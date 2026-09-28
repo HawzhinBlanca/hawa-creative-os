@@ -1,5 +1,6 @@
 import { assertTaskGenerationAllowed } from './task-generation-guard.js';
-import { assertNativeRevisionAdmission, nativeRevisionHandoff, latestRevisionCopy } from './native-revision-handoff.js';
+import { assertNativeRevisionAdmission, nativeRevisionHandoff } from './native-revision-handoff.js';
+import { latestNativeCopy, nativeInitialHandoff } from './initial-native-handoff.js';
 import { canRetryCanvaCreation } from '@hawa/domain';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { inspectCanvaAmendment } from './canva-amendment-observation.js';
@@ -343,7 +344,7 @@ export class CanvaConnectService {
           AND o.design_id=${binding.canva_design_id} AND o.binding_version=${binding.version}
         ORDER BY b.created_at DESC LIMIT 20`.execute(db)).rows : [];
       return { artifacts, binding:binding ? { designId:binding.canva_design_id,version:binding.version,status:binding.status } : null,operations,semanticCapture:'unverified',approvalReady:false,
-        revisionHandoff:await nativeRevisionHandoff(db,s.tenantId,taskId) };
+        revisionHandoff:await nativeRevisionHandoff(db,s.tenantId,taskId) ?? await nativeInitialHandoff(db,s.tenantId,taskId) };
     });
   }
   async importEditableDesign(s:Scope,taskId:string,key:string,source:{bytes:Buffer;sha256:string;manifest:Record<string,unknown>}) {
@@ -567,8 +568,10 @@ export class CanvaConnectService {
       // A concurrent retry keeps the first receipt, without reading today's mutable font policy.
       if ((await sql`SELECT id FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid
         AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows.length) return undefined;
-      const revisionCopy = await latestRevisionCopy(db,s.tenantId,taskId);
+      const revisionCopy = await latestNativeCopy(db,s.tenantId,taskId);
       if (!revisionCopy) await assertNativeRevisionAdmission(db,s.tenantId,taskId);
+      // ADR-126: an owned manual request captures only under its current human copy confirmation.
+      if (!revisionCopy && s.nativeRecovery) fail(409,'NATIVE_COPY_CONFIRMATION_REQUIRED','Confirm the exact final copy against the linked design before capture');
       // Both preview and editable capture must belong to the same human confirmation.
       if (format === 'pptx' || revisionCopy) {
         const source = format === 'pptx' ? await this.editableSource(s,taskId,binding.client_id,design.id,db) : undefined;

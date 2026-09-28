@@ -4,12 +4,13 @@ import { isServiceUserId } from '@hawa/contracts';
 import { computeDnaHash } from '../core-helpers.js';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { savedDesignCopy, classifyCopyScript } from './saved-design-copy.js';
-import { latestRevisionCopy, nativeRevisionHandoff } from './native-revision-handoff.js';
+import { nativeRevisionHandoff } from './native-revision-handoff.js';
+import { latestNativeCopy, nativeInitialHandoff } from './initial-native-handoff.js';
 import { lockNativeRecovery, type NativeActorScope } from './lifecycle-native-scope.js';
 
 export type ExportCheckPolicy = {
   version: 1;
-  kind: 'imported_source' | 'manual_client_dna' | 'revision_client_dna';
+  kind: 'imported_source' | 'manual_client_dna' | 'revision_client_dna' | 'initial_client_dna';
   copy: string[];
   requiredFont?: string;
   options: PptxCheckOptions;
@@ -32,12 +33,12 @@ export async function resolveManualExportPolicy(
       AND event_type='task.created' ORDER BY aggregate_version LIMIT 1) e ON true
     WHERE t.tenant_id=${tenantId}::uuid AND t.id=${taskId}::uuid AND t.client_id=${clientId}::uuid`.execute(db)).rows[0];
   const source = task?.source as { payload?: { body?: { workflow?: string } }; body?: { workflow?: string } } | undefined;
-  const revision = await latestRevisionCopy(db, tenantId, taskId);
+  const revision = await latestNativeCopy(db, tenantId, taskId);
   if (task?.request_id && recovery?.nativeRecovery) await lockNativeRecovery(db,recovery,taskId);
   if (!task || (task.request_id && !recovery?.nativeRecovery) || (!revision && (source?.payload?.body || source?.body)?.workflow !== 'canva_manual'))
     throw new CanvaFlowError(422, 'SOURCE_REQUIRED', 'Checked export needs a matching imported source or a manual Desk request with exact copy and active client fonts.');
   if (revision) {
-    const handoff = await nativeRevisionHandoff(db, tenantId, taskId);
+    const handoff = revision.kind === 'revision' ? await nativeRevisionHandoff(db, tenantId, taskId) : await nativeInitialHandoff(db, tenantId, taskId);
     if (!handoff?.available || handoff.confirmedEventId !== revision.id)
       throw new CanvaFlowError(409, 'REVISION_BASIS_CHANGED', 'Confirm the exact copy against the current linked native design before export.');
   }
@@ -64,7 +65,7 @@ export async function resolveManualExportPolicy(
   if (copy.some(text => (/[A-Za-z\u00C0-\u024F]/u.test(text) || classifyCopyScript(text) === 'latin') && !allowedFontsByScript.latin.length) ||
       copy.some(text => classifyCopyScript(text) === 'arabic' && !allowedFontsByScript.arabic.length))
     throw new CanvaFlowError(422, 'BRAND_FONTS_REQUIRED', 'The active Client DNA needs explicit licensed font families for every script in the saved copy.');
-  return { version: 1, kind: revision ? 'revision_client_dna' : 'manual_client_dna', copy, options: { allowedFontsByScript },
+  return { version: 1, kind: revision ? `${revision.kind}_client_dna` : 'manual_client_dna', copy, options: { allowedFontsByScript },
     ...(revision ? { confirmationEventId: revision.id, taskId } : {}),
     creationEventId: task.event_id, clientId, dnaVersion: row.version, dnaContentHash: row.content_hash };
 }

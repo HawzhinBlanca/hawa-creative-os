@@ -10,7 +10,7 @@ function read(id:string):Pending|null {
   if(!text)return null;
   const p=JSON.parse(text);
   if(!p||!uuid(p.key)||!p.body||!['requestId','artifactId','confirmationEventId'].every(k=>uuid(p.body[k]))||
-    !Number.isSafeInteger(p.body.expectedRev)||p.body.expectedRev<2||!Number.isSafeInteger(p.body.expectedTaskVersion)||p.body.expectedTaskVersion<1)
+    !Number.isSafeInteger(p.body.expectedRev)||p.body.expectedRev<1||!Number.isSafeInteger(p.body.expectedTaskVersion)||p.body.expectedTaskVersion<1)
     throw new Error('The retained review action is invalid. Clear it before submitting another review.');
   return p;
 }

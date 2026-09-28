@@ -29,7 +29,7 @@ describe('request-owned native revision submission',()=>{
     expect(checkSignedNativeReview(signed,secret)).toBe('ok');
     expect(checkSignedNativeReview({...signed,event:{...event,artifactId:randomUUID()}},secret)).toBe('unauthorized');
     expect(checkSignedNativeReview(signed,'wrong')).toBe('unauthorized');
-    for(const patch of [{actor:{...event.actor,role:'service'}},{expectedRev:1},{expectedTaskVersion:0},{extra:true},{artifactId:'bad'}])
+    for(const patch of [{actor:{...event.actor,role:'service'}},{expectedRev:0},{expectedTaskVersion:0},{extra:true},{artifactId:'bad'}])
       expect(parseNativeReviewSubmission({...event,...patch})).toBeUndefined();
   });
   it('recovers lost Core response and state-save failure without accepting altered action content',async()=>{

@@ -111,7 +111,10 @@ it('upgrades actual pre-ledger Studio artifacts without inventing or duplicating
   await sql`INSERT INTO hawa.canva_design_plans(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,status)
    VALUES(${legacy}::uuid,${tenant}::uuid,${task}::uuid,${client}::uuid,'synthetic-actor',${legacy},${requestHash},'{}','failed')`.execute(fresh);
   const before=(await sql<{result:unknown;source_content:Buffer;source_sha256:string}>`SELECT result,source_content,source_sha256 FROM hawa.canva_design_plans WHERE id=${plan}::uuid`.execute(fresh)).rows[0];
-  expect((await upgradeCanvaSchema(ownerUrl.toString())).applied).toEqual(['056_durable_canva_planner_calls.sql','057_scoped_receipt_audits.sql','058_availability_observations.sql','059_publication_expectations.sql','060_publication_inspections.sql','061_studio_retained_results.sql','062_studio_visual_inputs.sql','063_native_revision_policy.sql']);
+  // Every versioned upgrade after the historical baseline, in order; a new migration must not be skipped.
+  const later=readdirSync(dir).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&!f.endsWith('_down.sql')&&f>='056_').sort();
+  expect(later.slice(0,8)).toEqual(['056_durable_canva_planner_calls.sql','057_scoped_receipt_audits.sql','058_availability_observations.sql','059_publication_expectations.sql','060_publication_inspections.sql','061_studio_retained_results.sql','062_studio_visual_inputs.sql','063_native_revision_policy.sql']);
+  expect((await upgradeCanvaSchema(ownerUrl.toString())).applied).toEqual(later);
   expect((await sql<{paid_protocol:string;studio_run_id:string}>`SELECT paid_protocol,studio_run_id FROM hawa.canva_design_plans WHERE id=${plan}::uuid`.execute(fresh)).rows[0])
    .toEqual({paid_protocol:'studio-transfer-v1',studio_run_id:run});
   expect((await sql`SELECT result,source_content,source_sha256 FROM hawa.canva_design_plans WHERE id=${plan}::uuid`.execute(fresh)).rows[0]).toEqual(before);
