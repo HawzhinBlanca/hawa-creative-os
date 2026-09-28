@@ -659,6 +659,117 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   },25000);
 
   /**
+   * ADR-138: a Core that dies after claiming a plan and before admitting its paid call left the plan in
+   * `planning` for good (chaos R1.K0, 2026-09-28): resume never dispatched, and the design run gave up
+   * after its 30 polls as DESIGN_PLANNING. Admission is committed before transport, so no admission row
+   * proves the model never received the plan: the claim is carried on, once, under the plan's own id.
+   * A Core killed after admission leaves an uncertain call that is never sent again (ADR-101).
+   */
+  describe('a Core killed during planning (ADR-138)',()=>{
+    /** Runs generate() in a child that stops at the named chaos point, and SIGKILLs it there. */
+    const killAtPlannerPoint=async(taskId:string,key:string,point:'core.planner.after-claim'|'core.planner.after-admission')=>{
+      let reached!:()=>void,modelRequests=0;
+      const atPoint=new Promise<void>(resolve=>{reached=resolve;});
+      const held:ServerResponse[]=[];
+      const server=createServer((request,res)=>{
+        const chunks:Buffer[]=[];request.on('data',c=>chunks.push(c));
+        request.on('end',()=>{
+          if(request.url==='/chaos/reach'){
+            const body=JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}');
+            // Other points pass at once; the armed one is held until the child is killed.
+            if(body.point!==point){res.writeHead(200);res.end();return;}
+            res.writeHead(200,{'content-type':'text/plain'});res.write('\n');held.push(res);reached();return;
+          }
+          modelRequests++;held.push(res);
+        });
+      });
+      await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+      const address=server.address();if(!address||typeof address==='string')throw new Error('Local port unavailable');
+      const child=spawn(process.execPath,['--import','tsx',fileURLToPath(new URL('./fixtures/canva-planner-kill-child.ts',import.meta.url))],{
+        cwd:process.cwd(),env:{...process.env,HAWA_PLANNER_DRILL_DB:process.env.HAWA_ISOLATED_RUNTIME_DB!,HAWA_PLANNER_DRILL_PORT:String(address.port),
+          HAWA_PLANNER_DRILL_TENANT:scope.tenantId,HAWA_PLANNER_DRILL_USER:scope.actorId,HAWA_PLANNER_DRILL_TASK:taskId,
+          HAWA_PLANNER_DRILL_KEY:key,HAWA_PLANNER_DRILL_BOUNDARY:point,HAWA_CHAOS_CONTROL_URL:`http://127.0.0.1:${address.port}/chaos`},
+        stdio:['ignore','ignore','ignore','ipc']});
+      const exited=new Promise<string|null>((resolve,reject)=>{child.once('error',reject);child.once('exit',(_code,signal)=>resolve(signal));});
+      let timer:NodeJS.Timeout|undefined;
+      try{
+        await Promise.race([atPoint,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error(`Planner child did not reach ${point}`)),15000);}),
+          exited.then(()=>{throw new Error('Planner child exited before the point');})]);
+        child.kill('SIGKILL');expect(await exited).toBe('SIGKILL');
+      }finally{
+        clearTimeout(timer);if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited;
+        for(const res of held)res.destroy();
+        server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));
+      }
+      const [row]=(await sql<any>`SELECT id,status FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows;
+      const calls=(await sql<any>`SELECT id,status FROM hawa.canva_planner_calls WHERE task_id=${taskId}::uuid`.execute(db)).rows;
+      return {planId:String(row.id),planStatus:String(row.status),calls,modelRequests};
+    };
+
+    it('carries on a plan claimed before its call was admitted: one model call, the draft imported',async()=>{
+      const taskId=await intake(),key='k0-claim-'+randomUUID();
+      const killed=await killAtPlannerPoint(taskId,key,'core.planner.after-claim');
+      expect(killed).toMatchObject({planStatus:'planning',calls:[],modelRequests:0});
+      const remote=vi.fn(async()=>response()),{api,planner}=make(remote);
+      const carried=await planner.generate(scope,taskId,key,1200,1697);
+      expect({status:carried.status,planId:carried.planId}).toEqual({status:'submitted',planId:killed.planId});
+      expect(remote).toHaveBeenCalledTimes(1);
+      expect(api.importEditableDesign).toHaveBeenCalledWith(scope,taskId,'plan-'+killed.planId,expect.anything());
+      expect((await sql<any>`SELECT status FROM hawa.canva_design_plans WHERE id=${killed.planId}::uuid`.execute(db)).rows[0].status).toBe('planned');
+      expect((await sql<any>`SELECT id,status FROM hawa.canva_planner_calls WHERE task_id=${taskId}::uuid`.execute(db)).rows)
+        .toEqual([{id:killed.planId,status:'completed'}]);
+      // Asked again (the worker's retry after a lost answer), nothing is planned or paid twice.
+      expect((await planner.generate(scope,taskId,key,1200,1697)).planId).toBe(killed.planId);
+      expect(remote).toHaveBeenCalledTimes(1);
+    },30000);
+
+    it('carries a claim on once when two processes resume it at the same time',async()=>{
+      const taskId=await intake(),key='k0-race-'+randomUUID();
+      const killed=await killAtPlannerPoint(taskId,key,'core.planner.after-claim');
+      let open!:()=>void;const opened=new Promise<void>(r=>{open=r;});
+      const remote=vi.fn(async()=>{await opened;return response();});
+      const first=make(remote),second=make(remote);
+      const a=first.planner.generate(scope,taskId,key,1200,1697);
+      const b=second.planner.resume(scope,taskId,killed.planId);
+      for(let i=0;i<400&&remote.mock.calls.length<1;i++)await new Promise(r=>setTimeout(r,25));
+      // The loser found the call admitted and sends nothing; it answers where the plan stands.
+      const lost=await Promise.race([a,b,new Promise(r=>setTimeout(()=>r('both waiting'),3000))]);
+      expect(lost).toMatchObject({planId:killed.planId,status:'planning'});
+      open();
+      const answers=await Promise.all([a,b]);
+      expect(remote).toHaveBeenCalledTimes(1);
+      expect(answers.map(x=>x.status).sort()).toEqual(['planning','submitted']);
+      expect((await sql<any>`SELECT count(*)::int AS n FROM hawa.canva_planner_calls WHERE task_id=${taskId}::uuid`.execute(db)).rows[0].n).toBe(1);
+    },30000);
+
+    it('fails a carried-on claim with nothing spent when its inputs or its task changed',async()=>{
+      const changed=await intake(),changedKey='k0-changed-'+randomUUID();
+      const claim=await killAtPlannerPoint(changed,changedKey,'core.planner.after-claim');
+      const never=vi.fn<typeof fetch>(),{planner,api}=make(never);
+      const context=(planner as any).context.bind(planner);
+      vi.spyOn(planner as any,'context').mockImplementationOnce(async(...args:unknown[])=>{
+        const current=await context(...args);current.request.copy=[...current.request.copy,'A line added after the claim'];return current;});
+      expect(await planner.generate(scope,changed,changedKey,1200,1697)).toMatchObject({planId:claim.planId,status:'failed',message:'PLAN_INPUT_CHANGED'});
+      const paused=await intake(),pausedKey='k0-paused-'+randomUUID();
+      const pausedClaim=await killAtPlannerPoint(paused,pausedKey,'core.planner.after-claim');
+      await sql`UPDATE hawa.tasks SET state='paused'::hawa.task_state WHERE id=${paused}::uuid`.execute(db);
+      expect(await planner.resume(scope,paused,pausedClaim.planId)).toMatchObject({status:'failed',message:'TASK_GENERATION_BLOCKED'});
+      expect(never).not.toHaveBeenCalled();expect(api.importEditableDesign).not.toHaveBeenCalled();
+      expect((await sql<any>`SELECT id FROM hawa.canva_planner_calls WHERE task_id IN (${changed}::uuid,${paused}::uuid)`.execute(db)).rows).toHaveLength(0);
+    },45000);
+
+    it('never sends a call again once it was admitted, even if the Core died before sending it',async()=>{
+      const taskId=await intake(),key='k0-admitted-'+randomUUID();
+      const killed=await killAtPlannerPoint(taskId,key,'core.planner.after-admission');
+      expect(killed).toMatchObject({planStatus:'planning',calls:[{id:killed.planId,status:'started'}],modelRequests:0});
+      const never=vi.fn<typeof fetch>(),{planner,api}=make(never);
+      expect(await planner.generate(scope,taskId,key,1200,1697)).toMatchObject({planId:killed.planId,status:'planning'});
+      expect(await planner.resume(scope,taskId,killed.planId)).toMatchObject({status:'planning'});
+      expect(never).not.toHaveBeenCalled();expect(api.importEditableDesign).not.toHaveBeenCalled();
+    },30000);
+  });
+
+  /**
    * Planning slots are office-wide (ADR-131). A brief beyond them is refused 429 PLANNING_BUSY before
    * any paid admission and told when a slot should free (Retry-After), so the worker comes back then
    * instead of doubling its sleep. Other tests in this file leave plans in planning (a retained layout

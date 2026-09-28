@@ -12,8 +12,12 @@ native usage, conservative usage cost, original acceptance and uncertainty are
 separate from the reservation and any later administrator evidence.
 
 A validated layout is saved before editable file encoding. Exact copy, logo and
-reference hashes remain frozen. Resume never calls a model. It rechecks current
-task/client ownership and reference authority before making an editable source.
+reference hashes remain frozen. Resume never calls a model for a plan whose call
+was admitted. It rechecks current task/client ownership and reference authority
+before making an editable source. The one exception (ADR-138): a plan claimed by a
+Core that stopped before admitting its call has provably sent nothing, so the next
+resume (or the design run's same-key retry) admits and makes that plan's one call,
+under the same allowance checks, only if its inputs are unchanged.
 Local storage errors leave the saved layout recoverable; input validation errors
 leave the original paid-call evidence intact. Concurrent recovery keeps one source.
 
@@ -46,8 +50,9 @@ from costs or health observations. Existing editable sources remain readable.
 
 ## Failure drills
 
-The isolated tests kill an actual process after send, after receipt before save,
-and after the committed typed reply before materialization. Check one synthetic
+The isolated tests kill an actual process after the claim (carried on, ADR-138),
+after admission before send, after send, after receipt before save, and after the
+committed typed reply before materialization. Check one synthetic
 provider request, durable reservation/outcome, unchanged exact replay, alternate
 lane refusal, and successful local reconstruction only for the saved-reply case.
 Do not point these drills at production or use real paid credentials.

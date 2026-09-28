@@ -514,6 +514,15 @@ call, rechecking task ownership, revisions and active references before import.
 Historical unledgered plans remain incomplete accounting history. See
 runbooks/CANVA_PLANNER_RECOVERY.md for operator actions and failure drills.
 
+2026-09-29 (ADR-138): a plan whose Core died after the claim and before its call
+was admitted is carried on by the next resume or same-key generate. Admission is
+committed before transport, so no admission row proves the model never received
+the plan; the call is then admitted under the plan's own id (at most one, however
+many processes carry the claim on), with the same allowance and ownership checks,
+and only if the plan's inputs are unchanged. An admitted call is still never sent
+again. Before this, such a claim stayed `planning` and the design run ended
+`DESIGN_PLANNING` (chaos `R1.K0`).
+
 ### Operations evidence authority (ADR-102, 2026-09-27)
 
 Office intake/review availability targets 99.5% per calendar month. Without a

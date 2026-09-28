@@ -240,12 +240,26 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     const request = fullRequest(chat, 'R1.K0', events);
     await waitUntil('the acknowledgement send', async () => (await fakes.telegramCalls()).some((c) => c.method === 'sendMessage' && c.chat === chat), 60_000, 200);
     kill('core');
-    events.push(`killed core while the acknowledgement was being sent (tasks then: ${(await tasksOfChat(chat)).length})`);
+    // Where the design's plan stood when Core died (ADR-138: a claim with no admitted call is carried on).
+    const [task] = await tasksOfChat(chat);
+    const plans = task ? await query<{ status: string; call: string | null }>(sql`SELECT p.status, c.status AS call FROM hawa.canva_design_plans p
+      LEFT JOIN hawa.canva_planner_calls c ON c.id = p.id WHERE p.task_id = ${task.id}::uuid`) : [];
+    events.push(`killed core while the acknowledgement was being sent (tasks then: ${task ? 1 : 0}; plans then: ${JSON.stringify(plans)})`);
     await sleep(5000);
     start('core');
     await waitHealthy('core');
     await request;
-    return { delivered: true };
+    return { delivered: true, extra: await onePlannerCall(chat) };
+  });
+
+  // ADR-138: the same kill at a fixed moment, after the design's plan is claimed and before its paid
+  // call is admitted (the moment R1.K0 most often lands in since ADR-135). The claim is carried on
+  // after the restart with exactly one planner call.
+  scenario('R1.K0P', 'Core killed after the plan is claimed, before its paid call is admitted, back after 2 s', async (chat, events) => {
+    const k = await killAtPoint('core.planner.after-claim', {});
+    await fullRequest(chat, 'R1.K0P', events);
+    events.push(`killed ${(await k.done).killed} at core.planner.after-claim`);
+    return { delivered: true, extra: await onePlannerCall(chat) };
   });
 
   // Until ADR-135 these killed the worker around the outbox's dispatch of task.created to TaskWorkflow.
@@ -1031,6 +1045,15 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
  * PPTX are pinned, so two files go to the requester and a fault can fall between them. The Deliver
  * press is answered at once (202, executor restate); nothing presses it again.
  */
+/** ADR-138: the chat's design made one planner call, admitted once and completed, and its plan is planned. */
+async function onePlannerCall(chat: string): Promise<InvariantResult[]> {
+  const rows = await query<{ plan: string; call: string | null }>(sql`SELECT p.status AS plan, c.status AS call FROM hawa.canva_design_plans p
+    JOIN hawa.tasks t ON t.id = p.task_id JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
+    LEFT JOIN hawa.canva_planner_calls c ON c.id = p.id WHERE o.payload->>'sourceChannelId' = ${chat}`);
+  return [{ name: 'one plan, its one planner call admitted and completed', ok: rows.length === 1 && ['planned', 'completed', 'transferred'].includes(rows[0].plan) && rows[0].call === 'completed',
+    detail: JSON.stringify(rows) }];
+}
+
 async function workflowRequest(chat: string, tag: string, events: string[], hooks: { beforeDeliver?: (taskId: string) => Promise<void>; afterDeliver?: (taskId: string) => Promise<void>; beforeComplete?: (taskId: string) => Promise<void> } = {}) {
   const taskId = await briefToDraft(chat, tag);
   events.push(`task ${taskId}: draft in chat`);

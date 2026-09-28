@@ -13,6 +13,7 @@ import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js'
 import { savedDesignCopy, savedDesignCopyLocales, classifyCopyScript } from './saved-design-copy.js';
 export { savedDesignCopy, classifyCopyScript, unwrapCopyEnvelope, withoutEmoji } from './saved-design-copy.js';
 import { log } from '../logging.js';
+import { chaosPoint } from '@hawa/observability';
 import { blobStoreFor, putToStore, readPreferringStore } from './blob-store-context.js';
 import { assertCurrentClientDesignReference, resolveClientDesignReference } from './client-design-reference.js';
 import { clientExemplarManifestOf } from './client-packs.js';
@@ -60,6 +61,18 @@ export function planningRetryAfterMs(oldestAgeMs:number,typicalMs:number|null):n
   if(typicalMs===null||!Number.isFinite(typicalMs)||!Number.isFinite(oldestAgeMs))return 2000;
   return Math.min(15000,Math.max(2000,Math.round(typicalMs-oldestAgeMs)));
 }
+
+/**
+ * Thrown inside a dispatch when another process admitted this plan's paid call first: the call's
+ * primary key is the plan's id, so at most one admission (and one transport) ever exists (ADR-138).
+ */
+class PlannerCallAlreadyAdmitted extends Error {}
+/** What generate() and resume() answer: the plan and where it stands, with what the stage adds. */
+type PlanAnswer={planId:string;status:string;[key:string]:unknown};
+const uniqueViolation=(error:unknown):boolean=>{
+  const e=error as {code?:unknown;cause?:{code?:unknown};message?:unknown};
+  return e?.code==='23505'||e?.cause?.code==='23505'||/duplicate key value/i.test(String(e?.message??''));
+};
 
 /** Brand choices come from the task's scoped reference pack, never from this program's own palette. */
 export function buildPlannerSystemPrompt(request: {
@@ -327,32 +340,7 @@ export class CanvaDesignPlanner {
       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','Configure the requested design model first.');
       assertModelAllowed(request.model);
 
-      const directiveMatch = (request.instructions || '').match(/Operator Revision Directive:\s*([\s\S]+)$/i);
-      const rawDirective = directiveMatch ? directiveMatch[1].trim() : (request.instructions || '').trim();
-      const isRedesignRequest = /bullshit|bullshot|stuck|redo|different|fresh|start over|new (one|design|concept|layout)|better|cleaner|less boxy|unstick|similar design|keep giving me|keep sending|never hardcode|change (the )?(whole|entire|all)|whole design|entire design|redesign|try another|completely|from scratch|looks? (basic|cheap|bad)|not what i want|dislike/i.test(rawDirective);
-
-      let priorPlanRow: any = null;
-      let priorPreviewPng: string | null = null;
-      if (request.parentTaskId) {
-        priorPlanRow = (await sql<any>`SELECT cp.id,cp.task_id,cp.result FROM hawa.canva_design_plans cp
-          JOIN hawa.tasks parent ON parent.tenant_id=cp.tenant_id AND parent.id=cp.task_id
-          WHERE cp.tenant_id=${s.tenantId}::uuid AND cp.task_id=${request.parentTaskId}::uuid
-            AND cp.status IN ('planned','completed','transferred')
-            AND (${request.requestId}::uuid IS NULL OR parent.request_id=${request.requestId}::uuid)
-          ORDER BY cp.created_at DESC LIMIT 1`.execute(db)).rows[0];
-      }
-      if (!priorPlanRow && !request.requestId && /Operator Revision Directive:/i.test(request.instructions || '')) {
-        priorPlanRow = (await sql<any>`SELECT id, task_id, result FROM hawa.canva_design_plans
-          WHERE tenant_id=${s.tenantId}::uuid AND client_id=${request.clientId}::uuid AND task_id != ${taskId}::uuid AND status IN ('planned','completed','transferred')
-          ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
-      }
-      const targetPriorTaskId = priorPlanRow?.task_id || (!request.requestId ? request.parentTaskId : null);
-      if (targetPriorTaskId) {
-        const exp = (await sql<any>`SELECT encode(content, 'base64') AS b64 FROM hawa.canva_export_bytes WHERE tenant_id=${s.tenantId}::uuid AND task_id=${targetPriorTaskId}::uuid AND format='png' ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
-        if (exp?.b64) {
-          priorPreviewPng = exp.b64.replace(/\s+/g, '');
-        }
-      }
+      const {priorPlanRow,priorPreviewPng}=await this.priorOf(db,s,taskId,request);
 
       const id=randomUUID();
       const row=(await sql<any>`INSERT INTO hawa.canva_design_plans(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,status,paid_protocol)
@@ -360,6 +348,49 @@ export class CanvaDesignPlanner {
       return {row,created:true,priorPlanRow,priorPreviewPng};
     });
     if(!claim.created)return this.resume(s,taskId,claim.row.id);
+    // The plan is claimed and no paid call is admitted yet (chaos suite point: a Core killed here
+    // leaves the claim a later resume may carry on with, ADR-138).
+    await chaosPoint('core.planner.after-claim',{taskId,planId:claim.row.id});
+    const answer=await this.dispatchClaimed(s,taskId,claim.row.id,request,ownedImageDataUrls,taskVersion,claim.priorPlanRow,claim.priorPreviewPng??null);
+    return answer??this.resume(s,taskId,claim.row.id);
+  }
+
+  /** The earlier plan a revision builds on, and its preview, read as the claim read them. */
+  private async priorOf(db:Kysely<Database>,s:Scope,taskId:string,request:any):Promise<{priorPlanRow:any;priorPreviewPng:string|null}>{
+    let priorPlanRow: any = null;
+    let priorPreviewPng: string | null = null;
+    if (request.parentTaskId) {
+      priorPlanRow = (await sql<any>`SELECT cp.id,cp.task_id,cp.result FROM hawa.canva_design_plans cp
+        JOIN hawa.tasks parent ON parent.tenant_id=cp.tenant_id AND parent.id=cp.task_id
+        WHERE cp.tenant_id=${s.tenantId}::uuid AND cp.task_id=${request.parentTaskId}::uuid
+          AND cp.status IN ('planned','completed','transferred')
+          AND (${request.requestId}::uuid IS NULL OR parent.request_id=${request.requestId}::uuid)
+        ORDER BY cp.created_at DESC LIMIT 1`.execute(db)).rows[0];
+    }
+    if (!priorPlanRow && !request.requestId && /Operator Revision Directive:/i.test(request.instructions || '')) {
+      priorPlanRow = (await sql<any>`SELECT id, task_id, result FROM hawa.canva_design_plans
+        WHERE tenant_id=${s.tenantId}::uuid AND client_id=${request.clientId}::uuid AND task_id != ${taskId}::uuid AND status IN ('planned','completed','transferred')
+        ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
+    }
+    const targetPriorTaskId = priorPlanRow?.task_id || (!request.requestId ? request.parentTaskId : null);
+    if (targetPriorTaskId) {
+      const exp = (await sql<any>`SELECT encode(content, 'base64') AS b64 FROM hawa.canva_export_bytes WHERE tenant_id=${s.tenantId}::uuid AND task_id=${targetPriorTaskId}::uuid AND format='png' ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
+      if (exp?.b64) {
+        priorPreviewPng = exp.b64.replace(/\s+/g, '');
+      }
+    }
+    return {priorPlanRow,priorPreviewPng};
+  }
+
+  /**
+   * A claimed plan's one paid call: durable admission (its primary key is the plan's id, ADR-101),
+   * transport, and the recorded outcome. Null when the outcome is recorded (the caller resumes the
+   * plan); otherwise the answer to give. Used by generate() right after the claim, and by resume()
+   * for a claim whose Core died before admission (ADR-138).
+   */
+  private async dispatchClaimed(s:Scope,taskId:string,planId:string,request:any,ownedImageDataUrls:string[],taskVersion:number,
+    priorPlanRow:any,priorPreviewPng:string|null):Promise<PlanAnswer|null>{
+    const claim={row:{id:planId},priorPlanRow,priorPreviewPng};
     let admitted=false;
     try{
       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY!;
@@ -570,11 +601,19 @@ export class CanvaDesignPlanner {
           throw new CanvaFlowError(409,'REQUEST_CHANGED','Task ownership changed before model admission.');
         await assertStudioCallsResolved(db,s.tenantId,taskId,claim.row.id);
         await assertCurrentClientDesignReference(db,s,request.reference);
-        await sql`INSERT INTO hawa.canva_planner_calls(id,tenant_id,task_id,client_id,model,reservation,metadata,spending_policy_version)
-          VALUES(${claim.row.id}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${request.clientId}::uuid,${request.model},
-            ${JSON.stringify(reservation)}::jsonb,${JSON.stringify(metadata)}::jsonb,1)`.execute(db);
+        const already=(await sql`SELECT id FROM hawa.canva_planner_calls
+          WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid`.execute(db)).rows.length>0;
+        if(already)throw new PlannerCallAlreadyAdmitted();
+        try{
+          await sql`INSERT INTO hawa.canva_planner_calls(id,tenant_id,task_id,client_id,model,reservation,metadata,spending_policy_version)
+            VALUES(${claim.row.id}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${request.clientId}::uuid,${request.model},
+              ${JSON.stringify(reservation)}::jsonb,${JSON.stringify(metadata)}::jsonb,1)`.execute(db);
+        }catch(error){if(uniqueViolation(error))throw new PlannerCallAlreadyAdmitted();throw error;}
       });
       admitted=true;
+      // Admitted, not yet sent (chaos suite point: a Core killed here leaves an uncertain call, which
+      // is never sent again, ADR-101).
+      await chaosPoint('core.planner.after-admission',{taskId,planId:claim.row.id});
       const outcome=await executePlannerCall(apiKey,body,request.model,reservation,this.options.fetcher||fetch);
       await this.tx(s,async db=>{
         await sql`SELECT id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db);
@@ -587,6 +626,9 @@ export class CanvaDesignPlanner {
         if(updated.numAffectedRows!==1n)throw new Error('PLANNER_OUTCOME_NOT_RECORDED');
       });
     }catch(error){
+      // Another process admitted this plan's call first (a resume carrying on a claim this process
+      // also serves, ADR-138): that admission is the only one, and this process sends nothing.
+      if(error instanceof PlannerCallAlreadyAdmitted)return this.resume(s,taskId,planId);
       // A failed or ambiguous admission commit is never permission to send. If admission exists,
       // leave it available for evidence/recovery; no error handler may erase the paid attempt.
       const call=await this.tx(s,async db=>(await sql`SELECT id FROM hawa.canva_planner_calls
@@ -599,7 +641,38 @@ export class CanvaDesignPlanner {
         WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid AND status='planning'`.execute(db));
       return {planId:claim.row.id,status:'failed',message:code};
     }
-    return this.resume(s,taskId,claim.row.id);
+    return null;
+  }
+
+  /**
+   * A plan claimed by a Core that died before admitting its paid call (ADR-138). Admission is
+   * committed before transport, so with no admission row the model provably never received this plan:
+   * the call is made now, under the plan's own id, so however many processes carry the claim on, at
+   * most one is admitted and sent. The claim's inputs must be unchanged; if they changed, or the task
+   * no longer allows generation, the plan fails with nothing spent. Null when the call was made (or
+   * admitted by another process) and the plan should be read again; otherwise the answer to give.
+   */
+  private async carryOnClaim(s:Scope,taskId:string,row:any):Promise<PlanAnswer|null>{
+    const fail=async(code:string)=>{
+      await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status='failed',diagnostic=${code},updated_at=now()
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${row.id}::uuid AND status='planning'`.execute(db));
+      return {planId:row.id,status:'failed',message:code};
+    };
+    let current:Awaited<ReturnType<CanvaDesignPlanner['context']>>;
+    try{
+      await this.tx(s,db=>assertNativeRevisionAdmission(db,s.tenantId,taskId));
+      current=await this.context(s,taskId,row.request.width,row.request.height);
+    }catch(error){
+      // A refusal is final and nothing was spent; an unavailable store or database is asked again.
+      if(error instanceof CanvaFlowError&&error.status<500&&error.status!==429)return fail(error.code);
+      throw error;
+    }
+    // The claim fixed the model; a tier changed since does not change what this plan asks for.
+    current.request.model=row.request.model;
+    if(hash(JSON.stringify(current.request))!==row.request_hash)return fail('PLAN_INPUT_CHANGED');
+    log.warn(`[canva-planner] Plan ${row.id} of task ${taskId} was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138).`);
+    const prior=await this.tx(s,db=>this.priorOf(db,s,taskId,current.request));
+    return this.dispatchClaimed(s,taskId,row.id,current.request,current.ownedImageDataUrls,current.taskVersion,prior.priorPlanRow,prior.priorPreviewPng);
   }
 
   /** Deterministic reconstruction from a committed typed reply. This method has no model transport. */
@@ -717,11 +790,19 @@ export class CanvaDesignPlanner {
     let row=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);
     if(!row)throw new CanvaFlowError(404,'PLAN_NOT_FOUND','Saved plan not found.');
     if(row.status==='planning'&&row.paid_protocol==='canva-planner-v1'){
-      const call=await this.tx(s,async db=>(await sql<any>`SELECT c.*,EXISTS(SELECT 1 FROM hawa.call_cost_attestations a
+      const readCall=()=>this.tx(s,async db=>(await sql<any>`SELECT c.*,EXISTS(SELECT 1 FROM hawa.call_cost_attestations a
         WHERE a.tenant_id=c.tenant_id AND a.call_kind='canva_planner' AND a.call_id=c.id) AS cost_attested
         FROM hawa.canva_planner_calls c WHERE c.tenant_id=${s.tenantId}::uuid AND c.id=${id}::uuid`.execute(db)).rows[0]);
-      if(!call||call.status==='started')return {planId:id,status:'planning',callId:call?.id,
-        message:call?'This paid call has no saved outcome. Reconcile it before any new paid work.':'Planning is claimed but no paid call is recorded. It can be retired; this resume never dispatches a model.'};
+      let call=await readCall();
+      if(!call){
+        // Claimed, never admitted: the model never received this plan, so it is carried on (ADR-138).
+        const answer=await this.carryOnClaim(s,taskId,row);
+        if(answer)return answer;
+        call=await readCall();
+        if(!call)throw new Error('PLANNER_CALL_NOT_ADMITTED');
+      }
+      if(call.status==='started')return {planId:id,status:'planning',callId:call.id,
+        message:'This paid call has no saved outcome. Reconcile it before any new paid work.'};
       if(call.reconciliation_required&&!call.cost_attested){
         if(!call.layout)await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status='uncertain',diagnostic=${call.diagnostic},updated_at=now()
           WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid AND status='planning'`.execute(db));
