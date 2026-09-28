@@ -60,6 +60,54 @@ class Config:
     # The run record a cut-off run leaves behind (ADR-127): what this run changed, written before each
     # change. None keeps no record (the library default; main() always names one).
     state_file: Path | None = None
+    # Production names none of these (ADR-134): its Compose file carries the project name, and the Core
+    # database is `hawa`. A disposable rehearsal stack names its own project, overrides and database.
+    compose_project: str | None = None
+    extra_compose_files: tuple[Path, ...] = ()
+    database: str = "hawa"
+
+
+# Docker object names (containers, volumes, compose projects) and a PostgreSQL database name.
+DOCKER_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
+DATABASE_NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+# Every target the rehearsal may override (ADR-134). Unset, each keeps today's production value.
+TARGET_ENV = {
+    "HAWA_RESTATE_BACKUP_VOLUME": "volume",
+    "HAWA_RESTATE_BACKUP_CONTAINER": "container",
+    "HAWA_RESTATE_BACKUP_CORE_CONTAINER": "core_container",
+    "HAWA_RESTATE_BACKUP_POSTGRES_CONTAINER": "postgres_container",
+    "HAWA_RESTATE_BACKUP_NODE_NAME": "node_name",
+    "HAWA_RESTATE_BACKUP_COMPOSE_PROJECT": "compose_project",
+}
+
+
+def config_from_env(environ: dict[str, str] | os._Environ[str], root: Path = ROOT) -> Config:
+    """The command's configuration: production defaults unless the environment names a rehearsal stack."""
+    targets: dict[str, object] = {}
+    for name, field in TARGET_ENV.items():
+        value = environ.get(name)
+        if value is None or value == "":
+            continue
+        if not DOCKER_NAME.fullmatch(value):
+            raise BackupError(f"{name} is not a valid Docker name")
+        targets[field] = value
+    database = environ.get("HAWA_RESTATE_BACKUP_DATABASE") or "hawa"
+    if not DATABASE_NAME.fullmatch(database):
+        raise BackupError("HAWA_RESTATE_BACKUP_DATABASE is not a valid database name")
+    drain = environ.get("HAWA_RESTATE_BACKUP_DRAIN_SECONDS") or "300"
+    health = environ.get("HAWA_RESTATE_BACKUP_HEALTH_SECONDS") or "90"
+    if not drain.isdigit() or not 0 <= int(drain) <= 3600 or not health.isdigit() or not 0 <= int(health) <= 3600:
+        raise BackupError("HAWA_RESTATE_BACKUP_DRAIN_SECONDS and HAWA_RESTATE_BACKUP_HEALTH_SECONDS must be whole seconds")
+    compose_files = [Path(item) for item in (environ.get("HAWA_RESTATE_BACKUP_COMPOSE_FILES") or "").split(os.pathsep) if item]
+    return Config(compose_file=compose_files[0] if compose_files else root / "infra/docker/docker-compose.prod.yml",
+                  extra_compose_files=tuple(compose_files[1:]),
+                  compose_env=Path(environ.get("HAWA_RESTATE_BACKUP_COMPOSE_ENV") or root / "infra/docker/.env"),
+                  archive_dir=Path(environ.get("HAWA_BACKUP_ARCHIVE_DEST") or str(Path.home() / ".hawa/snapshots_archive")),
+                  key_file=Path(environ.get("HAWA_BACKUP_ARCHIVE_KEYFILE", "")),
+                  helper_image=environ.get("HAWA_RESTATE_BACKUP_HELPER_IMAGE", ""),
+                  drain_seconds=int(drain), health_seconds=int(health), database=database,
+                  state_file=Path(environ.get("HAWA_RESTATE_BACKUP_STATE") or str(Path.home() / ".hawa/restate-backup.state")),
+                  **targets)  # type: ignore[arg-type]
 
 
 # A record held under a live lock for longer than this is reported as a stuck backup.
@@ -323,7 +371,10 @@ if (!token) throw new Error('Core has no operator credential for the backup swit
 const base = 'http://127.0.0.1:3001/v1';
 const url = action === 'status' ? '/ingress/status' : '/ingress/channels/telegram/toggle';
 const payload = {enabled:action==='release', ...(expectedChangeTag ? {expectedChangeTag} : {})};
-const init = action === 'status' ? {} : {method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(payload)};
+// Every Core read but a few health paths needs the bearer, the status read included (ADR-134: without
+// it Core answered 401 and every backup and every watchdog recovery was refused).
+const auth = {authorization:'Bearer '+token};
+const init = action === 'status' ? {headers:auth} : {method:'POST',headers:{'content-type':'application/json',...auth},body:JSON.stringify(payload)};
 const response = await fetch(base + url, {...init,signal:AbortSignal.timeout(5000)});
 if (!response.ok) throw new Error('Core switch API answered HTTP ' + response.status);
 const result = await response.json();
@@ -354,7 +405,9 @@ class RestateBackup:
         self.sleep = sleep
 
     def compose(self, *args: str) -> str:
-        return self.r.run(["docker", "compose", "-f", str(self.c.compose_file), "--env-file", str(self.c.compose_env), *args])
+        project = ["-p", self.c.compose_project] if self.c.compose_project else []
+        files = [part for path in (self.c.compose_file, *self.c.extra_compose_files) for part in ("-f", str(path))]
+        return self.r.run(["docker", "compose", *project, *files, "--env-file", str(self.c.compose_env), *args])
 
     def core(self, action: str, expected_change_tag: str | None = None) -> dict:
         args = ["docker", "exec", self.c.core_container, "node", "-e", CORE_CONTROL, action]
@@ -374,7 +427,7 @@ class RestateBackup:
         if not isinstance(value, bool):
             raise BackupError("Core did not report the persisted Telegram switch")
         persisted = self.r.run(["docker", "exec", self.c.postgres_container, "psql", "-U", "hawa_owner",
-                                "-d", "hawa", "-At", "-v", "ON_ERROR_STOP=1", "-c", PERSISTED_TELEGRAM_SWITCH])
+                                "-d", self.c.database, "-At", "-v", "ON_ERROR_STOP=1", "-c", PERSISTED_TELEGRAM_SWITCH])
         if persisted not in ("t", "f") or value is not (persisted == "t"):
             raise BackupError("Core and PostgreSQL disagree about the Telegram intake switch")
         return value
@@ -396,7 +449,7 @@ class RestateBackup:
         c = self.c
         if not PINNED_IMAGE.fullmatch(c.helper_image):
             raise BackupError("HAWA_RESTATE_BACKUP_HELPER_IMAGE must be an immutable @sha256 digest")
-        if not c.compose_file.is_file() or not c.compose_env.is_file():
+        if not all(path.is_file() for path in (c.compose_file, *c.extra_compose_files, c.compose_env)):
             raise BackupError("production Compose file and interpolation environment are required")
         if not c.key_file.is_file() or not os.access(c.key_file, os.R_OK):
             raise BackupError("HAWA_BACKUP_ARCHIVE_KEYFILE must name a readable encryption key")
@@ -703,13 +756,11 @@ def main() -> int:
     args = parser.parse_args()
     if args.pair_stamp and not args.apply:
         parser.error("--pair-stamp requires --apply")
-    config = Config(compose_file=ROOT / "infra/docker/docker-compose.prod.yml",
-                    compose_env=ROOT / "infra/docker/.env",
-                    archive_dir=Path(os.environ.get("HAWA_BACKUP_ARCHIVE_DEST", str(Path.home() / ".hawa/snapshots_archive"))),
-                    key_file=Path(os.environ.get("HAWA_BACKUP_ARCHIVE_KEYFILE", "")),
-                    helper_image=os.environ.get("HAWA_RESTATE_BACKUP_HELPER_IMAGE", ""),
-                    health_seconds=int(os.environ.get("HAWA_RESTATE_BACKUP_HEALTH_SECONDS", "90")),
-                    state_file=Path(os.environ.get("HAWA_RESTATE_BACKUP_STATE", str(Path.home() / ".hawa/restate-backup.state"))))
+    try:
+        config = config_from_env(os.environ)
+    except BackupError as exc:
+        print(f"Restate backup refused: {exc}", file=sys.stderr)
+        return 1
     backup = RestateBackup(config)
     try:
         if args.recovery_status:

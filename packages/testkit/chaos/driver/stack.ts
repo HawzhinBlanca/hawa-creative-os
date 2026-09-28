@@ -13,18 +13,78 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDb, sql, type Database, type Kysely } from '@hawa/db';
 
-export const PROJECT = 'hawa-chaos';
 export const CHAOS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const REPO_ROOT = resolve(CHAOS_DIR, '..', '..', '..');
 const COMPOSE_FILE = join(CHAOS_DIR, 'docker-compose.chaos.yml');
 const RUN_DIR = join(CHAOS_DIR, '.run');
-const ENV_FILE = join(RUN_DIR, 'chaos.env');
 export const RECOVERY_OVERRIDE = join(RUN_DIR, 'recovery.compose.json');
 
-export const PORTS = { postgres: 56432, restateAdmin: 56070, restateIngress: 56080, fakes: 56090 } as const;
-export const FAKES_URL = `http://127.0.0.1:${PORTS.fakes}`;
-export const RESTATE_ADMIN_URL = `http://127.0.0.1:${PORTS.restateAdmin}`;
-export const RESTATE_INGRESS_URL = `http://127.0.0.1:${PORTS.restateIngress}`;
+export interface StackPorts { postgres: number; restateAdmin: number; restateIngress: number; fakes: number }
+const DEFAULT_PROJECT = 'hawa-chaos';
+const DEFAULT_PORTS: StackPorts = { postgres: 56432, restateAdmin: 56070, restateIngress: 56080, fakes: 56090 };
+
+// The shared hawa-chaos project by default. A drill that must not share it (the R10 clean-host restore,
+// ADR-134) names its own project, ports and image tag with configureStack() before it starts anything.
+// These are live bindings: every importer sees the configured values.
+export let PROJECT = DEFAULT_PROJECT;
+export let PORTS: Readonly<StackPorts> = { ...DEFAULT_PORTS };
+export let FAKES_URL = `http://127.0.0.1:${PORTS.fakes}`;
+export let RESTATE_ADMIN_URL = `http://127.0.0.1:${PORTS.restateAdmin}`;
+export let RESTATE_INGRESS_URL = `http://127.0.0.1:${PORTS.restateIngress}`;
+let ENV_FILE = join(RUN_DIR, 'chaos.env');
+let EXTRA_COMPOSE_FILES: string[] = [];
+let IMAGE_TAG: string | null = null;
+
+export interface StackTarget {
+  /** `hawa-chaos` or `hawa-chaos-<suffix>`: every container name keeps the `hawa-chaos-` prefix the kill guard checks. */
+  project: string;
+  ports?: Partial<StackPorts>;
+  /** Tag of the hawa-chaos-core/worker/fakes images (default `local`, shared with every hawa-chaos run). */
+  imageTag?: string;
+  /** Compose files merged after docker-compose.chaos.yml (bind mounts, external volumes, pinned image IDs). */
+  composeFiles?: string[];
+  /** Where the throwaway credentials live (default .run/<project>.env; .run/chaos.env for hawa-chaos). */
+  envFile?: string;
+}
+
+/**
+ * Points every helper here at another compose project. Defaults are today's hawa-chaos values, so a
+ * caller that never configures anything is unchanged. Closes the owner pool of the previous target.
+ */
+export async function configureStack(target: StackTarget): Promise<void> {
+  if (!/^hawa-chaos(-[a-z0-9]{1,24})?$/.test(target.project)) throw new Error(`refusing chaos project name ${target.project}`);
+  if (target.imageTag !== undefined && !/^[a-z0-9][a-z0-9_.-]{0,63}$/.test(target.imageTag)) throw new Error('invalid chaos image tag');
+  const ports = { ...DEFAULT_PORTS, ...(target.ports || {}) };
+  for (const port of Object.values(ports)) {
+    if (!Number.isInteger(port) || port < 50_000 || port > 65_000) throw new Error(`chaos port ${port} is outside 50000-65000`);
+  }
+  await closeDb();
+  PROJECT = target.project;
+  PORTS = ports;
+  FAKES_URL = `http://127.0.0.1:${ports.fakes}`;
+  RESTATE_ADMIN_URL = `http://127.0.0.1:${ports.restateAdmin}`;
+  RESTATE_INGRESS_URL = `http://127.0.0.1:${ports.restateIngress}`;
+  ENV_FILE = target.envFile ?? join(RUN_DIR, target.project === DEFAULT_PROJECT ? 'chaos.env' : `${target.project}.env`);
+  EXTRA_COMPOSE_FILES = [...(target.composeFiles || [])];
+  IMAGE_TAG = target.imageTag ?? null;
+}
+
+/** The environment compose interpolates for the configured target (ports and image tag). */
+function composeEnvironment(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    CHAOS_PORT_POSTGRES: String(PORTS.postgres),
+    CHAOS_PORT_RESTATE_ADMIN: String(PORTS.restateAdmin),
+    CHAOS_PORT_RESTATE_INGRESS: String(PORTS.restateIngress),
+    CHAOS_PORT_FAKES: String(PORTS.fakes),
+    ...(IMAGE_TAG ? { CHAOS_IMAGE_TAG: IMAGE_TAG } : {}),
+  };
+}
+
+/** The throwaway credentials file of the configured target. */
+export function envFile(): string {
+  return ENV_FILE;
+}
 
 export type Service = 'postgres' | 'restate' | 'core' | 'worker-blue' | 'worker-green' | 'fakes' | 'docling' | 'desk' | 'nginx';
 const SERVICES: readonly Service[] = ['postgres', 'restate', 'core', 'worker-blue', 'worker-green', 'fakes', 'docling', 'desk', 'nginx'];
@@ -81,13 +141,13 @@ export function secrets(): ChaosSecrets {
     writeFileSync(ENV_FILE, Object.entries(out).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
     return out as unknown as ChaosSecrets;
   }
-  mkdirSync(RUN_DIR, { recursive: true });
+  mkdirSync(dirname(ENV_FILE), { recursive: true });
   writeFileSync(ENV_FILE, Object.entries(made).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
   return made;
 }
 
 function run(cmd: string, args: string[], options: { allowFail?: boolean; timeoutMs?: number; quiet?: boolean } = {}): { status: number; stdout: string; stderr: string } {
-  const res = spawnSync(cmd, args, { cwd: CHAOS_DIR, encoding: 'utf8', timeout: options.timeoutMs ?? 20 * 60 * 1000, maxBuffer: 64 * 1024 * 1024 });
+  const res = spawnSync(cmd, args, { cwd: CHAOS_DIR, encoding: 'utf8', timeout: options.timeoutMs ?? 20 * 60 * 1000, maxBuffer: 64 * 1024 * 1024, env: composeEnvironment() });
   const status = res.status ?? -1;
   if (status !== 0 && !options.allowFail) {
     throw new Error(`${cmd} ${args.join(' ')} failed (${status}): ${(res.stderr || res.stdout || String(res.error || '')).slice(-2000)}`);
@@ -98,7 +158,8 @@ function run(cmd: string, args: string[], options: { allowFail?: boolean; timeou
 export function compose(args: string[], options: { allowFail?: boolean; timeoutMs?: number } = {}) {
   secrets();
   return run('docker', ['compose', '-p', PROJECT, '-f', COMPOSE_FILE,
-    ...(existsSync(RECOVERY_OVERRIDE) ? ['-f', RECOVERY_OVERRIDE] : []), '--env-file', ENV_FILE, ...args], options);
+    ...(PROJECT === DEFAULT_PROJECT && existsSync(RECOVERY_OVERRIDE) ? ['-f', RECOVERY_OVERRIDE] : []),
+    ...EXTRA_COMPOSE_FILES.flatMap((file) => ['-f', file]), '--env-file', ENV_FILE, ...args], options);
 }
 
 function containerOf(service: Service): string {

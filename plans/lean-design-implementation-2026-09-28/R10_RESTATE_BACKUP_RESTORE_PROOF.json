@@ -1,0 +1,588 @@
+{
+  "proof": "R10 Restate backup and clean-host restore (ADR-134)",
+  "date": "2026-09-28",
+  "status": "passed_on_disposable_stacks",
+  "passed": true,
+  "checksPassed": 47,
+  "checksTotal": 47,
+  "productionTouched": false,
+  "productionStatement": "No SQL, docker exec, deploy, stop or restart against any hawa-production-* resource. Read-only docker metadata only: `docker system df -v` (Restate volume size 4.733 MB), `docker ps`/`docker inspect` of containers built from the Restate image (node-name guard; env compared, never printed), and the names (not values) of the nightly and watchdog launch agents' environment plus `stat` of the configured archive key file (mode 0600, 64 bytes).",
+  "baseCommit": "3f3d71ca768436a960feec35a069bf2aee7318dc",
+  "drillWindow": {
+    "startedAt": "2026-09-28T18:38:51.521Z",
+    "finishedAt": "2026-09-28T18:42:05.005Z"
+  },
+  "what": {
+    "source": "compose project hawa-chaos-r10s (ports 57432/57070/57080/57090), worker poller, lifecycle chats, file store as a host directory, Restate health check at production cadence (10 s interval)",
+    "cleanHost": "compose project hawa-chaos-r10d (ports 58432/58070/58080): own network and volumes, PostgreSQL initialised with the roles script only, recorded image IDs, restored from the archive alone",
+    "outsideWorld": "the source project's fakes container (Telegram, Canva, Drive, models) survives the loss of the source host and is attached to the clean host's network under the provider names; its ledgers count the effects of both hosts",
+    "notProved": [
+      "a second physical machine",
+      "real Telegram/Canva/Google acceptance",
+      "production-sized data or a production RTO",
+      "production enablement (not done)",
+      "work done on the source after the capture (the source worker was frozen before the restored capture; see ADR-134 on the recovery point)"
+    ]
+  },
+  "commands": [
+    "[night 1] bash infra/backup/nightly_backup.sh (env: HAWA_BACKUP_ARCHIVE_DEST, HAWA_BACKUP_ARCHIVE_DIR, HAWA_BACKUP_ARCHIVE_KEYFILE, HAWA_BACKUP_DB, HAWA_BACKUP_MIN_BYTES, HAWA_BACKUP_NOTIFY_ENV, HAWA_BACKUP_PG_CONTAINER, HAWA_BACKUP_SNAPSHOT_DIR, HAWA_BLOBS_DIR, HAWA_BLOB_GC_CMD, HAWA_CONTAINER_LOGS_DIR, HAWA_RESTATE_BACKUP_COMPOSE_ENV, HAWA_RESTATE_BACKUP_COMPOSE_FILES, HAWA_RESTATE_BACKUP_COMPOSE_PROJECT, HAWA_RESTATE_BACKUP_CONTAINER, HAWA_RESTATE_BACKUP_CORE_CONTAINER, HAWA_RESTATE_BACKUP_DATABASE, HAWA_RESTATE_BACKUP_DRAIN_SECONDS, HAWA_RESTATE_BACKUP_ENABLED, HAWA_RESTATE_BACKUP_HELPER_IMAGE, HAWA_RESTATE_BACKUP_NODE_NAME, HAWA_RESTATE_BACKUP_POSTGRES_CONTAINER, HAWA_RESTATE_BACKUP_STATE, HAWA_RESTATE_BACKUP_VOLUME, HAWA_SCRATCH_DB_SUFFIX)",
+    "[night 2] bash infra/backup/nightly_backup.sh (env: HAWA_BACKUP_ARCHIVE_DEST, HAWA_BACKUP_ARCHIVE_DIR, HAWA_BACKUP_ARCHIVE_KEYFILE, HAWA_BACKUP_DB, HAWA_BACKUP_MIN_BYTES, HAWA_BACKUP_NOTIFY_ENV, HAWA_BACKUP_PG_CONTAINER, HAWA_BACKUP_SNAPSHOT_DIR, HAWA_BLOBS_DIR, HAWA_BLOB_GC_CMD, HAWA_CONTAINER_LOGS_DIR, HAWA_RESTATE_BACKUP_COMPOSE_ENV, HAWA_RESTATE_BACKUP_COMPOSE_FILES, HAWA_RESTATE_BACKUP_COMPOSE_PROJECT, HAWA_RESTATE_BACKUP_CONTAINER, HAWA_RESTATE_BACKUP_CORE_CONTAINER, HAWA_RESTATE_BACKUP_DATABASE, HAWA_RESTATE_BACKUP_DRAIN_SECONDS, HAWA_RESTATE_BACKUP_ENABLED, HAWA_RESTATE_BACKUP_HELPER_IMAGE, HAWA_RESTATE_BACKUP_NODE_NAME, HAWA_RESTATE_BACKUP_POSTGRES_CONTAINER, HAWA_RESTATE_BACKUP_STATE, HAWA_RESTATE_BACKUP_VOLUME, HAWA_SCRATCH_DB_SUFFIX)",
+    "[restore] python3 infra/backup/restate_nightly.py --verify-pair <archive>/hawa_20260928T184009Z.restate.json",
+    "[restore] python3 infra/backup/restate_restore_rehearsal.py --pair <pair> --key-file <key> --compose-file packages/testkit/chaos/docker-compose.chaos.yml --source-volume hawa-chaos-r10s_chaos_restate",
+    "[restore] openssl enc -d \u2026 hawa_<stamp>.dump.enc; runbooks/10_backup_restore.md restore-swap block with PG=hawa-chaos-r10d-postgres-1 DB=hawa_chaos",
+    "[restore] openssl enc -d \u2026 blobs/<pack> | tar -xkf - (runbook step 4); blob-verify.js --dir (runbook step 5, in the pinned Core image)",
+    "[restore] python3 infra/backup/restate_restore_rehearsal.py \u2026 --restore-into hawa-chaos-r10d-restored-restate",
+    "HAWA_R10_SCRATCH=<scratch> npx tsx packages/testkit/chaos/r10-restore.ts   (the whole drill; receipt packages/testkit/chaos/.run/r10-restore.json)"
+  ],
+  "images": {
+    "core": "sha256:9637415576b67322852df8f4d649699b9b1a013673c440b52a9f28b12341a7bd",
+    "worker": "sha256:670113c1d6eefe7bb3f357cbab204d5765a5bce94045c96843e634068d480709",
+    "fakes": "sha256:570af11305abb95db2cee1c4e85901cda07bf059ba2b766c7c134ccd0eecd544",
+    "restate": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+    "postgres": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+    "helper": "ghcr.io/restatedev/restate@sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+    "buildCommits": {
+      "core": "3f3d71ca768436a960feec35a069bf2aee7318dc",
+      "worker": "3f3d71ca768436a960feec35a069bf2aee7318dc"
+    }
+  },
+  "archive": {
+    "keyFile": "throwaway 32-byte random hex key generated in the scratch directory (0600), never printed, deleted with the scratch directory",
+    "helperImage": "ghcr.io/restatedev/restate@sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+    "night1": {
+      "stamp": "20260928T183923Z",
+      "pair": "hawa_20260928T183923Z.restate.json",
+      "restateManifest": "restate_20260928T183935Z.json",
+      "manifest": {
+        "capturedAt": "2026-09-28T18:39:36.957210+00:00",
+        "serviceRecoveredAt": "2026-09-28T18:39:49.276466+00:00",
+        "runningInvocationsAtStop": 0,
+        "regularFiles": 51,
+        "encryptedBytes": 798752,
+        "restateImageId": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+        "nodeName": "hawa-restate-r10-1",
+        "volume": "hawa-chaos-r10s_chaos_restate",
+        "composeSha256": "9430ef1a3f008127b9006f1bb524506554c53db0adaeaa17283e17800eace2d2"
+      }
+    },
+    "night2": {
+      "stamp": "20260928T184009Z",
+      "pair": "hawa_20260928T184009Z.restate.json",
+      "restateManifest": "restate_20260928T184021Z.json",
+      "manifest": {
+        "capturedAt": "2026-09-28T18:40:53.064765+00:00",
+        "serviceRecoveredAt": "2026-09-28T18:41:04.304361+00:00",
+        "runningInvocationsAtStop": 1,
+        "regularFiles": 58,
+        "encryptedBytes": 931872,
+        "restateImageId": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+        "nodeName": "hawa-restate-r10-1",
+        "volume": "hawa-chaos-r10s_chaos_restate",
+        "composeSha256": "9430ef1a3f008127b9006f1bb524506554c53db0adaeaa17283e17800eace2d2"
+      }
+    }
+  },
+  "timings": {
+    "night1_nothingRunning": {
+      "nightlySeconds": 26.517,
+      "intakePausedSeconds": 13.563,
+      "restateUnavailableSeconds": 11.554,
+      "manifestCaptureToRecoverySeconds": 12.319,
+      "dumpStampToRestateCaptureSeconds": 13.957,
+      "runningInvocationsAtStop": 0,
+      "monitor": {
+        "samples": 110,
+        "resolutionMs": 250,
+        "intakePausedAt": "2026-09-28T18:39:35.342Z",
+        "intakeReleasedAt": "2026-09-28T18:39:48.905Z",
+        "intakePausedSeconds": 13.563,
+        "restateStoppedAt": "2026-09-28T18:39:36.848Z",
+        "restateHealthyAgainAt": "2026-09-28T18:39:48.402Z",
+        "restateUnavailableSeconds": 11.554,
+        "unreadableSwitchSamples": 0
+      }
+    },
+    "night2_oneRunningInvocation_drain30s": {
+      "nightlySeconds": 55.913,
+      "intakePausedSeconds": 42.362,
+      "restateUnavailableSeconds": 10.794,
+      "manifestCaptureToRecoverySeconds": 11.24,
+      "dumpStampToRestateCaptureSeconds": 44.064,
+      "runningInvocationsAtStop": 1,
+      "monitor": {
+        "samples": 225,
+        "resolutionMs": 250,
+        "intakePausedAt": "2026-09-28T18:40:21.914Z",
+        "intakeReleasedAt": "2026-09-28T18:41:04.276Z",
+        "intakePausedSeconds": 42.362,
+        "restateStoppedAt": "2026-09-28T18:40:52.978Z",
+        "restateHealthyAgainAt": "2026-09-28T18:41:03.772Z",
+        "restateUnavailableSeconds": 10.794,
+        "unreadableSwitchSamples": 0
+      }
+    },
+    "productionEstimate": "Intake pause = drain wait (0 s when nothing runs; up to HAWA_RESTATE_BACKUP_DRAIN_SECONDS, default 300 s) + stop + copy/encrypt of a 4.7 MB volume + restart + the 10 s health interval: about 12-15 s on a quiet night, about 5 min 15 s if an invocation is stuck running.",
+    "restore": {
+      "secondsFromLossToRestoreStart": 2.384,
+      "cumulativeSecondsFromRestoreStart": {
+        "pairVerified": 0.506,
+        "postgresRestored": 6.102,
+        "filesRestored": 7.729,
+        "restateStarted": 21.969,
+        "stackReady": 34.533
+      },
+      "inFlightFinishedSecondsAfterStackReady": 12.214
+    }
+  },
+  "telegramDuringPause": {
+    "queuedAt": "2026-09-28T18:39:37.041Z",
+    "returnedByGetUpdatesAt": [
+      "2026-09-28T18:39:37.175Z",
+      "2026-09-28T18:39:52.247Z"
+    ],
+    "handedToChatInboxAt": "2026-09-28T18:39:52.256Z",
+    "releasedAt": "2026-09-28T18:39:48.905Z",
+    "getUpdatesCallsDuringPause": 2,
+    "secondsFromQueueToHandOn": 15.215
+  },
+  "inFlightAtCapture": [
+    {
+      "id": "inv_16sne0AiWeg01cAvOGKbmwqZFQX56fDd0S",
+      "target_service_name": "TelegramSender",
+      "target_service_key": "9300002",
+      "target_handler_name": "send",
+      "status": "backing-off",
+      "idempotency_key": "af6cb240-3c3d-5865-93fa-74ad521b0686:3:office-revision-notify",
+      "pinned_deployment_id": "dp_14wbpFiEtlryET6oAQuI9od",
+      "last_failure_error_code": "RT0007"
+    },
+    {
+      "id": "inv_1hSwA0ok8mqJ1E0nPIXnNYxfOBQ6nAoRed",
+      "target_service_name": "RequestLifecycle",
+      "target_service_key": "af6cb240-3c3d-5865-93fa-74ad521b0686",
+      "target_handler_name": "reminderTick",
+      "status": "scheduled",
+      "idempotency_key": "lifecycle:reminder:af6cb240-3c3d-5865-93fa-74ad521b0686:3"
+    },
+    {
+      "id": "inv_1kUjsFX0NFHc2Pf7srNVbJTkjnU1nLYDQk",
+      "target_service_name": "ChatInbox",
+      "target_service_key": "9300003",
+      "target_handler_name": "handleUpdate",
+      "status": "running",
+      "idempotency_key": "tg-90620733644",
+      "pinned_deployment_id": "dp_14wbpFiEtlryET6oAQuI9od"
+    }
+  ],
+  "inFlightRequests": [
+    {
+      "chat_id": "9300001",
+      "stage": "in_review",
+      "rev": "2"
+    },
+    {
+      "chat_id": "9300002",
+      "stage": "manual",
+      "rev": "3"
+    },
+    {
+      "chat_id": "9300005",
+      "stage": "in_review",
+      "rev": "2"
+    }
+  ],
+  "invocationsResumed": [
+    {
+      "name": "resume: every invocation in flight at the capture finished on the clean host",
+      "ok": true,
+      "detail": "inv_1hSwA0ok RequestLifecycle.reminderTick:scheduled, inv_1kUjsFX0 ChatInbox.handleUpdate:completed, inv_16sne0Ai TelegramSender.send:completed"
+    },
+    {
+      "name": "resume: the 24-hour reminder is still scheduled for the same moment (not lost, not fired early)",
+      "ok": true,
+      "detail": "before scheduled due 2026-09-29T18:40:05.719Z; after scheduled due 2026-09-29T18:40:05.719Z"
+    }
+  ],
+  "reminderTimer": {
+    "atCapture": {
+      "created_at": "2026-09-28T18:40:05.721Z",
+      "modified_at": "2026-09-28T18:40:05.721Z",
+      "scheduled_at": "2026-09-28T18:40:05.721Z",
+      "scheduled_start_at": "2026-09-29T18:40:05.719Z"
+    },
+    "afterRestore": {
+      "created_at": "2026-09-28T18:40:05.721Z",
+      "modified_at": "2026-09-28T18:40:05.721Z",
+      "scheduled_at": "2026-09-28T18:40:05.721Z",
+      "scheduled_start_at": "2026-09-29T18:40:05.719Z"
+    }
+  },
+  "requestsFinal": [
+    {
+      "chat_id": "9300001",
+      "stage": "delivered",
+      "rev": "5"
+    },
+    {
+      "chat_id": "9300002",
+      "stage": "manual",
+      "rev": "3"
+    },
+    {
+      "chat_id": "9300003",
+      "stage": "in_review",
+      "rev": "2"
+    },
+    {
+      "chat_id": "9300005",
+      "stage": "in_review",
+      "rev": "2"
+    }
+  ],
+  "effects": {
+    "atDrillStart": {
+      "telegramDelivered": 0,
+      "telegramRefused": 0,
+      "telegramDeliveredByChat": {},
+      "canvaOperations": 0,
+      "driveFiles": 0,
+      "paidModelCalls": 0,
+      "unmatchedModelCalls": 0
+    },
+    "atCapture": {
+      "telegramDelivered": 9,
+      "telegramRefused": 1,
+      "telegramDeliveredByChat": {
+        "9000001": 3,
+        "9300001": 2,
+        "9300002": 2,
+        "9300005": 2
+      },
+      "canvaOperations": 15,
+      "driveFiles": 0,
+      "paidModelCalls": 3,
+      "unmatchedModelCalls": 0
+    },
+    "afterNight2": {
+      "telegramDelivered": 9,
+      "telegramRefused": 1,
+      "telegramDeliveredByChat": {
+        "9000001": 3,
+        "9300001": 2,
+        "9300002": 2,
+        "9300005": 2
+      },
+      "canvaOperations": 15,
+      "driveFiles": 0,
+      "paidModelCalls": 3,
+      "unmatchedModelCalls": 0
+    },
+    "final": {
+      "telegramDelivered": 16,
+      "telegramRefused": 1,
+      "telegramDeliveredByChat": {
+        "9000001": 4,
+        "9300001": 5,
+        "9300002": 3,
+        "9300003": 2,
+        "9300005": 2
+      },
+      "canvaOperations": 20,
+      "driveFiles": 2,
+      "paidModelCalls": 4,
+      "unmatchedModelCalls": 0
+    }
+  },
+  "duplicateEffects": 0,
+  "checks": [
+    {
+      "name": "night 1: nightly_backup.sh exits 0 with restate=paired_archive",
+      "ok": true,
+      "detail": "exit 0 in 26.5 s; 2026-09-28T18:39:50Z OK 20260928T183923Z bytes=5422135 tasks=1 events=3 sha256=\u2026 dump_s=1 blobs=1 blob_bytes=1560607 new_blobs=1 refs_without_row=0 restate=paired_archive gc_deleted=0"
+    },
+    {
+      "name": "night 1: Restate restarted in place, not recreated",
+      "ok": true,
+      "detail": "container 23036d21fb40 before and 23036d21fb40 after"
+    },
+    {
+      "name": "night 1: intake is released and Restate healthy afterwards",
+      "ok": true,
+      "detail": "{\"t\":1790620790917,\"switchOn\":true,\"restate\":\"running/healthy\"}"
+    },
+    {
+      "name": "night 1: restate_nightly.py --verify-pair re-reads and decrypts the three archived members",
+      "ok": true,
+      "detail": "{\"status\": \"verified_pair\", \"dumpName\": \"hawa_20260928T183923Z.dump.enc\", \"restateManifestName\": \"restate_20260928T183935Z.json\"}"
+    },
+    {
+      "name": "night 1: a brief sent while Restate was stopped for the capture is not lost and is handed on once",
+      "ok": true,
+      "detail": "queued 2026-09-28T18:39:37.041Z; intake released 2026-09-28T18:39:48.905Z; returned by getUpdates at 2026-09-28T18:39:37.175Z, 2026-09-28T18:39:52.247Z; handed to ChatInbox 2026-09-28T18:39:52.256Z; 2 getUpdates calls during the pause; ChatInbox [\"completed\"]; task 30877b1c-6e93-4ed4-8f46-6d15d9c3c3bb"
+    },
+    {
+      "name": "in flight at the capture: a RequestLifecycle waiting for the office (chat A), a 24-hour reminder timer, a TelegramSender holding a refused notice, a running ChatInbox",
+      "ok": true,
+      "detail": "TelegramSender.send[9300002]:backing-off, RequestLifecycle.reminderTick[af6cb240-3c3d-5865-93fa-74ad521b0686]:scheduled, ChatInbox.handleUpdate[9300003]:running"
+    },
+    {
+      "name": "night 2: nightly_backup.sh exits 0 with restate=paired_archive",
+      "ok": true,
+      "detail": "exit 0 in 55.9 s; 2026-09-28T18:41:04Z OK 20260928T184009Z bytes=5436288 tasks=3 events=10 sha256=\u2026 dump_s=1 blobs=3 blob_bytes=4681821 new_blobs=2 refs_without_row=0 restate=paired_archive gc_deleted=0"
+    },
+    {
+      "name": "night 2: Restate restarted in place, not recreated",
+      "ok": true,
+      "detail": "container 23036d21fb40 before and 23036d21fb40 after"
+    },
+    {
+      "name": "night 2: intake is released and Restate healthy afterwards",
+      "ok": true,
+      "detail": "{\"t\":1790620865533,\"switchOn\":true,\"restate\":\"running/healthy\"}"
+    },
+    {
+      "name": "night 2: restate_nightly.py --verify-pair re-reads and decrypts the three archived members",
+      "ok": true,
+      "detail": "{\"status\": \"verified_pair\", \"dumpName\": \"hawa_20260928T184009Z.dump.enc\", \"restateManifestName\": \"restate_20260928T184021Z.json\"}"
+    },
+    {
+      "name": "nothing left the source host between the capture and its loss",
+      "ok": true,
+      "detail": "at capture {\"telegramDelivered\":9,\"telegramRefused\":1,\"telegramDeliveredByChat\":{\"9000001\":3,\"9300001\":2,\"9300002\":2,\"9300005\":2},\"canvaOperations\":15,\"driveFiles\":0,\"paidModelCalls\":3,\"unmatchedModelCalls\":0}; after night 2 {\"telegramDelivered\":9,\"telegramRefused\":1,\"telegramDeliveredByChat\":{\"9000001\":3,\"9300001\":2,\"9300002\":2,\"9300005\":2},\"canvaOperations\":15,\"driveFiles\":0,\"paidModelCalls\":3,\"unmatchedModelCalls\":0}"
+    },
+    {
+      "name": "restore: the paired night verifies on the clean host before anything is created",
+      "ok": true,
+      "detail": "{\"status\": \"verified_pair\", \"dumpName\": \"hawa_20260928T184009Z.dump.enc\", \"restateManifestName\": \"restate_20260928T184021Z.json\"} | ready_for_isolated_boot"
+    },
+    {
+      "name": "restore: the runbook restore-swap block restores the paired dump (restore-check=ok)",
+      "ok": true,
+      "detail": "dump: policies=161 foreign_keys=259 triggers=70 | new database hawa_chaos_restore_20260928t184112z: policies=161 foreign_keys=259 triggers=70 | restore-check=ok: hawa_chaos is the restored copy; the database it replaced is kept as hawa_chaos_before_20260928t184112z"
+    },
+    {
+      "name": "restore: every registered file is back with its exact bytes (blob-verify missing = 0)",
+      "ok": true,
+      "detail": "3 files in the night's manifest from 2 pack(s); blob-verify {\"rows\":3,\"references\":3,\"checked\":3,\"missing\":0,\"corrupt\":0,\"referencedWithoutRow\":0,\"orphanFiles\":0,\"problems\":[]}"
+    },
+    {
+      "name": "restore: restate_restore_rehearsal.py --restore-into fills the new volume with exactly the archive",
+      "ok": true,
+      "detail": "58 files, node hawa-restate-r10-1, image sha256:5cef318c0fb6"
+    },
+    {
+      "name": "restore: exactly one Restate node with the archived node name runs on this Docker host",
+      "ok": true,
+      "detail": "running: [\"hawa-chaos-r10d-restate-1\"]"
+    },
+    {
+      "name": "restore: the restored node holds the same unfinished invocations, before any writer starts",
+      "ok": true,
+      "detail": "3 before the capture, 3 restored: TelegramSender.send:backing-off, RequestLifecycle.reminderTick:scheduled, ChatInbox.handleUpdate:backing-off"
+    },
+    {
+      "name": "restore: the worker deployment registered on the source is the one the restored node knows (no re-registration)",
+      "ok": true,
+      "detail": "1 deployment(s)"
+    },
+    {
+      "name": "restore: one worker runs for the restored node (no second colour, the source worker is gone)",
+      "ok": true,
+      "detail": "[\"hawa-chaos-r10d-worker-blue-1\"]"
+    },
+    {
+      "name": "restore: the clean host runs the recorded image IDs",
+      "ok": true,
+      "detail": "{\"postgres\":\"sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f\",\"restate\":\"sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9\",\"core\":\"sha256:9637415576b67322852df8f4d649699b9b1a013673c440b52a9f28b12341a7bd\",\"worker-blue\":\"sha256:670113c1d6eefe7bb3f357cbab204d5765a5bce94045c96843e634068d480709\"}"
+    },
+    {
+      "name": "restore: no store of the source host is mounted on the clean host",
+      "ok": true,
+      "detail": "/Users/hawzhin/Hawdesign/.claude/worktrees/agent-a4ecce93227ca4d3a/infra/docker/00-init-roles.sql, hawa-chaos-r10d_chaos_postgres, hawa-chaos-r10d-restored-restate, hawa-chaos-r10s_chaos_ca, /host_mnt<scratch>/dst-blobs"
+    },
+    {
+      "name": "resume: every invocation in flight at the capture finished on the clean host",
+      "ok": true,
+      "detail": "inv_1hSwA0ok RequestLifecycle.reminderTick:scheduled, inv_1kUjsFX0 ChatInbox.handleUpdate:completed, inv_16sne0Ai TelegramSender.send:completed"
+    },
+    {
+      "name": "resume: the 24-hour reminder is still scheduled for the same moment (not lost, not fired early)",
+      "ok": true,
+      "detail": "before scheduled due 2026-09-29T18:40:05.719Z; after scheduled due 2026-09-29T18:40:05.719Z"
+    },
+    {
+      "name": "chat B: the notice Telegram refused before the capture is sent once after the restore",
+      "ok": true,
+      "detail": "3 messages in chat B, all distinct"
+    },
+    {
+      "name": "chat C: the ChatInbox running at the capture completes once, one task, and its design reaches office review",
+      "ok": true,
+      "detail": "tasks=1; ChatInbox [{\"status\":\"completed\"}]"
+    },
+    {
+      "name": "chat A: one task per scripted request",
+      "ok": true,
+      "detail": "tasks=1"
+    },
+    {
+      "name": "chat A: design_revisions per task = 1",
+      "ok": true,
+      "detail": "design_revisions=1"
+    },
+    {
+      "name": "chat A: approvals = 1",
+      "ok": true,
+      "detail": "approvals=1"
+    },
+    {
+      "name": "chat A: publications = 1, state 'complete'",
+      "ok": true,
+      "detail": "publications=[\"complete\"]"
+    },
+    {
+      "name": "chat A: final task state",
+      "ok": true,
+      "detail": "state=complete"
+    },
+    {
+      "name": "chat A: each message reaches the requester once",
+      "ok": true,
+      "detail": "5 sends, all distinct"
+    },
+    {
+      "name": "chat A: no office alert without an uncertain send",
+      "ok": true,
+      "detail": "uncertain sends expected=0 office alerts naming the task=0"
+    },
+    {
+      "name": "chat A: no paid call runs twice",
+      "ok": true,
+      "detail": "4 paid calls: canva_design_plan\u00d71, canva_design_plan\u00d71, canva_design_plan\u00d71, canva_design_plan\u00d71"
+    },
+    {
+      "name": "chat A: the 2 approved files are archived to Drive once each",
+      "ok": true,
+      "detail": "drive files for the task=2"
+    },
+    {
+      "name": "chat A: the requester has the 2 approved files",
+      "ok": true,
+      "detail": "documents shown=2"
+    },
+    {
+      "name": "chat A: the Delivery workflow delivered it, and reported every run it started",
+      "ok": true,
+      "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+    },
+    {
+      "name": "chat A: no notify.published command for a workflow delivery",
+      "ok": true,
+      "detail": "notify.published=0"
+    },
+    {
+      "name": "chat A: each Delivery run completed",
+      "ok": true,
+      "detail": "[\"d4ca90464283:completed\"]"
+    },
+    {
+      "name": "chat A: one Canva import per task",
+      "ok": true,
+      "detail": "imports=1 exports=2"
+    },
+    {
+      "name": "chat A: one design run (TaskWorkflow or DesignRun), completed",
+      "ok": true,
+      "detail": "[\"DesignRun:completed\"]"
+    },
+    {
+      "name": "chat A: no paused invocation",
+      "ok": true,
+      "detail": "paused=0"
+    },
+    {
+      "name": "chat A: no journal mismatch (RT0016)",
+      "ok": true,
+      "detail": "RT0016=0"
+    },
+    {
+      "name": "no Telegram message, file or notice reached any chat twice (source and clean host together)",
+      "ok": true,
+      "detail": "none"
+    },
+    {
+      "name": "no paid model call ran twice",
+      "ok": true,
+      "detail": "none"
+    },
+    {
+      "name": "one Canva import per task",
+      "ok": true,
+      "detail": "0 tasks with more than one import"
+    },
+    {
+      "name": "no paused invocation and no journal mismatch on the clean host",
+      "ok": true,
+      "detail": "paused or RT0016: 0"
+    },
+    {
+      "name": "no office alert (no send became uncertain)",
+      "ok": true,
+      "detail": "0 alerts"
+    }
+  ],
+  "attempts": [
+    {
+      "run": 1,
+      "result": "refused before any change",
+      "finding": "restate_nightly.py read GET /v1/ingress/status without the operator bearer; Core answered 401, so every --plan/--apply and watchdog --recover would be refused in production. Fixed (ADR-134) with CoreSwitchWireTest."
+    },
+    {
+      "run": 2,
+      "result": "12/13 then stopped",
+      "finding": "drill defects: the one-off blob-verify container needed the restored Restate volume to exist before compose ran; its error text carried the throwaway owner URL (drill now passes it through the environment, scrubs receipts, and the log was deleted); the pause-update check assumed getUpdates returns only after release."
+    },
+    {
+      "run": 3,
+      "result": "stopped by the node-name guard",
+      "finding": "--restore-into refused because another session's hawa-chaos stack was running a Restate with the same node name (hawa-restate-chaos-1). The drill now uses its own node name, hawa-restate-r10-1."
+    },
+    {
+      "run": 4,
+      "result": "45/47",
+      "finding": "two check defects, no product defect: the ChatInbox count included its setMode handler, and the pause-update check required the hand-on after the release while the poller's 5 s switch cache handed it to a restarted Restate 10 s before the release. Timer timestamps are now read with SELECT *."
+    },
+    {
+      "run": 5,
+      "result": "47/47 passed",
+      "finding": "this receipt"
+    }
+  ],
+  "findings": [
+    "BUG (fixed, ADR-134): the Core switch status read had no bearer; enabling the flag before this fix fails every night.",
+    "The nightly pause is dominated by the Restate health-check interval (10 s); Restate itself restarts in about a second.",
+    "A running invocation at 03:30 holds intake paused for the whole drain (default 300 s) before the capture proceeds anyway (runningInvocationsAtStop is recorded; the invocation resumed correctly after the restore).",
+    "The worker poller reads the kill switch at most every 5 s: an update can be handed on in the first seconds of a pause or up to 5 s after the release. The offset moves only after Restate accepts an update, so nothing is lost; Telegram keeps unconfirmed updates about 24 h.",
+    "Recovery point: work after the last paired night is not restored; updates confirmed after the backup are not offered again by Telegram (lost, requester must resend); a send marked after the dump but journaled before the capture may repeat. Dump-to-capture gap measured 14 s (quiet) and 44 s (with a drain).",
+    "The monthly design.hawa.restore-drill launch agent is not installed on the office Mac (only watchdog, nightly and weekly schema drill are).",
+    "Production archive destination is an iCloud Drive folder; the Restate volume is 4.7 MB, so the added archive is a few MB per night."
+  ],
+  "tests": {
+    "python": "cd infra/backup && python3 -m unittest discover -p \"test_*.py\": 88 passed (includes TargetConfigurationTest 4, CoreSwitchWireTest 1, restore-into/source-volume tests 4)",
+    "vitest_related": "HAWA_TEST_WORKERS=2 npx vitest run packages/testkit/test/watchdog-restate-backup.test.ts packages/db/test/blob-backup.test.ts packages/testkit/chaos/test: 4 files, 40 passed",
+    "typecheck": "pnpm typecheck (tsc -b, scripts, 577 test roots) and npx tsc -p packages/testkit/chaos/tsconfig.json --noEmit: clean",
+    "fullSuite": "pnpm test:db; (cd apps/desk && npx vite build); HAWA_TEST_WORKERS=3 pnpm test: 569 files passed, 7 skipped; 4848 tests passed, 60 skipped; exit 0 (run once, after the drill and every edit except this proof file)",
+    "drillRuns": "r10-restore.ts run 5 times (see attempts); the fifth passed 47/47 and tore both projects down itself"
+  },
+  "sourceHashes": {
+    "infra/backup/restate_nightly.py": "d4e572bc2751673fea572d6ac949d2d0ebf05649d203029cda3787f7bb7eea66",
+    "infra/backup/restate_restore_rehearsal.py": "e17d14c62819d2610589d598f02bc77ddd0d90bca881bcc00d8ec038439c7524",
+    "infra/backup/nightly_backup.sh": "6a2b01c7bf9c7ef4693ea3936ad80dd41f34e0fe9a25f64ba718eacff32d3457",
+    "packages/testkit/chaos/r10-restore.ts": "4618134a09388be948930408e8e70bb043ed2a43b411b65c1d0235aa412040b0",
+    "packages/testkit/chaos/driver/stack.ts": "1f1825d99ca30dfdbfc51efcbfeb96066a53aa4b742c8f3e2ff7f8e467d7bf5f",
+    "packages/testkit/chaos/docker-compose.chaos.yml": "37c40f390a8bac7ff176e378c6f17287c75054bb124b6d5cf8328c6f66b20ea0",
+    "runbooks/10_backup_restore.md": "0e3f179fdcf4b38c1adad2f1c6e800488e1f38a24e07e6d89ed6e52dbbcd4183"
+  },
+  "sourceHashNote": "Hashes of the committed files. The drill ran before two edits: the HAWA_RESTATE_BACKUP_HEALTH_SECONDS range was widened to allow 0 (as before ADR-134; the watchdog test uses it) and the runbook text around the unchanged restore-swap block was rewritten. The receipt's scriptSha256 is the drill script as run.",
+  "drillScriptSha256AsRun": "4618134a09388be948930408e8e70bb043ed2a43b411b65c1d0235aa412040b0"
+}

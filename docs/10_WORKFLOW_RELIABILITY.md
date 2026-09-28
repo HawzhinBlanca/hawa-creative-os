@@ -248,6 +248,8 @@ Chat enrolment for the legacy Delivery workflow is sampled when a Telegram task 
 
 This local rule has database-backed tests. Full ChatInbox handoff of old requests, deployed canary rollback, Restate backup and clean-host restore remain R10 acceptance work.
 
+2026-09-28 (ADR-134): the clean-host restore of one paired night (dump, file packs and Restate archive written by the real nightly with the Restate backup on) passed on disposable stacks: one Restate node, one worker, and a waiting RequestLifecycle, a TelegramSender holding a refused notice, a 24-hour reminder timer and a running ChatInbox all finished exactly once, with no duplicate Telegram send, paid call or Canva import (`runbooks/10_backup_restore.md`, "Clean-host restore of one paired night"). It is not a second machine and the providers are fakes. Enabling the Restate backup in production, a deployed canary rollback and the ChatInbox handoff of old requests remain open.
+
 ## 11. Availability design
 
 The first office deployment can use one core server, but it must include:

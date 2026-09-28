@@ -4,6 +4,8 @@
 # It shares nothing with the office's projects: its own project name (hawa-chaos), volumes, networks
 # and images (hawa-chaos-*:local); host ports only on 127.0.0.1, all above 56000. Start it through
 # the driver (README.md), which writes the throwaway secrets this file reads into .run/chaos.env.
+# CHAOS_PORT_* and CHAOS_IMAGE_TAG default to those values; the R10 restore drill (r10-restore.ts,
+# ADR-134) sets them to run its own projects beside a shared hawa-chaos run.
 #
 # Core and the workers are on the `chaos` network only, which is internal: they cannot reach the
 # internet at all. The provider hosts written into the code (api.telegram.org, api.openai.com, …)
@@ -75,7 +77,7 @@ x-worker: &worker
     dockerfile: infra/docker/Dockerfile.worker
     args:
       HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
-  image: hawa-chaos-worker:local
+  image: hawa-chaos-worker:${CHAOS_IMAGE_TAG:-local}
   restart: "no"
   logging: *logging
   mem_limit: 384m
@@ -89,7 +91,7 @@ x-worker: &worker
 
 services:
   blob-init:
-    image: hawa-chaos-core:local
+    image: hawa-chaos-core:${CHAOS_IMAGE_TAG:-local}
     user: root
     restart: "no"
     logging: *logging
@@ -116,7 +118,7 @@ services:
     # would report losses production cannot have (seen in the first run on 2026-09-24).
     command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=80", "-c", "fsync=${CHAOS_PG_FSYNC:-off}", "-c", "full_page_writes=${CHAOS_PG_FULL_PAGE_WRITES:-off}"]
     ports:
-      - "127.0.0.1:56432:5432"
+      - "127.0.0.1:${CHAOS_PORT_POSTGRES:-56432}:5432"
     volumes:
       - chaos_postgres:/var/lib/postgresql/data
       - ../../../infra/docker/00-init-roles.sql:/docker-entrypoint-initdb.d/00-init-roles.sql:ro
@@ -145,8 +147,8 @@ services:
       # The default RocksDB budget is sized for a server; the chaos stack runs beside production.
       RESTATE_ROCKSDB_TOTAL_MEMORY_SIZE: 256 MiB
     ports:
-      - "127.0.0.1:56070:9070"
-      - "127.0.0.1:56080:8080"
+      - "127.0.0.1:${CHAOS_PORT_RESTATE_ADMIN:-56070}:9070"
+      - "127.0.0.1:${CHAOS_PORT_RESTATE_INGRESS:-56080}:8080"
     volumes:
       - chaos_restate:/restate-data
     networks: [chaos, chaos-edge]
@@ -162,7 +164,7 @@ services:
       dockerfile: infra/docker/Dockerfile.worker
       # The node base stage only: the fakes use nothing but Node itself.
       target: base
-    image: hawa-chaos-fakes:local
+    image: hawa-chaos-fakes:${CHAOS_IMAGE_TAG:-local}
     restart: "no"
     logging: *logging
     mem_limit: 256m
@@ -172,7 +174,7 @@ services:
       CHAOS_CA_DIR: /chaos-ca
       CHAOS_CORE_URL: http://core:3001
     ports:
-      - "127.0.0.1:56090:9000"
+      - "127.0.0.1:${CHAOS_PORT_FAKES:-56090}:9000"
     volumes:
       - ./:/repo/packages/testkit/chaos:ro
       - ../../integrations/test/fake-drive-server.ts:/repo/packages/integrations/test/fake-drive-server.ts:ro
@@ -204,7 +206,7 @@ services:
       dockerfile: infra/docker/Dockerfile.core
       args:
         HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
-    image: hawa-chaos-core:local
+    image: hawa-chaos-core:${CHAOS_IMAGE_TAG:-local}
     restart: "no"
     logging: *logging
     mem_limit: 768m

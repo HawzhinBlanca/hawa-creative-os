@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T18:05:09Z",
+  "generatedAt": "2026-09-28T19:07:55Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 505,
+  "fileCount": 511,
   "files": [
     {
       "path": ".dockerignore",
@@ -31,6 +31,26 @@
       "path": ".github/workflows/ci.yml",
       "sha256": "dfef4edb419a6a2ab67151c98306ea1dd8cc7e8c5176cc6c5b0d556c9f97d7d1",
       "bytes": 6283
+    },
+    {
+      "path": ".pytest_cache/.gitignore",
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
+      "bytes": 37
+    },
+    {
+      "path": ".pytest_cache/CACHEDIR.TAG",
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
+      "bytes": 191
+    },
+    {
+      "path": ".pytest_cache/README.md",
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
+      "bytes": 302
+    },
+    {
+      "path": ".pytest_cache/v/cache/nodeids",
+      "sha256": "96e2286dd4eccf949d6c287a6f5c0979259f2ba46e0b290f605470f02e2b0af1",
+      "bytes": 4044
     },
     {
       "path": "AGENTS.md",
@@ -738,6 +758,11 @@
       "bytes": 4651
     },
     {
+      "path": "adrs/134_restate_clean_host_restore_drill.md",
+      "sha256": "28d0525ccb8193dd0dac898983ea16be5269b8bffd003373f47dd4bef97cc312",
+      "bytes": 7552
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1004,8 +1029,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "c6850c3eba3cad1033ab686611380e715e1850daa10ef4f79f67be8ae1ce5bb4",
-      "bytes": 33913
+      "sha256": "88684a711cf67d9cecae2ec342236ec385a49e05fad29dd682e40e916dbdba2f",
+      "bytes": 34600
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1261,6 +1286,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/OPERATIONS_REVIEW_FIXES_PROOF.json",
       "sha256": "5b246602dc68b9473397c769f6df189bf388617ab04f194528b1f88ad9f6c054",
       "bytes": 17033
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/R10_RESTATE_BACKUP_RESTORE_PROOF.json",
+      "sha256": "1c4237a6d337bbe5719bd527ab78d07e50372ace64581327550b3b2e6e569206",
+      "bytes": 28766
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/RETAINED_RESULTS_PROOF.json",
@@ -1734,8 +1764,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "8f2860c619f9df9b64a5dc55fd7cd6c92d180c46878680584472d1b33c80c461",
-      "bytes": 470647
+      "sha256": "a519f75ef5f5e3503bcebbc34b0469c71950628d3e35afd29296a1a1dacec66b",
+      "bytes": 472448
     },
     {
       "path": "plans/user-stories.csv",
@@ -1814,8 +1844,8 @@
     },
     {
       "path": "runbooks/10_backup_restore.md",
-      "sha256": "438de2f4946a70aa15c69b3cbfd8b1319f5258583eadaf95b9aed67e72243b08",
-      "bytes": 25329
+      "sha256": "0e3f179fdcf4b38c1adad2f1c6e800488e1f38a24e07e6d89ed6e52dbbcd4183",
+      "bytes": 34180
     },
     {
       "path": "runbooks/11_upgrade.md",
