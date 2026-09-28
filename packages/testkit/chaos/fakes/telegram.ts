@@ -29,6 +29,8 @@ export interface SentRecord {
   textHash: string | null;
   /** The first 300 characters, for the report; chaos fixtures carry no personal data. */
   text: string | null;
+  /** The whole text, so the driver can quote it in a reply_to_message as Telegram does. */
+  fullText: string | null;
   documentSha256: string | null;
   fileName: string | null;
   replyMarkup: unknown;
@@ -178,6 +180,7 @@ export class FakeTelegram {
       chat_id: String(fields.chat_id ?? ''),
       textHash: text === null ? null : sha256(text),
       text: text === null ? null : text.slice(0, 300),
+      fullText: text,
       documentSha256: file ? sha256(file.bytes) : null,
       fileName: file?.name ?? null,
       replyMarkup,

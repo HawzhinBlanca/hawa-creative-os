@@ -10,6 +10,8 @@
  *   npx tsx packages/testkit/chaos/run.ts --seed-dump infra/backup/snapshots/predeploy_<stamp>.dump
  *                                        # on a copy of production's data (driver/seed.ts, ADR-137)
  *   npx tsx packages/testkit/chaos/run.ts --lifecycle-chats all   # every chat on the Restate lifecycle (HAWA_LIFECYCLE_CHATS=*)
+ *   npx tsx packages/testkit/chaos/run.ts --poller core --lifecycle-chats none --only R10.H1,R10.K1,R10.K2
+ *                                                   # the 2026-09-28 cutover and its rollback (ADR-136)
  *
  * The scenarios are chaos.test.ts (vitest); this sets HAWA_CHAOS and friends and runs it alone.
  */
@@ -46,8 +48,8 @@ if (seedAt >= 0 && args.includes('--candidate')) {
   process.exit(2);
 }
 const chatsAt = args.indexOf('--lifecycle-chats');
-if (chatsAt >= 0 && !/^(\*|all|\d+(,\d+)*)$/.test(args[chatsAt + 1] ?? '')) {
-  console.error("--lifecycle-chats takes all (or '*') or a comma-separated list of chat ids");
+if (chatsAt >= 0 && !/^(none|all|\*|\d+(,\d+)*)$/.test(args[chatsAt + 1] ?? '')) {
+  console.error("--lifecycle-chats takes chat ids, all (or '*') or none");
   process.exit(2);
 }
 const onlyAt = args.indexOf('--only');
@@ -69,7 +71,9 @@ const env = {
   ...(pollerAt >= 0 && args[pollerAt + 1] ? { CHAOS_TELEGRAM_POLLER: args[pollerAt + 1] } : {}),
   // A copy of production's data under the scenarios (driver/seed.ts); compose never sees the path.
   ...(seedDump ? { HAWA_CHAOS_SEED_DUMP: seedDump } : {}),
-  ...(chatsAt >= 0 ? { CHAOS_LIFECYCLE_CHATS: args[chatsAt + 1] === 'all' ? '*' : args[chatsAt + 1] } : {}),
+  // HAWA_LIFECYCLE_CHATS of Core and the workers at start: chat ids, `all` (`*`), or `none` (set but
+  // empty, as production before 2026-09-28). Without it the compose file's list of flagged chats applies.
+  ...(chatsAt >= 0 ? { CHAOS_LIFECYCLE_CHATS: args[chatsAt + 1] === 'all' ? '*' : args[chatsAt + 1] === 'none' ? '' : String(args[chatsAt + 1] ?? '') } : {}),
   // The Mac also runs the office: one test file, one worker.
   HAWA_TEST_WORKERS: '1',
 };

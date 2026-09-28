@@ -66,6 +66,40 @@ driver takes the lock container `hawa-chaos-lock` (`driver/stack.ts` `acquirePro
 first `down` and waits, saying who holds it, while another run does. `run.ts --down` refuses instead
 of waiting. The lock runs `cat` on the holder's stdin, so it goes away however the holder ends.
 
+## Lifecycle cutover, handoff and rollback as deploys (R10, 2026-09-28, ADR-136)
+
+```sh
+npx tsx packages/testkit/chaos/run.ts --poller core --lifecycle-chats none --only R10.H1,R10.K1,R10.K2
+```
+
+Start from production's configuration before 2026-09-28 (Core polls, `HAWA_LIFECYCLE_CHATS` set but
+empty; `--lifecycle-chats` sets it, `none` meaning empty). Each scenario changes the whole stack's
+configuration the way `infra/docker/deploy.sh` does (`driver/cutover.ts`): Core recreated with the new
+chat list and the poller it must hold, the idle colour created and registered with Restate, Core
+released to the new poller, the old colour drained and removed. So run them alone and in this order.
+
+- `R10.H1`: requests made while Core polled, in five states (waiting for a draft, held on the old
+  colour across the switch; draft in review with the "What should change?" prompt open; approved, not
+  delivered; delivered; a legacy clarification question open), plus a control chat that makes the same
+  follow-ups under the old configuration. Then the switch to `worker` and `*`, with an update sent
+  while both pollers run, and every request continued from Telegram (button presses, replies, a photo
+  reply) and the Desk (approval, Deliver). New requests: a new chat, `/new` in a chat with Core history,
+  and an ordinary brief next to recent and then 48-hour-old Core history.
+- `R10.K1`: lifecycle requests awaiting approval, mid-delivery (held between two files) and waiting for
+  the requester's reply to the office revision notice; the poller and the chat list rolled back by a
+  deploy, with a new brief sent while both pollers run; updates and Desk actions after the rollback;
+  then forward again.
+- `R10.K2`: only the chat list emptied (the worker keeps polling) with a lifecycle request waiting for
+  its requester; then forward again.
+
+Every requester action is a real Telegram update shape (a reply quotes the bot's message and buttons,
+as Telegram does). The checks: each message reaches its chat once; no refusal of a legitimate follow-up
+(stale reply, ambiguous request, `/new` required, parked notice, late change); one ChatInbox invocation
+per `tg-<update_id>`, completed; no update dead-lettered; no update makes two tasks; each old request
+finishes on its pinned executor; the control chat's answers equal the handed-off chat's.
+The project lock (`hawa-chaos-lock`, `driver/stack.ts` `acquireProject`) is taken before the first down;
+a run waits up to three hours for another checkout's run to finish.
+
 ## Isolated full-app candidate rehearsal (2026-09-27)
 
 ### Coordinated recovery mode (ADR-080)

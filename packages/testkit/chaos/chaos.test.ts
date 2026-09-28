@@ -21,6 +21,7 @@ import { randomUUID } from 'node:crypto';
 import { acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, releaseProject, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import { neutralise, restoreDump, verifyEgressFence, type EgressProbe, type NeutraliseReport, type SeedReport } from './driver/seed.js';
+import { chatsOnlyRollback, handoffOfOldRequests, rollbackAndForward } from './driver/cutover-scenarios.js';
 import {
   approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
   OFFICE_CHAT, sendToChatInbox, sentTo, sleep, staffConfirmVisible, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
@@ -982,6 +983,26 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       extra: [{ name: "the second file is sent again no sooner than Telegram's retry_after (3 s)", ok: Boolean(limited && after) && waitedMs >= 3000, detail: `waited ${waitedMs} ms after the 429` }],
     };
   }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
+  // R10 (driver/cutover-scenarios.ts): the cutover of 2026-09-28 and its rollback, as deploys. Run alone,
+  // in this order, from production's earlier configuration:
+  //   run.ts --poller core --lifecycle-chats none --only R10.H1,R10.K1,R10.K2
+  const r10 = enabled && poller === 'core' && process.env.CHAOS_LIFECYCLE_CHATS === '';
+  if (r10 || only.includes('R10.H1')) scenario('R10.H1', 'requests made while Core polled, continued after the switch to the worker poller and every chat on the lifecycle', async (_chat, events) => {
+    if (!r10) throw new Error('R10.H1 starts from --poller core --lifecycle-chats none');
+    const { extra } = await handoffOfOldRequests(newChat, events);
+    return { delivered: false, skipRequestChecks: true, extra };
+  }, 60 * 60_000);
+
+  if (r10 || only.includes('R10.K1')) scenario('R10.K1', 'lifecycle requests in flight, the cutover rolled back by a deploy, updates kept coming, then rolled forward', async (_chat, events) => {
+    const { extra } = await rollbackAndForward(newChat, events);
+    return { delivered: false, skipRequestChecks: true, extra };
+  }, 60 * 60_000);
+
+  if (r10 || only.includes('R10.K2')) scenario('R10.K2', 'the chat list alone rolled back (the worker keeps polling) with a lifecycle request waiting for its requester, then forward', async (_chat, events) => {
+    const { extra } = await chatsOnlyRollback(newChat, events);
+    return { delivered: false, skipRequestChecks: true, extra };
+  }, 60 * 60_000);
 
   scenario('R4', 'two chats: a 19.9 MB picture with a 30 s download in chat A must not delay chat B', async (_chat, events) => {
     const chatA = newChat();
