@@ -39,6 +39,10 @@ export interface BrandKitDefinition {
   contactTokens: string[];
 }
 
+/** KAAE's official logo and symbol, by checksum, as its verified assets record them. */
+export const KAAE_PRIMARY_LOGO_SHA256 = '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc';
+export const KAAE_SYMBOL_SHA256 = 'fc01cc8ed2ba4016e4f701abcb46d5b4f934d9a3c664129d82a475de40439180';
+
 export const CANONICAL_BRAND_KITS: Record<string, BrandKitDefinition> = {
   drustee: {
     id: 'drustee',
@@ -162,7 +166,7 @@ export const CANONICAL_BRAND_KITS: Record<string, BrandKitDefinition> = {
     nameKurdish: 'دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا',
     industry: 'Educational Accreditation & Institutional Quality',
     industryKurdish: 'متمانەبەخشی و ستانداردەکانی خوێندنی باڵا و پەروەردە',
-    verifiedSha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc',
+    verifiedSha256: KAAE_PRIMARY_LOGO_SHA256,
     palette: {
       primary: '#4770A3',      // Official KAAE Blue (Pantone 5415 C)
       secondary: '#0A1628',    // Midnight Depth Foundation

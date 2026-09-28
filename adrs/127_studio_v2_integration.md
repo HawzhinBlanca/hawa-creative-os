@@ -109,6 +109,18 @@ lexical ranking over a hash-verified, KAAE-only collection, and another client's
 library needs its own admission design (approval, hashes, pinning) before any
 client other than KAAE is conditioned on exemplars.
 
+## Decision: the v1 KAAE templates are retired
+
+Ported from 4d3f393d unchanged in substance. The four v1 KAAE template files and
+`CreativeDirectorRunner.generateKaaeOperations` are deleted. They served only the
+chat-intake inline preview (off in production) and `POST /tasks/:id/generate`,
+which now refuses KAAE with 410 `LEGACY_TEMPLATES_RETIRED`: its generic draft could
+pass QA and reach review as a KAAE design nobody designed. A KAAE request without
+copy is still refused `COPY_REQUIRED`. The generic generator loses its KAAE
+styling, `generateCommercialBrandOperations` no longer falls back to KAAE's
+templates for an unknown brand, and seven proof scripts bound to the templates
+are deleted (none ran in CI). KAAE is designed only in the studio.
+
 ## Decision: a Restate backup killed outright is put back by the watchdog
 
 studio-v2's Restate backup was a shell script; its watchdog skipped a pass while a

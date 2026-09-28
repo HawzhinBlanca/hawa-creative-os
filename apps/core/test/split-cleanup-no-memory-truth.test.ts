@@ -55,10 +55,12 @@ describe('with a database, tasks are read from Postgres only', () => {
 
   it('generates from the copy the task was created with, in a Core that did not create it', async () => {
     const taskId = await newTask(core(), { title: 'Cleanup: KAAE copy', clientId: KAAE, headlineCkb: 'بەخێربێن بۆ کەی ئەی ئەی ئی' });
-    // KAAE's template refuses to draw without a headline. The creating Core kept the headline in
-    // memory; any other Core read the task without it and answered COPY_REQUIRED.
+    // A KAAE request without a headline is refused COPY_REQUIRED. The creating Core kept the headline
+    // in memory; any other Core read the task without it and answered COPY_REQUIRED. Read now, the
+    // copy passes, and the legacy generator refuses KAAE itself: it is designed in the studio (ADR-127).
     const res = await core().request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
-    expect(res.status).toBe(202);
+    expect(res.status).toBe(410);
+    expect((await res.json()).title).toBe('LEGACY_TEMPLATES_RETIRED');
   });
 
   it('generates from the brief another Core saved', async () => {
@@ -83,7 +85,7 @@ describe('with a database, tasks are read from Postgres only', () => {
   });
 
   it('shows the QC run Postgres holds on another Core\'s review desk', async () => {
-    const taskId = await newTask(core(), { title: 'Cleanup: review desk', clientId: KAAE, headlineEn: 'Accreditation results' });
+    const taskId = await newTask(core(), { title: 'Cleanup: review desk', clientId: HAWA_STUDIO, headlineEn: 'Accreditation results' });
     const generated = await core().request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
     expect(generated.status).toBe(202);
     // The generator draws a placeholder logo, so QA fails; the evidence was "not run" on every Core
@@ -94,7 +96,7 @@ describe('with a database, tasks are read from Postgres only', () => {
   });
 
   it('counts revision requests made through other Cores toward the repair budget', async () => {
-    const taskId = await newTask(core(), { title: 'Cleanup: three rounds', clientId: KAAE, headlineEn: 'Three rounds' });
+    const taskId = await newTask(core(), { title: 'Cleanup: three rounds', clientId: HAWA_STUDIO, headlineEn: 'Three rounds' });
     const round = async (comment: string) => {
       const app = core();
       expect((await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' })).status).toBe(202);

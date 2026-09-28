@@ -93,8 +93,8 @@ describe('/generate with a database', () => {
     const app = createAppWithClientFixtures({ testAuth: { roleHeader: true },  db });
     const { taskId } = await generate(
       app,
-      'c1000000-0000-4000-8000-000000000002',
-      { title: 'KAAE accreditation announcement', headlineEn: 'Accreditation Announcement', copyEn: 'KAAE announces accreditation results.' },
+      'c1000000-0000-4000-8000-000000000001',
+      { title: 'Studio announcement', headlineEn: 'Announcement', copyEn: 'Results are announced.' },
       auth
     );
 
@@ -121,5 +121,27 @@ describe('/generate with a database', () => {
     });
     expect(approve.status).toBe(412);
     await db.destroy();
+  });
+});
+
+describe('/generate for KAAE', () => {
+  it("is refused: KAAE's v1 templates are retired and its designs are made in the design studio (ADR-127)", async () => {
+    const db = createDb(process.env.TEST_DATABASE_URL!);
+    try {
+      const auth = { ...json, Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };
+      const app = createAppWithClientFixtures({ testAuth: { roleHeader: true }, db });
+      const created = await (await app.request('/v1/tasks', { method: 'POST', headers: { ...auth, 'Idempotency-Key': `gen_${crypto.randomUUID()}` }, body: JSON.stringify({ clientId: 'c1000000-0000-4000-8000-000000000002', title: 'KAAE notice', headlineEn: 'Accreditation Announcement' }) })).json();
+      await app.request(`/v1/tasks/${created.id}/route`, { method: 'POST', headers: auth, body: JSON.stringify({ clientId: 'c1000000-0000-4000-8000-000000000002', reason: 'Client assigned' }) });
+      const res = await app.request(`/v1/tasks/${created.id}/generate`, { method: 'POST', headers: auth });
+      expect(res.status).toBe(410);
+      expect((await res.json()).title).toBe('LEGACY_TEMPLATES_RETIRED');
+      // Nothing was drafted: no revision, no QC run.
+      const runs = await withRlsContext(db, { tenantId: '00000000-0000-4000-a000-000000000001', userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, (trx) =>
+        trx.selectFrom('qc_runs').selectAll().where('task_id', '=', created.id).execute()
+      );
+      expect(runs).toHaveLength(0);
+    } finally {
+      await db.destroy();
+    }
   });
 });

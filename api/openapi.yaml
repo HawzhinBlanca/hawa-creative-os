@@ -516,6 +516,7 @@ paths:
                 maxCostUsd: {type: number, minimum: 0}
       responses:
         '202': {description: Durable generation started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        '410': {description: "LEGACY_TEMPLATES_RETIRED: the client (KAAE) is designed only in the design studio (ADR-127)", content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
         default: {$ref: '#/components/responses/Problem'}
   /v1/designs/{designId}/revisions:
     get:

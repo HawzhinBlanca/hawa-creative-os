@@ -321,23 +321,12 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       const effectiveRules = clientId ? globalFeedbackMiner.getPromotedRules(clientId) : [];
       const isKaaeClient = clientId === KAAE_CLIENT_ID || clientId === 'client-office-1' || clientId === 'client-kaae' || String(clientId).includes('kaae');
       const isBrandClient = clientId === 'client-fastpay' || clientId === 'client-aster' || clientId === 'client-drustee';
-      const kaaeLogoSha = '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc';
+      // KAAE is still refused a request without copy, but gets no inline preview: its v1 templates are
+      // retired (ADR-127) and its designs are made only in the design studio.
       const template = isKaaeClient ? 'kaae' : isBrandClient ? 'brand' : null;
       try {
         if (template && inlineTemplateCopyMissing(template, { headlineEn, headlineCkb, copyEn, copyCkb })) {
           designRefusal = 'COPY_REQUIRED';
-        } else if (isKaaeClient) {
-          generatedOps = creativeDirector.generateKaaeOperations(brief, isInvitation ? 'invitation' : 'announcement', {
-            headlineEn,
-            headlineCkb,
-            copyEn,
-            copyCkb,
-            rawText: payloadText,
-            width: variantWidth,
-            height: variantHeight,
-            logoSha256: kaaeLogoSha,
-            learnedRules: effectiveRules,
-          });
         } else if (isBrandClient) {
           generatedOps = creativeDirector.generateCommercialBrandOperations(clientId!.replace('client-', ''), brief, {
             headlineEn,
