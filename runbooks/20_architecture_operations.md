@@ -291,18 +291,26 @@ npx tsx scripts/request_logs.ts 5c4fd738-b47d-4071-aa53-da5fcab14be9 --dir $S/..
 
 Two things the drill showed:
 
-- **A task id finds Core's lines, not the worker's.** The worker's Restate lines name the task only
-  inside `TaskWorkflow/task-wf-<taskId>/run`, and `request_logs.ts` matches whole tokens, where a
-  leading `-` belongs to the token. Search by the workflow's invocation id instead, which those lines
-  carry as `[inv_…]`; get it with
-  `SELECT id FROM sys_invocation WHERE target_service_key = 'task-wf-<taskId>'`:
+- **A task id finds Core's lines, not the worker's** (fixed 2026-09-28). The worker's Restate lines
+  name the task only inside the invocation's key, `[TaskWorkflow/task-wf-<taskId>/run][inv_…]`, and
+  `request_logs.ts` matched whole tokens, where a leading `-` belongs to the token. It now also takes
+  the id inside the keys that carry one (`task-wf-<id>`, `task-wf-<id>-redrive-<n>`, `dr-<id>[-a<n>]`,
+  `dl-<id>-<approvalId>[:archive:<n>]`; a lifecycle Delivery's key carries the request id, not the
+  task's), and follows the `inv_…` ids on those lines the way it follows request ids, including the
+  worker's lines logged under `restate-inv_…`. Searching by the invocation id still works:
 
   ```sh
-  # Ran on the chaos stack, 2026-09-24 21:21Z.
-  npx tsx scripts/request_logs.ts inv_17q3zCwJNhWz4fc7o8qtYbexBrtgqrIo4k --dir $S/../chaos-logs
-  # … [TaskWorkflow/task-wf-5c4fd738-…/run][inv_17q3zCwJNhWz4fc7o8qtYbexBrtgqrIo4k] INFO: Invocation completed …
-  # 22 line(s) for inv_17q3zCwJNhWz4fc7o8qtYbexBrtgqrIo4k in 5 file(s): worker-green
+  # Ran on the chaos stack, 2026-09-28 13:51Z.
+  npx tsx scripts/load/export-chaos-logs.ts $S/chaos-logs
+  npx tsx scripts/request_logs.ts 399c154a-fef8-4182-a9d1-a2a1a2141780 --dir $S/chaos-logs
+  # … worker-blue  [restate][2026-09-28T10:44:54.595Z][TaskWorkflow/task-wf-399c154a-…/run][inv_1jQLgVMhRi8800zKle1fGXCpKb7JarQsHN] INFO: Starting invocation.
+  # 35 line(s) for 399c154a-fef8-4182-a9d1-a2a1a2141780 in 5 file(s): core, worker-blue
+  #   (before the fix: 13 line(s) … : core)
   ```
+
+  Restate's own log records span several lines (the error, then `restate.invocation.id`,
+  `restate.invocation.target`, …), and each is stored as its own line: the `target` line is found by
+  the task id, the error text above it is not. Read Restate's lines around that time for the rest.
 
 - **`docker logs` goes with its container.** Core had been recreated four times in the drills and its
   export held 15 lines: the first delivery's Core lines were gone. That is why production keeps
