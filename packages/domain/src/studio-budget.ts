@@ -5,9 +5,22 @@ export interface StudioBudget {
   calls: number;
 }
 
+/**
+ * A single request whose advance reservation is larger than what its run has left, although the run
+ * itself is far from its limit (ADR-142). Nothing was sent for it and nothing was spent. It is not a
+ * run that "reached its limit": the office is told the reservation, the remainder and the limit, and
+ * the design can be run again once the limit fits it.
+ */
+export interface StudioReservationShortfall {
+  reservedUsd: number;
+  remainingUsd: number;
+  maxUsd: number | null;
+  accountedUsd: number | null;
+}
+
 export class StudioBudgetExhaustedError extends Error {
   readonly code = 'BUDGET_EXHAUSTED';
-  constructor(message = 'The Studio run has reached its spending or call limit.') {
+  constructor(message = 'The Studio run has reached its spending or call limit.', readonly shortfall?: StudioReservationShortfall) {
     super(message);
     this.name = 'StudioBudgetExhaustedError';
   }
@@ -164,6 +177,7 @@ export function assertStudioBudgetAdmission(usage: StudioBudgetUsage, reservedUs
       'A provider cost exceeded its reservation. Review the pricing policy before requesting more work.');
   }
   if (usage.remainingUsd === null || studioUsdMicros(reservedUsd) > studioUsdMicros(usage.remainingUsd)) {
-    throw new StudioBudgetExhaustedError(`The next request needs a $${reservedUsd.toFixed(6)} reservation; $${(usage.remainingUsd ?? 0).toFixed(6)} remains.`);
+    throw new StudioBudgetExhaustedError(`The next request needs a $${reservedUsd.toFixed(6)} reservation; $${(usage.remainingUsd ?? 0).toFixed(6)} remains.`,
+      { reservedUsd, remainingUsd: usage.remainingUsd ?? 0, maxUsd: usage.maxUsd, accountedUsd: usage.accountedUsd });
   }
 }

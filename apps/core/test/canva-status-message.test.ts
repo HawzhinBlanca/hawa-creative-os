@@ -49,6 +49,17 @@ describe('requester-facing Canva outcome messages', () => {
       expect(msg.text).not.toMatch(/\([A-Z0-9_]{4,}\)/);
     }
   });
+  it('tells the requester a design that stopped on the run limit needs more time and nothing more from them (ADR-142)', () => {
+    const msg = composeCanvaStatusMessage({ taskId, title: 'KAAE: KAAE K-12 Pilot Study', status: 'DESIGN_FAILED', code: 'STUDIO_RUN_LIMIT_TOO_SMALL' });
+    expect(msg.text).toBe("<b>KAAE K-12 Pilot Study</b> needs a little more time. The office is on it and will send your draft here; you don't need to send anything again.");
+    expect(msg.text).not.toMatch(OFFICE_WORDS);
+    expect(msg.text).not.toMatch(/limit|budget|STUDIO_/i);
+    expect(composeCanvaStatusMessage({ taskId, title: 'ڕاپۆرت', status: 'DESIGN_FAILED', code: 'STUDIO_RUN_LIMIT_TOO_SMALL', lang: 'ckb' }).text)
+      .toBe('<b>ڕاپۆرت</b> کەمێک کاتی زیاتری پێویستە. ئۆفیسەکە کاری لەسەر دەکات و ڕەشنووسەکەت لێرە بۆت دەنێرێت؛ پێویست ناکات هیچ شتێک دووبارە بنێریتەوە.');
+    // With no office chat to alert, nobody would run it again: the requester hears the follow-up line instead.
+    expect(composeCanvaStatusMessage({ taskId, title: 'Report', status: 'DESIGN_FAILED', code: 'STUDIO_RUN_LIMIT_TOO_SMALL', officeAlerted: false }).text)
+      .toBe('Someone from the office will follow up here.');
+  });
   it('says someone will follow up when there is no office chat to alert (#15)', () => {
     expect(composeCanvaStatusMessage({ taskId, title: 'Invitation', status: 'DESIGN_FAILED', officeAlerted: false }).text)
       .toBe('Someone from the office will follow up here.');

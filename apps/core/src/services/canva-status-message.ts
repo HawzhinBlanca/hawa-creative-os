@@ -99,6 +99,9 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
       question: `<b>${escapeTelegramHtml(asking.question.trim())}</b>`,
       options: asking.options.slice(0, 3).map((o, i) => `${i + 1}. ${escapeTelegramHtml(o.trim())}`).join('\n'),
     }) + (asks.length ? `\n\n${line(OUTCOME_MESSAGES.designerMakesPart, { list: askLines(asks) })}` : '');
+  } else if (code === 'STUDIO_RUN_LIMIT_TOO_SMALL' && input.officeAlerted !== false) {
+    // ADR-142: nothing was made and nothing is wrong with the request; the office runs it again.
+    body = line(OUTCOME_MESSAGES.designTakingLonger);
   } else if (code === 'CHANGE_NOT_SUPPORTED') {
     // The run stopped before anything was paid for the edit: nothing it could do was asked for.
     body = asks.length ? line(OUTCOME_MESSAGES.changeByDesignerList, { list: askLines(asks) }) : line(OUTCOME_MESSAGES.changeByDesigner);

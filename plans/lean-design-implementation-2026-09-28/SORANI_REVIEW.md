@@ -179,6 +179,7 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `outcomes.designerMakesPart` | A designer will make this part by hand:⏎{list} | دیزاینەرێک ئەم بەشە بە دەست دەکات:⏎{list} | needs native review |
 | `outcomes.changeByDesignerList` | A designer will make this part of your change to {title} by hand:⏎{list}⏎Your last draft stays as it is. Anything else to change? Just write it. | دیزاینەرێک ئەم بەشەی گۆڕانکارییەکەت لە {title} بە دەست دەکات:⏎{list}⏎دوایین ڕەشنووست وەک خۆی دەمێنێتەوە. شتێکی تر هەیە بگۆڕدرێت؟ تەنها بینووسە. | needs native review |
 | `outcomes.changeByDesigner` | A designer will make your change to {title} by hand. Your last draft stays as it is. Anything else to change? Just write it. | دیزاینەرێک گۆڕانکارییەکەت لە {title} بە دەست دەکات. دوایین ڕەشنووست وەک خۆی دەمێنێتەوە. شتێکی تر هەیە بگۆڕدرێت؟ تەنها بینووسە. | needs native review |
+| `outcomes.designTakingLonger` | {title} needs a little more time. The office is on it and will send your draft here; you don't need to send anything again. | {title} کەمێک کاتی زیاتری پێویستە. ئۆفیسەکە کاری لەسەر دەکات و ڕەشنووسەکەت لێرە بۆت دەنێرێت؛ پێویست ناکات هیچ شتێک دووبارە بنێریتەوە. | needs native review |
 | `outcomes.officeWillFinish` | The office will finish {title} and send it to you here. | ئۆفیسەکە {title} تەواو دەکات و لێرە بۆت دەنێرێت. | needs native review |
 | `outcomes.delivered` | Here is your final {title}. 🎉 | فەرموو، ئەمە وەشانی کۆتایی {title}. 🎉 | needs native review |
 | `outcomes.deliveredUnconfirmed` | I've sent your final {title}, but Telegram didn't confirm that it arrived. The office will check, and send it again if it didn't. | وەشانی کۆتایی {title}م بۆ ناردیت، بەڵام تێلێگرام دڵنیایی نەدا کە گەیشتووە. ئۆفیسەکە سەیری دەکات، و ئەگەر نەگەیشتبوو دووبارە دەینێرێتەوە. | needs native review |
@@ -210,4 +211,4 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `albums.somethingWrong` | Something went wrong with these photos. Please send them again, with what you would like designed. | کێشەیەک لەگەڵ ئەم وێنانەدا ڕوویدا. تکایە دووبارە بیاننێرەوە، لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
 | `albums.tooLarge` | These photos are too large together. Please send fewer or smaller photos. | ئەم وێنانە پێکەوە زۆر گەورەن. تکایە ژمارەیەکی کەمتر یان وێنەی بچووکتر بنێرە. | needs native review |
 
-152 lines.
+153 lines.

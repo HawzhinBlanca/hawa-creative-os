@@ -14,11 +14,12 @@ describe('Studio request reservation policy', () => {
   it('counts multilingual bytes, schema, framing and declared output independently', () => {
     const a = reserveStudioText(textBody()), prompt = 'سڵاو بالعربية'.repeat(100);
     const b = reserveStudioText(textBody({ messages: [{ role: 'user', content: prompt }] }));
-    expect(b.inputTokens - a.inputTokens).toBe(2 * (Buffer.byteLength(prompt) - 5));
+    // One token per UTF-8 byte (ADR-142): the byte count itself bounds any byte-level tokenizer.
+    expect(b.inputTokens - a.inputTokens).toBe(Buffer.byteLength(prompt) - 5);
     expect(reserveStudioText(textBody({ max_completion_tokens: 8000 })).usd - a.usd).toBeCloseTo(0.2, 6);
     const schema = reserveStudioText(textBody({ response_format: { description: 'x'.repeat(30000) } }));
     expect(schema.inputTokens).toBeGreaterThan(60000);
-    const long = reserveStudioText(textBody({ messages: [{ role: 'user', content: 'x'.repeat(140000) }] }));
+    const long = reserveStudioText(textBody({ messages: [{ role: 'user', content: 'x'.repeat(280000) }] }));
     expect(long.inputTokens).toBeGreaterThan(272000);
     expect(long.usd).toBeCloseTo((long.inputTokens * 45 + long.outputTokens * 75) / 1e6, 5);
     expect(a.usd).toBeCloseTo((a.inputTokens * 22.5 + a.outputTokens * 50) / 1e6, 5);

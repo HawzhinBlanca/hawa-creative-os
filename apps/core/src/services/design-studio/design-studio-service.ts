@@ -127,6 +127,9 @@ export type Scope = { tenantId: string; actorId: string; role?: string; clientId
 
 class RequestOwnedImageUnavailable extends Error {}
 
+/** ADR-142: the run's failure code when one request's reservation is larger than the run has left. */
+export const STUDIO_RUN_LIMIT_TOO_SMALL = 'STUDIO_RUN_LIMIT_TOO_SMALL';
+
 const optionalImages = (error: unknown): string[] => {
   if (error instanceof RequestOwnedImageUnavailable) throw error;
   return [];
@@ -317,9 +320,18 @@ export class DesignStudioService {
           ORDER BY f.created_at, f.sha256`.execute(db)).rows);
       if (refs.length && !this.blobs) throw new RequestOwnedImageUnavailable('A request-owned image needs its durable blob store');
       if (payload.lifecycleAlbum) found.length = 0;
-      for (const ref of orderedAlbumImages(payload.lifecycleAlbum, refs)) {
+      // The request's own photos are the design's content ("using only the provided photos"). An album
+      // whose stored files no longer match its manifest, or a photo of a type the Studio cannot read,
+      // used to be turned into no images at all by the caller (optionalImages), and the design went on
+      // without them. It stops the run instead, with the reason (2026-09-29).
+      let ordered: typeof refs;
+      try { ordered = orderedAlbumImages(payload.lifecycleAlbum, refs); }
+      catch (error) {
+        throw new RequestOwnedImageUnavailable(`The request's photos cannot be used: ${error instanceof Error ? error.message : String(error)}.`);
+      }
+      for (const ref of ordered) {
         if (!['image/png', 'image/jpeg', 'image/webp'].includes(ref.media_type)) {
-          throw new Error('A request-owned image has an unsupported stored media type');
+          throw new RequestOwnedImageUnavailable('A request-owned image has an unsupported stored media type');
         }
         let bytes: Buffer;
         try { bytes = await this.blobs!.read(ref.sha256, { verify: true }); }
@@ -2355,10 +2367,11 @@ export class DesignStudioService {
       if (err instanceof CanvaFlowError && (err.code === 'PARENT_STILL_RUNNING' || err.code === 'CANVA_RATE_LIMITED')) throw err;
       if (err instanceof StudioBudgetExhaustedError) {
         // Budget exhausted: gracefully handle by selecting best candidate so far
-        return this.handleBudgetExhaustion(s, run, ctx, budget, err.message);
+        return this.handleBudgetExhaustion(s, run, ctx, budget, err);
       }
 
-      if (ctx.pipelineV3) {
+      // The request's own photos could not be read: no pipeline designs it without them.
+      if (ctx.pipelineV3 || err instanceof RequestOwnedImageUnavailable) {
         const errorMsg = err.message || String(err);
         await this.repo.updateRunStatus(runId, s.tenantId, 'failed', {
           diagnostic: `Studio v3 failed at stage ${run.status}: ${errorMsg}`,
@@ -2474,8 +2487,9 @@ export class DesignStudioService {
     run: any,
     ctx: StageContext,
     budget?: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
-    reason?: string
+    error?: StudioBudgetExhaustedError
   ): Promise<StudioResumeResult> {
+    const reason = error?.message;
     // The cap and what reached it, in the run's own record: with the caps lowered to a few designs'
     // worth, the operator needs to see which one a run hit.
     const cap = budget
@@ -2517,6 +2531,25 @@ export class DesignStudioService {
         diagnostic: 'BUDGET_EXHAUSTED',
         winnerCandidateId: bestCandidate.id,
       };
+    }
+
+    // ADR-142: one request larger than what the run has left, with no candidate made yet, is not a run
+    // that spent its limit on candidates QA refused (the owner's report cover of 2026-09-29 was told
+    // "no candidate passed hard QA" before any layout existed). Nothing was sent for that request.
+    const shortfall = error?.shortfall;
+    const laidOut = (row: { layouts?: unknown }) => {
+      const layouts = typeof row.layouts === 'string' ? JSON.parse(row.layouts) : row.layouts;
+      return Array.isArray(layouts) && layouts.length > 0;
+    };
+    if (shortfall && !candidateRows.some(laidOut)) {
+      const limit = shortfall.maxUsd ?? budget?.maxUsd;
+      const diagnostic = `${STUDIO_RUN_LIMIT_TOO_SMALL} at stage ${run.status}: the next model request needs a ` +
+        `$${shortfall.reservedUsd.toFixed(2)} advance reservation and the run has $${shortfall.remainingUsd.toFixed(2)} ` +
+        `of its $${limit} limit left ($${Number(shortfall.accountedUsd ?? budget?.spentUsd ?? 0).toFixed(2)} spent). ` +
+        `Nothing was sent for it and no layout was made. Retry the design once the run limit (DESIGN_STUDIO_MAX_USD) fits the request.`;
+      await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', { diagnostic });
+      return { runId: run.id, status: 'failed', stage: run.status, code: STUDIO_RUN_LIMIT_TOO_SMALL, diagnostic, message: diagnostic,
+        ...(budget ? { spentUsd: budget.spentUsd } : {}) };
     }
 
     await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', {
