@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleUpdate, INTAKE_ATTEMPTS, chatInbox, type ChatInboxCore, type InboxContext } from '../src/lifecycle/chat-inbox.js';
+import { handleUpdate, INTAKE_ATTEMPTS, MAX_SETTLE_ROUNDS, chatInbox, settleUpdate, type ChatInboxCore, type InboxContext,
+  type SettleInput } from '../src/lifecycle/chat-inbox.js';
 import { createCoreClient } from '../src/lifecycle/core-client.js';
 
 /**
@@ -64,6 +65,8 @@ class FakeContext implements InboxContext {
     this.lifecycleOpens.push({ requestId, event });
   }
   sendNotice(message: unknown) { this.notices.push(message); }
+  settles: Array<{ input: SettleInput; delayMs: number; key: string }> = [];
+  scheduleSettle(input: SettleInput, delayMs: number, key: string) { this.settles.push({ input, delayMs, key }); }
 }
 
 const update = { update_id: 4242, message: { message_id: 1, date: 1, chat: { id: 555, type: 'private' }, from: { id: 9, is_bot: false, first_name: 'R' }, text: 'a brief' } };
@@ -220,7 +223,8 @@ describe('the Core client ChatInbox uses', () => {
     expect(calls[0].init.headers.Authorization).toBe(`Bearer ${token}`);
     expect(calls[0].init.headers['x-request-id']).toBe('tg-4242');
     // languageSiblings: this worker opens every request an open-request answer names (ADR-139).
-    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy', languageSiblings: true });
+    // briefHold: it schedules the settles Core asks for (ADR-143).
+    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy', languageSiblings: true, briefHold: true });
   });
 
   it('reads the sibling requests of a bilingual open, and refuses a malformed one (ADR-139)', async () => {
@@ -440,7 +444,7 @@ describe('ChatInbox.setMode', () => {
 describe('album collection notices', () => {
   it('journals one collection response and replays a stable notice without starting a lifecycle request', async () => {
     const transport=vi.fn(async()=>Response.json({intakeStatus:202,lifecycleAction:'album-message',
-      chatId:'555',albumMessage:'Photos saved. Reply with /use_album when finished.',albumNoticeKey:'album-received:abc123'}));
+      chatId:'555',albumMessage:'One of your photos could not be saved.',albumNoticeKey:'album-received:abc123'}));
     const client=createCoreClient({baseUrl:'http://core',token:'fixture-token',fetch:transport});
     const ctx=new FakeContext();
     ctx.crashOnSet=1;
@@ -518,5 +522,81 @@ describe('source review notices', () => {
         Response.json({ intakeStatus: 200, lifecycleAction: 'source-message', chatId: '555', ...fields }) });
       await expect(client.intake(update, 'legacy')).rejects.toThrow('invalid source notice');
     }
+  });
+});
+
+describe('album and brief settles (ADR-143)', () => {
+  const photo = { update_id: 5001, message: { message_id: 11, date: 1, chat: { id: 555, type: 'private' },
+    from: { id: 9, is_bot: false, first_name: 'R' }, media_group_id: 'g1', photo: [{ file_id: 'f1' }], caption: 'KAAE report cover' } };
+  const settleLater = (kind: 'album' | 'brief', delayMs: number) => async () =>
+    ({ kind: 'done', intakeStatus: 202, lifecycleAction: 'settle-later', chatId: '555', settle: { kind, delayMs } });
+
+  it('a saved album photo schedules one durable settle under a stable key and tells the requester nothing', async () => {
+    const ctx = new FakeContext();
+    ctx.crashOnSet = 1;
+    const c = core([settleLater('album', 8000)]);
+    await untilSettled(ctx, () => handleUpdate(ctx, { v: 1, update: photo }, c));
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(ctx.notices).toHaveLength(0);
+    // The crash replays the schedule under the same key, which Restate deduplicates.
+    expect(ctx.settles.map((s) => s.key)).toEqual(['settle:5001', 'settle:5001']);
+    expect(ctx.settles[0]).toMatchObject({ delayMs: 8000, input: { v: 1, update: photo, attempt: 0 } });
+    expect(ctx.lifecycleOpens).toHaveLength(0);
+  });
+
+  it('the settle asks Core with settle=true and opens the one request it answers, without moving lastUpdateId', async () => {
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 5003, lastOutcome: 'handled', at: 1 });
+    const requestId = '43d3fca4-7ce2-5afe-9ae4-b9530874d618';
+    const draft = { platform: 'telegram', sourceEventId: `lc-${requestId}-r0`, sourceChannelId: '555',
+      rawText: 'KAAE report cover', title: 'KAAE report cover', designInstructions: '', exactCopy: [],
+      clientId: 'c1000000-0000-4000-8000-000000000002', autoGenerate: true };
+    const c = core([async () => ({ kind: 'done', intakeStatus: 200, lifecycleAction: 'open-request', requestId, chatId: '555', draft })]);
+    ctx.failOpenOnce = true;
+    await untilSettled(ctx, () => settleUpdate(ctx, { v: 1, update: photo, attempt: 0 }, c));
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(c.intake.mock.calls[0][3]).toEqual({ settle: true });
+    expect(ctx.lifecycleOpens).toMatchObject([{ requestId, event: { eventId: `open:${requestId}` } }]);
+    expect(ctx.state.get('inbox')).toMatchObject({ lastUpdateId: 5003, mode: 'lifecycle', requestId });
+    expect(c.park).not.toHaveBeenCalled();
+  });
+
+  it('a held brief waiting for an album is settled again under the next key, and the rounds are bounded', async () => {
+    const ctx = new FakeContext();
+    const c = core([settleLater('brief', 8000)]);
+    await settleUpdate(ctx, { v: 1, update, attempt: 2 }, c);
+    expect(ctx.settles).toMatchObject([{ key: 'settle:4242:3', delayMs: 8000, input: { attempt: 3 } }]);
+    const last = new FakeContext();
+    await settleUpdate(last, { v: 1, update, attempt: MAX_SETTLE_ROUNDS }, core([settleLater('brief', 8000)]));
+    expect(last.settles).toHaveLength(0);
+  });
+
+  it('a settle whose Core keeps failing is left to the sweep: nothing is parked or sent', async () => {
+    const ctx = new FakeContext();
+    const retry = async () => ({ kind: 'retry', reason: 'HTTP 500' });
+    const c = core(Array.from({ length: INTAKE_ATTEMPTS }, () => retry));
+    expect(await settleUpdate(ctx, { v: 1, update: photo }, c)).toMatchObject({ outcome: 'handled', attempts: INTAKE_ATTEMPTS });
+    expect(c.park).not.toHaveBeenCalled();
+    expect(ctx.notices).toHaveLength(0);
+    expect(ctx.settles).toHaveLength(0);
+  });
+
+  it('the Core client sends settle=true, reads a settle-later answer and refuses a malformed one', async () => {
+    const bodies: any[] = [];
+    let answer: unknown = { v: 1, kind: 'handled', intakeStatus: 202, lifecycleAction: 'settle-later', chatId: '555',
+      settle: { kind: 'album', delayMs: 8000 } };
+    const c = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token',
+      fetch: (async (_url: string, init: any) => { bodies.push(JSON.parse(init.body)); return Response.json(answer); }) as any });
+    expect(await c.intake(photo, 'lifecycle', undefined, { settle: true })).toEqual({ kind: 'done', intakeStatus: 202,
+      duplicate: false, lifecycleAction: 'settle-later', chatId: '555', settle: { kind: 'album', delayMs: 8000 } });
+    expect(bodies[0]).toMatchObject({ settle: true, briefHold: true, languageSiblings: true });
+    answer = { v: 1, kind: 'handled', intakeStatus: 202, lifecycleAction: 'settle-later', chatId: '555', settle: { kind: 'x', delayMs: -1 } };
+    await expect(c.intake(photo, 'lifecycle')).rejects.toThrow('invalid settle');
+  });
+
+  it('ChatInbox binds a settle handler next to handleUpdate', () => {
+    const handlers = (chatInbox as any).handlers ?? (chatInbox as any).object;
+    expect(handlers?.settle).toBeTruthy();
+    expect(handlers?.handleUpdate).toBeTruthy();
   });
 });

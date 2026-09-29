@@ -102,7 +102,7 @@ describe('confirmed lifecycle photo albums', () => {
       message.document = { ...photo, file_name: 'original.png', mime_type: 'image/png',
         thumbnail: { file_id: 'not-the-original' } };
     }
-    expect(await f.intake(second)).toMatchObject({ intakeStatus: 202, lifecycleAction: 'album-message' });
+    expect(await f.intake(second)).toMatchObject({ intakeStatus: 202, lifecycleAction: 'settle-later' });
     expect(await f.intake(first)).toMatchObject({ intakeStatus: 202 });
     expect(await f.tasks()).toHaveLength(0);
     expect(await f.intake(first)).toMatchObject({ intakeStatus: 202 });
@@ -172,7 +172,7 @@ describe('confirmed lifecycle photo albums', () => {
     expect(await f.intake(f.confirm(202))).toMatchObject({ intakeStatus: 422, lifecycleAction: 'album-message' });
     const late = await f.intake(f.part(203, 3));
     expect(late).toMatchObject({ intakeStatus: 422 });
-    expect(late.albumMessage).toContain('late photo');
+    expect(late.albumMessage).toContain('arrived after I had started your design');
     expect(f.download).toHaveBeenCalledTimes(2);
     expect(await f.tasks()).toHaveLength(0);
   });

@@ -32,7 +32,9 @@ import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
-  confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot } from '../services/lifecycle-album.js';
+  confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
+  albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
+  settleHeldBrief } from '../services/lifecycle-album.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log, requestIdHeaders } from '../logging.js';
@@ -195,6 +197,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const mode = body?.mode ?? 'legacy';
     // The worker opens every request an answer names (ADR-139); an older worker opened only the first.
     const acceptsLanguageSiblings = body?.languageSiblings === true;
+    // ADR-143: `settle` is the worker's delayed settle of this (already saved) update; `briefHold`
+    // says the worker schedules settles, so a text brief may wait for photos sent right after it.
+    const settle = body?.settle === true;
+    const holdBriefs = body?.briefHold === true;
     if (mode !== 'legacy' && mode !== 'lifecycle') {
       return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
     }
@@ -257,7 +263,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
     }
     const albumPart = albumMessage(preparedUpdate);
-    if (albumPart || isAlbumConfirmation(preparedUpdate)) {
+    const incomingMessage = (preparedUpdate.message && typeof preparedUpdate.message === 'object'
+      ? preparedUpdate.message : null) as Record<string, unknown> | null;
+    // A `/use_album` reply to a photo keeps its old meaning; a plain one binds like any text (ADR-143).
+    const repliedConfirmation = isAlbumConfirmation(preparedUpdate) && Boolean(incomingMessage?.reply_to_message);
+    const textMessage = !albumPart && !repliedConfirmation && typeof incomingMessage?.text === 'string';
+    if (settle && !albumPart && !textMessage) return handled(200, { settle: 'skipped' });
+    if (albumPart || repliedConfirmation || (textMessage && (db || settle))) {
       if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
       const tx = <T>(fn: (trx: import('@hawa/db').Kysely<import('@hawa/db').Database>) => Promise<T>) =>
         withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
@@ -267,11 +279,48 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       const senderId = String((msg.from as { id?: unknown } | undefined)?.id ?? '');
       const senderAllowed = !ctx.isProduction || ctx.telegramIntakeUsers.includes('*') ||
         process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*' || ctx.telegramIntakeUsers.includes(senderId);
-      const reply = (answer: { status: number; message: string; noticeKey: string }) =>
-        handled(answer.status, { lifecycleAction: 'album-message', chatId,
+      // The worker schedules this update's settle (a durable delayed call) instead of sending anything.
+      const settleLater = (kind: 'album' | 'brief', delayMs: number) =>
+        handled(202, { lifecycleAction: 'settle-later', chatId, settle: { kind, delayMs } });
+      const reply = (answer: { status: number; message: string; noticeKey: string; settle?: true }) => answer.settle
+        ? settleLater('album', albumSettleMs())
+        : handled(answer.status, { lifecycleAction: 'album-message', chatId,
           albumMessage: answer.message, albumNoticeKey: answer.noticeKey });
+      const admit = async (outcome: AlbumOutcome, point: string): Promise<Response | null> => {
+        if (outcome.kind === 'reply') return reply(outcome.reply);
+        if (outcome.kind === 'skip') return handled(200, { settle: 'skipped' });
+        if (outcome.kind === 'none') return null;
+        admittedAlbum = outcome.snapshot;
+        preparedUpdate = normalizedAlbumUpdate(admittedAlbum);
+        await chaosPoint(point, { updateId: source.update_id, chat: chatId });
+        return null;
+      };
       try {
-        if (albumPart) {
+        if (albumPart && settle) {
+          if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+          const settled = await admit(await tx((trx) => settleAlbum(trx, DEFAULT_TENANT_ID, source)),
+            'core.intake.after-album-settle');
+          if (settled) return settled;
+        } else if (textMessage) {
+          if (settle) {
+            const held = await tx((trx) => settleHeldBrief(trx, DEFAULT_TENANT_ID, source));
+            if (held === 'skip') return handled(200, { settle: 'skipped' });
+            if (held === 'wait') return settleLater('brief', albumSettleMs());
+            // `release`: intake decides the brief below as it decides any brief, now without a hold.
+          } else if (await tx((trx) => isHeldBrief(trx, DEFAULT_TENANT_ID, source))) {
+            return settleLater('brief', briefPhotoWaitMs());
+          } else if (senderAllowed) {
+            const bound = await admit(await tx((trx) => bindTextToAlbum(trx, DEFAULT_TENANT_ID, source, {
+              linkedReply: async (chat, replyId) => (await linkedLifecycleReplies(trx, DEFAULT_TENANT_ID, chat, replyId)).length > 0 ||
+                (await lateChangeTargets(trx, DEFAULT_TENANT_ID, chat, replyId)).length > 0,
+              decided: async (chat, updateId) => Boolean(await readNewBriefDecision(trx, DEFAULT_TENANT_ID, updateId) ||
+                await readRoutingRefusal(trx, DEFAULT_TENANT_ID, updateId) ||
+                await readRevisionPhotoDecision(trx, DEFAULT_TENANT_ID, updateId)) ||
+                (await revisionIntakeReceipts(trx, DEFAULT_TENANT_ID, chat, updateId)).length > 0,
+            })), 'core.intake.after-album-confirmation');
+            if (bound) return bound;
+          }
+        } else if (albumPart) {
           const priorPart = await tx((trx) => readAlbumPart(trx, DEFAULT_TENANT_ID, source));
           if (priorPart) return reply(partReply(priorPart));
           const priorRouting = await tx((trx) => readRoutingRefusal(trx, DEFAULT_TENANT_ID, source.update_id));
@@ -301,6 +350,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
 
     const update = preparedUpdate;
+    // An album admitted above or a released held brief is decided now, not held again.
+    const mayHoldBrief = holdBriefs && !settle && !admittedAlbum && briefPhotoWaitMs() > 0;
 
     // A decision must replay even if the flag changed after the first answer was lost.
     const sourceChat = chatOf(update);
@@ -556,6 +607,14 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 if (newBriefText.length > 100_000) return handled(413, { code: 'BRIEF_TOO_LONG' });
                 // A chat whose open legacy request could take this message as a change was sent to
                 // the old intake above (ADR-135); every other brief opens a lifecycle request.
+                // A text brief waits a moment for photos sent right after it (ADR-143): its settle
+                // opens it, alone or with the album that followed.
+                if (mayHoldBrief && !photoInput && await withRlsContext(db,
+                  { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                  (trx) => holdBrief(trx, TENANT, update))) {
+                  return handled(202, { lifecycleAction: 'settle-later', chatId,
+                    settle: { kind: 'brief', delayMs: briefPhotoWaitMs() } });
+                }
                 {
                   const requestId = requestIdForUpdate(chatId, update.update_id);
                   // English and Kurdish copy for one graphic per language opens one request per
@@ -695,6 +754,15 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
 
     // --- anything the lifecycle path did not take: the old intake, finish-only (ADR-135) ---
     return legacyFinish(update);
+  });
+
+  // ADR-143: the settles the worker's poller sends again: albums saved before settles existed (the
+  // owner's album of 2026-09-29) and any whose delayed call was lost. Each settle decides for itself.
+  internal('/telegram/settle-sweep', async (c) => {
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The sweep reads the saved albums');
+    const due = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+      (trx) => overdueSettles(trx, DEFAULT_TENANT_ID));
+    return c.json({ v: 1, due }, 200);
   });
 
   internal('/telegram/park', async (c) => {

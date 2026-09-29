@@ -48,8 +48,10 @@ export type IntakeAnswer =
       /** When mode=lifecycle and Core routed the update as a requester revision. */
       lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
         'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message' |
-        'late-change';
+        'late-change' | 'settle-later';
       albumMessage?: string; albumNoticeKey?: string;
+      /** settle-later (ADR-143): settle this update after `delayMs` (a saved album photo, or a held brief). */
+      settle?: { kind: 'album' | 'brief'; delayMs: number };
       sourceMessage?: string; sourceNoticeKey?: string;
       draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
       /** open-request: the other requests the same update opens, one per language (ADR-139). */
@@ -67,7 +69,7 @@ export type IntakeAnswer =
 
 /** The Core calls ChatInbox makes (core-client.ts). A thrown error means "wait and try again". */
 export interface ChatInboxCore {
-  intake(update: TelegramUpdateLike, mode: IntakeMode, requestId?: string): Promise<IntakeAnswer>;
+  intake(update: TelegramUpdateLike, mode: IntakeMode, requestId?: string, options?: { settle?: boolean }): Promise<IntakeAnswer>;
   park(update: TelegramUpdateLike, reason: string): Promise<void>;
 }
 
@@ -91,7 +93,20 @@ export interface InboxContext {
   sendLifecycleDecision(requestId: string, event: RequesterDecisionEvent & { newTaskId: string }): Promise<void> | void;
   sendLifecycleOpen(requestId: string, event: OpenManualEvent | OpenAutomaticEvent): Promise<void> | void;
   sendNotice(message: OutboundMessage): void;
+  /** A durable delayed call of this chat's `settle` handler (ADR-143), under a stable idempotency key. */
+  scheduleSettle(input: SettleInput, delayMs: number, key: string): void;
 }
+
+/** A settle of an update Core has already saved: an album photo or a held text brief (ADR-143). */
+export interface SettleInput {
+  v: 1;
+  update: TelegramUpdateLike;
+  /** 0 for the settle the update itself scheduled; each "not yet" answer schedules the next. */
+  attempt?: number;
+}
+
+/** A held brief waits for an album its sender is still sending; this bounds the re-checks. */
+export const MAX_SETTLE_ROUNDS = 60;
 
 export interface ChatInboxView {
   v: 1;
@@ -144,7 +159,71 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
   }
 
   const at = await ctx.now();
-  if (done) {
+  if (done) return applyAnswer(ctx, update, done, core, { mode, lifecycleRequestId, at, attempts: reasons.length + 1 });
+
+  const reason = `${reasons[reasons.length - 1]} after ${INTAKE_ATTEMPTS} attempts`;
+  // Core stores the dead letter (id and kind only), alerts the office and tells the sender, once.
+  await ctx.run('park', async () => {
+    await core.park(update, reason);
+    log.error(`[chat-inbox] update ${update.update_id} parked for an operator: ${reason}`);
+    return true;
+  });
+  ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at,
+    ...(mode === 'lifecycle' ? { mode, requestId: lifecycleRequestId } : {}),
+  } satisfies ChatInboxView);
+  return { outcome: 'parked', attempts: INTAKE_ATTEMPTS };
+}
+
+/**
+ * The settle of a saved album photo or a held brief (ADR-143), run by a durable delayed call to this
+ * chat's object, so it waits behind the chat's earlier updates and survives a restart. Core decides
+ * under its own locks and stores the outcome, so a repeated settle answers the same and opens nothing
+ * twice. A settle whose Core calls keep failing is left to the poller's sweep, never parked: the
+ * update was handled when it arrived.
+ */
+export async function settleUpdate(ctx: InboxContext, input: SettleInput, core: ChatInboxCore): Promise<HandleUpdateResult> {
+  const update = input.update;
+  const attempt = Number.isSafeInteger(input.attempt) && Number(input.attempt) > 0 ? Number(input.attempt) : 0;
+  const view = await ctx.get<ChatInboxView>('inbox');
+  const mode: IntakeMode = view?.mode === 'lifecycle' ? 'lifecycle' : 'legacy';
+  const lifecycleRequestId = view?.mode === 'lifecycle' ? view.requestId : undefined;
+  let done: Extract<IntakeAnswer, { kind: 'done' }> | null = null;
+  let tries = 0;
+  for (let k = 0; k < INTAKE_ATTEMPTS && !done; k++) {
+    tries = k + 1;
+    const answer = await ctx.run(`settle-${k}`, async () => {
+      const a = await core.intake(update, mode, lifecycleRequestId, { settle: true });
+      if (a.kind === 'retry') log.warn(`[chat-inbox] settle of update ${update.update_id} attempt ${k + 1}/${INTAKE_ATTEMPTS} failed: ${a.reason}`);
+      return a;
+    });
+    if (answer.kind === 'done') { done = answer; break; }
+    if (k < INTAKE_ATTEMPTS - 1) await ctx.sleep(retryDelayMs(k));
+  }
+  if (!done) {
+    log.error(`[chat-inbox] settle of update ${update.update_id} failed ${INTAKE_ATTEMPTS} times; the poller's sweep asks again`);
+    return { outcome: 'handled', attempts: INTAKE_ATTEMPTS };
+  }
+  const at = await ctx.now();
+  return applyAnswer(ctx, update, done, core, { mode, lifecycleRequestId, at, attempts: tries, settleAttempt: attempt });
+}
+
+/** What ChatInbox does with Core's final answer, for an update and for its settle alike. */
+async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: Extract<IntakeAnswer, { kind: 'done' }>,
+  core: ChatInboxCore, info: { mode: IntakeMode; lifecycleRequestId?: string; at: number; attempts: number; settleAttempt?: number },
+): Promise<HandleUpdateResult> {
+  const { mode, lifecycleRequestId, at } = info;
+  const settling = info.settleAttempt !== undefined;
+  {
+    if (done.lifecycleAction === 'settle-later') {
+      if (!done.settle) throw new Error('Core returned an incomplete settle');
+      const next = settling ? info.settleAttempt! + 1 : 0;
+      if (next > MAX_SETTLE_ROUNDS) {
+        log.error(`[chat-inbox] update ${update.update_id} still not settled after ${MAX_SETTLE_ROUNDS} rounds; the poller's sweep asks again`);
+      } else {
+        ctx.scheduleSettle({ v: 1, update, attempt: next }, done.settle.delayMs,
+          next === 0 ? `settle:${update.update_id}` : `settle:${update.update_id}:${next}`);
+      }
+    }
     if (done.lifecycleAction === 'source-message') {
       if (!done.chatId || !done.sourceMessage || !done.sourceNoticeKey) throw new Error('Core returned an incomplete source notice');
       ctx.sendNotice({ v: 1, key: `chatinbox:${done.sourceNoticeKey}`, chatId: done.chatId,
@@ -160,10 +239,10 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
         throw new Error('Core returned an invalid lifecycle media hold');
       }
       await ctx.run('park', () => core.park(update, done.reason!));
-      ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at,
+      if (!settling) ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at,
         ...(mode === 'lifecycle' ? { mode, requestId: lifecycleRequestId } : {}),
       } satisfies ChatInboxView);
-      return { outcome: 'parked', intakeStatus: done.intakeStatus, attempts: reasons.length + 1 };
+      return { outcome: 'parked', intakeStatus: done.intakeStatus, attempts: info.attempts };
     }
     if (done.lifecycleAction === 'open-request') {
       if (!done.requestId || !done.chatId || !done.draft) throw new Error('Core returned an incomplete lifecycle open');
@@ -247,25 +326,22 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
             : 'I could not safely find the original design brief, so no revision started. Please ask the office to check this request.',
       });
     }
-    ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled',
-      lastIntakeStatus: done.intakeStatus, at,
-      ...(mode === 'lifecycle' || done.lifecycleAction === 'open-request'
-        ? { mode: 'lifecycle' as const, requestId: done.requestId ?? lifecycleRequestId } : {}),
-    } satisfies ChatInboxView);
-    return { outcome: 'handled', intakeStatus: done.intakeStatus, attempts: reasons.length + 1 };
+    if (!settling) {
+      ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled',
+        lastIntakeStatus: done.intakeStatus, at,
+        ...(mode === 'lifecycle' || done.lifecycleAction === 'open-request'
+          ? { mode: 'lifecycle' as const, requestId: done.requestId ?? lifecycleRequestId } : {}),
+      } satisfies ChatInboxView);
+    } else if (done.lifecycleAction === 'open-request' && done.requestId) {
+      // A settle that opened a request moves the chat to lifecycle mode, as an update's open does.
+      const view = await ctx.get<ChatInboxView>('inbox');
+      if (view?.mode !== 'lifecycle') ctx.set('inbox', { v: 1, lastUpdateId: view?.lastUpdateId ?? 0,
+        lastOutcome: view?.lastOutcome ?? 'handled',
+        ...(view?.lastIntakeStatus !== undefined ? { lastIntakeStatus: view.lastIntakeStatus } : {}),
+        at: view?.at ?? at, mode: 'lifecycle', requestId: done.requestId } satisfies ChatInboxView);
+    }
+    return { outcome: 'handled', intakeStatus: done.intakeStatus, attempts: info.attempts };
   }
-
-  const reason = `${reasons[reasons.length - 1]} after ${INTAKE_ATTEMPTS} attempts`;
-  // Core stores the dead letter (id and kind only), alerts the office and tells the sender, once.
-  await ctx.run('park', async () => {
-    await core.park(update, reason);
-    log.error(`[chat-inbox] update ${update.update_id} parked for an operator: ${reason}`);
-    return true;
-  });
-  ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at,
-    ...(mode === 'lifecycle' ? { mode, requestId: lifecycleRequestId } : {}),
-  } satisfies ChatInboxView);
-  return { outcome: 'parked', attempts: INTAKE_ATTEMPTS };
 }
 
 /** Steps that throw (a wait) back off from 2 s to a 30 s ceiling, without a limit of their own. */
@@ -293,6 +369,8 @@ function inboxContext(ctx: restate.ObjectContext): InboxContext {
     },
     sendNotice: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
       .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+    scheduleSettle: (input, delayMs, key) => ctx.objectSendClient(chatInbox, ctx.key)
+      .settle(input, restate.rpc.sendOpts({ idempotencyKey: key, delay: delayMs })),
   };
 }
 
@@ -342,6 +420,21 @@ export const chatInbox = restate.object({
         withInvocationLogContext(ctx, { requestId: `tg-${input?.update?.update_id}` }, async () => {
           if (!coreClient) throw new Error('ChatInbox has no Core client: HAWA_WORKER_TOKEN is not set in this worker');
           return handleUpdate(inboxContext(ctx), input, coreClient);
+        })
+    ),
+    /**
+     * ADR-143: the delayed settle of a saved album photo or a held brief (scheduleSettle), and the
+     * poller's sweep of overdue ones. Exclusive, so it runs after the chat's earlier updates.
+     */
+    settle: restate.handlers.object.exclusive(
+      { idempotencyRetention: { days: 7 }, journalRetention: { days: 1 } },
+      async (ctx: restate.ObjectContext, input: SettleInput): Promise<HandleUpdateResult> =>
+        withInvocationLogContext(ctx, { requestId: `settle-${input?.update?.update_id}` }, async () => {
+          if (!coreClient) throw new Error('ChatInbox has no Core client: HAWA_WORKER_TOKEN is not set in this worker');
+          if (input?.v !== 1 || !Number.isSafeInteger(input.update?.update_id) || input.update.update_id <= 0) {
+            throw new restate.TerminalError('A settle names the saved update it settles', { errorCode: 400 });
+          }
+          return settleUpdate(inboxContext(ctx), input, coreClient);
         })
     ),
     /**

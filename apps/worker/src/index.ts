@@ -136,9 +136,10 @@ const officeDecisionGateway = createOfficeDecisionGateway();
 
 // ChatInbox calls Core's internal intake with its own credential (HAWA_WORKER_TOKEN), never the
 // operator's bearer. Without it an update waits in its chat until the worker is configured.
-if (process.env.HAWA_WORKER_TOKEN?.trim()) {
-  useChatInboxCore(createCoreClient({ baseUrl: process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001', token: process.env.HAWA_WORKER_TOKEN.trim() }));
-}
+const chatInboxCore = process.env.HAWA_WORKER_TOKEN?.trim()
+  ? createCoreClient({ baseUrl: process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001', token: process.env.HAWA_WORKER_TOKEN.trim() })
+  : null;
+if (chatInboxCore) useChatInboxCore(chatInboxCore);
 
 // Every service any build ever hosted stays bound (services.ts). A build that binds another set
 // would strand what Restate still routes to the old one, so it does not start.
@@ -225,6 +226,8 @@ if (pollerConfig.mode === 'on' && sharedDb && backgroundMode.mode !== 'misconfig
     ingressUrl: pollerConfig.ingressUrl,
     offsets: new PostgresTelegramPollState(db, scope, telegramBotKey(pollerConfig.botToken)),
     killSwitch: () => readTelegramKillSwitch(db, scope),
+    // ADR-143: albums and held briefs whose settle is overdue (the poller config requires the token).
+    ...(chatInboxCore ? { settleSweep: { overdue: () => chatInboxCore.overdueSettles() } } : {}),
   });
   pollerGate = backgroundMode.mode === 'live-colour'
     ? new LiveColourGate({ adminUrl: backgroundMode.adminUrl, selfUri: backgroundMode.selfUri, takeoverMs: pollerConfig.takeoverMs, refreshMs: backgroundMode.refreshMs, service: 'ChatInbox' })

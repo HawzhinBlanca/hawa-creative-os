@@ -234,3 +234,36 @@ describe('pollerConfigFromEnv', () => {
     expect(pollerConfigFromEnv({ ...base, HAWA_WORKER_TOKEN: '   ' }).mode).toBe('misconfigured');
   });
 });
+
+describe('the overdue settle sweep (ADR-143)', () => {
+  it('sends each overdue settle to its chat under settle-sweep:<id>, at most once per interval, and survives a failed listing', async () => {
+    const fakes = new Fakes();
+    const stored = { update_id: 7001, message: { message_id: 5, chat: { id: -1005 }, from: { id: 9 }, media_group_id: 'g', photo: [{ file_id: 'x' }] } };
+    let now = 1_000_000;
+    const overdue = vi.fn(async () => [{ chatId: '-1005', update: stored }]);
+    const p = new TelegramPoller({ botToken: BOT, ingressUrl: INGRESS, offsets: offsets(), killSwitch: async () => false,
+      fetch: fakes.fetch as any, killSwitchCacheMs: 0, now: () => now, log: { info() {}, warn() {}, error() {} },
+      settleSweep: { overdue, everyMs: 60_000 } });
+    await p.pollOnce();
+    await p.pollOnce();
+    expect(overdue).toHaveBeenCalledTimes(1);
+    const sweeps = fakes.enqueued.filter((e) => e.url.endsWith('/settle/send'));
+    expect(sweeps).toEqual([{ url: `${INGRESS}/ChatInbox/-1005/settle/send`, key: 'settle-sweep:7001',
+      body: { v: 1, update: stored, attempt: 0 } }]);
+    now += 60_000;
+    overdue.mockRejectedValueOnce(new Error('Core restarting'));
+    expect((await p.pollOnce()).error).toBeUndefined();
+    now += 60_000;
+    await p.pollOnce();
+    expect(fakes.enqueued.filter((e) => e.url.endsWith('/settle/send'))).toHaveLength(2);
+  });
+
+  it('does not sweep while the office has switched intake off', async () => {
+    const fakes = new Fakes();
+    const overdue = vi.fn(async () => []);
+    const p = new TelegramPoller({ botToken: BOT, ingressUrl: INGRESS, offsets: offsets(), killSwitch: async () => true,
+      fetch: fakes.fetch as any, killSwitchCacheMs: 0, log: { info() {}, warn() {}, error() {} }, settleSweep: { overdue } });
+    await p.pollOnce();
+    expect(overdue).not.toHaveBeenCalled();
+  });
+});

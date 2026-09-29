@@ -36,7 +36,9 @@ const retryable = (status: number) => status >= 500 || status === 429 || status 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const isTimeout = (err: unknown) => err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
 
-export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
+export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
+  overdueSettles(): Promise<Array<{ chatId: string; update: TelegramUpdateLike }>>;
+} {
   const base = options.baseUrl.replace(/\/+$/, '');
   const doFetch = options.fetch ?? fetch;
   const headers = (update: TelegramUpdateLike) => ({
@@ -47,14 +49,17 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
   });
 
   return {
-    async intake(update: TelegramUpdateLike, mode: IntakeMode, requestId?: string): Promise<IntakeAnswer> {
+    async intake(update: TelegramUpdateLike, mode: IntakeMode, requestId?: string, call: { settle?: boolean } = {}): Promise<IntakeAnswer> {
       let res: Response;
       try {
         res = await doFetch(`${base}/v1/internal/telegram/intake`, {
           method: 'POST',
           headers: headers(update),
           // languageSiblings: this worker opens every request an open-request answer names (ADR-139).
-          body: JSON.stringify({ v: 1, update, mode, ...(requestId ? { requestId } : {}), languageSiblings: true }),
+          // briefHold: it schedules the settles a held brief or a saved album photo asks for (ADR-143);
+          // settle: this call is such a settle, of an update Core has already saved.
+          body: JSON.stringify({ v: 1, update, mode, ...(requestId ? { requestId } : {}), languageSiblings: true,
+            briefHold: true, ...(call.settle ? { settle: true } : {}) }),
           signal: AbortSignal.timeout(options.timeoutMs ?? 8 * 60_000),
         });
       } catch (err) {
@@ -66,7 +71,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         lifecycleAction?: string; requestId?: string; newTaskId?: string;
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
         chatId?: string; questionId?: string; draft?: unknown; reason?: string; siblings?: unknown;
-        albumMessage?: string; albumNoticeKey?: string;
+        albumMessage?: string; albumNoticeKey?: string; settle?: unknown;
         sourceMessage?: string; sourceNoticeKey?: string;
         requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null;
       };
@@ -80,6 +85,14 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
               throw new Error(`Core returned an invalid source notice for update ${update.update_id}`);
             return { ...base, lifecycleAction: 'source-message', chatId: body.chatId,
               sourceMessage: body.sourceMessage, sourceNoticeKey: body.sourceNoticeKey };
+          }
+          if (body.lifecycleAction === 'settle-later') {
+            const settle = body.settle as { kind?: unknown; delayMs?: unknown } | undefined;
+            if (!body.chatId || !settle || (settle.kind !== 'album' && settle.kind !== 'brief') ||
+                !Number.isSafeInteger(settle.delayMs) || Number(settle.delayMs) < 0 || Number(settle.delayMs) > 10 * 60_000)
+              throw new Error(`Core returned an invalid settle for update ${update.update_id}`);
+            return { ...base, lifecycleAction: 'settle-later', chatId: body.chatId,
+              settle: { kind: settle.kind, delayMs: Number(settle.delayMs) } };
           }
           if (body.lifecycleAction === 'album-message') {
             if (!body.chatId || typeof body.albumMessage !== 'string' || !body.albumMessage ||
@@ -163,6 +176,20 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
       if (res.status === 503 && body.title === 'Database Unavailable') throw new Error(`intake waits: Core answered 503 Database Unavailable`);
       if (res.status >= 500) return { kind: 'retry', reason: `Core answered HTTP ${res.status}` };
       throw new Error(`Core refused the worker's intake call with HTTP ${res.status} (${body.title ?? 'no reason'}); update ${update.update_id} waits until this deployment is fixed`);
+    },
+
+    async overdueSettles(): Promise<Array<{ chatId: string; update: TelegramUpdateLike }>> {
+      const res = await doFetch(`${base}/v1/internal/telegram/settle-sweep`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${options.token}`, 'Content-Type': 'application/json', 'x-request-id': 'settle-sweep' },
+        body: JSON.stringify({ v: 1 }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const body = (await res.json().catch(() => ({}))) as { v?: number; due?: unknown };
+      if (!res.ok || body.v !== 1 || !Array.isArray(body.due)) throw new Error(`Core did not list overdue settles: HTTP ${res.status}`);
+      return body.due.filter((item): item is { chatId: string; update: TelegramUpdateLike } =>
+        Boolean(item) && typeof item.chatId === 'string' && /^-?\d{1,20}$/.test(item.chatId) &&
+        Number.isSafeInteger(item.update?.update_id) && item.update.update_id > 0);
     },
 
     async park(update: TelegramUpdateLike, reason: string): Promise<void> {

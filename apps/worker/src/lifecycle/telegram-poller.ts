@@ -52,6 +52,11 @@ export interface TelegramPollerOptions {
   killSwitchCacheMs?: number;
   now?: () => number;
   log?: Pick<Console, 'info' | 'warn' | 'error'>;
+  /**
+   * ADR-143: the settles Core finds overdue (albums saved before settles existed, or whose delayed call
+   * was lost). Each is sent to its chat's ChatInbox `settle` handler, at start and every `everyMs`.
+   */
+  settleSweep?: { overdue(): Promise<Array<{ chatId: string; update: TelegramUpdateLike }>>; everyMs?: number };
 }
 
 export interface PollResult {
@@ -95,8 +100,46 @@ export class TelegramPoller {
   private lastOkAt?: string;
   private firstPollAt?: string;
   private handedOn = 0;
+  private lastSweepAt = -Infinity;
 
   constructor(private readonly options: TelegramPollerOptions) {}
+
+  /**
+   * Sends each overdue settle to its chat (ADR-143). Best effort: a failure is logged and the next
+   * sweep asks again; the settle itself decides whether anything is left to do, so a second send of
+   * the same settle (same idempotency key, or a later sweep) starts nothing twice.
+   */
+  async sweepSettles(): Promise<number> {
+    const sweep = this.options.settleSweep;
+    if (!sweep || this.now - this.lastSweepAt < (sweep.everyMs ?? 5 * 60_000)) return 0;
+    this.lastSweepAt = this.now;
+    let due: Array<{ chatId: string; update: TelegramUpdateLike }>;
+    try {
+      due = await sweep.overdue();
+    } catch (err) {
+      this.log.warn(`[telegram:poller] overdue settles could not be listed: ${errorText(err)}`);
+      return 0;
+    }
+    let sent = 0;
+    for (const item of due) {
+      const key = `settle-sweep:${item.update.update_id}`;
+      const url = `${this.options.ingressUrl.replace(/\/+$/, '')}/ChatInbox/${encodeURIComponent(chatKey(item.update))}/settle/send`;
+      try {
+        const res = await this.fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'idempotency-key': key, 'x-request-id': key },
+          body: JSON.stringify({ v: 1, update: item.update, attempt: 0 }),
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (res.ok) sent++;
+        else this.log.warn(`[telegram:poller] Restate did not accept the overdue settle of update ${item.update.update_id}: HTTP ${res.status}`);
+      } catch (err) {
+        this.log.warn(`[telegram:poller] Restate did not accept the overdue settle of update ${item.update.update_id}: ${errorText(err)}`);
+      }
+    }
+    if (due.length) this.log.info(`[telegram:poller] sent ${sent} of ${due.length} overdue settle(s)`);
+    return sent;
+  }
 
   private get log() { return this.options.log ?? workerLog; }
   private get fetch(): FetchLike { return this.options.fetch ?? fetch; }
@@ -130,6 +173,7 @@ export class TelegramPoller {
       this.lastError = `kill switch unreadable: ${errorText(err)}`;
       return { ...result, paused: 'kill_switch_unknown' };
     }
+    await this.sweepSettles();
     try {
       this.offset = Math.max(this.offset, await this.options.offsets.getOffset());
     } catch (err) {
