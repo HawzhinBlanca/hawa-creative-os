@@ -441,13 +441,23 @@ export function createApp(options?: CreateAppOptions) {
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
     }
 
+    // Trusted-office mode (ADR-146) lets a request with no credential from the office origin act as the
+    // office. A request that presents a credential is verified exactly as in required mode below: the
+    // worker's Canva and Studio calls reach Core from inside the Docker network with HAWA_BEARER_TOKEN,
+    // never from the office origin, and ignoring that key failed every design (2026-09-29 23:31 to the
+    // fix). The worker's internal token still authenticates only /v1/internal/*.
     if (officeAccess.mode === 'trusted_office') {
       const presented = String(authHeader || '').replace(/^Bearer\s*/, '').trim();
-      if (workerTokens.some(token => secretsEqual(presented, token)) || !permitsOfficeRequest(officeAccess, c.req)) {
+      if (presented && workerTokens.some(token => secretsEqual(presented, token))) {
         return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
       }
-      return { authenticated: true, tenantId: defaultTenantId, userId: adminUserId,
-        actorId: 'trusted_office_team', role: 'administrator', displayName: 'Office team', authMethod: 'trusted_office' };
+      if (!presented) {
+        if (!permitsOfficeRequest(officeAccess, c.req)) {
+          return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
+        }
+        return { authenticated: true, tenantId: defaultTenantId, userId: adminUserId,
+          actorId: 'trusted_office_team', role: 'administrator', displayName: 'Office team', authMethod: 'trusted_office' };
+      }
     }
 
     const allowRoleOverride = Boolean(options?.testAuth?.roleHeader ?? options?.allowRoleHeader);
