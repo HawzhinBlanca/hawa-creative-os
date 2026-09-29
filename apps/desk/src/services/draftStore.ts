@@ -38,18 +38,18 @@ class DraftStoreService {
     if (typeof window === 'undefined') return null;
     try {
       const raw = localStorage.getItem(ACTIVE_DRAFT_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw);
+      if (raw === null) return null;
+      const draft = JSON.parse(raw) as ActiveDraft | null;
+      if (!draft || typeof draft.title !== 'string' || typeof draft.copy !== 'string') throw new Error();
+      return draft;
     } catch {
-      return null;
+      throw new Error('The saved draft cannot be read. Keep this browser data and ask an operator to recover it before starting a new request.');
     }
   }
 
   public clearActiveDraft(): void {
     if (typeof window === 'undefined') return;
-    try {
-      localStorage.removeItem(ACTIVE_DRAFT_KEY);
-    } catch {}
+    localStorage.removeItem(ACTIVE_DRAFT_KEY);
   }
 
   private inMemoryQueue: QueuedTask[] = [];

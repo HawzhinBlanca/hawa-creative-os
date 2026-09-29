@@ -7,6 +7,7 @@ import { DeskProviders, createDeskRuntime, type DeskRuntime } from '../src/DeskP
 import { setAuthToken, clearAuthToken } from '../src/services/auth.js';
 import { submitManualTask } from '../src/services/manualTaskIntake.js';
 import { draftStore } from '../src/services/draftStore.js';
+import { i18nManager } from '../src/services/i18n.js';
 import { FakeStream, advance, byText, click, json, mount, stubCore } from './support/desk-harness.js';
 
 const a = 'aa000000-0000-4000-8000-000000000001';
@@ -22,6 +23,7 @@ let runtime: DeskRuntime | undefined;
 beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); setAuthToken('hawa_sess_client_test'); });
 afterEach(async () => {
   await view?.unmount(); await runtime?.queryClient.cancelQueries(); runtime?.queryClient.clear();
+  i18nManager.setLocale('en');
   vi.useRealTimers(); vi.unstubAllGlobals(); clearAuthToken(); localStorage.clear(); window.location.hash = '';
   view = undefined; runtime = undefined;
 });
@@ -40,6 +42,90 @@ function common(path: string) {
 }
 
 describe('registered client workflow', () => {
+  it('opens the exact client named by a search link instead of the first client', async () => {
+    window.location.hash = `#/dna?client=${b}`;
+    const calls = stubCore(c => c.path === '/v1/clients' ? json(clients)
+      : c.path === `/v1/clients/${b}/dna` ? json(dna(b, 'Cedar Bakery'))
+      : c.path.endsWith('/snapshots') ? json([])
+      : c.path.endsWith('/candidate-rules') ? json({candidateRules:[]}) : common(c.path));
+    runtime = createDeskRuntime({ stream: new FakeStream(), doc: {hidden:false} });
+    view = await mount(React.createElement(DeskProviders, {runtime, children:React.createElement(App)}));
+    await advance(500);
+    expect(view.text()).toContain(b);
+    expect(calls.some(c => c.path === `/v1/clients/${a}/dna`)).toBe(false);
+  });
+  it('does not open a different client when a search link is unavailable', async () => {
+    stubCore(c => c.path === '/v1/clients' ? json([clients[0]]) : undefined);
+    view = await mount(React.createElement(DnaScreen, {initialClientId:b}));
+    await advance(200);
+    expect(view.text()).toContain('The linked client is unavailable');
+    expect(view.container.querySelector('.listitem.active')).toBeNull();
+  });
+  it('scopes command search to the selected Work task and runs the tour and language actions', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {configurable:true,value:vi.fn()});
+    const calls = stubCore(c => c.path === '/v1/tasks' ? json({items:[{id:'task-a',title:'Searchable task',status:'CREATED',clientId:a,version:1}],total:1})
+      : c.path === '/v1/search' ? json({results:[]}) : common(c.path));
+    runtime = createDeskRuntime({ stream:new FakeStream(),doc:{hidden:false} });
+    view = await mount(React.createElement(DeskProviders, {runtime,children:React.createElement(App)}));
+    await advance(500);
+    const openPalette = async () => { await act(async () => { document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'k',ctrlKey:true,bubbles:true})); }); await advance(100); };
+    await openPalette();
+    await act(async () => {
+      const input = view!.container.querySelector<HTMLInputElement>('#command-palette-input')!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'poster');
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    await advance(200);
+    expect(calls.find(c => c.path === '/v1/search')?.search.get('clientId')).toBe(a);
+    await openPalette(); await openPalette();
+    await click(view.container.querySelector('#cmd-item-act-kurdish'));
+    expect(i18nManager.getLocale()).toBe('ckb');
+    await openPalette();
+    await click(view.container.querySelector('#cmd-item-act-tour'));
+    expect(view.text()).toContain('Your work queue');
+  });
+  it('keeps a saving form open and prevents edits until the original result returns', async () => {
+    let answer!: (response: Response) => void;
+    stubCore(c => c.path === '/v1/clients' ? json(clients)
+      : c.path === '/v1/tasks' && c.method === 'POST' ? new Promise<Response>(resolve => { answer = resolve; }) : common(c.path));
+    draftStore.saveActiveDraft({title:'Original request',copy:'Exact copy',clientId:a});
+    const screen = await renderApp();
+    await click(byText(screen.container, 'button', 'Save request'));
+    await act(async () => { screen.container.querySelector('[role="dialog"]')!.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',bubbles:true})); });
+    expect(screen.container.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(screen.container.querySelector<HTMLInputElement>('#modal-task-title')!.disabled).toBe(true);
+    expect(screen.container.querySelector<HTMLTextAreaElement>('#modal-copy-en')!.disabled).toBe(true);
+    await act(async () => { answer(json({id:'saved-original'})); }); await advance(200);
+    expect(screen.container.querySelector('[role="dialog"]')).toBeNull();
+    expect(draftStore.getActiveDraft()).toBeNull();
+  });
+  it('opens a recoverable error state without deleting a damaged retry record', async () => {
+    stubCore(c => c.path === '/v1/clients' ? json(clients) : common(c.path));
+    localStorage.setItem('hawa_desk_pending_manual_intake_v1', '{damaged');
+    const screen = await renderApp();
+    expect(screen.container.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(screen.text()).toMatch(/retry record.*cannot be read/i);
+    expect((byText(screen.container,'button','Save request') as HTMLButtonElement).disabled).toBe(true);
+    expect(localStorage.getItem('hawa_desk_pending_manual_intake_v1')).toBe('{damaged');
+  });
+  it('preserves a damaged active draft instead of autosaving an empty replacement', async () => {
+    stubCore(c => c.path === '/v1/clients' ? json(clients) : common(c.path));
+    localStorage.setItem('hawa_desk_active_draft', '{damaged');
+    const screen = await renderApp();
+    expect(screen.text()).toMatch(/saved draft cannot be read/i);
+    expect((byText(screen.container,'button','Save request') as HTMLButtonElement).disabled).toBe(true);
+    expect(localStorage.getItem('hawa_desk_active_draft')).toBe('{damaged');
+  });
+  it('disables an unchanged retry when the office session ends', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('lost')));
+    await expect(submitManualTask({title:'Uncertain request',copy:'Exact words',clientId:a})).rejects.toThrow('unconfirmed');
+    stubCore(c => c.path === '/v1/clients' ? json(clients) : common(c.path));
+    const screen = await renderApp();
+    expect((byText(screen.container,'button','Save request') as HTMLButtonElement).disabled).toBe(false);
+    await act(async () => { runtime!.session.end('Session ended'); });
+    expect((byText(screen.container,'button','Save request') as HTMLButtonElement).disabled).toBe(true);
+    expect(localStorage.getItem('hawa_desk_pending_manual_intake_v1')).toContain('Uncertain request');
+  });
   it('loads actual clients and requires an explicit choice for a new request', async () => {
     stubCore(c => c.path === '/v1/clients' ? json(clients) : common(c.path));
     const screen = await renderApp();

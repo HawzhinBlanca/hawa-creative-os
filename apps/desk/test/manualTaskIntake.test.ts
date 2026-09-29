@@ -15,6 +15,31 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe('manual Canva intake', () => {
+  it('retains the original request key until a confirmed save has cleared its local draft', async () => {
+    draftStore.saveActiveDraft(draft);
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(new Response('{"id":"task-1"}')));
+    vi.stubGlobal('fetch', fetcher);
+    const remove = localStorage.removeItem;
+    localStorage.removeItem = (key: string) => {
+      if (key === 'hawa_desk_active_draft') throw new Error('storage denied');
+      remove(key);
+    };
+    await expect(submitManualTask(draft)).rejects.toThrow(/saved.*browser/i);
+    expect(getPendingManualDraft()).toEqual(draft);
+    localStorage.removeItem = remove;
+    await submitManualTask(getPendingManualDraft()!);
+    expect(fetcher.mock.calls[0][1].headers['Idempotency-Key']).toBe(fetcher.mock.calls[1][1].headers['Idempotency-Key']);
+    expect(draftStore.getActiveDraft()).toBeNull();
+    expect(getPendingManualDraft()).toBeNull();
+  });
+  it('holds damaged retry records with an actionable error and sends no replacement request', async () => {
+    values.set('hawa_desk_pending_manual_intake_v1', '{damaged');
+    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    expect(() => getPendingManualDraft()).toThrow(/retry record.*cannot be read/i);
+    await expect(submitManualTask(draft)).rejects.toThrow(/retry record.*cannot be read/i);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(values.get('hawa_desk_pending_manual_intake_v1')).toBe('{damaged');
+  });
   it('preserves the complete request and does not call unavailable generation or partial brief endpoints', async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'task-1' }), { status: 201 }));
     vi.stubGlobal('fetch', fetcher);

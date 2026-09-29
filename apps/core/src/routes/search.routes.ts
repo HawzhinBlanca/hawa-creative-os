@@ -1,5 +1,6 @@
 import type { RouteContext } from './types.js';
 import type { ClientDNA } from '@hawa/domain';
+import { deskReviewPath } from '@hawa/contracts/desk-navigation';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { VaultSearchEngine, type SearchableItem, type SearchCategory } from '@hawa/retrieval';
 import { sql, toApiTaskStatus, withRlsContext } from '@hawa/db';
@@ -213,7 +214,7 @@ export function registerSearchRoutes(ctx: RouteContext): void {
       subtitle: h.item.subtitle || h.snippet,
       url:
         h.item.category === 'tasks'
-          ? `#/review?taskId=${h.item.id}`
+          ? deskReviewPath({ taskId: h.item.id }).slice(1)
           : h.item.category === 'clients'
             ? `#/dna?client=${h.item.clientId}`
             : `#/review`,

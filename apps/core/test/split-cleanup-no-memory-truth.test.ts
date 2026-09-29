@@ -4,6 +4,7 @@ import { createDb, TaskRepository, withRlsContext } from '@hawa/db';
 import { kaaeClientDNA } from '@hawa/domain';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import { deskReviewTarget } from '@hawa/contracts/desk-navigation';
 
 /**
  * The cleanup step of the app.ts split (architecture programme 1.3, SPLIT_PLAN.md section 7): with a
@@ -119,7 +120,10 @@ describe('with a database, tasks are read from Postgres only', () => {
     const taskId = await newTask(core(), { title: 'Cleanup Zagroswinter probe', clientId: KAAE });
     const res = await core().request('/v1/search?q=Zagroswinter');
     expect(res.status).toBe(200);
-    expect((await res.json()).results.map((r: { id: string }) => r.id)).toContain(taskId);
+    const results = (await res.json()).results as Array<{id:string;url:string}>;
+    const found = results.find(r => r.id === taskId);
+    expect(found).toBeDefined();
+    expect(deskReviewTarget(found!.url)).toMatchObject({taskId});
   });
 
   it('keeps a promoted message as a task in Postgres, once', async () => {

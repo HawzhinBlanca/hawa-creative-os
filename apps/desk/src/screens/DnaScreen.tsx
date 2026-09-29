@@ -178,7 +178,9 @@ const NOT_READ_YET: Record<DnaSection, string> = {
   rules: 'not read yet',
 };
 
-export const DnaScreen: React.FC = () => {
+export const DnaScreen: React.FC<{ initialClientId?: string }> = ({ initialClientId }) => {
+  const linkedClientRef = useRef(initialClientId);
+  linkedClientRef.current = initialClientId;
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [directoryNotice, setDirectoryNotice] = useState<string | null>('not read yet');
@@ -190,13 +192,20 @@ export const DnaScreen: React.FC = () => {
       if (generation !== directoryRead.current) return;
       setClients(list);
       setDirectoryNotice(null);
-      setSelectedClientId(current => list.some(client => client.clientId === current) ? current : list[0]?.clientId || '');
+      setSelectedClientId(current => list.some(client => client.clientId === current) ? current
+        : linkedClientRef.current ? list.find(client => client.clientId === linkedClientRef.current)?.clientId || '' : list[0]?.clientId || '');
     } catch (err) {
       if (generation !== directoryRead.current) return;
       setDirectoryNotice(reasonOf(err));
     }
   };
   useEffect(() => { void loadClientDirectory(); return () => { directoryRead.current++; }; }, []);
+  useEffect(() => {
+    if (!initialClientId || clients.length === 0) return;
+    const available = clients.some(client => client.clientId === initialClientId);
+    setSelectedClientId(available ? initialClientId : '');
+    if (!available) setDirectoryNotice('The linked client is unavailable. Choose a client you can access.');
+  }, [initialClientId, clients]);
   return <DnaClientScreen key={selectedClientId} clients={clients} selectedClientId={selectedClientId}
     setSelectedClientId={setSelectedClientId} directoryNotice={directoryNotice} loadClientDirectory={loadClientDirectory} />;
 };

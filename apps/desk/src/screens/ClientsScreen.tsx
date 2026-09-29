@@ -4,9 +4,10 @@ import { LibraryScreen } from './LibraryScreen.js';
 
 interface ClientsScreenProps {
   initialView?: 'dna' | 'library';
+  initialClientId?: string;
 }
 
-export const ClientsScreen: React.FC<ClientsScreenProps> = ({ initialView = 'dna' }) => {
+export const ClientsScreen: React.FC<ClientsScreenProps> = ({ initialView = 'dna', initialClientId }) => {
   const [subView, setSubView] = useState<'dna' | 'library'>(initialView);
 
   return (
@@ -48,7 +49,7 @@ export const ClientsScreen: React.FC<ClientsScreenProps> = ({ initialView = 'dna
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        {subView === 'dna' ? <DnaScreen /> : <LibraryScreen />}
+        {subView === 'dna' ? <DnaScreen initialClientId={initialClientId} /> : <LibraryScreen />}
       </div>
     </div>
   );
