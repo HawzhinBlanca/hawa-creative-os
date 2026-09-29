@@ -60,6 +60,28 @@ def should_skip(path: Path) -> bool:
     return False
 
 
+def package_files() -> list[Path]:
+    """Prune only directories whose descendants are all excluded by should_skip.
+
+    Do not prune config or filename-based exclusions: a nested example can still
+    be included. Like Path.rglob, do not recurse through directory symlinks.
+    """
+    files: list[Path] = []
+
+    def read_error(error: OSError) -> None:
+        raise error
+
+    for directory, names, filenames in os.walk(ROOT, onerror=read_error, followlinks=False):
+        parent = Path(directory)
+        names[:] = [name for name in names if name not in IGNORED_ANYWHERE
+                    and not (parent == ROOT and name in IGNORED_TOP_LEVEL)]
+        for name in filenames:
+            path = parent / name
+            if not should_skip(path) and path.is_file():
+                files.append(path)
+    return sorted(files, key=lambda path: str(path.relative_to(ROOT)))
+
+
 def ok(message: str) -> None:
     PASSES.append(message)
 
@@ -278,7 +300,7 @@ def shutil_which(name: str) -> str | None:
 
 
 def validate_yaml_and_config() -> None:
-    yaml_files = sorted([p for p in [*ROOT.rglob("*.yaml"), *ROOT.rglob("*.yml")] if not should_skip(p)])
+    yaml_files = [p for p in package_files() if p.suffix in {".yaml", ".yml"}]
     for path in yaml_files:
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -318,7 +340,7 @@ def validate_markup_and_diagrams() -> None:
 
 
 def validate_documents() -> None:
-    markdown = sorted([p for p in ROOT.rglob("*.md") if not should_skip(p)])
+    markdown = [p for p in package_files() if p.suffix == ".md"]
     require(len(markdown) >= 55, f"at least 55 Markdown documents exist (actual {len(markdown)})")
     empty = [str(p.relative_to(ROOT)) for p in markdown if p.stat().st_size < 100]
     require(not empty, "no Markdown document is trivially empty" + (f"; bad={empty}" if empty else ""))
@@ -348,7 +370,8 @@ def validate_documents() -> None:
 
 def validate_security_hygiene() -> None:
     forbidden_extensions = {".ttf", ".otf", ".woff", ".woff2", ".eot"}
-    font_files = [str(p.relative_to(ROOT)) for p in ROOT.rglob("*") if p.is_file() and not should_skip(p) and p.suffix.lower() in forbidden_extensions]
+    files = package_files()
+    font_files = [str(p.relative_to(ROOT)) for p in files if p.suffix.lower() in forbidden_extensions]
     require(not font_files, "package contains no redistributed font binaries")
 
     secret_patterns = [
@@ -357,7 +380,7 @@ def validate_security_hygiene() -> None:
         re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     ]
     hits: list[str] = []
-    for path in ROOT.rglob("*"):
+    for path in files:
         if not path.is_file() or should_skip(path) or path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".zip"}:
             continue
         try:
@@ -369,7 +392,7 @@ def validate_security_hygiene() -> None:
     require(not hits, "package contains no obvious live API keys/private keys" + (f"; bad={hits}" if hits else ""))
 
     absolute_hits: list[str] = []
-    for path in ROOT.rglob("*"):
+    for path in files:
         if not path.is_file() or should_skip(path) or path.name == "validate_pack.py":
             continue
         try:
@@ -404,7 +427,7 @@ def validate_manifest() -> None:
     for line in sum_lines:
         digest, rel = line.split("  ", 1)
         parsed[rel] = digest
-    expected = [p for p in ROOT.rglob("*") if p.is_file() and p != sums_path and not should_skip(p)]
+    expected = [p for p in package_files() if p != sums_path]
     require(set(parsed) == {str(p.relative_to(ROOT)) for p in expected}, "SHA256SUMS covers every package file except itself")
     for target in expected:
         rel = str(target.relative_to(ROOT))

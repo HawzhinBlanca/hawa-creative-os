@@ -30,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStar
     };
   }, []);
 
-  const badgeColor = !isOnline ? '#9a3412' : streamStatus === 'connected' ? '#166534' : '#854d0e';
+  const badgeColor = !isOnline ? 'var(--warn-text)' : streamStatus === 'connected' ? 'var(--ok-text)' : 'var(--warn-text)';
   const badgeBg = !isOnline ? 'rgba(154, 52, 18, 0.08)' : streamStatus === 'connected' ? 'rgba(22, 101, 52, 0.08)' : 'rgba(133, 77, 14, 0.08)';
   const badgeBorder = !isOnline ? 'rgba(154, 52, 18, 0.3)' : streamStatus === 'connected' ? 'rgba(22, 101, 52, 0.3)' : 'rgba(133, 77, 14, 0.3)';
   const badgeText = !isOnline ? t.header.offlineCache : streamStatus === 'connected' ? t.header.liveStream : t.header.connecting;
@@ -56,7 +56,7 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStar
             fontWeight: 600,
             padding: '5px 11px',
             background: locale === 'en' ? 'rgba(2, 132, 199, 0.1)' : 'rgba(180, 83, 9, 0.12)',
-            color: locale === 'en' ? '#0369a1' : '#b45309',
+            color: locale === 'en' ? 'var(--accent-text)' : 'var(--warn-text)',
             border: `1px solid ${locale === 'en' ? 'rgba(2, 132, 199, 0.35)' : 'rgba(180, 83, 9, 0.35)'}`,
             borderRadius: 8,
             cursor: 'pointer',
@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStar
               fontWeight: 600,
               padding: '5px 11px',
               background: 'rgba(4, 120, 87, 0.1)',
-              color: '#047857',
+              color: 'var(--ok-text)',
               border: '1px solid rgba(4, 120, 87, 0.35)',
               borderRadius: 8,
               cursor: 'pointer',
@@ -125,6 +125,7 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStar
 
         <button
           id="omnisearch-btn"
+          aria-label={t.header.searchPlaceholder}
           onClick={onOpenCommandPalette}
           className="btn"
           style={{

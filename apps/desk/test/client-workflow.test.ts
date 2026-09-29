@@ -29,7 +29,7 @@ async function renderApp() {
   runtime = createDeskRuntime({ stream: new FakeStream(), doc: { hidden: false } });
   view = await mount(React.createElement(DeskProviders, { runtime, children: React.createElement(App) }));
   await advance(500);
-  await click(byText(view.container, 'button', 'New Task'));
+  await click(byText(view.container, 'button', /New task/i));
   await advance(500);
   return view;
 }
@@ -130,4 +130,22 @@ describe('client changes during pending work', () => {
     expect(view.text()).toContain(b);
     expect(calls.filter(c => c.method === 'POST').map(c => c.path)).toEqual([`/v1/clients/${a}/dna`]);
   });
+});
+
+it('opens the task form and changes routes when Core becomes unavailable, preserving the draft',async()=>{
+ let unavailable=false;
+ stubCore(c=>unavailable ? json({detail:'Core unavailable'},503) : c.path==='/v1/clients'?json(clients):common(c.path));
+ draftStore.saveActiveDraft({title:'Retained office request',copy:'Exact text',clientId:a});
+ window.location.hash='#/ops';
+ const screen=await renderApp();
+ expect(screen.container.querySelector('[role="dialog"]')).toBeTruthy();
+ expect(screen.container.querySelector<HTMLInputElement>('#modal-task-title')?.value).toBe('Retained office request');
+ await click(byText(screen.container,'button','Cancel'));unavailable=true;
+ await click(screen.container.querySelector('#nav-work'));await advance(500);
+ expect(window.location.hash).toBe('#/work');
+ await click(byText(screen.container,'button',/New task/i));await advance(5000);
+ expect(screen.container.querySelector('[role="dialog"]')).toBeTruthy();expect(screen.text()).toContain('Client list unavailable');
+ expect(screen.container.querySelector<HTMLInputElement>('#modal-task-title')?.value).toBe('Retained office request');
+ expect((byText(screen.container,'button','Save request') as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.container.querySelector('#omnisearch-btn')?.getAttribute('aria-label')).toContain('Search');
 });
