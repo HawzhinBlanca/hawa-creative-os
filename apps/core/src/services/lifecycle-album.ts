@@ -7,6 +7,7 @@ import { parseLifecycleAlbumRef, type BlobRef, type LifecycleAlbumRef } from '@h
 import { sql, type Database, type Kysely, type BlobStore } from '@hawa/db';
 import { lifecycleStillImageFile, retainLifecyclePhoto } from './lifecycle-photo.js';
 import { classifyWithHeuristics, isSoraniText } from './telegram-classifier.js';
+import { ALBUM_MESSAGES, requesterLang, say } from '@hawa/integrations';
 
 type Update = { update_id: number; [key: string]: unknown };
 type Message = Record<string, unknown>;
@@ -149,7 +150,7 @@ export async function retainAlbumPart(tx: <T>(fn: (trx: Tx) => Promise<T>) => Pr
     const priorParts = (await parts(trx, tenant, groupKey)).filter((part) => part.source.update_id !== update.update_id);
     if (priorParts.some((part) => part.senderId !== senderId || part.topic !== base.topic))
       throw new AlbumConflict('Album parts must belong to one sender and topic.');
-    if (priorParts.length >= 10) return 'This album exceeds ten photos. No complete album can be submitted; send a smaller album.';
+    if (priorParts.length >= 10) return say(ALBUM_MESSAGES.tooMany, wordsLang(msg));
     return null;
   };
   let error = await tx(async (trx) => {
@@ -161,14 +162,14 @@ export async function retainAlbumPart(tx: <T>(fn: (trx: Tx) => Promise<T>) => Pr
   });
   const fileId = lifecycleStillImageFile(msg, true);
   if (!error && !fileId) {
-    error = 'This album contains unsupported media. Send only still photos in a new album; no design has started.';
+    error = say(ALBUM_MESSAGES.notPhotos, wordsLang(msg));
   }
   let image: BlobRef | null = null;
   if (!error) {
     const retained = await retainLifecyclePhoto(store, download, fileId!);
     if (retained.kind === 'download_unavailable') throw new Error('ALBUM_PHOTO_UNAVAILABLE');
     if (retained.kind === 'store_unavailable') throw new Error('ALBUM_STORE_UNAVAILABLE');
-    if (retained.kind === 'unsupported') error = 'An album photo is unsupported or too large. Send a corrected album; no design has started.';
+    if (retained.kind === 'unsupported') error = say(ALBUM_MESSAGES.photoUnreadable, wordsLang(msg));
     else image = retained.ref;
   }
   return tx(async (trx) => {
@@ -197,27 +198,28 @@ export async function confirmAlbum(trx: Tx, tenant: string, update: Update): Pro
   };
   const refuse = (message: string) => finish({ status: 422, message, noticeKey: `album-confirm:${update.update_id}` });
   // A confirmation sent as a plain message is bound by bindTextToAlbum (ADR-143); never asked for.
-  if (!replyId) return refuse('I could not tell which photos you mean. Please send the photos again with what you would like designed.');
+  const lang = wordsLang(msg);
+  if (!replyId) return refuse(say(ALBUM_MESSAGES.notFound, lang));
   const rows = (await sql<{ payload: Part }>`SELECT payload FROM hawa.inbox_events
     WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_album_part'
       AND payload->>'chatId' = ${chatId} AND payload->>'messageId' = ${replyId}`.execute(trx)).rows;
   if (rows.length !== 1 || rows[0].payload.senderId !== senderId || rows[0].payload.topic !== topic)
-    return refuse('That photo does not identify an album saved for you in this chat and topic.');
+    return refuse(say(ALBUM_MESSAGES.notFound, lang));
   const groupKey = rows[0].payload.groupKey;
   await lock(trx, tenant, groupKey);
   if (await event(trx, tenant, 'lifecycle_album_frozen', groupKey))
-    return refuse('This album was already submitted. Check the existing request; a second design was not started.');
+    return refuse(say(ALBUM_MESSAGES.alreadyStarted, lang));
   const selected = await parts(trx, tenant, groupKey);
   if (selected.length < 2 || selected.length > 10 || selected.some((part) => part.error || !part.image))
-    return refuse('The album needs two to ten successfully saved still photos. Please send the photos again.');
+    return refuse(say(ALBUM_MESSAGES.needsTwo, lang));
   if (selected.some((part) => part.senderId !== senderId || part.topic !== topic))
-    return refuse('The album scope is inconsistent. Ask the office to inspect it.');
+    return refuse(say(ALBUM_MESSAGES.somethingWrong, lang));
   const messages = selected.map((part) => record(part.source.message)!);
   const captions = [...new Set(messages.map((message) => typeof message.caption === 'string' ? message.caption.trim() : '').filter(Boolean))];
   const replies = [...new Set(messages.map((message) => positiveId(record(message.reply_to_message)?.message_id)).filter(Boolean))];
   if (replies.length > 1 || (replies.length === 1 && messages.some((message) => !record(message.reply_to_message))))
-    return refuse('The album photos do not all reply to the same request. Send a new album with one clear request.');
-  if (captions.length > 1) return refuse('Use one complete caption for the album. Multiple different captions need office review.');
+    return refuse(say(ALBUM_MESSAGES.mixedReplies, lang));
+  if (captions.length > 1) return refuse(say(ALBUM_MESSAGES.captions, lang));
   if (!captions.length && !replies.length) {
     // No brief: ask what to design (ADR-143); a later brief from this sender binds the album.
     await markSettled(trx, tenant, groupKey, 'asked', update.update_id);
@@ -231,7 +233,7 @@ export async function confirmAlbum(trx: Tx, tenant: string, update: Update): Pro
   if (!replies.length) delete (normalized.message as Message).reply_to_message;
   const ref = parseLifecycleAlbumRef({ updateId: update.update_id,
     sha256: hash({ groupKey, source: update, selected }), images: selected.map((part) => part.image) });
-  if (!ref) return refuse('This album exceeds the 100 MiB total image limit. Send a smaller album.');
+  if (!ref) return refuse(say(ALBUM_MESSAGES.tooLarge, lang));
   const result: Confirmation = { source: update, chatId, snapshot: { ref, update: normalized, chatId } };
   await save(trx, tenant, 'lifecycle_album_confirm', String(update.update_id), result, hash(update));
   await save(trx, tenant, 'lifecycle_album_frozen', groupKey, { updateId: update.update_id }, ref.sha256);
@@ -278,38 +280,18 @@ const easternDigits = (n: number) => String(n).replace(/[0-9]/g, (d) => '٠١٢�
 
 /** What the requester is told, in English, or in Sorani when the chat writes Sorani. */
 export const ALBUM_TEXT = {
-  question: (count: number, lang: Lang): string => lang === 'ckb'
-    ? `${easternDigits(count)} وێنەکەتم پێگەیشت. دەتەوێت چ دیزاینێکیان پێ دروست بکەم؟ تکایە بۆم بنووسە بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن.`
-    : `I have your ${count} photos. What would you like me to design with them? Please tell me what it is for and the exact words to put on it.`,
-  followUp: {
-    en: 'Happy to. What should I design with these photos? Tell me what it is for and the exact words to put on it.',
-    ckb: 'بە دڵخۆشییەوە. چ دیزاینێک بەم وێنانە دروست بکەم؟ پێم بڵێ بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن.',
-  },
-  latePhoto: {
-    en: 'This photo arrived after I had started your design, so it is not part of it. When the draft is ready, reply to it with this photo and tell me what to change.',
-    ckb: 'ئەم وێنەیە دوای دەستپێکردنی دیزاینەکەت گەیشت، بۆیە بەشێک نییە لێی. کاتێک ڕەشنووسەکە ئامادە بوو، بەم وێنەیەوە وەڵامی بدەرەوە و بڵێ چی بگۆڕدرێت.',
-  },
-  photoMissing: {
-    en: 'One of your photos could not be saved, so I have not started a design. Please send the photos again.',
-    ckb: 'یەکێک لە وێنەکانت پاشەکەوت نەکرا، بۆیە هێشتا دیزاینم دەست پێنەکردووە. تکایە وێنەکان دووبارە بنێرەوە.',
-  },
-  onePhoto: {
-    en: 'I received only one photo from this album. Please send the photos again together with what you would like designed.',
-    ckb: 'تەنها یەک وێنەم لەم ئەلبومە پێگەیشت. تکایە وێنەکان دووبارە بنێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت.',
-  },
-  captions: {
-    en: 'Your photos came with different captions, so I am not sure which one is the brief. Please send the brief again as one message.',
-    ckb: 'وێنەکانت چەند نووسینێکی جیاوازیان لەگەڵ بوو، بۆیە نازانم کامیان داواکارییەکەیە. تکایە داواکارییەکە وەک یەک نامە دووبارە بنێرەوە.',
-  },
-  mixedReplies: {
-    en: 'Some of these photos reply to a different message than the others. Please send them again as one album with one brief.',
-    ckb: 'هەندێک لەم وێنانە وەڵامی نامەیەکی جیاوازن. تکایە وەک یەک ئەلبوم لەگەڵ یەک داواکاری دووبارە بیاننێرەوە.',
-  },
-  noAlbum: {
-    en: 'I could not find photos from you waiting in this chat. Please send the photos again with what you would like designed.',
-    ckb: 'هیچ وێنەیەکی چاوەڕوانکراوی تۆم لەم چاتەدا نەدۆزییەوە. تکایە وێنەکان دووبارە بنێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت.',
-  },
+  question: (count: number, lang: Lang): string =>
+    say(ALBUM_MESSAGES.question, lang, { count: lang === 'ckb' ? easternDigits(count) : count }),
+  followUp: ALBUM_MESSAGES.followUp,
+  latePhoto: ALBUM_MESSAGES.latePhoto,
+  photoMissing: ALBUM_MESSAGES.photoMissing,
+  onePhoto: ALBUM_MESSAGES.onePhoto,
+  captions: ALBUM_MESSAGES.captions,
+  mixedReplies: ALBUM_MESSAGES.mixedReplies,
+  noAlbum: ALBUM_MESSAGES.noAlbum,
 } as const;
+/** The language of an album message's own words (ADR-145: the script with more letters), else English. */
+const wordsLang = (msg: Message): Lang => requesterLang(typeof msg.caption === 'string' ? msg.caption : typeof msg.text === 'string' ? msg.text : '');
 
 /**
  * The lifecycle answers in Sorani when the requester writes Sorani (the reply rule of
@@ -319,11 +301,12 @@ export const ALBUM_TEXT = {
 export async function replyLanguage(trx: Tx, tenant: string, chatId: string, texts: string[],
   languageCode?: unknown): Promise<Lang> {
   const own = texts.map((text) => (typeof text === 'string' ? text.trim() : '')).filter(Boolean);
-  if (own.length) return own.some(isSoraniText) ? 'ckb' : 'en';
+  // ADR-145: the script with more letters decides (a Latin brand name in a Sorani caption stays Sorani).
+  if (own.length) return requesterLang(own.join('\n'));
   const last = (await sql<{ raw: string | null }>`SELECT payload->'draft'->>'rawText' AS raw FROM hawa.inbox_events
     WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_chat_open' AND payload->>'chatId' = ${chatId}
     ORDER BY received_at DESC LIMIT 1`.execute(trx)).rows[0]?.raw;
-  if (typeof last === 'string' && last.trim()) return isSoraniText(last) ? 'ckb' : 'en';
+  if (typeof last === 'string' && last.trim()) return requesterLang(last);
   return typeof languageCode === 'string' && /^(?:ckb|ku)(?:$|[-_])/i.test(languageCode) ? 'ckb' : 'en';
 }
 
@@ -409,7 +392,7 @@ async function freeze(trx: Tx, tenant: string, input: { groupKey: string; select
   const ref = parseLifecycleAlbumRef({ updateId: identity.update_id,
     sha256: hash({ groupKey, source: identity, selected }), images: selected.map((part) => part.image) });
   if (!ref) {
-    const reply = { status: 422, message: 'This album exceeds the 100 MiB total image limit. Send a smaller album.',
+    const reply = { status: 422, message: say(ALBUM_MESSAGES.tooLarge, requesterLang(input.text)),
       noticeKey: `album-confirm:${identity.update_id}` };
     await save(trx, tenant, 'lifecycle_album_confirm', String(identity.update_id), { source: identity, chatId: input.chatId, reply }, hash(identity));
     await markSettled(trx, tenant, groupKey, 'refused', identity.update_id);
@@ -662,7 +645,7 @@ export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, d
   if (!album) return confirmation ? reply(ALBUM_TEXT.noAlbum[lang], `album-confirm:${update.update_id}`) : { kind: 'none' };
   await lock(trx, tenant, album.groupKey);
   if (await frozen(trx, tenant, album.groupKey)) return confirmation
-    ? reply('This album was already submitted. Check the existing request; a second design was not started.', `album-confirm:${update.update_id}`)
+    ? reply(say(ALBUM_MESSAGES.alreadyStarted, lang), `album-confirm:${update.update_id}`)
     : { kind: 'none' };
   const { captions, replies, mixedReplies } = albumShape(album.selected);
   if (mixedReplies) return reply(ALBUM_TEXT.mixedReplies[lang], `album-confirm:${update.update_id}`);

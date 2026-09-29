@@ -22,6 +22,7 @@ import { ROUTING_MESSAGES } from './routing.js';
 import { CONVERSATION_MESSAGES } from './conversation.js';
 import { LIFECYCLE_MESSAGES } from './lifecycle.js';
 import { OUTCOME_MESSAGES } from './outcomes.js';
+import { ALBUM_MESSAGES } from './albums.js';
 
 import type { Phrase, PhraseBook, RequesterLang } from './types.js';
 
@@ -74,7 +75,8 @@ export const REQUESTER_CATALOGUE = {
   conversation: CONVERSATION_MESSAGES,
   lifecycle: LIFECYCLE_MESSAGES,
   outcomes: OUTCOME_MESSAGES,
+  albums: ALBUM_MESSAGES,
 } as const satisfies Record<string, PhraseBook>;
 
 export { SOURCE_MESSAGES, MEDIA_MESSAGES, INBOX_MESSAGES, ACCESS_MESSAGES, ROUTING_MESSAGES, CONVERSATION_MESSAGES,
-  LIFECYCLE_MESSAGES, OUTCOME_MESSAGES };
+  LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ALBUM_MESSAGES };
