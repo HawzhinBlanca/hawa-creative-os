@@ -69,3 +69,28 @@ plans (chaos load test; 2 slots on studio-v2 measured 11.2/35.4 s and 125.4/245.
 4,844 passed, only the release-manifest test failing before the manifest; release gate passed.
 Deployed with no invocation in flight: Restate routes to blue (`dp_13w77Jmt5o7Ko35otsdydyh`), green
 drained and stopped, blue `background: live`, `outboxActive: true`, Desk 200, watchdog healthy.
+
+## The one path, 2026-09-28 evening to 2026-09-29 03:48 +03
+
+The owner moved every Telegram chat to the request lifecycle and asked for it to be the only path. Each
+release below went through the full gate from the main checkout with no Restate invocation in flight.
+
+| Deploy (+03) | Release | What changed |
+|---|---|---|
+| 09-28 19:10 | `9be1b46b` | `HAWA_TELEGRAM_POLLER=worker` (infra/docker/.env) and `HAWA_LIFECYCLE_CHATS=<owner chat>`: the owner's chat on the lifecycle. |
+| 09-28 19:49 | `3f3d71ca` | ADR-133, migration 067: 79 records from before daily admission (one Studio call of 09-18, 78 Canva plans of 09-13..20) had made the office "history incomplete" and refused every paid call since the 16:50 deploy; they are frozen into `hawa.pre_admission_spending` and no longer hold today's allowance. Rehearsed on the 16:09Z dump in a scratch database on the test server. |
+| 09-28 20:55 | `3f3d71ca` | `HAWA_LIFECYCLE_CHATS=*`: every chat. |
+| 09-28 21:15 | `38b0503f` | ADR-132 (a Canva 429 is a named workflow wait) merged from studio-v2; the watchdog no longer pages on funnel `in_progress`. |
+| 09-29 00:31 | `2bea4671` | ADR-136: the all-chats switch had refused replies to Core drafts and prompts, let a Core button become a lifecycle request's paid revision, held any chat with an old Core task on legacy, and stranded replies on a Core-poller rollback (chaos R10.H1 75/75, R10.K1 52/52, R10.K2 17/17). Also merged without a runtime change: ADR-134 (the Restate nightly read Core's intake switch without the operator bearer, so every night would have failed; clean-host restore drill 47/47, zero duplicate effects) and ADR-137 (chaos on a copy of production data with egress fenced; gate stage 3/8 applies pending migrations to the newest dump in a scratch database and checks the invariants that would have caught ADR-133). |
+| 09-29 03:48 | `fccf43ca` | ADR-135 reconciled with ADR-136: the chat list routes nothing, legacy intake only finishes its own open requests, Core never polls Telegram (rollback is the previous release), `GET /v1/operations/legacy-path` reports what is left. ADR-138: a Core kill between claiming a Canva plan and recording its paid call no longer strands the plan. ADR-139: an English-and-Kurdish brief opens one request per language on the lifecycle. Full suite 4,914 passed; chaos worker mode 43/44 before the last harness fix. |
+
+Restate backup: enabled on 09-28 22:05 (launch agent `design.hawa.nightly-backup`, helper image
+restate 1.7.10 `@sha256:5cef318c…`). The first paired night, 09-29 03:30, published
+`restate_20260929T003026Z` beside `hawa_20260929T003004Z.dump.enc`; `restate_nightly.py --verify-pair`
+answered `verified_pair` and no pause record was left.
+
+Open on the one path: 111 legacy Telegram tasks in 15 chats (97 received, 12 human review, 1 paused,
+1 failed; oldest untouched since 09-13) keep stage 2 (branch `legacy-retirement-stage2`) from merging
+until the office closes or finishes them; `HAWA_LIFECYCLE_CHATS=*` stays in `.env.production` until
+`fccf43ca` is proven, because a rollback to `2bea4671` needs it; a requester's "thank you, we received
+the files" is read as a new brief on both paths.
