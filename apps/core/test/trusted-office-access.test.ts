@@ -20,6 +20,10 @@ it('opens the office session and directory without a user credential', async () 
   expect((await app.request(origin + '/v1/clients')).status).toBe(200);
   expect((await (await app.request(origin + '/v1/auth/providers')).json()).trustedOffice).toBe(true);
   expect((await app.request(origin + '/v1/system/providers')).status).toBe(200);
+  // Administrator authorization succeeds without a key; an empty selection changes no outbox row.
+  expect((await app.request(origin + '/v1/system/outbox/requeue', {
+    method:'POST', headers:{'Content-Type':'application/json','X-Hawa-Office-Request':'1'}, body:'{}',
+  })).status).toBe(422);
 });
 
 it('creates exactly one explicitly scoped request on an unchanged retry', async () => {

@@ -101,7 +101,7 @@ describe('ADR-064 named Google Workspace sign-in', () => {
     vi.stubEnv('HAWA_GOOGLE_OIDC_HOSTED_DOMAINS', 'example.test');
     const app = newApp();
     vi.unstubAllEnvs();
-    expect(await (await app.request('/v1/auth/providers')).json()).toEqual({ googleWorkspace: true });
+    expect(await (await app.request('/v1/auth/providers')).json()).toEqual({ googleWorkspace: true, trustedOffice: false });
     const flow = await start(app);
     const callback = await app.request(`/v1/auth/google/callback?state=${encodeURIComponent(flow.state)}&code=fixture`,
       { headers: { Cookie: flow.cookie } });

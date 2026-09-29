@@ -81,7 +81,9 @@ export function registerSystemRoutes(ctx: RouteContext) {
 
   const requireAdministrator = (c: any): Response | null => {
     const auth = verifyRequestAuth(c);
-    if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
+    if (!auth.authenticated || !c.req.header('Authorization') && auth.authMethod !== 'trusted_office') {
+      return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
+    }
     if (auth.role !== 'administrator') return problem(c, 403, 'Administrator Required', 'Only an administrator may change Telegram delivery or inspect configuration');
     return null;
   };
