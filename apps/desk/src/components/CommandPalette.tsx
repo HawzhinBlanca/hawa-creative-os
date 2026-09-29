@@ -19,6 +19,8 @@ interface SearchItem {
   badge?: string;
   actionId?: string;
   screen?: ScreenId;
+  /** Found, but shown on no Desk page (Core answers url: null): listed, and selecting it opens nothing. */
+  unlinked?: boolean;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -33,6 +35,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [results, setResults] = useState<SearchItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -147,6 +150,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   useEffect(() => {
     setIsLoading(false);
     setSearchError(null);
+    setSearchNotice(null);
     if (!isOpen) return;
 
     const trimmed = query.trim().toLowerCase();
@@ -188,18 +192,22 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
             for (const r of data.results) {
               if (!seenIds.has(r.id)) {
+                const unlinked = r.url === null;
                 merged.push({
                   id: r.id,
                   category: r.category as any,
                   title: r.title,
-                  subtitle: r.subtitle,
-                  url: r.url,
+                  subtitle: unlinked ? `${r.subtitle ?? ''} · Not shown on a Desk page` : r.subtitle,
+                  url: typeof r.url === 'string' ? r.url : undefined,
                   badge: r.badge,
+                  ...(unlinked ? { unlinked } : {}),
                 });
                 seenIds.add(r.id);
               }
             }
             setResults(merged);
+            // Core read the newest tasks only (its ceiling); older matches may be missing.
+            if (data.truncated === true) setSearchNotice('Only the newest tasks were searched; an older task may be missing. Search for more specific words.');
           }
         }
       } catch {
@@ -249,6 +257,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   }, [selectedIndex]);
 
   const executeItem = (item: SearchItem) => {
+    if (item.unlinked) return;
     onClose();
 
     if (item.actionId && onAction) {
@@ -359,6 +368,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
         {!activeClientId && <p style={{ padding: '0 18px', color: '#9ca3af', fontSize: 12 }}>Select a task in Work to search its client.</p>}
         {searchError && <p role="alert" style={{ padding: '0 18px', color: '#fca5a5' }}>{searchError}</p>}
+        {searchNotice && <p role="status" style={{ padding: '0 18px', color: '#fcd34d' }}>{searchNotice}</p>}
         {/* Results List */}
         <div
           ref={listRef}
@@ -391,7 +401,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                     justifyContent: 'space-between',
                     padding: '10px 14px',
                     borderRadius: 8,
-                    cursor: 'pointer',
+                    cursor: item.unlinked ? 'default' : 'pointer',
                     background: isSelected ? 'rgba(56, 189, 248, 0.14)' : 'transparent',
                     border: isSelected ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid transparent',
                     transition: 'background 0.1s ease',

@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T13:24:16Z",
+  "generatedAt": "2026-09-29T18:40:54Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1234,8 +1234,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/BUG_HUNT_2026-09-29.md",
-      "sha256": "fa9377c075c4c4d5428af36561f85173da59c7a34fb6befccae78c31a02ac0f3",
-      "bytes": 5852
+      "sha256": "0e08340b542b8cdcfc8d696d7561faa6976dccf945d1e0cee7d4ceeb75bd56e0",
+      "bytes": 7556
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/CANVA_UNCERTAINTY_PROOF.json",
@@ -1839,8 +1839,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2d1649eaa808b5059d02c61279962f75855580dcbbb6483387d800e0c314282a",
-      "bytes": 484379
+      "sha256": "f29d37cde93396d078f012fde209caec71f68b36c05941c5133df1d5e6882655",
+      "bytes": 484817
     },
     {
       "path": "plans/user-stories.csv",
