@@ -45,6 +45,22 @@ Plain messages through the worker's poller, ChatInbox and Core's intent routing:
 - `R1.NL.TWO`: two designs wait for changes; a change asks "Which design is this for? 1. … 2. …";
   "2" applies the kept words to the second design only.
 
+## The owner's report cover and the office retry (2026-09-29, ADR-142)
+
+```sh
+npx tsx packages/testkit/chaos/run.ts --poller worker --only R1.S3.ALBUM_COVER_RETRY
+```
+
+`R1.S3.ALBUM_COVER_RETRY`: an album of six 1280×960 JPEGs whose caption is the owner's report-cover
+brief (the text after "Here is the text and the photos:"). The first plan is refused by the model fake
+(`fakes.modelFault({ schema, status, n })`, `POST /__fakes/models/faults`), so the design ends without a
+draft; the office presses the Desk's re-drive (`POST /v1/tasks/:id/redrive`), which goes through
+`OfficeDecisionGateway.retryDesign` to `RequestLifecycle.officeRetry`, and the same task is designed
+again as `dr-<task>-a1`. It checks the six photos reach the design model in album order, the exact copy,
+the task detail, the receipts, the second press replaying, and that nothing is asked of the requester.
+A scenario whose design ends without a draft on purpose declares `operatorAlerts` (the office is
+alerted once per such outcome).
+
 ## R10 clean-host restore (2026-09-28, ADR-134)
 
 `r10-restore.ts` runs the real nightly backup with the Restate backup on, twice, against its own source

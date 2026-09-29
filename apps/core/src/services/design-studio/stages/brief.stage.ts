@@ -1,5 +1,5 @@
 import type { StageContext, CreativeBrief } from '../types.js';
-import { nearestPaletteColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC } from '@hawa/creative';
+import { nearestPaletteColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC, layoutConditioningImage, imagePixelSize } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP1Prompt } from '../prompts.js';
 import { log } from '../../../logging.js';
 
@@ -119,6 +119,30 @@ const ATTACHED_WITH_THE_REQUEST =
 const SENT_JUST_AFTER_THE_REQUEST =
   "The client sent the image shown as a separate message moments after the request above, with no caption. That is how this office receives a reference, so judge it from the image alone: unless it is plainly the client's own logo or emblem, it is the design they want followed. Classify it in referenceRole, and for a style reference say in referenceNotes what the design should take from it.";
 
+/**
+ * The longest side of an image the brief reads (ADR-142). Telegram delivers a photo at 1280, which the
+ * brief has always read; a photo sent as a file arrives at the phone's full size (4032x3024), which
+ * the production model reads at up to thirty thousand patches: about 14,000 tokens a photo, six of
+ * them a $1.94 reservation for one brief, more than a whole run's limit leaves for its layout. The
+ * brief classifies the images and reads a reference's style; 1280 pixels show both. The design
+ * itself still places the original photo.
+ */
+export const BRIEF_IMAGE_MAX_EDGE = 1280;
+
+async function briefImage(mediaType: string, data: string): Promise<{ mediaType: string; data: string }> {
+  const bytes = Buffer.from(data, 'base64');
+  const size = imagePixelSize(bytes);
+  if (!size || Math.max(size.width, size.height) <= BRIEF_IMAGE_MAX_EDGE) return { mediaType, data };
+  try {
+    const bounded = await layoutConditioningImage(bytes, BRIEF_IMAGE_MAX_EDGE);
+    const m = bounded.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    return m ? { mediaType: m[1], data: m[2] } : { mediaType, data };
+  } catch {
+    // An image the renderer cannot read is sent as it came, as before.
+    return { mediaType, data };
+  }
+}
+
 /** `lateReference`: the image reached the run after this brief was first written (studio service). */
 export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: boolean }): Promise<CreativeBrief> {
   const systemPrompt = buildP0SystemPrompt({
@@ -159,10 +183,11 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
   const rulesPrompt = ctx.clientRules
     ? `\n\nThe office's standing rules for this client are in the system prompt. Where a rule names a value styleSpec has (typeface, title colour, logo corner, alignment, texture, dividers, panels, call to action), fill it from the rule unless this request's instructions or its reference say otherwise, and list each rule you applied in 'must'.`
     : '';
+  const sent = await Promise.all(images.map((m) => briefImage(m[1], m[2])));
   const response = await ctx.client.completeJson<CreativeBrief>({
     system: systemPrompt,
     prompt: `${userPrompt}\n\n${imagePrompt}${rulesPrompt}`,
-    ...(images.length ? { images: images.map((m) => ({ mediaType: m[1], data: m[2] })) } : {}),
+    ...(sent.length ? { images: sent } : {}),
     schema: CREATIVE_BRIEF_SCHEMA,
     schemaName: 'CreativeBrief',
   });

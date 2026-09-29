@@ -13,8 +13,12 @@ export interface LayoutVisualInput {
   dataUrl: string;
 }
 
-/** Reuse the admitted local renderer, with bounded dimensions and no remote fetch or model call. */
-export async function layoutConditioningImage(bytes: Buffer): Promise<Pick<LayoutVisualInput, 'dataUrl' | 'sourceSha256'>> {
+/**
+ * Reuse the admitted local renderer, with bounded dimensions and no remote fetch or model call.
+ * `maxEdge` is the longest side sent: 768 for the layout call (read at low detail); the brief reads
+ * its images at up to 1280, the size Telegram delivers a photo in (ADR-142).
+ */
+export async function layoutConditioningImage(bytes: Buffer, maxEdge = 768): Promise<Pick<LayoutVisualInput, 'dataUrl' | 'sourceSha256'>> {
   const sourceSha256 = createHash('sha256').update(bytes).digest('hex');
   const upright = await uprightPhoto(bytes);
   const type = sniffImageType(upright.bytes);
@@ -22,10 +26,10 @@ export async function layoutConditioningImage(bytes: Buffer): Promise<Pick<Layou
   if (!size || !type || !['image/png', 'image/jpeg', 'image/webp'].includes(type)) {
     throw new Error('LAYOUT_VISUAL_INPUT_INVALID');
   }
-  if (Math.max(size.width, size.height) <= 768 && upright.bytes.length <= 3 * 1024 * 1024) {
+  if (Math.max(size.width, size.height) <= maxEdge && upright.bytes.length <= 3 * 1024 * 1024) {
     return { sourceSha256, dataUrl: `data:${type};base64,${upright.bytes.toString('base64')}` };
   }
-  const scale = Math.min(1, 768 / Math.max(size.width, size.height));
+  const scale = Math.min(1, maxEdge / Math.max(size.width, size.height));
   const width = Math.max(1, Math.round(size.width * scale));
   const height = Math.max(1, Math.round(size.height * scale));
   const file = `input.${imageFileExtension(type)}`;

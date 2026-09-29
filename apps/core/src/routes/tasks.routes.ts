@@ -11,6 +11,7 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
 import { canvaFontEvidence } from '../services/canva-font-evidence.js';
+import { orderedAlbumImages } from '../services/lifecycle-album.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -24,6 +25,11 @@ const EXPORT_MEDIA: Record<string, { type: string; disposition: string }> = {
 /** A task's export's address: immutable, since the database refuses any change to an export's bytes. */
 export function taskExportContentUrl(taskId: string, exportId: string): string {
   return `/v1/tasks/${taskId}/exports/${exportId}/content`;
+}
+
+/** A task's reference photo's address: the authorised file route below, keyed by the file's hash. */
+export function taskFileContentUrl(taskId: string, sha256: string): string {
+  return `/v1/tasks/${taskId}/files/${sha256}`;
 }
 
 /**
@@ -504,13 +510,41 @@ export function registerTasksRoutes(ctx: RouteContext): void {
                 .orderBy('created_at', 'desc').executeTakeFirst()
               : null;
 
-            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication };
+            // The client's name, read under the caller's row-level security as the task list reads it.
+            const clientRow = dbTask.client_id
+              ? (await sql<{ name: string }>`SELECT name FROM hawa.clients WHERE id = ${dbTask.client_id}::uuid`.execute(trx)).rows[0]
+              : undefined;
+
+            // The task's reference photos (a Telegram album's, a lifecycle photo, a late reference):
+            // hawa.task_files rows, not the free-text `referenceAssets` intake field (2026-09-29).
+            const referenceRows = (await sql<{ sha256: string; media_type: string; size: string }>`
+              SELECT f.sha256, b.media_type, b.size FROM hawa.task_files f JOIN hawa.blobs b ON b.sha256 = f.sha256
+              WHERE f.tenant_id = ${tenantId}::uuid AND f.task_id = ${taskId}::uuid AND f.role = 'reference_image'
+              ORDER BY f.created_at, f.sha256`.execute(trx)).rows;
+
+            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication, clientRow, referenceRows };
           }
         );
 
         if (queryRes && queryRes.dbTask) {
-          const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication } = queryRes;
+          const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication, clientRow, referenceRows } = queryRes;
           const payload = createdEv?.data?.payload || createdEv?.data?.body || (createdEv?.data as any) || {};
+
+          // In the order the Studio and planner use them: the confirmed album's message order when the
+          // request carries an album, stored order otherwise. An album that no longer matches its
+          // files is refused by the Studio; shown here in stored order rather than hidden.
+          let orderedReferences = referenceRows;
+          try {
+            orderedReferences = orderedAlbumImages(payload.lifecycleAlbum, referenceRows);
+          } catch (err) {
+            log.warn('[core:tasks:get] reference photos differ from the confirmed album; shown in stored order', { taskId, err: String(err) });
+          }
+          const referenceImages = orderedReferences.map((row) => ({
+            sha256: row.sha256,
+            mediaType: row.media_type,
+            size: Number(row.size),
+            url: taskFileContentUrl(taskId, row.sha256),
+          }));
 
           const headlineEn = payload.headlineEn || payload.body?.headlineEn || dbTask.title;
           const headlineCkb = payload.headlineCkb || payload.body?.headlineCkb || null;
@@ -596,6 +630,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             id: dbTask.id,
             tenantId: dbTask.tenant_id,
             clientId: dbTask.client_id,
+            clientName: clientRow?.name || null,
             requestId: dbTask.request_id || null,
             projectId: dbTask.project_id,
             status: publicationAwareTaskStatus(dbTask.state, { errorClass: publication?.error_class }),
@@ -612,6 +647,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             sourceChannelId: payload.sourceChannelId || 'hawa_desk',
             designInstructions: payload.designInstructions || payload.body?.designInstructions || '',
             referenceAssets: payload.referenceAssets || payload.body?.referenceAssets || '',
+            referenceImages,
+            referenceImageCount: referenceImages.length,
             sourceDocument: payload.sourceDocument || (payload.reviewedSource?.kind === 'pdf' ? {
               id: payload.reviewedSource.documentId, clientId: payload.reviewedSource.clientId,
               sourceSha256: payload.reviewedSource.sourceSha256,

@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { imagePixelSize, reserveStudioText } from '@hawa/creative';
 import { runBriefStage } from '../src/services/design-studio/stages/brief.stage.js';
 
 const reply = (extra: Record<string, unknown>) => ({
@@ -74,5 +76,27 @@ describe('the brief says what each of several images is', () => {
       { index: 0, role: 'content_photo', notes: '' },
       { index: 1, role: 'unrelated', notes: '' },
     ]);
+  });
+});
+
+describe('the brief reads photos at most 1280 pixels on their long side (ADR-142)', () => {
+  it('sends a full-size phone photo downscaled, a Telegram-sized one unchanged, and reserves accordingly', async () => {
+    const phone = readFileSync(new URL('../../../packages/creative/test/fixtures/phone-12mp-plasma.jpg', import.meta.url));
+    const telegram = readFileSync(new URL('./fixtures/telegram-photo-1280.jpg', import.meta.url));
+    const completeJson = vi.fn(async () => reply({ imageRoles: [
+      { index: 0, role: 'content_photo', notes: 'full-size' }, { index: 1, role: 'content_photo', notes: 'telegram' }] }));
+    const c = { ...ctx(undefined, completeJson), requestImages: [
+      `data:image/jpeg;base64,${phone.toString('base64')}`, `data:image/jpeg;base64,${telegram.toString('base64')}`] };
+    await runBriefStage(c);
+    const sent = (completeJson.mock.calls[0] as any)[0].images as Array<{ mediaType: string; data: string }>;
+    expect(imagePixelSize(Buffer.from(phone))).toEqual({ width: 4032, height: 3024 });
+    expect(imagePixelSize(Buffer.from(sent[0].data, 'base64'))).toEqual({ width: 1280, height: 960 });
+    expect(sent[1]).toEqual({ mediaType: 'image/jpeg', data: telegram.toString('base64') });
+    // Six full-size photos in one brief reserve about $1.94 of vision input at production prices.
+    const sixUsd = (data: string, mediaType: string) => reserveStudioText(JSON.stringify({ model: 'gpt-6-astra', service_tier: 'default',
+      max_completion_tokens: 1, response_format: { type: 'json_schema', json_schema: { name: 'x', schema: { type: 'object' } } },
+      messages: [{ role: 'user', content: Array.from({ length: 6 }, () => ({ type: 'image_url', image_url: { url: `data:${mediaType};base64,${data}` } })) }] })).usd;
+    expect(sixUsd(phone.toString('base64'), 'image/jpeg')).toBeGreaterThan(1.9);
+    expect(sixUsd(sent[0].data, sent[0].mediaType)).toBeLessThan(0.25);
   });
 });

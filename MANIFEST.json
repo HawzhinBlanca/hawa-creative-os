@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T20:53:48Z",
+  "generatedAt": "2026-09-29T20:54:41Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 546,
+  "fileCount": 549,
   "files": [
     {
       "path": ".dockerignore",
@@ -778,6 +778,11 @@
       "bytes": 13248
     },
     {
+      "path": "adrs/142_first_request_fixes_run_limit_photos_copy_retry.md",
+      "sha256": "1b744da130e6c7705f866b226d56393d8feb67235171737ad8a5afe11578abf7",
+      "bytes": 16951
+    },
+    {
       "path": "adrs/143_albums_settle_without_commands.md",
       "sha256": "29e7d379dba4146ee7e8c01b6333e2d440d6c098c394a2e2a17c37bb7fb29297",
       "bytes": 16195
@@ -1248,6 +1253,16 @@
       "bytes": 22005
     },
     {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR142_ALBUM_CHAOS_RUN.json",
+      "sha256": "be6f97b87955ed56512862eecbff1c02e30d5b9cf77e0675b8546659a49d5ba6",
+      "bytes": 33820
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR142_ALBUM_COVER_RETRY_CHAOS_RUN.json",
+      "sha256": "198100bb53f872a843a19e7e3899601756c51b396a62f5c3cf208338b61bd9eb",
+      "bytes": 7165
+    },
+    {
       "path": "plans/lean-design-implementation-2026-09-28/ADR143_ALBUM_CHAOS_RUN.json",
       "sha256": "25cc318a85001ec0f3dc7ac3745e2ec986dd53f357f81642b75443de5fe7e3df",
       "bytes": 27108
@@ -1439,8 +1454,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "ee0479ee334fe113748eb6f26af5910d9c37c4d1a2f282290aab6d45a62b33e1",
-      "bytes": 43700
+      "sha256": "3b18d2c2cc22a5af23dbadd0ab3817f5387bc9e4d19c0bfe3d61275750f2b440",
+      "bytes": 44123
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -1909,8 +1924,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "65151591ef72ec0b924a6a1ca2c130e57464bac04acd302ece5c8e46a4740a5a",
-      "bytes": 497745
+      "sha256": "068296b3b3ac1583b07ea92e796c65ef6dd5f02669af00c8f9bec199a578e610",
+      "bytes": 499702
     },
     {
       "path": "plans/user-stories.csv",

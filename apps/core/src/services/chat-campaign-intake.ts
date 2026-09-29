@@ -1,6 +1,6 @@
 import { officeReviewUrl } from './desk-review-link.js';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
-import { peelTrailingRemarks } from './request-remarks.js';
+import { isCopyIntroducer, peelTrailingRemarks } from './request-remarks.js';
 import { log } from '../logging.js';
 import crypto from 'node:crypto';
 import path from 'node:path';
@@ -28,6 +28,21 @@ export function createChatCampaignIntake(ctx: CoreContext): ChatCampaignIntake {
   const intake = buildChatCampaignIntake(ctx);
   intakes.set(ctx, intake);
   return intake;
+}
+
+export { isCopyIntroducer };
+
+/**
+ * The first line that introduces the copy, with the instructions above it and the copy below it.
+ * None when no line does, or when nothing follows it (a request without copy stays one).
+ */
+function splitAtCopyIntroducer(text: string): { instructions: string; introducer: string; copy: string } | null {
+  const lines = text.split('\n');
+  const at = lines.findIndex((line) => isCopyIntroducer(line));
+  if (at < 0) return null;
+  const copy = lines.slice(at + 1).join('\n').trim();
+  if (!copy) return null;
+  return { instructions: lines.slice(0, at).join('\n').trim(), introducer: lines[at].trim(), copy };
 }
 
 type ChatCampaignIntake = ReturnType<typeof buildChatCampaignIntake>;
@@ -155,11 +170,22 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     let clientInstructions = '';
     let payloadText = rawText.trim();
 
+    // Set when a line introduces the copy ("Here is the text and the photos:"): each line after it
+    // is then one copy block, in the order written (see isCopyIntroducer, 2026-09-29).
+    let copyIsIntroduced = false;
+
     // 3a. Check for explicit divider lines: e.g. __________, ----------, ==========, ***
     const dividerMatch = payloadText.match(/\n\s*([_\-=\*]{3,})\s*\n/);
+    const introduced = dividerMatch ? null : splitAtCopyIntroducer(payloadText);
     if (dividerMatch && dividerMatch.index !== undefined) {
       clientInstructions = payloadText.slice(0, dividerMatch.index).trim();
       payloadText = payloadText.slice(dividerMatch.index + dividerMatch[0].length).trim();
+    } else if (introduced) {
+      // 3a'. A line that introduces the text: everything above it and the line itself are
+      // instructions (kept, so nothing the requester wrote is lost), everything below it is copy.
+      clientInstructions = [introduced.instructions, introduced.introducer].filter(Boolean).join('\n');
+      payloadText = introduced.copy;
+      copyIsIntroduced = true;
     } else {
       // 3b. Check for explicit copy section headers (e.g. "Content:", "Copy:", "Text:", "دەق:")
       const sectionMatch = payloadText.match(/\n\s*(?:content|copy|text|invitation|details|دەق|ناوەڕۆک)\s*:\s*\n?/i);
@@ -257,12 +283,24 @@ function buildChatCampaignIntake(ctx: CoreContext) {
 
     // Preserve every submitted paragraph, including unfamiliar event details. A template
     // parser must never discard copy or invent missing event facts during intake.
+    // Copy under a line that introduces it ("Here is the text and the photos:") is read line by line:
+    // the requester listed title, subtitle and supporting text one per line, and asked for them
+    // exactly as written, so each line is its own block, in order, in its own script. Elsewhere a
+    // paragraph stays one block, as before (a two-line date and venue is one detail).
+    const scriptOf = (text: string) => /[؀-ۿ]/.test(text)
+      ? { language: 'ckb' as const, direction: 'rtl' as const }
+      : { language: 'en' as const, direction: 'ltr' as const };
     const exactCopy: ExactCopyBlock[] = input.isInstructionOnly
       ? []
-      : payloadText.split(/\n\s*\n/).filter(t=>t.trim()).map((text,index)=>({
-          id: `copy_${index}`, role: index===0?'headline':'body', text: text.trim(),
-          language: primaryLanguage, direction, approved: true, protectedTokens: [],
-        }));
+      : copyIsIntroduced
+        ? payloadLines.map((text, index) => ({
+            id: `copy_${index}`, role: index === 0 ? 'headline' : 'body', text,
+            ...scriptOf(text), approved: true, protectedTokens: [],
+          }))
+        : payloadText.split(/\n\s*\n/).filter(t=>t.trim()).map((text,index)=>({
+            id: `copy_${index}`, role: index===0?'headline':'body', text: text.trim(),
+            language: primaryLanguage, direction, approved: true, protectedTokens: [],
+          }));
 
     // A pack client other than KAAE gets its own default canvas (a thumbnail client: 1280x720).
     const packCanvas = (() => { const pack = isKaae ? undefined : clientPackOf(clientId); return pack ? defaultCanvasFor(pack) : undefined; })();

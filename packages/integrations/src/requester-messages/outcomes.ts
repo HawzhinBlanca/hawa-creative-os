@@ -76,6 +76,15 @@ export const OUTCOME_MESSAGES = {
     en: 'A designer will make your change to {title} by hand. Your last draft stays as it is. Anything else to change? Just write it.',
     ckb: 'دیزاینەرێک گۆڕانکارییەکەت لە {title} بە دەست دەکات. دوایین ڕەشنووست وەک خۆی دەمێنێتەوە. شتێکی تر هەیە بگۆڕدرێت؟ تەنها بینووسە.',
   },
+  /**
+   * ADR-142: the automatic design stopped before anything was made, for a reason on the office's side
+   * (one step needed more than the run was allowed to spend). The office runs it again; the requester
+   * sends nothing more.
+   */
+  designTakingLonger: {
+    en: "{title} needs a little more time. The office is on it and will send your draft here; you don't need to send anything again.",
+    ckb: '{title} کەمێک کاتی زیاتری پێویستە. ئۆفیسەکە کاری لەسەر دەکات و ڕەشنووسەکەت لێرە بۆت دەنێرێت؛ پێویست ناکات هیچ شتێک دووبارە بنێریتەوە.',
+  },
   /** #29 and #30: stopped by a check, or failed; the office was alerted. */
   officeWillFinish: {
     en: 'The office will finish {title} and send it to you here.',

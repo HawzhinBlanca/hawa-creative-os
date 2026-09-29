@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { candidateSources } from './driver/candidate-sources.js';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { REPO_ROOT, acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, isRunning, releaseProject, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import { neutralise, restoreDump, verifyEgressFence, type EgressProbe, type NeutraliseReport, type SeedReport } from './driver/seed.js';
@@ -88,6 +88,8 @@ interface Expectation {
   classifierAllowance?: number;
   /** Sends the scenario makes uncertain (each must end with one office alert and no resend). */
   uncertainSends?: number;
+  /** Design outcomes the scenario makes end without a draft (each alerts the office once; ADR-142). */
+  operatorAlerts?: number;
   /** Checks of the scenario's own, added to the per-request ones. */
   extra?: InvariantResult[];
   /** The scenario made no design request in its chat (R4), so only `extra` applies. */
@@ -998,6 +1000,107 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       const checks = await albumChecks(chat, taskId, 2, { downloadsPrefix: `album-${tag}-${chat}-` });
       const questions = (await sentTo(chat)).filter((s) => s.method === 'sendMessage' && s.text?.startsWith('I have your 2 photos.'));
       return [...checks, { name: 'the album was asked about once', ok: questions.length === 1, detail: `questions=${questions.length}` }];
+    } };
+  });
+
+  /**
+   * ADR-142: the owner's first request on the natural-language release (2026-09-29), in its shape: an
+   * album of six phone photos (Telegram's 1280x960 JPEG) whose caption is the report-cover brief, the
+   * text after "Here is the text and the photos:". The first design is refused by the provider before
+   * any work (the run ended without a draft, as production's did), the office presses the Desk's
+   * re-drive, and the request's own object designs the same task again under an attempt run. The draft
+   * reaches review with all six photos sent to the design model, and nothing was asked of the requester.
+   */
+  scenario('R1.S3.ALBUM_COVER_RETRY', 'the owner\'s six-photo report cover: the first design fails, the office retries it from the Desk, and the draft uses the photos', async (chat, events) => {
+    const tag = 'albumcover';
+    const brief = `Design a professional report cover for KAAE using only the provided field-visit photos and the provided text. Arrange the supplied photos in a clean, structured collage across the upper and middle sections. Use KAAE’s navy blue, yellow, and white brand colors, with a dark navy overlay or gradient toward the lower section to create a clear text area. Place the KAAE logo near the top and use a thin yellow border as a framing element. Keep the provided title, subtitle, supporting text, and website exactly as written, without rewriting or shortening them. Use bold white and yellow typography with clear hierarchy. The overall design should feel modern, formal, institutional, educational, and suitable for an official KAAE report cover. Do not generate new photos or replace the supplied ones and you don’t have to use all the photos, choose the best ones based on your design.
+
+Here is the text and the photos:
+
+KAAE K-12 Pilot Study
+Field Visit Report
+
+Insights from KAAE school field visits and next steps toward`;
+    const jpeg = readFileSync(join(REPO_ROOT, 'apps/core/test/fixtures/telegram-photo-1280.jpg'));
+    const photos = [0, 1, 2, 3, 4, 5].map((i) => Buffer.concat([jpeg, Buffer.from(`${chat}-${i}`)]));
+    const hashes = photos.map((p) => createHash('sha256').update(p).digest('hex'));
+    const groupId = `group-${tag}-${chat}`;
+    const parts: Array<{ message: Record<string, unknown> }> = [];
+    for (let i = 0; i < 6; i++) {
+      const fileId = `album-${tag}-${chat}-${i}`;
+      await fakes.file({ file_id: fileId, mime: 'image/jpeg', contentBase64: photos[i].toString('base64') });
+      const part: { message: Record<string, unknown> } = captionedPhotoUpdate(chat, fileId, photos[i].length, brief);
+      if (i > 0) delete part.message.caption;
+      part.message.media_group_id = groupId;
+      part.message.photo = [{ file_id: fileId, file_unique_id: `u-${fileId}`, width: 1280, height: 960, file_size: photos[i].length }];
+      parts.push(part);
+    }
+    // The first design is refused before any work, so it ends without a draft.
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    await fakes.modelFault({ schema: 'canva_design_plan', status: 400, n: 1 });
+    const ids = await fakes.updates(parts);
+    events.push(`album of 6 photos (1280x960 JPEG), caption = the owner's brief: updates ${ids.join(', ')}`);
+    const failed = await waitUntil('the first design to end without a draft', async () => {
+      const [row] = await query<{ request_id: string; current_task_id: string; rev: string; stage: string }>(sql`
+        SELECT request_id, current_task_id, rev, stage FROM hawa.requests WHERE chat_id = ${chat}`);
+      return row?.stage === 'manual' && Number(row.rev) === 2 && (await taskState(row.current_task_id)) === 'failed_operator' ? row : null;
+    }, 240_000, 1000);
+    const taskId = failed.current_task_id;
+    events.push(`task ${taskId}: the first design ended without a draft (request manual, rev 2; task failed_operator)`);
+    const retry = await fakes.core(`/tasks/${taskId}/redrive`, secrets().CHAOS_REVIEWER_KEY,
+      { body: { reason: 'Chaos: retry the report cover after its first design failed.' } });
+    events.push(`Desk re-drive: HTTP ${retry.status} ${JSON.stringify(retry.json)}`);
+    if (retry.status !== 202) throw new Error(`the office retry was refused: HTTP ${retry.status} ${JSON.stringify(retry.json).slice(0, 300)}`);
+    const again = await fakes.core(`/tasks/${taskId}/redrive`, secrets().CHAOS_REVIEWER_KEY, { body: { reason: 'pressed twice' } });
+    events.push(`second press: HTTP ${again.status} replayed=${again.json?.replayed}`);
+    await waitUntil(`the retried draft of task ${taskId} in review`, async () => {
+      const [row] = await query<{ stage: string; rev: string }>(sql`SELECT stage, rev FROM hawa.requests WHERE chat_id = ${chat}`);
+      if (row?.stage === 'manual' && Number(row.rev) >= 4) throw new RequestEndedError(`the retried design ended without a draft too (rev ${row.rev})`);
+      return row?.stage === 'in_review' && Number(row.rev) === 4 && (await taskState(taskId)) === 'human_review' ? true : null;
+    }, 240_000, 1000);
+    events.push(`task ${taskId}: the retried draft is in review (rev 4)`);
+    return { delivered: false, operatorAlerts: 1, after: async () => {
+      const checks = await albumChecks(chat, taskId, 6, { downloadsPrefix: `album-${tag}-${chat}-` });
+      const plans = ((await fakes.modelLedger()).ledger as Array<{ seq: number; route: string; status: number; imageSha256?: string[] }>)
+        .filter((l) => l.seq > ledgerSince && (l.route === 'canva_design_plan' || l.route === 'fault:canva_design_plan'));
+      // The six photos, in album order, among the images the plan was sent (the brand's own come too).
+      const inOrder = (sent: string[] = []) => hashes.every((h, i) => sent.indexOf(h) >= 0 && (i === 0 || sent.indexOf(h) > sent.indexOf(hashes[i - 1])));
+      const made = plans.filter((l) => l.status === 200);
+      const [created] = await query<{ title: string; exact: any }>(sql`SELECT t.title, o.payload->'exactCopy' AS exact
+        FROM hawa.tasks t JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created' WHERE t.id = ${taskId}::uuid`);
+      const copy = (Array.isArray(created?.exact) ? created.exact : []).map((b: any) => typeof b === 'string' ? b : b?.text);
+      const detail = await fakes.core(`/tasks/${taskId}`, secrets().CHAOS_REVIEWER_KEY);
+      const receipts = await query<{ rev: string; key: string }>(sql`SELECT rev, idempotency_key AS key FROM hawa.lifecycle_projections
+        WHERE request_id = ${failed.request_id}::uuid ORDER BY rev`);
+      const runs = await restateQuery<{ target_service_key: string; status: string }>(
+        `SELECT target_service_key, status FROM sys_invocation WHERE target_service_name = 'DesignRun'`);
+      const mine = runs.filter((r) => String(r.target_service_key).startsWith(`dr-${taskId}`));
+      const requester = (await sentTo(chat)).filter((s) => s.method === 'sendMessage').map((s) => String(s.text ?? ''));
+      return [
+        ...checks,
+        { name: 'one refused first plan and one paid retried plan, which carried all six photos in album order',
+          ok: plans.length === 2 && plans[0].status === 400 && made.length === 1 && inOrder(made[0].imageSha256),
+          detail: JSON.stringify(plans.map((p) => ({ route: p.route, status: p.status, images: p.imageSha256?.length,
+            photos: hashes.filter((h) => p.imageSha256?.includes(h)).length }))) },
+        { name: 'the introducer line is not copy: title and exact copy are the owner\'s three lines',
+          ok: created?.title === 'KAAE: KAAE K-12 Pilot Study…' && JSON.stringify(copy) === JSON.stringify(
+            ['KAAE K-12 Pilot Study', 'Field Visit Report', 'Insights from KAAE school field visits and next steps toward']),
+          detail: JSON.stringify({ title: created?.title, copy }) },
+        { name: 'the task detail names the client and shows six reference photos',
+          ok: typeof detail.json?.clientName === 'string' && detail.json.clientName.length > 0 && detail.json?.referenceImageCount === 6,
+          detail: JSON.stringify({ clientName: detail.json?.clientName, referenceImageCount: detail.json?.referenceImageCount }) },
+        { name: 'the retry was one office action: receipts open, failed outcome, retry, draft outcome; the second press replayed it',
+          ok: receipts.map((r) => Number(r.rev)).join(',') === '1,2,3,4' && receipts[2].key.includes(':officeRetry:desk:') &&
+            receipts[3].key.endsWith(`:designFinished:dr-${taskId}-a1`) && again.status === 200 && again.json?.replayed === true,
+          detail: JSON.stringify({ receipts: receipts.map((r) => r.key.replace(failed.request_id, 'R')), again: again.status }) },
+        { name: 'two design runs for the task, the first and the attempt, both completed',
+          ok: mine.length === 2 && mine.every((r) => r.status === 'completed') &&
+            mine.some((r) => r.target_service_key === `dr-${taskId}-a1`),
+          detail: JSON.stringify(mine) },
+        { name: 'the requester was never asked to send the album or the brief again, nor for a command',
+          ok: !requester.some((t) => /send (it|them|the photos|everything) again|\/new|\/use_album|\/redo/i.test(t)),
+          detail: JSON.stringify(requester) },
+      ];
     } };
   });
 

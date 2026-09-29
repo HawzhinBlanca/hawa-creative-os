@@ -7,6 +7,9 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { createRedrive } from '../services/redrive.js';
 import { rejectLegacyTaskDesignWrite } from './lifecycle-design-proof.js';
+import { requestLifecycleDesignRetry } from '../services/lifecycle-office-retry.js';
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { withRlsContext } from '@hawa/db';
 
 /**
  * The task controls (architecture programme 1.3, SPLIT_PLAN.md G6), moved unchanged from app.ts:
@@ -56,10 +59,50 @@ export function registerControlsRoutes(ctx: RouteContext): void {
   };
   for (const control of ['pause', 'resume', 'cancel', 'retry'] as const) registerRoute('post', `/tasks/:taskId/${control}`, applyControl(control));
 
+  /**
+   * ADR-142: "retry this design" for a request-owned task whose automatic design ended without a
+   * draft. The request's own object runs the same task again under a new attempt; the requester sends
+   * nothing. Optional body { reason }; optional UUID Idempotency-Key (by default one action per
+   * request revision, so a second click is the same retry).
+   */
+  const retryLifecycleDesign = async (c: any, auth: ReturnType<typeof verifyRequestAuth>, taskId: string) => {
+    if (!db) return problem(c, 503, 'Database Required', 'A lifecycle retry is recorded in the database');
+    if (!auth.tenantId || !auth.userId) return problem(c, 401, 'Authentication Required');
+    const key = c.req.header('Idempotency-Key');
+    if (key !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) {
+      return problem(c, 422, 'Action Key Invalid', 'A lifecycle retry key must be a UUID');
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const reason = typeof body?.reason === 'string' ? body.reason : '';
+    if (reason.length > 2000) return problem(c, 422, 'Reason Too Long', 'Keep the reason under 2000 characters');
+    const result = await requestLifecycleDesignRetry(db, { tenantId: auth.tenantId, taskId,
+      actor: { userId: auth.userId, role: auth.role || '' }, reason, ...(key ? { actionId: key.toLowerCase() } : {}) });
+    if (!result.ok) return problem(c, result.status, result.code, result.message);
+    if (!result.body.replayed) broadcastTransition(taskId, 'failed_operator', 'received');
+    return c.json(result.body, result.status);
+  };
+  const lifecycleRequestOf = async (auth: ReturnType<typeof verifyRequestAuth>, taskId: string): Promise<string | null> => {
+    if (!db || !auth.tenantId || !/^[0-9a-f-]{36}$/i.test(taskId)) return null;
+    return withRlsContext(db, { tenantId: auth.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+      (await trx.selectFrom('tasks').select('request_id').where('tenant_id', '=', auth.tenantId!).where('id', '=', taskId)
+        .executeTakeFirst())?.request_id ?? null);
+  };
+  registerRoute('post', '/tasks/:taskId/lifecycle/retry-design', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    const taskId = c.req.param('taskId');
+    if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
+    return retryLifecycleDesign(c, auth, taskId);
+  });
+
   // Re-drive Failed Task Generation (ADR-025 / Audit 2026-09-16)
   registerRoute('post', '/tasks/:taskId/redrive', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    // A request-owned task is designed again by its request's own object (ADR-142), so the Desk's
+    // "Re-drive Generation" works for it; the legacy re-drive below would refuse it (LIFECYCLE_OWNED).
+    const ownedBy = await lifecycleRequestOf(auth, c.req.param('taskId')).catch(() => null);
+    if (ownedBy) return retryLifecycleDesign(c, auth, c.req.param('taskId'));
     const lifecycleRefusal = await rejectLegacyTaskDesignWrite(ctx, c, auth);
     if (lifecycleRefusal) return lifecycleRefusal;
     const taskId = c.req.param('taskId');

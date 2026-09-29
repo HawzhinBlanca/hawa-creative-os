@@ -463,6 +463,7 @@ export const fakes = {
   canvaManualEdit: (body: {designId:string;contentBase64:string}) => call('/__fakes/canva/manual-edit', {body}),
   modelLedger: () => call('/__fakes/models/ledger').then((r) => r.json),
   modelDelay: (delay: { schema: string; delayMs: number; n?: number }) => call('/__fakes/models/delays', { body: delay }),
+  modelFault: (fault: { schema: string; status: number; n?: number }) => call('/__fakes/models/faults', { body: fault }),
   hold: (point: string, match: Record<string, string> = {}, n = 1) => call('/__chaos/hold', { body: { point, match, n } }),
   wait: (point: string, timeoutMs = 120_000) => call(`/__chaos/wait?point=${encodeURIComponent(point)}&timeoutMs=${timeoutMs}`).then((r) => (r.status === 200 ? r.json : null)),
   release: (point?: string) => call('/__chaos/release', { body: point ? { point } : {} }),

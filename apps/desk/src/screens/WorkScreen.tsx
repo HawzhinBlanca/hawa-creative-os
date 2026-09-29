@@ -6,6 +6,7 @@ import { StudioPanel } from '../components/StudioPanel.js';
 import { AskLedgerPanel } from '../components/AskLedger.js';
 import { RequesterSendEvidencePanel } from '../components/RequesterSendEvidencePanel.js';
 import { VectorInspector } from '../components/VectorInspector.js';
+import { AuthorizedImage } from '../components/AuthorizedImage.js';
 import { OriginalDocument } from '../components/DocumentRequestForm.js';
 import { SubmittedCopy } from '../components/SubmittedCopy.js';
 import { apiClient, ApiError, type DecisionPayload, type LateRequesterChangeView, type TaskListParams, type TaskListResponse, type TaskTimelineEvent } from '../api/client.js';
@@ -36,6 +37,9 @@ export interface LiveTask {
   description?: string;
   designInstructions?: string;
   referenceAssets?: string;
+  /** The task's stored reference photos (GET /tasks/:id only), each served by its authorised `url`. */
+  referenceImages?: Array<{ sha256: string; mediaType: string; size: number; url: string }>;
+  referenceImageCount?: number;
   source?: { platform?: string; externalId?: string; channelId?: string };
   sourcePlatform?: string;
   createdAt?: string;
@@ -1287,6 +1291,25 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   {selectedTask.designInstructions && <div className="rule"><h4>Design instructions</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedTask.designInstructions}</p></div>}
                   {selectedTask.sourceDocument && <div className="rule"><h4>Original request PDF</h4><OriginalDocument receipt={selectedTask.sourceDocument} /></div>}
                   {selectedTask.referenceAssets && <div className="rule"><h4>Reference notes</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedTask.referenceAssets}</p></div>}
+                  {typeof selectedTask.referenceImageCount === 'number' && (
+                    <div className="rule" data-testid="reference-photos">
+                      <h4>Reference photos: {selectedTask.referenceImageCount}</h4>
+                      {(selectedTask.referenceImages?.length ?? 0) > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {selectedTask.referenceImages!.map((photo, i) => (
+                            <AuthorizedImage
+                              key={photo.sha256}
+                              src={photo.url}
+                              alt={`Reference photo ${i + 1} of ${selectedTask.referenceImageCount}`}
+                              title={`sha256 ${photo.sha256.slice(0, 12)}`}
+                              style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }}
+                              fallback={<span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'monospace' }}>{photo.sha256.slice(0, 12)}</span>}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                       <div className="exact-copy-notice">
                         <b>Exact Copy Invariant (#1):</b> Compare this content with the captured design. The server must validate exact copy before approval.
                       </div>

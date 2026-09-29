@@ -254,6 +254,8 @@ async function runUnlessBusy<T>(ctx: WorkflowDurableContext, stepName: string, r
 export function studioFailureCode(result: { code?: unknown; diagnostic?: unknown; message?: unknown; error?: unknown }): string {
   if (typeof result.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(result.code)) return result.code;
   const text = [result.diagnostic, result.message, result.error].filter((v) => typeof v === 'string').join(' ');
+  // ADR-142: one request larger than the run had left; nothing was laid out or sent for it.
+  if (/STUDIO_RUN_LIMIT_TOO_SMALL/.test(text)) return 'STUDIO_RUN_LIMIT_TOO_SMALL';
   if (/BUDGET_EXHAUSTED/i.test(text)) return 'BUDGET_EXHAUSTED';
   // The provider account out of credit or its key refused: every design fails the same way until
   // the office tops it up, which the generic STUDIO_FAILED hid in the task history.

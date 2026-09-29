@@ -21,6 +21,7 @@
 import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, say as sayPhrase, type Phrase,
   type RequesterLang } from '@hawa/integrations';
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
+import { isCopyIntroducer } from './request-remarks.js';
 
 export type TurnIntent = 'acknowledgement' | 'status' | 'approval' | 'cancel' | 'deadline' | 'change' |
   'new_brief' | 'conversation' | 'unclear';
@@ -610,6 +611,10 @@ export function shortTitle(value: string): string {
  * request carries no name.
  */
 export function designName(value: string | null | undefined, lang: Lang): string {
+  // A task titled before 2026-09-29 from the line that introduced its text ("KAAE: Here is the text
+  // and the photos:…", task ba4469f2) has no name the requester would know: it is "your design" (ADR-142).
+  const name = String(value ?? '').replace(/^[^:]{1,40}:\s*/, '').replace(/…$/, '').trim();
+  if (name && isCopyIntroducer(name)) return say(LIFECYCLE_MESSAGES.yourDesign, lang);
   return String(value ?? '').trim() ? title({ title: String(value) }) : say(LIFECYCLE_MESSAGES.yourDesign, lang);
 }
 

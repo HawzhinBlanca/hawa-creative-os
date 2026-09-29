@@ -281,6 +281,11 @@ export interface InvariantResult {
  */
 export async function checkRequest(chat: string, options: {
   delivered: boolean; classifierAllowance?: number; uncertainSends?: number; ledgerSince?: number;
+  /**
+   * Design outcomes the scenario makes end without a draft (ADR-142): each tells the office once that
+   * an operator is needed ("Automatic design needs an operator in Hawa Desk."). Default 0.
+   */
+  operatorAlerts?: number;
   /** The approved files the delivery sends (and archives): 1 unless the scenario pinned more. */
   files?: number;
   /** Who delivers: Core's own delivery and the outbox (legacy, before ADR-135), or the Restate Delivery workflow. */
@@ -315,9 +320,16 @@ export async function checkRequest(chat: string, options: {
   const uncertain = options.uncertainSends ?? shown.filter((s) => s.fault === 'drop-after-processing').length;
   // RequestLifecycle tells the office a draft is ready for its Desk review (ADR-065, 8682bd97): a
   // notice of the review, not an alert about a send.
-  const alerts = (await sentTo(OFFICE_CHAT)).filter((s) => s.text && s.text.includes(task.id) &&
-    !s.text.startsWith('A design is ready for office review in Hawa Desk.'));
+  const operatorAlert = (text: string) => text.startsWith('Automatic design needs an operator in Hawa Desk.');
+  const officeNotes = (await sentTo(OFFICE_CHAT)).filter((s) => s.text && s.text.includes(task.id));
+  const alerts = officeNotes.filter((s) => !s.text.startsWith('A design is ready for office review in Hawa Desk.') &&
+    !(options.operatorAlerts !== undefined && operatorAlert(s.text)));
   add(uncertain ? 'an uncertain send has exactly one office alert' : 'no office alert without an uncertain send', alerts.length === uncertain, `uncertain sends expected=${uncertain} office alerts naming the task=${alerts.length}`);
+  if (options.operatorAlerts !== undefined) {
+    const operator = officeNotes.filter((s) => operatorAlert(s.text));
+    add('each design that ended without a draft alerted the office once', operator.length === options.operatorAlerts,
+      `expected=${options.operatorAlerts} operator alerts=${operator.length}`);
+  }
 
   // Paid calls: every fingerprint once (the classifier may run again when intake died before saving).
   // Only this scenario's calls: each scenario's brief carries its own tag, so its fingerprints are its own.

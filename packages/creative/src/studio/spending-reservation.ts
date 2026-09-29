@@ -2,8 +2,11 @@ import { createHash } from 'node:crypto';
 import { studioUsdMicros, type StudioCallReservation } from '@hawa/domain';
 import { dataUriPixelSize } from './photo-crop.js';
 
-/** Versioned conservative policy, researched 2026-09-27; see ADR-091 for assumptions. */
-const POLICY = 'studio-2026-09-27-v2';
+/**
+ * Versioned conservative policy, researched 2026-09-27; see ADR-091 for assumptions. v3 (ADR-142,
+ * 2026-09-29) bounds message text at one token per UTF-8 byte instead of two.
+ */
+const POLICY = 'studio-2026-09-29-v3';
 export class StudioReservationError extends Error {
   readonly code = 'STUDIO_BUDGET_UNQUOTABLE';
   constructor(message: string) { super(message); this.name = 'StudioReservationError'; }
@@ -76,6 +79,21 @@ function visionTokens(model: string, image: Record<string, unknown>): number {
   return detail === 'low' ? 2833 : 2833 + 5667 * 16;
 }
 
+/**
+ * Message text is bounded at one token per UTF-8 byte (ADR-142). A tokenizer that works on bytes
+ * (byte-level BPE, or byte fallback) never spends more than one token on one byte, so this is a
+ * hard bound, not an estimate; English runs near four bytes a token and Sorani near two to three.
+ * v2 counted two tokens a byte on top of that bound, and the owner's first request on 2026-09-29
+ * (six field-visit photos, a report cover) could never be laid out: the layout call's reservation
+ * ($2.05 of it, measured, most of it doubled text and the 16,000-token output limit) was larger than
+ * the $1.85 its run had left under the default $2 cap, although the real call costs about a third
+ * of that. The schema keeps two tokens a byte: the provider renders it into its own grammar text,
+ * whose size this policy does not know. Framing, vision and output bounds are unchanged, and an
+ * overrun still holds the run (STUDIO_BUDGET_RESERVATION_EXCEEDED).
+ */
+const TEXT_TOKENS_PER_BYTE = 1;
+const SCHEMA_TOKENS_PER_BYTE = 2;
+
 /** The serialized body is both quoted here and sent unchanged after database admission. */
 export function reserveStudioText(body: string): StudioCallReservation {
   const p = record(JSON.parse(body)), model = family(str(p.model));
@@ -85,15 +103,15 @@ export function reserveStudioText(body: string): StudioCallReservation {
   if (!Array.isArray(messages) || messages.length > 200) return refuse('Invalid message count.');
   const outputTokens = positiveInt(p.max_completion_tokens);
   if (outputTokens > 131072) refuse('Output limit exceeds the qualified reservation range.');
-  let inputTokens = 1024 + 128 * messages.length + 2 * bytes(JSON.stringify(p.response_format));
+  let inputTokens = 1024 + 128 * messages.length + SCHEMA_TOKENS_PER_BYTE * bytes(JSON.stringify(p.response_format));
   for (const value of messages) {
     const message = record(value);
     onlyKeys(message, ['role', 'content']);
     if (!['system', 'user', 'assistant'].includes(String(message.role))) refuse('Unqualified message role.');
-    if (typeof message.content === 'string') inputTokens += 2 * bytes(message.content);
+    if (typeof message.content === 'string') inputTokens += TEXT_TOKENS_PER_BYTE * bytes(message.content);
     else if (Array.isArray(message.content)) for (const raw of message.content) {
       const part = record(raw);
-      if (part.type === 'text') inputTokens += 2 * bytes(str(part.text)) + 32;
+      if (part.type === 'text') inputTokens += TEXT_TOKENS_PER_BYTE * bytes(str(part.text)) + 32;
       else if (part.type === 'image_url') inputTokens += visionTokens(model, record(part.image_url)) + 32;
       else refuse('This media input needs a bounded reservation policy before paid dispatch.');
     }
