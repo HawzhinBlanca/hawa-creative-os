@@ -45,7 +45,7 @@ import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readN
   type LateChangeStage, type LateRequesterChange, type WaitingLifecycleRequest } from '../services/lifecycle-chat-target.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
 import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.js';
-import { activeChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
+import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
   type IntentReceipt } from '../services/requester-turn-store.js';
 import { askText, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, readIntentByRules, shortTitle, statusText,
   tellOfficeAlert, tellText, thanksText, waitsForRequester, type ChatRequestView, type IntentReading,
@@ -649,10 +649,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 (e?.type === 'text_mention' && e.user?.is_bot === true));
               const groupCommand = /^\/(?:task|brief|design|campaign)(?:@\w+)?(?:\s+|$)/i.exec(text);
               const addressed = !group || message.reply_to_message?.from?.is_bot === true || mentionsBot || text.startsWith('/');
-              const { requests, bindings } = await withRlsContext(db, system, async (trx) => ({
+              const { requests, bindings, opening } = await withRlsContext(db, system, async (trx) => ({
                 requests: await activeChatRequests(trx, TENANT, chatId),
                 bindings: replyMessageId ? await replyBindings(trx, TENANT, chatId, replyMessageId)
                   : { requestIds: [] as string[], askUpdateId: null as number | null },
+                opening: priorIntent ? [] : await openingChatRequests(trx, TENANT, chatId),
               }));
               let reading: IntentReading;
               let plan: TurnPlan;
@@ -670,6 +671,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 plan = { kind: 'open', text: body, instructionOnly: asRead.intent !== 'new_brief' || asRead.instructionOnly === true };
               } else {
                 reading = readIntentByRules(text);
+                // A follow-up that could concern a request whose open is still in flight waits for it
+                // (ChatInbox tries again in 2 s): read now, it would miss that request (F4).
+                if (opening.length && !['acknowledgement', 'conversation'].includes(reading.intent) &&
+                    !(reading.intent === 'new_brief' && reading.explicitNew)) {
+                  return handled(503, { code: 'REQUEST_OPENING', chatId });
+                }
                 const pendingAsk = await withRlsContext(db, system, (trx) =>
                   pendingAskFor(trx, TENANT, chatId, senderId, update.update_id, bindings.askUpdateId));
                 const input = { text, reading, requests, bound: bindings.requestIds,

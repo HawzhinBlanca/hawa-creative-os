@@ -202,6 +202,23 @@ describe('a message while designs are open', () => {
     expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, designing.requestId))).toHaveLength(1);
   });
 
+  it('a correction sent right after the brief waits for its request to open, then is kept on it', async () => {
+    const chat = chatId();
+    const a = app();
+    const opened = await intake(a, message(chat, 'KAAE members evening\n---\nDecember 4, 2026\nErbil'));
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request' });
+    const correction = message(chat, 'the date should be 5 October not 4');
+    // RequestLifecycle has not projected the open yet: the worker tries again (a counted retry).
+    expect(await intake(a, correction)).toMatchObject({ intakeStatus: 503, code: 'REQUEST_OPENING' });
+    expect(await intake(a, message(chat, 'thanks'))).toMatchObject({ intent: 'acknowledgement' });
+    const projected = await a.request(`/v1/internal/lifecycle/${opened.requestId}/project`, { method: 'POST', headers: worker,
+      body: JSON.stringify({ v: 1, expectedRev: 0, rev: 1, key: `${opened.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: opened.draft }] }) });
+    expect(projected.status).toBe(200);
+    expect(await intake(a, correction)).toMatchObject({ code: 'LATE_REQUESTER_CHANGE', requestId: opened.requestId,
+      requestStage: 'designing' });
+    expect(await tasksInChat(chat)).toHaveLength(1);
+  });
+
   it('"cancel the poster" asks the office to cancel it, holds Deliver, and starts nothing', async () => {
     const chat = chatId();
     const request = await seed(chat, 'in_review', 2, { title: 'Nawroz poster' });

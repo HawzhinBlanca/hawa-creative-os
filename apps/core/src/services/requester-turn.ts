@@ -548,10 +548,15 @@ export function planTurn(input: TurnInput): TurnPlan {
         return { kind: 'open', text: words, instructionOnly: reading.instructionOnly === true };
       }
       const bound = changeable.filter((r) => input.bound.includes(r.requestId));
-      if (!bound.length && reading.substantial && !overlapsRequest(words, changeable)) {
-        return { kind: 'open', text: words, instructionOnly: reading.instructionOnly === true };
+      if (bound.length) return ask('unclear', bound, true);
+      if (reading.substantial) {
+        // A full brief opens, unless it repeats the words of a design that waits for the requester's
+        // changes: then it may be that design's corrected copy, and the requester is asked.
+        const similar = changeable.filter((r) => waitsForRequester(r) && overlapsRequest(words, [r]));
+        if (!similar.length) return { kind: 'open', text: words, instructionOnly: reading.instructionOnly === true };
+        return ask('unclear', similar, true);
       }
-      return ask('unclear', bound.length ? bound : [...changeable].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), true);
+      return ask('unclear', [...changeable].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), true);
     }
     case 'change': {
       if (!changeable.length) {

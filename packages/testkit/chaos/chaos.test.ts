@@ -1090,6 +1090,138 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   // never Core's poller). Run alone, in this order:
   //   run.ts --only R10.K1,R10.K2
   // R10.H1 (old-intake requests continued after the deploy) went with stage 2 of ADR-135.
+  // --- ADR-144: natural requester messages, through the worker's poller, ChatInbox and Core ---
+
+  /** Sends one text message to the chat and waits until its ChatInbox invocation completed. */
+  const sendText = async (chat: string, text: string, fields: Record<string, unknown> = {}): Promise<number> => {
+    const update = textUpdate(chat, text);
+    Object.assign(update.message, fields);
+    const [id] = await fakes.updates([update]);
+    await waitUntil(`update ${id} handled in chat ${chat}`, async () =>
+      (await chatInboxInvocations(chat)).some((i) => i.idempotency_key === `tg-${id}` && i.status === 'completed') || null, 180_000);
+    return id;
+  };
+  /** Everything Telegram showed a chat, whole. */
+  const shown = async (chat: string): Promise<string[]> => (await sentTo(chat)).map((s: any) => String(s.fullText ?? s.text ?? ''));
+  const requestState = async (requestId: string) => (await query<{ stage: string; rev: string; current_task_id: string }>(sql`
+    SELECT stage, rev, current_task_id FROM hawa.requests WHERE request_id = ${requestId}::uuid`))[0];
+  /**
+   * A new brief in the chat, drafted and sent back by the office for changes: the request then waits
+   * for the requester (stage manual, rev 3), as the office's revision notice tells them.
+   */
+  const toWaiting = async (chat: string, tag: string, events: string[], text?: string): Promise<{ requestId: string; taskId: string }> => {
+    const known = (await query<{ request_id: string }>(sql`SELECT request_id FROM hawa.requests WHERE chat_id = ${chat}`)).map((r) => r.request_id);
+    if (text) await fakes.updates([textUpdate(chat, text)]);
+    else await sendBrief(chat, tag);
+    const request = await waitUntil(`the draft of ${tag} to enter review`, async () => {
+      const rows = await query<{ request_id: string; current_task_id: string; rev: string; stage: string }>(sql`
+        SELECT request_id, current_task_id, rev, stage FROM hawa.requests WHERE chat_id = ${chat}`);
+      const row = rows.find((r) => !known.includes(r.request_id));
+      return row?.stage === 'in_review' && Number(row.rev) === 2 ? row : null;
+    }, 240_000, 2000);
+    const [root] = await query<{ revision_id: string }>(sql`
+      SELECT current_design_revision_id AS revision_id FROM hawa.tasks WHERE id = ${request.current_task_id}::uuid`);
+    const office = await fakes.core(`/tasks/${request.current_task_id}/revisions/${root.revision_id}/decisions`,
+      secrets().CHAOS_REVIEWER_KEY, { headers: { 'Idempotency-Key': randomUUID() }, body: {
+        action: 'revision_requested', revisionRequest: { scope: 'copy', category: 'factual_error', targetNodes: ['title'],
+          priority: 'high', isReusableFeedback: false, comment: 'Please check the title' } } });
+    if (office.status !== 201) throw new Error(`office revision refused: ${JSON.stringify(office.json).slice(0, 300)}`);
+    await waitUntil(`${tag} to wait for the requester's changes`, async () => {
+      const row = await requestState(request.request_id);
+      return row?.stage === 'manual' && Number(row.rev) === 3 ? row : null;
+    });
+    events.push(`${tag}: request ${request.request_id} waits for changes`);
+    return { requestId: request.request_id, taskId: request.current_task_id };
+  };
+
+  scenario('R1.NL.THANKS', 'thanks while a design waits for changes starts nothing; the change sent after it starts one round', async (chat, events) => {
+    const request = await toWaiting(chat, 'R1.NL.THANKS', events);
+    const thanks = await sendText(chat, 'thanks 👍');
+    const afterThanks = { tasks: (await tasksOfChat(chat)).length, request: await requestState(request.requestId) };
+    events.push(`thanks ${thanks}: ${JSON.stringify(afterThanks)}`);
+    const thanked = (await shown(chat)).filter((t) => t.includes('Thank you') && t.includes('tell me what to change'));
+    const change = await sendText(chat, 'Please make the title gold');
+    await waitUntil('one revision task', async () => (await tasksOfChat(chat)).length === 2 || null, 60_000);
+    const projections = await query<{ rev: string; key: string }>(sql`SELECT rev, idempotency_key AS key
+      FROM hawa.lifecycle_projections WHERE request_id = ${request.requestId}::uuid AND idempotency_key LIKE '%requesterRevisionIntake%'`);
+    return { delivered: false, skipRequestChecks: true, extra: [
+      { name: 'thanks started no round', ok: afterThanks.tasks === 1 && afterThanks.request?.stage === 'manual' && Number(afterThanks.request?.rev) === 3,
+        detail: JSON.stringify(afterThanks) },
+      { name: 'the requester was thanked once, with a reminder of the waiting design', ok: thanked.length === 1, detail: JSON.stringify(thanked) },
+      { name: 'the change started exactly one round, from the change\'s own update', ok: projections.length === 1 &&
+          projections[0].key.endsWith(`:requesterRevisionIntake:u${change}`), detail: JSON.stringify(projections) },
+      ...await checkIntake(chat, [thanks, change]),
+    ] };
+  });
+
+  scenario('R1.NL.DESIGNING', 'a correction sent right after the brief is kept on that request for the office, never a second request', async (chat, events) => {
+    const brief = await sendBrief(chat, 'R1.NL.DESIGNING');
+    const words = 'the date should be 5 October not 4';
+    const correction = await sendText(chat, words);
+    const [late] = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
+      WHERE source_account_id = 'lifecycle_chat_routing' AND source_event_id = ${String(correction)}`);
+    events.push(`correction ${correction}: kept at stage ${late?.payload?.requestStage}`);
+    const taskId = await draftOf(chat);
+    const requests = await query<{ request_id: string }>(sql`SELECT request_id FROM hawa.requests WHERE chat_id = ${chat}`);
+    const office = (await shown(OFFICE_CHAT)).filter((t) => t.includes(words));
+    const told = (await shown(chat)).filter((t) => /added that to|passed your change/.test(t));
+    return { delivered: false, skipRequestChecks: true, extra: [
+      { name: 'one request and one task in the chat', ok: requests.length === 1 && (await tasksOfChat(chat)).length === 1,
+        detail: JSON.stringify({ requests, task: taskId }) },
+      { name: 'the correction is kept on that request with its words', ok: late?.payload?.requestId === requests[0]?.request_id &&
+          late?.payload?.text === words && late?.payload?.kind === 'change' &&
+          ['designing', 'in_review', 'manual'].includes(late?.payload?.requestStage), detail: JSON.stringify(late?.payload) },
+      { name: 'the office was told the words once', ok: office.length === 1, detail: JSON.stringify(office) },
+      { name: 'the requester was told plainly, once', ok: told.length === 1, detail: JSON.stringify(told) },
+      ...await checkIntake(chat, [brief.update_id, correction]),
+    ] };
+  });
+
+  scenario('R1.NL.CANCEL', 'a cancel said naturally asks the office, holds Deliver and starts nothing', async (chat, events) => {
+    const taskId = await briefToDraft(chat, 'R1.NL.CANCEL');
+    const cancel = await sendText(chat, 'please cancel the poster');
+    const approved = await approve(taskId);
+    events.push(`approve: HTTP ${approved.status}`);
+    const delivered = await deliver(taskId);
+    events.push(`deliver: HTTP ${delivered.status} ${delivered.body?.code ?? ''}`);
+    const told = (await shown(chat)).filter((t) => t.includes("I've asked the office to cancel"));
+    const office = (await shown(OFFICE_CHAT)).filter((t) => t.includes('asked to cancel'));
+    return { delivered: false, skipRequestChecks: true, extra: [
+      { name: 'the requester was told the office is asked to cancel', ok: told.length === 1, detail: JSON.stringify(told) },
+      { name: 'the office was asked once', ok: office.length === 1, detail: JSON.stringify(office) },
+      { name: 'Deliver is held until the office reads the cancel', ok: approved.status < 300 && delivered.status === 409 &&
+          delivered.body?.code === 'LATE_REQUESTER_CHANGE' && Array.isArray(delivered.body?.lateChanges) &&
+          delivered.body.lateChanges.some((c: any) => c.text === 'please cancel the poster'), detail: JSON.stringify(delivered.body).slice(0, 400) },
+      { name: 'nothing new started', ok: (await tasksOfChat(chat)).length === 1, detail: `${(await tasksOfChat(chat)).length} tasks` },
+      ...await checkIntake(chat, [cancel]),
+    ] };
+  });
+
+  scenario('R1.NL.TWO', 'two designs wait for changes: the bot asks which, and "2" applies the kept words to the second only', async (chat, events) => {
+    const first = await toWaiting(chat, 'R1.NL.TWO-a', events);
+    // A second, different design ("new poster …"): it opens beside the first, which waits.
+    const second = await toWaiting(chat, 'R1.NL.TWO-b', events, ['New poster for the KAAE graduation dinner, formal and clean. Reference R1.NL.TWO-b.',
+      '', '-----', '', 'KAAE Graduation Dinner', '', 'Friday 20 November 2026, 19:00 (R1.NL.TWO-b)', '', 'Rotana Hotel Erbil'].join('\n'));
+    const words = 'Please make the title gold';
+    const change = await sendText(chat, words);
+    const asked = (await shown(chat)).filter((t) => t.startsWith('Which design is this for?'));
+    const beforePick = (await tasksOfChat(chat)).length;
+    const pick = await sendText(chat, '2');
+    await waitUntil('the second design\'s revision task', async () => (await tasksOfChat(chat)).length === 3 || null, 60_000);
+    const child = (await query<{ payload: any }>(sql`SELECT payload FROM hawa.outbox_commands WHERE command_type = 'task.created'
+      AND payload->>'sourceChannelId' = ${chat} AND payload->'studioOptions'->>'parentTaskId' = ${second.taskId}`))[0];
+    const firstNow = await requestState(first.requestId);
+    return { delivered: false, skipRequestChecks: true, extra: [
+      { name: 'the bot asked which design, listing both', ok: asked.length === 1 && /\n1\. .*\n2\. /.test(asked[0]), detail: JSON.stringify(asked) },
+      { name: 'nothing started before the answer', ok: beforePick === 2, detail: `${beforePick} tasks` },
+      { name: 'the kept words started one round on the second design', ok: child?.payload?.studioOptions?.revisionDirective === words,
+        detail: JSON.stringify(child?.payload?.studioOptions ?? null) },
+      { name: 'the first design still waits, untouched', ok: firstNow?.stage === 'manual' && Number(firstNow.rev) === 3 &&
+          firstNow.current_task_id === first.taskId, detail: JSON.stringify(firstNow) },
+      ...await checkIntake(chat, [change, pick]),
+    ] };
+  });
+
   scenario('R10.K1', 'lifecycle requests in flight, this release rolled back to the previous one by a deploy, then forward again', async (_chat, events) => {
     const { extra } = await rollbackToPreviousRelease(newChat, events);
     return { delivered: false, skipRequestChecks: true, extra };

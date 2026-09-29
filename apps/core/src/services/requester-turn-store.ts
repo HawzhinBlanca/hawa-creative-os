@@ -42,6 +42,19 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
 }
 
 /**
+ * Requests this chat's intake decided to open in the last ten minutes that RequestLifecycle has not
+ * projected yet (ChatInbox sends the open without waiting for it). A follow-up read before the
+ * projection lands would miss the request it is about.
+ */
+export async function openingChatRequests(trx: Kysely<Database>, tenantId: string, chatId: string): Promise<string[]> {
+  return (await sql<{ request_id: string }>`SELECT e.payload->>'requestId' AS request_id FROM hawa.inbox_events e
+    WHERE e.tenant_id = ${tenantId}::uuid AND e.source_account_id = 'lifecycle_chat_open'
+      AND e.payload->>'chatId' = ${chatId} AND e.received_at > now() - interval '10 minutes'
+      AND NOT EXISTS (SELECT 1 FROM hawa.requests r WHERE r.tenant_id = e.tenant_id
+        AND r.request_id::text = e.payload->>'requestId')`.execute(trx)).rows.map((row) => row.request_id);
+}
+
+/**
  * What a Telegram reply points at in this chat: any message the bot sent about a request (a draft, a
  * notice, the "Request received" acknowledgement), an answer the bot gave to a routed message, the
  * requester's own brief, or an earlier routed message of theirs. `askUpdateId` is set when the reply

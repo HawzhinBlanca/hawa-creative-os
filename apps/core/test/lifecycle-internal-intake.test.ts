@@ -318,14 +318,16 @@ describe('POST /v1/internal/telegram/intake', () => {
     altered.message.text = 'An unrelated brief';
     expect((await intake(createApp({ db } as any), altered)).body).toMatchObject({
       intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
-    const change = brief(updateId(), chat);
+    const other = chatId();
+    const change = brief(updateId(), other);
     change.message.text = 'Make the logo bigger';
-    (change.message as any).reply_to_message = { message_id: 123457 };
+    (change.message as any).reply_to_message = { message_id: 123457, from: { id: 7000001, is_bot: true, first_name: 'Hawa' } };
     const answered = await intake(createApp({ db } as any), change);
-    // The first brief's request is not open yet (the worker opens it), so there is nothing to change.
+    // A change in reply to a bot message no request knows, in a chat with nothing open: the words go
+    // to the office, and nothing opens.
     expect(answered.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer',
-      chatAnswer: { text: expect.stringContaining("I don't have a design in progress here to change") } });
-    expect(await tasksInChat(chat)).toHaveLength(0);
+      chatAnswer: { text: expect.stringContaining("I've passed your message to the office") } });
+    expect(await tasksInChat(other)).toHaveLength(0);
   });
 
   it('admits a styling-only message as manual and does not promote a greeting to a lifecycle request', async () => {
