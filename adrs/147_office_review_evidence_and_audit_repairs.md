@@ -92,3 +92,8 @@ They now render with saved request/photos outside the captured-preview condition
 A full Work interaction checks an uncaptured task retains both preparation panels
 while final approval remains disabled. Earlier unit tests did not cover this
 condition; that deployment is superseded by the next qualified seal.
+
+The narrow live search screenshot also exposed the long client name clipping
+outside the dialog header. Its scope indicator now wraps below the query, which
+can shrink within the viewport. This receives a fresh compact screenshot after
+deployment; a style inspection alone is not visual acceptance.

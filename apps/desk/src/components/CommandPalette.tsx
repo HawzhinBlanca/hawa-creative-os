@@ -322,6 +322,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         <div
           style={{
             display: 'flex',
+            flexWrap: 'wrap',
             alignItems: 'center',
             padding: '14px 18px',
             borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
@@ -345,6 +346,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             placeholder="Search commands or this client… (⌘K)"
             style={{
               flex: 1,
+              minWidth: 0,
               background: 'transparent',
               border: 'none',
               outline: 'none',
@@ -355,7 +357,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           />
 
           {/* Scope Indicator Badge (Invariant #4) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexBasis: '100%', minWidth: 0, gap: 6 }}>
             {isLoading && (
               <span style={{ fontSize: 11, color: '#38bdf8', opacity: 0.8 }}>Searching…</span>
             )}
@@ -372,6 +374,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                 color: '#38bdf8',
                 border: '1px solid rgba(56, 189, 248, 0.25)',
                 letterSpacing: '0.02em',
+                overflowWrap: 'anywhere',
+                minWidth: 0,
               }}
               title="Client search is limited to the selected task’s client"
             >
