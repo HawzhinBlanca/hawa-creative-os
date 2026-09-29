@@ -12,8 +12,12 @@ cd "$ROOT"
 
 PATTERN='^(export )?[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|_KEY|CREDENTIAL)[A-Z0-9_]*=.{6,}|"[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|API_KEY|_KEY)[A-Z0-9_]*=[^"]{6,}"|postgres(ql)?://[^:/@]+:[^@/]{4,}@'
 
-mode_of() { stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1"; }
-size_of() { stat -f '%z' "$1" 2>/dev/null || stat -c '%s' "$1"; }
+# GNU or BSD stat, chosen by uname (infra/ops/host_lib.sh). `stat -f … || stat -c …` stopped deploy.sh
+# on Linux: there `stat -f` is "file-system status", prints several lines and fails, and both outputs
+# reached the mode check below (plans/hosting section 3.6).
+source "$ROOT/infra/ops/host_lib.sh"
+mode_of() { hawa_file_mode "$1"; }
+size_of() { hawa_file_size "$1"; }
 
 exposed=0; committable=0; total=0
 printf '%-6s %-10s %-22s %s\n' MODE BYTES KIND PATH

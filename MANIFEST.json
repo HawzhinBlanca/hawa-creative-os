@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T00:51:30Z",
+  "generatedAt": "2026-09-29T08:19:50Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 522,
+  "fileCount": 518,
   "files": [
     {
       "path": ".dockerignore",
@@ -31,26 +31,6 @@
       "path": ".github/workflows/ci.yml",
       "sha256": "dfef4edb419a6a2ab67151c98306ea1dd8cc7e8c5176cc6c5b0d556c9f97d7d1",
       "bytes": 6283
-    },
-    {
-      "path": ".pytest_cache/.gitignore",
-      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
-      "bytes": 37
-    },
-    {
-      "path": ".pytest_cache/CACHEDIR.TAG",
-      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
-      "bytes": 191
-    },
-    {
-      "path": ".pytest_cache/README.md",
-      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
-      "bytes": 302
-    },
-    {
-      "path": ".pytest_cache/v/cache/nodeids",
-      "sha256": "96e2286dd4eccf949d6c287a6f5c0979259f2ba46e0b290f605470f02e2b0af1",
-      "bytes": 4044
     },
     {
       "path": "AGENTS.md",
@@ -2109,8 +2089,8 @@
     },
     {
       "path": "scripts/disaster_recovery_drill.sh",
-      "sha256": "19dda40fed73d6b696ab3300785ca1c00c3a024417d36901fef270d1e2373042",
-      "bytes": 24624
+      "sha256": "31f6e430eb9ebf9e4cb146cbb0d2a1a04c46c509b1009a49b1a47b8c90aaabe7",
+      "bytes": 24738
     },
     {
       "path": "scripts/dispatch_authentic_kaae_telegram.ts",
@@ -2124,8 +2104,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "03c2f8ab381cff144df92a1c9b98983feb15f8763cfb86afa4e8b2a565a71cc0",
-      "bytes": 19038
+      "sha256": "8a43811d49a9ebbc3c2ef74966632658d51947c52e47efc8035ec1ef54f9e8e9",
+      "bytes": 19183
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",
@@ -2579,8 +2559,8 @@
     },
     {
       "path": "scripts/validate_pack.py",
-      "sha256": "903e00cf5245d3d9d77a661ec7f76c91fb12e766711b14485e9a22bf6d55d12d",
-      "bytes": 24275
+      "sha256": "4fa773c814ccf7a3141c197f5fac15e2eeb72ef0b1a7fcdb1ca6dfd0f608ad16",
+      "bytes": 24615
     },
     {
       "path": "scripts/verify_live_h01_h03.ts",

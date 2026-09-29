@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Hawa watchdog: starts Docker and the stack after a login or reboot, checks core and worker health,
 # and tells the operator on Telegram when something is wrong (once per 30 minutes) and when it recovers.
+# It runs on the production host: a Mac (launch agent, infra/ops/install_launch_agents.sh) or a Linux
+# server (systemd timer, infra/ops/install_systemd_units.sh). On a host marked standby or retired
+# (infra/ops/host_lib.sh, ADR-141) it never starts anything, and reports production containers running there.
 # A nearly full disk is cleaned first (Hawa's own old backups and build cache, disk_cleanup.sh); what
 # is left is reported every 6 hours, with how much of it is Hawa's, so it is not mistaken for an outage.
 #
@@ -9,6 +12,7 @@
 #   bash infra/ops/watchdog.sh --announce   # send "watchdog armed" once (proves alerts reach you)
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
+source "$ROOT/infra/ops/host_lib.sh"
 # HAWA_WATCHDOG_ENV_FILE points the alerts at another file: the tests use it, so a run of the test suite in
 # this checkout never reads production's Telegram credential (2026-09-28: a test logged it).
 PROD="${HAWA_WATCHDOG_ENV_FILE:-$ROOT/infra/docker/.env.production}"; STATE_DIR="$HOME/.hawa/watchdog"; mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
@@ -31,7 +35,39 @@ notify() {
   [[ -n "$token" && -n "$chat" ]] || return 0
   curl -s -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" || true
 }
-if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login, nightly backup 03:30."; echo "announced"; exit 0; fi
+
+# ADR-141: on a standby or retired host production runs elsewhere. This pass never starts Docker or a
+# hawa-production container, never touches Restate (the recovery below can start it), and checks one
+# thing: that no production container runs here, since two live hosts would poll the same Telegram bot.
+HOST_ROLE_RC=0; HOST_ROLE="$(hawa_host_role)" || HOST_ROLE_RC=$?
+if [[ "$HOST_ROLE_RC" != 0 || "$HOST_ROLE" != production ]]; then
+  where="$(hawa_host_role_source)"
+  if [[ "$MODE" == "--announce" ]]; then
+    notify "🟢 Hawa watchdog on $(hostname -s): this host is ${HOST_ROLE} (${where}). It never starts production here, and reports production containers running here."
+    echo "announced"; exit 0
+  fi
+  role_problems=()
+  [[ "$HOST_ROLE_RC" == 0 ]] || role_problems+=("unrecognised host role '${HOST_ROLE}' in ${where} (production, standby or retired): the watchdog starts nothing until it is fixed")
+  here=""
+  if docker info >/dev/null 2>&1; then
+    here="$( { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; } | tr '\n' ' ' | sed 's/ *$//')"
+  fi
+  [[ -z "$here" ]] || role_problems+=("this ${HOST_ROLE} host is running production containers (${here}); stop them here, since two live hosts poll the same Telegram bot")
+  if [[ ${#role_problems[@]} -eq 0 ]]; then
+    echo "${HOST_ROLE} host (${where}): production runs elsewhere; nothing was started"
+    [[ "$MODE" == "--status" ]] && exit 0
+    [[ "$alerted" != 1 ]] || notify "✅ Hawa ($(hostname -s), ${HOST_ROLE} host): back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
+    last_msg=""; alerted=0; alerted_other=""; save healthy; exit 0
+  fi
+  msg="$(printf '%s; ' "${role_problems[@]}")"; echo "PROBLEM: ${msg%; }"
+  [[ "$MODE" == "--status" ]] && exit 1
+  last_msg="${msg%; }"
+  if (( NOW - last_alert >= COOLDOWN )); then
+    notify "🔴 Hawa ($(hostname -s), ${HOST_ROLE} host) needs attention ($(date '+%H:%M')): ${msg%; }."; last_alert="$NOW"; alerted=1; alerted_other="${msg%; }"
+  fi
+  save problem; exit 1
+fi
+if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login or boot, nightly backup 03:30."; echo "announced"; exit 0; fi
 
 # The worker Telegram poller (Phase 2.1). With HAWA_TELEGRAM_POLLER=worker Core does not poll, and a
 # colour whose poller was off, never started or failing left every check green while no client message
@@ -81,12 +117,29 @@ if [[ $rb_rc != 0 && $rb_rc != 2 ]]; then
 fi
 
 problems=()
-# 1. Docker daemon (Docker Desktop is not set to auto-start; the agent runs at login and starts it)
+# 1. Docker daemon. On a Mac, Docker Desktop is not set to auto-start: the agent runs at login and
+#    opens it. On Linux, Docker Engine is a systemd service started at boot; this unprivileged pass only
+#    reads its state (systemctl is-active docker), waits while it is starting, and reports otherwise.
 docker_up=1
 if ! docker info >/dev/null 2>&1; then
-  [[ "$MODE" == "--status" ]] || open -ga Docker 2>/dev/null || true
-  for _ in $(seq 1 36); do docker info >/dev/null 2>&1 && break; sleep 5; done
-  docker info >/dev/null 2>&1 || { docker_up=0; problems+=("Docker is not running and could not be started"); }
+  if [[ "$HAWA_HOST_OS" == Linux ]]; then
+    docker_state="$(systemctl is-active docker 2>/dev/null || true)"; docker_state="${docker_state:-unknown}"
+    if [[ "$docker_state" == activating || "$docker_state" == reloading ]]; then
+      for _ in $(seq 1 36); do docker info >/dev/null 2>&1 && break; sleep 5; done
+    fi
+    if ! docker info >/dev/null 2>&1; then
+      docker_up=0
+      if [[ "$docker_state" == active ]]; then
+        problems+=("docker.service is active but this user cannot reach Docker (is it in the docker group?)")
+      else
+        problems+=("Docker is not running: docker.service is ${docker_state} (start it with sudo systemctl start docker; systemctl enable docker starts it at boot)")
+      fi
+    fi
+  else
+    [[ "$MODE" == "--status" ]] || open -ga Docker 2>/dev/null || true
+    for _ in $(seq 1 36); do docker info >/dev/null 2>&1 && break; sleep 5; done
+    docker info >/dev/null 2>&1 || { docker_up=0; problems+=("Docker is not running and could not be started"); }
+  fi
 fi
 # 2. Stack containers: the six stack services by name, at least one worker, and the vector log
 #    shipper (stack_containers.sh says why each is matched by name). Only deploy.sh creates a worker
@@ -212,13 +265,15 @@ if [[ ${#problems[@]} -eq 0 && "$disk_full" -eq 0 ]]; then
 fi
 
 if [[ "$disk_full" -eq 1 ]]; then
-  free="$(df -h "$ROOT" | awk 'NR==2{print $4}' | sed -E 's/Ti$/ TB/; s/Gi$/ GB/; s/Mi$/ MB/')"
+  # macOS df prints 12Gi, GNU df 12G.
+  free="$(df -h "$ROOT" | awk 'NR==2{print $4}' | sed -E 's/Ti$/ TB/; s/Gi$/ GB/; s/Mi$/ MB/; s/([0-9])T$/\1 TB/; s/([0-9])G$/\1 GB/; s/([0-9])M$/\1 MB/')"
   # Both sources may fail (Docker down, no archive folder yet): the alert still goes, with "?".
   backups="$( { du -sch "$ROOT/infra/backup/snapshots" "$HOME/.hawa/snapshots_archive" 2>/dev/null || true; } | tail -1 | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/')"
   cache="$( { docker system df --format '{{.Type}} {{.Size}}' 2>/dev/null || true; } | awk '/^Build Cache/{print $3}' | sed -E 's/([0-9])([KMGT]B)$/\1 \2/')"
   # The file store (ADR-035): client photos and design sources, deleted only by the collector.
   files="$( { du -sh "${HAWA_BLOBS_DIR:-$HOME/.hawa/blobs}" 2>/dev/null || true; } | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/; s/K$/ KB/')"
-  disk_msg="The Mac's disk is ${used}% full (${free} free). Hawa has already cleaned up after itself: its backups take ${backups:-?}, its stored pictures and design files ${files:-0} and Docker's build cache ${cache:-?}. The rest is other files on this Mac, so please free some space (System Settings, General, Storage)."
+  if [[ "$HAWA_HOST_OS" == Darwin ]]; then where_hint="System Settings, General, Storage"; else where_hint="sudo du -xh --max-depth=2 / | sort -h | tail shows where it went"; fi
+  disk_msg="The production host's disk is ${used}% full (${free} free). Hawa has already cleaned up after itself: its backups take ${backups:-?}, its stored pictures and design files ${files:-0} and Docker's build cache ${cache:-?}. The rest is other files on this host, so please free some space (${where_hint})."
 fi
 if [[ ${#problems[@]} -eq 0 ]]; then
   # Only the disk: a reminder every 6 hours, hourly past 97%, instead of every 30 minutes.

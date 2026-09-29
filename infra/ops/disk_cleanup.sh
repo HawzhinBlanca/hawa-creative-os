@@ -34,6 +34,8 @@ LOG_DAYS="${HAWA_LOG_DAYS:-30}"
 LOG_MAX_MB="${HAWA_LOG_MAX_MB:-2048}"
 MODE="${1:-}"
 export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:/Applications/Docker.app/Contents/Resources/bin"
+# BSD or GNU date, chosen by uname (ADR-141).
+source "$ROOT/infra/ops/host_lib.sh"
 
 # The UTC stamp in a dump's name (hawa_20260923T183220Z.sql, predeploy_20260923T183220Z.dump).
 stamp_of() { basename "$1" | sed -E 's/^(hawa|predeploy)_([0-9]{8}T[0-9]{6}Z).*/\2/'; }
@@ -67,7 +69,7 @@ compress() {
 prune_container_logs() {
   local dir="$1" days="$2" max_mb="$3" cutoff today d
   [[ -d "$dir" ]] || return 0
-  cutoff="$(date -u -v-"${days}"d +%Y-%m-%d 2>/dev/null || date -u -d "-${days} days" +%Y-%m-%d)"
+  cutoff="$(hawa_utc_days_ago "$days" %Y-%m-%d)"
   today="$(date -u +%Y-%m-%d)"
   for d in "$dir"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]; do
     if [[ -d "$d" && "$(basename "$d")" < "$cutoff" ]]; then rm -rf -- "$d"; fi
@@ -126,7 +128,7 @@ fi
 
 # 2. The old archive of deploy dumps (deploy.sh no longer writes to it): one dump a day, 30 days.
 if [[ -d "$ARCHIVE" ]]; then
-  cutoff="$(date -u -v-"${ARCHIVE_DAYS}"d +%Y%m%d 2>/dev/null || date -u -d "-${ARCHIVE_DAYS} days" +%Y%m%d)"
+  cutoff="$(hawa_utc_days_ago "$ARCHIVE_DAYS" %Y%m%d)"
   last_day=""
   while read -r stamp f; do
     day="${stamp:0:8}"

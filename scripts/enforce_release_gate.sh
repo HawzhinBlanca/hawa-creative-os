@@ -6,6 +6,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The SHA-256 tool, chosen per host (ADR-141): deploy.sh runs this gate on the production host.
+source "${ROOT_DIR}/infra/ops/host_lib.sh"
 # Run evidence is local and ignored. The historical 2026-09-21 dossier stays
 # tracked as an audit record; a new run must never overwrite it.
 OUTPUT_DIR="${ROOT_DIR}/output/release-gate"
@@ -282,7 +284,7 @@ fi
 # ------------------------------------------------------------------------------
 # Emit Evidence Dossier
 # ------------------------------------------------------------------------------
-MANIFEST_SHA256=$(shasum -a 256 "${ROOT_DIR}/RELEASE_MANIFEST.json" | awk '{print $1}')
+MANIFEST_SHA256=$("${HAWA_SHA256[@]}" "${ROOT_DIR}/RELEASE_MANIFEST.json" | awk '{print $1}')
 GIT_COMMIT=$(git rev-parse HEAD)
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

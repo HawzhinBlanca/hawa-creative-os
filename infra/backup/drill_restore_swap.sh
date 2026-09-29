@@ -22,6 +22,8 @@
 # counts only: no row of the dump is printed.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# The SHA-256 tool, chosen per host (ADR-141).
+source "$ROOT/infra/ops/host_lib.sh"
 PG="${HAWA_DRILL_CONTAINER:-hawa-test-postgres}"
 DUMP="${HAWA_DRILL_DUMP:?set HAWA_DRILL_DUMP to a dump file}"
 OWNER_URL="${HAWA_DRILL_OWNER_URL:?set HAWA_DRILL_OWNER_URL to the test server owner URL}"
@@ -96,7 +98,7 @@ refused_without_connect() {
 }
 db_url() { node -e 'const u=new URL(process.argv[1]);u.pathname="/"+process.argv[2];process.stdout.write(u.toString())' "$OWNER_URL" "$1"; }
 
-DUMP_SHA="$(shasum -a 256 "$DUMP" | cut -d' ' -f1)"
+DUMP_SHA="$("${HAWA_SHA256[@]}" "$DUMP" | cut -d' ' -f1)"
 if [[ -f "$DUMP.sha256" ]]; then [[ "$DUMP_SHA" == "$(tr -d '[:space:]' < "$DUMP.sha256")" ]] || { echo "dump checksum mismatch" >&2; exit 1; }; fi
 echo "drill ${STAMP}: container ${PG}, scratch ${LIVE}" >&2
 
@@ -133,7 +135,7 @@ PROPS_BEFORE="$(props "$LIVE")"; LOGIN_BEFORE="$(login_view "$LIVE")"; REFUSED_B
 # 4. Green: the runbook's own block, as the file has it, from the repository root.
 BLOCK="$(awk '/<!-- restore-swap:begin -->/{on=1;next} /<!-- restore-swap:end -->/{on=0} on' "$RUNBOOK" | sed -e 's/^   //' | grep -v '^```')"
 [[ -n "$BLOCK" ]] || { echo "${RUNBOOK} has no restore-swap block" >&2; exit 1; }
-BLOCK_SHA="$(printf '%s' "$BLOCK" | shasum -a 256 | cut -d' ' -f1)"
+BLOCK_SHA="$(printf '%s' "$BLOCK" | "${HAWA_SHA256[@]}" | cut -d' ' -f1)"
 GREEN_OUT="$(cd "$ROOT" && PG="$PG" DB="$LIVE" DUMP="$DUMP" bash -Eeuo pipefail -c "$BLOCK")"
 grep -q '^restore-check=ok' <<< "$GREEN_OUT" || { echo "$GREEN_OUT" >&2; echo "the runbook block did not swap" >&2; exit 1; }
 REPLACED="$(sed -n 's/.*kept as \(hawa_scratch_[0-9a-z_]*\)$/\1/p' <<< "$GREEN_OUT")"

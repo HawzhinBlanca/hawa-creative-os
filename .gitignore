@@ -66,3 +66,7 @@ infra/backup/release-receipts/
 packages/creative/assets/fonts/private/
 data/
 packages/creative/bin/
+# Volume creation stamps are host-local since ADR-141 (~/.hawa/volume-stamps). A host that still has
+# these old repository copies adopts them once on its next deploy; they are never committed again.
+infra/docker/.postgres_volume_created
+infra/docker/.restate_volume_created
