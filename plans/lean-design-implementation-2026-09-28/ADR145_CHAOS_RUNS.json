@@ -1,0 +1,521 @@
+{
+  "adr": "ADR-145",
+  "branch": "nl-media-wording",
+  "command": "npx tsx packages/testkit/chaos/run.ts --poller worker (through hawa-chaos-lock)",
+  "focusedFirstRun": {
+    "only": "R1.NL.VOICE,R1.NL.PHOTO_TEXT,R1.S3.MEDIA,R1.S3.PHOTO,R1.S3.CAPTIONLESS_PHOTO,R1.S3.ALBUM_BRIEF,R1.S3.ALBUM_ASK,R1.NL.DESIGNING",
+    "note": "R1.NL.DESIGNING failed its record check only: the correction, set behind the held brief (ADR-145), is recorded by its settle after the update completes; the scenario now waits for it.",
+    "finishedAt": "2026-09-29T17:04:52.155Z",
+    "telegramPoller": "worker",
+    "totalSeconds": 265,
+    "peakTotalMiB": 706,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.S3.PHOTO",
+        "ok": true,
+        "seconds": 14,
+        "invariants": 7,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.CAPTIONLESS_PHOTO",
+        "ok": true,
+        "seconds": 33,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.ALBUM_BRIEF",
+        "ok": true,
+        "seconds": 27,
+        "invariants": 23,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.ALBUM_ASK",
+        "ok": true,
+        "seconds": 23,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.MEDIA",
+        "ok": true,
+        "seconds": 6,
+        "invariants": 5,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.NL.DESIGNING",
+        "ok": false,
+        "seconds": 26,
+        "invariants": 9,
+        "error": null,
+        "failed": [
+          "the correction is kept on that request with its words"
+        ]
+      },
+      {
+        "name": "R1.NL.VOICE",
+        "ok": true,
+        "seconds": 13,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.NL.PHOTO_TEXT",
+        "ok": true,
+        "seconds": 32,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      }
+    ]
+  },
+  "fullRun": {
+    "skipped": [
+      "R10.K1",
+      "R10.K2 (need --previous-release; run alone)"
+    ],
+    "finishedAt": "2026-09-29T17:37:21.414Z",
+    "telegramPoller": "worker",
+    "totalSeconds": 1926,
+    "peakTotalMiB": 922,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.0",
+        "ok": true,
+        "seconds": 30,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K0",
+        "ok": true,
+        "seconds": 32,
+        "invariants": 18,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K0A",
+        "ok": true,
+        "seconds": 87,
+        "invariants": 5,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K0P",
+        "ok": true,
+        "seconds": 32,
+        "invariants": 18,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K1",
+        "ok": true,
+        "seconds": 30,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K2",
+        "ok": true,
+        "seconds": 32,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K3",
+        "ok": true,
+        "seconds": 30,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K4",
+        "ok": true,
+        "seconds": 28,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K5",
+        "ok": true,
+        "seconds": 28,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K6",
+        "ok": true,
+        "seconds": 34,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K7",
+        "ok": true,
+        "seconds": 35,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K8",
+        "ok": true,
+        "seconds": 33,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K9",
+        "ok": true,
+        "seconds": 36,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K10",
+        "ok": true,
+        "seconds": 28,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K11",
+        "ok": true,
+        "seconds": 37,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K13",
+        "ok": true,
+        "seconds": 28,
+        "invariants": 20,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.K14",
+        "ok": true,
+        "seconds": 36,
+        "invariants": 19,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.D1",
+        "ok": true,
+        "seconds": 35,
+        "invariants": 20,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.W0",
+        "ok": true,
+        "seconds": 46,
+        "invariants": 21,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S1.K1",
+        "ok": true,
+        "seconds": 32,
+        "invariants": 14,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S1.K2",
+        "ok": true,
+        "seconds": 34,
+        "invariants": 14,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S1.K3",
+        "ok": true,
+        "seconds": 33,
+        "invariants": 14,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S2.K4",
+        "ok": true,
+        "seconds": 32,
+        "invariants": 14,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S2.K5",
+        "ok": true,
+        "seconds": 26,
+        "invariants": 14,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S2.K5b",
+        "ok": true,
+        "seconds": 26,
+        "invariants": 16,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.DUP",
+        "ok": true,
+        "seconds": 27,
+        "invariants": 15,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.K1",
+        "ok": true,
+        "seconds": 40,
+        "invariants": 7,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.PHOTO",
+        "ok": true,
+        "seconds": 14,
+        "invariants": 7,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.REVISION_PHOTO",
+        "ok": true,
+        "seconds": 38,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.CAPTIONLESS_PHOTO",
+        "ok": true,
+        "seconds": 33,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.ALBUM",
+        "ok": true,
+        "seconds": 42,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.IMAGE_DOCUMENT",
+        "ok": true,
+        "seconds": 33,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.DOCUMENT_ALBUM",
+        "ok": true,
+        "seconds": 45,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.ALBUM_BRIEF",
+        "ok": true,
+        "seconds": 29,
+        "invariants": 23,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.ALBUM_RESTART",
+        "ok": true,
+        "seconds": 28,
+        "invariants": 16,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.ALBUM_ASK",
+        "ok": true,
+        "seconds": 25,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.S3.MEDIA",
+        "ok": true,
+        "seconds": 6,
+        "invariants": 5,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "L2.0",
+        "ok": true,
+        "seconds": 28,
+        "invariants": 18,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "L2.K14",
+        "ok": true,
+        "seconds": 34,
+        "invariants": 18,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "L2.K15",
+        "ok": true,
+        "seconds": 35,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "L2.K16",
+        "ok": true,
+        "seconds": 31,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "L2.K17",
+        "ok": true,
+        "seconds": 36,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "L2.K18",
+        "ok": true,
+        "seconds": 35,
+        "invariants": 17,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "L2.K12",
+        "ok": true,
+        "seconds": 33,
+        "invariants": 20,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "L2.429",
+        "ok": true,
+        "seconds": 32,
+        "invariants": 18,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.BL",
+        "ok": true,
+        "seconds": 29,
+        "invariants": 6,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.NL.THANKS",
+        "ok": true,
+        "seconds": 31,
+        "invariants": 8,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.NL.DESIGNING",
+        "ok": true,
+        "seconds": 26,
+        "invariants": 9,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.NL.CANCEL",
+        "ok": true,
+        "seconds": 36,
+        "invariants": 8,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.NL.TWO",
+        "ok": true,
+        "seconds": 60,
+        "invariants": 9,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.NL.VOICE",
+        "ok": true,
+        "seconds": 14,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R1.NL.PHOTO_TEXT",
+        "ok": true,
+        "seconds": 37,
+        "invariants": 10,
+        "error": null,
+        "failed": []
+      },
+      {
+        "name": "R4",
+        "ok": true,
+        "seconds": 37,
+        "invariants": 2,
+        "error": null,
+        "failed": []
+      }
+    ],
+    "passed": 53,
+    "invariantsTotal": 755
+  }
+}

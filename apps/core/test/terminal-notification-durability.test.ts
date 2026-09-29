@@ -79,8 +79,11 @@ describe('a terminal design notification survives a failed send', () => {
     );
     expect(rows[0].state).toBe('delivered');
     expect(rows[0].payload.chatId).toBe(channel);
-    // The composed message is stored, not rebuilt, so a retry sends exactly what was attempted.
-    expect(rows[0].payload.message.text).toContain(`https://www.canva.com/design/${designId}/edit`);
+    // The composed message is stored, not rebuilt, so a retry sends exactly what was attempted. Since
+    // ADR-145 the requester is told in plain words that the draft is with the office; no Canva edit
+    // link is sent to a requester.
+    expect(rows[0].payload.message.text).toContain('is ready, and the office is giving it a final check');
+    expect(rows[0].payload.message.text).not.toContain('canva.com');
 
     // Restate journals finish() and re-issues the same call on a workflow retry.
     const second = await notify(app, taskId, {
@@ -127,7 +130,9 @@ describe('a terminal design notification survives a failed send', () => {
 
     const rows = await notifyCommands(taskId);
     expect(rows).toHaveLength(2);
-    expect(rows.map((cmd: any) => cmd.payload.message.text.includes('DAGsecondrun2'))).toContain(true);
+    // Each run is its own message, keyed by its own design (ADR-145: the text no longer carries the link).
+    expect(rows.map((cmd: any) => cmd.idempotency_key)).toEqual(expect.arrayContaining([
+      expect.stringContaining('DAGfirstrun01'), expect.stringContaining('DAGsecondrun2')]));
     expect(dispatch).toHaveBeenCalledTimes(2);
   });
 
@@ -147,7 +152,8 @@ describe('a terminal design notification survives a failed send', () => {
     expect(rows[0].attempts).toBe(1);
     expect(rows[0].last_error).toContain('TELEGRAM_REJECTED_429');
     expect(new Date(rows[0].available_at).getTime()).toBeGreaterThan(Date.now());
-    expect(rows[0].payload.message.text).toContain('queued for manual design');
+    // ADR-145 wording: a designer makes it (it was "queued for manual design").
+    expect(rows[0].payload.message.text).toContain('A designer will make');
   });
 
   it('leaves a lost receipt for an operator instead of resending it', async () => {
