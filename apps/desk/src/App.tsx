@@ -23,7 +23,7 @@ import { readClientDirectory } from './services/clientDirectory.js';
 import { queryKeys } from './services/queryClient.js';
 
 export const App: React.FC = () => {
-  const { t, isRtl } = useI18n();
+  const { t, isRtl, toggleLocale } = useI18n();
   const queryClient = useQueryClient();
   // Signed out (never signed in, signed out, or a session Core ended), the App shows sign-in in place
   // of any screen. The session read stays mounted while signed in, so an ended session is noticed on
@@ -45,6 +45,8 @@ export const App: React.FC = () => {
   };
 
   const [linkedReview, setLinkedReview] = useState(() => deskReviewTarget(window.location.hash));
+  const readLinkedClient = () => new URLSearchParams(window.location.hash.split('?')[1] || '').get('client') || undefined;
+  const [linkedClient, setLinkedClient] = useState(readLinkedClient);
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(getInitialScreen);
   const [appToast, setAppToast] = useState<string | null>(null);
   useEffect(() => {
@@ -98,6 +100,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const handleLocationChange = () => {
+      setLinkedClient(readLinkedClient());
       const target = deskReviewTarget(window.location.hash);
       setLinkedReview(target);
       if (target) { setCurrentScreen('work'); return; }
@@ -145,16 +148,19 @@ export const App: React.FC = () => {
   const [taskDesignInstructions, setTaskDesignInstructions] = useState('');
   const [taskReferenceAssets, setTaskReferenceAssets] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submissionBusyRef = useRef(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [searchClientId, setSearchClientId] = useState<string | undefined>();
   const [selectedClientId, setSelectedClientId] = useState('');
   const taskTitleInputRef = useRef<HTMLInputElement>(null);
 
   const [pendingManualRetry, setPendingManualRetry] = useState(false);
+  const [draftReadBlocked, setDraftReadBlocked] = useState(false);
   const clientDirectory = useQuery({ queryKey: ['client-directory'], queryFn: readClientDirectory,
     enabled: showNewTaskModal && sessionState.status === 'signed_in', staleTime: 0 });
   const availableClients = clientDirectory.data || [];
   const clientAvailable = availableClients.some(client => client.clientId === selectedClientId);
-  const canSaveRequest = Boolean(taskTitle.trim()) && !isSubmitting &&
+  const canSaveRequest = sessionState.status === 'signed_in' && !draftReadBlocked && Boolean(taskTitle.trim()) && !isSubmitting &&
     (pendingManualRetry || (clientDirectory.isSuccess && !clientDirectory.isFetching && clientAvailable));
 
   const modalRef = useRef<HTMLDivElement>(null);
@@ -172,7 +178,7 @@ export const App: React.FC = () => {
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           e.preventDefault();
-          setShowNewTaskModal(false);
+          if (!submissionBusyRef.current) setShowNewTaskModal(false);
           return;
         }
 
@@ -211,42 +217,50 @@ export const App: React.FC = () => {
 
   // Restore draft when opening modal
   const handleOpenModal = () => {
-    const pendingDraft = getPendingManualDraft();
-    setPendingManualRetry(Boolean(pendingDraft));
-    const existingDraft = pendingDraft || draftStore.getActiveDraft();
-    if (existingDraft && (pendingDraft || (!taskTitle && !taskCopyEn))) {
-      setTaskTitle(existingDraft.title || '');
-      setTaskCopyEn(existingDraft.copy || '');
-      setTaskDesignInstructions(existingDraft.designInstructions || '');
-      setTaskReferenceAssets(existingDraft.referenceAssets || '');
-      if (existingDraft.copyCkb) setTaskCopyCkb(existingDraft.copyCkb);
-      if (existingDraft.clientId) setSelectedClientId(existingDraft.clientId);
+    if (isSubmitting) return;
+    setTaskSubmissionError(null);
+    setDraftReadBlocked(false);
+    try {
+      const pendingDraft = getPendingManualDraft();
+      setPendingManualRetry(Boolean(pendingDraft));
+      const existingDraft = pendingDraft || draftStore.getActiveDraft();
+      if (existingDraft && (pendingDraft || (!taskTitle && !taskCopyEn))) {
+        setTaskTitle(existingDraft.title || '');
+        setTaskCopyEn(existingDraft.copy || '');
+        setTaskDesignInstructions(existingDraft.designInstructions || '');
+        setTaskReferenceAssets(existingDraft.referenceAssets || '');
+        setTaskCopyCkb(existingDraft.copyCkb || '');
+        setSelectedClientId(existingDraft.clientId || '');
+      }
+    } catch (error) {
+      setDraftReadBlocked(true);
+      setTaskSubmissionError(error instanceof Error ? error.message : 'The saved draft cannot be read. Saving is blocked.');
     }
     setShowNewTaskModal(true);
   };
 
   // Save every field; an unavailable browser store must be visible before submission.
   useEffect(() => {
-    if (!showNewTaskModal) return;
+    if (!showNewTaskModal || draftReadBlocked || isSubmitting || pendingManualRetry) return;
     try {
       draftStore.saveActiveDraft({ title: taskTitle, copy: taskCopyEn, copyCkb: taskCopyCkb,
         clientId: selectedClientId, designInstructions: taskDesignInstructions, referenceAssets: taskReferenceAssets });
     } catch {
       setTaskSubmissionError('Your browser could not save this draft. Keep this window open and free browser storage before submitting.');
     }
-  }, [showNewTaskModal, taskTitle, taskCopyEn, taskCopyCkb, selectedClientId, taskDesignInstructions, taskReferenceAssets]);
+  }, [showNewTaskModal, draftReadBlocked, isSubmitting, pendingManualRetry, taskTitle, taskCopyEn, taskCopyCkb, selectedClientId, taskDesignInstructions, taskReferenceAssets]);
 
   const handleTitleChange = setTaskTitle;
   const handleCopyEnChange = setTaskCopyEn;
 
   const handleCreateTask = async () => {
-    if (!canSaveRequest) return;
+    if (!canSaveRequest || submissionBusyRef.current) return;
+    submissionBusyRef.current = true;
     setIsSubmitting(true);
     setTaskSubmissionError(null);
     try {
       const data = await submitManualTask({ title: taskTitle, copy: taskCopyEn, copyCkb: taskCopyCkb,
         clientId: selectedClientId, designInstructions: taskDesignInstructions, referenceAssets: taskReferenceAssets });
-      draftStore.clearActiveDraft();
       setSelectedTask(data);
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
       setShowNewTaskModal(false);
@@ -260,9 +274,14 @@ export const App: React.FC = () => {
       setAppToast('Request saved.');
       handleNavigate('review');
     } catch (error) {
-      setPendingManualRetry(Boolean(getPendingManualDraft()));
       setTaskSubmissionError(error instanceof Error ? error.message : 'Request could not be confirmed. Your draft is retained; retry without changing it.');
+      try { setPendingManualRetry(Boolean(getPendingManualDraft())); }
+      catch (readError) {
+        setDraftReadBlocked(true);
+        setTaskSubmissionError(readError instanceof Error ? readError.message : 'The saved retry record cannot be read. Saving is blocked.');
+      }
     } finally {
+      submissionBusyRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -287,10 +306,11 @@ export const App: React.FC = () => {
               onNavigateToClients={() => handleNavigate('clients')}
               onNavigateToSettings={() => handleNavigate('settings')}
               onNewTask={handleOpenModal}
+              onSelectedClientChange={setSearchClientId}
             />
           )}
           {sessionState.status === 'signed_in' && (currentScreen === 'clients' || currentScreen === 'dna' || currentScreen === 'library') && (
-            <ClientsScreen initialView={currentScreen === 'library' ? 'library' : 'dna'} />
+            <ClientsScreen initialView={currentScreen === 'library' ? 'library' : 'dna'} initialClientId={linkedClient} />
           )}
           {sessionState.status === 'signed_in' && currentScreen === 'settings' && <SettingsScreen />}
           {sessionState.status === 'signed_in' && currentScreen === 'ops' && <OpsScreen />}
@@ -305,7 +325,7 @@ export const App: React.FC = () => {
         <div
           role="presentation"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setShowNewTaskModal(false);
+            if (!isSubmitting && e.target === e.currentTarget) setShowNewTaskModal(false);
           }}
           style={{
             position: 'fixed',
@@ -362,7 +382,7 @@ export const App: React.FC = () => {
                 id="modal-client-select"
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--panel)', color: 'var(--text)' }}
                 value={selectedClientId}
-                disabled={pendingManualRetry || clientDirectory.isFetching}
+                disabled={isSubmitting || draftReadBlocked || pendingManualRetry || clientDirectory.isFetching}
                 onChange={(e) => setSelectedClientId(e.target.value)}
               >
                 <option value="">Choose a client</option>
@@ -387,6 +407,7 @@ export const App: React.FC = () => {
               </label>
               <input
                 id="modal-task-title"
+                disabled={isSubmitting || pendingManualRetry || draftReadBlocked}
                 ref={taskTitleInputRef}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
                 placeholder={t.modal.taskTitlePlaceholder}
@@ -405,6 +426,7 @@ export const App: React.FC = () => {
               </div>
               <textarea
                 id="modal-design-instructions"
+                disabled={isSubmitting || pendingManualRetry || draftReadBlocked}
                 style={{ width: '100%', height: 60, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
                 placeholder="e.g. Minimalist layout, emerald botanical palette, elegant Kurdish typography, formal institutional tone..."
                 value={taskDesignInstructions}
@@ -422,6 +444,7 @@ export const App: React.FC = () => {
               </div>
               <input
                 id="modal-reference-assets"
+                disabled={isSubmitting || pendingManualRetry || draftReadBlocked}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
                 placeholder="e.g. logo_primary, product_packshot, certification_seal"
                 value={taskReferenceAssets}
@@ -439,6 +462,7 @@ export const App: React.FC = () => {
               </div>
               <textarea
                 id="modal-copy-en"
+                disabled={isSubmitting || pendingManualRetry || draftReadBlocked}
                 dir="ltr"
                 lang="en"
                 style={{ width: '100%', height: 65, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
@@ -458,6 +482,7 @@ export const App: React.FC = () => {
               </div>
               <textarea
                 id="modal-copy-ckb"
+                disabled={isSubmitting || pendingManualRetry || draftReadBlocked}
                 dir="rtl"
                 lang="ckb"
                 style={{ width: '100%', height: 65, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
@@ -518,13 +543,15 @@ export const App: React.FC = () => {
 
       {/* Raycast-Grade Global Command Palette (Cmd+K) */}
       <CommandPalette
-        isOpen={showCommandPalette}
+        isOpen={showCommandPalette && sessionState.status === 'signed_in'}
         onClose={() => setShowCommandPalette(false)}
         onNavigate={(screen) => handleNavigate(screen)}
-        activeClientId={selectedTask?.clientId}
+        activeClientId={searchClientId}
         onAction={(actionId) => {
-          if (actionId === 'tour') {
+          if (actionId === 'start_tour') {
             setShowTour(true);
+          } else if (actionId === 'toggle_language') {
+            toggleLocale();
           } else if (actionId === 'new_task') {
             handleOpenModal();
           }

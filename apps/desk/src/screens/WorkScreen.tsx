@@ -110,6 +110,7 @@ interface WorkScreenProps {
   onNavigateToClients?: (clientId?: string) => void;
   onNavigateToSettings?: () => void;
   onNewTask?: () => void;
+  onSelectedClientChange?: (clientId: string | undefined) => void;
 }
 
 export const WorkScreen: React.FC<WorkScreenProps> = ({
@@ -118,6 +119,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   onNavigateToClients: _onNavigateToClients,
   onNavigateToSettings: _onNavigateToSettings,
   onNewTask,
+  onSelectedClientChange,
 }) => {
   const queryClient = useQueryClient();
   const { session, stream } = useDesk();
@@ -312,6 +314,11 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     if (entry && detail) return { ...entry, ...detail };
     return selectedTaskId ? entry : filteredTasks[0] || tasks[0];
   }, [tasks, selectedTaskId, filteredTasks, detail]);
+
+  useEffect(() => {
+    onSelectedClientChange?.(selectedTask?.clientId);
+    return () => onSelectedClientChange?.(undefined);
+  }, [selectedTask?.clientId, onSelectedClientChange]);
 
   // History & Audit reads the task's recorded events (GET /tasks/:id/timeline). It read `history`
   // from the task, which no task route returns, so it always showed none (2026-09-24).

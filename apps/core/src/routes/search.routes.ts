@@ -1,5 +1,6 @@
 import type { RouteContext } from './types.js';
 import type { ClientDNA } from '@hawa/domain';
+import { deskReviewPath } from '@hawa/contracts/desk-navigation';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { VaultSearchEngine, type SearchableItem, type SearchCategory } from '@hawa/retrieval';
 import { sql, toApiTaskStatus, withRlsContext } from '@hawa/db';
@@ -14,6 +15,30 @@ interface Searchable {
   assets: Array<{ assetId: string; clientId?: string; filename?: string; mimeType?: string; category?: string; sha256?: string; storageKey?: string | null; sizeBytes?: number; createdAt?: string }>;
   /** A client's code and `client-<code>` spellings, to its Postgres id. */
   aliases: Map<string, string>;
+  /** More tasks are in scope than one search reads (TASK_CEILING); the answer may miss some. */
+  truncated: boolean;
+}
+
+/** Tasks read per round trip, and at most per search (HAWA_SEARCH_TASK_CEILING overrides the most). */
+const TASK_PAGE = 1000;
+const TASK_CEILING = 20_000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The Desk screen for the navigation items the search indexes. */
+const NAV_ROUTES: Record<string, string> = {
+  'nav-review': '#/review', 'nav-inbox': '#/inbox', 'nav-dna': '#/dna', 'nav-ops': '#/ops', 'nav-eval': '#/eval',
+};
+
+/**
+ * Where a hit opens in the Desk, or null when no Desk screen shows it. Every hit that was neither a
+ * task nor a client opened the generic review page (bug hunt 2026-09-29): a candidate rule is shown
+ * on its client's DNA page, a navigation item is its own screen, and an uploaded asset is listed on
+ * no Desk screen, so it opens nothing rather than a page without it.
+ */
+export function searchResultUrl(item: { id: string; category: string; clientId: string }): string | null {
+  if (item.category === 'tasks') return deskReviewPath({ taskId: item.id }).slice(1);
+  if (item.category === 'clients' || item.category === 'rules') return `#/dna?client=${item.clientId}`;
+  return NAV_ROUTES[item.id] ?? null;
 }
 
 /**
@@ -38,25 +63,19 @@ export function registerSearchRoutes(ctx: RouteContext): void {
    * process held in memory and the DNA it loaded at start-up, so the Desk's search found nothing
    * another Core, or this one before a restart, had created. Without a database, the no-database store.
    */
-  async function searchable(auth: { tenantId?: string; userId?: string; role?: string }): Promise<Searchable> {
+  async function searchable(auth: { tenantId?: string; userId?: string; role?: string }, requestedClientId?: string): Promise<Searchable> {
     if (!db) {
       return {
         tasks: Array.from(tasks.entries()).map(([id, t]) => ({ ...t, id, objective: briefs.get(id)?.objective })),
         clients: Array.from(clientDnas.entries()),
         assets: Array.from(uploadedAssets.values()),
         aliases: new Map(),
+        truncated: false,
       };
     }
     const scope = { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId || OPERATOR_USER_ID, role: auth.role || 'operator' };
     const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : value ? String(value) : undefined);
-    const [taskRows, clientRows, assets] = await Promise.all([
-      withRlsContext(db, scope, async (trx) =>
-        (await sql<{ id: string; title: string | null; client_id: string | null; state: string; current_design_revision_id: string | null; updated_at: Date; objective: string | null }>`
-          SELECT t.id, t.title, t.client_id, t.state, t.current_design_revision_id, t.updated_at,
-            (SELECT b.brief->>'objective' FROM hawa.design_briefs b
-              WHERE b.tenant_id = t.tenant_id AND b.task_id = t.id ORDER BY b.version DESC LIMIT 1) AS objective
-          FROM hawa.tasks t WHERE t.tenant_id = ${scope.tenantId}::uuid
-          ORDER BY t.created_at DESC LIMIT 1000`.execute(trx)).rows),
+    const [clientRows, assets] = await Promise.all([
       withRlsContext(db, scope, async (trx) =>
         (await sql<{ client_id: string; code: string | null; dna: unknown }>`
           SELECT v.client_id, c.code, v.dna FROM hawa.client_dna_versions v
@@ -75,6 +94,43 @@ export function registerSearchRoutes(ctx: RouteContext): void {
         aliases.set(`client-${row.code}`, row.client_id);
       }
     }
+
+    // Every task in scope, newest first, a page at a time. The search read the newest 1,000 of the
+    // tenant and filtered them by client and words afterwards, so an older task, or any task of a
+    // client whose work was not among the newest 1,000, could not be found (bug hunt 2026-09-29).
+    // The words stay with the engine, which scores each task on its own and normalises Sorani and
+    // Arabic spellings that SQL would not; only the client is filtered here. A task without a client
+    // is indexed under the default client, so a search scoped to it reads those.
+    const resolved = requestedClientId && requestedClientId !== 'all'
+      ? aliases.get(requestedClientId) || requestedClientId : undefined;
+    const clientFilter = resolved === undefined ? sql``
+      : resolved === defaultClientId ? sql`AND t.client_id IS NULL`
+        : UUID.test(resolved) ? sql`AND t.client_id = ${resolved}::uuid`
+          : sql`AND false`;
+    const ceiling = Math.max(1, Number(process.env.HAWA_SEARCH_TASK_CEILING) || TASK_CEILING);
+    type TaskRow = { id: string; title: string | null; client_id: string | null; state: string; current_design_revision_id: string | null; created_at: Date; updated_at: Date; objective: string | null };
+    const taskRows: TaskRow[] = [];
+    let truncated = false;
+    let after: { createdAt: Date; id: string } | undefined;
+    for (;;) {
+      const want = Math.min(TASK_PAGE, ceiling - taskRows.length);
+      const page = await withRlsContext(db, scope, async (trx) =>
+        (await sql<TaskRow>`
+          SELECT t.id, t.title, t.client_id, t.state, t.current_design_revision_id, t.created_at, t.updated_at,
+            (SELECT b.brief->>'objective' FROM hawa.design_briefs b
+              WHERE b.tenant_id = t.tenant_id AND b.task_id = t.id ORDER BY b.version DESC LIMIT 1) AS objective
+          FROM hawa.tasks t WHERE t.tenant_id = ${scope.tenantId}::uuid ${clientFilter}
+            ${after ? sql`AND (t.created_at, t.id) < (${after.createdAt}, ${after.id}::uuid)` : sql``}
+          ORDER BY t.created_at DESC, t.id DESC LIMIT ${want + 1}`.execute(trx)).rows);
+      const more = page.length > want;
+      taskRows.push(...page.slice(0, want));
+      if (!more) break;
+      if (taskRows.length >= ceiling) { truncated = true; break; }
+      const last = taskRows[taskRows.length - 1];
+      after = { createdAt: last.created_at, id: last.id };
+    }
+    if (truncated) log.warn(`[core:search] more than ${ceiling} tasks in scope; the search read the newest ${ceiling}`);
+
     return {
       tasks: taskRows.map((t) => ({
         id: t.id, title: t.title || undefined, clientId: t.client_id, status: toApiTaskStatus(t.state),
@@ -83,6 +139,7 @@ export function registerSearchRoutes(ctx: RouteContext): void {
       clients,
       assets,
       aliases,
+      truncated,
     };
   }
 
@@ -181,16 +238,16 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
 
+    const requestedClientId = c.req.query('clientId');
     let state: Searchable;
     try {
-      state = await searchable(auth);
+      state = await searchable(auth, requestedClientId);
     } catch (err) {
       log.error('[core:search] Could not read what to search:', err);
       return problem(c, 503, 'Database Unavailable', 'The search could not read the tasks, clients and assets; try again');
     }
 
     const q = (c.req.query('q') || c.req.query('query') || '').trim();
-    const requestedClientId = c.req.query('clientId');
     // A client named by its code is searched by its Postgres id, which is what the items carry.
     const clientId = requestedClientId ? state.aliases.get(requestedClientId) || requestedClientId : requestedClientId;
     const category = (c.req.query('category') || 'all') as SearchCategory;
@@ -211,12 +268,7 @@ export function registerSearchRoutes(ctx: RouteContext): void {
       category: h.item.category.toUpperCase(),
       title: h.item.title,
       subtitle: h.item.subtitle || h.snippet,
-      url:
-        h.item.category === 'tasks'
-          ? `#/review?taskId=${h.item.id}`
-          : h.item.category === 'clients'
-            ? `#/dna?client=${h.item.clientId}`
-            : `#/review`,
+      url: searchResultUrl(h.item),
       badge: h.item.status || h.item.category,
     }));
 
@@ -226,6 +278,7 @@ export function registerSearchRoutes(ctx: RouteContext): void {
       results,
       resultsCount: searchRes.total,
       scopeEnforced: Boolean(clientId && clientId !== 'all'),
+      truncated: state.truncated,
     }, 200);
   });
 }

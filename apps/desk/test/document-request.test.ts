@@ -30,6 +30,23 @@ async function fill() {
   await edit('PDF design instructions', 'Preserve editable price');
 }
 describe('reviewed PDF request UI', () => {
+  it('keeps document browsing mounted when the saved retry record is damaged', async () => {
+    localStorage.setItem('hawa_desk_pending_document_intake_v1','{damaged');
+    const fetch = vi.fn(); vi.stubGlobal('fetch',fetch);
+    view = await mount(React.createElement(DocumentInspectionPanel,{clientId}));
+    expect(view.text()).toMatch(/retry record.*cannot be read/i);
+    expect(byText(view.container,'button','Browse saved PDFs')).toBeTruthy();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(localStorage.getItem('hawa_desk_pending_document_intake_v1')).toBe('{damaged');
+  });
+  it('blocks PDF submission without crashing or clearing a damaged retry record', async () => {
+    localStorage.setItem('hawa_desk_pending_document_intake_v1','{damaged');
+    const fetch = vi.fn(); vi.stubGlobal('fetch',fetch);
+    view = await mount(React.createElement(DocumentRequestForm,{source:answer}));
+    expect(view.text()).toMatch(/retry record.*cannot be read/i);
+    expect((byText(view.container,'button','Save reviewed request') as HTMLButtonElement).disabled).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it('leaves extracted text out of the request until human review and binds only the selected exact copy', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'task-saved' }), { status: 201 })); vi.stubGlobal('fetch', fetch);
     view = await mount(React.createElement(DocumentRequestForm, { source: answer }));

@@ -25,8 +25,10 @@ export function DocumentInspectionPanel({ clientId }: { clientId: string }) {
     controller.current?.abort();
     setFile(null); setResult(null); setError(''); setBusy(false); setSaved([]);
     if (input.current) input.current.value = '';
-    const pending = getPendingDocumentDraft();
-    if (pending?.clientId === clientId && pending.sourceDocument) void openSaved(pending.sourceDocument.id);
+    try {
+      const pending = getPendingDocumentDraft();
+      if (pending?.clientId === clientId && pending.sourceDocument) void openSaved(pending.sourceDocument.id);
+    } catch (e) { setError(e instanceof Error ? e.message : 'The saved retry record cannot be read.'); }
     return () => { generation.current++; controller.current?.abort(); };
   }, [clientId]);
   const inspect = async (retain = false) => {

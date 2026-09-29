@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ScreenId } from './Sidebar.js';
+import { getAuthHeaders } from '../services/auth.js';
 
 export interface CommandPaletteProps {
   isOpen: boolean;
@@ -18,6 +19,8 @@ interface SearchItem {
   badge?: string;
   actionId?: string;
   screen?: ScreenId;
+  /** Found, but shown on no Desk page (Core answers url: null): listed, and selecting it opens nothing. */
+  unlinked?: boolean;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -31,6 +34,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [results, setResults] = useState<SearchItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -129,43 +134,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       screen: 'library',
     },
 
-    // ComfyUI Workflow Templates
-    {
-      id: 'tpl-clinical',
-      category: 'Templates',
-      title: 'Clinical Podium Mesh Template',
-      subtitle: 'Clean 3D podium with studio key-light and medical cyan accents',
-      badge: 'SDXL',
-      screen: 'review',
-      actionId: 'select_tpl_clinical',
-    },
-    {
-      id: 'tpl-kurdish',
-      category: 'Templates',
-      title: 'Kurdish Geometric Luxury Template',
-      subtitle: '8-point Kurdish star arabesque motif with gold and obsidian tones',
-      badge: 'SDXL',
-      screen: 'review',
-      actionId: 'select_tpl_kurdish',
-    },
-    {
-      id: 'tpl-tech',
-      category: 'Templates',
-      title: 'Tech Isometric Grid Template',
-      subtitle: '3D floating isometric data blocks with cyber-cyan gridlines',
-      badge: 'SDXL',
-      screen: 'review',
-      actionId: 'select_tpl_tech',
-    },
-    {
-      id: 'tpl-editorial',
-      category: 'Templates',
-      title: 'Editorial Scrim Gradient Template',
-      subtitle: 'Dynamic radial spotlight with deep bottom scrim vignette for text legibility',
-      badge: 'SDXL',
-      screen: 'review',
-      actionId: 'select_tpl_editorial',
-    },
   ];
 
   // Auto-focus input when opened
@@ -173,12 +141,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     if (isOpen) {
       setQuery('');
       setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      const timer = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
   // Search logic: combines instant local filtering with API search
   useEffect(() => {
+    setIsLoading(false);
+    setSearchError(null);
+    setSearchNotice(null);
     if (!isOpen) return;
 
     const trimmed = query.trim().toLowerCase();
@@ -198,45 +170,54 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     setSelectedIndex(0);
 
     // No guessed scope: remote results require an actual selected client.
-    if (!activeClientId) { setIsLoading(false); return; }
+    if (!activeClientId || !trimmed) return;
+    const controller = new AbortController();
+    let current = true;
 
     // 2. Fetch server items if query provided (tasks, client DNA)
     const timer = setTimeout(async () => {
       try {
         setIsLoading(true);
         const url = `/v1/search?q=${encodeURIComponent(trimmed)}&clientId=${encodeURIComponent(activeClientId)}`;
-        const res = await fetch(url).catch(() => null);
-        if (res && res.ok) {
+        const res = await fetch(url, { headers: getAuthHeaders(), signal: controller.signal });
+        if (!res.ok) throw new Error('Search failed');
+        {
           const data = await res.json();
-          if (data.results && Array.isArray(data.results)) {
+          if (!current) return;
+          if (!Array.isArray(data.results)) throw new Error('Invalid search response');
+          {
             // Merge remote items, deduplicating IDs
             const seenIds = new Set(localMatches.map((i) => i.id));
             const merged: SearchItem[] = [...localMatches];
 
             for (const r of data.results) {
               if (!seenIds.has(r.id)) {
+                const unlinked = r.url === null;
                 merged.push({
                   id: r.id,
                   category: r.category as any,
                   title: r.title,
-                  subtitle: r.subtitle,
-                  url: r.url,
+                  subtitle: unlinked ? `${r.subtitle ?? ''} · Not shown on a Desk page` : r.subtitle,
+                  url: typeof r.url === 'string' ? r.url : undefined,
                   badge: r.badge,
+                  ...(unlinked ? { unlinked } : {}),
                 });
                 seenIds.add(r.id);
               }
             }
             setResults(merged);
+            // Core read the newest tasks only (its ceiling); older matches may be missing.
+            if (data.truncated === true) setSearchNotice('Only the newest tasks were searched; an older task may be missing. Search for more specific words.');
           }
         }
       } catch {
-        // Graceful fallback to local matches
+        if (current) setSearchError('Client search could not load. Check your connection and search again.');
       } finally {
-        setIsLoading(false);
+        if (current) setIsLoading(false);
       }
     }, 150);
 
-    return () => clearTimeout(timer);
+    return () => { current = false; clearTimeout(timer); controller.abort(); };
   }, [query, isOpen, activeClientId]);
 
   // Keyboard navigation inside palette
@@ -276,6 +257,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   }, [selectedIndex]);
 
   const executeItem = (item: SearchItem) => {
+    if (item.unlinked) return;
     onClose();
 
     if (item.actionId && onAction) {
@@ -344,7 +326,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command, task, asset, or client... (⌘K)"
+            aria-label="Search commands and selected client"
+            placeholder="Search commands or this client… (⌘K)"
             style={{
               flex: 1,
               background: 'transparent',
@@ -375,14 +358,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                 border: '1px solid rgba(56, 189, 248, 0.25)',
                 letterSpacing: '0.02em',
               }}
-              title="Search queries are pre-retrieval scope locked to the active tenant"
+              title="Client search is limited to the selected task’s client"
             >
               <span>🔒</span>
-              <span>{activeClientId}</span>
+              <span>{activeClientId ? 'Selected client' : 'Commands'}</span>
             </div>
           </div>
         </div>
 
+        {!activeClientId && <p style={{ padding: '0 18px', color: '#9ca3af', fontSize: 12 }}>Select a task in Work to search its client.</p>}
+        {searchError && <p role="alert" style={{ padding: '0 18px', color: '#fca5a5' }}>{searchError}</p>}
+        {searchNotice && <p role="status" style={{ padding: '0 18px', color: '#fcd34d' }}>{searchNotice}</p>}
         {/* Results List */}
         <div
           ref={listRef}
@@ -415,7 +401,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                     justifyContent: 'space-between',
                     padding: '10px 14px',
                     borderRadius: 8,
-                    cursor: 'pointer',
+                    cursor: item.unlinked ? 'default' : 'pointer',
                     background: isSelected ? 'rgba(56, 189, 248, 0.14)' : 'transparent',
                     border: isSelected ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid transparent',
                     transition: 'background 0.1s ease',

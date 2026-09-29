@@ -21,7 +21,10 @@ export function OriginalDocument({ receipt }: { receipt: Pick<DocumentReceipt, '
 
 /** Extracted text stays evidence. The operator deliberately chooses the exact copy to submit. */
 export function DocumentRequestForm({ source }: { source: SavedDocumentInspection }) {
-  const pending = getPendingDocumentDraft();
+  let pending: ReturnType<typeof getPendingDocumentDraft> = null;
+  let recoveryError = '';
+  try { pending = getPendingDocumentDraft(); }
+  catch (e) { recoveryError = e instanceof Error ? e.message : 'The saved retry record cannot be read.'; }
   const own = pending?.clientId === source.clientId && pending.sourceDocument?.id === source.receipt.id ? pending : null;
   const [title, setTitle] = useState(own?.title ?? '');
   const [copy, setCopy] = useState(own?.copy ?? '');
@@ -31,9 +34,9 @@ export function DocumentRequestForm({ source }: { source: SavedDocumentInspectio
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [taskId, setTaskId] = useState('');
-  const locked = busy || Boolean(own) || Boolean(taskId);
+  const locked = busy || Boolean(own) || Boolean(taskId) || Boolean(recoveryError);
   const save = async () => {
-    if (busy || !confirmed || taskId) return;
+    if (busy || !confirmed || taskId || recoveryError) return;
     setBusy(true); setError('');
     try {
       const task = await submitDocumentTask({ clientId: source.clientId, title, copy, copyCkb,
@@ -47,6 +50,7 @@ export function DocumentRequestForm({ source }: { source: SavedDocumentInspectio
     <h4>Create a request from this PDF</h4>
     <p>Enter only the copy this design should contain. Review every page of the original for omitted text, images and tables. Saving a request does not approve a design or brand knowledge.</p>
     <OriginalDocument receipt={source.receipt} />
+    {recoveryError && <p role="alert">{recoveryError}</p>}
     {pending && !own && <p role="alert">Another PDF request has an unconfirmed result. Reopen its saved document and retry it before submitting a different request.</p>}
     {own && !taskId && <p role="status">This request has an unconfirmed result. Its original copy and request key are retained; retry unchanged.</p>}
     <label>Request title<input aria-label="PDF request title" value={title} maxLength={200} disabled={locked} onChange={e => { setTitle(e.target.value); setConfirmed(false); }} /></label>
@@ -54,7 +58,7 @@ export function DocumentRequestForm({ source }: { source: SavedDocumentInspectio
     <label>Exact copy (Sorani)<textarea aria-label="PDF exact copy Sorani" dir="rtl" value={copyCkb} maxLength={20000} disabled={locked} onChange={e => { setCopyCkb(e.target.value); setConfirmed(false); }} /></label>
     <label>Design instructions<textarea aria-label="PDF design instructions" value={instructions} maxLength={4000} disabled={locked} onChange={e => { setInstructions(e.target.value); setConfirmed(false); }} /></label>
     <label><input type="checkbox" checked={confirmed} disabled={locked} onChange={e => setConfirmed(e.target.checked)} /> I checked the original PDF and confirm the exact copy above for this request.</label>
-    <button className="btn" type="button" disabled={busy || Boolean(taskId) || !confirmed || !title.trim() || !(copy.trim() || copyCkb.trim()) || Boolean(pending && !own)} onClick={() => void save()}>
+    <button className="btn" type="button" disabled={busy || Boolean(recoveryError) || Boolean(taskId) || !confirmed || !title.trim() || !(copy.trim() || copyCkb.trim()) || Boolean(pending && !own)} onClick={() => void save()}>
       {busy ? 'Saving request…' : own ? 'Retry saved PDF request' : 'Save reviewed request'}
     </button>
     {error && <p role="alert">{error}</p>}
