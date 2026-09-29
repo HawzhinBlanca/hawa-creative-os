@@ -1,4 +1,4 @@
-# Photo and image-file intake (ADR-068, ADR-069, ADR-143)
+# Photo and image-file intake (ADR-068, ADR-069, ADR-143, ADR-148)
 
 Requirements: FR-002, FR-004, FR-005, FR-011, FR-060, NFR-001, NFR-006.
 Local evidence: `plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md`; ADR-143 section 5.
@@ -40,6 +40,17 @@ words waits two hours (`HAWA_ALBUM_BRIEF_WINDOW_MINUTES`); a captioned one waits
 - "yes", "go ahead", "use them", "بەڵێ" or a plain `/use_album` starts a captioned album,
   and for an album with no words is asked again what to design;
 - thanks, greetings and questions are answered as before and the album keeps waiting.
+
+**A caption Telegram cut (ADR-148).** A standard Telegram account can send at most
+1,024 characters of caption (UTF-16 units) and Telegram silently drops the rest. A caption
+at that length is never designed from as it is: at the settle the bot says once "Telegram
+kept only the first part of the text you sent with the photos. Please send the rest as a
+message and I'll use it with these photos." (Sorani in a Sorani chat). The sender's next
+message (anything but thanks, an OK or a command) is joined after a newline and the
+request opens with every photo; an OK is asked for the rest again. With no rest after
+10 minutes (the held-brief window; the album's delayed settle, backed by the poller's
+sweep), the album opens with the caption's complete lines only: the cut last line is
+dropped and never becomes copy. A single photo (not an album) is not covered yet.
 
 A text brief sent just **before** the photos waits `HAWA_BRIEF_PHOTO_WAIT_MS`
 (default 15 s) for them. An album that follows within that time takes the brief, and

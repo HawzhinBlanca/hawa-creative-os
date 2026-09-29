@@ -12,6 +12,17 @@ import { blobStoreFor } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
 import { canvaFontEvidence } from '../services/canva-font-evidence.js';
 import { orderedAlbumImages } from '../services/lifecycle-album.js';
+import { isCopyIntroducer } from '../services/chat-campaign-intake.js';
+
+/**
+ * The title shown where a task has no English headline (a lifecycle draft carries none), unless the
+ * title quotes the line that introduced the copy: before 2026-09-29 a chat request could be titled
+ * "KAAE: Here is the text and the photos:…", and that line is an instruction, never a headline.
+ */
+export function titleAsHeadline(title: string): string | undefined {
+  const quoted = String(title || '').replace(/^[^:\n]{1,80}:\s*/u, '').replace(/…$/u, '').trim();
+  return quoted && isCopyIntroducer(quoted) ? undefined : title;
+}
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -164,7 +175,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             title: t.title,
             description: t.description,
             clientName: t.client_name || null,
-            headlineEn: t.headline_en || t.title,
+            headlineEn: t.headline_en || titleAsHeadline(t.title),
             headlineCkb: t.headline_ckb || null,
             copyEn: t.copy_en || t.description,
             copyCkb: t.copy_ckb || null,
