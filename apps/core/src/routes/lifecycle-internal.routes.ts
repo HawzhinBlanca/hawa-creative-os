@@ -31,10 +31,15 @@ import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeAppr
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
-import { lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
+import { heldPhotoCandidate, lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
+import { createMediaRoute, wordsOf } from '../services/lifecycle-media-route.js';
+import { deferMessage, pendingHeldBrief, readDeferral, releaseDeferral, overdueDeferrals, overduePhotos,
+  claimPhoto, pendingEditWords, readMediaAnswer, waitingPhotos } from '../services/lifecycle-media-intake.js';
+import { createEditIntake } from '../services/lifecycle-edit-intake.js';
+import { INBOX_MESSAGES, MEDIA_MESSAGES, requesterLang, say } from '@hawa/integrations';
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
-  albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, overdueSettles, settleAlbum,
+  albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
   settleHeldBrief } from '../services/lifecycle-album.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
@@ -45,7 +50,7 @@ import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readN
   readRoutingRefusal, recordRoutingRefusal,
   revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests,
   type LateChangeStage, type LateRequesterChange, type WaitingLifecycleRequest } from '../services/lifecycle-chat-target.js';
-import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
+import { parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
 import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.js';
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
   type IntentReceipt } from '../services/requester-turn-store.js';
@@ -88,6 +93,34 @@ function lateChangeAnswer(chatId: string, late: LateRequesterChange): Record<str
     requestId: late.requestId, requestStage: late.requestStage, ...(officeAlert ? { officeAlert } : {}),
     // ADR-144: what the requester is told comes from Core, in their language, and replays as it was.
     ...(late.answer ? { chatAnswer: { text: late.answer, parseMode: 'HTML' } } : {}) };
+}
+
+/** Who sent a message, in which chat and topic: the scope a kept photo or a deferred message belongs to. */
+function senderScopeOf(update: UpdateLike): { chatId: string; senderId: string; topic: string } | null {
+  const message = update.message && typeof update.message === 'object' ? update.message as Record<string, any> : null;
+  const sender = message?.from?.id;
+  if (!message || !Number.isSafeInteger(sender) || message.from?.is_bot === true) return null;
+  return { chatId: String(message.chat?.id ?? ''), senderId: String(sender),
+    topic: message.message_thread_id === undefined ? '' : String(message.message_thread_id) };
+}
+const updateHash = (update: unknown) => createHash('sha256').update(JSON.stringify(update)).digest('hex');
+const SYSTEM_SCOPE = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
+
+/**
+ * The office's alert for a change or answer the bot could not apply by itself (the day's automatic
+ * allowance is used up, or the question or original brief cannot be found): the requester is told the
+ * office has it (ADR-145), so the office must, with the words quoted. Null without an office chat.
+ */
+function revisionBlockedAlert(chatId: string, code: string, update: UpdateLike): { chatId: string; text: string } | null {
+  const office = officeChatId();
+  if (!office || office === chatId || !['DAILY_CAP_REACHED', 'PARENT_BRIEF_MISSING', 'QUESTION_MISSING'].includes(code)) return null;
+  const message = update.message && typeof update.message === 'object' ? update.message as Record<string, unknown> : null;
+  const words = String(message?.text ?? message?.caption ?? '').trim();
+  const why = code === 'DAILY_CAP_REACHED' ? 'the automatic design allowance for today is used up'
+    : code === 'QUESTION_MISSING' ? 'the question it answers could not be found' : 'the original brief could not be found';
+  return { chatId: office, text: [`The requester in chat ${chatId} sent a change or answer that was not applied, because ${why} (${code}).`,
+    'Nothing was started. Please make the change and send the design to them; they were told the office has it.',
+    '', 'Their words:', (words.length > 1500 ? `${words.slice(0, 1500)}…` : words) || '(a photo or file, in the chat)'].join('\n') };
 }
 
 /** The office's Telegram chat: the first office member (TELEGRAM_ALLOWED_USERS). */
@@ -168,6 +201,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   const { app, db, problem, verifyRequestAuth, channelKillSwitches } = ctx;
   const sourceIntake = createLifecycleSourceIntake(ctx);
   const chatAnswers = createLifecycleChatAnswers(ctx);
+  // ADR-145: photos with no words, videos, files, edits and senders outside the intake list.
+  const mediaRoute = createMediaRoute(ctx);
+  const edits = createEditIntake(ctx);
   // ADR-144: the intake router, asked only about what the rules cannot place. Tests pass their own.
   const intentModel: RequesterIntentModel | null = ctx.options?.requesterIntentModel !== undefined
     ? ctx.options.requesterIntentModel : (db ? createRequesterIntentModel(db) : null);
@@ -201,7 +237,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
   };
 
-  internal('/telegram/intake', async (c) => {
+  const intakeHandler = async (c: Context): Promise<Response> => {
     const body = await readBody(c);
     const incoming = body?.update;
     if (!isUpdate(incoming)) return problem(c, 400, 'Invalid update', 'The body must carry a Telegram update with a positive update_id');
@@ -213,14 +249,36 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const acceptsLanguageSiblings = body?.languageSiblings === true;
     // ADR-143: `settle` is the worker's delayed settle of this (already saved) update; `briefHold`
     // says the worker schedules settles, so a text brief may wait for photos sent right after it.
-    const settle = body?.settle === true;
+    let settle = body?.settle === true;
     const holdBriefs = body?.briefHold === true;
+    // ADR-145: a message set behind its sender's held brief, now read as it arrived (never held again).
+    let releasedDeferral = false;
+    // ADR-145: words said beside the answer (a video's words were used; a file could not be opened).
+    let beside: { text: string; parseMode: 'HTML' } | null = null;
     if (mode !== 'legacy' && mode !== 'lifecycle') {
       return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
     }
 
     const handled = (intakeStatus: number, extra: Record<string, unknown> = {}) =>
-      c.json({ v: 1, kind: 'handled', intakeStatus, ...extra }, 200);
+      c.json({ v: 1, kind: 'handled', intakeStatus, ...extra, ...(beside && !extra.notice ? { notice: beside } : {}) }, 200);
+
+    const senderAllowedFor = (u: UpdateLike): boolean => {
+      const carrier = (u.message ?? u.edited_message ?? u.channel_post) as Record<string, any> | undefined;
+      const senderId = String(carrier?.from?.id ?? '');
+      return !ctx.isProduction || ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*' ||
+        (ctx.telegramIntakeUsers.length > 0 && ctx.telegramIntakeUsers.includes(senderId));
+    };
+    /** Keeps words on a request for the office (the late-change store) under this update, once (ADR-145). */
+    const recordLate = async (u: UpdateLike, late: LateRequesterChange): Promise<{ status: number; extra: Record<string, unknown> }> => {
+      const chatId = chatOf(u);
+      const payloadHash = updateHash(u);
+      const stored = await withRlsContext(db!, SYSTEM_SCOPE, (trx) => recordRoutingRefusal(trx, DEFAULT_TENANT_ID, u.update_id,
+        { code: 'LATE_REQUESTER_CHANGE', chatId, payloadHash, late }));
+      if (stored.payloadHash !== payloadHash || stored.chatId !== chatId || stored.code !== 'LATE_REQUESTER_CHANGE' || !stored.late) {
+        return { status: 409, extra: { code: 'IDEMPOTENCY_CONFLICT' } };
+      }
+      return { status: 409, extra: lateChangeAnswer(chatId, stored.late) };
+    };
 
     // What intake answers when the update opens no request and changes none (ADR-135 stage 2c).
     const answerChat = async (update: UpdateLike): Promise<Response> => {
@@ -266,7 +324,26 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // A `/use_album` reply to a photo keeps its old meaning; a plain one binds like any text (ADR-143).
     const repliedConfirmation = isAlbumConfirmation(preparedUpdate) && Boolean(incomingMessage?.reply_to_message);
     const textMessage = !albumPart && !repliedConfirmation && typeof incomingMessage?.text === 'string';
-    if (settle && !albumPart && !textMessage) return handled(200, { settle: 'skipped' });
+    // ADR-145: the settle of a message set behind its sender's held brief. While that brief is still
+    // held it waits again; once the brief has opened, the message is read as it arrived.
+    if (settle && textMessage && db) {
+      const deferral = await withRlsContext(db, SYSTEM_SCOPE, (trx) => readDeferral(trx, DEFAULT_TENANT_ID, preparedUpdate.update_id));
+      if (deferral) {
+        if (!deferral.released) {
+          const scope = senderScopeOf(preparedUpdate);
+          const held = scope && await withRlsContext(db, SYSTEM_SCOPE, (trx) =>
+            pendingHeldBrief(trx, DEFAULT_TENANT_ID, scope, preparedUpdate.update_id));
+          if (held) return handled(202, { lifecycleAction: 'settle-later', chatId: chatOf(preparedUpdate),
+            settle: { kind: 'brief', delayMs: albumSettleMs() } });
+          await withRlsContext(db, SYSTEM_SCOPE, (trx) => releaseDeferral(trx, DEFAULT_TENANT_ID, preparedUpdate.update_id));
+        }
+        settle = false;
+        releasedDeferral = true;
+      }
+    }
+    // A kept photo's settle (ADR-145) is decided below; any other settle of a non-album, non-text
+    // update has nothing to do.
+    if (settle && !albumPart && !textMessage && !heldPhotoCandidate(preparedUpdate)) return handled(200, { settle: 'skipped' });
     if (albumPart || repliedConfirmation || (textMessage && (db || settle))) {
       if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
       const tx = <T>(fn: (trx: import('@hawa/db').Kysely<import('@hawa/db').Database>) => Promise<T>) =>
@@ -350,9 +427,53 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
     }
 
+    // ADR-145: a message from a sender whose brief ADR-143 still holds for photos is read after that
+    // brief opens, so a correction to it is a change to it and not a second request. ChatInbox runs one
+    // update of a chat at a time, and the brief's own settle queues behind this update: the message is
+    // therefore settled later instead of being made to wait here.
+    if (db && !settle && !releasedDeferral && !admittedAlbum && typeof (preparedUpdate.message as Record<string, unknown> | undefined)?.text === 'string') {
+      const source = preparedUpdate;
+      const scope = senderScopeOf(source);
+      const hash = updateHash(source);
+      const outcome = await withRlsContext(db, SYSTEM_SCOPE, async (trx) => {
+        const prior = await readDeferral(trx, DEFAULT_TENANT_ID, source.update_id);
+        if (prior && prior.payloadHash !== hash) return 'conflict' as const;
+        if (prior?.released) return 'released' as const;
+        if (!prior && (await isHeldBrief(trx, DEFAULT_TENANT_ID, source) ||
+            await readNewBriefDecision(trx, DEFAULT_TENANT_ID, source.update_id) ||
+            await readIntentReceipt(trx, DEFAULT_TENANT_ID, source.update_id) ||
+            await readRoutingRefusal(trx, DEFAULT_TENANT_ID, source.update_id))) return 'decided' as const;
+        const held = scope ? await pendingHeldBrief(trx, DEFAULT_TENANT_ID, scope, source.update_id) : null;
+        if (!held) {
+          if (!prior) return 'none' as const;
+          await releaseDeferral(trx, DEFAULT_TENANT_ID, source.update_id);
+          return 'released' as const;
+        }
+        if (!prior) await deferMessage(trx, DEFAULT_TENANT_ID, source.update_id, scope!, held.updateId, hash, source);
+        return 'deferred' as const;
+      });
+      if (outcome === 'conflict') return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+      if (outcome === 'deferred') return handled(202, { lifecycleAction: 'settle-later', chatId: chatOf(source),
+        settle: { kind: 'brief', delayMs: albumSettleMs() } });
+      if (outcome === 'released') releasedDeferral = true;
+    }
+
+    // ADR-145: an edited message or caption. Words still held (a kept photo, a voice note or PDF not yet
+    // used) take the new words; words that opened or changed a design become a note to the office on it;
+    // words that opened nothing are read again as a new message; an edit to anything else goes to the office.
+    if (db && preparedUpdate.edited_message && !preparedUpdate.message) {
+      const edited = await edits.handle(preparedUpdate, {
+        senderAllowed: senderAllowedFor(preparedUpdate),
+        recordLate: (late) => recordLate(preparedUpdate, late),
+        officeChatId: officeChatId(),
+      });
+      if (edited.kind === 'answer') return handled(edited.answer.status, edited.answer.extra);
+      if (edited.kind === 'reread') preparedUpdate = edited.update;
+    }
+
     const update = preparedUpdate;
     // An album admitted above or a released held brief is decided now, not held again.
-    const mayHoldBrief = holdBriefs && !settle && !admittedAlbum && briefPhotoWaitMs() > 0;
+    const mayHoldBrief = holdBriefs && !settle && !releasedDeferral && !admittedAlbum && briefPhotoWaitMs() > 0;
 
     // A decision must replay even if the flag changed after the first answer was lost.
     const sourceChat = chatOf(update);
@@ -431,14 +552,45 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       if (priorRefusal.code === 'LATE_REQUESTER_CHANGE' && priorRefusal.late) {
         return handled(409, lateChangeAnswer(sourceChat, priorRefusal.late));
       }
+      const blocked = priorRefusal.code !== 'AMBIGUOUS_REQUEST' && priorRefusal.code !== 'STALE_REQUEST_REPLY';
+      const alert = blocked ? revisionBlockedAlert(sourceChat, priorRefusal.code, update) : null;
       return handled(409, { code: priorRefusal.code,
-        lifecycleAction: priorRefusal.code === 'AMBIGUOUS_REQUEST' ||
-          priorRefusal.code === 'STALE_REQUEST_REPLY' ? 'request-choice-required' : 'revision-blocked',
-        chatId: sourceChat });
+        lifecycleAction: blocked ? 'revision-blocked' : 'request-choice-required',
+        chatId: sourceChat, ...(alert ? { officeAlert: alert } : {}) });
+    }
+
+    // ADR-145: words said about this update's media (a picture that could not be opened, a video, a kept
+    // photo's question, an edit) are given again as they were, before anything is downloaded again.
+    if (db && !settle) {
+      const said = await withRlsContext(db, SYSTEM_SCOPE, (trx) => readMediaAnswer(trx, DEFAULT_TENANT_ID, update.update_id));
+      if (said) {
+        if (said.payloadHash !== updateHash(update) && !said.payloadHash.startsWith('settle:')) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        return handled(said.status, { ...said.extra, duplicate: true });
+      }
     }
 
     const sourceAnswer = await sourceIntake(update);
     if (sourceAnswer) return handled(sourceAnswer.status, sourceAnswer.extra);
+
+    // ADR-145: a photo with no words is kept for its sender's words (and settled later); a video is
+    // explained, and its words, if any, are read as a message. Nothing is parked for an operator.
+    if (db && chatOf(update) && !admittedAlbum && !priorRevisionPhoto && update.message) {
+      const hash = updateHash(update);
+      if (settle) {
+        const settled = await mediaRoute.settlePhoto(update, chatOf(update), albumSettleMs(), (late) => recordLate(update, late));
+        if (settled) return handled(settled.status, settled.extra);
+      } else if (heldPhotoCandidate(update)) {
+        if (!senderAllowedFor(update)) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+        const held = await mediaRoute.holdPhotoUpdate(update, chatOf(update), hash, albumSettleMs());
+        if (held) return handled(held.status, held.extra);
+      }
+      if (!settle) {
+        const unusable = await mediaRoute.unusable(update, chatOf(update), hash);
+        if (unusable && !senderAllowedFor(update)) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+        if (unusable && 'answer' in unusable) return handled(unusable.answer.status, unusable.answer.extra);
+        if (unusable) beside = unusable.notice;
+      }
+    }
 
     // A button press. Lifecycle messages carry no buttons, so every button is under a message the
     // old intake sent (a draft's Approve / Change / Ask a designer, an office review card, a
@@ -465,7 +617,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
       // Stops the button's spinner; the answer itself is ChatInbox's notice.
       if (typeof button.id === 'string' && ctx.telegramBridge) {
-        await ctx.telegramBridge.answerCallbackQuery(button.id, 'This button no longer does anything.', false).catch(() => false);
+        const pressed = (update.callback_query as { from?: { language_code?: unknown } }).from?.language_code;
+        const popupLang = typeof pressed === 'string' && /^(?:ckb|ku)(?:$|[-_])/i.test(pressed) ? 'ckb' as const : 'en' as const;
+        await ctx.telegramBridge.answerCallbackQuery(button.id, say(INBOX_MESSAGES.buttonPopup, popupLang), false).catch(() => false);
       }
       await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 409 });
       return handled(409, { code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required', chatId });
@@ -487,29 +641,33 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         const isIntakeOpen = ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
         const senderAllowed = !ctx.isProduction || isIntakeOpen ||
           (ctx.telegramIntakeUsers.length > 0 && ctx.telegramIntakeUsers.includes(senderId));
-        const holdMedia = async () => {
-          // Hold unsupported input as a whole; a caption cannot replace an unavailable file.
+        /**
+         * A file the design cannot use, or a picture that could not be opened: answered in words, once
+         * (ADR-145). Nothing is parked for an operator any more; updates parked before keep their replay.
+         */
+        const holdMedia = async (phrase: 'fileUnsupported' | 'photoUnreadable' | 'photosUnplaced' = 'fileUnsupported') => {
           if (!senderAllowed) {
             return handled(403, { code: 'SENDER_NOT_ALLOWED' });
           }
-          const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
-          const stored = await withRlsContext(db,
-            { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-            (trx) => recordRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id,
-              { code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', chatId, payloadHash }));
-          if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
-              stored.code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED') {
-            return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
-          }
-          return handled(422, { code: stored.code, lifecycleAction: 'park-update', chatId,
-            reason: 'A lifecycle chat media update needs operator review; no task was started' });
+          const answer = await mediaRoute.unreadableFile(update, chatId, updateHash(update), phrase);
+          return handled(answer.status, answer.extra);
         };
         if (media && chatId && (media.photo || media.voice || media.audio || media.document ||
-            media.video || media.video_note || media.animation || media.live_photo || media.caption) && !photoInput) {
-          return await holdMedia();
+            media.video || media.video_note || media.animation || media.live_photo || media.caption) && !photoInput && !beside) {
+          // A channel's own post is no requester's message: nothing is said in a channel (ADR-145).
+          if (update.channel_post && !update.message) return handled(200, { ignored: true, reason: 'CHANNEL_POST_MEDIA' });
+          // A file the design cannot use, even with words: its caption never designs without it (ADR-069),
+          // so the file is asked for again in a form that can be used.
+          return await holdMedia(media.photo || (media.document && /^image\//i.test(String((media.document as Record<string, unknown>).mime_type ?? '')))
+            ? 'photoUnreadable' : 'fileUnsupported');
         }
+        // ADR-145: a message edited before the bot read it (held for photos, or set behind a held
+        // brief) is read with its new words; the update itself, and so every receipt, stays the same.
+        const editedWords = msg && !photoInput && !admittedAlbum
+          ? await withRlsContext(db, SYSTEM_SCOPE, (trx) => pendingEditWords(trx, DEFAULT_TENANT_ID, update.update_id)) : null;
         const rawText: string = (() => {
           if (photoInput) return photoInput.directive;
+          if (editedWords !== null) return editedWords;
           if (msg && typeof msg === 'object') {
             const t = (msg as Record<string, unknown>).text ?? (msg as Record<string, unknown>).caption;
             return typeof t === 'string' ? t : '';
@@ -530,7 +688,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             if (stored.payloadHash !== payloadHash || stored.chatId !== chatId || stored.code !== code) {
               return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
             }
-            return handled(409, { code, lifecycleAction: actionFor(code), chatId });
+            const alert = actionFor(code) === 'revision-blocked' ? revisionBlockedAlert(chatId, code, update) : null;
+            return handled(409, { code, lifecycleAction: actionFor(code), chatId, ...(alert ? { officeAlert: alert } : {}) });
           };
           try {
             const TENANT = DEFAULT_TENANT_ID;
@@ -568,8 +727,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             }
 
             /** Opens a lifecycle request for a brief (ADR-135), one per language (ADR-139). */
-            const openBrief = async (briefText: string, instructionOnly: boolean): Promise<Response> => {
+            const openBrief = async (briefText: string, instructionOnly: boolean, takeHeldPhoto = true): Promise<Response> => {
               const sender = (msg as Record<string, { id?: unknown; first_name?: unknown }>).from;
+              // ADR-145: the newest photo its sender sent with no words, kept for these words.
+              const scope = senderScopeOf(update);
+              const heldPhoto = takeHeldPhoto && !photoInput && !admittedAlbum && scope && !mayHoldBrief
+                ? (await withRlsContext(db, system, (trx) => waitingPhotos(trx, TENANT, scope))).at(-1) ?? null : null;
               if (!senderAllowed) {
                 return handled(403, { code: 'SENDER_NOT_ALLOWED' });
               }
@@ -605,8 +768,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
                 if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
                 if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
-                if (photo.kind === 'unsupported') return await holdMedia();
+                // A caption never designs without its picture (ADR-069): the picture is asked for again.
+                if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
                 lifecycleImage = { ...photo.ref, updateId: update.update_id };
+              } else if (heldPhoto) {
+                // ADR-145: the photo its sender sent just before (or while the brief waited for photos).
+                lifecycleImage = { ...heldPhoto.image, updateId: update.update_id };
+                beside = { text: say(MEDIA_MESSAGES.photoUsedWithWords, requesterLang(briefText)), parseMode: 'HTML' };
               }
               const media = { ...(lifecycleImage ? { lifecycleImage } : {}),
                 ...(admittedAlbum ? { lifecycleAlbum: admittedAlbum.ref } : {}) };
@@ -618,11 +786,21 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 if (!sibling) return handled(422, { code: 'INVALID_BRIEF' });
                 siblings.push({ requestId: part.requestId, draft: sibling });
               }
-              const stored = await withRlsContext(db, system,
-                (trx) => recordNewBriefDecision(trx, TENANT, update.update_id,
+              const stored = await withRlsContext(db, system, async (trx) => {
+                if (heldPhoto) {
+                  // One photo is used once: words that took it first keep it (then this brief opens without it).
+                  const claim = await claimPhoto(trx, TENANT, heldPhoto.updateId, { byUpdateId: update.update_id, how: 'brief', requestId });
+                  if (claim.byUpdateId !== update.update_id) return null;
+                }
+                return recordNewBriefDecision(trx, TENANT, update.update_id,
                   { requestId, chatId, payloadHash, draft,
                     ...((lifecycleImage || admittedAlbum) ? { sourceUpdate: update } : {}),
-                    ...(siblings.length ? { siblings } : {}) }));
+                    ...(siblings.length ? { siblings } : {}) });
+              });
+              if (!stored) {
+                beside = null;
+                return openBrief(briefText, instructionOnly, false);
+              }
               if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
                   stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
               await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
@@ -646,6 +824,24 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               // subsequent revisions increment by 2 each time (office+requester), so round = (rev - 1) / 2.
               const round = Math.max(1, Math.floor((expectedRev - 1) / 2));
               let lifecycleImage = priorRevisionPhoto?.image;
+              // ADR-145: a photo its sender sent with no words just before this change goes with it.
+              const scope = senderScopeOf(update);
+              const heldPhoto = !photoInput && !lifecycleImage && !admittedAlbum && scope && !openRequest.question
+                ? (await withRlsContext(db, system, (trx) => waitingPhotos(trx, TENANT, scope))).at(-1) ?? null : null;
+              if (heldPhoto) {
+                const stored = await withRlsContext(db, system, async (trx) => {
+                  const claim = await claimPhoto(trx, TENANT, heldPhoto.updateId,
+                    { byUpdateId: update.update_id, how: 'revision', requestId: openRequest.request_id });
+                  if (claim.byUpdateId !== update.update_id) return null;
+                  return recordRevisionPhotoDecision(trx, TENANT, update.update_id, { requestId: openRequest.request_id, chatId,
+                    payloadHash, image: heldPhoto.image, heldPhotoUpdateId: heldPhoto.updateId });
+                });
+                if (stored) {
+                  if (stored.payloadHash !== payloadHash || stored.requestId !== openRequest.request_id) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+                  lifecycleImage = stored.image;
+                  beside = { text: say(MEDIA_MESSAGES.photoUsedWithWords, requesterLang(words)), parseMode: 'HTML' };
+                }
+              }
               if (photoInput && !lifecycleImage) {
                 if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
                 if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
@@ -653,7 +849,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
                 if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
                 if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
-                if (photo.kind === 'unsupported') return await holdMedia();
+                if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
                 const stored = await withRlsContext(db, system,
                   (trx) => recordRevisionPhotoDecision(trx, TENANT, update.update_id,
                     { requestId, chatId, payloadHash, image: photo.ref }));
@@ -696,7 +892,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             }
 
             // --- ADR-144: a plain text message is read in the context of the chat's requests, once ---
-            if (msg && !photoInput && !admittedAlbum && !priorRevisionPhoto) {
+            if (msg && !photoInput && !admittedAlbum && (!priorRevisionPhoto || priorRevisionPhoto.heldPhotoUpdateId)) {
               if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
               const message = msg as Record<string, any>;
               const lang = langOf(text);
@@ -779,7 +975,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               }
               switch (plan.kind) {
                 case 'open':
-                  return await openBrief(plan.text, plan.instructionOnly);
+                  // A brief held for photos was read before it was held: an edit since then gives its words.
+                  return await openBrief(editedWords !== null && !plan.resolves ? editedWords.trim() : plan.text, plan.instructionOnly);
                 case 'revise': {
                   const target = byId(plan.requestId);
                   if (!target || !waitsForRequester(target)) return handled(409, { code: 'STALE_REVISION', chatId });
@@ -896,7 +1093,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
             }
             if (openRequest) return await reviseRequest(openRequest, directive);
-            if (photoInput || admittedAlbum) return await holdMedia();
+            // A photo whose words are not a brief, with no design waiting for it: kept for the words, and
+            // asked about (ADR-145). Album photos that answer no current design are explained.
+            if (photoInput) {
+              const kept = await mediaRoute.holdPhotoUpdate(update, chatId, payloadHash, albumSettleMs(), { fileId: photoInput.fileId });
+              if (kept) return handled(kept.status, kept.extra);
+            }
+            if (photoInput || admittedAlbum) return await holdMedia(admittedAlbum ? 'photosUnplaced' : 'photoUnreadable');
             // No waiting request and not a new brief (a question, a greeting, a rule): the chat's
             // answer below.
           } catch (err) {
@@ -917,6 +1120,20 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
 
     // --- anything the lifecycle path did not take: a greeting, a question, a rule, a command ---
     return await answerChat(update);
+  };
+
+  internal('/telegram/intake', async (c) => {
+    const response = await intakeHandler(c);
+    // N5 (ADR-145): a sender outside the intake list is answered once per chat per day, in words, and
+    // nothing else of theirs is kept; every other refusal of theirs that day says nothing (`quiet`).
+    if (response.status !== 200 || !db) return response;
+    const answer = await response.clone().json().catch(() => null) as Record<string, unknown> | null;
+    if (answer?.intakeStatus !== 403 || answer.code !== 'SENDER_NOT_ALLOWED' || answer.lifecycleAction) return response;
+    const body = await readBody(c);
+    const update = body?.update;
+    if (!isUpdate(update)) return response;
+    const said = await mediaRoute.notAllowed(update as UpdateLike & Record<string, unknown>, chatOf(update));
+    return c.json({ v: 1, kind: 'handled', intakeStatus: said.status, ...said.extra }, 200);
   });
 
   // ADR-143: the settles the worker's poller sends again: albums saved before settles existed (the
@@ -924,7 +1141,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   internal('/telegram/settle-sweep', async (c) => {
     if (!db) return problem(c, 503, 'Database Unavailable', 'The sweep reads the saved albums');
     const due = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-      (trx) => overdueSettles(trx, DEFAULT_TENANT_ID));
+      async (trx) => [...await overdueSettles(trx, DEFAULT_TENANT_ID),
+        // ADR-145: kept photos never settled, and messages set behind a held brief never read.
+        ...await overduePhotos(trx, DEFAULT_TENANT_ID), ...await overdueDeferrals(trx, DEFAULT_TENANT_ID)]);
     return c.json({ v: 1, due }, 200);
   });
 
@@ -950,7 +1169,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         const chat = parkedUpdateChat(update);
         if (body?.notifySender !== false && chat && ctx.telegramBridge) {
           // Best effort, as before: the dead letter and the office alert are what must not be lost.
-          await ctx.telegramBridge.dispatchOutboundMessage(chat, { text: PARKED_UPDATE_NOTICE })
+          const carrier = (update.message ?? update.edited_message) as Record<string, unknown> | undefined;
+          await ctx.telegramBridge.dispatchOutboundMessage(chat, { text: say(INBOX_MESSAGES.couldNotRead, requesterLang(wordsOf(carrier ?? null))) })
             .then((sent) => { if (!sent.success) throw new Error(sent.error || 'send failed'); })
             .catch((err: unknown) => log.warn(`[core:internal] could not tell the sender that update ${update.update_id} was parked:`, err instanceof Error ? err.message : err));
         }

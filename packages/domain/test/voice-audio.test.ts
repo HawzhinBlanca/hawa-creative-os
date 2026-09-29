@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { inspectVoiceAudio, VoiceAudioError } from '../src/voice-audio.js';
-import { telegramVoiceSource } from '../src/telegram-source-review.js';
+import { naturalDesignSize, telegramVoiceSource } from '../src/telegram-source-review.js';
 const audio = await readFile(new URL('../../testkit/fixtures/voice/silence-one-second.ogg', import.meta.url));
 function pages(bytes: Buffer) {
   const found: number[] = []; let offset = 0;
@@ -61,6 +61,23 @@ describe('bounded original Opus timing', () => {
       voice: { file_id: 'voice', mime_type: 'audio/ogg', duration: 999999 } } };
     expect(telegramVoiceSource(base)?.kind).toBe('voice');
     expect(telegramVoiceSource({ ...base, message: { ...base.message, audio: base.message.voice } })).toBeNull();
-    expect(telegramVoiceSource({ ...base, message: { ...base.message, voice: { file_id: 'voice', mime_type: 'audio/mpeg' } } })).toBeNull();
+    // ADR-145: a phone's MP3, M4A or WAV is a recording too (Core converts it to Ogg Opus by its bytes);
+    // a type that is certainly not a recording is still refused, and so is a recording sent with a photo.
+    expect(telegramVoiceSource({ ...base, message: { ...base.message, voice: { file_id: 'voice', mime_type: 'audio/mpeg' } } })?.kind).toBe('voice');
+    expect(telegramVoiceSource({ ...base, message: { ...base.message, voice: { file_id: 'voice', mime_type: 'image/png' } } })).toBeNull();
+    expect(telegramVoiceSource({ ...base, message: { ...base.message, photo: [{ file_id: 'p' }] } })).toBeNull();
+    const asFile = { update_id: 1, message: { message_id: 2, from: { id: 3 }, chat: { id: 4, type: 'private' },
+      document: { file_id: 'memo', mime_type: 'audio/x-m4a', file_name: 'memo.m4a' } } };
+    expect(telegramVoiceSource(asFile)?.kind).toBe('voice');
+    expect(telegramVoiceSource({ ...asFile, message: { ...asFile.message, document: { file_id: 'doc', mime_type: 'application/zip' } } })).toBeNull();
+  });
+
+  it('reads a size said in plain words, and fits it to the canvas bounds', () => {
+    expect(naturalDesignSize('Instagram story please')).toEqual({ width: 1080, height: 1920 });
+    expect(naturalDesignSize('A4 poster')).toEqual({ width: 1697, height: 2400 });
+    expect(naturalDesignSize('size 1080 x 1350')).toEqual({ width: 1080, height: 1350 });
+    expect(naturalDesignSize('square post')).toEqual({ width: 1080, height: 1080 });
+    expect(naturalDesignSize('20000x100')).toBeUndefined();
+    expect(naturalDesignSize('Make it look nice')).toBeUndefined();
   });
 });

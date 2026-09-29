@@ -1,6 +1,8 @@
 /** Core-owned Telegram photo admission. Restate receives only the content reference. */
 import { sniffBlobMediaType, type BlobRef } from '@hawa/contracts';
 import type { BlobStore } from '@hawa/db';
+import { heifAsJpeg, isHeif, MediaConversionError } from './media-conversion.js';
+import { log } from '../logging.js';
 
 const MAX_TELEGRAM_PHOTO_BYTES = 20 * 1024 * 1024;
 
@@ -24,10 +26,28 @@ export function lifecycleStillImageFile(message: unknown, allowAlbum = false): s
   if (file.file_size !== undefined && (!Number.isSafeInteger(file.file_size) ||
       Number(file.file_size) < 1 || Number(file.file_size) > MAX_TELEGRAM_PHOTO_BYTES)) return null;
   if (hasDocument && file.mime_type !== undefined &&
-      (typeof file.mime_type !== 'string' || !['image/png', 'image/jpeg', 'image/webp', 'application/octet-stream']
+      (typeof file.mime_type !== 'string' || !['image/png', 'image/jpeg', 'image/webp', 'application/octet-stream',
+        // An iPhone photo sent "as a file" (ADR-145): converted to JPEG once its bytes say it is HEIF.
+        'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence']
         .includes(file.mime_type.trim().toLowerCase()))) return null;
   // A document thumbnail is a different, usually smaller file and is never selected here.
   return file.file_id;
+}
+
+/**
+ * A still photo with no words and no reply, outside an album (ADR-145): kept until its sender's words
+ * arrive, or joined to the request those words just opened. Null for anything else.
+ */
+export function heldPhotoCandidate(update: unknown): { fileId: string; messageId: string; senderId: string; topic: string } | null {
+  if (!update || typeof update !== 'object' || Array.isArray(update)) return null;
+  const msg = (update as Record<string, unknown>).message as Record<string, unknown> | undefined;
+  if (!msg || typeof msg !== 'object' || msg.reply_to_message || msg.media_group_id !== undefined) return null;
+  if (typeof msg.caption === 'string' && msg.caption.trim()) return null;
+  const fileId = lifecycleStillImageFile(msg);
+  const from = msg.from as { id?: unknown; is_bot?: unknown } | undefined;
+  if (!fileId || !Number.isSafeInteger(from?.id) || from?.is_bot === true || !Number.isSafeInteger(msg.message_id)) return null;
+  return { fileId, messageId: String(msg.message_id), senderId: String(from!.id),
+    topic: msg.message_thread_id === undefined ? '' : String(msg.message_thread_id) };
 }
 
 /** A captionless image needs a reply identity; Core verifies its recorded request/revision. */
@@ -69,6 +89,17 @@ export async function retainLifecyclePhoto(
   }
   if (!bytes?.length) return { kind: 'download_unavailable' };
   if (bytes.length > MAX_TELEGRAM_PHOTO_BYTES) return { kind: 'unsupported' };
+  if (isHeif(bytes)) {
+    // The bytes, not the declared type, say HEIF: the design path takes the JPEG it becomes (ADR-145).
+    try {
+      bytes = await heifAsJpeg(bytes);
+    } catch (error) {
+      if (error instanceof MediaConversionError && error.code === 'CONVERTER_UNAVAILABLE') {
+        log.error('[core:photo] a HEIC photo arrived but heif-convert is not installed; it was refused as unreadable');
+      }
+      return { kind: 'unsupported' };
+    }
+  }
   const mediaType = sniffBlobMediaType(bytes);
   if (mediaType !== 'image/png' && mediaType !== 'image/jpeg' && mediaType !== 'image/webp') {
     return { kind: 'unsupported' };

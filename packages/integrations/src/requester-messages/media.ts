@@ -57,6 +57,11 @@ export const MEDIA_MESSAGES = {
     en: "I saw your edit to {title}. I've passed the new wording to the office so it's used.",
     ckb: 'دەستکارییەکەتم لە {title} بینی. دەقە نوێیەکەم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاری بهێنن.',
   },
+  /** An edit the bot could not place (a fallback). */
+  editSeen: {
+    en: 'I saw your edit. If anything should change, just tell me here.',
+    ckb: 'دەستکارییەکەتم بینی. ئەگەر شتێک پێویستی بە گۆڕین هەیە، تەنها لێرە پێم بڵێ.',
+  },
   /** An edit to a message the bot cannot link to anything current. */
   editForwarded: {
     en: "I saw your edit and passed it to the office; they'll follow up here.",

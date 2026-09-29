@@ -10,11 +10,12 @@
  */
 import crypto from 'node:crypto';
 import { sql, withRlsContext, type Kysely, type Database } from '@hawa/db';
+import { INBOX_MESSAGES } from '@hawa/integrations';
 
 export interface PolledUpdate { update_id: number }
 
-export const PARKED_UPDATE_NOTICE =
-  'We received your message but could not process it automatically. The office has been alerted and will follow up with you.';
+/** What the sender of a parked update hears, in English (the park route answers in their language: ADR-145). */
+export const PARKED_UPDATE_NOTICE = INBOX_MESSAGES.couldNotRead.en;
 
 /** Which kind of update this is (`message`, `callback_query`, ...), without anything it says. */
 export function telegramUpdateKind(update: PolledUpdate): string {

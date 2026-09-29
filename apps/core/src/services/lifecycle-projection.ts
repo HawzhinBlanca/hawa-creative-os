@@ -709,19 +709,27 @@ export async function projectLifecycleRequesterRevisionWithIntake(
   const sourceImage = sourceMessage?.photo ?? sourceMessage?.document;
   const photoInput = lifecyclePhotoInput(input.sourceUpdate);
   const sourceConfirmation = sourceCopyConfirmation(input.sourceUpdate);
-  if (Boolean(sourceConfirmation) !== Boolean(input.lifecycleSource) ||
-      (input.lifecycleSource && (input.lifecycleImage || input.lifecycleAlbum || !sourceConfirmation ||
-        sourceConfirmation.copy !== rawText || sourceConfirmation.copy.trim() !== directive)))
+  // ADR-145: the words may be confirmed naturally ("yes", or the corrected text), with no command in the
+  // update; the stored confirmation (checked with the source below) then carries the exact copy.
+  const naturalConfirmation = Boolean(input.lifecycleSource) && !sourceConfirmation;
+  if ((Boolean(sourceConfirmation) !== Boolean(input.lifecycleSource) && !naturalConfirmation) ||
+      (input.lifecycleSource && (input.lifecycleImage || input.lifecycleAlbum || rawText.trim() !== directive ||
+        (sourceConfirmation && sourceConfirmation.copy !== rawText))))
     throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The source confirmation does not match this exact copy');
   if (input.lifecycleAlbum && (input.lifecycleImage || sourceImage ||
       sourceMessage?.text !== directive || input.lifecycleAlbum.updateId !== source?.update_id)) {
     throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The album source does not match this directive');
   }
-  if (Boolean(sourceImage) !== Boolean(input.lifecycleImage)) {
+  // ADR-145: words sent just after a photo with no words may carry that photo (kept for them). Such a
+  // photo is admitted only by its stored decision and its claim, checked below; any other image must
+  // come in the update itself.
+  const heldImage = !sourceImage && Boolean(input.lifecycleImage) && !input.lifecycleSource && !input.lifecycleAlbum &&
+    typeof sourceMessage?.text === 'string';
+  if (Boolean(sourceImage) !== Boolean(input.lifecycleImage) && !heldImage) {
     throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'A requester photo requires its stored image decision');
   }
   if (input.lifecycleImage && (!parseBlobRef(input.lifecycleImage) ||
-      !photoInput || photoInput.directive !== directive.trim() ||
+      (!heldImage && (!photoInput || photoInput.directive !== directive.trim())) ||
       !Number.isSafeInteger(source?.update_id) || Number(source?.update_id) <= 0)) {
     throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The requester image does not match an admitted Telegram photo');
   }
@@ -789,8 +797,19 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       const decision = await readRevisionPhotoDecision(trx, tenantId, Number(source!.update_id));
       if (!decision || decision.requestId !== requestId || decision.chatId !== sourceChannelId ||
           decision.payloadHash !== input.sourceUpdateHash ||
-          canonical(decision.image) !== canonical(input.lifecycleImage)) {
+          canonical(decision.image) !== canonical(input.lifecycleImage) || Boolean(decision.heldPhotoUpdateId) !== heldImage) {
         throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The image is not bound to this requester revision');
+      }
+      if (decision.heldPhotoUpdateId) {
+        // The kept photo is this image, from this chat, and was claimed by these words for this request.
+        const held = (await sql<{ ok: boolean }>`SELECT EXISTS (SELECT 1 FROM hawa.inbox_events h
+            JOIN hawa.inbox_events u ON u.tenant_id = h.tenant_id AND u.source_account_id = 'lifecycle_photo_used'
+              AND u.source_event_id = h.source_event_id
+            WHERE h.tenant_id = ${tenantId}::uuid AND h.source_account_id = 'lifecycle_photo_held'
+              AND h.source_event_id = ${String(decision.heldPhotoUpdateId)} AND h.payload->>'chatId' = ${sourceChannelId}
+              AND h.payload->'image'->>'sha256' = ${input.lifecycleImage.sha256}
+              AND u.payload->>'byUpdateId' = ${String(source!.update_id)} AND u.payload->>'requestId' = ${requestId}) AS ok`.execute(trx)).rows[0];
+        if (!held?.ok) throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The kept photo is not claimed by this requester revision');
       }
       const blob = (await sql<{ size: string; media_type: string }>`SELECT size, media_type
         FROM hawa.blobs WHERE sha256 = ${input.lifecycleImage.sha256}`.execute(trx)).rows[0];

@@ -33,16 +33,31 @@ export function telegramPdfSource(update: unknown): TelegramSourceEnvelope | nul
   return { ...scope, fileId: file.file_id, kind: 'pdf', caption: typeof msg.caption === 'string' ? msg.caption : '' };
 }
 
+/**
+ * Recording types a requester's phone sends (ADR-145): a voice note is Ogg Opus; a recording sent as
+ * audio or as a file is often M4A, MP3, WAV, AAC or WebM. Core reads the container from the bytes and
+ * turns the others into Ogg Opus; the declared type only rules out what is certainly not a recording.
+ */
+export const ADMITTED_AUDIO_TYPES = ['audio/ogg', 'audio/opus', 'application/ogg', 'audio/mpeg', 'audio/mp3', 'audio/mpeg3',
+  'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac', 'audio/x-aac', 'audio/aacp', 'audio/wav', 'audio/x-wav', 'audio/wave',
+  'audio/vnd.wave', 'audio/webm', 'audio/3gpp', 'video/ogg'];
+
 export function telegramVoiceSource(update: unknown): TelegramSourceEnvelope | null {
   const scope = sourceMessageScope(update), msg = record(record(update)?.message);
-  if (!scope || !msg || Boolean(msg.voice) === Boolean(msg.audio) ||
-      ['photo','document','video','animation','live_photo','video_note','media_group_id','text'].some(key => msg[key] !== undefined) ||
+  if (!scope || !msg) return null;
+  // A recording sent "as a file" arrives as a document with an audio type.
+  const doc = record(msg.document);
+  const docMime = typeof doc?.mime_type === 'string' ? doc.mime_type.toLowerCase().split(';')[0].trim() : '';
+  const audioDocument = Boolean(doc) && docMime.startsWith('audio/');
+  if (Number(Boolean(msg.voice)) + Number(Boolean(msg.audio)) + Number(audioDocument) !== 1 ||
+      ['photo', ...(audioDocument ? [] : ['document']), 'video','animation','live_photo','video_note','media_group_id','text']
+        .some(key => msg[key] !== undefined) ||
       (msg.caption !== undefined && typeof msg.caption !== 'string')) return null;
-  const file = record(msg.voice ?? msg.audio);
+  const file = record(msg.voice ?? msg.audio ?? msg.document);
   if (!file || typeof file.file_id !== 'string' || !file.file_id.trim() || file.file_id.length > 512 ||
       (file.file_size !== undefined && (!positive(file.file_size) || file.file_size > 20 * 1024 * 1024))) return null;
   const mime = typeof file.mime_type === 'string' ? file.mime_type.toLowerCase().split(';')[0].trim() : '';
-  if (mime && !['audio/ogg', 'audio/opus', 'application/ogg'].includes(mime)) return null;
+  if (mime && !ADMITTED_AUDIO_TYPES.includes(mime)) return null;
   return { ...scope, fileId: file.file_id, kind: 'voice', caption: typeof msg.caption === 'string' ? msg.caption : '' };
 }
 
@@ -65,6 +80,30 @@ export function sourceClientSelection(caption: string): { client: string | null;
     invalidClient: matches.length > 1 || (matches.length === 1 && (!client || client.length > 200)),
     instructions: lines.filter(line => !/^\s*client\s*:/i.test(line)).join('\n').replace(/^\/new(?:@\w+)?(?:\s|$)/i, '').trim(),
     explicitNew: /^\/new(?:@\w+)?(?:\s|$)/i.test(caption) };
+}
+
+/**
+ * A size said naturally in a caption (ADR-145): "A4", "A5", "Instagram story", "square post",
+ * "portrait post", "landscape", "1080x1350" anywhere in the words. A size larger than the lifecycle's
+ * 640–2400 px canvas is scaled down to fit, keeping its shape. Undefined when no size is said.
+ */
+export function naturalDesignSize(caption: string): { width: number; height: number } | undefined {
+  const text = caption.toLowerCase();
+  const fit = (w: number, h: number) => {
+    const scale = Math.min(1, 2400 / Math.max(w, h));
+    const width = Math.round(w * scale), height = Math.round(h * scale);
+    return width >= 640 && height >= 640 ? { width, height } : undefined;
+  };
+  const explicit = /(?<![\d.])(\d{3,5})\s*[x×*]\s*(\d{3,5})(?![\d.])/.exec(text);
+  if (explicit) return fit(Number(explicit[1]), Number(explicit[2]));
+  if (/\ba4\b/.test(text)) return fit(2480, 3508);
+  if (/\ba5\b/.test(text)) return fit(1748, 2480);
+  if (/\ba3\b/.test(text)) return fit(3508, 4961);
+  if (/\b(?:instagram\s+|insta\s+|ig\s+)?(?:story|stories|reel|status)\b|ستۆری/u.test(text)) return { width: 1080, height: 1920 };
+  if (/\bsquare\b|چوارگۆشە/u.test(text)) return { width: 1080, height: 1080 };
+  if (/\bportrait\b|\binstagram\s+post\b|\bpost\b/.test(text)) return { width: 1080, height: 1350 };
+  if (/\blandscape\b|\bbanner\b/.test(text)) return { width: 1920, height: 1080 };
+  return undefined;
 }
 
 /** Explicit source format uses the lifecycle's supported 640–2400 px canvas bounds. */

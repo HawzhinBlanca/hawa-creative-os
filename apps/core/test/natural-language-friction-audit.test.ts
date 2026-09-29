@@ -17,15 +17,10 @@ import { classifyWithHeuristics } from '../src/services/telegram-classifier.js';
  * product did not behave that way yet. Each one names its finding (F-number in the report). When a
  * fix lands, the matching `it.fails` starts failing and is turned into a plain `it` in the fix's commit.
  * ADR-144 (requester intent routing) turned F1, F2, F3, F4, F7, F8, F9, F10, F12 and F13 into plain
- * tests; F5, F6 and F11 (media admission and edits) are still expected to fail.
+ * tests; ADR-145 (natural media and wording) turned F5, F6 and F11 into plain tests. None is expected to fail.
  * Since ADR-135 stage 2 Core sends nothing to a requester: what the bot says is the answer ChatInbox
  * sends (`chatAnswer`), so the tests that read the bot's words read it there as well as in Telegram.
  */
-/**
- * `bug` is `it.fails`. Run with AUDIT_SHOW_FAILURES=1 to make every audit test a plain `it` and see
- * the assertion each one fails on today (a check that it fails for the stated reason, not a setup error).
- */
-const bug = process.env.AUDIT_SHOW_FAILURES === '1' ? it : it.fails;
 
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const clientId = 'c1000000-0000-4000-8000-000000000002';
@@ -193,7 +188,7 @@ describe('F4: a correction while the design is being made', () => {
 });
 
 describe('F5: a split brief (photo first, words second) loses the photo', () => {
-  bug('a captionless photo right after a brief is kept with it, not parked for an operator', async () => {
+  it('a captionless photo right after a brief is kept with it, not parked for an operator', async () => {
     fakeTelegram();
     const chat = chatId();
     const a = app({ telegramBridge: { downloadFile: vi.fn(async () => null), dispatchOutboundMessage: vi.fn(async () => ({ success: true })) } });
@@ -206,7 +201,7 @@ describe('F5: a split brief (photo first, words second) loses the photo', () => 
 });
 
 describe('F6: voice and PDF briefs demand an exact "Client:" line', () => {
-  bug('a voice note (Telegram gives it no caption) in a fresh chat is not refused for a missing "Client:" line', async () => {
+  it('a voice note (Telegram gives it no caption) in a fresh chat is not refused for a missing "Client:" line', async () => {
     fakeTelegram();
     const chat = chatId();
     const answer = await intake(app(), message(chat, { voice: { file_id: 'voice-brief', duration: 12, mime_type: 'audio/ogg' } }));
@@ -214,7 +209,7 @@ describe('F6: voice and PDF briefs demand an exact "Client:" line', () => {
     expect(String(answer.body.sourceMessage ?? '')).not.toMatch(/Client:/);
   });
 
-  bug('a PDF with a natural caption is not refused for a missing "Client:" line', async () => {
+  it('a PDF with a natural caption is not refused for a missing "Client:" line', async () => {
     fakeTelegram();
     const chat = chatId();
     const answer = await intake(app(), message(chat, {
@@ -223,7 +218,7 @@ describe('F6: voice and PDF briefs demand an exact "Client:" line', () => {
     expect(String(answer.body.sourceMessage ?? '')).not.toMatch(/Client:/);
   });
 
-  bug('a voice note sent while a design waits for changes is not told to use /new', async () => {
+  it('a voice note sent while a design waits for changes is not told to use /new', async () => {
     fakeTelegram();
     const chat = chatId();
     await seedRequest(chat, 'manual', 3);
@@ -331,7 +326,7 @@ describe('F13: approvals, cancellations and deadlines written as plain messages 
 });
 
 describe('F11: edited messages', () => {
-  bug('editing the caption of a photo brief is not parked for an operator', async () => {
+  it('editing the caption of a photo brief is not parked for an operator', async () => {
     fakeTelegram();
     const chat = chatId();
     const edit = message(chat, {});

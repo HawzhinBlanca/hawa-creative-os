@@ -44,6 +44,11 @@ export interface RevisionPhotoDecision {
   chatId: string;
   payloadHash: string;
   image: BlobRef;
+  /**
+   * ADR-145: the photo came in its own update before these words (kept for them), not with them. The
+   * photo's claim (`lifecycle_photo_used`, by this update, for this request) is what admits it.
+   */
+  heldPhotoUpdateId?: number;
 }
 
 /** A downloaded revision photo survives a crash before its child task is projected. */
@@ -60,7 +65,9 @@ export async function readRevisionPhotoDecision(trx: Kysely<Database>, tenantId:
   if (typeof requestId !== 'string' || typeof chatId !== 'string' || !image ||
       !['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType) ||
       image.size > 20 * 1024 * 1024) throw new Error('Invalid stored revision-photo decision');
-  return { requestId, chatId, payloadHash: row.payload_hash, image };
+  const held = row.payload.heldPhotoUpdateId;
+  if (held !== undefined && (!Number.isSafeInteger(held) || Number(held) <= 0)) throw new Error('Invalid stored revision-photo decision');
+  return { requestId, chatId, payloadHash: row.payload_hash, image, ...(held !== undefined ? { heldPhotoUpdateId: Number(held) } : {}) };
 }
 
 export async function recordRevisionPhotoDecision(trx: Kysely<Database>, tenantId: string,
@@ -70,7 +77,8 @@ export async function recordRevisionPhotoDecision(trx: Kysely<Database>, tenantI
     VALUES (${tenantId}::uuid, 'lifecycle_chat_revision_photo', ${String(updateId)},
       'lifecycle_revision_photo_decision',
       ${JSON.stringify({ requestId: decision.requestId, chatId: decision.chatId,
-        image: decision.image })}::jsonb, ${decision.payloadHash}, true)
+        image: decision.image, ...(decision.heldPhotoUpdateId ? { heldPhotoUpdateId: decision.heldPhotoUpdateId } : {}) })}::jsonb,
+      ${decision.payloadHash}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
   const stored = await readRevisionPhotoDecision(trx, tenantId, updateId);
   if (!stored) throw new Error('Revision-photo decision was not stored');

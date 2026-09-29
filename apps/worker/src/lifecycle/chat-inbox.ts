@@ -28,6 +28,7 @@ import { withInvocationLogContext, log } from '../logging.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
 import type { OpenAutomaticEvent, OpenManualEvent, RequesterDecisionEvent } from './request-lifecycle.js';
 import { TelegramSenderApi } from './telegram-sender.js';
+import { ACCESS_MESSAGES, INBOX_MESSAGES, requesterLang, say, type RequesterLang } from '@hawa/integrations';
 
 /** Fields are only ever added, and only as optional (PHASE2_DESIGN.md section 4). */
 export interface HandleUpdateInput {
@@ -54,8 +55,15 @@ export type IntakeAnswer =
         'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message' |
         'late-change' | 'chat-answer' | 'settle-later';
       albumMessage?: string; albumNoticeKey?: string;
-      /** settle-later (ADR-143): settle this update after `delayMs` (a saved album photo, or a held brief). */
-      settle?: { kind: 'album' | 'brief'; delayMs: number };
+      /**
+       * settle-later (ADR-143): settle this update after `delayMs` (a saved album photo, or a held brief;
+       * since ADR-145 also a photo kept for its words, or a message set behind a held brief).
+       */
+      settle?: { kind: 'album' | 'brief' | 'photo'; delayMs: number };
+      /** ADR-145: words Core says beside its answer, sent once per update. */
+      notice?: { text: string; parseMode?: 'HTML' };
+      /** ADR-145 (N5): a sender outside the intake list was already answered in this chat today. */
+      quiet?: boolean;
       /**
        * chat-answer: Core's answer to a greeting, question, rule or command (ADR-135 stage 2c), and
        * since ADR-144 to thanks, a status question, a note passed to the office or a question back.
@@ -141,11 +149,21 @@ export interface HandleUpdateResult {
 
 export const INTAKE_ATTEMPTS = 5;
 
-/** Whether the requester wrote in Sorani (Arabic script): the notices below answer in kind. */
-function soraniMessage(update: TelegramUpdateLike): boolean {
-  const message = (update as { message?: { text?: unknown; caption?: unknown } }).message;
+/**
+ * The language the requester wrote in (ADR-145): Sorani when their words are mostly in Arabic script,
+ * English when mostly Latin; the notices below answer in kind (requester-messages catalogue).
+ */
+function languageOf(update: TelegramUpdateLike): RequesterLang {
+  const u = update as { message?: { text?: unknown; caption?: unknown }; edited_message?: { text?: unknown; caption?: unknown } };
+  const message = u.message ?? u.edited_message;
   const words = typeof message?.text === 'string' ? message.text : typeof message?.caption === 'string' ? message.caption : '';
-  return /[\u0600-\u06FF]/.test(words);
+  return requesterLang(words);
+}
+/** The chat an update came from, for a notice Core gave no chat for (a bare refusal). */
+function chatOfUpdate(update: TelegramUpdateLike): string | null {
+  const u = update as { message?: { chat?: { id?: unknown } }; edited_message?: { chat?: { id?: unknown } } };
+  const id = (u.message ?? u.edited_message)?.chat?.id;
+  return Number.isSafeInteger(id) && Number(id) !== 0 ? String(id) : null;
 }
 /** Waits between retryable answers: 2, 4, 8 and 16 s, the backoff Core's poller used. */
 const retryDelayMs = (k: number) => 2000 * 2 ** k;
@@ -310,8 +328,7 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
         ctx.sendNotice({ v: 1, key: `chatinbox:answer-accepted:${update.update_id}`,
           chatId: done.chatId, kind: 'text', class: 'critical',
           // Sorani (native review pending, ADR-144): "Thanks, I'll use that and carry on with the same design."
-          text: soraniMessage(update) ? 'سوپاس، ئەوە بەکاردەهێنم و هەمان دیزاین تەواو دەکەم.'
-            : 'Your answer is saved. I am continuing the same design with that detail.',
+          text: say(INBOX_MESSAGES.answerTaken, languageOf(update)),
         });
       }
     }
@@ -322,11 +339,7 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
         // ADR-144: no reply target is demanded. Core no longer answers a text message this way (it
         // asks which design, in words); a photo with two designs waiting, or a button under an old
         // draft, still does.
-        text: done.code === 'STALE_REQUEST_REPLY'
-          ? (soraniMessage(update) ? 'ئەو دیزاینە ئێستا لای ئۆفیسەکەیە. ئەگەر شتێک پێویستی بە گۆڕین هەیە، لێرە پێم بڵێ.'
-            : 'That design is now with the office. If anything should change, just tell me here.')
-          : (soraniMessage(update) ? 'زیاتر لە یەک دیزاین چاوەڕێی گۆڕانکارییەکانی تۆن. ئەمە بۆ کامیانە؟ ناوەکەی بنووسە.'
-            : 'More than one of your designs is waiting for changes. Which one is this for? Just tell me its name.'),
+        text: say(done.code === 'STALE_REQUEST_REPLY' ? INBOX_MESSAGES.staleButton : INBOX_MESSAGES.whichWaitingDesign, languageOf(update)),
       });
     }
     if (done.lifecycleAction === 'late-change') {
@@ -341,17 +354,14 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
       }
       // ADR-144: Core words the answer (in the requester's language) when it has the request's name;
       // otherwise these, which say what happened without a refusal.
-      const sorani = soraniMessage(update);
+      const lang = languageOf(update);
       // Without an office chat nobody was alerted: the words are kept for the office (the Desk shows
       // them before Deliver), and the requester is told exactly that.
       const told = Boolean(done.officeAlert);
-      const fallback = !told
-        ? (sorani ? 'تێگەیشتم. پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت؛ پێش ناردنی دیزاینەکە دەیبینن.' : "Got it. I've kept your message for the office; they'll see it before the design is sent.")
-        : done.requestStage === 'delivered'
-          ? (sorani ? 'ئەم دیزاینە پێشتر گەیەندرابوو؛ پەیامەکەتم گەیاندە ئۆفیسەکە.' : "This design was already delivered; I've passed your message to the office.")
-          : done.requestStage === 'delivering'
-            ? (sorani ? 'ئەم دیزاینە ئێستا بۆت دەنێردرێت؛ پەیامەکەتم گەیاندە ئۆفیسەکە.' : "This design is being sent to you now; I've passed your message to the office.")
-            : (sorani ? 'تێگەیشتم. ئۆفیسەکە ئێستا سەیری ئەم دیزاینە دەکات، و پەیامەکەتم پێیان گەیاند.' : "Got it. The office is checking this design now, and I've passed your message to them.");
+      const fallback = say(!told ? INBOX_MESSAGES.lateChangeKept
+        : done.requestStage === 'delivered' ? INBOX_MESSAGES.lateChangeDelivered
+          : done.requestStage === 'delivering' ? INBOX_MESSAGES.lateChangeDelivering
+            : INBOX_MESSAGES.lateChangeReview, lang);
       ctx.sendNotice({ v: 1, key: `chatinbox:late-change:${update.update_id}`,
         chatId: done.chatId, kind: 'text', class: 'critical', text: done.chatAnswer?.text || fallback,
         ...(done.chatAnswer?.text && done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}),
@@ -361,21 +371,38 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
       ctx.sendNotice({ v: 1, key: `chatinbox:new-brief-required:${update.update_id}`,
         chatId: done.chatId, kind: 'text', class: 'critical',
         // ADR-144: no command is asked for; the next message with the brief opens the request.
-        text: soraniMessage(update) ? 'چیت دەوێت دیزاین بکرێت؟ بە وشەی خۆت پێم بڵێ، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت.'
-          : 'What would you like designed? Tell me in your own words, with the text that should go on it.',
+        text: say(INBOX_MESSAGES.whatToDesign, languageOf(update)),
       });
     }
     if (done.lifecycleAction === 'revision-blocked' && done.chatId &&
         (done.code === 'DAILY_CAP_REACHED' || done.code === 'PARENT_BRIEF_MISSING' ||
           done.code === 'QUESTION_MISSING')) {
+      // ADR-145: the requester's words go to the office, which makes the change; the requester is told
+      // so, and is never asked to send it again. Without an office chat to tell, they are told plainly.
+      if (done.officeAlert) {
+        ctx.sendNotice({ v: 1, key: `notify.office:revision-blocked:${update.update_id}`,
+          chatId: done.officeAlert.chatId, kind: 'text', class: 'critical', text: done.officeAlert.text });
+      }
+      const lang = languageOf(update);
       ctx.sendNotice({ v: 1, key: `chatinbox:revision-blocked:${update.update_id}`,
         chatId: done.chatId, kind: 'text', class: 'critical',
-        text: done.code === 'DAILY_CAP_REACHED'
-          ? 'The automatic design limit has been reached. No revision started. Please send this change again after the daily limit resets, or ask the office for help.'
-          : done.code === 'QUESTION_MISSING'
-            ? 'I could not safely recover the question for this design, so no answer was applied. Please ask the office to check this request.'
-            : 'I could not safely find the original design brief, so no revision started. Please ask the office to check this request.',
+        text: say(!done.officeAlert ? INBOX_MESSAGES.changeNotStarted
+          : done.code === 'DAILY_CAP_REACHED' ? INBOX_MESSAGES.changeToOffice
+            : done.code === 'QUESTION_MISSING' ? INBOX_MESSAGES.answerToOffice : INBOX_MESSAGES.changeToOfficeToFinish, lang),
       });
+    }
+    // N5 (ADR-145): a sender outside the intake list hears one polite line. Core words it (once per chat
+    // per day) and says `quiet` for the rest of the day; a Core that gave no words at all gets these.
+    if (done.intakeStatus === 403 && !done.chatAnswer && !done.quiet) {
+      const chat = done.chatId ?? chatOfUpdate(update);
+      if (chat) ctx.sendNotice({ v: 1, key: `chatinbox:not-allowed:${update.update_id}`, chatId: chat, kind: 'text',
+        class: 'critical', text: say(ACCESS_MESSAGES.notAllowed, languageOf(update)) });
+    }
+    // ADR-145: words Core said beside its answer (the photo sent before was used; a video's words were).
+    if (done.notice) {
+      const chat = done.chatId ?? chatOfUpdate(update);
+      if (chat) ctx.sendNotice({ v: 1, key: `chatinbox:notice:${update.update_id}`, chatId: chat, kind: 'text',
+        class: 'critical', text: done.notice.text, ...(done.notice.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) });
     }
     if (!settling) {
       ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled',

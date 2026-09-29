@@ -79,11 +79,20 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
         sourceMessage?: string; sourceNoticeKey?: string;
         chatAnswer?: { text?: unknown; parseMode?: unknown } | null;
         requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null;
+        notice?: { text?: unknown; parseMode?: unknown } | null; quiet?: unknown;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
         if (!retryable(status)) {
-          const base: Extract<IntakeAnswer, { kind: 'done' }> = { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true };
+          // ADR-145: words Core said beside its answer (a video's words were used; a file could not be opened).
+          const notice = body.notice;
+          if (notice !== undefined && (!notice || typeof notice.text !== 'string' || !notice.text || notice.text.length > 4000 ||
+              (notice.parseMode !== undefined && notice.parseMode !== 'HTML')))
+            throw new Error(`Core returned an invalid notice for update ${update.update_id}`);
+          const base: Extract<IntakeAnswer, { kind: 'done' }> = { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true,
+            ...(notice ? { notice: { text: String(notice.text), ...(notice.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) } } : {}),
+            // N5: Core answered this chat's sender outside the intake list already today.
+            ...(status === 403 && body.quiet === true ? { quiet: true } : {}) };
           if (body.lifecycleAction === 'source-message') {
             if (!body.chatId || typeof body.sourceMessage !== 'string' || !body.sourceMessage || body.sourceMessage.length > 3000 ||
                 typeof body.sourceNoticeKey !== 'string' || !/^source-review:[0-9]+$/.test(body.sourceNoticeKey))
@@ -103,7 +112,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
           }
           if (body.lifecycleAction === 'settle-later') {
             const settle = body.settle as { kind?: unknown; delayMs?: unknown } | undefined;
-            if (!body.chatId || !settle || (settle.kind !== 'album' && settle.kind !== 'brief') ||
+            if (!body.chatId || !settle || (settle.kind !== 'album' && settle.kind !== 'brief' && settle.kind !== 'photo') ||
                 !Number.isSafeInteger(settle.delayMs) || Number(settle.delayMs) < 0 || Number(settle.delayMs) > 10 * 60_000)
               throw new Error(`Core returned an invalid settle for update ${update.update_id}`);
             return { ...base, lifecycleAction: 'settle-later', chatId: body.chatId,
@@ -182,8 +191,12 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
           if (body.lifecycleAction === 'revision-blocked' && body.chatId &&
               (body.code === 'DAILY_CAP_REACHED' || body.code === 'PARENT_BRIEF_MISSING' ||
                 body.code === 'QUESTION_MISSING')) {
+            const alert = body.officeAlert;
+            if (!validAlert(alert)) throw new Error(`Core returned an invalid revision block for update ${update.update_id}`);
             return { ...base, lifecycleAction: 'revision-blocked',
-              chatId: body.chatId, code: body.code };
+              chatId: body.chatId, code: body.code,
+              // ADR-145: the words the requester sent go to the office, which makes the change.
+              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}) };
           }
           return base;
         }

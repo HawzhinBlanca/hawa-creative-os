@@ -431,16 +431,30 @@ describe('ChatInbox.setMode', () => {
     }
   });
 
-  it('tells the sender when a revision cannot start under the daily limit', async () => {
+  // ADR-145: the requester is no longer asked to send the change again after the limit resets. Core
+  // passes their words to the office, which makes the change; the requester is told so.
+  it('passes a change the daily limit stopped to the office, and tells the sender the office has it', async () => {
     const ctx = new FakeContext();
     ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
       mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
     const c = core([async () => ({ kind: 'done', intakeStatus: 409,
-      lifecycleAction: 'revision-blocked', chatId: '555', code: 'DAILY_CAP_REACHED' })]);
+      lifecycleAction: 'revision-blocked', chatId: '555', code: 'DAILY_CAP_REACHED',
+      officeAlert: { chatId: '9000', text: 'The requester in chat 555 sent a change that was not applied.' } })]);
     await handleUpdate(ctx, input, c);
     expect(ctx.lifecycleDecisions).toHaveLength(0);
-    expect(ctx.notices).toMatchObject([{ key: `chatinbox:revision-blocked:${update.update_id}`,
-      chatId: '555', class: 'critical', text: expect.stringContaining('No revision started') }]);
+    expect(ctx.notices).toMatchObject([{ key: `notify.office:revision-blocked:${update.update_id}`, chatId: '9000' },
+      { key: `chatinbox:revision-blocked:${update.update_id}`, chatId: '555', class: 'critical',
+        text: expect.stringContaining("I've passed your change to the office") }]);
+    expect((ctx.notices[1] as { text: string }).text).not.toMatch(/send this change again|after the daily limit resets|No revision started/i);
+  });
+
+  it('without an office chat to tell, says plainly that the change did not start', async () => {
+    const ctx = new FakeContext();
+    const c = core([async () => ({ kind: 'done', intakeStatus: 409,
+      lifecycleAction: 'revision-blocked', chatId: '555', code: 'PARENT_BRIEF_MISSING' })]);
+    await handleUpdate(ctx, input, c);
+    expect(ctx.notices).toMatchObject([{ key: `chatinbox:revision-blocked:${update.update_id}`, chatId: '555',
+      text: expect.stringContaining("I couldn't make this change by myself") }]);
   });
 });
 
@@ -679,5 +693,57 @@ describe('album and brief settles (ADR-143)', () => {
     const handlers = (chatInbox as any).handlers ?? (chatInbox as any).object;
     expect(handlers?.settle).toBeTruthy();
     expect(handlers?.handleUpdate).toBeTruthy();
+  });
+});
+
+describe('natural media and plain words (ADR-145)', () => {
+  const photo = { update_id: 6001, message: { message_id: 12, date: 1, chat: { id: 555, type: 'private' },
+    from: { id: 9, is_bot: false, first_name: 'R' }, photo: [{ file_id: 'p1' }] } };
+
+  it('a kept photo is settled later under the photo\'s own key, and its settle\'s question is sent once', async () => {
+    const answers: unknown[] = [
+      { v: 1, kind: 'handled', intakeStatus: 202, lifecycleAction: 'settle-later', chatId: '555', settle: { kind: 'photo', delayMs: 8000 } },
+      { v: 1, kind: 'handled', intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: '555',
+        chatAnswer: { text: 'Got the photo. Send me the text for the design and I\'ll use it with the photo.', parseMode: 'HTML' } },
+    ];
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: (async () => Response.json(answers.shift())) as any });
+    const ctx = new FakeContext();
+    await handleUpdate(ctx, { v: 1, update: photo }, client);
+    expect(ctx.settles).toMatchObject([{ key: 'settle:6001', delayMs: 8000 }]);
+    expect(ctx.notices).toHaveLength(0);
+    await settleUpdate(ctx, { v: 1, update: photo, attempt: 0 }, client);
+    expect(ctx.notices).toMatchObject([{ key: 'chatinbox:chat-answer:6001', chatId: '555', text: expect.stringContaining('Got the photo') }]);
+  });
+
+  it('sends the words Core says beside its answer once, keyed by the update', async () => {
+    const requestId = '43d3fca4-7ce2-5afe-9ae4-b9530874d618';
+    const draft = { platform: 'telegram', sourceEventId: `lc-${requestId}-r0`, sourceChannelId: '555', rawText: 'Brief', title: 'Brief',
+      designInstructions: '', exactCopy: [], clientId: null, autoGenerate: false };
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: (async () => Response.json({ v: 1, kind: 'handled',
+      intakeStatus: 200, lifecycleAction: 'open-request', requestId, chatId: '555', draft,
+      notice: { text: "I'll use the photo you sent with this.", parseMode: 'HTML' } })) as any });
+    const ctx = new FakeContext(); ctx.crashOnSet = 1;
+    await untilSettled(ctx, () => handleUpdate(ctx, input, client));
+    expect([...new Set(ctx.notices.map((n: any) => n.key))]).toEqual([`chatinbox:notice:${update.update_id}`]);
+    expect(ctx.notices[0]).toMatchObject({ chatId: '555', parseMode: 'HTML', text: "I'll use the photo you sent with this." });
+    const bad = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: (async () => Response.json({ intakeStatus: 200,
+      lifecycleAction: 'chat-answer', chatId: '555', chatAnswer: { text: 'x' }, notice: { text: '' } })) as any });
+    await expect(bad.intake(update, 'lifecycle')).rejects.toThrow('invalid notice');
+  });
+
+  it('a sender outside the intake list: Core\'s words once, then silence for the day, and a fallback when Core gave none', async () => {
+    const said = async (body: Record<string, unknown>, text = 'Poster for our open day') => {
+      const ctx = new FakeContext();
+      const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: (async () => Response.json(body)) as any });
+      await handleUpdate(ctx, { v: 1, update: { ...update, message: { ...update.message, text } } }, client);
+      return ctx.notices as any[];
+    };
+    const worded = await said({ v: 1, kind: 'handled', intakeStatus: 403, code: 'SENDER_NOT_ALLOWED', lifecycleAction: 'chat-answer',
+      chatId: '555', chatAnswer: { text: 'Hi! This design assistant is only set up for the Hawa office team. Please ask the office to add you.' } });
+    expect(worded).toMatchObject([{ key: `chatinbox:chat-answer:${update.update_id}`, chatId: '555' }]);
+    expect(await said({ v: 1, kind: 'handled', intakeStatus: 403, code: 'SENDER_NOT_ALLOWED', quiet: true })).toHaveLength(0);
+    // An older Core that says nothing: ChatInbox says the same line itself, in the sender's language.
+    expect(await said({ v: 1, kind: 'handled', intakeStatus: 403, code: 'SENDER_NOT_ALLOWED' }, 'پۆستەرێکم دەوێت'))
+      .toMatchObject([{ key: `chatinbox:not-allowed:${update.update_id}`, chatId: '555', text: expect.stringMatching(/[؀-ۿ]/) }]);
   });
 });

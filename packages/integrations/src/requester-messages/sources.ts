@@ -45,6 +45,26 @@ export const SOURCE_MESSAGES = {
     en: 'Thanks, I have read your PDF. It has a lot of text, so please send me the exact words that should go on the design. It starts:\n\n«{text}…»',
     ckb: 'سوپاس، PDFـەکەتم خوێندەوە. دەقێکی زۆری تێدایە، بۆیە تکایە ئەو وشانەم بۆ بنێرە کە دەبێت لەسەر دیزاینەکە بن. سەرەتاکەی ئەمەیە:\n\n«{text}…»',
   },
+  /** A long voice note: the requester sends the words to print. */
+  heardLong: {
+    en: 'Thanks, I have listened to your voice note. It has a lot of words, so please send me the exact words that should go on the design. It starts:\n\n«{text}…»',
+    ckb: 'سوپاس، گوێم لە دەنگەکەت گرت. وشەیەکی زۆری تێدایە، بۆیە تکایە ئەو وشانەم بۆ بنێرە کە دەبێت لەسەر دیزاینەکە بن. سەرەتاکەی ئەمەیە:\n\n«{text}…»',
+  },
+  /** "No" to the words shown: the corrected text is asked for. */
+  sendCorrected: {
+    en: 'No problem. Please send me the text exactly as it should appear on the design.',
+    ckb: 'کێشە نییە. تکایە دەقەکەم بۆ بنێرە، ڕێک وەک ئەوەی دەبێت لەسەر دیزاینەکە دەربکەوێت.',
+  },
+  /** "Yes" when the words were too long to confirm as they are, or none could be read. */
+  sendExactWords: {
+    en: 'Please send me the words that should go on the design, exactly as they should read.',
+    ckb: 'تکایە ئەو وشانەم بۆ بنێرە کە دەبێت لەسەر دیزاینەکە بن، ڕێک وەک ئەوەی دەبێت بخوێنرێنەوە.',
+  },
+  /** A confirmation that names no voice note or PDF of this sender. */
+  sourceNotFound: {
+    en: "I couldn't find the voice note or PDF you mean. Could you send it again?",
+    ckb: 'ئەو دەنگ یان PDFـەی مەبەستتە نەمدۆزییەوە. دەتوانیت دووبارە بینێریتەوە؟',
+  },
   /** A voice note that could not be turned into text here. */
   voiceNoText: {
     en: "Thanks, I've saved your voice note, but I couldn't turn it into text here. Could you type the words that should go on the design? The office can listen to it too.",

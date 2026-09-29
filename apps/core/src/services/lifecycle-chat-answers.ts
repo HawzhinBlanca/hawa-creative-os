@@ -17,7 +17,7 @@
 import crypto from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID, isTaskDbState, type TaskDbState } from '@hawa/contracts';
 import { sql, withRlsContext } from '@hawa/db';
-import { CONVERSATION_MESSAGES, LIFECYCLE_MESSAGES, ROUTING_MESSAGES, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
+import { CONVERSATION_MESSAGES, LIFECYCLE_MESSAGES, MEDIA_MESSAGES, ROUTING_MESSAGES, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 import { cutText } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { log } from '../logging.js';
@@ -47,10 +47,11 @@ export function deskApprovalAnswer(lang: RequesterLang = 'en'): string {
 /** The English answer to a typed approval (kept as a constant for callers that name it). */
 export const DESK_APPROVAL_ANSWER = deskApprovalAnswer('en');
 
-/** Said to an edited message: the edit is not read, and the design does not follow it. */
-export const EDITED_MESSAGE_ANSWER =
-  '✏️ <b>Edits to a message already sent are not picked up.</b>\n\n' +
-  '<i>Send the corrected text as a new message. To change a draft you already received, reply to its image with the change.</i>';
+/**
+ * Said to an edited message the intake route could not place (ADR-145: the route reads edits first, so
+ * this is only a fallback). No reply trick is asked for.
+ */
+export const EDITED_MESSAGE_ANSWER = MEDIA_MESSAGES.editSeen.en;
 
 /**
  * /start and /help (F15, #70): how to ask for a design, in plain words, in the requester's language.
@@ -218,7 +219,8 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
 
     // An edited message is not a new request, and its text is not read: the design went ahead with
     // the old words while the sender thought it had the new ones.
-    if (edited) return answerOnce(chatId, updateId, 'edited_message', 200, { text: EDITED_MESSAGE_ANSWER, parseMode: 'HTML' },
+    if (edited) return answerOnce(chatId, updateId, 'edited_message', 200,
+      { text: say(MEDIA_MESSAGES.editSeen, requesterLang(String(msg.text ?? msg.caption ?? ''))), parseMode: 'HTML' },
       { ignored: true, reason: 'EDITED_MESSAGE' });
 
     const rawText = String(msg.text ?? msg.caption ?? '');

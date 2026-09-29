@@ -459,9 +459,14 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
-  it('requests an explicit client for voice and PDF sources and holds unlinked photos', async () => {
+  // ADR-145 changed this deliberately (it was "requests an explicit client … and holds unlinked photos"):
+  // a voice note or PDF whose organisation nothing names is asked about in words, never with a "Client:"
+  // format, and a photo with no words is kept for its sender's words instead of being parked.
+  it('asks which organisation a voice note or PDF is for, and keeps an unlinked photo for its words', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
-    const app = createApp({ db } as any);
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
+    const bridge = { downloadFile: vi.fn(async () => png), dispatchOutboundMessage: vi.fn() };
+    const app = createApp({ db, telegramBridge: bridge } as any);
     for (const media of [
       { voice: { file_id: 'voice-fixture', duration: 5 }, caption: 'The exact spoken brief' },
       { document: { file_id: 'pdf-fixture', mime_type: 'application/pdf', file_name: 'brand.pdf' }, caption: 'Use these guidelines' },
@@ -472,11 +477,17 @@ describe('POST /v1/internal/telegram/intake', () => {
       delete (update.message as any).text;
       Object.assign(update.message, media);
       const result = await intake(app, update, 'lifecycle');
-      expect(result.body).toMatchObject('document' in media || 'voice' in media
-        ? { intakeStatus: 422, lifecycleAction: 'source-message' }
-        : { intakeStatus: 422, lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+      if ('photo' in media) {
+        expect(result.body).toMatchObject({ intakeStatus: 202, lifecycleAction: 'settle-later', settle: { kind: 'photo' } });
+      } else {
+        expect(result.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'source-message',
+          sourceMessage: `Thanks for the ${'voice' in media ? 'voice note' : 'PDF'}! Which organisation is it for?` });
+        expect(result.body.sourceMessage).not.toMatch(/Client:|\/new|reply to/i);
+      }
       expect(await tasksInChat(chat)).toHaveLength(0);
     }
+    // Only the photo was downloaded: a question comes before any download.
+    expect(bridge.downloadFile.mock.calls).toEqual([['captionless-fixture']]);
   });
 
   it.each([undefined, 'application/octet-stream', 'image/jpeg'])(
@@ -516,10 +527,15 @@ describe('POST /v1/internal/telegram/intake', () => {
     if (fault === 'mixed') message.photo = [{ file_id: 'other-image' }];
     const bytes = fault === 'oversized-bytes' ? Buffer.alloc(20 * 1024 * 1024 + 1) : Buffer.from('%PDF-1.7\nnot an image');
     const bridge = { downloadFile: vi.fn(async () => bytes), dispatchOutboundMessage: vi.fn() };
-    const expected = fault === 'pdf' ? { intakeStatus: 422, lifecycleAction: 'source-message' }
-      : { intakeStatus: 422, lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' };
+    // ADR-145: nothing is parked for an operator any more. A PDF is kept as a source (its words are shown
+    // back before anything is designed); a picture that cannot be used is asked for again, in words.
+    // Either way the caption never designs on its own (ADR-069).
+    // (The PDF's words wait here for the PDF reader, which this test does not configure.)
+    const expected = fault === 'pdf' ? { intakeStatus: 503, code: 'NOT_CONFIGURED' }
+      : { intakeStatus: 200, lifecycleAction: 'chat-answer',
+        chatAnswer: { text: "I couldn't open that picture. Could you send it again as a photo?" } };
     expect((await intake(createApp({ db, telegramBridge: bridge } as any), update)).body).toMatchObject(expected);
-    expect(bridge.downloadFile).toHaveBeenCalledTimes(fault.endsWith('bytes') ? 1 : 0);
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(fault.endsWith('bytes') || fault === 'pdf' ? 1 : 0);
     expect(await tasksInChat(chat)).toHaveLength(0);
     expect((await intake(createApp({ db } as any), update)).body).toMatchObject(expected);
     expect(await tasksInChat(chat)).toHaveLength(0);
@@ -561,7 +577,8 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
-  it('parks an unreadable photo rather than designing from its caption alone', async () => {
+  // ADR-145: asked for again in words rather than parked for an operator; still never designed from the caption alone.
+  it('asks again for an unreadable photo rather than designing from its caption alone', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     const update = brief(updateId(), chat);
@@ -570,13 +587,15 @@ describe('POST /v1/internal/telegram/intake', () => {
     (update.message as any).photo = [{ file_id: 'photo-invalid' }];
     const bridge = { downloadFile: vi.fn(async () => Buffer.from('not an image')) };
     const result = await intake(createApp({ db, telegramBridge: bridge } as any), update);
-    expect(result.body).toMatchObject({ intakeStatus: 422, lifecycleAction: 'park-update',
-      code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+    expect(result.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer',
+      chatAnswer: { text: "I couldn't open that picture. Could you send it again as a photo?" } });
     expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
-  it('holds media in channel posts and edited messages before legacy intake can see it', async () => {
+  // ADR-145: a channel's own photo is ignored (nothing is said in a channel); an edited caption of a
+  // message the bot has no record of goes to the office. Neither designs, and neither is parked.
+  it('ignores media in channel posts and passes an edit it cannot place to the office, without designing', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     for (const kind of ['channel_post', 'edited_message'] as const) {
       const chat = chatId();
@@ -586,8 +605,9 @@ describe('POST /v1/internal/telegram/intake', () => {
       delete update[kind].text;
       delete update.message;
       const result = await intake(createApp({ db } as any), update);
-      expect(result.body).toMatchObject({ intakeStatus: 422,
-        lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+      expect(result.body).toMatchObject(kind === 'channel_post' ? { intakeStatus: 200, ignored: true }
+        : { intakeStatus: 200, lifecycleAction: 'chat-answer',
+          chatAnswer: { text: "I saw your edit and passed it to the office; they'll follow up here." } });
       expect(await tasksInChat(chat)).toHaveLength(0);
     }
   });
@@ -772,8 +792,11 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(first.taskId).not.toBe(result.body.newTaskId);
   });
 
+  // ADR-145: an unlinked captionless photo is kept for its sender's words (downloaded once, settled
+  // later), never parked; a captionless photo replying to a message no current design knows is still
+  // not applied to any design and not downloaded.
   it.each(['unlinked', 'unknown-reply', 'stale-reply'] as const)(
-    'refuses a captionless %s photo before downloading or creating a task', async (kind) => {
+    'never designs from a captionless %s photo, and keeps an unlinked one for its words', async (kind) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     const app = createApp({ db } as any);
@@ -791,13 +814,14 @@ describe('POST /v1/internal/telegram/intake', () => {
         await trx.updateTable('requests').set({ rev: 5 }).where('request_id', '=', requestId).execute();
       });
     }
-    const bridge = { downloadFile: vi.fn(), dispatchOutboundMessage: vi.fn() };
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
+    const bridge = { downloadFile: vi.fn(async () => png), dispatchOutboundMessage: vi.fn() };
     const result = await intake(createApp({ db, telegramBridge: bridge } as any), update);
     const expected = kind === 'unlinked'
-      ? { intakeStatus: 422, code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', lifecycleAction: 'park-update' }
+      ? { intakeStatus: 202, lifecycleAction: 'settle-later', settle: { kind: 'photo' } }
       : { intakeStatus: 409, code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required' };
     expect(result.body).toMatchObject(expected);
-    expect(bridge.downloadFile).not.toHaveBeenCalled();
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(kind === 'unlinked' ? 1 : 0);
     expect(await tasksInChat(chat)).toHaveLength(1);
     expect((await intake(createApp({ db } as any), update)).body).toMatchObject(expected);
     expect(await tasksInChat(chat)).toHaveLength(1);
@@ -1334,8 +1358,10 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
     edit.edited_message = { ...edit.message, text: 'KAAE members evening\n---\nDecember 5, 2026', edit_date: 1790000100 };
     delete edit.message;
     const edited = await intake(createApp({ db } as any), edit);
+    // ADR-145: an edit is never "not picked up". This one edits a message the bot has no record of,
+    // so it goes to the office (see natural-media-intake.test.ts for edits it can place).
     expect(edited.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer',
-      chatAnswer: { text: expect.stringContaining('Edits to a message already sent are not picked up.') } });
+      chatAnswer: { text: "I saw your edit and passed it to the office; they'll follow up here." } });
     const group = -Math.abs(chatId());
     const chatter = text(group, 'hi everyone', { chat: { id: group, type: 'supergroup' } });
     const kept = await intake(createApp({ db } as any), chatter);

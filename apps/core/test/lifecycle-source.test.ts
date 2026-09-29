@@ -155,20 +155,24 @@ describe('requester-reviewed PDF source', () => {
     expect((await intake(wrongReply)).intakeStatus).toBe(404); expect(await tasks(f.clientId)).toHaveLength(0);
   });
 
-  it('requires active explicit client scope and deliberate group promotion before download', async () => {
+  // ADR-145: an organisation nobody named is asked for in words (it was a "Client:" demand), and a file
+  // in a group's conversation is kept passive (it was a "/new" demand). Neither downloads anything.
+  it('asks which organisation when nothing names one, and keeps a group file passive unless addressed, before download', async () => {
     const f = await fixture(); f.update.message.caption = 'Some document';
-    expect((await intake(f.update)).intakeStatus).toBe(422);
+    expect(await intake(f.update)).toMatchObject({ intakeStatus: 200, lifecycleAction: 'source-message',
+      sourceMessage: 'Thanks for the PDF! Which organisation is it for?' });
     const other = await fixture(); other.update.message.chat.type = 'group'; other.update.message.caption = `Client: ${other.code}`;
-    expect((await intake(other.update)).intakeStatus).toBe(409);
+    const passive = await intake(other.update);
+    expect(passive).toMatchObject({ intakeStatus: 200, status: 'MESSAGE_ONLY' }); expect(passive.lifecycleAction).toBeUndefined();
     expect(TelegramBridgeDaemon.prototype.downloadFile).not.toHaveBeenCalled();
     other.update.message.caption = `/new\nClient: ${other.code}`;
     other.update.update_id = next(); other.update.message.message_id = next();
     expect((await intake(other.update)).intakeStatus).toBe(200);
   });
 
-  it('keeps refused source events refused after restart, flag rollback and payload replacement', async () => {
+  it('keeps a source\'s first answer after restart, flag rollback and payload replacement', async () => {
     const f = await fixture(); f.update.message.caption = 'No client selected';
-    const refused = await intake(f.update); expect(refused.intakeStatus).toBe(422);
+    const refused = await intake(f.update); expect(refused).toMatchObject({ intakeStatus: 200, lifecycleAction: 'source-message' });
     expect(await intake(f.update)).toEqual(refused);
     const changed = structuredClone(f.update); changed.message.caption = `/new\nClient: ${f.code}`;
     expect((await intake(changed)).intakeStatus).toBe(409);
@@ -207,12 +211,16 @@ describe('requester-reviewed PDF source', () => {
     expect(DoclingParser.prototype.parse).not.toHaveBeenCalled(); expect(await tasks(f.clientId)).toHaveLength(0);
   });
 
-  it('refuses ambiguous client lines and invalid requested sizes before download', async () => {
+  // ADR-145: two "Client:" lines name no one, so the organisation is asked for (before any download);
+  // an impossible size is read as no size, and the default canvas is used, instead of a refusal.
+  it('asks about ambiguous client lines before download and reads an impossible size as the default', async () => {
     const f = await fixture(); f.update.message.caption += `\nClient: ${f.code}`;
-    expect((await intake(f.update)).intakeStatus).toBe(422);
-    const g = await fixture(); g.update.message.caption += '\nSize: 20000x1080';
-    expect((await intake(g.update)).intakeStatus).toBe(422);
+    expect(await intake(f.update)).toMatchObject({ intakeStatus: 200, sourceMessage: 'Thanks for the PDF! Which organisation is it for?' });
     expect(TelegramBridgeDaemon.prototype.downloadFile).not.toHaveBeenCalled();
+    const g = await fixture(); g.update.message.caption += '\nSize: 20000x1080';
+    expect(await intake(g.update)).toMatchObject({ intakeStatus: 200, sourceMessage: expect.stringContaining('Source page 1') });
+    const open = await intake(g.confirm());
+    expect(open).toMatchObject({ lifecycleAction: 'open-request', draft: { variant: { width: 1080, height: 1350 } } });
   });
 
   it('retries a saved source and its waiting confirmation after the parser becomes available', async () => {
@@ -276,8 +284,58 @@ describe('requester-reviewed PDF source', () => {
     expect(savedDesignCopy(child.payload, 'fallback').copy).toEqual(['  نرخ ١٢٣\n_____\nپارێزراو  ']);
     expect(child.payload.variant).toEqual({ width: 1080, height: 1920 });
     expect((await intake(c)).newTaskId).toBe(revised.newTaskId);
-    // Another file replying to the old revision is refused before a new download.
+    // Another file replying to the old revision is not applied to it; nothing names its organisation, so
+    // the requester is asked (ADR-145; it was refused), before any download.
     const stale = structuredClone(f.update); stale.update_id = next(); stale.message.message_id = next();
-    expect((await intake(stale)).intakeStatus).toBe(409);
+    expect(await intake(stale)).toMatchObject({ intakeStatus: 200, sourceMessage: 'Thanks for the PDF! Which organisation is it for?' });
+    expect(TelegramBridgeDaemon.prototype.downloadFile).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * ADR-145 (audit F6): a PDF with a natural caption needs no "Client:" or "Size:" line and no command.
+ * Its organisation is the one its words name; its size is read from the words; its text is shown
+ * back, and "yes", "no" or the corrected text answer, with no reply to a particular message.
+ */
+describe('PDFs in plain words (ADR-145)', () => {
+  const text = (f: Awaited<ReturnType<typeof fixture>>, words: string) => ({ update_id: next(), message: {
+    message_id: next(), from: f.update.message.from, chat: f.update.message.chat, text: words } });
+
+  it('a PDF whose caption names its organisation is read and shown back; "yes" designs with the text read', async () => {
+    const f = await fixture(); f.update.message.caption = `Please make an Instagram story from this programme for ${f.code}`;
+    const read = await intake(f.update);
+    expect(read).toMatchObject({ intakeStatus: 200, lifecycleAction: 'source-message' });
+    expect(read.sourceMessage).toBe('Here is the text I found in your PDF:\n\n«Source page 1\n\nSource page 2»\n\n' +
+      'Is this exactly the text for the design? Just say “yes”, or send me the corrected text.');
+    const opened = await intake(text(f, 'Yes, correct'));
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: f.clientId,
+      rawText: 'Source page 1\n\nSource page 2', variant: { width: 1080, height: 1920 },
+      designInstructions: `Please make an Instagram story from this programme for ${f.code}` } });
+    expect((await project(opened)).status).toBe(200);
+    expect(await tasks(f.clientId)).toHaveLength(1);
+  });
+
+  it('"no" asks for the corrected text, which then starts the design exactly as sent', async () => {
+    const f = await fixture(); f.update.message.caption = `${f.code} brochure, A4 please`;
+    await intake(f.update);
+    expect(await intake(text(f, 'no'))).toMatchObject({ sourceMessage: 'No problem. Please send me the text exactly as it should appear on the design.' });
+    expect(await tasks(f.clientId)).toHaveLength(0);
+    const copy = '  Open day\n12 October · Erbil  ';
+    const opened = await intake(text(f, copy));
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { rawText: copy, variant: { width: 1697, height: 2400 } } });
+    expect((await project(opened)).status).toBe(200);
+    const [row] = await tasks(f.clientId);
+    expect(savedDesignCopy(row.payload, 'fallback').copy).toEqual([copy]);
+    expect(row.payload.reviewedSource).toMatchObject({ confirmation: 'request_copy_reviewed', copySha256: hash(copy) });
+  });
+
+  it('thanks or a status question while the words wait is read as usual, not taken as the words', async () => {
+    const f = await fixture(); f.update.message.caption = `For ${f.code}`;
+    await intake(f.update);
+    for (const words of ['thanks', 'when will it be ready?']) {
+      const answer = await intake(text(f, words));
+      expect(answer.lifecycleAction, words).not.toBe('open-request');
+    }
+    expect(await tasks(f.clientId)).toHaveLength(0);
   });
 });

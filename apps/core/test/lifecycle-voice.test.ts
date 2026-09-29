@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { TelegramBridgeDaemon } from '@hawa/integrations';
@@ -58,6 +59,14 @@ async function project(open: { requestId: string; draft: unknown }) {
 }
 const count = async (kind: string) => Number((await sql<{ n: string }>`SELECT count(*)::text AS n FROM hawa.inbox_events
   WHERE tenant_id=${tenantId}::uuid AND source_account_id=${kind}`.execute(owner)).rows[0].n);
+/**
+ * ADR-145: the requester hears plain words ("Here is what I heard…", or "I couldn't turn it into text
+ * here…"); why a transcription was held, and what it was reserved to cost, is the office's to read, in
+ * the Desk's review of the saved voice note.
+ */
+const officeReview = async (clientId: string, updateId: number) =>
+  (await app(true).request(`/v1/clients/${clientId}/source-files/${updateId}/review`)).json();
+const NO_TEXT = "couldn't turn it into text";
 
 describe('retained voice admission and reviewed request', () => {
   it('refuses shared client-budget admission and still permits exact manual copy review',async()=>{
@@ -67,7 +76,8 @@ describe('retained voice admission and reviewed request', () => {
       ${JSON.stringify({officeUsd:30,clientUsd:30,roleUsd:30,clients:{[f.clientId]:0},roles:{}})}::jsonb
       FROM hawa.studio_spending_policies WHERE tenant_id=${tenantId}::uuid`.execute(tx));
     const held=await intake(f.update);
-    expect(held.sourceMessage).toContain('shared');expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(held.sourceMessage).toContain(NO_TEXT);expect(held.sourceMessage).not.toMatch(/\$|allowance|shared/);
+    expect((await officeReview(f.clientId,f.update.update_id)).message).toContain('shared');expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(await count('lifecycle_voice_attempt')).toBe(0);
     expect((await project(await intake(f.confirm()))).status).toBe(200);
   });
@@ -75,7 +85,9 @@ describe('retained voice admission and reviewed request', () => {
     const f = await fixture(); const received = await intake(f.update);
     expect(received).toMatchObject({ lifecycleAction: 'source-message', intakeStatus: 200 });
     expect(received.sourceMessage).toContain('Unreviewed دە دۆلار');
-    expect(received.sourceMessage).toContain('$0.006'); expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    // The words are shown back to confirm; the reserved cost is the office's (the review below), not the requester's.
+    expect(received.sourceMessage).toContain('Is this exactly the text for the design?'); expect(received.sourceMessage).not.toContain('$');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     const reader = app(true), path = `/v1/clients/${f.clientId}/source-files/${f.update.update_id}`;
     const original = await reader.request(`${path}/content`);
     expect(original.status).toBe(200); expect(original.headers.get('Content-Type')).toBe('audio/ogg');
@@ -94,7 +106,8 @@ describe('retained voice admission and reviewed request', () => {
 
   it('makes zero provider calls for local-only DNA and keeps the original available for manual reviewed copy', async () => {
     const f = await fixture(true); const held = await intake(f.update);
-    expect(held.sourceMessage).toContain('privacy'); expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(held.sourceMessage).toContain(NO_TEXT);
+    expect((await officeReview(f.clientId, f.update.update_id)).message).toContain('privacy'); expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(await count('lifecycle_voice_attempt')).toBe(0);
     const opened = await intake(f.confirm()); expect((await project(opened)).status).toBe(200);
     expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -119,9 +132,11 @@ describe('retained voice admission and reviewed request', () => {
   it('unknown provider acceptance survives restart and original-message resend without a second call', async () => {
     vi.mocked(globalThis.fetch).mockRejectedValue(new Error('lost response'));
     const f = await fixture(); const held = await intake(f.update);
-    expect(held.sourceMessage).toContain('uncertain'); expect(await intake(f.update, app())).toEqual(held);
+    expect(held.sourceMessage).toContain(NO_TEXT); expect(await intake(f.update, app())).toEqual(held);
+    expect(await officeReview(f.clientId, f.update.update_id)).toMatchObject({ state: 'uncertain' });
     const another = structuredClone(f.update); another.update_id = next(); another.message.message_id = another.update_id;
-    expect((await intake(another)).sourceMessage).toContain('uncertain'); expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect((await intake(another)).sourceMessage).toContain(NO_TEXT);
+    expect(await officeReview(f.clientId, another.update_id)).toMatchObject({ state: 'uncertain' }); expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     const opened = await intake(f.confirm()); expect((await project(opened)).status).toBe(200);
     expect(await count('lifecycle_voice_attempt')).toBe(1);
   });
@@ -131,9 +146,12 @@ describe('retained voice admission and reviewed request', () => {
     await owner.transaction().execute(async tx=>{
       await sql`ALTER TABLE hawa.inbox_events DISABLE TRIGGER enforce_voice_spending`.execute(tx);
       await sql`DELETE FROM hawa.inbox_events WHERE source_account_id='lifecycle_voice_outcome'`.execute(tx);
+      // The words shown to the requester are recorded after the outcome (ADR-145): with no outcome, none were.
+      await sql`DELETE FROM hawa.inbox_events WHERE source_account_id='lifecycle_source_candidate'`.execute(tx);
       await sql`ALTER TABLE hawa.inbox_events ENABLE TRIGGER enforce_voice_spending`.execute(tx);
     });
-    const held = await intake(f.update, app()); expect(held.sourceMessage).toContain('outcome is not recorded');
+    const held = await intake(f.update, app()); expect(held.sourceMessage).toContain(NO_TEXT);
+    expect((await officeReview(f.clientId, f.update.update_id)).message).toContain('outcome is not recorded');
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect((await project(await intake(f.confirm()))).status).toBe(200);
   });
@@ -160,7 +178,9 @@ describe('retained voice admission and reviewed request', () => {
     await sql`UPDATE hawa.model_deployments SET policy_profile=jsonb_set(policy_profile,'{maxCallsPerDay}','1') WHERE role='voice_transcriber'`.execute(owner);
     const first = await fixture(), second = await fixture();
     const answers = await Promise.all([intake(first.update, app()), intake(second.update, app())]);
-    expect(answers.filter(a => a.sourceMessage.includes('daily transcription'))).toHaveLength(1);
+    expect(answers.filter(a => a.sourceMessage.includes(NO_TEXT))).toHaveLength(1);
+    const held = answers.findIndex(a => a.sourceMessage.includes(NO_TEXT)), heldFixture = [first, second][held];
+    expect((await officeReview(heldFixture.clientId, heldFixture.update.update_id)).message).toContain('daily transcription');
     expect(globalThis.fetch).toHaveBeenCalledTimes(1); expect(await count('lifecycle_voice_attempt')).toBe(1);
   });
 
@@ -202,8 +222,109 @@ describe('retained voice admission and reviewed request', () => {
     expect(savedDesignCopy(row.payload, 'fallback').copy).toEqual(['  Corrected 123\n_____  ']);
     expect(row.payload.variant).toEqual({ width: 1080, height: 1920 });
     expect((await intake(confirmation)).newTaskId).toBe(revised.newTaskId);
+    // ADR-145: a recording that replies to a notice no current design waits on is not applied to it (as
+    // before), and is no longer refused: nothing names its organisation, so the requester is asked.
     const stale = structuredClone(f.update); stale.update_id = next(); stale.message.message_id = next();
-    expect((await intake(stale)).intakeStatus).toBe(409);
+    const asked = await intake(stale);
+    expect(asked).toMatchObject({ intakeStatus: 200, lifecycleAction: 'source-message',
+      sourceMessage: 'Thanks for the voice note! Which organisation is it for?' });
+    expect((await sql`SELECT 1 FROM hawa.tasks WHERE request_id=${requestId}::uuid`.execute(owner)).rows).toHaveLength(2);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ADR-145 (audit F6): a voice note needs no "Client:" line, no "/new" and no "/use_source". Its
+ * organisation is asked for in words when nothing names it, a design waiting for changes is asked
+ * about, recordings in other containers are converted, and the words are confirmed with "yes" or by
+ * sending the corrected text.
+ */
+describe('voice notes in plain words (ADR-145)', () => {
+  const text = (f: Awaited<ReturnType<typeof fixture>>, words: string) => ({ update_id: next(), message: {
+    message_id: next(), from: f.update.message.from, chat: f.update.message.chat, text: words } });
+  const plain = (f: Awaited<ReturnType<typeof fixture>>) => {
+    const message = f.update.message as Record<string, unknown>;
+    delete message.caption;
+    return f.update;
+  };
+
+  it('a voice note with no caption asks for its organisation, is heard, and "yes" starts one design with the words heard', async () => {
+    const f = await fixture(); plain(f);
+    const asked = await intake(f.update);
+    expect(asked).toMatchObject({ lifecycleAction: 'source-message', sourceMessage: 'Thanks for the voice note! Which organisation is it for?' });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    const answer = text(f, `It's for ${f.code}`);
+    const heard = await intake(answer);
+    expect(heard).toMatchObject({ lifecycleAction: 'source-message', sourceNoticeKey: `source-review:${answer.update_id}` });
+    expect(heard.sourceMessage).toContain('Here is what I heard:');
+    expect(heard.sourceMessage).toContain('Unreviewed دە دۆلار');
+    expect(heard.sourceMessage).not.toMatch(/Client:|\/new|\/use_source|reply to|\$/i);
+    expect(await intake(answer)).toEqual(heard);
+    const yes = text(f, 'yes');
+    const opened = await intake(yes);
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: f.clientId, rawText: 'Unreviewed دە دۆلار\nsource_01' } });
+    expect((await project(opened)).status).toBe(200);
+    expect(await intake(yes)).toMatchObject({ duplicate: true, requestId: opened.requestId });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('a name the office does not know is asked again, kindly; a chatty message is left to be read as usual', async () => {
+    const f = await fixture(); plain(f);
+    await intake(f.update);
+    expect(await intake(text(f, 'Nobody Known Ltd'))).toMatchObject({ sourceMessage: expect.stringContaining("I couldn't find that organisation") });
+    const response = await app().request('/v1/internal/telegram/intake', { method: 'POST', headers,
+      body: JSON.stringify({ v: 1, update: text(f, 'thanks'), mode: 'lifecycle' }) });
+    expect((await response.json()).lifecycleAction).not.toBe('source-message');
+  });
+
+  it('while a design waits for changes, it asks "change or new", and the corrected words revise that design', async () => {
+    const f = await fixture(true), requestId = randomUUID();
+    const original = await persistChatIntake(db, { platform: 'telegram', sourceEventId: `voice-wait-${requestId}`,
+      sourceChannelId: String(f.update.message.chat.id), clientId: f.clientId, rawText: 'Original', title: 'Nawroz poster',
+      exactCopy: [{ text: 'Old copy' }], designInstructions: 'Keep brand.', autoGenerate: false }, { outboxState: 'recorded' });
+    const taskId = String(original.task.id);
+    await sql`INSERT INTO hawa.requests(request_id,tenant_id,root_task_id,current_task_id,owner,stage,rev,chat_id)
+      VALUES (${requestId}::uuid,${tenantId}::uuid,${taskId}::uuid,${taskId}::uuid,'restate','manual',3,${String(f.update.message.chat.id)})`.execute(owner);
+    await sql`UPDATE hawa.tasks SET request_id=${requestId}::uuid WHERE id=${taskId}::uuid`.execute(owner);
+    plain(f);
+    const asked = await intake(f.update);
+    expect(asked.sourceMessage).toBe('Is this for a change to <b>Nawroz poster</b>, or for a new design? Just say “change” or “new”.');
+    expect(asked.sourceMessage).not.toMatch(/\/new|reply to its/);
+    const heard = await intake(text(f, 'change'));
+    expect(heard.sourceMessage).toContain("couldn't turn it into text");
+    const revised = await intake(text(f, 'Nawroz 2026 · Erbil'));
+    expect(revised).toMatchObject({ lifecycleAction: 'requester-revision', requestId, priorTaskId: taskId });
+    const row = (await sql<{ payload: Record<string, unknown> }>`SELECT payload FROM hawa.outbox_commands
+      WHERE aggregate_id=${revised.newTaskId}::uuid AND command_type='task.created'`.execute(owner)).rows[0];
+    expect(savedDesignCopy(row.payload, 'fallback').copy).toEqual(['Nawroz 2026 · Erbil']);
+  });
+
+  it.runIf((() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })())(
+    'a recording sent as an M4A file is turned into Ogg Opus, heard once, and the corrected words start the design', async () => {
+    const m4a = await readFile(new URL('../../../packages/testkit/fixtures/media/tone-one-second.m4a', import.meta.url));
+    vi.mocked(TelegramBridgeDaemon.prototype.downloadFile).mockResolvedValue(m4a);
+    const f = await fixture();
+    const message = f.update.message as Record<string, unknown>;
+    delete message.voice;
+    message.audio = { file_id: 'phone-recording', mime_type: 'audio/mp4', file_size: m4a.length, duration: 1 };
+    const heard = await intake(f.update);
+    expect(heard.sourceMessage).toContain('Here is what I heard:');
+    const reader = app(true);
+    const original = await reader.request(`/v1/clients/${f.clientId}/source-files/${f.update.update_id}/content`);
+    expect(original.headers.get('Content-Type')).toBe('audio/ogg');
+    expect(Buffer.from(await original.arrayBuffer()).subarray(0, 4).toString()).toBe('OggS');
+    const opened = await intake(text(f, 'Members evening · 4 December'));
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { rawText: 'Members evening · 4 December' } });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('an edited caption before the words are confirmed gives the design its instructions', async () => {
+    const f = await fixture();
+    await intake(f.update);
+    const edit = { update_id: next(), edited_message: { ...f.update.message, edit_date: 1790000100,
+      caption: `/new\nClient: ${f.code}\nUse a dark blue background.` } };
+    expect(await intake(edit)).toMatchObject({ lifecycleAction: 'chat-answer', chatAnswer: { text: "I saw your edit, and I'll use the new words." } });
+    const opened = await intake(text(f, 'yes'));
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { designInstructions: 'Use a dark blue background.' } });
   });
 });

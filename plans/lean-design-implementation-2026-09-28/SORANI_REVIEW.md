@@ -26,6 +26,10 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `sources.heard` | Here is what I heard:⏎⏎«{text}»⏎⏎Is this exactly the text for the design? Just say “yes”, or send me the corrected text. | ئەمە ئەوەیە کە بیستم:⏎⏎«{text}»⏎⏎ئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ تەنها بنووسە «بەڵێ»، یان دەقە ڕاستکراوەکەم بۆ بنێرە. | needs native review |
 | `sources.readPdf` | Here is the text I found in your PDF:⏎⏎«{text}»⏎⏎Is this exactly the text for the design? Just say “yes”, or send me the corrected text. | ئەمە ئەو دەقەیە کە لە PDFـەکەتدا دۆزیمەوە:⏎⏎«{text}»⏎⏎ئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ تەنها بنووسە «بەڵێ»، یان دەقە ڕاستکراوەکەم بۆ بنێرە. | needs native review |
 | `sources.readPdfLong` | Thanks, I have read your PDF. It has a lot of text, so please send me the exact words that should go on the design. It starts:⏎⏎«{text}…» | سوپاس، PDFـەکەتم خوێندەوە. دەقێکی زۆری تێدایە، بۆیە تکایە ئەو وشانەم بۆ بنێرە کە دەبێت لەسەر دیزاینەکە بن. سەرەتاکەی ئەمەیە:⏎⏎«{text}…» | needs native review |
+| `sources.heardLong` | Thanks, I have listened to your voice note. It has a lot of words, so please send me the exact words that should go on the design. It starts:⏎⏎«{text}…» | سوپاس، گوێم لە دەنگەکەت گرت. وشەیەکی زۆری تێدایە، بۆیە تکایە ئەو وشانەم بۆ بنێرە کە دەبێت لەسەر دیزاینەکە بن. سەرەتاکەی ئەمەیە:⏎⏎«{text}…» | needs native review |
+| `sources.sendCorrected` | No problem. Please send me the text exactly as it should appear on the design. | کێشە نییە. تکایە دەقەکەم بۆ بنێرە، ڕێک وەک ئەوەی دەبێت لەسەر دیزاینەکە دەربکەوێت. | needs native review |
+| `sources.sendExactWords` | Please send me the words that should go on the design, exactly as they should read. | تکایە ئەو وشانەم بۆ بنێرە کە دەبێت لەسەر دیزاینەکە بن، ڕێک وەک ئەوەی دەبێت بخوێنرێنەوە. | needs native review |
+| `sources.sourceNotFound` | I couldn't find the voice note or PDF you mean. Could you send it again? | ئەو دەنگ یان PDFـەی مەبەستتە نەمدۆزییەوە. دەتوانیت دووبارە بینێریتەوە؟ | needs native review |
 | `sources.voiceNoText` | Thanks, I've saved your voice note, but I couldn't turn it into text here. Could you type the words that should go on the design? The office can listen to it too. | سوپاس، دەنگەکەتم هەڵگرت، بەڵام نەمتوانی لێرە بیکەمە دەق. دەتوانیت ئەو وشانە بنووسیت کە دەبێت لەسەر دیزاینەکە بن؟ ئۆفیسەکەش دەتوانێت گوێی لێ بگرێت. | needs native review |
 | `sources.pdfNoText` | I couldn't read the text in that PDF. Could you paste the words for the design here? The office can look at the file too. | نەمتوانی دەقی ناو ئەو PDFـە بخوێنمەوە. دەتوانیت وشەکانی دیزاینەکە لێرە بنووسیت؟ ئۆفیسەکەش دەتوانێت سەیری فایلەکە بکات. | needs native review |
 | `sources.fileUnreadable` | I couldn't open that file. Could you send it again, or paste the text here? | نەمتوانی ئەو فایلە بکەمەوە. دەتوانیت دووبارە بینێریتەوە، یان دەقەکە لێرە بنووسیت؟ | needs native review |
@@ -49,6 +53,7 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `media.fileUnsupported` | I couldn't open that file. Could you send it as a photo or a PDF, or paste the text here? | نەمتوانی ئەو فایلە بکەمەوە. دەتوانیت وەک وێنە یان PDF بینێریت، یان دەقەکە لێرە بنووسیت؟ | needs native review |
 | `media.editApplied` | I saw your edit, and I'll use the new words. | دەستکارییەکەتم بینی، و وشە نوێیەکان بەکاردەهێنم. | needs native review |
 | `media.editPassed` | I saw your edit to {title}. I've passed the new wording to the office so it's used. | دەستکارییەکەتم لە {title} بینی. دەقە نوێیەکەم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاری بهێنن. | needs native review |
+| `media.editSeen` | I saw your edit. If anything should change, just tell me here. | دەستکارییەکەتم بینی. ئەگەر شتێک پێویستی بە گۆڕین هەیە، تەنها لێرە پێم بڵێ. | needs native review |
 | `media.editForwarded` | I saw your edit and passed it to the office; they'll follow up here. | دەستکارییەکەتم بینی و گەیاندمە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 
 ## inbox
@@ -184,4 +189,25 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `outcomes.draftMadeNotSaved` | Your draft of {title} is made, but I couldn't finish saving it. The office will follow up with you here. | ڕەشنووسی {title} دروست کرا، بەڵام نەمتوانی بە تەواوی پاشەکەوتی بکەم. ئۆفیسەکە لێرە بەدواداچوونت بۆ دەکات. | needs native review |
 | `outcomes.couldNotFinish` | I couldn't finish {title} automatically. The office will follow up with you here. | نەمتوانی {title} بە شێوەی خۆکار تەواو بکەم. ئۆفیسەکە لێرە بەدواداچوونت بۆ دەکات. | needs native review |
 
-131 lines.
+## albums
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `albums.question` | I have your {count} photos. What would you like me to design with them? Please tell me what it is for and the exact words to put on it. | {count} وێنەکەتم پێگەیشت. دەتەوێت چ دیزاینێکیان پێ دروست بکەم؟ تکایە بۆم بنووسە بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن. | needs native review |
+| `albums.followUp` | Happy to. What should I design with these photos? Tell me what it is for and the exact words to put on it. | بە دڵخۆشییەوە. چ دیزاینێک بەم وێنانە دروست بکەم؟ پێم بڵێ بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن. | needs native review |
+| `albums.latePhoto` | This photo arrived after I had started your design, so it isn't part of it. When the draft is ready, just send the photo again and tell me what to change. | ئەم وێنەیە دوای دەستپێکردنی دیزاینەکەت گەیشت، بۆیە بەشێک نییە لێی. کاتێک ڕەشنووسەکە ئامادە بوو، تەنها وێنەکە دووبارە بنێرەوە و پێم بڵێ چی بگۆڕدرێت. | needs native review |
+| `albums.photoMissing` | One of your photos could not be saved, so I have not started a design. Please send the photos again. | یەکێک لە وێنەکانت پاشەکەوت نەکرا، بۆیە هێشتا دیزاینم دەست پێنەکردووە. تکایە وێنەکان دووبارە بنێرەوە. | needs native review |
+| `albums.onePhoto` | I received only one photo from this album. Please send the photos again together with what you would like designed. | تەنها یەک وێنەم لەم ئەلبومە پێگەیشت. تکایە وێنەکان دووبارە بنێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
+| `albums.captions` | Your photos came with different captions, so I am not sure which one is the brief. Please send the brief again as one message. | وێنەکانت چەند نووسینێکی جیاوازیان لەگەڵ بوو، بۆیە نازانم کامیان داواکارییەکەیە. تکایە داواکارییەکە وەک یەک نامە دووبارە بنێرەوە. | needs native review |
+| `albums.mixedReplies` | Some of these photos answer a different message than the others. Please send them again together, with one brief. | هەندێک لەم وێنانە وەڵامی نامەیەکی جیاوازن. تکایە وەک یەک ئەلبوم لەگەڵ یەک داواکاری دووبارە بیاننێرەوە. | needs native review |
+| `albums.noAlbum` | I could not find photos from you waiting in this chat. Please send the photos again with what you would like designed. | هیچ وێنەیەکی چاوەڕوانکراوی تۆم لەم چاتەدا نەدۆزییەوە. تکایە وێنەکان دووبارە بنێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
+| `albums.tooMany` | That is more than ten photos, which is more than one design can use. Please send up to ten, with what you would like designed. | ئەوە زیاتر لە دە وێنەیە، کە زیاترە لەوەی یەک دیزاین بتوانێت بەکاری بهێنێت. تکایە تا دە وێنە بنێرە، لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
+| `albums.notPhotos` | I can only use photos in a design, not videos or other files. Please send just the photos again, with what you would like designed. | تەنها دەتوانم وێنە لە دیزایندا بەکاربهێنم، نەک ڤیدیۆ یان فایلی تر. تکایە تەنها وێنەکان دووبارە بنێرەوە، لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
+| `albums.photoUnreadable` | One of these photos could not be opened. Please send the photos again. | یەکێک لەم وێنانە نەکرایەوە. تکایە وێنەکان دووبارە بنێرەوە. | needs native review |
+| `albums.notFound` | I could not find the photos you mean. Please send them again with what you would like designed. | ئەو وێنانەی مەبەستتە نەمدۆزییەوە. تکایە دووبارە بیاننێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
+| `albums.alreadyStarted` | I have already started a design with these photos, so I did not start another one. | پێشتر دیزاینێکم بەم وێنانە دەست پێکردووە، بۆیە یەکێکی ترم دەست پێنەکرد. | needs native review |
+| `albums.needsTwo` | I did not receive all of these photos. Please send them again together. | هەموو ئەم وێنانەم پێنەگەیشت. تکایە پێکەوە دووبارە بیاننێرەوە. | needs native review |
+| `albums.somethingWrong` | Something went wrong with these photos. Please send them again, with what you would like designed. | کێشەیەک لەگەڵ ئەم وێنانەدا ڕوویدا. تکایە دووبارە بیاننێرەوە، لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
+| `albums.tooLarge` | These photos are too large together. Please send fewer or smaller photos. | ئەم وێنانە پێکەوە زۆر گەورەن. تکایە ژمارەیەکی کەمتر یان وێنەی بچووکتر بنێرە. | needs native review |
+
+152 lines.

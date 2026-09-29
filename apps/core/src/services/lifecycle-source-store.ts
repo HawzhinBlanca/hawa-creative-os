@@ -21,9 +21,16 @@ export interface SourceConfirmation {
   copy: string; copySha256: string; payloadHash: string; sourceUpdate: unknown; sourceJson: string;
 }
 export interface SourceIntakeAnswer { status: number; extra: Record<string, unknown> }
+/** A source whose organisation, or whose design (a change or a new one), the requester is asked about (ADR-145). */
+export type PendingSource = Omit<SourceUpload, 'blob' | 'clientId'> & { clientId: string | null };
 export type SourceAdmission = { payloadHash: string; result:
   | { kind: 'upload'; source: Omit<SourceUpload, 'blob'> }
-  | { kind: 'confirmation'; sourceUpdateId: number }
+  /** ADR-145: the source is kept while one question about it is asked (`answer` is the question). */
+  | { kind: 'pending'; source: PendingSource; answer: SourceIntakeAnswer }
+  /** ADR-145: this update answered a question about the source `sourceUpdateId`. */
+  | { kind: 'resolved'; sourceUpdateId: number }
+  /** `copy`: ADR-145's natural confirmation ("yes", or the corrected text) carries the words itself. */
+  | { kind: 'confirmation'; sourceUpdateId: number; copy?: string }
   | { kind: 'answer'; answer: SourceIntakeAnswer }
 };
 interface SourceAnswer { payloadHash: string; answer: SourceIntakeAnswer }

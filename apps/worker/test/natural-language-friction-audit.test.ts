@@ -5,10 +5,8 @@ import { handleUpdate, type ChatInboxCore, type InboxContext, type IntakeAnswer 
  * NATURAL-LANGUAGE FRICTION AUDIT (2026-09-29): what ChatInbox tells a requester for each Core answer
  * (plans/lean-design-implementation-2026-09-28/NATURAL_LANGUAGE_FRICTION_AUDIT.md). Every test was
  * `it.fails` and asserts the natural behaviour the owner asked for. ADR-144 made N1 to N4 plain tests;
- * N5 (a sender outside the allowlist) is still expected to fail. AUDIT_SHOW_FAILURES=1 turns the
- * remaining ones into plain tests to show the failures.
+ * ADR-145 made N5 (a sender outside the allowlist) one. None is expected to fail.
  */
-const bug = process.env.AUDIT_SHOW_FAILURES === '1' ? it : it.fails;
 
 class Ctx implements InboxContext {
   journal = new Map<string, unknown>();
@@ -27,6 +25,7 @@ class Ctx implements InboxContext {
   sendLifecycleDecision() {}
   sendLifecycleOpen() {}
   sendNotice(message: any) { this.notices.push(message); }
+  scheduleSettle() {}
 }
 
 const updateWith = (text: string) => ({ update_id: 777, message: { message_id: 1, date: 1,
@@ -85,7 +84,7 @@ describe('N4: approval words in reply to the draft', () => {
 });
 
 describe('N5: silent drops', () => {
-  bug('a sender Core does not recognise hears something instead of nothing', async () => {
+  it('a sender Core does not recognise hears something instead of nothing', async () => {
     const texts = await noticesFor({ kind: 'done', intakeStatus: 403, code: undefined } as any, 'Poster for our open day on Monday');
     expect(texts.length).toBeGreaterThan(0);
   });
