@@ -1,17 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, OutboxRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { captureLogs } from '@hawa/observability';
-import { OutboxConsumer } from '../src/outbox-consumer.js';
+import { OutboxConsumer, REQUESTER_SEND_RETIRED } from '../src/outbox-consumer.js';
 import { composeDeliveredMessage, readStoredExportBytes, type TelegramSender } from '../src/delivery-notification.js';
 
 /**
  * What the requester hears from the outbox worker.
  *
- * `notify.published` used to send one Markdown-starred message with no parse mode (the requester saw
- * the asterisks), named only the client's root Drive folder, never sent the approved file, and was
- * marked delivered when the bot token or the chat was missing although nothing was sent. A request
- * dead-lettered at intake was never mentioned to the requester at all.
+ * `notify.published`, Core's own delivery of the approved files to a Telegram requester, was retired
+ * with ADR-135 stage 2d: the request-owned Delivery workflow sends them (with composeDeliveredMessage
+ * and readStoredExportBytes, pinned below), and a command left from before ends at once, sending
+ * nothing. A request dead-lettered at intake is told to the requester and the office.
  */
 
 const tenantId = '00000000-0000-4000-a000-000000000006';
@@ -56,217 +55,31 @@ function recordingSender() {
 
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
-describe('notify.published', () => {
-  it('sends the approved files as documents, then an HTML notice with each file\'s Drive link', async () => {
+describe('an old notify.published command', () => {
+  it('ends failed with REQUESTER_SEND_RETIRED at once, and sends nothing to the requester or the office', async () => {
     const png = new Uint8Array(Array.from({ length: 48 }, (_, i) => i));
-    const pdf = new Uint8Array(Array.from({ length: 64 }, (_, i) => 255 - i));
-    const pngId = randomUUID();
-    const pdfId = randomUUID();
-    const stored = new Map<string, Uint8Array>([[pngId, png], [pdfId, pdf]]);
-    const { idempotencyKey } = await enqueue('notify.published', {
-      taskId: randomUUID(),
-      title: 'Eid <poster> & *sale*',
-      chatId: '4242',
-      driveFolderId: 'client-root-folder',
-      spreadsheetId: '',
-      sheetsConfirmed: false,
-      sheetProblem: 'No spreadsheet is configured for this client',
-      filesCount: 2,
-      files: [
-        { artifactId: pngId, format: 'png', filename: 'kaae-1.png', mimeType: 'image/png', sha256: sha(png), byteSize: png.length, webViewLink: 'https://drive.google.com/file/d/png-file/view' },
-        { artifactId: pdfId, format: 'pdf', filename: 'kaae-2.pdf', mimeType: 'application/pdf', sha256: sha(pdf), byteSize: pdf.length, webViewLink: 'https://drive.google.com/file/d/pdf-file/view' },
-      ],
-    });
-    const { sender, documents, messages } = recordingSender();
-    const consumer = new OutboxConsumer(db, {
-      tenantId, userId, batchSize: 100,
-      telegramBotToken: botToken,
-      telegramSender: () => sender,
-      readExportBytes: async (_db, _tenant, _task, artifactId) => stored.get(artifactId) ?? null,
-    });
-
-    await consumer.processBatch(100);
-
-    const sent = documents.filter((d) => d.chatId === '4242');
-    expect(sent.map((d) => [d.filename, d.mimeType])).toEqual([
-      ['kaae-1.png', 'image/png'],
-      ['kaae-2.pdf', 'application/pdf'],
-    ]);
-    expect(sent[0].bytes).toEqual(png);
-    expect(sent[1].bytes).toEqual(pdf);
-
-    // Only this test's chat: the batch can also hold other commands of the shared test tenant.
-    const toRequester = messages.filter((m) => m.chatId === '4242');
-    expect(toRequester).toHaveLength(1);
-    const [notice] = toRequester;
-    expect(notice.parse_mode).toBe('HTML');
-    expect(notice.text).toContain('<b>Eid &lt;poster&gt; &amp; *sale*</b>');
-    expect(notice.text).toContain('The 2 approved files are attached above.');
-    expect(notice.text).toContain('<a href="https://drive.google.com/file/d/png-file/view">kaae-1.png</a>');
-    expect(notice.text).toContain('<a href="https://drive.google.com/file/d/pdf-file/view">kaae-2.pdf</a>');
-    expect(notice.text).not.toContain('client-root-folder');
-    expect(notice.text).toContain('Production log: not updated yet (No spreadsheet is configured for this client).');
-    expect(notice.text).not.toMatch(/\*[A-Z][^*]*\*/); // no Markdown bold left over
-
-    expect((await record(idempotencyKey))?.state).toBe('delivered');
-  });
-
-  it('does not send a file again when a later file failed and the delivery is retried', async () => {
-    const a = new Uint8Array(Array.from({ length: 30 }, (_, i) => i));
-    const b = new Uint8Array(Array.from({ length: 31 }, (_, i) => 200 - i));
-    const aId = randomUUID();
-    const bId = randomUUID();
-    const stored = new Map<string, Uint8Array>([[aId, a], [bId, b]]);
-    const chat = String(5000 + Math.floor(Math.random() * 1000));
-    const { idempotencyKey } = await enqueue('notify.published', {
-      taskId: randomUUID(), title: 'Retry', chatId: chat,
-      files: [
-        { artifactId: aId, format: 'png', filename: 'a.png', mimeType: 'image/png', sha256: sha(a), byteSize: a.length },
-        { artifactId: bId, format: 'png', filename: 'b.png', mimeType: 'image/png', sha256: sha(b), byteSize: b.length },
-      ],
-    });
-    const { sender, documents, messages } = recordingSender();
-    let failB = true;
-    const flaky: TelegramSender = {
-      ...sender,
-      async dispatchOutboundDocument(chatId, bytes, filename, options) {
-        if (filename === 'b.png' && failB) { failB = false; return { success: false, error: 'TELEGRAM_NETWORK_ERROR' }; }
-        return sender.dispatchOutboundDocument(chatId, bytes, filename, options);
-      },
-    };
-    const consumer = new OutboxConsumer(db, {
-      tenantId, userId, batchSize: 100, telegramBotToken: botToken, telegramSender: () => flaky,
-      readExportBytes: async (_db, _tenant, _task, artifactId) => stored.get(artifactId) ?? null,
-    });
-    await consumer.processBatch(100);
-    expect(documents.filter((d) => d.chatId === chat).map((d) => d.filename)).toEqual(['a.png']);
-    // Due again now (only this test's own command).
-    await asTenant((trx) => sql`UPDATE hawa.outbox_commands SET available_at = now() - interval '1 second' WHERE tenant_id = ${tenantId}::uuid AND idempotency_key = ${idempotencyKey}`.execute(trx));
-    await consumer.processBatch(100);
-    expect(documents.filter((d) => d.chatId === chat).map((d) => d.filename)).toEqual(['a.png', 'b.png']);
-    expect(messages.filter((m) => m.chatId === chat)).toHaveLength(1);
-    expect((await record(idempotencyKey))?.state).toBe('delivered');
-  });
-
-  it('sends nothing, and is not marked delivered, when a stored file no longer matches its approved hash', async () => {
     const artifactId = randomUUID();
+    const chat = String(4300 + Math.floor(Math.random() * 600));
+    const office = '9191';
     const { idempotencyKey } = await enqueue('notify.published', {
-      taskId: randomUUID(), title: 'Changed file', chatId: '4243',
-      files: [{ artifactId, format: 'png', filename: 'x.png', mimeType: 'image/png', sha256: 'f'.repeat(64) }],
+      taskId: randomUUID(), title: 'Left from before', chatId: chat, driveFolderId: 'client-root-folder', spreadsheetId: '',
+      sheetsConfirmed: false, filesCount: 1,
+      files: [{ artifactId, format: 'png', filename: 'old.png', mimeType: 'image/png', sha256: sha(png), byteSize: png.length }],
     });
     const { sender, documents, messages } = recordingSender();
     const consumer = new OutboxConsumer(db, {
-      tenantId, userId, batchSize: 100, telegramBotToken: botToken, telegramSender: () => sender,
-      readExportBytes: async () => new Uint8Array(40),
+      tenantId, userId, batchSize: 100, maxAttempts: 5,
+      telegramBotToken: botToken, telegramSender: () => sender, officeAlertChatId: office,
     });
+
     await consumer.processBatch(100);
-    expect(documents.filter((d) => d.chatId === '4243')).toHaveLength(0);
-    expect(messages.filter((m) => m.chatId === '4243')).toHaveLength(0);
+
     const row = await record(idempotencyKey);
-    expect(row?.state).toBe('failed');
-    expect(row?.last_error).toContain('DELIVERED_FILE_CHANGED');
-  });
-
-  it('dead-letters, instead of reporting delivered, when the task has no requesting chat', async () => {
-    const { idempotencyKey } = await enqueue('notify.published', { taskId: 'not-a-uuid', title: 'Desk drill', files: [] });
-    const { sender, messages } = recordingSender();
-    const consumer = new OutboxConsumer(db, { tenantId, userId, batchSize: 100, telegramBotToken: botToken, telegramSender: () => sender });
-    await consumer.processBatch(100);
-    const row = await record(idempotencyKey);
-    expect(row?.state).toBe('failed');
-    expect(row?.last_error).toContain('NO_REQUESTER_CHAT');
-    expect(messages.some((m) => m.text.includes('Desk drill'))).toBe(false);
-  });
-
-  describe('when Telegram refuses a file', () => {
-    // 2026-09-23: TELEGRAM_DOCUMENT_REJECTED_403 (a blocked bot, a bad chat) was not known to be
-    // permanent, so the delivery was retried to its last attempt and nobody was told.
-    async function deliverRefused(error: string, officeAlertChatId: string | null) {
-      const bytes = new Uint8Array(Array.from({ length: 20 }, (_, i) => i));
-      const taskId = randomUUID();
-      const chat = String(6000 + Math.floor(Math.random() * 1000));
-      const { idempotencyKey } = await enqueue('notify.published', {
-        taskId, title: 'Refused file', chatId: chat,
-        files: [{ artifactId: randomUUID(), format: 'png', filename: 'refused.png', mimeType: 'image/png', sha256: sha(bytes) }],
-      });
-      const { sender, messages } = recordingSender();
-      const refusing: TelegramSender = { ...sender, async dispatchOutboundDocument() { return { success: false, error }; } };
-      const consumer = new OutboxConsumer(db, {
-        tenantId, userId, batchSize: 100, maxAttempts: 5,
-        telegramBotToken: botToken, telegramSender: () => refusing, officeAlertChatId,
-        readExportBytes: async () => bytes,
-      });
-      await consumer.processBatch(100);
-      return { taskId, chat, idempotencyKey, messages, row: await record(idempotencyKey) };
-    }
-
-    it('stops at the first 403, and alerts the office instead of messaging the requester again', async () => {
-      const { taskId, chat, messages, row } = await deliverRefused('TELEGRAM_DOCUMENT_REJECTED_403', '9191');
-      expect(row?.state).toBe('failed');
-      expect(row?.attempts).toBe(1);
-      expect(row?.last_error).toContain('TELEGRAM_DOCUMENT_REJECTED_403');
-      expect(messages.filter((m) => m.chatId === chat)).toHaveLength(0);
-      const toOffice = messages.filter((m) => m.chatId === '9191' && m.text.includes(taskId));
-      expect(toOffice).toHaveLength(1);
-      expect(toOffice[0].text).toContain('could not be delivered');
-      expect(toOffice[0].text).toContain(`Requesting chat: ${chat}`);
-      expect(toOffice[0].text).toContain('TELEGRAM_DOCUMENT_REJECTED_403');
-      expect(toOffice[0].parse_mode).toBeUndefined();
-    });
-
-    it('logs the task and the reason when there is no office chat to alert', async () => {
-      const logged = captureLogs();
-      try {
-        const { taskId, row } = await deliverRefused('TELEGRAM_DOCUMENT_REJECTED_400', null);
-        expect(row?.state).toBe('failed');
-        const lines = logged.lines.filter((l) => l.level === 'error').map((l) => l.msg);
-        expect(lines.some((l) => l.includes(taskId) && l.includes('TELEGRAM_DOCUMENT_REJECTED_400') && l.includes('no office chat'))).toBe(true);
-      } finally {
-        logged.restore();
-      }
-    });
-
-    it('keeps retrying a 429, which is Telegram asking to slow down, and alerts nobody yet', async () => {
-      const { taskId, idempotencyKey, messages, row } = await deliverRefused('TELEGRAM_DOCUMENT_REJECTED_429', '9191');
-      try {
-        expect(row?.state).toBe('pending');
-        expect(messages.filter((m) => m.text.includes(taskId))).toHaveLength(0);
-      } finally {
-        await asTenant((trx) => sql`DELETE FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid AND idempotency_key = ${idempotencyKey}`.execute(trx));
-      }
-    });
-
-    it('alerts the office about a send that may have arrived, and does not tell the requester it was delivered', async () => {
-      // 2026-09-24: an uncertain send was closed with no office alert while the requester read
-      // "Your approved design has been delivered." Nobody knew whether they had the file.
-      const { taskId, chat, messages, row } = await deliverRefused('TELEGRAM_DELIVERY_UNCERTAIN', '9191');
-      expect(row?.state).toBe('failed');
-      expect(row?.last_error).toContain('DELIVERY_UNCERTAIN');
-      const toRequester = messages.filter((m) => m.chatId === chat);
-      expect(toRequester).toHaveLength(1);
-      expect(toRequester[0].text).not.toContain('has been delivered');
-      expect(toRequester[0].text).toContain('Telegram did not confirm that it arrived');
-      expect(toRequester[0].text).toContain('The office will check');
-      const toOffice = messages.filter((m) => m.chatId === '9191' && m.text.includes(taskId));
-      expect(toOffice).toHaveLength(1);
-      expect(toOffice[0].text).toContain('did not confirm');
-      expect(toOffice[0].text).toContain(`Requesting chat: ${chat}`);
-      expect(toOffice[0].text).toContain('Nothing was sent twice');
-    });
-  });
-
-  it('is retried, instead of reported delivered, when no bot token is configured', async () => {
-    const { idempotencyKey } = await enqueue('notify.published', { taskId: randomUUID(), title: 'No token', chatId: '4244', files: [] });
-    const consumer = new OutboxConsumer(db, { tenantId, userId, batchSize: 100, telegramBotToken: null, maxAttempts: 5 });
-    try {
-      await consumer.processBatch(100);
-      const row = await record(idempotencyKey);
-      expect(row?.state).toBe('pending');
-      expect(row?.attempts).toBe(1);
-      expect(row?.last_error).toContain('TELEGRAM_NOT_CONFIGURED');
-    } finally {
-      await asTenant((trx) => sql`DELETE FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid AND idempotency_key = ${idempotencyKey}`.execute(trx));
-    }
+    // Permanent on the first attempt: no retries while attempts remain.
+    expect([row?.state, row?.attempts]).toEqual(['failed', 1]);
+    expect(row?.last_error).toContain(REQUESTER_SEND_RETIRED);
+    expect(documents.filter((d) => d.chatId === chat || d.chatId === office)).toEqual([]);
+    expect(messages.filter((m) => m.chatId === chat || m.chatId === office)).toEqual([]);
   });
 });
 
@@ -316,6 +129,24 @@ describe('a request dead-lettered at intake', () => {
 });
 
 describe('composeDeliveredMessage', () => {
+  it('writes an HTML notice naming each attached file with its own Drive link, and the Sheets problem', () => {
+    const text = composeDeliveredMessage({
+      title: 'Eid <poster> & *sale*', driveFolderId: 'client-root-folder', spreadsheetId: '', sheetsConfirmed: false,
+      sheetProblem: 'No spreadsheet is configured for this client',
+      files: [
+        { artifactId: randomUUID(), format: 'png', filename: 'kaae-1.png', mimeType: 'image/png', sha256: 'a'.repeat(64), byteSize: 1, webViewLink: 'https://drive.google.com/file/d/png-file/view' },
+        { artifactId: randomUUID(), format: 'pdf', filename: 'kaae-2.pdf', mimeType: 'application/pdf', sha256: 'b'.repeat(64), byteSize: 1, webViewLink: 'https://drive.google.com/file/d/pdf-file/view' },
+      ],
+    } as never, { filesSent: 2 });
+    expect(text).toContain('<b>Eid &lt;poster&gt; &amp; *sale*</b>');
+    expect(text).toContain('The 2 approved files are attached above.');
+    expect(text).toContain('<a href="https://drive.google.com/file/d/png-file/view">kaae-1.png</a>');
+    expect(text).toContain('<a href="https://drive.google.com/file/d/pdf-file/view">kaae-2.pdf</a>');
+    expect(text).not.toContain('client-root-folder');
+    expect(text).toContain('Production log: not updated yet (No spreadsheet is configured for this client).');
+    expect(text).not.toMatch(/\*[A-Z][^*]*\*/); // no Markdown bold left over
+  });
+
   it('falls back to the delivery folder for a command written before files were named', () => {
     const text = composeDeliveredMessage({ title: 'Old', driveFolderId: 'fld_1', spreadsheetId: 'sh_1', sheetRowNumber: 7 }, { filesSent: 0 });
     expect(text).toContain('<a href="https://drive.google.com/drive/folders/fld_1">delivery folder</a>');

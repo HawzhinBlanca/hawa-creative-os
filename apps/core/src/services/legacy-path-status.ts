@@ -1,8 +1,14 @@
 /**
  * What is still on the old Telegram path, read without SQL on production (ADR-135): the Desk or an
  * administrator's session reads GET /v1/operations/legacy-path. Stage 2 of the retirement, which
- * deletes the code that finishes legacy requests, may merge only when `stage2Ready` is true
+ * deleted the code that finished legacy requests, merged on `stage2Ready: true`
  * (plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md).
+ *
+ * Since stage 2 it is a standing check that the old path stays empty: nothing creates a legacy task,
+ * enqueues a requester send or starts a legacy workflow delivery, so every count stays 0 and
+ * `stage2Ready` true. A count above 0 means an old row was reopened by hand, or something new writes
+ * what only the old path wrote; the removed code will not finish it (Core's delivery refuses such a
+ * task with LEGACY_TELEGRAM_DELIVERY_RETIRED, and an old send redriven ends REQUESTER_SEND_RETIRED).
  *
  * A legacy Telegram task is one created from a Telegram chat (its task.created event names
  * sourcePlatform 'telegram') that RequestLifecycle does not own (tasks.request_id is null), whichever

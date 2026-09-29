@@ -1,11 +1,10 @@
 import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, sql, withRlsContext, OutboxRepository, PublicationRepository, type Kysely, type Database } from '@hawa/db';
+import { createDb, sql, withRlsContext, PublicationRepository, type Kysely, type Database } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
-import { OutboxConsumer } from '../../worker/src/outbox-consumer.js';
 import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 describe('E2E Canva-to-Delivery Closed Loop', () => {
@@ -13,7 +12,6 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
-  const testChannelId = '777888999';
 
   const headers = {
     'Content-Type': 'application/json',
@@ -31,13 +29,9 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     if (db) await db.destroy();
   });
 
-  it('completes the entire chain from intake to Canva draft, PostgreSQL revision & QC, Desk approval, delivery, and outbox notification', async () => {
-    const sentMessages: Array<{ chatId: string; message: any }> = [];
+  it('completes the entire chain from intake to Canva draft, PostgreSQL revision & QC, Desk approval and delivery, with no requester command', async () => {
     const mockTelegramBridge = {
-      dispatchOutboundMessage: vi.fn().mockImplementation(async (chatId: string, message: any) => {
-        sentMessages.push({ chatId, message });
-        return { success: true, messageId: 'msg_' + randomUUID() };
-      }),
+      dispatchOutboundMessage: vi.fn().mockImplementation(async () => ({ success: true, messageId: 'msg_' + randomUUID() })),
       dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }),
     };
 
@@ -51,7 +45,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     });
 
     // -------------------------------------------------------------------------
-    // 1. INTAKE: Create a new task for client KAAE with Telegram source channel
+    // 1. INTAKE: Create a new Desk task for client KAAE. (Core's own delivery refuses a Telegram
+    // task outside RequestLifecycle since ADR-135 stage 2d: delivery-workflow.test.ts.)
     // -------------------------------------------------------------------------
     const taskId = randomUUID();
     await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
@@ -67,8 +62,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, 1, 'task.created', 'user', ${operatorUserId}, ${randomUUID()}::uuid,
                 ${JSON.stringify({
                   payload: {
-                    sourcePlatform: 'telegram',
-                    sourceChannelId: testChannelId,
+                    sourcePlatform: 'hawa_desk',
+                    sourceChannelId: 'hawa_desk',
                     headlineEn: 'Accreditation Milestone',
                     copyEn: 'We are pleased to announce full institutional accreditation.',
                   },
@@ -247,29 +242,6 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(held).toEqual({ taskState: 'publishing', publication: { state: 'pending', error_class: 'ARCHIVE_UNCONFIRMED' }, driveRefs: 0, requesterCommands: 0 });
     expect((await (await app.request(`/tasks/${taskId}`, { headers })).json()).status).toBe('ARCHIVE_RECONCILIATION');
 
-    const originalEnqueue = OutboxRepository.prototype.enqueue;
-    const enqueue = vi.spyOn(OutboxRepository.prototype, 'enqueue')
-      .mockImplementationOnce(async () => { throw new Error('injected outbox commit failure'); })
-      .mockImplementation(originalEnqueue);
-    let failedNotificationCommit: Response;
-    try {
-      failedNotificationCommit = await app.request(`/tasks/${taskId}/publish`, {
-        method: 'POST', headers, body: JSON.stringify({ policy: 'current_task' }),
-      });
-    } finally {
-      enqueue.mockRestore();
-    }
-    expect(failedNotificationCommit.status).toBe(503);
-    const rolledBack = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => ({
-      taskState: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx)).rows[0].state,
-      publication: (await sql<{ state: string; error_class: string }>`SELECT state, error_class FROM hawa.publications WHERE task_id = ${taskId}::uuid`.execute(trx)).rows[0],
-      driveRefs: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.drive_refs WHERE publication_id IN
-        (SELECT id FROM hawa.publications WHERE task_id = ${taskId}::uuid)`.execute(trx)).rows[0].n,
-      requesterCommands: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
-        WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n,
-    }));
-    expect(rolledBack).toEqual(held);
-
     const deliverRes = await app.request(`/tasks/${taskId}/publish`, {
       method: 'POST',
       headers,
@@ -293,71 +265,15 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(dbPub).toBeDefined();
     expect(dbPub.state).toBe('complete');
 
-    // Verify hawa.outbox_commands has notify.published command
-    const outboxCmd = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
-      return (await sql<any>`
-        SELECT * FROM hawa.outbox_commands
-        WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'
-      `.execute(trx)).rows[0];
-    });
-    expect(outboxCmd).toBeDefined();
-    expect(outboxCmd.command_type).toBe('notify.published');
-    expect(outboxCmd.state).toBe('pending');
+    // Core's own delivery queues nothing for a requester (ADR-135 stage 2d): the request-owned
+    // Delivery workflow sends a Telegram requester's files, and a Desk task has no chat.
+    const requesterCommands = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) =>
+      (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
+        WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n);
+    expect(requesterCommands).toBe(0);
 
     // -------------------------------------------------------------------------
-    // 7. OUTBOX CONSUMER: Worker leases and executes notify.published handler
-    // -------------------------------------------------------------------------
-    let outboxNotified = false;
-    let publishedChatId: string | null = null;
-
-    const consumer = new OutboxConsumer(db, {
-      tenantId,
-      userId: operatorUserId,
-      batchSize: 10,
-      handlers: {
-        'notify.published': async (cmd, _db, scope) => {
-          // Resolve task channel from DB under RLS, in its own short transaction: a handler runs
-          // with no transaction open (outbox-consumer.ts).
-          const taskInfo: any = await scope.inTenant((trx) => sql`
-            SELECT t.title, e.data
-            FROM hawa.tasks t
-            LEFT JOIN hawa.task_events e ON e.task_id = t.id AND e.event_type = 'task.created'
-            WHERE t.id = ${taskId}::uuid LIMIT 1
-          `.execute(trx));
-
-          const eventPayload = taskInfo.rows[0]?.data?.payload || {};
-          publishedChatId = eventPayload.sourceChannelId;
-
-          const dispatch = await mockTelegramBridge.dispatchOutboundMessage(publishedChatId!, {
-            text: `🚀 Campaign Assets Delivered for task ${taskId}! Drive folder: ${cmd.payload.driveFiles?.[0]?.name}`,
-          });
-
-          if (dispatch.success) {
-            outboxNotified = true;
-          }
-        },
-      },
-    });
-
-    const summary = await consumer.processBatch(10);
-    expect(summary.succeeded).toBeGreaterThanOrEqual(1);
-    expect(outboxNotified).toBe(true);
-    expect(publishedChatId).toBe(testChannelId);
-
-    // Verify outbox command marked 'delivered' in PostgreSQL
-    const deliveredCmd = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
-      return (await sql<any>`
-        SELECT state, delivered_at FROM hawa.outbox_commands WHERE id = ${outboxCmd.id}::uuid
-      `.execute(trx)).rows[0];
-    });
-    expect(deliveredCmd.state).toBe('delivered');
-    expect(deliveredCmd.delivered_at).toBeTruthy();
-
-    // Verify telegram message was dispatched to the right chat
-    expect(sentMessages.some((m) => m.chatId === testChannelId && m.message.text.includes(taskId))).toBe(true);
-
-    // -------------------------------------------------------------------------
-    // 8. SHEETS RETRY: a sheet that failed once can still be recorded as synced
+    // 7. SHEETS RETRY: a sheet that failed once can still be recorded as synced
     // -------------------------------------------------------------------------
     // recordSheetSync was a plain INSERT on a UNIQUE (spreadsheet, sheet, row_key) row, so the retry
     // after a failed first attempt always died on the key and the ledger row could never be closed.

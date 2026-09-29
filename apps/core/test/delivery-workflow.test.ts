@@ -170,7 +170,12 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
     destinationSaved = true;
   }
 
-  async function approvedTask(app: ReturnType<typeof core>, deliveryExecutorPin: 'core' | 'restate' = 'core') {
+  /**
+   * An approved task with two pinned exports and no request owner. `origin` 'desk' is a Desk task,
+   * the only kind Core's own delivery still delivers; 'telegram' is one the retired Telegram intake
+   * made outside RequestLifecycle (ADR-135 stage 2d refuses to deliver it).
+   */
+  async function approvedTask(app: ReturnType<typeof core>, deliveryExecutorPin: 'core' | 'restate' = 'core', origin: 'desk' | 'telegram' = 'desk') {
     await saveKaaeDestination(app);
     const taskId = randomUUID();
     const chat = String(60_000_000 + Math.floor(Math.random() * 9_000_000));
@@ -183,7 +188,9 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
         VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'Slice 2.2 delivery', 'x', 'received', 3, 1, ${deliveryExecutorPin}, now(), now())`.execute(trx);
       await sql`INSERT INTO hawa.task_events (id, tenant_id, task_id, aggregate_version, event_type, actor_type, actor_id, correlation_id, data, occurred_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, 1, 'task.created', 'user', ${operator.userId}, ${randomUUID()}::uuid,
-          ${JSON.stringify({ payload: { sourcePlatform: 'telegram', sourceChannelId: chat, copyEn: 'x' } })}::jsonb, now())`.execute(trx);
+          ${JSON.stringify({ payload: origin === 'telegram'
+            ? { sourcePlatform: 'telegram', sourceChannelId: chat, copyEn: 'x' }
+            : { sourcePlatform: 'hawa_desk', sourceChannelId: 'hawa_desk', copyEn: 'x' } })}::jsonb, now())`.execute(trx);
       await sql`INSERT INTO hawa.canva_bindings (id, tenant_id, task_id, client_id, canva_design_id, edit_url, status, version, created_at, updated_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${designId}, ${`https://www.canva.com/design/${designId}/edit`}, 'bound', 1, now(), now())`.execute(trx);
       for (const [format, bytes, id] of [['png', png, ids.png], ['pptx', deck, ids.pptx]] as const) {
@@ -227,14 +234,14 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
     expect(restateIngress.starts).toEqual([]);
     expect(await taskState(taskId)).toBe('complete');
     expect((await publications(taskId)).map((p) => [p.state, p.executor])).toEqual([['complete', 'core']]);
-    // The requester's files go through the outbox, as before.
-    expect((await publishedCommands(taskId)).map((c) => c.state)).toEqual(['pending']);
+    // Core's own delivery sends nothing to a requester (ADR-135 stage 2d).
+    expect(await publishedCommands(taskId)).toEqual([]);
   });
 
   it('a Core-pinned task stays on Core at its first delivery', async () => {
     const restateIngress = fakeRestate();
     const app = core();
-    const { taskId, chat } = await approvedTask(app);
+    const { taskId } = await approvedTask(app);
     const res = await deliver(app, taskId);
     expect(res.status).toBe(202);
     expect((await res.json()).status).toBe('COMPLETE');
@@ -265,14 +272,39 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
   it('a delivery Core\'s own path started stays Core\'s', async () => {
     const restateIngress = fakeRestate();
     const app = core(noDrivePublisher());
-    const { taskId, chat } = await approvedTask(app);
+    const { taskId } = await approvedTask(app);
     const first = await deliver(app, taskId);
-    expect((await first.json()).status).toBe('DELIVERED_TO_CHAT_ONLY');
+    // Drive refused: the failure is answered and nothing goes to a requester (ADR-135 stage 2d).
+    expect(first.status).toBe(422);
+    expect((await first.json()).detail).toMatch(/credentials not configured/);
     const again = await deliver(app, taskId);
     expect(again.status).toBe(503);
     expect((await again.json()).detail).toMatch(/archive may already exist/i);
     expect(restateIngress.starts).toEqual([]);
     expect((await publications(taskId)).map((p) => p.executor)).toEqual(['core']);
+    expect(await publishedCommands(taskId)).toEqual([]);
+  });
+
+  // ADR-135 stage 2d: Core's own delivery no longer sends files to a Telegram requester, and every
+  // Telegram request is RequestLifecycle's. A Telegram task the retired intake made outside it is
+  // refused before any effect, rather than archived with its requester never told.
+  it('a Telegram task outside RequestLifecycle is refused before any effect (LEGACY_TELEGRAM_DELIVERY_RETIRED)', async () => {
+    const restateIngress = fakeRestate();
+    const publisher = archivingPublisher();
+    const app = core(publisher);
+    const { taskId } = await approvedTask(app, 'core', 'telegram');
+    const res = await deliver(app, taskId);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ title: 'Telegram Delivery Retired', detail: expect.stringMatching(/outside RequestLifecycle/) });
+    expect(publisher.publish).not.toHaveBeenCalled();
+    expect(restateIngress.starts).toEqual([]);
+    expect(await publications(taskId)).toEqual([]);
+    const reservations = (await withRlsContext(db, operator, (trx) => sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM hawa.drive_upload_reservations r JOIN hawa.publications p ON p.id = r.publication_id
+      WHERE p.task_id = ${taskId}::uuid`.execute(trx))).rows[0].n;
+    expect(reservations).toBe(0);
+    expect(await publishedCommands(taskId)).toEqual([]);
+    expect(await taskState(taskId)).toBe('approved');
   });
 
   describe('the internal endpoints', () => {

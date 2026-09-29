@@ -11,13 +11,9 @@ import crypto from 'node:crypto';
 import {
   CHANNEL_INGRESS_USER_ID,
   SYSTEM_AUTOMATION_USER_ID,
-  TASK_TRANSITIONED_EVENT,
   deliveryWorkflowId,
-  taskTransitioned,
   publicationRequestFromExpectation,
   type PublishRequest,
-  type DeliveryInput,
-  type DeliveryOutcome,
   type PreparedDelivery,
   type Publisher,
   type RequestContext,
@@ -79,7 +75,7 @@ export interface DeliveryOptions {
 
 export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
   const {
-    db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, events,
+    db, taskRepo, publicationRepo, publisher, deliverableStore, events,
     isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
   } = deps;
 
@@ -253,15 +249,6 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
   /** Tasks whose delivery is running in this process: a task left PUBLISHING with none is stranded. */
   const deliveriesInFlight = new Set<string>();
 
-  /** Tells the Desk the task moved, in the one task:transitioned shape. */
-  const broadcastMove = (taskId: string, from: string, to: string) => {
-    try {
-      broadcast(TASK_TRANSITIONED_EVENT, taskTransitioned({ taskId, from, to }));
-    } catch (err) {
-      log.error(`[core:events] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, err instanceof Error ? err.message : err);
-    }
-  };
-
   const tenantOf = (task: { tenantId?: string } | null | undefined) => (task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID);
 
   /** The task's requesting Telegram chat: the task's own record of it, else its `task.created` event. */
@@ -281,9 +268,9 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
 
   /**
    * Who delivers the task: 'restate' when any of its publications is the Delivery workflow's (slice
-   * 2.2); 'core' when Core's own delivery has started one, or has queued the requester's files in the
-   * outbox (a chat-only delivery can do that with no publication row). Before the first effect the
-   * task's immutable creation-time pin decides. Historical Restate publications override the
+   * 2.2); 'core' when Core's own delivery has started one. Before the first effect the task's
+   * immutable creation-time pin decides. (A chat-only delivery of an old Telegram task queued the
+   * requester's files with no publication row; such a task is pinned 'core', which says the same.) Historical Restate publications override the
    * migrated task default of core.
    * Throws when Postgres cannot be read: the caller must not guess, since either path acting on the
    * other's delivery would send the files a second time.
@@ -296,23 +283,11 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
         ORDER BY (executor = 'restate') DESC, created_at DESC LIMIT 1`.execute(trx)).rows[0];
       if (row) return row.executor;
-      if (await coreQueuedFiles(trx, tenantId, taskId)) return 'core';
       const taskPin = (await sql<{ delivery_executor_pin: 'core' | 'restate' }>`
         SELECT delivery_executor_pin FROM hawa.tasks
         WHERE tenant_id = ${tenantId}::uuid AND id = ${taskId}::uuid`.execute(trx)).rows[0];
       return taskPin?.delivery_executor_pin ?? null;
     });
-  }
-
-  /** Whether Core's own delivery queued the task's files for the requester (a `notify.published` command). */
-  async function coreQueuedFiles(trx: Kysely<Database>, tenantId: string, taskId: string, publicationKey?: string): Promise<boolean> {
-    const { deliveredNotificationKey } = await import('./delivery-notification.js');
-    const rows = publicationKey
-      ? (await sql`SELECT 1 FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid AND command_type = 'notify.published'
-          AND idempotency_key = ${deliveredNotificationKey(taskId, publicationKey)} LIMIT 1`.execute(trx)).rows
-      : (await sql`SELECT 1 FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid AND command_type = 'notify.published'
-          AND aggregate_id = ${taskId}::uuid LIMIT 1`.execute(trx)).rows;
-    return rows.length > 0;
   }
 
   async function executeOmnichannelPublish(
@@ -390,6 +365,14 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     // deliver a version the client had asked to change (audit 2026-09-27 #3). The workflow's own run
     // is checked by RequestLifecycle before it starts.
     if (!workflowMode) {
+      // Core's own delivery sends no files to a Telegram requester any more (ADR-135 stage 2d): every
+      // Telegram request is RequestLifecycle's, whose Delivery workflow sends them. A Telegram task
+      // outside it (made by the old intake, none open when stage 2 shipped) is refused before any
+      // effect, rather than archived with its requester never told.
+      if (await requesterChatOf(task, taskId)) {
+        return { ok: false, status: 409, title: 'Telegram Delivery Retired', code: 'LEGACY_TELEGRAM_DELIVERY_RETIRED',
+          message: `Task ${taskId} came from a Telegram chat outside RequestLifecycle; Core no longer sends files to Telegram requesters. Cancel it, and ask the requester to send the request again.` };
+      }
       const change = await changeBlockingDelivery(task, taskId);
       if (change === null) {
         return { ok: false, status: 503, title: 'Database Unavailable', code: 'DATABASE_UNAVAILABLE', message: 'Whether the client asked for a change could not be checked; try again' };
@@ -697,60 +680,9 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         });
         return preparedAnswer(chatOnly, { chatId, chatOnly: true, archived: false, sheetsConfirmed: false, archiveProblem });
       }
-      // The Drive archive could not be written, and the requester still gets the design the office
-        // approved: the pinned exports are stored and hash-checked, and the worker sends those bytes.
-        // The archive stays failed here (and in Desk) until Drive works; a later successful delivery
-        // does not send the files twice (same notification key).
-        let requesterNotified = false;
-        try {
-          const notification = await import('./delivery-notification.js');
-          const chatId = await notification.resolveRequesterChat(
-            task,
-            db && isValidUuid(taskId)
-              ? () => withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
-                  (await sql<{ data: Parameters<typeof notification.requesterChatFromIntake>[0] }>`SELECT data FROM hawa.task_events
-                    WHERE tenant_id = ${failTenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.created'
-                    ORDER BY aggregate_version LIMIT 1`.execute(trx)).rows[0]?.data)
-              : undefined
-          );
-          const chatOnly = chatId
-            ? notification.buildChatOnlyNotificationPayload({
-                taskId,
-                clientId: task.clientId || null,
-                title: task.title || null,
-                chatId,
-                publicationKey,
-                pins: approval.pinnedExports,
-                files,
-                archiveProblem: failure.code === 'CREDENTIALS_MISSING'
-                  ? 'the office Google account is not connected'
-                  : String(failure.code || 'Drive refused the upload'),
-              })
-            : null;
-          if (chatOnly && outboxRepo && db && isValidUuid(taskId)) {
-            const notifyKey = notification.deliveredNotificationKey(taskId, publicationKey);
-            let earlierSendFailed = false;
-            await withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-              const earlier = await outboxRepo.findByIdempotencyKey(failTenantId, notifyKey, trx);
-              // A second Deliver said "sent" whatever became of the first send, even one that failed.
-              if (earlier) {
-                earlierSendFailed = (earlier as { state?: string }).state === 'failed';
-                return;
-              }
-              await outboxRepo.enqueue({
-                tenantId: failTenantId,
-                aggregateType: 'task',
-                aggregateId: taskId,
-                commandType: 'notify.published',
-                idempotencyKey: notifyKey,
-                payload: chatOnly as unknown as Record<string, unknown>,
-              }, trx);
-            });
-            requesterNotified = !earlierSendFailed;
-          }
-        } catch (err) {
-          log.error('[core:omnichannel:notify] Could not queue the approved files for the requester after the Drive failure:', err);
-        }
+      // Core's own delivery sends nothing to a requester (ADR-135 stage 2d: Desk, WhatsApp and
+      // webhook tasks have no Telegram chat, and a Telegram task outside RequestLifecycle is refused
+      // before any effect). The archive stays failed here (and in Desk) until Drive works.
         // Nothing reached Drive, so the task goes back to APPROVED and Deliver can be pressed again
         // once Drive works; it used to stay PUBLISHING, which the publish route refuses.
         if (task.status === 'PUBLISHING') {
@@ -773,17 +705,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
             ).catch((err: unknown) => log.error('[core:omnichannel:publish] Could not return the task to approved:', err));
           }
         }
-      return {
-        ok: false as const,
-        status: failure.status,
-        code: failure.code,
-        message: requesterNotified
-          // Queued, not known to have arrived: the office is alerted if Telegram does not take it
-          // (outbox consumer). "Was sent" was said the moment it was queued (review of 2026-09-24).
-          ? `${String(failure.message).replace(/[.\s]+$/, '')}. The approved file is queued for the requester in Telegram; the Drive archive is not written.`
-          : failure.message,
-        requesterNotified,
-      };
+      return { ok: false as const, status: failure.status, code: failure.code, message: failure.message };
     };
 
     let publicationRequest: PublishRequest = {
@@ -921,16 +843,10 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       return { ok: false, status: 409, message: `Illegal transition from ${task.status} to ${finalStatus}` };
     }
 
-    // The requester is told once the approved files are verified in Drive, and receives the files
-    // themselves: the payload names the pinned exports, which the worker reads and sends to the chat,
-    // with each file's Drive link. It used to wait for the Sheets row too, so a client with no ledger,
-    // or a row Google did not confirm, left the requester unnotified for good. The Sheets outcome
-    // travels in the payload and is reported separately; the task still becomes COMPLETE only when
-    // the row is confirmed. The key is the publication's, so the retry that later confirms the row
-    // does not notify twice. Its durable command is committed with the receipts and task state;
-    // the worker's later Telegram send remains independent of the publication transaction.
+    // The workflow's answer names the files verified in Drive, which the Delivery workflow sends to
+    // the requester with each file's Drive link, and the Sheets outcome. Core's own delivery sends
+    // nothing to a requester (ADR-135 stage 2d); only the workflow's answer uses this.
     const notification = await import('./delivery-notification.js');
-    const notifyKey = notification.deliveredNotificationKey(taskId, publicationKey);
     const outboxPayload = notification.buildDeliveredNotificationPayload({
       taskId,
       clientId: task.clientId || null,
@@ -952,10 +868,9 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       files,
     });
 
-    // A task made in Desk has no chat to tell. The workflow owns its Telegram send and does not
-    // enqueue here. Core's own delivery must durably record provider receipts before a requester
-    // command can become visible, and completion cannot precede either write.
-    if (db && isValidUuid(taskId) && (!publicationRepo || !dbPub || (!workflowMode && outboxPayload?.chatId && !outboxRepo))) {
+    // Provider receipts are recorded durably before the workflow is told to send and before
+    // completion.
+    if (db && isValidUuid(taskId) && (!publicationRepo || !dbPub)) {
       return holdArchive({ status: 503, code: 'RECEIPTS_NOT_RECORDED',
         message: 'The Drive and Sheets receipts could not be recorded; requester delivery remains held' });
     }
@@ -1015,17 +930,6 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
               taskId,
             }, trx);
           }
-          if (!workflowMode && outboxPayload?.chatId && outboxRepo &&
-              !(await outboxRepo.findByIdempotencyKey(pubTenantId, notifyKey, trx))) {
-            await outboxRepo.enqueue({
-              tenantId: pubTenantId,
-              aggregateType: 'task',
-              aggregateId: taskId,
-              commandType: 'notify.published',
-              idempotencyKey: notifyKey,
-              payload: outboxPayload as unknown as Record<string, unknown>,
-            }, trx);
-          }
         });
       } catch (err) {
         log.error('[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:', err);
@@ -1044,9 +948,6 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       );
       if (finishTrans.ok) events.get(taskId)?.push(finishTrans.value);
       task.status = finalStatus;
-    }
-    if (!workflowMode && outboxPayload && !outboxPayload.chatId) {
-      log.info(`[core:omnichannel:notify] Task ${taskId} has no requesting chat; no delivery message is sent.`);
     }
 
     if (workflowMode) {

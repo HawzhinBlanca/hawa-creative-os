@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { describe, expect, it, afterAll, vi } from 'vitest';
-import { createDb, OutboxRepository } from '@hawa/db';
+import { describe, expect, it, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import {
   buildDeliveredNotificationPayload,
@@ -16,17 +16,17 @@ const testDb = createDb(process.env.TEST_DATABASE_URL!);
 afterAll(() => testDb.destroy());
 
 /**
- * The requester is told about a delivery once the approved files are verified in Drive, and the
- * notification carries the files themselves. Until now `notify.published` was written only when the
- * Sheets row was confirmed too, so a client with no ledger left the requester unnotified for good,
- * and the message named only the client's root Drive folder.
+ * Core's own delivery sends nothing to a requester (ADR-135 stage 2d): the request-owned Delivery
+ * workflow sends the approved files to a Telegram requester, and a Telegram task outside
+ * RequestLifecycle is refused before any effect (delivery-without-drive.test.ts). Until stage 2d
+ * Core wrote a `notify.published` command once the files were verified in Drive. The payload
+ * helpers below stay: the workflow's answer is built with them.
  */
 
 const KAAE = 'c1000000-0000-4000-8000-000000000002';
 // FastPay's seeded client row, given KAAE's DNA without a spreadsheet: Postgres keeps DNA only
 // for a client it holds.
 const NO_SHEET_CLIENT = 'c1000000-0000-4000-8000-000000000004';
-const REQUESTER_CHAT = 4343;
 const json = { 'Content-Type': 'application/json' };
 const auth = { ...json, Authorization: 'Bearer test_bearer' };
 
@@ -53,16 +53,13 @@ async function setup() {
   };
   await saveDna('');
 
-  // A request from a Telegram chat, which the notification goes back to (a Desk task has no chat, and
-  // Postgres's outbox writes no notification for one), then routed to the client.
-  const created = await (await app.request('/api/webhooks/telegram', {
+  // A Desk task for the client: the only kind of task Core's own delivery still delivers.
+  const created = await (await app.request('/tasks', {
     method: 'POST',
-    headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ update_id: 5000 + Math.floor(Math.random() * 1e6), message: { text: 'Please create a new poster\n---\nDelivery <notice> & files', chat: { id: REQUESTER_CHAT } } }),
+    headers: auth,
+    body: JSON.stringify({ title: 'Delivery <notice> & files', clientId: NO_SHEET_CLIENT }),
   })).json();
   const taskId: string = created.id || created.task?.id;
-  const routed = await app.request(`/tasks/${taskId}/route`, { method: 'POST', headers: auth, body: JSON.stringify({ clientId: NO_SHEET_CLIENT, reason: 'Client assigned' }) });
-  expect(routed.status).toBe(202);
   const rev = await (
     await app.request(`/tasks/${taskId}/revisions`, {
       method: 'POST',
@@ -87,64 +84,22 @@ async function setup() {
   return { app, taskId, exportId, saveDna, deliver, notifications };
 }
 
-describe('the delivery notification', () => {
-  it('is written once the files are in Drive, with the Sheets outcome reported separately', async () => {
-    const { deliver, notifications, exportId, taskId } = await setup();
+describe("Core's own delivery", () => {
+  it('writes no requester notification once the files are in Drive, with the Sheets outcome still reported', async () => {
+    const { deliver, notifications } = await setup();
 
     const first = await (await deliver()).json();
+    // No spreadsheet: the archive is written and the ledger row is left for reconciliation.
     expect(first.status).toBe('PUBLISH_RECONCILIATION');
-
-    const [notify, ...rest] = await notifications();
-    expect(rest).toHaveLength(0);
-    expect(notify).toBeDefined();
-    expect(notify.payload).toMatchObject({
-      taskId,
-      // The chat intake's title, which carries the message text as sent.
-      title: expect.stringContaining('Delivery <notice> & files'),
-      chatId: String(REQUESTER_CHAT),
-      sheetsConfirmed: false,
-      sheetProblem: 'No spreadsheet is configured for this client',
-      sheetRowNumber: null,
-      filesCount: 1,
-    });
-    expect(notify.payload.files).toHaveLength(1);
-    expect(notify.payload.files[0]).toMatchObject({ artifactId: exportId, format: 'png', mimeType: 'image/png' });
-    expect(notify.payload.files[0].webViewLink).toMatch(/^https:\/\//);
+    expect(await notifications()).toHaveLength(0);
   });
 
-  it('is not written a second time when a retry later confirms the Sheets row', async () => {
+  it('writes none either when a retry later confirms the Sheets row and completes the task', async () => {
     const { deliver, notifications, saveDna } = await setup();
     expect((await (await deliver()).json()).status).toBe('PUBLISH_RECONCILIATION');
     await saveDna('sheet-for-no-sheet-notify-client');
     expect((await (await deliver()).json()).status).toBe('COMPLETE');
-    expect(await notifications()).toHaveLength(1);
-  });
-
-  // Ported from studio-v2 66e483e8 (audit 2026-09-27 #12). studio-v2 completed the files and left
-  // the task in PUBLISH_RECONCILIATION with a notificationProblem; this branch is stricter: the
-  // notice is enqueued in the same transaction as the Drive/Sheets receipts, so a failed write holds
-  // the whole delivery (503 RECEIPTS_NOT_RECORDED) and Deliver retries it.
-  it('must be queued before the task is COMPLETE: a failed write leaves it for Deliver to retry (audit 2026-09-27 #12)', async () => {
-    const { deliver, notifications, saveDna } = await setup();
-    await saveDna('sheet-for-no-sheet-notify-client');
-    const enqueue = OutboxRepository.prototype.enqueue;
-    const spy = vi.spyOn(OutboxRepository.prototype, 'enqueue').mockImplementation(function (this: OutboxRepository, command: any, trx?: any) {
-      if (command?.commandType === 'notify.published') return Promise.reject(new Error('connection reset (fixture)'));
-      return enqueue.call(this, command, trx);
-    } as any);
-    try {
-      const first = await deliver();
-      const body = await first.json();
-      // The files are in Drive, but the requester would never hear: nothing is recorded as delivered.
-      expect(first.status).toBe(503);
-      expect(JSON.stringify(body)).toMatch(/RECEIPTS_NOT_RECORDED|requester delivery remains held/);
-      expect(body.status).not.toBe('COMPLETE');
-      expect(await notifications()).toHaveLength(0);
-    } finally {
-      spy.mockRestore();
-    }
-    expect((await (await deliver()).json()).status).toBe('COMPLETE');
-    expect(await notifications()).toHaveLength(1);
+    expect(await notifications()).toHaveLength(0);
   });
 });
 

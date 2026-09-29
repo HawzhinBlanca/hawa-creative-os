@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, OutboxRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
@@ -110,35 +110,7 @@ describe('legacy outbox Telegram send receipt', () => {
     expect((await command(idempotencyKey))?.last_error).toContain('DELIVERY_UNCERTAIN');
     expect((await latestMark(id))?.event_kind).toBe('telegram_message_uncertain');
   });
-
-  it('does not claim an approved file arrived when its success answer has no message ID', async () => {
-    const bytes = new Uint8Array([3, 5, 7]);
-    const artifactId = randomUUID();
-    const { idempotencyKey, id } = await enqueue('notify.published', {
-      taskId: randomUUID(), chatId: '551123', title: 'Approved design',
-      files: [{ artifactId, filename: 'approved.png', format: 'png', mimeType: 'image/png',
-        sha256: createHash('sha256').update(bytes).digest('hex'), byteSize: bytes.length }],
-    });
-    let fileSends = 0;
-    const notices: string[] = [];
-    const bridge: TelegramSender = {
-      async dispatchOutboundDocument() { fileSends++; return { success: true }; },
-      async dispatchOutboundMessage(_chatId, message) { notices.push(message.text); return { success: true, messageId: '714' }; },
-    };
-    const worker = new OutboxConsumer(db, { tenantId, userId, telegramBotToken: 'test-token', officeAlertChatId: null,
-      telegramSender: () => bridge, readExportBytes: async () => bytes });
-
-    await worker.processBatch(10);
-    expect((await command(idempotencyKey))?.state).toBe('failed');
-    expect((await latestMark(id, artifactId))?.event_kind).toBe('telegram_document_uncertain');
-    expect(notices).toHaveLength(1);
-    expect(notices[0]).toContain('Telegram did not confirm that it arrived');
-    expect(notices[0]).not.toContain('has been delivered');
-
-    await inTenant((trx) => sql`UPDATE hawa.outbox_commands SET state = 'pending', attempts = 0,
-      available_at = now(), leased_until = NULL WHERE tenant_id = ${tenantId}::uuid AND id = ${id}::uuid`.execute(trx));
-    await worker.processBatch(10);
-    expect(fileSends).toBe(1);
-    expect(notices).toHaveLength(1);
-  });
+  // (Core's requester delivery, notify.published, had a case here: a file answered 'success' with no
+  // message ID stayed uncertain. ADR-135 stage 2d retired that send; the Delivery workflow's own
+  // sends go through lifecycle/telegram-sender.ts.)
 });

@@ -31,7 +31,7 @@ import {
 import { chaosPoint } from '@hawa/observability';
 import { verifyLifecycleDeliveryClaim } from '@hawa/integrations';
 import { composeDeliveredMessage, composeDeliveryFailedAlert } from '../delivery-notification.js';
-import { log, requestIdHeaders, withInvocationLogContext } from '../logging.js';
+import { requestIdHeaders, withInvocationLogContext } from '../logging.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { RequestLifecycleApi } from './request-lifecycle.js';
 import { acceptedWorkerSecrets } from './worker-secrets.js';

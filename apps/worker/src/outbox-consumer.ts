@@ -15,20 +15,13 @@ import { TelegramBridge } from '@hawa/integrations';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 import { log, outboxLogContext, requestIdHeaders, runWithLogContext } from './logging.js';
 import {
-  composeDeliveredMessage,
-  composeDeliveryFailedAlert,
-  composeDeliveryUncertainAlert,
   composeIntakeFailedAlert,
   composeIntakeFailedMessage,
   composeMessageUncertainAlert,
   intakeChatOf,
   priorSendOf,
   readSendMarks,
-  readStoredExportBytes,
-  sha256Hex,
   writeSendMark,
-  type DeliveredFile,
-  type ExportBytesReader,
   type PriorSend,
   type SendMarkOutcome,
   type SendStepKind,
@@ -67,8 +60,8 @@ export type DeliveryErrorCategory = 'retryable' | 'permanent' | 'uncertain';
  */
 const TELEGRAM_REFUSED = /TELEGRAM_(?:DOCUMENT_)?REJECTED_4(?!29)\d\d/;
 
-/** The code a `notify.published` command ends with when the Delivery workflow owns its delivery. */
-export const DELIVERY_OWNED_BY_WORKFLOW = 'DELIVERY_OWNED_BY_WORKFLOW';
+/** The code an old `notify.published` command ends with: Core's requester sends are retired (ADR-135). */
+export const REQUESTER_SEND_RETIRED = 'REQUESTER_SEND_RETIRED';
 
 export class OutboxDeliveryError extends Error {
   constructor(
@@ -140,8 +133,6 @@ export interface OutboxConsumerOptions {
   telegramBotToken?: string | null;
   /** Builds the Telegram sender for a token. Defaults to the Telegram bridge. */
   telegramSender?: (botToken: string) => TelegramSender;
-  /** Reads a delivered export's stored bytes. Defaults to hawa.canva_export_bytes. */
-  readExportBytes?: ExportBytesReader;
   /** Waits between attempts to persist a confirmed Telegram message ID after the provider answered. */
   markRetryDelaysMs?: number[];
   /** The office chat alerted about dead-lettered requests. Undefined reads the first TELEGRAM_ALLOWED_USERS entry. */
@@ -238,40 +229,6 @@ export class OutboxConsumer {
     }
   }
 
-  /**
-   * A delivery of an approved design that ended `failed` (refused for good, or out of attempts) used
-   * to leave one log line naming the command: neither the requester nor the office heard (2026-09-23).
-   * The office chat is alerted. The requester is not messaged again: the chat that failed may be
-   * theirs. With no bot token or office chat, or an office chat that is the requester's own, the
-   * failure is logged with the task and the reason instead.
-   *
-   * A send Telegram did not confirm (`uncertain`) is alerted too. It was skipped, although nobody
-   * knows whether the requester has the file and it is never resent (2026-09-24).
-   */
-  private async alertOfficeDeliveryFailed(cmd: OutboxCommandRecord, attempts: number, error: string, uncertain = false) {
-    let taskId = cmd.aggregate_id;
-    try {
-      const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
-      taskId = String(payload?.taskId || cmd.aggregate_id);
-      const chat = payload?.chatId || payload?.sourceChannelId;
-      const requesterChat = chat ? String(chat) : null;
-      const botToken = this.telegramBotToken();
-      const office = this.officeAlertChatId();
-      if (!botToken || !office || office === requesterChat) {
-        const why = !botToken ? 'TELEGRAM_BOT_TOKEN is not set' : !office ? 'no office chat is configured' : "the office chat is the requester's own";
-        log.error(`[OutboxConsumer] Delivery of task ${taskId} failed after ${attempts} attempts (${error}); the office was not alerted: ${why}.`);
-        return;
-      }
-      const alerted = await this.telegramSender(botToken).dispatchOutboundMessage(office, {
-        text: uncertain ? composeDeliveryUncertainAlert(taskId, requesterChat, error) : composeDeliveryFailedAlert(taskId, requesterChat, attempts, error),
-      });
-      if (!alerted.success) {
-        log.error(`[OutboxConsumer] Delivery of task ${taskId} failed (${error}), and so did the office alert: ${alerted.error}`);
-      }
-    } catch (alertErr) {
-      log.error(`[OutboxConsumer] Delivery of task ${taskId} failed (${error}); the office could not be alerted:`, alertErr);
-    }
-  }
 
   /**
    * A message from the outbox (`notify.telegram`) that Telegram did not confirm, or that a worker
@@ -299,33 +256,11 @@ export class OutboxConsumer {
     }
   }
 
-  /**
-   * Whether the Delivery workflow owns this delivery (publications.executor, migration 022): the
-   * publication the command names, or, for a command that names none, any of the task's.
-   */
-  private async deliveredByWorkflow(cmd: OutboxCommandRecord, taskId: string, publicationKey: unknown, scope: OutboxHandlerScope): Promise<boolean> {
-    if (!/^[0-9a-f-]{36}$/i.test(String(taskId))) return false;
-    const rows = await scope.inTenant((trx) => (typeof publicationKey === 'string' && publicationKey
-      ? sql<{ n: number }>`SELECT 1 AS n FROM hawa.publications WHERE tenant_id = ${cmd.tenant_id}::uuid
-          AND publication_key = ${publicationKey} AND executor = 'restate'`
-      : sql<{ n: number }>`SELECT 1 AS n FROM hawa.publications WHERE tenant_id = ${cmd.tenant_id}::uuid
-          AND task_id = ${taskId}::uuid AND executor = 'restate' LIMIT 1`).execute(trx));
-    return rows.rows.length > 0;
-  }
-
   /** Who hears about a command that ended without being delivered. None of it changes the outcome. */
   private async reportEnded(cmd: OutboxCommandRecord, attempts: number, error: string, uncertain: boolean) {
     // An uncertain dispatch may have started the workflow, so only a definite failure is announced.
     if (cmd.command_type === 'task.created' && !uncertain) {
       await this.tellRequesterIntakeFailed(cmd, attempts, error);
-    }
-    if (cmd.command_type === 'notify.published') {
-      if (error.includes(DELIVERY_OWNED_BY_WORKFLOW)) {
-        // Nothing was sent, and the workflow delivers it: there is nothing for the office to do.
-        log.error(`[OutboxConsumer] ${cmd.id} (notify.published) was dead-lettered: ${error}`);
-        return;
-      }
-      await this.alertOfficeDeliveryFailed(cmd, attempts, error, uncertain);
     }
     if (cmd.command_type === 'notify.telegram' && uncertain) {
       await this.alertOfficeMessageUncertain(cmd, error);
@@ -543,122 +478,16 @@ export class OutboxConsumer {
     }
 
     if (!this.handlers.has('notify.published')) {
-      this.handlers.set('notify.published', async (cmd, _db, scope) => {
-        // Effect transport: the requester receives the approved files and the delivery notice.
-        const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
-        const taskId = payload?.taskId || cmd.aggregate_id;
-
-        // A guard that should never fire: Core writes no notify.published for a publication the Delivery
-        // workflow owns (slice 2.2), which sends its files through TelegramSender under its own marks.
-        // A command for one anyway (written by an older Core, or by hand) must not send them a second time.
-        if (await this.deliveredByWorkflow(cmd, taskId, payload?.publicationKey, scope)) {
-          throw new OutboxDeliveryError(
-            `${DELIVERY_OWNED_BY_WORKFLOW}: the Delivery workflow delivers task ${taskId}; this command sent nothing`,
-            'permanent',
-            DELIVERY_OWNED_BY_WORKFLOW
-          );
-        }
-
-        let sourceChannelId = payload?.chatId || payload?.sourceChannelId;
-        let taskTitle = payload?.title;
-
-        // Commands written before Core named the chat carry only the task: find it from the intake.
-        // A malformed id is never queried; it could only fail.
-        if ((!sourceChannelId || !taskTitle) && /^[0-9a-f-]{36}$/i.test(String(taskId))) {
-          try {
-            const row: any = await scope.inTenant((trx) => sql`
-              SELECT t.title, e.data
-              FROM hawa.tasks t
-              LEFT JOIN hawa.task_events e ON e.task_id = t.id AND e.event_type = 'task.created'
-              WHERE t.id = ${taskId}::uuid
-              LIMIT 1
-            `.execute(trx));
-            if (row.rows[0]) {
-              taskTitle = taskTitle || row.rows[0].title;
-              const eventData = row.rows[0].data?.payload || row.rows[0].data?.body || row.rows[0].data || {};
-              if (!sourceChannelId && eventData.sourcePlatform === 'telegram' && eventData.sourceChannelId) {
-                sourceChannelId = String(eventData.sourceChannelId);
-              }
-            }
-          } catch (e) {
-            log.warn('[outbox:notify.published] Could not lookup task intake:', e);
-          }
-        }
-
-        // Nothing was sent, so the command must not be marked delivered: it used to be, whenever the
-        // bot token or the requesting chat was missing, and the requester was never told.
-        const botToken = this.telegramBotToken();
-        if (!botToken) {
-          throw new Error(`TELEGRAM_NOT_CONFIGURED: TELEGRAM_BOT_TOKEN is not set, so the delivery notice for task ${taskId} was not sent`);
-        }
-        if (!sourceChannelId) {
-          throw new OutboxDeliveryError(
-            `NO_REQUESTER_CHAT: task ${taskId} has no Telegram chat to send the delivery to`,
-            'permanent',
-            'NO_REQUESTER_CHAT'
-          );
-        }
-
-        // Every file is read and checked against its approved hash before anything is sent, so a
-        // missing or changed file never leaves the requester with half a delivery. The reads are one
-        // short transaction, finished before the first upload starts.
-        const files: DeliveredFile[] = Array.isArray(payload?.files) ? payload.files : [];
-        const readBytes = this.options.readExportBytes || readStoredExportBytes;
-        const loaded = await scope.inTenant(async (trx) => {
-          const out: Array<{ file: DeliveredFile; bytes: Uint8Array }> = [];
-          for (const file of files) {
-            const bytes = await readBytes(trx, cmd.tenant_id, taskId, file.artifactId);
-            if (!bytes) {
-              throw new Error(`DELIVERED_FILE_UNREADABLE: the approved export ${file.artifactId} of task ${taskId} could not be read`);
-            }
-            if (sha256Hex(bytes) !== file.sha256) {
-              throw new OutboxDeliveryError(
-                `DELIVERED_FILE_CHANGED: the stored export ${file.artifactId} no longer matches its approved hash`,
-                'permanent',
-                'DELIVERED_FILE_CHANGED'
-              );
-            }
-            out.push({ file, bytes });
-          }
-          return out;
-        });
-
-        // The files first, as documents: the exact approved bytes (a photo would be recompressed).
-        // A file or notice an earlier attempt sent is not sent again, and one that may have reached
-        // Telegram is never repeated; it is reported as uncertain (sendOnce).
-        const sender = this.telegramSender(botToken);
-        const prior = await this.priorSends(cmd, scope);
-        const uncertain: string[] = [];
-        const endUncertain = (then?: unknown) => new OutboxDeliveryError(
-          `TELEGRAM_DELIVERY_UNCERTAIN: Telegram may or may not have received ${uncertain.join(', ')}; not resent` +
-            (then === undefined ? '' : `. After that: ${then instanceof Error ? then.message : String(then)}`),
-          'uncertain',
-          'TELEGRAM_DELIVERY_UNCERTAIN'
+      // Core's own delivery wrote this command to send a Telegram requester the approved files. It
+      // writes none since ADR-135 stage 2d (every Telegram request is RequestLifecycle's, whose
+      // Delivery workflow sends them). A command left from before, redriven from the Desk, ends at
+      // once and sends nothing: nobody can tell any more whether its files were wanted.
+      this.handlers.set('notify.published', async (cmd) => {
+        throw new OutboxDeliveryError(
+          `${REQUESTER_SEND_RETIRED}: Core's requester sends were retired (ADR-135); command ${cmd.id} sent nothing`,
+          'permanent',
+          REQUESTER_SEND_RETIRED
         );
-        try {
-          for (const { file, bytes } of loaded) {
-            const sent = await this.sendOnce(cmd, scope, prior, file.artifactId, 'document', () =>
-              sender.dispatchOutboundDocument(sourceChannelId, bytes, file.filename, {
-                mimeType: file.mimeType || (file.format === 'pdf' ? 'application/pdf' : file.format === 'png' ? 'image/png' : undefined),
-                caption: file.filename,
-              })
-            );
-            if (sent === 'uncertain') uncertain.push(file.filename);
-          }
-
-          const text = composeDeliveredMessage({ ...payload, title: taskTitle }, { filesSent: loaded.length - uncertain.length, filesUncertain: uncertain.length });
-          const notice = await this.sendOnce(cmd, scope, prior, 'notice', 'notice', () =>
-            sender.dispatchOutboundMessage(sourceChannelId, { text, parse_mode: 'HTML' })
-          );
-          if (notice === 'uncertain') uncertain.push('delivery notice');
-        } catch (err) {
-          // A file that may have arrived must end the command as uncertain, whatever failed after it:
-          // a later refusal used to end it 'failed' naming only that refusal, so the office was told
-          // "failed" and a requeue of every dead letter took it back.
-          if (uncertain.length === 0 || err instanceof OutboxClaimLostError) throw err;
-          throw endUncertain(err);
-        }
-        if (uncertain.length > 0) throw endUncertain();
       });
     }
   }

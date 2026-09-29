@@ -43,7 +43,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
   const verifyRequestAuth = ctx.verifyRequestAuth as (c: Context) => Required<AuthContext> & { displayName?: string };
   const {
     executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery,
-    requesterChatOf, deliveryExecutorOfTask,
+    deliveryExecutorOfTask,
   } = ctx.delivery;
   const defaultClientId = DEFAULT_CLIENT_ID;
 
@@ -252,19 +252,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     );
 
     if (!result.ok) {
-      // Drive refused and the approved file went to the requester's chat: the delivery happened and
-      // only the archive did not, so it is not reported as an error. The Desk showed a red "Delivery
-      // failed" for a file the client had received.
-      if ((result as { requesterNotified?: boolean }).requesterNotified) {
-        return c.json({
-          ok: true,
-          status: 'DELIVERED_TO_CHAT_ONLY',
-          taskId,
-          code: (result as { code?: string }).code || 'ARCHIVE_NOT_WRITTEN',
-          message: (result as { message?: string }).message || 'The approved file is queued for the requester in Telegram; the Drive archive is not written.',
-          requesterNotified: true,
-        }, 202);
-      }
+      // (A 202 DELIVERED_TO_CHAT_ONLY, the old requester send after a Drive failure, went with
+      // ADR-135 stage 2d: Core's own delivery sends nothing to a requester.)
       const status = (result as any).status || 422;
       const title = (result as any).title || (status === 409 ? 'Conflict' : status === 404 ? 'Task Not Found' : 'Publication Failed');
       return problem(c, status, title, (result as any).message || 'The publisher refused the delivery');

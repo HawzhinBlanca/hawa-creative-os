@@ -31,6 +31,8 @@ describe.skipIf(!url)('review of 2026-09-24: the old design while the requester\
       publisher,
       telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) },
     } as any);
+    // A Desk task: Core's own delivery refuses a Telegram task outside RequestLifecycle before it
+    // looks at changes (ADR-135 stage 2d). The change is still the requester's, from their chat.
     const parent = randomUUID();
     const chat = String(60000000 + Math.floor(Math.random() * 9000000));
     const designId = `canva_hunt_${randomUUID().slice(0, 8)}`;
@@ -43,7 +45,7 @@ describe.skipIf(!url)('review of 2026-09-24: the old design while the requester\
         VALUES (${parent}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'HUNT parent', 'x', 'received', 3, 1, now(), now())`.execute(trx);
       await sql`INSERT INTO hawa.task_events (id, tenant_id, task_id, aggregate_version, event_type, actor_type, actor_id, correlation_id, data, occurred_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${parent}::uuid, 1, 'task.created', 'user', ${operator.userId}, ${randomUUID()}::uuid,
-          ${JSON.stringify({ payload: { sourcePlatform: 'telegram', sourceChannelId: chat, copyEn: 'x' } })}::jsonb, now())`.execute(trx);
+          ${JSON.stringify({ payload: { sourcePlatform: 'hawa_desk', sourceChannelId: 'hawa_desk', copyEn: 'x' } })}::jsonb, now())`.execute(trx);
       await sql`INSERT INTO hawa.canva_bindings (id, tenant_id, task_id, client_id, canva_design_id, edit_url, status, version, created_at, updated_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${parent}::uuid, ${kaae}::uuid, ${designId}, ${`https://www.canva.com/design/${designId}/edit`}, 'bound', 1, now(), now())`.execute(trx);
       for (const [format, bytes, id] of [['png', png, exportId], ['pptx', deck, checkedId]] as const) {
@@ -82,7 +84,7 @@ describe.skipIf(!url)('review of 2026-09-24: the old design while the requester\
     return child;
   }
 
-  it('(control, passes) an operator cannot approve, a second approval is refused, and delivery twice queues one notice', async () => {
+  it('(control, passes) an operator cannot approve, a second approval is refused, and Deliver without Drive fails twice and queues nothing', async () => {
     const { app, parent, approve, deliver } = await parentWithDraft();
     const detail = await (await app.request(`/tasks/${parent}`, { headers })).json();
     const asOperator = await app.request(`/tasks/${parent}/revisions/${detail.latestRevisionId}/decisions`, {
@@ -91,11 +93,16 @@ describe.skipIf(!url)('review of 2026-09-24: the old design while the requester\
     expect(asOperator.status).toBe(403);
     expect((await approve()).status).toBe(201);
     expect((await approve()).status).toBe(409);
-    expect((await deliver()).status).toBe(202);
-    expect((await deliver()).status).toBe(202);
+    // This app's client has no Drive folder: the failure is answered and the task goes back to
+    // approved, so Deliver can be pressed again (ADR-135 stage 2d: no chat-only send to a requester).
+    const first = await deliver();
+    expect(first.status).toBe(400);
+    expect((await first.json()).detail).toMatch(/no authorized Google Drive/);
+    expect((await deliver()).status).toBe(400);
+    expect((await (await app.request(`/tasks/${parent}`, { headers })).json()).status).toBe('APPROVED');
     const queued = await withRlsContext(db, operator, async (trx) =>
       (await sql<any>`SELECT count(*)::int AS n FROM hawa.outbox_commands WHERE aggregate_id = ${parent}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n);
-    expect(queued).toBe(1);
+    expect(queued).toBe(0);
   });
 
   it('refuses to approve the old design while the change is queued and its run has not started', async () => {
@@ -120,11 +127,11 @@ describe.skipIf(!url)('review of 2026-09-24: the old design while the requester\
     // Before the office pressed Deliver, the requester replied to the draft: "make the date gold".
     await requesterAskedForChange(parent, chat, 'received');
     const res = await deliver();
-    const body = await res.json();
-    expect({ status: res.status, delivered: body.status }).not.toMatchObject({ status: 202, delivered: 'DELIVERED_TO_CHAT_ONLY' });
-    const queued = await withRlsContext(db, operator, async (trx) =>
-      (await sql<any>`SELECT count(*)::int AS n FROM hawa.outbox_commands WHERE aggregate_id = ${parent}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n);
-    expect(queued).toBe(0);
+    expect(res.status).toBe(409);
+    expect((await res.json()).detail).toMatch(/not delivered/);
+    const published = await withRlsContext(db, operator, async (trx) =>
+      (await sql<any>`SELECT count(*)::int AS n FROM hawa.publications WHERE task_id = ${parent}::uuid`.execute(trx)).rows[0].n);
+    expect(published).toBe(0);
   });
 
   it('does not deliver it through publish-omnichannel either, which never checked (audit 2026-09-27 #3)', async () => {
@@ -134,8 +141,8 @@ describe.skipIf(!url)('review of 2026-09-24: the old design while the requester\
     const res = await app.request(`/tasks/${parent}/publish-omnichannel`, { method: 'POST', headers, body: '{}' });
     expect(res.status).toBe(409);
     expect((await res.json()).detail).toMatch(/not delivered/);
-    const queued = await withRlsContext(db, operator, async (trx) =>
-      (await sql<any>`SELECT count(*)::int AS n FROM hawa.outbox_commands WHERE aggregate_id = ${parent}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n);
-    expect(queued).toBe(0);
+    const published = await withRlsContext(db, operator, async (trx) =>
+      (await sql<any>`SELECT count(*)::int AS n FROM hawa.publications WHERE task_id = ${parent}::uuid`.execute(trx)).rows[0].n);
+    expect(published).toBe(0);
   });
 });

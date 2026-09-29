@@ -53,11 +53,25 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
   };
   const r07App = (publisher: GooglePublisher, exports: ReturnType<typeof memoryExportStore>) =>
     createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true }, publisher, deliverableStore: exports.store, qaEngine: passingQa as never, allowRoleHeader: true });
-  /** The task's delivery notice, as the outbox list reports it. */
-  const notifyCommand = async (app: ReturnType<typeof createApp>, taskId: string) => {
+  /**
+   * A message to the task's chat queued in the outbox (Core writes `notify.telegram` for office and
+   * requester messages). Core's own delivery queues no `notify.published` since ADR-135 stage 2d, so
+   * the discovery and redrive cases enqueue a command of a surviving type themselves.
+   */
+  const enqueueTaskMessage = (taskId: string) =>
+    withRlsContext(testDb, operatorScope, (trx) => new OutboxRepository(testDb).enqueue({
+      tenantId: operatorScope.tenantId,
+      aggregateType: 'task',
+      aggregateId: taskId,
+      commandType: 'notify.telegram',
+      idempotencyKey: `r07-message-${taskId}`,
+      payload: { chatId: '7007', text: 'Terminal workflow message' },
+    }, trx));
+  /** The task's queued message, as the outbox list reports it. */
+  const messageCommand = async (app: ReturnType<typeof createApp>, taskId: string) => {
     const res = await app.request(`/v1/tasks/${taskId}/outbox`, { headers: operatorHeaders });
     expect(res.status).toBe(200);
-    const cmd = (await res.json()).commands.find((c: any) => c.commandType === 'notify.published');
+    const cmd = (await res.json()).commands.find((c: any) => c.commandType === 'notify.telegram');
     expect(cmd).toBeDefined();
     return cmd;
   };
@@ -73,18 +87,17 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
   });
 
   async function createApprovedTaskWithExport(app: ReturnType<typeof createApp>, exports: ReturnType<typeof memoryExportStore>) {
-    // A request from a Telegram chat, which the delivery notice goes back to (Postgres's outbox writes
-    // no notice for a Desk task, which has no chat), routed to Drustee.
-    const intake = await app.request('/api/webhooks/telegram', {
+    // A Desk task for Drustee: Core's own delivery refuses a Telegram task outside RequestLifecycle
+    // (ADR-135 stage 2d), and the old Telegram intake route is gone.
+    const createdRes = await app.request('/v1/tasks', {
       method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ update_id: 7_000_000 + Math.floor(Math.random() * 1e6), message: { text: 'Please create a new poster\n---\nTerminal Workflow Task', chat: { id: 7007 } } }),
+      headers: operatorHeaders,
+      body: JSON.stringify({ title: 'Terminal Workflow Task', clientId: DRUSTEE }),
     });
-    const created = await intake.json();
+    expect(createdRes.status).toBe(201);
+    const created = await createdRes.json();
     const task = { id: (created.id || created.task?.id) as string };
     expect(task.id).toBeTruthy();
-    const routed = await app.request(`/v1/tasks/${task.id}/route`, { method: 'POST', headers: operatorHeaders, body: JSON.stringify({ clientId: DRUSTEE, reason: 'Client assigned' }) });
-    expect(routed.status).toBe(202);
 
     const revRes = await app.request(`/v1/tasks/${task.id}/revisions`, {
       method: 'POST',
@@ -121,7 +134,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     return { task, rev, approval, exportId };
   }
 
-  it('1. Atomically commits terminal task completion and enrolls notify.published outbox command', async () => {
+  it('1. Commits terminal task completion and enrolls no notify.published command (ADR-135 stage 2d)', async () => {
     const exports = memoryExportStore();
     const publisher = new GooglePublisher(); // Uses the isolated fake Drive/Sheets HTTP server from test setup.
 
@@ -148,18 +161,11 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     const outboxRes = await app.request(`/v1/tasks/${task.id}/outbox`, { headers: operatorHeaders });
     expect(outboxRes.status).toBe(200);
     const outboxBody = await outboxRes.json();
-    expect(outboxBody.count).toBeGreaterThanOrEqual(1);
-
-    const notifyCmd = outboxBody.commands.find((c: any) => c.commandType === 'notify.published');
-    expect(notifyCmd).toBeDefined();
-    expect(notifyCmd.state).toBe('pending');
-    expect(notifyCmd.attempts).toBe(0);
-    expect(notifyCmd.payload.taskId).toBe(task.id);
-    expect(notifyCmd.payload.publicationKey).toBeDefined();
-    expect(notifyCmd.actionableRecovery).toContain('pending worker pickup');
+    // Core's own delivery sends nothing to a requester: the request-owned Delivery workflow does.
+    expect(outboxBody.commands.filter((c: any) => c.commandType === 'notify.published')).toEqual([]);
   });
 
-  it('2. Preserves COMPLETE publication and task state if outbox notification fails (FR-051 decoupling)', async () => {
+  it('2. Records the COMPLETE publication with verified Drive files and a synced Sheet row (FR-051)', async () => {
     const exports = memoryExportStore();
     const publisher = new GooglePublisher(); // Uses the isolated fake Drive/Sheets HTTP server from test setup.
 
@@ -173,7 +179,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     });
     expect(pubRes.status).toBe(202);
 
-    // Directly inspect publication state - publication remains COMPLETE despite notification failure
+    // Directly inspect publication state
     const pubStateRes = await app.request(`/v1/tasks/${task.id}/publication-state`, { headers: operatorHeaders });
     expect(pubStateRes.status).toBe(200);
     const pubState = await pubStateRes.json();
@@ -209,7 +215,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
           tenantId: testTenantId,
           aggregateType: 'task',
           aggregateId: task1,
-          commandType: 'notify.published',
+          commandType: 'test.r07.send',
           idempotencyKey: `ik-perm-${Date.now()}`,
           payload: { destination: 'telegram-deleted-chat' },
         }, trx);
@@ -219,7 +225,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
           tenantId: testTenantId,
           aggregateType: 'task',
           aggregateId: task2,
-          commandType: 'notify.published',
+          commandType: 'test.r07.send',
           idempotencyKey: `ik-uncert-${Date.now()}`,
           payload: { destination: 'telegram-flaky-conn' },
         }, trx);
@@ -229,7 +235,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
           tenantId: testTenantId,
           aggregateType: 'task',
           aggregateId: task3,
-          commandType: 'notify.published',
+          commandType: 'test.r07.send',
           idempotencyKey: `ik-retry-${Date.now()}`,
           payload: { destination: 'telegram-rate-limited' },
         }, trx);
@@ -240,7 +246,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
         userId: adminUserId,
         batchSize: 10,
         handlers: {
-          'notify.published': async (cmd) => {
+          'test.r07.send': async (cmd) => {
             const dest = (cmd.payload as any)?.destination;
             if (dest === 'telegram-deleted-chat') {
               throw new OutboxDeliveryError('CHAT_NOT_FOUND: user has blocked bot or chat deleted', 'permanent');
@@ -288,28 +294,23 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     const publisher = new GooglePublisher(); // Uses the isolated fake Drive/Sheets HTTP server from test setup.
 
     const app = r07App(publisher, exports);
-    const { task, approval } = await createApprovedTaskWithExport(app, exports);
-
-    await app.request(`/v1/tasks/${task.id}/publish`, {
-      method: 'POST',
-      headers: operatorHeaders,
-      body: JSON.stringify({ approvalId: approval.decisionId }),
-    });
+    const { task } = await createApprovedTaskWithExport(app, exports);
+    await enqueueTaskMessage(task.id);
 
     // Fetch initial outbox command
-    const serverCmd = await notifyCommand(app, task.id);
+    const serverCmd = await messageCommand(app, task.id);
     expect(serverCmd.actionableRecovery).toContain('pending worker pickup');
 
     // The worker records a permanent failure on the command
     await failCommand(serverCmd.id, 'CHAT_NOT_FOUND: chat id does not exist');
 
-    const permCmd = await notifyCommand(app, task.id);
+    const permCmd = await messageCommand(app, task.id);
     expect(permCmd.errorCategory).toBe('permanent');
     expect(permCmd.actionableRecovery).toContain('Permanent delivery failure');
 
     // The worker records an uncertain failure on the command
     await failCommand(serverCmd.id, 'DELIVERY_UNCERTAIN: socket timeout after dispatch');
-    const uncertCmd = await notifyCommand(app, task.id);
+    const uncertCmd = await messageCommand(app, task.id);
     expect(uncertCmd.errorCategory).toBe('uncertain');
     expect(uncertCmd.requiresUncertainConfirmation).toBe(true);
     expect(uncertCmd.actionableRecovery).toContain('Uncertain delivery');
@@ -321,15 +322,10 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     const publisher = new GooglePublisher(); // Uses the isolated fake Drive/Sheets HTTP server from test setup.
 
     const app = r07App(publisher, exports);
-    const { task, approval } = await createApprovedTaskWithExport(app, exports);
+    const { task } = await createApprovedTaskWithExport(app, exports);
+    await enqueueTaskMessage(task.id);
 
-    await app.request(`/v1/tasks/${task.id}/publish`, {
-      method: 'POST',
-      headers: operatorHeaders,
-      body: JSON.stringify({ approvalId: approval.decisionId }),
-    });
-
-    const serverCmd = await notifyCommand(app, task.id);
+    const serverCmd = await messageCommand(app, task.id);
 
     // Non-operator is forbidden even before inspecting command state
     const viewerRedriveRes = await app.request(`/v1/tasks/${task.id}/outbox/${serverCmd.id}/redrive`, {
@@ -403,6 +399,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     expect(postPub.driveFiles.verified).toBe(true);
     expect(postPub.sheetSync.synced).toBe(true);
     expect(postPub.sheetSync.rowNumber).toBeGreaterThanOrEqual(2);
-    expect(postPub.notification.status).toBe('pending');
+    // Core's own delivery queues no requester notification (ADR-135 stage 2d).
+    expect(postPub.notification.status).toBe('not_enqueued');
   });
 });

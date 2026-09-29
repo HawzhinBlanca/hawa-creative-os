@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -50,18 +50,15 @@ const armControl = () => vi.stubEnv('HAWA_CHAOS_CONTROL_URL', `http://127.0.0.1:
 const asAdmin = <T>(fn: (trx: Kysely<Database>) => Promise<T>) => withRlsContext(db, { tenantId, userId, role: 'administrator' }, fn);
 
 describe('worker chaos points', () => {
-  it('delivery: the file is sent before worker.sender.after-telegram and marked sent only after it; the command is recorded after worker.outbox.before-record', async () => {
+  // The Telegram send point, pinned on a queued message (notify.telegram). It was pinned on Core's
+  // requester delivery (notify.published), which ADR-135 stage 2d retired; the points are the same.
+  it('message: it is sent before worker.sender.after-telegram and marked sent only after it; the command is recorded after worker.outbox.before-record', async () => {
     armControl();
-    const png = new Uint8Array(Array.from({ length: 40 }, (_, i) => i * 5));
-    const artifactId = randomUUID();
     const chat = String(7000 + Math.floor(Math.random() * 1000));
     const idempotencyKey = `chaos-points-${randomUUID()}`;
     await asAdmin((trx) => new OutboxRepository(db).enqueue({
-      tenantId, aggregateType: 'task', aggregateId: randomUUID(), commandType: 'notify.published', idempotencyKey,
-      payload: {
-        taskId: randomUUID(), title: 'Chaos poster', chatId: chat, driveFolderId: '', spreadsheetId: '', sheetsConfirmed: false, filesCount: 1,
-        files: [{ artifactId, format: 'png', filename: 'chaos.png', mimeType: 'image/png', sha256: createHash('sha256').update(png).digest('hex'), byteSize: png.length }],
-      },
+      tenantId, aggregateType: 'task', aggregateId: randomUUID(), commandType: 'notify.telegram', idempotencyKey,
+      payload: { chatId: chat, message: 'Chaos message' },
     }, trx));
     const sends: string[] = [];
     observe = async () => asAdmin(async (trx) => {
@@ -71,28 +68,26 @@ describe('worker chaos points', () => {
     });
     const sender: TelegramSender = {
       async dispatchOutboundDocument() { sends.push('document'); return { success: true, messageId: '11' }; },
-      async dispatchOutboundMessage() { sends.push('notice'); return { success: true, messageId: '12' }; },
+      async dispatchOutboundMessage() { sends.push('message'); return { success: true, messageId: '12' }; },
     };
     const consumer = new OutboxConsumer(db, {
       tenantId, userId, batchSize: 100, telegramBotToken: botToken, officeAlertChatId: '9999',
       telegramSender: () => sender,
-      readExportBytes: async (_d, _t, _task, id) => (id === artifactId ? png : null),
     });
     await consumer.processBatch(100);
 
-    const mine = reached.filter((r) => r.detail?.commandType === 'notify.published' || r.point === 'worker.sender.after-telegram');
+    const mine = reached.filter((r) => r.detail?.commandType === 'notify.telegram' || r.point === 'worker.sender.after-telegram');
     expect(mine.map((r) => [r.point, r.detail.kind ?? r.detail.commandType])).toEqual([
-      ['worker.outbox.after-claim', 'notify.published'],
-      ['worker.sender.after-telegram', 'document'],
-      ['worker.sender.after-telegram', 'notice'],
-      ['worker.outbox.before-record', 'notify.published'],
+      ['worker.outbox.after-claim', 'notify.telegram'],
+      ['worker.sender.after-telegram', 'message'],
+      ['worker.outbox.before-record', 'notify.telegram'],
     ]);
     // At the send point the send has happened and its mark still says only "attempted".
-    const afterDocument = mine[1].at;
-    expect(afterDocument.sends).toEqual(['document']);
-    expect(afterDocument.marks).not.toContain('sent');
+    const afterSend = mine[1].at;
+    expect(afterSend.sends).toEqual(['message']);
+    expect(afterSend.marks).not.toContain('sent');
     // Before the record the command is still leased: killed here, it is claimed again.
-    expect(mine[3].at.state).toBe('leased');
+    expect(mine[2].at.state).toBe('leased');
     const final = await asAdmin(async (trx) => (await sql<any>`SELECT state FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid AND idempotency_key = ${idempotencyKey}`.execute(trx)).rows[0].state);
     expect(final).toBe('delivered');
   });

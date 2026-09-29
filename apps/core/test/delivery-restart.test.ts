@@ -42,7 +42,7 @@ describe.skipIf(!url)('review of 2026-09-24: approval and delivery across a Core
         VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'HUNT restart', 'x', 'received', 3, 1, now(), now())`.execute(trx);
       await sql`INSERT INTO hawa.task_events (id, tenant_id, task_id, aggregate_version, event_type, actor_type, actor_id, correlation_id, data, occurred_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, 1, 'task.created', 'user', ${operator.userId}, ${randomUUID()}::uuid,
-          ${JSON.stringify({ payload: { sourcePlatform: 'telegram', sourceChannelId: String(60000000 + Math.floor(Math.random() * 9000000)), copyEn: 'x' } })}::jsonb, now())`.execute(trx);
+          ${JSON.stringify({ payload: { sourcePlatform: 'hawa_desk', sourceChannelId: 'hawa_desk', copyEn: 'x' } })}::jsonb, now())`.execute(trx);
       await sql`INSERT INTO hawa.canva_bindings (id, tenant_id, task_id, client_id, canva_design_id, edit_url, status, version, created_at, updated_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${designId}, ${`https://www.canva.com/design/${designId}/edit`}, 'bound', 1, now(), now())`.execute(trx);
       for (const [format, bytes, id] of [['png', png, pngId], ['pptx', deck, checkedId]] as const) {
@@ -74,8 +74,10 @@ describe.skipIf(!url)('review of 2026-09-24: approval and delivery across a Core
     const listed = (await (await after.request(`/tasks?status=APPROVED`, { headers })).json()).items?.find((i: any) => i.id === taskId);
     expect(listed?.latestApproval).toBeTruthy();
     const res = await after.request(`/tasks/${taskId}/publish`, { method: 'POST', headers, body: JSON.stringify({ destination: 'google_drive' }) });
-    expect(res.status).toBe(202);
-    expect((await res.json()).status).toBe('DELIVERED_TO_CHAT_ONLY');
+    // The delivery runs: it reaches the Drive destination, which this app's client has none of. (A
+    // Desk task: Core's own delivery sends nothing to a requester since ADR-135 stage 2d.)
+    expect(res.status).toBe(400);
+    expect((await res.json()).detail).toMatch(/no authorized Google Drive/);
   });
 
   it('a delivery interrupted by a restart can be delivered again from the Desk', async () => {
@@ -86,6 +88,11 @@ describe.skipIf(!url)('review of 2026-09-24: approval and delivery across a Core
     const after = core();
     const again = await after.request(`/tasks/${taskId}/publish`, { method: 'POST', headers, body: JSON.stringify({ destination: 'google_drive' }) });
     const body = await again.json();
-    expect({ status: again.status, delivery: typeof body.status === 'string' ? body.status : body.title + ': ' + body.detail }).toEqual({ status: 202, delivery: 'DELIVERED_TO_CHAT_ONLY' });
+    // Taken back to approved and run again: it reaches the Drive destination (none configured here)
+    // instead of being refused as a task still 'publishing'.
+    expect({ status: again.status, delivery: body.title + ': ' + body.detail }).toEqual({
+      status: 400, delivery: expect.stringMatching(/^Publication Failed: .*no authorized Google Drive/) });
+    const state = (await withRlsContext(db, operator, (trx) => sql<{ state: string }>`SELECT state::text AS state FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx))).rows[0].state;
+    expect(state).toBe('approved');
   });
 });
