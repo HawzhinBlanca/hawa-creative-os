@@ -116,8 +116,9 @@ describe('Delivery workflow', () => {
     const base = deliveryWorkflowId(i.taskId, i.approvalId);
     expect(h.sends.map((s) => s.key)).toEqual([`${base}:file:${h.sends[0].exportRef!.artifactId}`, `${base}:file:${h.sends[1].exportRef!.artifactId}`, `${base}:notice`]);
     expect(h.sends.every((s) => s.class === 'critical' && s.chatId === '7200001')).toBe(true);
-    expect(h.sends[2].text).toContain('The 2 approved files are attached above.');
-    expect(h.sends[2].text).toContain('Your approved design has been delivered.');
+    // ADR-145 (#31, #32): the requester's words only, each file captioned with the design's name.
+    expect(h.sends[2].text).toMatch(/^Here is your final <b>KAAE ceremony<\/b>\. 🎉/);
+    expect(h.sends.slice(0, 2).map((s) => s.caption)).toEqual(['KAAE ceremony, final', 'KAAE ceremony, final']);
     expect(h.steps).toEqual(['prepare']);
     expect(h.posts.map((p) => p.path)).toEqual([`/internal/lifecycle/${i.requestId}/deliveries/${i.approvalId}/prepare`]);
     expect(h.reports).toEqual([{ input: i, outcome }]);
@@ -132,9 +133,8 @@ describe('Delivery workflow', () => {
     const outcome = await runDelivery(h.ctx, h.core, i);
     expect(outcome).toMatchObject({ outcome: 'uncertain', uncertain: ['kaae-1.pptx'], filesSent: 1 });
     const notice = h.sends.find((s) => s.kind === 'text')!;
-    expect(notice.text).toContain('Telegram did not confirm that it arrived');
-    expect(notice.text).toContain('The approved file is attached above.');
-    expect(notice.text).toContain('The office will check that the approved file reached you');
+    expect(notice.text).toContain("I've sent your final <b>KAAE ceremony</b>, but Telegram didn't confirm that it arrived.");
+    expect(notice.text).toContain('The office will check, and send it again if it didn\'t.');
     // The office hears of it from TelegramSender (per message), not a second time from here.
     expect(h.sends.filter((s) => s.chatId === OFFICE)).toEqual([]);
   });
@@ -200,7 +200,10 @@ describe('Delivery workflow', () => {
     });
     const outcome = await runDelivery(h.ctx, h.core, i);
     expect(outcome).toMatchObject({ outcome: 'chat_only', archived: false, filesSent: 1 });
-    expect(h.sends.find((s) => s.kind === 'text')!.text).toContain('Office archive: not saved to Google Drive yet');
+    // The archive's state is the office's (the Desk shows it); the requester is not told (ADR-145, #31).
+    const notice = h.sends.find((s) => s.kind === 'text')!.text!;
+    expect(notice).toMatch(/^Here is your final <b>KAAE ceremony<\/b>\./);
+    expect(notice).not.toMatch(/Office archive|Production log|Google account/);
   });
 
   it('a later run of the same publication (the archive retried) sends under the same keys as the first', async () => {

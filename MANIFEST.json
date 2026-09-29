@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T16:19:16Z",
+  "generatedAt": "2026-09-29T16:36:19Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1414,8 +1414,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "470e05f4863419c06cd281bf1d77230ef82547a6bf9aa426fafb5243dd9ce2ae",
-      "bytes": 13107
+      "sha256": "670b4687258b19b3d9599fbe67f14b1d0ac1fb9880b685f20c18c7b23ed91932",
+      "bytes": 36507
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",

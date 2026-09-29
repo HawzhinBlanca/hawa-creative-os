@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, OutboxRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { OutboxConsumer, REQUESTER_SEND_RETIRED } from '../src/outbox-consumer.js';
-import { composeDeliveredMessage, readStoredExportBytes, type TelegramSender } from '../src/delivery-notification.js';
+import { composeDeliveredCaption, composeDeliveredMessage, readStoredExportBytes, type TelegramSender } from '../src/delivery-notification.js';
 
 /**
  * What the requester hears from the outbox worker.
@@ -100,8 +100,8 @@ describe('a request dead-lettered at intake', () => {
     expect((await record(idempotencyKey))?.state).toBe('failed');
     const toRequester = messages.filter((m) => m.chatId === '5151');
     expect(toRequester).toHaveLength(1);
-    expect(toRequester[0].text).toContain('Sorry, we could not process your design request.');
-    expect(toRequester[0].text).toContain('The office has been alerted');
+    // ADR-145: plain words, and no reference number (the office's alert names the task).
+    expect(toRequester[0].text).toBe("Sorry, I couldn't start your design request. The office has been told and will follow up with you here.");
     expect(toRequester[0].parse_mode).toBeUndefined();
     const toOffice = messages.filter((m) => m.chatId === '9090');
     expect(toOffice).toHaveLength(1);
@@ -129,7 +129,7 @@ describe('a request dead-lettered at intake', () => {
 });
 
 describe('composeDeliveredMessage', () => {
-  it('writes an HTML notice naming each attached file with its own Drive link, and the Sheets problem', () => {
+  it('writes an HTML notice naming each attached file with its own Drive link, and nothing of the office\'s', () => {
     const text = composeDeliveredMessage({
       title: 'Eid <poster> & *sale*', driveFolderId: 'client-root-folder', spreadsheetId: '', sheetsConfirmed: false,
       sheetProblem: 'No spreadsheet is configured for this client',
@@ -138,33 +138,33 @@ describe('composeDeliveredMessage', () => {
         { artifactId: randomUUID(), format: 'pdf', filename: 'kaae-2.pdf', mimeType: 'application/pdf', sha256: 'b'.repeat(64), byteSize: 1, webViewLink: 'https://drive.google.com/file/d/pdf-file/view' },
       ],
     } as never, { filesSent: 2 });
-    expect(text).toContain('<b>Eid &lt;poster&gt; &amp; *sale*</b>');
-    expect(text).toContain('The 2 approved files are attached above.');
+    expect(text).toMatch(/^Here is your final <b>Eid &lt;poster&gt; &amp; \*sale\*<\/b>\. 🎉/);
+    expect(text).toContain('Also in Google Drive:');
     expect(text).toContain('<a href="https://drive.google.com/file/d/png-file/view">kaae-1.png</a>');
     expect(text).toContain('<a href="https://drive.google.com/file/d/pdf-file/view">kaae-2.pdf</a>');
     expect(text).not.toContain('client-root-folder');
-    expect(text).toContain('Production log: not updated yet (No spreadsheet is configured for this client).');
+    // The production log is the office's (ADR-145, #31): the Desk shows it, the requester is not told.
+    expect(text).not.toMatch(/Production log|spreadsheet/i);
     expect(text).not.toMatch(/\*[A-Z][^*]*\*/); // no Markdown bold left over
   });
 
   it('falls back to the delivery folder for a command written before files were named', () => {
     const text = composeDeliveredMessage({ title: 'Old', driveFolderId: 'fld_1', spreadsheetId: 'sh_1', sheetRowNumber: 7 }, { filesSent: 0 });
-    expect(text).toContain('<a href="https://drive.google.com/drive/folders/fld_1">delivery folder</a>');
-    expect(text).toContain('<a href="https://docs.google.com/spreadsheets/d/sh_1#gid=0&amp;range=A7">row 7</a> recorded.');
-    expect(text).not.toContain('attached');
+    expect(text).toContain('<a href="https://drive.google.com/drive/folders/fld_1">the delivery folder</a>');
+    expect(text).not.toMatch(/row 7|spreadsheets/);
   });
 
-  it('names a Drive archive failure in plain English instead of printing Core\'s code', () => {
-    const archive = (archiveProblem: string) =>
-      composeDeliveredMessage({ title: 'Archive', archiveProblem }, { filesSent: 1 }).split('\n\n').find((l) => l.startsWith('Office archive'));
-    expect(archive('INVALID_DESTINATION')).toBe("Office archive: not saved to Google Drive yet (the client's Drive folder is not set up).");
-    expect(archive('CREDENTIALS_MISSING')).toBe('Office archive: not saved to Google Drive yet (the office Google account is not connected).');
-    for (const code of ['DRIVE_LOOKUP_FAILED', 'DRIVE_UPLOAD_FAILED', 'HTTP_403', 'DRIVE_UPLOAD_FAILED: 403 Forbidden']) {
-      expect(archive(code)).toBe('Office archive: not saved to Google Drive yet (Google Drive did not accept the upload).');
+  it('says nothing of the office\'s Drive archive: that is the office\'s to follow up (ADR-145, #31)', () => {
+    for (const archiveProblem of ['INVALID_DESTINATION', 'CREDENTIALS_MISSING', 'DRIVE_UPLOAD_FAILED: 403 Forbidden', 'the office Google account is not connected']) {
+      const text = composeDeliveredMessage({ title: 'Archive', archiveProblem, driveFolderId: 'fld_1' }, { filesSent: 1 });
+      expect(text).toBe('Here is your final <b>Archive</b>. 🎉');
     }
-    // A reason Core already put into words is kept, and still escaped.
-    expect(archive('the office Google account is not connected')).toBe('Office archive: not saved to Google Drive yet (the office Google account is not connected).');
-    expect(archive('Drive quota <full> & closed')).toBe('Office archive: not saved to Google Drive yet (Drive quota &lt;full&gt; &amp; closed).');
+  });
+
+  it('answers in the language of the design\'s name, and names files by it', () => {
+    expect(composeDeliveredMessage({ title: 'پۆستەری نەورۆز' }, { filesSent: 1 })).toBe('فەرموو، ئەمە وەشانی کۆتایی <b>پۆستەری نەورۆز</b>. 🎉');
+    expect(composeDeliveredCaption('KAAE: Nawroz poster', 'kaae.png')).toBe('Nawroz poster, final');
+    expect(composeDeliveredCaption(null, 'kaae.png')).toBe('kaae.png');
   });
 });
 

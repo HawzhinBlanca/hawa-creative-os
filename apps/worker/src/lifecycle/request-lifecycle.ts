@@ -14,6 +14,7 @@ import { TelegramSenderApi } from './telegram-sender.js';
 import { DesignRunApi, type DesignRunInput } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
+import { LIFECYCLE_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -56,6 +57,13 @@ export interface ManualLifecycleState {
   taskId: string;
   openEventId: string;
   openSha256: string;
+  /**
+   * ADR-145: the language the requester wrote the brief in (requesterLang on its words) and the
+   * design's name, for what this object says to them. Added fields: state saved before they existed
+   * has neither, and is answered by `requesterOf`.
+   */
+  lang?: RequesterLang;
+  title?: string;
 }
 
 export interface OpenManualResult { accepted: true; taskId: string; stage: 'manual'; rev: 1 }
@@ -233,11 +241,36 @@ function canonical(value: unknown): string {
 const hashOf = (event: unknown) => createHash('sha256').update(canonical(event)).digest('hex');
 const invalid = (reason: string) => new restate.TerminalError(`LIFECYCLE_OPEN_REFUSED: ${reason}`, { errorCode: 409 });
 
+/**
+ * The requester's language and the design's name as they see it (bold HTML). State saved before
+ * ADR-145 carries neither: the language is then read from the design run's words when there are any,
+ * else English, and the design is "your design".
+ */
+function requesterOf(state: Pick<ManualLifecycleState, 'lang' | 'title'> & { designInput?: { rawText?: string } }):
+  { lang: RequesterLang; title: string } {
+  const lang = state.lang ?? requesterLang(state.designInput?.rawText, 'en');
+  const name = String(state.title || '').replace(/^[^:]{1,40}:\s*/, '').replace(/\s+/g, ' ').trim();
+  const short = Array.from(name).length > 60 ? `${Array.from(name).slice(0, 59).join('')}…` : name;
+  return { lang, title: short ? bold(short) : say(LIFECYCLE_MESSAGES.yourDesign, lang) };
+}
+
+/** A requester-facing line in their language, in Telegram HTML; `params` values are HTML already. */
+function requesterText(state: Parameters<typeof requesterOf>[0], phrase: Phrase, params: Record<string, string> = {}): string {
+  const { lang, title } = requesterOf(state);
+  return say(phrase, lang, { title, ...params });
+}
+
+/** The language and name recorded when a request opens (ADR-145). */
+const requesterFields = (draft: { rawText: string; title: string }): Pick<ManualLifecycleState, 'lang' | 'title'> => ({
+  lang: requesterLang(draft.rawText, 'en'),
+  ...(typeof draft.title === 'string' && draft.title.trim() ? { title: draft.title.trim().slice(0, 200) } : {}),
+});
+
 function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
-  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId'>): void {
+  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title'>): void {
   ctx.send({
     v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
-    text: 'Request received. An art director will review it.', class: 'critical',
+    text: requesterText(state, LIFECYCLE_MESSAGES.receivedForDesigner), parseMode: 'HTML', class: 'critical',
     tenantId: state.tenantId, taskId: state.taskId,
   });
 }
@@ -270,7 +303,7 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
   const state: ManualLifecycleState = {
     v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
     owner: 'restate', stage: 'manual', rev: 1, taskId: projected.taskId,
-    openEventId: event.eventId, openSha256: fingerprint,
+    openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);
@@ -280,7 +313,7 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
 
 function sendAutomaticAcknowledgement(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
   ctx.send({ v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
-    text: 'Request received. I am preparing a draft for art director review.', class: 'critical',
+    text: requesterText(state, LIFECYCLE_MESSAGES.receivedDrafting), parseMode: 'HTML', class: 'critical',
     tenantId: state.tenantId, taskId: state.taskId });
 }
 
@@ -322,7 +355,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
     const manual: ManualLifecycleState = {
       v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
       owner: 'restate', stage: 'manual', rev: 1, taskId: projected.taskId,
-      openEventId: event.eventId, openSha256: fingerprint,
+      openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
     };
     ctx.set('lc', manual);
     ctx.setChatMode?.(event.chatId, event.requestId);
@@ -346,7 +379,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
   const state: AutomaticLifecycleState = {
     v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
     owner: 'restate', stage: 'designing', rev: 1, taskId: projected.taskId,
-    openEventId: event.eventId, openSha256: fingerprint, runId, designInput,
+    openEventId: event.eventId, openSha256: fingerprint, runId, designInput, ...requesterFields(event.draft),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);
@@ -562,12 +595,13 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
 }
 
 function sendOfficeRevisionNotice(ctx: AutomaticOpenContext,
-  state: Pick<ReviewOwnedState, 'requestId' | 'rev' | 'chatId' | 'tenantId' | 'taskId'>, event: OfficeRevisionEvent): void {
+  state: Pick<ReviewOwnedState, 'requestId' | 'rev' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title'> & { designInput?: { rawText?: string } },
+  event: OfficeRevisionEvent): void {
   const comment = event.revisionRequest?.comment?.trim() || event.reason.trim();
-  const round = Math.floor((state.rev - 1) / 2);
+  // #11 (ADR-145): the office's note in its own words, with no round number and no reply target.
   ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:office-revision-notify`,
     chatId: state.chatId, kind: 'text',
-    text: `Your design needs adjustments (revision ${round}).\n\n${comment}\n\nPlease reply with your updated direction or the changes you want.`,
+    text: requesterText(state, LIFECYCLE_MESSAGES.officeNote, { comment: escapeTelegramHtml(comment) }), parseMode: 'HTML',
     class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
   ctx.scheduleReminder?.(state.requestId, state.rev, REVISION_REMINDER_DELAY_MS);
 }
@@ -592,7 +626,10 @@ export async function recordReminderTick(ctx: Pick<AutomaticOpenContext, 'key' |
     }
     ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:question-reminder-${event.day}`,
       chatId: state.chatId, kind: 'text',
-      text: `Reminder: This design is waiting for your answer.\n\n${state.question.text}\n\nPlease reply to this message when you are ready.`,
+      text: requesterText(state, LIFECYCLE_MESSAGES.questionReminder, {
+        question: `<b>${escapeTelegramHtml(state.question.text)}</b>`,
+        options: state.question.options.map((option, i) => `${i + 1}. ${escapeTelegramHtml(option)}`).join('\n'),
+      }), parseMode: 'HTML',
       class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
     return { reminded: true };
   }
@@ -601,7 +638,7 @@ export async function recordReminderTick(ctx: Pick<AutomaticOpenContext, 'key' |
   }
   ctx.send({ v: 1, key: `${state.requestId}:${event.expectedRev}:revision-reminder`,
     chatId: state.chatId, kind: 'text',
-    text: 'Reminder: Your design is waiting for your revision direction. Please reply when you are ready.',
+    text: requesterText(state, LIFECYCLE_MESSAGES.changesReminder), parseMode: 'HTML',
     class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
   return { reminded: true };
 }

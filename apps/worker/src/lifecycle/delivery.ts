@@ -30,7 +30,7 @@ import {
 } from '@hawa/contracts';
 import { chaosPoint } from '@hawa/observability';
 import { verifyLifecycleDeliveryClaim } from '@hawa/integrations';
-import { composeDeliveredMessage, composeDeliveryFailedAlert } from '../delivery-notification.js';
+import { composeDeliveredCaption, composeDeliveredMessage, composeDeliveryFailedAlert } from '../delivery-notification.js';
 import { requestIdHeaders, withInvocationLogContext } from '../logging.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { RequestLifecycleApi } from './request-lifecycle.js';
@@ -139,7 +139,8 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
         kind: 'document',
         exportRef: { tenantId: input.tenantId, taskId: input.taskId, artifactId: file.artifactId, sha256: file.sha256 },
         filename: file.filename,
-        caption: file.filename,
+        // #32 (ADR-145): "<design>, final" in the requester's language; the file keeps its own name.
+        caption: composeDeliveredCaption(prepared.notice?.title ?? prepared.title, file.filename),
         ...(file.mimeType ? { mimeType: file.mimeType } : {}),
         class: 'critical',
         tenantId: input.tenantId,

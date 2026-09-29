@@ -7,7 +7,7 @@ import { blobStoreFor } from './blob-store-context.js';
 import { verifyReviewedSource, SourceConflict } from './lifecycle-source-store.js';
 import { parseCompleteRevisionRequest, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
 import { IdempotencyConflictError, OUTBOX_SEND_MARK_SOURCE, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
-import { escapeTelegramHtml } from '@hawa/integrations';
+import { LIFECYCLE_MESSAGES, escapeTelegramHtml, requesterLang, say } from '@hawa/integrations';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
 import { decisionDraftFor, linkedLifecycleReplies, readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-chat-target.js';
 import { lifecyclePhotoInput } from './lifecycle-photo.js';
@@ -15,6 +15,7 @@ import { verifyAlbumSnapshot } from './lifecycle-album.js';
 import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage } from './canva-status-message.js';
+import { designName } from './requester-turn.js';
 import { namedOfficeReviewMode } from './google-oidc.js';
 import { lockNamedReviewAuthority } from './named-review-authority.js';
 import { initialManualOrigin } from './lifecycle-native-scope.js';
@@ -453,25 +454,35 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during outcome projection');
     const reviewUrl = officeReviewUrl({ taskId, ...(revisionId ? { revisionId } : {}) });
+    const officeChat = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
+    // ADR-145: the requester hears the design by the name they know (the request's first task: a
+    // revision task is titled by its change) and in the language their brief was written in.
+    const root = await trx.selectFrom('tasks').select(['title', 'description'])
+      .where('tenant_id', '=', tenantId).where('id', '=', request.root_task_id).executeTakeFirst();
+    const requestTitle = root?.title || task.title;
+    const lang = requesterLang(root?.description || requestTitle);
     const composed = question || report.notifyRequester === false ? undefined : composeCanvaStatusMessage({
-      taskId, title: task.title, status, code: report.code,
+      taskId, title: requestTitle, status, code: report.code, lang,
       reviewUrl,
       canvaUrl: report.designId ? `https://www.canva.com/design/${report.designId}/edit` : undefined,
+      // #15: with no office chat to alert, "someone from the office will follow up here".
+      officeAlerted: Boolean(officeChat),
     });
-    const officeChat = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
     const officeAlert = officeChat && officeChat !== request.chat_id
       ? { chatId: officeChat, text: (hasDraft
           ? `A design is ready for office review in Hawa Desk. Task ${taskId}.`
           : `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.`) +
           (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '') }
       : undefined;
+    // #14 (ADR-145): the question in plain words, answered with a number or in the requester's own words.
     const questionText = question
-      ? `I need one detail before I can finish your requested change.\n\n<b>${escapeTelegramHtml(question.text)}</b>\n\n${question.options.map((option, index) => `${index + 1}. ${escapeTelegramHtml(option)}`).join('\n')}\n\nReply to this message with your answer. No new design has started yet.`
+      ? say(LIFECYCLE_MESSAGES.oneQuestion, lang, {
+        title: designName(requestTitle, lang),
+        question: `<b>${escapeTelegramHtml(question.text)}</b>`,
+        options: question.options.map((option, index) => `${index + 1}. ${escapeTelegramHtml(option)}`).join('\n'),
+      })
       : undefined;
-    const messageText = questionText || (composed?.text && !officeChat
-      ? composed.text.replace('The office has been alerted and will follow up with you here.',
-          'A person needs to review it in Hawa Desk and follow up with you here.')
-      : composed?.text);
+    const messageText = questionText || composed?.text;
     const result: DesignOutcomeResult = { requestId, taskId, rev, stage, status,
       ...(revisionId ? { revisionId } : {}),
       ...(question ? { question } : {}),

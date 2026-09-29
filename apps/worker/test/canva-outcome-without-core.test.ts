@@ -99,8 +99,10 @@ describe('an outcome Core does not take', () => {
     ]);
     const requester = rows.find((r) => r.idempotency_key === `notify.telegram:${key}`)!;
     expect(requester.payload.chatId).toBe(chat);
-    expect(requester.payload.message).toContain('could not be finished automatically');
-    expect(requester.payload.message).toContain('The office has been alerted');
+    // ADR-145: plain words by the design's name; no service names and no reference number.
+    expect(requester.payload.message).toContain("I couldn't finish");
+    expect(requester.payload.message).toContain('automatically. The office will follow up with you here.');
+    expect(requester.payload.message).not.toMatch(/Reference|Canva|Hawa/);
     expect(rows.find((r) => r.command_type === 'task.outcome')!.payload.report).toMatchObject({ status: 'DESIGN_SERVER_ERROR', code: 'RETRY_EXHAUSTED' });
     expect(rows.find((r) => r.idempotency_key.startsWith('notify.office:'))!.payload.chatId).toBe(office);
 

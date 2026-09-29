@@ -18,7 +18,8 @@
  *  - approval words are passed to the office and approve nothing (ADR-022);
  *  - only a new brief opens a request; a message that could be either asks one short question.
  */
-import { escapeTelegramHtml } from '@hawa/integrations';
+import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, say as sayPhrase, type Phrase,
+  type RequesterLang } from '@hawa/integrations';
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 
 export type TurnIntent = 'acknowledgement' | 'status' | 'approval' | 'cancel' | 'deadline' | 'change' |
@@ -39,8 +40,13 @@ export interface IntentReading {
   confidence?: number;
 }
 
-export type Lang = 'en' | 'ckb';
-export const langOf = (text: string): Lang => (isSoraniText(text) ? 'ckb' : 'en');
+export type Lang = RequesterLang;
+/**
+ * The language to answer a message in (ADR-145): the script with more letters, so a Sorani message
+ * that names a brand in Latin letters is answered in Sorani, and an English one quoting a Kurdish word
+ * in English. A message with no letters (an emoji) is answered in English.
+ */
+export const langOf = (text: string): Lang => requesterLang(text, 'en');
 
 export type RequestStage = 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' |
   'delivering' | 'delivered';
@@ -588,61 +594,53 @@ export function planTurn(input: TurnInput): TurnPlan {
 }
 
 // ---------------------------------------------------------------------------------------------
-// What the requester hears. New strings only (ADR-144); every Sorani line awaits native review.
+// What the requester hears: the catalogue's routing phrases (ADR-145, packages/integrations/src/
+// requester-messages/routing.ts), in the requester's language. The office's alerts stay here.
 // ---------------------------------------------------------------------------------------------
 
-const title = (r: { title: string }) => `<b>${escapeTelegramHtml(shortTitle(r.title))}</b>`;
+const say = (phrase: Phrase, lang: Lang, params: Record<string, string | number> = {}) => sayPhrase(phrase, lang, params);
+const title = (r: { title: string }) => bold(shortTitle(r.title));
 export function shortTitle(value: string): string {
   const t = String(value || '').replace(/^[^:]{1,40}:\s*/, '').replace(/\s+/g, ' ').trim() || 'your design';
   return Array.from(t).length > 60 ? `${Array.from(t).slice(0, 59).join('')}…` : t;
 }
 
-const STATUS_LINE: Record<RequestStage | 'manual-waiting', { en: string; ckb: string }> = {
-  designing: { en: '{t} is being designed right now. The draft usually takes a few minutes; the office checks it before it comes to you.',
-    ckb: '{t} ئێستا دیزاین دەکرێت. ڕەشنووسەکە زۆرجار چەند خولەکێک دەخایەنێت؛ ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات.' },
-  manual: { en: 'A designer at the office is working on {t}. It will be sent here when it is ready.',
-    ckb: 'دیزاینەرێک لە ئۆفیسەکە کار لەسەر {t} دەکات. کە ئامادە بوو لێرە بۆت دەنێردرێت.' },
-  'manual-waiting': { en: '{t} is waiting for your changes. Just tell me what you would like changed.',
-    ckb: '{t} چاوەڕێی گۆڕانکارییەکانی تۆیە. تەنها پێم بڵێ چیت دەوێت بگۆڕدرێت.' },
-  awaiting_answer: { en: '{t} is waiting for your answer to one question: {q}',
-    ckb: '{t} چاوەڕێی وەڵامی تۆیە بۆ یەک پرسیار: {q}' },
-  in_review: { en: '{t} is with the office for a final check. It will be sent here once they approve it.',
-    ckb: '{t} لای ئۆفیسەکەیە بۆ دوایین پشکنین. کە پەسەندیان کرد لێرە بۆت دەنێردرێت.' },
-  approved: { en: '{t} is approved and will be sent to you shortly.',
-    ckb: '{t} پەسەند کراوە و بەم زووانە بۆت دەنێردرێت.' },
-  delivering: { en: '{t} is being sent to you now.', ckb: '{t} ئێستا بۆت دەنێردرێت.' },
-  delivered: { en: '{t} has been delivered.', ckb: '{t} گەیەندرا.' },
+/**
+ * A design's name as a requester sees it, in bold (HTML), or "your design" in their language when the
+ * request carries no name.
+ */
+export function designName(value: string | null | undefined, lang: Lang): string {
+  return String(value ?? '').trim() ? title({ title: String(value) }) : say(LIFECYCLE_MESSAGES.yourDesign, lang);
+}
+
+const STATUS_LINE: Record<RequestStage | 'manual-waiting', Phrase> = {
+  designing: ROUTING_MESSAGES.statusDesigning,
+  manual: ROUTING_MESSAGES.statusManual,
+  'manual-waiting': ROUTING_MESSAGES.statusWaitingForChanges,
+  awaiting_answer: ROUTING_MESSAGES.statusAwaitingAnswer,
+  in_review: ROUTING_MESSAGES.statusInReview,
+  approved: ROUTING_MESSAGES.statusApproved,
+  delivering: ROUTING_MESSAGES.statusDelivering,
+  delivered: ROUTING_MESSAGES.statusDelivered,
 };
 
 export function statusText(requests: ChatRequestView[], lang: Lang): string {
-  if (!requests.length) {
-    return lang === 'ckb'
-      ? 'ئێستا هیچ دیزاینێکم لەم چاتەدا لە دەستدا نییە. پێم بڵێ چیت دەوێت دیزاین بکرێت.'
-      : "I don't have a design in progress in this chat right now. Tell me what you'd like designed.";
-  }
+  if (!requests.length) return say(ROUTING_MESSAGES.statusNothingOpen, lang);
   return requests.map((r) => {
     const key = r.stage === 'manual' && r.rev >= 3 ? 'manual-waiting' : r.stage;
     const q = r.question?.text ? escapeTelegramHtml(r.question.text) : '';
-    return STATUS_LINE[key][lang].replace('{t}', title(r)).replace('{q}', q);
+    return say(STATUS_LINE[key], lang, { title: title(r), question: q });
   }).join('\n\n');
 }
 
 export function thanksText(waiting: ChatRequestView[], lang: Lang): string {
-  const base = lang === 'ckb' ? '🙏 سوپاس.' : '🙏 Thank you.';
-  if (waiting.length !== 1) return base;
-  return lang === 'ckb'
-    ? `${base}\n\nهەر کاتێک ئامادە بوویت، پێم بڵێ چی لە ${title(waiting[0])} بگۆڕم.`
-    : `${base}\n\nWhenever you're ready, just tell me what to change on ${title(waiting[0])}.`;
+  if (waiting.length !== 1) return say(ROUTING_MESSAGES.thanks, lang);
+  return say(ROUTING_MESSAGES.thanksOneWaiting, lang, { title: title(waiting[0]) });
 }
 
 /** `alerted`: the office chat was told; without one the words are only kept for the office. */
 export function forwardText(lang: Lang, alerted: boolean): string {
-  if (!alerted) {
-    return lang === 'ckb' ? 'پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە.'
-      : "I've kept your message for the office; they'll follow up here.";
-  }
-  return lang === 'ckb' ? 'پەیامەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.'
-    : "I've passed your message to the office; they'll follow up here.";
+  return say(alerted ? ROUTING_MESSAGES.forwardedToOffice : ROUTING_MESSAGES.keptForOffice, lang);
 }
 
 /** The office's alert for words about a design this bot cannot link to a current request. */
@@ -653,65 +651,33 @@ export function forwardOfficeAlert(chatId: string, words: string): string {
 }
 
 export function nothingToChangeText(lang: Lang): string {
-  return lang === 'ckb'
-    ? 'ئێستا هیچ دیزاینێکم لە دەستدا نییە بۆ گۆڕین. پێم بڵێ چیت دەوێت دیزاین بکرێت، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت.'
-    : "I don't have a design in progress here to change. Tell me what you'd like designed, with the text that should go on it.";
+  return say(ROUTING_MESSAGES.nothingToChange, lang);
 }
 
 export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang): string {
-  const list = plan.options.map((o, i) => `${i + 1}. ${title(o)}`);
-  if (plan.options.length === 1 && plan.allowNew) {
-    return lang === 'ckb'
-      ? `ئەمە گۆڕانکارییە لە ${title(plan.options[0])}، یان دیزاینێکی نوێیە؟ تەنها بنووسە «گۆڕانکاری» یان «نوێ».`
-      : `Is this a change to ${title(plan.options[0])}, or a new design? Just say “change” or “new”.`;
-  }
+  if (plan.options.length === 1 && plan.allowNew) return say(ROUTING_MESSAGES.askChangeOrNew, lang, { title: title(plan.options[0]) });
   if (plan.options.length === 1) {
-    const what = plan.intent === 'cancel'
-      ? { en: `Do you want me to ask the office to cancel ${title(plan.options[0])}? Just say “yes”.`,
-        ckb: `دەتەوێت داوا لە ئۆفیسەکە بکەم ${title(plan.options[0])} هەڵبوەشێنێتەوە؟ تەنها بنووسە «بەڵێ».` }
-      : { en: `Is this for ${title(plan.options[0])}? Just say “yes”.`,
-        ckb: `ئەمە بۆ ${title(plan.options[0])}ە؟ تەنها بنووسە «بەڵێ».` };
-    return what[lang];
+    return say(plan.intent === 'cancel' ? ROUTING_MESSAGES.askCancel : ROUTING_MESSAGES.askIsThisOne, lang, { title: title(plan.options[0]) });
   }
-  if (plan.allowNew) list.push(`${plan.options.length + 1}. ${lang === 'ckb' ? 'دیزاینێکی نوێ' : 'A new design'}`);
-  return lang === 'ckb'
-    ? `ئەمە بۆ کام دیزاینە؟\n${list.join('\n')}\n\nبە ژمارە یان ناو وەڵام بدەرەوە.`
-    : `Which design is this for?\n${list.join('\n')}\n\nAnswer with the number or the name.`;
+  const list = plan.options.map((o, i) => `${i + 1}. ${title(o)}`);
+  if (plan.allowNew) list.push(`${plan.options.length + 1}. ${say(ROUTING_MESSAGES.aNewDesign, lang)}`);
+  return say(ROUTING_MESSAGES.askWhichDesign, lang, { list: list.join('\n') });
 }
 
 /** The requester's answer to a note kept on a request (a change or a cancel). */
 export function noteText(note: 'change' | 'cancel', stage: string, requestTitle: string, lang: Lang): string {
-  const t = title({ title: requestTitle });
-  if (note === 'cancel') {
-    return lang === 'ckb' ? `باشە. داوام لە ئۆفیسەکە کرد کە ${t} هەڵبوەشێنێتەوە.`
-      : `OK. I've asked the office to cancel ${t}.`;
-  }
-  if (stage === 'designing' || stage === 'manual' || stage === 'awaiting_answer') {
-    return lang === 'ckb'
-      ? `تێگەیشتم. ئەوەم بۆ ${t} زیاد کرد؛ ئۆفیسەکە پێش ناردنی دیزاینەکە دەیبینێت.`
-      : `Got it. I've added that to ${t}; the office will see it before the design is sent to you.`;
-  }
-  if (stage === 'delivering') {
-    return lang === 'ckb' ? `${t} ئێستا بۆت دەنێردرێت؛ گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە.`
-      : `${t} is being sent to you now; I've passed your change to the office.`;
-  }
-  if (stage === 'delivered') {
-    return lang === 'ckb' ? `${t} پێشتر گەیەندرابوو؛ گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە.`
-      : `${t} was already delivered; I've passed your change to the office.`;
-  }
-  return lang === 'ckb' ? `تێگەیشتم. ئۆفیسەکە ئێستا سەیری ${t} دەکات، و گۆڕانکارییەکەتم پێیان گەیاند.`
-    : `Got it. The office is checking ${t} now, and I've passed your change to them.`;
+  const t = { title: title({ title: requestTitle }) };
+  if (note === 'cancel') return say(ROUTING_MESSAGES.cancelAsked, lang, t);
+  if (stage === 'designing' || stage === 'manual' || stage === 'awaiting_answer') return say(ROUTING_MESSAGES.changeAddedWhileDesigning, lang, t);
+  if (stage === 'delivering') return say(ROUTING_MESSAGES.changePassedDelivering, lang, t);
+  if (stage === 'delivered') return say(ROUTING_MESSAGES.changePassedDelivered, lang, t);
+  return say(ROUTING_MESSAGES.changePassedInReview, lang, t);
 }
 
 /** The requester's answer when approval or timing words were passed to the office. */
 export function tellText(note: 'approval' | 'deadline', requestTitle: string, lang: Lang): string {
-  const t = title({ title: requestTitle });
-  if (note === 'approval') {
-    return lang === 'ckb' ? `سوپاس! بە ئۆفیسەکەم ڕاگەیاند کە تۆ ڕازیت بە ${t}. پێش ناردن بۆ دواجار سەیری دەکەن.`
-      : `Thanks! I've told the office you're happy with ${t}. They give it a final check before it's sent.`;
-  }
-  return lang === 'ckb' ? `تێبینی کرا. سەبارەت بە کاتی ${t} ئۆفیسەکەم ئاگادار کردەوە.`
-    : `Noted. I've told the office about the timing for ${t}.`;
+  return say(note === 'approval' ? ROUTING_MESSAGES.approvalPassed : ROUTING_MESSAGES.deadlinePassed, lang,
+    { title: title({ title: requestTitle }) });
 }
 
 /** The office's alert for approval or timing words (plain text: the words are quoted as sent). */

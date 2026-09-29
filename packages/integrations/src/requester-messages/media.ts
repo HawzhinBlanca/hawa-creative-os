@@ -22,6 +22,11 @@ export const MEDIA_MESSAGES = {
     en: "Got the photo. {title} is already being made, so I've passed the photo to the office to use.",
     ckb: 'وێنەکەم وەرگرت. {title} پێشتر دەستی پێکراوە، بۆیە وێنەکەم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاری بهێنن.',
   },
+  /** Photos whose design the bot cannot tell (they answer a design that no longer waits). */
+  photosUnplaced: {
+    en: "Got the photos, but I'm not sure which design they're for. Please send them again together with what you'd like designed.",
+    ckb: 'وێنەکانم وەرگرت، بەڵام دڵنیا نیم بۆ کام دیزاینن. تکایە دووبارە بیاننێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت.',
+  },
   /** A picture that could not be opened (damaged, or not really a picture). */
   photoUnreadable: {
     en: "I couldn't open that picture. Could you send it again as a photo?",

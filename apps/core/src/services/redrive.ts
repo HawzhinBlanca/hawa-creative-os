@@ -78,6 +78,7 @@ export function createRedrive(deps: RedriveDeps) {
           text: composeCanvaStatusMessage({
             taskId,
             title: taskData.title,
+            briefText: taskData.description,
             status: 'CLIENT_REQUIRED',
           }).text,
           parse_mode: 'HTML',
@@ -122,6 +123,7 @@ export function createRedrive(deps: RedriveDeps) {
         const existsMsg = composeCanvaStatusMessage({
           taskId,
           title: taskData.title,
+          briefText: taskData.description,
           status: 'DESIGN_REJECTED',
           code: 'CANVA_ALREADY_BOUND',
           canvaUrl: existingBinding.edit_url,
@@ -241,6 +243,7 @@ export function createRedrive(deps: RedriveDeps) {
       const failedMsg = composeCanvaStatusMessage({
         taskId,
         title: taskData.title,
+        briefText: taskData.description,
         status: planResult.status === 'uncertain' ? 'DESIGN_UNCERTAIN' : 'DESIGN_FAILED',
         code: (planResult as any).message || 'PLAN_FAILED',
       });
@@ -355,6 +358,7 @@ export function createRedrive(deps: RedriveDeps) {
       const statusMsg = composeCanvaStatusMessage({
         taskId,
         title: taskData.title,
+        briefText: taskData.description,
         status: finalCanvaUrl ? 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW' : 'DRAFT_READY',
         canvaUrl: finalCanvaUrl,
       });

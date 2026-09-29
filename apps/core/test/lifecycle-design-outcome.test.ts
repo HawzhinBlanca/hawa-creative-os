@@ -63,8 +63,12 @@ describe('versioned lifecycle design outcome', () => {
     const first = await post(requestId, 'design-outcome', body);
     expect(first).toMatchObject({ status: 200, body: { v: 1, requestId, taskId, rev: 2,
       stage: 'manual', status: 'DESIGN_REJECTED', message: { parseMode: 'HTML' } } });
-    expect(first.body.message.text).toContain(taskId);
+    // ADR-145 (#16, #22): the requester is asked for the words in plain language, without the task
+    // id; the office's alert names the task.
+    expect(first.body.message.text).not.toContain(taskId);
+    expect(first.body.message.text).toContain('What text should go on');
     expect(first.body.officeAlert).toMatchObject({ chatId: '88880001' });
+    expect(first.body.officeAlert.text).toContain(taskId);
     const replay = await post(requestId, 'design-outcome', body);
     expect(replay).toEqual(first);
     const changed = structuredClone(body);
@@ -133,8 +137,8 @@ describe('versioned lifecycle design outcome', () => {
         reviewUrl: 'https://outside.test/forged' });
       const first = await post(requestId, 'design-outcome', payload);
       expect(first.status).toBe(200);
-      expect(first.body.message.text).toContain(`https://desk.example.test/#/work?task=${taskId}&amp;revision=${first.body.revisionId}`);
-      expect(first.body.message.text).not.toContain('outside.test');
+      // ADR-145 (#16): the review link is the office's alone; the requester's message carries none.
+      expect(first.body.message.text).not.toMatch(/desk\.example\.test|outside\.test|canva\.com/);
       expect(first.body.officeAlert).toMatchObject({ chatId: '940001111' });
       expect(first.body.officeAlert.text).toContain(`https://desk.example.test/#/work?task=${taskId}&revision=${first.body.revisionId}`);
       vi.stubEnv('PUBLIC_TUNNEL_URL', 'https://changed.example.test');

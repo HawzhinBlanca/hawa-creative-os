@@ -57,6 +57,16 @@ export const INBOX_MESSAGES = {
     en: "I've passed your change to the office; they'll finish this design and send it here.",
     ckb: 'گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە؛ ئەوان ئەم دیزاینە تەواو دەکەن و لێرە بۆت دەنێرن.',
   },
+  /** A change or an answer the bot could not start by itself, with no office chat to pass it to. */
+  changeNotStarted: {
+    en: "I couldn't make this change by myself just now. Please let the office know, and they'll take care of it.",
+    ckb: 'ئێستا نەمتوانی خۆم ئەم گۆڕانکارییە بکەم. تکایە ئۆفیسەکە ئاگادار بکەرەوە، ئەوان بۆت دەکەن.',
+  },
+  /** The pop-up under a button of an old draft (at most 200 characters). */
+  buttonPopup: {
+    en: 'The office has this design now. Just tell me here if anything should change.',
+    ckb: 'ئەم دیزاینە ئێستا لای ئۆفیسەکەیە. ئەگەر شتێک پێویستی بە گۆڕین هەیە، لێرە پێم بڵێ.',
+  },
   /** The message could not be read after several tries (a dead letter): the office has it. */
   couldNotRead: {
     en: "Sorry, I couldn't read that message just now. I've passed it to the office and they'll follow up here.",

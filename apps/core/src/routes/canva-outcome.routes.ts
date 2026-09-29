@@ -260,7 +260,7 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
     let notificationError: string | undefined;
     let notificationCommandId: string | undefined;
     if (sourceChannelId && notifyRequester) {
-      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes, notPossible, question,
+      const message = composeCanvaStatusMessage({ taskId, title: task.title, briefText: task.description, status, code, canvaUrl, notes, notPossible, question,
         reviewUrl: officeReviewUrl({ taskId, ...(reviewRevisionId ? { revisionId: reviewRevisionId } : {}) }) });
       const scope = { tenantId: auth.tenantId, userId: auth.userId, role: auth.role };
       // The worker's finish() swallows its own notification errors so a failed message cannot fail

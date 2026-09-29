@@ -1,5 +1,5 @@
 import { sql, withRlsContext, ClientRulesRepository, type Database, type Kysely } from '@hawa/db';
-import { escapeTelegramHtml } from '@hawa/integrations';
+import { CONVERSATION_MESSAGES, escapeTelegramHtml, requesterLang, say, type RequesterLang } from '@hawa/integrations';
 import { formatRuleSaved, formatRulesList, ruleNumber, type RulesCommand } from './standing-rules-chat.js';
 
 /**
@@ -102,19 +102,28 @@ export async function ruleClientById(deps: RulesIntakeDeps, clientId: string): P
   }).catch(() => undefined);
 }
 
-const noClient = (what: string) => ({
-  text: `❓ <b>Which client is this ${what} for?</b>\n\n<i>Send it again with the client's name in it (for example KAAE).</i>`,
+/** Asked when no organisation can be told for a preference or the list (ADR-145: no command, no format). */
+const noClient = (lang: RequesterLang) => ({
+  text: `❓ ${escapeTelegramHtml(say(CONVERSATION_MESSAGES.whichOrganisation, lang))}`,
   parse_mode: 'HTML',
 });
+
+/**
+ * The language to answer a rules command in: the words after the command, else the rules' own words
+ * (a chat whose preferences are in Sorani reads the list in Sorani), else English.
+ */
+const commandLang = (text: string, rules: Array<{ humanRule: string }> = []): RequesterLang =>
+  requesterLang(String(text || '').replace(/^\/[a-z_]+(?:@\w+)?/i, ''), requesterLang(rules.map((r) => r.humanRule).join(' '), 'en'));
 
 /** Saves a rule said in chat, and tells the sender it is in force. */
 export async function saveChatRule(
   deps: RulesIntakeDeps,
   params: { sourceChannelId: string; sourceEventId: string; ruleText: string; originalText: string; client?: RuleClient }
 ): Promise<{ saved: boolean; created?: boolean; ruleId?: string; clientId?: string; ruleNumber?: number }> {
+  const lang = requesterLang(params.originalText || params.ruleText);
   const client = params.client || (await resolveRuleClient(deps, params.sourceChannelId, params.originalText));
   if (!client) {
-    await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, noClient('rule'));
+    await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, noClient(lang));
     return { saved: false };
   }
   const { rule, created, count, number } = await withRlsContext(deps.db, scope(deps), async (trx) => {
@@ -129,7 +138,7 @@ export async function saveChatRule(
     return { ...out, count: active.length, number: ruleNumber(active, out.rule.id) };
   });
   await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
-    text: formatRuleSaved(client.name, rule.humanRule, created, count, number),
+    text: formatRuleSaved(client.name, rule.humanRule, created, count, number, lang),
     parse_mode: 'HTML',
   });
   return { saved: true, created, ruleId: rule.id, clientId: client.id, ruleNumber: number };
@@ -140,16 +149,10 @@ export async function handleRulesCommand(
   deps: RulesIntakeDeps,
   params: { sourceChannelId: string; command: RulesCommand; text: string }
 ): Promise<void> {
-  if (params.command.kind === 'forget_usage') {
-    await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
-      text: 'ℹ️ Send /rules to see the numbered list, then /forget and the number, for example <code>/forget 2</code>.',
-      parse_mode: 'HTML',
-    });
-    return;
-  }
+  // "/forget" with no number shows the list (ADR-145): the answer never teaches a command's format.
   const client = await resolveRuleClient(deps, params.sourceChannelId, params.text);
   if (!client) {
-    await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, noClient('command'));
+    await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, noClient(commandLang(params.text)));
     return;
   }
   const command = params.command;
@@ -165,18 +168,20 @@ export async function handleRulesCommand(
     }
     return { rules: await repo.listActive(deps.tenantId, client.id), removed };
   });
+  const lang = commandLang(params.text, rules.length ? rules : removed.map((humanRule) => ({ humanRule })));
   if (command.kind === 'forget') {
     const missing = command.numbers.length - removed.length;
+    const name = escapeTelegramHtml(client.name);
     await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
       text:
         (removed.length
-          ? `🗑️ <b>No longer applied to ${escapeTelegramHtml(client.name)} designs:</b>\n${removed.map(escapeTelegramHtml).join('\n')}\n\n`
+          ? `🗑️ <b>${say(CONVERSATION_MESSAGES.preferencesRemoved, lang, { client: name })}</b>\n${removed.map(escapeTelegramHtml).join('\n')}\n\n`
           : '') +
-        (missing > 0 ? `<i>${missing} number${missing === 1 ? '' : 's'} did not match a rule.</i>\n\n` : '') +
-        formatRulesList(client.name, rules),
+        (missing > 0 ? `<i>${escapeTelegramHtml(say(CONVERSATION_MESSAGES.preferencesUnmatched, lang, { count: missing }))}</i>\n\n` : '') +
+        formatRulesList(client.name, rules, lang),
       parse_mode: 'HTML',
     });
     return;
   }
-  await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, { text: formatRulesList(client.name, rules), parse_mode: 'HTML' });
+  await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, { text: formatRulesList(client.name, rules, lang), parse_mode: 'HTML' });
 }

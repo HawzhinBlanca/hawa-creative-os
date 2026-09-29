@@ -50,6 +50,25 @@ describe('RequestLifecycle first manual open', () => {
     expect(c.postSpy.mock.calls[0][0]).toBe(`/internal/lifecycle/${e.requestId}/project`);
     expect(ctx.state).toMatchObject({ requestId: e.requestId, owner: 'restate', stage: 'manual', taskId: result.taskId });
     expect(ctx.sent).toEqual([expect.objectContaining({ key: `${e.requestId}:1:ack`, class: 'critical', taskId: result.taskId })]);
+    // ADR-145 (#9): the brief's language and the design's name are kept, and the ack is plain words.
+    expect(ctx.state).toMatchObject({ lang: 'en', title: 'Autumn event' });
+    expect(ctx.sent[0]).toMatchObject({ parseMode: 'HTML',
+      text: 'Got it. A designer will make <b>Autumn event</b> and send it to you here.' });
+  });
+
+  it('acknowledges a Sorani brief in Sorani, and old state without a language in English (ADR-145)', async () => {
+    const e = event();
+    e.draft = { ...e.draft, rawText: 'پۆستەرێک بۆ ئاهەنگی پاییز دروست بکە', title: 'ئاهەنگی پاییز' };
+    const ctx = new FakeContext(e.requestId);
+    await openManualRequest(ctx, core(), e);
+    expect(ctx.state).toMatchObject({ lang: 'ckb' });
+    expect(ctx.sent[0].text).toBe('تێگەیشتم. دیزاینەرێک <b>ئاهەنگی پاییز</b> دروست دەکات و لێرە بۆت دەنێرێت.');
+    // State saved before ADR-145 has neither field: the replayed ack (same key) is English.
+    const { lang: _lang, title: _title, ...old } = ctx.state!;
+    ctx.state = old;
+    ctx.sent = [];
+    await openManualRequest(ctx, core(), e);
+    expect(ctx.sent[0]).toMatchObject({ key: `${e.requestId}:1:ack`, text: 'Got it. A designer will make your design and send it to you here.' });
   });
 
   it('replays the same ack after a crash between state and send without projecting again', async () => {

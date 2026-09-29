@@ -1,4 +1,5 @@
 import type { ClientRule } from '@hawa/db';
+import { CONVERSATION_MESSAGES, say, type RequesterLang } from '@hawa/integrations';
 
 /**
  * How the office states, lists and removes a client's standing rules in chat.
@@ -39,28 +40,27 @@ export function parseRulesCommand(text: string): RulesCommand | null {
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** The numbered list the office sees; the numbers are what /forget takes. */
-export function formatRulesList(clientName: string, rules: ClientRule[]): string {
-  if (!rules.length) {
-    return (
-      `📌 <b>No standing rules for ${esc(clientName)} yet.</b>\n\n` +
-      `<i>Say one in a message ("From now on, put the logo bottom-right") or send the brand guidelines as a PDF, and every later ${esc(clientName)} design follows it.</i>`
-    );
-  }
+/**
+ * The numbered list of a client's lasting preferences. The numbers are what /forget takes; the list
+ * names no command (ADR-145): whoever reads it is told to say what should change.
+ */
+export function formatRulesList(clientName: string, rules: ClientRule[], lang: RequesterLang = 'en'): string {
+  const client = esc(clientName);
+  if (!rules.length) return `📌 ${say(CONVERSATION_MESSAGES.preferencesNone, lang, { client })}`;
   // Whole lines within Telegram's 4096 characters: two guidelines PDFs can hold 50 rules, and a
   // message over the limit is refused and the sender gets nothing.
   const all = rules.map((r, i) => `${i + 1}. ${esc(r.humanRule)}`);
   const lines: string[] = [];
   for (const line of all) {
     if (lines.join('\n').length + line.length > 3200) {
-      lines.push(`… and ${all.length - lines.length} more (numbers ${lines.length + 1}–${all.length}; /forget takes them too).`);
+      lines.push(say(CONVERSATION_MESSAGES.preferencesMore, lang, { count: all.length - lines.length }));
       break;
     }
     lines.push(line);
   }
   return (
-    `📌 <b>Standing rules for ${esc(clientName)}</b> (${rules.length})\n\n${lines.join('\n')}\n\n` +
-    `<i>Every new ${esc(clientName)} design follows these; a later rule wins over an earlier one, and a request's own instructions win over both. Remove one with /forget and its number, for example /forget 2.</i>`
+    `📌 <b>${say(CONVERSATION_MESSAGES.preferencesHeader, lang, { client, count: rules.length })}</b>\n\n${lines.join('\n')}\n\n` +
+    `<i>${say(CONVERSATION_MESSAGES.preferencesFooter, lang)}</i>`
   );
 }
 
@@ -71,13 +71,13 @@ export function ruleNumber(activeRules: Array<Pick<ClientRule, 'id'>>, ruleId: s
 }
 
 /**
- * The reply to a rule said in chat. `number` is the rule's place in /rules, so the sender can
- * remove this one without listing them first.
+ * The reply to a rule said in chat (ADR-145, #74): what every later design of the client will follow,
+ * in the sender's language, with no command to learn. `count` and `number` are the office's (how many
+ * rules are in force, and this one's place in the list /forget takes); the requester is not shown them.
  */
-export function formatRuleSaved(clientName: string, rule: string, created: boolean, count: number, number?: number): string {
-  const n = number && number > 0 ? ` (number ${number})` : '';
-  const forget = n ? `/forget ${number} removes it` : '/forget removes one';
-  return created
-    ? `📌 <b>Saved as a standing rule for ${esc(clientName)}${n}:</b>\n"${esc(rule)}"\n\n<i>Every new ${esc(clientName)} design follows it (${count} rule${count === 1 ? '' : 's'} in force). /rules lists them; ${forget}.</i>`
-    : `📌 <b>Already a standing rule for ${esc(clientName)}${n}:</b>\n"${esc(rule)}"\n\n<i>/rules lists them; ${forget}.</i>`;
+export function formatRuleSaved(clientName: string, rule: string, created: boolean, _count: number, _number?: number,
+  lang: RequesterLang = 'en'): string {
+  const text = say(created ? CONVERSATION_MESSAGES.preferenceSaved : CONVERSATION_MESSAGES.preferenceAlreadySaved, lang,
+    { client: esc(clientName), rule: esc(rule) });
+  return `📌 ${text}`;
 }

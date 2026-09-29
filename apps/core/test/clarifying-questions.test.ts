@@ -161,7 +161,10 @@ describe('the question the requester reads', () => {
       question: { question: 'Fill the space with what?', options: ['bigger title text', 'bigger <logo>'] },
       notPossible: [{ ask: 'cut the panelists out', reason: 'a designer is needed' }],
     });
-    expect(msg.text).toContain('One question before I make your change');
+    // ADR-145 (#27): the question in plain words; no "reply to this message".
+    expect(msg.text).toContain('One question about your design before I make your change');
+    expect(msg.text).toContain('Tap an answer below, or answer in your own words.');
+    expect(msg.text).not.toMatch(/reply to/i);
     expect(msg.text).toContain('Fill the space with what?');
     expect(msg.text).toContain('2. bigger &lt;logo&gt;');
     expect(msg.text).toContain('• cut the panelists out (a designer is needed)');

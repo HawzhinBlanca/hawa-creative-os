@@ -225,9 +225,11 @@ describe('the messages for a change that needs a designer', () => {
   const taskId = '00000000-0000-4000-c000-000000000001';
   it('tells the requester what cannot be done automatically and that their draft stands', () => {
     const msg = composeCanvaStatusMessage({ taskId, status: 'DESIGN_FAILED', code: 'CHANGE_NOT_SUPPORTED', notPossible: [{ ask: 'cut the panelists out of their photos', reason: 'the people need cutting out <b>' }] });
-    expect(msg.text).toContain('This change needs a designer');
+    // ADR-145 (#28): plain words, and any other change is simply written, not replied to a message.
+    expect(msg.text).toContain('A designer will make this part of your change to your design by hand');
     expect(msg.text).toContain('• cut the panelists out of their photos (the people need cutting out &lt;b&gt;)');
-    expect(msg.text).toContain('Your previous draft stays as it was');
+    expect(msg.text).toContain('Your last draft stays as it is');
+    expect(msg.text).not.toMatch(/reply to/i);
     expect(msg.text).not.toContain('CHANGE_NOT_SUPPORTED');
   });
   it('keeps a note\'s own sign and marks the others', () => {

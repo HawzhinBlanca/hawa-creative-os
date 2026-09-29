@@ -42,6 +42,7 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `media.photoUsedWithWords` | I'll use the photo you sent with this. | ئەو وێنەیەی ناردت لەگەڵ ئەمەدا بەکاردەهێنم. | needs native review |
 | `media.photoAdded` | Got the photo. I've added it to {title}. | وێنەکەم وەرگرت و بۆ {title} زیادم کرد. | needs native review |
 | `media.photoPassed` | Got the photo. {title} is already being made, so I've passed the photo to the office to use. | وێنەکەم وەرگرت. {title} پێشتر دەستی پێکراوە، بۆیە وێنەکەم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاری بهێنن. | needs native review |
+| `media.photosUnplaced` | Got the photos, but I'm not sure which design they're for. Please send them again together with what you'd like designed. | وێنەکانم وەرگرت، بەڵام دڵنیا نیم بۆ کام دیزاینن. تکایە دووبارە بیاننێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
 | `media.photoUnreadable` | I couldn't open that picture. Could you send it again as a photo? | نەمتوانی ئەو وێنەیە بکەمەوە. دەتوانیت دووبارە وەک وێنە بینێریتەوە؟ | needs native review |
 | `media.videoNotUsed` | Thanks! I can't put videos on a design. Could you send a photo instead? You can also just tell me what the design should say. | سوپاس! ناتوانم ڤیدیۆ لەسەر دیزاین دابنێم. دەتوانیت لە جیاتی ئەوە وێنەیەک بنێریت؟ یان تەنها پێم بڵێ دیزاینەکە چی لەسەر بنووسرێت. | needs native review |
 | `media.videoWordsUsed` | I can't put the video itself on a design, so I've used your words. Send photos if you'd like pictures on it. | ناتوانم خودی ڤیدیۆکە لەسەر دیزاین دابنێم، بۆیە وشەکانتم بەکارهێنا. ئەگەر وێنەت دەوێت لەسەری بێت، وێنە بنێرە. | needs native review |
@@ -65,6 +66,8 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `inbox.changeToOffice` | I've passed your change to the office; they'll make it and send the design here. There's no need to send it again. | گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە؛ ئەوان دەیکەن و دیزاینەکە لێرە بۆت دەنێرن. پێویست ناکات دووبارەی بنێریتەوە. | needs native review |
 | `inbox.answerToOffice` | I've passed your answer to the office; they'll finish this design and send it here. | وەڵامەکەتم گەیاندە ئۆفیسەکە؛ ئەوان ئەم دیزاینە تەواو دەکەن و لێرە بۆت دەنێرن. | needs native review |
 | `inbox.changeToOfficeToFinish` | I've passed your change to the office; they'll finish this design and send it here. | گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە؛ ئەوان ئەم دیزاینە تەواو دەکەن و لێرە بۆت دەنێرن. | needs native review |
+| `inbox.changeNotStarted` | I couldn't make this change by myself just now. Please let the office know, and they'll take care of it. | ئێستا نەمتوانی خۆم ئەم گۆڕانکارییە بکەم. تکایە ئۆفیسەکە ئاگادار بکەرەوە، ئەوان بۆت دەکەن. | needs native review |
+| `inbox.buttonPopup` | The office has this design now. Just tell me here if anything should change. | ئەم دیزاینە ئێستا لای ئۆفیسەکەیە. ئەگەر شتێک پێویستی بە گۆڕین هەیە، لێرە پێم بڵێ. | needs native review |
 | `inbox.couldNotRead` | Sorry, I couldn't read that message just now. I've passed it to the office and they'll follow up here. | ببورە، ئێستا نەمتوانی ئەو پەیامە بخوێنمەوە. گەیاندمە ئۆفیسەکە و لێرە وەڵامت دەدەنەوە. | needs native review |
 
 ## access
@@ -73,4 +76,112 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 |---|---|---|---|
 | `access.notAllowed` | Hi! This design assistant is only set up for the Hawa office team. Please ask the office to add you. | سڵاو! ئەم یاریدەدەرەی دیزاین تەنها بۆ تیمی ئۆفیسی هاوا ئامادە کراوە. تکایە داوا لە ئۆفیسەکە بکە زیادت بکەن. | needs native review |
 
-40 lines.
+## routing
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `routing.statusDesigning` | {title} is being designed right now. The draft usually takes a few minutes; the office checks it before it comes to you. | {title} ئێستا دیزاین دەکرێت. ڕەشنووسەکە زۆرجار چەند خولەکێک دەخایەنێت؛ ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات. | needs native review |
+| `routing.statusManual` | A designer at the office is working on {title}. It will be sent here when it is ready. | دیزاینەرێک لە ئۆفیسەکە کار لەسەر {title} دەکات. کە ئامادە بوو لێرە بۆت دەنێردرێت. | needs native review |
+| `routing.statusWaitingForChanges` | {title} is waiting for your changes. Just tell me what you would like changed. | {title} چاوەڕێی گۆڕانکارییەکانی تۆیە. تەنها پێم بڵێ چیت دەوێت بگۆڕدرێت. | needs native review |
+| `routing.statusAwaitingAnswer` | {title} is waiting for your answer to one question: {question} | {title} چاوەڕێی وەڵامی تۆیە بۆ یەک پرسیار: {question} | needs native review |
+| `routing.statusInReview` | {title} is with the office for a final check. It will be sent here once they approve it. | {title} لای ئۆفیسەکەیە بۆ دوایین پشکنین. کە پەسەندیان کرد لێرە بۆت دەنێردرێت. | needs native review |
+| `routing.statusApproved` | {title} is approved and will be sent to you shortly. | {title} پەسەند کراوە و بەم زووانە بۆت دەنێردرێت. | needs native review |
+| `routing.statusDelivering` | {title} is being sent to you now. | {title} ئێستا بۆت دەنێردرێت. | needs native review |
+| `routing.statusDelivered` | {title} has been delivered. | {title} گەیەندرا. | needs native review |
+| `routing.statusNothingOpen` | I don't have a design in progress in this chat right now. Tell me what you'd like designed. | ئێستا هیچ دیزاینێکم لەم چاتەدا لە دەستدا نییە. پێم بڵێ چیت دەوێت دیزاین بکرێت. | needs native review |
+| `routing.thanks` | 🙏 Thank you. | 🙏 سوپاس. | needs native review |
+| `routing.thanksOneWaiting` | 🙏 Thank you.⏎⏎Whenever you're ready, just tell me what to change on {title}. | 🙏 سوپاس.⏎⏎هەر کاتێک ئامادە بوویت، پێم بڵێ چی لە {title} بگۆڕم. | needs native review |
+| `routing.forwardedToOffice` | I've passed your message to the office; they'll follow up here. | پەیامەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
+| `routing.keptForOffice` | I've kept your message for the office; they'll follow up here. | پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە. | needs native review |
+| `routing.nothingToChange` | I don't have a design in progress here to change. Tell me what you'd like designed, with the text that should go on it. | ئێستا هیچ دیزاینێکم لە دەستدا نییە بۆ گۆڕین. پێم بڵێ چیت دەوێت دیزاین بکرێت، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت. | needs native review |
+| `routing.askChangeOrNew` | Is this a change to {title}, or a new design? Just say “change” or “new”. | ئەمە گۆڕانکارییە لە {title}، یان دیزاینێکی نوێیە؟ تەنها بنووسە «گۆڕانکاری» یان «نوێ». | needs native review |
+| `routing.askCancel` | Do you want me to ask the office to cancel {title}? Just say “yes”. | دەتەوێت داوا لە ئۆفیسەکە بکەم {title} هەڵبوەشێنێتەوە؟ تەنها بنووسە «بەڵێ». | needs native review |
+| `routing.askIsThisOne` | Is this for {title}? Just say “yes”. | ئەمە بۆ {title}ە؟ تەنها بنووسە «بەڵێ». | needs native review |
+| `routing.askWhichDesign` | Which design is this for?⏎{list}⏎⏎Answer with the number or the name. | ئەمە بۆ کام دیزاینە؟⏎{list}⏎⏎بە ژمارە یان ناو وەڵام بدەرەوە. | needs native review |
+| `routing.aNewDesign` | A new design | دیزاینێکی نوێ | needs native review |
+| `routing.cancelAsked` | OK. I've asked the office to cancel {title}. | باشە. داوام لە ئۆفیسەکە کرد کە {title} هەڵبوەشێنێتەوە. | needs native review |
+| `routing.changeAddedWhileDesigning` | Got it. I've added that to {title}; the office will see it before the design is sent to you. | تێگەیشتم. ئەوەم بۆ {title} زیاد کرد؛ ئۆفیسەکە پێش ناردنی دیزاینەکە دەیبینێت. | needs native review |
+| `routing.changePassedInReview` | Got it. The office is checking {title} now, and I've passed your change to them. | تێگەیشتم. ئۆفیسەکە ئێستا سەیری {title} دەکات، و گۆڕانکارییەکەتم پێیان گەیاند. | needs native review |
+| `routing.changePassedDelivering` | {title} is being sent to you now; I've passed your change to the office. | {title} ئێستا بۆت دەنێردرێت؛ گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە. | needs native review |
+| `routing.changePassedDelivered` | {title} was already delivered; I've passed your change to the office. | {title} پێشتر گەیەندرابوو؛ گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە. | needs native review |
+| `routing.approvalPassed` | Thanks! I've told the office you're happy with {title}. They give it a final check before it's sent. | سوپاس! بە ئۆفیسەکەم ڕاگەیاند کە تۆ ڕازیت بە {title}. پێش ناردن بۆ دواجار سەیری دەکەن. | needs native review |
+| `routing.deadlinePassed` | Noted. I've told the office about the timing for {title}. | تێبینی کرا. سەبارەت بە کاتی {title} ئۆفیسەکەم ئاگادار کردەوە. | needs native review |
+
+## conversation
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `conversation.welcome` | 👋 Hi! Tell me what you'd like designed, in English or Kurdish, with the text that should go on it. You can add photos, a voice note or a PDF, and tell me any changes in your own words. The office checks every design before it's sent to you here. | 👋 سڵاو! پێم بڵێ چیت دەوێت دیزاین بکرێت، بە کوردی یان ئینگلیزی، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت. دەتوانیت وێنە، تۆمارێکی دەنگی یان PDF زیاد بکەیت، و هەر گۆڕانکارییەک بە وشەی خۆت پێم بڵێیت. ئۆفیسەکە پێش ئەوەی هەر دیزاینێک لێرە بۆت بنێردرێت سەیری دەکات. | needs native review |
+| `conversation.greeting` | 👋 Hi! What would you like designed? Tell me in your own words, with the text that should go on it. | 👋 سڵاو! چیت دەوێت دیزاین بکرێت؟ بە وشەی خۆت پێم بڵێ، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت. | needs native review |
+| `conversation.question` | Happy to help. Tell me what you'd like designed and the text that should go on it, such as the date, time and place. | بە خۆشحاڵییەوە. پێم بڵێ چیت دەوێت دیزاین بکرێت و ئەو دەقەی دەبێت لەسەری بێت، وەک بەروار، کات و شوێن. | needs native review |
+| `conversation.officeGivesFinalCheck` | Thanks! The office gives every design a final check before it's sent to you. If anything should change, just tell me here. | سوپاس! ئۆفیسەکە پێش ناردنی هەر دیزاینێک بۆت، بۆ دواجار سەیری دەکات. ئەگەر شتێک پێویستی بە گۆڕین هەیە، لێرە پێم بڵێ. | needs native review |
+| `conversation.officeRestarts` | The office looks after every design. If something should be made again or changed, just tell me here in your own words. | ئۆفیسەکە ئاگای لە هەموو دیزاینەکانە. ئەگەر شتێک دەبێت دووبارە دروست بکرێتەوە یان بگۆڕدرێت، لێرە بە وشەی خۆت پێم بڵێ. | needs native review |
+| `conversation.officeOnly` | That's something the office does. | ئەوە کاری ئۆفیسەکەیە. | needs native review |
+| `conversation.statusHeader` | 📊 Your designs | 📊 دیزاینەکانت | needs native review |
+| `conversation.statusNone` | 📊 I haven't made any designs for this chat yet. Tell me what you'd like designed. | 📊 هێشتا هیچ دیزاینێکم بۆ ئەم چاتە دروست نەکردووە. پێم بڵێ چیت دەوێت دیزاین بکرێت. | needs native review |
+| `conversation.statusUnavailable` | I can't check on your designs just now. Please ask me again in a minute. | ئێستا ناتوانم سەیری دیزاینەکانت بکەم. تکایە دوای خولەکێک دووبارە لێم بپرسەوە. | needs native review |
+| `conversation.stateDesigning` | being designed | دیزاین دەکرێت | needs native review |
+| `conversation.stateChecking` | being checked | پشکنینی بۆ دەکرێت | needs native review |
+| `conversation.stateInReview` | with the office for a final check | لای ئۆفیسەکەیە بۆ دوایین پشکنین | needs native review |
+| `conversation.stateReplaced` | replaced by a newer version | وەشانێکی نوێتر جێگەی گرتەوە | needs native review |
+| `conversation.stateApproved` | approved, and will be sent to you shortly | پەسەند کراوە و بەم زووانە بۆت دەنێردرێت | needs native review |
+| `conversation.stateDelivering` | being sent to you now | ئێستا بۆت دەنێردرێت | needs native review |
+| `conversation.stateDelivered` | delivered | گەیەندرا | needs native review |
+| `conversation.stateWaitingForAnswer` | waiting for your answer to a question | چاوەڕێی وەڵامی تۆیە بۆ پرسیارێک | needs native review |
+| `conversation.stateNoLongerWaiting` | no longer waiting: answered, or replaced by a newer change | چیتر چاوەڕێ ناکات: وەڵام درایەوە، یان گۆڕانکارییەکی نوێتر جێگەی گرتەوە | needs native review |
+| `conversation.stateDelayed` | delayed; I'm trying again | دواکەوتووە؛ دووبارە هەوڵ دەدەمەوە | needs native review |
+| `conversation.stateWithOffice` | a designer at the office is finishing it | دیزاینەرێک لە ئۆفیسەکە تەواوی دەکات | needs native review |
+| `conversation.stateStopped` | stopped by the office | ئۆفیسەکە ڕایگرت | needs native review |
+| `conversation.stateCancelled` | cancelled | هەڵوەشێنرایەوە | needs native review |
+| `conversation.stateInProgress` | in progress | لە کاردایە | needs native review |
+| `conversation.preferenceSaved` | Noted. From now on every {client} design will follow this:⏎"{rule}"⏎⏎If you want it changed, just tell me or the office. | تێبینی کرا. لەمەودوا هەموو دیزاینێکی {client} ئەمە ڕەچاو دەکات:⏎"{rule}"⏎⏎ئەگەر دەتەوێت بگۆڕدرێت، تەنها بە من یان بە ئۆفیسەکە بڵێ. | needs native review |
+| `conversation.preferenceAlreadySaved` | I already have this for every {client} design:⏎"{rule}"⏎⏎If you want it changed, just tell me or the office. | ئەمە پێشتر بۆ هەموو دیزاینێکی {client} تۆمار کراوە:⏎"{rule}"⏎⏎ئەگەر دەتەوێت بگۆڕدرێت، تەنها بە من یان بە ئۆفیسەکە بڵێ. | needs native review |
+| `conversation.whichOrganisation` | Which organisation is this for? Please tell me again with its name in the same message. | ئەمە بۆ کام دامەزراوەیە؟ تکایە دووبارە پێم بڵێوە و ناوەکەی لە هەمان پەیامدا بنووسە. | needs native review |
+| `conversation.preferencesNone` | I have no lasting preferences saved for {client} yet. Tell me one in your own words, for example "from now on, put the logo bottom-right", and every later {client} design will follow it. | هێشتا هیچ ڕێنماییەکی هەمیشەییم بۆ {client} تۆمار نەکردووە. بە وشەی خۆت یەکێکم پێ بڵێ، بۆ نموونە «لەمەودوا لۆگۆکە لە خوارەوەی لای ڕاست دابنێ»، و هەموو دیزاینێکی دواتری {client} ڕەچاوی دەکات. | needs native review |
+| `conversation.preferencesHeader` | What every {client} design follows ({count}): | ئەوەی هەموو دیزاینێکی {client} ڕەچاوی دەکات ({count}): | needs native review |
+| `conversation.preferencesMore` | … and {count} more. | … و {count} دانەی تر. | needs native review |
+| `conversation.preferencesFooter` | A later one wins over an earlier one, and what you ask for in a request wins over both. If one should change, just tell me or the office. | ئەوەی دواتر هاتووە لە پێشترەکە بەهێزترە، و ئەوەی لە داواکارییەکدا دەیخوازیت لە هەردووکیان بەهێزترە. ئەگەر یەکێکیان دەبێت بگۆڕدرێت، تەنها بە من یان بە ئۆفیسەکە بڵێ. | needs native review |
+| `conversation.preferencesRemoved` | No longer applied to {client} designs: | چیتر لە دیزاینەکانی {client} جێبەجێ ناکرێت: | needs native review |
+| `conversation.preferencesUnmatched` | {count} of those numbers did not match a saved preference. | {count} لەو ژمارانە لەگەڵ هیچ ڕێنماییەکی تۆمارکراو نەگونجا. | needs native review |
+
+## lifecycle
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `lifecycle.yourDesign` | your design | دیزاینەکەت | needs native review |
+| `lifecycle.receivedForDesigner` | Got it. A designer will make {title} and send it to you here. | تێگەیشتم. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `lifecycle.receivedDrafting` | Got it. I'm making a first draft of {title}; the office checks it before you get it. | تێگەیشتم. یەکەم ڕەشنووسی {title} دروست دەکەم؛ ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات. | needs native review |
+| `lifecycle.officeNote` | The office has a note on {title}:⏎⏎{comment}⏎⏎What would you like changed? Just write it here. | ئۆفیسەکە تێبینییەکی لەسەر {title} هەیە:⏎⏎{comment}⏎⏎چیت دەوێت بگۆڕدرێت؟ تەنها لێرە بینووسە. | needs native review |
+| `lifecycle.oneQuestion` | One question about {title}:⏎⏎{question}⏎⏎{options}⏎⏎Answer with a number or in your own words. | پرسیارێک دەربارەی {title}:⏎⏎{question}⏎⏎{options}⏎⏎بە ژمارە یان بە وشەی خۆت وەڵام بدەرەوە. | needs native review |
+| `lifecycle.questionReminder` | {title} is still waiting for one answer:⏎⏎{question}⏎⏎{options}⏎⏎Answer with a number or in your own words. | {title} هێشتا چاوەڕێی یەک وەڵامە:⏎⏎{question}⏎⏎{options}⏎⏎بە ژمارە یان بە وشەی خۆت وەڵام بدەرەوە. | needs native review |
+| `lifecycle.changesReminder` | {title} is still waiting for your changes. What should I change? | {title} هێشتا چاوەڕێی گۆڕانکارییەکانی تۆیە. چی بگۆڕم؟ | needs native review |
+| `lifecycle.officeWillFollowUp` | Someone from the office will follow up here. | کەسێک لە ئۆفیسەکە لێرە بەدواداچوونی بۆ دەکات. | needs native review |
+
+## outcomes
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `outcomes.draftReady` | Your draft of {title} is ready, and the office is giving it a final check. They'll send it to you here once it's approved. If anything should change, just tell me. | ڕەشنووسی {title} ئامادەیە و ئۆفیسەکە بۆ دواجار سەیری دەکات. کە پەسەند کرا لێرە بۆت دەنێردرێت. ئەگەر شتێک پێویستی بە گۆڕین هەیە، تەنها پێم بڵێ. | needs native review |
+| `outcomes.draftBeingFixed` | Your draft of {title} is made; the office is fixing a small detail before you get it. | ڕەشنووسی {title} دروست کرا؛ ئۆفیسەکە پێش ئەوەی بۆت بێت وردەکارییەکی بچووک چاک دەکات. | needs native review |
+| `outcomes.organisationUnknown` | I couldn't tell which organisation {title} is for, so a designer at the office will make it and send it to you here. | نەمزانی {title} بۆ کام دامەزراوەیە، بۆیە دیزاینەرێک لە ئۆفیسەکە دروستی دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `outcomes.designerMakes` | A designer will make {title} and send it to you here. | دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `outcomes.designerSetsText` | A designer will set the text of {title} by hand and send it to you here. | دیزاینەرێک دەقی {title} بە دەست دادەنێت و لێرە بۆت دەنێرێت. | needs native review |
+| `outcomes.designerMakesChange` | A designer will make this change to {title} by hand and send it to you here. | دیزاینەرێک ئەم گۆڕانکارییە لە {title} بە دەست دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `outcomes.textNeeded` | What text should go on {title}? Send it just as you would like it to read. | چ دەقێک دەبێت لەسەر {title} بێت؟ بە هەمان شێوە بینێرە کە دەتەوێت بخوێندرێتەوە. | needs native review |
+| `outcomes.alreadyInProgress` | {title} is already being worked on; you'll get it here. | ئێستا کار لەسەر {title} دەکرێت؛ لێرە بۆت دێت. | needs native review |
+| `outcomes.officeCheckingDraft` | The office is checking the draft of {title} and will send it to you here. | ئۆفیسەکە سەیری ڕەشنووسی {title} دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `outcomes.questionWithButtons` | One question about {title} before I make your change:⏎⏎{question}⏎⏎{options}⏎⏎Tap an answer below, or answer in your own words. Everything else you asked for goes into the same draft. | پرسیارێک دەربارەی {title} پێش ئەوەی گۆڕانکارییەکەت بکەم:⏎⏎{question}⏎⏎{options}⏎⏎لە خوارەوە وەڵامێک هەڵبژێرە، یان بە وشەی خۆت وەڵام بدەرەوە. هەموو ئەوانی تری داوات کردووە دەچنە هەمان ڕەشنووسەوە. | needs native review |
+| `outcomes.designerMakesPart` | A designer will make this part by hand:⏎{list} | دیزاینەرێک ئەم بەشە بە دەست دەکات:⏎{list} | needs native review |
+| `outcomes.changeByDesignerList` | A designer will make this part of your change to {title} by hand:⏎{list}⏎Your last draft stays as it is. Anything else to change? Just write it. | دیزاینەرێک ئەم بەشەی گۆڕانکارییەکەت لە {title} بە دەست دەکات:⏎{list}⏎دوایین ڕەشنووست وەک خۆی دەمێنێتەوە. شتێکی تر هەیە بگۆڕدرێت؟ تەنها بینووسە. | needs native review |
+| `outcomes.changeByDesigner` | A designer will make your change to {title} by hand. Your last draft stays as it is. Anything else to change? Just write it. | دیزاینەرێک گۆڕانکارییەکەت لە {title} بە دەست دەکات. دوایین ڕەشنووست وەک خۆی دەمێنێتەوە. شتێکی تر هەیە بگۆڕدرێت؟ تەنها بینووسە. | needs native review |
+| `outcomes.officeWillFinish` | The office will finish {title} and send it to you here. | ئۆفیسەکە {title} تەواو دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `outcomes.delivered` | Here is your final {title}. 🎉 | فەرموو، ئەمە وەشانی کۆتایی {title}. 🎉 | needs native review |
+| `outcomes.deliveredUnconfirmed` | I've sent your final {title}, but Telegram didn't confirm that it arrived. The office will check, and send it again if it didn't. | وەشانی کۆتایی {title}م بۆ ناردیت، بەڵام تێلێگرام دڵنیایی نەدا کە گەیشتووە. ئۆفیسەکە سەیری دەکات، و ئەگەر نەگەیشتبوو دووبارە دەینێرێتەوە. | needs native review |
+| `outcomes.deliveredInDrive` | Also in Google Drive: | هەروەها لە گووگڵ درایڤدا: | needs native review |
+| `outcomes.deliveryFolder` | the delivery folder | بوخچەی گەیاندن | needs native review |
+| `outcomes.deliveredCaption` | {title}, final | {title}، وەشانی کۆتایی | needs native review |
+| `outcomes.couldNotStart` | Sorry, I couldn't start your design request. The office has been told and will follow up with you here. | ببورە، نەمتوانی داواکاری دیزاینەکەت دەست پێ بکەم. ئۆفیسەکە ئاگادار کرایەوە و لێرە بەدواداچوونت بۆ دەکات. | needs native review |
+| `outcomes.draftMadeNotSaved` | Your draft of {title} is made, but I couldn't finish saving it. The office will follow up with you here. | ڕەشنووسی {title} دروست کرا، بەڵام نەمتوانی بە تەواوی پاشەکەوتی بکەم. ئۆفیسەکە لێرە بەدواداچوونت بۆ دەکات. | needs native review |
+| `outcomes.couldNotFinish` | I couldn't finish {title} automatically. The office will follow up with you here. | نەمتوانی {title} بە شێوەی خۆکار تەواو بکەم. ئۆفیسەکە لێرە بەدواداچوونت بۆ دەکات. | needs native review |
+
+131 lines.

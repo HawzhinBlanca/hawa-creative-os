@@ -14,11 +14,11 @@ import { requesterButtons, composeDesignerHandoff } from '../src/services/reques
 const taskId = '00000000-0000-4000-c000-000000000001';
 
 describe('the requester buttons', () => {
-  it('ride on a ready draft only, with the Canva link above them', () => {
+  it('ride on a ready draft only, with no Canva link (ADR-145: the requester is never sent an edit link)', () => {
     const ready = composeCanvaStatusMessage({ taskId, status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', canvaUrl: 'https://www.canva.com/design/DA_x/edit' });
     const rows = ready.reply_markup!.inline_keyboard;
-    expect(rows[0][0]).toMatchObject({ url: 'https://www.canva.com/design/DA_x/edit' });
-    expect(rows.slice(1).flat().map((b) => ('callback_data' in b ? b.callback_data : ''))).toEqual([`rq:ok:${taskId}`, `rq:chg:${taskId}`, `rq:dsg:${taskId}`]);
+    expect(JSON.stringify(rows)).not.toContain('canva.com');
+    expect(rows.flat().map((b) => ('callback_data' in b ? b.callback_data : ''))).toEqual([`rq:ok:${taskId}`, `rq:chg:${taskId}`, `rq:dsg:${taskId}`]);
     for (const status of ['DESIGN_FAILED', 'CANVA_COPY_MISMATCH', 'MANUAL_DESIGN_REQUIRED']) {
       const msg = composeCanvaStatusMessage({ taskId, status, canvaUrl: 'https://www.canva.com/design/DA_x/edit' });
       expect(JSON.stringify(msg.reply_markup || {})).not.toContain('rq:');

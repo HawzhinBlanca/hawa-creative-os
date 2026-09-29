@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { OUTBOX_SEND_MARK_SOURCE, sql, type Database, type Kysely } from '@hawa/db';
-import { escapeTelegramHtml } from '@hawa/integrations';
+import { LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type RequesterLang } from '@hawa/integrations';
 
 /**
  * What the worker sends a requester when their approved design is delivered, when their request
@@ -156,83 +156,64 @@ export async function writeSendMark(
       ${`${key}:${outcome}`}, true, clock_timestamp())`.execute(db);
 }
 
+/** A design's name as a requester reads it: the office's "Client: " prefix dropped, at most 60 characters. */
+export function requesterDesignTitle(value: unknown): string {
+  const name = String(value ?? '').replace(/^[^:]{1,40}:\s*/, '').replace(/\s+/g, ' ').trim();
+  return Array.from(name).length > 60 ? `${Array.from(name).slice(0, 59).join('')}…` : name;
+}
+
+/** The language a delivery speaks to the requester in: given, or the design's name's own script. */
+const deliveryLang = (title: unknown, lang?: RequesterLang): RequesterLang => lang ?? requesterLang(String(title ?? ''), 'en');
+
 /**
- * The Drive archive problem as a client reads it. Core passes its failure code through when it has no
- * words for it, so a client was shown "INVALID_DESTINATION" or "DRIVE_LOOKUP_FAILED" (2026-09-23). A
- * known code is said in plain English, any other code (upper case with underscores, alone or leading
- * a detail) is described generically, and a reason already in words is kept as it is.
+ * The caption on a delivered file (#32, ADR-145): "<design>, final" in the requester's language, plain
+ * text. Without a name, the file's own name.
  */
-const ARCHIVE_PROBLEMS: Record<string, string> = {
-  INVALID_DESTINATION: "the client's Drive folder is not set up",
-  CREDENTIALS_MISSING: 'the office Google account is not connected',
-};
-const ARCHIVE_CODE = /^([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)(?=$|[\s:(])/;
-function describeArchiveProblem(problem: unknown): string {
-  const text = String(problem).trim();
-  const code = ARCHIVE_CODE.exec(text)?.[1];
-  if (!code) return text;
-  return ARCHIVE_PROBLEMS[code] || 'Google Drive did not accept the upload';
+export function composeDeliveredCaption(title: unknown, filename: string, lang?: RequesterLang): string {
+  const name = requesterDesignTitle(title);
+  return name ? say(OUTCOME_MESSAGES.deliveredCaption, deliveryLang(title, lang), { title: name }) : filename;
 }
 
 /**
  * The delivery message, in Telegram HTML. Every value that came from a person (the title, file
- * names, the Sheets problem) is escaped: the old message used Markdown asterisks and was sent with
- * no parse mode, so the requester saw the asterisks, and an unescaped title could break parsing.
+ * names) is escaped: the old message used Markdown asterisks and was sent with no parse mode, so the
+ * requester saw the asterisks, and an unescaped title could break parsing.
+ *
+ * ADR-145 (#31): it is the requester's, so it says "here is your final design" in their language and
+ * nothing of the office's. The Drive archive's state and the production log row are the office's
+ * facts: Core records them on the publication (archiveProblem, sheetsConfirmed, sheetRowNumber) and
+ * the Desk shows them; they are no longer printed here.
  */
 export function composeDeliveredMessage(
   payload: Record<string, unknown> & { title?: string | null; files?: unknown } | null | undefined,
-  options: { filesSent: number; filesUncertain?: number }
+  options: { filesSent: number; filesUncertain?: number; lang?: RequesterLang }
 ): string {
+  const lang = deliveryLang(payload?.title, options.lang);
+  const name = requesterDesignTitle(payload?.title);
+  const title = name ? bold(name) : say(LIFECYCLE_MESSAGES.yourDesign, lang);
   // A file whose upload Telegram did not confirm may or may not be above. The notice said "has been
   // delivered" all the same (2026-09-24); it now says what is known, and the office is alerted.
   const uncertain = options.filesUncertain ?? 0;
-  const lines: string[] = [
-    uncertain > 0 ? '<b>Your approved design was sent, but Telegram did not confirm that it arrived.</b>' : '<b>Your approved design has been delivered.</b>',
-  ];
-  if (payload?.title) lines.push(`Request: <b>${escapeTelegramHtml(payload.title)}</b>`);
+  const lines: string[] = [say(uncertain > 0 ? OUTCOME_MESSAGES.deliveredUnconfirmed : OUTCOME_MESSAGES.delivered, lang, { title })];
 
   const files: DeliveredFile[] = Array.isArray(payload?.files) ? payload.files : [];
-  if (options.filesSent > 0) {
-    lines.push(options.filesSent === 1 ? 'The approved file is attached above.' : `The ${options.filesSent} approved files are attached above.`);
-  }
-  if (uncertain > 0) {
-    lines.push(
-      uncertain === 1
-        ? 'The office will check that the approved file reached you, and send it again if it did not.'
-        : `The office will check that the ${uncertain} approved files reached you, and send again any that did not.`
-    );
-  }
   const linked = files.filter((f) => f.webViewLink);
   if (linked.length > 0) {
-    lines.push(['In Google Drive:', ...linked.map((f) => `• <a href="${escapeTelegramHtml(f.webViewLink)}">${escapeTelegramHtml(f.filename)}</a>`)].join('\n'));
-  } else if (payload?.driveFolderId) {
+    lines.push([say(OUTCOME_MESSAGES.deliveredInDrive, lang),
+      ...linked.map((f) => `• <a href="${escapeTelegramHtml(f.webViewLink)}">${escapeTelegramHtml(f.filename)}</a>`)].join('\n'));
+  } else if (payload?.driveFolderId && !payload?.archiveProblem) {
     // Commands written before the files were named carry only the folder.
-    lines.push(`In Google Drive: <a href="${escapeTelegramHtml(`https://drive.google.com/drive/folders/${payload.driveFolderId}`)}">delivery folder</a>`);
-  }
-
-  if (payload?.archiveProblem) {
-    // The files reached the requester; the office's Drive archive is reported, not hidden.
-    lines.push(`Office archive: not saved to Google Drive yet (${escapeTelegramHtml(describeArchiveProblem(payload.archiveProblem))}).`);
-    return lines.join('\n\n');
-  }
-  // Older commands were written only after the Sheets row was confirmed, and carry no flag.
-  const sheetsConfirmed = payload?.sheetsConfirmed ?? true;
-  if (sheetsConfirmed && payload?.spreadsheetId && payload?.sheetRowNumber) {
-    const url = `https://docs.google.com/spreadsheets/d/${payload.spreadsheetId}#gid=0&range=A${payload.sheetRowNumber}`;
-    lines.push(`Production log: <a href="${escapeTelegramHtml(url)}">row ${escapeTelegramHtml(payload.sheetRowNumber)}</a> recorded.`);
-  } else if (!sheetsConfirmed) {
-    lines.push(`Production log: not updated yet (${escapeTelegramHtml(payload?.sheetProblem || 'the row was not confirmed')}).`);
+    lines.push(`${say(OUTCOME_MESSAGES.deliveredInDrive, lang)} <a href="${escapeTelegramHtml(`https://drive.google.com/drive/folders/${payload.driveFolderId}`)}">${escapeTelegramHtml(say(OUTCOME_MESSAGES.deliveryFolder, lang))}</a>`);
   }
   return lines.join('\n\n');
 }
 
-/** The requester's notice when a request could not be started. Plain text, no formatting. */
-export function composeIntakeFailedMessage(taskId: string): string {
-  return [
-    'Sorry, we could not process your design request.',
-    'The office has been alerted and will follow up with you.',
-    `Reference: ${String(taskId).slice(0, 8)}`,
-  ].join('\n');
+/**
+ * The requester's notice when a request could not be started. Plain text, no formatting, and no
+ * reference number (ADR-145): the office's alert names the task.
+ */
+export function composeIntakeFailedMessage(_taskId: string, lang: RequesterLang = 'en'): string {
+  return say(OUTCOME_MESSAGES.couldNotStart, lang);
 }
 
 /** The office's alert for the same failure. Plain text, no formatting. */
@@ -262,17 +243,14 @@ export function composeDeliveryFailedAlert(taskId: string, chatId: string | null
 /**
  * The requester's notice when their workflow finished but Core, which records the outcome and
  * composes the usual message, did not answer (outcome-without-core.ts). It says only what the worker
- * knows. Plain text, no formatting.
+ * knows, in plain words and the requester's language (ADR-145: no service names, no reference number;
+ * the office's alert names the task). Plain text, no formatting.
  */
-export function composeOutcomeUnrecordedMessage(input: { taskId: string; title?: string | null; draftMade: boolean; officeAlerted: boolean }): string {
-  return [
-    input.draftMade
-      ? 'Your design was made in Canva, but Hawa could not record it, because one of its services was not answering.'
-      : "Your design request could not be finished automatically, because one of Hawa's services was not answering.",
-    ...(input.title ? [`Request: ${input.title}`] : []),
-    input.officeAlerted ? 'The office has been alerted and will follow up with you here.' : 'The office will follow up with you here.',
-    `Reference: ${String(input.taskId).slice(0, 8)}`,
-  ].join('\n');
+export function composeOutcomeUnrecordedMessage(input: { taskId: string; title?: string | null; draftMade: boolean; officeAlerted: boolean;
+  lang?: RequesterLang }): string {
+  const lang = deliveryLang(input.title, input.lang);
+  const title = requesterDesignTitle(input.title) || say(LIFECYCLE_MESSAGES.yourDesign, lang);
+  return say(input.draftMade ? OUTCOME_MESSAGES.draftMadeNotSaved : OUTCOME_MESSAGES.couldNotFinish, lang, { title });
 }
 
 /** The office's alert for the same outcome. Plain text, no formatting. */

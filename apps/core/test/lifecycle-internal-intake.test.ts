@@ -665,7 +665,7 @@ describe('POST /v1/internal/telegram/intake', () => {
       const greeting = brief(updateId(), chat);
       greeting.message.text = 'hello';
       const greeted = (await intake(app, greeting, mode)).body;
-      expect(greeted, mode).toMatchObject({ lifecycleAction: 'chat-answer', chatAnswer: { text: expect.stringMatching(/^👋 Hello!/) } });
+      expect(greeted, mode).toMatchObject({ lifecycleAction: 'chat-answer', chatAnswer: { text: expect.stringMatching(/^👋 Hi!/) } }); // ADR-145 (#62)
       expect(greeted.requestId, mode).toBeUndefined();
       expect(await tasksInChat(chat)).toHaveLength(0);
     }
@@ -1218,14 +1218,17 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
     SELECT payload FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'telegram'
       AND event_kind = 'telegram_chat_answer' AND source_event_id LIKE ${`${chat}:%`}`.execute(trx))).rows;
 
+  // ADR-145 (#62, #63, #70): plain words in the sender's language, with no product name, no reply
+  // instruction and no command.
   it.each([
-    ['a greeting', 'hello', /^👋 Hello! How can Hawa Creative OS assist you today\?/],
-    ['a Kurdish greeting', 'سڵاو', /^👋 سڵاو!/],
+    ['a greeting', 'hello', /^👋 Hi! What would you like designed\? Tell me in your own words/],
+    ['a Kurdish greeting', 'سڵاو', /^👋 سڵاو! چیت دەوێت دیزاین بکرێت؟/],
     // "when will it be ready?" is a status question since ADR-144 (requester-intent-routing.test.ts).
-    ['a question', 'what fonts can you use?', /^ℹ️ <b>Question received:<\/b> "what fonts can you use\?"/],
-    ['/start', '/start', /Welcome to Hawa Creative OS Bot/],
-    ['/help@hawa_bot', '/help@hawa_bot', /Welcome to Hawa Creative OS Bot/],
-    ['an unknown command', '/weather', /Question received/],
+    ['a question', 'what fonts can you use?', /^Happy to help\. Tell me what you'd like designed/],
+    ['/start', '/start', /^👋 Hi! Tell me what you'd like designed, in English or Kurdish/],
+    ['/help@hawa_bot', '/help@hawa_bot', /^👋 Hi! Tell me what you'd like designed/],
+    ['a Kurdish /start', '/start سڵاو', /^👋 سڵاو! پێم بڵێ چیت دەوێت دیزاین بکرێت/],
+    ['an unknown command', '/weather', /^Happy to help\./],
   ] as const)('answers %s through ChatInbox, starts nothing, and gives the recorded answer again', async (_what, words, expected) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const bridge = bridgeStub();
@@ -1245,13 +1248,14 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
     }
   });
 
-  it('answers /approve, /publish, /revise and /reject with "approved in Hawa Desk", and changes nothing', async () => {
+  it('answers /approve, /publish, /revise and /reject with the office\'s final check, and changes nothing', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     for (const words of ['/approve', `/approve ${randomUUID()}`, '/publish x', '/revise x change it', '/reject x']) {
       const answered = await intake(createApp({ db } as any), text(chat, words));
       expect(answered.body, words).toMatchObject({ intakeStatus: 422, lifecycleAction: 'chat-answer',
-        chatAnswer: { text: expect.stringContaining('Designs are approved in Hawa Desk, not in chat.') } });
+        // ADR-145 (#67): no office alert is sent for the command, so the answer claims none.
+        chatAnswer: { text: "Thanks! The office gives every design a final check before it's sent to you. If anything should change, just tell me here." } });
     }
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
@@ -1260,14 +1264,17 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     const empty = await intake(createApp({ db } as any), text(chat, '/status'));
-    expect(empty.body).toMatchObject({ lifecycleAction: 'chat-answer', chatAnswer: { text: '📊 No requests from this chat yet.' } });
+    expect(empty.body).toMatchObject({ lifecycleAction: 'chat-answer',
+      chatAnswer: { text: "📊 I haven't made any designs for this chat yet. Tell me what you'd like designed." } });
     const { taskId } = await seedWaitingRequest(createApp({ db } as any), chat);
     // (With a request waiting for the requester, a message is its revision: the request is delivered here.)
     await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requests SET stage = 'delivered', rev = 9
       WHERE tenant_id = ${tenantId}::uuid AND chat_id = ${String(chat)}`.execute(trx));
     const listed = await intake(createApp({ db } as any), text(chat, '/status'));
-    expect(listed.body.chatAnswer.text).toMatch(/^📊 <b>Your latest requests<\/b>/);
-    expect(listed.body.chatAnswer.text).toContain(`<code>${taskId.slice(0, 8)}</code>`);
+    // ADR-145 (#71): the designs by name and where each is, in words; no ids and no Canva links.
+    expect(listed.body.chatAnswer.text).toMatch(/^<b>📊 Your designs<\/b>\n\n1\. <b>/);
+    expect(listed.body.chatAnswer.text).not.toContain(taskId.slice(0, 8));
+    expect(listed.body.chatAnswer.text).not.toMatch(/Canva|<code>|Hawa Desk/);
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
@@ -1283,6 +1290,9 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
     const saved = await intake(createApp({ db } as any), said);
     expect(saved.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer', chatAnswer: { parseMode: 'HTML' } });
     expect(saved.body.chatAnswer.text).toContain('logo bottom-right');
+    // ADR-145 (#74): plain words; the commands keep working but are never named.
+    expect(saved.body.chatAnswer.text).toContain('Noted. From now on every');
+    expect(saved.body.chatAnswer.text).not.toMatch(/\/rules|\/forget/);
     const rules = async () => (await withRlsContext(db, scope, (trx) => sql<{ id: string; active: boolean }>`
       SELECT id::text, status = 'active' AS active FROM hawa.client_rules WHERE tenant_id = ${tenantId}::uuid AND client_id = ${clientId}::uuid
         AND human_rule LIKE ${`%${rule.slice(-8)}%`}`.execute(trx))).rows;
@@ -1297,6 +1307,7 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
     const forget = text(chat, `/forget ${number}`);
     const forgotten = await intake(createApp({ db } as any), forget);
     expect(forgotten.body.chatAnswer.text).toContain('No longer applied');
+    expect(forgotten.body.chatAnswer.text).not.toMatch(/\/rules|\/forget/);
     expect((await rules())[0]?.active).toBe(false);
     // "/forget 1" repeated must not remove the rule after it: the recorded answer is given again.
     const before = (await withRlsContext(db, scope, (trx) => sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.client_rules
@@ -1312,7 +1323,7 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
     const chat = chatId();
     const answered = await intake(createApp({ db } as any), text(chat, 'From now on, always use navy for titles'));
     expect(answered.body).toMatchObject({ intakeStatus: 200, status: 'RULE_CLIENT_UNKNOWN', lifecycleAction: 'chat-answer',
-      chatAnswer: { text: expect.stringContaining('Which client is this rule for?') } });
+      chatAnswer: { text: expect.stringContaining('Which organisation is this for?') } });
     expect(await chatAnswerEvents(chat)).toHaveLength(0);
   });
 

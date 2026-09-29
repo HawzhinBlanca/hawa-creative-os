@@ -41,12 +41,13 @@ describe('standing rules said in chat', () => {
     const active = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
     expect(ruleNumber(active, 'c')).toBe(3);
     expect(ruleNumber(active, 'z')).toBeUndefined();
+    // ADR-145 (#74): the reply says what later designs will follow, in plain words; the number and
+    // the commands that take it stay the office's.
     const saved = formatRuleSaved('KAAE', 'Logo bottom-right', true, 3, 3);
-    expect(saved).toContain('Saved as a standing rule for KAAE (number 3):');
-    expect(saved).toContain('/forget 3 removes it');
-    expect(formatRuleSaved('KAAE', 'Logo bottom-right', false, 3, 2)).toContain('Already a standing rule for KAAE (number 2):');
-    // Without a number the reply reads as it did.
-    expect(formatRuleSaved('KAAE', 'x', true, 1)).toContain('Saved as a standing rule for KAAE:</b>');
+    expect(saved).toBe('📌 Noted. From now on every KAAE design will follow this:\n"Logo bottom-right"\n\nIf you want it changed, just tell me or the office.');
+    expect(saved).not.toMatch(/\/forget|\/rules|number 3/);
+    expect(formatRuleSaved('KAAE', 'Logo bottom-right', false, 3, 2)).toContain('I already have this for every KAAE design:');
+    expect(formatRuleSaved('KAAE', 'لۆگۆ لە خوارەوە', true, 1, 1, 'ckb')).toContain('لەمەودوا هەموو دیزاینێکی KAAE ئەمە ڕەچاو دەکات');
   });
 
   it('lists rules numbered, escaped for Telegram HTML', () => {
@@ -57,8 +58,9 @@ describe('standing rules said in chat', () => {
     const text = formatRulesList('KAAE', rules);
     expect(text).toContain('1. Put the logo bottom-right');
     expect(text).toContain('2. Titles &lt;gold&gt; &amp; white');
-    expect(formatRulesList('KAAE', [])).toContain('No standing rules for KAAE yet');
-    expect(formatRuleSaved('KAAE', 'x', true, 1)).toContain('1 rule in force');
-    expect(formatRuleSaved('KAAE', 'x', false, 3)).toContain('Already a standing rule');
+    expect(text).toContain('What every KAAE design follows (2):');
+    expect(text).not.toMatch(/\/forget|\/rules/);
+    expect(formatRulesList('KAAE', [])).toContain('I have no lasting preferences saved for KAAE yet');
+    expect(formatRuleSaved('KAAE', 'x', false, 3)).toContain('I already have this');
   });
 });

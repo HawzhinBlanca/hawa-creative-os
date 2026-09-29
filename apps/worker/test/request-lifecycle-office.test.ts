@@ -114,6 +114,8 @@ describe('RequestLifecycle office revision', () => {
 
   it('sends office comments as literal text and suppresses stale reminders', async () => {
     const { ctx, event } = setup();
+    // ADR-145: the name recorded when the request opened; state from before it has none.
+    ctx.state = { ...ctx.state, title: 'KAAE: Autumn workshop', lang: 'en' };
     const comment = '<b>Keep this literal</b> & correct the venue';
     const revised = { ...event, reason: comment,
       revisionRequest: { ...event.revisionRequest!, comment } };
@@ -121,11 +123,15 @@ describe('RequestLifecycle office revision', () => {
       taskId: event.taskId, revisionId: event.revisionId, actionId: event.actionId,
       approvalId: randomUUID(), taskState: 'revision_requested', rev: 3, stage: 'manual' }) };
     await recordOfficeRevision(ctx, core, revised);
-    expect(ctx.sent[0]).toMatchObject({ text: expect.stringContaining(comment), class: 'critical' });
-    expect(ctx.sent[0]).not.toHaveProperty('parseMode');
+    // ADR-145 (#11): the office's note by the design's name, in HTML with the comment escaped (so it
+    // stays literal), and no revision number or reply instruction.
+    expect(ctx.sent[0]).toMatchObject({ parseMode: 'HTML', class: 'critical',
+      text: 'The office has a note on <b>Autumn workshop</b>:\n\n&lt;b&gt;Keep this literal&lt;/b&gt; &amp; correct the venue\n\nWhat would you like changed? Just write it here.' });
     expect(await recordReminderTick(ctx, { v: 1, requestId: event.requestId, expectedRev: 3 }))
       .toEqual({ reminded: true });
-    expect(ctx.sent[1]).toMatchObject({ key: `${event.requestId}:3:revision-reminder`, class: 'critical' });
+    // #13: the reminder, by name and in plain words.
+    expect(ctx.sent[1]).toMatchObject({ key: `${event.requestId}:3:revision-reminder`, class: 'critical',
+      text: '<b>Autumn workshop</b> is still waiting for your changes. What should I change?' });
     ctx.state = { ...ctx.state, stage: 'designing', rev: 4 };
     expect(await recordReminderTick(ctx, { v: 1, requestId: event.requestId, expectedRev: 3 }))
       .toEqual({ skipped: true });

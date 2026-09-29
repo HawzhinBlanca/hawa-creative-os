@@ -1,5 +1,6 @@
 import { computeActionSignature, verifyActionSignature } from './outbound-notifier.js';
 import type { TelegramOffsetStorage, TelegramActionTokenService } from './telegram-security.js';
+import { CONVERSATION_MESSAGES, requesterLang, say } from './requester-messages/index.js';
 
 export interface TelegramBridgeConfig {
   botToken?: string;
@@ -972,29 +973,19 @@ export class TelegramBridgeDaemon {
   handleCommand(text: string, chatId?: string | number, senderId?: string | number): TelegramCommandResult | null {
     const trimmed = text.trim();
     const isPublicCommand = trimmed.startsWith('/start') || trimmed.startsWith('/help');
+    // ADR-145: what a requester reads is the catalogue's, in their language (the words after the
+    // command decide; a bare command is answered in English), with no id, command or product name.
+    const lang = requesterLang(trimmed.replace(/^\/[a-z_]+(?:@\w+)?/i, ''), 'en');
     if (!isPublicCommand && senderId && this.config.allowedUserIds && this.config.allowedUserIds.length > 0) {
       const sId = String(senderId);
       if (!this.config.allowedUserIds.includes(sId)) {
-        return {
-          text: `🚫 *Unauthorized*: User \`${sId}\` is not permitted to execute office commands.`,
-          parse_mode: 'Markdown',
-        };
+        // #72: an office command from someone outside the office. No alert is sent, so none is claimed.
+        return { text: escapeTelegramMarkdown(say(CONVERSATION_MESSAGES.officeOnly, lang)), parse_mode: 'Markdown' };
       }
     }
     if (trimmed.startsWith('/start') || trimmed.startsWith('/help')) {
-      return {
-        text:
-          `👋 *Welcome to Hawa Creative OS Bot*\n\n` +
-          `• Send the text for a design (English or Kurdish) and get an editable Canva draft.\n` +
-          `• Send photos with it (one by one or as an album): photos to place, or a design to follow.\n` +
-          `• To change a draft, reply to its image with what to change.\n` +
-          `• Say a lasting preference ("From now on, put the logo bottom-right") and every later design follows it.\n` +
-          `• Send brand guidelines as a PDF and their rules are saved the same way.\n` +
-          `• /rules lists the saved rules; /forget 2 removes one.\n` +
-          `• Voice notes in Kurdish or English work too.\n\n` +
-          `_Designs are approved in Hawa Desk; the approved file is then sent here._`,
-        parse_mode: 'Markdown',
-      };
+      // #70 (F15): how to ask for a design, in plain words.
+      return { text: escapeTelegramMarkdown(say(CONVERSATION_MESSAGES.welcome, lang)), parse_mode: 'Markdown' };
     }
 
     if (trimmed.startsWith('/status')) {

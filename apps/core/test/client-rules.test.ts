@@ -210,13 +210,16 @@ describe.skipIf(!url)('standing client rules', () => {
     }
   });
 
-  it('says the number of a rule saved from chat', async () => {
+  it('keeps the number of a rule saved from chat, and tells the sender in plain words', async () => {
     const { deps, replies } = intake();
     const saved = await saveChatRule(deps, { sourceChannelId: chatId(), sourceEventId: '1', ruleText: `From now on KAAE titles in navy ${tag()}`, originalText: 'From now on KAAE titles in navy' });
     try {
       const active = await repo((r) => r.listActive(tenantId, clientId));
       expect(saved.ruleNumber).toBe(active.findIndex((x) => x.id === saved.ruleId) + 1);
-      expect(replies().pop()).toContain(`Saved as a standing rule for KAAE (number ${saved.ruleNumber}):`);
+      // ADR-145 (#74): the reply names no number or command; the number stays the office's (/forget).
+      const reply = replies().pop();
+      expect(reply).toContain('Noted. From now on every KAAE design will follow this:');
+      expect(reply).not.toMatch(/\/forget|\/rules|number/);
     } finally {
       await forgetAll(clientId, [saved.ruleId!]);
     }
@@ -239,7 +242,7 @@ describe.skipIf(!url)('standing client rules', () => {
       const { deps, replies } = intake({ trustNamedClient: false });
       const res = await saveChatRule(deps, { sourceChannelId: chat, sourceEventId: '2', ruleText: 'x', originalText: 'From now on always put the KAAE logo bottom-right' });
       expect(res.saved).toBe(false);
-      expect(replies().pop()).toMatch(/Which client is this rule for/);
+      expect(replies().pop()).toContain('Which organisation is this for?');
     } finally {
       await forgetAll(drustee, [drusteeRule.rule.id]);
     }

@@ -17,7 +17,7 @@
 import crypto from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID, isTaskDbState, type TaskDbState } from '@hawa/contracts';
 import { sql, withRlsContext } from '@hawa/db';
-import { escapeTelegramHtml } from '@hawa/integrations';
+import { CONVERSATION_MESSAGES, LIFECYCLE_MESSAGES, ROUTING_MESSAGES, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 import { cutText } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { log } from '../logging.js';
@@ -37,10 +37,15 @@ type Json = Record<string, any>;
 /** The event kind an answered update is recorded under; the answer rides in its payload. */
 const ANSWER_KIND = 'telegram_chat_answer';
 
-/** Said to /approve, /publish, /revise and /reject: designs are approved in Hawa Desk (ADR-022). */
-export const DESK_APPROVAL_ANSWER =
-  'ℹ️ <b>Designs are approved in Hawa Desk, not in chat.</b>\n\n' +
-  '<i>To change a draft, reply to its image with what to change. To approve it, open the task in Hawa Desk.</i>';
+/**
+ * Said to /approve, /publish, /revise and /reject: nothing is approved in chat (ADR-022), and no office
+ * alert is sent for the command, so the answer claims none (ADR-145, #67).
+ */
+export function deskApprovalAnswer(lang: RequesterLang = 'en'): string {
+  return say(CONVERSATION_MESSAGES.officeGivesFinalCheck, lang);
+}
+/** The English answer to a typed approval (kept as a constant for callers that name it). */
+export const DESK_APPROVAL_ANSWER = deskApprovalAnswer('en');
 
 /** Said to an edited message: the edit is not read, and the design does not follow it. */
 export const EDITED_MESSAGE_ANSWER =
@@ -48,45 +53,53 @@ export const EDITED_MESSAGE_ANSWER =
   '<i>Send the corrected text as a new message. To change a draft you already received, reply to its image with the change.</i>';
 
 /**
- * /start and /help: the old intake's welcome, in HTML (ChatInbox notices take no Markdown). Its line
- * about brand guidelines PDFs is gone: a PDF is a lifecycle source now, read for the words to print.
+ * /start and /help (F15, #70): how to ask for a design, in plain words, in the requester's language.
+ * It promises only what the lifecycle path does: words, photos, a voice note or a PDF, changes in the
+ * requester's own words, and the office's check before anything is sent.
  */
-export const WELCOME_ANSWER =
-  '👋 <b>Welcome to Hawa Creative OS Bot</b>\n\n' +
-  '• Send the text for a design (English or Kurdish) and get an editable Canva draft.\n' +
-  '• Send photos with it (one by one or as an album): photos to place, or a design to follow.\n' +
-  '• To change a draft, reply to its image with what to change.\n' +
-  '• Say a lasting preference ("From now on, put the logo bottom-right") and every later design follows it.\n' +
-  '• /rules lists the saved rules; /forget 2 removes one.\n' +
-  '• Voice notes and PDFs are saved for review first; the bot tells you how to confirm the words to print.\n\n' +
-  '<i>Designs are approved in Hawa Desk; the approved file is then sent here.</i>';
+export function welcomeAnswer(lang: RequesterLang = 'en'): string {
+  return say(CONVERSATION_MESSAGES.welcome, lang);
+}
+export const WELCOME_ANSWER = welcomeAnswer('en');
 
-/** /redo: every request is RequestLifecycle's, and the office restarts a design from Hawa Desk. */
-export const REDO_ANSWER = 'This request is managed by the office. No new design was started by /redo.';
+/** /redo: every request is RequestLifecycle's, and the office restarts a design; nothing was started. */
+export function redoAnswer(lang: RequesterLang = 'en'): string {
+  return say(CONVERSATION_MESSAGES.officeRestarts, lang);
+}
+export const REDO_ANSWER = redoAnswer('en');
 
-/** The words for a greeting, a question or thanks, as the old intake answered them (ADR-140 for thanks). */
+/**
+ * The words for a greeting, a question or thanks (ADR-140 for thanks; ADR-145: no product name, no
+ * reply-to instruction, and the requester's language by the script they wrote in).
+ */
 export function inquiryAnswer(kind: 'question' | 'other', reason: string, rawText: string): string {
-  const isSorani = /[؀-ۿ]/.test(rawText);
-  if (reason === 'Acknowledgement') return isSorani ? '🙏 سوپاس.' : '🙏 Thank you.';
-  if (kind === 'question') {
-    return isSorani
-      ? `ℹ️ <b>پەیامەکەت گەیشت:</b> "${escapeTelegramHtml(cutText(rawText, 500))}"\n\nئەگەر دەتەوێت داواکاری دیزاین بنێریت، تکایە دەقی ڕاگەیاندن، بەروار، و شوێن بنێرە.`
-      : `ℹ️ <b>Question received:</b> "${escapeTelegramHtml(cutText(rawText, 500))}"\n\nTo generate a design, please send your announcement text, date, and venue. For revisions on an existing design, reply directly to the preview message.`;
-  }
-  return isSorani
-    ? '👋 سڵاو! چۆن دەتوانم یارمەتیت بدەم لە دیزاینەکانتدا؟ تکایە دەقی دیزاینەکەت بنێرە.'
-    : '👋 Hello! How can Hawa Creative OS assist you today? Please send your event brief or announcement copy to start.';
+  const lang = requesterLang(rawText);
+  if (reason === 'Acknowledgement') return say(ROUTING_MESSAGES.thanks, lang);
+  return say(kind === 'question' ? CONVERSATION_MESSAGES.question : CONVERSATION_MESSAGES.greeting, lang);
+}
+
+/**
+ * The language to answer a command in. A command carries few words of its own ("/start", "/status"),
+ * so what follows it decides when it has letters, then the sender's Telegram app language (Sorani or
+ * Kurdish), then `fallback`.
+ */
+export function commandLang(text: string, languageCode: unknown, fallback: RequesterLang = 'en'): RequesterLang {
+  const rest = String(text || '').replace(/^\/[a-z_]+(?:@\w+)?/i, '');
+  const app = String(languageCode || '').toLowerCase();
+  return requesterLang(rest, /^(ckb|ku)\b/.test(app) ? 'ckb' : fallback);
 }
 
 // Keyed by every database state, so a state added to the vocabulary does not compile until it has words.
-const STATE_LABEL: Record<TaskDbState, string> = {
-  received: 'being designed', promotion_pending: 'being designed', routing: 'being designed', routing_review: 'being designed',
-  brief_draft: 'being designed', brief_review: 'being designed', context_ready: 'being designed', design_planning: 'being designed',
-  asset_production: 'being designed', studio_composition: 'being designed', qa: 'being checked', auto_repair: 'being checked',
-  human_review: 'draft ready, awaiting approval in Hawa Desk', revision_requested: 'replaced by a newer version',
-  approved: 'approved, awaiting delivery', publishing: 'being delivered', complete: 'delivered', paused: 'waiting for your answer to a question',
-  failed_retryable: 'delayed, being retried', failed_operator: 'needs the office (the automatic draft failed)',
-  rejected: 'rejected', cancelled: 'cancelled',
+// The requester's words for where a design is (ADR-145): no Desk, no internal state names.
+const C = CONVERSATION_MESSAGES;
+const STATE_LABEL: Record<TaskDbState, Phrase> = {
+  received: C.stateDesigning, promotion_pending: C.stateDesigning, routing: C.stateDesigning, routing_review: C.stateDesigning,
+  brief_draft: C.stateDesigning, brief_review: C.stateDesigning, context_ready: C.stateDesigning, design_planning: C.stateDesigning,
+  asset_production: C.stateDesigning, studio_composition: C.stateDesigning, qa: C.stateChecking, auto_repair: C.stateChecking,
+  human_review: C.stateInReview, revision_requested: C.stateReplaced,
+  approved: C.stateApproved, publishing: C.stateDelivering, complete: C.stateDelivered, paused: C.stateWaitingForAnswer,
+  failed_retryable: C.stateDelayed, failed_operator: C.stateWithOffice,
+  rejected: C.stateStopped, cancelled: C.stateCancelled,
 };
 
 export type LifecycleChatAnswers = ReturnType<typeof createLifecycleChatAnswers>;
@@ -137,13 +150,12 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
   }
 
   /** The chat's latest requests and where each is (/status). Null when they could not be read. */
-  async function chatStatus(chatId: string): Promise<string | null> {
+  async function chatStatus(chatId: string, text: string, languageCode: unknown): Promise<string | null> {
     if (!db) return null;
     try {
       const { rows, asking } = await withRlsContext(db, scope, async (trx) => ({
-        rows: (await sql<{ id: string; title: string | null; state: string; design_id: string | null }>`
-          SELECT t.id, t.title, t.state,
-            (SELECT b.canva_design_id FROM hawa.canva_bindings b WHERE b.task_id = t.id AND b.tenant_id = t.tenant_id AND b.status = 'bound' ORDER BY b.created_at DESC LIMIT 1) AS design_id
+        rows: (await sql<{ id: string; title: string | null; state: string }>`
+          SELECT t.id, t.title, t.state
           FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
           WHERE o.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND o.command_type = 'task.created'
             AND o.payload->>'sourceChannelId' = ${chatId}
@@ -153,17 +165,18 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
         asking: new Set((await waitingLifecycleRequests(trx, DEFAULT_TENANT_ID, chatId))
           .filter((r) => r.stage === 'awaiting_answer').map((r) => r.current_task_id)),
       }));
+      // The chat's own design names say which language it writes in, when the command does not.
+      const lang = commandLang(text, languageCode, requesterLang(rows.map((r) => r.title || '').join(' '), 'en'));
       const labelOf = (r: { id: string; state: string }) =>
-        r.state === 'paused' && !asking.has(r.id) ? 'no longer waiting: answered, or replaced by a newer change'
-          : (isTaskDbState(r.state) ? STATE_LABEL[r.state] : r.state);
+        say(r.state === 'paused' && !asking.has(r.id) ? C.stateNoLongerWaiting
+          : (isTaskDbState(r.state) ? STATE_LABEL[r.state] : C.stateInProgress), lang);
+      // No ids and no Canva links (ADR-145): the name and where it is, in words.
       const lines = rows.map((r, i) =>
-        `${i + 1}. <b>${escapeTelegramHtml(cutText(String(r.title || 'Request').replace(/^[^:]*:\s*/, ''), 60))}</b>\n` +
-        `   ${escapeTelegramHtml(labelOf(r))}` +
-        (r.design_id ? ` · <a href="https://www.canva.com/design/${escapeTelegramHtml(r.design_id)}/edit">Canva</a>` : '') +
-        `\n   <code>${r.id.slice(0, 8)}</code>`);
-      return lines.length ? `📊 <b>Your latest requests</b>\n\n${lines.join('\n')}` : '📊 No requests from this chat yet.';
+        `${i + 1}. <b>${escapeTelegramHtml(cutText(String(r.title || say(LIFECYCLE_MESSAGES.yourDesign, lang)).replace(/^[^:]*:\s*/, ''), 60))}</b>\n` +
+        `   ${escapeTelegramHtml(labelOf(r))}`);
+      return lines.length ? `<b>${escapeTelegramHtml(say(C.statusHeader, lang))}</b>\n\n${lines.join('\n')}` : escapeTelegramHtml(say(C.statusNone, lang));
     } catch (err) {
-      // A read that failed answered "No requests from this chat yet", which is untrue.
+      // A read that failed answered that the chat had no requests, which is untrue.
       log.warn('[core:chat-answer] /status could not read the chat\'s requests:', err);
       return null;
     }
@@ -215,13 +228,14 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
 
     // Chat actions never approve or change a design (ADR-022); a bare /approve used to get no reply.
     if (command && /^(approve|publish|revise|reject)/.test(command)) {
-      return answerOnce(chatId, updateId, 'desk_approval', 422, { text: DESK_APPROVAL_ANSWER, parseMode: 'HTML' },
+      return answerOnce(chatId, updateId, 'desk_approval', 422,
+        { text: escapeTelegramHtml(deskApprovalAnswer(commandLang(text, msg.from?.language_code))), parseMode: 'HTML' },
         { code: 'DESK_REVIEW_REQUIRED' });
     }
     if (command === 'status') {
-      const status = await chatStatus(chatId);
+      const status = await chatStatus(chatId, text, msg.from?.language_code);
       // Not recorded: a failed read is asked again, and a later /status should read the chat anew.
-      return answered(200, chatId, { text: status ?? '📊 Your requests could not be read just now. Please send /status again in a minute.',
+      return answered(200, chatId, { text: status ?? escapeTelegramHtml(say(C.statusUnavailable, commandLang(text, msg.from?.language_code))),
         parseMode: 'HTML' }, status ? {} : { code: 'STATUS_UNAVAILABLE' });
     }
     const rulesCommand = parseRulesCommand(text);
@@ -234,8 +248,12 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
       if (rulesCommand.kind === 'forget') return answerOnce(chatId, updateId, 'rules_forget', 200, said, { rules: 'forget' });
       return said ? answered(200, chatId, said, { rules: rulesCommand.kind }) : { status: 200, extra: { rules: rulesCommand.kind } };
     }
-    if (command === 'start' || command === 'help') return answered(200, chatId, { text: WELCOME_ANSWER, parseMode: 'HTML' });
-    if (command === 'redo' || command === 'redrive') return answered(200, chatId, { text: REDO_ANSWER }, { code: 'LIFECYCLE_OWNED' });
+    if (command === 'start' || command === 'help') {
+      return answered(200, chatId, { text: escapeTelegramHtml(welcomeAnswer(commandLang(text, msg.from?.language_code))), parseMode: 'HTML' });
+    }
+    if (command === 'redo' || command === 'redrive') {
+      return answered(200, chatId, { text: redoAnswer(commandLang(text, msg.from?.language_code)) }, { code: 'LIFECYCLE_OWNED' });
+    }
     // A brief promoted in a group ("/task …") opens a request only as /new does.
     if (command && /^(task|brief|design|campaign)$/.test(command)) {
       return { status: 422, extra: { code: 'NEW_BRIEF_REQUIRED', lifecycleAction: 'new-brief-required', chatId } };
@@ -259,7 +277,7 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
     }
     if (classification.kind === 'question' || classification.kind === 'other') {
       return answerOnce(chatId, updateId, `inquiry_${classification.kind}`, 200,
-        { text: inquiryAnswer(classification.kind, classification.reason, rawText), parseMode: 'HTML' },
+        { text: escapeTelegramHtml(inquiryAnswer(classification.kind, classification.reason, rawText)), parseMode: 'HTML' },
         { status: 'PROCESSED', inquiry: classification.kind });
     }
     // A brief or a change the lifecycle path could not take here (a channel post, a change with no

@@ -50,7 +50,10 @@ describe('Telegram Bot & Bidirectional Feedback Engine', () => {
     // 1. /start command
     const startRes = bridge.handleCommand('/start', 123456);
     expect(startRes).not.toBeNull();
-    expect(startRes?.text).toContain('Welcome to Hawa Creative OS Bot');
+    // ADR-145 (F15): how to ask for a design in plain words; no product name, command or Desk.
+    expect(startRes?.text).toContain("Tell me what you'd like designed");
+    expect(startRes?.text).not.toMatch(/Hawa Creative OS|Hawa Desk|Canva|\/rules|\/forget|reply to/);
+    expect(bridge.handleCommand('/start سڵاو', 123456)?.text).toMatch(/^👋 سڵاو!/);
 
     // 2. /status command
     const statusRes = bridge.handleCommand('/status', 123456);
@@ -151,5 +154,12 @@ describe('Telegram Bot & Bidirectional Feedback Engine', () => {
     expect(reviseCmd?.action).toBe('revision');
     expect(reviseCmd?.taskId).toBe('task-fast-101');
     expect(reviseCmd?.notes).toBe('Increase logo size and use dark blue');
+  });
+
+  it('answers an office command from outside the office in plain words, without the sender id (ADR-145, #72)', () => {
+    const bridge = new TelegramBridgeDaemon({ botToken: 'mock_token', allowedUserIds: ['1001'] });
+    const refused = bridge.handleCommand('/approve task-fast-101', 9876, 2002);
+    expect(refused).toEqual({ text: "That's something the office does.", parse_mode: 'Markdown' });
+    expect(bridge.handleCommand('/approve task-fast-101 تکایە پەسەندی بکە', 9876, 2002)?.text).toBe('ئەوە کاری ئۆفیسەکەیە.');
   });
 });

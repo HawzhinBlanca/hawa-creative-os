@@ -80,6 +80,9 @@ describe('request-owned automatic design', () => {
       canvaVariant: { width: 1080, height: 1350 }, designStudio: true,
       lifecycle: { requestId: e.requestId, round: 0, runId: `dr-${answer.taskId}` } });
     expect(ctx.sent.map((m) => m.key)).toEqual([`${e.requestId}:1:ack`, `${e.requestId}:1:ack`]);
+    // ADR-145 (#10): plain words by the design's name, in the brief's language.
+    expect(ctx.sent[0]).toMatchObject({ parseMode: 'HTML',
+      text: "Got it. I'm making a first draft of <b>Autumn workshop</b>; the office checks it before you get it." });
   });
 
   it('accepts a Core daily-cap decline as a manual request without starting paid work', async () => {
@@ -160,7 +163,9 @@ describe('request-owned automatic design', () => {
     expect(await recordReminderTick(ctx, { v: 1, requestId: e.requestId,
       expectedRev: 2, kind: 'question', questionId, day: 1 })).toEqual({ reminded: true });
     expect(ctx.sent.at(-1)).toMatchObject({ key: `${e.requestId}:2:question-reminder-1`,
-      class: 'critical' });
+      class: 'critical', parseMode: 'HTML',
+      // ADR-145 (#12): by name, with its answers; no "reply to this message".
+      text: '<b>Autumn workshop</b> is still waiting for one answer:\n\n<b>Bigger headline?</b>\n\n1. Yes\n2. No\n\nAnswer with a number or in your own words.' });
     expect(ctx.scheduledQuestions).toHaveLength(2);
     expect(await recordReminderTick(ctx, { v: 1, requestId: e.requestId,
       expectedRev: 2, kind: 'question', questionId, day: 5 })).toEqual({ reminded: true });

@@ -80,7 +80,7 @@ describe('a Canva outcome moves the task truthfully and tells the requester plai
     expect(await qcRuns(taskId)).toHaveLength(1);
   });
 
-  it('binds the notification link to the stored revision and keeps it on outbox replay', async () => {
+  it('sends the requester no review link, forged or built, and nothing twice on outbox replay', async () => {
     const taskId = await telegramTask(channel());
     const { telegramBridge, sent } = bridge();
     const app = createApp({ db, telegramBridge } as any);
@@ -89,12 +89,11 @@ describe('a Canva outcome moves the task truthfully and tells the requester plai
     vi.stubEnv('PUBLIC_TUNNEL_URL', 'https://desk.example.test');
     try {
       expect((await notify(app, taskId, payload)).status).toBe(200);
-      const revisionId = (await taskRow(taskId)).current_design_revision_id;
       expect(sent).toHaveLength(1);
-      expect(sent[0].message.text).toContain(`https://desk.example.test/#/work?task=${taskId}&amp;revision=${revisionId}`);
-      expect(sent[0].message.text).not.toContain('outside.test');
-      expect(sent[0].message.reply_markup.inline_keyboard.at(-1)[0].url)
-        .toBe(`https://desk.example.test/#/work?task=${taskId}&revision=${revisionId}`);
+      // ADR-145 (#16): the Desk review link is the office's; the requester cannot sign in to it. Before
+      // ADR-145 the message carried the server-built link (never the forged one); now it carries none.
+      expect(JSON.stringify(sent[0].message)).not.toMatch(/desk\.example\.test|outside\.test|canva\.com|Hawa Desk/);
+      expect(sent[0].message.text).toContain('is ready, and the office is giving it a final check');
       vi.stubEnv('PUBLIC_TUNNEL_URL', 'https://changed.example.test');
       expect((await notify(app, taskId, payload)).status).toBe(200);
       expect(sent).toHaveLength(1);
@@ -114,7 +113,9 @@ describe('a Canva outcome moves the task truthfully and tells the requester plai
 
     expect(sent).toHaveLength(1);
     const text = sent[0].message.text as string;
-    expect(text).toContain('The office has been alerted and will follow up with you here.');
+    // ADR-145 (#30): what happens next, in plain words.
+    expect(text).toContain('The office will finish');
+    expect(text).toContain('and send it to you here.');
     expect(text).not.toContain('HARD_QA_REFUSED');
     expect(text).not.toContain('TEXT_OVERFLOW');
   });
@@ -130,8 +131,10 @@ describe('a Canva outcome moves the task truthfully and tells the requester plai
     const [qc] = await qcRuns(taskId);
     expect(qc.critical_pass).toBe(false);
     expect(JSON.stringify(qc.report)).toContain('CANVA_COPY_MISMATCH');
-    // The requester still gets the link and the honest caveat.
-    expect(sent[0].message.text).toContain('https://www.canva.com/design/DAGcopymiss01/edit');
+    // The requester hears the draft exists and the office is fixing it; the Canva edit link and the
+    // check's name are the office's (ADR-145, #18).
+    expect(sent[0].message.text).toContain('is made; the office is fixing a small detail before you get it.');
+    expect(sent[0].message.text).not.toMatch(/canva\.com|COPY_MISMATCH|copy/i);
   });
 
   it('moves a task back to review when a later run delivers a draft, even when its revision already exists', async () => {
@@ -237,8 +240,9 @@ describe('a Canva outcome moves the task truthfully and tells the requester plai
       const res = await redrive(createApp({ db, telegramBridge } as any), taskId);
       expect(await res.json()).toMatchObject({ status: 'ALREADY_BOUND' });
       const text = sent.at(-1)!.message.text as string;
-      expect(text).toContain('a design already exists');
-      expect(text).toContain(`https://www.canva.com/design/${designId}/edit`);
+      // ADR-145 (#25): plain words, and the requester is never sent the Canva edit link.
+      expect(text).toContain('is already being worked on');
+      expect(text).not.toContain('canva.com');
       expect(text).not.toContain('draft is ready');
       expect(await dispatches(taskId)).toHaveLength(0);
     });
