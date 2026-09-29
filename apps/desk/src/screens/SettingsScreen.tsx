@@ -117,6 +117,7 @@ export const SettingsScreen: React.FC = () => {
         <h1 className="sr-only">Settings & Platform Adapters</h1>
         <div className="panel" style={{ padding: 16 }}>
           <h2>Adapters and capabilities</h2>
+          <div className="settings-adapters-table" role="region" aria-label="Adapters and capabilities table" tabIndex={0}>
           <table className="table">
             <thead>
               <tr>
@@ -190,6 +191,7 @@ export const SettingsScreen: React.FC = () => {
               </tr>
             </tbody>
           </table>
+          </div>
 
           {webhookResult && (
             <div className="finding" style={{ borderColor: CHECK_COLORS[webhookResult.tone].border, background: CHECK_COLORS[webhookResult.tone].background, marginTop: 14 }}>
@@ -314,7 +316,7 @@ export const SettingsScreen: React.FC = () => {
             zIndex: 100,
           }}
         >
-          <div className="panel" style={{ width: 500, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+          <div className="panel" style={{ width: 500, maxWidth: 'calc(100vw - 32px)', boxSizing: 'border-box', padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
             <h2 style={{ marginTop: 0 }}>WAHA WhatsApp Admission</h2>
             <p style={{ color: 'var(--muted)', fontSize: 13 }}>Status: <code>QUARANTINED</code> · Invariant #1 Compliance Check</p>
             <div className="finding" style={{ borderColor: '#d97706', background: '#fffbeb' }}>
@@ -343,7 +345,7 @@ export const SettingsScreen: React.FC = () => {
             zIndex: 100,
           }}
         >
-          <div className="panel" style={{ width: 540, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+          <div className="panel" style={{ width: 540, maxWidth: 'calc(100vw - 32px)', boxSizing: 'border-box', padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
             <h2 style={{ marginTop: 0 }}>Canva integration</h2>
             <p>Connect your own Canva account below. A selected editor does not prove native composition, semantic capture, print quality or delivery.</p>
             <CanvaConnectionPanel />
@@ -368,7 +370,7 @@ export const SettingsScreen: React.FC = () => {
             backdropFilter: 'blur(4px)',
           }}
         >
-          <div className="panel" style={{ width: 560, padding: 24, boxShadow: '0 24px 48px rgba(0,0,0,0.25)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="panel" style={{ width: 560, maxWidth: 'calc(100vw - 32px)', boxSizing: 'border-box', padding: 24, boxShadow: '0 24px 48px rgba(0,0,0,0.25)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h2 style={{ margin: 0, fontSize: 18 }}>🔑 Production API Credentials & Secret Store</h2>
               <button className="btn" style={{ fontSize: 11 }} onClick={() => setActiveModal(null)}>✕</button>

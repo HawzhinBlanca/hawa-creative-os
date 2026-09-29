@@ -97,3 +97,11 @@ The narrow live search screenshot also exposed the long client name clipping
 outside the dialog header. Its scope indicator now wraps below the query, which
 can shrink within the viewport. This receives a fresh compact screenshot after
 deployment; a style inspection alone is not visual acceptance.
+
+The next preflight stopped at test typechecking: the new interaction queried an
+HTMLElement's button-only disabled property. It now checks the DOM disabled
+attribute. No deployment happened from that failed run. Compact Settings was
+also found to inherit a two-column grid with intrinsic table widths. Provider
+setup cards now use bounded responsive columns, with the adapter table in its
+own named keyboard-focusable scroll region; setup modal widths are bounded by
+the viewport. Fresh screenshots must confirm the connection action fits.

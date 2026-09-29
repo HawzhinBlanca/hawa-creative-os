@@ -221,7 +221,7 @@ describe('the Work queue follows the event stream', () => {
     expect(view.container.querySelector('[aria-label="Canva design and exports"]')).not.toBeNull();
     await click(byText(view.container,'button',/Open Canva settings/));
     expect(openSettings).toHaveBeenCalledOnce();
-    expect(byText(view.container,'button',/Approve Captured Files/)?.disabled).toBe(true);
+    expect(byText(view.container,'button',/Approve Captured Files/)?.hasAttribute('disabled')).toBe(true);
   });
 
   it.each([undefined, true, false, null])('keeps rendered glyphs unverified with legacy coverage=true and family result %s', async (fontFamilyPass) => {
