@@ -18,7 +18,9 @@ function prepare(text: string) {
   });
 }
 
-const texts = (draft: { exactCopy: Array<{ text: string }> }) => draft.exactCopy.map((block) => block.text);
+type Block = { text: string; role?: string; language?: string; direction?: string };
+const blocks = (draft: { exactCopy: unknown[] }) => draft.exactCopy as Block[];
+const texts = (draft: { exactCopy: unknown[] }) => blocks(draft).map((block) => block.text);
 
 // The owner's caption, verbatim (curly apostrophes included).
 const OWNER_INSTRUCTIONS =
@@ -44,8 +46,8 @@ describe('a line that introduces the text is not copy', () => {
       'Field Visit Report',
       'Insights from KAAE school field visits and next steps toward',
     ]);
-    expect(draft.exactCopy.map((b) => b.role)).toEqual(['headline', 'body', 'body']);
-    expect(draft.exactCopy.every((b) => b.language === 'en' && b.direction === 'ltr')).toBe(true);
+    expect(blocks(draft).map((b) => b.role)).toEqual(['headline', 'body', 'body']);
+    expect(blocks(draft).every((b) => b.language === 'en' && b.direction === 'ltr')).toBe(true);
     expect(draft.designInstructions).toContain(OWNER_INSTRUCTIONS);
     expect(draft.designInstructions).toContain('Here is the text and the photos:');
     for (const block of texts(draft)) expect(block).not.toContain('Here is the text');
@@ -62,7 +64,7 @@ describe('a line that introduces the text is not copy', () => {
       'کۆنفرانسی نیشتمانی متمانەبەخشین',
       '٩ی ئەیلوولی ٢٠٢٦، هۆڵی سەعد عەبدوڵا، هەولێر',
     ]);
-    expect(draft.exactCopy.every((b) => b.language === 'ckb' && b.direction === 'rtl')).toBe(true);
+    expect(blocks(draft).every((b) => b.language === 'ckb' && b.direction === 'rtl')).toBe(true);
     expect(draft.designInstructions).toContain(instructions);
     expect(draft.designInstructions).toContain('دەقەکە:');
   });
@@ -81,7 +83,7 @@ describe('a line that introduces the text is not copy', () => {
     );
 
     expect(texts(draft)).toEqual(['KAAE Annual Conference', 'کۆنفرانسی ساڵانەی کەی ئەی ئەی']);
-    expect(draft.exactCopy.map((b) => [b.language, b.direction])).toEqual([['en', 'ltr'], ['ckb', 'rtl']]);
+    expect(blocks(draft).map((b) => [b.language, b.direction])).toEqual([['en', 'ltr'], ['ckb', 'rtl']]);
     expect(draft.title).toBe('KAAE: KAAE Annual Conference…');
     expect(draft.designInstructions).toBe('Please design a KAAE poster in navy and yellow, formal and clean.\nHere is the text:');
   });
