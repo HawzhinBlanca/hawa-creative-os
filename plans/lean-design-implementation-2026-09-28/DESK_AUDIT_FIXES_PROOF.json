@@ -31,7 +31,8 @@
     "plans/traceability.csv": "ab95f7157acd808a1ea463d3ba3aa76047b3fd3ee864e687dbe6a248142b5042",
     "apps/desk/src/services/operationsPresentation.ts": "24f58b77a5402e42a6653adfc4259e4c7bdd16d129cf0891c3b23350329abd42",
     "apps/desk/test/operations-presentation.test.ts": "8538df1d8857482706621ec520699001a207c9562778c8576ca390ff2c31ea1f",
-    "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES.md": "854a29f96d19beb529cbbdd898c7b7d7a4b540d5320414ffe509e1019a026206"
+    "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES.md": "cfd24914bdd48d4e6528d5925e9eb1098ee7f893f620e0e0ee3e7b50ab2770d2",
+    "apps/desk/test/desk-auth.test.ts": "705b6f7bddddd0ecb221c18ca9b7fd004d5eb114f2682a8539debc58c7fdd507"
   },
   "evidence": {
     "output/audits/2026-09-29-product-flow-fixes/ratchet.log": "76288843d00b782f92f7fc4e9b39fa3da29d052f95ef7c90a2b15617b4137c10",
@@ -49,7 +50,10 @@
     "output/audits/2026-09-29-product-flow-fixes/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "output/audits/2026-09-29-product-flow-fixes/tests-final.log": "fceee296bbdc914362823b207de0aca5639dcc1a29d48c30091ad3ec671441eb",
     "output/audits/2026-09-29-product-flow-fixes/03-task-form.png": "0772f59f6b8e9bc563238232d34b108c796cf310b377dc005fee7914746ea854",
-    "output/audits/2026-09-29-product-flow-fixes/build.log": "11cdf3809cb327eee8a70c9a8fcbb0b28fd9aa5356a38556d8fcfdf0463f6c60"
+    "output/audits/2026-09-29-product-flow-fixes/build.log": "11cdf3809cb327eee8a70c9a8fcbb0b28fd9aa5356a38556d8fcfdf0463f6c60",
+    "output/audits/2026-09-29-product-flow-fixes/full-suite-first.log": "d8a5e1a1b3eae827205098ba08de89700e4c9812480ee97a698855bbb4a1f505",
+    "output/audits/2026-09-29-product-flow-fixes/desk-auth-final.log": "06c95c647e26cad50819127d70e8fc747b584d6304e7da602788c413d7ce94eb",
+    "output/audits/2026-09-29-product-flow-fixes/pack-validation-direct.log": "afc0ecd10292529e02a87f991ee0e21abbcfddae3d7cdf707d4067d073cbdb77"
   },
   "limitations": [
     "Synthetic read-only browser API; no live task or provider side effect",
@@ -61,5 +65,24 @@
     "warnings": 0,
     "failed": 0,
     "method": "Exact included specification snapshot; existing skip rules retained, excluded directories linked; original slow traversal interrupted"
+  },
+  "release_followup": {
+    "first_full_suite": {
+      "passed": 4919,
+      "failed": 1,
+      "skipped": 64
+    },
+    "failure": "old literal publication-audit notice in desk-auth.test.ts; assertion updated to equivalent new copy",
+    "affected_recheck": {
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0
+    },
+    "direct_blueprint": {
+      "passed": 1203,
+      "warnings": 0,
+      "failed": 0
+    },
+    "final_full_release": "pending"
   }
 }

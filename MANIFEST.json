@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T09:23:37Z",
+  "generatedAt": "2026-09-29T09:41:41Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1254,13 +1254,13 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES.md",
-      "sha256": "854a29f96d19beb529cbbdd898c7b7d7a4b540d5320414ffe509e1019a026206",
-      "bytes": 5104
+      "sha256": "cfd24914bdd48d4e6528d5925e9eb1098ee7f893f620e0e0ee3e7b50ab2770d2",
+      "bytes": 5963
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES_PROOF.json",
-      "sha256": "18b99ce4db957b08adfe684d980d28206b36f542e9e89d488c0a05ccd87a8b14",
-      "bytes": 4719
+      "sha256": "9451549e6ac315a13507747b2f2b01143a450e22a73d43d7430b926464604628",
+      "bytes": 5714
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
