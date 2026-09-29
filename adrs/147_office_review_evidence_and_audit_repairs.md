@@ -71,3 +71,17 @@ now include 069, and Work uses a human-readable actionable empty message. All
 45 tests across the three affected files passed on rerun. The failed full log
 is retained as full-suite-first.log; the full release gate will be rerun on the
 corrected seal before deploying. No failed or skipped test is counted as passed.
+
+The corrected full release gate passed 5426 tests, with 67 explicitly skipped,
+and deployed seal 382f3071 on 2026-09-30. A final storage-boundary review found
+the new feedback hash was absent from blob_references. Migration 070 adds it
+to the existing retention view (including every prior branch) and indexes it.
+This prevents nightly collection of an old reviewed picture when a candidate's
+current preview is replaced. A collector regression references the picture only
+through feedback, backdates it past the grace, and exercises both direct sweep
+and mark/sweep under the application role. Historical null hashes stay unknown.
+The retention correction will be independently qualified before readiness.
+
+Retention/source schema checks: 30 tests in three files passed, zero failed or
+skipped (retention-tests.log). Release preflight and live migration receipt for
+070 are still required.

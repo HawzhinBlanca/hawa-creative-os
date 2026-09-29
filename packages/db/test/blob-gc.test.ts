@@ -31,6 +31,7 @@ const hex = () => randomBytes(32).toString('hex');
 /** Every branch of hawa.blob_references, as table.column. */
 const BRANCHES = [
   'task_files.sha256',
+  'design_feedback.preview_sha256',
   'design_studio_candidates.preview_sha256',
   'design_studio_candidates.composite_sha256',
   'design_studio_candidates.art_sha256',
@@ -94,6 +95,10 @@ describe.skipIf(!appUrl || !ownerUrl)('blob garbage collection against PostgreSQ
     const tenant = randomUUID();
     const [table, column] = branch.split('.');
     switch (table) {
+      case 'design_feedback':
+        // No candidate reference retains this old picture: only the review does.
+        await asOwnerUnchecked(`INSERT INTO hawa.design_feedback(id, tenant_id, task_id, actor_id, source, verdict, preview_sha256) VALUES ($1, $2, $3, 'reviewer', 'desk', 'revise', $4)`, [randomUUID(), tenant, randomUUID(), sha256]);
+        return;
       case 'task_files':
         await asOwnerUnchecked(`INSERT INTO hawa.task_files(tenant_id, task_id, sha256, role) VALUES ($1, $2, $3, 'reference_image')`, [tenant, randomUUID(), sha256]);
         return;
