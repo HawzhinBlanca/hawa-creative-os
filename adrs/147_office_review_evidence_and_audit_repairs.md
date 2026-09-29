@@ -105,3 +105,12 @@ also found to inherit a two-column grid with intrinsic table widths. Provider
 setup cards now use bounded responsive columns, with the adapter table in its
 own named keyboard-focusable scroll region; setup modal widths are bounded by
 the viewport. Fresh screenshots must confirm the connection action fits.
+
+User-requested outage repair: merged claude/trusted-office-service-keys, commit
+72ff926d, preserving its provenance. ADR-146's credential-free office admission
+now coexists with normal verification of presented service keys. Worker-only
+internal keys remain refused outside /v1/internal/*. All eight trusted-office
+regressions passed. Before deploying, a GET of the selected task from the active
+Docker worker with its configured service key returned 401; no credential or
+response body was copied into evidence. The same read and negative controls are
+required after deployment. This check does not dispatch or notify a requester.
