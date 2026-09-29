@@ -389,6 +389,16 @@ export async function sendToChatInbox(chat: string, update: Record<string, unkno
   return res.status;
 }
 
+/** Sends a saved update's settle to its chat's ChatInbox (ADR-143), as the poller's sweep does. */
+export async function sendSettleToChatInbox(chat: string, update: Record<string, unknown>, idempotencyKey: string): Promise<number> {
+  const res = await fetch(`${RESTATE_INGRESS_URL}/ChatInbox/${encodeURIComponent(chat)}/settle/send`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'idempotency-key': idempotencyKey },
+    body: JSON.stringify({ v: 1, update, attempt: 0 }),
+  });
+  return res.status;
+}
+
 /** The chat's ChatInbox invocations as Restate records them. */
 export async function chatInboxInvocations(chat: string): Promise<Array<{ id: string; status: string; idempotency_key: string | null; last_failure_error_code: string | null }>> {
   return restateQuery(`SELECT id, status, idempotency_key, last_failure_error_code FROM sys_invocation

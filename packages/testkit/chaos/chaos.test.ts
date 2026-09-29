@@ -22,17 +22,19 @@ import { candidateSources } from './driver/candidate-sources.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, releaseProject, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
+import { acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, isRunning, releaseProject, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import { neutralise, restoreDump, verifyEgressFence, type EgressProbe, type NeutraliseReport, type SeedReport } from './driver/seed.js';
 import { buildPreviousRelease, startOnRelease } from './driver/cutover.js';
 import { handoffOfOldRequests, retiredSettingsIgnored, rollbackToPreviousRelease } from './driver/cutover-scenarios.js';
 import {
-  approve, briefToDraft, captionedPhotoUpdate, RequestEndedError, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
-  OFFICE_CHAT, sendToChatInbox, sentTo, sleep, staffConfirmVisible, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
+  approve, briefText, briefToDraft, captionedPhotoUpdate, RequestEndedError, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
+  OFFICE_CHAT, sendSettleToChatInbox, sendToChatInbox, sentTo, sleep, staffConfirmVisible, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type ArmedKill, type InvariantResult,
 } from './driver/scenario.js';
 
 const enabled = process.env.HAWA_CHAOS === '1';
+/** Core's default HAWA_BRIEF_PHOTO_WAIT_MS (ADR-143): a text brief waits this long for photos. */
+const BRIEF_HOLD_MS = 15_000;
 const only = (process.env.HAWA_CHAOS_ONLY || '').split(',').map((s) => s.trim()).filter(Boolean);
 const keep = process.env.HAWA_CHAOS_KEEP === '1';
 const candidate = process.env.HAWA_CHAOS_CANDIDATE === '1';
@@ -737,6 +739,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         thumbnail: { file_id: `${id}-thumbnail` } };
     };
     if (document) asDocument(update, fileId, size);
+    // ADR-143: an album settles by itself (no /use_album); Core is killed after the settle froze it.
+    let albumSettle: { killed: ArmedKill; updateId: number; polled: Record<string, unknown> } | null = null;
     if (captionless || album) {
       const noticeId = await waitUntil('the current office revision notice to be confirmed', async () => {
         const [mark] = await query<{ message_id: string }>(sql`SELECT payload->>'messageId' AS message_id
@@ -757,25 +761,25 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         update.message.media_group_id = groupId;
         second.message.media_group_id = groupId;
         second.message.reply_to_message = { message_id: noticeId };
+        // Armed before the photos: the settle is held at the point, so nothing is projected before the kill.
+        const settleKill = await killAtPoint('core.intake.after-album-settle', { chat });
         const partIds = await fakes.updates([update, second]);
-        await waitUntil('both album parts saved before confirmation', async () => {
+        await waitUntil('both album parts saved before the album settles', async () => {
           const [row] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
             WHERE source_account_id = 'lifecycle_album_part' AND payload->>'chatId' = ${chat}
               AND payload->>'groupId' = ${groupId} AND payload->'image'->>'sha256' IS NOT NULL`);
           return Number(row?.n) === 2 ? true : null;
         });
-        if ((await tasksOfChat(chat)).length !== 1) throw new Error('An album started a task before confirmation');
-        events.push(`saved album updates ${partIds.join(', ')}; no child before confirmation`);
-        const confirmation: { message: Record<string, unknown> } = textUpdate(chat, '/use_album');
-        confirmation.message.reply_to_message = { message_id: update.message.message_id };
-        update = confirmation;
+        if ((await tasksOfChat(chat)).length !== 1) throw new Error('An album started a task before it settled');
+        events.push(`saved album updates ${partIds.join(', ')}; no child before the album settled; no /use_album sent`);
+        albumSettle = { killed: settleKill, updateId: partIds[1], polled: { ...second, update_id: partIds[1] } };
       }
     }
-    const killed = await killAtPoint(album ? 'core.intake.after-album-confirmation' : 'core.intake.after-revision-photo-decision', { chat });
-    const [updateId] = await fakes.updates([update]);
-    const polled = { ...update, update_id: updateId };
+    const killed = albumSettle?.killed ?? await killAtPoint('core.intake.after-revision-photo-decision', { chat });
+    const updateId = albumSettle?.updateId ?? (await fakes.updates([update]))[0];
+    const polled = albumSettle?.polled ?? { ...update, update_id: updateId };
     events.push(`revision photo update ${updateId} in request ${request.request_id}`);
-    events.push(`killed ${(await killed.done).killed} after ${album ? 'album confirmation' : 'photo decision'}, before child task projection`);
+    events.push(`killed ${(await killed.done).killed} after ${album ? 'the album settled' : 'photo decision'}, before child task projection`);
     const child = await waitUntil('one revision task after Core restart', async () => {
       const tasks = await tasksOfChat(chat);
       const [row] = await query<{ rev: string; current_task_id: string }>(sql`
@@ -784,11 +788,15 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         ? row.current_task_id : null;
     });
     events.push(`child task ${child} after restart`);
-    const replay = await sendToChatInbox(chat, polled, `chaos-revision-photo-replay-${updateId}`);
-    events.push(`same update under a second Restate key: HTTP ${replay}`);
+    // The album's own settle ran under settle:<id>; the replay is a second settle of the same photo.
+    const firstKey = album ? `settle:${updateId}` : `tg-${updateId}`;
+    const replay = album
+      ? await sendSettleToChatInbox(chat, polled, `chaos-revision-photo-replay-${updateId}`)
+      : await sendToChatInbox(chat, polled, `chaos-revision-photo-replay-${updateId}`);
+    events.push(`same ${album ? 'settle' : 'update'} under a second Restate key: HTTP ${replay}`);
     await waitUntil('both photo intakes to complete', async () => {
       const inbox = (await chatInboxInvocations(chat)).filter((item) =>
-        item.idempotency_key === `tg-${updateId}` ||
+        item.idempotency_key === firstKey ||
         item.idempotency_key === `chaos-revision-photo-replay-${updateId}`);
       return inbox.length === 2 && inbox.every((item) => item.status === 'completed') ? inbox : null;
     });
@@ -829,7 +837,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         const parked = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
           WHERE source_event_id = ${`parked-update-${updateId}`}`);
         const inbox = (await chatInboxInvocations(chat)).filter((item) =>
-          item.idempotency_key === `tg-${updateId}` ||
+          item.idempotency_key === firstKey ||
           item.idempotency_key === `chaos-revision-photo-replay-${updateId}`);
         const unfinished = await restateQuery<{ status: string; target_service_name: string; target_handler_name: string }>(
           `SELECT status, target_service_name, target_handler_name FROM sys_invocation WHERE status NOT IN ('completed')`);
@@ -884,6 +892,114 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   });
 
   }
+
+  // ADR-143: an album with its brief as the caption starts one request by itself, end to end.
+  async function sendAlbum(chat: string, tag: string, caption: string | null, n = 3) {
+    const groupId = `chaos-album-${tag}-${chat}`;
+    const parts: Array<{ message: Record<string, unknown> }> = [];
+    for (let i = 0; i < n; i++) {
+      const fileId = `album-${tag}-${chat}-${i}`;
+      await fakes.file({ file_id: fileId, size: 1024 + i, mime: 'image/jpeg' });
+      const part: { message: Record<string, unknown> } = captionedPhotoUpdate(chat, fileId, 1024 + i, caption ?? '');
+      if (i > 0 || caption === null) delete part.message.caption;
+      part.message.media_group_id = groupId;
+      parts.push(part);
+    }
+    const ids = await fakes.updates(parts);
+    return { groupId, ids, parts: parts.map((p, i) => ({ ...p, update_id: ids[i] })) };
+  }
+  const albumChecks = async (chat: string, taskId: string, n: number, extra: { downloadsPrefix: string }) => {
+    const files = await query<{ role: string; media_type: string }>(sql`SELECT f.role, b.media_type FROM hawa.task_files f
+      JOIN hawa.blobs b ON b.sha256 = f.sha256 WHERE f.task_id = ${taskId}::uuid`);
+    const [frozen] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events WHERE source_account_id = 'lifecycle_album_frozen'
+      AND source_event_id IN (SELECT payload->>'groupKey' FROM hawa.inbox_events WHERE source_account_id = 'lifecycle_album_part' AND payload->>'chatId' = ${chat})`);
+    const [opens] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
+      WHERE source_account_id = 'lifecycle_chat_open' AND payload->>'chatId' = ${chat}`);
+    const shown = await sentTo(chat);
+    const commands = shown.filter((s) => typeof s.text === 'string' && /\/use_album|\/new/.test(s.text));
+    const acks = shown.filter((s) => s.method === 'sendMessage' && s.text?.includes('Request received.'));
+    const downloads = (await fakes.polls()).downloads?.filter((id: string) => id.startsWith(extra.downloadsPrefix)) ?? [];
+    const inbox = await chatInboxInvocations(chat);
+    return [
+      { name: `all ${n} album photos are the task's reference images`, ok: files.length === n &&
+          files.every((f) => f.role === 'reference_image' && f.media_type === 'image/jpeg'), detail: JSON.stringify(files) },
+      { name: 'the album was frozen once and opened one request', ok: Number(frozen?.n) === 1 && Number(opens?.n) === 1,
+        detail: `frozen=${frozen?.n} opens=${opens?.n}` },
+      { name: 'the requester was never asked for a command', ok: commands.length === 0, detail: JSON.stringify(commands.map((c) => c.text)) },
+      { name: 'one acknowledgement', ok: acks.length === 1, detail: `acknowledgements=${acks.length}` },
+      { name: 'one download per photo', ok: downloads.length === n && new Set(downloads).size === n, detail: JSON.stringify(downloads) },
+      { name: 'every ChatInbox invocation (updates and settles) completed', ok: inbox.length > 0 && inbox.every((i) => i.status === 'completed'),
+        detail: JSON.stringify(inbox.map((i) => `${i.idempotency_key}:${i.status}`)) },
+    ];
+  };
+
+  scenario('R1.S3.ALBUM_BRIEF', 'an album with its brief as the caption starts one design by itself, survives a Core kill at the settle, and is delivered', async (chat, events) => {
+    const tag = 'albumbrief';
+    const killed = await killAtPoint('core.intake.after-album-settle', { chat });
+    const album = await sendAlbum(chat, tag, briefText(`${tag}-${chat}`));
+    events.push(`album of 3 photos, caption = brief: updates ${album.ids.join(', ')}; no /use_album`);
+    events.push(`killed ${(await killed.done).killed} after the settle froze the album, before the decision`);
+    const taskId = await draftOf(chat);
+    events.push(`task ${taskId}: draft in review`);
+    const approved = await approve(taskId);
+    events.push(`approve: HTTP ${approved.status}`);
+    if (approved.status >= 300) throw new Error(`approval refused: HTTP ${approved.status} ${JSON.stringify(approved.body).slice(0, 300)}`);
+    const delivered = await deliver(taskId);
+    events.push(`deliver: HTTP ${delivered.status}`);
+    if (delivered.status >= 300) throw new Error(`delivery refused: HTTP ${delivered.status} ${JSON.stringify(delivered.body).slice(0, 300)}`);
+    await waitDelivered(chat, taskId);
+    // A second settle of the same photo (the sweep, or a lost answer) opens nothing again.
+    const replay = await sendSettleToChatInbox(chat, album.parts[2], `chaos-album-settle-replay-${album.ids[2]}`);
+    events.push(`second settle of the newest photo: HTTP ${replay}`);
+    return { delivered: true, after: () => albumChecks(chat, taskId, 3, { downloadsPrefix: `album-${tag}-${chat}-` }) };
+  });
+
+  scenario('R1.S3.ALBUM_RESTART', 'a worker killed while the album settles loses nothing: the durable settle opens one request after the restart', async (chat, events) => {
+    const tag = 'albumrestart';
+    const album = await sendAlbum(chat, tag, briefText(`${tag}-${chat}`));
+    await waitUntil('all three photos saved', async () => {
+      const [row] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
+        WHERE source_account_id = 'lifecycle_album_part' AND payload->>'chatId' = ${chat} AND payload->'image'->>'sha256' IS NOT NULL`);
+      return Number(row?.n) === 3 ? true : null;
+    }, 60_000, 250);
+    // The settle is a delayed call in Restate now; every worker that could run it goes away for longer
+    // than the quiet period (an earlier scenario may have left worker-green serving too).
+    const workers = (['worker-blue', 'worker-green'] as const).filter((w) => isRunning(w));
+    for (const w of workers) kill(w);
+    events.push(`album saved (updates ${album.ids.join(', ')}); ${workers.join(' and ')} killed inside the settle window`);
+    await sleep(12_000);
+    if ((await tasksOfChat(chat)).length !== 0) throw new Error('a task appeared while no worker was running');
+    for (const w of workers) start(w);
+    for (const w of workers) await waitHealthy(w);
+    events.push(`${workers.join(' and ')} started again after 12 s`);
+    const taskId = await draftOf(chat);
+    events.push(`task ${taskId}: draft in review`);
+    return { delivered: false, after: () => albumChecks(chat, taskId, 3, { downloadsPrefix: `album-${tag}-${chat}-` }) };
+  });
+
+  scenario('R1.S3.ALBUM_ASK', 'an album with no words is asked about once; an OK is asked again; the natural brief starts one design', async (chat, events) => {
+    const tag = 'albumask';
+    const album = await sendAlbum(chat, tag, null, 2);
+    events.push(`album of 2 photos without words: updates ${album.ids.join(', ')}`);
+    const question = await waitUntil('the question about the photos', async () =>
+      (await sentTo(chat)).find((s) => s.method === 'sendMessage' && s.text?.startsWith('I have your 2 photos.')) ?? null, 60_000);
+    events.push(`asked: ${question.text}`);
+    await sleep(3000);
+    if ((await tasksOfChat(chat)).length !== 0) throw new Error('an album without words started a task');
+    await fakes.updates([textUpdate(chat, 'yes, use them')]);
+    await waitUntil('the follow-up question', async () =>
+      (await sentTo(chat)).find((s) => s.method === 'sendMessage' && s.text?.startsWith('Happy to. What should I design')) ?? null, 60_000);
+    if ((await tasksOfChat(chat)).length !== 0) throw new Error('an OK without a brief started a task');
+    events.push('"yes, use them" was asked what to design; no task');
+    await fakes.updates([textUpdate(chat, briefText(`${tag}-${chat}`))]);
+    const taskId = await draftOf(chat);
+    events.push(`task ${taskId}: draft in review`);
+    return { delivered: false, after: async () => {
+      const checks = await albumChecks(chat, taskId, 2, { downloadsPrefix: `album-${tag}-${chat}-` });
+      const questions = (await sentTo(chat)).filter((s) => s.method === 'sendMessage' && s.text?.startsWith('I have your 2 photos.'));
+      return [...checks, { name: 'the album was asked about once', ok: questions.length === 1, detail: `questions=${questions.length}` }];
+    } };
+  });
 
   scenario('R1.S3.MEDIA', 'a PDF without client selection gets one durable review prompt and no task', async (chat, events) => {
     const update = imageDocumentUpdate(chat, 'lifecycle-pdf', 128,
@@ -1124,7 +1240,10 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       delivered: false,
       // R4 has no Canva request of its own: the per-request checks do not apply to chat _chat.
       extra: [
-        { name: 'chat B is acknowledged in under 5 s while chat A downloads', ok: bMs < 5000, detail: `chat B first answer after ${bMs} ms (chat A after ${aMs} ms)` },
+        // ADR-143: a text brief waits HAWA_BRIEF_PHOTO_WAIT_MS (15 s by default) for photos sent after
+        // it, so chat B's acknowledgement comes after that wait; chat A's download must add nothing to it.
+        { name: 'chat B is acknowledged within 5 s of its brief hold while chat A downloads',
+          ok: bMs < BRIEF_HOLD_MS + 5000 && bMs < aMs, detail: `chat B first answer after ${bMs} ms (hold ${BRIEF_HOLD_MS} ms; chat A after ${aMs} ms)` },
         { name: 'chat B has its one task', ok: tasksB.length === 1, detail: `tasks=${tasksB.length}` },
       ],
       skipRequestChecks: true,
