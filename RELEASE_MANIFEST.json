@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-29T21:41:07+03:00",
+  "generatedAt": "2026-09-29T22:10:30+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "3ae390c4a60a9e3adf134c0e4e7233015341a6de",
+    "commit": "30e91e6db790f5a6e3900f97966ff6ef70d9472f",
     "treeClean": true,
-    "commitTimestamp": "2026-09-29T21:41:07+03:00",
-    "branch": "codex/research-grade-design-system"
+    "commitTimestamp": "2026-09-29T22:10:30+03:00",
+    "branch": "claude/release-nl"
   },
   "migrations": {
-    "targetVersion": "067_pre_admission_spending",
-    "latestMigrationFile": "067_pre_admission_spending.sql",
-    "totalMigrations": 67
+    "targetVersion": "068_requester_intent_calls",
+    "latestMigrationFile": "068_requester_intent_calls.sql",
+    "totalMigrations": 68
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "ab01b63090c4b9072d38bea9f3382034e4bdbfad508a34142c23606d8607c542",
+        "apps/core/src/app.ts": "1892db25c3e19aff5ebb2ccd84701f756efdbc6fdd1732df152fb1bb59188c58",
         "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -56,7 +56,7 @@
       "service": "worker",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "eace626b6c33e7da47c3657e21ca4b9944908836e349728483b3c0cfbb1105bc"
+        "apps/worker/src/index.ts": "b9c5cfe17e3bf5ee9bd8d3ab0b158f83b9c4b725ba940530836104a1eadf1f94"
       }
     }
   },
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "aa60badd5c9ffc0b7fdaece6b4a42ff7262f37eea545679719ebcc2be38b7cde"
+  "sha256": "b069452a16f5a5a0d213e4576abca35cdb969ddecd0110ebd28ab0d14808d931"
 }
