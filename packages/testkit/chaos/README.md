@@ -66,33 +66,26 @@ driver takes the lock container `hawa-chaos-lock` (`driver/stack.ts` `acquirePro
 first `down` and waits, saying who holds it, while another run does. `run.ts --down` refuses instead
 of waiting. The lock runs `cat` on the holder's stdin, so it goes away however the holder ends.
 
-## Old requests after the deploy, and rolling back (R10; ADR-136, reconciled with ADR-135 on 2026-09-29)
+## Rolling back (R10; ADR-136, reconciled with ADR-135 on 2026-09-29)
 
 ```sh
-npx tsx packages/testkit/chaos/run.ts --only R10.H1,R10.K1,R10.K2 [--previous-release <commit>]
+npx tsx packages/testkit/chaos/run.ts --only R10.K1,R10.K2 [--previous-release <commit>]
 ```
 
-This release has no Core poller and no chat list (ADR-135), and its old intake only finishes requests
-it started. Requests "from before the cutover" are therefore made the way production made them: on the
-previous release. The suite builds `hawa-chaos-core:prev` and `hawa-chaos-worker:prev` from a
-`git archive` of that release's commit (`driver/cutover.ts` `buildPreviousRelease`; default
-`RELEASE_MANIFEST.json`'s build commit, the release production runs) and starts the stack on it with
-Core polling and no chat on the lifecycle (production before 2026-09-28). Which release a container is
-created from, and the previous release's `HAWA_LIFECYCLE_CHATS`, come from `.run/release.compose.json`,
-which `down -v` removes. Each scenario then deploys a release the way `infra/docker/deploy.sh` does:
-Core recreated (with the poller it must hold), the idle colour created and registered with Restate, the
-old colour drained and removed. So run them alone and in this order; a whole-suite run skips them.
+This release has no Core poller, no chat list and no old intake (ADR-135). The suite builds
+`hawa-chaos-core:prev` and `hawa-chaos-worker:prev` from a `git archive` of the previous release's
+commit (`driver/cutover.ts` `buildPreviousRelease`; default `RELEASE_MANIFEST.json`'s build commit, the
+release production runs) and starts the stack on this release. Which release a container is created
+from, and the previous release's `HAWA_LIFECYCLE_CHATS`, come from `.run/release.compose.json`, which
+`down -v` removes. Each scenario then deploys a release the way `infra/docker/deploy.sh` does: Core
+recreated, the idle colour created and registered with Restate, the old colour drained and removed. So
+run them alone and in this order; a whole-suite run skips them.
 
-- `R10.H1`: requests made on the previous release while Core polled, in five states (waiting for a
-  draft, held on the old colour across the deploy; draft in review with the "What should change?"
-  prompt open; approved, not delivered; delivered; a legacy clarification question open), plus a
-  control chat that makes the same follow-ups on the previous release. Then this release is deployed,
-  with an update sent during the deploy, and every request is continued from Telegram (button presses,
-  replies, a photo reply) and the Desk (approval, Deliver). What ADR-135 changes is checked as such: a
-  photo reply asking to change the delivered design starts nothing and asks for `/new` (the control got
-  a revision); a brief beside an open recent Core design is continued or refused, never a new Core task;
-  beside a finished one it opens a lifecycle request. New chats, `/new`, and a brief once Core history
-  is older than 48 hours open lifecycle requests.
+`R10.H1` (requests made on a previous release while Core polled, continued after the deploy of this
+one) was removed with stage 2 of ADR-135: this release no longer finishes old-intake requests, and
+production had none open when it shipped. A reply or button under an old draft is a stale reply,
+covered by `apps/core/test/lifecycle-internal-intake.test.ts` and `lifecycle-cutover-handoff.test.ts`.
+
 - `R10.K1`: lifecycle requests awaiting approval, mid-delivery (held between two files) and waiting for
   the requester's reply to the office revision notice; this release rolled back to the previous one
   (worker poller, `HAWA_LIFECYCLE_CHATS=*`, as production ran it) by a deploy, with a new brief sent
@@ -107,8 +100,7 @@ Core's poller. Every requester action is a real Telegram update shape (a reply q
 and buttons, as Telegram does). The checks: each message reaches its chat once; no refusal of a
 legitimate follow-up (stale reply, ambiguous request, `/new` required where not expected, parked notice,
 late change); one ChatInbox invocation per `tg-<update_id>`, completed; no update dead-lettered; no update
-makes two tasks; each old request finishes on its pinned executor; the control chat's answer to the
-thanks equals the handed-off chat's. The project lock (`hawa-chaos-lock`, `driver/stack.ts`
+makes two tasks. The project lock (`hawa-chaos-lock`, `driver/stack.ts`
 `acquireProject`) is taken before the first down; a run waits up to three hours for another checkout's
 run to finish.
 

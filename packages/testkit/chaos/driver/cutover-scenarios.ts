@@ -1,27 +1,27 @@
 /**
- * R10 acceptance on the chaos stack: the handoff of requests made before the lifecycle cutover
- * (R10.H1), and what rolling back means once every chat is lifecycle-owned (R10.K1, R10.K2).
+ * R10 acceptance on the chaos stack: what rolling back means once every chat is lifecycle-owned
+ * (R10.K1, R10.K2). The handoff of requests made before the lifecycle cutover (R10.H1) was removed
+ * with stage 2 of ADR-135, which deletes the code that finished them.
  * docs/10_WORKFLOW_RELIABILITY.md "Legacy delivery cutover pin"; ADR-052, ADR-059, ADR-065,
  * ADR-113/114, ADR-129, ADR-130, ADR-135 and ADR-136.
  *
- * Since ADR-135 this release has no Core poller and no chat list, and its old intake only finishes
- * requests it started. So the old requests are made the way production made them: on the previous
- * release (driver/cutover.ts buildPreviousRelease), with Core polling and no chat on the lifecycle.
- * R10.H1 then deploys this release; R10.K1 rolls it back to the previous release with lifecycle
- * requests in flight and forward again; R10.K2 empties the retired chat list on this release. Run them
- * alone, in this order (the suite starts the stack on the previous release when they are selected):
+ * This release has no Core poller, no chat list and no old intake. R10.K1 rolls it back to the previous
+ * release (driver/cutover.ts buildPreviousRelease: --previous-release, else RELEASE_MANIFEST.json's
+ * build commit) with lifecycle requests in flight and forward again; R10.K2 empties the retired chat
+ * list on this release. Run them alone, in this order (the suite starts the stack on this release and
+ * builds the previous one when they are selected):
  *
- *   npx tsx packages/testkit/chaos/run.ts --only R10.H1,R10.K1,R10.K2
+ *   npx tsx packages/testkit/chaos/run.ts --only R10.K1,R10.K2 [--previous-release <commit>]
  *
- * Every requester action is a Telegram update the fake serves to whichever process polls: a text, a
- * Telegram reply that quotes the bot's message as Telegram does (text and buttons), a button press
- * (callback_query) or a captioned photo. Office actions are the Desk's API calls.
+ * Every requester action is a Telegram update the fake serves to whichever process polls: a text, or
+ * a Telegram reply that quotes the bot's message as Telegram does. Office actions are the Desk's API
+ * calls.
  */
 import { randomUUID } from 'node:crypto';
-import { fakes, query, restateQuery, secrets, sql } from './stack.js';
+import { fakes, query, secrets, sql } from './stack.js';
 import { deployConfig, type DeployReport, type StackConfig } from './cutover.js';
 import {
-  approve, briefText, briefToDraft, chatInboxInvocations, deliver, designOutcome, OFFICE_CHAT, REQUESTER_ID, sentTo, sleep,
+  approve, briefText, chatInboxInvocations, deliver, designOutcome, OFFICE_CHAT, sentTo,
   storedOffset, tasksOfChat, taskState, textUpdate, waitDelivered, waitUntil, type InvariantResult,
 } from './scenario.js';
 
@@ -44,21 +44,6 @@ export function textReply(chat: string, text: string, to: Sent) {
   const update = textUpdate(chat, text);
   (update.message as Record<string, unknown>).reply_to_message = quoted(chat, to);
   return update;
-}
-
-export function photoReply(chat: string, fileId: string, size: number, caption: string, to: Sent) {
-  const update = textUpdate(chat, '');
-  const message = update.message as Record<string, unknown>;
-  delete message.text;
-  message.caption = caption;
-  message.photo = [{ file_id: fileId, file_unique_id: `u-${fileId}`, width: 800, height: 600, file_size: size }];
-  message.reply_to_message = quoted(chat, to);
-  return update;
-}
-
-export function buttonPress(chat: string, to: Sent, data: string) {
-  return { callback_query: { id: `cb-${randomUUID()}`, from: { id: REQUESTER_ID, is_bot: false, first_name: 'Chaos' },
-    message: quoted(chat, to), chat_instance: `chaos-${chat}`, data } };
 }
 
 async function send(update: Record<string, unknown>): Promise<number> {
@@ -138,21 +123,6 @@ async function publicationsOf(taskId: string) {
   return query<{ executor: string; state: string }>(sql`SELECT executor, state::text AS state FROM hawa.publications WHERE task_id = ${taskId}::uuid`);
 }
 
-/** The newest message in the chat whose text matches, once it has arrived. */
-async function waitForMessage(chat: string, label: string, match: (s: Sent) => boolean, since = 0, timeoutMs = 180_000): Promise<Sent> {
-  return waitUntil(`${label} in chat ${chat}`, async () => (await sentTo(chat)).filter((s) => s.seq > since && match(s)).pop() ?? null, timeoutMs, 1000);
-}
-
-const lastSeq = async (chat: string) => Math.max(0, ...(await sentTo(chat)).map((s) => s.seq));
-
-/** Children of a task (revisions, answers) Core created from the chat. */
-async function childrenOf(taskId: string) {
-  return query<{ id: string; state: string; pin: string; created: string }>(sql`SELECT t.id::text, t.state::text AS state,
-      t.delivery_executor_pin AS pin, t.created_at::text AS created FROM hawa.tasks t
-    JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
-    WHERE o.payload->'studioOptions'->>'parentTaskId' = ${taskId} ORDER BY t.created_at`);
-}
-
 /** Runs one chat's continuation; a failure becomes an invariant, so the other chats still report. */
 async function step(label: string, events: string[], out: InvariantResult[], body: () => Promise<InvariantResult[]>): Promise<void> {
   try {
@@ -188,30 +158,9 @@ async function lifecycleNotice(chat: string, requestId: string, key: string): Pr
   return record;
 }
 
-const legacyDraft = async (chat: string, taskId: string): Promise<Sent> => {
-  const draft = (await sentTo(chat)).filter((s) => JSON.stringify(s.replyMarkup ?? '').includes(`rq:ok:${taskId}`)).pop();
-  if (!draft) throw new Error(`no legacy draft message with buttons for task ${taskId} in chat ${chat}`);
-  return draft;
-};
-
-/** The first line of a bot message without markup or IDs, to compare how two chats were answered. */
+/** The first line of a bot message without markup or IDs. */
 const gist = (s: Sent) => (s.fullText ?? s.text ?? `(${s.method})`).split('\n')[0].replace(/<[^>]+>/g, '')
   .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<id>').trim().slice(0, 60);
-
-interface FollowUp { update: number; newTasks: number; children: number; answers: string[] }
-
-/** One requester action and what it led to: new tasks, revisions of `parent`, and the bot's answers. */
-async function followUp(chat: string, parent: string, act: () => Promise<number>): Promise<FollowUp> {
-  const tasksBefore = (await tasksOfChat(chat)).length;
-  const childrenBefore = (await childrenOf(parent)).length;
-  const seq = await lastSeq(chat);
-  const update = await act();
-  await waitUntil(`update ${update} to be read`, async () => (await storedOffset()) >= update, 180_000, 1000);
-  await waitUntil(`an answer to update ${update}`, async () => (await sentTo(chat)).some((s) => s.seq > seq), 30_000, 1000).catch(() => undefined);
-  await sleep(8000);
-  return { update, newTasks: (await tasksOfChat(chat)).length - tasksBefore, children: (await childrenOf(parent)).length - childrenBefore,
-    answers: (await sentTo(chat)).filter((s) => s.seq > seq).map(gist) };
-}
 
 /** What a chat holds, for the report: its tasks and what the bot said. */
 async function chatSummary(name: string, chat: string): Promise<string> {
@@ -224,277 +173,14 @@ async function chatSummary(name: string, chat: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------------------------------
-// R10.H1: requests made on the previous release while Core polled and no chat was on the lifecycle,
-// continued after this release is deployed.
+// R10.H1 (requests made on the previous release while Core polled, continued after the deploy of this
+// release) was removed with stage 2 of ADR-135: this release does not finish old-intake requests, and
+// production had none open when it shipped (GET /v1/operations/legacy-path, stage2Ready). A reply or
+// a button under an old draft is a stale reply now; apps/core/test/lifecycle-internal-intake.test.ts
+// covers that.
 
 /** This release as production runs it: the worker polls, and there is no chat list any more. */
 export const THIS_RELEASE: StackConfig = { release: 'current', poller: 'worker', chats: null };
-
-export async function handoffOfOldRequests(newChat: () => string, events: string[]): Promise<{ extra: InvariantResult[]; deploy: DeployReport }> {
-  const out: InvariantResult[] = [];
-  const chat = { A: newChat(), B: newChat(), C: newChat(), D: newChat(), E: newChat(), F: newChat(), G: newChat() };
-  events.push(`chats ${JSON.stringify(chat)}; the previous release, Core polls, HAWA_LIFECYCLE_CHATS empty`);
-  const beforeSwitch: Record<string, number[]> = {};
-  const note = (c: string, id: number) => (beforeSwitch[c] ??= []).push(id);
-
-  // --- Old configuration: five requests in five states -----------------------------------------------
-  // D: delivered.
-  const taskD = await briefToDraft(chat.D, 'R10.H1.D');
-  if ((await approve(taskD)).status >= 300) throw new Error('approval of D refused');
-  if ((await deliver(taskD)).status >= 300) throw new Error('delivery of D refused');
-  await waitDelivered(chat.D, taskD);
-  events.push(`D ${taskD}: delivered before the switch (${await taskState(taskD)})`);
-  // G: the control. The same delivered request, and the follow-ups D makes after the switch, made now
-  // under the old configuration: what legacy intake did with them is what D must get afterwards.
-  const taskG = await briefToDraft(chat.G, 'R10.H1.G');
-  if ((await approve(taskG)).status >= 300 || (await deliver(taskG)).status >= 300) throw new Error('G was not delivered');
-  await waitDelivered(chat.G, taskG);
-  const controlThanks = await followUp(chat.G, taskG, () => send(textUpdate(chat.G, 'Thank you, we received the files.')));
-  const photoOf = async (c: string) => {
-    const fileId = `r10-photo-${c}`;
-    await fakes.file({ file_id: fileId, size: 2048, mime: 'image/jpeg' });
-    const doc = (await sentTo(c)).filter((s) => s.method === 'sendDocument').pop();
-    if (!doc) throw new Error(`chat ${c} has no delivered file to reply to`);
-    return { fileId, update: () => send(photoReply(c, fileId, 2048, 'Please use this photo as the background and keep the text', doc)) };
-  };
-  const photoG = await photoOf(chat.G);
-  const controlPhoto = await followUp(chat.G, taskG, photoG.update);
-  events.push(`G ${taskG} (control, old configuration): thanks ${JSON.stringify(controlThanks)}; photo reply ${JSON.stringify(controlPhoto)}`);
-  // C: approved, not delivered.
-  const taskC = await briefToDraft(chat.C, 'R10.H1.C');
-  if ((await approve(taskC)).status >= 300) throw new Error('approval of C refused');
-  events.push(`C ${taskC}: approved before the switch (${await taskState(taskC)})`);
-  // B: draft ready; the requester pressed "Change something" and has the prompt to answer.
-  const taskB = await briefToDraft(chat.B, 'R10.H1.B');
-  let seq = await lastSeq(chat.B);
-  note('B', await send(buttonPress(chat.B, await legacyDraft(chat.B, taskB), `rq:chg:${taskB}`)));
-  const promptB = await waitForMessage(chat.B, 'the change prompt', (s) => /What should change/i.test(s.fullText ?? ''), seq);
-  events.push(`B ${taskB}: draft in review, the requester has the change prompt (message ${promptB.messageId})`);
-  // E: draft ready; the requester replied without a change and was asked a question.
-  const taskE = await briefToDraft(chat.E, 'R10.H1.E');
-  seq = await lastSeq(chat.E);
-  note('E', await send(textReply(chat.E, 'I showed it to the committee', await legacyDraft(chat.E, taskE))));
-  const questionE = await waitForMessage(chat.E, 'the clarification question', (s) => /Clarification needed/i.test(s.fullText ?? ''), seq);
-  events.push(`E ${taskE}: the requester has an open question (message ${questionE.messageId})`);
-  // A: waiting for its draft; the design is held on the old worker colour across the switch.
-  await fakes.hold('worker.step.after-action', { step: 'canva-read-binding' }, 1);
-  const briefA = textUpdate(chat.A, briefText('R10.H1.A'));
-  note('A', await send(briefA));
-  const heldA = await fakes.wait('worker.step.after-action', 240_000);
-  const [taskA] = await waitUntil('the task of A', async () => { const t = await tasksOfChat(chat.A); return t.length ? t : null; });
-  events.push(`A ${taskA.id}: design held on ${heldA?.service} before its draft`);
-  const offsetBefore = await storedOffset();
-
-  // --- This release deployed (deploy.sh, ADR-129) --------------------------------------------------
-  // This release's Core never polls, and the previous release's colour, created with `core`, does not
-  // either: an update sent during the deploy waits in Telegram for the new colour and is read once.
-  let windowUpdate = 0;
-  let windowThanks: FollowUp | null = null;
-  const deploy = await deployConfig(THIS_RELEASE, {
-    afterRegister: async () => {
-      windowThanks = await followUp(chat.D, taskD, () => send(textUpdate(chat.D, 'Thank you, we received the files.')));
-      windowUpdate = windowThanks.update;
-      events.push(`D: update ${windowUpdate} sent during the deploy: ${JSON.stringify(windowThanks)}`);
-    },
-    // A's design, pinned to the old colour, finishes there; the drain waits for it.
-    beforeDrain: async () => { await fakes.release(); },
-  });
-  events.push(...deploy.steps.map((s) => `deploy: ${s}`));
-  out.push({ name: 'deploy: the new colour registered and the old one drained and removed', ok: deploy.register.code === 0 && deploy.removed.includes(deploy.live),
-    detail: `idle=${deploy.idle} live=${deploy.live} removed=${deploy.removed.join(',')} drains=${deploy.drains.lines.join(' ')}` });
-  out.push({ name: 'deploy: the offset only moved forward', ok: (await storedOffset()) >= offsetBefore, detail: `before=${offsetBefore} after=${await storedOffset()}` });
-
-  // --- Continue every old request under the new configuration -----------------------------------------
-  // A: the draft arrives from the old colour; the requester approves with the button; the office
-  // approves and delivers; Core delivers (pinned core).
-  await step('A (was waiting for a draft)', events, out, async () => {
-    const [wf] = await restateQuery<{ status: string; deployment: string | null }>(`SELECT status, pinned_deployment_id AS deployment FROM sys_invocation
-      WHERE target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${taskA.id}'`);
-    await waitUntil('the draft of A', async () => (await taskState(taskA.id)) === 'human_review' &&
-      (await sentTo(chat.A)).some((s) => JSON.stringify(s.replyMarkup ?? '').includes(`rq:ok:${taskA.id}`)), 240_000, 2000);
-    const seqA = await lastSeq(chat.A);
-    const press = await send(buttonPress(chat.A, await legacyDraft(chat.A, taskA.id), `rq:ok:${taskA.id}`));
-    const thanks = await waitForMessage(chat.A, 'the requester approval answer', (s) => /you approved this design/i.test(s.fullText ?? ''), seqA);
-    events.push(`A: button press ${press} answered (message ${thanks.messageId})`);
-    const approved = await approve(taskA.id);
-    const delivered = await deliver(taskA.id);
-    events.push(`A: office approve HTTP ${approved.status}, deliver HTTP ${delivered.status} executor ${delivered.body?.executor ?? 'core'}`);
-    await waitDelivered(chat.A, taskA.id, 240_000);
-    const pubs = await publicationsOf(taskA.id);
-    return [
-      { name: 'A: the held design finished on the colour it started on', ok: wf?.status === 'completed', detail: JSON.stringify(wf) },
-      { name: 'A: Core delivered it (pinned core), complete', ok: (await pinOf(taskA.id)) === 'core' && pubs.length === 1 && pubs[0].executor === 'core' && pubs[0].state === 'complete', detail: JSON.stringify(pubs) },
-      { name: 'A: no lifecycle request in the chat', ok: (await requestsOf(chat.A)).length === 0, detail: JSON.stringify(await requestsOf(chat.A)) },
-      ...(await updateChecks('A', chat.A, [press])),
-      ...(await chatChecks('A', chat.A)),
-    ];
-  });
-
-  // B: the requester answers the change prompt with a Telegram reply; legacy intake owns the task.
-  await step('B (draft in review, change prompt open)', events, out, async () => {
-    const seqB = await lastSeq(chat.B);
-    const reply = await send(textReply(chat.B, 'Please change the venue to Rotana Hotel, Erbil', promptB));
-    await waitUntil('an answer to B\'s change', async () => (await sentTo(chat.B)).some((s) => s.seq > seqB), 180_000, 1000);
-    const children = await waitUntil('a revision of B, or its absence settled', async () => {
-      const c = await childrenOf(taskB);
-      return c.length ? c : (await chatInboxInvocations(chat.B)).some((i) => i.idempotency_key === `tg-${reply}` && i.status === 'completed') ? [] : null;
-    }, 180_000, 2000);
-    const answer = (await sentTo(chat.B)).filter((s) => s.seq > seqB).map((s) => (s.fullText ?? '').slice(0, 80));
-    events.push(`B: reply ${reply} → children ${JSON.stringify(children)}; answers ${JSON.stringify(answer)}`);
-    return [
-      { name: 'B: the reply became one revision of B, pinned core', ok: children.length === 1 && children[0].pin === 'core', detail: JSON.stringify(children) },
-      { name: 'B: no lifecycle request in the chat', ok: (await requestsOf(chat.B)).length === 0, detail: JSON.stringify(await requestsOf(chat.B)) },
-      ...(await updateChecks('B', chat.B, [reply])),
-      ...(await chatChecks('B', chat.B)),
-    ];
-  });
-
-  // C: approved before the switch; the office delivers after it. Core delivers (ADR-052).
-  await step('C (approved, not delivered)', events, out, async () => {
-    const delivered = await deliver(taskC);
-    events.push(`C: deliver HTTP ${delivered.status} executor ${delivered.body?.executor ?? 'core'}`);
-    await waitDelivered(chat.C, taskC, 240_000);
-    const pubs = await publicationsOf(taskC);
-    const workflows = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_name = 'Delivery' AND target_service_key LIKE 'dl-${taskC}-%'`);
-    const files = (await fakes.driveFiles()).filter((f: any) => f.properties?.taskId === taskC);
-    const [pin] = await query<{ n: number | null }>(sql`SELECT jsonb_array_length(decision_payload->'pinnedExports') AS n
-      FROM hawa.approvals WHERE task_id = ${taskC}::uuid AND decision = 'approved' ORDER BY created_at DESC LIMIT 1`);
-    const docs = (await sentTo(chat.C)).filter((s) => s.method === 'sendDocument');
-    return [
-      { name: 'C: Core delivered it after the switch (pinned core), complete, each pinned file once', ok: pubs.length === 1 && pubs[0].executor === 'core' &&
-        pubs[0].state === 'complete' && Number(workflows[0]?.n ?? 0) === 0 && files.length === Number(pin?.n ?? 1) && new Set(docs.map((d) => d.documentSha256)).size === docs.length,
-        detail: JSON.stringify({ pubs, deliveryWorkflows: workflows[0]?.n, driveFiles: files.length, pinned: pin?.n, documents: docs.length }) },
-      ...(await chatChecks('C', chat.C)),
-    ];
-  });
-
-  // D: delivered before the deploy; the requester thanked the office during it (above) and now replies
-  // to the delivered file with a photo. The previous release read the thanks as a new brief (G, the
-  // control, made a task of it); since ADR-140 it is an acknowledgement: no request, thanked back. The photo
-  // asked for a change to a finished legacy design: before ADR-135 (G, the control) that was a paid
-  // revision on the old path; since, the old intake starts no new work and the requester is asked for
-  // /new (ADR-135, "Consequences").
-  await step('D (delivered, then a follow-up and a photo reply)', events, out, async () => {
-    const photoD = await photoOf(chat.D);
-    const photo = await followUp(chat.D, taskD, photoD.update);
-    const downloads = ((await fakes.polls()).downloads ?? []).filter((id: string) => id === photoD.fileId);
-    const askedForNew = (await sentTo(chat.D)).some((s) => /Please send \/new followed by/i.test(s.fullText ?? s.text ?? ''));
-    events.push(`D: photo reply ${JSON.stringify(photo)}; downloads ${downloads.length}; control ${JSON.stringify(controlPhoto)}`);
-    return [
-      ...(windowThanks ? [{ name: 'D thanks (sent during the deploy): starts nothing and is thanked back (ADR-140)',
-        ok: (windowThanks as FollowUp).newTasks === 0 && (windowThanks as FollowUp).children === 0 &&
-          (windowThanks as FollowUp).answers.some((a) => /^🙏 Thank you\.$/u.test(a)) &&
-          !(windowThanks as FollowUp).answers.some((a) => /Request received|Brief received|art director/i.test(a)),
-        detail: `after=${JSON.stringify(windowThanks)} control (previous release)=${JSON.stringify(controlThanks)}` }] : []),
-      { name: 'D photo reply: a change to a finished legacy design starts nothing and asks for /new (ADR-135)',
-        ok: photo.newTasks === 0 && photo.children === 0 && askedForNew, detail: JSON.stringify({ photo, askedForNew }) },
-      { name: 'D: the photo was downloaded at most once', ok: downloads.length <= 1, detail: `downloads=${downloads.length}` },
-      // Neither the thanks (ADR-140) nor the photo reply (ADR-135) opens a lifecycle request.
-      { name: 'D: no lifecycle request in the chat', ok: (await requestsOf(chat.D)).length === 0,
-        detail: JSON.stringify(await requestsOf(chat.D)) },
-      ...(await updateChecks('D', chat.D, [photo.update, ...(windowUpdate ? [windowUpdate] : [])])),
-      ...(await chatChecks('D', chat.D, ['/new required'])),
-    ];
-  });
-
-  // E: the requester answers the open question with a reply to it.
-  await step('E (open requester question)', events, out, async () => {
-    const seqE = await lastSeq(chat.E);
-    const answer = await send(textReply(chat.E, 'revise', questionE));
-    await waitUntil('an answer to E', async () => (await sentTo(chat.E)).some((s) => s.seq > seqE) ||
-      (await chatInboxInvocations(chat.E)).some((i) => i.idempotency_key === `tg-${answer}` && i.status === 'completed'), 180_000, 1000);
-    await sleep(5000);
-    const said = (await sentTo(chat.E)).filter((s) => s.seq > seqE).map((s) => (s.fullText ?? '').slice(0, 100));
-    const children = await childrenOf(taskE);
-    events.push(`E: answer ${answer} → children ${JSON.stringify(children)}; answers ${JSON.stringify(said)}`);
-    return [
-      { name: 'E: the answer reached legacy intake and was answered', ok: said.length >= 1, detail: JSON.stringify(said) },
-      { name: 'E: no lifecycle request in the chat', ok: (await requestsOf(chat.E)).length === 0, detail: JSON.stringify(await requestsOf(chat.E)) },
-      ...(await updateChecks('E', chat.E, [answer])),
-      ...(await chatChecks('E', chat.E)),
-    ];
-  });
-
-  // New requests. F: a chat with no history opens a lifecycle request at once. D: /new opens one in a
-  // chat with Core history. B: an ordinary brief next to an open recent Core design goes to the old
-  // intake (it could be a change to that design), which since ADR-135 continues that design or asks
-  // for /new, never a new Core task; once that history is older than legacy intake's own 48-hour
-  // reading window, an ordinary brief opens a lifecycle request (ADR-136). C: next to a finished
-  // recent Core design an ordinary brief opens a lifecycle request at once (ADR-135).
-  await step('F (new chat after the deploy)', events, out, async () => {
-    const brief = await send(textUpdate(chat.F, briefText('R10.H1.F')));
-    const taskF = await briefToDraftSent(chat.F);
-    const approved = await approve(taskF, { pinDeck: true });
-    const delivered = await deliver(taskF);
-    events.push(`F ${taskF}: approve HTTP ${approved.status}, deliver HTTP ${delivered.status} executor ${delivered.body?.executor}`);
-    await waitDelivered(chat.F, taskF, 300_000, 2);
-    const requests = await requestsOf(chat.F);
-    const pubs = await publicationsOf(taskF);
-    return [
-      { name: 'F: a new chat opens a lifecycle request that Restate delivers', ok: requests.length === 1 && requests[0].owner === 'restate' &&
-        (await pinOf(taskF)) === 'restate' && pubs.length === 1 && pubs[0].executor === 'restate' && pubs[0].state === 'complete', detail: JSON.stringify({ requests, pubs }) },
-      ...(await updateChecks('F', chat.F, [brief])),
-      ...(await chatChecks('F', chat.F)),
-    ];
-  });
-
-  await step('D /new (explicit new request in a chat with Core history)', events, out, async () => {
-    const before = (await requestsOf(chat.D)).length;
-    const update = await send(textUpdate(chat.D, `/new ${briefText('R10.H1.D-new')}`));
-    const request = await waitUntil('the /new request of D', async () => (await requestsOf(chat.D))[before] ?? null, 180_000, 2000);
-    return [
-      { name: 'D: /new opens a lifecycle request in a chat with Core history', ok: request.owner === 'restate', detail: JSON.stringify(request) },
-      ...(await updateChecks('D /new', chat.D, [update])),
-    ];
-  });
-
-  await step('C new brief (a finished recent Core design)', events, out, async () => {
-    const brief = await send(textUpdate(chat.C, briefText('R10.H1.C-new')));
-    const request = await waitUntil('the lifecycle request of C', async () => (await requestsOf(chat.C))[0] ?? null, 180_000, 2000);
-    return [
-      { name: 'C: next to a finished recent Core design an ordinary brief opens a lifecycle request', ok: request.owner === 'restate', detail: JSON.stringify(request) },
-      ...(await updateChecks('C new brief', chat.C, [brief])),
-    ];
-  });
-
-  await step('B new brief (an open recent Core design, then older than 48 h)', events, out, async () => {
-    const before = await tasksOfChat(chat.B);
-    const recent = await send(textUpdate(chat.B, briefText('R10.H1.B-recent')));
-    await waitUntil('B\'s recent-history brief to be handled', async () =>
-      (await chatInboxInvocations(chat.B)).some((i) => i.idempotency_key === `tg-${recent}` && i.status === 'completed'), 180_000, 1000);
-    await sleep(3000);
-    const afterRecent = await requestsOf(chat.B);
-    const newTasks = (await tasksOfChat(chat.B)).filter((t) => !before.some((b) => b.id === t.id));
-    const newChildren = await query<{ id: string; parent: string | null }>(sql`SELECT t.id::text, o.payload->'studioOptions'->>'parentTaskId' AS parent
-      FROM hawa.tasks t JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
-      WHERE t.id = ANY(${newTasks.map((t) => t.id)}::uuid[])`);
-    const askedForNew = (await sentTo(chat.B)).some((s) => /Please send \/new followed by/i.test(s.fullText ?? s.text ?? ''));
-    // Age the chat's Core history past legacy intake's reading window (the chaos database only).
-    await query(sql`UPDATE hawa.tasks SET created_at = created_at - interval '3 days'
-      WHERE id IN (SELECT aggregate_id FROM hawa.outbox_commands WHERE command_type = 'task.created' AND payload->>'sourceChannelId' = ${chat.B})`);
-    const old = await send(textUpdate(chat.B, briefText('R10.H1.B-old')));
-    await waitUntil('B\'s aged-history brief to be handled', async () =>
-      (await chatInboxInvocations(chat.B)).some((i) => i.idempotency_key === `tg-${old}` && i.status === 'completed'), 180_000, 1000);
-    await sleep(3000);
-    const afterOld = await requestsOf(chat.B);
-    events.push(`B: recent brief ${recent} → requests ${afterRecent.length}, new tasks ${JSON.stringify(newChildren)}, asked for /new ${askedForNew}; aged brief ${old} → requests ${afterOld.length}`);
-    return [
-      { name: 'B: a brief next to an open recent Core design goes to the old intake, which starts no new Core request', ok: afterRecent.length === 0 &&
-        newChildren.every((t) => t.parent !== null && before.some((b) => b.id === t.parent)) && (newChildren.length > 0 || askedForNew),
-        detail: JSON.stringify({ requests: afterRecent, newTasks: newChildren, askedForNew }) },
-      { name: 'B: once the Core history is older than 48 h, an ordinary brief opens a lifecycle request', ok: afterOld.length === 1 && afterOld[0].owner === 'restate',
-        detail: JSON.stringify(afterOld) },
-      ...(await updateChecks('B new briefs', chat.B, [recent, old])),
-    ];
-  });
-
-  // Only B and D were asked for /new (a brief beside an open Core design; a change to a finished one).
-  for (const [name, c] of Object.entries(chat)) out.push(...(await chatChecks(`${name} (whole chat)`, c, ['B', 'D'].includes(name) ? ['/new required'] : [])));
-  for (const [name, c] of Object.entries(chat)) events.push(await chatSummary(name, c));
-  out.push({ name: 'the stored offset passed every update', ok: (await storedOffset()) >= Math.max(...Object.values(beforeSwitch).flat(), windowUpdate),
-    detail: `offset=${await storedOffset()}` });
-  return { extra: out, deploy };
-}
 
 /** A request's first draft reached review (legacy draft with buttons, or a lifecycle request in review). */
 async function briefToDraftSent(chat: string): Promise<string> {

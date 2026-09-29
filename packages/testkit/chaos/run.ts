@@ -10,7 +10,7 @@
  *   npx tsx packages/testkit/chaos/run.ts --poller worker # the worker polls Telegram (the only poller since ADR-135)
  *   npx tsx packages/testkit/chaos/run.ts --seed-dump infra/backup/snapshots/predeploy_<stamp>.dump
  *                                        # on a copy of production's data (driver/seed.ts, ADR-137)
- *   npx tsx packages/testkit/chaos/run.ts --only R10.H1,R10.K1,R10.K2 [--previous-release <commit>]
+ *   npx tsx packages/testkit/chaos/run.ts --only R10.K1,R10.K2 [--previous-release <commit>]
  *                                        # old requests after this release's deploy, and rolling it back
  *                                        # to the previous release (default: RELEASE_MANIFEST.json's build)
  *

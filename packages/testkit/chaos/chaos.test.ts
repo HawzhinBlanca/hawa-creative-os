@@ -26,7 +26,7 @@ import { acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fak
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import { neutralise, restoreDump, verifyEgressFence, type EgressProbe, type NeutraliseReport, type SeedReport } from './driver/seed.js';
 import { buildPreviousRelease, startOnRelease } from './driver/cutover.js';
-import { handoffOfOldRequests, retiredSettingsIgnored, rollbackToPreviousRelease } from './driver/cutover-scenarios.js';
+import { retiredSettingsIgnored, rollbackToPreviousRelease } from './driver/cutover-scenarios.js';
 import {
   approve, briefToDraft, captionedPhotoUpdate, RequestEndedError, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
   OFFICE_CHAT, sendToChatInbox, sentTo, sleep, staffConfirmVisible, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
@@ -47,9 +47,9 @@ let seeded: { restore: SeedReport; upgrade: { applied: string[]; verified: numbe
 // Set once this run holds the project's lock; a run that never got it must not touch the project.
 let owned = false;
 const LOCK_WAIT_MS = 3 * 60 * 60_000;
-// R10 (driver/cutover-scenarios.ts) starts on the previous release, which only a run that selects it
-// builds (run.ts --only R10.H1,R10.K1,R10.K2): the stack then starts on that release, as production.
-const r10 = ['R10.H1', 'R10.K1', 'R10.K2'].some((n) => only.includes(n));
+// R10 (driver/cutover-scenarios.ts) deploys the previous release, which only a run that selects it
+// builds (run.ts --only R10.K1,R10.K2).
+const r10 = ['R10.K1', 'R10.K2'].some((n) => only.includes(n));
 if (r10 && only.some((n) => !n.startsWith('R10.'))) throw new Error('R10 scenarios run alone (they deploy releases on the stack)');
 
 interface ScenarioReport {
@@ -184,9 +184,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     }
     await connectCanva();
     await kaaeClientDna();
-    // R10.H1 makes its old requests the way production made them: the previous release, Core polling
-    // and no chat on the lifecycle (the configuration before 2026-09-28).
-    if (r10) startOnRelease({ release: 'previous', poller: 'core', chats: '' });
+    // R10 starts on this release as production runs it (R10.H1, which started on a Core-polling
+    // release, went with stage 2 of ADR-135).
+    if (r10) startOnRelease({ release: 'current', poller: 'worker', chats: null });
     up({ build: false, services: ['core', 'worker-blue'] });
     if (seeded) {
       // Refuse to run a scenario on production's data unless the fence holds from inside the apps.
@@ -1086,15 +1086,10 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     ] };
   }, 20 * 60_000);
 
-  // R10 (driver/cutover-scenarios.ts): the requests made before the lifecycle cutover, and what rolling
-  // back means since ADR-135 (the previous release, never Core's poller). Run alone, in this order:
-  //   run.ts --only R10.H1,R10.K1,R10.K2
-  // The stack starts on the previous release with Core polling and no chat on the lifecycle.
-  scenario('R10.H1', 'requests made on the previous release while Core polled, continued after the deploy of this release', async (_chat, events) => {
-    const { extra } = await handoffOfOldRequests(newChat, events);
-    return { delivered: false, skipRequestChecks: true, extra };
-  }, 75 * 60_000);
-
+  // R10 (driver/cutover-scenarios.ts): what rolling back means since ADR-135 (the previous release,
+  // never Core's poller). Run alone, in this order:
+  //   run.ts --only R10.K1,R10.K2
+  // R10.H1 (old-intake requests continued after the deploy) went with stage 2 of ADR-135.
   scenario('R10.K1', 'lifecycle requests in flight, this release rolled back to the previous one by a deploy, then forward again', async (_chat, events) => {
     const { extra } = await rollbackToPreviousRelease(newChat, events);
     return { delivered: false, skipRequestChecks: true, extra };
