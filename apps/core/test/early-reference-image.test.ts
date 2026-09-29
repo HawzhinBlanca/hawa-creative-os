@@ -136,6 +136,10 @@ describe.skipIf(!url)('a reference image sent before the request', () => {
     });
     expect(await (service() as any).attachedImage(scope, taskId)).toBe(photo);
     // A photo belongs to the nearest request in time: a later, different request does not take it.
+    // The later request must come later than the photo came after its own: on a slow CI runner the
+    // first brief's transaction took longer than the gap to the next insert, and the photo went to
+    // the later request (studio-v2 CI, 2026-09-29).
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     const later = await brief(channel, different);
     expect(await (service() as any).attachedImage(scope, taskId)).toBe(photo);
     expect(await (service() as any).attachedImage(scope, later)).toBeUndefined();
