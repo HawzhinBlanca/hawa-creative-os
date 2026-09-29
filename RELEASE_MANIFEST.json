@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-29T23:54:41+03:00",
+  "generatedAt": "2026-09-30T00:13:26+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "b075fbbb6d3142d3328209b4dfd98a777d7183f8",
+    "commit": "15e8756e74bb7e1b376fa35286d3fc53eec01539",
     "treeClean": true,
-    "commitTimestamp": "2026-09-29T23:54:41+03:00",
+    "commitTimestamp": "2026-09-30T00:13:26+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
-    "targetVersion": "068_requester_intent_calls",
-    "latestMigrationFile": "068_requester_intent_calls.sql",
-    "totalMigrations": 68
+    "targetVersion": "069_reviewed_candidate_feedback",
+    "latestMigrationFile": "069_reviewed_candidate_feedback.sql",
+    "totalMigrations": 69
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -48,7 +48,7 @@
       "service": "desk",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/desk/src/App.tsx": "8b119ea46f01d62f17b639c4c4861311b769eb07ee3bf60b2d5055f9faa21046",
+        "apps/desk/src/App.tsx": "6836ed5f6f8ae9ba5d22f65aa4285b0df954a895da34540201c26fdb4b5b9225",
         "apps/desk/src/main.tsx": "ee234aa0846b3baa9aed56ba633e50ff95f0d039343d052a8a7d7860feffa8c8"
       }
     },
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "8775d68a05a18cf6966505cdfbf10caf26041af8ed31a16270919e8aa636e01c"
+  "sha256": "6e27d5bfb785ba6449ed4e82ebcf0a9eba0b534844c20f75f8e4ad352c914357"
 }
