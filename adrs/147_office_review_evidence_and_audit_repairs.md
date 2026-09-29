@@ -114,3 +114,30 @@ regressions passed. Before deploying, a GET of the selected task from the active
 Docker worker with its configured service key returned 401; no credential or
 response body was copied into evidence. The same read and negative controls are
 required after deployment. This check does not dispatch or notify a requester.
+
+The deployed 44af7cc0 restores the real worker service-key GET (200) and keeps
+wrong/missing/internal-only task credentials at 401. Its live browser check
+exposed another boundary: the office's one-use SSE ticket carries a server-side
+marker, which normal presented-key verification refused. Only an actually
+redeemed ticket may use that marker, and it must still meet the office-origin
+policy; a bearer header with the marker is refused. Regression tests exercise
+issuance, redemption, replay, spoofed bearer and foreign-origin rejection.
+Desk now displays access loading while server policy is unknown, rather than
+flashing a sign-in form before the no-key office bootstrap resolves.
+
+The live task changed while auditing: its latest run now records transferred
+with three previews, while the task has no Canva binding and the account is
+unauthorized. This audit did not dispatch that run and does not qualify its
+provenance or native result. Desk requires the task binding before showing an
+editor action, and labels an unbound transfer as requiring reconciliation.
+A negative render check prevents the prior false native-document claim. Candidate
+score units vary between legacy critique and v3 deterministic paths, so the UI
+shows a recorded raw score without inventing a common /10 denominator.
+
+Final focused checks: office stream/negative controls 23 passed across three
+files; minimal entry/session/deep-link/transfer controls 42 passed across three
+files. The first loading approach broke session interaction checks (17 failures),
+and a subsequent wrapper was stopped when it stalled those checks. Both were
+removed. The final change uses SignIn's existing provider query and preserves
+expired-session behavior; failed and interrupted logs remain in the repair
+evidence directory. The next full gate must include this corrected source.

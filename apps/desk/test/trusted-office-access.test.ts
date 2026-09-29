@@ -41,3 +41,19 @@ it('continues to require sign-in when the server reports required mode', async (
   expect(view.text()).toContain('Authentication Required');
   expect(runtime.session.getState().status).toBe('signed_out');
 });
+
+
+it('shows access loading instead of requesting a key while office policy is unknown', async () => {
+  let answer: ((value:Response)=>void)|undefined;
+  stubCore(c => c.path === '/v1/auth/providers' ? new Promise<Response>(resolve=>{answer=resolve;})
+    : c.path === '/v1/auth/session' ? json({authenticated:true,user:{id:'office',role:'administrator',displayName:'Office team',authMethod:'trusted_office'}})
+    : c.path === '/v1/tasks' ? json({items:[],total:0}) : c.path === '/v1/clients' ? json([]) : undefined);
+  runtime=createDeskRuntime({stream:new FakeStream()});
+  view=await mount(React.createElement(DeskProviders,{runtime,children:React.createElement(App)}));
+  expect(view.text()).toContain('Checking office access…');
+  expect(view.text()).not.toContain('Authentication Required');
+  await React.act(async()=>{answer!(json({trustedOffice:true,googleWorkspace:false}));});
+  await advance(500);
+  expect(view.text()).toContain('Office team');
+  expect(view.text()).not.toContain('Authentication Required');
+});

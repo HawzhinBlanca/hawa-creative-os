@@ -88,3 +88,24 @@ it('refuses accidental public access configuration and unknown modes', () => {
   expect(() => validateOfficeBind(local,'0.0.0.0')).toThrow();
   expect(() => validateOfficeBind(local,'127.0.0.1')).not.toThrow();
 });
+
+
+it('redeems the office stream ticket once without accepting its marker as a bearer key', async () => {
+  const app=createApp({db});
+  const issued=await app.request(origin+'/v1/auth/stream-ticket',{method:'POST',headers:{'X-Hawa-Office-Request':'1'}});
+  const {ticket}=await issued.json();
+  const stream=await app.request(origin+'/v1/events/stream?ticket='+encodeURIComponent(ticket));
+  expect(stream.status).toBe(200);
+  expect(stream.headers.get('content-type')).toContain('text/event-stream');
+  await stream.body?.cancel();
+  expect((await app.request(origin+'/v1/events/stream?ticket='+encodeURIComponent(ticket))).status).toBe(401);
+  expect((await app.request(origin+'/v1/tasks',{headers:{Authorization:'Bearer hawa_trusted_office'}})).status).toBe(401);
+});
+
+it('keeps an office ticket bound to the permitted office origin', async () => {
+  const app=createApp({db});
+  const issued=await app.request(origin+'/v1/auth/stream-ticket',{method:'POST',headers:{'X-Hawa-Office-Request':'1'}});
+  const {ticket}=await issued.json();
+  const stream=await app.request(origin+'/v1/events/stream?ticket='+encodeURIComponent(ticket),{headers:{Origin:'https://outside.example'}});
+  expect(stream.status).toBe(401);
+});

@@ -22,6 +22,12 @@ export const SignIn: React.FC<{ reason: string | null }> = ({ reason }) => {
     },
   });
 
+  // Initial office policy is still being read. An expired session retains its
+  // existing sign-in/recovery behavior; no provider observer is added here.
+  if (!reason && (providers.isPending || providers.data?.trustedOffice)) {
+    return <p role="status">Checking office access…</p>;
+  }
+
   return (
     <div className="auth-prompt-card" role="region" aria-label="Sign In Required">
       <span style={{ fontSize: 24 }}>🔒</span>

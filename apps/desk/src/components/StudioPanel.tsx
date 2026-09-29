@@ -650,12 +650,12 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
               }}
             >
               <div>
-                <strong>✓ Transferred to Canva</strong>
+                <strong>{hasCanvaBinding ? 'Linked Canva design available' : 'Transfer record needs reconciliation'}</strong>
                 <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#BBF7D0' }}>
-                  OpenXML/PPTX package transferred into native Canva document.
+                  {hasCanvaBinding ? 'Open the linked design and capture fresh review evidence before approval.' : 'This run records a transfer, but the task has no linked Canva design. Check the recorded transfer before claiming a native design is ready.'}
                 </p>
               </div>
-              {onOpenCanva && (
+              {onOpenCanva && hasCanvaBinding && (
                 <button
                   type="button"
                   onClick={onOpenCanva}
@@ -753,7 +753,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                             color: cand.score >= 8.5 ? 'var(--ok-text, #4ADE80)' : 'var(--warn-text, #FBBF24)',
                           }}
                         >
-                          Score: {cand.score.toFixed(1)} / 10
+                          Recorded score: {cand.score.toFixed(2)}
                         </span>
                       )}
 

@@ -451,7 +451,9 @@ export function createApp(options?: CreateAppOptions) {
       if (presented && workerTokens.some(token => secretsEqual(presented, token))) {
         return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
       }
-      if (!presented) {
+      // Only a successfully redeemed one-use ticket supplies this marker. A header
+      // containing the same text is still a presented key and must be verified.
+      if (!presented || ticketCredential === 'hawa_trusted_office') {
         if (!permitsOfficeRequest(officeAccess, c.req)) {
           return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
         }

@@ -46,8 +46,18 @@ it('replays the original review across an uncertain response and remount',async(
 it('opens a transferred design through the authenticated task editor action',async()=>{
   vi.spyOn(apiClient.studio,'getRun').mockResolvedValue({run:{id:'run',taskId:'task',status:'transferred',tier:'standard',planId:'plan'},candidates:[],calls:[]});
   const open=vi.fn();
-  const view=await mount(React.createElement(StudioPanel,{taskId:'task',taskStatus:'OPERATOR_REQUIRED',initialRunId:'run',onOpenCanva:open}));
+  const view=await mount(React.createElement(StudioPanel,{taskId:'task',taskStatus:'OPERATOR_REQUIRED',initialRunId:'run',hasCanvaBinding:true,onOpenCanva:open}));
   const button=Array.from(view.container.querySelectorAll('button')).find(b=>b.textContent?.includes('Open Canva Editor'))!;
   expect(button).toBeDefined();expect(view.container.querySelector('a[href*="/canva/editor"]')).toBeNull();
   await click(button);expect(open).toHaveBeenCalledOnce();await view.unmount();
+});
+
+
+it('does not claim native transfer success or open an editor without a linked design',async()=>{
+  vi.spyOn(apiClient.studio,'getRun').mockResolvedValue({run:{id:'run',taskId:'task',status:'transferred',tier:'standard',planId:'plan'},candidates:[],calls:[]});
+  const view=await mount(React.createElement(StudioPanel,{taskId:'task',taskStatus:'RECEIVED',initialRunId:'run',hasCanvaBinding:false,onOpenCanva:vi.fn()}));
+  expect(view.text()).toContain('Transfer record needs reconciliation');
+  expect(view.text()).not.toContain('native Canva document');
+  expect(Array.from(view.container.querySelectorAll('button')).some(b=>b.textContent?.includes('Open Canva Editor'))).toBe(false);
+  await view.unmount();
 });
