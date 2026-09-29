@@ -1,8 +1,12 @@
-/** Durable album collection. A requester confirmation freezes the complete selected input set. */
+/**
+ * Durable album collection. The settled album (ADR-143), a natural brief, or a compatible
+ * confirmation freezes the complete selected input set.
+ */
 import { createHash } from 'node:crypto';
 import { parseLifecycleAlbumRef, type BlobRef, type LifecycleAlbumRef } from '@hawa/contracts';
 import { sql, type Database, type Kysely, type BlobStore } from '@hawa/db';
 import { lifecycleStillImageFile, retainLifecyclePhoto } from './lifecycle-photo.js';
+import { classifyWithHeuristics, isSoraniText } from './telegram-classifier.js';
 
 type Update = { update_id: number; [key: string]: unknown };
 type Message = Record<string, unknown>;
@@ -18,7 +22,8 @@ const record = (value: unknown): Message | null => value && typeof value === 'ob
 const positiveId = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0 ? String(value) : null;
 
 export class AlbumConflict extends Error {}
-export interface AlbumMessage { status: number; message: string; noticeKey: string }
+/** `settle`: the photo was saved; the caller schedules the album's settle instead of sending a message. */
+export interface AlbumMessage { status: number; message: string; noticeKey: string; settle?: true }
 export interface AlbumSnapshot { ref: LifecycleAlbumRef; update: Update; chatId: string }
 export const normalizedAlbumUpdate = (snapshot: AlbumSnapshot): Update => JSON.parse(canonical(snapshot.update));
 
@@ -110,11 +115,15 @@ export async function verifyAlbumSnapshot(trx: Tx, tenant: string, ref: Lifecycl
   // JSONB reorders object keys. Compare the ordered image fields, not incidental serialization.
   return snap;
 }
+/**
+ * A saved photo says nothing to the requester: the album settles once no photo has arrived for a
+ * quiet period (ADR-143), and then starts the design or asks what to design. Only a refused photo
+ * is answered at once.
+ */
 export function partReply(part: Part): AlbumMessage {
   return part.error
     ? { status: 422, message: part.error, noticeKey: `album-error:${part.source.update_id}` }
-    : { status: 202, message: 'Album photos are being saved. After every photo has finished sending, reply to any photo in this album with /use_album. No design has started yet.',
-      noticeKey: `album-received:${part.groupKey}` };
+    : { status: 202, message: '', noticeKey: `album-received:${part.groupKey}`, settle: true };
 }
 
 /** The caller supplies a tenant-scoped transaction runner, not a long transaction around Telegram. */
@@ -133,8 +142,10 @@ export async function retainAlbumPart(tx: <T>(fn: (trx: Tx) => Promise<T>) => Pr
     topic: String(msg.message_thread_id ?? ''), source: update, image: null };
   const check = async (trx: Tx): Promise<string | null> => {
     await lock(trx, tenant, groupKey);
+    // The design already started from the settled album; its task files are frozen (ADR-143).
     if (await event(trx, tenant, 'lifecycle_album_frozen', groupKey))
-      return 'This album was already submitted. This late photo was not added to the design. Send a new album or ask the office to revise the request.';
+      return ALBUM_TEXT.latePhoto[await replyLanguage(trx, tenant, chatId,
+        [typeof msg.caption === 'string' ? msg.caption : ''], record(msg.from)?.language_code)];
     const priorParts = (await parts(trx, tenant, groupKey)).filter((part) => part.source.update_id !== update.update_id);
     if (priorParts.some((part) => part.senderId !== senderId || part.topic !== base.topic))
       throw new AlbumConflict('Album parts must belong to one sender and topic.');
@@ -185,7 +196,8 @@ export async function confirmAlbum(trx: Tx, tenant: string, update: Update): Pro
     return result;
   };
   const refuse = (message: string) => finish({ status: 422, message, noticeKey: `album-confirm:${update.update_id}` });
-  if (!replyId) return refuse('Reply to a photo in the album with /use_album after all photos have finished sending.');
+  // A confirmation sent as a plain message is bound by bindTextToAlbum (ADR-143); never asked for.
+  if (!replyId) return refuse('I could not tell which photos you mean. Please send the photos again with what you would like designed.');
   const rows = (await sql<{ payload: Part }>`SELECT payload FROM hawa.inbox_events
     WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_album_part'
       AND payload->>'chatId' = ${chatId} AND payload->>'messageId' = ${replyId}`.execute(trx)).rows;
@@ -197,7 +209,7 @@ export async function confirmAlbum(trx: Tx, tenant: string, update: Update): Pro
     return refuse('This album was already submitted. Check the existing request; a second design was not started.');
   const selected = await parts(trx, tenant, groupKey);
   if (selected.length < 2 || selected.length > 10 || selected.some((part) => part.error || !part.image))
-    return refuse('The album needs two to ten successfully saved still photos. Wait for all files, or send a corrected album, then confirm again.');
+    return refuse('The album needs two to ten successfully saved still photos. Please send the photos again.');
   if (selected.some((part) => part.senderId !== senderId || part.topic !== topic))
     return refuse('The album scope is inconsistent. Ask the office to inspect it.');
   const messages = selected.map((part) => record(part.source.message)!);
@@ -206,7 +218,11 @@ export async function confirmAlbum(trx: Tx, tenant: string, update: Update): Pro
   if (replies.length > 1 || (replies.length === 1 && messages.some((message) => !record(message.reply_to_message))))
     return refuse('The album photos do not all reply to the same request. Send a new album with one clear request.');
   if (captions.length > 1) return refuse('Use one complete caption for the album. Multiple different captions need office review.');
-  if (!captions.length && !replies.length) return refuse('The album has no brief or request reply. Send a captioned album with the exact copy to use.');
+  if (!captions.length && !replies.length) {
+    // No brief: ask what to design (ADR-143); a later brief from this sender binds the album.
+    await markSettled(trx, tenant, groupKey, 'asked', update.update_id);
+    return finish(await albumQuestion(trx, tenant, chatId, groupKey, selected));
+  }
   const text = captions[0] || 'The requester attached an album with no written instructions. Use it as reference for the existing brief; do not infer or change factual copy from image text.';
   const normalized: Update = { update_id: update.update_id, message: {
     ...msg, text, ...(replies[0] ? { reply_to_message: { message_id: Number(replies[0]) } } : {}),
@@ -220,4 +236,483 @@ export async function confirmAlbum(trx: Tx, tenant: string, update: Update): Pro
   await save(trx, tenant, 'lifecycle_album_confirm', String(update.update_id), result, hash(update));
   await save(trx, tenant, 'lifecycle_album_frozen', groupKey, { updateId: update.update_id }, ref.sha256);
   return result;
+}
+
+// ---------------------------------------------------------------------------------------------
+// ADR-143: an album settles by itself, and the requester's own words bind a waiting album.
+//
+// Telegram delivers an album as separate updates with no expected total. A saved photo schedules a
+// settle (a durable Restate delayed call in ChatInbox); only the settle scheduled by the newest photo
+// acts, once no photo came for the quiet period. A caption or a brief sent next to the album starts
+// one request; an album with no words is asked about, so an accidental album starts no paid design.
+
+/** Every settle outcome is stored under its source update, so a replay answers the same way. */
+export type AlbumOutcome =
+  | { kind: 'none' }
+  | { kind: 'skip' }
+  | { kind: 'reply'; reply: AlbumMessage }
+  | { kind: 'snapshot'; snapshot: AlbumSnapshot };
+
+type Lang = 'en' | 'ckb';
+
+const envNumber = (name: string, fallback: number, min: number, max: number): number => {
+  const raw = process.env[name];
+  const value = raw === undefined || raw.trim() === '' ? NaN : Number(raw);
+  return Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
+};
+/** The quiet period after an album's newest photo before the album settles (HAWA_ALBUM_SETTLE_MS). */
+export const albumSettleMs = (): number => envNumber('HAWA_ALBUM_SETTLE_MS', 8000, 2000, 120_000);
+/** How long a text brief waits for photos sent right after it; 0 opens it at once (HAWA_BRIEF_PHOTO_WAIT_MS). */
+export const briefPhotoWaitMs = (): number => envNumber('HAWA_BRIEF_PHOTO_WAIT_MS', 15_000, 0, 120_000);
+/** How long an album with no brief accepts one from its sender. */
+const briefWindowMs = (): number => envNumber('HAWA_ALBUM_BRIEF_WINDOW_MINUTES', 120, 1, 7 * 24 * 60) * 60_000;
+/** How long an unsettled album is still settled by a sweep (the captioned album before ADR-143). */
+export const albumResumeMs = (): number => envNumber('HAWA_ALBUM_RESUME_HOURS', 72, 1, 14 * 24) * 3_600_000;
+/** A settle this long after the newest photo is a sweep or a lost timer, not the album's own settle. */
+const LATE_SETTLE_MS = 5 * 60_000;
+/** A held brief joins an album that started at most this long after it, and is never held longer. */
+const HELD_BRIEF_MS = 10 * 60_000;
+
+const REFERENCE_DIRECTIVE = 'The requester attached an album with no written instructions. Use it as reference for the existing brief; do not infer or change factual copy from image text.';
+const easternDigits = (n: number) => String(n).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
+
+/** What the requester is told, in English, or in Sorani when the chat writes Sorani. */
+export const ALBUM_TEXT = {
+  question: (count: number, lang: Lang): string => lang === 'ckb'
+    ? `${easternDigits(count)} وێنەکەتم پێگەیشت. دەتەوێت چ دیزاینێکیان پێ دروست بکەم؟ تکایە بۆم بنووسە بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن.`
+    : `I have your ${count} photos. What would you like me to design with them? Please tell me what it is for and the exact words to put on it.`,
+  followUp: {
+    en: 'Happy to. What should I design with these photos? Tell me what it is for and the exact words to put on it.',
+    ckb: 'بە دڵخۆشییەوە. چ دیزاینێک بەم وێنانە دروست بکەم؟ پێم بڵێ بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن.',
+  },
+  latePhoto: {
+    en: 'This photo arrived after I had started your design, so it is not part of it. When the draft is ready, reply to it with this photo and tell me what to change.',
+    ckb: 'ئەم وێنەیە دوای دەستپێکردنی دیزاینەکەت گەیشت، بۆیە بەشێک نییە لێی. کاتێک ڕەشنووسەکە ئامادە بوو، بەم وێنەیەوە وەڵامی بدەرەوە و بڵێ چی بگۆڕدرێت.',
+  },
+  photoMissing: {
+    en: 'One of your photos could not be saved, so I have not started a design. Please send the photos again.',
+    ckb: 'یەکێک لە وێنەکانت پاشەکەوت نەکرا، بۆیە هێشتا دیزاینم دەست پێنەکردووە. تکایە وێنەکان دووبارە بنێرەوە.',
+  },
+  onePhoto: {
+    en: 'I received only one photo from this album. Please send the photos again together with what you would like designed.',
+    ckb: 'تەنها یەک وێنەم لەم ئەلبومە پێگەیشت. تکایە وێنەکان دووبارە بنێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت.',
+  },
+  captions: {
+    en: 'Your photos came with different captions, so I am not sure which one is the brief. Please send the brief again as one message.',
+    ckb: 'وێنەکانت چەند نووسینێکی جیاوازیان لەگەڵ بوو، بۆیە نازانم کامیان داواکارییەکەیە. تکایە داواکارییەکە وەک یەک نامە دووبارە بنێرەوە.',
+  },
+  mixedReplies: {
+    en: 'Some of these photos reply to a different message than the others. Please send them again as one album with one brief.',
+    ckb: 'هەندێک لەم وێنانە وەڵامی نامەیەکی جیاوازن. تکایە وەک یەک ئەلبوم لەگەڵ یەک داواکاری دووبارە بیاننێرەوە.',
+  },
+  noAlbum: {
+    en: 'I could not find photos from you waiting in this chat. Please send the photos again with what you would like designed.',
+    ckb: 'هیچ وێنەیەکی چاوەڕوانکراوی تۆم لەم چاتەدا نەدۆزییەوە. تکایە وێنەکان دووبارە بنێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت.',
+  },
+} as const;
+
+/**
+ * The lifecycle answers in Sorani when the requester writes Sorani (the reply rule of
+ * telegram-intake/replies.ts). With no words of their own, the chat's newest brief decides, then the
+ * sender's Telegram language.
+ */
+export async function replyLanguage(trx: Tx, tenant: string, chatId: string, texts: string[],
+  languageCode?: unknown): Promise<Lang> {
+  const own = texts.map((text) => (typeof text === 'string' ? text.trim() : '')).filter(Boolean);
+  if (own.length) return own.some(isSoraniText) ? 'ckb' : 'en';
+  const last = (await sql<{ raw: string | null }>`SELECT payload->'draft'->>'rawText' AS raw FROM hawa.inbox_events
+    WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_chat_open' AND payload->>'chatId' = ${chatId}
+    ORDER BY received_at DESC LIMIT 1`.execute(trx)).rows[0]?.raw;
+  if (typeof last === 'string' && last.trim()) return isSoraniText(last) ? 'ckb' : 'en';
+  return typeof languageCode === 'string' && /^(?:ckb|ku)(?:$|[-_])/i.test(languageCode) ? 'ckb' : 'en';
+}
+
+const AFFIRM_CORE = new Set(['yes', 'yeah', 'yep', 'yup', 'ok', 'okay', 'sure', 'go', 'proceed', 'start', 'continue',
+  'use', 'confirm', 'confirmed', 'done', 'do', 'بەڵێ', 'ئەرێ', 'باشە', 'ئۆکەی', 'بەکاریان', 'بەکاری', 'بەکاربهێنە',
+  'دەست', 'پێبکە', 'بەردەوام', 'بەردەوامبە', 'تەواو']);
+const AFFIRM_FILLER = new Set(['please', 'the', 'these', 'those', 'them', 'it', 'all', 'photos', 'photo', 'pictures',
+  'images', 'pics', 'now', 'ahead', 'on', 'with', 'and', 'that', 'this', 'one', 'album', 'تکایە', 'ئەم', 'ئەو',
+  'ئەوانە', 'وێنانە', 'وێنەکان', 'هەموو', 'ئێستا', 'بە', 'و', 'بهێنە', 'پێ', 'بکە']);
+
+/** "yes", "go ahead", "use them", "بەڵێ" and the like: an OK to go on that says nothing about what to design. */
+export function isAffirmativeOnly(text: string): boolean {
+  const t = text.replace(/[\u{1F3FB}-\u{1F3FF}️]/gu, '').trim();
+  if (!t || t.length > 80) return false;
+  if (/^[\u{1F44D}\u{2705}\u{1F44C}\s]+$/u.test(t)) return true;
+  const words = t.toLowerCase().replace(/[.,!?;:،؛؟"'’()-]+/g, ' ').split(/\s+/).filter(Boolean);
+  return words.length > 0 && words.length <= 8 && words.some((w) => AFFIRM_CORE.has(w)) &&
+    words.every((w) => AFFIRM_CORE.has(w) || AFFIRM_FILLER.has(w));
+}
+
+const NEW_COMMAND = /^\/new(?:@\w+)?(?:\s+|$)/i;
+/** Whether the words describe a design to make (the intake's own rule), not only an OK or chatter. */
+export function isBriefText(text: string): boolean {
+  const body = text.replace(NEW_COMMAND, '').trim();
+  if (!body || body.startsWith('/') || isAffirmativeOnly(body)) return false;
+  return classifyWithHeuristics(body, false, false).kind === 'new_brief';
+}
+/** A caption and a brief sent next to it are one brief: the caption first, as the requester sent them. */
+function joinBriefs(first: string, second: string): string {
+  const prefix = NEW_COMMAND.test(first) || NEW_COMMAND.test(second) ? '/new ' : '';
+  return prefix + [first.replace(NEW_COMMAND, '').trim(), second.replace(NEW_COMMAND, '').trim()].filter(Boolean).join('\n\n');
+}
+
+type SettledState = 'asked' | 'refused' | 'superseded' | 'expired';
+async function markSettled(trx: Tx, tenant: string, groupKey: string, state: SettledState, updateId: number): Promise<void> {
+  await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+    VALUES (${tenant}::uuid, 'lifecycle_album_settled', ${groupKey}, 'lifecycle_album_settled',
+      ${JSON.stringify({ state, updateId })}::jsonb, ${hash({ groupKey, state, updateId })}, true)
+    ON CONFLICT DO NOTHING`.execute(trx);
+}
+async function settledState(trx: Tx, tenant: string, groupKey: string): Promise<SettledState | null> {
+  const row = await event<{ state: SettledState }>(trx, tenant, 'lifecycle_album_settled', groupKey);
+  return row?.payload.state ?? null;
+}
+const frozen = async (trx: Tx, tenant: string, groupKey: string) =>
+  Boolean(await event(trx, tenant, 'lifecycle_album_frozen', groupKey));
+
+async function albumQuestion(trx: Tx, tenant: string, chatId: string, groupKey: string, selected: Part[]): Promise<AlbumMessage> {
+  const first = record(selected[0]?.source.message);
+  const lang = await replyLanguage(trx, tenant, chatId, [], record(first?.from)?.language_code);
+  return { status: 202, message: ALBUM_TEXT.question(selected.length, lang), noticeKey: `album-question:${groupKey}` };
+}
+
+/** Receipt times of a group's saved photos, in database time (ms). */
+async function albumTimes(trx: Tx, tenant: string, groupKey: string): Promise<{ first: number; last: number; now: number }> {
+  const row = (await sql<{ first: number | null; last: number | null; now: number }>`SELECT
+      (extract(epoch FROM min(received_at)) * 1000)::float8 AS first,
+      (extract(epoch FROM max(received_at)) * 1000)::float8 AS last,
+      (extract(epoch FROM now()) * 1000)::float8 AS now
+    FROM hawa.inbox_events WHERE tenant_id = ${tenant}::uuid
+      AND source_account_id IN ('lifecycle_album_part', 'lifecycle_album_pending')
+      AND payload->>'groupKey' = ${groupKey}`.execute(trx)).rows[0];
+  const now = Number(row?.now ?? Date.now());
+  return { first: Number(row?.first ?? now), last: Number(row?.last ?? now), now };
+}
+
+function albumShape(selected: Part[]) {
+  const messages = selected.map((part) => record(part.source.message)!);
+  const captions = [...new Set(messages.map((message) => typeof message.caption === 'string' ? message.caption.trim() : '').filter(Boolean))];
+  const replies = [...new Set(messages.map((message) => positiveId(record(message.reply_to_message)?.message_id)).filter(Boolean))] as string[];
+  const mixedReplies = replies.length > 1 || (replies.length === 1 && messages.some((message) => !record(message.reply_to_message)));
+  return { messages, captions, replies, mixedReplies };
+}
+
+/** Freeze the selected photos under one source update; the rest of intake reads it like any message. */
+async function freeze(trx: Tx, tenant: string, input: { groupKey: string; selected: Part[]; identity: Update;
+  chatId: string; base: Message; text: string; replyId: string | null }): Promise<AlbumOutcome> {
+  const { base, identity, selected, groupKey } = input;
+  const message: Message = { message_id: base.message_id, date: base.date, chat: base.chat, from: base.from,
+    ...(base.message_thread_id !== undefined ? { message_thread_id: base.message_thread_id } : {}),
+    text: input.text, ...(input.replyId ? { reply_to_message: { message_id: Number(input.replyId) } } : {}),
+    album_source: selected.map((part) => ({ updateId: part.source.update_id, hash: hash(part.source) })) };
+  const ref = parseLifecycleAlbumRef({ updateId: identity.update_id,
+    sha256: hash({ groupKey, source: identity, selected }), images: selected.map((part) => part.image) });
+  if (!ref) {
+    const reply = { status: 422, message: 'This album exceeds the 100 MiB total image limit. Send a smaller album.',
+      noticeKey: `album-confirm:${identity.update_id}` };
+    await save(trx, tenant, 'lifecycle_album_confirm', String(identity.update_id), { source: identity, chatId: input.chatId, reply }, hash(identity));
+    await markSettled(trx, tenant, groupKey, 'refused', identity.update_id);
+    return { kind: 'reply', reply };
+  }
+  const snapshot: AlbumSnapshot = { ref, update: { update_id: identity.update_id, message }, chatId: input.chatId };
+  await save(trx, tenant, 'lifecycle_album_confirm', String(identity.update_id),
+    { source: identity, chatId: input.chatId, snapshot } satisfies Confirmation, hash(identity));
+  await save(trx, tenant, 'lifecycle_album_frozen', groupKey, { updateId: identity.update_id }, ref.sha256);
+  return { kind: 'snapshot', snapshot };
+}
+
+const outcomeOf = (prior: Confirmation): AlbumOutcome => prior.snapshot ? { kind: 'snapshot', snapshot: prior.snapshot }
+  : prior.reply ? { kind: 'reply', reply: prior.reply } : { kind: 'skip' };
+const senderLock = (trx: Tx, tenant: string, chatId: string, senderId: string) => lock(trx, tenant, `sender:${chatId}:${senderId}`);
+
+// --- held briefs: a text brief waits briefly for photos sent right after it ------------------
+
+interface HeldBrief { updateId: number; chatId: string; senderId: string; topic: string; update: Update; at: number }
+type HeldState = 'held' | 'consumed' | 'released';
+
+async function heldBriefState(trx: Tx, tenant: string, updateId: number): Promise<HeldState> {
+  if (await event(trx, tenant, 'lifecycle_brief_consumed', String(updateId))) return 'consumed';
+  if (await event(trx, tenant, 'lifecycle_brief_released', String(updateId))) return 'released';
+  return 'held';
+}
+async function heldBrief(trx: Tx, tenant: string, updateId: number): Promise<HeldBrief | null> {
+  const row = (await sql<{ payload: Omit<HeldBrief, 'at' | 'updateId'>; at: number }>`SELECT payload,
+      (extract(epoch FROM received_at) * 1000)::float8 AS at FROM hawa.inbox_events
+    WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_brief_held'
+      AND source_event_id = ${String(updateId)}`.execute(trx)).rows[0];
+  return row ? { ...row.payload, updateId, at: Number(row.at) } : null;
+}
+/** The sender's newest brief still held when the album's photos arrived. */
+async function heldBriefBefore(trx: Tx, tenant: string, scope: { chatId: string; senderId: string; topic: string },
+  fromMs: number, toMs: number): Promise<HeldBrief | null> {
+  const rows = (await sql<{ source_event_id: string }>`SELECT h.source_event_id FROM hawa.inbox_events h
+    WHERE h.tenant_id = ${tenant}::uuid AND h.source_account_id = 'lifecycle_brief_held'
+      AND h.payload->>'chatId' = ${scope.chatId} AND h.payload->>'senderId' = ${scope.senderId}
+      AND h.payload->>'topic' = ${scope.topic}
+      AND h.received_at >= to_timestamp(${fromMs / 1000}) AND h.received_at <= to_timestamp(${toMs / 1000})
+      AND NOT EXISTS (SELECT 1 FROM hawa.inbox_events s WHERE s.tenant_id = h.tenant_id
+        AND s.source_account_id IN ('lifecycle_brief_consumed', 'lifecycle_brief_released')
+        AND s.source_event_id = h.source_event_id)
+    ORDER BY h.received_at DESC LIMIT 1`.execute(trx)).rows;
+  return rows[0] ? heldBrief(trx, tenant, Number(rows[0].source_event_id)) : null;
+}
+const messageScope = (update: Update) => {
+  const msg = record(update.message);
+  return { msg, chatId: String(record(msg?.chat)?.id ?? ''), senderId: positiveId(record(msg?.from)?.id),
+    topic: String(msg?.message_thread_id ?? '') };
+};
+
+/** Hold a text brief (ADR-143): its settle opens it, alone or with the album that followed it. */
+export async function holdBrief(trx: Tx, tenant: string, update: Update): Promise<boolean> {
+  const { chatId, senderId, topic } = messageScope(update);
+  if (!senderId || !/^-?\d{1,20}$/.test(chatId)) return false;
+  await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+    VALUES (${tenant}::uuid, 'lifecycle_brief_held', ${String(update.update_id)}, 'lifecycle_brief_held',
+      ${JSON.stringify({ chatId, senderId, topic, update })}::jsonb, ${hash(update)}, true)
+    ON CONFLICT DO NOTHING`.execute(trx);
+  const stored = await event(trx, tenant, 'lifecycle_brief_held', String(update.update_id));
+  if (!stored || stored.payload_hash !== hash(update)) throw new AlbumConflict('This held brief already has different content.');
+  return true;
+}
+/** Whether this update was held as a brief (a replay answers "settle later" again). */
+export async function isHeldBrief(trx: Tx, tenant: string, update: Update): Promise<boolean> {
+  const stored = await event(trx, tenant, 'lifecycle_brief_held', String(update.update_id));
+  if (stored && stored.payload_hash !== hash(update)) throw new AlbumConflict('This held brief changed after it was saved.');
+  return Boolean(stored);
+}
+/**
+ * A replayed held brief: `held` answers "settle later" again, `released` replays the decision intake
+ * recorded for it, `consumed` answers that an album took it; `none` if it was never held.
+ */
+export async function heldBriefReplay(trx: Tx, tenant: string, update: Update): Promise<'none' | HeldState> {
+  return await isHeldBrief(trx, tenant, update) ? heldBriefState(trx, tenant, update.update_id) : 'none';
+}
+
+/**
+ * The held brief's settle: `skip` when an album took it (or it was never held), `wait` while an album
+ * its sender began after it is still arriving, else `release`: intake opens it as it opens any brief.
+ */
+export async function settleHeldBrief(trx: Tx, tenant: string, update: Update): Promise<'skip' | 'wait' | 'release'> {
+  if (!await isHeldBrief(trx, tenant, update)) return 'skip';
+  const held = (await heldBrief(trx, tenant, update.update_id))!;
+  await senderLock(trx, tenant, held.chatId, held.senderId);
+  const state = await heldBriefState(trx, tenant, held.updateId);
+  if (state === 'consumed') return 'skip';
+  if (state === 'released') return 'release';
+  const now = Number((await sql<{ now: number }>`SELECT (extract(epoch FROM now()) * 1000)::float8 AS now`.execute(trx)).rows[0].now);
+  if (now - held.at < HELD_BRIEF_MS) {
+    const groups = (await sql<{ group_key: string }>`SELECT DISTINCT payload->>'groupKey' AS group_key FROM hawa.inbox_events
+      WHERE tenant_id = ${tenant}::uuid AND source_account_id IN ('lifecycle_album_part', 'lifecycle_album_pending')
+        AND payload->>'chatId' = ${held.chatId} AND payload->>'senderId' = ${held.senderId}
+        AND payload->>'topic' = ${held.topic} AND received_at >= to_timestamp(${held.at / 1000})`.execute(trx)).rows;
+    for (const { group_key: groupKey } of groups) {
+      if (!await frozen(trx, tenant, groupKey) && !await settledState(trx, tenant, groupKey)) return 'wait';
+    }
+  }
+  await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+    VALUES (${tenant}::uuid, 'lifecycle_brief_released', ${String(held.updateId)}, 'lifecycle_brief_released',
+      ${JSON.stringify({ chatId: held.chatId })}::jsonb, ${hash(update)}, true) ON CONFLICT DO NOTHING`.execute(trx);
+  return 'release';
+}
+
+// --- the album's settle -------------------------------------------------------------------------
+
+/**
+ * Settle an album from the photo that scheduled it. Only the newest photo's settle acts: an older
+ * one is skipped (a newer photo scheduled its own). The outcome is stored under that photo's update
+ * ID, so a retried or repeated settle answers the same, and the album is frozen once.
+ */
+export async function settleAlbum(trx: Tx, tenant: string, update: Update): Promise<AlbumOutcome> {
+  const part = await readAlbumPart(trx, tenant, update);
+  if (!part) return { kind: 'skip' };
+  const prior = await readAlbumConfirmation(trx, tenant, update);
+  if (prior) return outcomeOf(prior);
+  await senderLock(trx, tenant, part.chatId, part.senderId);
+  await lock(trx, tenant, part.groupKey);
+  const raced = await readAlbumConfirmation(trx, tenant, update);
+  if (raced) return outcomeOf(raced);
+  const { groupKey, chatId } = part;
+  if (await frozen(trx, tenant, groupKey)) return { kind: 'skip' };
+  const state = await settledState(trx, tenant, groupKey);
+  if (state && state !== 'asked') return { kind: 'skip' };
+  const selected = await parts(trx, tenant, groupKey);
+  if (Math.max(...selected.map((p) => p.source.update_id)) !== update.update_id) return { kind: 'skip' };
+  const times = await albumTimes(trx, tenant, groupKey);
+  const late = times.now - times.last > LATE_SETTLE_MS;
+  // A settle long after the photos (a sweep after a lost timer, or an album saved before ADR-143)
+  // starts nothing once the chat has moved on to another request.
+  if (late && (await sql`SELECT 1 FROM hawa.requests WHERE tenant_id = ${tenant}::uuid AND chat_id = ${chatId}
+      AND created_at > to_timestamp(${times.last / 1000}) LIMIT 1`.execute(trx)).rows.length) {
+    await markSettled(trx, tenant, groupKey, 'superseded', update.update_id);
+    return { kind: 'skip' };
+  }
+  const first = record(selected[0].source.message);
+  const { captions, replies, mixedReplies } = albumShape(selected);
+  const lang = await replyLanguage(trx, tenant, chatId, captions, record(first?.from)?.language_code);
+  const answer = async (message: string, settled: SettledState): Promise<AlbumOutcome> => {
+    await markSettled(trx, tenant, groupKey, settled, update.update_id);
+    const reply: AlbumMessage = { status: settled === 'asked' ? 202 : 422, message, noticeKey: `album-settle:${update.update_id}` };
+    await save(trx, tenant, 'lifecycle_album_confirm', String(update.update_id), { source: update, chatId, reply }, hash(update));
+    return { kind: 'reply', reply };
+  };
+  if (selected.some((p) => !p.image && !p.error)) return answer(ALBUM_TEXT.photoMissing[lang], 'refused');
+  if (selected.some((p) => p.error)) {
+    // Each refused photo was answered when it arrived.
+    await markSettled(trx, tenant, groupKey, 'refused', update.update_id);
+    return { kind: 'skip' };
+  }
+  if (selected.length < 2) return answer(ALBUM_TEXT.onePhoto[lang], 'refused');
+  if (mixedReplies) return answer(ALBUM_TEXT.mixedReplies[lang], 'refused');
+  if (captions.length > 1) return answer(ALBUM_TEXT.captions[lang], 'asked');
+  const lastMessage = record(update.message)!;
+  const caption = captions[0] ?? '';
+  // Photos sent in reply to a request's notice are that request's reference, as a replied photo is.
+  if (replies.length === 1) return freeze(trx, tenant, { groupKey, selected, identity: update, chatId,
+    base: lastMessage, text: caption || REFERENCE_DIRECTIVE, replyId: replies[0] });
+  if (caption && isBriefText(caption)) return freeze(trx, tenant, { groupKey, selected, identity: update, chatId,
+    base: lastMessage, text: caption, replyId: null });
+  // A brief its sender sent just before the photos is this album's brief.
+  const held = await heldBriefBefore(trx, tenant, { chatId, senderId: part.senderId, topic: part.topic },
+    times.first - HELD_BRIEF_MS, times.last);
+  const heldMessage = held ? record(held.update.message) : null;
+  if (held && heldMessage && typeof heldMessage.text === 'string') {
+    await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+      VALUES (${tenant}::uuid, 'lifecycle_brief_consumed', ${String(held.updateId)}, 'lifecycle_brief_consumed',
+        ${JSON.stringify({ groupKey, updateId: update.update_id })}::jsonb, ${hash({ groupKey, updateId: update.update_id })}, true)
+      ON CONFLICT DO NOTHING`.execute(trx);
+    return freeze(trx, tenant, { groupKey, selected, identity: update, chatId,
+      base: heldMessage, text: heldMessage.text, replyId: null });
+  }
+  if (late && times.now - times.last > briefWindowMs()) {
+    await markSettled(trx, tenant, groupKey, 'expired', update.update_id);
+    return { kind: 'skip' };
+  }
+  await markSettled(trx, tenant, groupKey, 'asked', update.update_id);
+  const question = await albumQuestion(trx, tenant, chatId, groupKey, selected);
+  await save(trx, tenant, 'lifecycle_album_confirm', String(update.update_id), { source: update, chatId, reply: question }, hash(update));
+  return { kind: 'reply', reply: question };
+}
+
+// --- the requester's own words bind a waiting album --------------------------------------------
+
+/** The sender's newest album that still waits for words: not frozen, no refused photo, in its window. */
+async function waitingAlbum(trx: Tx, tenant: string, scope: { chatId: string; senderId: string; topic: string },
+  onlyGroup?: string): Promise<{ groupKey: string; selected: Part[] } | null> {
+  const rows = (await sql<{ group_key: string; last: number; now: number }>`SELECT payload->>'groupKey' AS group_key,
+      (extract(epoch FROM max(received_at)) * 1000)::float8 AS last, (extract(epoch FROM now()) * 1000)::float8 AS now
+    FROM hawa.inbox_events WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_album_part'
+      AND payload->>'chatId' = ${scope.chatId} AND payload->>'senderId' = ${scope.senderId}
+      AND payload->>'topic' = ${scope.topic}
+      AND (${onlyGroup === undefined}::boolean OR payload->>'groupKey' = ${onlyGroup ?? ''})
+      AND received_at > now() - make_interval(secs => ${albumResumeMs() / 1000})
+    GROUP BY 1 ORDER BY max(received_at) DESC LIMIT 5`.execute(trx)).rows;
+  for (const row of rows) {
+    if (await frozen(trx, tenant, row.group_key)) continue;
+    const state = await settledState(trx, tenant, row.group_key);
+    if (state && state !== 'asked') continue;
+    const selected = await parts(trx, tenant, row.group_key);
+    if (selected.length < 2 || selected.some((p) => p.error || !p.image)) continue;
+    const { captions } = albumShape(selected);
+    if (!captions.length && Number(row.now) - Number(row.last) > briefWindowMs()) continue;
+    return { groupKey: row.group_key, selected };
+  }
+  return null;
+}
+
+/**
+ * A text from the album's sender, before or after the album settled: a brief starts one request with
+ * the photos, an OK starts a captioned album or is asked what to design, anything else (thanks, a
+ * question) is left to intake. A `/use_album` sent as a plain message is such an OK (compatibility).
+ */
+export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, deps: {
+  linkedReply(chatId: string, replyId: string): Promise<boolean>;
+  decided(chatId: string, updateId: number): Promise<boolean>;
+}): Promise<AlbumOutcome> {
+  const { msg, chatId, senderId, topic } = messageScope(update);
+  if (!msg || typeof msg.text !== 'string' || msg.media_group_id !== undefined || !senderId) return { kind: 'none' };
+  const text = msg.text.trim();
+  const confirmation = isAlbumConfirmation(update);
+  if (!text || (text.startsWith('/') && !confirmation && !NEW_COMMAND.test(text))) return { kind: 'none' };
+  const prior = await readAlbumConfirmation(trx, tenant, update);
+  if (prior) return outcomeOf(prior);
+  const affirmative = confirmation || isAffirmativeOnly(text);
+  const brief = !affirmative && isBriefText(text);
+  if (!affirmative && !brief) return { kind: 'none' };
+  // An update intake already decided keeps that decision, even if an album has arrived since.
+  if (!/^-?\d{1,20}$/.test(chatId) || await deps.decided(chatId, update.update_id)) return { kind: 'none' };
+  await senderLock(trx, tenant, chatId, senderId);
+  const replyId = positiveId(record(msg.reply_to_message)?.message_id);
+  let onlyGroup: string | undefined;
+  if (replyId) {
+    const photo = (await sql<{ payload: Part }>`SELECT payload FROM hawa.inbox_events
+      WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_album_part'
+        AND payload->>'chatId' = ${chatId} AND payload->>'messageId' = ${replyId} LIMIT 1`.execute(trx)).rows[0]?.payload;
+    if (photo) onlyGroup = photo.groupKey;
+    // A reply to a request's own notice is about that request.
+    else if (await deps.linkedReply(chatId, replyId)) return { kind: 'none' };
+  }
+  const reply = async (message: string, noticeKey: string, status = 422): Promise<AlbumOutcome> => {
+    const answer: AlbumMessage = { status, message, noticeKey };
+    await save(trx, tenant, 'lifecycle_album_confirm', String(update.update_id), { source: update, chatId, reply: answer }, hash(update));
+    return { kind: 'reply', reply: answer };
+  };
+  const album = await waitingAlbum(trx, tenant, { chatId, senderId, topic }, onlyGroup);
+  const lang = await replyLanguage(trx, tenant, chatId, confirmation ? [] : [text], record(msg.from)?.language_code);
+  if (!album) return confirmation ? reply(ALBUM_TEXT.noAlbum[lang], `album-confirm:${update.update_id}`) : { kind: 'none' };
+  await lock(trx, tenant, album.groupKey);
+  if (await frozen(trx, tenant, album.groupKey)) return confirmation
+    ? reply('This album was already submitted. Check the existing request; a second design was not started.', `album-confirm:${update.update_id}`)
+    : { kind: 'none' };
+  const { captions, replies, mixedReplies } = albumShape(album.selected);
+  if (mixedReplies) return reply(ALBUM_TEXT.mixedReplies[lang], `album-confirm:${update.update_id}`);
+  const caption = captions.length === 1 ? captions[0] : '';
+  let briefText: string;
+  if (brief) briefText = caption ? joinBriefs(caption, text) : text;
+  else if (caption) briefText = caption;
+  else if (replies.length === 1) briefText = REFERENCE_DIRECTIVE;
+  else {
+    await markSettled(trx, tenant, album.groupKey, 'asked', update.update_id);
+    return reply(captions.length > 1 ? ALBUM_TEXT.captions[lang] : ALBUM_TEXT.followUp[lang],
+      `album-followup:${update.update_id}`, 202);
+  }
+  return freeze(trx, tenant, { groupKey: album.groupKey, selected: album.selected, identity: update, chatId,
+    base: msg, text: briefText, replyId: replies[0] ?? null });
+}
+
+// --- the sweep: albums and held briefs whose settle never ran -------------------------------------
+
+/**
+ * Albums and held briefs whose settle is overdue: saved before ADR-143 (no timer was ever set), or
+ * whose timer was lost. The worker's poller sends each one's settle to its ChatInbox; the settle
+ * itself decides, under the same locks, whether anything is left to do.
+ */
+export async function overdueSettles(trx: Tx, tenant: string, limit = 50): Promise<Array<{ chatId: string; update: Update }>> {
+  const due: Array<{ chatId: string; update: Update }> = [];
+  const overdueSecs = (albumSettleMs() + 60_000) / 1000;
+  const groups = (await sql<{ group_key: string }>`SELECT payload->>'groupKey' AS group_key FROM hawa.inbox_events
+    WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_album_part'
+      AND received_at > now() - make_interval(secs => ${albumResumeMs() / 1000})
+    GROUP BY 1 HAVING max(received_at) < now() - make_interval(secs => ${overdueSecs})
+    ORDER BY max(received_at) LIMIT ${limit * 2}`.execute(trx)).rows;
+  for (const { group_key: groupKey } of groups) {
+    if (due.length >= limit) break;
+    if (await frozen(trx, tenant, groupKey) || await settledState(trx, tenant, groupKey)) continue;
+    const selected = await parts(trx, tenant, groupKey);
+    const newest = selected.reduce<Part | null>((a, p) => !a || p.source.update_id > a.source.update_id ? p : a, null);
+    if (!newest || await event(trx, tenant, 'lifecycle_album_confirm', String(newest.source.update_id))) continue;
+    // A photo still being downloaded has no settle of its own yet; its update's retry schedules one.
+    if (!await event(trx, tenant, 'lifecycle_album_part', String(newest.source.update_id))) continue;
+    due.push({ chatId: newest.chatId, update: newest.source });
+  }
+  const heldSecs = (briefPhotoWaitMs() + 60_000) / 1000;
+  const held = (await sql<{ payload: { chatId: string; update: Update } }>`SELECT h.payload FROM hawa.inbox_events h
+    WHERE h.tenant_id = ${tenant}::uuid AND h.source_account_id = 'lifecycle_brief_held'
+      AND h.received_at > now() - interval '24 hours' AND h.received_at < now() - make_interval(secs => ${heldSecs})
+      AND NOT EXISTS (SELECT 1 FROM hawa.inbox_events s WHERE s.tenant_id = h.tenant_id
+        AND s.source_account_id IN ('lifecycle_brief_consumed', 'lifecycle_brief_released')
+        AND s.source_event_id = h.source_event_id)
+    ORDER BY h.received_at LIMIT ${limit}`.execute(trx)).rows;
+  for (const row of held) if (due.length < limit) due.push({ chatId: row.payload.chatId, update: row.payload.update });
+  return due;
 }
