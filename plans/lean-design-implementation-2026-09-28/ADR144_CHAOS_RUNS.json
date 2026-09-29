@@ -1,0 +1,472 @@
+{
+  "adr": "ADR-144",
+  "branch": "nl-routing",
+  "command": "npx tsx packages/testkit/chaos/run.ts --poller worker [--only R1.NL.THANKS,R1.NL.DESIGNING,R1.NL.CANCEL,R1.NL.TWO]",
+  "notRun": "R10.K1, R10.K2 (need --previous-release 73b75f44 and run alone; a whole-suite run skips them)",
+  "newScenariosRun": {
+    "finishedAt": "2026-09-29T14:05:51.770Z",
+    "telegramPoller": "worker",
+    "totalMs": 350253,
+    "peakTotalMiB": 974,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.NL.THANKS",
+        "ms": 15300,
+        "error": null,
+        "invariantsPassed": 8,
+        "invariants": 8,
+        "checks": [
+          "thanks started no round",
+          "the requester was thanked once, with a reminder of the waiting design",
+          "the change started exactly one round, from the change's own update",
+          "update 90690674651: one ChatInbox invocation (key tg-90690674651), completed",
+          "update 90690674652: one ChatInbox invocation (key tg-90690674652), completed",
+          "every ChatInbox invocation of the chat completed",
+          "the stored offset moved past the chat's last update",
+          "no update was dead-lettered"
+        ]
+      },
+      {
+        "name": "R1.NL.DESIGNING",
+        "ms": 10142,
+        "error": null,
+        "invariantsPassed": 9,
+        "invariants": 9,
+        "checks": [
+          "one request and one task in the chat",
+          "the correction is kept on that request with its words",
+          "the office was told the words once",
+          "the requester was told plainly, once",
+          "update 90690674653: one ChatInbox invocation (key tg-90690674653), completed",
+          "update 90690674654: one ChatInbox invocation (key tg-90690674654), completed",
+          "every ChatInbox invocation of the chat completed",
+          "the stored offset moved past the chat's last update",
+          "no update was dead-lettered"
+        ]
+      },
+      {
+        "name": "R1.NL.CANCEL",
+        "ms": 10247,
+        "error": null,
+        "invariantsPassed": 8,
+        "invariants": 8,
+        "checks": [
+          "the requester was told the office is asked to cancel",
+          "the office was asked once",
+          "Deliver is held until the office reads the cancel",
+          "nothing new started",
+          "update 90690674656: one ChatInbox invocation (key tg-90690674656), completed",
+          "every ChatInbox invocation of the chat completed",
+          "the stored offset moved past the chat's last update",
+          "no update was dead-lettered"
+        ]
+      },
+      {
+        "name": "R1.NL.TWO",
+        "ms": 19343,
+        "error": null,
+        "invariantsPassed": 9,
+        "invariants": 9,
+        "checks": [
+          "the bot asked which design, listing both",
+          "nothing started before the answer",
+          "the kept words started one round on the second design",
+          "the first design still waits, untouched",
+          "update 90690674659: one ChatInbox invocation (key tg-90690674659), completed",
+          "update 90690674660: one ChatInbox invocation (key tg-90690674660), completed",
+          "every ChatInbox invocation of the chat completed",
+          "the stored offset moved past the chat's last update",
+          "no update was dead-lettered"
+        ]
+      }
+    ]
+  },
+  "fullSuiteRun": {
+    "finishedAt": "2026-09-29T14:23:19.101Z",
+    "telegramPoller": "worker",
+    "totalMs": 1024207,
+    "peakTotalMiB": 1423,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.0",
+        "ms": 15283,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K0",
+        "ms": 17287,
+        "error": null,
+        "invariantsPassed": 18,
+        "invariants": 18
+      },
+      {
+        "name": "R1.K0A",
+        "ms": 73289,
+        "error": null,
+        "invariantsPassed": 5,
+        "invariants": 5
+      },
+      {
+        "name": "R1.K0P",
+        "ms": 17298,
+        "error": null,
+        "invariantsPassed": 18,
+        "invariants": 18
+      },
+      {
+        "name": "R1.K1",
+        "ms": 17540,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K2",
+        "ms": 17423,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K3",
+        "ms": 15249,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K4",
+        "ms": 13827,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K5",
+        "ms": 13307,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K6",
+        "ms": 17363,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K7",
+        "ms": 19333,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K8",
+        "ms": 17323,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K9",
+        "ms": 19265,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K10",
+        "ms": 13356,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K11",
+        "ms": 23716,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "R1.K13",
+        "ms": 11472,
+        "error": null,
+        "invariantsPassed": 20,
+        "invariants": 20
+      },
+      {
+        "name": "R1.K14",
+        "ms": 22652,
+        "error": null,
+        "invariantsPassed": 19,
+        "invariants": 19
+      },
+      {
+        "name": "R1.D1",
+        "ms": 20047,
+        "error": null,
+        "invariantsPassed": 20,
+        "invariants": 20
+      },
+      {
+        "name": "R1.W0",
+        "ms": 31411,
+        "error": null,
+        "invariantsPassed": 21,
+        "invariants": 21
+      },
+      {
+        "name": "R1.S1.K1",
+        "ms": 17419,
+        "error": null,
+        "invariantsPassed": 14,
+        "invariants": 14
+      },
+      {
+        "name": "R1.S1.K2",
+        "ms": 17443,
+        "error": null,
+        "invariantsPassed": 14,
+        "invariants": 14
+      },
+      {
+        "name": "R1.S1.K3",
+        "ms": 17213,
+        "error": null,
+        "invariantsPassed": 14,
+        "invariants": 14
+      },
+      {
+        "name": "R1.S2.K4",
+        "ms": 17307,
+        "error": null,
+        "invariantsPassed": 14,
+        "invariants": 14
+      },
+      {
+        "name": "R1.S2.K5",
+        "ms": 10909,
+        "error": null,
+        "invariantsPassed": 14,
+        "invariants": 14
+      },
+      {
+        "name": "R1.S2.K5b",
+        "ms": 10320,
+        "error": null,
+        "invariantsPassed": 16,
+        "invariants": 16
+      },
+      {
+        "name": "R1.DUP",
+        "ms": 10155,
+        "error": null,
+        "invariantsPassed": 15,
+        "invariants": 15
+      },
+      {
+        "name": "R1.S3.K1",
+        "ms": 11660,
+        "error": null,
+        "invariantsPassed": 7,
+        "invariants": 7
+      },
+      {
+        "name": "R1.S3.PHOTO",
+        "ms": 11931,
+        "error": null,
+        "invariantsPassed": 7,
+        "invariants": 7
+      },
+      {
+        "name": "R1.S3.REVISION_PHOTO",
+        "ms": 17035,
+        "error": null,
+        "invariantsPassed": 10,
+        "invariants": 10
+      },
+      {
+        "name": "R1.S3.CAPTIONLESS_PHOTO",
+        "ms": 17105,
+        "error": null,
+        "invariantsPassed": 10,
+        "invariants": 10
+      },
+      {
+        "name": "R1.S3.ALBUM",
+        "ms": 18089,
+        "error": null,
+        "invariantsPassed": 10,
+        "invariants": 10
+      },
+      {
+        "name": "R1.S3.IMAGE_DOCUMENT",
+        "ms": 17105,
+        "error": null,
+        "invariantsPassed": 10,
+        "invariants": 10
+      },
+      {
+        "name": "R1.S3.DOCUMENT_ALBUM",
+        "ms": 18098,
+        "error": null,
+        "invariantsPassed": 10,
+        "invariants": 10
+      },
+      {
+        "name": "R1.S3.MEDIA",
+        "ms": 6165,
+        "error": null,
+        "invariantsPassed": 5,
+        "invariants": 5
+      },
+      {
+        "name": "L2.0",
+        "ms": 11340,
+        "error": null,
+        "invariantsPassed": 18,
+        "invariants": 18
+      },
+      {
+        "name": "L2.K14",
+        "ms": 20773,
+        "error": null,
+        "invariantsPassed": 18,
+        "invariants": 18
+      },
+      {
+        "name": "L2.K15",
+        "ms": 17343,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "L2.K16",
+        "ms": 16800,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "L2.K17",
+        "ms": 19390,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "L2.K18",
+        "ms": 18830,
+        "error": null,
+        "invariantsPassed": 17,
+        "invariants": 17
+      },
+      {
+        "name": "L2.K12",
+        "ms": 16856,
+        "error": null,
+        "invariantsPassed": 20,
+        "invariants": 20
+      },
+      {
+        "name": "L2.429",
+        "ms": 16448,
+        "error": null,
+        "invariantsPassed": 18,
+        "invariants": 18
+      },
+      {
+        "name": "R1.BL",
+        "ms": 11386,
+        "error": null,
+        "invariantsPassed": 6,
+        "invariants": 6
+      },
+      {
+        "name": "R1.NL.THANKS",
+        "ms": 13206,
+        "error": null,
+        "invariantsPassed": 8,
+        "invariants": 8,
+        "checks": [
+          "thanks started no round",
+          "the requester was thanked once, with a reminder of the waiting design",
+          "the change started exactly one round, from the change's own update",
+          "update 90690828364: one ChatInbox invocation (key tg-90690828364), completed",
+          "update 90690828365: one ChatInbox invocation (key tg-90690828365), completed",
+          "every ChatInbox invocation of the chat completed",
+          "the stored offset moved past the chat's last update",
+          "no update was dead-lettered"
+        ]
+      },
+      {
+        "name": "R1.NL.DESIGNING",
+        "ms": 11172,
+        "error": null,
+        "invariantsPassed": 9,
+        "invariants": 9,
+        "checks": [
+          "one request and one task in the chat",
+          "the correction is kept on that request with its words",
+          "the office was told the words once",
+          "the requester was told plainly, once",
+          "update 90690828366: one ChatInbox invocation (key tg-90690828366), completed",
+          "update 90690828367: one ChatInbox invocation (key tg-90690828367), completed",
+          "every ChatInbox invocation of the chat completed",
+          "the stored offset moved past the chat's last update",
+          "no update was dead-lettered"
+        ]
+      },
+      {
+        "name": "R1.NL.CANCEL",
+        "ms": 13261,
+        "error": null,
+        "invariantsPassed": 8,
+        "invariants": 8,
+        "checks": [
+          "the requester was told the office is asked to cancel",
+          "the office was asked once",
+          "Deliver is held until the office reads the cancel",
+          "nothing new started",
+          "update 90690828369: one ChatInbox invocation (key tg-90690828369), completed",
+          "every ChatInbox invocation of the chat completed",
+          "the stored offset moved past the chat's last update",
+          "no update was dead-lettered"
+        ]
+      },
+      {
+        "name": "R1.NL.TWO",
+        "ms": 19322,
+        "error": null,
+        "invariantsPassed": 9,
+        "invariants": 9,
+        "checks": [
+          "the bot asked which design, listing both",
+          "nothing started before the answer",
+          "the kept words started one round on the second design",
+          "the first design still waits, untouched",
+          "update 90690828372: one ChatInbox invocation (key tg-90690828372), completed",
+          "update 90690828373: one ChatInbox invocation (key tg-90690828373), completed",
+          "every ChatInbox invocation of the chat completed",
+          "the stored offset moved past the chat's last update",
+          "no update was dead-lettered"
+        ]
+      },
+      {
+        "name": "R4",
+        "ms": 36053,
+        "error": null,
+        "invariantsPassed": 2,
+        "invariants": 2
+      }
+    ]
+  }
+}
