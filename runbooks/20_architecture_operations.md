@@ -196,21 +196,19 @@ executor when it is created (`delivery_executor_pin = 'restate'`); the pin never
 (ADR-052; only a committed lifecycle open may claim Restate, `apps/core/src/services/chat-intake.ts`).
 Media and PDF sources have their own admissions (ADR-061, ADR-068, ADR-069, ADR-071).
 
-Requests the old intake started before the switch are **finished, never started**, by that intake in
-its finish-only scope (ADR-135, `apps/core/src/services/legacy-telegram-scope.ts`): a press of one of
-its buttons, a reply that names one of its tasks, a reply to a file or notice the outbox sent for one,
-any reply in a chat that has legacy tasks and no lifecycle request (ADR-136), and an unlinked message in
-a chat whose newest request of the last 48 hours is an open legacy one
-(`apps/core/src/services/legacy-telegram-routing.ts`). Questions, greetings and standing rules are still answered by
-it. Whenever it would start new work (a new request, or a change to a finished legacy design) it
-refuses, and `ChatInbox` asks the requester to send `/new` with the brief. Their tasks keep
-`delivery_executor_pin = 'core'` and are delivered by Core, as before.
+There is no old intake any more (ADR-135 stage 2, 2026-09-29). A press of a button under one of its
+messages, or a reply to one, is answered as a stale reply ("That design is no longer waiting for
+changes…") and changes nothing. Greetings, questions, thanks, standing rules, `/status`, `/rules`,
+`/forget`, `/start`, `/help` and a chat `/approve` are answered by Core's intake
+(`apps/core/src/services/lifecycle-chat-answers.ts`) and sent by `ChatInbox`. Old tasks keep
+`delivery_executor_pin = 'core'` and stay readable in the Desk; Core refuses to deliver one that came
+from a Telegram chat (`409 LEGACY_TELEGRAM_DELIVERY_RETIRED`): cancel it, and ask the requester to send
+it again.
 
-`GET /v1/operations/legacy-path` (administrators) says what is left on the old path: open legacy
-Telegram tasks by state and pin (with the 50 least recently updated), Core requester sends still
-queued, legacy Delivery workflow runs in flight, the newest legacy task, and `stage2Ready`. Close the
-stale ones in the Desk; the code that finishes legacy requests is removed only once `stage2Ready` is
-true (plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md).
+`GET /v1/operations/legacy-path` (administrators) stays as a standing check: open legacy Telegram
+tasks, Core requester sends still queued, legacy Delivery workflow runs in flight, and the newest legacy
+task should all stay 0 (or unchanged), with `stage2Ready: true`. Anything else means an old row was
+reopened by hand; the removed code will not finish it.
 
 Once a chat's first lifecycle request opens, `ChatInbox` keeps that chat in lifecycle mode for good
 (`apps/worker/src/lifecycle/chat-inbox.ts`, `setMode`): replies to a request's notices keep reaching

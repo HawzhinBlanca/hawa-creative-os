@@ -11,8 +11,8 @@
  *   npx tsx packages/testkit/chaos/run.ts --seed-dump infra/backup/snapshots/predeploy_<stamp>.dump
  *                                        # on a copy of production's data (driver/seed.ts, ADR-137)
  *   npx tsx packages/testkit/chaos/run.ts --only R10.K1,R10.K2 [--previous-release <commit>]
- *                                        # old requests after this release's deploy, and rolling it back
- *                                        # to the previous release (default: RELEASE_MANIFEST.json's build)
+ *                                        # rolling this release back to the previous one and forward
+ *                                        # (default: RELEASE_MANIFEST.json's build)
  *
  * The scenarios are chaos.test.ts (vitest); this sets HAWA_CHAOS and friends and runs it alone.
  */

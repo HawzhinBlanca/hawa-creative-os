@@ -2,7 +2,9 @@
 
 Date: 2026-09-28. Status: deployed 2026-09-29 00:31 +03; **partly superseded by ADR-135** (2026-09-29,
 see "Reconciled with ADR-135" at the end): the Core-poller rollback and the 48-hour new-Core-task rule
-are gone; the handoff of Core-owned updates stays.
+are gone; the handoff of Core-owned updates stayed until stage 2 of ADR-135 (2026-09-29, ADR-135
+section 9), which deleted the old intake once none of its requests was open: such updates are now
+stale replies.
 Requirements: FR-004, FR-060, NFR-001, NFR-013. Normative sources: MASTER_SPEC.md,
 docs/10_WORKFLOW_RELIABILITY.md ("Legacy delivery cutover pin"), infra/docker/README.md,
 runbooks/20_architecture_operations.md. Builds on ADR-052, ADR-059, ADR-065, ADR-113/114, ADR-129

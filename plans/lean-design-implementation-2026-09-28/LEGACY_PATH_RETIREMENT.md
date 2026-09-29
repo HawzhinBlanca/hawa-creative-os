@@ -231,3 +231,28 @@ What stays after all of stage 2: TaskWorkflow and the outbox's `task.created` di
 webhook and redriven tasks), `runCanvaDraft` (DesignRun uses it), Core's own Drive/Sheets delivery for
 Desk and WhatsApp tasks, the pin column (history), `parkTelegramUpdate`, the classifier,
 `prepareChatCampaignDraft` and `persistChatIntake`.
+
+## 7. Stage 2 done (2026-09-29)
+
+Production answered `stage2Ready: true` (0 open legacy Telegram tasks, 0 pending or failed Core
+requester sends, 0 legacy Delivery runs) after the office closed every old task. 2a and 2b were
+carried onto the combined release `73b75f44`, and 2c and 2d were done as section 6 plans them, in its
+order: the answers the lifecycle still delegated were moved first
+(`apps/core/src/services/lifecycle-chat-answers.ts`, sent by ChatInbox as `chat-answer`), then buttons
+and replies about old requests became stale replies, then the readers, the route, the finish-only
+scope, the backstop, Core's `notify.published` sends and the worker's sender were deleted. Details,
+what went beyond this plan and why, and the qualification: ADR-135 section 9.
+
+Differences from section 6 as written:
+
+- The in-chat approve (`act:` buttons, `/approve`) was already unreachable: the route refused every
+  button that was not a requester's and every `/approve` before its handlers. It went with the readers.
+- `rq:` buttons (the requester's own) did not publish; they recorded a sign-off. Every button press is
+  now a stale reply, whatever its data.
+- Also deleted, because only the old path used them: the unanswered-draft reminders (they sent `rq:`
+  buttons to old-intake requesters), the brand-guidelines PDF reader and the reference/album finders
+  (media reader only), the Telegram webhook secret's `adapter` principal, and the chaos scenario
+  `R10.H1` (old requests continued after the deploy).
+- Core's own delivery refuses a Telegram-origin task without a request owner
+  (`409 LEGACY_TELEGRAM_DELIVERY_RETIRED`) instead of relying on the gate alone.
+- The endpoint stays as a standing "0 legacy" check (`apps/core/src/services/legacy-path-status.ts`).

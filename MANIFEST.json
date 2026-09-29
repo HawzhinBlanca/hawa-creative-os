@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T12:09:14Z",
+  "generatedAt": "2026-09-29T13:05:17Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -744,13 +744,13 @@
     },
     {
       "path": "adrs/135_lifecycle_only_telegram_requests.md",
-      "sha256": "22935018d7b76f508164e57d70cde1420102e3f1f444a860e9a22d58659caba1",
-      "bytes": 15833
+      "sha256": "37daeffb9b3cfdf6d453764e7a549fd2e1c60432dd804e6fed1fdae13a36e0e6",
+      "bytes": 22513
     },
     {
       "path": "adrs/136_cutover_handoff_and_poller_rollback.md",
-      "sha256": "db1283181359e30863c38be328d46818c8771f208adb05c2964e349b7a39dd9a",
-      "bytes": 8984
+      "sha256": "7927c12832da8f951c13303f851b19552d813dd45cd0003eef56c21b2d6eba82",
+      "bytes": 9143
     },
     {
       "path": "adrs/137_production_data_before_deploy.md",
@@ -1044,8 +1044,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "caa008c35fc62c5b4f1c0b855819afce0e482d77e88f5588ffb6a7f8adb3bbf4",
-      "bytes": 39843
+      "sha256": "b7c2fe9107f8c6a35d3acf4a12bf1d40976ed305e546846b83d006fc21d758a7",
+      "bytes": 39284
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1289,8 +1289,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md",
-      "sha256": "1f64bda9520afecf207d67c421117973641e0a8f1877244e83c79ae3fa8d706e",
-      "bytes": 22729
+      "sha256": "2a145e75b4f3eca7a691d533a4e7151ef7d36d77cc8248de0ca380260bbd3ff4",
+      "bytes": 24503
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT_PROOF.json",
@@ -1834,8 +1834,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "7fdfa4e4af68dde5a0b7fceb301203c8fd9c254b65da1717a92f8024aa9c4741",
-      "bytes": 481892
+      "sha256": "5cb3db8a882b44dc492b7323f2511606f973ee7204abccc9747eed36a65965bd",
+      "bytes": 482775
     },
     {
       "path": "plans/user-stories.csv",
@@ -1929,8 +1929,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "6ac2eb3be267f5d5af8ccf16cf9ee3e4fe3c255811f5adc47b32fedb550eed4c",
-      "bytes": 40145
+      "sha256": "e92c273202c4950a5d109ad4d9dab21c9a3c2c3c18acb1303a7f534014fc9a55",
+      "bytes": 39857
     },
     {
       "path": "runbooks/AVAILABILITY_MONITORING.md",
