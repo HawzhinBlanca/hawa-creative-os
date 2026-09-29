@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T20:22:40Z",
+  "generatedAt": "2026-09-29T20:36:03Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -794,8 +794,8 @@
     },
     {
       "path": "adrs/146_trusted_office_without_sign_in.md",
-      "sha256": "792a5a0d2aefceccb6875bdc5bc608adf8090466a1dece10faeef32099c3c56e",
-      "bytes": 2267
+      "sha256": "6bc168896d2e10f8205f1bd399b5feaccd51c558abcbdd6dc1a2354d213958ca",
+      "bytes": 2723
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1459,8 +1459,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/TRUSTED_OFFICE_ACCESS.md",
-      "sha256": "6ad530d01d9c4a9c8ea800b3546751b30d5d2b21b34c1aea1efa44547a387e77",
-      "bytes": 2635
+      "sha256": "827923b7bee0e8909f054c76b34cb46ef3395e158a3d99b1b6a995946c8a753e",
+      "bytes": 3277
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/UNICODE_RETRIEVAL_PROOF.json",
@@ -1909,8 +1909,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "3490919802fe0ff37629a55987ccf7114419ec8cae91a6bc2b9a20fbe7d4411e",
-      "bytes": 493575
+      "sha256": "65151591ef72ec0b924a6a1ca2c130e57464bac04acd302ece5c8e46a4740a5a",
+      "bytes": 497745
     },
     {
       "path": "plans/user-stories.csv",
