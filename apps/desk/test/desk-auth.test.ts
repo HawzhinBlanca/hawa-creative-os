@@ -219,7 +219,7 @@ describe('actions the owner did not enable make no request', () => {
   it('synthetic operational execution is absent and tenant onboarding stays disabled', () => {
     const ops = renderToStaticMarkup(React.createElement(OpsScreen));
     expect(ops).not.toContain('Run Synthetic Benchmark');
-    expect(ops).toContain('Google Drive and Sheets are not read; nothing is repaired.');
+    expect(ops).toContain('This does not contact Google Drive or Sheets, or repair records.');
 
     const dna = renderToStaticMarkup(React.createElement(DnaScreen));
     expect(dna).toMatch(/<button[^>]*disabled=""[^>]*><span>\+<\/span><span>Onboard Client Tenant \(not enabled\)<\/span><\/button>/);

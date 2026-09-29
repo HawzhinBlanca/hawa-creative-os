@@ -31,3 +31,9 @@ Requirements: FR-006 (Desk intake), FR-063 (actionable operational state), FR-06
 ## Browser artifacts
 
 See [current-run report](../../output/audits/2026-09-29-product-flow-fixes/REPORT.md). Local UI and isolated-database qualification only; not deployed. Live sign-in and full release/office qualification remain open.
+
+## Release follow-up — 29 September 2026
+
+Source bcbc6078 and seal 862d1934 passed release stages 1–7, including all 588 typed test roots and the migration/invariant rehearsal on a production-dump copy. The full suite returned 4,919 passed, 1 failed, 64 skipped: desk-auth.test.ts retained the previous publication-audit notice wording. Updated that exact-text assertion to the new equivalent notice; all 29 tests in the file then passed. Disabled-action and tenant-onboarding safeguards remain asserted. The failed run is retained at output/audits/2026-09-29-product-flow-fixes/full-suite-first.log. Final full release verification is still required.
+
+The normal specification validator now runs directly in the checkout and passes 1,203 checks, zero warnings/failures, after the separately tested traversal repair described in VALIDATION_TRAVERSAL.md.
