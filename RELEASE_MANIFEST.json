@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-29T11:02:33+03:00",
+  "generatedAt": "2026-09-29T12:41:42+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,10 +20,10 @@
     ]
   },
   "build": {
-    "commit": "b53b0646aac03e6b62b13082c530f7a40b342c3d",
+    "commit": "94c04b0ec601f9faa57bb04f305732fb436a5ef1",
     "treeClean": true,
-    "commitTimestamp": "2026-09-29T11:02:33+03:00",
-    "branch": "claude/competent-cori-30b258"
+    "commitTimestamp": "2026-09-29T12:41:42+03:00",
+    "branch": "claude/linux-integration"
   },
   "migrations": {
     "targetVersion": "067_pre_admission_spending",
@@ -48,7 +48,7 @@
       "service": "desk",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/desk/src/App.tsx": "49d95897183c30b34a43877aa6f281002eb5b0e6487f626aedf5769a0f67c5d1",
+        "apps/desk/src/App.tsx": "d4413738c1464be3578a9fb720ce1e97302a12150bc24510ab0f1f0c0ca2e345",
         "apps/desk/src/main.tsx": "ee234aa0846b3baa9aed56ba633e50ff95f0d039343d052a8a7d7860feffa8c8"
       }
     },
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "f2ecd284cb2314afbe9148dc20d0b3baa1d898b9646a8ba88e2b1555ad82b097"
+  "sha256": "152b4c04102b7824fd630bb77156bf48b03193e90dd03eb16a629b87550e1e4f"
 }
