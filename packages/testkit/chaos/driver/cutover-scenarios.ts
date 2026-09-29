@@ -459,9 +459,14 @@ export async function handoffOfOldRequests(newChat: () => string, events: string
 
   await step('B new brief (an open recent Core design, then older than 48 h)', events, out, async () => {
     const before = await tasksOfChat(chat.B);
+    // ADR-143: a brief this release opens is held for photos and opened by its settle (settle:<id>).
+    const handledAndSettled = async (id: number) => {
+      const invocations = await chatInboxInvocations(chat.B);
+      return invocations.some((i) => i.idempotency_key === `tg-${id}` && i.status === 'completed') &&
+        invocations.filter((i) => i.idempotency_key?.startsWith(`settle:${id}`)).every((i) => i.status === 'completed');
+    };
     const recent = await send(textUpdate(chat.B, briefText('R10.H1.B-recent')));
-    await waitUntil('B\'s recent-history brief to be handled', async () =>
-      (await chatInboxInvocations(chat.B)).some((i) => i.idempotency_key === `tg-${recent}` && i.status === 'completed'), 180_000, 1000);
+    await waitUntil('B\'s recent-history brief to be handled', () => handledAndSettled(recent), 180_000, 1000);
     await sleep(3000);
     const afterRecent = await requestsOf(chat.B);
     const newTasks = (await tasksOfChat(chat.B)).filter((t) => !before.some((b) => b.id === t.id));
@@ -473,8 +478,7 @@ export async function handoffOfOldRequests(newChat: () => string, events: string
     await query(sql`UPDATE hawa.tasks SET created_at = created_at - interval '3 days'
       WHERE id IN (SELECT aggregate_id FROM hawa.outbox_commands WHERE command_type = 'task.created' AND payload->>'sourceChannelId' = ${chat.B})`);
     const old = await send(textUpdate(chat.B, briefText('R10.H1.B-old')));
-    await waitUntil('B\'s aged-history brief to be handled', async () =>
-      (await chatInboxInvocations(chat.B)).some((i) => i.idempotency_key === `tg-${old}` && i.status === 'completed'), 180_000, 1000);
+    await waitUntil('B\'s aged-history brief to be handled and settled', () => handledAndSettled(old), 180_000, 1000);
     await sleep(3000);
     const afterOld = await requestsOf(chat.B);
     events.push(`B: recent brief ${recent} → requests ${afterRecent.length}, new tasks ${JSON.stringify(newChildren)}, asked for /new ${askedForNew}; aged brief ${old} → requests ${afterOld.length}`);

@@ -423,12 +423,22 @@ export async function restateQuery<T = any>(sql: string): Promise<T[]> {
   return ((await res.json()) as { rows: T[] }).rows;
 }
 
+/**
+ * A pooled keep-alive socket the fakes server closed as idle while this process was blocked in a
+ * synchronous `docker compose` (spawnSync) fails the next request before the server read it
+ * (undici: "other side closed", UND_ERR_SOCKET). That request never arrived, so it is sent once more
+ * on a fresh socket (R10.K1's rollback, 2026-09-29).
+ */
+const staleSocket = (err: unknown) => err instanceof TypeError &&
+  (err.cause as { code?: string } | undefined)?.code === 'UND_ERR_SOCKET';
+
 async function call(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<any> {
-  const res = await fetch(`${FAKES_URL}${path}`, {
+  const request = () => fetch(`${FAKES_URL}${path}`, {
     method: init.method || (init.body === undefined ? 'GET' : 'POST'),
     headers: { 'content-type': 'application/json', ...init.headers },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
+  const res = await request().catch((err) => { if (staleSocket(err)) return request(); throw err; });
   const text = await res.text();
   let json: any = null;
   try { json = JSON.parse(text); } catch { json = text; }
