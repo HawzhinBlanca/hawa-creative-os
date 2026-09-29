@@ -42,6 +42,11 @@ x-worker: &worker
   # into the worker in Phase 2.1. deploy.sh creates the directory and its marker before any container.
   volumes:
     - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/var/lib/hawa/blobs
+  # The same Telegram address Core pins. The worker polls Telegram and sends every requester message
+  # since ADR-129/135; on 2026-09-29 the office network could not reach the address DNS returned
+  # (149.154.166.110), so the worker could neither receive nor send while Core, pinned, still could.
+  extra_hosts:
+    - "api.telegram.org:149.154.167.99"
   depends_on:
     core:
       condition: service_healthy
