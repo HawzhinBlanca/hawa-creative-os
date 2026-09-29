@@ -97,11 +97,22 @@ export interface ModelDelay {
   n: number;
 }
 
+/**
+ * A refusal for one schema (ADR-142 scenario): the provider answers HTTP `status` before doing any
+ * work, as it does for a malformed or unaffordable request, so the design run ends without a draft.
+ */
+export interface ModelFault {
+  schema: string;
+  status: number;
+  n: number;
+}
+
 export class FakeModels {
   readonly ledger: LedgerEntry[] = [];
   /** Requests as they arrive (the ledger records them when answered). */
   readonly arrivals: Array<{ schema: string | null; at: string }> = [];
   private delays: ModelDelay[] = [];
+  private faults: ModelFault[] = [];
   private seq = 0;
   private fixtures: ModelFixture[];
 
@@ -114,6 +125,11 @@ export class FakeModels {
     this.ledger.length = 0;
     this.arrivals.length = 0;
     this.delays = [];
+    this.faults = [];
+  }
+
+  addFault(fault: ModelFault): void {
+    this.faults.push({ schema: String(fault.schema), status: Number(fault.status) || 400, n: Number(fault.n) || 1 });
   }
 
   addDelay(delay: ModelDelay): void {
@@ -122,6 +138,7 @@ export class FakeModels {
 
   clearDelays(): void {
     this.delays = [];
+    this.faults = [];
   }
 
   setFixtures(fixtures: ModelFixture[]): void {
@@ -184,6 +201,12 @@ export class FakeModels {
     if (delay) {
       delay.n--;
       await new Promise((r) => setTimeout(r, delay.delayMs));
+    }
+    const fault = this.faults.find((f) => f.n > 0 && f.schema === schema);
+    if (fault && host === 'api.openai.com' && path === '/v1/chat/completions') {
+      fault.n--;
+      this.note('openai', `fault:${schema}`, model, fingerprint, fault.status, imageSha256);
+      return sendJson(res, fault.status, { error: { message: 'chaos fault: refused before any work', type: 'invalid_request_error' } });
     }
     if (host === 'api.openai.com' && path === '/v1/chat/completions') {
       const answer = this.chatAnswer(body);

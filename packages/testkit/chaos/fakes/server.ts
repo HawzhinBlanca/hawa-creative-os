@@ -155,6 +155,9 @@ export async function startFakes(options: { httpPort?: number; httpsPort?: numbe
       case 'POST /models/delays':
         models.addDelay(body);
         return sendJson(res, 200, { ok: true });
+      case 'POST /models/faults':
+        models.addFault(body);
+        return sendJson(res, 200, { ok: true });
       case 'GET /drive/files':
         return sendJson(res, 200, { files: drive.getUploadedFiles().map(({ content, ...meta }) => ({ ...meta, bytes: content.length })) });
     }
