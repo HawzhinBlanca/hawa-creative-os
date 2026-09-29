@@ -5,6 +5,7 @@ import { SpendingPolicyPanel } from '../components/SpendingPolicyPanel.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../api/client.js';
 import { read } from '../services/statusReport.js';
+import { formatElapsedHours, stageLabel } from '../services/operationsPresentation.js';
 import { CallCostAccountingPanel } from '../components/CallCostAccountingPanel.js';
 
 interface IntegrationHealth {
@@ -85,6 +86,7 @@ export const OpsScreen: React.FC = () => {
   const fetchOpsData = async () => {
     const sequence = ++refreshSequence.current;
     setLoading(true);
+    setFunnel(null); setFailures([]); setIntegrations([]); setLastCheck(null);
     const [healthRes, funnelRes, failRes] = await Promise.all([
       read(() => apiClient.operations.integrationsHealth()),
       read(() => apiClient.operations.funnelHealth()),
@@ -109,14 +111,16 @@ export const OpsScreen: React.FC = () => {
     setFailures(nextFailures || []);
     setFunnel(nextFunnel);
     setUnreadable(gaps);
-    setLastCheck(new Date().toLocaleTimeString());
+    setLastCheck(new Date().toISOString());
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchOpsData();
-
-    return () => { refreshSequence.current++; };
+    void fetchOpsData();
+    const refreshVisible = () => { if (!document.hidden) void fetchOpsData(); };
+    const timer = window.setInterval(refreshVisible, 60_000);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => { refreshSequence.current++; window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshVisible); };
   }, []);
 
   const degradedCount = integrations.filter((i) => i.state !== 'paid_verified').length;
@@ -127,52 +131,22 @@ export const OpsScreen: React.FC = () => {
 
   return (
     <section id="ops" className="screen active">
-      <SpendingPolicyPanel />
-      <CallCostAccountingPanel />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+        <div role="status" style={{ fontSize: 13, color: 'var(--muted)' }}>
           {loading
             ? 'Polling infrastructure telemetry…'
             : !lastCheck
               ? 'Telemetry not read yet'
               : Object.keys(unreadable).length > 0
                 ? `Telemetry incomplete · last checked ${lastCheck} · could not read ${Object.entries(unreadable).map(([name, why]) => `${name} (${why})`).join('; ')}`
-                : `Telemetry read · last checked ${lastCheck}`}
+                : `Snapshot read ${lastCheck}. Current connection health is shown separately. Refreshes every minute while visible.`}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => { setAuditRefresh(value => value + 1); void fetchOpsData(); }}>Refresh telemetry</button>
+          <button className="btn" disabled={loading} onClick={() => { setAuditRefresh(value => value + 1); void fetchOpsData(); }}>Refresh telemetry</button>
         </div>
       </div>
 
-      {/* Primary Ops Metrics */}
-      <h1 className="sr-only">Operations & Telemetry Overview</h1>
-      <div className="grid4">
-        {/* A count Core could not supply is shown as —, never as 0. */}
-        <div className="stat"><b>{failuresKnown ? criticalCount : '—'}</b><span>critical incidents</span></div>
-        <div className="stat"><b>{failuresKnown ? recoverableCount : '—'}</b><span>recoverable failures</span></div>
-        <div className="stat"><b>{integrationsKnown ? degradedCount : '—'}</b><span>adapters not verified</span></div>
-        <div className="stat"><b>—</b><span>last backup age (not reported to the Desk)</span></div>
-      </div>
-
-      <div className="panel" style={{ padding: 16, marginTop: 16 }}>
-        <h2>Design request progress</h2>
-        {funnel ? (
-          <>
-            <p>Last {funnel.windowHours} hours: {funnel.briefsCount ?? '—'} requests · {funnel.draftsCount ?? '—'} Canva drafts · {funnel.stalledTaskCount ?? '—'} overdue automatic requests · {funnel.status.replace('_', ' ')}</p>
-            {funnel.oldestStalledTaskId && <p>Oldest overdue task: {funnel.oldestStalledTaskId} ({funnel.oldestStalledTaskHours} hours). {funnel.nextAction}</p>}
-            {funnel.stageDurations && Object.entries(funnel.stageDurations).map(([stage, timing]) => (
-              <p key={stage}>{stage.replace(/([A-Z])/g, ' $1')}: {timing.samples} completed · p50 {timing.p50Hours === null ? '—' : `${timing.p50Hours}h`} · p95 {timing.p95Hours === null ? '—' : `${timing.p95Hours}h`}</p>
-            ))}
-          </>
-        ) : <p>Design progress unknown. {unreadable['design funnel'] || 'No result has been read yet.'}</p>}
-      </div>
-
-      <AvailabilityPanel refreshKey={auditRefresh} />
-
-      <ReceiptAuditPanel refreshKey={auditRefresh} />
-      <PublicationInspectionPanel refreshKey={auditRefresh} />
-
-      <div className="ops" style={{ marginTop: 16 }}>
+      <div className="ops-actions" style={{ marginTop: 16 }}>
         <div className="panel" style={{ padding: 16 }}>
           <h2>Actionable operations</h2>
           <table className="table">
@@ -193,7 +167,7 @@ export const OpsScreen: React.FC = () => {
                       {f.status}
                     </span>
                   </td>
-                  <td data-label="Evidence">Client: {f.clientId || 'Office'} · Invariant #7 check</td>
+                  <td data-label="Evidence">{f.reason || 'Open this task to inspect the recorded failure.'}</td>
                   <td data-label="Safe action">
                     <button
                       className="btn"
@@ -205,6 +179,7 @@ export const OpsScreen: React.FC = () => {
                   </td>
                 </tr>
               ))}
+              {failuresKnown && failures.length === 0 && <tr><td colSpan={4}>No task failures reported in this snapshot.</td></tr>}
               {unreadable.failures && (
                 <tr>
                   <td colSpan={4}>Could not read task failures, so this list may be incomplete: {unreadable.failures}</td>
@@ -214,6 +189,38 @@ export const OpsScreen: React.FC = () => {
           </table>
         </div>
 
+      </div>
+
+      {/* Primary Ops Metrics */}
+      <h2 className="sr-only">Operations overview</h2>
+      <div className="grid4">
+        {/* A count Core could not supply is shown as —, never as 0. */}
+        <div className="stat"><b>{failuresKnown ? criticalCount : '—'}</b><span>critical incidents</span></div>
+        <div className="stat"><b>{failuresKnown ? recoverableCount : '—'}</b><span>recoverable failures</span></div>
+        <div className="stat"><b>{integrationsKnown ? degradedCount : '—'}</b><span>adapters not verified</span></div>
+        <div className="stat"><b>—</b><span>last backup age (not reported to the Desk)</span></div>
+      </div>
+
+      <div className="panel" style={{ padding: 16, marginTop: 16 }}>
+        <h2>Design request progress</h2>
+        {lastCheck && <p className="observation-note">Snapshot read <time dateTime={lastCheck}>{lastCheck}</time>. These counts describe workflow progress, not live service availability.</p>}
+        {funnel ? (
+          <>
+            <p>Last {funnel.windowHours} hours: {funnel.briefsCount ?? '—'} requests · {funnel.draftsCount ?? '—'} Canva drafts · {funnel.stalledTaskCount ?? '—'} overdue automatic requests · workflow timeliness: {funnel.status === 'healthy' ? 'no overdue automatic requests at this read' : funnel.status.replaceAll('_', ' ')}</p>
+            {funnel.oldestStalledTaskId && <p>Oldest overdue task: {funnel.oldestStalledTaskId} ({funnel.oldestStalledTaskHours} hours). {funnel.nextAction}</p>}
+            {funnel.stageDurations && Object.entries(funnel.stageDurations).map(([stage, timing]) => (
+              <p key={stage}>{stageLabel(stage)}: {timing.samples} completed · p50 {formatElapsedHours(timing.p50Hours)} · p95 {formatElapsedHours(timing.p95Hours)}</p>
+            ))}
+          </>
+        ) : <p>Design progress unknown. {unreadable['design funnel'] || 'No result has been read yet.'}</p>}
+      </div>
+
+      <AvailabilityPanel refreshKey={auditRefresh} />
+
+      <ReceiptAuditPanel refreshKey={auditRefresh} />
+      <PublicationInspectionPanel refreshKey={auditRefresh} />
+
+      <div className="ops" style={{ marginTop: 16 }}>
         <div className="panel" style={{ padding: 16 }}>
           <h2>Component health</h2>
           {integrations.length > 0 ? (
@@ -233,6 +240,9 @@ export const OpsScreen: React.FC = () => {
           )}
         </div>
       </div>
+
+      <SpendingPolicyPanel />
+      <CallCostAccountingPanel />
 
       {/* Intervention Inspection Modal */}
       {inspectingFailure && (

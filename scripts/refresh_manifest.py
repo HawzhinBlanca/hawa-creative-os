@@ -15,16 +15,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from validate_pack import should_skip  # noqa: E402  (same rules as the validator)
+from validate_pack import package_files  # noqa: E402  (same traversal as the validator)
 
 MANIFEST = ROOT / "MANIFEST.json"
 SUMS = ROOT / "SHA256SUMS.txt"
 SELF_EXCLUDED = {MANIFEST.name, SUMS.name, "VALIDATION_REPORT.md"}
-
-
-def package_files() -> list[Path]:
-    files = [p for p in ROOT.rglob("*") if p.is_file() and not should_skip(p)]
-    return sorted(files, key=lambda p: str(p.relative_to(ROOT)))
 
 
 def main() -> int:

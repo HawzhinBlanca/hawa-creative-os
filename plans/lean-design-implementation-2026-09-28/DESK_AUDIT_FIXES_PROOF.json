@@ -1,0 +1,65 @@
+{
+  "date": "2026-09-29",
+  "base": "a7a29c7a",
+  "status": "local_audit_repairs_qualified_not_deployed",
+  "requirements": [
+    "FR-006",
+    "FR-063",
+    "FR-064",
+    "FR-076",
+    "NFR-021"
+  ],
+  "tests": {
+    "files": 9,
+    "passed": 61,
+    "failed": 0,
+    "skipped": 0
+  },
+  "strict_test_roots": 588,
+  "sources": {
+    "apps/core/src/services/funnel-monitor.ts": "e09cf968433bf2b5a1b3f522fbc388c6a48b6f22772eeaec2d74f036413301c6",
+    "apps/core/test/funnel-monitor.test.ts": "748b7710e3f47a670f41d5a79edbbb527e25459ec539f094ab06a7c0602cf943",
+    "apps/desk/src/App.tsx": "d4413738c1464be3578a9fb720ce1e97302a12150bc24510ab0f1f0c0ca2e345",
+    "apps/desk/src/components/AvailabilityPanel.tsx": "ef00320257128111f0e1ead95154d04faabd7461603c67c2c6152e0d52bc9ba3",
+    "apps/desk/src/components/Header.tsx": "bbe5e03bc4f2d8b6706bd31f77d6e58fceee6477f55f33ed4402ab3431d9d6a3",
+    "apps/desk/src/components/ReceiptAuditPanel.tsx": "988a030d8e4da346754fbf6484a88faba4509c867dc131d0898f3f296da11273",
+    "apps/desk/src/index.css": "553a83585bb87bfeb771178c59171df6f056d92dbde634628086b8a34d5f96db",
+    "apps/desk/src/screens/OpsScreen.tsx": "b3d43ee28b572d4989e1822312f57f2833e3578d8e7982250b6b1f04d43c32a7",
+    "apps/desk/test/availability-panel.test.ts": "b39203d2d9ffc28e76b158e8998b6aebc4160a983e279a8e8aa3fb2030c225cb",
+    "apps/desk/test/client-workflow.test.ts": "dd3ffabfbddb4fd9b937580ae7ffb4a8dcb635be5f712241cb279035a1f7103b",
+    "apps/desk/test/operations-evidence.test.ts": "1fe5f943b2721831b0125fa44425051c5d7c4cf7e8906cd486af1ec2ea30d704",
+    "plans/traceability.csv": "ab95f7157acd808a1ea463d3ba3aa76047b3fd3ee864e687dbe6a248142b5042",
+    "apps/desk/src/services/operationsPresentation.ts": "24f58b77a5402e42a6653adfc4259e4c7bdd16d129cf0891c3b23350329abd42",
+    "apps/desk/test/operations-presentation.test.ts": "8538df1d8857482706621ec520699001a207c9562778c8576ca390ff2c31ea1f",
+    "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES.md": "854a29f96d19beb529cbbdd898c7b7d7a4b540d5320414ffe509e1019a026206"
+  },
+  "evidence": {
+    "output/audits/2026-09-29-product-flow-fixes/ratchet.log": "76288843d00b782f92f7fc4e9b39fa3da29d052f95ef7c90a2b15617b4137c10",
+    "output/audits/2026-09-29-product-flow-fixes/security.log": "7450e92e55b05055300f48136230a89bedb47cc4d925e74f128ad62a0ec07e5c",
+    "output/audits/2026-09-29-product-flow-fixes/egress.log": "b6e716bda86ecb080e1fd6c96efaf64b06b2bbb78001c634eaf7a1137a63edf8",
+    "output/audits/2026-09-29-product-flow-fixes/REPORT.md": "4fe33cb046839d8de12ca021028c623f472efc372867b320aa3682c44f64cafd",
+    "output/audits/2026-09-29-product-flow-fixes/validate-spec-snapshot.py": "9227f166c10ad89e23304ab3746b95809ab9ec3351094aa1d60cb5b12fb123cc",
+    "output/audits/2026-09-29-product-flow-fixes/01-operations.png": "668165dc969dc818915f9369776cbfe665314a33b7db660250ec1295f5f0c899",
+    "output/audits/2026-09-29-product-flow-fixes/typecheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/audits/2026-09-29-product-flow-fixes/contrast.json": "dd68f92ed305a6d9bf980716971f9e4e7aa4af5c62e3d0ac37882d3daa3144c2",
+    "output/audits/2026-09-29-product-flow-fixes/preview.mjs": "6695c364eb5d65566e1be610099b2e66847c352ce4720245346f60a539d7724b",
+    "output/audits/2026-09-29-product-flow-fixes/pack-validation.log": "7208b42cc4563fab752943a7ae2ebc125a07ffbbccc1505795594b315ec26d83",
+    "output/audits/2026-09-29-product-flow-fixes/02-narrow-navigation.png": "7d149cb3258a1f96e90a49f19615e4c66bbf781f2c82691d35ea356bb7fbfc30",
+    "output/audits/2026-09-29-product-flow-fixes/test-types.log": "e307aa9b62fec0aa7693589d7c293ec011e9a8876dfe0356057b4123e00f0b92",
+    "output/audits/2026-09-29-product-flow-fixes/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/audits/2026-09-29-product-flow-fixes/tests-final.log": "fceee296bbdc914362823b207de0aca5639dcc1a29d48c30091ad3ec671441eb",
+    "output/audits/2026-09-29-product-flow-fixes/03-task-form.png": "0772f59f6b8e9bc563238232d34b108c796cf310b377dc005fee7914746ea854",
+    "output/audits/2026-09-29-product-flow-fixes/build.log": "11cdf3809cb327eee8a70c9a8fcbb0b28fd9aa5356a38556d8fcfdf0463f6c60"
+  },
+  "limitations": [
+    "Synthetic read-only browser API; no live task or provider side effect",
+    "Existing live deployment reachable, requires sign-in; fixes not deployed",
+    "Full release suite, screen-reader and RTL visual qualification not run"
+  ],
+  "blueprint": {
+    "passed": 1199,
+    "warnings": 0,
+    "failed": 0,
+    "method": "Exact included specification snapshot; existing skip rules retained, excluded directories linked; original slow traversal interrupted"
+  }
+}

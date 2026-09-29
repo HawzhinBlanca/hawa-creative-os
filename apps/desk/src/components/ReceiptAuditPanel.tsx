@@ -56,7 +56,7 @@ export function ReceiptAuditPanel({refreshKey=0}:{refreshKey?:number}) {
       <h2 style={{margin:0}}>Stored publication receipt audit</h2>
       <button className="btn" onClick={()=>void load()} disabled={busy}>Reload receipt audits</button>
     </div>
-    <p>Compares one PostgreSQL snapshot for your current authorized clients. Google Drive and Sheets are not read; nothing is repaired.</p>
+    <p>Checks saved delivery records for the clients you can access. This does not contact Google Drive or Sheets, or repair records.</p>
     {unavailable?<p role="alert">Receipt audit evidence unavailable: {unavailable}</p>:!state?<p>Reading audit scope…</p>:<>
       <p>Scope: {state.scope.clientIds.length} authorized client(s) and unassigned office tasks. History belongs to your current identity and this exact client scope.</p>
       <form onSubmit={record}>

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T09:06:37Z",
+  "generatedAt": "2026-09-29T09:23:37Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 525,
+  "fileCount": 529,
   "files": [
     {
       "path": ".dockerignore",
@@ -1253,6 +1253,16 @@
       "bytes": 5703
     },
     {
+      "path": "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES.md",
+      "sha256": "854a29f96d19beb529cbbdd898c7b7d7a4b540d5320414ffe509e1019a026206",
+      "bytes": 5104
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES_PROOF.json",
+      "sha256": "18b99ce4db957b08adfe684d980d28206b36f542e9e89d488c0a05ccd87a8b14",
+      "bytes": 4719
+    },
+    {
       "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
       "sha256": "8539fb14dab34eff20105d33d1f1506e23a217306f40faa32dcdfe586570a09b",
       "bytes": 64739
@@ -1381,6 +1391,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/UNICODE_RETRIEVAL_PROOF.json",
       "sha256": "e965b5cfa7cf663e89430c02c0fa8fcb33c1969446e0ea23f1fb4606e3769088",
       "bytes": 12651
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/VALIDATION_TRAVERSAL.md",
+      "sha256": "57453b5211155f37852dd283fc1cb5a73c02d4b51f85506af7f3eac63543b7ef",
+      "bytes": 1309
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/VISUAL_INPUTS_PROOF.json",
@@ -1819,8 +1834,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2466089161ef66de5c9078270de5d2ff0a948724b3837b845dc62f6ef1c067bf",
-      "bytes": 478746
+      "sha256": "7fdfa4e4af68dde5a0b7fceb301203c8fd9c254b65da1717a92f8024aa9c4741",
+      "bytes": 481892
     },
     {
       "path": "plans/user-stories.csv",
@@ -2424,8 +2439,8 @@
     },
     {
       "path": "scripts/refresh_manifest.py",
-      "sha256": "a14f7d2cdd1e5401b1c515e721557b7b0486d8665ce05a367c60eb852614abc7",
-      "bytes": 2937
+      "sha256": "006076e3b192cbbc208b94c5e36a0fd228433c74730dfef0e6779dc76e3c7ea1",
+      "bytes": 2762
     },
     {
       "path": "scripts/release_admission_verdict.ts",
@@ -2573,6 +2588,11 @@
       "bytes": 3912
     },
     {
+      "path": "scripts/test_pack_walk.py",
+      "sha256": "d4ce026bc39f3b31dd72392e20cf8eed3ece5460236197c592fee8a0e727c377",
+      "bytes": 3440
+    },
+    {
       "path": "scripts/test_studio_v3_e2e.mjs",
       "sha256": "894a91a62acf5c3c5aad454d65958ee8d4ed3450d4b93715e924c44deffd87bd",
       "bytes": 6418
@@ -2594,8 +2614,8 @@
     },
     {
       "path": "scripts/validate_pack.py",
-      "sha256": "4fa773c814ccf7a3141c197f5fac15e2eeb72ef0b1a7fcdb1ca6dfd0f608ad16",
-      "bytes": 24615
+      "sha256": "a45cd06e0bd0f370f10d4bfed36787fb44f91fa507d5bd06868a4b42284eb513",
+      "bytes": 25378
     },
     {
       "path": "scripts/verify_live_h01_h03.ts",

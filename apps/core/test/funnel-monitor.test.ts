@@ -127,6 +127,29 @@ describe('Production Funnel Health Monitor (Step 5 Audit Requirement)', () => {
     }
   });
 
+  it('retains a thirty-second draft interval instead of rounding it to zero hours', async () => {
+    const isolatedTenant = randomUUID(), isolatedClient = randomUUID(), task = randomUUID();
+    const owner = createDb(process.env.TEST_DATABASE_OWNER_URL!);
+    await sql`INSERT INTO hawa.tenants (id,name,slug) VALUES (${isolatedTenant}::uuid,'Precision fixture',${isolatedTenant})`.execute(owner);
+    try {
+      await sql`INSERT INTO hawa.tenant_memberships (tenant_id,user_id,role) VALUES (${isolatedTenant}::uuid,${operatorUserId}::uuid,'operator')`.execute(owner);
+      await withRlsContext(db, { tenantId: isolatedTenant, userId: operatorUserId, role: 'operator' }, async trx => {
+        await sql`INSERT INTO hawa.clients (id,tenant_id,name,code) VALUES (${isolatedClient}::uuid,${isolatedTenant}::uuid,'Precision fixture','PRECISION')`.execute(trx);
+        await sql`INSERT INTO hawa.tasks (id,tenant_id,client_id,title,state,priority,version,created_at,updated_at)
+          VALUES (${task}::uuid,${isolatedTenant}::uuid,${isolatedClient}::uuid,'Precision fixture','received',3,1,now()-interval '60 seconds',now())`.execute(trx);
+        await sql`INSERT INTO hawa.canva_bindings (tenant_id,task_id,client_id,canva_design_id,edit_url,created_at)
+          VALUES (${isolatedTenant}::uuid,${task}::uuid,${isolatedClient}::uuid,'precision-fixture','https://www.canva.com/design/test/edit',now()-interval '30 seconds')`.execute(trx);
+      });
+      const metrics=await checkProductionFunnelHealth(db,{tenantId:isolatedTenant});
+      expect(metrics.stageDurations?.briefToDraft.samples).toBe(1);
+      expect(metrics.stageDurations?.briefToDraft.p50Hours).toBeCloseTo(30/3600,8);
+      expect(metrics.stageDurations?.briefToDraft.p95Hours).toBeCloseTo(30/3600,8);
+    } finally {
+      // The test runner drops this file's disposable database, including tenant provisioning receipts.
+      await owner.destroy();
+    }
+  });
+
   it('exposes GET /v1/system/funnel/health route through Hono app', async () => {
     const app = createApp({ db });
     const res = await app.request('/v1/system/funnel/health?windowHours=24', {

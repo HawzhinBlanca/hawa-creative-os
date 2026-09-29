@@ -2,6 +2,7 @@
   --bg: #0f1117;
   --panel: #181b22;
   --ink: #f1f3f7;
+  --text: var(--ink);
   --muted: #94a3b8;
   --line: #29303d;
   --soft: #1f242e;
@@ -38,7 +39,7 @@
 }
 
 ::placeholder {
-  color: #475569;
+  color: var(--muted);
   opacity: 1;
 }
 
@@ -250,14 +251,14 @@ input, select, textarea {
 }
 
 .btn.primary {
-  background: #0284c7;
+  background: #0369a1;
   color: #fff;
-  border-color: #0284c7;
+  border-color: #0369a1;
 }
 
 .btn.primary:hover {
-  background: #0369a1;
-  border-color: #0369a1;
+  background: #075985;
+  border-color: #075985;
 }
 
 .btn.danger {
@@ -2484,4 +2485,17 @@ input, select, textarea {
   border-color: var(--line) !important;
   color: var(--muted);
   cursor: not-allowed;
+}
+
+/* Audit repair: every destination stays visible in a narrow office panel. */
+.observation-note { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.ops-actions { overflow-wrap: anywhere; }
+#ops > .panel, #ops > section { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .side { position: static; }
+  .side .brand, .side .health { width: 100%; }
+  .side .nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; min-width: 0; overflow: visible; }
+  .side .nav button { white-space: normal; min-width: 0; min-height: 44px; font-size: 13px; text-align: start; }
+  .top .btn, #ops .btn, [role="dialog"] .btn { min-height: 44px; }
+  .top h1 { overflow-wrap: anywhere; }
 }

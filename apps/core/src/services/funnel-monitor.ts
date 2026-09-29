@@ -163,8 +163,8 @@ export async function checkProductionFunnelHealth(
           approvalToDelivery: emptyStage(),
           ...Object.fromEntries(durations.map((d) => [d.stage, {
           samples: Number(d.samples),
-          p50Hours: d.p50_hours === null ? null : Math.round(Number(d.p50_hours) * 10) / 10,
-          p95Hours: d.p95_hours === null ? null : Math.round(Number(d.p95_hours) * 10) / 10,
+          p50Hours: d.p50_hours === null ? null : Number(d.p50_hours),
+          p95Hours: d.p95_hours === null ? null : Number(d.p95_hours),
           }])),
         };
 

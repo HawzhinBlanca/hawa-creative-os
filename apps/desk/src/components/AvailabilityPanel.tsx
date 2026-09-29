@@ -5,6 +5,7 @@ import { parseOperationsReliability } from '../services/operationsEvidence.js';
 
 const percent = (v: number | null) => v === null ? 'Unknown' : `${v.toFixed(3)}%`;
 export function AvailabilityPanel({ refreshKey = 0 }: { refreshKey?: number }) {
+  const [retry, setRetry] = useState(0);
   const [month, setMonth] = useState('');
   const [report, setReport] = useState<OperationsReliabilityReport | null>(null);
   const [error, setError] = useState('');
@@ -27,12 +28,13 @@ export function AvailabilityPanel({ refreshKey = 0 }: { refreshKey?: number }) {
     refresh();
     const timer = setInterval(refresh, 60000);
     return () => { clearInterval(timer); sequence.current++; };
-  }, [month, refreshKey]);
+  }, [month, refreshKey, retry]);
   return <section className="panel" aria-label="Office reliability" style={{ padding: 16, marginTop: 16, minWidth: 0, overflowWrap: 'anywhere' }}>
     <h2>Office availability and latency</h2>
+    <button className="btn" disabled={loading} onClick={() => setRetry(value => value + 1)}>Retry reliability read</button>
     <label>Evidence month (Asia/Baghdad) <input aria-label="Availability month" type="month" value={month} onChange={e => setMonth(e.target.value)} /></label>
     {month && <button className="btn" onClick={() => setMonth('')}>Current month</button>}
-    {loading ? <p>Reading availability evidence…</p> : !report ? <p>Reliability evidence unavailable. {error}</p> : <>
+    {loading ? <p>Reading availability evidence…</p> : !report ? <div role="alert"><p>Reliability evidence unavailable. {error}</p><p>Retry this read after checking the Core connection. You can keep a local request draft; saving and review require the server.</p></div> : <>
       <p>Target: {report.availability.targetPercent}% monthly availability for office intake and review (Asia/Baghdad).</p>
       {report.schemaVersion === 1 ? <>
         <p><span className="pill warn">Availability unmeasured</span></p>

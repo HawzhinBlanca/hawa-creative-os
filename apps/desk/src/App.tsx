@@ -324,7 +324,9 @@ export const App: React.FC = () => {
             aria-modal="true"
             aria-labelledby="new-task-title"
             style={{
-              width: 540,
+              width: 'min(540px, calc(100vw - 24px))',
+              maxHeight: 'calc(100dvh - 24px)',
+              overflowY: 'auto',
               padding: 24,
               boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
             }}
@@ -430,12 +432,13 @@ export const App: React.FC = () => {
             {/* Primary Copy (English) */}
             <div style={{ margin: '14px 0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={{ fontWeight: 650, fontSize: 13 }}>
+                <label htmlFor="modal-copy-en" style={{ fontWeight: 650, fontSize: 13 }}>
                   {t.modal.taskCopyEnLabel}
                 </label>
                 <span style={{ fontSize: 11, color: '#38bdf8', fontWeight: 600 }}>Primary · LTR</span>
               </div>
               <textarea
+                id="modal-copy-en"
                 dir="ltr"
                 lang="en"
                 style={{ width: '100%', height: 65, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
@@ -448,12 +451,13 @@ export const App: React.FC = () => {
             {/* Secondary Copy (Kurdish Sorani) */}
             <div style={{ margin: '14px 0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={{ fontWeight: 650, fontSize: 13 }}>
+                <label htmlFor="modal-copy-ckb" style={{ fontWeight: 650, fontSize: 13 }}>
                   {t.modal.taskCopyCkbLabel}
                 </label>
                 <span style={{ fontSize: 11, color: '#eab308', fontWeight: 600 }}>Secondary · RTL</span>
               </div>
               <textarea
+                id="modal-copy-ckb"
                 dir="rtl"
                 lang="ckb"
                 style={{ width: '100%', height: 65, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}

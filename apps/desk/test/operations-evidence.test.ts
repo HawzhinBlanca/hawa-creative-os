@@ -43,3 +43,22 @@ it('treats malformed successful telemetry as unknown instead of an empty healthy
  expect(v.text()).toContain('Design progress unknown');expect(v.text()).toContain('critical incidents');
  const stats=v.container.querySelector('.grid4')!;expect([...stats.querySelectorAll('b')].map(e=>e.textContent)).toEqual(['—','—','—','—']);await v.unmount();
 });
+
+it('prioritizes actionable failures and labels the progress as a timestamped snapshot', async () => {
+ stubCore(c => c.path.endsWith('/funnel/health') ? json({status:'healthy',windowHours:48,briefsCount:2,draftsCount:2,stalledTaskCount:0,stageDurations:{briefToDraft:{samples:2,p50Hours:1/60,p95Hours:1/120}}}) : json({items:[]}));
+ const v=await mount(React.createElement(OpsScreen));await flush();
+ expect(v.text().indexOf('Actionable operations')).toBeLessThan(v.text().indexOf('Daily spending policy'));
+ expect(v.text()).toContain('Snapshot read');expect(v.container.querySelector('time')?.dateTime).toMatch(/^\d{4}-/);
+ expect(v.text()).toContain('Brief → draft: 2 completed · p50 1m · p95 30s');
+ expect(v.text()).toContain('not live service availability');expect(v.text()).not.toContain('· healthy');
+ expect(v.container.querySelectorAll('h1')).toHaveLength(0);await v.unmount();
+});
+
+it('expires successful telemetry on the next visible refresh and ignores late responses after unmount', async () => {
+ let failed=false;
+ const calls=stubCore(c=>c.path.endsWith('/funnel/health')&&!failed ? json({status:'healthy',windowHours:48,briefsCount:2,draftsCount:2,stalledTaskCount:0}) : json({detail:'Unavailable'},503));
+ const v=await mount(React.createElement(OpsScreen));await flush();expect(v.text()).toContain('2 requests');
+ failed=true;await import('./support/desk-harness.js').then(m=>m.advance(60000));
+ expect(v.text()).not.toContain('2 requests');expect(v.text()).toContain('Design progress unknown');
+ await v.unmount();const total=calls.length;await import('./support/desk-harness.js').then(m=>m.advance(60000));expect(calls).toHaveLength(total);
+});

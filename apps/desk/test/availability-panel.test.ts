@@ -51,3 +51,11 @@ it('refreshes each minute so a stopped monitor or failed read cannot remain appa
  available=false;await advance(60000);expect(v.text()).toContain('Reliability evidence unavailable');expect(v.text()).not.toContain('Coverage: 33.333%');
  await v.unmount();const count=calls.length;await advance(60000);expect(calls.length).toBe(count);
 });
+
+it('retries only reliability evidence and recovers from an unavailable read',async()=>{
+ let fail=true;
+ const calls=stubCore(()=>fail?json({detail:'Unavailable'},503):json(report()));
+ const v=await mount(React.createElement(AvailabilityPanel));await flush();expect(v.text()).toContain('Reliability evidence unavailable');
+ fail=false;await click(byText(v.container,'button','Retry reliability read'));await flush();
+ expect(v.text()).toContain('Coverage: 33.333%');expect(calls).toHaveLength(2);expect(calls.every(c=>c.path==='/v1/operations/slo' && c.method==='GET')).toBe(true);await v.unmount();
+});
