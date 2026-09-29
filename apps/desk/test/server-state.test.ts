@@ -131,9 +131,9 @@ function fakeCore(initial: FakeTask[], opts: { role?: string; listIds?: string[]
   };
 }
 
-async function renderWork(stream: FakeStream, doc = { hidden: false }) {
+async function renderWork(stream: FakeStream, doc = { hidden: false }, props: React.ComponentProps<typeof WorkScreen> = {}) {
   const runtime = createDeskRuntime({ stream, doc });
-  const view = await mount(h(DeskProviders, { runtime, children: h(WorkScreen, {}) }));
+  const view = await mount(h(DeskProviders, { runtime, children: h(WorkScreen, props) }));
   mounted.push({ view, runtime });
   await advance(500);
   const queue = () => view.container.querySelector('[aria-label="Tasks List"]')?.textContent || '';
@@ -211,6 +211,19 @@ afterAll(() => {
 });
 
 describe('the Work queue follows the event stream', () => {
+  it('offers Studio and Canva setup before the first design is captured', async () => {
+    fakeCore([{id:'t1',title:'Uncaptured report cover',status:'OPERATOR_REQUIRED'}]);
+    const openSettings=vi.fn();
+    const {view}=await renderWork(new FakeStream('connected'),{hidden:false},{onNavigateToSettings:openSettings});
+    expect(view.container.querySelector('[aria-label="Captured Design Preview"]')).toBeNull();
+    expect(view.container.querySelector('[aria-label="Saved request"]')?.textContent).toContain('Uncaptured report cover');
+    expect(view.container.querySelector('[aria-label="Design Studio"]')).not.toBeNull();
+    expect(view.container.querySelector('[aria-label="Canva design and exports"]')).not.toBeNull();
+    await click(byText(view.container,'button',/Open Canva settings/));
+    expect(openSettings).toHaveBeenCalledOnce();
+    expect(byText(view.container,'button',/Approve Captured Files/)?.disabled).toBe(true);
+  });
+
   it.each([undefined, true, false, null])('keeps rendered glyphs unverified with legacy coverage=true and family result %s', async (fontFamilyPass) => {
     fakeCore([{ ...approvable('t1', 'Font evidence'), fontFamilyPass }]);
     const { view } = await renderWork(new FakeStream('connected'));

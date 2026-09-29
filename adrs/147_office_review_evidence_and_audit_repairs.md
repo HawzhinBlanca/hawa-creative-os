@@ -85,3 +85,10 @@ The retention correction will be independently qualified before readiness.
 Retention/source schema checks: 30 tests in three files passed, zero failed or
 skipped (retention-tests.log). Release preflight and live migration receipt for
 070 are still required.
+
+Live checking of the deployed 382f3071 seal exposed a rendering regression:
+Studio and Canva setup had been inadvertently nested under latestRevision.
+They now render with saved request/photos outside the captured-preview condition.
+A full Work interaction checks an uncaptured task retains both preparation panels
+while final approval remains disabled. Earlier unit tests did not cover this
+condition; that deployment is superseded by the next qualified seal.
