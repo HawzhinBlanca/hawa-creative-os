@@ -60,6 +60,7 @@ import { askText, forwardOfficeAlert, forwardText, langOf, noteText, nothingToCh
 import { createRequesterIntentModel, type RequesterIntentModel } from '../services/requester-intent-model.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
+import { projectLifecycleOfficeRetry } from '../services/lifecycle-office-retry.js';
 import { splitBilingualRequest, type ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
 import { parseNativeReviewSubmission } from '@hawa/domain';
@@ -1227,7 +1228,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     if (!UUID.test(requestId) || body?.v !== 1 ||
         !Number.isInteger(expectedRev) || expectedRev < 1 || rev !== expectedRev + 1 ||
         op?.kind !== 'recordOutcome' || typeof taskId !== 'string' || !UUID.test(taskId) ||
-        runId !== `dr-${taskId}` || body.key !== `${requestId}:${rev}:designFinished:${runId}` ||
+        // The task's first design run, or an office retry's attempt run (ADR-142).
+        typeof runId !== 'string' || (runId !== `dr-${taskId}` && !new RegExp(`^dr-${taskId}-a[1-9][0-9]*$`).test(runId)) ||
+        body.key !== `${requestId}:${rev}:designFinished:${runId}` ||
         !report || !clean(report.status) ||
         (report.code !== undefined && !clean(report.code)) ||
         (report.designId !== undefined && (typeof report.designId !== 'string' || !/^[A-Za-z0-9_-]{4,64}$/.test(report.designId))) ||
@@ -1341,6 +1344,42 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
       log.error(`[core:internal] lifecycle office revision ${requestId} failed:`, error instanceof Error ? error.message : error);
       return problem(c, 503, 'Lifecycle Projection Unavailable', 'The office decision did not commit; retry with the same key');
+    }
+  });
+
+  // ADR-142: the office runs a design that ended without a draft again, on the same task, under a new
+  // attempt run. manual (rev N) -> designing (rev N+1); the task failed_operator -> received.
+  internal('/lifecycle/:requestId/office-retry', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const actor = op?.actor && typeof op.actor === 'object' && !Array.isArray(op.actor)
+      ? op.actor as Record<string, unknown> : null;
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 || !Number.isInteger(expectedRev) || expectedRev < 2 ||
+        rev !== expectedRev + 1 || op?.kind !== 'retryDesign' ||
+        !UUID.test(String(op.taskId || '')) || !UUID.test(String(op.actionId || '')) ||
+        body.key !== `${requestId}:${rev}:officeRetry:desk:${op.actionId}` ||
+        !actor || !UUID.test(String(actor.userId || '')) || typeof actor.role !== 'string' || actor.role.length > 60 ||
+        typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000) {
+      return problem(c, 400, 'Invalid office retry', 'Expected one versioned retryDesign action for the current request');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleOfficeRetry(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID, taskId: op.taskId as string, actionId: op.actionId as string,
+        actor: { userId: actor.userId as string, role: actor.role }, reason: op.reason.trim(),
+        expectedRev, rev, key: body.key as string,
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle office retry ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The office retry did not commit; retry with the same key');
     }
   });
 

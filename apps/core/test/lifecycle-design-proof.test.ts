@@ -147,11 +147,14 @@ describe('one write owner for lifecycle-owned designs', () => {
     const { taskId } = await ownedTask();
     const before = await withRlsContext(db, scope, (trx) => trx.selectFrom('tasks')
       .select(['state', 'version']).where('id', '=', taskId).executeTakeFirstOrThrow());
-    for (const action of ['pause', 'resume', 'cancel', 'retry', 'redrive']) {
+    for (const action of ['pause', 'resume', 'cancel', 'retry']) {
       expect(await post(`/v1/tasks/${taskId}/${action}`)).toMatchObject({
         status: 409, body: { title: 'LIFECYCLE_OWNED' },
       });
     }
+    // ADR-142: a re-drive of a request-owned task is the request's office retry, which applies only to
+    // a design that ended without a draft; this request is still designing, so nothing changes.
+    expect(await post(`/v1/tasks/${taskId}/redrive`)).toMatchObject({ status: 409, body: { title: 'NOT_RETRYABLE' } });
     const after = await withRlsContext(db, scope, (trx) => trx.selectFrom('tasks')
       .select(['state', 'version']).where('id', '=', taskId).executeTakeFirstOrThrow());
     expect(after).toEqual(before);

@@ -593,12 +593,25 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       tier: 'standard',
     });
 
-    // Step 1: brief executes and records cost (> 0.0001)
-    await service.resume(scope, taskId, run.id);
+    // The brief's own reservation is larger than the whole $0.0001 limit: nothing is sent, and since
+    // ADR-142 the run says so instead of "no candidate passed hard QA".
+    const result = await service.resume(scope, taskId, run.id);
+    expect(result).toMatchObject({ status: 'failed', code: 'STUDIO_RUN_LIMIT_TOO_SMALL' });
+    expect(result.diagnostic).toMatch(/^STUDIO_RUN_LIMIT_TOO_SMALL at stage briefing: .* the run has \$0\.00 of its \$0\.0001 limit left/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 
-    // Step 2: next stage attempts model call, detects budget breach -> handles exhaustion
+  it('4b. a run that spent its limit on its work still ends as BUDGET_EXHAUSTED', async () => {
+    const taskId = await createTask();
+    const fetcher = createMockFetch();
+    // The brief is the run's one admitted call; the next call finds the run at its call limit, which is
+    // BUDGET_EXHAUSTED as before, not a reservation shortfall.
+    const service = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher, maxUsd: 0.5, maxCalls: 1, defaultTier: 'standard' });
+    const { run } = await service.createOrGetRun(scope, taskId, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350, tier: 'standard' });
+    await service.resume(scope, taskId, run.id);
     const result = await service.resume(scope, taskId, run.id);
     expect(result.diagnostic).toContain('BUDGET_EXHAUSTED');
+    expect(result.diagnostic).not.toContain('STUDIO_RUN_LIMIT_TOO_SMALL');
   });
 
   it('5. a lost layout-model reply holds the run instead of paying for a fallback design', async () => {

@@ -494,6 +494,7 @@ POST /api/tasks/:taskId/figma/lease
 POST /api/tasks/:taskId/figma/mutate
 POST /api/tasks/:taskId/generate
 POST /api/tasks/:taskId/leases
+POST /api/tasks/:taskId/lifecycle/retry-design
 POST /api/tasks/:taskId/native-review
 POST /api/tasks/:taskId/notifications/canva-ready
 POST /api/tasks/:taskId/notifications/canva-status
@@ -594,6 +595,7 @@ POST /api/v1/tasks/:taskId/figma/lease
 POST /api/v1/tasks/:taskId/figma/mutate
 POST /api/v1/tasks/:taskId/generate
 POST /api/v1/tasks/:taskId/leases
+POST /api/v1/tasks/:taskId/lifecycle/retry-design
 POST /api/v1/tasks/:taskId/native-review
 POST /api/v1/tasks/:taskId/notifications/canva-ready
 POST /api/v1/tasks/:taskId/notifications/canva-status
@@ -697,6 +699,7 @@ POST /tasks/:taskId/figma/lease
 POST /tasks/:taskId/figma/mutate
 POST /tasks/:taskId/generate
 POST /tasks/:taskId/leases
+POST /tasks/:taskId/lifecycle/retry-design
 POST /tasks/:taskId/native-review
 POST /tasks/:taskId/notifications/canva-ready
 POST /tasks/:taskId/notifications/canva-status
@@ -761,6 +764,7 @@ POST /v1/internal/lifecycle/:requestId/delivery-start
 POST /v1/internal/lifecycle/:requestId/design-outcome
 POST /v1/internal/lifecycle/:requestId/native-review
 POST /v1/internal/lifecycle/:requestId/office-decision
+POST /v1/internal/lifecycle/:requestId/office-retry
 POST /v1/internal/lifecycle/:requestId/project
 POST /v1/internal/lifecycle/:requestId/question-sent
 POST /v1/internal/lifecycle/:requestId/requester-revision
@@ -811,6 +815,7 @@ POST /v1/tasks/:taskId/figma/lease
 POST /v1/tasks/:taskId/figma/mutate
 POST /v1/tasks/:taskId/generate
 POST /v1/tasks/:taskId/leases
+POST /v1/tasks/:taskId/lifecycle/retry-design
 POST /v1/tasks/:taskId/native-review
 POST /v1/tasks/:taskId/notifications/canva-ready
 POST /v1/tasks/:taskId/notifications/canva-status

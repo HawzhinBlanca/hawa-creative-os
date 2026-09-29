@@ -17,10 +17,20 @@ export interface DesignRunInput extends WorkflowInput {
   lifecycle: { requestId: string; round: number; runId: string };
 }
 
+/**
+ * The run of a task's first design is `dr-<taskId>`; an office retry of a design that ended without a
+ * draft (ADR-142) is `dr-<taskId>-a<n>`, run with `redriveAttempt: n` so its Studio run has its own key.
+ */
+export function designRunKeyMatches(input: Pick<DesignRunInput, 'taskId' | 'redriveAttempt'>, key: string): boolean {
+  if (key === `dr-${input.taskId}`) return input.redriveAttempt === undefined;
+  const attempt = new RegExp(`^dr-${input.taskId}-a([1-9][0-9]*)$`).exec(key);
+  return Boolean(attempt) && input.redriveAttempt === Number(attempt![1]);
+}
+
 export function validDesignRun(input: DesignRunInput, key: string): boolean {
   return input?.v === 1 && UUID.test(input.taskId) && UUID.test(input.lifecycle?.requestId) &&
     Number.isInteger(input.lifecycle.round) && input.lifecycle.round >= 0 &&
-    input.lifecycle.runId === key && key === `dr-${input.taskId}` &&
+    input.lifecycle.runId === key && designRunKeyMatches(input, key) &&
     input.tenantId === DEFAULT_TENANT_ID && Boolean(input.clientId && UUID.test(input.clientId)) &&
     input.canvaAutoGenerate === true && input.idempotencyKey === `lifecycle:${input.lifecycle.requestId}:${input.taskId}`;
 }

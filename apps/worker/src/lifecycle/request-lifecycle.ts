@@ -94,6 +94,8 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
     kind?: 'revise' | 'approve' | 'reject' };
   /** Filled when the requester submits a revision directive after the office marks "revise". */
   revisionRound?: { eventId: string; sha256: string; round: number; newTaskId: string; runId: string };
+  /** The office's latest retry of a design that ended without a draft (ADR-142). */
+  officeRetry?: { eventId: string; sha256: string; actionId: string; attempt: number; runId: string; rev: number };
   delivery?: { startEventId: string; startSha256: string; actionId: string; input: DeliveryInput;
     finishEventId?: string; finishSha256?: string; finishResult?: DeliveryFinishedReply };
 }
@@ -131,6 +133,20 @@ export type OfficeRevisionReply =
   | { accepted: true; requestId: string; taskId: string; revisionId: string; actionId: string;
       approvalId: string; stage: 'manual' | 'approved' | 'rejected'; rev: number }
   | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
+
+/** ADR-142: the office runs the current task's automatic design again after it ended without a draft. */
+export interface OfficeRetryEvent {
+  v: 1; kind: 'retry'; eventId: string; requestId: string; taskId: string; actionId: string;
+  expectedRev: number; actor: { userId: string; role: string }; reason: string;
+}
+
+export type OfficeRetryReply =
+  | { accepted: true; requestId: string; taskId: string; actionId: string; runId: string; attempt: number;
+      stage: 'designing'; rev: number }
+  | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
+
+/** The roles Core's projection admits for a retry (lifecycle-office-retry.ts OFFICE_RETRY_ROLES). */
+export const OFFICE_RETRY_ROLES = new Set(['operator', 'art_director', 'creative_director', 'office_admin', 'administrator']);
 
 export interface OfficeDeliveryStartEvent {
   v: 1; kind: 'deliver'; eventId: string; requestId: string; taskId: string;
@@ -389,8 +405,8 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
 }
 
 export async function recordDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal, event: DesignFinishedEvent) {
-  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
-      !UUID.test(event.taskId) || event.runId !== `dr-${event.taskId}` ||
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId || !UUID.test(event.taskId) ||
+      (event.runId !== `dr-${event.taskId}` && !new RegExp(`^dr-${event.taskId}-a[1-9][0-9]*$`).test(event.runId)) ||
       event.eventId !== `dr-finished:${event.runId}` ||
       typeof event.round !== 'number' || !Number.isInteger(event.round) || event.round < 0 ||
       !event.report || typeof event.report.status !== 'string') throw invalid('invalid design finish identity');
@@ -753,6 +769,62 @@ export async function recordDeliveryFinished(ctx: AutomaticOpenContext, core: Co
   return reply;
 }
 
+/**
+ * ADR-142: the office runs the current task's automatic design again, after it ended without a draft
+ * (the request is manual, its outcome had no draft and no question, and the office has not sent a
+ * draft back for changes). Core records the retry, moves the task back to received and names the
+ * attempt run; the same task is designed again under `dr-<taskId>-a<n>`. Nothing is sent to the
+ * requester: they were told the office is on it, and they hear the outcome as they would the first.
+ */
+export async function recordOfficeRetry(ctx: AutomaticOpenContext, core: CoreInternal, event: OfficeRetryEvent): Promise<OfficeRetryReply> {
+  if (event?.v !== 1 || event.kind !== 'retry' || ctx.key !== event.requestId || !UUID.test(event.requestId) ||
+      !UUID.test(event.taskId) || !UUID.test(event.actionId) || event.eventId !== `desk:${event.actionId}` ||
+      !Number.isInteger(event.expectedRev) || event.expectedRev < 2 ||
+      !event.actor || !UUID.test(event.actor.userId) || !OFFICE_RETRY_ROLES.has(event.actor.role) ||
+      typeof event.reason !== 'string' || !event.reason.trim() || event.reason.length > 2000) {
+    throw invalid('invalid office retry identity, actor or reason');
+  }
+  const sha256 = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.officeRetry?.eventId === event.eventId) {
+    if (prior.officeRetry.sha256 !== sha256) throw invalid('this office retry was recorded with different content');
+    // A worker can stop after saving state and before the run started; the workflow key makes it once.
+    if (prior.stage === 'designing' && prior.runId === prior.officeRetry.runId) ctx.startDesign(prior.designInput);
+    return { accepted: true, requestId: prior.requestId, taskId: prior.taskId, actionId: event.actionId,
+      runId: prior.officeRetry.runId, attempt: prior.officeRetry.attempt, stage: 'designing', rev: prior.officeRetry.rev };
+  }
+  if (prior.stage !== 'manual' || prior.rev !== event.expectedRev || prior.officeRevision || prior.question ||
+      !prior.outcome || prior.outcome.revisionId) return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.taskId !== event.taskId) return { accepted: false, code: 'NOT_CURRENT_DRAFT' };
+  const nextRev = prior.rev + 1;
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; taskId: string; actionId: string; rev: number; stage: 'designing';
+    runId: string; attempt: number; taskState: string;
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/office-retry`, {
+    v: 1, expectedRev: prior.rev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:officeRetry:${event.eventId}`,
+    ops: [{ kind: 'retryDesign', taskId: event.taskId, actionId: event.actionId,
+      actor: { userId: event.actor.userId, role: event.actor.role }, reason: event.reason.trim() }],
+  }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
+      projected.actionId !== event.actionId || projected.rev !== nextRev || projected.stage !== 'designing' ||
+      !Number.isInteger(projected.attempt) || projected.attempt < 1 ||
+      projected.runId !== `dr-${event.taskId}-a${projected.attempt}`) {
+    throw new Error('Core did not return a valid office retry projection');
+  }
+  const designInput: DesignRunInput = { ...prior.designInput,
+    lifecycle: { ...prior.designInput.lifecycle, runId: projected.runId }, redriveAttempt: projected.attempt };
+  const next: AutomaticLifecycleState = { ...prior, stage: 'designing', rev: nextRev, runId: projected.runId, designInput,
+    outcome: undefined, question: undefined,
+    officeRetry: { eventId: event.eventId, sha256, actionId: event.actionId, attempt: projected.attempt,
+      runId: projected.runId, rev: nextRev } };
+  ctx.set('lc', next);
+  ctx.startDesign(designInput);
+  return { accepted: true, requestId: event.requestId, taskId: event.taskId, actionId: event.actionId,
+    runId: projected.runId, attempt: projected.attempt, stage: 'designing', rev: nextRev };
+}
+
 function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
   const message = state.outcome?.message;
   // Key is scoped to rev so a retried send after a revision round uses the correct idempotency key.
@@ -964,6 +1036,19 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               ? recordOfficeDeliveryStart(handlers, core, event)
               : recordOfficeRevision(handlers, core, event as OfficeRevisionEvent);
           }),
+      ),
+      /** ADR-142: reached only through the signed office gateway (OfficeDecisionGateway.retryDesign). */
+      officeRetry: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: OfficeRetryEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordOfficeRetry({
+            key: ctx.key,
+            get: (name) => ctx.get<LifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: () => { throw new Error('officeRetry does not message the requester'); },
+            startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
+          }, core, event)),
       ),
       requesterDecision: restate.handlers.object.exclusive(
         { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },

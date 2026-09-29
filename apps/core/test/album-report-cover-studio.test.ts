@@ -17,6 +17,8 @@ import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import type { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { projectLifecycleDesignOutcome } from '../src/services/lifecycle-projection.js';
+import { projectLifecycleOfficeRetry } from '../src/services/lifecycle-office-retry.js';
 
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const userId = '00000000-0000-4000-b000-000000000001';
@@ -251,7 +253,7 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
     process.env.HAWA_MODEL_TIER = 'production';
     process.env.DESIGN_PIPELINE_V3 = 'on';
     try {
-      const { taskId } = await openOwnersAlbum('settle');
+      const { taskId, requestId } = await openOwnersAlbum('settle');
       const calls: Array<{ schema: string }> = [];
       // A run limit of $1: the brief ($0.81 reserved, $0.15 spent) is admitted, the layout ($1.61) is not.
       const service = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher: fakeProvider(calls) as any, defaultTier: 'standard', maxUsd: 1 });
@@ -269,6 +271,32 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
       // A resume of the settled run answers with the same diagnostic, which the worker reads as the same code.
       const again = await service.resume(studioScope, taskId, run.id);
       expect(again).toMatchObject({ status: 'failed', diagnostic: result.diagnostic });
+
+      // The office's retry (ADR-142) designs the same task again: the request records the failed outcome,
+      // the retry moves it back to designing, and the worker's attempt run starts a new Studio run under
+      // its own key. With the run limit that fits the request, it transfers a draft with the six photos.
+      const firstRun = `dr-${taskId}`;
+      await projectLifecycleDesignOutcome(db, { requestId, tenantId, taskId, runId: firstRun, expectedRev: 1, rev: 2,
+        key: `${requestId}:2:designFinished:${firstRun}`, report: { status: 'DESIGN_FAILED', code: 'STUDIO_RUN_LIMIT_TOO_SMALL' } });
+      const actionId = randomUUID();
+      const retried = await projectLifecycleOfficeRetry(db, { requestId, tenantId, taskId, actionId,
+        actor: { userId, role: 'operator' }, reason: 'Retry after ADR-142', expectedRev: 2, rev: 3,
+        key: `${requestId}:3:officeRetry:desk:${actionId}` });
+      expect(retried).toMatchObject({ stage: 'designing', attempt: 1, runId: `dr-${taskId}-a1`, taskState: 'received' });
+      const canva = { importEditableDesign: vi.fn().mockResolvedValue({ operationId: randomUUID(), status: 'submitted', designId: 'DAFCOVER02' }) } as unknown as CanvaConnectService;
+      const retry = new DesignStudioService(db, canva, { apiKey: 'test-key', fetcher: fakeProvider(calls) as any, defaultTier: 'standard' });
+      // The worker's Studio key for attempt 1 (canva-draft-workflow.ts runKey with redriveAttempt 1).
+      const { run: second, created } = await retry.createOrGetRun(studioScope, taskId, `workflow-studio-${taskId}-redrive-1`, { width: 1080, height: 1350, tier: 'standard' });
+      expect(created).toBe(true);
+      expect(second.id).not.toBe(run.id);
+      let next: any = { status: second.status };
+      for (let i = 0; i < 20 && !['transferred', 'failed', 'degraded'].includes(next.status); i++) {
+        next = await retry.resume(studioScope, taskId, second.id);
+      }
+      expect(next.status).toBe('transferred');
+      const winner = (await sql<any>`SELECT layouts FROM hawa.design_studio_candidates WHERE run_id = ${second.id}::uuid AND status = 'winner'`.execute(owner)).rows[0];
+      const layouts = typeof winner.layouts === 'string' ? JSON.parse(winner.layouts) : winner.layouts;
+      expect(layouts.at(-1).photos).toHaveLength(6);
     } finally {
       for (const [k, v] of [['HAWA_MODEL_TIER', env.tier], ['DESIGN_PIPELINE_V3', env.v3]] as const) {
         if (v === undefined) delete process.env[k]; else process.env[k] = v;
