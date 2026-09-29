@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T16:55:23Z",
+  "generatedAt": "2026-09-29T16:58:11Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 539,
+  "fileCount": 540,
   "files": [
     {
       "path": ".dockerignore",
@@ -1261,6 +1261,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/ADR144_CHAOS_RUNS.json",
       "sha256": "a7a0c2873d7c68444822b61a119330e126cec1e55c93e67451a3e4b053cb30a0",
       "bytes": 12799
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR145_MEDIA_IMAGE_PROOF.json",
+      "sha256": "d60b70e5665f7ddbd79d9c98be52ab0e334c8f4923622280bff464f672e947c4",
+      "bytes": 1683
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/BRIEF_CONTRACT_PROOF.json",

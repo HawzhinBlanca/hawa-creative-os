@@ -10,12 +10,22 @@ RUN corepack enable
 # design with English copy, which is what production did from 2026-09-20 to 2026-09-22.
 # webp-pixbuf-loader lets librsvg draw WebP: without it a WebP photo was blank in every preview and
 # transparent in the Canva deck, while tests on a Mac (librsvg 2.62, WebP built in) passed (2026-09-24).
+# ADR-145: requesters send what their phones make. libheif-examples (heif-convert) turns an iPhone
+# HEIC photo sent "as a file" into the JPEG the design path takes; ffmpeg turns a recording sent as
+# M4A, MP3, WAV, AAC or WebM into the Ogg Opus the voice path inspects, prices and transcribes. Both run
+# only on bytes Core has sniffed, as short-lived processes with a time limit, on private temporary
+# files, with one forced input format and no network protocol (apps/core/src/services/media-conversion.ts).
+# The build fails if either is missing or cannot do its job.
 RUN sed -i 's/^Components: main$/Components: main contrib/' /etc/apt/sources.list.d/debian.sources \
     && echo 'ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true' | debconf-set-selections \
     && apt-get update \
     && apt-get install -y --no-install-recommends librsvg2-bin webp-pixbuf-loader fonts-dejavu-core cabextract ttf-mscorefonts-installer \
+      ffmpeg libheif-examples \
     && rm -rf /var/lib/apt/lists/* \
-    && test -f /usr/share/fonts/truetype/msttcorefonts/Verdana.ttf
+    && test -f /usr/share/fonts/truetype/msttcorefonts/Verdana.ttf \
+    && command -v heif-convert \
+    && ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libopus \
+    && ffmpeg -hide_banner -demuxers 2>/dev/null | grep -Eq ' mov,mp4,m4a' 
 WORKDIR /app
 
 FROM base AS builder

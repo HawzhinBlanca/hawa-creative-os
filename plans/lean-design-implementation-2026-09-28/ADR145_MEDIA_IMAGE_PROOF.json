@@ -1,0 +1,45 @@
+{
+  "date": "2026-09-29",
+  "adr": "ADR-145",
+  "method": "docker build --target base -f infra/docker/Dockerfile.core, then the compiled apps/core media-conversion.js and packages/domain voice-audio.js run inside that image as uid 10001 (the runner user) on packages/testkit/fixtures/media",
+  "image": "hawa-core-base:adr145-media-check (infra/docker/Dockerfile.core, target base)",
+  "ffmpeg": "ffmpeg version 5.1.9-0+deb12u1 Copyright (c) 2000-2026 the FFmpeg developers",
+  "heifConvert": "libheif-examples 1.15.1-1+deb12u1",
+  "user": "10001",
+  "audio": [
+    {
+      "name": "tone-one-second.m4a",
+      "inputSha256": "2dc4b0193a0ba84ebf51e059ef6987635e2b4d2145508a2f51300e00672406ff",
+      "from": "mp4",
+      "oggBytes": 6042,
+      "channels": 1,
+      "durationSeconds": 1.024
+    },
+    {
+      "name": "tone-one-second.mp3",
+      "inputSha256": "7873ffac427ff0f76659abd9c164c73b15f36f356cefbd3a812a505b5e24454f",
+      "from": "mp3",
+      "oggBytes": 6184,
+      "channels": 1,
+      "durationSeconds": 1
+    },
+    {
+      "name": "tone-one-second.wav",
+      "inputSha256": "fa510ddab01939e24d6edf36ec226dc28915d0771c5e7afbd1a1a6e1fdaacd9b",
+      "from": "wav",
+      "oggBytes": 4844,
+      "channels": 1,
+      "durationSeconds": 1
+    }
+  ],
+  "heic": {
+    "inputSha256": "ff0691ab1276ab72ff2d3813a1c3157663404261b6b603a6f9e9a892f2223c91",
+    "jpegBytes": 2919,
+    "jpegMagic": "ffd8ff"
+  },
+  "sizeDelta": {
+    "baseBefore": "490 MB on disk, 119 MB content",
+    "baseAfter": "937 MB on disk, 246 MB content",
+    "note": "ffmpeg (libavcodec59 and its codec libraries) is most of it; a minimal static ffmpeg is the follow-up if image size matters"
+  }
+}
