@@ -1,0 +1,20 @@
+# Rendered by infra/ops/install_systemd_units.sh (ADR-141); edit the template in infra/ops/systemd/, not the copy.
+[Unit]
+Description=Hawa off-site copy of the newest complete encrypted recovery set (infra/backup/offsite_copy.sh)
+Documentation=file://@ROOT@/infra/ops/README.md
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@ROOT@
+Environment=HOME=@HOME@
+Environment=PATH=@PATH@
+# Settings (archive destination, passphrase file, retention, Restate pairing, off-site target, host
+# role): root-owned, mode 0600, read by systemd before it drops to the user. Never in git.
+EnvironmentFile=@ENV_FILE@
+ExecStart=/bin/bash @ROOT@/infra/backup/offsite_copy.sh
+StandardOutput=append:@LOGS@/design.hawa.offsite-copy.log
+StandardError=append:@LOGS@/design.hawa.offsite-copy.log

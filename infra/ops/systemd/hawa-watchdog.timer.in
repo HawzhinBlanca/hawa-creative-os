@@ -1,0 +1,13 @@
+# Rendered by infra/ops/install_systemd_units.sh (ADR-141); edit the template in infra/ops/systemd/, not the copy.
+[Unit]
+Description=Hawa watchdog at boot, then every 5 minutes
+
+[Timer]
+OnActiveSec=10s
+OnBootSec=1min
+OnUnitActiveSec=5min
+AccuracySec=15s
+Unit=hawa-watchdog.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,12 @@
+# Rendered by infra/ops/install_systemd_units.sh (ADR-141); edit the template in infra/ops/systemd/, not the copy.
+[Unit]
+Description=Hawa monthly restore drill, the 1st at 05:00 Asia/Baghdad
+
+[Timer]
+OnCalendar=*-*-01 05:00:00 Asia/Baghdad
+Persistent=true
+AccuracySec=1min
+Unit=hawa-restore-drill.service
+
+[Install]
+WantedBy=timers.target

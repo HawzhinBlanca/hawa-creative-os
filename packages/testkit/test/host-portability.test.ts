@@ -127,7 +127,7 @@ describe('local_state_audit.sh reads modes with the host\'s stat', () => {
 
 describe('no production host script keeps a Mac-only or a || stat form', () => {
   const scripts = ['infra/security/local_state_audit.sh', 'infra/backup/nightly_backup.sh', 'infra/backup/restore_drill.sh',
-    'infra/backup/backup_restore_drill.sh', 'infra/backup/drill_restore_swap.sh',
+    'infra/backup/backup_restore_drill.sh', 'infra/backup/drill_restore_swap.sh', 'infra/backup/offsite_copy.sh',
     'infra/docker/deploy.sh', 'infra/ops/watchdog.sh', 'infra/ops/disk_cleanup.sh', 'scripts/enforce_release_gate.sh',
     'scripts/disaster_recovery_drill.sh'];
   it.each(scripts)('%s', (script) => {

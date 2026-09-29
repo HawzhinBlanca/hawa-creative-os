@@ -1,0 +1,12 @@
+# Rendered by infra/ops/install_systemd_units.sh (ADR-141); edit the template in infra/ops/systemd/, not the copy.
+[Unit]
+Description=Hawa nightly backup, 03:30 Asia/Baghdad; a run missed while the host was off runs at boot
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Asia/Baghdad
+Persistent=true
+AccuracySec=1min
+Unit=hawa-nightly-backup.service
+
+[Install]
+WantedBy=timers.target
