@@ -18,6 +18,14 @@ export const ALBUM_MESSAGES = {
     en: "This photo arrived after I had started your design, so it isn't part of it. When the draft is ready, just send the photo again and tell me what to change.",
     ckb: 'ئەم وێنەیە دوای دەستپێکردنی دیزاینەکەت گەیشت، بۆیە بەشێک نییە لێی. کاتێک ڕەشنووسەکە ئامادە بوو، تەنها وێنەکە دووبارە بنێرەوە و پێم بڵێ چی بگۆڕدرێت.',
   },
+  /**
+   * ADR-148: the album's caption reached Telegram's caption limit, so Telegram kept only its start.
+   * Nothing is designed until the rest arrives (or the held-brief window passes).
+   */
+  captionCut: {
+    en: "Telegram kept only the first part of the text you sent with the photos. Please send the rest as a message and I'll use it with these photos.",
+    ckb: 'تێلیگرام تەنها بەشی یەکەمی ئەو دەقەی لەگەڵ وێنەکان ناردت هێشتەوە. تکایە ئەوەی ماوەتەوە وەک نامەیەک بنێرە و لەگەڵ ئەم وێنانە بەکاری دەهێنم.',
+  },
   photoMissing: {
     en: 'One of your photos could not be saved, so I have not started a design. Please send the photos again.',
     ckb: 'یەکێک لە وێنەکانت پاشەکەوت نەکرا، بۆیە هێشتا دیزاینم دەست پێنەکردووە. تکایە وێنەکان دووبارە بنێرەوە.',

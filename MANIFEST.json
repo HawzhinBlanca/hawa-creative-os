@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T21:45:31Z",
+  "generatedAt": "2026-09-29T22:22:32Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 550,
+  "fileCount": 551,
   "files": [
     {
       "path": ".dockerignore",
@@ -808,6 +808,11 @@
       "bytes": 7242
     },
     {
+      "path": "adrs/148_caption_limit_holds_album.md",
+      "sha256": "27414c9008cc21ee307acf326c024ea885ae7d62cfa5b25906cd61bd83d5aac4",
+      "bytes": 9168
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1459,8 +1464,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "3b18d2c2cc22a5af23dbadd0ab3817f5387bc9e4d19c0bfe3d61275750f2b440",
-      "bytes": 44123
+      "sha256": "a7de66b49e8dbab81403dd72abd60afb874ca6ab0ec12380111aa6c23a8ba91c",
+      "bytes": 44568
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -1929,8 +1934,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "f73e7b31bfe55003151e0d82510f7fd82a68f3f2383261cbf816797f7146c7df",
-      "bytes": 501952
+      "sha256": "f22fd056edc3b7c80931e7ad0d1e9f3a9758b9103e266a76cba1093b7a4a3997",
+      "bytes": 503414
     },
     {
       "path": "plans/user-stories.csv",
@@ -2059,8 +2064,8 @@
     },
     {
       "path": "runbooks/CONFIRMED_PHOTO_ALBUMS.md",
-      "sha256": "3955e960b66ce30af1357aab4e4328822a1757fab515ddfd0dc43ad6637a805b",
-      "bytes": 6946
+      "sha256": "19ecc4721116ea2bb49429dab31deffaac47fe3cf72eee940c49f496da613cc1",
+      "bytes": 7821
     },
     {
       "path": "runbooks/EVALUATION_RECOVERY.md",

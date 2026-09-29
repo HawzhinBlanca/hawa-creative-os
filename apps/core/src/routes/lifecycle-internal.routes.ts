@@ -365,6 +365,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       const admit = async (outcome: AlbumOutcome, point: string): Promise<Response | null> => {
         if (outcome.kind === 'reply') return reply(outcome.reply);
         if (outcome.kind === 'skip') return handled(200, { settle: 'skipped' });
+        // ADR-148: the album waits for the rest of a caption Telegram cut; the question is said beside it.
+        if (outcome.kind === 'wait') return handled(202, { lifecycleAction: 'settle-later', chatId,
+          settle: { kind: 'album', delayMs: outcome.delayMs }, ...(outcome.notice ? { notice: { text: outcome.notice } } : {}) });
         if (outcome.kind === 'none') return null;
         admittedAlbum = outcome.snapshot;
         preparedUpdate = normalizedAlbumUpdate(admittedAlbum);

@@ -6,8 +6,8 @@ import { createHash } from 'node:crypto';
 import { parseLifecycleAlbumRef, type BlobRef, type LifecycleAlbumRef } from '@hawa/contracts';
 import { sql, type Database, type Kysely, type BlobStore } from '@hawa/db';
 import { lifecycleStillImageFile, retainLifecyclePhoto } from './lifecycle-photo.js';
-import { classifyWithHeuristics, isSoraniText } from './telegram-classifier.js';
-import { ALBUM_MESSAGES, requesterLang, say } from '@hawa/integrations';
+import { classifyWithHeuristics, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
+import { ALBUM_MESSAGES, TELEGRAM_CAPTION_LIMIT, requesterLang, say } from '@hawa/integrations';
 
 type Update = { update_id: number; [key: string]: unknown };
 type Message = Record<string, unknown>;
@@ -220,6 +220,10 @@ export async function confirmAlbum(trx: Tx, tenant: string, update: Update): Pro
   if (replies.length > 1 || (replies.length === 1 && messages.some((message) => !record(message.reply_to_message))))
     return refuse(say(ALBUM_MESSAGES.mixedReplies, lang));
   if (captions.length > 1) return refuse(say(ALBUM_MESSAGES.captions, lang));
+  // ADR-148: a caption Telegram cut is never the whole brief; the album waits for the rest.
+  if (messages.some((message) => captionMayBeCut(message.caption))) {
+    return finish({ status: 202, message: say(ALBUM_MESSAGES.captionCut, lang), noticeKey: `album-confirm:${update.update_id}` });
+  }
   if (!captions.length && !replies.length) {
     // No brief: ask what to design (ADR-143); a later brief from this sender binds the album.
     await markSettled(trx, tenant, groupKey, 'asked', update.update_id);
@@ -253,7 +257,9 @@ export type AlbumOutcome =
   | { kind: 'none' }
   | { kind: 'skip' }
   | { kind: 'reply'; reply: AlbumMessage }
-  | { kind: 'snapshot'; snapshot: AlbumSnapshot };
+  | { kind: 'snapshot'; snapshot: AlbumSnapshot }
+  /** ADR-148: settle this album again after `delayMs`; `notice` is said beside it (once, keyed by the update). */
+  | { kind: 'wait'; delayMs: number; notice: string | null };
 
 type Lang = 'en' | 'ckb';
 
@@ -274,6 +280,59 @@ export const albumResumeMs = (): number => envNumber('HAWA_ALBUM_RESUME_HOURS', 
 const LATE_SETTLE_MS = 5 * 60_000;
 /** A held brief joins an album that started at most this long after it, and is never held longer. */
 const HELD_BRIEF_MS = 10 * 60_000;
+
+// --- ADR-148: a caption Telegram cut at its limit ----------------------------------------------------
+//
+// A standard Telegram account can send at most TELEGRAM_CAPTION_LIMIT (1024) UTF-16 units of caption,
+// and Telegram silently keeps only the first 1024. A caption that long is therefore never taken as the
+// whole brief: the album waits for the rest (the sender's next message joins it), asked once, for the
+// held-brief window at most. Then it opens with the caption's complete lines only: a cut line is never copy.
+
+/** Whether Telegram may have cut this caption: it is at the caption limit, counted as Telegram counts (JS length). */
+export const captionMayBeCut = (caption: unknown): boolean =>
+  typeof caption === 'string' && caption.length >= TELEGRAM_CAPTION_LIMIT;
+/** How long an album whose caption was cut waits for the rest before it opens without its cut line. */
+export const CUT_CAPTION_WAIT_MS = HELD_BRIEF_MS;
+
+/**
+ * The caption without its cut last line: the lines before the last one, else (one line) the sentences
+ * before the last one. Empty when no complete line or sentence is left.
+ */
+export function withoutCutLine(caption: string): string {
+  const at = caption.lastIndexOf('\n');
+  if (at >= 0) return caption.slice(0, at).trim();
+  const ends = [...caption.matchAll(/[.!?\u061F\u06D4\u2026](?=\s)/gu)];
+  const last = ends.at(-1);
+  return last?.index !== undefined ? caption.slice(0, last.index + 1).trim() : '';
+}
+
+/**
+ * The rest of a cut caption joins it: the caption, a newline, the rest. When the rest repeats what
+ * Telegram kept (the whole brief sent again, or the cut line sent again whole), the repeat replaces the
+ * kept text instead of doubling it, so the cut line is not copy.
+ */
+export function joinCutCaption(caption: string, rest: string): string {
+  const flat = (text: string) => text.replace(/\s+/gu, ' ').trim().toLowerCase();
+  const again = flat(rest);
+  const head = flat(caption).slice(0, 80);
+  if (head.length >= 40 && again.startsWith(head)) return rest;
+  const at = caption.lastIndexOf('\n');
+  const cutLine = at >= 0 ? flat(caption.slice(at + 1)) : '';
+  if (cutLine.length >= 12 && again.startsWith(cutLine)) return `${caption.slice(0, at).trimEnd()}\n${rest}`;
+  return `${caption}\n${rest}`;
+}
+
+/** The caption Telegram may have cut, as it arrived, or null. */
+const cutCaptionOf = (messages: Message[]): string | null => {
+  const cut = messages.map((message) => message.caption).find(captionMayBeCut);
+  return typeof cut === 'string' ? cut : null;
+};
+async function cutAsked(trx: Tx, tenant: string, groupKey: string): Promise<{ updateId: number; at: number } | null> {
+  const row = (await sql<{ payload: { updateId: number }; at: number }>`SELECT payload,
+      (extract(epoch FROM received_at) * 1000)::float8 AS at FROM hawa.inbox_events
+    WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_album_cut' AND source_event_id = ${groupKey}`.execute(trx)).rows[0];
+  return row ? { updateId: Number(row.payload.updateId), at: Number(row.at) } : null;
+}
 
 const REFERENCE_DIRECTIVE = 'The requester attached an album with no written instructions. Use it as reference for the existing brief; do not infer or change factual copy from image text.';
 const easternDigits = (n: number) => String(n).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
@@ -378,7 +437,7 @@ function albumShape(selected: Part[]) {
   const captions = [...new Set(messages.map((message) => typeof message.caption === 'string' ? message.caption.trim() : '').filter(Boolean))];
   const replies = [...new Set(messages.map((message) => positiveId(record(message.reply_to_message)?.message_id)).filter(Boolean))] as string[];
   const mixedReplies = replies.length > 1 || (replies.length === 1 && messages.some((message) => !record(message.reply_to_message)));
-  return { messages, captions, replies, mixedReplies };
+  return { messages, captions, replies, mixedReplies, cutCaption: cutCaptionOf(messages) };
 }
 
 /** Freeze the selected photos under one source update; the rest of intake reads it like any message. */
@@ -531,7 +590,7 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
     return { kind: 'skip' };
   }
   const first = record(selected[0].source.message);
-  const { captions, replies, mixedReplies } = albumShape(selected);
+  const { captions, replies, mixedReplies, cutCaption } = albumShape(selected);
   const lang = await replyLanguage(trx, tenant, chatId, captions, record(first?.from)?.language_code);
   const answer = async (message: string, settled: SettledState): Promise<AlbumOutcome> => {
     await markSettled(trx, tenant, groupKey, settled, update.update_id);
@@ -550,6 +609,29 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   if (captions.length > 1) return answer(ALBUM_TEXT.captions[lang], 'asked');
   const lastMessage = record(update.message)!;
   const caption = captions[0] ?? '';
+  // ADR-148: Telegram kept only the start of this caption. The album waits for the rest (the sender's
+  // next message joins it in bindTextToAlbum); the requester is asked once, beside a durable settle
+  // after the held-brief window. Past it, the album opens with the caption's complete lines only.
+  if (cutCaption !== null) {
+    const asked = await cutAsked(trx, tenant, groupKey);
+    const notice = !asked || asked.updateId === update.update_id ? say(ALBUM_MESSAGES.captionCut, lang) : null;
+    if (!asked) {
+      await save(trx, tenant, 'lifecycle_album_cut', groupKey, { updateId: update.update_id, chatId },
+        hash({ groupKey, updateId: update.update_id }));
+      await markSettled(trx, tenant, groupKey, 'asked', update.update_id);
+      return { kind: 'wait', delayMs: CUT_CAPTION_WAIT_MS, notice };
+    }
+    const waited = times.now - asked.at;
+    if (waited < CUT_CAPTION_WAIT_MS) {
+      return { kind: 'wait', delayMs: Math.min(CUT_CAPTION_WAIT_MS, Math.max(albumSettleMs(), Math.ceil(CUT_CAPTION_WAIT_MS - waited))), notice };
+    }
+    // No rest came: the complete lines are the brief. A caption with no complete line or sentence left
+    // has no brief to open; the requester was asked, and the album lapses with its window.
+    const kept = withoutCutLine(cutCaption);
+    if (!kept) return { kind: 'skip' };
+    return freeze(trx, tenant, { groupKey, selected, identity: update, chatId, base: lastMessage, text: kept,
+      replyId: replies[0] ?? null });
+  }
   // Photos sent in reply to a request's notice are that request's reference, as a replied photo is.
   if (replies.length === 1) return freeze(trx, tenant, { groupKey, selected, identity: update, chatId,
     base: lastMessage, text: caption || REFERENCE_DIRECTIVE, replyId: replies[0] });
@@ -596,8 +678,9 @@ async function waitingAlbum(trx: Tx, tenant: string, scope: { chatId: string; se
     if (state && state !== 'asked') continue;
     const selected = await parts(trx, tenant, row.group_key);
     if (selected.length < 2 || selected.some((p) => p.error || !p.image)) continue;
-    const { captions } = albumShape(selected);
-    if (!captions.length && Number(row.now) - Number(row.last) > briefWindowMs()) continue;
+    const { captions, cutCaption } = albumShape(selected);
+    // An album with no words, or whose caption Telegram cut (ADR-148), waits for words as long as asked.
+    if ((!captions.length || cutCaption !== null) && Number(row.now) - Number(row.last) > briefWindowMs()) continue;
     return { groupKey: row.group_key, selected };
   }
   return null;
@@ -621,7 +704,9 @@ export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, d
   if (prior) return outcomeOf(prior);
   const affirmative = confirmation || isAffirmativeOnly(text);
   const brief = !affirmative && isBriefText(text);
-  if (!affirmative && !brief) return { kind: 'none' };
+  // ADR-148: any other words (not thanks or an OK) may be the rest of a caption Telegram cut.
+  const maybeRest = !affirmative && !brief && !text.startsWith('/') && !isAcknowledgement(text);
+  if (!affirmative && !brief && !maybeRest) return { kind: 'none' };
   // An update intake already decided keeps that decision, even if an album has arrived since.
   if (!/^-?\d{1,20}$/.test(chatId) || await deps.decided(chatId, update.update_id)) return { kind: 'none' };
   await senderLock(trx, tenant, chatId, senderId);
@@ -647,9 +732,18 @@ export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, d
   if (await frozen(trx, tenant, album.groupKey)) return confirmation
     ? reply(say(ALBUM_MESSAGES.alreadyStarted, lang), `album-confirm:${update.update_id}`)
     : { kind: 'none' };
-  const { captions, replies, mixedReplies } = albumShape(album.selected);
+  const { captions, replies, mixedReplies, cutCaption } = albumShape(album.selected);
+  // Words that are not a brief bind only an album whose caption Telegram cut (ADR-148).
+  if (maybeRest && (cutCaption === null || captions.length > 1)) return { kind: 'none' };
   if (mixedReplies) return reply(ALBUM_TEXT.mixedReplies[lang], `album-confirm:${update.update_id}`);
   const caption = captions.length === 1 ? captions[0] : '';
+  if (cutCaption !== null && captions.length === 1) {
+    // An OK is not the rest: the album keeps waiting (the held-brief window still bounds it).
+    if (affirmative) return reply(say(ALBUM_MESSAGES.captionCut, lang), `album-rest:${update.update_id}`, 202);
+    const prefix = NEW_COMMAND.test(text) ? '/new ' : '';
+    return freeze(trx, tenant, { groupKey: album.groupKey, selected: album.selected, identity: update, chatId,
+      base: msg, text: prefix + joinCutCaption(cutCaption, text.replace(NEW_COMMAND, '').trim()), replyId: replies[0] ?? null });
+  }
   let briefText: string;
   if (brief) briefText = caption ? joinBriefs(caption, text) : text;
   else if (caption) briefText = caption;
@@ -686,6 +780,27 @@ export async function overdueSettles(trx: Tx, tenant: string, limit = 50): Promi
     if (!newest || await event(trx, tenant, 'lifecycle_album_confirm', String(newest.source.update_id))) continue;
     // A photo still being downloaded has no settle of its own yet; its update's retry schedules one.
     if (!await event(trx, tenant, 'lifecycle_album_part', String(newest.source.update_id))) continue;
+    due.push({ chatId: newest.chatId, update: newest.source });
+  }
+  // ADR-148: an album whose caption Telegram cut, asked for the rest, whose own delayed settle is
+  // overdue: its settle opens it with the caption's complete lines (or finds that the rest came).
+  const cutSecs = (CUT_CAPTION_WAIT_MS + 60_000) / 1000;
+  const cuts = (await sql<{ group_key: string }>`SELECT c.source_event_id AS group_key FROM hawa.inbox_events c
+    WHERE c.tenant_id = ${tenant}::uuid AND c.source_account_id = 'lifecycle_album_cut'
+      AND c.received_at < now() - make_interval(secs => ${cutSecs})
+      AND c.received_at > now() - make_interval(secs => ${briefWindowMs() / 1000})
+      AND NOT EXISTS (SELECT 1 FROM hawa.inbox_events f WHERE f.tenant_id = c.tenant_id
+        AND f.source_account_id = 'lifecycle_album_frozen' AND f.source_event_id = c.source_event_id)
+    ORDER BY c.received_at LIMIT ${limit}`.execute(trx)).rows;
+  for (const { group_key: groupKey } of cuts) {
+    if (due.length >= limit) break;
+    if (await settledState(trx, tenant, groupKey) !== 'asked') continue;
+    const selected = await parts(trx, tenant, groupKey);
+    const newest = selected.reduce<Part | null>((a, p) => !a || p.source.update_id > a.source.update_id ? p : a, null);
+    const cut = cutCaptionOf(selected.map((part) => record(part.source.message) ?? {}));
+    // Nothing complete is left to open with: the settle would only skip.
+    if (!newest || cut === null || !withoutCutLine(cut)) continue;
+    if (await event(trx, tenant, 'lifecycle_album_confirm', String(newest.source.update_id))) continue;
     due.push({ chatId: newest.chatId, update: newest.source });
   }
   const heldSecs = (briefPhotoWaitMs() + 60_000) / 1000;

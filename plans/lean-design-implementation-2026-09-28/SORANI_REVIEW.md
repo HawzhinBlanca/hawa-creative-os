@@ -197,6 +197,7 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `albums.question` | I have your {count} photos. What would you like me to design with them? Please tell me what it is for and the exact words to put on it. | {count} وێنەکەتم پێگەیشت. دەتەوێت چ دیزاینێکیان پێ دروست بکەم؟ تکایە بۆم بنووسە بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن. | needs native review |
 | `albums.followUp` | Happy to. What should I design with these photos? Tell me what it is for and the exact words to put on it. | بە دڵخۆشییەوە. چ دیزاینێک بەم وێنانە دروست بکەم؟ پێم بڵێ بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن. | needs native review |
 | `albums.latePhoto` | This photo arrived after I had started your design, so it isn't part of it. When the draft is ready, just send the photo again and tell me what to change. | ئەم وێنەیە دوای دەستپێکردنی دیزاینەکەت گەیشت، بۆیە بەشێک نییە لێی. کاتێک ڕەشنووسەکە ئامادە بوو، تەنها وێنەکە دووبارە بنێرەوە و پێم بڵێ چی بگۆڕدرێت. | needs native review |
+| `albums.captionCut` | Telegram kept only the first part of the text you sent with the photos. Please send the rest as a message and I'll use it with these photos. | تێلیگرام تەنها بەشی یەکەمی ئەو دەقەی لەگەڵ وێنەکان ناردت هێشتەوە. تکایە ئەوەی ماوەتەوە وەک نامەیەک بنێرە و لەگەڵ ئەم وێنانە بەکاری دەهێنم. | needs native review |
 | `albums.photoMissing` | One of your photos could not be saved, so I have not started a design. Please send the photos again. | یەکێک لە وێنەکانت پاشەکەوت نەکرا، بۆیە هێشتا دیزاینم دەست پێنەکردووە. تکایە وێنەکان دووبارە بنێرەوە. | needs native review |
 | `albums.onePhoto` | I received only one photo from this album. Please send the photos again together with what you would like designed. | تەنها یەک وێنەم لەم ئەلبومە پێگەیشت. تکایە وێنەکان دووبارە بنێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
 | `albums.captions` | Your photos came with different captions, so I am not sure which one is the brief. Please send the brief again as one message. | وێنەکانت چەند نووسینێکی جیاوازیان لەگەڵ بوو، بۆیە نازانم کامیان داواکارییەکەیە. تکایە داواکارییەکە وەک یەک نامە دووبارە بنێرەوە. | needs native review |
@@ -211,4 +212,4 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `albums.somethingWrong` | Something went wrong with these photos. Please send them again, with what you would like designed. | کێشەیەک لەگەڵ ئەم وێنانەدا ڕوویدا. تکایە دووبارە بیاننێرەوە، لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
 | `albums.tooLarge` | These photos are too large together. Please send fewer or smaller photos. | ئەم وێنانە پێکەوە زۆر گەورەن. تکایە ژمارەیەکی کەمتر یان وێنەی بچووکتر بنێرە. | needs native review |
 
-153 lines.
+154 lines.
