@@ -1,0 +1,146 @@
+{
+  "finishedAt": "2026-09-29T20:31:40.731Z",
+  "telegramPoller": "worker",
+  "totalMs": 115577,
+  "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
+  "peakMemoryMiB": {
+    "hawa-chaos-core-1": 96,
+    "hawa-chaos-worker-blue-1": 57,
+    "hawa-chaos-postgres-1": 71,
+    "hawa-chaos-restate-1": 490,
+    "hawa-chaos-fakes-1": 62
+  },
+  "peakTotalMiB": 776,
+  "uncoveredModelCalls": [],
+  "scenarios": [
+    {
+      "name": "R1.S3.ALBUM_COVER_RETRY",
+      "what": "the owner's six-photo report cover: the first design fails, the office retries it from the Desk, and the draft uses the photos",
+      "ms": 22511,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "3 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "each design that ended without a draft alerted the office once",
+          "ok": true,
+          "detail": "expected=1 operator alerts=1"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "all 6 album photos are the task's reference images",
+          "ok": true,
+          "detail": "[{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "the album was frozen once and opened one request",
+          "ok": true,
+          "detail": "frozen=1 opens=1"
+        },
+        {
+          "name": "the requester was never asked for a command",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "one acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "one download per photo",
+          "ok": true,
+          "detail": "[\"album-albumcover-10051541-0\",\"album-albumcover-10051541-1\",\"album-albumcover-10051541-2\",\"album-albumcover-10051541-3\",\"album-albumcover-10051541-4\",\"album-albumcover-10051541-5\"]"
+        },
+        {
+          "name": "every ChatInbox invocation (updates and settles) completed",
+          "ok": true,
+          "detail": "[\"tg-90713859384:completed\",\"tg-90713859383:completed\",\"tg-90713859382:completed\",\"chatinbox:setMode:55859f67-d5ab-5ff2-8620-3dc4f9202e2a:completed\",\"settle:90713859383:completed\",\"tg-90713859380:completed\",\"tg-90713859381:completed\",\"settle:90713859380:completed\",\"settle:90713859384:completed\",\"settle:90713859379:completed\",\"settle:90713859381:completed\",\"settle:90713859382:completed\",\"tg-90713859379:completed\"]"
+        },
+        {
+          "name": "one refused first plan and one paid retried plan, which carried all six photos in album order",
+          "ok": true,
+          "detail": "[{\"route\":\"fault:canva_design_plan\",\"status\":400,\"images\":8,\"photos\":6},{\"route\":\"canva_design_plan\",\"status\":200,\"images\":8,\"photos\":6}]"
+        },
+        {
+          "name": "the introducer line is not copy: title and exact copy are the owner's three lines",
+          "ok": true,
+          "detail": "{\"title\":\"KAAE: KAAE K-12 Pilot Study…\",\"copy\":[\"KAAE K-12 Pilot Study\",\"Field Visit Report\",\"Insights from KAAE school field visits and next steps toward\"]}"
+        },
+        {
+          "name": "the task detail names the client and shows six reference photos",
+          "ok": true,
+          "detail": "{\"clientName\":\"Kurdistan Accrediting Association for Education\",\"referenceImageCount\":6}"
+        },
+        {
+          "name": "the retry was one office action: receipts open, failed outcome, retry, draft outcome; the second press replayed it",
+          "ok": true,
+          "detail": "{\"receipts\":[\"R:1:open\",\"R:2:designFinished:dr-52b2973b-2ff4-4732-9a0a-95d02c4773cb\",\"R:3:officeRetry:desk:821338fe-fead-46f0-b1a8-be9c36db09d7\",\"R:4:designFinished:dr-52b2973b-2ff4-4732-9a0a-95d02c4773cb-a1\"],\"again\":200}"
+        },
+        {
+          "name": "two design runs for the task, the first and the attempt, both completed",
+          "ok": true,
+          "detail": "[{\"target_service_key\":\"dr-52b2973b-2ff4-4732-9a0a-95d02c4773cb-a1\",\"status\":\"completed\"},{\"target_service_key\":\"dr-52b2973b-2ff4-4732-9a0a-95d02c4773cb\",\"status\":\"completed\"}]"
+        },
+        {
+          "name": "the requester was never asked to send the album or the brief again, nor for a command",
+          "ok": true,
+          "detail": "[\"Got it. I'm making a first draft of <b>KAAE K-12 Pilot Study…</b>; the office checks it before you get it.\",\"The office will finish <b>KAAE K-12 Pilot Study…</b> and send it to you here.\",\"Your draft of <b>KAAE K-12 Pilot Study…</b> is ready, and the office is giving it a final check. They'll send it to you here once it's approved. If anything should change, just tell me.\"]"
+        }
+      ],
+      "events": [
+        "album of 6 photos (1280x960 JPEG), caption = the owner's brief: updates 90713859379, 90713859380, 90713859381, 90713859382, 90713859383, 90713859384",
+        "task 52b2973b-2ff4-4732-9a0a-95d02c4773cb: the first design ended without a draft (request manual, rev 2; task failed_operator)",
+        "Desk re-drive: HTTP 202 {\"requestId\":\"55859f67-d5ab-5ff2-8620-3dc4f9202e2a\",\"taskId\":\"52b2973b-2ff4-4732-9a0a-95d02c4773cb\",\"actionId\":\"821338fe-fead-46f0-b1a8-be9c36db09d7\",\"rev\":3,\"stage\":\"designing\",\"runId\":\"dr-52b2973b-2ff4-4732-9a0a-95d02c4773cb-a1\",\"attempt\":1,\"taskState\":\"received\",\"replayed\":false}",
+        "second press: HTTP 200 replayed=true",
+        "task 52b2973b-2ff4-4732-9a0a-95d02c4773cb: the retried draft is in review (rev 4)"
+      ]
+    }
+  ]
+}
