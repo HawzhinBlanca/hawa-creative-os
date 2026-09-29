@@ -54,6 +54,16 @@ it('keeps worker routes credentialed and keeps worker credentials out of office 
   expect((await app.request(origin+'/v1/tasks',{headers:{Authorization:'Bearer test_office_worker_credential'}})).status).toBe(401);
 });
 
+it('still verifies a presented service key from inside the network, and refuses a wrong one', async () => {
+  const serviceKey = ['svc', 'office', 'trusted', 'key'].join('_');
+  vi.stubEnv('HAWA_BEARER_TOKEN', serviceKey);
+  const app = createApp({ db });
+  // The worker's Canva and Studio calls come from the Docker network (host core:3001), not the office.
+  expect((await app.request('http://core:3001/v1/tasks',{headers:{Authorization:`Bearer ${serviceKey}`}})).status).toBe(200);
+  expect((await app.request('http://core:3001/v1/tasks',{headers:{Authorization:'Bearer not_a_configured_key'}})).status).toBe(401);
+  expect((await app.request('http://core:3001/v1/tasks')).status).toBe(401);
+});
+
 it('issues a stream ticket without placing a secret in the Desk', async () => {
   const app = createApp({ db });
   const result = await app.request(origin+'/v1/auth/stream-ticket',{method:'POST',headers:{'X-Hawa-Office-Request':'1'}});
