@@ -19,3 +19,4 @@ export * from './canva-design-studio-adapter.js';
 export * from './canva-connect-client.js';
 export * from './telegram-pick-flow.js';
 export * from './lifecycle-office-auth.js';
+export * from './requester-messages/index.js';

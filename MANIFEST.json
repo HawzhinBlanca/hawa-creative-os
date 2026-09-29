@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T16:00:48Z",
+  "generatedAt": "2026-09-29T16:12:01Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 532,
+  "fileCount": 534,
   "files": [
     {
       "path": ".dockerignore",
@@ -1388,6 +1388,11 @@
       "bytes": 10164
     },
     {
+      "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
+      "sha256": "470e05f4863419c06cd281bf1d77230ef82547a6bf9aa426fafb5243dd9ce2ae",
+      "bytes": 13107
+    },
+    {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
       "sha256": "45031d54c7975e84def3b73d26615e62b4c3df592d9e91d8b6ce31d88894e1d7",
       "bytes": 26531
@@ -2551,6 +2556,11 @@
       "path": "scripts/smoke_test_10_of_10.ts",
       "sha256": "3bdb63505c15318436fad21103437cba1d1ce8deed4a29a297982382b872111c",
       "bytes": 13785
+    },
+    {
+      "path": "scripts/sorani_review_list.ts",
+      "sha256": "1271637f6bc87327c1ae30c7c78e45a65f31bd51a942a57bdf1e4bf3326b536d",
+      "bytes": 2581
     },
     {
       "path": "scripts/studio_fault_injection.ts",
