@@ -219,6 +219,7 @@ const DnaClientScreen: React.FC<{
   const [snapshots, setSnapshots] = useState<ClientDnaSnapshot[]>([]);
   const [activeTab, setActiveTab] = useState<'brand' | 'identity' | 'language' | 'rules'>('brand');
   const [loading, setLoading] = useState(false);
+  const [undoPalette, setUndoPalette] = useState<{ dna: ClientDNA; expectedVersion: number } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   // Sections Core has not answered for, with the reason. An unread section shows as unknown, never as empty.
@@ -314,11 +315,12 @@ const DnaClientScreen: React.FC<{
 
   // Save DNA modifications to Core API
   // Resolves true only when Core confirmed the save.
-  const saveDnaChanges = async (updatedDna: ClientDNA, successMessage: string): Promise<boolean> => {
+  const saveDnaChanges = async (updatedDna: ClientDNA, successMessage: string, undo?: ClientDNA): Promise<boolean> => {
     setLoading(true);
     try {
       const saved: ClientDNA = await apiClient.clients.saveDna(updatedDna.clientId, updatedDna);
       setCurrentDna(saved);
+      setUndoPalette(undo ? { dna: undo, expectedVersion: saved.version } : null);
       setSaveSuccess(successMessage);
       loadClientDirectory();
       // Core records a snapshot with every save.
@@ -362,7 +364,7 @@ const DnaClientScreen: React.FC<{
       ...currentDna,
       colors: currentDna.colors.filter((c) => c.name !== colorName),
     };
-    await saveDnaChanges(updated, `Removed color swatch "${colorName}"`);
+    await saveDnaChanges(updated, `Removed color swatch "${colorName}"`, currentDna);
   };
 
   // Logo Palette Extraction Handler
@@ -704,19 +706,19 @@ const DnaClientScreen: React.FC<{
           </div>
 
           <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--soft)', fontSize: 11, color: 'var(--muted)', lineHeight: 1.45 }}>
-            <b style={{ color: 'var(--text)' }}>Invariant #4 Strict Isolation:</b> Each client scope is immutable and bounded in PostgreSQL before retrieval commences. Zero cross-tenant leakage.
+            <b style={{ color: 'var(--text)' }}>Client scope:</b> Requests and brand references stay within the selected client.
           </div>
         </div>
 
         {/* Center Column: Live DNA Workspace */}
         <div className="panel" style={{ minWidth: 0 }}>
-          <DocumentInspectionPanel clientId={selectedClientId} />
+          <details style={{marginBottom:16}}><summary>Inspect a source PDF</summary><DocumentInspectionPanel clientId={selectedClientId} /></details>
           <div className="tabs" style={{ marginBottom: 16 }}>
             <button className={activeTab === 'brand' ? 'on' : ''} onClick={() => setActiveTab('brand')}>
               🎨 Brand & Palette
             </button>
             <button className={activeTab === 'identity' ? 'on' : ''} onClick={() => setActiveTab('identity')}>
-              🏛️ Tenant Identity
+              🏛️ Client details
             </button>
             <button className={activeTab === 'language' ? 'on' : ''} onClick={() => setActiveTab('language')}>
               ✍️ Language & RTL
@@ -740,9 +742,9 @@ const DnaClientScreen: React.FC<{
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+              <details style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}><summary>Client identifiers</summary>
                 Tenant ID: <code>{currentDna?.tenantId ?? '—'}</code> · Client ID: <code>{selectedClientId}</code>
-              </div>
+              </details>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -775,8 +777,12 @@ const DnaClientScreen: React.FC<{
 
           {saveSuccess && (
             <div className="finding" style={{ borderColor: '#1d733c', background: '#ecfdf5', marginBottom: 16 }}>
-              <b style={{ color: '#065f46' }}>✓ Live DNA Synchronized</b>
+              <b style={{ color: '#065f46' }}>Brand changes saved</b>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: '#047857' }}>{saveSuccess}</p>
+              {undoPalette && <button className="btn" disabled={loading || currentDna?.version !== undoPalette.expectedVersion} onClick={() => {
+                if (!currentDna || currentDna.version !== undoPalette.expectedVersion) return;
+                void saveDnaChanges({...undoPalette.dna, version: currentDna.version}, 'Color removal undone in a new brand version.');
+              }}>Undo color removal</button>}
             </div>
           )}
 
@@ -929,7 +935,8 @@ const DnaClientScreen: React.FC<{
               {/* Swatch Display Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
                 {(currentDna?.colors || []).map((color) => {
-                  const contrast = getContrastRatio(color.hex, currentBgHex);
+                  const contrastBackground = color.role === 'text' ? currentBgHex : getLuminance(color.hex) > 0.18 ? '#000000' : '#ffffff';
+                  const contrast = getContrastRatio(color.hex, contrastBackground);
                   const isWcagAaa = contrast >= 7.0;
                   const isWcagAa = contrast >= 4.5;
                   const isTextDark = getLuminance(color.hex) > 0.18;
@@ -961,13 +968,15 @@ const DnaClientScreen: React.FC<{
                         </span>
                         <button
                           onClick={() => handleRemoveSwatch(color.name)}
-                          title="Remove Swatch"
+                          aria-label={`Remove ${color.name} color`}
+                          disabled={loading}
+                          title={`Remove ${color.name} color`}
                           style={{
-                            background: 'rgba(0,0,0,0.25)',
+                            background: '#12141a',
                             border: 'none',
                             borderRadius: '50%',
-                            width: 20,
-                            height: 20,
+                            width: 44,
+                            height: 44,
                             color: '#fff',
                             cursor: 'pointer',
                             display: 'flex',
@@ -983,13 +992,13 @@ const DnaClientScreen: React.FC<{
                       <div style={{ padding: 10 }}>
                         <div style={{ fontWeight: 650, fontSize: 13, marginBottom: 2 }}>{color.name}</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <code
+                          <button type="button" className="btn" aria-label={`Copy ${color.name} hex ${color.hex}`}
                             style={{ fontSize: 12, cursor: 'pointer' }}
                             onClick={() => copyToClipboard(color.hex, color.name)}
                             title="Click to copy hex"
                           >
                             {color.hex}
-                          </code>
+                          </button>
                           {Number.isNaN(contrast) ? (
                             <span className="pill" style={{ fontSize: 10 }} title="This colour could not be read, so its contrast is unknown">
                               Contrast unknown
@@ -998,9 +1007,9 @@ const DnaClientScreen: React.FC<{
                             <span
                               className={`pill ${isWcagAaa ? 'ok' : isWcagAa ? 'blue' : 'warn'}`}
                               style={{ fontSize: 10 }}
-                              title={`Contrast ratio against canvas: ${contrast}:1`}
+                              title={color.role === 'text' ? `Text on brand background ${currentBgHex}: ${contrast}:1` : `Example ${contrastBackground} text on ${color.hex}: ${contrast}:1`}
                             >
-                              {isWcagAaa ? 'AAA' : isWcagAa ? 'AA' : 'Fail'} {contrast}:1
+                              {color.role === 'text' ? 'Text / background' : contrastBackground === '#000000' ? 'Black text' : 'White text'} · {contrast}:1 {isWcagAa ? '✓' : 'low contrast'}
                             </span>
                           )}
                         </div>
@@ -1011,9 +1020,9 @@ const DnaClientScreen: React.FC<{
               </div>
 
               {/* Official Verified Assets */}
-              <h3 style={{ marginTop: 24, marginBottom: 8 }}>Official Cryptographic Assets</h3>
+              <h3 style={{ marginTop: 24, marginBottom: 8 }}>Verified brand assets</h3>
               <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 0, marginBottom: 12 }}>
-                Assets protected by Invariant #5 with deterministic SHA-256 integrity verification.
+                Approved logo and brand files. File integrity is checked before use.
               </p>
 
               <table className="table" style={{ width: '100%' }}>

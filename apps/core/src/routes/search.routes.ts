@@ -1,8 +1,9 @@
 import type { RouteContext } from './types.js';
 import type { ClientDNA } from '@hawa/domain';
+import { API_STATUS_OF_DB_STATE } from '@hawa/contracts';
 import { deskReviewPath } from '@hawa/contracts/desk-navigation';
 import { globalFeedbackMiner } from '@hawa/creative';
-import { VaultSearchEngine, type SearchableItem, type SearchCategory } from '@hawa/retrieval';
+import { VaultSearchEngine, extractSearchTokens, type SearchableItem, type SearchCategory } from '@hawa/retrieval';
 import { sql, toApiTaskStatus, withRlsContext } from '@hawa/db';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { listUploadedAssets } from '../services/uploaded-assets.js';
@@ -10,7 +11,7 @@ import { log } from '../logging.js';
 
 /** What the search indexes: tasks, clients (keyed by the id a scoped search names) and assets. */
 interface Searchable {
-  tasks: Array<{ id: string; title?: string; clientId?: string | null; status: string; objective?: string; currentPhase?: string; latestRevisionId?: string; tags?: string[]; updatedAt?: string }>;
+  tasks: Array<{ id: string; title?: string; clientId?: string | null; status: string; objective?: string; requestText?: string; currentPhase?: string; latestRevisionId?: string; tags?: string[]; updatedAt?: string }>;
   clients: Array<[string, ClientDNA]>;
   assets: Array<{ assetId: string; clientId?: string; filename?: string; mimeType?: string; category?: string; sha256?: string; storageKey?: string | null; sizeBytes?: number; createdAt?: string }>;
   /** A client's code and `client-<code>` spellings, to its Postgres id. */
@@ -63,10 +64,10 @@ export function registerSearchRoutes(ctx: RouteContext): void {
    * process held in memory and the DNA it loaded at start-up, so the Desk's search found nothing
    * another Core, or this one before a restart, had created. Without a database, the no-database store.
    */
-  async function searchable(auth: { tenantId?: string; userId?: string; role?: string }, requestedClientId?: string): Promise<Searchable> {
+  async function searchable(auth: { tenantId?: string; userId?: string; role?: string }, requestedClientId?: string, query = ''): Promise<Searchable> {
     if (!db) {
       return {
-        tasks: Array.from(tasks.entries()).map(([id, t]) => ({ ...t, id, objective: briefs.get(id)?.objective })),
+        tasks: Array.from(tasks.entries()).map(([id, t]) => ({ ...t, id, objective: briefs.get(id)?.objective, requestText: t.description })),
         clients: Array.from(clientDnas.entries()),
         assets: Array.from(uploadedAssets.values()),
         aliases: new Map(),
@@ -75,14 +76,13 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     }
     const scope = { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId || OPERATOR_USER_ID, role: auth.role || 'operator' };
     const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : value ? String(value) : undefined);
-    const [clientRows, assets] = await Promise.all([
-      withRlsContext(db, scope, async (trx) =>
+    const requestedScope = requestedClientId && requestedClientId !== 'all' ? requestedClientId : undefined;
+    const clientRows = await withRlsContext(db, scope, async (trx) =>
         (await sql<{ client_id: string; code: string | null; dna: unknown }>`
           SELECT v.client_id, c.code, v.dna FROM hawa.client_dna_versions v
           JOIN hawa.clients c ON c.id = v.client_id AND c.tenant_id = v.tenant_id
-          WHERE v.tenant_id = ${scope.tenantId}::uuid AND v.status = 'active'`.execute(trx)).rows),
-      listUploadedAssets(db, scope),
-    ]);
+          WHERE v.tenant_id = ${scope.tenantId}::uuid AND v.status = 'active'
+            ${requestedScope ? sql`AND (c.id::text=${requestedScope} OR c.code=${requestedScope} OR 'client-' || c.code=${requestedScope})` : sql``}`.execute(trx)).rows);
     const aliases = new Map<string, string>();
     const clients: Array<[string, ClientDNA]> = [];
     for (const row of clientRows) {
@@ -99,16 +99,28 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     // tenant and filtered them by client and words afterwards, so an older task, or any task of a
     // client whose work was not among the newest 1,000, could not be found (bug hunt 2026-09-29).
     // The words stay with the engine, which scores each task on its own and normalises Sorani and
-    // Arabic spellings that SQL would not; only the client is filtered here. A task without a client
+    // Arabic spellings that SQL would not; client scope and normalized tokens are applied before reading the bounded matches. A task without a client
     // is indexed under the default client, so a search scoped to it reads those.
     const resolved = requestedClientId && requestedClientId !== 'all'
       ? aliases.get(requestedClientId) || requestedClientId : undefined;
+    const assets = resolved === undefined ? await listUploadedAssets(db, scope)
+      : UUID.test(resolved) ? await listUploadedAssets(db, scope, resolved) : [];
     const clientFilter = resolved === undefined ? sql``
       : resolved === defaultClientId ? sql`AND t.client_id IS NULL`
         : UUID.test(resolved) ? sql`AND t.client_id = ${resolved}::uuid`
           : sql`AND false`;
     const ceiling = Math.max(1, Number(process.env.HAWA_SEARCH_TASK_CEILING) || TASK_CEILING);
-    type TaskRow = { id: string; title: string | null; client_id: string | null; state: string; current_design_revision_id: string | null; created_at: Date; updated_at: Date; objective: string | null };
+    type TaskRow = { id: string; title: string | null; client_id: string | null; state: string; current_design_revision_id: string | null; created_at: Date; updated_at: Date; objective: string | null; request_text: string | null };
+    // Match before the bounded read, so an old request cannot disappear behind unrelated new work.
+    // Keep the retrieval engine's OR-token semantics and Sorani/Arabic normalization.
+    const tokens = extractSearchTokens(query);
+    const corpus = sql`concat_ws(' ', t.id::text, t.title, t.description, t.state, ${sql`CASE t.state ${sql.join(Object.entries(API_STATUS_OF_DB_STATE).map(([state, api]) => sql`WHEN ${state} THEN ${api}`), sql` `)} END`}, 'Status Phase INTAKE',
+      b.brief::text, source.payload->>'rawRequestText', source.payload->>'copyEn',
+      source.payload->>'copyCkb', source.payload->'exactCopy')`;
+    const normalized = sql`btrim(regexp_replace(regexp_replace(
+      translate(lower(normalize(${corpus}, NFC)), 'كي٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', 'کی01234567890123456789'),
+      ${'[\u064B-\u065F\u0670]'}, '', 'g'), ${'[\u200C-\u200F\u202A-\u202E\u2066-\u2069،؛؟]'}, ' ', 'g'))`;
+    const wordFilter = tokens.length ? sql`AND (${sql.join(tokens.map(token => sql`strpos(${normalized}, ${token}) > 0`), sql` OR `)})` : sql``;
     const taskRows: TaskRow[] = [];
     let truncated = false;
     let after: { createdAt: Date; id: string } | undefined;
@@ -117,9 +129,16 @@ export function registerSearchRoutes(ctx: RouteContext): void {
       const page = await withRlsContext(db, scope, async (trx) =>
         (await sql<TaskRow>`
           SELECT t.id, t.title, t.client_id, t.state, t.current_design_revision_id, t.created_at, t.updated_at,
-            (SELECT b.brief->>'objective' FROM hawa.design_briefs b
-              WHERE b.tenant_id = t.tenant_id AND b.task_id = t.id ORDER BY b.version DESC LIMIT 1) AS objective
-          FROM hawa.tasks t WHERE t.tenant_id = ${scope.tenantId}::uuid ${clientFilter}
+            b.brief->>'objective' AS objective,
+            concat_ws(' ', t.description, source.payload->>'rawRequestText', source.payload->>'copyEn',
+              source.payload->>'copyCkb', source.payload->'exactCopy') AS request_text
+          FROM hawa.tasks t
+          LEFT JOIN LATERAL (SELECT brief FROM hawa.design_briefs
+            WHERE tenant_id=t.tenant_id AND task_id=t.id ORDER BY version DESC LIMIT 1) b ON true
+          LEFT JOIN LATERAL (SELECT payload FROM hawa.outbox_commands
+            WHERE tenant_id=t.tenant_id AND aggregate_id=t.id AND command_type='task.created'
+            ORDER BY created_at DESC LIMIT 1) source ON true
+          WHERE t.tenant_id = ${scope.tenantId}::uuid ${clientFilter} ${wordFilter}
             ${after ? sql`AND (t.created_at, t.id) < (${after.createdAt}, ${after.id}::uuid)` : sql``}
           ORDER BY t.created_at DESC, t.id DESC LIMIT ${want + 1}`.execute(trx)).rows);
       const more = page.length > want;
@@ -129,12 +148,12 @@ export function registerSearchRoutes(ctx: RouteContext): void {
       const last = taskRows[taskRows.length - 1];
       after = { createdAt: last.created_at, id: last.id };
     }
-    if (truncated) log.warn(`[core:search] more than ${ceiling} tasks in scope; the search read the newest ${ceiling}`);
+    if (truncated) log.warn(`[core:search] more than ${ceiling} matching tasks in scope; the search read the newest ${ceiling} matches`);
 
     return {
       tasks: taskRows.map((t) => ({
         id: t.id, title: t.title || undefined, clientId: t.client_id, status: toApiTaskStatus(t.state),
-        objective: t.objective || undefined, latestRevisionId: t.current_design_revision_id || undefined, updatedAt: iso(t.updated_at),
+        objective: t.objective || undefined, requestText: t.request_text || undefined, latestRevisionId: t.current_design_revision_id || undefined, updatedAt: iso(t.updated_at),
       })),
       clients,
       assets,
@@ -170,7 +189,7 @@ export function registerSearchRoutes(ctx: RouteContext): void {
         clientName: clientNames.get(clientId),
         title: task.title || `Task ${taskId.slice(0, 8)}`,
         subtitle: `Status: ${task.status} · Phase: ${task.currentPhase || 'INTAKE'}`,
-        bodyText: `${briefText} ${taskId} ${task.tags?.join(' ') || ''}`,
+        bodyText: `${briefText} ${task.requestText || ''} ${taskId} ${task.tags?.join(' ') || ''}`,
         tags: task.tags || [task.status],
         status: task.status,
         metadata: { currentPhase: task.currentPhase, status: task.status, latestRevisionId: task.latestRevisionId },
@@ -238,16 +257,17 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
 
+    const q = (c.req.query('q') || c.req.query('query') || '').trim();
+    if (q.length > 512 || extractSearchTokens(q).length > 64) return problem(c,422,'Search Too Long','Use up to 512 characters and 64 search words.');
     const requestedClientId = c.req.query('clientId');
     let state: Searchable;
     try {
-      state = await searchable(auth, requestedClientId);
+      state = await searchable(auth, requestedClientId, q);
     } catch (err) {
       log.error('[core:search] Could not read what to search:', err);
       return problem(c, 503, 'Database Unavailable', 'The search could not read the tasks, clients and assets; try again');
     }
 
-    const q = (c.req.query('q') || c.req.query('query') || '').trim();
     // A client named by its code is searched by its Postgres id, which is what the items carry.
     const clientId = requestedClientId ? state.aliases.get(requestedClientId) || requestedClientId : requestedClientId;
     const category = (c.req.query('category') || 'all') as SearchCategory;

@@ -114,14 +114,14 @@ interface WorkScreenProps {
   onNavigateToClients?: (clientId?: string) => void;
   onNavigateToSettings?: () => void;
   onNewTask?: () => void;
-  onSelectedClientChange?: (clientId: string | undefined) => void;
+  onSelectedClientChange?: (clientId: string | undefined, clientName?: string) => void;
 }
 
 export const WorkScreen: React.FC<WorkScreenProps> = ({
   initialTaskId,
   reviewRevisionId,
   onNavigateToClients: _onNavigateToClients,
-  onNavigateToSettings: _onNavigateToSettings,
+  onNavigateToSettings,
   onNewTask,
   onSelectedClientChange,
 }) => {
@@ -179,7 +179,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // filter or search starts again at page 1, in the same update, so no request is made for the old
   // page under the new filter. The search waits until typing pauses.
   const [queueView, setQueueView] = useState<{ filter: QueueFilter; search: string; cursors: (string | null)[] }>({
-    filter: 'all',
+    filter: 'needs_action',
     search: '',
     cursors: [null],
   });
@@ -320,9 +320,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   }, [tasks, selectedTaskId, filteredTasks, detail]);
 
   useEffect(() => {
-    onSelectedClientChange?.(selectedTask?.clientId);
+    onSelectedClientChange?.(selectedTask?.clientId, selectedTask?.clientName);
     return () => onSelectedClientChange?.(undefined);
-  }, [selectedTask?.clientId, onSelectedClientChange]);
+  }, [selectedTask?.clientId, selectedTask?.clientName, onSelectedClientChange]);
 
   // History & Audit reads the task's recorded events (GET /tasks/:id/timeline). It read `history`
   // from the task, which no task route returns, so it always showed none (2026-09-24).
@@ -1000,9 +1000,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span className="client-badge-large">{selectedTask.clientName || 'Client'}</span>
-                      <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'monospace' }}>
-                        {selectedTask.id}
-                      </span>
+                      <details style={{ fontSize: 12, color: 'var(--muted)' }}><summary>Task details</summary><code>{selectedTask.id}</code></details>
                     </div>
                     <h1 className="detail-title" dir="auto">{selectedTask.title}</h1>
                   </div>
@@ -1058,8 +1056,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 {!detail?.requestId && !selectedTask.requestId && <TaskControls key={`controls-${selectedTask.id}`}
                   taskId={selectedTask.id} status={selectedTask.status} version={selectedTask.version} role={sessionUser?.role}
                   refresh={() => readTaskAgain(selectedTask.id)} />}
-                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} taskStatus={selectedTask.status} hasCanvaBinding={Boolean(selectedTask.canvaBinding)} />
-                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} taskStatus={selectedTask.status} revision={detailQuery.dataUpdatedAt} />
+
                 <p className="capture-availability" role="status">Retrieved exports require QA and human approval before delivery.</p>
                 {/* =================================================================== */}
                 {/* PRIMARY ACTION BAR (FR-078)                                         */}
@@ -1206,6 +1203,13 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   />
                 </div>
 
+                <section className="rule" aria-label="Saved request">
+                  <h3>Saved request</h3>
+                  <p dir="auto" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{selectedTask.description || selectedTask.title}</p>
+                  {selectedTask.referenceImages?.length ? <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{selectedTask.referenceImages.map((photo,i) => <AuthorizedImage key={photo.sha256} src={photo.url} alt={`Request photo ${i+1}`} style={{width:96,height:96,objectFit:'contain'}} />)}</div> : null}
+                </section>
+                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} taskStatus={selectedTask.status} hasCanvaBinding={Boolean(selectedTask.canvaBinding)} />
+                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} taskStatus={selectedTask.status} revision={detailQuery.dataUpdatedAt} onOpenSettings={onNavigateToSettings} />
                 {/* Technical Package Metadata Badges (FR-032, FR-048) */}
                 <div className="preview-meta-strip">
                   <div className="meta-badge-item">

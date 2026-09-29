@@ -235,3 +235,18 @@ it('opens the task form and changes routes when Core becomes unavailable, preser
  expect((byText(screen.container,'button','Save request') as HTMLButtonElement).disabled).toBe(true);
  expect(screen.container.querySelector('#omnisearch-btn')?.getAttribute('aria-label')).toContain('Search');
 });
+
+it('names palette actions and undoes removal using the newly saved revision',async()=>{
+  let saved={...dna(a,'Orchid Books'),colors:[{name:'Canvas',hex:'#ffffff',role:'background'},{name:'Ink',hex:'#000000',role:'text'}]};
+  const writes:any[]=[];
+  stubCore(c=>c.path==='/v1/clients'?json(clients):c.path===`/v1/clients/${a}/dna`?
+    c.method==='GET'?json(saved):(writes.push(c.body),saved={...c.body,version:saved.version+1},json(saved)):
+    c.path.endsWith('/snapshots')?json([]):c.path.endsWith('/candidate-rules')?json({candidateRules:[]}):undefined);
+  view=await mount(React.createElement(DnaScreen,{initialClientId:a}));await advance(200);
+  expect(view.container.querySelector('button[aria-label="Remove Ink color"]')).not.toBeNull();
+  expect(view.text()).not.toContain('Fail 1');
+  await click(view.container.querySelector('button[aria-label="Remove Ink color"]'));await advance(200);
+  expect(writes[0].version).toBe(1);expect(writes[0].colors).toHaveLength(1);
+  await click(byText(view.container,'button',/Undo color removal/));await advance(200);
+  expect(writes[1].version).toBe(2);expect(writes[1].colors).toHaveLength(2);
+});

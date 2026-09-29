@@ -3,7 +3,7 @@ import React from 'react';
 /** Canva owns editing and its design library. No local insertion or template emulator. */
 export const LibraryScreen: React.FC = () => (
   <section aria-label="Canva design library" className="card" style={{padding:24}}>
-    <h2>Design library</h2>
+    <h2>Canva library handoff</h2>
     <p>Open a task to edit its linked design in Canva. Use Canva to manage templates, uploads and design assets.</p>
     <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:20}}>
       <a className="btn primary" href="#/work">Open work queue</a>

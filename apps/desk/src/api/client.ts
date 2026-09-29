@@ -600,10 +600,13 @@ class HawaApiClient {
         verdict: 'approve' | 'reject' | 'revise' | 'rating';
         rating?: number;
         notes?: string;
-      }
+        previewSha256?: string;
+      },
+      actionId?: string
     ) =>
       this.request<any>(`/tasks/${encodeURIComponent(taskId)}/design-feedback`, {
         method: 'POST',
+        ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}),
         body: JSON.stringify(payload),
       }),
   };

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useDialogFocus } from '../services/useDialogFocus.js';
+import { taskStatusView } from '../services/taskStatus.js';
 import type { ScreenId } from './Sidebar.js';
 import { getAuthHeaders } from '../services/auth.js';
 
@@ -7,6 +9,7 @@ export interface CommandPaletteProps {
   onClose: () => void;
   onNavigate: (screen: ScreenId) => void;
   activeClientId?: string;
+  activeClientName?: string;
   onAction?: (actionId: string) => void;
 }
 
@@ -28,6 +31,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onClose,
   onNavigate,
   activeClientId,
+  activeClientName,
   onAction,
 }) => {
   const [query, setQuery] = useState('');
@@ -36,6 +40,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(isOpen, dialogRef, onClose);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -197,9 +203,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                   id: r.id,
                   category: r.category as any,
                   title: r.title,
-                  subtitle: unlinked ? `${r.subtitle ?? ''} · Not shown on a Desk page` : r.subtitle,
+                  subtitle: unlinked ? `${r.subtitle ?? ''} · Not shown on a Desk page` : r.category === 'TASKS' ? taskStatusView(r.badge).message : r.subtitle,
                   url: typeof r.url === 'string' ? r.url : undefined,
-                  badge: r.badge,
+                  badge: r.category === 'TASKS' ? taskStatusView(r.badge).pill : r.badge,
                   ...(unlinked ? { unlinked } : {}),
                 });
                 seenIds.add(r.id);
@@ -207,7 +213,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             }
             setResults(merged);
             // Core read the newest tasks only (its ceiling); older matches may be missing.
-            if (data.truncated === true) setSearchNotice('Only the newest tasks were searched; an older task may be missing. Search for more specific words.');
+            if (data.truncated === true) setSearchNotice('There are more matching tasks than this search can show. Add more specific words.');
           }
         }
       } catch {
@@ -292,6 +298,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search this client and commands"
         id="command-palette-modal"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -324,6 +334,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             ref={inputRef}
             id="command-palette-input"
             type="text"
+            role="combobox"
+            aria-expanded="true"
+            aria-autocomplete="list"
+            aria-controls="command-palette-results"
+            aria-activedescendant={results[selectedIndex] ? `cmd-item-${results[selectedIndex].id}` : undefined}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search commands and selected client"
@@ -361,7 +376,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               title="Client search is limited to the selected task’s client"
             >
               <span>🔒</span>
-              <span>{activeClientId ? 'Selected client' : 'Commands'}</span>
+              <span>{activeClientId ? activeClientName || activeClientId : 'Commands'}</span>
             </div>
           </div>
         </div>
@@ -373,6 +388,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         <div
           ref={listRef}
           id="command-palette-results"
+          role="listbox"
+          aria-label="Search results"
           style={{
             maxHeight: 380,
             overflowY: 'auto',
@@ -393,6 +410,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                 <div
                   key={item.id}
                   id={`cmd-item-${item.id}`}
+                  role="option"
+                  aria-selected={isSelected}
+                  aria-disabled={Boolean(item.unlinked)}
                   onClick={() => executeItem(item)}
                   onMouseEnter={() => setSelectedIndex(idx)}
                   style={{
@@ -483,7 +503,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </span>
           </div>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ color: '#22c55e' }}>●</span> Raycast Engine • Invariant #4 Scope Locked
+            <span style={{ color: '#22c55e' }}>●</span> Search stays within this client
           </span>
         </div>
       </div>

@@ -116,7 +116,7 @@ export const translations: Record<Locale, TranslationSchema> = {
     },
     modal: {
       title: 'Create Task in Hawa Desk',
-      subtitle: 'Canonical office intake with client scope lock and exact copy preservation.',
+      subtitle: 'Choose a client, add your instructions and keep the exact words for the design.',
       autosaved: '💾 Autosaved',
       clientLabel: 'Client / Brand Space',
       taskTitleLabel: 'Task Title (English)',

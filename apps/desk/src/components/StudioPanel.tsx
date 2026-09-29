@@ -1,9 +1,12 @@
+import { isRenderedStudioCandidate } from '@hawa/domain/feedback';
+import { useDialogFocus } from '../services/useDialogFocus.js';
 import { taskGenerationBlocker } from '@hawa/contracts/task-status';
 import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client.js';
 import { AuthorizedImage } from './AuthorizedImage.js';
 import { StudioRecoveryPanel } from './StudioRecoveryPanel.js';
 import { StudioBudgetSummary, type StudioBudgetUsage } from './StudioBudgetSummary.js';
+import { StudioFeedbackForm } from './StudioFeedbackForm.js';
 import { StudioJudgeNotice } from './StudioJudgeNotice.js';
 
 interface CritiqueDetail {
@@ -127,6 +130,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
 
   // View modes
   const [activeTab, setActiveTab] = useState<'preview' | 'art' | 'critique' | 'metrics'>('preview');
+  const [loadedPreviews, setLoadedPreviews] = useState<Set<string>>(new Set());
   const [zoomModalUrl, setZoomModalUrl] = useState<string | null>(null);
 
   // Form states
@@ -136,12 +140,8 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
   const [imagery, setImagery] = useState<'auto' | 'none' | 'generated'>('auto');
   const [holdForSelection, setHoldForSelection] = useState(false);
 
-  // Feedback states
-  const [feedbackVerdict, setFeedbackVerdict] = useState<'approve' | 'reject' | 'revise'>('approve');
-  const [feedbackRating, setFeedbackRating] = useState<number>(9);
-  const [feedbackNotes, setFeedbackNotes] = useState('');
-  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
-
+  const zoomRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(Boolean(zoomModalUrl), zoomRef, () => setZoomModalUrl(null));
   const activeTask = useRef(taskId);
   activeTask.current = taskId;
   const idempotencyKey = useRef<string>(crypto.randomUUID());
@@ -186,7 +186,6 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
     setCalls([]);
     setCandidates([]);
     setMessage('');
-    setFeedbackSubmitted(false);
     idempotencyKey.current = crypto.randomUUID();
     void refresh();
   }, [taskId, runId]);
@@ -271,26 +270,6 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
       await refresh();
     } catch (err: any) {
       setMessage(err.message || 'Abandon failed');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleSubmitFeedback = async () => {
-    if (!runId) return;
-    setBusy(true);
-    try {
-      await apiClient.studio.feedback(taskId, {
-        runId,
-        candidateId: selectedCandidateId || undefined,
-        verdict: feedbackVerdict,
-        rating: feedbackRating,
-        notes: feedbackNotes.trim() || undefined,
-      });
-      setFeedbackSubmitted(true);
-      setMessage('Design feedback recorded in durable memory.');
-    } catch (err: any) {
-      setMessage(err.message || 'Feedback recording failed');
     } finally {
       setBusy(false);
     }
@@ -565,8 +544,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
             }}
           >
             <div>
-              <strong>Run ID:</strong> <code>{run.id.slice(0, 8)}...</code>
-              <StudioBudgetSummary usage={run.budgetUsage}/>
+              <details><summary>Spending and model evidence</summary><p>Run <code>{run.id}</code></p><StudioBudgetSummary usage={run.budgetUsage}/></details>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -596,10 +574,10 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                     setBusy(true);
                     try {
                       await apiClient.tasks.redrive(taskId);
-                      setMessage('Task generation re-driven successfully');
+                      setMessage('Design retry recorded. Follow its progress below.');
                       await refresh();
                     } catch (err: any) {
-                      setMessage(err.message || 'Re-drive failed');
+                      setMessage(err.message || 'Design retry could not start');
                     } finally {
                       setBusy(false);
                     }
@@ -614,7 +592,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                     cursor: 'pointer',
                   }}
                 >
-                  🔄 Re-drive Generation
+                  Retry design with current policy
                 </button>
               )}
               {!['transferred', 'degraded', 'failed', 'abandoned'].includes(run.status) && (
@@ -649,7 +627,9 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                 fontSize: '0.85rem',
               }}
             >
-              <strong>Diagnostic:</strong> {run.diagnostic}
+              <strong>{/budget|reservation|RUN_LIMIT/i.test(run.diagnostic) ? 'This attempt stopped at its spending limit.' : 'This attempt needs recovery.'}</strong>
+              <p>Retry uses the current design policy and a bounded new attempt. Existing costs and evidence remain recorded. If retry is refused, follow its reason or continue with an editable Canva design.</p>
+              <details><summary>Failure details</summary>{run.diagnostic}</details>
             </div>
           )}
 
@@ -699,7 +679,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
             <div style={{ marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--ink, #F1F3F7)' }}>
-                  Generated Candidates ({candidates.length})
+                  Design options ({candidates.filter(isRenderedStudioCandidate).length} previews · {candidates.length} concepts)
                 </h4>
                 <span style={{ fontSize: '0.75rem', color: 'var(--muted, #94A3B8)' }}>
                   Click candidate to inspect critique, metrics, or select for Canva transfer
@@ -709,7 +689,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: `repeat(${Math.min(candidates.length, 5)}, 1fr)`,
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
                   gap: 12,
                 }}
               >
@@ -721,7 +701,6 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                   return (
                     <div
                       key={cand.id}
-                      onClick={() => setSelectedCandidateId(cand.id)}
                       style={{
                         padding: 10,
                         borderRadius: 6,
@@ -739,9 +718,9 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: '0.85rem', color: '#FFF' }}>
+                        <button type="button" className="btn" aria-pressed={isSelected} onClick={() => setSelectedCandidateId(cand.id)} style={{ fontSize: '0.85rem', color: '#FFF' }}>
                           {cand.concept?.name || `Option ${cand.ordinal + 1}`}
-                        </strong>
+                        </button>
                         {isWinner && (
                           <span
                             style={{
@@ -776,7 +755,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                       )}
 
                       {/* Thumbnail with Zoom Click */}
-                      <div
+                      <button
                         style={{
                           width: '100%',
                           height: 190,
@@ -793,10 +772,14 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                           setSelectedCandidateId(cand.id);
                           setZoomModalUrl(mediaPreviewUrl);
                         }}
-                        title="Click to zoom candidate image"
+                        type="button"
+                        disabled={!isRenderedStudioCandidate(cand)}
+                        aria-label={`Zoom ${cand.concept?.name || `option ${cand.ordinal + 1}`}`}
+                        title="Zoom design preview"
                       >
-                        {mediaPreviewUrl ? (
+                        {isRenderedStudioCandidate(cand) && mediaPreviewUrl ? (
                           <AuthorizedImage
+                            onLoad={() => { if (cand.previewSha256) setLoadedPreviews(previous => new Set([...previous, cand.previewSha256!])); }}
                             src={mediaPreviewUrl}
                             alt={cand.concept?.name}
                             style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
@@ -805,9 +788,9 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                             }}
                           />
                         ) : (
-                          <span style={{ fontSize: '0.75rem', color: 'var(--muted, #94A3B8)' }}>No preview</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--muted, #94A3B8)' }}>Preview not rendered yet</span>
                         )}
-                      </div>
+                      </button>
 
                       {run.status === 'awaiting_selection' && (
                         <button
@@ -851,7 +834,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
               }}
             >
               {/* INSPECTION VIEW TABS */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--warn-text, #FBBF24)' }}>
                     Candidate {activeCandidate.ordinal + 1}: {activeCandidate.concept?.name}
@@ -861,7 +844,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {(['preview', 'art', 'critique', 'metrics'] as const).map((tab) => (
                     <button
                       key={tab}
@@ -891,10 +874,11 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
 
               {/* TAB 1: COMPOSITE PREVIEW */}
               {activeTab === 'preview' && (
-                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                  <div
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
+                  <button type="button"
                     style={{
-                      width: 280,
+                      width: 'min(280px, 100%)',
+                      flexShrink: 0,
                       height: 350,
                       borderRadius: 6,
                       background: '#060B12',
@@ -904,9 +888,12 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                       overflow: 'hidden',
                       cursor: 'zoom-in',
                     }}
+                    aria-label="Zoom selected design"
+                    disabled={!isRenderedStudioCandidate(activeCandidate)}
                     onClick={() => setZoomModalUrl(getMediaUrl(activeCandidate.previewUrl))}
                   >
                     <AuthorizedImage
+                      onLoad={() => { if (activeCandidate.previewSha256) setLoadedPreviews(previous => new Set([...previous, activeCandidate.previewSha256!])); }}
                       src={getMediaUrl(activeCandidate.previewUrl)}
                       alt={activeCandidate.concept?.name}
                       style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
@@ -914,7 +901,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
-                  </div>
+                  </button>
 
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ fontSize: '0.85rem' }}>
@@ -967,10 +954,11 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
 
               {/* TAB 2: ART BACKGROUND LAYER */}
               {activeTab === 'art' && (
-                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                  <div
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
+                  <button type="button"
                     style={{
-                      width: 280,
+                      width: 'min(280px, 100%)',
+                      flexShrink: 0,
                       height: 350,
                       borderRadius: 6,
                       background: '#060B12',
@@ -980,6 +968,8 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                       overflow: 'hidden',
                       cursor: 'zoom-in',
                     }}
+                    aria-label="Zoom selected artwork"
+                    disabled={!activeCandidate.artUrl}
                     onClick={() => activeCandidate.artUrl && setZoomModalUrl(getMediaUrl(activeCandidate.artUrl))}
                   >
                     {activeCandidate.artUrl ? (
@@ -996,7 +986,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                         No separate art layer (Typography / Procedural layout)
                       </span>
                     )}
-                  </div>
+                  </button>
 
                   <div style={{ flex: 1, fontSize: '0.85rem' }}>
                     <strong>Art Layer SHA-256:</strong>
@@ -1169,86 +1159,8 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                 </div>
               )}
 
-              {/* ART DIRECTOR FEEDBACK FORM */}
-              <div
-                style={{
-                  marginTop: 14,
-                  padding: 10,
-                  borderRadius: 6,
-                  background: 'var(--soft, #1F242E)',
-                  borderTop: '1px solid var(--line, #29303D)',
-                }}
-              >
-                <h5 style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: '#FFF' }}>
-                  Art Director Feedback (Durable Learning Loop)
-                </h5>
-
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <label style={{ fontSize: '0.8rem' }}>Verdict:</label>
-                  {(['approve', 'revise', 'reject'] as const).map((v) => (
-                    <label key={v} style={{ fontSize: '0.8rem', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="verdict"
-                        checked={feedbackVerdict === v}
-                        onChange={() => setFeedbackVerdict(v)}
-                      />{' '}
-                      {v.toUpperCase()}
-                    </label>
-                  ))}
-
-                  <label style={{ fontSize: '0.8rem', marginLeft: 8 }}>Rating (1–10):</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={feedbackRating}
-                    onChange={(e) => setFeedbackRating(Number(e.target.value))}
-                    style={{
-                      width: 45,
-                      padding: '2px 4px',
-                      background: 'var(--dark, #12141A)',
-                      color: '#FFF',
-                      border: '1px solid var(--line, #29303D)',
-                      borderRadius: 3,
-                    }}
-                  />
-
-                  <input
-                    type="text"
-                    placeholder="Artistic rationale or critique notes for exemplar memory..."
-                    value={feedbackNotes}
-                    onChange={(e) => setFeedbackNotes(e.target.value)}
-                    style={{
-                      flex: 1,
-                      minWidth: 200,
-                      padding: '5px 8px',
-                      borderRadius: 4,
-                      background: 'var(--dark, #12141A)',
-                      color: '#FFF',
-                      border: '1px solid var(--line, #29303D)',
-                      fontSize: '0.8rem',
-                    }}
-                  />
-
-                  <button
-                    className="btn"
-                    disabled={busy || feedbackSubmitted}
-                    onClick={handleSubmitFeedback}
-                    style={{
-                      padding: '5px 14px',
-                      borderRadius: 4,
-                      background: feedbackSubmitted ? '#137333' : 'var(--warn-text, #FBBF24)',
-                      color: '#0A1628',
-                      fontWeight: 700,
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {feedbackSubmitted ? 'Recorded ✓' : 'Submit Feedback'}
-                  </button>
-                </div>
-              </div>
+              <StudioFeedbackForm key={`${taskId}:${runId}:${activeCandidate.id}:${activeCandidate.previewSha256}`} taskId={taskId} runId={runId!}
+                candidateId={activeCandidate.id} previewSha256={activeCandidate.previewSha256} previewAvailable={Boolean(activeCandidate.previewSha256 && loadedPreviews.has(activeCandidate.previewSha256))} />
             </div>
           )}
         </div>
@@ -1257,7 +1169,9 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
       {/* ZOOM MODAL */}
       {zoomModalUrl && (
         <div
+          ref={zoomRef}
           role="dialog"
+          aria-modal="true"
           aria-label="High Resolution Candidate Inspection"
           onClick={() => setZoomModalUrl(null)}
           style={{
@@ -1301,6 +1215,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
             >
               <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>High-Resolution Layout Inspection</span>
               <button
+                aria-label="Close design preview"
                 onClick={() => setZoomModalUrl(null)}
                 style={{
                   background: 'transparent',

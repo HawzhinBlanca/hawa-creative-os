@@ -671,6 +671,7 @@ export interface DesignFeedbackTable {
   verdict: DesignFeedbackVerdict;
   rating: number | null;
   notes: string | null;
+  preview_sha256: Generated<string | null>;
   created_at: Generated<Date>;
 }
 

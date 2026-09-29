@@ -1,5 +1,10 @@
 import type { UUID, ISODateTime, JsonObject, Result, AppError } from '@hawa/contracts';
 
+/** A concept or failed render is not evidence a person can review. */
+export function isRenderedStudioCandidate(candidate: { previewSha256?: string | null; hasPreviewBytes?: boolean } | null | undefined): boolean {
+  return Boolean(candidate && (candidate.hasPreviewBytes || /^[a-f0-9]{64}$/i.test(candidate.previewSha256 || '')));
+}
+
 export type FeedbackPolarity = 'positive' | 'negative' | 'neutral';
 
 export interface FeedbackEvent {

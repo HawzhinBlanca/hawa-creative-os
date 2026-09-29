@@ -2,6 +2,8 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { deskReviewTarget } from '@hawa/contracts/desk-navigation';
 import { createApp } from '../src/app.js';
+import { persistChatIntake } from '../src/services/chat-intake.js';
+import { randomUUID } from 'node:crypto';
 import { searchResultUrl } from '../src/routes/search.routes.js';
 
 /**
@@ -94,5 +96,22 @@ describe('each hit opens where the Desk shows it', () => {
     const nav = await search({ q: 'Operations' });
     expect(nav.results.find((r) => r.id === 'nav-ops')?.url).toBe('#/ops');
     expect(nav.results.some((r) => r.url === '#/review' && r.id !== 'nav-review')).toBe(false);
+  });
+});
+
+// The audited six-photo task used a generic title; its actual copy lived in the saved request.
+describe('request and exact-copy search before the bounded read', () => {
+  it('finds an older saved request and exact copy beyond the ceiling without crossing clients', async () => {
+    const intake = await persistChatIntake(testDb, { platform:'telegram', sourceEventId:randomUUID(),
+      sourceChannelId:`search-${randomUUID()}`, clientId:KAAE, title:'Here is the text',
+      rawText:'Field visit report Qandiluniquereport', designInstructions:'Use supplied photographs',
+      exactCopy:['Uncommonexactcopytext', 'كردي ١٢٣'] });
+    await newerTasks(30, KAAE);
+    vi.stubEnv('HAWA_SEARCH_TASK_CEILING', '10');
+    for (const q of ['Qandiluniquereport','Uncommonexactcopytext','کردی 123']) {
+      expect((await search({q,clientId:KAAE})).results.map(hit=>hit.id)).toContain(intake.task.id);
+      expect((await search({q,clientId:HAWA_STUDIO})).results.map(hit=>hit.id)).not.toContain(intake.task.id);
+    }
+    expect((await search({q:'Qandiluniquereport',clientId:KAAE})).truncated).toBe(false);
   });
 });

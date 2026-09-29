@@ -544,8 +544,8 @@ input, select, textarea {
 
 .tabs button.on {
   font-weight: 700;
-  color: var(--dark);
-  border-bottom: 2px solid var(--dark);
+  color: var(--ink);
+  border-bottom: 2px solid var(--accent-text, var(--ink));
 }
 
 .dna {
@@ -2499,3 +2499,10 @@ input, select, textarea {
   .top .btn, #ops .btn, [role="dialog"] .btn { min-height: 44px; }
   .top h1 { overflow-wrap: anywhere; }
 }
+
+/* Office review controls remain legible and reachable at compact widths. */
+.btn:disabled, .btn.primary:disabled { background: var(--soft); color: var(--muted); border: 1px solid var(--line); cursor: not-allowed; box-shadow: none; }
+.tabs button { min-height: 44px; }
+button:focus-visible, [role="combobox"]:focus-visible { outline: 2px solid var(--accent-text, #60a5fa); outline-offset: 3px; }
+
+.queue-pill { min-height: 44px; padding: 8px 12px; font-size: 12px; }

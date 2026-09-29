@@ -150,6 +150,7 @@ export const App: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionBusyRef = useRef(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [searchClientName, setSearchClientName] = useState<string | undefined>();
   const [searchClientId, setSearchClientId] = useState<string | undefined>();
   const [selectedClientId, setSelectedClientId] = useState('');
   const taskTitleInputRef = useRef<HTMLInputElement>(null);
@@ -163,6 +164,7 @@ export const App: React.FC = () => {
   const canSaveRequest = sessionState.status === 'signed_in' && !draftReadBlocked && Boolean(taskTitle.trim()) && !isSubmitting &&
     (pendingManualRetry || (clientDirectory.isSuccess && !clientDirectory.isFetching && clientAvailable));
 
+  const handleSearchClientChange = React.useCallback((id: string | undefined, name?: string) => { setSearchClientId(id); setSearchClientName(name); }, []);
   const modalRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
 
@@ -306,7 +308,7 @@ export const App: React.FC = () => {
               onNavigateToClients={() => handleNavigate('clients')}
               onNavigateToSettings={() => handleNavigate('settings')}
               onNewTask={handleOpenModal}
-              onSelectedClientChange={setSearchClientId}
+              onSelectedClientChange={handleSearchClientChange}
             />
           )}
           {sessionState.status === 'signed_in' && (currentScreen === 'clients' || currentScreen === 'dna' || currentScreen === 'library') && (
@@ -376,10 +378,10 @@ export const App: React.FC = () => {
             {/* Client / Workspace Selector */}
             <div style={{ margin: '14px 0' }}>
               <label htmlFor="modal-client-select" style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
-                {t.modal.clientLabel}
+                {t.modal.clientLabel} (required)
               </label>
               <select
-                id="modal-client-select"
+                id="modal-client-select" required
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--panel)', color: 'var(--text)' }}
                 value={selectedClientId}
                 disabled={isSubmitting || draftReadBlocked || pendingManualRetry || clientDirectory.isFetching}
@@ -403,10 +405,10 @@ export const App: React.FC = () => {
 
             <div style={{ margin: '14px 0' }}>
               <label htmlFor="modal-task-title" style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
-                {t.modal.taskTitleLabel}
+                {t.modal.taskTitleLabel} (required)
               </label>
               <input
-                id="modal-task-title"
+                id="modal-task-title" required aria-describedby="request-save-help"
                 disabled={isSubmitting || pendingManualRetry || draftReadBlocked}
                 ref={taskTitleInputRef}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
@@ -496,6 +498,7 @@ export const App: React.FC = () => {
             </div>
 
             <p style={{ color: 'var(--muted)', fontSize: 13 }}>Save your instructions and exact copy, then use the task’s design controls to generate a draft or create or link a Canva design.</p>
+            <p id="request-save-help" role="status">{!taskTitle.trim() ? 'Enter a request title to enable Save.' : !clientAvailable ? 'Choose an available client to enable Save.' : draftReadBlocked ? 'Recover the browser draft before saving.' : 'Ready to save your request.'}</p>
             {taskSubmissionError && <p role="alert" style={{ color: '#f87171' }}>{taskSubmissionError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
               <button className="btn" disabled={isSubmitting} onClick={() => setShowNewTaskModal(false)}>
@@ -547,6 +550,7 @@ export const App: React.FC = () => {
         onClose={() => setShowCommandPalette(false)}
         onNavigate={(screen) => handleNavigate(screen)}
         activeClientId={searchClientId}
+        activeClientName={searchClientName}
         onAction={(actionId) => {
           if (actionId === 'start_tour') {
             setShowTour(true);

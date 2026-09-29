@@ -12,6 +12,10 @@
     "./spending-policy": {
       "import": "./dist/spending-policy.js",
       "types": "./dist/spending-policy.d.ts"
+    },
+    "./feedback": {
+      "import": "./dist/feedback.js",
+      "types": "./dist/feedback.d.ts"
     }
   },
   "scripts": {

@@ -413,12 +413,30 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       expect(data.status).toBe('abandoned');
     });
 
+    it('refuses pending concepts, missing candidates and fractional ratings before recording learning evidence', async () => {
+      const pendingId = randomUUID();
+      await sql`INSERT INTO hawa.design_studio_candidates(id,run_id,tenant_id,ordinal,concept,status)
+        VALUES(${pendingId}::uuid,${runId}::uuid,${tenantId}::uuid,99,'{}','draft')`.execute(db);
+      for (const [payload, status] of [
+        [{runId,candidateId:pendingId,verdict:'approve',rating:9},409],
+        [{runId,verdict:'approve',rating:9},422],
+        [{runId,candidateId,verdict:'approve',rating:9.5},422],
+        [{runId,candidateId:randomUUID(),verdict:'approve',rating:9},409],
+      ] as const) {
+        const response = await app.request(`/v1/tasks/${taskId}/design-feedback`, {
+          method:'POST', headers, body:JSON.stringify(payload) });
+        expect(response.status).toBe(status);
+      }
+      expect((await sql`SELECT id FROM hawa.design_feedback WHERE candidate_id=${pendingId}::uuid`.execute(db)).rows).toHaveLength(0);
+    });
+
     it('POST /v1/tasks/:taskId/design-feedback records human feedback (201)', async () => {
       const res = await app.request(`/v1/tasks/${taskId}/design-feedback`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           runId,
+          candidateId,
           verdict: 'approve',
           rating: 9,
           notes: 'Excellent hierarchy and color harmony with deep navy',
@@ -435,6 +453,19 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       expect(data.rulesProposed).toBeGreaterThanOrEqual(1);
     });
 
+    it('replays feedback once and refuses action reuse or a changed reviewed preview', async () => {
+      const key=randomUUID();
+      const payload={runId,candidateId,previewSha256:fakeSha,verdict:'revise',rating:8,notes:'Check spacing'};
+      const post=(body:unknown, action=key)=>app.request(`/v1/tasks/${taskId}/design-feedback`,{
+        method:'POST',headers:{...headers,'Idempotency-Key':action},body:JSON.stringify(body)});
+      expect((await post(payload)).status).toBe(201);
+      const replay=await post(payload);expect(replay.status).toBe(200);expect(await replay.json()).toMatchObject({id:key,replayed:true});
+      expect((await post({...payload,rating:10})).status).toBe(409);
+      expect((await post({...payload,previewSha256:'b'.repeat(64)},randomUUID())).status).toBe(409);
+      const rows=(await sql<{preview_sha256:string}>`SELECT * FROM hawa.design_feedback WHERE id=${key}::uuid`.execute(db)).rows;
+      expect(rows).toHaveLength(1);expect(rows[0].preview_sha256).toBe(fakeSha);
+    });
+
     it('GET /v1/tasks/:taskId/design-feedback returns list of recorded feedback (200)', async () => {
       const res = await app.request(`/v1/tasks/${taskId}/design-feedback`, {
         method: 'GET',
@@ -446,7 +477,7 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       expect(data.feedback).toBeInstanceOf(Array);
       expect(data.count).toBeGreaterThanOrEqual(1);
       expect(data.feedback[0].taskId).toBe(taskId);
-      expect(data.feedback[0].verdict).toBe('approve');
+      expect(data.feedback.some((row:any)=>row.verdict==='approve')).toBe(true);
     });
 
     it('Candidate image streaming returns 404 if bytes not yet rendered', async () => {

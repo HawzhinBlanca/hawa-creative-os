@@ -176,6 +176,7 @@ export interface RecordFeedbackParams {
   verdict: DesignFeedbackVerdict;
   rating?: number | null;
   notes?: string | null;
+  previewSha256?: string | null;
 }
 
 /** A candidate's three pictures, each a bytea column (until migration 021) and a hash naming its file. */
@@ -801,6 +802,7 @@ export class DesignStudioRepository {
           verdict: params.verdict,
           rating: params.rating !== undefined ? params.rating : null,
           notes: params.notes || null,
+          preview_sha256: params.previewSha256 || null,
         })
         .returningAll()
         .execute();

@@ -78,8 +78,23 @@ it('lists a hit with no Desk page as such and opens nothing for it; says when ol
   await query('gala');
   expect(view.text()).toContain('Gala logo.png');
   expect(view.text()).toContain('Not shown on a Desk page');
-  expect(view.container.querySelector('[role="status"]')?.textContent).toContain('Only the newest tasks were searched');
+  expect(view.container.querySelector('[role="status"]')?.textContent).toContain('There are more matching tasks');
   await click(view.container.querySelector('#cmd-item-asset-1'));
   expect(onClose).not.toHaveBeenCalled();
   expect(window.location.hash).toBe(before);
+});
+
+it('names the client, exposes keyboard selection and returns focus when closed', async () => {
+  const caller=document.createElement('button'); document.body.append(caller); caller.focus();
+  view=await mount(React.createElement(CommandPalette,{isOpen:true,activeClientId:'client-a',activeClientName:'KAAE',onClose(){},onNavigate(){}}));
+  await advance(100);
+  const input=view.container.querySelector<HTMLInputElement>('[role="combobox"]')!;
+  expect(document.activeElement).toBe(input);
+  expect(input.getAttribute('aria-controls')).toBe('command-palette-results');
+  expect(view.text()).toContain('KAAE');
+  const before=input.getAttribute('aria-activedescendant');
+  await act(async()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true})));
+  expect(input.getAttribute('aria-activedescendant')).not.toBe(before);
+  expect(view.container.querySelector('[aria-selected="true"]')?.id).toBe(input.getAttribute('aria-activedescendant'));
+  await view.unmount();view=undefined;expect(document.activeElement).toBe(caller);caller.remove();
 });

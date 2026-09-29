@@ -8,7 +8,7 @@ import {captureForReview} from '../services/canvaCapture.js';
 import type {CanvaAmendmentObservation} from '@hawa/contracts';
 import {canvaPanelPollMs,onCanvaPanelWake} from '../services/canvaPanelPoll.js';
 // `revision` changes when a live event names the task (the Work screen's detail query read it again).
-export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string;revision?:number}>=({taskId,taskStatus,revision})=>{
+export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string;revision?:number;onOpenSettings?:()=>void}>=({taskId,taskStatus,revision,onOpenSettings})=>{
   const generationBlocker=taskGenerationBlocker(taskStatus);
   const [state,setState]=useState<any>(null),[connected,setConnected]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
   useEffect(()=>{setMessage('');},[taskStatus]);
@@ -67,7 +67,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string;revision?:
     <h4>Canva design and exports</h4>
     {state?.revisionHandoff&&<NativeRevisionHandoff taskId={taskId} handoff={state.revisionHandoff} busy={busy} onAction={run}
       onCapture={()=>void run(async()=>{const result=await captureForReview(apiClient.canva,taskId,{key:requestKey('revision-capture')});setMessage(result.text);if(result.completed)delete keys.current['revision-capture'];})}/>}
-    {!connected&&<p>Connect Canva in Settings to create a native design or retrieve its exports.</p>}
+    {!connected&&<div role="note"><p>Connect Canva to create an editable design and retrieve its exports. Review and delivery become available after a design is captured and checked.</p>{onOpenSettings&&<button className="btn" onClick={onOpenSettings}>Open Canva settings</button>}</div>}
     {state&&!state.binding&&!state.revisionHandoff&&<div>
       <p>Create an editable draft from the saved copy and verified client references. The saved plan records the model used. Native font, layout and copy still require review.</p>
       <label>Draft proportions <select value={`${width}x${height}`} onChange={e=>{const [w,h]=e.target.value.split('x');setWidth(w);setHeight(h);}}>

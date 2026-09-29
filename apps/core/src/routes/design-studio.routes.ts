@@ -5,9 +5,9 @@ import {
   type DesignStudioServiceOptions,
 } from '../services/design-studio/index.js';
 import { CanvaConnectService, CanvaFlowError } from '../services/canva-connect-service.js';
-import { DesignStudioRepository, withRlsContext, type CandidateImageKind } from '@hawa/db';
+import { DesignStudioRepository, sql, withRlsContext, type CandidateImageKind } from '@hawa/db';
 import { isSha256Hex } from '@hawa/contracts';
-import { StudioBudgetEvidenceError, StudioBudgetExhaustedError } from '@hawa/domain';
+import { isRenderedStudioCandidate, StudioBudgetEvidenceError, StudioBudgetExhaustedError } from '@hawa/domain';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { blobStoreFor, storedFileLost } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
@@ -369,11 +369,56 @@ export function registerDesignStudioRoutes(
       }
 
       let rating = body.rating !== undefined ? Number(body.rating) : null;
-      if (rating !== null && (isNaN(rating) || rating < 1 || rating > 10)) {
+      if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 10)) {
         return ctx.problem(c, 422, 'Invalid Rating', 'Rating must be an integer between 1 and 10');
       }
 
-      const feedbackId = randomUUID();
+      if (body.notes !== undefined && (typeof body.notes !== 'string' || body.notes.length > 4000)) {
+        return ctx.problem(c,422,'Invalid Notes','Feedback notes must be text, up to 4000 characters.');
+      }
+      const actionId = c.req.header('Idempotency-Key') || randomUUID();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actionId)) {
+        return ctx.problem(c, 422, 'Invalid Action', 'Use a UUID feedback action.');
+      }
+      if (body.previewSha256 !== undefined && !isSha256Hex(body.previewSha256)) {
+        return ctx.problem(c, 422, 'Invalid Preview', 'Use the saved preview hash.');
+      }
+      // Bind the reviewed picture to this authorized task before admitting learning evidence.
+      // RLS and the transaction prevent a cross-client id or concurrent candidate update slipping in.
+      if (!body.runId || !body.candidateId || ![body.runId, body.candidateId].every(id =>
+        typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+        return ctx.problem(c, 422, 'Review Candidate Required', 'Choose a rendered candidate from this task before submitting feedback.');
+      }
+
+      return withRlsContext(ctx.db!, { tenantId: s.tenantId, userId: s.actorId, role: s.role }, async trx => {
+        await sql`SELECT pg_advisory_xact_lock(hashtextextended(${actionId},0))`.execute(trx);
+        const existing = await trx.selectFrom('design_feedback').selectAll()
+          .where('id','=',actionId).where('tenant_id','=',s.tenantId).executeTakeFirst();
+        if (existing) {
+          if (existing.task_id !== taskId || existing.run_id !== body.runId || existing.candidate_id !== body.candidateId ||
+            existing.actor_id !== s.actorId || existing.source !== (body.source || 'desk') || existing.verdict !== body.verdict || Number(existing.rating) !== Number(rating) ||
+            (existing.notes || '') !== (body.notes || '') || (existing.preview_sha256 || '') !== (body.previewSha256 || '')) {
+            return ctx.problem(c,409,'Feedback Action Conflict','This action already records different feedback.');
+          }
+          return c.json({id:existing.id,status:'recorded',verdict:existing.verdict,rating:existing.rating,replayed:true},200);
+        }
+        const candidate = await trx.selectFrom('design_studio_candidates as candidate')
+          .innerJoin('design_studio_runs as run', 'run.id', 'candidate.run_id')
+          .innerJoin('tasks as task', 'task.id', 'run.task_id')
+          .select(['candidate.preview_sha256', 'candidate.preview_png'])
+          .where('candidate.tenant_id', '=', s.tenantId).where('run.tenant_id', '=', s.tenantId)
+          .where('task.tenant_id', '=', s.tenantId).where('task.id', '=', taskId)
+          .where('run.id', '=', body.runId).where('candidate.id', '=', body.candidateId)
+          .forShare('candidate').executeTakeFirst();
+        if (!isRenderedStudioCandidate(candidate && { previewSha256: candidate.preview_sha256,
+          hasPreviewBytes: Boolean(candidate.preview_png?.length) })) {
+          return ctx.problem(c, 409, 'Candidate Not Ready', 'No rendered candidate is available to review. Wait for a preview or recover the failed design first.');
+        }
+
+        if (body.previewSha256 && body.previewSha256 !== candidate?.preview_sha256) {
+          return ctx.problem(c,409,'Preview Changed','The candidate preview changed. Inspect the current preview before submitting new feedback.');
+        }
+      const feedbackId = actionId;
       const feedbackRow = await r.recordFeedback({
         id: feedbackId,
         tenantId: s.tenantId,
@@ -385,7 +430,8 @@ export function registerDesignStudioRoutes(
         verdict: body.verdict,
         rating,
         notes: body.notes || null,
-      });
+        previewSha256: body.previewSha256 || null,
+      }, trx);
 
       // Feed verdict into globalFeedbackMiner (governed learning loop)
       const proposedRules = globalFeedbackMiner.ingestDesignFeedback({
@@ -412,6 +458,7 @@ export function registerDesignStudioRoutes(
         },
         201
       );
+      });
     })
   );
 
