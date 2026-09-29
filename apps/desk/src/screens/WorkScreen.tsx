@@ -1208,7 +1208,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   <p dir="auto" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{selectedTask.description || selectedTask.title}</p>
                   {selectedTask.referenceImages?.length ? <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{selectedTask.referenceImages.map((photo,i) => <AuthorizedImage key={photo.sha256} src={photo.url} alt={`Request photo ${i+1}`} style={{width:96,height:96,objectFit:'contain'}} />)}</div> : null}
                 </section>
-                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} taskStatus={selectedTask.status} hasCanvaBinding={Boolean(selectedTask.canvaBinding)} />
+                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} taskStatus={selectedTask.status} hasCanvaBinding={Boolean(selectedTask.canvaBinding)} onOpenCanva={() => void handleEditInCanva()} />
                 <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} taskStatus={selectedTask.status} revision={detailQuery.dataUpdatedAt} onOpenSettings={onNavigateToSettings} />
                 {/* Technical Package Metadata Badges (FR-032, FR-048) */}
                 <div className="preview-meta-strip">

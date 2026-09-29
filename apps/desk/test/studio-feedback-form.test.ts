@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import React, {act} from 'react';
 import {afterEach,expect,it,vi} from 'vitest';
+import {StudioPanel} from '../src/components/StudioPanel.js';
 import {StudioFeedbackForm} from '../src/components/StudioFeedbackForm.js';
 import {apiClient} from '../src/api/client.js';
 import {click,mount} from './support/desk-harness.js';
+
+vi.mock('../src/components/StudioRecoveryPanel.js',()=>({StudioRecoveryPanel:()=>null}));
 
 const props={taskId:'task',runId:'run',candidateId:'candidate',previewSha256:'a'.repeat(64)};
 afterEach(()=>{vi.restoreAllMocks();sessionStorage.clear();document.body.innerHTML='';});
@@ -38,4 +41,13 @@ it('replays the original review across an uncertain response and remount',async(
   await click(view.container.querySelector('button'));
   expect(send.mock.calls[1]).toEqual(send.mock.calls[0]);
   expect(sessionStorage.length).toBe(0);await view.unmount();
+});
+
+it('opens a transferred design through the authenticated task editor action',async()=>{
+  vi.spyOn(apiClient.studio,'getRun').mockResolvedValue({run:{id:'run',taskId:'task',status:'transferred',tier:'standard',planId:'plan'},candidates:[],calls:[]});
+  const open=vi.fn();
+  const view=await mount(React.createElement(StudioPanel,{taskId:'task',taskStatus:'OPERATOR_REQUIRED',initialRunId:'run',onOpenCanva:open}));
+  const button=Array.from(view.container.querySelectorAll('button')).find(b=>b.textContent?.includes('Open Canva Editor'))!;
+  expect(button).toBeDefined();expect(view.container.querySelector('a[href*="/canva/editor"]')).toBeNull();
+  await click(button);expect(open).toHaveBeenCalledOnce();await view.unmount();
 });

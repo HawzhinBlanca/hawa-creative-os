@@ -111,11 +111,12 @@ const PIPELINE_STAGES = [
   { id: 'transfer', label: 'Canva' },
 ];
 
-export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanvaBinding?: boolean; initialRunId?: string }> = ({
+export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanvaBinding?: boolean; initialRunId?: string; onOpenCanva?: () => void }> = ({
   taskId,
   taskStatus,
   hasCanvaBinding = false,
   initialRunId,
+  onOpenCanva,
 }) => {
   const [historyLoaded, setHistoryLoaded] = useState(Boolean(initialRunId));
   const generationBlocker = taskGenerationBlocker(taskStatus);
@@ -654,9 +655,11 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                   OpenXML/PPTX package transferred into native Canva document.
                 </p>
               </div>
-              {run.planId && (
-                <a
-                  href={`/tasks/${taskId}/canva/editor`}
+              {onOpenCanva && (
+                <button
+                  type="button"
+                  onClick={onOpenCanva}
+                  disabled={busy}
                   className="btn"
                   style={{
                     padding: '6px 14px',
@@ -669,7 +672,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                   }}
                 >
                   Open Canva Editor ↗
-                </a>
+                </button>
               )}
             </div>
           )}

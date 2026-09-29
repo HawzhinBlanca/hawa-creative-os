@@ -58,3 +58,8 @@ is implemented; deployment, live viewport checks and provider pilot remain open.
 Evidence: output/repairs/2026-09-30-office-flow/focused-final.log,
 test-typecheck.log, desk-build.log. Tests use isolated PostgreSQL and mocked
 external providers; they do not establish live creative quality.
+
+Preflight readiness review also found Studio's transferred editor link used the
+API path as a browser URL. The release was stopped during stage 8, before live
+services changed. Studio now invokes Work's existing authenticated editor lookup,
+which opens the provider's scoped edit URL. This is included in the next seal.
