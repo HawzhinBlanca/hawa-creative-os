@@ -332,7 +332,7 @@ def run(archive: Path, key: Path | None, dest: Destination, keep: int, restate_o
                    "copiedAt": (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                    "members": [{"path": name, "sha256": chosen.hashes[name], "bytes": chosen.sizes[name]} for name in members]}
         existing = receipts.get(chosen.stamp)
-        same = existing is not None and existing.get("members") == receipt["members"]
+        same = isinstance(existing, dict) and existing.get("members") == receipt["members"]
         if same:
             # Already copied: verified again, and copied again if anything there changed since.
             try:
@@ -362,7 +362,7 @@ def prune(dest: Destination, receipts: dict[str, dict], keep: int, current: str)
     kept = set(ordered[:keep]) | {current}
     expired = [stamp for stamp in ordered if stamp not in kept]
     def names_of(stamp: str) -> list[str]:
-        members = receipts[stamp].get("members", [])
+        members = receipts[stamp].get("members", []) if isinstance(receipts[stamp], dict) else []
         return [m["path"] for m in members if isinstance(m, dict) and isinstance(m.get("path"), str)]
     needed_packs = {name for stamp in kept for name in names_of(stamp) if name.startswith("blobs/")}
     deletions: list[str] = []

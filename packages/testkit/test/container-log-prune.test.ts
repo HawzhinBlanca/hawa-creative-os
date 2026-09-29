@@ -23,6 +23,8 @@ function fill(name: string, mb: number) {
 function prune(days: number, maxMb: number): string {
   const body = [
     'set -Eeuo pipefail',
+    // The date some days ago comes from infra/ops/host_lib.sh (BSD or GNU date, ADR-141).
+    `source '${path.resolve(import.meta.dirname, '../../../infra/ops/host_lib.sh')}'`,
     `eval "$(sed -n '/^prune_container_logs() {/,/^}/p' '${script}')"`,
     `prune_container_logs '${dir}' ${days} ${maxMb}`,
   ].join('\n');

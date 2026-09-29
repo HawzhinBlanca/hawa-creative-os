@@ -220,6 +220,10 @@ class OffsiteCopyTest(unittest.TestCase):
                     "20260927T003000Z": {"members": []}}
         with self.assertRaisesRegex(BackupError, "does not own"):
             prune(dest, receipts, keep=1, current="20260927T003000Z")
+        # A receipt that is not a JSON object names no member: only the receipt itself goes.
+        pruned = prune(dest, {"20260925T003000Z": "not a receipt", "20260927T003000Z": {"members": []}},
+                       keep=1, current="20260927T003000Z")
+        self.assertEqual(pruned["prunedSets"], ["20260925T003000Z"])
 
     def test_waits_for_the_nightly_lock_then_reports_it(self) -> None:
         self.night("20260928T003000Z", [])
