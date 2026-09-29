@@ -63,3 +63,11 @@ Preflight readiness review also found Studio's transferred editor link used the
 API path as a browser URL. The release was stopped during stage 8, before live
 services changed. Studio now invokes Work's existing authenticated editor lookup,
 which opens the provider's scoped edit URL. This is included in the next seal.
+
+The first completed full suite returned 5423 passed, 3 failed, 67 skipped (600
+files). Two expected-upgrade fixtures still ended at migration 068; the session
+interaction expected the old default-All empty message. Explicit fixture lists
+now include 069, and Work uses a human-readable actionable empty message. All
+45 tests across the three affected files passed on rerun. The failed full log
+is retained as full-suite-first.log; the full release gate will be rerun on the
+corrected seal before deploying. No failed or skipped test is counted as passed.

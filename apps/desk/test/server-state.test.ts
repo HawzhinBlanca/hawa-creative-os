@@ -623,7 +623,7 @@ describe('an expired session reaches sign-in from any screen, once', () => {
     expect(runtime.session.getState().status).toBe('signed_in');
     expect(signInForms(view.container)).toBe(0);
     expect(stream.connects).toBeGreaterThanOrEqual(2);
-    expect(view.text()).toContain('No tasks currently pending in the work queue.');
+    expect(view.text()).toContain('No tasks need action right now.');
   });
 });
 

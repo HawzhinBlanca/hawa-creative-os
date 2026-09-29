@@ -184,6 +184,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     cursors: [null],
   });
   const { filter, search } = queueView;
+  const emptyQueueMessage = filter === 'needs_action' && !search ? 'No tasks need action right now.' :
+    filter === 'all' && !search ? 'No tasks currently pending in the work queue.' : 'No tasks match this filter or search.';
   const setFilter = (next: QueueFilter) => setQueueView((v) => (v.filter === next ? v : { ...v, filter: next, cursors: [null] }));
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -870,7 +872,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
 
             {queueState === 'empty' && (
               <div className="queue-empty-state">
-                <p>No tasks currently pending in the work queue.</p>
+                <p>{emptyQueueMessage}</p>
                 <button className="btn btn-sm" onClick={() => void listQuery.refetch()}>
                   🔄 Refresh Queue
                 </button>
@@ -885,7 +887,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
 
             {queueState === 'ready' && filteredTasks.length === 0 && (
               <div className="queue-empty-state">
-                <p>No tasks match the active filter ({filter}).</p>
+                <p>{emptyQueueMessage}</p>
                 <button className="btn btn-sm" onClick={() => { setFilter('all'); setSearchQuery(''); }}>
                   Reset Filters
                 </button>
