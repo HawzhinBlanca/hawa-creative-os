@@ -1,0 +1,328 @@
+{
+ "schemaVersion": 1,
+ "adr": "ADR-141",
+ "date": "2026-09-29",
+ "branch": "worktree-agent-a25b3b2a4122dcb91 (based on a7a29c7a)",
+ "scope": "Linux readiness of the production host scripts, host-local volume stamps, host role, systemd scheduling, off-site copy, validate_pack in a fresh clone. Nothing here touched production: no hawa-production container, volume or port, no SQL on 54332, no deploy.sh --apply, no edit of the main checkout, ~/Library/LaunchAgents or ~/.hawa (read only).",
+ "linuxContainer": {
+  "commit": "ce63344bec30b5dd5c855ec899e8cf71c672e62d",
+  "image": "debian:trixie-slim arm64 + bash coreutils findutils python3 python3-pytest python3-yaml openssl rsync curl git ca-certificates postgresql postgresql-client systemd systemd-sysv dbus tzdata procps zstd sudo nodejs (throwaway tag hawa-linux-proof:local, removed afterwards)",
+  "command": "git archive HEAD > copy; docker run --rm --network none -v copy:/repo:ro -v out:/out hawa-linux-proof:local bash /repo/scripts/proofs/linux_host_readiness.sh",
+  "result": {
+   "host": "Linux 7.0.12-linuxkit aarch64",
+   "passed": 29,
+   "failed": 0,
+   "checks": [
+    {
+     "result": "PASS",
+     "check": "A1 old 'stat -f || stat -c' form yields 6 lines on GNU (the reported bug reproduces)",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "A2 old form breaks $((8#$mode & 8#077)) as reported",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "A3 host_lib picks GNU stat and reads mode 640 / size 1234",
+     "detail": "stat -c %a / stat -c %s"
+    },
+    {
+     "result": "PASS",
+     "check": "A4 host_lib GNU date for N days ago",
+     "detail": "20260830"
+    },
+    {
+     "result": "PASS",
+     "check": "A5 host_lib SHA-256 tool present",
+     "detail": "shasum -a 256"
+    },
+    {
+     "result": "PASS",
+     "check": "B1 audit flags a 0644 dump (exit 1)",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "B2 audit passes a 0600 dump (exit 0)",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "C1 nightly_backup.sh completes on Linux: size (line 116) and blob bytes (line 163) read with GNU stat",
+     "detail": "2026-09-29T08:47:27Z OK 20260929T084726Z bytes=7830 tasks=40 events=90 sha256=1266bf94671b1d77 dump_s=0 blobs=2 blob_bytes=42 new_blobs=2 refs_without_row=0 restate=off gc_deleted="
+    },
+    {
+     "result": "PASS",
+     "check": "C2 second night packs only the new file",
+     "detail": "2026-09-29T08:47:29Z OK 20260929T084728Z bytes=7900 tasks=41 events=90 sha256=a91593883cb86c78 dump_s=0 blobs=3 blob_byt"
+    },
+    {
+     "result": "PASS",
+     "check": "C3 archive holds encrypted dumps with checksums, owner-only",
+     "detail": "2 encrypted"
+    },
+    {
+     "result": "PASS",
+     "check": "C4 backup_status.py accepts the night",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "C5 a retired host skips the night with a log line, and backup_status still reads the last OK",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "D1 off-site copy to a path",
+     "detail": "2026-09-29T08:47:29Z COPIED 20260929T084728Z files=7 bytes=29105 verified=sha256-readback pruned_sets=0 pruned_packs=0 skipped_newer=0"
+    },
+    {
+     "result": "PASS",
+     "check": "D2 rerun verifies and copies nothing",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "D3 off-site copy through rsync (rsync  version 3.5.0  protocol)",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "D4 the rsync copy decrypts back to the archived dump",
+     "detail": "0000000   P   G   D   M   P"
+    },
+    {
+     "result": "PASS",
+     "check": "D5 backup_status.py accepts the off-site copy",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "D6 python3 -m pytest infra/backup on Linux (node v20.19.2; 1 Node-22-only test deselected)",
+     "detail": "104 passed, 1 deselected in 25.69s"
+    },
+    {
+     "result": "PASS",
+     "check": "E1 watchdog reads docker.service and never opens a Mac app",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "E2 watchdog on a retired Linux host starts nothing",
+     "detail": "retired host (/tmp/hawa-linux-proof.7D537v/wd-home/.hawa/host-role): production runs elsewhere; nothing was started"
+    },
+    {
+     "result": "PASS",
+     "check": "F1 deploy.sh pre-flight on a brand-new Linux host records both stamps, then stops at the missing .env.production",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "F2 a recreated volume is refused on the next deploy",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "F3 deploy.sh --apply refuses on a retired host before any step",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "G1 render",
+     "detail": "rendered 10 unit files into /tmp/hawa-linux-proof.7D537v/units for user hawa"
+    },
+    {
+     "result": "PASS",
+     "check": "G2 systemd-analyze verify: 10 units",
+     "detail": " "
+    },
+    {
+     "result": "PASS",
+     "check": "G3 calendar '*-*-* 03:30:00 Asia/Baghdad'",
+     "detail": "    Next elapse: Wed 2026-09-30 00:30:00 UTC "
+    },
+    {
+     "result": "PASS",
+     "check": "G3 calendar 'Sun *-*-* 04:00:00 Asia/Baghdad'",
+     "detail": "    Next elapse: Sun 2026-10-04 01:00:00 UTC "
+    },
+    {
+     "result": "PASS",
+     "check": "G3 calendar '*-*-01 05:00:00 Asia/Baghdad'",
+     "detail": "    Next elapse: Thu 2026-10-01 02:00:00 UTC "
+    },
+    {
+     "result": "PASS",
+     "check": "G3 calendar '*-*-* 05:30:00 Asia/Baghdad'",
+     "detail": "    Next elapse: Wed 2026-09-30 02:30:00 UTC "
+    }
+   ]
+  }
+ },
+ "systemdContainer": {
+  "commit": "0577b53621d0d3d93e1d05759594d2d5df3e838d (the units, the installer and the job scripts are unchanged at ce63344b)",
+  "command": "docker run -d --network none --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock -e container=docker -v copy:/repo:ro -v out:/out hawa-linux-proof:local /sbin/init; docker exec <c> bash /repo/scripts/proofs/linux_systemd_install.sh; docker rm -f <c>",
+  "note": "--privileged with a private cgroup namespace: systemd as PID 1 did not start without it on Docker Desktop. No network, no host volume other than the two scratch directories.",
+  "result": {
+   "systemd": "systemd 257 (257.13-1~deb13u1)",
+   "passed": 11,
+   "failed": 0,
+   "checks": [
+    {
+     "result": "PASS",
+     "check": "S1 install: 5 timers enabled and active (systemd-analyze verify passed inside)",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "S2 /etc/hawa/backup.env root 0600, seeded from the calling environment",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "S3 logs in ~hawa/.hawa/logs, owned by the job user",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "S4 list-timers shows 5 hawa timers",
+     "detail": "Wed 2026-09-30 00:30:00 UTC 15h - - hawa-nightly-backup.timer hawa-nightly-backup.service"
+    },
+    {
+     "result": "PASS",
+     "check": "S5 the watchdog timer fired by itself and the pass ran as hawa",
+     "detail": "PROBLEM: Docker is not running: docker.service is inactive (start it with sudo systemctl start docker; systemctl enable docker starts it at "
+    },
+    {
+     "result": "PASS",
+     "check": "S6 on a retired host the watchdog service succeeds and starts nothing",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "S7 hawa-nightly-backup.service ran as hawa with the settings file (standby: skipped)",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "S8 hawa-offsite-copy.service: not configured, nothing done",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "S9 jobs run as hawa, not root",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "S10 reinstall keeps /etc/hawa/backup.env as it is",
+     "detail": ""
+    },
+    {
+     "result": "PASS",
+     "check": "S11 --uninstall removes every unit and keeps the settings",
+     "detail": ""
+    }
+   ]
+  }
+ },
+ "freshClone": {
+  "command": "git clone --no-local --branch worktree-agent-a25b3b2a4122dcb91 <worktree> <scratch>; python3 scripts/validate_pack.py; python3 scripts/refresh_manifest.py && python3 scripts/validate_pack.py; then the same at a7a29c7a",
+  "result": {
+   "head": "0577b53621d0d3d93e1d05759594d2d5df3e838d",
+   "untracked_before": [],
+   "gitignored_output_audits_present": [
+    "2026-09-05-reliability",
+    "2026-09-09-product-quality",
+    "2026-09-09-remediation-reality"
+   ],
+   "validate_as_cloned": {
+    "exit": 0,
+    "tail": [
+     "PASS=1193 WARN=0 FAIL=0",
+     "Hawa Creative OS blueprint validation passed."
+    ]
+   },
+   "refresh": {
+    "exit": 0,
+    "tail": [
+     "MANIFEST.json: 521 entries; SHA256SUMS.txt: 523 lines"
+    ]
+   },
+   "validate_after_refresh": {
+    "exit": 0,
+    "tail": [
+     "PASS=1193 WARN=0 FAIL=0",
+     "Hawa Creative OS blueprint validation passed."
+    ]
+   },
+   "tree_changed_by_refresh": [],
+   "parent_a7a29c7a_as_cloned": {
+    "exit": 1,
+    "fails": [
+     "FAIL: manifest target exists: .pytest_cache/.gitignore",
+     "FAIL: manifest target exists: .pytest_cache/CACHEDIR.TAG",
+     "FAIL: manifest target exists: .pytest_cache/README.md",
+     "FAIL: manifest target exists: .pytest_cache/v/cache/nodeids",
+     "FAIL: SHA256SUMS covers every package file except itself"
+    ]
+   }
+  },
+  "finding": "The fresh-clone failure on this branch was not the output/audits link (that report is tracked here and resolves) but .pytest_cache entries recorded in MANIFEST.json and SHA256SUMS.txt by the main checkout. validate_pack.py now skips tool caches."
+ },
+ "macOS": {
+  "host": "Darwin 27.0.0 arm64, /bin/bash 3.2.57 (the launch agents' shell), node 22.23.1, python 3.14",
+  "checks": [
+   {
+    "check": "python3 -m pytest infra/backup",
+    "result": "104 passed, 1 skipped (the rsync-transport test needs GNU rsync; macOS ships openrsync 2.6.9-compatible)"
+   },
+   {
+    "check": "packages/db/test/blob-backup.test.ts + blob-prebackfill.test.ts: the changed nightly_backup.sh, restore_drill.sh and disk_cleanup.sh end to end against hawa-test-postgres (55432) with temporary HOME, archive, store and snapshots",
+    "result": "2 files, 22 tests passed"
+   },
+   {
+    "check": "host_lib.sh under the nightly launch agent's PATH and /bin/bash",
+    "result": "os=Darwin size=stat -f %z mode=stat -f %Lp sha=shasum -a 256 (/usr/bin/shasum) role=production: the same commands the scripts ran before; no ~/.hawa/host-role on this Mac"
+   },
+   {
+    "check": "install_launch_agents.sh --render with HAWA_LAUNCH_AGENTS_DIR=~/Library/LaunchAgents (read only; launchctl a failing stub first on PATH) compared with the installed plists, checkout path normalised",
+    "result": "design.hawa.watchdog, nightly-backup, backup-restore-drill, restore-drill: IDENTICAL; launchctl not called; design.hawa.offsite-copy carries the nightly agent's HAWA_BACKUP_*/HAWA_RESTATE_* keys and no HAWA_OFFSITE_DEST (off)"
+   },
+   {
+    "check": "new vitest files: host-portability (19), deploy-sh-host-local-state (13), watchdog-host-role (12), host-scheduling (7), validate-pack-tool-caches (2), container-log-prune (1), plus the existing watchdog-* and deploy-sh-* files",
+    "result": "13 files, 116 tests; all pass alone and in the full suite. One run of the 13 together under a load average of 52-62 from other sessions timed out one watchdog-restate-backup test at 30 s; it passed alone (12/12) and in the full suite"
+   },
+   {
+    "check": "pnpm typecheck (tsc -b, scripts, 592 test roots)",
+    "result": "exit 0"
+   },
+   {
+    "check": "pnpm lint",
+    "result": "exit 0 (any-ratchet 966 <= 1053, egress lint passed)"
+   },
+   {
+    "check": "full suite: HAWA_TEST_WORKERS=3 npx vitest run at 0577b536",
+    "result": "591 files: 582 passed, 7 skipped, 2 failed; 5030 tests: 4964 passed, 64 skipped, 2 failed",
+    "failures": [
+     {
+      "test": "r11-release-gate.test.ts test 1",
+      "why": "expected: RELEASE_MANIFEST.json is not re-sealed on this branch (HEAD is more than two commits past the seal); not edited, per instructions"
+     },
+     {
+      "test": "container-log-prune.test.ts",
+      "why": "the test cut prune_container_logs out of disk_cleanup.sh without host_lib.sh, which now provides its date helper; fixed in ce63344b (the test sources host_lib.sh) and passes"
+     }
+    ]
+   }
+  ]
+ },
+ "notProven": [
+  "a real arm64 server (netcup or Hetzner)",
+  "Docker Engine on Linux running this stack: images, Compose profiles, bind mounts, deploy.sh past step 2 and deploy.sh --apply",
+  "the off-site copy over SSH to a Storage Box (rsync was exercised against local paths only; no SSH key was created for a test)",
+  "the cutover and rollback with the host role on real hosts"
+ ]
+}
