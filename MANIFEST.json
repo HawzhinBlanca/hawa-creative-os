@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T09:42:14Z",
+  "generatedAt": "2026-09-29T16:13:11Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 529,
+  "fileCount": 534,
   "files": [
     {
       "path": ".dockerignore",
@@ -778,6 +778,11 @@
       "bytes": 13248
     },
     {
+      "path": "adrs/143_albums_settle_without_commands.md",
+      "sha256": "29e7d379dba4146ee7e8c01b6333e2d440d6c098c394a2e2a17c37bb7fb29297",
+      "bytes": 16195
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1226,6 +1231,26 @@
       "path": "plans/lean-design-implementation-2026-09-28/ADR140_R10_H1_RUN.json",
       "sha256": "a5c169fa65169df06eaa9ae65f31f9b8ed9f52177f517f619373bc0a9c18cdca",
       "bytes": 22005
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR143_ALBUM_CHAOS_RUN.json",
+      "sha256": "25cc318a85001ec0f3dc7ac3745e2ec986dd53f357f81642b75443de5fe7e3df",
+      "bytes": 27108
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR143_CHAOS_RERUN.json",
+      "sha256": "065a35945fd5c921d42b9aa50b3ed3edc3ec9149b391e264398864bb415322c6",
+      "bytes": 17173
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR143_FULL_CHAOS_RUN.json",
+      "sha256": "c128510c44057a0e045973967c29a5c141572559b45aa15f4663dbe86c8ae71c",
+      "bytes": 139299
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR143_R10_RUN.json",
+      "sha256": "37592d40e091533cd02fedc28aed1a819a33c13578dc8d46b614eb48222cb0db",
+      "bytes": 40560
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/BRIEF_CONTRACT_PROOF.json",
@@ -1834,8 +1859,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "7fdfa4e4af68dde5a0b7fceb301203c8fd9c254b65da1717a92f8024aa9c4741",
-      "bytes": 481892
+      "sha256": "f7fa07c983d0a993bc1fec7093d8f49795d7737867744b98410c545e70b893fe",
+      "bytes": 483863
     },
     {
       "path": "plans/user-stories.csv",
@@ -1964,8 +1989,8 @@
     },
     {
       "path": "runbooks/CONFIRMED_PHOTO_ALBUMS.md",
-      "sha256": "8d23b892149def34fb1df551b908b11e5fc140c4ac68b00f7109cfb9a85cabfe",
-      "bytes": 3938
+      "sha256": "3955e960b66ce30af1357aab4e4328822a1757fab515ddfd0dc43ad6637a805b",
+      "bytes": 6946
     },
     {
       "path": "runbooks/EVALUATION_RECOVERY.md",

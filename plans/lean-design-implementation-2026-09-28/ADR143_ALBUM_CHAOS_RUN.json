@@ -1,0 +1,618 @@
+{
+  "finishedAt": "2026-09-29T13:15:18.459Z",
+  "telegramPoller": "worker",
+  "totalMs": 276740,
+  "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
+  "peakMemoryMiB": {
+    "hawa-chaos-core-1": 112,
+    "hawa-chaos-worker-blue-1": 85,
+    "hawa-chaos-postgres-1": 121,
+    "hawa-chaos-restate-1": 529,
+    "hawa-chaos-fakes-1": 73
+  },
+  "peakTotalMiB": 887,
+  "uncoveredModelCalls": [],
+  "scenarios": [
+    {
+      "name": "R1.0",
+      "what": "happy path: brief, draft, approve, deliver, no faults",
+      "ms": 30390,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"42d449b507cb:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 26742377-99f9-4e16-927f-832ce033d91b: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete"
+      ]
+    },
+    {
+      "name": "R1.S3.K1",
+      "what": "a Core crash and update replay open one owned request and send one acknowledgement",
+      "ms": 26904,
+      "invariants": [
+        {
+          "name": "second Restate key accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one task and one Restate-owned request",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"95af0280-e776-4baf-b38b-a3a663a6395c\",\"state\":\"received\",\"version\":\"1\"}],\"requests\":[{\"request_id\":\"106b52c2-04b5-5803-89f4-a51e2fb0220b\",\"root_task_id\":\"95af0280-e776-4baf-b38b-a3a663a6395c\",\"owner\":\"restate\",\"stage\":\"manual\",\"rev\":\"1\"}]}"
+        },
+        {
+          "name": "one version-one projection",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"}]"
+        },
+        {
+          "name": "one requester acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "request owner invocation completed",
+          "ok": true,
+          "detail": "[{\"status\":\"completed\"}]"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_1ajviAjDo1ib4tl1sq8mn50doUpuUE1JGp\",\"status\":\"completed\",\"idempotency_key\":\"tg-90687472868\"},{\"id\":\"inv_1ajviAjDo1ib0TQxDUsuBEeBLflaMkbStk\",\"status\":\"completed\",\"idempotency_key\":\"chaos-lifecycle-replay-90687472868\"}]"
+        },
+        {
+          "name": "Telegram offset passed the update",
+          "ok": true,
+          "detail": "offset=90687472868 update=90687472868"
+        }
+      ],
+      "events": [
+        "update 90687472868 in chat 9617192",
+        "killed core after Core committed the intake decision",
+        "same update under a second Restate key: HTTP 202"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM",
+      "what": "album photo input survives Core SIGKILL before task projection",
+      "ms": 41255,
+      "invariants": [
+        {
+          "name": "second revision photo update accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one owned child task after the office revision",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"c5c113f6-808a-4ca0-97bf-15f4c0a4775f\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"962e65cd-3aa1-4ff0-86d5-c208767c3fbb\",\"state\":\"failed_operator\",\"version\":\"2\"}],\"state\":{\"current_task_id\":\"962e65cd-3aa1-4ff0-86d5-c208767c3fbb\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"}}"
+        },
+        {
+          "name": "requester revision projection recorded exactly once",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"},{\"rev\":\"2\"},{\"rev\":\"3\"},{\"rev\":\"4\"},{\"rev\":\"5\"}]"
+        },
+        {
+          "name": "all selected photos bound only to the child task",
+          "ok": true,
+          "detail": "[{\"task_id\":\"962e65cd-3aa1-4ff0-86d5-c208767c3fbb\",\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"},{\"task_id\":\"962e65cd-3aa1-4ff0-86d5-c208767c3fbb\",\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"role\":\"reference_image\",\"size\":\"1025\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "hash-bound photo decision, with no image bytes in the event",
+          "ok": true,
+          "detail": "{\"chatId\":\"9617193\",\"source\":{\"message\":{\"chat\":{\"id\":9617193,\"type\":\"private\"},\"date\":1790687567,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"photo\":[{\"width\":800,\"height\":600,\"file_id\":\"lifecycle-revision-9617193-second\",\"file_size\":1025,\"file_unique_id\":\"u-lifecycle-revision-9617193-second\"}],\"message_id\":105,\"media_group_id\":\"chaos-album-9617193\",\"reply_to_message\":{\"message_id\":5011}},\"update_id\":90687472871},\"snapshot\":{\"ref\":{\"images\":[{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"mediaType\":\"image/jpeg\"},{\"size\":1025,\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"mediaType\":\"image/jpeg\"}],\"sha256\":\"7be40ebe4890c98d702225bc2b32a52577bdd16cb090b6f7c3b89b16c6719d2c\",\"updateId\":90687472871},\"chatId\":\"9617193\",\"update\":{\"message\":{\"chat\":{\"id\":9617193,\"type\":\"private\"},\"date\":1790687567,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"text\":\"Please use this photo as the reference and change the background to navy.\",\"message_id\":105,\"album_source\":[{\"hash\":\"0033fad5aab4b317fe262273ff371cdee43eabc7378258168296e8fa5ea94e5a\",\"updateId\":90687472870},{\"hash\":\"caf6199af9fce0b42975aed7cbc998a4e464be1e3c3fe6b3071a8049e8dd11c4\",\"updateId\":90687472871}],\"reply_to_message\":{\"message_id\":5011}},\"update_id\":90687472871}}}"
+        },
+        {
+          "name": "one download per photo and no parked update across kill and replay",
+          "ok": true,
+          "detail": "downloads=2 parked=0"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_11MuFQXd4wvi2TTouxiXr6rRJ3JkOrsz3U\",\"status\":\"completed\",\"idempotency_key\":\"chaos-revision-photo-replay-90687472871\"},{\"id\":\"inv_11MuFQXd4wvi6X5sbwlOzF6LWaWTj5mWp4\",\"status\":\"completed\",\"idempotency_key\":\"settle:90687472871\"}]"
+        },
+        {
+          "name": "the linked revision is held for the native handoff (ADR-113, ADR-114)",
+          "ok": true,
+          "detail": "{\"childState\":\"failed_operator\",\"request\":{\"current_task_id\":\"962e65cd-3aa1-4ff0-86d5-c208767c3fbb\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"},\"outcome\":\"DESIGN_REJECTED\",\"code\":\"NATIVE_REVISION_HANDOFF_REQUIRED\"}"
+        },
+        {
+          "name": "the held revision made no plan, no Canva effect and no unmatched model call",
+          "ok": true,
+          "detail": "{\"effects\":{\"plans\":\"0\",\"operations\":\"0\"},\"unmatched\":0}"
+        },
+        {
+          "name": "only future lifecycle reminders remain scheduled",
+          "ok": true,
+          "detail": "{\"unfinished\":[{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"}],\"readyOutbox\":\"0\"}"
+        }
+      ],
+      "events": [
+        "office revision: HTTP 201",
+        "album reply to confirmed notice 5011",
+        "saved album updates 90687472870, 90687472871; no child before the album settled; no /use_album sent",
+        "revision photo update 90687472871 in request c6ba86e8-6636-5641-baaf-e98dcdf751bc",
+        "killed core after the album settled, before child task projection",
+        "child task 962e65cd-3aa1-4ff0-86d5-c208767c3fbb after restart",
+        "same settle under a second Restate key: HTTP 202",
+        "child design outcome: DESIGN_REJECTED",
+        "child held: DESIGN_REJECTED (NATIVE_REVISION_HANDOFF_REQUIRED)"
+      ]
+    },
+    {
+      "name": "R1.S3.DOCUMENT_ALBUM",
+      "what": "document-album photo input survives Core SIGKILL before task projection",
+      "ms": 41259,
+      "invariants": [
+        {
+          "name": "second revision photo update accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one owned child task after the office revision",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"27029752-d3e6-4412-93e2-907419dbe356\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"d71ecfca-9242-417c-897f-79414d32e1f3\",\"state\":\"failed_operator\",\"version\":\"2\"}],\"state\":{\"current_task_id\":\"d71ecfca-9242-417c-897f-79414d32e1f3\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"}}"
+        },
+        {
+          "name": "requester revision projection recorded exactly once",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"},{\"rev\":\"2\"},{\"rev\":\"3\"},{\"rev\":\"4\"},{\"rev\":\"5\"}]"
+        },
+        {
+          "name": "all selected photos bound only to the child task",
+          "ok": true,
+          "detail": "[{\"task_id\":\"d71ecfca-9242-417c-897f-79414d32e1f3\",\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"},{\"task_id\":\"d71ecfca-9242-417c-897f-79414d32e1f3\",\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"role\":\"reference_image\",\"size\":\"1025\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "hash-bound photo decision, with no image bytes in the event",
+          "ok": true,
+          "detail": "{\"chatId\":\"9617194\",\"source\":{\"message\":{\"chat\":{\"id\":9617194,\"type\":\"private\"},\"date\":1790687610,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"document\":{\"file_id\":\"lifecycle-revision-9617194-second\",\"file_name\":\"original.jpg\",\"file_size\":1025,\"mime_type\":\"image/jpeg\",\"thumbnail\":{\"file_id\":\"lifecycle-revision-9617194-second-thumbnail\"}},\"message_id\":108,\"media_group_id\":\"chaos-album-9617194\",\"reply_to_message\":{\"message_id\":5017}},\"update_id\":90687472874},\"snapshot\":{\"ref\":{\"images\":[{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"mediaType\":\"image/jpeg\"},{\"size\":1025,\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"mediaType\":\"image/jpeg\"}],\"sha256\":\"756634f82764b62a9bc7367468fee91e15d7587c1ac29bbab9c36876434c803a\",\"updateId\":90687472874},\"chatId\":\"9617194\",\"update\":{\"message\":{\"chat\":{\"id\":9617194,\"type\":\"private\"},\"date\":1790687610,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"text\":\"Please use this photo as the reference and change the background to navy.\",\"message_id\":108,\"album_source\":[{\"hash\":\"72e22e5304c7a936597e6adc1e012d34b045324adad4e5c11675f80a1b8035c5\",\"updateId\":90687472873},{\"hash\":\"0305f54824bf732dc94c9b0c9d6ed288b5877839b97e9d3cdab1c0eedb5619b4\",\"updateId\":90687472874}],\"reply_to_message\":{\"message_id\":5017}},\"update_id\":90687472874}}}"
+        },
+        {
+          "name": "one download per photo and no parked update across kill and replay",
+          "ok": true,
+          "detail": "downloads=2 parked=0"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_1l8jxHxezc5N31eMhvU2bZMrKuxyv2ri33\",\"status\":\"completed\",\"idempotency_key\":\"chaos-revision-photo-replay-90687472874\"},{\"id\":\"inv_1l8jxHxezc5N5YdnIXT3nQzXNndiY1Efhq\",\"status\":\"completed\",\"idempotency_key\":\"settle:90687472874\"}]"
+        },
+        {
+          "name": "the linked revision is held for the native handoff (ADR-113, ADR-114)",
+          "ok": true,
+          "detail": "{\"childState\":\"failed_operator\",\"request\":{\"current_task_id\":\"d71ecfca-9242-417c-897f-79414d32e1f3\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"},\"outcome\":\"DESIGN_REJECTED\",\"code\":\"NATIVE_REVISION_HANDOFF_REQUIRED\"}"
+        },
+        {
+          "name": "the held revision made no plan, no Canva effect and no unmatched model call",
+          "ok": true,
+          "detail": "{\"effects\":{\"plans\":\"0\",\"operations\":\"0\"},\"unmatched\":0}"
+        },
+        {
+          "name": "only future lifecycle reminders remain scheduled",
+          "ok": true,
+          "detail": "{\"unfinished\":[{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"}],\"readyOutbox\":\"0\"}"
+        }
+      ],
+      "events": [
+        "office revision: HTTP 201",
+        "document-album reply to confirmed notice 5017",
+        "saved album updates 90687472873, 90687472874; no child before the album settled; no /use_album sent",
+        "revision photo update 90687472874 in request eda5291e-1a15-5f42-8e49-23436837a186",
+        "killed core after the album settled, before child task projection",
+        "child task d71ecfca-9242-417c-897f-79414d32e1f3 after restart",
+        "same settle under a second Restate key: HTTP 202",
+        "child design outcome: DESIGN_REJECTED",
+        "child held: DESIGN_REJECTED (NATIVE_REVISION_HANDOFF_REQUIRED)"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM_BRIEF",
+      "what": "an album with its brief as the caption starts one design by itself, survives a Core kill at the settle, and is delivered",
+      "ms": 26323,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"71102c3f1665:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "all 3 album photos are the task's reference images",
+          "ok": true,
+          "detail": "[{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "the album was frozen once and opened one request",
+          "ok": true,
+          "detail": "frozen=1 opens=1"
+        },
+        {
+          "name": "the requester was never asked for a command",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "one acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "one download per photo",
+          "ok": true,
+          "detail": "[\"album-albumbrief-9617195-0\",\"album-albumbrief-9617195-1\",\"album-albumbrief-9617195-2\"]"
+        },
+        {
+          "name": "every ChatInbox invocation (updates and settles) completed",
+          "ok": true,
+          "detail": "[\"settle:90687472876:completed\",\"chaos-album-settle-replay-90687472877:completed\",\"tg-90687472875:completed\",\"chatinbox:setMode:20c43e6f-e934-5491-a808-bb01588ae1e8:completed\",\"tg-90687472877:completed\",\"tg-90687472876:completed\",\"settle:90687472875:completed\",\"settle:90687472877:completed\"]"
+        }
+      ],
+      "events": [
+        "album of 3 photos, caption = brief: updates 90687472875, 90687472876, 90687472877; no /use_album",
+        "killed core after the settle froze the album, before the decision",
+        "task 6e6a3bd2-0c2f-4a75-bf04-eb49abb2219f: draft in review",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "second settle of the newest photo: HTTP 202"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM_RESTART",
+      "what": "a worker killed while the album settles loses nothing: the durable settle opens one request after the restart",
+      "ms": 25994,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "all 3 album photos are the task's reference images",
+          "ok": true,
+          "detail": "[{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "the album was frozen once and opened one request",
+          "ok": true,
+          "detail": "frozen=1 opens=1"
+        },
+        {
+          "name": "the requester was never asked for a command",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "one acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "one download per photo",
+          "ok": true,
+          "detail": "[\"album-albumrestart-9617196-0\",\"album-albumrestart-9617196-1\",\"album-albumrestart-9617196-2\"]"
+        },
+        {
+          "name": "every ChatInbox invocation (updates and settles) completed",
+          "ok": true,
+          "detail": "[\"tg-90687472880:completed\",\"tg-90687472878:completed\",\"settle:90687472879:completed\",\"settle:90687472880:completed\",\"settle:90687472878:completed\",\"chatinbox:setMode:21c1ba44-07e8-5d02-950d-1d1f1c9d0fc5:completed\",\"tg-90687472879:completed\"]"
+        }
+      ],
+      "events": [
+        "album saved (updates 90687472878, 90687472879, 90687472880); worker-blue killed inside the settle window",
+        "worker-blue started again after 12 s",
+        "task 8deadbec-7397-4782-989a-c8376c1ca498: draft in review"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM_ASK",
+      "what": "an album with no words is asked about once; an OK is asked again; the natural brief starts one design",
+      "ms": 25220,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "4 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "all 2 album photos are the task's reference images",
+          "ok": true,
+          "detail": "[{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "the album was frozen once and opened one request",
+          "ok": true,
+          "detail": "frozen=1 opens=1"
+        },
+        {
+          "name": "the requester was never asked for a command",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "one acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "one download per photo",
+          "ok": true,
+          "detail": "[\"album-albumask-9617197-0\",\"album-albumask-9617197-1\"]"
+        },
+        {
+          "name": "every ChatInbox invocation (updates and settles) completed",
+          "ok": true,
+          "detail": "[\"settle:90687472881:completed\",\"chatinbox:setMode:5e2a1cd8-62b1-54fc-9c9e-43ab8351456f:completed\",\"settle:90687472882:completed\",\"tg-90687472883:completed\",\"tg-90687472881:completed\",\"tg-90687472882:completed\",\"tg-90687472884:completed\"]"
+        },
+        {
+          "name": "the album was asked about once",
+          "ok": true,
+          "detail": "questions=1"
+        }
+      ],
+      "events": [
+        "album of 2 photos without words: updates 90687472881, 90687472882",
+        "asked: I have your 2 photos. What would you like me to design with them? Please tell me what it is for and the exact words to put on it.",
+        "\"yes, use them\" was asked what to design; no task",
+        "task fc636fe4-aed1-4af2-8380-bf58e2c26b96: draft in review"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4007 @@
+{
+  "finishedAt": "2026-09-29T13:44:39.715Z",
+  "telegramPoller": "worker",
+  "totalMs": 1726662,
+  "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
+  "peakMemoryMiB": {
+    "hawa-chaos-core-1": 149,
+    "hawa-chaos-worker-blue-1": 109,
+    "hawa-chaos-postgres-1": 209,
+    "hawa-chaos-restate-1": 727,
+    "hawa-chaos-fakes-1": 182,
+    "hawa-chaos-worker-green-1": 118
+  },
+  "peakTotalMiB": 1227,
+  "uncoveredModelCalls": [],
+  "scenarios": [
+    {
+      "name": "R1.0",
+      "what": "happy path: brief, draft, approve, deliver, no faults",
+      "ms": 30342,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"4d6a2581bfb3:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task b37ade92-01a7-4311-bc77-453376cddf14: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete"
+      ]
+    },
+    {
+      "name": "R1.K0",
+      "what": "Core killed while the acknowledgement is sent (the send slowed to 4 s), back after 5 s",
+      "ms": 32316,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"05b121aaea95:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "one plan, its one planner call admitted and completed",
+          "ok": true,
+          "detail": "[{\"plan\":\"planned\",\"call\":\"completed\"}]"
+        }
+      ],
+      "events": [
+        "killed core while the acknowledgement was being sent (tasks then: 1; plans then: [{\"status\":\"planned\",\"call\":\"completed\"}])",
+        "task 3df81ba9-1e6c-4d05-8ddb-a0629497f7d2: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete"
+      ]
+    },
+    {
+      "name": "R1.K0A",
+      "what": "Core killed after the paid planner call is admitted, before it is sent: never sent again",
+      "ms": 87247,
+      "invariants": [
+        {
+          "name": "one plan, its admitted call left uncertain (started), never completed by a second send",
+          "ok": true,
+          "detail": "[{\"plan\":\"planning\",\"call\":\"started\"}]"
+        },
+        {
+          "name": "at most one planner request reached the model",
+          "ok": true,
+          "detail": "planner requests=0"
+        },
+        {
+          "name": "the task waits for an operator",
+          "ok": true,
+          "detail": "state=failed_operator"
+        },
+        {
+          "name": "the office is told once",
+          "ok": true,
+          "detail": "alerts=1"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, 0 duplicate(s)"
+        }
+      ],
+      "events": [
+        "killed core at core.planner.after-admission; the request ended: task a0e6725f-1657-4e2d-bbbb-130ef029071b: the design run ended as DESIGN_PLANNING, so there is no draft to approve"
+      ]
+    },
+    {
+      "name": "R1.K0P",
+      "what": "Core killed after the plan is claimed, before its paid call is admitted, back after 2 s",
+      "ms": 34571,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"eb8a5931b31f:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "one plan, its one planner call admitted and completed",
+          "ok": true,
+          "detail": "[{\"plan\":\"planned\",\"call\":\"completed\"}]"
+        }
+      ],
+      "events": [
+        "task 9a2ce58e-e03a-4182-8041-f9b14e2b8f80: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "killed core at core.planner.after-claim"
+      ]
+    },
+    {
+      "name": "R1.K1",
+      "what": "worker killed after the design run checked its task, before the step was journalled",
+      "ms": 30585,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"5fe5fe752a2e:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task cef3dc84-3cbf-4120-814d-5df3dde50898: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "killed worker-blue after canva-verify-task-scope"
+      ]
+    },
+    {
+      "name": "R1.K2",
+      "what": "Restate killed right after the design run started (worker held after its first step), back after 5 s",
+      "ms": 33322,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"5f0078eec8eb:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 540a4253-5451-4699-b294-6c1d89b2948e: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "killed restate while the worker was held after canva-verify-task-scope"
+      ]
+    },
+    {
+      "name": "R1.K3",
+      "what": "worker killed after Core planned and imported the draft, before the step was journalled",
+      "ms": 30413,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"4943f9c3a64e:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 59b0e2f8-831d-412f-88fa-fe710d06357a: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "killed worker-blue after canva-create-draft"
+      ]
+    },
+    {
+      "name": "R1.K4",
+      "what": "worker killed after the copy-and-font check export, before the step was journalled",
+      "ms": 28504,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"2b4527b732f0:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task db946364-1b7c-4513-84a0-04214b264e12: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "killed worker-blue after canva-export-copy-font-check"
+      ]
+    },
+    {
+      "name": "R1.K5",
+      "what": "worker killed after the preview export, before the step was journalled (just before the outcome is reported)",
+      "ms": 28331,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"3184500be906:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 13d9a02b-6ef2-4c1c-b12c-7f10b911c989: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "killed worker-blue after canva-export-preview"
+      ]
+    },
+    {
+      "name": "R1.K6",
+      "what": "Core killed mid-design (worker held after reading the binding), back after 5 s",
+      "ms": 34345,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"65bac9426d47:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 37702b4c-47e0-4f2b-83a3-817b0a152f95: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "killed core while the worker was held after canva-read-binding"
+      ]
+    },
+    {
+      "name": "R1.K7",
+      "what": "Postgres killed mid-design (worker held after the preview export), back after 5 s",
+      "ms": 34453,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"ecb5b56673d7:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 70ac014a-ee03-4c24-91d0-1fc1c73e9650: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "killed postgres while the worker was held after canva-export-preview"
+      ]
+    },
+    {
+      "name": "R1.K8",
+      "what": "Restate killed mid-design (worker held inside the draft step), back after 5 s",
+      "ms": 32406,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"4b274238abf5:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 0fe9631b-0b0b-4324-bde1-211de30904ba: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "killed restate while the worker was held after canva-create-draft"
+      ]
+    },
+    {
+      "name": "R1.K9",
+      "what": "Canva answers 5xx three times and then 429 on export creation",
+      "ms": 36328,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"9de3a5505b93:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task ef1480eb-997b-4b6f-b847-7e42541f6174: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete"
+      ]
+    },
+    {
+      "name": "R1.K10",
+      "what": "Telegram answers 429 (retry_after 3) to the chat's second message",
+      "ms": 29286,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"2d2a0ff19a7f:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 4c65d5ab-4d4c-4ab7-9e03-22f00cfae5e0: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete"
+      ]
+    },
+    {
+      "name": "R1.K11",
+      "what": "Core killed right after the Desk approval, back after 5 s, then delivered",
+      "ms": 36920,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"4b5c2ae399a0:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task a92ce888-27af-4c6f-8667-f9639792cec7: draft in chat",
+        "approve: HTTP 201",
+        "killed core after the approval",
+        "deliver: HTTP 202",
+        "delivered, task complete"
+      ]
+    },
+    {
+      "name": "R1.K13",
+      "what": "Telegram takes the first approved file and the answer is lost (one uncertain send, settled by staff)",
+      "ms": 28367,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "an uncertain send has exactly one office alert",
+          "ok": true,
+          "detail": "uncertain sends expected=1 office alerts naming the task=1"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"4167a224ac86:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "an unconfirmed requester send holds the delivery for staff reconciliation",
+          "ok": true,
+          "detail": "state=requester_send_reconciliation"
+        },
+        {
+          "name": "the administrator's confirmation settles the delivery",
+          "ok": true,
+          "detail": "HTTP 200 {\"requestId\":\"a9c967fa-ae70-5cd1-96bf-d7c450f2cc4a\",\"taskId\":\"7112d5a5-1fbe-4e7a-bec9-81241b59378c\",\"publicationId\":\"81256ec8-c9ea-4830-b949-d402d69c4d7c\",\"stage\":\"delivered\",\"requestRev\":6,\"confirmat"
+        },
+        {
+          "name": "the settlement sends nothing to the requester",
+          "ok": true,
+          "detail": "sends before=5 after=5"
+        }
+      ],
+      "events": [
+        "task 7112d5a5-1fbe-4e7a-bec9-81241b59378c: draft in chat",
+        "approve (PNG and PPTX pinned): HTTP 201",
+        "deliver: HTTP 202 in 73 ms, executor restate, dl-7112d5a5-1fbe-4e7a-bec9-81241b59378c-247e5f9f-12bc-4078-abd2-4167a224ac86",
+        "synthetic administrator confirmed 3 sends visible in the fake chat: HTTP 200",
+        "delivered, task complete"
+      ]
+    },
+    {
+      "name": "R1.K14",
+      "what": "Core killed in the middle of a Deliver request (Drive upload slowed to 8 s), back after 5 s; Deliver pressed again once",
+      "ms": 35691,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"558bbd421ed3:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "the second press is answered without a server error",
+          "ok": true,
+          "detail": "HTTP 409"
+        },
+        {
+          "name": "the delivery cut off by a Core restart finishes as one Delivery run",
+          "ok": true,
+          "detail": "task publishing at the kill, complete after the restart; runs [{\"executor_run\":1}]"
+        }
+      ],
+      "events": [
+        "approve: HTTP 201",
+        "task publishing when Core was killed; that Deliver request got HTTP 202",
+        "after Core restarted, before a second Deliver: task complete",
+        "second Deliver: HTTP 409 {\"type\":\"https://hawa.design/errors/409\",\"title\":\"Stale Lifecycle Delivery\",\"status\":409,\"detail\":\"The request is no longer approved for this delivery; refresh "
+      ]
+    },
+    {
+      "name": "R1.D1",
+      "what": "deploy to green while the design runs on blue: it finishes on blue, blue drains and is deleted",
+      "ms": 35013,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"3fb9a7c7a332:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "green registered without force",
+          "ok": true,
+          "detail": "exit 0"
+        },
+        {
+          "name": "the in-flight design finished on the blue deployment it started on",
+          "ok": true,
+          "detail": "[{\"pinned_deployment_id\":\"dp_164QDia5ZKbScAIoMx26KuR\",\"status\":\"completed\"}]"
+        },
+        {
+          "name": "blue drained and its deployment deleted",
+          "ok": true,
+          "detail": "deleted=blue"
+        }
+      ],
+      "events": [
+        "design held on worker-blue (blue deployment dp_164QDia5ZKbScAIoMx26KuR)",
+        "register green: exit 0 deployment=dp_14LZLQNHxoGq5hkMX3Iskmt",
+        "task 3a11161b-ea28-4e59-804a-caa2643cac03: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "delivered, task complete",
+        "finish-drains: exit 0 deleted=blue"
+      ]
+    },
+    {
+      "name": "R1.W0",
+      "what": "the worker polls: brief to delivery through ChatInbox, no faults",
+      "ms": 46391,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"2148425f6b42:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "update 90687757781: one ChatInbox invocation (key tg-90687757781), completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations: [\"tg-90687757781:completed\",\"chatinbox:setMode:713a2fda-4496-575e-b44d-65873ba0f1af:completed\",\"settle:90687757781:completed\"]"
+        },
+        {
+          "name": "the stored offset moved past the chat's last update",
+          "ok": true,
+          "detail": "offset=90687757781 last update=90687757781"
+        },
+        {
+          "name": "no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        }
+      ],
+      "events": [
+        "update 90687757781 in chat 9730549",
+        "task 1971bdf2-3b1e-4e2b-960f-4c992266e8b8: draft in chat",
+        "approve: HTTP 201",
+        "deliver: HTTP 202"
+      ]
+    },
+    {
+      "name": "R1.S1.K1",
+      "what": "worker killed after Restate accepted the update, before the offset was stored",
+      "ms": 28555,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "update 90687757782: one ChatInbox invocation (key tg-90687757782), completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations: [\"tg-90687757782:completed\",\"settle:90687757782:completed\",\"chatinbox:setMode:897679a3-12c9-5eb5-b926-c541a7310d88:completed\"]"
+        },
+        {
+          "name": "the stored offset moved past the chat's last update",
+          "ok": true,
+          "detail": "offset=90687757782 last update=90687757782"
+        },
+        {
+          "name": "no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        }
+      ],
+      "events": [
+        "update 90687757782 in chat 9730550",
+        "task 8bfc3e0c-4d78-44e3-b681-9372fd61411f: draft in chat",
+        "killed worker-green at worker.poller.after-enqueue"
+      ]
+    },
+    {
+      "name": "R1.S1.K2",
+      "what": "Restate killed right after getUpdates returned the update, back after 5 s",
+      "ms": 32546,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "update 90687757783: one ChatInbox invocation (key tg-90687757783), completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations: [\"tg-90687757783:completed\",\"settle:90687757783:completed\",\"chatinbox:setMode:010ee82d-f2f0-5b9b-b428-e17f156b4641:completed\"]"
+        },
+        {
+          "name": "the stored offset moved past the chat's last update",
+          "ok": true,
+          "detail": "offset=90687757783 last update=90687757783"
+        },
+        {
+          "name": "no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        }
+      ],
+      "events": [
+        "update 90687757783 in chat 9730551",
+        "task e7e5d5a8-f78f-4439-9c47-ad7c4c70eb6a: draft in chat",
+        "killed restate while the poller was held after getUpdates"
+      ]
+    },
+    {
+      "name": "R1.S1.K3",
+      "what": "Postgres killed after Restate accepted the update, before the offset was stored; back after 5 s",
+      "ms": 32611,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "update 90687757784: one ChatInbox invocation (key tg-90687757784), completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations: [\"chatinbox:setMode:7b588f6a-6a00-5c9d-abd6-1c74ff6f0db7:completed\",\"tg-90687757784:completed\",\"settle:90687757784:completed\"]"
+        },
+        {
+          "name": "the stored offset moved past the chat's last update",
+          "ok": true,
+          "detail": "offset=90687757784 last update=90687757784"
+        },
+        {
+          "name": "no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        }
+      ],
+      "events": [
+        "update 90687757784 in chat 9730552",
+        "task 0e7b7097-01dd-4e12-b71e-4787f7bea47c: draft in chat",
+        "killed postgres while the poller was held after the enqueue"
+      ]
+    },
+    {
+      "name": "R1.S2.K4",
+      "what": "Core killed after intake saved the request, before it answered ChatInbox",
+      "ms": 32643,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "update 90687757785: one ChatInbox invocation (key tg-90687757785), completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations: [\"tg-90687757785:completed\",\"settle:90687757785:completed\",\"chatinbox:setMode:7cd7971b-e1d5-501d-8786-b6541e7c0823:completed\"]"
+        },
+        {
+          "name": "the stored offset moved past the chat's last update",
+          "ok": true,
+          "detail": "offset=90687757785 last update=90687757785"
+        },
+        {
+          "name": "no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        }
+      ],
+      "events": [
+        "update 90687757785 in chat 9730553",
+        "task 7e0e6b48-854a-4493-af86-7383bf117379: draft in chat",
+        "killed core at core.intake.after-decision"
+      ]
+    },
+    {
+      "name": "R1.S2.K5",
+      "what": "worker killed while Core's intake of its update was answering; back after 5 s",
+      "ms": 26065,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "update 90687757786: one ChatInbox invocation (key tg-90687757786), completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations: [\"settle:90687757786:completed\",\"tg-90687757786:completed\",\"chatinbox:setMode:3d6ba36f-17bf-5015-ad17-e7514fb89997:completed\"]"
+        },
+        {
+          "name": "the stored offset moved past the chat's last update",
+          "ok": true,
+          "detail": "offset=90687757786 last update=90687757786"
+        },
+        {
+          "name": "no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        }
+      ],
+      "events": [
+        "update 90687757786 in chat 9730554",
+        "task cd4ddc56-e19b-4639-9a4f-d02753c22ac9: draft in chat",
+        "killed worker-blue while Core was held at core.intake.after-decision"
+      ]
+    },
+    {
+      "name": "R1.S2.K5b",
+      "what": "worker killed while its acknowledgement send waits for Telegram (slowed to 4 s)",
+      "ms": 26203,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "the acknowledgement has a send mark",
+          "ok": true,
+          "detail": "[\"telegram_message_attempted\",\"telegram_message_sent\"]"
+        },
+        {
+          "name": "the acknowledgement reached the requester once",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "update 90687757787: one ChatInbox invocation (key tg-90687757787), completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations: [\"settle:90687757787:completed\",\"tg-90687757787:completed\",\"chatinbox:setMode:5d90affa-1beb-52a2-948c-19bd99de2dc8:completed\"]"
+        },
+        {
+          "name": "the stored offset moved past the chat's last update",
+          "ok": true,
+          "detail": "offset=90687757787 last update=90687757787"
+        },
+        {
+          "name": "no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        }
+      ],
+      "events": [
+        "update 90687757787 in chat 9730555",
+        "killed worker-blue while intake was acknowledging",
+        "task 699c6f58-bda5-46d6-a67e-e252584ecdb7: draft in chat",
+        "acknowledgement send marks: [\"telegram_message_attempted\",\"telegram_message_sent\"]"
+      ]
+    },
+    {
+      "name": "R1.DUP",
+      "what": "the same update handed on twice (Restate's key, then past it) makes one task and one acknowledgement",
+      "ms": 142262,
+      "invariants": [],
+      "events": [
+        "update 90687757788 in chat 9730556",
+        "task 5112d3c6-f0e1-4966-9d8b-f55cdd7043d7: draft in chat",
+        "sent again: tg key HTTP 202, another key HTTP 202"
+      ],
+      "error": "timed out after 120000 ms waiting for the second hand-off to finish"
+    },
+    {
+      "name": "R1.S3.K1",
+      "what": "a Core crash and update replay open one owned request and send one acknowledgement",
+      "ms": 27505,
+      "invariants": [
+        {
+          "name": "second Restate key accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one task and one Restate-owned request",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"318bcb9e-48ef-472a-824e-b28086d830c7\",\"state\":\"received\",\"version\":\"1\"}],\"requests\":[{\"request_id\":\"9e7fc6dd-1714-57aa-bfaf-893e9699209b\",\"root_task_id\":\"318bcb9e-48ef-472a-824e-b28086d830c7\",\"owner\":\"restate\",\"stage\":\"manual\",\"rev\":\"1\"}]}"
+        },
+        {
+          "name": "one version-one projection",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"}]"
+        },
+        {
+          "name": "one requester acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "request owner invocation completed",
+          "ok": true,
+          "detail": "[{\"status\":\"completed\"}]"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_1im4jaoEeV8U6Wtp6tJytEJkZUZaLcowuz\",\"status\":\"completed\",\"idempotency_key\":\"chaos-lifecycle-replay-90687757789\"},{\"id\":\"inv_1im4jaoEeV8U4Rky2IwkhPEATKmFj4dzyW\",\"status\":\"completed\",\"idempotency_key\":\"tg-90687757789\"}]"
+        },
+        {
+          "name": "Telegram offset passed the update",
+          "ok": true,
+          "detail": "offset=90687757789 update=90687757789"
+        }
+      ],
+      "events": [
+        "update 90687757789 in chat 9730557",
+        "killed core after Core committed the intake decision",
+        "same update under a second Restate key: HTTP 202"
+      ]
+    },
+    {
+      "name": "R1.S3.PHOTO",
+      "what": "a captioned photo survives a Core crash, binds to one request, and is downloaded once",
+      "ms": 11890,
+      "invariants": [
+        {
+          "name": "second photo update accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one Restate-owned manual request and task",
+          "ok": true,
+          "detail": "{\"requests\":[{\"request_id\":\"453a53aa-1e2f-5a85-b029-e3eae411b414\",\"root_task_id\":\"bd6a4a24-8659-4b09-b4af-22484618e4b9\",\"owner\":\"restate\",\"stage\":\"manual\"}],\"tasks\":[{\"id\":\"bd6a4a24-8659-4b09-b4af-22484618e4b9\",\"state\":\"received\",\"version\":\"1\"}]}"
+        },
+        {
+          "name": "the image is bound to the task and retained for retrieval",
+          "ok": true,
+          "detail": "{\"files\":[{\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"}],\"refs\":[{\"h\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\"}]}"
+        },
+        {
+          "name": "the decision carries only an image reference",
+          "ok": true,
+          "detail": "{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"updateId\":90687757790,\"mediaType\":\"image/jpeg\"}"
+        },
+        {
+          "name": "the photo is downloaded once across crash and replay",
+          "ok": true,
+          "detail": "downloads=1"
+        },
+        {
+          "name": "one acknowledgement and no parked update",
+          "ok": true,
+          "detail": "acknowledgements=1 parked=0"
+        },
+        {
+          "name": "both photo intake invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_1c8wHwp5gLrZ60fY2ZJwRUhtJgDB3qyqbM\",\"status\":\"completed\",\"idempotency_key\":\"tg-90687757790\"},{\"id\":\"inv_1c8wHwp5gLrZ5ld22UZxirTGWQKBjGQ1mz\",\"status\":\"completed\",\"idempotency_key\":\"chaos-photo-replay-90687757790\"}]"
+        }
+      ],
+      "events": [
+        "captioned photo update 90687757790 in chat 9730558",
+        "killed core after the stored photo decision",
+        "same photo under a second Restate key: HTTP 202"
+      ]
+    },
+    {
+      "name": "R1.S3.REVISION_PHOTO",
+      "what": "captioned photo input survives Core SIGKILL before task projection",
+      "ms": 32066,
+      "invariants": [
+        {
+          "name": "second revision photo update accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one owned child task after the office revision",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"0263fc3a-5d05-4527-b8da-26d54691256e\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"5de77a5a-4025-4544-92e9-4f9928a300f6\",\"state\":\"failed_operator\",\"version\":\"2\"}],\"state\":{\"current_task_id\":\"5de77a5a-4025-4544-92e9-4f9928a300f6\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"}}"
+        },
+        {
+          "name": "requester revision projection recorded exactly once",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"},{\"rev\":\"2\"},{\"rev\":\"3\"},{\"rev\":\"4\"},{\"rev\":\"5\"}]"
+        },
+        {
+          "name": "all selected photos bound only to the child task",
+          "ok": true,
+          "detail": "[{\"task_id\":\"5de77a5a-4025-4544-92e9-4f9928a300f6\",\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "hash-bound photo decision, with no image bytes in the event",
+          "ok": true,
+          "detail": "{\"image\":{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"mediaType\":\"image/jpeg\"},\"chatId\":\"9730559\",\"requestId\":\"d7847c26-0e04-5e27-8025-4eaf801d68e1\"}"
+        },
+        {
+          "name": "one download per photo and no parked update across kill and replay",
+          "ok": true,
+          "detail": "downloads=1 parked=0"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_1kN3OZXqgIy32wjhmSOKPiQxxYGtoS861h\",\"status\":\"completed\",\"idempotency_key\":\"tg-90687757792\"},{\"id\":\"inv_1kN3OZXqgIy33LppTfpP0IM49oBN7YRrLw\",\"status\":\"completed\",\"idempotency_key\":\"chaos-revision-photo-replay-90687757792\"}]"
+        },
+        {
+          "name": "the linked revision is held for the native handoff (ADR-113, ADR-114)",
+          "ok": true,
+          "detail": "{\"childState\":\"failed_operator\",\"request\":{\"current_task_id\":\"5de77a5a-4025-4544-92e9-4f9928a300f6\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"},\"outcome\":\"DESIGN_REJECTED\",\"code\":\"NATIVE_REVISION_HANDOFF_REQUIRED\"}"
+        },
+        {
+          "name": "the held revision made no plan, no Canva effect and no unmatched model call",
+          "ok": true,
+          "detail": "{\"effects\":{\"plans\":\"0\",\"operations\":\"0\"},\"unmatched\":0}"
+        },
+        {
+          "name": "only future lifecycle reminders remain scheduled",
+          "ok": true,
+          "detail": "{\"unfinished\":[{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"}],\"readyOutbox\":\"0\"}"
+        }
+      ],
+      "events": [
+        "office revision: HTTP 201",
+        "revision photo update 90687757792 in request d7847c26-0e04-5e27-8025-4eaf801d68e1",
+        "killed core after photo decision, before child task projection",
+        "child task 5de77a5a-4025-4544-92e9-4f9928a300f6 after restart",
+        "same update under a second Restate key: HTTP 202",
+        "child design outcome: DESIGN_REJECTED",
+        "child held: DESIGN_REJECTED (NATIVE_REVISION_HANDOFF_REQUIRED)"
+      ]
+    },
+    {
+      "name": "R1.S3.CAPTIONLESS_PHOTO",
+      "what": "captionless photo input survives Core SIGKILL before task projection",
+      "ms": 32211,
+      "invariants": [
+        {
+          "name": "second revision photo update accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one owned child task after the office revision",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"af53b271-63f5-4631-b484-821f5545aac5\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"b193b8a8-0374-4fb3-8e38-9cf6108f3703\",\"state\":\"failed_operator\",\"version\":\"2\"}],\"state\":{\"current_task_id\":\"b193b8a8-0374-4fb3-8e38-9cf6108f3703\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"}}"
+        },
+        {
+          "name": "requester revision projection recorded exactly once",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"},{\"rev\":\"2\"},{\"rev\":\"3\"},{\"rev\":\"4\"},{\"rev\":\"5\"}]"
+        },
+        {
+          "name": "all selected photos bound only to the child task",
+          "ok": true,
+          "detail": "[{\"task_id\":\"b193b8a8-0374-4fb3-8e38-9cf6108f3703\",\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "hash-bound photo decision, with no image bytes in the event",
+          "ok": true,
+          "detail": "{\"image\":{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"mediaType\":\"image/jpeg\"},\"chatId\":\"9730560\",\"requestId\":\"cc08c80d-b1cd-5301-bf55-30da16ec87e8\"}"
+        },
+        {
+          "name": "one download per photo and no parked update across kill and replay",
+          "ok": true,
+          "detail": "downloads=1 parked=0"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_17YAbSeqyFni2C3X3V6gB2W7Phhsl8K8tB\",\"status\":\"completed\",\"idempotency_key\":\"chaos-revision-photo-replay-90687757794\"},{\"id\":\"inv_17YAbSeqyFni1hjnwJJgGa58XF20RBCHrL\",\"status\":\"completed\",\"idempotency_key\":\"tg-90687757794\"}]"
+        },
+        {
+          "name": "the linked revision is held for the native handoff (ADR-113, ADR-114)",
+          "ok": true,
+          "detail": "{\"childState\":\"failed_operator\",\"request\":{\"current_task_id\":\"b193b8a8-0374-4fb3-8e38-9cf6108f3703\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"},\"outcome\":\"DESIGN_REJECTED\",\"code\":\"NATIVE_REVISION_HANDOFF_REQUIRED\"}"
+        },
+        {
+          "name": "the held revision made no plan, no Canva effect and no unmatched model call",
+          "ok": true,
+          "detail": "{\"effects\":{\"plans\":\"0\",\"operations\":\"0\"},\"unmatched\":0}"
+        },
+        {
+          "name": "only future lifecycle reminders remain scheduled",
+          "ok": true,
+          "detail": "{\"unfinished\":[{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"}],\"readyOutbox\":\"0\"}"
+        }
+      ],
+      "events": [
+        "office revision: HTTP 201",
+        "captionless reply to confirmed notice 5145",
+        "revision photo update 90687757794 in request cc08c80d-b1cd-5301-bf55-30da16ec87e8",
+        "killed core after photo decision, before child task projection",
+        "child task b193b8a8-0374-4fb3-8e38-9cf6108f3703 after restart",
+        "same update under a second Restate key: HTTP 202",
+        "child design outcome: DESIGN_REJECTED",
+        "child held: DESIGN_REJECTED (NATIVE_REVISION_HANDOFF_REQUIRED)"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM",
+      "what": "album photo input survives Core SIGKILL before task projection",
+      "ms": 40215,
+      "invariants": [
+        {
+          "name": "second revision photo update accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one owned child task after the office revision",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"ca8b2858-0f6f-4ac0-bdc2-faa8d9788f3e\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"495d5a6e-ac52-49d8-9a9e-1b86ef73e004\",\"state\":\"failed_operator\",\"version\":\"2\"}],\"state\":{\"current_task_id\":\"495d5a6e-ac52-49d8-9a9e-1b86ef73e004\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"}}"
+        },
+        {
+          "name": "requester revision projection recorded exactly once",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"},{\"rev\":\"2\"},{\"rev\":\"3\"},{\"rev\":\"4\"},{\"rev\":\"5\"}]"
+        },
+        {
+          "name": "all selected photos bound only to the child task",
+          "ok": true,
+          "detail": "[{\"task_id\":\"495d5a6e-ac52-49d8-9a9e-1b86ef73e004\",\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"},{\"task_id\":\"495d5a6e-ac52-49d8-9a9e-1b86ef73e004\",\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"role\":\"reference_image\",\"size\":\"1025\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "hash-bound photo decision, with no image bytes in the event",
+          "ok": true,
+          "detail": "{\"chatId\":\"9730561\",\"source\":{\"message\":{\"chat\":{\"id\":9730561,\"type\":\"private\"},\"date\":1790688962,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"photo\":[{\"width\":800,\"height\":600,\"file_id\":\"lifecycle-revision-9730561-second\",\"file_size\":1025,\"file_unique_id\":\"u-lifecycle-revision-9730561-second\"}],\"message_id\":135,\"media_group_id\":\"chaos-album-9730561\",\"reply_to_message\":{\"message_id\":5151}},\"update_id\":90687757797},\"snapshot\":{\"ref\":{\"images\":[{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"mediaType\":\"image/jpeg\"},{\"size\":1025,\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"mediaType\":\"image/jpeg\"}],\"sha256\":\"04d0da58018fddd8345c9f2830263f86ca03a08d1f1afc4dc59111c69bae0ca1\",\"updateId\":90687757797},\"chatId\":\"9730561\",\"update\":{\"message\":{\"chat\":{\"id\":9730561,\"type\":\"private\"},\"date\":1790688962,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"text\":\"Please use this photo as the reference and change the background to navy.\",\"message_id\":135,\"album_source\":[{\"hash\":\"f72c145526b0d1cedc66938ea2e6cc30d2a13aa3110b57eaffa3279668f988c6\",\"updateId\":90687757796},{\"hash\":\"f23187b55519a1f1fc070a7f1020d39d28424fa7f122acb273201cd7cc72261e\",\"updateId\":90687757797}],\"reply_to_message\":{\"message_id\":5151}},\"update_id\":90687757797}}}"
+        },
+        {
+          "name": "one download per photo and no parked update across kill and replay",
+          "ok": true,
+          "detail": "downloads=2 parked=0"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_1cCMXo3ZyXbA0x7aAOY3lYeMdhpfvoNL5h\",\"status\":\"completed\",\"idempotency_key\":\"settle:90687757797\"},{\"id\":\"inv_1cCMXo3ZyXbA5qErNu2TTIf3gu8QUk7Zke\",\"status\":\"completed\",\"idempotency_key\":\"chaos-revision-photo-replay-90687757797\"}]"
+        },
+        {
+          "name": "the linked revision is held for the native handoff (ADR-113, ADR-114)",
+          "ok": true,
+          "detail": "{\"childState\":\"failed_operator\",\"request\":{\"current_task_id\":\"495d5a6e-ac52-49d8-9a9e-1b86ef73e004\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"},\"outcome\":\"DESIGN_REJECTED\",\"code\":\"NATIVE_REVISION_HANDOFF_REQUIRED\"}"
+        },
+        {
+          "name": "the held revision made no plan, no Canva effect and no unmatched model call",
+          "ok": true,
+          "detail": "{\"effects\":{\"plans\":\"0\",\"operations\":\"0\"},\"unmatched\":0}"
+        },
+        {
+          "name": "only future lifecycle reminders remain scheduled",
+          "ok": true,
+          "detail": "{\"unfinished\":[{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"}],\"readyOutbox\":\"0\"}"
+        }
+      ],
+      "events": [
+        "office revision: HTTP 201",
+        "album reply to confirmed notice 5151",
+        "saved album updates 90687757796, 90687757797; no child before the album settled; no /use_album sent",
+        "revision photo update 90687757797 in request 44506a56-d9f2-551f-b6f8-06c22ef5b210",
+        "killed core after the album settled, before child task projection",
+        "child task 495d5a6e-ac52-49d8-9a9e-1b86ef73e004 after restart",
+        "same settle under a second Restate key: HTTP 202",
+        "child design outcome: DESIGN_REJECTED",
+        "child held: DESIGN_REJECTED (NATIVE_REVISION_HANDOFF_REQUIRED)"
+      ]
+    },
+    {
+      "name": "R1.S3.IMAGE_DOCUMENT",
+      "what": "document photo input survives Core SIGKILL before task projection",
+      "ms": 32096,
+      "invariants": [
+        {
+          "name": "second revision photo update accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one owned child task after the office revision",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"5cd91265-19c8-4873-8980-f6ed5e3cb22e\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"4c6c0344-3df1-4466-8482-2df5263fb96c\",\"state\":\"failed_operator\",\"version\":\"2\"}],\"state\":{\"current_task_id\":\"4c6c0344-3df1-4466-8482-2df5263fb96c\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"}}"
+        },
+        {
+          "name": "requester revision projection recorded exactly once",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"},{\"rev\":\"2\"},{\"rev\":\"3\"},{\"rev\":\"4\"},{\"rev\":\"5\"}]"
+        },
+        {
+          "name": "all selected photos bound only to the child task",
+          "ok": true,
+          "detail": "[{\"task_id\":\"4c6c0344-3df1-4466-8482-2df5263fb96c\",\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "hash-bound photo decision, with no image bytes in the event",
+          "ok": true,
+          "detail": "{\"image\":{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"mediaType\":\"image/jpeg\"},\"chatId\":\"9730562\",\"requestId\":\"bdeb5eee-e9ce-5506-b5bb-b6a46a5576af\"}"
+        },
+        {
+          "name": "one download per photo and no parked update across kill and replay",
+          "ok": true,
+          "detail": "downloads=1 parked=0"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_15NTXPcG2CYZ236rBLMbVBLGwC3VK4gtHf\",\"status\":\"completed\",\"idempotency_key\":\"tg-90687757799\"},{\"id\":\"inv_15NTXPcG2CYZ3O0Y2T2wbFtwCs1DnYis8b\",\"status\":\"completed\",\"idempotency_key\":\"chaos-revision-photo-replay-90687757799\"}]"
+        },
+        {
+          "name": "the linked revision is held for the native handoff (ADR-113, ADR-114)",
+          "ok": true,
+          "detail": "{\"childState\":\"failed_operator\",\"request\":{\"current_task_id\":\"4c6c0344-3df1-4466-8482-2df5263fb96c\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"},\"outcome\":\"DESIGN_REJECTED\",\"code\":\"NATIVE_REVISION_HANDOFF_REQUIRED\"}"
+        },
+        {
+          "name": "the held revision made no plan, no Canva effect and no unmatched model call",
+          "ok": true,
+          "detail": "{\"effects\":{\"plans\":\"0\",\"operations\":\"0\"},\"unmatched\":0}"
+        },
+        {
+          "name": "only future lifecycle reminders remain scheduled",
+          "ok": true,
+          "detail": "{\"unfinished\":[{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"}],\"readyOutbox\":\"0\"}"
+        }
+      ],
+      "events": [
+        "office revision: HTTP 201",
+        "document reply to confirmed notice 5157",
+        "revision photo update 90687757799 in request bdeb5eee-e9ce-5506-b5bb-b6a46a5576af",
+        "killed core after photo decision, before child task projection",
+        "child task 4c6c0344-3df1-4466-8482-2df5263fb96c after restart",
+        "same update under a second Restate key: HTTP 202",
+        "child design outcome: DESIGN_REJECTED",
+        "child held: DESIGN_REJECTED (NATIVE_REVISION_HANDOFF_REQUIRED)"
+      ]
+    },
+    {
+      "name": "R1.S3.DOCUMENT_ALBUM",
+      "what": "document-album photo input survives Core SIGKILL before task projection",
+      "ms": 40149,
+      "invariants": [
+        {
+          "name": "second revision photo update accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one owned child task after the office revision",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"81966fe7-61b2-40f4-af42-bcf2f17d6709\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"7f082dfb-3732-4b4a-81dd-55f918c012fd\",\"state\":\"failed_operator\",\"version\":\"2\"}],\"state\":{\"current_task_id\":\"7f082dfb-3732-4b4a-81dd-55f918c012fd\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"}}"
+        },
+        {
+          "name": "requester revision projection recorded exactly once",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"},{\"rev\":\"2\"},{\"rev\":\"3\"},{\"rev\":\"4\"},{\"rev\":\"5\"}]"
+        },
+        {
+          "name": "all selected photos bound only to the child task",
+          "ok": true,
+          "detail": "[{\"task_id\":\"7f082dfb-3732-4b4a-81dd-55f918c012fd\",\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"},{\"task_id\":\"7f082dfb-3732-4b4a-81dd-55f918c012fd\",\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"role\":\"reference_image\",\"size\":\"1025\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "hash-bound photo decision, with no image bytes in the event",
+          "ok": true,
+          "detail": "{\"chatId\":\"9730563\",\"source\":{\"message\":{\"chat\":{\"id\":9730563,\"type\":\"private\"},\"date\":1790689038,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"document\":{\"file_id\":\"lifecycle-revision-9730563-second\",\"file_name\":\"original.jpg\",\"file_size\":1025,\"mime_type\":\"image/jpeg\",\"thumbnail\":{\"file_id\":\"lifecycle-revision-9730563-second-thumbnail\"}},\"message_id\":140,\"media_group_id\":\"chaos-album-9730563\",\"reply_to_message\":{\"message_id\":5163}},\"update_id\":90687757802},\"snapshot\":{\"ref\":{\"images\":[{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"mediaType\":\"image/jpeg\"},{\"size\":1025,\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"mediaType\":\"image/jpeg\"}],\"sha256\":\"a98b70ab6bb67a5ab64474267a81e4d2e987cb690145113486ee5b7703996f55\",\"updateId\":90687757802},\"chatId\":\"9730563\",\"update\":{\"message\":{\"chat\":{\"id\":9730563,\"type\":\"private\"},\"date\":1790689038,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"text\":\"Please use this photo as the reference and change the background to navy.\",\"message_id\":140,\"album_source\":[{\"hash\":\"181528d174a88a63475f1548a143bcfdcb0519291500a1cc7324d27dc1c20af7\",\"updateId\":90687757801},{\"hash\":\"9f470c3e132ba421765eb4cb169b0683e20a702a83233899340a07bbe03d247c\",\"updateId\":90687757802}],\"reply_to_message\":{\"message_id\":5163}},\"update_id\":90687757802}}}"
+        },
+        {
+          "name": "one download per photo and no parked update across kill and replay",
+          "ok": true,
+          "detail": "downloads=2 parked=0"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_102WKvubTIC60iWTLgwy9s07dojs6vUJZj\",\"status\":\"completed\",\"idempotency_key\":\"chaos-revision-photo-replay-90687757802\"},{\"id\":\"inv_102WKvubTIC6782DX6QpCMPj4GlfRUmTvJ\",\"status\":\"completed\",\"idempotency_key\":\"settle:90687757802\"}]"
+        },
+        {
+          "name": "the linked revision is held for the native handoff (ADR-113, ADR-114)",
+          "ok": true,
+          "detail": "{\"childState\":\"failed_operator\",\"request\":{\"current_task_id\":\"7f082dfb-3732-4b4a-81dd-55f918c012fd\",\"rev\":\"5\",\"owner\":\"restate\",\"stage\":\"manual\"},\"outcome\":\"DESIGN_REJECTED\",\"code\":\"NATIVE_REVISION_HANDOFF_REQUIRED\"}"
+        },
+        {
+          "name": "the held revision made no plan, no Canva effect and no unmatched model call",
+          "ok": true,
+          "detail": "{\"effects\":{\"plans\":\"0\",\"operations\":\"0\"},\"unmatched\":0}"
+        },
+        {
+          "name": "only future lifecycle reminders remain scheduled",
+          "ok": true,
+          "detail": "{\"unfinished\":[{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"},{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"}],\"readyOutbox\":\"0\"}"
+        }
+      ],
+      "events": [
+        "office revision: HTTP 201",
+        "document-album reply to confirmed notice 5163",
+        "saved album updates 90687757801, 90687757802; no child before the album settled; no /use_album sent",
+        "revision photo update 90687757802 in request 38204c9e-62b5-5fe0-a4c0-3d3ba6c07f27",
+        "killed core after the album settled, before child task projection",
+        "child task 7f082dfb-3732-4b4a-81dd-55f918c012fd after restart",
+        "same settle under a second Restate key: HTTP 202",
+        "child design outcome: DESIGN_REJECTED",
+        "child held: DESIGN_REJECTED (NATIVE_REVISION_HANDOFF_REQUIRED)"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM_BRIEF",
+      "what": "an album with its brief as the caption starts one design by itself, survives a Core kill at the settle, and is delivered",
+      "ms": 26324,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"655bc68cf122:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "all 3 album photos are the task's reference images",
+          "ok": true,
+          "detail": "[{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "the album was frozen once and opened one request",
+          "ok": true,
+          "detail": "frozen=1 opens=1"
+        },
+        {
+          "name": "the requester was never asked for a command",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "one acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "one download per photo",
+          "ok": true,
+          "detail": "[\"album-albumbrief-9730564-0\",\"album-albumbrief-9730564-1\",\"album-albumbrief-9730564-2\"]"
+        },
+        {
+          "name": "every ChatInbox invocation (updates and settles) completed",
+          "ok": true,
+          "detail": "[\"tg-90687757804:completed\",\"chatinbox:setMode:fd827450-f126-5e20-9efe-44ab46e67bcc:completed\",\"tg-90687757803:completed\",\"settle:90687757804:completed\",\"settle:90687757805:completed\",\"settle:90687757803:completed\",\"chaos-album-settle-replay-90687757805:completed\",\"tg-90687757805:completed\"]"
+        }
+      ],
+      "events": [
+        "album of 3 photos, caption = brief: updates 90687757803, 90687757804, 90687757805; no /use_album",
+        "killed core after the settle froze the album, before the decision",
+        "task 23626f0d-d5c1-46e5-ac40-2e2fb307784b: draft in review",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "second settle of the newest photo: HTTP 202"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM_RESTART",
+      "what": "a worker killed while the album settles loses nothing: the durable settle opens one request after the restart",
+      "ms": 12383,
+      "invariants": [],
+      "events": [
+        "album saved (updates 90687757806, 90687757807, 90687757808); worker-blue killed inside the settle window"
+      ],
+      "error": "a task appeared while no worker was running"
+    },
+    {
+      "name": "R1.S3.ALBUM_ASK",
+      "what": "an album with no words is asked about once; an OK is asked again; the natural brief starts one design",
+      "ms": 24317,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "4 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "all 2 album photos are the task's reference images",
+          "ok": true,
+          "detail": "[{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "the album was frozen once and opened one request",
+          "ok": true,
+          "detail": "frozen=1 opens=1"
+        },
+        {
+          "name": "the requester was never asked for a command",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "one acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "one download per photo",
+          "ok": true,
+          "detail": "[\"album-albumask-9730566-0\",\"album-albumask-9730566-1\"]"
+        },
+        {
+          "name": "every ChatInbox invocation (updates and settles) completed",
+          "ok": true,
+          "detail": "[\"settle:90687757809:completed\",\"tg-90687757811:completed\",\"settle:90687757810:completed\",\"tg-90687757809:completed\",\"chatinbox:setMode:c8787452-8d97-59ea-a997-8d6c7ccdc86a:completed\",\"tg-90687757810:completed\",\"tg-90687757812:completed\"]"
+        },
+        {
+          "name": "the album was asked about once",
+          "ok": true,
+          "detail": "questions=1"
+        }
+      ],
+      "events": [
+        "album of 2 photos without words: updates 90687757809, 90687757810",
+        "asked: I have your 2 photos. What would you like me to design with them? Please tell me what it is for and the exact words to put on it.",
+        "\"yes, use them\" was asked what to design; no task",
+        "task 2caaf579-3203-431a-91be-cc3543e24cff: draft in review"
+      ]
+    },
+    {
+      "name": "R1.S3.MEDIA",
+      "what": "a PDF without client selection gets one durable review prompt and no task",
+      "ms": 6181,
+      "invariants": [
+        {
+          "name": "second media update accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "no legacy task created",
+          "ok": true,
+          "detail": "tasks=0"
+        },
+        {
+          "name": "one admission refusal and no parked update",
+          "ok": true,
+          "detail": "[{\"source_account_id\":\"lifecycle_source_admission\"}]"
+        },
+        {
+          "name": "one requester correction prompt without an office failure alert",
+          "ok": true,
+          "detail": "sender=1 office=0"
+        },
+        {
+          "name": "both media intake invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_1gK5MsFywuPQ59oUve3WZQuhjpJxYsaxRP\",\"status\":\"completed\",\"idempotency_key\":\"tg-90687757813\"},{\"id\":\"inv_1gK5MsFywuPQ7h5HEXe55a63H4EqAtd20H\",\"status\":\"completed\",\"idempotency_key\":\"chaos-media-replay-90687757813\"}]"
+        }
+      ],
+      "events": [
+        "captioned PDF update 90687757813 in chat 9730567",
+        "duplicate media update under a second Restate key: HTTP 202"
+      ]
+    },
+    {
+      "name": "L2.0",
+      "what": "the Delivery workflow sends both approved files and the notice once, no faults",
+      "ms": 26416,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"872b0960a35e:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "Restate keeps the finished run's outcome where Core reads it",
+          "ok": true,
+          "detail": "HTTP 200 {\"outcome\":\"delivered\",\"uncertain\":[],\"sheetsConfirmed\":true,\"archived\":true,\"filesSent\":2}"
+        }
+      ],
+      "events": [
+        "task b177bcdb-1765-4040-9c5d-0cf5ef97ce00: draft in chat",
+        "approve (PNG and PPTX pinned): HTTP 201",
+        "deliver: HTTP 202 in 60 ms, executor restate, dl-b177bcdb-1765-4040-9c5d-0cf5ef97ce00-5a2a1ebb-266b-4767-b7d4-872b0960a35e",
+        "delivered, task complete",
+        "workflow output: HTTP 200 {\"outcome\":\"delivered\",\"uncertain\":[],\"sheetsConfirmed\":true,\"archived\":true,\"filesSent\":2}"
+      ]
+    },
+    {
+      "name": "L2.K14",
+      "what": "Core killed in the middle of the delivery (Drive upload slowed to 8 s), back after 5 s; Deliver pressed once",
+      "ms": 34783,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"eccc012e87e2:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "the delivery finishes after a Core restart without a second Deliver press",
+          "ok": true,
+          "detail": "task complete right after the restart, complete without another press"
+        }
+      ],
+      "events": [
+        "task b752d3d8-8ae3-45f1-87d8-1e70015e94ed: draft in chat",
+        "approve (PNG and PPTX pinned): HTTP 201",
+        "deliver: HTTP 202 in 56 ms, executor restate, dl-b752d3d8-8ae3-45f1-87d8-1e70015e94ed-9224a565-77b6-40b1-8366-eccc012e87e2",
+        "killed core 2 s into the delivery (task publishing); after the restart: task complete",
+        "delivered, task complete"
+      ]
+    },
+    {
+      "name": "L2.K15",
+      "what": "Core killed at core.delivery.after-drive (files in Drive, nothing recorded), restarted",
+      "ms": 32424,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"e40c6051b671:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 00146514-eb26-4d61-9f88-39a5e90f0448: draft in chat",
+        "approve (PNG and PPTX pinned): HTTP 201",
+        "deliver: HTTP 202 in 57 ms, executor restate, dl-00146514-eb26-4d61-9f88-39a5e90f0448-169f0f36-0f61-4f0e-90fc-e40c6051b671",
+        "delivered, task complete",
+        "killed core at core.delivery.after-drive"
+      ]
+    },
+    {
+      "name": "L2.K16",
+      "what": "worker killed between the two files",
+      "ms": 28882,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"d218c724f82c:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 2c786db3-09e9-45c4-a264-ff1b3e34a183: draft in chat",
+        "approve (PNG and PPTX pinned): HTTP 201",
+        "deliver: HTTP 202 in 55 ms, executor restate, dl-2c786db3-09e9-45c4-a264-ff1b3e34a183-ab613132-399e-4e79-8837-d218c724f82c",
+        "delivered, task complete",
+        "killed worker-green at worker.delivery.between-files"
+      ]
+    },
+    {
+      "name": "L2.K17",
+      "what": "Postgres killed after Telegram took the first file, before its mark was written; back after 5 s",
+      "ms": 35422,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"bf95a37245d9:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 8b0b0901-6039-4279-a399-6afbf916731e: draft in chat",
+        "approve (PNG and PPTX pinned): HTTP 201",
+        "deliver: HTTP 202 in 58 ms, executor restate, dl-8b0b0901-6039-4279-a399-6afbf916731e-5389c879-df48-417c-afd8-bf95a37245d9",
+        "delivered, task complete",
+        "killed postgres while the sender was held after the first file"
+      ]
+    },
+    {
+      "name": "L2.K18",
+      "what": "Restate killed between the two files, back after 5 s",
+      "ms": 34428,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"804e2119787e:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        }
+      ],
+      "events": [
+        "task 092db2b2-620e-442f-a954-496eae8692c1: draft in chat",
+        "approve (PNG and PPTX pinned): HTTP 201",
+        "deliver: HTTP 202 in 66 ms, executor restate, dl-092db2b2-620e-442f-a954-496eae8692c1-e51fffaa-58ec-4b85-8d0d-804e2119787e",
+        "delivered, task complete",
+        "killed restate while the delivery was held between the files"
+      ]
+    },
+    {
+      "name": "L2.K12",
+      "what": "worker killed after Telegram took the first file, before its mark (one uncertain send expected)",
+      "ms": 29929,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "an uncertain send has exactly one office alert",
+          "ok": true,
+          "detail": "uncertain sends expected=1 office alerts naming the task=1"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"e9e6ffab13dd:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "an unconfirmed requester send holds the delivery for staff reconciliation",
+          "ok": true,
+          "detail": "state=requester_send_reconciliation"
+        },
+        {
+          "name": "the administrator's confirmation settles the delivery",
+          "ok": true,
+          "detail": "HTTP 200 {\"requestId\":\"ebe27f9f-ef49-57c8-a8bb-65f4fa6e15a7\",\"taskId\":\"18cc3826-4967-4095-a498-164a322675e3\",\"publicationId\":\"d674cee3-d2ff-492f-a71e-6287b2419db3\",\"stage\":\"delivered\",\"requestRev\":6,\"confirmat"
+        },
+        {
+          "name": "the settlement sends nothing to the requester",
+          "ok": true,
+          "detail": "sends before=5 after=5"
+        }
+      ],
+      "events": [
+        "task 18cc3826-4967-4095-a498-164a322675e3: draft in chat",
+        "approve (PNG and PPTX pinned): HTTP 201",
+        "deliver: HTTP 202 in 62 ms, executor restate, dl-18cc3826-4967-4095-a498-164a322675e3-d782f229-54b6-4b03-9a0f-e9e6ffab13dd",
+        "killed worker-green after the first document send",
+        "synthetic administrator confirmed 3 sends visible in the fake chat: HTTP 200",
+        "delivered, task complete"
+      ]
+    },
+    {
+      "name": "L2.429",
+      "what": "Telegram answers 429 (retry_after 3) to the second file",
+      "ms": 31437,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"ad260193f597:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "the second file is sent again no sooner than Telegram's retry_after (3 s)",
+          "ok": true,
+          "detail": "waited 3050 ms after the 429"
+        }
+      ],
+      "events": [
+        "task cfa27aef-c0dd-4ea4-b47e-224cb9c088ab: draft in chat",
+        "approve (PNG and PPTX pinned): HTTP 201",
+        "deliver: HTTP 202 in 53 ms, executor restate, dl-cfa27aef-c0dd-4ea4-b47e-224cb9c088ab-4b04aeec-3699-430b-a400-ad260193f597",
+        "delivered, task complete",
+        "429 at 2026-09-29T13:43:17.994Z; the second file delivered 3050 ms later"
+      ]
+    },
+    {
+      "name": "R1.BL",
+      "what": "an English-and-Kurdish brief opens one request per language; each is drafted, approved and delivered",
+      "ms": 28462,
+      "invariants": [
+        {
+          "name": "two lifecycle requests, both delivered",
+          "ok": true,
+          "detail": "[{\"request_id\":\"26404fd1-0bff-5f13-ac30-2c24925ef54a\",\"owner\":\"restate\",\"stage\":\"delivered\"},{\"request_id\":\"b12a5d5d-4e8c-5291-acdc-6c91932a085b\",\"owner\":\"restate\",\"stage\":\"delivered\"}]"
+        },
+        {
+          "name": "one task per language: one English-only copy, one Kurdish copy",
+          "ok": true,
+          "detail": "[{\"id\":\"0d46b609\",\"en\":false,\"ckb\":true},{\"id\":\"d7ba3194\",\"en\":true,\"ckb\":false}]"
+        },
+        {
+          "name": "each request delivered once by its Delivery workflow",
+          "ok": true,
+          "detail": "[{\"task_id\":\"0d46b609-b0e6-4958-9c42-58bce8d8abbc\",\"state\":\"complete\",\"executor\":\"restate\"},{\"task_id\":\"d7ba3194-2bbe-4e7c-abd8-893f9fa4d575\",\"state\":\"complete\",\"executor\":\"restate\"}]"
+        },
+        {
+          "name": "the requester has every approved file of both designs, each once",
+          "ok": true,
+          "detail": "documents=4 pinned=4"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "2 paid calls"
+        },
+        {
+          "name": "each task: one planner call, completed",
+          "ok": true,
+          "detail": "[{\"task_id\":\"0d46b609-b0e6-4958-9c42-58bce8d8abbc\",\"calls\":1},{\"task_id\":\"d7ba3194-2bbe-4e7c-abd8-893f9fa4d575\",\"calls\":1}]"
+        }
+      ],
+      "events": [
+        "task 0d46b609-b0e6-4958-9c42-58bce8d8abbc: approve HTTP 201",
+        "task 0d46b609-b0e6-4958-9c42-58bce8d8abbc: deliver HTTP 202",
+        "task d7ba3194-2bbe-4e7c-abd8-893f9fa4d575: approve HTTP 201",
+        "task d7ba3194-2bbe-4e7c-abd8-893f9fa4d575: deliver HTTP 202"
+      ]
+    },
+    {
+      "name": "R4",
+      "what": "two chats: a 19.9 MB picture with a 30 s download in chat A must not delay chat B",
+      "ms": 35884,
+      "invariants": [
+        {
+          "name": "chat B is acknowledged in under 5 s while chat A downloads",
+          "ok": false,
+          "detail": "chat B first answer after 15413 ms (chat A after 30519 ms)"
+        },
+        {
+          "name": "chat B has its one task",
+          "ok": true,
+          "detail": "tasks=1"
+        }
+      ],
+      "events": [
+        "chat B answered after 15413 ms; chat A after 30519 ms"
+      ]
+    }
+  ]
+}

@@ -778,6 +778,7 @@ POST /v1/internal/lifecycle/:requestId/requester-revision-intake
 POST /v1/internal/tasks/:taskId/delivery-finished
 POST /v1/internal/telegram/intake
 POST /v1/internal/telegram/park
+POST /v1/internal/telegram/settle-sweep
 POST /v1/judge/:token/judgments
 POST /v1/messages/:messageId/promote
 POST /v1/migration/archive

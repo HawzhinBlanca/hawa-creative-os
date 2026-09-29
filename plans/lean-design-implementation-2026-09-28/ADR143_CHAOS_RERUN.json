@@ -1,0 +1,492 @@
+{
+  "finishedAt": "2026-09-29T13:49:53.063Z",
+  "telegramPoller": "worker",
+  "totalMs": 225053,
+  "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
+  "peakMemoryMiB": {
+    "hawa-chaos-core-1": 143,
+    "hawa-chaos-worker-blue-1": 93,
+    "hawa-chaos-postgres-1": 112,
+    "hawa-chaos-fakes-1": 75,
+    "hawa-chaos-restate-1": 637
+  },
+  "peakTotalMiB": 1022,
+  "uncoveredModelCalls": [],
+  "scenarios": [
+    {
+      "name": "R1.DUP",
+      "what": "the same update handed on twice (Restate's key, then past it) makes one task and one acknowledgement",
+      "ms": 27761,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "nothing new reached the chat after the update was handed on again",
+          "ok": true,
+          "detail": "sends before=2 after=2"
+        },
+        {
+          "name": "update 90689598113: one ChatInbox invocation (key tg-90689598113), completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "6 invocations: [\"chaos-dup-90689598113:completed\",\"01M3PPPSP8RQTVWWZHEKYFVN46:completed\",\"settle:90689598113:completed\",\"tg-90689598113:completed\",\"01M3PPPS6DYQ58X0ZDFQSFMRJ7:completed\",\"chatinbox:setMode:161da493-cae3-52a3-a60f-b05d7836ae04:completed\"]"
+        },
+        {
+          "name": "the stored offset moved past the chat's last update",
+          "ok": true,
+          "detail": "offset=90689598113 last update=90689598113"
+        },
+        {
+          "name": "no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        }
+      ],
+      "events": [
+        "update 90689598113 in chat 9880101",
+        "task e11873ad-d38e-4eb2-bfa0-5733e202a248: draft in chat",
+        "sent again: tg key HTTP 202, another key HTTP 202",
+        "ChatInbox view after the second hand-off: {\"v\":1,\"lastUpdateId\":90689598113,\"lastOutcome\":\"handled\",\"lastIntakeStatus\":200,\"at\":1790689633498,\"mode\":\"lifecycle\",\"requestId\":\"161da493-cae3-52a3-a60f-b05d7836ae04\"}"
+      ]
+    },
+    {
+      "name": "R1.S3.K1",
+      "what": "a Core crash and update replay open one owned request and send one acknowledgement",
+      "ms": 27571,
+      "invariants": [
+        {
+          "name": "second Restate key accepted for replay",
+          "ok": true,
+          "detail": "HTTP 202"
+        },
+        {
+          "name": "one task and one Restate-owned request",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"9f2333f6-fa56-4ae1-8172-2b7769cdccc5\",\"state\":\"received\",\"version\":\"1\"}],\"requests\":[{\"request_id\":\"101fdfe2-e5fd-55ce-8bd0-4b57babaf67c\",\"root_task_id\":\"9f2333f6-fa56-4ae1-8172-2b7769cdccc5\",\"owner\":\"restate\",\"stage\":\"manual\",\"rev\":\"1\"}]}"
+        },
+        {
+          "name": "one version-one projection",
+          "ok": true,
+          "detail": "[{\"rev\":\"1\"}]"
+        },
+        {
+          "name": "one requester acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "request owner invocation completed",
+          "ok": true,
+          "detail": "[{\"status\":\"completed\"}]"
+        },
+        {
+          "name": "both ChatInbox invocations completed",
+          "ok": true,
+          "detail": "[{\"id\":\"inv_11ClySPXS7n51RhFi0YEgGVi6r6liq6Uxs\",\"status\":\"completed\",\"idempotency_key\":\"chaos-lifecycle-replay-90689598114\"},{\"id\":\"inv_11ClySPXS7n57pInnO5ndGV92c90cNtEEI\",\"status\":\"completed\",\"idempotency_key\":\"tg-90689598114\"}]"
+        },
+        {
+          "name": "Telegram offset passed the update",
+          "ok": true,
+          "detail": "offset=90689598114 update=90689598114"
+        }
+      ],
+      "events": [
+        "update 90689598114 in chat 9880102",
+        "killed core after Core committed the intake decision",
+        "same update under a second Restate key: HTTP 202"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM_BRIEF",
+      "what": "an album with its brief as the caption starts one design by itself, survives a Core kill at the settle, and is delivered",
+      "ms": 26294,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "approvals = 1",
+          "ok": true,
+          "detail": "approvals=1"
+        },
+        {
+          "name": "publications = 1, state 'complete'",
+          "ok": true,
+          "detail": "publications=[\"complete\"]"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=complete"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "the 2 approved files are archived to Drive once each",
+          "ok": true,
+          "detail": "drive files for the task=2"
+        },
+        {
+          "name": "the requester has the 2 approved files",
+          "ok": true,
+          "detail": "documents shown=2"
+        },
+        {
+          "name": "the Delivery workflow delivered it, and reported every run it started",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"executor_run\":1,\"executor_finished_run\":1}]"
+        },
+        {
+          "name": "no notify.published command for a workflow delivery",
+          "ok": true,
+          "detail": "notify.published=0"
+        },
+        {
+          "name": "each Delivery run completed",
+          "ok": true,
+          "detail": "[\"e8ca4e23220e:completed\"]"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "all 3 album photos are the task's reference images",
+          "ok": true,
+          "detail": "[{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "the album was frozen once and opened one request",
+          "ok": true,
+          "detail": "frozen=1 opens=1"
+        },
+        {
+          "name": "the requester was never asked for a command",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "one acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "one download per photo",
+          "ok": true,
+          "detail": "[\"album-albumbrief-9880103-0\",\"album-albumbrief-9880103-1\",\"album-albumbrief-9880103-2\"]"
+        },
+        {
+          "name": "every ChatInbox invocation (updates and settles) completed",
+          "ok": true,
+          "detail": "[\"settle:90689598117:completed\",\"settle:90689598116:completed\",\"settle:90689598115:completed\",\"chatinbox:setMode:5bf62bed-47d3-570e-b1ca-501f0b921778:completed\",\"tg-90689598117:completed\",\"chaos-album-settle-replay-90689598117:completed\",\"tg-90689598116:completed\",\"tg-90689598115:completed\"]"
+        }
+      ],
+      "events": [
+        "album of 3 photos, caption = brief: updates 90689598115, 90689598116, 90689598117; no /use_album",
+        "killed core after the settle froze the album, before the decision",
+        "task 211d09db-43cd-4969-a173-4f0b867100f3: draft in review",
+        "approve: HTTP 201",
+        "deliver: HTTP 202",
+        "second settle of the newest photo: HTTP 202"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM_RESTART",
+      "what": "a worker killed while the album settles loses nothing: the durable settle opens one request after the restart",
+      "ms": 26709,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "all 3 album photos are the task's reference images",
+          "ok": true,
+          "detail": "[{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "the album was frozen once and opened one request",
+          "ok": true,
+          "detail": "frozen=1 opens=1"
+        },
+        {
+          "name": "the requester was never asked for a command",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "one acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "one download per photo",
+          "ok": true,
+          "detail": "[\"album-albumrestart-9880104-0\",\"album-albumrestart-9880104-1\",\"album-albumrestart-9880104-2\"]"
+        },
+        {
+          "name": "every ChatInbox invocation (updates and settles) completed",
+          "ok": true,
+          "detail": "[\"chatinbox:setMode:f6dc9182-b6e5-5b48-80f2-04a062ac0a50:completed\",\"tg-90689598120:completed\",\"settle:90689598118:completed\",\"tg-90689598118:completed\",\"settle:90689598119:completed\",\"settle:90689598120:completed\",\"tg-90689598119:completed\"]"
+        }
+      ],
+      "events": [
+        "album saved (updates 90689598118, 90689598119, 90689598120); worker-blue killed inside the settle window",
+        "worker-blue started again after 12 s",
+        "task 568d78e0-8ca9-4962-b398-abebc8bd7c9e: draft in review"
+      ]
+    },
+    {
+      "name": "R1.S3.ALBUM_ASK",
+      "what": "an album with no words is asked about once; an OK is asked again; the natural brief starts one design",
+      "ms": 24263,
+      "invariants": [
+        {
+          "name": "one task per scripted request",
+          "ok": true,
+          "detail": "tasks=1"
+        },
+        {
+          "name": "design_revisions per task = 1",
+          "ok": true,
+          "detail": "design_revisions=1"
+        },
+        {
+          "name": "final task state",
+          "ok": true,
+          "detail": "state=human_review"
+        },
+        {
+          "name": "each message reaches the requester once",
+          "ok": true,
+          "detail": "4 sends, all distinct"
+        },
+        {
+          "name": "no office alert without an uncertain send",
+          "ok": true,
+          "detail": "uncertain sends expected=0 office alerts naming the task=0"
+        },
+        {
+          "name": "no paid call runs twice",
+          "ok": true,
+          "detail": "1 paid calls: canva_design_plan×1"
+        },
+        {
+          "name": "one Canva import per task",
+          "ok": true,
+          "detail": "imports=1 exports=2"
+        },
+        {
+          "name": "one design run (TaskWorkflow or DesignRun), completed",
+          "ok": true,
+          "detail": "[\"DesignRun:completed\"]"
+        },
+        {
+          "name": "no paused invocation",
+          "ok": true,
+          "detail": "paused=0"
+        },
+        {
+          "name": "no journal mismatch (RT0016)",
+          "ok": true,
+          "detail": "RT0016=0"
+        },
+        {
+          "name": "all 2 album photos are the task's reference images",
+          "ok": true,
+          "detail": "[{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"},{\"role\":\"reference_image\",\"media_type\":\"image/jpeg\"}]"
+        },
+        {
+          "name": "the album was frozen once and opened one request",
+          "ok": true,
+          "detail": "frozen=1 opens=1"
+        },
+        {
+          "name": "the requester was never asked for a command",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "one acknowledgement",
+          "ok": true,
+          "detail": "acknowledgements=1"
+        },
+        {
+          "name": "one download per photo",
+          "ok": true,
+          "detail": "[\"album-albumask-9880105-0\",\"album-albumask-9880105-1\"]"
+        },
+        {
+          "name": "every ChatInbox invocation (updates and settles) completed",
+          "ok": true,
+          "detail": "[\"settle:90689598121:completed\",\"tg-90689598121:completed\",\"tg-90689598122:completed\",\"chatinbox:setMode:ae134b26-a744-5e58-a033-6af52ea02bd1:completed\",\"tg-90689598123:completed\",\"settle:90689598122:completed\",\"tg-90689598124:completed\"]"
+        },
+        {
+          "name": "the album was asked about once",
+          "ok": true,
+          "detail": "questions=1"
+        }
+      ],
+      "events": [
+        "album of 2 photos without words: updates 90689598121, 90689598122",
+        "asked: I have your 2 photos. What would you like me to design with them? Please tell me what it is for and the exact words to put on it.",
+        "\"yes, use them\" was asked what to design; no task",
+        "task 73ad5a82-8ae0-4340-8670-1a43a50ae383: draft in review"
+      ]
+    },
+    {
+      "name": "R4",
+      "what": "two chats: a 19.9 MB picture with a 30 s download in chat A must not delay chat B",
+      "ms": 36416,
+      "invariants": [
+        {
+          "name": "chat B is acknowledged within 5 s of its brief hold while chat A downloads",
+          "ok": true,
+          "detail": "chat B first answer after 16085 ms (hold 15000 ms; chat A after 31128 ms)"
+        },
+        {
+          "name": "chat B has its one task",
+          "ok": true,
+          "detail": "tasks=1"
+        }
+      ],
+      "events": [
+        "chat B answered after 16085 ms; chat A after 31128 ms"
+      ]
+    }
+  ]
+}

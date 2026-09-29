@@ -1,0 +1,865 @@
+{
+  "finishedAt": "2026-09-29T16:08:24.301Z",
+  "telegramPoller": "worker",
+  "totalMs": 460760,
+  "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
+  "peakMemoryMiB": {
+    "hawa-chaos-core-1": 121,
+    "hawa-chaos-worker-blue-1": 50,
+    "hawa-chaos-postgres-1": 154,
+    "hawa-chaos-restate-1": 665,
+    "hawa-chaos-fakes-1": 110,
+    "hawa-chaos-worker-green-1": 107
+  },
+  "peakTotalMiB": 1088,
+  "uncoveredModelCalls": [],
+  "scenarios": [
+    {
+      "name": "R10.H1",
+      "what": "requests made on the previous release while Core polled, continued after the deploy of this release",
+      "ms": 250708,
+      "invariants": [
+        {
+          "name": "deploy: the new colour registered and the old one drained and removed",
+          "ok": true,
+          "detail": "idle=green live=blue removed=blue drains=  waiting for blue: 1 in flight   waiting for blue: 1 in flight   waiting for blue: 1 in flight deleted=blue"
+        },
+        {
+          "name": "deploy: the offset only moved forward",
+          "ok": true,
+          "detail": "before=90697675111 after=90697675112"
+        },
+        {
+          "name": "A: the held design finished on the colour it started on",
+          "ok": true,
+          "detail": "{\"status\":\"completed\",\"deployment\":\"dp_10xBoYrcLAgnexzugDvOlBT\"}"
+        },
+        {
+          "name": "A: Core delivered it (pinned core), complete",
+          "ok": true,
+          "detail": "[{\"executor\":\"core\",\"state\":\"complete\"}]"
+        },
+        {
+          "name": "A: no lifecycle request in the chat",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "A: update 90697675113 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "A: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "1 invocations"
+        },
+        {
+          "name": "A: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "A: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "A: each message reaches the requester once",
+          "ok": true,
+          "detail": "7 sends, all distinct"
+        },
+        {
+          "name": "A: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "B: the reply became one revision of B, pinned core",
+          "ok": true,
+          "detail": "[{\"id\":\"9a201415-3013-473c-b344-a10cf10f93d3\",\"state\":\"received\",\"pin\":\"core\",\"created\":\"2026-09-29 16:03:55.804648+00\"}]"
+        },
+        {
+          "name": "B: no lifecycle request in the chat",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "B: update 90697675114 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "B: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "1 invocations"
+        },
+        {
+          "name": "B: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "B: no update made two tasks",
+          "ok": true,
+          "detail": "1 update(s) made a task"
+        },
+        {
+          "name": "B: each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "B: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "C: Core delivered it after the switch (pinned core), complete, each pinned file once",
+          "ok": true,
+          "detail": "{\"pubs\":[{\"executor\":\"core\",\"state\":\"complete\"}],\"deliveryWorkflows\":0,\"driveFiles\":2,\"pinned\":2,\"documents\":2}"
+        },
+        {
+          "name": "C: each message reaches the requester once",
+          "ok": true,
+          "detail": "6 sends, all distinct"
+        },
+        {
+          "name": "C: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "D thanks (sent during the deploy): starts nothing and is thanked back (ADR-140)",
+          "ok": true,
+          "detail": "after={\"update\":90697675112,\"newTasks\":0,\"children\":0,\"answers\":[\"🙏 Thank you.\"]} control (previous release)={\"update\":90697675104,\"newTasks\":1,\"children\":0,\"answers\":[\"📥 Brief received and queued in Hawa Desk\"]}"
+        },
+        {
+          "name": "D photo reply: a change to a finished legacy design starts nothing and asks for /new (ADR-135)",
+          "ok": true,
+          "detail": "{\"photo\":{\"update\":90697675115,\"newTasks\":0,\"children\":0,\"answers\":[\"Please send /new followed by the full design brief and the e\"]},\"askedForNew\":true}"
+        },
+        {
+          "name": "D: the photo was downloaded at most once",
+          "ok": true,
+          "detail": "downloads=1"
+        },
+        {
+          "name": "D: no lifecycle request in the chat",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "D: update 90697675115 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "D: update 90697675112 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "D: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "2 invocations"
+        },
+        {
+          "name": "D: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "D: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "D: each message reaches the requester once",
+          "ok": true,
+          "detail": "8 sends, all distinct"
+        },
+        {
+          "name": "D: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "E: the answer reached legacy intake and was answered",
+          "ok": true,
+          "detail": "[\"✏️ <b>Change received:</b> \\\"revise\\\"\\n\\n🎨 <b>Making this change to the same design.</b>\\n<i>The new dra\",\"📥 <b>Revision saved for native editing</b>\\n\\n📌 <b>Task ID:</b> <code>f8a12dc9-9c91-4659-b561-3afceb\"]"
+        },
+        {
+          "name": "E: no lifecycle request in the chat",
+          "ok": true,
+          "detail": "[]"
+        },
+        {
+          "name": "E: update 90697675116 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "E: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "1 invocations"
+        },
+        {
+          "name": "E: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "E: no update made two tasks",
+          "ok": true,
+          "detail": "1 update(s) made a task"
+        },
+        {
+          "name": "E: each message reaches the requester once",
+          "ok": true,
+          "detail": "6 sends, all distinct"
+        },
+        {
+          "name": "E: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "F: a new chat opens a lifecycle request that Restate delivers",
+          "ok": true,
+          "detail": "{\"requests\":[{\"request_id\":\"4ec1ecd5-048f-5177-9308-a884e81a2f01\",\"owner\":\"restate\",\"stage\":\"delivered\",\"rev\":\"5\",\"root_task_id\":\"e227c5f9-801c-48e7-8e48-d5a7dfd71928\",\"current_task_id\":\"e227c5f9-801c-48e7-8e48-d5a7dfd71928\"}],\"pubs\":[{\"executor\":\"restate\",\"state\":\"complete\"}]}"
+        },
+        {
+          "name": "F: update 90697675117 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "F: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations"
+        },
+        {
+          "name": "F: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "F: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "F: each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "F: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "D: /new opens a lifecycle request in a chat with Core history",
+          "ok": true,
+          "detail": "{\"request_id\":\"bb933d23-5568-55ec-afa2-2df2796b980b\",\"owner\":\"restate\",\"stage\":\"designing\",\"rev\":\"1\",\"root_task_id\":\"34458d14-ed40-476b-87fa-e97b220c5c4a\",\"current_task_id\":\"34458d14-ed40-476b-87fa-e97b220c5c4a\"}"
+        },
+        {
+          "name": "D /new: update 90697675118 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "D /new: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "5 invocations"
+        },
+        {
+          "name": "D /new: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "D /new: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "C: next to a finished recent Core design an ordinary brief opens a lifecycle request",
+          "ok": true,
+          "detail": "{\"request_id\":\"a681375a-cb71-503e-bb7d-81429e1b5c1f\",\"owner\":\"restate\",\"stage\":\"designing\",\"rev\":\"1\",\"root_task_id\":\"b0c17785-b87a-47c2-beb8-72d6e20e7063\",\"current_task_id\":\"b0c17785-b87a-47c2-beb8-72d6e20e7063\"}"
+        },
+        {
+          "name": "C new brief: update 90697675119 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "C new brief: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations"
+        },
+        {
+          "name": "C new brief: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "C new brief: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "B: a brief next to an open recent Core design goes to the old intake, which starts no new Core request",
+          "ok": true,
+          "detail": "{\"requests\":[],\"newTasks\":[],\"askedForNew\":true}"
+        },
+        {
+          "name": "B: once the Core history is older than 48 h, an ordinary brief opens a lifecycle request",
+          "ok": true,
+          "detail": "[{\"request_id\":\"5d66309d-0f19-5e39-bd17-e40eb27cb396\",\"owner\":\"restate\",\"stage\":\"designing\",\"rev\":\"1\",\"root_task_id\":\"6795bb28-e09f-4e3a-8f9d-106a59f6c645\",\"current_task_id\":\"6795bb28-e09f-4e3a-8f9d-106a59f6c645\"}]"
+        },
+        {
+          "name": "B new briefs: update 90697675120 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "B new briefs: update 90697675121 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "B new briefs: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "5 invocations"
+        },
+        {
+          "name": "B new briefs: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "B new briefs: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "A (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "7 sends, all distinct"
+        },
+        {
+          "name": "A (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "B (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "8 sends, all distinct"
+        },
+        {
+          "name": "B (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "C (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "8 sends, all distinct"
+        },
+        {
+          "name": "C (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "D (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "10 sends, all distinct"
+        },
+        {
+          "name": "D (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "E (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "6 sends, all distinct"
+        },
+        {
+          "name": "E (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "F (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "F (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "G (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "8 sends, all distinct"
+        },
+        {
+          "name": "G (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "the stored offset passed every update",
+          "ok": true,
+          "detail": "offset=90697675121"
+        }
+      ],
+      "events": [
+        "chats {\"A\":\"9635412\",\"B\":\"9635413\",\"C\":\"9635414\",\"D\":\"9635415\",\"E\":\"9635416\",\"F\":\"9635417\",\"G\":\"9635418\"}; the previous release, Core polls, HAWA_LIFECYCLE_CHATS empty",
+        "D f939de48-53a0-4200-be2a-e44c12112240: delivered before the switch (complete)",
+        "G d8bb811a-edf4-4373-a95f-a9273b4d7411 (control, old configuration): thanks {\"update\":90697675104,\"newTasks\":1,\"children\":0,\"answers\":[\"📥 Brief received and queued in Hawa Desk\"]}; photo reply {\"update\":90697675105,\"newTasks\":1,\"children\":0,\"answers\":[\"📥 Brief received and queued in Hawa Desk\"]}",
+        "C 62b57d4f-dade-4030-bfba-71c6065a6158: approved before the switch (approved)",
+        "B e0a2e378-35dc-4668-9885-c2e407bbc364: draft in review, the requester has the change prompt (message 5021)",
+        "E c5f19923-7133-4be5-91d9-f6b17967517d: the requester has an open question (message 5025)",
+        "A b557c890-b935-4fdb-bbfe-9cb7f2580e55: design held on worker-blue before its draft",
+        "D: update 90697675112 sent during the deploy: {\"update\":90697675112,\"newTasks\":0,\"children\":0,\"answers\":[\"🙏 Thank you.\"]}",
+        "deploy: 2026-09-29T16:02:32.838Z step 7: core recreated with release=current poller=core chats=(unset)",
+        "deploy: 2026-09-29T16:02:38.559Z step 7b: worker-green created with release=current poller=worker chats=(unset) (live was blue)",
+        "deploy: 2026-09-29T16:02:38.611Z register green: exit 0 deployment=dp_15cSHE3DX5HIjk14KB8YHEB",
+        "deploy: 2026-09-29T16:03:27.772Z release: core recreated with poller=worker",
+        "deploy: 2026-09-29T16:03:33.841Z finish-drains: exit 0   waiting for blue: 1 in flight |   waiting for blue: 1 in flight |   waiting for blue: 1 in flight | deleted=blue",
+        "deploy: 2026-09-29T16:03:34.063Z removed worker-blue",
+        "A: button press 90697675113 answered (message 5030)",
+        "A: office approve HTTP 201, deliver HTTP 202 executor core",
+        "B: reply 90697675114 → children [{\"id\":\"9a201415-3013-473c-b344-a10cf10f93d3\",\"state\":\"received\",\"pin\":\"core\",\"created\":\"2026-09-29 16:03:55.804648+00\"}]; answers [\"✏️ <b>Change received:</b> \\\"Please change the venue to Rotana Hotel, Erbil\\\"\\n\\n🎨 \"]",
+        "C: deliver HTTP 202 executor core",
+        "D: photo reply {\"update\":90697675115,\"newTasks\":0,\"children\":0,\"answers\":[\"Please send /new followed by the full design brief and the e\"]}; downloads 1; control {\"update\":90697675105,\"newTasks\":1,\"children\":0,\"answers\":[\"📥 Brief received and queued in Hawa Desk\"]}",
+        "E: answer 90697675116 → children [{\"id\":\"f8a12dc9-9c91-4659-b561-3afceb160c2e\",\"state\":\"failed_operator\",\"pin\":\"core\",\"created\":\"2026-09-29 16:04:07.797953+00\"}]; answers [\"✏️ <b>Change received:</b> \\\"revise\\\"\\n\\n🎨 <b>Making this change to the same design.</b>\\n<i>The new dra\",\"📥 <b>Revision saved for native editing</b>\\n\\n📌 <b>Task ID:</b> <code>f8a12dc9-9c91-4659-b561-3afceb\"]",
+        "F e227c5f9-801c-48e7-8e48-d5a7dfd71928: approve HTTP 201, deliver HTTP 202 executor restate",
+        "B: recent brief 90697675120 → requests 0, new tasks [], asked for /new true; aged brief 90697675121 → requests 1",
+        "A 9635412: tasks [\"b557c890:complete:core\"]; sends [\"Message:📥 Request saved. Preparing your Canva draft\",\"Message:🎨 Your Canva draft is ready\",\"Photo:🎨 Canva draft · Task ID: <id>\",\"Message:✅ Thank you, you approved this design.\",\"Document:kurdistan-accrediting-association-for-education-f063d868.png\",\"Document:kurdistan-accrediting-association-for-education-ceb71ac2.ppt\",\"Message:Your approved design has been delivered.\"]",
+        "B 9635413: tasks [\"e0a2e378:human_review:core\",\"9a201415:failed_operator:core<e0a2e378\",\"6795bb28:received:restate\"]; sends [\"Message:📥 Request saved. Preparing your Canva draft\",\"Message:🎨 Your Canva draft is ready\",\"Photo:🎨 Canva draft · Task ID: <id>\",\"Message:✏️ What should change?\",\"Message:✏️ Change received: \\\"Please change the venue to Rotana Hotel\",\"Message:📥 Revision saved for native editing\",\"Message:Please send /new followed by the full design brief and the e\",\"Message:Request received. I am preparing a draft for art director re\"]",
+        "C 9635414: tasks [\"62b57d4f:complete:core\",\"b0c17785:human_review:restate\"]; sends [\"Message:📥 Request saved. Preparing your Canva draft\",\"Message:🎨 Your Canva draft is ready\",\"Photo:🎨 Canva draft · Task ID: <id>\",\"Document:kurdistan-accrediting-association-for-education-d692014b.png\",\"Document:kurdistan-accrediting-association-for-education-70bd8478.ppt\",\"Message:Your approved design has been delivered.\",\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\"]",
+        "D 9635415: tasks [\"f939de48:complete:core\",\"34458d14:human_review:restate\"]; sends [\"Message:📥 Request saved. Preparing your Canva draft\",\"Message:🎨 Your Canva draft is ready\",\"Photo:🎨 Canva draft · Task ID: <id>\",\"Document:kurdistan-accrediting-association-for-education-78aca96c.png\",\"Document:kurdistan-accrediting-association-for-education-f116c4c9.ppt\",\"Message:Your approved design has been delivered.\",\"Message:🙏 Thank you.\",\"Message:Please send /new followed by the full design brief and the e\",\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\"]",
+        "E 9635416: tasks [\"c5f19923:human_review:core\",\"f8a12dc9:failed_operator:core<c5f19923\"]; sends [\"Message:📥 Request saved. Preparing your Canva draft\",\"Message:🎨 Your Canva draft is ready\",\"Photo:🎨 Canva draft · Task ID: <id>\",\"Message:❓ Clarification needed:\",\"Message:✏️ Change received: \\\"revise\\\"\",\"Message:📥 Revision saved for native editing\"]",
+        "F 9635417: tasks [\"e227c5f9:complete:restate\"]; sends [\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\",\"Document:kurdistan-accrediting-association-for-education-8e1e20fc.png\",\"Document:kurdistan-accrediting-association-for-education-d8ea8177.ppt\",\"Message:Your approved design has been delivered.\"]",
+        "G 9635418: tasks [\"d8bb811a:complete:core\",\"ab877151:failed_operator:core\",\"006e049c:failed_operator:core\"]; sends [\"Message:📥 Request saved. Preparing your Canva draft\",\"Message:🎨 Your Canva draft is ready\",\"Photo:🎨 Canva draft · Task ID: <id>\",\"Document:kurdistan-accrediting-association-for-education-af447433.png\",\"Document:kurdistan-accrediting-association-for-education-ae171771.ppt\",\"Message:Your approved design has been delivered.\",\"Message:📥 Brief received and queued in Hawa Desk\",\"Message:📥 Brief received and queued in Hawa Desk\"]"
+      ]
+    },
+    {
+      "name": "R10.K1",
+      "what": "lifecycle requests in flight, this release rolled back to the previous one by a deploy, then forward again",
+      "ms": 86265,
+      "invariants": [
+        {
+          "name": "rollback: the previous release registered, this release's colour drained and removed",
+          "ok": true,
+          "detail": "idle=blue live=green removed=green drains=  waiting for green: 1 in flight deleted=green"
+        },
+        {
+          "name": "Q: the delivery in flight finished once after the rollback",
+          "ok": true,
+          "detail": "{\"pubs\":[{\"executor\":\"restate\",\"state\":\"complete\"}],\"stage\":\"delivered\"}"
+        },
+        {
+          "name": "Q: each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "Q: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "P: approved and delivered by its request after the rollback",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"state\":\"complete\"}]"
+        },
+        {
+          "name": "P: each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "P: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "R: the requester's reply reached its request on the previous release",
+          "ok": true,
+          "detail": "{\"request\":{\"request_id\":\"8451ee8c-fa54-5420-99b5-63648c78abe9\",\"owner\":\"restate\",\"stage\":\"manual\",\"rev\":\"5\",\"root_task_id\":\"a5448759-c291-47fa-b8ac-8c000a8554cf\",\"current_task_id\":\"314b7165-e35a-4fab-b1be-46e616383b46\"},\"tasks\":2}"
+        },
+        {
+          "name": "R: update 90697675124 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "R: update 90697675126 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "R: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "4 invocations"
+        },
+        {
+          "name": "R: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "R: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "R: each message reaches the requester once",
+          "ok": true,
+          "detail": "4 sends, all distinct"
+        },
+        {
+          "name": "R: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "W: one lifecycle request, one task and one acknowledgement for the brief sent during the rollback",
+          "ok": true,
+          "detail": "{\"tasks\":1,\"requests\":1,\"acks\":1,\"pin\":\"restate\"}"
+        },
+        {
+          "name": "W: update 90697675125 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "W: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "2 invocations"
+        },
+        {
+          "name": "W: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "W: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "W: each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "W: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "N1: a new request on the previous release is a lifecycle request",
+          "ok": true,
+          "detail": "{\"pin\":\"restate\",\"requests\":[{\"request_id\":\"dd360a10-5a1d-5ae1-a1cc-b7e0d06aabad\",\"owner\":\"restate\",\"stage\":\"in_review\",\"rev\":\"2\",\"root_task_id\":\"2ab171c4-06d4-4a62-9e1c-0f48bb3aecd5\",\"current_task_id\":\"2ab171c4-06d4-4a62-9e1c-0f48bb3aecd5\"}]}"
+        },
+        {
+          "name": "N1: update 90697675127 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "N1: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "2 invocations"
+        },
+        {
+          "name": "N1: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "N1: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "N1: each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "N1: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "roll forward: this release registered, the previous one drained and removed",
+          "ok": true,
+          "detail": "idle=green live=blue removed=blue drains=deleted=blue"
+        },
+        {
+          "name": "N2: a new request after the roll forward opens a lifecycle request",
+          "ok": true,
+          "detail": "[{\"request_id\":\"7d9536ca-a9e9-5d65-8fe4-a58b856eb23e\",\"owner\":\"restate\",\"stage\":\"in_review\",\"rev\":\"2\",\"root_task_id\":\"433163d9-5b1a-49e3-8f79-b995369c9d01\",\"current_task_id\":\"433163d9-5b1a-49e3-8f79-b995369c9d01\"}]"
+        },
+        {
+          "name": "N2: update 90697675128 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "N2: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations"
+        },
+        {
+          "name": "N2: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "N2: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "N2: each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "N2: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "N1: a request opened on the previous release is delivered once after the roll forward",
+          "ok": true,
+          "detail": "[{\"executor\":\"restate\",\"state\":\"complete\"}]"
+        },
+        {
+          "name": "R: unchanged by the roll forward",
+          "ok": true,
+          "detail": "{\"before\":{\"request_id\":\"8451ee8c-fa54-5420-99b5-63648c78abe9\",\"owner\":\"restate\",\"stage\":\"manual\",\"rev\":\"5\",\"root_task_id\":\"a5448759-c291-47fa-b8ac-8c000a8554cf\",\"current_task_id\":\"314b7165-e35a-4fab-b1be-46e616383b46\"},\"after\":{\"request_id\":\"8451ee8c-fa54-5420-99b5-63648c78abe9\",\"owner\":\"restate\",\"stage\":\"manual\",\"rev\":\"5\",\"root_task_id\":\"a5448759-c291-47fa-b8ac-8c000a8554cf\",\"current_task_id\":\"314b7165-e35a-4fab-b1be-46e616383b46\"}}"
+        },
+        {
+          "name": "N1 after forward: each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "N1 after forward: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "P (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "P (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "Q (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "Q (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "R (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "4 sends, all distinct"
+        },
+        {
+          "name": "R (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "N1 (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "5 sends, all distinct"
+        },
+        {
+          "name": "N1 (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "N2 (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "N2 (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "W (whole chat): each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "W (whole chat): no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "no update was set aside for the office",
+          "ok": true,
+          "detail": "office alerts=0"
+        }
+      ],
+      "events": [
+        "chats {\"P\":\"9635420\",\"Q\":\"9635421\",\"R\":\"9635422\",\"N1\":\"9635423\",\"N2\":\"9635424\",\"W\":\"9635425\"}; this release, the worker polls",
+        "Q 6fec03e6-99f3-4cd4-a1bc-d9f94adff093: deliver HTTP 202 executor restate",
+        "Q: delivery held between files on worker-green",
+        "P 965f1843-8b53-469e-8b54-25aee17a5cb6 in review; R a5448759-c291-47fa-b8ac-8c000a8554cf waits for the requester (notice 5069)",
+        "rollback: 2026-09-29T16:06:05.929Z step 7: core recreated with release=previous poller=worker chats=\"*\"",
+        "rollback: 2026-09-29T16:06:11.678Z step 7b: worker-blue created with release=previous poller=worker chats=\"*\" (live was green)",
+        "rollback: 2026-09-29T16:06:11.733Z register blue: exit 0 deployment=dp_15YzUmMUzcqrK7qpzJXxYs1",
+        "rollback: 2026-09-29T16:06:13.762Z finish-drains: exit 0   waiting for green: 1 in flight | deleted=green",
+        "rollback: 2026-09-29T16:06:14.013Z removed worker-green",
+        "P: approve HTTP 201, deliver HTTP 202 executor restate",
+        "R: reply 90697675126 → request manual rev 5; tasks 2",
+        "W: brief 90697675125 → task cfab9ef3-38ad-4f89-9947-fa55330e40c2 pin restate, requests 1, acknowledgements 1",
+        "forward: 2026-09-29T16:06:29.264Z step 7: core recreated with release=current poller=worker chats=(unset)",
+        "forward: 2026-09-29T16:06:35.009Z step 7b: worker-green created with release=current poller=worker chats=(unset) (live was blue)",
+        "forward: 2026-09-29T16:06:35.065Z register green: exit 0 deployment=dp_12VG5O1s3reYGKutx6egs0N",
+        "forward: 2026-09-29T16:06:35.075Z finish-drains: exit 0 deleted=blue",
+        "forward: 2026-09-29T16:06:35.271Z removed worker-blue",
+        "N1: approve HTTP 201, deliver HTTP 202",
+        "P 9635420: tasks [\"965f1843:complete:restate\"]; sends [\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\",\"Document:kurdistan-accrediting-association-for-education-2766fb79.png\",\"Document:kurdistan-accrediting-association-for-education-c7030d52.ppt\",\"Message:Your approved design has been delivered.\"]",
+        "Q 9635421: tasks [\"6fec03e6:complete:restate\"]; sends [\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\",\"Document:kurdistan-accrediting-association-for-education-9526ebeb.png\",\"Document:kurdistan-accrediting-association-for-education-cf50efd6.ppt\",\"Message:Your approved design has been delivered.\"]",
+        "R 9635422: tasks [\"a5448759:revision_requested:restate\",\"314b7165:failed_operator:restate<a5448759\"]; sends [\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\",\"Message:Your design needs adjustments (revision 1).\",\"Message:📥 Revision saved for native editing\"]",
+        "N1 9635423: tasks [\"2ab171c4:complete:restate\"]; sends [\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\",\"Document:kurdistan-accrediting-association-for-education-dc696dcc.png\",\"Document:kurdistan-accrediting-association-for-education-d8fac724.ppt\",\"Message:Your approved design has been delivered.\"]",
+        "N2 9635424: tasks [\"433163d9:human_review:restate\"]; sends [\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\"]",
+        "W 9635425: tasks [\"cfab9ef3:human_review:restate\"]; sends [\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\"]"
+      ]
+    },
+    {
+      "name": "R10.K2",
+      "what": "the retired chat list emptied on this release changes nothing: a waiting request keeps its reply, a new chat opens a request",
+      "ms": 72414,
+      "invariants": [
+        {
+          "name": "chat list emptied: registered, the old colour drained and removed",
+          "ok": true,
+          "detail": "idle=blue live=green removed=green"
+        },
+        {
+          "name": "X: the reply reached its request with the chat list emptied",
+          "ok": true,
+          "detail": "{\"request\":{\"request_id\":\"3873036b-7c6f-5ca9-950f-438a0868c5ad\",\"owner\":\"restate\",\"stage\":\"manual\",\"rev\":\"5\",\"root_task_id\":\"bfb5d469-f4ca-46c5-b987-f64ffdd334c3\",\"current_task_id\":\"56d4d1b8-8da4-4bc5-8a21-8f6765ed1c91\"},\"tasks\":2}"
+        },
+        {
+          "name": "X: update 90697675129 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "X: update 90697675130 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "X: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "4 invocations"
+        },
+        {
+          "name": "X: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "X: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "X: each message reaches the requester once",
+          "ok": true,
+          "detail": "4 sends, all distinct"
+        },
+        {
+          "name": "X: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "Y: a new request is still a lifecycle request (the retired setting sends nothing to the old path)",
+          "ok": true,
+          "detail": "{\"pin\":\"restate\",\"requests\":[{\"request_id\":\"ffe0572d-b182-579d-a9f2-bb8de470e7be\",\"owner\":\"restate\",\"stage\":\"in_review\",\"rev\":\"2\",\"root_task_id\":\"cf193c48-c73a-441c-b640-933850f3a07f\",\"current_task_id\":\"cf193c48-c73a-441c-b640-933850f3a07f\"}]}"
+        },
+        {
+          "name": "Y: update 90697675131 has one ChatInbox invocation, completed",
+          "ok": true,
+          "detail": "[\"completed\"]"
+        },
+        {
+          "name": "Y: every ChatInbox invocation of the chat completed",
+          "ok": true,
+          "detail": "3 invocations"
+        },
+        {
+          "name": "Y: no update was dead-lettered",
+          "ok": true,
+          "detail": "parked=0"
+        },
+        {
+          "name": "Y: no update made two tasks",
+          "ok": true,
+          "detail": "0 update(s) made a task"
+        },
+        {
+          "name": "Y: each message reaches the requester once",
+          "ok": true,
+          "detail": "2 sends, all distinct"
+        },
+        {
+          "name": "Y: no refusal of a legitimate follow-up",
+          "ok": true,
+          "detail": "none"
+        },
+        {
+          "name": "chat list removed: registered, the old colour drained and removed",
+          "ok": true,
+          "detail": "idle=green live=blue removed=blue"
+        }
+      ],
+      "events": [
+        "chat list emptied: 2026-09-29T16:07:34.005Z step 7: core recreated with release=current poller=worker chats=\"\"",
+        "chat list emptied: 2026-09-29T16:07:39.767Z step 7b: worker-blue created with release=current poller=worker chats=\"\" (live was green)",
+        "chat list emptied: 2026-09-29T16:07:39.792Z register blue: exit 0 deployment=dp_16BDnqVipQfXxlOELmGTwzv",
+        "chat list emptied: 2026-09-29T16:07:39.805Z finish-drains: exit 0 deleted=green",
+        "chat list emptied: 2026-09-29T16:07:40.037Z removed worker-green",
+        "chat list removed: 2026-09-29T16:08:14.131Z step 7: core recreated with release=current poller=worker chats=(unset)",
+        "chat list removed: 2026-09-29T16:08:19.922Z step 7b: worker-green created with release=current poller=worker chats=(unset) (live was blue)",
+        "chat list removed: 2026-09-29T16:08:19.937Z register green: exit 0 deployment=dp_13fGntn975OD0hDU9fBtAnn",
+        "chat list removed: 2026-09-29T16:08:19.952Z finish-drains: exit 0 deleted=blue",
+        "chat list removed: 2026-09-29T16:08:20.157Z removed worker-blue",
+        "X 9635427: tasks [\"bfb5d469:revision_requested:restate\",\"56d4d1b8:failed_operator:restate<bfb5d469\"]; sends [\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\",\"Message:Your design needs adjustments (revision 1).\",\"Message:📥 Revision saved for native editing\"]",
+        "Y 9635428: tasks [\"cf193c48:human_review:restate\"]; sends [\"Message:Request received. I am preparing a draft for art director re\",\"Message:🎨 Your Canva draft is ready\"]"
+      ]
+    }
+  ]
+}
