@@ -19,10 +19,10 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { candidateSources } from './driver/candidate-sources.js';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, isRunning, releaseProject, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
+import { REPO_ROOT, acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, isRunning, releaseProject, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import { neutralise, restoreDump, verifyEgressFence, type EgressProbe, type NeutraliseReport, type SeedReport } from './driver/seed.js';
 import { buildPreviousRelease, startOnRelease } from './driver/cutover.js';
@@ -548,7 +548,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     // result is one whose answer was lost, which ADR-130 keeps uncertain and alerts once.
     const attempts = marks.filter((m) => /_attempted$/.test(m.event_kind)).length;
     const ackUncertain = attempts > marks.length - attempts;
-    const acks = (await sentTo(chat)).filter((m) => m.method === 'sendMessage' && m.text?.includes('Request received.'));
+    const acks = (await sentTo(chat)).filter((m) => m.method === 'sendMessage' && isAck(m.text));
     return {
       delivered: false, uncertainSends: ackUncertain ? 1 : 0,
       extra: [
@@ -593,7 +593,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await waitUntil('the request-owned task and acknowledgement', async () => {
       const tasks = await tasksOfChat(chat);
       const acknowledgements = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' &&
-        send.text?.includes('Request received.'));
+        isAck(send.text));
       return tasks.length === 1 && acknowledgements.length === 1 ? tasks[0] : null;
     });
     const replay = await sendToChatInbox(chat, polled, `chaos-lifecycle-replay-${updateId}`);
@@ -612,7 +612,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
               WHERE request_id = ${requests[0].request_id}::uuid`)
           : [];
         const acknowledgements = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' &&
-          send.text?.includes('Request received.'));
+          isAck(send.text));
         const invocations = requests.length === 1 ? await restateQuery<{ status: string }>(
           `SELECT status FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requests[0].request_id}' AND target_handler_name = 'open'`
         ) : [];
@@ -652,7 +652,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     events.push(`killed ${(await killed.done).killed} after the stored photo decision`);
     await waitUntil('the photo-owned request and acknowledgement', async () => {
       const requests = await query<{ request_id: string }>(sql`SELECT request_id FROM hawa.requests WHERE chat_id = ${chat}`);
-      const acks = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' && send.text?.includes('Request received.'));
+      const acks = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' && isAck(send.text));
       return requests.length === 1 && acks.length === 1 ? requests[0] : null;
     });
     const replay = await sendToChatInbox(chat, polled, `chaos-photo-replay-${updateId}`);
@@ -672,7 +672,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         const decisions = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
           WHERE source_account_id = 'lifecycle_chat_open' AND source_event_id = ${String(updateId)}`);
         const downloads = (await fakes.polls()).downloads?.filter((id: string) => id === fileId) ?? [];
-        const acks = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' && send.text?.includes('Request received.'));
+        const acks = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' && isAck(send.text));
         const parked = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events WHERE source_event_id = ${`parked-update-${updateId}`}`);
         const inbox = (await chatInboxInvocations(chat)).filter((item) =>
           item.idempotency_key === `tg-${updateId}` || item.idempotency_key === `chaos-photo-replay-${updateId}`);
@@ -917,7 +917,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       WHERE source_account_id = 'lifecycle_chat_open' AND payload->>'chatId' = ${chat}`);
     const shown = await sentTo(chat);
     const commands = shown.filter((s) => typeof s.text === 'string' && /\/use_album|\/new/.test(s.text));
-    const acks = shown.filter((s) => s.method === 'sendMessage' && s.text?.includes('Request received.'));
+    const acks = shown.filter((s) => s.method === 'sendMessage' && isAck(s.text));
     const downloads = (await fakes.polls()).downloads?.filter((id: string) => id.startsWith(extra.downloadsPrefix)) ?? [];
     const inbox = await chatInboxInvocations(chat);
     return [
@@ -1001,9 +1001,10 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     } };
   });
 
-  scenario('R1.S3.MEDIA', 'a PDF without client selection gets one durable review prompt and no task', async (chat, events) => {
+  // ADR-145: the prompt is a question in words ("Which organisation is it for?"); it was a "Client:" demand.
+  scenario('R1.S3.MEDIA', 'a PDF whose words name no organisation gets one durable question and no task', async (chat, events) => {
     const update = imageDocumentUpdate(chat, 'lifecycle-pdf', 128,
-      'KAAE members evening\n---\nDecember 4, 2026\nErbil');
+      'Please make a poster from this programme\n---\nDecember 4, 2026\nErbil');
     update.message.document.mime_type = 'application/pdf';
     update.message.document.file_name = 'brief.pdf';
     const [updateId] = await fakes.updates([update]);
@@ -1012,7 +1013,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await waitUntil('the PDF review prompt to be sent', async () => {
       const rows = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
         WHERE source_account_id = 'lifecycle_source_admission' AND source_event_id = ${String(updateId)}`);
-      const notices = (await sentTo(chat)).filter(s => s.method === 'sendMessage' && s.text?.includes('Name one active client'));
+      const notices = (await sentTo(chat)).filter(s => s.method === 'sendMessage' && s.text === 'Thanks for the PDF! Which organisation is it for?');
       return Number(rows[0]?.n) === 1 && notices.length === 1 ? true : null;
     });
     const replay = await sendToChatInbox(chat, polled, `chaos-media-replay-${updateId}`);
@@ -1026,7 +1027,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
           FROM hawa.inbox_events WHERE source_event_id IN (${String(updateId)}, ${`parked-update-${updateId}`})
             AND source_account_id IN ('lifecycle_source_admission', 'telegram')`);
         const notices = (await sentTo(chat)).filter((s) => s.method === 'sendMessage' &&
-          s.text?.includes('Name one active client'));
+          s.text === 'Thanks for the PDF! Which organisation is it for?');
         const alerts = (await sentTo(OFFICE_CHAT)).filter((s) => s.method === 'sendMessage' &&
           s.text?.includes(String(updateId)));
         const inbox = (await chatInboxInvocations(chat)).filter((item) =>
@@ -1274,8 +1275,10 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     const brief = await sendBrief(chat, 'R1.NL.DESIGNING');
     const words = 'the date should be 5 October not 4';
     const correction = await sendText(chat, words);
-    const [late] = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
-      WHERE source_account_id = 'lifecycle_chat_routing' AND source_event_id = ${String(correction)}`);
+    // ADR-145: a correction sent while ADR-143 still holds the brief for photos is set behind it and read
+    // by its settle once the brief has opened, so its record lands a little after the update completes.
+    const late = await waitUntil('the correction kept on the request', async () => (await query<{ payload: any }>(sql`SELECT payload
+      FROM hawa.inbox_events WHERE source_account_id = 'lifecycle_chat_routing' AND source_event_id = ${String(correction)}`))[0] ?? null, 120_000);
     events.push(`correction ${correction}: kept at stage ${late?.payload?.requestStage}`);
     const taskId = await draftOf(chat);
     const requests = await query<{ request_id: string }>(sql`SELECT request_id FROM hawa.requests WHERE chat_id = ${chat}`);
@@ -1335,6 +1338,87 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       { name: 'the first design still waits, untouched', ok: firstNow?.stage === 'manual' && Number(firstNow.rev) === 3 &&
           firstNow.current_task_id === first.taskId, detail: JSON.stringify(firstNow) },
       ...await checkIntake(chat, [change, pick]),
+    ] };
+  });
+
+  // ADR-145: a voice note with no caption and no command. The organisation is asked for in words, the
+  // voice model is not admitted here, so the requester types the words, and one design starts.
+  scenario('R1.NL.VOICE', 'a voice brief with no caption: the organisation is asked, the words are typed, one design starts', async (chat, events) => {
+    const audio = readFileSync(join(REPO_ROOT, 'packages/testkit/fixtures/voice/silence-one-second.ogg'));
+    const voiceFile = `nl-voice-${chat}`;
+    await fakes.file({ file_id: voiceFile, mime: 'audio/ogg', contentBase64: audio.toString('base64') });
+    const voice: { message: Record<string, unknown> } = textUpdate(chat, '');
+    delete voice.message.text;
+    voice.message.voice = { file_id: voiceFile, file_size: audio.length, mime_type: 'audio/ogg', duration: 1 };
+    const [voiceId] = await fakes.updates([voice]);
+    const asked = await waitUntil('the organisation question', async () =>
+      (await shown(chat)).find((t) => t === 'Thanks for the voice note! Which organisation is it for?') ?? null, 120_000);
+    events.push(`voice ${voiceId}: asked "${asked}"`);
+    const answer = await sendText(chat, "It's for KAAE");
+    const typeIt = await waitUntil('the request to type the words', async () =>
+      (await shown(chat)).find((t) => t.includes("couldn't turn it into text")) ?? null, 120_000);
+    events.push(`answer ${answer}: ${typeIt.slice(0, 80)}`);
+    if ((await tasksOfChat(chat)).length !== 0) throw new Error('a task started before the words were confirmed');
+    const words = await sendText(chat, briefText(`nl-voice-${chat}`).split('-----')[1].trim());
+    const taskId = await draftOf(chat);
+    events.push(`typed words ${words}: task ${taskId} in review`);
+    const said = await shown(chat);
+    const commands = said.filter((t) => /\/new|\/use_source|Client:|reply to/i.test(t));
+    const [confirmation] = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
+      WHERE source_account_id = 'lifecycle_source_confirmation' AND source_event_id = ${String(voiceId)}`);
+    const [attempts] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events WHERE source_account_id = 'lifecycle_voice_attempt'
+      AND payload->>'sourceUpdateId' = ${String(voiceId)}`);
+    return { delivered: false, skipRequestChecks: true, extra: [
+      { name: 'one request and one task, from the typed words', ok: (await tasksOfChat(chat)).length === 1 &&
+          confirmation?.payload?.confirmationUpdateId === words, detail: JSON.stringify(confirmation?.payload ?? null) },
+      { name: 'the requester was never asked for a command, a format or a reply', ok: commands.length === 0, detail: JSON.stringify(commands) },
+      { name: 'the voice model was not called (not admitted here)', ok: Number(attempts?.n) === 0, detail: `attempts=${attempts?.n}` },
+      { name: 'the voice note was downloaded once', ok: ((await fakes.polls()).downloads?.filter((id: string) => id === voiceFile) ?? []).length === 1,
+        detail: 'downloads' },
+      ...await checkIntake(chat, [voiceId, answer, words]),
+    ] };
+  });
+
+  // ADR-145: a captionless photo and, in its own message a moment later, the brief: one request with the photo.
+  scenario('R1.NL.PHOTO_TEXT', 'a photo with no words, then the brief as a separate message: one request, the photo its reference', async (chat, events) => {
+    const fileId = `nl-photo-${chat}`;
+    const size = 2048;
+    await fakes.file({ file_id: fileId, size, mime: 'image/jpeg' });
+    const photo: { message: Record<string, unknown> } = captionedPhotoUpdate(chat, fileId, size, '');
+    delete photo.message.caption;
+    const [photoId] = await fakes.updates([photo]);
+    await waitUntil('the photo kept for its words', async () => {
+      const [row] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
+        WHERE source_account_id = 'lifecycle_photo_held' AND source_event_id = ${String(photoId)}`);
+      return Number(row?.n) === 1 ? true : null;
+    }, 60_000, 250);
+    const brief = await sendBrief(chat, 'R1.NL.PHOTO_TEXT');
+    events.push(`photo ${photoId}, then brief ${brief.update_id}`);
+    const taskId = await draftOf(chat);
+    events.push(`task ${taskId}: draft in review`);
+    // The photo's own settle comes after the brief took it: it says nothing more.
+    await sleep(10_000);
+    const files = await query<{ role: string; media_type: string; size: string }>(sql`SELECT f.role, b.media_type, b.size
+      FROM hawa.task_files f JOIN hawa.blobs b ON b.sha256 = f.sha256 WHERE f.task_id = ${taskId}::uuid`);
+    const [used] = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
+      WHERE source_account_id = 'lifecycle_photo_used' AND source_event_id = ${String(photoId)}`);
+    const said = await shown(chat);
+    const questions = said.filter((t) => t.startsWith('Got the photo.'));
+    const acks = (await sentTo(chat)).filter((s) => s.method === 'sendMessage' && isAck(s.text));
+    const settles = (await chatInboxInvocations(chat)).filter((i) => i.idempotency_key?.startsWith(`settle:${photoId}`));
+    return { delivered: false, skipRequestChecks: true, extra: [
+      { name: 'one request whose task has the photo as its reference image', ok: (await tasksOfChat(chat)).length === 1 &&
+          files.length === 1 && files[0].role === 'reference_image' && files[0].media_type === 'image/jpeg' && Number(files[0].size) === size,
+        detail: JSON.stringify(files) },
+      { name: 'the photo was used once, by the brief', ok: used?.payload?.byUpdateId === brief.update_id && used?.payload?.how === 'brief',
+        detail: JSON.stringify(used?.payload ?? null) },
+      { name: 'one acknowledgement, and no question about the photo', ok: acks.length === 1 && questions.length === 0,
+        detail: JSON.stringify({ acks: acks.length, questions }) },
+      { name: 'the photo\'s settle ran and completed', ok: settles.length >= 1 && settles.every((i) => i.status === 'completed'),
+        detail: JSON.stringify(settles.map((i) => `${i.idempotency_key}:${i.status}`)) },
+      { name: 'the photo was downloaded once', ok: ((await fakes.polls()).downloads?.filter((id: string) => id === fileId) ?? []).length === 1,
+        detail: 'downloads' },
+      ...await checkIntake(chat, [photoId, brief.update_id]),
     ] };
   });
 
@@ -1404,6 +1488,15 @@ async function uncertainPlannerCall(chat: string, ledgerSince: number): Promise<
     { name: 'the office is told once', ok: alerts.length === 1, detail: `alerts=${alerts.length}` },
     { name: 'each message reaches the requester once', ok: dupes === 0, detail: `${shown.length} sends, ${dupes} duplicate(s)` },
   ];
+}
+
+/**
+ * RequestLifecycle's acknowledgement at open, in ADR-145's words: "Got it. I'm making a first draft of
+ * …" for an automatic draft, "Got it. A designer will make …" for a person. It read "Request received."
+ * before ADR-145. The chaos briefs are English.
+ */
+function isAck(text: unknown): boolean {
+  return typeof text === 'string' && (text.includes("I'm making a first draft of") || text.includes('A designer will make'));
 }
 
 /** Each task made one planner call, admitted once and completed (ADR-138, ADR-139). */

@@ -7,6 +7,25 @@ request. It covers the legacy path (Core intake → outbox → `TaskWorkflow` �
 outcome → Desk approval → delivery) and the admitted Restate lifecycle slices.
 The dated run histories below preserve their original scope and limitations.
 
+## Natural media (2026-09-29, ADR-145)
+
+```sh
+npx tsx packages/testkit/chaos/run.ts --poller worker --only R1.NL.VOICE,R1.NL.PHOTO_TEXT,R1.S3.MEDIA
+```
+
+- `R1.NL.VOICE`: a voice note with no caption. The organisation is asked for in words ("Thanks for the
+  voice note! Which organisation is it for?"), "It's for KAAE" answers it, the voice model is not
+  admitted here so the requester is asked to type the words, and the typed words start one design.
+  No command, format or reply demand is ever shown; one download; no transcription call.
+- `R1.NL.PHOTO_TEXT`: a photo with no words, then the brief as a separate message (held 15 s by
+  ADR-143). One request whose task has the photo as its reference image, the photo used once (by the
+  brief), one acknowledgement, no question about the photo, the photo's own settle completed.
+- `R1.S3.MEDIA` (changed): a PDF whose words name no organisation gets one durable question in words
+  (it was a "Client:" demand), no task and no parked update.
+
+The acknowledgement filters now match ADR-145's wording ("Got it. I'm making a first draft of …",
+"Got it. A designer will make …"; it was "Request received.").
+
 ## Natural requester messages (2026-09-29, ADR-144)
 
 ```sh
