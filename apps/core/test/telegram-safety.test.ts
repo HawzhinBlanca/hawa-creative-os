@@ -11,9 +11,9 @@ import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-e
 /**
  * Telegram safety (architecture programme 0.4, 2026-09-24), against hawa-test-postgres as hawa_app
  * (row-level security as in production): the getUpdates offset lives in Postgres and never moves
- * past an update intake did not accept (the worker's poller since ADR-135); the kill switch stops
- * intake at the webhook; the handlers that deliver, publish and decide read the
- * task's status from Postgres; delivery ignores an approval only Core's memory holds.
+ * past an update intake did not accept (the worker's poller since ADR-135); the handlers that
+ * deliver, publish and decide read the task's status from Postgres; delivery ignores an approval
+ * only Core's memory holds.
  */
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const operatorUserId = '00000000-0000-4000-b000-000000000001';
@@ -45,43 +45,14 @@ afterAll(async () => {
 });
 
 const chatId = () => 60_000_000 + Math.floor(Math.random() * 9_000_000);
-const updateBase = () => 1_000_000_000 + Math.floor(Math.random() * 900_000_000);
-const brief = (updateId: number, chat: number) => ({
-  update_id: updateId,
-  message: { message_id: updateId % 100000, from: { id: OFFICE, is_bot: false, first_name: 'Owner' }, chat: { id: chat, type: 'private' }, date: 1790000000, text: 'KAAE members evening\n---\nDecember 4, 2026\nErbil' },
-});
-const tasksInChat = async (chat: number) =>
-  (await withRlsContext(db, scope, (trx) =>
-    trx.selectFrom('outbox_commands').select(['aggregate_id', 'payload']).where('command_type', '=', 'task.created').execute()
-  )).filter((r: any) => String(r.payload?.sourceChannelId) === String(chat));
 
 // Core's own poller (its getUpdates offset, dead letters after five attempts, "poll now" and its
 // pause under the kill switch) was removed by stage 2 of ADR-135. The worker's poller, the only one,
 // has the same rules: apps/worker/test/telegram-poller.test.ts and chat-inbox.test.ts.
 
-describe('the Telegram kill switch stops intake', () => {
-  const killSwitch = (app: any, active: boolean) =>
-    app.request('/v1/operations/kill-switch', { method: 'POST', headers: { ...operator, Authorization: 'Bearer test_admin_key' }, body: JSON.stringify({ channel: 'telegram', active }) });
-
-  it('at the webhook: refused with 503, as the WhatsApp kill switch refuses, and nothing is started', async () => {
-    const chat = chatId();
-    const app = createApp({ db } as any);
-    await killSwitch(app, true);
-    const post = () => app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET! },
-      body: JSON.stringify(brief(updateBase(), chat)),
-    });
-    const refused = await post();
-    expect(refused.status).toBe(503);
-    expect((await refused.json()).title).toBe('Service Unavailable');
-    expect(await tasksInChat(chat)).toHaveLength(0);
-
-    await killSwitch(app, false);
-    expect((await post()).status).toBe(201);
-    expect(await tasksInChat(chat)).toHaveLength(1);
-  });
-});
+// The kill switch stops intake at the worker's hand-off (POST /v1/internal/telegram/intake answers
+// INTAKE_PAUSED and starts nothing): lifecycle-internal-intake.test.ts. The webhook it used to stop was
+// removed by stage 2 of ADR-135.
 
 describe('handlers that act on a task read its status from Postgres', () => {
   const request = async (title: string) =>
@@ -192,13 +163,13 @@ describe('handlers that act on a task read its status from Postgres', () => {
 
 describe('delivery ignores an approval that exists only in Core\'s memory', () => {
   it('a memory-only approval cannot trigger delivery', async () => {
-    const taskId = (
-      await persistChatIntake(db, {
-        platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: String(chatId()), clientId: kaae,
-        title: 'KAAE: memory-only approval', rawText: 'KAAE members evening\n---\nDecember 4, 2026\nErbil', designInstructions: '',
-        exactCopy: [{ id: 'copy_0', role: 'headline', text: 'KAAE members evening' }], autoGenerate: false,
-      } as any)
-    ).task.id as string;
+    // A Desk task: Core's own delivery refuses a Telegram-origin one before reading any approval
+    // (ADR-135 stage 2d), which would hide what this test is about.
+    const created = await createApp({ db } as any).request('/v1/tasks', {
+      method: 'POST', headers: operator, body: JSON.stringify({ title: 'KAAE: memory-only approval', clientId: kaae }),
+    });
+    expect(created.status).toBe(201);
+    const taskId = (await created.json()).id as string;
     const checked = await checkedCanvaExportFixture('KAAE members evening');
     const revisionId = await withRlsContext(db, scope, async (trx) => {
       const revision = await new RevisionRepository(db).createRevision({

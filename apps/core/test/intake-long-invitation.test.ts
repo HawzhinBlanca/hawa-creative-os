@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createDb, withRlsContext, sql } from '@hawa/db';
-import { createApp } from '../src/app.js';
+import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
+import { persistChatIntake } from '../src/services/chat-intake.js';
 
 /**
  * A real KAAE invitation sent on Telegram was answered 503 and never saved: intake computed the
@@ -10,6 +11,11 @@ import { createApp } from '../src/app.js';
  * retried the same update and hit the same throw, so the request was lost without a trace in the
  * database. Persistence must come first, and a preview that cannot be drawn must never decide the
  * HTTP status.
+ *
+ * ADR-135 stage 2: a new Telegram request is the draft prepareChatCampaignDraft builds for the
+ * lifecycle, persisted by its projection through persistChatIntake. The legacy webhook and its inline
+ * preview (the part that threw) are gone; what stays is that the draft keeps every paragraph and is
+ * saved whole.
  */
 const KAAE_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 
@@ -36,52 +42,29 @@ const LONG_INVITATION = `${INSTRUCTIONS}\n__________\n\n${PARAGRAPHS.join('\n\n'
 
 describe('long KAAE invitation intake', () => {
   const db = createDb(process.env.TEST_DATABASE_URL!);
+  afterAll(() => db.destroy());
 
   it('is long enough and structured enough to reproduce the lost request', () => {
     expect(LONG_INVITATION.length).toBeGreaterThan(700);
     expect(PARAGRAPHS.length).toBeGreaterThanOrEqual(8);
   });
 
-  it('saves the task with every paragraph in exactCopy instead of answering 503', async () => {
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const app = createApp({ db, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
+  it('saves the task with every paragraph in exactCopy', async () => {
     const chatId = `long-invitation-${randomUUID()}`;
-    const payload = {
-      update_id: `long-invitation-${randomUUID()}`,
-      message: {
-        message_id: 9001,
-        from: { id: 987654, first_name: 'KAAE Office' },
-        chat: { id: chatId },
-        text: LONG_INVITATION,
-      },
-    };
-    const send = () =>
-      app.request('/api/webhooks/telegram?generate=true', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET!,
-        },
-        body: JSON.stringify(payload),
-      });
-
-    const res = await send();
-    expect(res.status).toBe(201);
-    const body = await res.json();
-    expect(body.ok).toBe(true);
-    const taskId = body.task.id;
-    expect(taskId).toBeTruthy();
-
-    const exactCopy = body.task.brief.exactCopy.map((block: any) => block.text);
+    const draft = await createChatCampaignIntake({ telegramBridge: {} } as any).prepareChatCampaignDraft({
+      platform: 'telegram', sourceEventId: `long-invitation-${randomUUID()}`, sourceChannelId: chatId,
+      senderName: 'KAAE Office', rawText: LONG_INVITATION,
+      rawJson: { message: { message_id: 9001, chat: { id: chatId }, text: LONG_INVITATION } },
+      autoGenerate: true, isInstructionOnly: false,
+    });
+    const exactCopy = draft.exactCopy.map((block: any) => block.text);
     for (const paragraph of PARAGRAPHS) {
       expect(exactCopy).toContain(paragraph);
     }
+    expect(draft.designInstructions).toBe(INSTRUCTIONS);
 
-    // The inline preview is the part that cannot be drawn at this size. It is skipped, the request
-    // stands, and the sender is told it was received.
-    expect(body.task.generatedOps).toEqual([]);
-    expect(dispatch).toHaveBeenCalledTimes(1);
-
+    const persisted = await persistChatIntake(db, draft);
+    const taskId = persisted.task.id;
     const { rows } = await withRlsContext(
       db,
       { tenantId: KAAE_TENANT_ID, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' },
@@ -95,11 +78,5 @@ describe('long KAAE invitation intake', () => {
       expect(persistedCopy).toContain(paragraph);
     }
     expect(rows[0].payload.designInstructions).toBe(INSTRUCTIONS);
-
-    // Telegram retries the same update. The second delivery must find the saved task, not repeat
-    // the work that lost the first one.
-    const replay = await send();
-    expect(replay.status).toBe(200);
-    expect((await replay.json()).task.id).toBe(taskId);
   });
 });

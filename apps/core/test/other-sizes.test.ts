@@ -1,18 +1,19 @@
 import { useMemoryVisualInputs } from '../test-support/studio-visual-input-fixture.js';
 import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createDb, sql, withRlsContext } from '@hawa/db';
 import { NEUTRAL_STYLE_SPEC, type StudioLayoutV2 } from '@hawa/creative';
-import { createApp } from '../src/app.js';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { requesterDraftNotes } from '../src/services/design-studio/studio-status-note.js';
-import { parseRequesterAction, sizeButtons, composeRequesterApproved, sizeOf } from '../src/services/requester-actions.js';
+import { sizeButtons, OTHER_SIZES } from '../src/services/requester-actions.js';
 
 /**
  * The same design in another size (plan 4.3): after approving a post, the requester can ask for the
  * story, square or landscape version. It is laid out again for the format by the edit, not stretched,
  * and checked by the same gates; it comes back as its own draft.
+ *
+ * ADR-135 stage 2: no intake reads a size press any more, so the case that pressed rq:sst through the
+ * legacy webhook went with it; the size run itself and the buttons stay.
  */
 const scope = { tenantId: '00000000-0000-4000-a000-000000000001', actorId: '00000000-0000-4000-b000-000000000001' };
 const taskId = '00000000-0000-4000-c000-000000000011';
@@ -32,19 +33,11 @@ const post = {
 } as unknown as StudioLayoutV2;
 
 describe('the size buttons', () => {
-  it('offer every other size after approval, and parse back', () => {
+  it('offer every other size, one row', () => {
     const rows = sizeButtons(taskId, { width: 1080, height: 1080 });
     expect(rows.flat().map((b) => ('callback_data' in b ? b.callback_data : ''))).toEqual([`rq:sst:${taskId}`, `rq:sls:${taskId}`]);
-    expect(parseRequesterAction(`rq:sls:${taskId}`)).toEqual({ action: 'sls', taskId });
-    expect(sizeOf('sst')).toMatchObject({ width: 1080, height: 1920, label: 'story' });
-    expect(sizeOf('ok')).toBeUndefined();
-    const approved = composeRequesterApproved(taskId, { width: 1080, height: 1350 });
-    expect(approved.text).toContain('Need it in another size too?');
-    expect(JSON.stringify(approved.reply_markup)).toContain(`rq:ssq:${taskId}`);
-    // A chat on the older pipeline cannot make another size, so it is not offered one.
-    const older = composeRequesterApproved(taskId, { width: 1080, height: 1350 }, false);
-    expect(older.reply_markup).toBeUndefined();
-    expect(older.text).not.toContain('another size');
+    expect(OTHER_SIZES.sst).toMatchObject({ width: 1080, height: 1920, label: 'story' });
+    expect(sizeButtons(taskId).flat()).toHaveLength(3);
   });
 });
 
@@ -127,77 +120,5 @@ describe('a size run', () => {
     const stages = JSON.parse(run.stages);
     expect(stages.directed).toMatchObject({ reformat: 'story', size: { width: 1080, height: 1920 } });
     expect(requesterDraftNotes({ run, candidates: [] } as any)).toEqual(['📐 Your approved design as a story (1080×1920), laid out again for the format.']);
-  });
-});
-
-const url = process.env.HAWA_ISOLATED_TEST_DB;
-
-describe.skipIf(!url)('asking for another size (webhook, PostgreSQL)', () => {
-  const db = createDb(url || 'postgres://localhost/hawa_repair');
-  const operator = { tenantId: '00000000-0000-4000-a000-000000000001', userId: '00000000-0000-4000-b000-000000000001', role: 'operator' } as const;
-  const secret = ['other', 'sizes', 'fixture'].join('_');
-  const OFFICE = 91000005;
-  const saved = { ...process.env };
-  beforeAll(() => {
-    process.env.TELEGRAM_WEBHOOK_SECRET = secret;
-    process.env.TELEGRAM_ALLOWED_USERS = String(OFFICE);
-    // The test database holds every test's tasks of the day; the caps are not what is tested here.
-    process.env.AUTO_GENERATE_DAILY_CAP_GLOBAL = '1000000';
-    process.env.AUTO_GENERATE_DAILY_CAP_PER_SENDER = '1000';
-    delete process.env.OPENAI_API_KEY;
-  });
-  afterAll(async () => {
-    process.env = saved;
-    await db.destroy();
-  });
-
-  it('makes the story version once, as its own task of the same design, and the original keeps its buttons', async () => {
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const bridge = {
-      dispatchOutboundMessage: dispatch,
-      dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }),
-      answerCallbackQuery: vi.fn().mockResolvedValue(true),
-      downloadFile: vi.fn(),
-      handleCommand: vi.fn().mockReturnValue(null),
-      formatTaskPreviewCard: vi.fn().mockReturnValue({}),
-    };
-    const app = createApp({ db, telegramBridge: bridge as any } as any);
-    const chat = 50000000 + Math.floor(Math.random() * 9000000);
-    // Other sizes are made by the v3 edit: this chat is one of its pilot chats.
-    process.env.DESIGN_PIPELINE_V3_CHATS = String(chat);
-    const call = async (body: unknown) => {
-      const res = await app.request('/api/webhooks/telegram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret },
-        body: JSON.stringify(body),
-      });
-      return { status: res.status, body: (await res.json().catch(() => ({}))) as any };
-    };
-    const made = await call({ update_id: randomUUID(), message: { message_id: 1, from: { id: OFFICE, is_bot: false, first_name: 'Owner' }, chat: { id: chat, type: 'private' }, text: 'KAAE members evening\n---\nDecember 4, 2026\nErbil' } });
-    const design = String(made.body.task?.id || made.body.taskId);
-    const press = (data: string) =>
-      call({ update_id: randomUUID(), callback_query: { id: randomUUID(), from: { id: OFFICE, is_bot: false }, message: { message_id: 5, chat: { id: chat, type: 'private' } }, data } });
-
-    const approved = await press(`rq:ok:${design}`);
-    expect(approved.body).toMatchObject({ requesterAction: 'ok' });
-    expect(JSON.stringify(dispatch.mock.calls.at(-1)?.[1]?.reply_markup)).toContain(`rq:sst:${design}`);
-
-    const story = await press(`rq:sst:${design}`);
-    expect(story.body).toMatchObject({ ok: true, requesterAction: 'sst', taskId: design });
-    const row = await withRlsContext(db, operator, async (trx) =>
-      (await sql<{ title: string; payload: any }>`SELECT t.title, o.payload FROM hawa.tasks t JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
-        WHERE t.id = ${story.body.sizeTaskId}::uuid`.execute(trx)).rows[0]);
-    expect(row.payload.variant).toEqual({ width: 1080, height: 1920 });
-    expect(row.payload.studioOptions).toMatchObject({ parentTaskId: design, reformat: 'story' });
-    expect(row.payload.exactCopy).toEqual(expect.any(Array));
-    expect(row.title).toMatch(/\(story\)$/);
-    expect(String(dispatch.mock.calls.at(-1)?.[1]?.text)).toContain('Making the story version (1080×1920)');
-
-    expect((await press(`rq:sst:${design}`)).body).toMatchObject({ already: true });
-    // The story task is a format of the design, not a newer version of it: the design's own buttons still act on it.
-    const again = await press(`rq:dsg:${design}`);
-    expect(again.body.replacedBy).toBeUndefined();
-    const change = await press(`rq:chg:${design}`);
-    expect(change.body.replacedBy).toBeUndefined();
   });
 });

@@ -3,7 +3,7 @@ import { ensureClientPackRows } from './services/client-pack-rows.js';
 import { clientPacks } from './services/client-packs.js';
 import { probeRestate } from './services/restate-probe.js';
 import { createRestateInvocationProbe } from './services/restate-invocations.js';
-import { log, requestLogContext, bindLogContext, runWithLogContext, requestIdHeaders } from './logging.js';
+import { log, requestLogContext, bindLogContext } from './logging.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -48,7 +48,6 @@ import {
   HistoricalDesignMigrator,
   CanvaNativeAdapter,
   CircuitBreaker,
-  type TelegramUpdate,
 } from '@hawa/integrations';
 import { PostgresIngressPersistenceAdapter } from './ingress-persistence-adapter.js';
 import { DurableEvaluationService } from './services/durable-evaluations.js';
@@ -85,14 +84,12 @@ import { registerTaskPipelineRoutes } from './routes/task-pipeline.routes.js';
 import { registerSearchRoutes } from './routes/search.routes.js';
 import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
 import { createChannelKillSwitchStore } from './services/channel-kill-switches.js';
-import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
 import { acceptedServiceTokensOf, isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
 import { retiredTelegramSettings, telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 import { PaidModelProbeService } from './services/paid-model-probe.js';
 import { evaluatePaidModelHealth, paidModelConfigFingerprint, readLatestPaidModelObservation, type PaidModelHealth } from './services/paid-model-health.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
-import { remindUnansweredDrafts } from './services/draft-reminders.js';
 import { createStreamTicketStore } from './services/stream-tickets.js';
 import { googleOidcSettings } from './services/google-oidc.js';
 import {
@@ -136,8 +133,6 @@ export function createApp(options?: CreateAppOptions) {
   const currentEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
   const isProduction = currentEnv === 'production';
   const db = options?.db || (process.env.DATABASE_URL ? createDb(process.env.DATABASE_URL) : null);
-  // Brand guidelines being read in the background after the sender was answered; tests await them.
-  const guidelineReadings = new Set<Promise<void>>();
   const taskRepo = db ? new TaskRepository(db) : null;
   const clientRepo = db ? new ClientRepository(db) : null;
   const ingressRepo = db ? new IngressRepository(db) : null;
@@ -436,16 +431,10 @@ export function createApp(options?: CreateAppOptions) {
     // the session token as `?access_token=`: it reached nginx's error log whenever a stored file was
     // missing. The Desk fetches pictures with the header (AuthorizedImage), and an <img> sends the
     // session cookie read above; the event stream takes a one-use ticket (ADR-037).
-    const botSecret = c.req.header('x-telegram-bot-api-secret-token');
-
-    const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-    if (botSecret) {
-      // The webhook secret is shared with the Telegram platform. It authenticates webhook
-      // deliveries only and must never act as an operator credential for the rest of the API.
-      const isWebhookPath = String(c.req.path || '').startsWith('/api/webhooks/');
-      if (isWebhookPath && secretsEqual(botSecret, expectedSecret)) {
-        return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId, actorId: 'telegram_bot', role: 'adapter', displayName: 'Telegram Bridge' };
-      }
+    // The Telegram webhook secret is shared with the Telegram platform and is never a credential. It
+    // authenticated the old intake's webhook deliveries (an 'adapter' principal on /api/webhooks/*);
+    // that intake went with stage 2 of ADR-135, and a request carrying it is anonymous everywhere.
+    if (c.req.header('x-telegram-bot-api-secret-token')) {
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
     }
 
@@ -918,7 +907,6 @@ export function createApp(options?: CreateAppOptions) {
     voiceTranscriber,
     telegramAllowedUsers,
     telegramIntakeUsers,
-    guidelineReadings,
     tasks,
     events,
     briefs,
@@ -990,24 +978,14 @@ export function createApp(options?: CreateAppOptions) {
   registerTaskPipelineRoutes(routeContext);
   registerSearchRoutes(routeContext);
   registerWhatsappRoutes(routeContext);
-  registerTelegramWebhookRoutes(routeContext);
 
   if (db && options?.enablePublicationInspections) {
     const inspections = new PublicationInspectionService(db,options.publicationInspector || new GooglePublisher());
     startPublicationInspectionSchedule(inspections,defaultTenantId,() => log.warn('[publication-inspections] Pass not confirmed; durable claims retain their state.'));
   }
 
-  // Reminders about drafts a requester has not answered: a pass every 15 minutes writes what is due to
-  // the outbox, keyed by task and day, so a restart or a second process never sends one twice.
-  if (db && outboxRepo && process.env.TELEGRAM_BOT_TOKEN && options?.enableDraftReminders) {
-    const reminderDb = db;
-    const reminderOutbox = outboxRepo;
-    const pass = () =>
-      remindUnansweredDrafts({ db: reminderDb, outbox: reminderOutbox, tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID })
-        .catch((err) => log.warn('[draft-reminders] pass failed:', (err as Error)?.message || err));
-    setInterval(pass, 15 * 60_000).unref?.();
-    setTimeout(pass, 90_000).unref?.();
-  }
+  // (Reminders about drafts a requester had not answered went with ADR-135 stage 2d: they reminded
+  // only old-intake tasks, with buttons nothing reads any more.)
 
   // Canva operations nobody follows any more (an import still settling when the studio stopped
   // polling, an export the worker ran out of polls for, a call cut off by a restart) are settled
@@ -1066,5 +1044,5 @@ export function createApp(options?: CreateAppOptions) {
   for (const retired of retiredTelegramSettings(process.env, { production: isProduction })) log.error(`[core] ${retired}`);
 
   // index.ts awaits clientDnaHydrated before it opens the port.
-  return Object.assign(app, { clientDnaHydrated, guidelineReadings });
+  return Object.assign(app, { clientDnaHydrated });
 }

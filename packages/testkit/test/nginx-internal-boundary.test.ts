@@ -163,7 +163,7 @@ http { server { listen 80; location / { default_type text/plain; return 200 "des
   }, 60_000);
 
   it('still proxies the office\'s API, webhooks and event stream to Core', async () => {
-    for (const p of ['/v1/tasks', '/api/v1/tasks', '/api/webhooks/telegram', '/v1/events/stream', '/v1/auth/session', '/v1/internalise']) {
+    for (const p of ['/v1/tasks', '/api/v1/tasks', '/api/webhooks/whatsapp', '/v1/events/stream', '/v1/auth/session', '/v1/internalise']) {
       const res = await get(p);
       expect({ p, status: res.status, body: res.body }).toEqual({ p, status: 200, body: `core ${p}` });
     }

@@ -1,7 +1,8 @@
-import { describe, it, expect, afterAll, beforeAll, vi } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, sql, withRlsContext, ClientRulesRepository } from '@hawa/db';
+import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
+import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { withoutEmoji, savedDesignCopy } from '../src/services/canva-design-planner.js';
@@ -20,15 +21,8 @@ describe.skipIf(!url)('messages that must not start a paid design', () => {
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const kaae = 'c1000000-0000-4000-8000-000000000002';
   const operator = { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' } as const;
-  const secret = ['paid', 'guards', 'fixture'].join('_');
-  const OFFICE = 91000002;
   const saved = { ...process.env };
   beforeAll(() => {
-    process.env.TELEGRAM_WEBHOOK_SECRET = secret;
-    process.env.TELEGRAM_ALLOWED_USERS = String(OFFICE);
-    // The test database keeps every run's tasks of the day, so the office-wide daily cap on automatic
-    // drafts (200) is reached by the tests themselves; it is not what these tests are about.
-    process.env.AUTO_GENERATE_DAILY_CAP_GLOBAL = '1000000';
     delete process.env.OPENAI_API_KEY;
   });
   afterAll(async () => {
@@ -36,120 +30,19 @@ describe.skipIf(!url)('messages that must not start a paid design', () => {
     await db.destroy();
   });
 
-  const setup = (extra: Record<string, unknown> = {}) => {
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const bridge = {
-      dispatchOutboundMessage: dispatch,
-      dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }),
-      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
-      downloadFile: vi.fn(),
-      handleCommand: vi.fn().mockReturnValue(null),
-      formatTaskPreviewCard: vi.fn().mockReturnValue({}),
-    };
-    const app = createApp({ db, telegramBridge: bridge as any, ...extra } as any);
-    const chat = 60000000 + Math.floor(Math.random() * 9000000);
-    const update = (message: Record<string, unknown>, updateId: string = randomUUID()) => ({
-      update_id: updateId,
-      message: { message_id: Math.floor(Math.random() * 1e6), from: { id: OFFICE, is_bot: false, first_name: 'Owner' }, chat: { id: chat, type: 'private' }, ...message },
-    });
-    const post = async (body: unknown) => {
-      const res = await app.request('/api/webhooks/telegram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret },
-        body: JSON.stringify(body),
-      });
-      return { status: res.status, body: await res.json().catch(() => ({})) };
-    };
-    const send = (message: Record<string, unknown>) => post(update(message));
-    const replies = () => dispatch.mock.calls.map((c) => String(c[1]?.text ?? '')).join('\n---\n');
-    const draftOf = (taskId: string) => ({ message_id: 99, from: { id: 1, is_bot: true, first_name: 'Hawa' }, chat: { id: chat, type: 'private' }, text: `🎨 Canva draft · Task ID: ${taskId}` });
-    return { app, chat, post, update, send, replies, bridge, draftOf };
-  };
-
-  const tasksInChat = async (chat: number) =>
-    (await withRlsContext(db, operator, (trx) =>
-      trx.selectFrom('outbox_commands').select(['aggregate_id', 'payload']).where('command_type', '=', 'task.created').execute()
-    )).filter((r: any) => String(r.payload?.sourceChannelId) === String(chat));
-
-  const startRun = (taskId: string, status: string) =>
-    withRlsContext(db, operator, (trx) =>
-      sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status)
-        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operator.userId}, ${'guard_' + randomUUID()}, 'h', '{}'::jsonb, 'standard', ${status})`.execute(trx));
-
-  it('an update Telegram delivers twice is handled once', async () => {
-    const { chat, post, update } = setup();
-    const body = update({ text: 'KAAE members evening\n---\nDecember 4, 2026\nErbil' });
-    const first = await post(body);
-    expect(first.status).toBe(201);
-    const again = await post(body);
-    expect(again.status).toBe(200);
-    expect(again.body.duplicate).toBe(true);
-    expect(await tasksInChat(chat)).toHaveLength(1);
-  });
-
-  it('a change to a design still being made starts nothing and says so', async () => {
-    const { chat, send, replies, draftOf } = setup();
-    const brief = await send({ text: 'KAAE audit forum\n---\nJanuary 9, 2027\nErbil' });
-    const taskId = brief.body.task.id;
-    await startRun(taskId, 'laying_out');
-    const change = await send({ text: 'move the logo to the top-left', reply_to_message: draftOf(taskId) });
-    expect(change.status).toBe(200);
-    expect(change.body.status).toBe('DESIGN_STILL_RUNNING');
-    expect(replies()).toMatch(/still being made/);
-    expect(await tasksInChat(chat)).toHaveLength(1);
-  });
-
-  it('a second change before the first one\'s draft starts nothing', async () => {
-    const { chat, send, replies, draftOf } = setup();
-    const brief = await send({ text: 'KAAE ethics seminar\n---\nFebruary 2, 2027\nErbil' });
-    const taskId = brief.body.task.id;
-    await startRun(taskId, 'transferred');
-    const first = await send({ text: 'make the title gold', reply_to_message: draftOf(taskId) });
-    expect(first.body.status).toBe('REVISION_QUEUED');
-    // The revision's own reply carries its Task ID, so a reply to it reaches the revision.
-    expect(replies()).toContain(first.body.revisionTaskId);
-    const second = await send({ text: 'and move the date up', reply_to_message: draftOf(taskId) });
-    expect(second.body.status).toBe('DESIGN_STILL_RUNNING');
-    expect(replies()).toMatch(/previous change .* is still being made/s);
-    expect(await tasksInChat(chat)).toHaveLength(2);
-  });
-
-  it('"from now on …" sent on its own is a rule, not a change to the latest draft', async () => {
-    const { chat, send } = setup();
-    const brief = await send({ text: 'KAAE graduation\n---\nMarch 3, 2027\nErbil' });
-    await startRun(brief.body.task.id, 'transferred');
-    const words = `From now on, always put the KAAE logo bottom-right ${randomUUID().slice(0, 6)}`;
-    const res = await send({ text: words });
-    expect(res.body.status).toBe('RULE_SAVED');
-    expect(await tasksInChat(chat)).toHaveLength(1);
-    const rule = (await withRlsContext(db, operator, (trx) => new ClientRulesRepository(trx).listActive(tenantId, kaae))).find((r) => r.humanRule === words);
-    expect(rule).toBeDefined();
-    await withRlsContext(db, operator, (trx) => new ClientRulesRepository(trx).deactivate(tenantId, kaae, rule!.id));
-  });
-
-  it('/status with words after it still lists the requests', async () => {
-    const { send, replies } = setup();
-    await send({ text: 'KAAE study day\n---\nApril 8, 2027\nErbil' });
-    const res = await send({ text: '/status now' });
-    expect(res.body.command).toBe(true);
-    expect(replies()).toMatch(/Your latest requests/);
-  });
-
-  it('a picture Telegram could not hand over is fetched again, not dropped', async () => {
-    const { send, bridge } = setup();
-    bridge.downloadFile.mockRejectedValue(new Error('ETIMEDOUT'));
-    const res = await send({ caption: 'KAAE poster\n---\nMay 5, 2027', photo: [{ file_id: 'p1', file_unique_id: 'u1', width: 800, height: 800 }] });
-    expect(res.status).toBe(503);
-  });
-
+  // ADR-135 stage 2: a new Telegram request is the draft prepareChatCampaignDraft builds for the
+  // lifecycle. The cases for a duplicate update, a change while a design is made, a second change, a
+  // "from now on" rule, /status and a photo refetch drove the deleted legacy webhook and went with it.
   it('a request that opens "Please make …" keeps that line out of the copy', async () => {
-    const { chat, send } = setup();
-    const res = await send({ text: 'Please make a KAAE poster with the details below\nKAAE Annual Audit Conference\nJune 14, 2027, Erbil' });
-    expect(res.status).toBe(201);
-    const [row] = await tasksInChat(chat);
-    const copy = JSON.stringify((row as any).payload.exactCopy || []);
+    const text = 'Please make a KAAE poster with the details below\nKAAE Annual Audit Conference\nJune 14, 2027, Erbil';
+    const draft = await createChatCampaignIntake({ telegramBridge: {} } as any).prepareChatCampaignDraft({
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: String(60000000 + Math.floor(Math.random() * 9000000)),
+      senderName: 'Owner', rawText: text, rawJson: { message: { text } }, autoGenerate: true, isInstructionOnly: false,
+    });
+    const copy = JSON.stringify(draft.exactCopy || []);
     expect(copy).not.toMatch(/Please make/);
     expect(copy).toMatch(/Annual Audit Conference/);
+    expect(draft.designInstructions).toMatch(/Please make a KAAE poster/);
   });
 
   it('the older version of a changed design cannot be approved while the change is waiting', async () => {

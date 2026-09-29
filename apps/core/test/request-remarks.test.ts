@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createDb, withRlsContext } from '@hawa/db';
-import { createApp } from '../src/app.js';
+import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
+import { persistChatIntake } from '../src/services/chat-intake.js';
 import { isDesignerRemark, peelTrailingRemarks } from '../src/services/request-remarks.js';
 
 // The message Sewa sent four times on 2026-09-22; the last line was printed on the design.
@@ -25,33 +26,29 @@ describe('a closing remark to the designer is not copy', () => {
   });
 
   it("Sewa's request: the attachment line goes to instructions, the event text stays copy", async () => {
-    const secret = ['remarks', 'fixture', 'secret'].join('_');
-    const saved = process.env.TELEGRAM_WEBHOOK_SECRET;
-    process.env.TELEGRAM_WEBHOOK_SECRET = secret;
+    // ADR-135 stage 2: a new Telegram request is the draft prepareChatCampaignDraft builds for the
+    // lifecycle, persisted by its projection through persistChatIntake.
+    const draft = await createChatCampaignIntake({ telegramBridge: {} } as any).prepareChatCampaignDraft({
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: '5150', senderName: 'Sewa',
+      rawText: SEWA, rawJson: { message: { message_id: 1, chat: { id: 5150, type: 'private' }, text: SEWA } },
+      autoGenerate: true, isInstructionOnly: false,
+    });
+    const copyText = JSON.stringify(draft.exactCopy);
+    expect(copyText).toMatch(/MEET KAAE AT SAGACON 2026/);
+    expect(copyText).toMatch(/Choueifat/);
+    expect(copyText).not.toMatch(/I attached/);
+    expect(copyText).not.toMatch(/I need a graphic/);
+    const db = createDb(process.env.TEST_DATABASE_URL!);
     try {
-      const db = createDb(process.env.TEST_DATABASE_URL!);
-      const app = createApp({ db, testAuth: { principal: { role: 'operator' }, roleHeader: true }, telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }) } as any });
-      const res = await app.request('/api/webhooks/telegram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret },
-        body: JSON.stringify({ update_id: randomUUID(), message: { message_id: 1, from: { id: 5150, first_name: 'Sewa' }, chat: { id: 5150, type: 'private' }, text: SEWA } }),
-      });
-      expect(res.status).toBe(201);
-      const { task } = await res.json();
-      const copyText = JSON.stringify(task.brief.exactCopy);
-      expect(copyText).toMatch(/MEET KAAE AT SAGACON 2026/);
-      expect(copyText).toMatch(/Choueifat/);
-      expect(copyText).not.toMatch(/I attached/);
-      expect(copyText).not.toMatch(/I need a graphic/);
+      const { task } = await persistChatIntake(db, draft);
       const created = await withRlsContext(db, { tenantId: '00000000-0000-4000-a000-000000000001', userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, (trx) =>
         trx.selectFrom('task_events').select('data').where('task_id', '=', task.id).where('event_type', '=', 'task.created').executeTakeFirstOrThrow());
       const payload = (created.data as any).payload;
       expect(payload.designInstructions).toMatch(/I need a graphic/);
       expect(payload.designInstructions).toMatch(/I attached the panelists pictures and a reference/);
       expect(JSON.stringify(payload.exactCopy)).not.toMatch(/I attached/);
-      await db.destroy();
     } finally {
-      process.env.TELEGRAM_WEBHOOK_SECRET = saved;
+      await db.destroy();
     }
   });
 });

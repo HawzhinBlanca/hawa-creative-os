@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { createApp } from '../src/app.js';
+import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
 
 describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horizons 16-19)', () => {
   let app: any;
@@ -9,71 +11,6 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
   beforeEach(() => {
     process.env.TELEGRAM_WEBHOOK_SECRET = mockWebhookSecret;
     app = createApp();
-  });
-
-  it('holds the entire voice request even when its download is unavailable and a caption exists', async () => {
-    const audioPayload = {
-      update_id: 88801,
-      message: {
-        message_id: 501,
-        from: { id: 991122, first_name: 'Diyar', username: 'diyar_kurd' },
-        chat: { id: 7001, type: 'private' },
-        voice: {
-          file_id: 'voice_file_mock_442',
-          duration: 12,
-          mime_type: 'audio/ogg',
-          file_size: 24500,
-        },
-        caption: 'دەرمانخانەی ئاستەر: داشکاندنی وەرزی لەسەدا بیست و پێنج بۆ نەورۆز',
-      },
-    };
-
-    const res = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': mockWebhookSecret,
-      },
-      body: JSON.stringify(audioPayload),
-    });
-
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json).toMatchObject({ ok: true, ignored: true, reason: 'VOICE_POLICY_UNRESOLVED' });
-    expect(json.task).toBeUndefined();
-    expect(json.voiceTranscript).toBeUndefined();
-  });
-
-  it('refuses an actual voice file before client policy selection without model egress or a partial task', async () => {
-    const seenUrls: string[] = [];
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      seenUrls.push(String(input));
-      return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { status: 200 });
-    });
-    try {
-      const res = await app.request('/api/webhooks/telegram?generate=true', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': mockWebhookSecret },
-        body: JSON.stringify({
-          update_id: 88811,
-          audioBase64: Buffer.from('private-audio').toString('base64'),
-          message: {
-            message_id: 511,
-            from: { id: 991122, first_name: 'Diyar' },
-            chat: { id: 7001, type: 'private' },
-            voice: { duration: 12, mime_type: 'audio/ogg' },
-            caption: 'Design a poster',
-          },
-        }),
-      });
-      expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json).toMatchObject({ ignored: true, reason: 'VOICE_POLICY_UNRESOLVED' });
-      expect(json.task).toBeUndefined();
-      expect(seenUrls.filter((url) => /getFile|api\.openai\.com|generativelanguage\.googleapis\.com|api\.anthropic\.com/.test(url))).toEqual([]);
-    } finally {
-      fetchSpy.mockRestore();
-    }
   });
 
   it('manages Telegram webhook lifecycle via /v1/adapters/telegram/webhook endpoints', async () => {
@@ -112,66 +49,23 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
     expect(json.error).toBe('FIGMA_TRANSPORT_DECOMMISSIONED');
   });
 
-  it('autonomously generates FastPay 1:1 fintech promo layout with verified vector operations and CBI badge', async () => {
-    const fastpayMsg = {
-      update_id: 88802,
-      message: {
-        message_id: 502,
-        from: { id: 991133, first_name: 'Soran', username: 'soran_pay' },
-        chat: { id: 7002, type: 'group' },
-        text: '/task فاستپەی: گواستنەوەی پارە بەبێ هیچ کرێیەک، داشکاندنی لەسەدا پەنجا و ٥٬٠٠٠ دینار کاشباک بۆ کڕیاران',
-      },
-    };
-
-    const res = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': 'kaae_office_secret_production_entropy_99f3b817',
-      },
-      body: JSON.stringify(fastpayMsg),
+  // ADR-135 stage 2: the legacy webhook these two cases posted to is gone; a new Telegram request is
+  // the draft prepareChatCampaignDraft builds for the lifecycle, with the brand alias resolved to
+  // its seeded client row. Voice intake is the lifecycle's (lifecycle-voice*.test.ts).
+  const prepare = (text: string, senderName: string) =>
+    createChatCampaignIntake({ telegramBridge: {} } as any).prepareChatCampaignDraft({
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: String(7000 + Math.floor(Math.random() * 1e6)),
+      senderName, rawText: text, rawJson: { message: { text } }, autoGenerate: true, isInstructionOnly: false,
     });
 
-    expect(res.status).toBe(201);
-    const json = await res.json();
-    expect(json.ok).toBe(true);
-    expect(json.task.clientId).toBe('client-fastpay');
-    expect(['RECEIVED', 'AWAITING_APPROVAL']).toContain(json.task.status);
-
-    // Inspect design revision in studio if generated
-    const revId = json.task.latestRevisionId;
-    if (revId) {
-      const revRes = await app.request(`/v1/tasks/${json.task.id}/revisions/${revId}`);
-      expect(revRes.status).toBe(200);
-      const revJson = await revRes.json();
-      expect(revJson.revision.document).toBeDefined();
-    }
+  it('routes a Kurdish FastPay promo to FastPay', async () => {
+    const draft = await prepare('فاستپەی: گواستنەوەی پارە بەبێ هیچ کرێیەک، داشکاندنی لەسەدا پەنجا و ٥٬٠٠٠ دینار کاشباک بۆ کڕیاران', 'Soran');
+    expect(draft.clientId).toBe('c1000000-0000-4000-8000-000000000004');
+    expect(draft.headlineCkb).toContain('فاستپەی');
   });
 
-  it('autonomously generates Drustee 1:1 clinical supplement layout with GMP certification and botanical seal', async () => {
-    const drusteeMsg = {
-      update_id: 88803,
-      message: {
-        message_id: 503,
-        from: { id: 991144, first_name: 'Drustee Official' },
-        chat: { id: 7003, type: 'channel' },
-        text: 'دروستی: تەواوکەری خۆراکی سروشتی بۆ تەندروستی خێزان، داشکاندنی لەسەدا بیست و پێنج بە گەرەنتی GMP',
-      },
-    };
-
-    const res = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': 'kaae_office_secret_production_entropy_99f3b817',
-      },
-      body: JSON.stringify(drusteeMsg),
-    });
-
-    expect(res.status).toBe(201);
-    const json = await res.json();
-    expect(json.ok).toBe(true);
-    expect(json.task.clientId).toBe('client-drustee');
-    expect(['RECEIVED', 'AWAITING_APPROVAL']).toContain(json.task.status);
+  it('routes a Kurdish Drustee supplement request to Drustee', async () => {
+    const draft = await prepare('دروستی: تەواوکەری خۆراکی سروشتی بۆ تەندروستی خێزان، داشکاندنی لەسەدا بیست و پێنج بە گەرەنتی GMP', 'Drustee Official');
+    expect(draft.clientId).toBe('c1000000-0000-4000-8000-000000000003');
   });
 });

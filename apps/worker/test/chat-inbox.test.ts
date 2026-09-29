@@ -406,16 +406,16 @@ describe('ChatInbox.setMode', () => {
       chatId: '555', class: 'critical', text: expect.stringContaining('reply directly') }]);
   });
 
-  // ADR-135: the old intake finishes its own requests and starts none; Core's refusal asks for /new,
-  // and nothing reaches RequestLifecycle. A chat's first update (legacy mode) is answered alike.
-  it('asks for /new when the old intake would have started new work, and keeps the chat\'s mode', async () => {
+  // A group "/task …" or a change with no design waiting opens nothing; Core asks for /new, and nothing
+  // reaches RequestLifecycle. A chat's first update (legacy mode) is answered alike.
+  it('asks for /new when Core answers new-brief-required, and keeps the chat\'s mode', async () => {
     for (const mode of [undefined, 'lifecycle'] as const) {
       const ctx = new FakeContext();
       if (mode) ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
         mode, requestId: 'req-x' } satisfies ChatInboxView);
-      const c = core([async () => ({ kind: 'done', intakeStatus: 409, code: 'LEGACY_REQUEST_REFUSED',
+      const c = core([async () => ({ kind: 'done', intakeStatus: 422, code: 'NEW_BRIEF_REQUIRED',
         lifecycleAction: 'new-brief-required', chatId: '555' })]);
-      expect(await handleUpdate(ctx, input, c)).toMatchObject({ outcome: 'handled', intakeStatus: 409 });
+      expect(await handleUpdate(ctx, input, c)).toMatchObject({ outcome: 'handled', intakeStatus: 422 });
       expect(ctx.lifecycleDecisions).toHaveLength(0);
       expect(ctx.notices).toMatchObject([{ key: `chatinbox:new-brief-required:${update.update_id}`,
         chatId: '555', class: 'critical', text: expect.stringContaining('/new') }]);
@@ -436,6 +436,41 @@ describe('ChatInbox.setMode', () => {
   });
 });
 
+
+describe('chat answers (ADR-135 stage 2c)', () => {
+  const answer = (extra: Record<string, unknown> = {}) => ({ v: 1, kind: 'handled', intakeStatus: 200,
+    lifecycleAction: 'chat-answer', chatId: '555', chatAnswer: { text: '👋 <b>Hello!</b>', parseMode: 'HTML' }, ...extra });
+
+  it('sends Core\'s answer to a greeting, question, rule or command once per update, with its parse mode, after a crash', async () => {
+    const transport = vi.fn(async () => Response.json(answer()));
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: transport });
+    const ctx = new FakeContext(); ctx.crashOnSet = 1;
+    await untilSettled(ctx, () => handleUpdate(ctx, input, client));
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleOpens).toHaveLength(0);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    // The fake context does not deduplicate; Restate does, by the message's key.
+    expect([...new Set(ctx.notices.map((n: any) => n.key))]).toEqual([`chatinbox:chat-answer:${update.update_id}`]);
+    expect(ctx.notices[0]).toMatchObject({ chatId: '555', kind: 'text', class: 'critical', text: '👋 <b>Hello!</b>', parseMode: 'HTML' });
+  });
+
+  it('sends a plain answer without a parse mode, and answers a refusal status the same way', async () => {
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token',
+      fetch: async () => Response.json(answer({ intakeStatus: 422, chatAnswer: { text: 'Designs are approved in Hawa Desk.' } })) });
+    const ctx = new FakeContext();
+    expect(await handleUpdate(ctx, input, client)).toMatchObject({ outcome: 'handled', intakeStatus: 422 });
+    expect(ctx.notices).toHaveLength(1);
+    expect((ctx.notices[0] as any).parseMode).toBeUndefined();
+  });
+
+  it('refuses a malformed chat answer from Core', async () => {
+    for (const extra of [{ chatAnswer: { text: '' } }, { chatAnswer: { text: 'x'.repeat(4001) } },
+      { chatAnswer: { text: 'hi', parseMode: 'Markdown' } }, { chatId: '' }, { chatAnswer: null }]) {
+      const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () => Response.json(answer(extra)) });
+      await expect(client.intake(update, 'legacy')).rejects.toThrow('invalid chat answer');
+    }
+  });
+});
 
 describe('album collection notices', () => {
   it('journals one collection response and replays a stable notice without starting a lifecycle request', async () => {

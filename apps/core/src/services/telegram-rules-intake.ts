@@ -1,14 +1,11 @@
-import { createHash } from 'node:crypto';
 import { sql, withRlsContext, ClientRulesRepository, type Database, type Kysely } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
-import { readBrandGuidelines, fontCaveat, type GuidelinesModel } from './brand-guidelines.js';
-import { isPdf } from './telegram-media.js';
 import { formatRuleSaved, formatRulesList, ruleNumber, type RulesCommand } from './standing-rules-chat.js';
-import { log } from '../logging.js';
 
 /**
  * The chat side of a client's standing rules: which client a message is about, saving a rule said
- * in chat, /rules and /forget, and reading a brand guidelines PDF into rules.
+ * in chat, /rules and /forget (lifecycle-chat-answers.ts). Reading a brand guidelines PDF into rules
+ * went with the old intake (ADR-135 stage 2): a PDF is a lifecycle source now.
  */
 export interface RulesIntakeDeps {
   db: Kysely<Database>;
@@ -21,7 +18,6 @@ export interface RulesIntakeDeps {
   trustNamedClient?: boolean;
   bridge: {
     dispatchOutboundMessage(chatId: string | number, message: { text: string; parse_mode?: string }): Promise<unknown>;
-    downloadFile(fileId: string): Promise<Buffer | undefined | null>;
   };
 }
 
@@ -106,31 +102,6 @@ export async function ruleClientById(deps: RulesIntakeDeps, clientId: string): P
   }).catch(() => undefined);
 }
 
-/** Lower case, letters and digits only: "K.A.A.E." and "kaae" are one name. */
-const squash = (s: string) => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-/** "Kurdistan Accrediting Association for Education" as "kaae". */
-const initials = (s: string) =>
-  s.split(/[^\p{L}\p{N}]+/u).filter((w) => w && !/^(for|of|and|the|in)$/i.test(w)).map((w) => w[0]).join('').toLowerCase();
-
-/**
- * Whether the brand a guidelines document is for is this client: one name contains the other, or
- * one is the other's initials. Case, spaces and punctuation do not count.
- */
-export function brandMatchesClient(brandName: string, clientNames: string[]): boolean {
-  const brand = squash(brandName);
-  if (!brand) return true;
-  return clientNames.some((n) => {
-    const name = squash(n);
-    if (!name) return false;
-    return (
-      (name.length >= 3 && brand.includes(name)) ||
-      (brand.length >= 3 && name.includes(brand)) ||
-      (name.length >= 2 && initials(brandName) === name) ||
-      (brand.length >= 2 && initials(n) === brand)
-    );
-  });
-}
-
 const noClient = (what: string) => ({
   text: `❓ <b>Which client is this ${what} for?</b>\n\n<i>Send it again with the client's name in it (for example KAAE).</i>`,
   parse_mode: 'HTML',
@@ -208,121 +179,4 @@ export async function handleRulesCommand(
     return;
   }
   await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, { text: formatRulesList(client.name, rules), parse_mode: 'HTML' });
-}
-
-/**
- * A PDF sent to the bot. It is read as brand guidelines: the rules found are saved for the client
- * and listed back. Reading takes a minute or two, so the sender is answered at once and the result
- * follows; the returned promise settles when it has.
- */
-export async function handleGuidelinesPdf(
-  deps: RulesIntakeDeps & { model: GuidelinesModel },
-  params: { sourceChannelId: string; fileId: string; fileUniqueId?: string; fileName: string; fileSize?: number; caption: string }
-): Promise<{ accepted: boolean; done?: Promise<void> }> {
-  const name = params.fileName || 'the PDF';
-  if (params.fileSize && params.fileSize > 20 * 1024 * 1024) {
-    await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
-      text: `📘 <b>${escapeTelegramHtml(name)} is larger than 20 MB</b>, the most a bot can download from Telegram.\n\n<i>Send a smaller export of it (or the pages that set out colours, type and logo use).</i>`,
-      parse_mode: 'HTML',
-    });
-    return { accepted: false };
-  }
-  const client = await resolveRuleClient(deps, params.sourceChannelId, `${params.caption} ${params.fileName}`);
-  if (!client) {
-    await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, noClient('document'));
-    return { accepted: false };
-  }
-  await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
-    text:
-      `📘 <b>Reading ${escapeTelegramHtml(name)}</b> for ${escapeTelegramHtml(client.name)}.\n\n<i>If it is brand guidelines, the rules found are saved and listed here in a minute or two.</i>` +
-      // A caption that reads like a request is not designed from: the PDF is read as guidelines.
-      (params.caption.trim().length > 120 || params.caption.includes('\n')
-        ? `\n\n<i>The text sent with the PDF was not used as a design request; if it is one, send it as its own message.</i>`
-        : ''),
-    parse_mode: 'HTML',
-  });
-
-  const done = (async () => {
-    try {
-      const bytes = await deps.bridge.downloadFile(params.fileId);
-      if (!bytes || !bytes.length) throw new Error('The file could not be downloaded from Telegram.');
-      if (!isPdf(bytes)) throw new Error('The file is not a PDF.');
-      const reading = await readBrandGuidelines(deps.model, { pdf: { filename: name, bytes }, senderNote: params.caption });
-      if (!reading.isBrandGuidelines) {
-        await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
-          text:
-            `📄 <b>${escapeTelegramHtml(name)} does not read as brand guidelines</b>` +
-            (reading.summary ? `: ${escapeTelegramHtml(reading.summary)}` : '.') +
-            `\n\n<i>Nothing was saved. If it holds a design request, send its text as a message.</i>`,
-          parse_mode: 'HTML',
-        });
-        return;
-      }
-      // Another brand's guidelines sent in this client's chat would become this client's rules.
-      // A caption or file name that names the client is the sender saying which client they are for.
-      if (reading.brandName && !client.named && !brandMatchesClient(reading.brandName, client.names?.length ? client.names : [client.name])) {
-        await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
-          text:
-            `📘 <b>${escapeTelegramHtml(name)} reads as the brand guidelines of ${escapeTelegramHtml(reading.brandName)}, not ${escapeTelegramHtml(client.name)}</b>, so no rules were saved.\n\n` +
-            `<i>Send it again with the client's name in the caption (for example ${escapeTelegramHtml(client.name)}), and its rules are saved for that client.</i>`,
-          parse_mode: 'HTML',
-        });
-        return;
-      }
-      const sourceId = params.fileUniqueId || createHash('sha256').update(bytes).digest('hex').slice(0, 32);
-      const saved = await withRlsContext(deps.db, scope(deps), async (trx) => {
-        const repo = new ClientRulesRepository(trx);
-        const out: Array<{ id: string; text: string; created: boolean; caveat?: string }> = [];
-        for (const rule of reading.rules) {
-          const { rule: row, created } = await repo.save({
-            tenantId: deps.tenantId,
-            clientId: client.id,
-            humanRule: rule.rule,
-            category: rule.category,
-            machineRule: {
-              ...(rule.fontFamily ? { fontFamily: rule.fontFamily, script: rule.script } : {}),
-              ...(rule.colourHex ? { colourHex: rule.colourHex } : {}),
-            },
-            source: { kind: 'brand_guidelines', id: sourceId, note: name },
-          });
-          // Two lines of the document can read as one rule; it is listed once.
-          if (!out.some((r) => r.id === row.id)) out.push({ id: row.id, text: row.humanRule, created, caveat: fontCaveat(rule) });
-        }
-        return { out, active: await repo.listActive(deps.tenantId, client.id) };
-      });
-      const fresh = saved.out.filter((r) => r.created).length;
-      // Each rule under the number /rules shows and /forget takes. They were numbered 1..N in the
-      // document's order, so "/forget 3" removed another rule than the one shown as 3 (2026-09-23).
-      const numbered = saved.out
-        .map((r) => ({ ...r, n: ruleNumber(saved.active, r.id) }))
-        .sort((a, b) => (a.n ?? Infinity) - (b.n ?? Infinity));
-      // Whole lines only, within Telegram's 4096 characters: a cut through a tag fails the message.
-      const all = numbered.map((r) => `${r.n ? `${r.n}.` : '•'} ${escapeTelegramHtml(r.text)}${r.caveat ? `\n   <i>⚠️ ${escapeTelegramHtml(r.caveat)}</i>` : ''}`);
-      const lines: string[] = [];
-      for (const line of all) {
-        if (lines.join('\n').length + line.length > 3000) {
-          lines.push(`… and ${all.length - lines.length} more (/rules lists them all).`);
-          break;
-        }
-        lines.push(line);
-      }
-      await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
-        text:
-          `📘 <b>${escapeTelegramHtml(client.name)} brand guidelines read</b> (${escapeTelegramHtml(name)}): ` +
-          `${fresh} new rule${fresh === 1 ? '' : 's'} saved${saved.out.length > fresh ? `, ${saved.out.length - fresh} already in force` : ''}.\n\n` +
-          lines.join('\n') +
-          `\n\n<i>Every new ${escapeTelegramHtml(client.name)} design follows these (${saved.active.length} rules in force). /rules lists them; /forget and a number removes one.</i>`,
-        parse_mode: 'HTML',
-      });
-    } catch (err) {
-      log.error(`[telegram] brand guidelines ${name} could not be read:`, (err as Error)?.message || err);
-      await deps.bridge
-        .dispatchOutboundMessage(params.sourceChannelId, {
-          text: `⚠️ <b>${escapeTelegramHtml(name)} could not be read</b>, so no rules were saved from it.\n\n<i>Please send it again; if it fails twice, the office will add the rules by hand.</i>`,
-          parse_mode: 'HTML',
-        })
-        .catch(() => undefined);
-    }
-  })();
-  return { accepted: true, done };
 }

@@ -39,7 +39,7 @@ globalThis.fetch = (input, init) => {
 const { createApp } = await import('../../src/app.js');
 const db = createDb(process.env.TEST_DATABASE_URL);
 const app = createApp({ db, skipPaidModelProbe: true, skipTelegramProbe: true,
-  enableBillingProbeSchedule: false, enableDraftReminders: false, enableCanvaSweeper: false });
+  enableBillingProbeSchedule: false, enableCanvaSweeper: false });
 await app.clientDnaHydrated;
 const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 }, info => process.send?.({ port: info.port }));
 process.on('SIGTERM', () => {

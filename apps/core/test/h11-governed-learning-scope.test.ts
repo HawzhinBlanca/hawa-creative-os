@@ -7,13 +7,11 @@ import path from 'node:path';
 describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   const KAAE_CLIENT_ID = 'c1000000-0000-4000-8000-000000000002';
   const OTHER_CLIENT_ID = 'c2000000-0000-4000-8000-000000000003';
-  const telegramSecret = ['kaae', 'office', 'secret', 'production', 'entropy', '99f3b817'].join('_');
   const operatorToken = 'test_operator_token_h11';
   const artDirectorToken = 'test_art_director_bearer';
   const initialEnv = { ...process.env };
 
   beforeEach(() => {
-    process.env.TELEGRAM_WEBHOOK_SECRET = telegramSecret;
     process.env.HAWA_BEARER_TOKEN = operatorToken;
     process.env.HAWA_ART_DIRECTOR_KEY = artDirectorToken;
     process.env.NODE_ENV = 'test';
@@ -23,61 +21,9 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     process.env = initialEnv;
   });
 
-  it('1. Task-scoped feedback ("Make this one brighter") changes only the target task, never creates or promotes permanent rules', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
-
-    // Ingest a task for KAAE
-    const intakeRes = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': telegramSecret,
-      },
-      body: JSON.stringify({
-        update_id: 10001,
-        message: {
-          message_id: 20001,
-          from: { id: 800001, is_bot: false, first_name: 'TestOperator' },
-          chat: { id: 800001, type: 'private' },
-          text: 'KAAE Annual Research Conference 2026',
-        },
-      }),
-    });
-    expect(intakeRes.status).toBe(201);
-    const { task } = await intakeRes.json();
-    expect(task.id).toBeDefined();
-
-    const rulesBefore = globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID);
-    const promotedBefore = globalFeedbackMiner.getPromotedRules(KAAE_CLIENT_ID);
-
-    // Send casual task-scoped feedback: "Make this one brighter"
-    const fbRes = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': telegramSecret,
-      },
-      body: JSON.stringify({
-        update_id: 10002,
-        message: {
-          message_id: 20002,
-          from: { id: 800001, is_bot: false, first_name: 'TestOperator' },
-          chat: { id: 800001, type: 'private' },
-          text: `revise task ${task.id}: Make this one brighter and adjust margins`,
-        },
-      }),
-    });
-    expect(fbRes.status).toBe(200);
-    const fbBody = await fbRes.json();
-    expect(fbBody.feedback).toBe(true);
-
-    // Assert: No new permanent candidate rules were created or promoted
-    const rulesAfter = globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID);
-    const promotedAfter = globalFeedbackMiner.getPromotedRules(KAAE_CLIENT_ID);
-    expect(promotedAfter.length).toBe(promotedBefore.length);
-    expect(rulesAfter.filter((r) => r.status === 'PROMOTED').length).toBe(promotedBefore.length);
-  });
-
+  // Cases 1 ("revise task" feedback) and 5 (a reply quoting an unknown task id) sent their messages to
+  // the Telegram webhook, removed by stage 2 of ADR-135 with the old intake's feedback and reply
+  // readers. The lifecycle path's replies, an unknown one included: lifecycle-internal-intake.test.ts.
   it('2. Another client\'s feedback cannot change KAAE DNA, rules or files', async () => {
     const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
@@ -239,37 +185,6 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     expect(apiPromoteRes.status).toBe(409);
     const apiBody = await apiPromoteRes.json();
     expect(apiBody.title).toBe('Conflict');
-  });
-
-  it('5. Unknown reply UUID is rejected fail-closed without fabricating tasks or mutating KAAE DNA', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
-    const unknownUuid = '00000000-0000-4000-8000-000000000099';
-
-    const unknownReplyRes = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': telegramSecret,
-      },
-      body: JSON.stringify({
-        update_id: 10005,
-        message: {
-          message_id: 20005,
-          from: { id: 800003, is_bot: false, first_name: 'TestOperator' },
-          chat: { id: 800003, type: 'private' },
-          reply_to_message: {
-            message_id: 19999,
-            text: `Previous message regarding Task ${unknownUuid}`,
-          },
-          text: 'Change colors to dark blue',
-        },
-      }),
-    });
-
-    // The reply is read as a message on its own (it used to be dropped with a 404 the poller took
-    // as final, and the sender heard nothing). No task with the unknown id is made up.
-    expect(unknownReplyRes.status).not.toBe(404);
-    expect((await app.request(`/tasks/${unknownUuid}`)).status).toBe(404);
   });
 
   it('6. Reversible rollback restores prior state and removes rule from generation scope', async () => {

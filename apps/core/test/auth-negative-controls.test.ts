@@ -44,28 +44,20 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
   });
 
   describe('2. Telegram Webhook Secret Hardening', () => {
-    it('rejects revoked fallback webhook secret "kaae_office_secret_production_entropy_99f3b817"', async () => {
-      const res = await app.request('/api/webhooks/telegram', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-telegram-bot-api-secret-token': 'kaae_office_secret_production_entropy_99f3b817',
-        },
-        body: JSON.stringify({ update_id: 101 }),
-      });
-      expect(res.status).toBe(401);
-    });
-
-    it('rejects revoked fallback webhook secret "expected_office_secret"', async () => {
-      const res = await app.request('/api/webhooks/telegram', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        },
-        body: JSON.stringify({ update_id: 102 }),
-      });
-      expect(res.status).toBe(401);
+    // The Telegram webhook was removed by stage 2 of ADR-135 (the worker polls and hands each update to
+    // POST /v1/internal/telegram/intake with its own token). No secret, configured or revoked, reaches
+    // an intake through it any more.
+    it('has no Telegram webhook left for any secret to reach', async () => {
+      for (const path of ['/api/webhooks/telegram', '/v1/webhooks/telegram', '/webhooks/telegram']) {
+        for (const secret of [testWebhookSecret, 'kaae_office_secret_production_entropy_99f3b817', 'expected_office_secret']) {
+          const res = await app.request(path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret },
+            body: JSON.stringify({ update_id: 101, message: { message_id: 1, chat: { id: 1, type: 'private' }, date: 1790000000, text: 'hello' } }),
+          });
+          expect(res.status, `${path} with ${secret}`).toBe(404);
+        }
+      }
     });
 
     it('rejects anonymous reads of client, task and operations data', async () => {
@@ -81,20 +73,6 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
         headers: { 'x-telegram-bot-api-secret-token': testWebhookSecret },
       });
       expect(res.status).toBe(401);
-    });
-
-    it('accepts configured webhook secret from environment', async () => {
-      const res = await app.request('/api/webhooks/telegram', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-telegram-bot-api-secret-token': testWebhookSecret,
-        },
-        body: JSON.stringify({ update_id: 103 }),
-      });
-      // Authenticated, and an update without text is acknowledged (not turned into an empty task).
-      expect(res.status).toBe(200);
-      expect((await res.json()).ignored).toBe(true);
     });
   });
 

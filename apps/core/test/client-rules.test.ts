@@ -1,11 +1,10 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
-import { OpenAiStudioClient } from '@hawa/creative';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDb, withRlsContext, ClientRulesRepository, formatClientRulesForPrompt } from '@hawa/db';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { visualPolicySha256 } from '../src/services/design-studio/visual-inputs.js';
 import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
-import { handleGuidelinesPdf, handleRulesCommand, resolveRuleClient, saveChatRule, type RulesIntakeDeps } from '../src/services/telegram-rules-intake.js';
+import { handleRulesCommand, resolveRuleClient, saveChatRule, type RulesIntakeDeps } from '../src/services/telegram-rules-intake.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
@@ -142,7 +141,7 @@ describe.skipIf(!url)('standing client rules', () => {
     await expect(build(runWith('0'.repeat(64)))).rejects.toMatchObject({ code: 'CLIENT_REFERENCE_CHANGED' });
   });
 
-  // ---- 2026-09-23: numbers, which client, and whose guidelines ----
+  // ---- 2026-09-23: numbers and which client ----
 
   const drustee = 'c1000000-0000-4000-8000-000000000003';
   const tag = () => randomUUID().slice(0, 6);
@@ -154,23 +153,12 @@ describe.skipIf(!url)('standing client rules', () => {
       tenantId,
       userId: actorId,
       trustNamedClient: true,
-      bridge: { dispatchOutboundMessage: dispatch, downloadFile: vi.fn().mockResolvedValue(Buffer.from('%PDF-1.7 guidelines')) },
+      bridge: { dispatchOutboundMessage: dispatch },
       ...extra,
     };
     const replies = () => dispatch.mock.calls.map((c) => String(c[1]?.text ?? ''));
     return { deps, replies };
   };
-  const guidelines = (brandName: string, rules: string[]) => new OpenAiStudioClient({
-    apiKey: 'fixture-only',
-    fetcher: async () => Response.json({ id: 'guidelines-fixture',
-      choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({
-        isBrandGuidelines: true,
-        brandName,
-        summary: 'Brand guidelines.',
-        rules: rules.map((rule) => ({ category: 'general', rule, fontFamily: '', script: 'any', colourHex: '' })),
-      }) } }], usage: { prompt_tokens: 20, completion_tokens: 50 },
-    }),
-  });
   const forgetAll = (client: string, ids: string[]) => repo(async (r) => { for (const id of ids) await r.deactivate(tenantId, client, id); });
 
   it('keeps the order rules were saved in, even when one transaction saves them all', async () => {
@@ -192,32 +180,34 @@ describe.skipIf(!url)('standing client rules', () => {
     }
   });
 
-  it('numbers the rules a PDF added as /rules does, so /forget removes the rule the reply showed', async () => {
+  // ADR-135 stage 2 deleted the brand-guidelines PDF reader (handleGuidelinesPdf) with the legacy
+  // webhook; /rules and /forget stay (lifecycle-chat-answers.ts), and number the rules the same way.
+  it('numbers the rules as /rules shows them, so /forget removes the rule the list showed', async () => {
     const t = tag();
-    const already = `Guideline ${t} keep clear space around the logo`;
-    const existing = await repo((r) => r.save({ tenantId, clientId, humanRule: already, source: { kind: 'telegram_message', id: randomUUID() } }));
-    const fromPdf = [`Guideline ${t} titles in navy`, already, `Guideline ${t} body in white`, `Guideline ${t} one accent colour`];
-    const { deps, replies } = intake();
-    const chat = chatId();
-    const reading = await handleGuidelinesPdf(
-      { ...deps, model: guidelines('KAAE', fromPdf) },
-      { sourceChannelId: chat, fileId: 'f', fileUniqueId: `u-${t}`, fileName: 'KAAE guidelines.pdf', caption: 'KAAE guidelines' }
-    );
-    await reading.done;
-    const reply = replies().pop()!;
-    expect(reply).toMatch(/3 new rules saved, 1 already in force/);
-    const active = await repo((r) => r.listActive(tenantId, clientId));
-    const shown = reply.split('\n').map((l) => l.match(/^(\d+)\. (Guideline .*)$/)).filter((m): m is RegExpMatchArray => Boolean(m));
-    expect(shown).toHaveLength(4);
-    for (const [, n, text] of shown) expect(active[Number(n) - 1].humanRule).toBe(text);
+    const words = [`Guideline ${t} keep clear space around the logo`, `Guideline ${t} titles in navy`, `Guideline ${t} body in white`, `Guideline ${t} one accent colour`];
+    const ids = await repo(async (r) => {
+      const out: string[] = [];
+      for (const w of words) out.push((await r.save({ tenantId, clientId, humanRule: w, source: { kind: 'telegram_message', id: randomUUID() } })).rule.id);
+      return out;
+    });
+    try {
+      const { deps, replies } = intake();
+      const chat = chatId();
+      await handleRulesCommand(deps, { sourceChannelId: chat, command: { kind: 'list' }, text: '/rules KAAE' });
+      const active = await repo((r) => r.listActive(tenantId, clientId));
+      const shown = replies().pop()!.split('\n').map((l) => l.match(/^(\d+)\. (Guideline .*)$/)).filter((m): m is RegExpMatchArray => Boolean(m) && m![2].includes(t));
+      expect(shown).toHaveLength(4);
+      for (const [, n, text] of shown) expect(active[Number(n) - 1].humanRule).toBe(text);
 
-    // "/forget <the number shown beside 'body in white'>" removes that rule and no other.
-    const [, n] = shown.find(([, , text]) => text.endsWith('body in white'))!;
-    await handleRulesCommand(deps, { sourceChannelId: chat, command: { kind: 'forget', numbers: [Number(n)] }, text: `/forget ${n} KAAE` });
-    expect(replies().pop()).toContain(`${n}. Guideline ${t} body in white`);
-    const after = (await repo((r) => r.listActive(tenantId, clientId))).filter((x) => x.humanRule.includes(t)).map((x) => x.humanRule);
-    expect(after).toEqual([already, `Guideline ${t} titles in navy`, `Guideline ${t} one accent colour`]);
-    await forgetAll(clientId, [existing.rule.id, ...active.filter((x) => x.humanRule.includes(t)).map((x) => x.id)]);
+      // "/forget <the number shown beside 'body in white'>" removes that rule and no other.
+      const [, n] = shown.find(([, , text]) => text.endsWith('body in white'))!;
+      await handleRulesCommand(deps, { sourceChannelId: chat, command: { kind: 'forget', numbers: [Number(n)] }, text: `/forget ${n} KAAE` });
+      expect(replies().pop()).toContain(`${n}. Guideline ${t} body in white`);
+      const after = (await repo((r) => r.listActive(tenantId, clientId))).filter((x) => x.humanRule.includes(t)).map((x) => x.humanRule);
+      expect(after).toEqual([words[0], words[1], words[3]]);
+    } finally {
+      await forgetAll(clientId, ids);
+    }
   });
 
   it('says the number of a rule saved from chat', async () => {
@@ -252,37 +242,6 @@ describe.skipIf(!url)('standing client rules', () => {
       expect(replies().pop()).toMatch(/Which client is this rule for/);
     } finally {
       await forgetAll(drustee, [drusteeRule.rule.id]);
-    }
-  });
-
-  it("does not save another brand's guidelines as this client's rules", async () => {
-    const t = tag();
-    const chat = chatId();
-    // The chat's client is KAAE because its last rule was KAAE's; the PDF's caption names no client.
-    const kaaeRule = await repo((r) => r.save({ tenantId, clientId, humanRule: `KAAE chat rule ${t}`, source: { kind: 'telegram_message', id: `${chat}:1` } }));
-    const foreign = [`Foreign ${t} use FastPay green`];
-    try {
-      const { deps, replies } = intake();
-      const refused = await handleGuidelinesPdf({ ...deps, model: guidelines('FastPay Wallet', foreign) }, { sourceChannelId: chat, fileId: 'f', fileName: 'guidelines.pdf', caption: '' });
-      await refused.done;
-      expect(replies().pop()).toMatch(/reads as the brand guidelines of FastPay Wallet, not KAAE<\/b>, so no rules were saved[\s\S]*client's name in the caption/);
-      expect((await repo((r) => r.listActive(tenantId, clientId))).some((x) => x.humanRule.includes(`Foreign ${t}`))).toBe(false);
-
-      // The client's own guidelines, under its full name, are saved.
-      const own = await handleGuidelinesPdf(
-        { ...deps, model: guidelines('Kurdistan Accrediting Association for Education', [`Own ${t} titles in navy`]) },
-        { sourceChannelId: chat, fileId: 'f', fileName: 'guidelines.pdf', caption: '' }
-      );
-      await own.done;
-      expect(replies().pop()).toMatch(/KAAE brand guidelines read/);
-
-      // A caption that names the client is the sender saying whose they are.
-      const named = await handleGuidelinesPdf({ ...deps, model: guidelines('FastPay Wallet', foreign) }, { sourceChannelId: chat, fileId: 'f', fileName: 'guidelines.pdf', caption: 'KAAE' });
-      await named.done;
-      expect(replies().pop()).toMatch(/KAAE brand guidelines read/);
-    } finally {
-      const mine = (await repo((r) => r.listActive(tenantId, clientId))).filter((x) => x.humanRule.includes(t));
-      await forgetAll(clientId, [kaaeRule.rule.id, ...mine.map((x) => x.id)]);
     }
   });
 });

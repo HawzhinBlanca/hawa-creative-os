@@ -41,24 +41,19 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     approvalManager = new HumanApprovalManager();
   });
 
-  async function createTestTask(clientName: string = 'KAAE Kurdistan Association') {
-    const res = await app.request('/api/webhooks/telegram', {
+  const KAAE = 'c1000000-0000-4000-8000-000000000002';
+
+  /** A Desk task; KAAE's unless a caller asks for one with no client. */
+  async function createTestTask(clientName: string = 'KAAE Kurdistan Association', clientId: string | null = KAAE) {
+    const res = await app.request('/tasks', {
       method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        update_id: Math.floor(Math.random() * 1000000),
-        message: {
-          text: `/task Annual Gala Invitation Campaign for ${clientName}`,
-          chat: { id: 888123 },
-        },
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: `Annual Gala Invitation Campaign for ${clientName}`, ...(clientId ? { clientId } : {}) }),
     });
     expect(res.status).toBe(201);
-    const json = await res.json();
-    return json.task;
+    const task = await res.json();
+    expect(task.clientId).toBe(clientId);
+    return task;
   }
 
   /** The passing QA run Postgres wants on record before a revision is approved. */
@@ -228,8 +223,8 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
   });
 
   it('3. Rejects stale revision approval and cross-task revision mismatch', async () => {
-    const taskA = await createTestTask('Client Alpha');
-    const taskB = await createTestTask('Client Beta');
+    const taskA = await createTestTask('Client Alpha', null);
+    const taskB = await createTestTask('Client Beta', null);
 
     const revA1 = crypto.randomUUID();
     const revA2 = crypto.randomUUID();
@@ -833,7 +828,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
   });
 
   it('10. H03: Maps UI action "approve" to "approved", rejects invalid actions with 400, and denies role spoofing', async () => {
-    const task = await createTestTask('H03 Test Client');
+    const task = await createTestTask('H03 Test Client', null);
     const revId = crypto.randomUUID();
 
     await app.request(`/tasks/${task.id}/revisions`, {

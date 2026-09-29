@@ -615,11 +615,9 @@ POST /api/v1/tasks/:taskId/studio-recovery/:runId/settlement
 POST /api/v1/tasks/:taskId/workflow/:action
 POST /api/v1/tasks/sweep-failed
 POST /api/v1/waha/kill-switch
-POST /api/v1/webhooks/telegram
 POST /api/v1/webhooks/whatsapp
 POST /api/v1/webhooks/whatsapp/actions
 POST /api/waha/kill-switch
-POST /api/webhooks/telegram
 POST /api/webhooks/whatsapp
 POST /api/webhooks/whatsapp/actions
 POST /assets/sanitize-svg
@@ -833,11 +831,9 @@ POST /v1/tasks/:taskId/studio-recovery/:runId/settlement
 POST /v1/tasks/:taskId/workflow/:action
 POST /v1/tasks/sweep-failed
 POST /v1/waha/kill-switch
-POST /v1/webhooks/telegram
 POST /v1/webhooks/whatsapp
 POST /v1/webhooks/whatsapp/actions
 POST /waha/kill-switch
-POST /webhooks/telegram
 POST /webhooks/whatsapp
 POST /webhooks/whatsapp/actions
 PUT /api/clients/:clientId/documents/:documentId/knowledge

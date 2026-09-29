@@ -74,8 +74,6 @@ export interface CoreContext {
   telegramAllowedUsers: string[];
   /** The office plus the requesters allowed to send work in Telegram (TELEGRAM_INTAKE_ALLOWED_USERS). */
   telegramIntakeUsers: string[];
-  /** Brand guidelines being read in the background after the sender was answered; tests await them. */
-  guidelineReadings: Set<Promise<void>>;
 
   // Without a database only: with one, each holds nothing and Postgres is the only truth
   // (services/no-database-store.ts). Routes still read and write them for the in-memory mode.

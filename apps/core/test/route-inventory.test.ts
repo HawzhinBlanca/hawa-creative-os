@@ -162,7 +162,7 @@ describe('the route modules the app.ts split fills (SPLIT_PLAN F11)', () => {
     'task-pipeline.routes.ts': 'registerTaskPipelineRoutes',
     'search.routes.ts': 'registerSearchRoutes',
     'whatsapp.routes.ts': 'registerWhatsappRoutes',
-    'telegram-webhook.routes.ts': 'registerTelegramWebhookRoutes',
+    // telegram-webhook.routes.ts (the old Telegram intake) was deleted by stage 2 of ADR-135.
   };
 
   it.each(Object.entries(MODULES))('routes/%s exports %s', async (file, register) => {

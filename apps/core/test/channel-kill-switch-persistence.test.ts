@@ -24,6 +24,7 @@ beforeAll(() => {
   delete process.env.TELEGRAM_BOT_TOKEN;
 });
 afterEach(async () => {
+  vi.unstubAllEnvs();
   // Release both switches for the next test: Telegram through the route an operator uses, WhatsApp
   // through the same route as an administrator, the only role that may change it (ADR-128).
   const app = createApp({ db } as any);
@@ -47,12 +48,17 @@ const switchRow = async (channel: 'telegram' | 'waha') =>
     (await sql<{ state: string; detail: { killSwitch?: { active: boolean } } }>`SELECT h.state, h.detail FROM hawa.integration_health h
       JOIN hawa.integrations i ON i.id = h.integration_id
       WHERE i.tenant_id = ${tenantId}::uuid AND i.kind = ${channel} AND i.name = ${KILL_SWITCH_ROW_NAME}`.execute(trx)).rows[0]);
-const telegramWebhook = (app: ReturnType<typeof createApp>) =>
-  app.request('/api/webhooks/telegram', {
+const WORKER = ['worker', 'kill', 'switch', 'token'].join('_');
+/** The worker's hand-off of one polled Telegram update (POST /v1/internal/telegram/intake, ADR-135). */
+const telegramIntake = async (app: ReturnType<typeof createApp>) => {
+  vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+  const res = await app.request('/v1/internal/telegram/intake', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET! },
-    body: JSON.stringify({ update_id: 1, message: { message_id: 1, from: { id: 1, is_bot: false, first_name: 'A' }, chat: { id: 1, type: 'private' }, date: 1790000000, text: 'hello' } }),
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WORKER}` },
+    body: JSON.stringify({ v: 1, mode: 'legacy', update: { update_id: 1, message: { message_id: 1, from: { id: 1, is_bot: false, first_name: 'A' }, chat: { id: 1, type: 'private' }, date: 1790000000, text: 'hello' } } }),
   });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+};
 
 describe('the kill switches survive a restart', () => {
   it('refuses a non-office principal before changing the persisted switch', async () => {
@@ -105,7 +111,7 @@ describe('the kill switches survive a restart', () => {
     }
   });
 
-  it('Telegram, thrown with the ingress toggle: a new Core reports it and refuses the webhook (the worker\'s poller reads the same row)', async () => {
+  it('Telegram, thrown with the ingress toggle: a new Core reports it and refuses the worker\'s intake (the worker\'s poller reads the same row)', async () => {
     const before = createApp({ db } as any);
     const thrown = await toggle(before, 'telegram', false);
     expect(thrown.status).toBe(200);
@@ -114,7 +120,7 @@ describe('the kill switches survive a restart', () => {
 
     const restarted = createApp({ db } as any);
     expect(await channels(restarted)).toEqual({ telegram: false, waha: true });
-    expect((await telegramWebhook(restarted)).status).toBe(503);
+    expect((await telegramIntake(restarted)).body).toMatchObject({ kind: 'handled', intakeStatus: 503, code: 'INTAKE_PAUSED' });
     const health = await (await restarted.request('/v1/health', { headers: operator })).json();
     expect(health.dependencies.telegram).toBe('kill_switch_active');
   });

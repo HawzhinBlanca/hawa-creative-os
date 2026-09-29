@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { createDb, sql } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { persistChatIntake, type ChatIntake } from '../src/services/chat-intake.js';
+import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) throw new Error('Only disposable hawa_repair database admitted');
@@ -53,50 +54,41 @@ describe.skipIf(!url)('chat intake with real isolated PostgreSQL', () => {
     expect(second.created).toBe(false);
     expect(second.task.id).toBe(first.task.id);
   });
+  // ADR-135 stage 2: a new Telegram request is the draft prepareChatCampaignDraft builds, persisted by
+  // the lifecycle projection through persistChatIntake. These cases drive that pair directly.
+  const prepare = (chat: string, text: string, senderName = 'Office') =>
+    createChatCampaignIntake({ telegramBridge: {} } as any).prepareChatCampaignDraft({
+      platform: 'telegram', sourceEventId: `test-${randomUUID()}`, sourceChannelId: chat, senderName,
+      rawText: text, rawJson: { message: { chat: { id: chat }, text } }, autoGenerate: true, isInstructionOnly: false,
+    });
   it('survives a new HTTP app instance and preserves the source/copy after refresh', async () => {
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const bridge: any = { dispatchOutboundMessage: dispatch };
-    const payload = { update_id: `test-${randomUUID()}`, message: { message_id: 101, from: { id: 123, first_name: 'Test' },
-      chat: { id: 'isolated-test' }, text: 'KAAE invitation\n---\nHAWA TEST\nExact test copy.' } };
-    const send = (app: any) => app.request('/api/webhooks/telegram', { method: 'POST', headers: {
-      'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET! }, body: JSON.stringify(payload) });
-    const first = await send(createApp({ db, telegramBridge: bridge })); expect(first.status).toBe(201);
-    const firstBody = await first.json();
-    const restarted = createApp({ db, telegramBridge: bridge });
-    const replay = await send(restarted); expect(replay.status).toBe(200); expect((await replay.json()).task.id).toBe(firstBody.task.id);
-    expect(dispatch).toHaveBeenCalledTimes(1);
-    const read = await restarted.request(`/v1/tasks/${firstBody.task.id}`, { headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` } });
+    const draft = await prepare('isolated-test', 'KAAE invitation\n---\nHAWA TEST\nExact test copy.');
+    const first = await persistChatIntake(db, draft);
+    expect(first.created).toBe(true);
+    const replay = await persistChatIntake(db, draft);
+    expect(replay.created).toBe(false);
+    expect(replay.task.id).toBe(first.task.id);
+    const restarted = createApp({ db });
+    const read = await restarted.request(`/v1/tasks/${first.task.id}`, { headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` } });
     const task = await read.json(); expect(read.status).toBe(200); expect(task.sourcePlatform).toBe('telegram');
     expect(task.designInstructions).toBe('KAAE invitation'); expect(task.copyEn).toBe('Exact test copy.');
     const list = await restarted.request('/v1/tasks', { headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` } });
-    expect((await list.json()).items.some((x: any) => x.id === firstBody.task.id)).toBe(true);
+    expect((await list.json()).items.some((x: any) => x.id === first.task.id)).toBe(true);
   });
   it('keeps an unrecognised client unscoped and never schedules automatic drafting for it', async () => {
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const app = createApp({ db, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
-    const payload = { update_id: `test-${randomUUID()}`, message: { message_id: 102, from: { id: 555, first_name: 'Stranger <b>' },
-      chat: { id: 'isolated-stranger' }, text: 'Hello, please make me a poster.\n---\nBIG SALE\nEverything half price.' } };
-    const res = await app.request('/api/webhooks/telegram?generate=true', { method: 'POST', headers: {
-      'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET! }, body: JSON.stringify(payload) });
-    expect(res.status).toBe(201);
-    const body = await res.json();
-    expect(body.task.clientId).toBeNull();
-    const row = await db.selectFrom('tasks').select(['client_id', 'requested_by']).where('id', '=', body.task.id).executeTakeFirst();
+    const draft = await prepare('isolated-stranger', 'Hello, please make me a poster.\n---\nBIG SALE\nEverything half price.', 'Stranger <b>');
+    expect(draft.clientId).toBeNull();
+    expect(draft.autoGenerate).toBe(false);
+    const persisted = await persistChatIntake(db, draft);
+    const row = await db.selectFrom('tasks').select(['client_id', 'requested_by']).where('id', '=', persisted.task.id).executeTakeFirst();
     expect(row?.client_id).toBeNull();
     // ADR-027: a channel message is attributed to the Channel Ingress identity, never to the Primary Operator.
     expect(row?.requested_by).toBe(CHANNEL_INGRESS_USER_ID);
     expect(row?.requested_by).not.toBe(PRIMARY_OPERATOR_USER_ID);
-    const outbox = await db.selectFrom('outbox_commands').select(['payload']).where('aggregate_id', '=', body.task.id).execute();
+    const outbox = await db.selectFrom('outbox_commands').select(['payload']).where('aggregate_id', '=', persisted.task.id).execute();
     expect(outbox).toHaveLength(1);
     expect((outbox[0].payload as any).autoGenerate).toBeUndefined();
     expect((outbox[0].payload as any).variant).toEqual({ width: 1080, height: 1080 });
-    // the requester is told the truth, in escaped HTML, and the message contains no Canva link
-    expect(dispatch).toHaveBeenCalledTimes(1);
-    const sent = dispatch.mock.calls[0][1];
-    expect(sent.parse_mode).toBe('HTML');
-    expect(sent.text).toContain('No client was named');
-    expect(sent.text).not.toContain('canva.com/design');
-    expect(sent.text).toContain('Stranger &lt;b&gt;');
   });
   it('records the request language from its script (Sorani for Arabic script, English otherwise)', async () => {
     const ku = await persistChatIntake(db, { platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: 'lang-' + randomUUID().slice(0, 8), clientId: null, title: 'وۆرکشۆپ', rawText: 'وۆرکشۆپی دڵنیایی جۆری', designInstructions: '', exactCopy: [] });
@@ -109,44 +101,29 @@ describe.skipIf(!url)('chat intake with real isolated PostgreSQL', () => {
     // The disposable database accumulates rows across runs; a fresh chat id keeps the daily cap out of this test.
     vi.stubEnv('AUTO_GENERATE_DAILY_CAP_PER_SENDER', '100000');
     vi.stubEnv('AUTO_GENERATE_DAILY_CAP_GLOBAL', '100000');
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const app = createApp({ db, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
-    const payload = { update_id: `test-${randomUUID()}`, message: { message_id: 103, from: { id: 556, first_name: 'Office' },
-      chat: { id: `isolated-office-${randomUUID()}` }, text: 'KAAE invitation\n---\nINVITATION\nYou are cordially invited.' } };
-    const res = await app.request('/api/webhooks/telegram?generate=true', { method: 'POST', headers: {
-      'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET! }, body: JSON.stringify(payload) });
-    expect(res.status).toBe(201);
-    const body = await res.json();
-    expect(body.task.clientId).toBe(client);
-    const outbox = await db.selectFrom('outbox_commands').select(['payload']).where('aggregate_id', '=', body.task.id).execute();
+    const draft = await prepare(`isolated-office-${randomUUID()}`, 'KAAE invitation\n---\nINVITATION\nYou are cordially invited.');
+    expect(draft.clientId).toBe(client);
+    const persisted = await persistChatIntake(db, draft);
+    const outbox = await db.selectFrom('outbox_commands').select(['payload']).where('aggregate_id', '=', persisted.task.id).execute();
     expect(outbox).toHaveLength(1);
     expect((outbox[0].payload as any)).toMatchObject({ workflow: 'canva', autoGenerate: true, variant: { width: 1080, height: 1350 } });
-    const sent = dispatch.mock.calls[0][1];
-    expect(sent.text).toContain('Preparing your Canva draft');
-    expect(sent.text).not.toContain('canva.com/design');
     vi.unstubAllEnvs();
   });
-  it('caps automatic drafts per sender per day and tells the sender the request is saved for manual design', async () => {
+  it('caps automatic drafts per sender per day and saves the request for manual design', async () => {
     vi.stubEnv('AUTO_GENERATE_DAILY_CAP_PER_SENDER', '1');
     vi.stubEnv('AUTO_GENERATE_DAILY_CAP_GLOBAL', '100000');
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const app = createApp({ db, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
     const chat = `isolated-cap-${randomUUID()}`;
-    const send = (n: number) => app.request('/api/webhooks/telegram?generate=true', { method: 'POST', headers: {
-      'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET! },
-      body: JSON.stringify({ update_id: `test-${randomUUID()}`, message: { message_id: n, from: { id: 777, first_name: 'Office' },
-        chat: { id: chat }, text: `KAAE invitation ${n}\n---\nINVITATION ${n}\nYou are cordially invited.` } }) });
-    const first = await (await send(1)).json();
-    const second = await (await send(2)).json();
+    const send = async (n: number) => persistChatIntake(db,
+      await prepare(chat, `KAAE invitation ${n}\n---\nINVITATION ${n}\nYou are cordially invited.`));
+    const first = await send(1);
+    const second = await send(2);
+    expect(first.autoGenerateDeclined).toBeUndefined();
+    expect(second.autoGenerateDeclined).toBe('SENDER_DAILY_CAP');
     const payloads = await Promise.all([first, second].map(async (b) =>
       (await db.selectFrom('outbox_commands').select(['payload']).where('aggregate_id', '=', b.task.id).executeTakeFirst())?.payload as any));
     expect(payloads[0].autoGenerate).toBe(true);
     expect(payloads[1].autoGenerate).toBeUndefined();
     expect(payloads[1].autoGenerateDeclined).toBe('SENDER_DAILY_CAP');
-    expect(dispatch).toHaveBeenCalledTimes(2);
-    expect(dispatch.mock.calls[0][1].text).toContain('Preparing your Canva draft');
-    expect(dispatch.mock.calls[1][1].text).toContain('daily limit for automatic drafts');
-    expect(dispatch.mock.calls[1][1].text).not.toContain('Preparing your Canva draft');
     vi.unstubAllEnvs();
   });
   it('keeps a Desk session across a Core restart and honours a revocation made on another instance', async () => {
@@ -167,11 +144,5 @@ describe.skipIf(!url)('chat intake with real isolated PostgreSQL', () => {
     expect((await restarted.request('/v1/tasks', { headers: { Authorization: `Bearer ${token}` } })).status).toBe(401);
     const stored = await sql<any>`SELECT revoked_at FROM hawa.desk_sessions WHERE token_hash=encode(digest(${token},'sha256'),'hex')`.execute(db);
     expect(stored.rows[0]?.revoked_at).toBeTruthy();
-  });
-  it('denies unbound chat approval before fabricating a task or sending any acknowledgment', async () => {
-    const dispatch = vi.fn(); const app = createApp({ db, telegramBridge: { answerCallbackQuery: dispatch } as any });
-    const res = await app.request('/api/webhooks/telegram', { method: 'POST', headers: { 'Content-Type': 'application/json',
-      'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET! }, body: JSON.stringify({ update_id: randomUUID(), callback_query: { from: { id: 123 }, data: 'approve:unknown' } }) });
-    expect(res.status).toBe(422); expect(dispatch).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { type Kysely, type Database, TaskRepository, withRlsContext, sql } from '@hawa/db';
 import { CHANNEL_INGRESS_USER_ID, type BlobRef, type LifecycleAlbumRef, type LifecycleSourceRef, type ReviewedSourceEvidence } from '@hawa/contracts';
-import { LegacyTelegramRequestRefused, legacyTelegramFinishOnly } from './legacy-telegram-scope.js';
 
 export interface ChatIntake {
   tenantId?: string;
@@ -133,74 +132,6 @@ export function splitBilingualRequest(rawText: string): { en: string; ckb: strin
   };
 }
 
-/**
- * The request in this chat that a caption-less photo should join: the latest one saved within
- * `withinMinutes` (HAWA_REFERENCE_MERGE_MINUTES, default 5) that goes to the v3 studio, has no image
- * of its own, and whose design has not reached layout generation. Null when there is none, and the
- * photo is handled as before.
- */
-export async function findRequestAwaitingReference(
-  db: Kysely<Database>,
-  opts: { sourceChannelId: string; tenantId?: string; withinMinutes?: number; env?: NodeJS.ProcessEnv }
-): Promise<{ taskId: string; clientId: string; title: string } | null> {
-  const env = opts.env || process.env;
-  if (!runsPipelineV3(opts.sourceChannelId, env)) return null;
-  const tenantId = opts.tenantId || '00000000-0000-4000-a000-000000000001';
-  const minutes = opts.withinMinutes ?? Math.max(0, Number(env.HAWA_REFERENCE_MERGE_MINUTES || 5));
-  if (!(minutes > 0)) return null;
-  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
-    const row = (
-      await sql<any>`SELECT t.id, t.client_id, t.title, o.payload
-        FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
-        WHERE o.tenant_id = ${tenantId}::uuid AND o.command_type = 'task.created'
-          AND o.payload->>'sourceChannelId' = ${opts.sourceChannelId}
-          AND o.created_at > now() - make_interval(mins => ${minutes})
-          AND COALESCE(o.payload->>'isInstructionOnly', 'false') <> 'true'
-          AND t.client_id IS NOT NULL
-        ORDER BY o.created_at DESC LIMIT 1`.execute(trx)
-    ).rows[0];
-    // A request that came with its own picture takes more: the brief classifies every picture the
-    // request carries. Refusing it answered a reference sent seconds after an album "send the
-    // request text now", when the request had just been sent.
-    if (!row || row.payload?.designStudio !== true) return null;
-    const run = (
-      await sql<{ status: string }>`SELECT status FROM hawa.design_studio_runs
-        WHERE tenant_id = ${tenantId}::uuid AND task_id = ${row.id}::uuid
-        ORDER BY created_at DESC LIMIT 1`.execute(trx)
-    ).rows[0];
-    if (run && !['briefing', 'conceiving'].includes(run.status)) return null;
-    return { taskId: String(row.id), clientId: String(row.client_id), title: String(row.title || 'your request') };
-  });
-}
-
-/**
- * The request an album photo belongs to. Telegram delivers an album as one message per photo,
- * sharing a media_group_id, with the caption on one of them. The captioned photo became the
- * request; the others, captionless, were each saved as "reference image (awaiting request)" and
- * answered "Send the request text now", because the request already had an image and so was not
- * "awaiting" one.
- */
-export async function findAlbumRequest(
-  db: Kysely<Database>,
-  opts: { sourceChannelId: string; mediaGroupId: string; tenantId?: string }
-): Promise<{ taskId: string; clientId: string; title: string } | null> {
-  const tenantId = opts.tenantId || '00000000-0000-4000-a000-000000000001';
-  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
-    const row = (
-      await sql<{ id: string; client_id: string; title: string | null }>`SELECT t.id, t.client_id, t.title
-        FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
-        WHERE o.tenant_id = ${tenantId}::uuid AND o.command_type = 'task.created'
-          AND o.payload->>'sourceChannelId' = ${opts.sourceChannelId}
-          AND o.payload->'studioOptions'->>'mediaGroupId' = ${opts.mediaGroupId}
-          AND o.created_at > now() - interval '15 minutes'
-          AND COALESCE(o.payload->>'isInstructionOnly', 'false') <> 'true'
-          AND t.client_id IS NOT NULL
-        ORDER BY o.created_at ASC LIMIT 1`.execute(trx)
-    ).rows[0];
-    return row ? { taskId: String(row.id), clientId: String(row.client_id), title: String(row.title || 'your request') } : null;
-  });
-}
-
 /** Commit the verified original event and its task before broadcasting or acknowledging. */
 export async function persistChatIntake(
   db: Kysely<Database>,
@@ -278,11 +209,8 @@ export async function persistChatIntake(
     const predecessorIds = [...new Set([
       input.studioOptions?.parentTaskId, input.studioOptions?.answers, input.studioOptions?.referenceFor,
     ].filter((id): id is string => Boolean(id)))];
-    // ADR-135: in the legacy intake's finish-only scope a new Telegram task outside the lifecycle
-    // must continue an open legacy request of this chat. A replay of a saved event is not new work.
-    const legacyFinishOnly = !existing && input.platform === 'telegram' &&
-      options.outboxState !== 'recorded' && legacyTelegramFinishOnly();
-    if (legacyFinishOnly && predecessorIds.length === 0) throw new LegacyTelegramRequestRefused('NEW_REQUEST');
+    // ADR-135 stage 2: the only production callers are RequestLifecycle's projection (outboxState
+    // 'recorded') and WhatsApp intake; no path creates a Telegram task outside the lifecycle any more.
     let predecessorPin: 'core' | 'restate' | undefined;
     for (const predecessorId of predecessorIds) {
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(predecessorId)) {
@@ -298,10 +226,6 @@ export async function persistChatIntake(
           AND t.client_id IS NOT DISTINCT FROM ${input.clientId || null}::uuid
         LIMIT 1`.execute(trx)).rows[0];
       if (!predecessor) throw new Error('Predecessor task is outside this request scope');
-      if (legacyFinishOnly && predecessor.request_id) throw new LegacyTelegramRequestRefused('LIFECYCLE_OWNED');
-      if (legacyFinishOnly && ['complete', 'rejected', 'cancelled'].includes(predecessor.state)) {
-        throw new LegacyTelegramRequestRefused('REQUEST_CLOSED');
-      }
       if (predecessorPin && predecessorPin !== predecessor.delivery_executor_pin) {
         throw new Error('Predecessor tasks belong to different delivery executors');
       }

@@ -7,9 +7,10 @@ import { productionAppOptions } from '../src/entrypoint-options.js';
 import { telegramPollerOf } from '../src/services/telegram-poller-owner.js';
 
 /**
- * ADR-135: every Telegram chat is owned by RequestLifecycle, whatever the configuration says, and
- * the old intake only finishes requests it started before the switch. Against the per-file test
- * database as hawa_app, through Core's internal intake as the worker's ChatInbox calls it.
+ * ADR-135: every Telegram chat is owned by RequestLifecycle, whatever the configuration says. Since
+ * stage 2 the old intake is gone: a reply or a button under one of its messages is a stale reply, and
+ * a brief beside one of its requests opens a lifecycle request. Against the per-file test database as
+ * hawa_app, through Core's internal intake as the worker's ChatInbox calls it.
  *
  * The production behaviour this replaces (found 2026-09-28 with HAWA_LIFECYCLE_CHATS=*): a plain
  * brief in a chat with earlier Core tasks became a new Core-pinned task; a reply to an open legacy
@@ -152,58 +153,38 @@ describe('every Telegram chat is lifecycle-owned (ADR-135)', () => {
     }
   });
 
-  it('a reply to an open legacy draft reaches that request and makes its revision, pinned as it was', async () => {
+  // Stage 2 of ADR-135: the old intake is gone, so a reply to one of its drafts, open or finished, is
+  // a stale reply. It changes nothing and makes no task; the requester is asked to reply to a current
+  // notice or send /new (ChatInbox's request-choice-required notice).
+  it.each(['human_review', 'complete'] as const)('a reply to an old-intake draft (%s) is a stale reply and makes nothing', async (state) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '*');
-    fakeTelegram();
+    const { sent } = fakeTelegram();
     const chat = chatId();
-    const legacy = await legacyTask(chat, { state: 'human_review', ageHours: 3 });
+    const legacy = await legacyTask(chat, { state, ageHours: 3 });
     const reply = textUpdate(chat, 'Make the title bigger', {
       reply_to_message: { message_id: 4242, from: { id: 1, is_bot: true, first_name: 'Hawa' },
         chat: { id: chat, type: 'private' }, date: 1790000000,
         caption: `Draft ready\n🆔 Task ID: ${legacy}` } });
-    const answer = await intake(createApp({ db } as any), reply);
-    expect(answer.body.code).not.toBe('STALE_REQUEST_REPLY');
-    expect(answer.body.lifecycleAction).toBeUndefined();
-    expect(answer.body.intakeStatus).toBe(200);
-    const tasks = await tasksInChat(chat);
-    expect(tasks).toHaveLength(2);
-    expect(tasks[1]).toMatchObject({ parent: legacy, pin: 'core', request_id: null });
+    const app = createApp({ db } as any);
+    const answer = await intake(app, reply);
+    expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY',
+      lifecycleAction: 'request-choice-required', chatId: String(chat) });
+    expect(await tasksInChat(chat)).toEqual([expect.objectContaining({ id: legacy, pin: 'core', request_id: null })]);
+    // The same update again gives the same answer (a receipt), and Core itself sent nothing.
+    expect((await intake(createApp({ db } as any), reply)).body).toMatchObject({ code: 'STALE_REQUEST_REPLY' });
+    expect(sent).toHaveLength(0);
   });
 
-  it('a reply to a finished legacy design starts nothing and asks for /new', async () => {
+  it('an unlinked brief beside an open old-intake request opens a lifecycle request', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '*');
-    fakeTelegram();
-    const chat = chatId();
-    const legacy = await legacyTask(chat, { state: 'complete', ageHours: 3 });
-    const reply = textUpdate(chat, 'Make the title bigger', {
-      reply_to_message: { message_id: 4243, from: { id: 1, is_bot: true, first_name: 'Hawa' },
-        chat: { id: chat, type: 'private' }, date: 1790000000, text: `Delivered.\n🆔 Task ID: ${legacy}` } });
-    const answer = await intake(createApp({ db } as any), reply);
-    expect(answer.body).toMatchObject({ code: 'LEGACY_REQUEST_REFUSED', reason: 'REQUEST_CLOSED',
-      lifecycleAction: 'new-brief-required', chatId: String(chat) });
-    expect(await tasksInChat(chat)).toHaveLength(1);
-  });
-
-  it('an unlinked brief beside an open legacy request of the last 48 hours never becomes a new legacy task', async () => {
-    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '*');
     const { sent } = fakeTelegram();
     const chat = chatId();
     const legacy = await legacyTask(chat, { state: 'human_review', ageHours: 5 });
     const answer = await intake(createApp({ db } as any), textUpdate(chat, 'KAAE follow-up event\n---\nDecember 9, 2026'));
-    expect(answer.body.lifecycleAction === 'open-request').toBe(false);
-    // Legacy intake read it against its open design: a change to it, or a refusal asking for /new.
-    for (const task of (await tasksInChat(chat)).slice(1)) expect(task).toMatchObject({ parent: legacy, pin: 'core' });
-    if (answer.body.code === 'LEGACY_REQUEST_REFUSED') {
-      expect(answer.body).toMatchObject({ reason: 'NEW_REQUEST', lifecycleAction: 'new-brief-required' });
-      expect(await tasksInChat(chat)).toHaveLength(1);
-      expect(sent).toHaveLength(0);
-    }
-    // /new is always a new lifecycle request.
-    const explicit = await intake(createApp({ db } as any), textUpdate(chat, '/new KAAE follow-up event\n---\nDecember 9, 2026'));
-    expect(explicit.body).toMatchObject({ lifecycleAction: 'open-request' });
+    expect(answer.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request', chatId: String(chat) });
+    // Intake made no task (the request object makes it), and nothing joined the old request.
+    expect(await tasksInChat(chat)).toEqual([expect.objectContaining({ id: legacy, pin: 'core', parent: null })]);
+    expect(sent).toHaveLength(0);
   });
 
   it('a legacy draft button never becomes a directive for a waiting lifecycle request', async () => {
@@ -216,36 +197,37 @@ describe('every Telegram chat is lifecycle-owned (ADR-135)', () => {
     const press = { update_id: updateId(), callback_query: { id: `cb-${randomUUID()}`,
       from: { id: OFFICE, is_bot: false, first_name: 'Owner' }, data: `rq:ok:${legacy}`,
       message: { message_id: 4244, chat: { id: chat, type: 'private' }, date: 1790000000, text: 'Draft ready' } } };
-    const answer = await intake(createApp({ db } as any), press, 'lifecycle');
-    expect(answer.body.lifecycleAction).not.toBe('requester-revision');
-    expect(answer.body.lifecycleAction).not.toBe('requester-answer');
+    const bridge = { downloadFile: vi.fn(), dispatchOutboundMessage: vi.fn(async () => ({ success: true })),
+      answerCallbackQuery: vi.fn(async () => true) };
+    const answer = await intake(createApp({ db, telegramBridge: bridge } as any), press, 'lifecycle');
+    // Stage 2 of ADR-135: every button is under an old-intake message, and a press is a stale reply.
+    expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY',
+      lifecycleAction: 'request-choice-required', chatId: String(chat) });
     expect(await requestRev(waiting.requestId)).toBe(3);
-    expect((await tasksInChat(chat)).filter((t) => t.parent === waiting.taskId)).toHaveLength(0);
+    expect((await tasksInChat(chat)).filter((t) => t.parent === waiting.taskId || t.parent === legacy)).toHaveLength(0);
+    // The spinner is stopped once; the same press again replays its receipt and asks Telegram nothing.
+    expect(bridge.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect((await intake(createApp({ db, telegramBridge: bridge } as any), press, 'lifecycle')).body).toMatchObject({ code: 'STALE_REQUEST_REPLY' });
+    expect(bridge.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(bridge.dispatchOutboundMessage).not.toHaveBeenCalled();
   });
 
-  it('the old intake starts no request when handed an update by the lifecycle, or in production', async () => {
+  it('the old intake is gone: its route answers 404 under every prefix, in production too', async () => {
     const { sent } = fakeTelegram();
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET!;
-    const post = (app: any, chat: number, headers: Record<string, string> = {}) => app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret, ...headers },
-      body: JSON.stringify(textUpdate(chat, BRIEF)) });
-    const handedOn = chatId();
-    const refused = await post(createApp({ db } as any), handedOn, { 'x-hawa-intake-scope': 'finish-only' });
-    expect(refused.status).toBe(409);
-    expect(await refused.json()).toMatchObject({ code: 'LEGACY_REQUEST_REFUSED', reason: 'NEW_REQUEST' });
-    expect(await tasksInChat(handedOn)).toHaveLength(0);
-    const instruction = await createApp({ db } as any).request('/api/webhooks/telegram?generate=true', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret, 'x-hawa-intake-scope': 'finish-only' },
-      body: JSON.stringify(textUpdate(handedOn, 'Please change the background to navy')) });
-    expect(instruction.status).toBe(409);
-    expect(sent.filter((m) => String(m.chat_id) === String(handedOn))).toHaveLength(0);
-
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('TELEGRAM_INTAKE_ALLOWED_USERS', '*');
-    const inProduction = chatId();
-    const production = await post(createApp({ db } as any), inProduction);
-    expect(production.status).toBe(409);
-    expect(await tasksInChat(inProduction)).toHaveLength(0);
+    for (const production of [false, true]) {
+      if (production) { vi.stubEnv('NODE_ENV', 'production'); vi.stubEnv('TELEGRAM_INTAKE_ALLOWED_USERS', '*'); }
+      const app = createApp({ db } as any);
+      const chat = chatId();
+      for (const path of ['/webhooks/telegram', '/api/webhooks/telegram?generate=true', '/v1/webhooks/telegram', '/api/v1/webhooks/telegram']) {
+        const res = await app.request(path, { method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret },
+          body: JSON.stringify(textUpdate(chat, BRIEF)) });
+        expect(res.status, `${path} production=${production}`).toBe(404);
+      }
+      expect(await tasksInChat(chat)).toHaveLength(0);
+    }
+    expect(sent).toHaveLength(0);
   });
 });
 

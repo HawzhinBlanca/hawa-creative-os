@@ -213,20 +213,14 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
       const exports = memoryExportStore();
       const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store, qaEngine: passingQa as never });
 
-      // Ingest task with valid client
-      const ingestRes = await app.request('/api/webhooks/telegram', {
+      // A Drustee task
+      const createRes = await app.request('/tasks', {
         method: 'POST',
-        headers: {
-          'x-telegram-bot-api-secret-token': 'expected_office_secret',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          update_id: 202616,
-          message: { text: 'Campaign for Drustee Hospital', chat: { id: 888 } },
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Campaign for Drustee Hospital', clientId: 'c1000000-0000-4000-8000-000000000003' }),
       });
-      const ingestData = await ingestRes.json();
-      const taskId = ingestData.task.id;
+      expect(createRes.status).toBe(201);
+      const taskId = (await createRes.json()).id;
 
       // Register revision
       const revRes = await app.request(`/tasks/${taskId}/revisions`, {

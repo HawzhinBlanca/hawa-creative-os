@@ -140,8 +140,10 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
     expect(card.reply_markup?.inline_keyboard).toBeDefined();
   });
 
+  // Cases 2-5 also sent each token's button press to the Telegram webhook, which refused it with
+  // 422 "Desk review required". The webhook was removed by stage 2 of ADR-135; the tokens' own rules
+  // stay here.
   it('2. Callback Action Tokens: verifies valid approval and omnichannel publication', async () => {
-    const runId = Date.now();
     const taskId = crypto.randomUUID();
 
     // Create an action token bound to task, rev_1, and authorized user
@@ -162,33 +164,9 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
     expect(verifyResult.ok).toBe(true); assert(verifyResult.ok);
     expect(verifyResult.payload?.taskId).toBe(taskId);
     expect(verifyResult.payload?.action).toBe('approve');
-
-    // Send callback query webhook request: strictly gated to Desk review with 422
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': testSecret,
-      },
-      body: JSON.stringify({
-        update_id: 10001 + runId % 10000,
-        callback_query: {
-          id: `cb_${runId}`,
-          from: { id: parseInt(authorizedUserId, 10), first_name: 'Authorized', is_bot: false },
-          message: { message_id: 8891, chat: { id: 450405554, type: 'private' } },
-          data: callbackData,
-        },
-      }),
-    });
-
-    expect(res.status).toBe(422);
-    const body = await res.json();
-    expect(body.title).toBe('Desk review required');
-    expect(body.detail).toContain('Desk review bound to a captured revision');
   });
 
   it('3. Callback Replay Attack Defense: rejects duplicate execution with REPLAY_DETECTED', async () => {
-    const runId = Date.now();
     const taskId = crypto.randomUUID();
 
     const { callbackData } = actionTokenService.createToken({
@@ -215,31 +193,9 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
     });
     expect(res2.ok).toBe(false); assert(!res2.ok);
     expect(res2.code).toBe('REPLAY_DETECTED');
-
-    // Chat webhook boundary defense: rejects callback queries with 422 Desk review required
-    const hookRes = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': testSecret,
-      },
-      body: JSON.stringify({
-        update_id: 20002 + runId % 10000,
-        callback_query: {
-          id: `cb_replay_${runId}`,
-          from: { id: parseInt(authorizedUserId, 10), first_name: 'Authorized', is_bot: false },
-          message: { message_id: 8893, chat: { id: 450405554, type: 'private' } },
-          data: callbackData,
-        },
-      }),
-    });
-    expect(hookRes.status).toBe(422);
-    const hookBody = await hookRes.json();
-    expect(hookBody.title).toBe('Desk review required');
   });
 
   it('4. Stale Token Defense: rejects expired callback action tokens with EXPIRED', async () => {
-    const runId = Date.now();
     const taskId = crypto.randomUUID();
 
     // Token with -1000ms expiration (already expired)
@@ -259,31 +215,9 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
     });
     expect(tokenRes.ok).toBe(false); assert(!tokenRes.ok);
     expect(tokenRes.code).toBe('EXPIRED');
-
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': testSecret,
-      },
-      body: JSON.stringify({
-        update_id: Math.floor(Math.random() * 100000000) + 30001,
-        callback_query: {
-          id: `cb_expired_${runId}`,
-          from: { id: parseInt(authorizedUserId, 10), first_name: 'Authorized', is_bot: false },
-          message: { message_id: 8894, chat: { id: 450405554, type: 'private' } },
-          data: callbackData,
-        },
-      }),
-    });
-
-    expect(res.status).toBe(422);
-    const body = await res.json();
-    expect(body.title).toBe('Desk review required');
   });
 
   it('5. Foreign/Unknown Actor Defense: unknown users cannot approve tasks', async () => {
-    const runId = Date.now();
     const taskId = crypto.randomUUID();
 
     // Token created for authorized user
@@ -303,28 +237,6 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
     });
     expect(tokenRes.ok).toBe(false); assert(!tokenRes.ok);
     expect(tokenRes.code).toBe('UNAUTHORIZED_ACTOR');
-
-    // Foreign user clicks button in webhook -> rejected with 422 Desk review required
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': testSecret,
-      },
-      body: JSON.stringify({
-        update_id: Math.floor(Math.random() * 100000000) + 40001,
-        callback_query: {
-          id: `cb_foreign_${runId}`,
-          from: { id: parseInt(foreignUserId, 10), first_name: 'Intruder', is_bot: false },
-          message: { message_id: 8895, chat: { id: 450405554, type: 'private' } },
-          data: callbackData,
-        },
-      }),
-    });
-
-    expect(res.status).toBe(422);
-    const body = await res.json();
-    expect(body.title).toBe('Desk review required');
   });
 
   it('6. Stale Revision Defense: rejects approval minted for an older design revision', async () => {

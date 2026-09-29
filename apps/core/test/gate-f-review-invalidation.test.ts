@@ -24,20 +24,16 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
   const exports = memoryExportStore();
   const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store, qaEngine: passingQa as never });
 
+  /** A Desk task with no client yet: case 2 routes it to KAAE for its Drive destination. */
   async function createFixtureTask(clientName: string = 'Aster Hotel') {
-    const res = await app.request('/api/webhooks/telegram', {
+    const res = await app.request('/tasks', {
       method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        update_id: Math.floor(Math.random() * 100000),
-        message: { text: `Ramadan campaign for ${clientName}`, chat: { id: 999 } },
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: `Ramadan campaign for ${clientName}` }),
     });
+    expect(res.status).toBe(201);
     const json = await res.json();
-    return { ...json.task, taskId: json.task.id };
+    return { ...json, taskId: json.id };
   }
 
   /** The QA run Postgres wants on record before a revision is approved. */

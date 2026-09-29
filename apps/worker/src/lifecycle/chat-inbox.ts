@@ -48,8 +48,10 @@ export type IntakeAnswer =
       /** When mode=lifecycle and Core routed the update as a requester revision. */
       lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
         'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message' |
-        'late-change';
+        'late-change' | 'chat-answer';
       albumMessage?: string; albumNoticeKey?: string;
+      /** chat-answer: Core's answer to a greeting, question, rule or command (ADR-135 stage 2c). */
+      chatAnswer?: { text: string; parseMode?: 'HTML' };
       sourceMessage?: string; sourceNoticeKey?: string;
       draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
       /** open-request: the other requests the same update opens, one per language (ADR-139). */
@@ -58,8 +60,8 @@ export type IntakeAnswer =
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
       code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
         'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' | 'LIFECYCLE_MEDIA_NOT_ADMITTED' | 'LATE_REQUESTER_CHANGE' |
-        /** ADR-135: the old intake would have started new work; with new-brief-required, asks for /new. */
-        'LEGACY_REQUEST_REFUSED';
+        /** A group "/task …" or a change with no design waiting: with new-brief-required, asks for /new. */
+        'NEW_BRIEF_REQUIRED';
       reason?: string;
       /** late-change: the stage the request was in, and Core's alert for the office chat (if any). */
       requestStage?: LateChangeStage; officeAlert?: { chatId: string; text: string }; }
@@ -149,6 +151,13 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
       if (!done.chatId || !done.sourceMessage || !done.sourceNoticeKey) throw new Error('Core returned an incomplete source notice');
       ctx.sendNotice({ v: 1, key: `chatinbox:${done.sourceNoticeKey}`, chatId: done.chatId,
         kind: 'text', class: 'critical', text: done.sourceMessage });
+    }
+    if (done.lifecycleAction === 'chat-answer') {
+      if (!done.chatId || !done.chatAnswer?.text) throw new Error('Core returned an incomplete chat answer');
+      // Keyed by the update: a replay of this handler, or Core giving its recorded answer again, sends it once.
+      ctx.sendNotice({ v: 1, key: `chatinbox:chat-answer:${update.update_id}`, chatId: done.chatId,
+        kind: 'text', class: 'critical', text: done.chatAnswer.text,
+        ...(done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) });
     }
     if (done.lifecycleAction === 'album-message') {
       if (!done.chatId || !done.albumMessage || !done.albumNoticeKey) throw new Error('Core returned an incomplete album notice');

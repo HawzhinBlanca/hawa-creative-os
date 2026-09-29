@@ -2,6 +2,7 @@ import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { describe, it, expect, afterAll } from 'vitest';
 import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createHash } from 'node:crypto';
 
@@ -41,76 +42,28 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     }
   });
 
-  it('rejects unauthenticated telegram webhook', async () => {
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      body: JSON.stringify({ update_id: 1 }),
-    });
-    expect(res.status).toBe(401);
-  });
-
-  it('accepts authenticated telegram webhook and creates task', async () => {
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        update_id: 101,
-        message: { text: 'New poster request', chat: { id: 777 } },
-      }),
-    });
-    expect(res.status).toBe(201);
-    const json = await res.json();
-    expect(json.ok).toBe(true);
-    expect(json.task.status).toBe('RECEIVED');
-  });
-
-  it('handles authenticated telegram webhook with auto-generation into AWAITING_APPROVAL and QA report', async () => {
-    const res = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        update_id: 1011,
-        message: {
-          text: 'دەستپێکردنی خولی باوەڕپێدانی زانکۆکانی کەی ئەی ئەی ئی ٢٠٢٦',
-          chat: { id: 9988 },
-          from: { id: 9988, first_name: 'Hawzhin', username: 'hawzhin' },
-        },
-      }),
-    });
-    expect(res.status).toBe(201);
-    const json = await res.json();
-    expect(json.ok).toBe(true);
-    expect(json.task.sourcePlatform).toBe('telegram');
-    expect(json.task.clientId).toBe('c1000000-0000-4000-8000-000000000002');
-    expect(['RECEIVED', 'AWAITING_APPROVAL']).toContain(json.task.status);
-    if (json.task.latestQAReport) {
-      expect(json.task.latestQAReport.criticalPass).toBe(true);
+  // The Telegram webhook (POST /webhooks/telegram) was removed by stage 2 of ADR-135: the worker polls
+  // and hands each update to POST /v1/internal/telegram/intake. Its answers to briefs, /status,
+  // duplicates, passive and group messages are lifecycle-internal-intake.test.ts's.
+  it('has no Telegram webhook left', async () => {
+    for (const path of ['/api/webhooks/telegram', '/v1/webhooks/telegram', '/webhooks/telegram']) {
+      const res = await app.request(path, {
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ update_id: 101, message: { text: 'New poster request', chat: { id: 777 } } }),
+      });
+      expect(res.status, path).toBe(404);
     }
   });
 
-  it('handles telegram bot slash commands via webhook (/status)', async () => {
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        update_id: 1012,
-        message: { text: '/status', chat: { id: 9988 } },
-      }),
+  it('routes a Sorani KAAE brief to KAAE in the draft a new Telegram request opens', async () => {
+    // What the lifecycle's open-request builds (lifecycle-internal.routes.ts).
+    const text = 'دەستپێکردنی خولی باوەڕپێدانی زانکۆکانی کەی ئەی ئەی ئی ٢٠٢٦';
+    const draft = await createChatCampaignIntake({ telegramBridge: {} } as any).prepareChatCampaignDraft({
+      platform: 'telegram', sourceEventId: 'core-kaae-routing-1011', sourceChannelId: '9988',
+      senderName: 'Hawzhin', rawText: text, rawJson: { message: { text } }, autoGenerate: true, isInstructionOnly: false,
     });
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.ok).toBe(true);
-    expect(json.command).toBe(true);
-    expect(json.reply.text).toContain('Hawa Telegram Bridge Status');
+    expect(draft.clientId).toBe(KAAE);
   });
 
   it('exposes telegram adapter health and configuration via /v1/adapters/telegram/status', async () => {
@@ -123,108 +76,6 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(json.botUsername).toBeUndefined();
     expect(json.botName).toBeUndefined();
     expect(json.bridge).toBeDefined();
-  });
-
-  it('deduplicates identical incoming event', async () => {
-    const payload = JSON.stringify({
-      update_id: 102,
-      message: { text: 'Please create a new KAAE poster\n---\nDUPLICATE TEST', chat: { id: 777 } },
-    });
-    const res1 = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: payload,
-    });
-    expect(res1.status).toBe(201);
-
-    const res2 = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: payload,
-    });
-    expect(res2.status).toBe(200);
-    const json = await res2.json();
-    expect(json.duplicate).toBe(true);
-  });
-
-  it('keeps passive chat text out of the production task pipeline', async () => {
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        update_id: 103,
-        message: { text: 'Duplicate test', chat: { id: 777 } },
-      }),
-    });
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.ok).toBe(true);
-    expect(json.task).toBeUndefined();
-  });
-
-  it('keeps even a complete passive group brief in the inbox until explicitly promoted', async () => {
-    const message = 'KAAE Accreditation Ceremony\n---\nOctober 28, 2026\nErbil Hotel';
-    const passive = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ update_id: 104, message: { text: message, chat: { id: -777, type: 'supergroup' } } }),
-    });
-    expect(passive.status).toBe(200);
-    expect(await passive.json()).toMatchObject({ ok: true, status: 'MESSAGE_ONLY' });
-
-    const promoted = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ update_id: 105, message: { text: `/task ${message}`, chat: { id: -777, type: 'supergroup' } } }),
-    });
-    expect(promoted.status).toBe(201);
-    const json = await promoted.json();
-    expect(json.task).toBeDefined();
-    expect(json.task.title).toContain('KAAE');
-  });
-
-  it('records passive group updates durably so a webhook replay cannot promote them', async () => {
-    const payload = JSON.stringify({
-      update_id: 106,
-      message: { text: 'KAAE Ceremony\n---\nOctober 28, 2026\nErbil Hotel', chat: { id: -778, type: 'group' } },
-    });
-    const request = () => dbApp.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-      body: payload,
-    });
-    const first = await request();
-    expect(first.status).toBe(200);
-    expect(await first.json()).toMatchObject({ ok: true, status: 'MESSAGE_ONLY' });
-    const replay = await request();
-    expect(replay.status).toBe(200);
-    expect(await replay.json()).toMatchObject({ ok: true, duplicate: true, updateId: '106' });
-  });
-
-  it('does not treat a group reply quoting an unknown task ID as a new brief', async () => {
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        update_id: 107,
-        message: {
-          text: 'KAAE Accreditation Ceremony\n---\nOctober 28, 2026\nErbil Hotel',
-          chat: { id: -779, type: 'group' },
-          reply_to_message: { text: 'Unknown task 11111111-1111-4111-8111-111111111111' },
-        },
-      }),
-    });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, status: 'MESSAGE_ONLY' });
   });
 
   it('creates task via Desk API with Idempotency-Key', async () => {

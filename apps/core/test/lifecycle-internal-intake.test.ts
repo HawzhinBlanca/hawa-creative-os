@@ -18,8 +18,9 @@ import { telegramPollerOf } from '../src/services/telegram-poller-owner.js';
  * hawa_app (row-level security as in production): the worker's ChatInbox hands each update to
  * POST /v1/internal/telegram/intake, and dead-letters one intake keeps failing through
  * POST /v1/internal/telegram/park. Since ADR-135 every chat is lifecycle-owned (no chat setting
- * exists), the old intake only finishes requests it started (lifecycle-only-telegram.test.ts), and
- * only the worker polls.
+ * exists) and only the worker polls; since its stage 2 there is no old intake, and the answers it gave
+ * to greetings, questions, thanks, rules and chat commands come from lifecycle-chat-answers.ts, sent
+ * by ChatInbox (lifecycleAction 'chat-answer').
  */
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const clientId = 'c1000000-0000-4000-8000-000000000002';
@@ -348,13 +349,14 @@ describe('POST /v1/internal/telegram/intake', () => {
     thanks.message.text = text;
     const answered = await intake(app, thanks);
     expect(answered.status).toBe(200);
-    expect(answered.body).toMatchObject({ kind: 'handled' });
-    expect(answered.body.lifecycleAction).toBeUndefined();
+    expect(answered.body).toMatchObject({ kind: 'handled', intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: String(chat) });
     expect(answered.body.requestId).toBeUndefined();
     expect({ tasks: (await tasksInChat(chat)).length, requests: await requestsInChat() }).toEqual(before);
-    const replies = bridge.dispatchOutboundMessage.mock.calls.map((call) => (call[1] as { text: string }).text).join('\n');
-    expect(replies).not.toMatch(/Request received|Brief received|art director|send your event brief/i);
-    expect(replies).toMatch(/Thank you|سوپاس/);
+    // The answer is ChatInbox's to send (stage 2 of ADR-135); Core sends nothing itself.
+    expect(bridge.dispatchOutboundMessage).not.toHaveBeenCalled();
+    const reply = String(answered.body.chatAnswer?.text);
+    expect(reply).not.toMatch(/Request received|Brief received|art director|send your event brief/i);
+    expect(reply).toMatch(/Thank you|سوپاس/);
   });
 
   it.each(['photo', 'document'] as const)('admits a captioned %s through its owned task without image bytes in Restate', async (carrier) => {
@@ -570,33 +572,29 @@ describe('POST /v1/internal/telegram/intake', () => {
     }
   });
 
-  // Before ADR-135 an ordinary brief in a chat with earlier Core tasks became another Core task.
-  it('an update the old intake saved replays its receipt; beside that open legacy request a brief needs /new', async () => {
+  // Before ADR-135 an ordinary brief in a chat with earlier Core tasks became another Core task; until
+  // its stage 2 such a brief beside an open old-intake request went to that intake.
+  it('an update the old intake saved replays its receipt; beside that open request a brief opens a lifecycle request', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
     const app = createApp({ db } as any);
-    // A request the old intake made before the switch (its route still builds one for tests).
+    // A request the old intake made before the switch, keyed as it keyed one (<chat>:<update>).
     const oldUpdate = brief(updateId(), chat);
-    const old = await app.request('/api/webhooks/telegram?generate=true', { method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET! },
-      body: JSON.stringify(oldUpdate) });
-    expect(old.status).toBe(201);
-    const oldTask = String((await old.json()).task.id);
+    const old = await persistChatIntake(db, {
+      platform: 'telegram', sourceEventId: String(oldUpdate.update_id), sourceChannelId: String(chat),
+      rawText: oldUpdate.message.text, rawJson: oldUpdate, title: 'KAAE members evening', clientId,
+      designInstructions: 'Event announcement', exactCopy: [{ text: 'December 4, 2026' }], autoGenerate: false,
+    });
+    const oldTask = String(old.task.id);
     const replay = await intake(createApp({ db } as any), oldUpdate);
     expect(replay.body).toMatchObject({ duplicate: true, taskIds: [oldTask] });
     expect(replay.body.lifecycleAction).toBeUndefined();
     expect(await tasksInChat(chat)).toHaveLength(1);
-    // Legacy intake reads an unlinked message there against that request: it starts no new one.
     const ordinary = brief(updateId(), chat);
     ordinary.message.text = 'KAAE follow-up event\n---\nDecember 9, 2026';
-    const refused = await intake(app, ordinary);
-    expect(refused.body).toMatchObject({ intakeStatus: 409, code: 'LEGACY_REQUEST_REFUSED',
-      lifecycleAction: 'new-brief-required', chatId: String(chat) });
+    expect((await intake(app, ordinary)).body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request', chatId: String(chat) });
     expect(await tasksInChat(chat)).toHaveLength(1);
-    const explicit = brief(updateId(), chat);
-    explicit.message.text = '/new KAAE new request\n---\nDecember 10, 2026';
-    expect((await intake(app, explicit)).body).toMatchObject({ lifecycleAction: 'open-request' });
     const pins = await withRlsContext(db, scope, async (trx) =>
       (await sql<{ delivery_executor_pin: string }>`SELECT t.delivery_executor_pin
         FROM hawa.tasks t WHERE t.id = ${oldTask}::uuid`.execute(trx)).rows);
@@ -646,7 +644,9 @@ describe('POST /v1/internal/telegram/intake', () => {
       expect(result.body, mode).toMatchObject({ kind: 'handled', intakeStatus: 200, lifecycleAction: 'open-request' });
       const greeting = brief(updateId(), chat);
       greeting.message.text = 'hello';
-      expect((await intake(app, greeting, mode)).body.lifecycleAction, mode).toBeUndefined();
+      const greeted = (await intake(app, greeting, mode)).body;
+      expect(greeted, mode).toMatchObject({ lifecycleAction: 'chat-answer', chatAnswer: { text: expect.stringMatching(/^👋 Hello!/) } });
+      expect(greeted.requestId, mode).toBeUndefined();
       expect(await tasksInChat(chat)).toHaveLength(0);
     }
     // A mode we have never heard of is still refused.
@@ -1176,6 +1176,154 @@ describe('POST /v1/internal/telegram/intake', () => {
     const stranger = brief(updateId(), chatId());
     stranger.message.from.id = 12345;
     expect((await intake(app, stranger)).body).toMatchObject({ kind: 'handled', intakeStatus: 403 });
+  });
+});
+
+describe('what intake answers when an update opens no request (ADR-135 stage 2c)', () => {
+  const text = (chat: number, words: string, extra: Record<string, unknown> = {}) => {
+    const update = brief(updateId(), chat) as any;
+    update.message.text = words;
+    Object.assign(update.message, extra);
+    return update;
+  };
+  const bridgeStub = () => ({ downloadFile: vi.fn(), dispatchOutboundMessage: vi.fn(async () => ({ success: true })),
+    answerCallbackQuery: vi.fn(async () => true) });
+  const chatAnswerEvents = async (chat: number) => (await withRlsContext(db, scope, (trx) => sql<{ payload: Record<string, any> }>`
+    SELECT payload FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'telegram'
+      AND event_kind = 'telegram_chat_answer' AND source_event_id LIKE ${`${chat}:%`}`.execute(trx))).rows;
+
+  it.each([
+    ['a greeting', 'hello', /^👋 Hello! How can Hawa Creative OS assist you today\?/],
+    ['a Kurdish greeting', 'سڵاو', /^👋 سڵاو!/],
+    ['a question', 'when will it be ready?', /^ℹ️ <b>Question received:<\/b> "when will it be ready\?"/],
+    ['/start', '/start', /Welcome to Hawa Creative OS Bot/],
+    ['/help@hawa_bot', '/help@hawa_bot', /Welcome to Hawa Creative OS Bot/],
+    ['an unknown command', '/weather', /Question received/],
+  ] as const)('answers %s through ChatInbox, starts nothing, and gives the recorded answer again', async (_what, words, expected) => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const bridge = bridgeStub();
+    const chat = chatId();
+    const update = text(chat, words);
+    const first = await intake(createApp({ db, telegramBridge: bridge } as any), update);
+    expect(first.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: String(chat),
+      chatAnswer: { text: expect.stringMatching(expected), parseMode: 'HTML' } });
+    expect(first.body.requestId).toBeUndefined();
+    expect(bridge.dispatchOutboundMessage).not.toHaveBeenCalled();
+    expect(await tasksInChat(chat)).toHaveLength(0);
+    if (!words.startsWith('/')) {
+      // Recorded once: the worker asking again after a lost answer gets the same words.
+      expect(await chatAnswerEvents(chat)).toHaveLength(1);
+      const again = await intake(createApp({ db, telegramBridge: bridge } as any), update);
+      expect(again.body).toMatchObject({ duplicate: true, lifecycleAction: 'chat-answer', chatAnswer: first.body.chatAnswer });
+    }
+  });
+
+  it('answers /approve, /publish, /revise and /reject with "approved in Hawa Desk", and changes nothing', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    for (const words of ['/approve', `/approve ${randomUUID()}`, '/publish x', '/revise x change it', '/reject x']) {
+      const answered = await intake(createApp({ db } as any), text(chat, words));
+      expect(answered.body, words).toMatchObject({ intakeStatus: 422, lifecycleAction: 'chat-answer',
+        chatAnswer: { text: expect.stringContaining('Designs are approved in Hawa Desk, not in chat.') } });
+    }
+    expect(await tasksInChat(chat)).toHaveLength(0);
+  });
+
+  it('/status lists the chat\'s requests and where each is', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    const empty = await intake(createApp({ db } as any), text(chat, '/status'));
+    expect(empty.body).toMatchObject({ lifecycleAction: 'chat-answer', chatAnswer: { text: '📊 No requests from this chat yet.' } });
+    const { taskId } = await seedWaitingRequest(createApp({ db } as any), chat);
+    // (With a request waiting for the requester, a message is its revision: the request is delivered here.)
+    await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requests SET stage = 'delivered', rev = 9
+      WHERE tenant_id = ${tenantId}::uuid AND chat_id = ${String(chat)}`.execute(trx));
+    const listed = await intake(createApp({ db } as any), text(chat, '/status'));
+    expect(listed.body.chatAnswer.text).toMatch(/^📊 <b>Your latest requests<\/b>/);
+    expect(listed.body.chatAnswer.text).toContain(`<code>${taskId.slice(0, 8)}</code>`);
+    expect(await tasksInChat(chat)).toHaveLength(1);
+  });
+
+  it('saves a standing rule said in chat for the chat\'s client, lists it with /rules and removes it once with /forget', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    await seedWaitingRequest(createApp({ db } as any), chat);
+    // With a request waiting, a message is its revision; the rule is said once that request is done.
+    await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requests SET stage = 'delivered', rev = 9
+      WHERE tenant_id = ${tenantId}::uuid AND chat_id = ${String(chat)}`.execute(trx));
+    const rule = `From now on, always put the logo bottom-right ${randomUUID().slice(0, 8)}`;
+    const said = text(chat, rule);
+    const saved = await intake(createApp({ db } as any), said);
+    expect(saved.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer', chatAnswer: { parseMode: 'HTML' } });
+    expect(saved.body.chatAnswer.text).toContain('logo bottom-right');
+    const rules = async () => (await withRlsContext(db, scope, (trx) => sql<{ id: string; active: boolean }>`
+      SELECT id::text, status = 'active' AS active FROM hawa.client_rules WHERE tenant_id = ${tenantId}::uuid AND client_id = ${clientId}::uuid
+        AND human_rule LIKE ${`%${rule.slice(-8)}%`}`.execute(trx))).rows;
+    expect(await rules()).toEqual([expect.objectContaining({ active: true })]);
+    // The same update again: the recorded answer, no second rule.
+    expect((await intake(createApp({ db } as any), said)).body).toMatchObject({ duplicate: true, chatAnswer: saved.body.chatAnswer });
+    expect(await rules()).toHaveLength(1);
+    const listed = await intake(createApp({ db } as any), text(chat, '/rules'));
+    expect(listed.body.chatAnswer.text).toContain(rule.slice(-8));
+    const number = (/(\d+)\.\s[^\n]*/.exec(listed.body.chatAnswer.text.split('\n').find((l: string) => l.includes(rule.slice(-8))) ?? '') ?? [])[1];
+    expect(number).toBeTruthy();
+    const forget = text(chat, `/forget ${number}`);
+    const forgotten = await intake(createApp({ db } as any), forget);
+    expect(forgotten.body.chatAnswer.text).toContain('No longer applied');
+    expect((await rules())[0]?.active).toBe(false);
+    // "/forget 1" repeated must not remove the rule after it: the recorded answer is given again.
+    const before = (await withRlsContext(db, scope, (trx) => sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.client_rules
+      WHERE tenant_id = ${tenantId}::uuid AND client_id = ${clientId}::uuid AND status = 'active'`.execute(trx))).rows[0].n;
+    expect((await intake(createApp({ db } as any), forget)).body).toMatchObject({ duplicate: true, chatAnswer: forgotten.body.chatAnswer });
+    const after = (await withRlsContext(db, scope, (trx) => sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.client_rules
+      WHERE tenant_id = ${tenantId}::uuid AND client_id = ${clientId}::uuid AND status = 'active'`.execute(trx))).rows[0].n;
+    expect(after).toBe(before);
+  });
+
+  it('asks which client a rule is for when the chat has none, and saves nothing', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    const answered = await intake(createApp({ db } as any), text(chat, 'From now on, always use navy for titles'));
+    expect(answered.body).toMatchObject({ intakeStatus: 200, status: 'RULE_CLIENT_UNKNOWN', lifecycleAction: 'chat-answer',
+      chatAnswer: { text: expect.stringContaining('Which client is this rule for?') } });
+    expect(await chatAnswerEvents(chat)).toHaveLength(0);
+  });
+
+  it('tells the sender an edited message is not picked up, and a group chat message is kept without an answer', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    const edit = brief(updateId(), chat) as any;
+    edit.edited_message = { ...edit.message, text: 'KAAE members evening\n---\nDecember 5, 2026', edit_date: 1790000100 };
+    delete edit.message;
+    const edited = await intake(createApp({ db } as any), edit);
+    expect(edited.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer',
+      chatAnswer: { text: expect.stringContaining('Edits to a message already sent are not picked up.') } });
+    const group = -Math.abs(chatId());
+    const chatter = text(group, 'hi everyone', { chat: { id: group, type: 'supergroup' } });
+    const kept = await intake(createApp({ db } as any), chatter);
+    expect(kept.body).toMatchObject({ intakeStatus: 200, status: 'MESSAGE_ONLY' });
+    expect(kept.body.lifecycleAction).toBeUndefined();
+    expect(await chatAnswerEvents(group)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ what: 'message_only' }) })]);
+    // A "/task …" in a group opens a request only as /new does.
+    const promoted = await intake(createApp({ db } as any), text(group, '/task Eid poster', { chat: { id: group, type: 'supergroup' } }));
+    expect(promoted.body).toMatchObject({ intakeStatus: 422, lifecycleAction: 'new-brief-required', chatId: String(group) });
+    expect(await tasksInChat(group)).toHaveLength(0);
+  });
+
+  it('answers a button press as a stale reply, whatever its data, with a receipt', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const bridge = bridgeStub();
+    const chat = chatId();
+    for (const data of [`rq:ok:${randomUUID()}`, `act:${'x'.repeat(40)}`, 'pick_layout:1']) {
+      const press = { update_id: updateId(), callback_query: { id: `cb-${randomUUID()}`, from: { id: OFFICE, is_bot: false, first_name: 'Owner' },
+        data, message: { message_id: 4244, chat: { id: chat, type: 'private' }, date: 1790000000, text: 'Draft ready' } } };
+      const answered = await intake(createApp({ db, telegramBridge: bridge } as any), press);
+      expect(answered.body, data).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY',
+        lifecycleAction: 'request-choice-required', chatId: String(chat) });
+    }
+    expect(bridge.answerCallbackQuery).toHaveBeenCalledTimes(3);
+    expect(bridge.dispatchOutboundMessage).not.toHaveBeenCalled();
+    expect(await tasksInChat(chat)).toHaveLength(0);
   });
 });
 

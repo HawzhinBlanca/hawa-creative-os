@@ -41,7 +41,7 @@ function startCore(databaseUrl: string): Promise<{ code: number | null; out: str
       // nothing is polled.
       env: {
         PATH: process.env.PATH, HOME: process.env.HOME, DATABASE_URL: databaseUrl, PORT: '0', HOST: '127.0.0.1',
-        NODE_ENV: 'production', HAWA_DRAFT_REMINDERS: 'off', HAWA_ACTION_HMAC_SECRET: ['startup', 'check', 'fixture', 'hmac'].join('_'),
+        NODE_ENV: 'production', HAWA_ACTION_HMAC_SECRET: ['startup', 'check', 'fixture', 'hmac'].join('_'),
       },
     });
     let out = '';

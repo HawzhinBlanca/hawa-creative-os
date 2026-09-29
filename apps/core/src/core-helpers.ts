@@ -11,7 +11,6 @@ import type { TelegramActionTokenService, TelegramBridgeDaemon } from '@hawa/int
 import type { CanvaConnectService, CanvaServiceOptions } from './services/canva-connect-service.js';
 import type { DesignStudioService, DesignStudioServiceOptions } from './services/design-studio/index.js';
 import type { DeliverableStore } from './services/pinned-deliverables.js';
-import type { GuidelinesModel } from './services/brand-guidelines.js';
 import type { ClientDNA } from '@hawa/domain';
 import type { ClientDnaSnapshot } from './routes/types.js';
 
@@ -92,14 +91,10 @@ export interface CreateAppOptions {
   skipPaidModelProbe?: boolean;
   enableBillingProbeSchedule?: boolean;
   skipTelegramProbe?: boolean;
-  /** Remind requesters about drafts they have not answered (services/draft-reminders.ts). */
-  enableDraftReminders?: boolean;
   /** Settle Canva imports and exports nobody is following any more (sweepStrandedOperations). */
   enableCanvaSweeper?: boolean;
   enablePublicationInspections?: boolean;
   publicationInspector?: import('@hawa/contracts').PublicationInspector;
-  /** Reads brand guidelines PDFs sent on Telegram; defaults to the studio's model client. */
-  guidelinesModel?: GuidelinesModel;
   persistDnaToDisk?: boolean;
   /**
    * Tests only: fills the client DNA map (and its snapshot list, for a test without a database) before

@@ -4,30 +4,13 @@ import { createApp } from '../src/app.js';
 describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & Asset Sandbox', () => {
   const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
-  // Helper to create an active task
-  async function createFixtureTask(clientName: string = 'Kurdish Boutique') {
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        update_id: Math.floor(Math.random() * 100000),
-        message: { text: `New luxury campaign for ${clientName}`, chat: { id: 888 } },
-      }),
-    });
-    const json = await res.json();
-    return { ...json.task, taskId: json.task.id };
-  }
-
   // A task that names its client: the rubric scores against the client's brand colours and refuses
   // a task without one (SPLIT_PLAN G1). A Telegram message in a test without a database names none.
-  async function createClientTask(text: string) {
+  async function createClientTask(text: string, title?: string) {
     const res = await app.request('/v1/ingress/rehearsal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: 'client-rabar', text }),
+      body: JSON.stringify({ clientId: 'client-rabar', text, title }),
     });
     const json = await res.json();
     return { ...json.task, taskId: json.task.id };
@@ -35,7 +18,7 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
 
   describe('Horizon 1: Universal Multi-Tenant Search Engine (FR-077, Invariant #6)', () => {
     it('indexes tasks, clients, and assets with sub-10ms query execution', async () => {
-      const task = await createFixtureTask('Zagros Roastery');
+      const task = await createClientTask('New luxury campaign for Zagros Roastery', 'Zagros Roastery luxury campaign');
       const res = await app.request(`/search?q=Zagros`);
       expect(res.status).toBe(200);
       const json = await res.json();
@@ -211,7 +194,7 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
     // own pause, crash, resume, checkpoint and replay rules are packages/domain/test/workflow-recovery.test.ts;
     // the routes, which now read the task's state from Postgres, are workflow-state-from-postgres.test.ts.
     it('reports the task\'s state and sends every action to its durable route', async () => {
-      const task = await createFixtureTask('Recovery Workflow');
+      const task = await createClientTask('New luxury campaign for Recovery Workflow');
       const taskId = task.taskId;
 
       const stateRes = await app.request(`/tasks/${taskId}/workflow/state`);

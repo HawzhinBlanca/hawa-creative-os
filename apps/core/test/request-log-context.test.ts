@@ -1,5 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { captureLogs } from '@hawa/observability';
@@ -88,59 +87,6 @@ describe('Core with its database', () => {
   });
 });
 
-const repairUrl = process.env.HAWA_ISOLATED_TEST_DB;
-describe.skipIf(!repairUrl)('a Telegram update', () => {
-  const db = createDb(repairUrl || 'postgres://localhost/hawa_repair');
-  const scope = { tenantId: '00000000-0000-4000-a000-000000000001', userId: '00000000-0000-4000-b000-000000000001', role: 'operator' };
-  const secret = ['log', 'context', 'fixture'].join('_');
-  const OFFICE = 91000078;
-  const saved = { ...process.env };
-  beforeAll(() => {
-    process.env.TELEGRAM_WEBHOOK_SECRET = secret;
-    process.env.TELEGRAM_ALLOWED_USERS = String(OFFICE);
-    process.env.AUTO_GENERATE_DAILY_CAP_GLOBAL = '1000000';
-    delete process.env.OPENAI_API_KEY;
-  });
-  afterAll(async () => {
-    process.env = saved;
-    await db.destroy();
-  });
-
-  const bridge = () => ({
-    dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }),
-    dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }),
-    answerCallbackQuery: vi.fn().mockResolvedValue(true),
-    handleCommand: vi.fn().mockReturnValue(null),
-    formatTaskPreviewCard: vi.fn().mockReturnValue({}),
-    attachOffsetStorage: vi.fn(),
-    startPolling: vi.fn(),
-    useUpdateHandler: vi.fn(),
-  });
-  const message = (chat: number, text: string) => ({
-    message_id: Math.floor(Math.random() * 1e6),
-    from: { id: OFFICE, is_bot: false, first_name: 'Owner' },
-    chat: { id: chat, type: 'private' },
-    text,
-  });
-  const traceIdsOf = (chat: number) =>
-    withRlsContext(db, scope, async (trx) =>
-      (await sql<{ trace_id: string | null; request_id: string | null }>`
-        SELECT e.trace_id, o.payload->>'requestId' AS request_id
-        FROM hawa.outbox_commands o JOIN hawa.task_events e ON e.task_id = o.aggregate_id AND e.event_type = 'task.created'
-        WHERE o.command_type = 'task.created' AND o.payload->>'sourceChannelId' = ${String(chat)}`.execute(trx)).rows);
-
-  it('from the webhook: every line of it names its chat', async () => {
-    capture = captureLogs();
-    const chat = 65000000 + Math.floor(Math.random() * 9000000);
-    const app = createApp({ db, telegramBridge: bridge() as any } as any);
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret, 'x-request-id': 'req-webhook-1' },
-      body: JSON.stringify({ update_id: randomUUID(), message: message(chat, 'KAAE members evening\n---\nDecember 4, 2026\nErbil') }),
-    });
-    expect(res.status).toBeLessThan(300);
-    expect(capture.lines.find((l) => l.msg === 'request' && l.requestId === 'req-webhook-1')).toMatchObject({ chatId: String(chat) });
-    expect(await traceIdsOf(chat)).toEqual([{ trace_id: 'req-webhook-1', request_id: 'req-webhook-1' }]);
-  });
-
-});
+// A Telegram update's lines named its chat through the webhook's own log context. The webhook was
+// removed by stage 2 of ADR-135; the worker's hand-off (POST /v1/internal/telegram/intake) goes
+// through the same request middleware as any other request, and no Core line binds a chat id now.

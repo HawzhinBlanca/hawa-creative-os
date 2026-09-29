@@ -34,25 +34,19 @@ function setup(opts: { passingQa?: boolean } = {}) {
   const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store,
     ...(opts.passingQa ? { qaEngine: passingQa as never } : {}) });
 
-  /** withClient false: a Telegram-ingested task, which carries no client until one is routed. */
+  /** withClient false: a task that carries no client yet (as a chat-ingested task did until it was routed). */
   async function taskAwaitingApproval(withClient = true) {
-    const created = withClient
-      ? await (
-          await app.request('/tasks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: 'KAAE accreditation announcement', clientId: KAAE }),
-          })
-        ).json()
-      : await (
-          await app.request('/api/webhooks/telegram', {
-            method: 'POST',
-            headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ update_id: 4242, message: { text: 'Campaign for Erbil Citadel Holdings', chat: { id: 777 } } }),
-          })
-        ).json();
-    const taskId: string = created.id || created.task?.id;
-    if (!withClient) expect(created.task.clientId).toBeNull();
+    const created = await (
+      await app.request('/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(withClient
+          ? { title: 'KAAE accreditation announcement', clientId: KAAE }
+          : { title: 'Campaign for Erbil Citadel Holdings' }),
+      })
+    ).json();
+    const taskId: string = created.id;
+    if (!withClient) expect(created.clientId).toBeNull();
     const rev = await (
       await app.request(`/tasks/${taskId}/revisions`, {
         method: 'POST',
@@ -202,9 +196,9 @@ describe('publish-omnichannel delivers exactly the pinned exports', () => {
   });
 
   it('a signed WhatsApp approve-and-publish pins nothing, so it is refused before the task is approved', async () => {
-    // Telegram approve commands and buttons never get this far: the webhook refuses them up front
-    // (ADR-022, see telegram-unknown-task.test.ts). The signed WhatsApp action is the chat path that
-    // reaches delivery, and the pin check is what refuses it.
+    // Telegram approve commands and buttons never get this far: the webhook that read them was removed
+    // by stage 2 of ADR-135, and a lifecycle request is approved in the Desk (ADR-022). The signed
+    // WhatsApp action is the chat path that reaches delivery, and the pin check is what refuses it.
     const { app, taskAwaitingApproval, status } = setup();
     const { taskId } = await taskAwaitingApproval();
     const sig = computeActionSignature(taskId, 'approve');
@@ -258,7 +252,7 @@ describe('only the test suite emulates Google', () => {
       const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
       const auth = { 'Content-Type': 'application/json', Authorization: 'Bearer test_bearer' };
       const created = await (await app.request('/tasks', { method: 'POST', headers: auth, body: JSON.stringify({ title: 'Dev delivery', clientId: KAAE }) })).json();
-      const taskId: string = created.id || created.task?.id;
+      const taskId: string = created.id;
       const rev = await (
         await app.request(`/tasks/${taskId}/revisions`, {
           method: 'POST',

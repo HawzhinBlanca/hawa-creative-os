@@ -1,14 +1,16 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createDb, sql, withRlsContext } from '@hawa/db';
+import { createDb } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
-import { persistChatIntake, findRequestAwaitingReference } from '../src/services/chat-intake.js';
+import { persistChatIntake } from '../src/services/chat-intake.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
 // Telegram delivers a request's text and a photo sent with it as two messages. On 2026-09-19 the
 // photo became a "revision" (task 936c5c6f) and a second full design run; it now joins the request.
+// ADR-135 stage 2 deleted the legacy lookup of the request a photo joins (findRequestAwaitingReference)
+// with the legacy webhook; the studio still reads a photo saved as the request's reference.
 describe.skipIf(!url)('a caption-less photo joins the request it followed', () => {
   const db = createDb(url || 'postgres://localhost/hawa_repair');
   const clientId = 'c1000000-0000-4000-8000-000000000002';
@@ -16,7 +18,7 @@ describe.skipIf(!url)('a caption-less photo joins the request it followed', () =
   const photo = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHR8eHR0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';
   afterAll(() => db.destroy());
 
-  const request = async (channel: string, image?: string) =>
+  const request = async (channel: string) =>
     (
       await persistChatIntake(db, {
         platform: 'telegram',
@@ -28,33 +30,13 @@ describe.skipIf(!url)('a caption-less photo joins the request it followed', () =
         designInstructions: '',
         exactCopy: [],
         designStudio: true,
-        ...(image ? { studioOptions: { referenceImageBase64: image } } : {}),
       })
     ).task.id as string;
-  const enrolled = (channel: string) => ({ DESIGN_PIPELINE_V3_CHATS: channel }) as NodeJS.ProcessEnv;
 
-  it('finds the latest v3 request in the chat (also one with its own picture), and nothing for an unenrolled chat', async () => {
-    const channel = `late-ref-${randomUUID().slice(0, 8)}`;
-    const taskId = await request(channel);
-    expect(await findRequestAwaitingReference(db, { sourceChannelId: channel, env: enrolled(channel) })).toMatchObject({ taskId, clientId });
-    expect(await findRequestAwaitingReference(db, { sourceChannelId: channel, env: {} as NodeJS.ProcessEnv })).toBeNull();
-    const withImage = `late-ref-${randomUUID().slice(0, 8)}`;
-    await request(withImage, photo);
-    expect(await findRequestAwaitingReference(db, { sourceChannelId: withImage, env: enrolled(withImage) })).not.toBeNull();
-    expect(await findRequestAwaitingReference(db, { sourceChannelId: channel, env: { ...enrolled(channel), HAWA_REFERENCE_MERGE_MINUTES: '0' } })).toBeNull();
-  });
-
-  it('stops once the design has reached layout generation, and the studio reads a photo that joined in time', async () => {
+  it('the studio reads a photo that joined the request, and the photo\'s own task sends no manual-design notice', async () => {
     const channel = `late-ref-${randomUUID().slice(0, 8)}`;
     const taskId = await request(channel);
     const service = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher: (async () => { throw new Error('no calls'); }) as any });
-    await withRlsContext(db, scope, (tx) =>
-      sql`UPDATE hawa.design_studio_runs SET status='abandoned' WHERE tenant_id=${scope.tenantId}::uuid
-        AND status NOT IN ('transferred','degraded','failed','abandoned')`.execute(tx)
-    );
-    const { run } = await service.createOrGetRun(scope, taskId, `k-${randomUUID().slice(0, 12)}`, { width: 1080, height: 1350, tier: 'standard' });
-    expect(await findRequestAwaitingReference(db, { sourceChannelId: channel, env: enrolled(channel) })).not.toBeNull();
-
     const joined = await persistChatIntake(db, {
       platform: 'telegram',
       sourceEventId: randomUUID(),
@@ -77,9 +59,5 @@ describe.skipIf(!url)('a caption-less photo joins the request it followed', () =
       body: JSON.stringify({ status: 'MANUAL_DESIGN_REQUIRED' }),
     });
     expect(await res.json()).toMatchObject({ notified: false, reason: 'REFERENCE_FOR_ANOTHER_REQUEST' });
-
-    await withRlsContext(db, scope, (tx) => sql`UPDATE hawa.design_studio_runs SET status='laying_out' WHERE id=${run.id}::uuid`.execute(tx));
-    expect(await findRequestAwaitingReference(db, { sourceChannelId: channel, env: enrolled(channel) })).toBeNull();
-    await withRlsContext(db, scope, (tx) => sql`UPDATE hawa.design_studio_runs SET status='abandoned' WHERE id=${run.id}::uuid`.execute(tx));
   });
 });

@@ -1,6 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { globalFeedbackMiner } from '@hawa/creative';
-import { createApp } from '../src/app.js';
+import { describe, expect, it } from 'vitest';
 import { detectFontRequests, unavailableFontNotice } from '../src/services/feedback-font-request.js';
 
 /**
@@ -9,11 +7,9 @@ import { detectFontRequests, unavailableFontNotice } from '../src/services/feedb
  * print it back to the sender as their applied preference. Calibri is not a face the studio has,
  * and nothing in the message said Cinzel.
  *
- * The first block tests the detector against the real font registry. The second sends the message
- * through the Telegram webhook with a captured bridge and reads what the sender is told.
+ * These cases test the detector against the real font registry. The cases that sent the feedback
+ * through the legacy Telegram webhook went with that route (ADR-135 stage 2).
  */
-
-const KAAE_CLIENT_ID = 'c1000000-0000-4000-8000-000000000002';
 
 describe('detectFontRequests: the face a reviewer named', () => {
   it('reads Calibri for Kurdish as a request the studio cannot meet, and offers what it has', () => {
@@ -84,96 +80,5 @@ describe('detectFontRequests: the face a reviewer named', () => {
   it('names nothing when no face is named', () => {
     expect(detectFontRequests('make the font bigger')).toEqual([]);
     expect(detectFontRequests('the colours are wrong')).toEqual([]);
-  });
-});
-
-describe('Telegram feedback that asks for a font', () => {
-  const telegramSecret = ['font', 'request', 'fixture', 'secret'].join('_');
-  const saved = { ...process.env };
-  beforeAll(() => {
-    process.env.TELEGRAM_WEBHOOK_SECRET = telegramSecret;
-  });
-  afterAll(() => {
-    process.env = saved;
-  });
-
-  const post = (app: any, chat: number, updateId: number, text: string) =>
-    app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': telegramSecret },
-      body: JSON.stringify({
-        update_id: updateId,
-        message: { message_id: updateId, from: { id: chat, is_bot: false, first_name: 'Office' }, chat: { id: chat, type: 'private' }, text },
-      }),
-    });
-
-  it('tells the sender Calibri is not installed, applies nothing in its place, and proposes no rule', async () => {
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
-    const intake = await post(app, 910001, 910001, 'KAAE Annual Research Conference 2026');
-    expect(intake.status).toBe(201);
-    const { task } = await intake.json();
-    const rulesBefore = globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).length;
-
-    const res = await post(app, 910001, 910002, `revise task ${task.id}: we wanna use Calibri font for kurdish here and there`);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.feedback).toBe(true);
-    expect(body.unavailableFonts).toEqual([expect.objectContaining({ family: 'Calibri', script: 'arabic' })]);
-    expect(body.unavailableFonts[0].alternatives).toContain('Noto Sans Arabic');
-    // Nothing was applied to the design in Calibri's place: the rules on the task are the client's
-    // standing ones and nothing else.
-    const standing = globalFeedbackMiner.getPromotedRules(KAAE_CLIENT_ID);
-    const fromThisMessage = body.learnedRules.filter((r: string) => !standing.includes(r));
-    expect(fromThisMessage).toEqual([]);
-    expect(body.proposedRules).toEqual([]);
-    expect(globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).length).toBe(rulesBefore);
-
-    const texts = dispatch.mock.calls.map((call) => String(call[1]?.text ?? ''));
-    const refusal = texts.find((t) => /Calibri is not installed/.test(t));
-    expect(refusal).toBeDefined();
-    expect(refusal).toMatch(/Noto Sans Arabic/);
-    expect(texts.join('\n')).not.toMatch(/Cinzel|Applied Preferences/);
-  });
-
-  it('applies an installed face to this design once, and says it was not made a standing rule', async () => {
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
-    const { task } = await (await post(app, 910002, 910003, 'KAAE Curriculum Framework')).json();
-    const rulesBefore = globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).length;
-
-    const body = await (await post(app, 910002, 910004, `revise task ${task.id}: use Amiri for the Kurdish text`)).json();
-    expect(body.scope).toBe('one_time');
-    expect(body.learnedRules).toContain('Set Kurdish and Arabic text in Amiri.');
-    expect(body.unavailableFonts).toEqual([]);
-    expect(body.proposedRules).toEqual([]);
-    expect(globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).length).toBe(rulesBefore);
-    const texts = dispatch.mock.calls.map((call) => String(call[1]?.text ?? '')).join('\n');
-    expect(texts).not.toMatch(/Font not available/);
-  });
-
-  it('a complaint that happens to say "always" or "every time" is not a standing rule', async () => {
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
-    const { task } = await (await post(app, 910004, 910007, 'KAAE Board Meeting')).json();
-    const before = globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).length;
-    for (const text of ['the logo always looks cramped', 'every time I open it the text overlaps', 'ئەم ناونیشانە هەمیشە زۆر بچووکە']) {
-      const body = await (await post(app, 910004, 910008, `revise task ${task.id}: ${text}`)).json();
-      expect(body.scope).toBe('one_time');
-      expect(body.proposedRules).toEqual([]);
-    }
-    expect(globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).length).toBe(before);
-  });
-
-  it('"from now on" with a change is never recorded as a canned sentence or an in-memory proposal', async () => {
-    const dispatch = vi.fn().mockResolvedValue({ success: true });
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
-    const { task } = await (await post(app, 910003, 910005, 'KAAE Graduation Ceremony')).json();
-
-    const body = await (await post(app, 910003, 910006, `revise task ${task.id}: from now on use IBM Plex Sans Arabic for all Kurdish text`)).json();
-    expect(JSON.stringify(body)).not.toMatch(/Cinzel|authentic master brand seal|Direct all design reviews/);
-    // Standing rules are saved in PostgreSQL (client-rules.test.ts, telegram-understanding.test.ts);
-    // the in-memory proposal queue a restart forgot is no longer written.
-    expect(globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).find((r) => r.ruleText === 'Set Kurdish and Arabic text in IBM Plex Sans Arabic.')).toBeUndefined();
   });
 });

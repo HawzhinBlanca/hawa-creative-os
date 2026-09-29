@@ -57,7 +57,6 @@ x-app-environment: &app-environment
   # The legacy path this suite measures today: planner drafts, no studio (fixtures cover no studio stage).
   DESIGN_PIPELINE_V3: "off"
   DESIGN_STUDIO_V2: "off"
-  HAWA_DRAFT_REMINDERS: "off"
   # One sender makes every scripted request of a run; the office's ceilings (5 a day) would stop
   # the automatic draft after the fifth. Intake still counts and checks them.
   AUTO_GENERATE_DAILY_CAP_PER_SENDER: "1000"

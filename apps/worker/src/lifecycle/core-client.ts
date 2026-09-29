@@ -68,6 +68,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         chatId?: string; questionId?: string; draft?: unknown; reason?: string; siblings?: unknown;
         albumMessage?: string; albumNoticeKey?: string;
         sourceMessage?: string; sourceNoticeKey?: string;
+        chatAnswer?: { text?: unknown; parseMode?: unknown } | null;
         requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
@@ -80,6 +81,14 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
               throw new Error(`Core returned an invalid source notice for update ${update.update_id}`);
             return { ...base, lifecycleAction: 'source-message', chatId: body.chatId,
               sourceMessage: body.sourceMessage, sourceNoticeKey: body.sourceNoticeKey };
+          }
+          if (body.lifecycleAction === 'chat-answer') {
+            const answer = body.chatAnswer;
+            if (!body.chatId || !answer || typeof answer.text !== 'string' || !answer.text || answer.text.length > 4000 ||
+                (answer.parseMode !== undefined && answer.parseMode !== 'HTML'))
+              throw new Error(`Core returned an invalid chat answer for update ${update.update_id}`);
+            return { ...base, lifecycleAction: 'chat-answer', chatId: body.chatId,
+              chatAnswer: { text: answer.text, ...(answer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) } };
           }
           if (body.lifecycleAction === 'album-message') {
             if (!body.chatId || typeof body.albumMessage !== 'string' || !body.albumMessage ||
