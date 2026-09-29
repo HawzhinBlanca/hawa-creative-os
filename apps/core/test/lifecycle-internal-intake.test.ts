@@ -209,7 +209,10 @@ describe('a requester change after the design reached the office (finding 13 of 
     expect(answer.body.officeAlert.text).toContain('also sent a photo');
   });
 
-  it('a reply to a request that is designing again stays a stale reply', async () => {
+  // Until ADR-144 this reply was refused as a stale reply and its words were dropped ("Please reply to
+  // the current revision notice"). A reply to any message about a request now binds to that request;
+  // while it is designing, the words are kept on it for the office, and nothing new starts.
+  it('a reply to a request that is designing again is kept on it as a pending change (ADR-144)', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
@@ -218,8 +221,13 @@ describe('a requester change after the design reached the office (finding 13 of 
     const reply = brief(updateId(), chat);
     reply.message.text = words;
     (reply.message as Record<string, unknown>).reply_to_message = { message_id: 813 };
-    expect((await intake(app, reply, 'lifecycle', requestId)).body).toMatchObject({
-      intakeStatus: 409, code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required' });
+    const answer = await intake(app, reply, 'lifecycle', requestId);
+    expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change',
+      requestId, requestStage: 'designing', chatAnswer: { text: expect.stringContaining("I've added that to") } });
+    expect(answer.body.officeAlert.text).toContain(words);
+    expect(await tasksInChat(chat)).toHaveLength(1);
+    expect(await lateReceipt(reply.update_id)).toEqual([expect.objectContaining({
+      payload: expect.objectContaining({ requestStage: 'designing', text: words, kind: 'change' }) })]);
   });
 
   it('without an office chat the words are still kept, and no alert is claimed', async () => {
@@ -291,22 +299,32 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
-  it('refuses a reply to an unknown message instead of saving it as a new task', async () => {
+  // Until ADR-144 a brief sent as a reply to a message no request knows (a colleague's, an old
+  // draft's) was refused as a stale reply and dropped. It is now read like any message: a brief opens
+  // one request, once, and a change with nothing to change is answered, never opened.
+  it('reads a reply to a message no request knows like a plain message, and replays its decision', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
     const update = brief(updateId(), chat);
     (update.message as any).reply_to_message = { message_id: 123456 };
     const result = await intake(createApp({ db } as any), update);
-    expect(result.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY' });
+    expect(result.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request', duplicate: false });
     expect(await tasksInChat(chat)).toHaveLength(0);
     const replay = await intake(createApp({ db } as any), update);
-    expect(replay.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY',
-      lifecycleAction: 'request-choice-required' });
+    expect(replay.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request', duplicate: true,
+      requestId: result.body.requestId });
     const altered = structuredClone(update);
     altered.message.text = 'An unrelated brief';
     expect((await intake(createApp({ db } as any), altered)).body).toMatchObject({
       intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    const change = brief(updateId(), chat);
+    change.message.text = 'Make the logo bigger';
+    (change.message as any).reply_to_message = { message_id: 123457 };
+    const answered = await intake(createApp({ db } as any), change);
+    // The first brief's request is not open yet (the worker opens it), so there is nothing to change.
+    expect(answered.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer',
+      chatAnswer: { text: expect.stringContaining("I don't have a design in progress here to change") } });
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
@@ -990,7 +1008,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(2);
   });
 
-  it('requires a linked reply for two waiting requests and refuses a stale linked reply', async () => {
+  it('asks which design when two wait, binds a linked reply, and keeps a later reply as a pending change', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
@@ -999,9 +1017,10 @@ describe('POST /v1/internal/telegram/intake', () => {
     const second = await seedWaitingRequest(app, chat);
     const unlinkedUpdate = brief(updateId(), chat);
     unlinkedUpdate.message.text = 'Use the blue background';
+    // ADR-144: the words are kept and the requester is asked which design, in words; nothing starts.
     const ambiguous = await intake(app, unlinkedUpdate, 'lifecycle', first.requestId);
-    expect(ambiguous.body).toMatchObject({ intakeStatus: 409, code: 'AMBIGUOUS_REQUEST',
-      lifecycleAction: 'request-choice-required', chatId: String(chat) });
+    expect(ambiguous.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer', choiceRequired: true,
+      chatId: String(chat), chatAnswer: { text: expect.stringMatching(/Which design is this for\?\n1\. .*\n2\. /) } });
     expect(await tasksInChat(chat)).toHaveLength(2);
 
     await withRlsContext(db, scope, (trx) => sql`
@@ -1018,20 +1037,22 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(linked.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-revision',
       requestId: second.requestId, priorTaskId: second.taskId });
     // The first answer was lost; even after one request advanced, the same update cannot be
-    // reinterpreted as a directive for the other waiting request.
+    // reinterpreted as a directive for the other waiting request: it asks the same question again.
     const ambiguousReplay = await intake(createApp({ db } as any), unlinkedUpdate, 'lifecycle', first.requestId);
-    expect(ambiguousReplay.body).toMatchObject({ intakeStatus: 409, code: 'AMBIGUOUS_REQUEST',
-      lifecycleAction: 'request-choice-required' });
+    expect(ambiguousReplay.body).toMatchObject({ intakeStatus: 200, duplicate: true, lifecycleAction: 'chat-answer',
+      choiceRequired: true, chatAnswer: ambiguous.body.chatAnswer });
     const changedAmbiguity = await intake(app,
       { ...unlinkedUpdate, message: { ...unlinkedUpdate.message, text: 'Changed under the same ID' } },
       'lifecycle', first.requestId);
     expect(changedAmbiguity.body).toMatchObject({ intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    // A second reply to the same notice while that design is being made again is kept on it for the
+    // office (ADR-144), not refused as stale, and starts nothing.
     const staleUpdate = brief(updateId(), chat);
     staleUpdate.message.text = 'Another change';
     (staleUpdate.message as Record<string, unknown>).reply_to_message = { message_id: 734 };
     const stale = await intake(app, staleUpdate, 'lifecycle', first.requestId);
-    expect(stale.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY',
-      lifecycleAction: 'request-choice-required' });
+    expect(stale.body).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE',
+      lifecycleAction: 'late-change', requestId: second.requestId, requestStage: 'designing' });
     expect(await tasksInChat(chat)).toHaveLength(3);
   });
 
@@ -1104,8 +1125,9 @@ describe('POST /v1/internal/telegram/intake', () => {
     const other = await seedWaitingRequest(app, chat);
     const unlinked = brief(updateId(), chat);
     unlinked.message.text = 'Larger headline';
+    // ADR-144: with two requests waiting, an unlinked change is asked about in words, not refused.
     expect((await intake(app, unlinked, 'lifecycle', other.requestId)).body).toMatchObject({
-      intakeStatus: 409, code: 'AMBIGUOUS_REQUEST', lifecycleAction: 'request-choice-required' });
+      intakeStatus: 200, lifecycleAction: 'chat-answer', choiceRequired: true });
     const answer = brief(updateId(), chat);
     delete (answer.message as any).text;
     if (kind === 'captioned') (answer.message as any).caption = 'Larger headline';
@@ -1153,8 +1175,10 @@ describe('POST /v1/internal/telegram/intake', () => {
     const late = brief(updateId(), chat);
     late.message.text = 'Keep it as is';
     (late.message as Record<string, unknown>).reply_to_message = { message_id: 735 };
+    // ADR-144: "keep it as is" to the answered question is the requester being happy: the office is
+    // told, nothing is approved and nothing starts (it was refused as a stale reply before).
     expect((await intake(app, late, 'lifecycle', requestId)).body).toMatchObject({
-      intakeStatus: 409, code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required' });
+      intakeStatus: 200, lifecycleAction: 'chat-answer', note: 'approval', requestId });
     expect(await (await confirm(confirmBody)).json()).toMatchObject({ skipped: true });
     expect(await tasksInChat(chat)).toHaveLength(4);
   });
@@ -1195,7 +1219,8 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
   it.each([
     ['a greeting', 'hello', /^👋 Hello! How can Hawa Creative OS assist you today\?/],
     ['a Kurdish greeting', 'سڵاو', /^👋 سڵاو!/],
-    ['a question', 'when will it be ready?', /^ℹ️ <b>Question received:<\/b> "when will it be ready\?"/],
+    // "when will it be ready?" is a status question since ADR-144 (requester-intent-routing.test.ts).
+    ['a question', 'what fonts can you use?', /^ℹ️ <b>Question received:<\/b> "what fonts can you use\?"/],
     ['/start', '/start', /Welcome to Hawa Creative OS Bot/],
     ['/help@hawa_bot', '/help@hawa_bot', /Welcome to Hawa Creative OS Bot/],
     ['an unknown command', '/weather', /Question received/],
@@ -1304,9 +1329,10 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
     expect(kept.body).toMatchObject({ intakeStatus: 200, status: 'MESSAGE_ONLY' });
     expect(kept.body.lifecycleAction).toBeUndefined();
     expect(await chatAnswerEvents(group)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ what: 'message_only' }) })]);
-    // A "/task …" in a group opens a request only as /new does.
+    // A "/task …" in a group opens a request as /new does (ADR-144; it asked for /new before).
     const promoted = await intake(createApp({ db } as any), text(group, '/task Eid poster', { chat: { id: group, type: 'supergroup' } }));
-    expect(promoted.body).toMatchObject({ intakeStatus: 422, lifecycleAction: 'new-brief-required', chatId: String(group) });
+    expect(promoted.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request', chatId: String(group),
+      draft: { rawText: 'Eid poster', autoGenerate: false } });
     expect(await tasksInChat(group)).toHaveLength(0);
   });
 

@@ -39,8 +39,12 @@ export interface HandleUpdateInput {
 
 export type IntakeMode = 'legacy' | 'lifecycle';
 
-/** The request stages in which a requester's reply is kept as a late change (finding 13). */
-export type LateChangeStage = 'in_review' | 'approved' | 'delivering' | 'delivered';
+/**
+ * The request stages in which a requester's words are kept on the request for the office: after the
+ * design reached the office (finding 13), and while it is still being made or waits (ADR-144).
+ */
+export type LateChangeStage = 'in_review' | 'approved' | 'delivering' | 'delivered' | 'designing' | 'manual' | 'awaiting_answer';
+export const LATE_CHANGE_STAGES: readonly LateChangeStage[] = ['in_review', 'approved', 'delivering', 'delivered', 'designing', 'manual', 'awaiting_answer'];
 
 /** What Core's intake answered, as journaled. */
 export type IntakeAnswer =
@@ -50,7 +54,11 @@ export type IntakeAnswer =
         'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message' |
         'late-change' | 'chat-answer';
       albumMessage?: string; albumNoticeKey?: string;
-      /** chat-answer: Core's answer to a greeting, question, rule or command (ADR-135 stage 2c). */
+      /**
+       * chat-answer: Core's answer to a greeting, question, rule or command (ADR-135 stage 2c), and
+       * since ADR-144 to thanks, a status question, a note passed to the office or a question back.
+       * late-change: what the requester is told, in their language (ADR-144).
+       */
       chatAnswer?: { text: string; parseMode?: 'HTML' };
       sourceMessage?: string; sourceNoticeKey?: string;
       draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
@@ -63,7 +71,10 @@ export type IntakeAnswer =
         /** A group "/task …" or a change with no design waiting: with new-brief-required, asks for /new. */
         'NEW_BRIEF_REQUIRED';
       reason?: string;
-      /** late-change: the stage the request was in, and Core's alert for the office chat (if any). */
+      /**
+       * late-change: the stage the request was in. late-change and chat-answer: Core's alert for the
+       * office chat (if any), e.g. "the requester is happy with it" (ADR-144).
+       */
       requestStage?: LateChangeStage; officeAlert?: { chatId: string; text: string }; }
   | { kind: 'retry'; reason: string };
 
@@ -114,6 +125,13 @@ export interface HandleUpdateResult {
 }
 
 export const INTAKE_ATTEMPTS = 5;
+
+/** Whether the requester wrote in Sorani (Arabic script): the notices below answer in kind. */
+function soraniMessage(update: TelegramUpdateLike): boolean {
+  const message = (update as { message?: { text?: unknown; caption?: unknown } }).message;
+  const words = typeof message?.text === 'string' ? message.text : typeof message?.caption === 'string' ? message.caption : '';
+  return /[\u0600-\u06FF]/.test(words);
+}
 /** Waits between retryable answers: 2, 4, 8 and 16 s, the backoff Core's poller used. */
 const retryDelayMs = (k: number) => 2000 * 2 ** k;
 
@@ -158,6 +176,11 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
       ctx.sendNotice({ v: 1, key: `chatinbox:chat-answer:${update.update_id}`, chatId: done.chatId,
         kind: 'text', class: 'critical', text: done.chatAnswer.text,
         ...(done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) });
+      // ADR-144: approval or timing words passed to the office (never an approval by themselves).
+      if (done.officeAlert) {
+        ctx.sendNotice({ v: 1, key: `notify.office:requester-note:${update.update_id}`,
+          chatId: done.officeAlert.chatId, kind: 'text', class: 'critical', text: done.officeAlert.text });
+      }
     }
     if (done.lifecycleAction === 'album-message') {
       if (!done.chatId || !done.albumMessage || !done.albumNoticeKey) throw new Error('Core returned an incomplete album notice');
@@ -207,7 +230,9 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
       if (done.lifecycleAction === 'requester-answer' && done.chatId) {
         ctx.sendNotice({ v: 1, key: `chatinbox:answer-accepted:${update.update_id}`,
           chatId: done.chatId, kind: 'text', class: 'critical',
-          text: 'Your answer is saved. I am continuing the same design with that detail.',
+          // Sorani (native review pending, ADR-144): "Thanks, I'll use that and carry on with the same design."
+          text: soraniMessage(update) ? 'سوپاس، ئەوە بەکاردەهێنم و هەمان دیزاین تەواو دەکەم.'
+            : 'Your answer is saved. I am continuing the same design with that detail.',
         });
       }
     }
@@ -215,9 +240,14 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
         (done.code === 'AMBIGUOUS_REQUEST' || done.code === 'STALE_REQUEST_REPLY')) {
       ctx.sendNotice({ v: 1, key: `chatinbox:request-choice:${update.update_id}`,
         chatId: done.chatId, kind: 'text', class: 'critical',
+        // ADR-144: no reply target is demanded. Core no longer answers a text message this way (it
+        // asks which design, in words); a photo with two designs waiting, or a button under an old
+        // draft, still does.
         text: done.code === 'STALE_REQUEST_REPLY'
-          ? 'That design is no longer waiting for changes. Please reply to the current revision notice for the design you mean.'
-          : 'More than one design is waiting for your changes. Please reply directly to the revision notice for the design you mean.',
+          ? (soraniMessage(update) ? 'ئەو دیزاینە ئێستا لای ئۆفیسەکەیە. ئەگەر شتێک پێویستی بە گۆڕین هەیە، لێرە پێم بڵێ.'
+            : 'That design is now with the office. If anything should change, just tell me here.')
+          : (soraniMessage(update) ? 'زیاتر لە یەک دیزاین چاوەڕێی گۆڕانکارییەکانی تۆن. ئەمە بۆ کامیانە؟ ناوەکەی بنووسە.'
+            : 'More than one of your designs is waiting for changes. Which one is this for? Just tell me its name.'),
       });
     }
     if (done.lifecycleAction === 'late-change') {
@@ -230,18 +260,30 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
         ctx.sendNotice({ v: 1, key: `notify.office:late-change:${done.requestId}:${update.update_id}`,
           chatId: done.officeAlert.chatId, kind: 'text', class: 'critical', text: done.officeAlert.text });
       }
-      const when = done.requestStage === 'delivered' ? 'after this design was delivered'
-        : 'after this design went to the office';
+      // ADR-144: Core words the answer (in the requester's language) when it has the request's name;
+      // otherwise these, which say what happened without a refusal.
+      const sorani = soraniMessage(update);
+      // Without an office chat nobody was alerted: the words are kept for the office (the Desk shows
+      // them before Deliver), and the requester is told exactly that.
+      const told = Boolean(done.officeAlert);
+      const fallback = !told
+        ? (sorani ? 'تێگەیشتم. پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت؛ پێش ناردنی دیزاینەکە دەیبینن.' : "Got it. I've kept your message for the office; they'll see it before the design is sent.")
+        : done.requestStage === 'delivered'
+          ? (sorani ? 'ئەم دیزاینە پێشتر گەیەندرابوو؛ پەیامەکەتم گەیاندە ئۆفیسەکە.' : "This design was already delivered; I've passed your message to the office.")
+          : done.requestStage === 'delivering'
+            ? (sorani ? 'ئەم دیزاینە ئێستا بۆت دەنێردرێت؛ پەیامەکەتم گەیاندە ئۆفیسەکە.' : "This design is being sent to you now; I've passed your message to the office.")
+            : (sorani ? 'تێگەیشتم. ئۆفیسەکە ئێستا سەیری ئەم دیزاینە دەکات، و پەیامەکەتم پێیان گەیاند.' : "Got it. The office is checking this design now, and I've passed your message to them.");
       ctx.sendNotice({ v: 1, key: `chatinbox:late-change:${update.update_id}`,
-        chatId: done.chatId, kind: 'text', class: 'critical',
-        text: `Your message arrived ${when}, so it was not applied to the design. ` +
-          (done.officeAlert ? 'The office has been told and has your words.' : 'Your words were saved for the office.'),
+        chatId: done.chatId, kind: 'text', class: 'critical', text: done.chatAnswer?.text || fallback,
+        ...(done.chatAnswer?.text && done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}),
       });
     }
     if (done.lifecycleAction === 'new-brief-required' && done.chatId) {
       ctx.sendNotice({ v: 1, key: `chatinbox:new-brief-required:${update.update_id}`,
         chatId: done.chatId, kind: 'text', class: 'critical',
-        text: 'Please send /new followed by the full design brief and the exact words to place on it.',
+        // ADR-144: no command is asked for; the next message with the brief opens the request.
+        text: soraniMessage(update) ? 'چیت دەوێت دیزاین بکرێت؟ بە وشەی خۆت پێم بڵێ، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت.'
+          : 'What would you like designed? Tell me in your own words, with the text that should go on it.',
       });
     }
     if (done.lifecycleAction === 'revision-blocked' && done.chatId &&

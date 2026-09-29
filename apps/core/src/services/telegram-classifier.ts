@@ -200,7 +200,7 @@ function acknowledgement(documentKind: DocumentKind): MessageClassification {
  * professional") or only name a colour ("love the gold"), plus the verbs a change is asked with.
  */
 const NOT_CHANGE_CUES = new Set(['great', 'better', 'professional', 'high end', 'bad', 'poor', 'gold', 'navy', 'cream', 'blue', 'white']);
-const CHANGE_CUES = [
+export const CHANGE_CUES = [
   ...new Set([...REVISION_ACTION_KEYWORDS, ...REVISION_KEYWORDS, 'make', 'use', 'put', 'size', 'instead', 'wrong', 'mistake', 'typo']),
 ].filter((k) => !NOT_CHANGE_CUES.has(k));
 

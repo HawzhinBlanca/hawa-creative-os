@@ -8,10 +8,12 @@ import { persistChatIntake } from '../src/services/chat-intake.js';
  * ADR-136 handed a button press or a reply about a request the old intake made to that intake, so
  * requests made before a chat joined the lifecycle finished where they started. Stage 2 of ADR-135
  * deleted the old intake once none of its requests was open (GET /v1/operations/legacy-path,
- * stage2Ready). These are ADR-136's cases as they are answered now: every such update is a stale reply
- * with a receipt (ChatInbox asks the requester to reply to a current notice or send /new); it changes
- * nothing, makes no task, never reaches a waiting lifecycle request; and a brief beside an old request
- * opens a lifecycle request at once (the old 48-hour window went with the old intake).
+ * stage2Ready). These are ADR-136's cases as they are answered now. A button press is a stale reply
+ * with a receipt. A reply with words about an old request (ADR-144) is never applied to a current
+ * request by itself: with a current request the requester is asked, in words, whether it is for that
+ * one; with none, the words go to the office. It changes nothing, makes no task, never reaches a
+ * waiting lifecycle request unasked; and a brief beside an old request opens a lifecycle request at
+ * once (the old 48-hour window went with the old intake).
  * Against the per-file test database as hawa_app (row-level security as in production).
  */
 const tenantId = '00000000-0000-4000-a000-000000000001';
@@ -74,6 +76,10 @@ const tasksInChat = async (chat: number) =>
     FROM hawa.tasks t JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
     WHERE o.payload->>'sourceChannelId' = ${String(chat)} ORDER BY t.created_at`.execute(trx))).rows;
 
+const intentReceipt = async (id: number) => (await withRlsContext(db, scope, (trx) => sql<{ event_kind: string }>`
+  SELECT event_kind FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
+    AND source_account_id = 'lifecycle_chat_intent' AND source_event_id = ${String(id)}`.execute(trx))).rows;
+
 const routingReceipt = async (id: number) => (await withRlsContext(db, scope, (trx) => sql<{ event_kind: string }>`
   SELECT event_kind FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
     AND source_account_id = 'lifecycle_chat_routing' AND source_event_id = ${String(id)}`.execute(trx))).rows;
@@ -118,8 +124,11 @@ const requestRev = async (requestId: string) => (await withRlsContext(db, scope,
 
 describe('a chat with requests the old intake made, after stage 2 of ADR-135 (was ADR-136)', () => {
   const stale = { intakeStatus: 409, code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required' };
+  const forwarded = { intakeStatus: 200, lifecycleAction: 'chat-answer',
+    chatAnswer: { text: expect.stringContaining("I've passed your message to the office") } };
+  const asked = { intakeStatus: 200, lifecycleAction: 'chat-answer', choiceRequired: true };
 
-  it('a Telegram reply to an old-intake draft is a stale reply with a receipt, and makes nothing', async () => {
+  it('a Telegram reply to an old-intake draft is passed to the office with a receipt, and makes nothing', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const { sent } = fakeTelegram();
     const chat = chatId();
@@ -128,14 +137,14 @@ describe('a chat with requests the old intake made, after stage 2 of ADR-135 (wa
     (reply.message as Record<string, unknown>).reply_to_message = { message_id: 4242, from: BOT, chat: { id: chat, type: 'private' }, date: 1790000000,
       text: 'Your draft is ready', reply_markup: { inline_keyboard: [[{ text: 'Approve design', callback_data: `rq:ok:${task}` }]] } };
     const result = await intake(createApp({ db } as any), reply);
-    expect(result.body).toMatchObject({ ...stale, chatId: String(chat) });
-    expect(await routingReceipt(reply.update_id)).toHaveLength(1);
-    expect((await intake(createApp({ db } as any), reply)).body).toMatchObject(stale);
+    expect(result.body).toMatchObject({ ...forwarded, chatId: String(chat) });
+    expect(await intentReceipt(reply.update_id)).toHaveLength(1);
+    expect((await intake(createApp({ db } as any), reply)).body).toMatchObject({ ...forwarded, duplicate: true });
     expect(await tasksInChat(chat)).toEqual([expect.objectContaining({ id: task, pin: 'core' })]);
     expect(sent).toHaveLength(0);
   });
 
-  it('a reply to a delivered old-intake file is a stale reply, and the chat\'s waiting lifecycle request keeps its revision', async () => {
+  it('a reply to a delivered old-intake file asks which design, and the chat\'s waiting lifecycle request keeps its revision', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
@@ -152,7 +161,8 @@ describe('a chat with requests the old intake made, after stage 2 of ADR-135 (wa
     (reply.message as Record<string, unknown>).reply_to_message = { message_id: 5151, from: BOT, chat: { id: chat, type: 'private' },
       date: 1790000000, document: { file_id: 'sent-file', file_name: 'design.png' } };
     const result = await intake(createApp({ db } as any), reply, 'lifecycle');
-    expect(result.body).toMatchObject(stale);
+    expect(result.body).toMatchObject(asked);
+    expect(result.body.chatAnswer.text).toMatch(/Is this for <b>KAAE members evening<\/b>\?/);
     expect(await requestRev(waiting.requestId)).toMatchObject({ rev: '3', stage: 'manual' });
     expect((await tasksInChat(chat)).map((t) => t.id).sort()).toEqual([task, waiting.taskId].sort());
   });
@@ -173,7 +183,7 @@ describe('a chat with requests the old intake made, after stage 2 of ADR-135 (wa
     expect((await tasksInChat(chat)).filter((t) => t.parent === waiting.taskId || t.parent === task)).toEqual([]);
   });
 
-  it('still refuses a reply to an unknown message once the chat has a lifecycle request', async () => {
+  it('asks, instead of applying, a reply to an unknown bot message once the chat has a lifecycle request', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
@@ -182,10 +192,11 @@ describe('a chat with requests the old intake made, after stage 2 of ADR-135 (wa
     const reply = message(updateId(), chat, 'Make it blue');
     (reply.message as Record<string, unknown>).reply_to_message = { message_id: 777001, from: BOT, chat: { id: chat, type: 'private' }, date: 1790000000, text: 'Something' };
     const result = await intake(createApp({ db } as any), reply, 'lifecycle');
-    expect(result.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY' });
+    expect(result.body).toMatchObject(asked);
+    expect(await tasksInChat(chat)).toHaveLength(2);
   });
 
-  it('a reply in a chat with only old-intake history (an answer to its clarification question) is a stale reply', async () => {
+  it('a reply in a chat with only old-intake history (an answer to its clarification question) is passed to the office', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
@@ -194,8 +205,8 @@ describe('a chat with requests the old intake made, after stage 2 of ADR-135 (wa
     (reply.message as Record<string, unknown>).reply_to_message = { message_id: 777002, from: BOT, chat: { id: chat, type: 'private' }, date: 1790000000,
       text: 'Clarification needed: is this a change to the design?' };
     const result = await intake(createApp({ db } as any), reply);
-    expect(result.body).toMatchObject(stale);
-    expect(await routingReceipt(reply.update_id)).toHaveLength(1);
+    expect(result.body).toMatchObject(forwarded);
+    expect(await intentReceipt(reply.update_id)).toHaveLength(1);
     expect(await tasksInChat(chat)).toEqual([expect.objectContaining({ id: task })]);
   });
 

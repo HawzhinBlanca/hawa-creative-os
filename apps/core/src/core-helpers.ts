@@ -61,6 +61,8 @@ export class TaskStoreUnavailableError extends Error {
 
 export interface CreateAppOptions {
   evaluationGateway?: import('@hawa/contracts').ModelGateway;
+  /** ADR-144: the intake router for messages the rules cannot place; tests pass their own. */
+  requesterIntentModel?: import('./services/requester-intent-model.js').RequesterIntentModel | null;
   canvaOptions?: CanvaServiceOptions;
   canvaConnectService?: CanvaConnectService;
   designStudioOptions?: DesignStudioServiceOptions;

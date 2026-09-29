@@ -15,7 +15,7 @@
  *    longer than `timeoutMs` counts as this update's retryable failure.
  * "Wait" is a thrown error: Restate retries the step and does not journal it.
  */
-import type { ChatInboxCore, IntakeAnswer, IntakeMode, LateChangeStage } from './chat-inbox.js';
+import { LATE_CHANGE_STAGES, type ChatInboxCore, type IntakeAnswer, type IntakeMode, type LateChangeStage } from './chat-inbox.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -34,6 +34,10 @@ export interface CoreClientOptions {
 const WAIT_CODES = new Set(['DATABASE_UNAVAILABLE', 'INTAKE_PAUSED', 'NOT_CONFIGURED']);
 const retryable = (status: number) => status >= 500 || status === 429 || status === 408;
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+/** An office alert Core attached: absent, or a chat and words within Telegram's limit. */
+const validAlert = (alert: { chatId?: unknown; text?: unknown } | null | undefined): boolean =>
+  alert === undefined || (Boolean(alert) && typeof alert!.chatId === 'string' && Boolean(alert!.chatId) &&
+    typeof alert!.text === 'string' && Boolean(alert!.text) && (alert!.text as string).length <= 4000);
 const isTimeout = (err: unknown) => err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
 
 export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
@@ -84,11 +88,13 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
           }
           if (body.lifecycleAction === 'chat-answer') {
             const answer = body.chatAnswer;
+            const alert = body.officeAlert;
             if (!body.chatId || !answer || typeof answer.text !== 'string' || !answer.text || answer.text.length > 4000 ||
-                (answer.parseMode !== undefined && answer.parseMode !== 'HTML'))
+                (answer.parseMode !== undefined && answer.parseMode !== 'HTML') || !validAlert(alert))
               throw new Error(`Core returned an invalid chat answer for update ${update.update_id}`);
             return { ...base, lifecycleAction: 'chat-answer', chatId: body.chatId,
-              chatAnswer: { text: answer.text, ...(answer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) } };
+              chatAnswer: { text: answer.text, ...(answer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) },
+              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}) };
           }
           if (body.lifecycleAction === 'album-message') {
             if (!body.chatId || typeof body.albumMessage !== 'string' || !body.albumMessage ||
@@ -142,16 +148,18 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
           }
           if (body.lifecycleAction === 'late-change') {
             const alert = body.officeAlert;
+            const answer = body.chatAnswer;
             if (body.code !== 'LATE_REQUESTER_CHANGE' || !body.chatId || typeof body.requestId !== 'string' ||
                 !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId) ||
-                !['in_review', 'approved', 'delivering', 'delivered'].includes(String(body.requestStage)) ||
-                (alert !== undefined && (!alert || typeof alert.chatId !== 'string' || !alert.chatId ||
-                  typeof alert.text !== 'string' || !alert.text || alert.text.length > 4000))) {
+                !(LATE_CHANGE_STAGES as readonly string[]).includes(String(body.requestStage)) || !validAlert(alert) ||
+                (answer !== undefined && (!answer || typeof answer.text !== 'string' || !answer.text ||
+                  answer.text.length > 4000 || (answer.parseMode !== undefined && answer.parseMode !== 'HTML')))) {
               throw new Error(`Core returned an invalid late change for update ${update.update_id}`);
             }
             return { ...base, lifecycleAction: 'late-change', code: body.code, chatId: body.chatId,
               requestId: body.requestId, requestStage: body.requestStage as LateChangeStage,
-              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}) };
+              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}),
+              ...(answer ? { chatAnswer: { text: String(answer.text), ...(answer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) } } : {}) };
           }
           if (body.lifecycleAction === 'request-choice-required' && body.chatId &&
               (body.code === 'AMBIGUOUS_REQUEST' || body.code === 'STALE_REQUEST_REPLY')) {

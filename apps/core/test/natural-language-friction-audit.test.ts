@@ -13,10 +13,13 @@ import { classifyWithHeuristics } from '../src/services/telegram-classifier.js';
  * forwards). No slash commands, keywords, exact formats or "reply to message X" tricks, and a
  * natural message is never refused, silently dropped or misread.
  *
- * Every test here is `it.fails`: it asserts the NATURAL behaviour, and passes today only because the
- * product does not behave that way yet. Each one names its finding (F-number in the report). When a
- * fix lands, the matching `it.fails` starts failing: turn it into a plain `it` in the fix's commit.
- * Nothing here changes product code; the fixtures are those of lifecycle-internal-intake.test.ts.
+ * Every test here was `it.fails`: it asserts the NATURAL behaviour, and passed only because the
+ * product did not behave that way yet. Each one names its finding (F-number in the report). When a
+ * fix lands, the matching `it.fails` starts failing and is turned into a plain `it` in the fix's commit.
+ * ADR-144 (requester intent routing) turned F1, F2, F3, F4, F7, F8, F9, F10, F12 and F13 into plain
+ * tests; F5, F6 and F11 (media admission and edits) are still expected to fail.
+ * Since ADR-135 stage 2 Core sends nothing to a requester: what the bot says is the answer ChatInbox
+ * sends (`chatAnswer`), so the tests that read the bot's words read it there as well as in Telegram.
  */
 /**
  * `bug` is `it.fails`. Run with AUDIT_SHOW_FAILURES=1 to make every audit test a plain `it` and see
@@ -74,6 +77,11 @@ function fakeTelegram() {
   return { sent };
 }
 
+/** What the requester is told: anything Core sent itself, and the answer ChatInbox sends (ADR-135 stage 2). */
+const saidTo = (chat: number, sent: Array<{ chat_id: string | number; text: string }>, body: Record<string, any>) =>
+  [...sent.filter((m) => String(m.chat_id) === String(chat)).map((m) => m.text),
+    ...(String(body.chatId) === String(chat) && typeof body.chatAnswer?.text === 'string' ? [body.chatAnswer.text] : [])].join('\n');
+
 const intake = async (app: any, update: unknown) => {
   const res = await app.request('/v1/internal/telegram/intake', { method: 'POST', headers: worker,
     body: JSON.stringify({ v: 1, update, mode: 'lifecycle', languageSiblings: true }) });
@@ -117,7 +125,7 @@ function app(extra: Record<string, unknown> = {}) {
 }
 
 describe('F1: acknowledgements and chatter are read as design instructions while a design waits for changes', () => {
-  bug.each(['thanks', 'ok', '👍', 'سوپاس', '/status', '/start', 'when will it be ready?'])(
+  it.each(['thanks', 'ok', '👍', 'سوپاس', '/status', '/start', 'when will it be ready?'])(
     '"%s" in a chat whose design waits for changes does not start a paid revision round', async (words) => {
     fakeTelegram();
     const chat = chatId();
@@ -129,7 +137,7 @@ describe('F1: acknowledgements and chatter are read as design instructions while
 });
 
 describe('F2: a new, unrelated brief while one design waits for changes is swallowed as that design\'s revision', () => {
-  bug('a complete new brief opens a new request (or asks), instead of revising the waiting design', async () => {
+  it('a complete new brief opens a new request (or asks), instead of revising the waiting design', async () => {
     fakeTelegram();
     const chat = chatId();
     await seedRequest(chat, 'manual', 3);
@@ -141,7 +149,7 @@ describe('F2: a new, unrelated brief while one design waits for changes is swall
 });
 
 describe('F3: two designs waiting means every natural message is refused with "reply directly to the revision notice"', () => {
-  bug('"thanks" with two waiting designs is not refused as an ambiguous request', async () => {
+  it('"thanks" with two waiting designs is not refused as an ambiguous request', async () => {
     fakeTelegram();
     const chat = chatId();
     await seedRequest(chat, 'manual', 3);
@@ -153,7 +161,7 @@ describe('F3: two designs waiting means every natural message is refused with "r
 });
 
 describe('F4: a correction while the design is being made', () => {
-  bug.each([
+  it.each([
     'the date should be 5 October not 4',
     'make the title bigger',
     'also add the phone number 0750 123 4567',
@@ -166,7 +174,7 @@ describe('F4: a correction while the design is being made', () => {
     expect(answer.body.lifecycleAction).not.toBe('open-request');
   });
 
-  bug('a reply to the "Request received" acknowledgement is not refused as a stale reply', async () => {
+  it('a reply to the "Request received" acknowledgement is not refused as a stale reply', async () => {
     fakeTelegram();
     const chat = chatId();
     await seedRequest(chat, 'designing', 2, { key: '1:ack', messageId: '4401' });
@@ -175,7 +183,7 @@ describe('F4: a correction while the design is being made', () => {
     expect(answer.body.code).not.toBe('STALE_REQUEST_REPLY');
   });
 
-  bug('a reply to the requester\'s own earlier brief is not refused as a stale reply', async () => {
+  it('a reply to the requester\'s own earlier brief is not refused as a stale reply', async () => {
     fakeTelegram();
     const chat = chatId();
     await seedRequest(chat, 'designing', 2);
@@ -226,7 +234,7 @@ describe('F6: voice and PDF briefs demand an exact "Client:" line', () => {
 });
 
 describe('F7: replies to the draft while it is with the office', () => {
-  bug.each(['thanks', 'looks good, send it'])(
+  it.each(['thanks', 'looks good, send it'])(
     '"%s" in reply to the draft is not filed as a late change the office must acknowledge', async (words) => {
     fakeTelegram();
     const chat = chatId();
@@ -238,7 +246,7 @@ describe('F7: replies to the draft while it is with the office', () => {
 });
 
 describe('F8: group chats', () => {
-  bug('ordinary group conversation that mentions an event does not open a design request', async () => {
+  it('ordinary group conversation that mentions an event does not open a design request', async () => {
     fakeTelegram();
     const chat = -(1_000_000_000_000 + Math.floor(Math.random() * 1_000_000));
     const answer = await intake(app(), message(chat, {
@@ -249,7 +257,7 @@ describe('F8: group chats', () => {
 });
 
 describe('F9: a request that opens with a greeting or is phrased as a question is answered with a canned reply and dropped', () => {
-  bug.each([
+  it.each([
     'Hi, can you make a poster for our Nawroz party?',
     'Can you make a poster for Nawroz?',
   ])('"%s" is taken as a request', async (words) => {
@@ -276,29 +284,29 @@ describe('F9: a request that opens with a greeting or is phrased as a question i
 });
 
 describe('F10: status questions and cancellations while a design is being made', () => {
-  bug('"when will it be ready?" gets an answer about the running design, not a reply-to-the-preview instruction', async () => {
+  it('"when will it be ready?" gets an answer about the running design, not a reply-to-the-preview instruction', async () => {
     const { sent } = fakeTelegram();
     const chat = chatId();
     await seedRequest(chat, 'designing', 2);
-    await intake(app(), message(chat, { text: 'when will it be ready?' }));
-    const texts = sent.filter((m) => String(m.chat_id) === String(chat)).map((m) => m.text).join('\n');
+    const answer = await intake(app(), message(chat, { text: 'when will it be ready?' }));
+    const texts = saidTo(chat, sent, answer.body);
     expect(texts).toMatch(/being (made|designed)|working on/i);
     expect(texts).not.toMatch(/reply directly to the preview/i);
   });
 
-  bug('"cancel that" is acknowledged as a cancellation request', async () => {
+  it('"cancel that" is acknowledged as a cancellation request', async () => {
     const { sent } = fakeTelegram();
     const chat = chatId();
     await seedRequest(chat, 'designing', 2);
-    await intake(app(), message(chat, { text: 'cancel that' }));
-    const texts = sent.filter((m) => String(m.chat_id) === String(chat)).map((m) => m.text).join('\n');
+    const answer = await intake(app(), message(chat, { text: 'cancel that' }));
+    const texts = saidTo(chat, sent, answer.body);
     // Today: nothing about cancelling; the design keeps running (legacy answers a greeting or nothing).
     expect(texts).toMatch(/cancel|stop/i);
   });
 });
 
 describe('F13: approvals, cancellations and deadlines written as plain messages open new design requests', () => {
-  bug.each([
+  it.each([
     'looks good, send it',
     'please cancel the poster',
     'we need it by tomorrow',
@@ -338,12 +346,12 @@ describe('F11: edited messages', () => {
 });
 
 describe('F12: a sticker in reply to a lifecycle draft', () => {
-  bug('is not told to "tap ✅ Approve design" (lifecycle drafts carry no such button)', async () => {
+  it('is not told to "tap ✅ Approve design" (lifecycle drafts carry no such button)', async () => {
     const { sent } = fakeTelegram();
     const chat = chatId();
     await seedRequest(chat, 'in_review', 2, { key: '2:design-outcome', messageId: '6601' });
-    await intake(app(), message(chat, { sticker: { file_id: 'thumbs', emoji: '👍' }, reply_to_message: { message_id: 6601 } }));
-    const texts = sent.filter((m) => String(m.chat_id) === String(chat)).map((m) => m.text).join('\n');
+    const answer = await intake(app(), message(chat, { sticker: { file_id: 'thumbs', emoji: '👍' }, reply_to_message: { message_id: 6601 } }));
+    const texts = saidTo(chat, sent, answer.body);
     expect(texts).not.toMatch(/Approve design/);
   });
 });

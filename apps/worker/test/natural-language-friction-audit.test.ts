@@ -3,9 +3,10 @@ import { handleUpdate, type ChatInboxCore, type InboxContext, type IntakeAnswer 
 
 /**
  * NATURAL-LANGUAGE FRICTION AUDIT (2026-09-29): what ChatInbox tells a requester for each Core answer
- * (plans/lean-design-implementation-2026-09-28/NATURAL_LANGUAGE_FRICTION_AUDIT.md). Every test is
- * `it.fails` and asserts the natural behaviour the owner asked for; it passes today only because the
- * notice is not natural yet. AUDIT_SHOW_FAILURES=1 turns them into plain tests to show the failures.
+ * (plans/lean-design-implementation-2026-09-28/NATURAL_LANGUAGE_FRICTION_AUDIT.md). Every test was
+ * `it.fails` and asserts the natural behaviour the owner asked for. ADR-144 made N1 to N4 plain tests;
+ * N5 (a sender outside the allowlist) is still expected to fail. AUDIT_SHOW_FAILURES=1 turns the
+ * remaining ones into plain tests to show the failures.
  */
 const bug = process.env.AUDIT_SHOW_FAILURES === '1' ? it : it.fails;
 
@@ -42,7 +43,7 @@ const done = (extra: Partial<Extract<IntakeAnswer, { kind: 'done' }>>): IntakeAn
   ({ kind: 'done', intakeStatus: 409, chatId: '555', ...extra });
 
 describe('N1: the requester is asked for a slash command', () => {
-  bug.each(['NEW_BRIEF_EMPTY', 'LEGACY_REQUEST_REFUSED'] as const)('%s: the notice does not ask for /new', async (code) => {
+  it.each(['NEW_BRIEF_EMPTY', 'LEGACY_REQUEST_REFUSED'] as const)('%s: the notice does not ask for /new', async (code) => {
     const texts = await noticesFor(done({ lifecycleAction: 'new-brief-required', code: code as any }), 'KAAE follow-up event');
     // Today: "Please send /new followed by the full design brief and the exact words to place on it."
     expect(texts.join('\n')).not.toMatch(/\/new/);
@@ -50,14 +51,14 @@ describe('N1: the requester is asked for a slash command', () => {
 });
 
 describe('N2: the requester is asked to "reply directly to the revision notice"', () => {
-  bug.each(['AMBIGUOUS_REQUEST', 'STALE_REQUEST_REPLY'] as const)('%s: the notice does not demand a reply to a specific message', async (code) => {
+  it.each(['AMBIGUOUS_REQUEST', 'STALE_REQUEST_REPLY'] as const)('%s: the notice does not demand a reply to a specific message', async (code) => {
     const texts = await noticesFor(done({ lifecycleAction: 'request-choice-required', code }), 'thanks');
     expect(texts.join('\n')).not.toMatch(/reply (directly )?to the (current )?revision notice/i);
   });
 });
 
 describe('N3: a Sorani requester is answered in English', () => {
-  bug('an answer taken from a Sorani message is acknowledged in Sorani', async () => {
+  it('an answer taken from a Sorani message is acknowledged in Sorani', async () => {
     const texts = await noticesFor({ kind: 'done', intakeStatus: 200, lifecycleAction: 'requester-answer', chatId: '555',
       requestId: '11111111-1111-4111-8111-111111111111', newTaskId: '22222222-2222-4222-8222-222222222222',
       priorTaskId: '33333333-3333-4333-8333-333333333333', round: 1, directive: 'پاشبنەمای شین',
@@ -66,7 +67,7 @@ describe('N3: a Sorani requester is answered in English', () => {
     expect(texts.join('\n')).toMatch(/[؀-ۿ]/);
   });
 
-  bug('a late change written in Sorani is answered in Sorani', async () => {
+  it('a late change written in Sorani is answered in Sorani', async () => {
     const texts = await noticesFor(done({ lifecycleAction: 'late-change', code: 'LATE_REQUESTER_CHANGE',
       requestId: '11111111-1111-4111-8111-111111111111', requestStage: 'in_review' }), 'ژمارەی تەلەفۆنەکە هەڵەیە');
     expect(texts.join('\n')).toMatch(/[؀-ۿ]/);
@@ -74,7 +75,7 @@ describe('N3: a Sorani requester is answered in English', () => {
 });
 
 describe('N4: approval words in reply to the draft', () => {
-  bug('"looks good, send it" is not told its words were "not applied to the design"', async () => {
+  it('"looks good, send it" is not told its words were "not applied to the design"', async () => {
     const texts = await noticesFor(done({ lifecycleAction: 'late-change', code: 'LATE_REQUESTER_CHANGE',
       requestId: '11111111-1111-4111-8111-111111111111', requestStage: 'in_review',
       officeAlert: { chatId: '1', text: 'x' } }), 'looks good, send it');

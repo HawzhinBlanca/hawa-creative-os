@@ -174,18 +174,29 @@ export interface RoutingRefusal { code: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REP
   /** Only for LATE_REQUESTER_CHANGE: the request the reply was bound to and the requester's words. */
   late?: LateRequesterChange }
 
-/** The stages in which a requester's words can no longer change the design by themselves. */
-export const LATE_CHANGE_STAGES = ['in_review', 'approved', 'delivering', 'delivered'] as const;
+/**
+ * The stages in which a requester's words are kept on a request instead of changing its design by
+ * themselves: after the design went to the office (finding 13 of the Phase 4 review), and, since
+ * ADR-144, while it is still being made (a pending change) or when the requester asks to cancel it.
+ */
+export const LATE_CHANGE_STAGES = ['in_review', 'approved', 'delivering', 'delivered',
+  'designing', 'manual', 'awaiting_answer'] as const;
 export type LateChangeStage = typeof LATE_CHANGE_STAGES[number];
 const isLateStage = (value: unknown): value is LateChangeStage =>
   typeof value === 'string' && (LATE_CHANGE_STAGES as readonly string[]).includes(value);
 
 /**
- * A reply that reached a request after its design went to the office (finding 13 of the Phase 4
- * review). The words are kept as they were sent; they are not applied to any design.
+ * Words kept on a request for the office. The words are kept as they were sent; they are not applied
+ * to any design, and Deliver waits until an office member has read them.
  */
 export interface LateRequesterChange {
   requestId: string; taskId: string; requestRev: number; requestStage: LateChangeStage; text: string;
+  /** ADR-144: a change (the default) or a request to cancel. */
+  kind?: 'change' | 'cancel';
+  /** ADR-144: what the requester was told, given again word for word on a replay. */
+  answer?: string;
+  /** ADR-144: the request's title, for the office's alert. */
+  title?: string;
 }
 
 const ROUTING_CODES = new Set(['AMBIGUOUS_REQUEST', 'STALE_REQUEST_REPLY', 'DAILY_CAP_REACHED',
@@ -193,11 +204,15 @@ const ROUTING_CODES = new Set(['AMBIGUOUS_REQUEST', 'STALE_REQUEST_REPLY', 'DAIL
 const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function parseLateChange(payload: Record<string, unknown>): LateRequesterChange | null {
-  const { requestId, taskId, requestRev, requestStage, text } = payload;
+  const { requestId, taskId, requestRev, requestStage, text, kind, answer, title } = payload;
   if (typeof requestId !== 'string' || !UUID_TEXT.test(requestId) || typeof taskId !== 'string' ||
       !UUID_TEXT.test(taskId) || !Number.isSafeInteger(requestRev) || !isLateStage(requestStage) ||
-      typeof text !== 'string' || !text.trim()) return null;
-  return { requestId, taskId, requestRev: requestRev as number, requestStage, text };
+      typeof text !== 'string' || !text.trim() ||
+      (kind !== undefined && kind !== 'change' && kind !== 'cancel') ||
+      (answer !== undefined && (typeof answer !== 'string' || !answer || answer.length > 4000)) ||
+      (title !== undefined && (typeof title !== 'string' || title.length > 500))) return null;
+  return { requestId, taskId, requestRev: requestRev as number, requestStage, text,
+    ...(kind ? { kind } : {}), ...(answer ? { answer } : {}), ...(title !== undefined ? { title } : {}) };
 }
 
 export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string,
@@ -291,6 +306,9 @@ const STAGE_WORDS: Record<LateChangeStage, string> = {
   approved: 'approved',
   delivering: 'being delivered',
   delivered: 'delivered',
+  designing: 'still being designed',
+  manual: 'with a designer',
+  awaiting_answer: 'waiting for their answer to a question',
 };
 
 /**
@@ -306,8 +324,14 @@ export function lateChangeOfficeAlert(late: LateRequesterChange, requesterChatId
     : late.requestStage === 'delivered'
       ? 'The design had already been delivered.'
       : 'Deliver will ask someone in the Desk to read and acknowledge these words first.';
+  const named = late.title ? ` "${late.title}"` : '';
+  const opening = late.kind === 'cancel'
+    ? `The requester in chat ${requesterChatId} asked to cancel the design${named} while it was ${STAGE_WORDS[late.requestStage]}. Nothing was stopped automatically.`
+    : late.requestStage === 'designing' || late.requestStage === 'manual' || late.requestStage === 'awaiting_answer'
+      ? `The requester in chat ${requesterChatId} sent a change for the design${named} while it was ${STAGE_WORDS[late.requestStage]}. It was not applied to any design; fold it into the next round or the review.`
+      : `The requester in chat ${requesterChatId} replied after the design${named} was ${STAGE_WORDS[late.requestStage]}. Their words were not applied to any design.`;
   return { chatId: officeChatId, text: [
-    `The requester in chat ${requesterChatId} replied after the design was ${STAGE_WORDS[late.requestStage]}. Their words were not applied to any design.`,
+    opening,
     `Task ${late.taskId}, request ${late.requestId}.`,
     '',
     'Their words:',

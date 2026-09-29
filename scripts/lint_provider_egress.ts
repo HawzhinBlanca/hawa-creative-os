@@ -30,6 +30,8 @@ const ALLOWED_EGRESS_FILES = new Set([
   'apps/core/src/routes/system.routes.ts',
   'apps/core/src/services/canva-planner-call.ts',
   'apps/core/src/services/telegram-classifier.ts',
+  // ADR-144: the intake router, admitted per update against the office's shared allowance.
+  'apps/core/src/services/requester-intent-model.ts',
 ]);
 
 function scanDirectory(dir: string, scanRoot: string, violations: Array<{ file: string; host: string }>) {

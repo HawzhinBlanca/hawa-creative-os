@@ -394,7 +394,8 @@ describe('ChatInbox.setMode', () => {
     expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastOutcome: 'parked' });
   });
 
-  it('asks for a specific reply when more than one request is waiting', async () => {
+  // ADR-144: no reply target is demanded; the requester is asked which design, in words.
+  it('asks which design, in words, when Core answers that more than one request is waiting', async () => {
     const ctx = new FakeContext();
     ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
       mode: 'lifecycle', requestId: 'old-pointer' } satisfies ChatInboxView);
@@ -403,12 +404,14 @@ describe('ChatInbox.setMode', () => {
     await handleUpdate(ctx, input, c);
     expect(ctx.lifecycleDecisions).toHaveLength(0);
     expect(ctx.notices).toMatchObject([{ key: `chatinbox:request-choice:${update.update_id}`,
-      chatId: '555', class: 'critical', text: expect.stringContaining('reply directly') }]);
+      chatId: '555', class: 'critical', text: expect.stringContaining('Which one is this for?') }]);
+    expect((ctx.notices[0] as any).text).not.toMatch(/reply (directly )?to|revision notice/i);
   });
 
-  // A group "/task …" or a change with no design waiting opens nothing; Core asks for /new, and nothing
-  // reaches RequestLifecycle. A chat's first update (legacy mode) is answered alike.
-  it('asks for /new when Core answers new-brief-required, and keeps the chat\'s mode', async () => {
+  // "/new" with no brief opens nothing; the requester is asked, in words and with no command, what
+  // to design (ADR-144), and nothing reaches RequestLifecycle. A chat's first update (legacy mode) is
+  // answered alike.
+  it('asks what to design, without naming a command, when Core answers new-brief-required, and keeps the chat\'s mode', async () => {
     for (const mode of [undefined, 'lifecycle'] as const) {
       const ctx = new FakeContext();
       if (mode) ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
@@ -418,7 +421,8 @@ describe('ChatInbox.setMode', () => {
       expect(await handleUpdate(ctx, input, c)).toMatchObject({ outcome: 'handled', intakeStatus: 422 });
       expect(ctx.lifecycleDecisions).toHaveLength(0);
       expect(ctx.notices).toMatchObject([{ key: `chatinbox:new-brief-required:${update.update_id}`,
-        chatId: '555', class: 'critical', text: expect.stringContaining('/new') }]);
+        chatId: '555', class: 'critical', text: expect.stringContaining('What would you like designed?') }]);
+      expect((ctx.notices[0] as any).text).not.toMatch(/\/new/);
       expect((ctx.state.get('inbox') as ChatInboxView | undefined)?.mode).toBe(mode);
     }
   });
@@ -510,8 +514,9 @@ describe('a requester change after the design reached the office (finding 13 of 
     expect(office).toMatchObject({ chatId: '9000', kind: 'text', class: 'critical', text: expect.stringContaining(words) });
     expect(office.parseMode).toBeUndefined();
     expect(requester).toMatchObject({ chatId: '555', kind: 'text', class: 'critical' });
-    expect(requester.text).toMatch(/office has been told/i);
-    expect(requester.text).not.toMatch(/revision notice|will follow up/i);
+    // ADR-144: said plainly, without a refusal ("not applied") or a reply demand.
+    expect(requester.text).toMatch(/passed your message to them/i);
+    expect(requester.text).not.toMatch(/revision notice|will follow up|not applied/i);
   });
 
   it('does not claim the office was told when Core had no office chat to alert', async () => {
@@ -520,13 +525,14 @@ describe('a requester change after the design reached the office (finding 13 of 
     const ctx = new FakeContext();
     await handleUpdate(ctx, input, client);
     expect(ctx.notices).toHaveLength(1);
-    expect((ctx.notices[0] as any).text).not.toMatch(/office has been told/i);
-    expect((ctx.notices[0] as any).text).toMatch(/saved/i);
+    expect((ctx.notices[0] as any).text).not.toMatch(/passed your message/i);
+    expect((ctx.notices[0] as any).text).toMatch(/kept your message for the office/i);
   });
 
   it('refuses a malformed late-change answer from Core', async () => {
-    for (const extra of [{ requestId: 'not-a-request' }, { requestStage: 'designing' },
-      { officeAlert: { chatId: '9000', text: 'x'.repeat(4001) } }, { officeAlert: { chatId: '', text: words } }]) {
+    for (const extra of [{ requestId: 'not-a-request' }, { requestStage: 'cancelled' },
+      { officeAlert: { chatId: '9000', text: 'x'.repeat(4001) } }, { officeAlert: { chatId: '', text: words } },
+      { chatAnswer: { text: '' } }, { chatAnswer: { text: 'Got it', parseMode: 'Markdown' } }]) {
       const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token',
         fetch: async () => Response.json(lateAnswer(extra)) });
       await expect(client.intake(update, 'lifecycle')).rejects.toThrow('invalid late change');
@@ -552,6 +558,46 @@ describe('source review notices', () => {
       const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () =>
         Response.json({ intakeStatus: 200, lifecycleAction: 'source-message', chatId: '555', ...fields }) });
       await expect(client.intake(update, 'legacy')).rejects.toThrow('invalid source notice');
+    }
+  });
+});
+
+describe('requester intent answers (ADR-144)', () => {
+  const requestId = '3f1c2b7a-1d2e-4f5a-8b6c-7d8e9f0a1b2c';
+
+  it('sends the office alert Core attached to a chat answer, once per update, beside the requester\'s answer', async () => {
+    const transport = vi.fn(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 200, lifecycleAction: 'chat-answer',
+      chatId: '555', note: 'approval', requestId, chatAnswer: { text: "Thanks! I've told the office you're happy with <b>Poster</b>.", parseMode: 'HTML' },
+      officeAlert: { chatId: '9000', text: 'The requester in chat 555 says they are happy with "Poster". Nothing was approved.' } }));
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: transport });
+    const ctx = new FakeContext(); ctx.crashOnSet = 1;
+    await untilSettled(ctx, () => handleUpdate(ctx, input, client));
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    expect([...new Set(ctx.notices.map((n: any) => n.key))]).toEqual([`chatinbox:chat-answer:${update.update_id}`,
+      `notify.office:requester-note:${update.update_id}`]);
+    const [requester, office] = ctx.notices as any[];
+    expect(requester).toMatchObject({ chatId: '555', parseMode: 'HTML', text: expect.stringContaining('happy with') });
+    expect(office).toMatchObject({ chatId: '9000', class: 'critical', text: expect.stringContaining('Nothing was approved') });
+    expect(office.parseMode).toBeUndefined();
+  });
+
+  it('tells the requester Core\'s own words for a change kept while the design is being made', async () => {
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () => Response.json({ v: 1, kind: 'handled',
+      intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change', chatId: '555', requestId, requestStage: 'designing',
+      chatAnswer: { text: "Got it. I've added that to <b>Poster</b>; the office will see it before the design is sent to you.", parseMode: 'HTML' },
+      officeAlert: { chatId: '9000', text: 'A change for the design while it was still being designed.' } }) });
+    const ctx = new FakeContext();
+    await handleUpdate(ctx, input, client);
+    expect(ctx.notices).toMatchObject([{ chatId: '9000' }, { key: `chatinbox:late-change:${update.update_id}`, chatId: '555',
+      parseMode: 'HTML', text: expect.stringContaining("I've added that to <b>Poster</b>") }]);
+  });
+
+  it('refuses a chat answer whose office alert is malformed', async () => {
+    for (const officeAlert of [{ chatId: '', text: 'x' }, { chatId: '9000', text: '' }, { chatId: '9000', text: 'x'.repeat(4001) }, null]) {
+      const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () => Response.json({ intakeStatus: 200,
+        lifecycleAction: 'chat-answer', chatId: '555', chatAnswer: { text: 'Thanks' }, officeAlert }) });
+      await expect(client.intake(update, 'lifecycle')).rejects.toThrow('invalid chat answer');
     }
   });
 });

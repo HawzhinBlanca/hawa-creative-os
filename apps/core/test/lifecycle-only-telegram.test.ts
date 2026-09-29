@@ -154,9 +154,10 @@ describe('every Telegram chat is lifecycle-owned (ADR-135)', () => {
   });
 
   // Stage 2 of ADR-135: the old intake is gone, so a reply to one of its drafts, open or finished, is
-  // a stale reply. It changes nothing and makes no task; the requester is asked to reply to a current
-  // notice or send /new (ChatInbox's request-choice-required notice).
-  it.each(['human_review', 'complete'] as const)('a reply to an old-intake draft (%s) is a stale reply and makes nothing', async (state) => {
+  // a stale reply that asked the requester to reply to a current notice or send /new. Since ADR-144 the
+  // words are passed to the office (and the requester is told so, in plain words); it still changes
+  // nothing and makes no task, and the decision replays.
+  it.each(['human_review', 'complete'] as const)('a reply to an old-intake draft (%s) is passed to the office and makes nothing', async (state) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const { sent } = fakeTelegram();
     const chat = chatId();
@@ -167,11 +168,13 @@ describe('every Telegram chat is lifecycle-owned (ADR-135)', () => {
         caption: `Draft ready\n🆔 Task ID: ${legacy}` } });
     const app = createApp({ db } as any);
     const answer = await intake(app, reply);
-    expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY',
-      lifecycleAction: 'request-choice-required', chatId: String(chat) });
+    expect(answer.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: String(chat),
+      chatAnswer: { text: expect.stringContaining("I've passed your message to the office") },
+      officeAlert: { text: expect.stringContaining('Make the title bigger') } });
     expect(await tasksInChat(chat)).toEqual([expect.objectContaining({ id: legacy, pin: 'core', request_id: null })]);
     // The same update again gives the same answer (a receipt), and Core itself sent nothing.
-    expect((await intake(createApp({ db } as any), reply)).body).toMatchObject({ code: 'STALE_REQUEST_REPLY' });
+    expect((await intake(createApp({ db } as any), reply)).body).toMatchObject({ duplicate: true,
+      lifecycleAction: 'chat-answer', chatAnswer: answer.body.chatAnswer });
     expect(sent).toHaveLength(0);
   });
 
