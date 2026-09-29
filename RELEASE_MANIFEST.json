@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-30T00:39:12+03:00",
+  "generatedAt": "2026-09-30T00:40:58+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "603db9f47fdfa850f3b32f44ce59f8f1a69db276",
+    "commit": "9f50d1f2ca2f0e17a3074b64dde31fa314ed5cf2",
     "treeClean": true,
-    "commitTimestamp": "2026-09-30T00:39:12+03:00",
+    "commitTimestamp": "2026-09-30T00:40:58+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "2b0300059fd5dfc998aa919c7c9574463044cd61b264fc1973ad383e52d1cbb9"
+  "sha256": "620a49539b300ca59793b3eb5f2f0eca7e7dce88907bfb2b97e43cad9fbff5f8"
 }
