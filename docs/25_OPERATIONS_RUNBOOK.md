@@ -116,8 +116,9 @@ encrypted location or delete them yourself.
 
 ## Backups
 
-`infra/backup/nightly_backup.sh` runs every night at 03:30 (launch agent `design.hawa.nightly-backup`)
-and on demand. It takes a `pg_dump` in custom format compressed with zstd (`--compress=zstd:long`:
+`infra/backup/nightly_backup.sh` runs every night at 03:30 (launch agent `design.hawa.nightly-backup` on
+a Mac, `hawa-nightly-backup.timer` on a Linux host; infra/ops/README.md lists every job on both) and on
+demand. It takes a `pg_dump` in custom format compressed with zstd (`--compress=zstd:long`:
 about 41 MB, against 319 MB with the default compression, because the dump repeats the same images),
 writes a SHA-256 sidecar, restores the dump into a scratch database on the same server to prove it
 loads and holds the live task count, drops the scratch database, keeps the 14 newest dumps, copies an
@@ -150,7 +151,15 @@ or off-host/whole-system recovery admission. `gs://` is refused because the form
 path did not copy and verify the complete database/file set. A synchronized local
 archive still needs independent off-host readback and recovery qualification.
 
-The launch agents execute these host scripts from this checkout. Changes take
+The off-site copy (`infra/backup/offsite_copy.sh`, 05:30, ADR-141) is that readback for
+the newest complete encrypted recovery set: it copies the set to `HAWA_OFFSITE_DEST`
+(a path, or `host:path` over rsync and SSH), verifies every file there, keeps
+`HAWA_OFFSITE_KEEP` sets and logs to `snapshots/offsite.log`, from which the watchdog
+reports a failed or late copy. It is off until `HAWA_OFFSITE_DEST` is set
+(`runbooks/10_backup_restore.md`, "Off-site copy"). It proves the bytes arrived; a
+restore from them is still the monthly drill's job on the host that reads them.
+
+The launch agents (or, on Linux, the systemd timers) execute these host scripts from this checkout. Changes take
 effect when the next scheduled job invokes them; rebuilding app containers is
 not required. Run isolated backup tests before committing a script change.
 
@@ -158,7 +167,7 @@ The deploy script writes `predeploy_<stamp>.dump` (same format, with its table o
 before every migration. It is written as `.partial` and named, with its `.sha256`, only once checked;
 a failed one is removed and stops the deploy. Both live under the gitignored, owner-only `infra/backup/snapshots/`. Restore
 either into a **new** database and swap it in by renaming, as `runbooks/10_backup_restore.md`
-("Restoring for real") gives it, step by step: stop the launch agents, Core and both worker colours, run
+("Restoring for real") gives it, step by step: stop the launch agents (or timers), Core and both worker colours, run
 its restore-swap block with `DUMP=<file>` (it also copies the database's owner, grants and settings,
 which neither the dump nor the rename carries), restore and verify the files, deploy. Never restore with
 `--clean` over the database the stack uses: once a migration newer than the dump has run, the dump
@@ -184,8 +193,11 @@ kept as it is with a warning, so one failure never stops the rest.
 
 ## Watchdog and self-healing
 
-`infra/ops/watchdog.sh` runs at login and every five minutes (launch agent `design.hawa.watchdog`).
-Docker Desktop is not configured to start at login, so the watchdog starts it, brings the stack up
+`infra/ops/watchdog.sh` runs at login and every five minutes (launch agent `design.hawa.watchdog`), or
+on a Linux host a minute after boot and every five minutes (`hawa-watchdog.timer`). On a Mac, Docker
+Desktop is not configured to start at login, so the watchdog starts it; on Linux, Docker Engine is a
+systemd service started at boot, and the watchdog only reads its state (`systemctl is-active docker`)
+and reports it when it is not running. It then brings the stack up
 when fewer than the six non-worker containers or no worker colour run (`compose start` first, then
 `up -d --no-build --no-recreate`; worker colours that exist are started by name, and only a deploy
 creates one), then checks core `/v1/health` (including paused Restate invocations) and the health of
@@ -196,12 +208,23 @@ completed a poll for five minutes reports itself degraded with `telegramPoller.p
 once per 30 minutes. Recovery is announced once, saying what it was, and only for a problem you were
 told about; when the other problems clear but the disk is still full, that is said at once. A disk
 over 90% full after Hawa's own cleanup is reported with how much of it is Hawa's, every 6 hours
-(hourly past 97%), since the rest is other files on the Mac; it counts as full until it drops below
+(hourly past 97%), since the rest is other files on the production host; it counts as full until it drops below
 88%, so a disk hovering at the line does not flap. `--status` prints the assessment without acting; `--announce` proves the alert path.
-Agents run only while this user is logged in; after a reboot, log in and the stack returns on its own.
+On a Mac, agents run only while this user is logged in; after a reboot, log in and the stack returns on its own.
 Install or refresh the agents with `bash infra/ops/install_launch_agents.sh` (`--uninstall` removes).
 A refresh keeps every `HAWA_*` setting already in an installed agent (the nightly job's archive
 destination, passphrase file and retention), so it never turns the off-machine copy unencrypted.
+On Linux the same jobs are systemd timers that run from boot without a login:
+`sudo bash infra/ops/install_systemd_units.sh --user <user>` installs them, with their settings in
+`/etc/hawa/backup.env` (root, 0600), which a refresh never rewrites.
+
+A host marked `standby` or `retired` (`~/.hawa/host-role`, or `HAWA_HOST_ROLE`; ADR-141) is not a
+production host: its watchdog starts nothing and instead alerts when production containers run there,
+`deploy.sh --apply` refuses, and the nightly backup, the drills and the off-site copy skip. It is how
+the old host is kept from coming back to life after production moves, and how a new host is prepared
+without polling the bot twice. Host requirements, deploying over SSH and the firewall are in
+infra/ops/README.md; the move itself is in `runbooks/10_backup_restore.md`, "Moving production to
+another host".
 
 ## Sorani Kurdish drafts
 

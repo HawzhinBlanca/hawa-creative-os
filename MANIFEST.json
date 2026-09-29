@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T08:19:50Z",
+  "generatedAt": "2026-09-29T08:35:24Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 518,
+  "fileCount": 521,
   "files": [
     {
       "path": ".dockerignore",
@@ -768,6 +768,11 @@
       "bytes": 5975
     },
     {
+      "path": "adrs/141_production_host_portability.md",
+      "sha256": "9e3c8f8c22855560611f112fce7943dc5050f1776ae133dc41a3fd57254b5a50",
+      "bytes": 13248
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1109,8 +1114,8 @@
     },
     {
       "path": "docs/25_OPERATIONS_RUNBOOK.md",
-      "sha256": "47c583d9dcaf52fe6bd3bc208b62917d4bda4b184a0ad546d95cedec88e6570d",
-      "bytes": 20323
+      "sha256": "3315952afe83a146288e0ceb444929d94b76bf7fe0d4ab800a3ed9e3f0689ec1",
+      "bytes": 22197
     },
     {
       "path": "docs/26_WHAT_NOT_TO_BUILD.md",
@@ -1794,8 +1799,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "cad784818c070fd269a5ea85122ca6812abf28cba5bd842f7c2c06798370bd64",
-      "bytes": 477257
+      "sha256": "9ff737ced607cc6c3902781e79782e336e735cdc158bd1cb3afa99333fd334e7",
+      "bytes": 478007
     },
     {
       "path": "plans/user-stories.csv",
@@ -1874,8 +1879,8 @@
     },
     {
       "path": "runbooks/10_backup_restore.md",
-      "sha256": "0e3f179fdcf4b38c1adad2f1c6e800488e1f38a24e07e6d89ed6e52dbbcd4183",
-      "bytes": 34180
+      "sha256": "a12b1bdaddc58ecc6b1d13c1edf04165af3c9baa509b3678859e18d2061b2c0f",
+      "bytes": 40121
     },
     {
       "path": "runbooks/11_upgrade.md",
@@ -2326,6 +2331,16 @@
       "path": "scripts/proofs/gate-baseline.json",
       "sha256": "17a8eba1cb6598fde8e3305dafdf484da4050f54561b50444f7e4472d45148db",
       "bytes": 11710
+    },
+    {
+      "path": "scripts/proofs/linux_host_readiness.sh",
+      "sha256": "2c0e0562af903201fda01fe42947c8b9a8df188e6aba40db869c9465b47760ee",
+      "bytes": 16972
+    },
+    {
+      "path": "scripts/proofs/linux_systemd_install.sh",
+      "sha256": "5863a4a8b5600ca13afdff6d719c45614124958e6d5a65454bc331a2af391fde",
+      "bytes": 6155
     },
     {
       "path": "scripts/proofs/measure_candidate_diversity.ts",
