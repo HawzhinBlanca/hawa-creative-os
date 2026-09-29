@@ -115,6 +115,7 @@ import { PostgresDriveUploadIdentityStore } from './services/drive-upload-reserv
 import { PostgresSheetExpectationStore } from './services/publication-expectations.js';
 import { PublicationInspectionService, startPublicationInspectionSchedule } from './services/publication-inspections.js';
 import { registerPublicationInspectionRoutes } from './routes/publication-inspections.routes.js';
+import { officeAccessPolicy, permitsOfficeRequest } from './services/office-access.js';
 
 // What app.ts exported before its helpers moved to core-helpers.ts; tests and scripts import them from here.
 export { canonicalJson, computeDnaHash, isValidUuid, inlineTemplateCopyMissing, qaReportSha256, secretsEqual, probeDatabase, evaluateCanvaExportQc };
@@ -127,6 +128,7 @@ const globalCanvaCircuitBreaker = new CircuitBreaker({ name: 'canva-api', failur
 
 export function createApp(options?: CreateAppOptions) {
   const app = new Hono();
+  const officeAccess = officeAccessPolicy(process.env);
   // The Node adapter sees an HTTP upstream socket behind the HTTPS reverse proxy. Compare browser
   // Origin with the configured public OAuth callback origin, never that internal request scheme.
   const officeBrowserOrigin = googleOidcSettings()?.redirectUri;
@@ -151,9 +153,10 @@ export function createApp(options?: CreateAppOptions) {
   // First, so every later middleware, handler and error line carries the request's id (logging.ts).
   app.use('*', requestLogContext());
   app.use('*', cors({
-    origin: '*',
+    origin: officeAccess.mode === 'trusted_office' ? officeAccess.origin! : '*',
     allowHeaders: [
       'Content-Type',
+      'X-Hawa-Office-Request',
       'Authorization',
       'Idempotency-Key',
       'If-Match-Version',
@@ -436,6 +439,15 @@ export function createApp(options?: CreateAppOptions) {
     // that intake went with stage 2 of ADR-135, and a request carrying it is anonymous everywhere.
     if (c.req.header('x-telegram-bot-api-secret-token')) {
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
+    }
+
+    if (officeAccess.mode === 'trusted_office') {
+      const presented = String(authHeader || '').replace(/^Bearer\s*/, '').trim();
+      if (workerTokens.some(token => secretsEqual(presented, token)) || !permitsOfficeRequest(officeAccess, c.req)) {
+        return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
+      }
+      return { authenticated: true, tenantId: defaultTenantId, userId: adminUserId,
+        actorId: 'trusted_office_team', role: 'administrator', displayName: 'Office team', authMethod: 'trusted_office' };
     }
 
     const allowRoleOverride = Boolean(options?.testAuth?.roleHeader ?? options?.allowRoleHeader);
@@ -843,7 +855,7 @@ export function createApp(options?: CreateAppOptions) {
     const guarded = isPublic
       ? handler
         : async (c: any, next: any) => {
-          if (method !== 'get' && !c.req.header('Authorization')) {
+          if (officeAccess.mode !== 'trusted_office' && method !== 'get' && !c.req.header('Authorization')) {
             const cookieSession = getCookie(c, 'hawa_session');
             if (cookieSession) {
               const presented = c.req.header('x-hawa-csrf') || '';

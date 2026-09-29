@@ -80,8 +80,6 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   const requireAdministrator = (c: any): Response | null => {
-    const authHeader = c.req.header('Authorization');
-    if (!authHeader) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
     if (auth.role !== 'administrator') return problem(c, 403, 'Administrator Required', 'Only an administrator may change Telegram delivery or inspect configuration');
@@ -544,7 +542,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
   app.get('/v1/system/providers', (c: any) => {
     const authHeader = c.req.header('Authorization');
     const auth = verifyRequestAuth(c);
-    if (!authHeader || !auth.authenticated) {
+    if ((!authHeader && auth.authMethod !== 'trusted_office') || !auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to view system providers');
     }
     const isAdmin = auth.role === 'admin' || auth.role === 'administrator';
@@ -575,7 +573,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
   app.get('/v1/system/providers/test-telegram', async (c: any) => {
     const authHeader = c.req.header('Authorization');
     const auth = verifyRequestAuth(c);
-    if (!authHeader || !auth.authenticated) {
+    if ((!authHeader && auth.authMethod !== 'trusted_office') || !auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to test telegram connection');
     }
     const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -598,7 +596,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
   app.post('/v1/system/providers', async (c: any) => {
     const authHeader = c.req.header('Authorization');
     const auth = verifyRequestAuth(c);
-    if (!authHeader || !auth.authenticated || auth.role !== 'administrator') {
+    if ((!authHeader && auth.authMethod !== 'trusted_office') || !auth.authenticated || auth.role !== 'administrator') {
       return problem(c, 401, 'Unauthorized', 'Administrator credentials required to update provider keys');
     }
     let body: any = {};

@@ -334,6 +334,7 @@ compose_value() {
   case "$v" in '${HOME}'*) v="${HOME}${v#'${HOME}'}" ;; '$HOME'*) v="${HOME}${v#'$HOME'}" ;; esac
   printf '%s' "${v:-$2}"
 }
+node --import tsx "${ROOT_DIR}/scripts/check_office_access.ts" "$ENV_FILE" "$(compose_value HAWA_BIND_IP 127.0.0.1)"
 # 2c. The content-addressed file store (ADR-035) is a host directory bind-mounted into Core, both worker
 # colours (read-write) and nginx (read-only). It is created here, before any container starts, with the
 # marker the store requires: Docker would otherwise create a missing mount source itself, and the store

@@ -8,6 +8,8 @@ logs, the file store, test databases, the chaos suite and the load test) see
 
 ## Worker deploys: blue/green
 
+For the owner's private no-sign-in office mode and restoring authentication before customer publication, see [trusted office access](../../plans/lean-design-implementation-2026-09-28/TRUSTED_OFFICE_ACCESS.md) (ADR-146).
+
 *Architecture programme 0.1, ADR-034. Since 2026-09-24.*
 
 ### Why

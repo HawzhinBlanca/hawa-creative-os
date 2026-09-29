@@ -725,12 +725,12 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     style={{ fontSize: 11, padding: '2px 6px', background: 'var(--blue)', color: 'var(--blue-text)', borderRadius: 4, fontWeight: 500 }}
                     title={`Signed in as ${sessionUser.displayName || sessionUser.role}`}
                   >
-                    👤 {sessionUser.role}
+                    {sessionUser.authMethod === 'trusted_office' ? 'Office team' : `👤 ${sessionUser.role}`}
                   </span>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                {sessionUser && (
+                {sessionUser && sessionUser.authMethod !== 'trusted_office' && (
                   <button className="btn btn-sm" onClick={handleSignOut} title="Sign Out of Session">
                     Sign Out
                   </button>

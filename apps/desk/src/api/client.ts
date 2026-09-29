@@ -32,6 +32,7 @@ export interface ApiSessionUser {
   id: string;
   role: 'administrator' | 'art_director' | 'creative_director' | 'operator' | string;
   displayName: string;
+  authMethod?: string;
 }
 
 export interface ApiSessionResponse {
@@ -227,6 +228,7 @@ class HawaApiClient {
   private getHeaders(customHeaders?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'X-Hawa-Office-Request': '1',
       ...customHeaders,
     };
     const token = getAuthToken();
@@ -308,7 +310,7 @@ class HawaApiClient {
   }
 
   public readonly auth = {
-    providers: async (): Promise<{ googleWorkspace: boolean }> =>
+    providers: async (): Promise<{ googleWorkspace: boolean; trustedOffice?: boolean }> =>
       this.request('/auth/providers', { method: 'GET' }),
     getSession: async (): Promise<ApiSessionResponse> => {
       return this.request<ApiSessionResponse>('/auth/session', { method: 'GET' });

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T19:30:40Z",
+  "generatedAt": "2026-09-29T19:58:28Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 543,
+  "fileCount": 546,
   "files": [
     {
       "path": ".dockerignore",
@@ -793,6 +793,11 @@
       "bytes": 21009
     },
     {
+      "path": "adrs/146_trusted_office_without_sign_in.md",
+      "sha256": "792a5a0d2aefceccb6875bdc5bc608adf8090466a1dece10faeef32099c3c56e",
+      "bytes": 2267
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1079,8 +1084,8 @@
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
-      "sha256": "7612a7b411da65cf474c6f1f46226092e65d551b5f05a468dc1ac7ad7993a444",
-      "bytes": 8270
+      "sha256": "521c5c6fd6d486a4558c056fb86005344356ff7c1afa11feb246b1ce858cf43c",
+      "bytes": 8658
     },
     {
       "path": "docs/15_DATABASE_DESIGN.md",
@@ -1451,6 +1456,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/TEXT_MEASUREMENT_PROOF.json",
       "sha256": "ab7cb567168c21cedf3d365d573fad114c15d2f80d6d87fc54cacf74bd16f905",
       "bytes": 9238
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/TRUSTED_OFFICE_ACCESS.md",
+      "sha256": "7fb6d8f566484ef40dc4a6f4702866050fdc98728bc316040bc3a29a0419ae99",
+      "bytes": 2019
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/UNICODE_RETRIEVAL_PROOF.json",
@@ -1899,8 +1909,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2e9f53172ed8e342fa39e712c6ad25af292df7c1f1d180d0e2e907217d3d5810",
-      "bytes": 490779
+      "sha256": "3490919802fe0ff37629a55987ccf7114419ec8cae91a6bc2b9a20fbe7d4411e",
+      "bytes": 493575
     },
     {
       "path": "plans/user-stories.csv",
@@ -2171,6 +2181,11 @@
       "path": "scripts/build_proof_manifest.ts",
       "sha256": "026f563439a271ad370cab8fb3371e0d187df8dce10570c4c3bf71307e9caf91",
       "bytes": 4150
+    },
+    {
+      "path": "scripts/check_office_access.ts",
+      "sha256": "0ab7ae734bc2819558112d6518a5acf96a9bb0ec7023abf282245b5c25e6a12a",
+      "bytes": 541
     },
     {
       "path": "scripts/ci/install_render_deps.sh",

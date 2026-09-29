@@ -80,5 +80,5 @@ export function clearAuthToken(): void {
 
 export function getAuthHeaders(): Record<string, string> {
   const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return { 'X-Hawa-Office-Request': '1', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }

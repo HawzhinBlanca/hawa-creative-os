@@ -32,7 +32,8 @@ export function registerAuthRoutes(ctx: RouteContext) {
   const oidcEnabled = Boolean(db && googleOidc);
   const oidcRls = { tenantId: defaultTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
 
-  registerRoute('get', '/auth/providers', (c: Context) => c.json({ googleWorkspace: oidcEnabled }, 200));
+  registerRoute('get', '/auth/providers', (c: Context) => c.json({ googleWorkspace: oidcEnabled,
+    trustedOffice: verifyRequestAuth(c).authMethod === 'trusted_office' }, 200));
 
   registerRoute('get', '/auth/google/start', async (c: Context) => {
     if (!db || !googleOidc) return problem(c, 503, 'Google Sign-In Unavailable', 'Office sign-in is not configured');
@@ -227,7 +228,7 @@ export function registerAuthRoutes(ctx: RouteContext) {
   // address instead was written to every access log on the way. An authenticated bearer or a cookie
   // session with a valid CSRF proof earns a ticket; it stands for that credential and nothing more.
   registerRoute('post', '/auth/stream-ticket', async (c: Context) => {
-    const credential = bearerTokenOf?.(c);
+    const credential = verifyRequestAuth(c).authMethod === 'trusted_office' ? 'hawa_trusted_office' : bearerTokenOf?.(c);
     if (!credential || !streamTickets) {
       return problem(c, 401, 'Unauthorized', 'A stream ticket requires an authenticated office session');
     }

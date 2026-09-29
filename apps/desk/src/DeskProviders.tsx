@@ -42,6 +42,18 @@ export function createDeskRuntime(input: { stream: LiveEventSource; doc?: Visibi
 
 const DeskContext = createContext<DeskRuntime | null>(null);
 
+function OfficeAccessBootstrap({ runtime }: { runtime: DeskRuntime }) {
+  const access = useQuery({ queryKey: ['auth-providers'], queryFn: () => apiClient.auth.providers(),
+    retry: false, staleTime: 0 });
+  useEffect(() => {
+    if (access.data?.trustedOffice && runtime.session.getState().status !== 'signed_in') {
+      clearAuthToken();
+      runtime.session.signedIn();
+    }
+  }, [access.data, runtime]);
+  return null;
+}
+
 export const DeskProviders: React.FC<{ runtime: DeskRuntime; children: React.ReactNode }> = ({ runtime, children }) => {
   useEffect(() => {
     const { queryClient, session, stream, doc } = runtime;
@@ -62,7 +74,7 @@ export const DeskProviders: React.FC<{ runtime: DeskRuntime; children: React.Rea
 
   return (
     <QueryClientProvider client={runtime.queryClient}>
-      <DeskContext.Provider value={runtime}>{children}</DeskContext.Provider>
+      <DeskContext.Provider value={runtime}><OfficeAccessBootstrap runtime={runtime} />{children}</DeskContext.Provider>
     </QueryClientProvider>
   );
 };

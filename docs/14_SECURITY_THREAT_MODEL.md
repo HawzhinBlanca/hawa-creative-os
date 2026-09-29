@@ -105,6 +105,8 @@ Tools use fixed schemas and server-side authorization. Model output is never exe
 
 ## 4. Authentication
 
+**Owner override, ADR-146 (2026-09-29):** the private five-person office may explicitly enable trusted-office access without sign-in. It runs under one honestly named shared office identity, with private origin and cross-site request controls. Individual attribution requires restoring sign-in. Customer deployment defaults to authentication and must use `HAWA_DESK_AUTH_MODE=required`.
+
 - Google Workspace OIDC for staff where available;
 - restricted allowed domains/users;
 - MFA enforced at identity provider;
