@@ -520,7 +520,11 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
         }
         {
           const isSorani = /[\u0600-\u06FF]/.test(rawText);
-          const replyText = classification.kind === 'question'
+          // Thanks or a receipt ("thank you, we received the files") after a delivery is thanked
+          // back; asking for a brief reads as if the files never arrived (ADR-140).
+          const replyText = classification.reason === 'Acknowledgement'
+            ? (isSorani ? '🙏 سوپاس.' : '🙏 Thank you.')
+            : classification.kind === 'question'
             ? (isSorani
                 ? `ℹ️ <b>پەیامەکەت گەیشت:</b> "${escapeTelegramHtml(cutText(rawText, 500))}"\n\nئەگەر دەتەوێت داواکاری دیزاین بنێریت، تکایە دەقی ڕاگەیاندن، بەروار، و شوێن بنێرە.`
                 : `ℹ️ <b>Question received:</b> "${escapeTelegramHtml(cutText(rawText, 500))}"\n\nTo generate a design, please send your announcement text, date, and venue. For revisions on an existing design, reply directly to the preview message.`)

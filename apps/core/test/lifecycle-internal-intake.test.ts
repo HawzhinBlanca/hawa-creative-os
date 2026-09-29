@@ -327,6 +327,36 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
+  // Chaos R10.H1 (2026-09-29): the requester's thanks after a delivery opened a manual request in
+  // the Desk and was answered "Request received. An art director will review it." (ADR-140).
+  it.each([
+    ['in a new chat', 'Thank you, we received the files.', null],
+    ['after a delivery', 'Thank you, we received the files.', 'delivered'],
+    ['in Kurdish, after a delivery', 'زۆر سوپاس، فایلەکان گەیشتن', 'delivered'],
+  ] as const)('a thanks %s with no waiting request opens no lifecycle request', async (_when, text, stage) => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const bridge = { downloadFile: vi.fn(), dispatchOutboundMessage: vi.fn(async (..._args: unknown[]) => ({ success: true })) };
+    const chat = chatId();
+    const app = createApp({ db, telegramBridge: bridge } as any);
+    if (stage) await seedRequestAt(app, chat, stage, 7, { key: '6:delivered', messageId: '820' });
+    const requestsInChat = async () => (await withRlsContext(db, scope, (trx) => sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM hawa.requests WHERE tenant_id = ${tenantId}::uuid
+        AND chat_id = ${String(chat)}`.execute(trx))).rows[0].n;
+    const before = { tasks: (await tasksInChat(chat)).length, requests: await requestsInChat() };
+    const thanks = brief(updateId(), chat);
+    thanks.message.text = text;
+    const answered = await intake(app, thanks);
+    expect(answered.status).toBe(200);
+    expect(answered.body).toMatchObject({ kind: 'handled' });
+    expect(answered.body.lifecycleAction).toBeUndefined();
+    expect(answered.body.requestId).toBeUndefined();
+    expect({ tasks: (await tasksInChat(chat)).length, requests: await requestsInChat() }).toEqual(before);
+    const replies = bridge.dispatchOutboundMessage.mock.calls.map((call) => (call[1] as { text: string }).text).join('\n');
+    expect(replies).not.toMatch(/Request received|Brief received|art director|send your event brief/i);
+    expect(replies).toMatch(/Thank you|سوپاس/);
+  });
+
   it.each(['photo', 'document'] as const)('admits a captioned %s through its owned task without image bytes in Restate', async (carrier) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();

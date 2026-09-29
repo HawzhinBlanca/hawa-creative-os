@@ -405,3 +405,56 @@ describe('telegram-classifier: a model-stated rule needs the words of one', () =
     expect(rule.standingRule).toBe('Use gold titles.');
   });
 });
+
+/**
+ * Found on 2026-09-29 (chaos R10.H1): "Thank you, we received the files." after a delivery was
+ * 'new_brief' ("Standard new design brief text"), so with no waiting request Core's intake opened a
+ * lifecycle request for it and the requester was told an art director would review it (ADR-140).
+ */
+describe('telegram-classifier: thanks and receipts are not briefs', () => {
+  const receipts = [
+    'Thank you, we received the files.', 'thanks', 'Thanks!', 'thank you, received', 'Received, thanks!',
+    'We have received everything safely, thank you so much 🙏', 'files received', 'All files received.',
+    'All received with thanks', 'got them, thanks', "I've got it", "we've received the final design, thanks again",
+    'the posters arrived, thank you', 'everything has been received',
+    'سوپاس', 'زۆر سوپاس', 'سوپاس، پێمان گەیشت', 'فایلەکان گەیشتن، زۆر سوپاس', 'هەموو فایلەکان گەیشتن',
+    'وەرمانگرت سوپاس', 'فایلەکانمان وەرگرت 🙏', 'گەیشت', 'شكراً',
+  ];
+  for (const text of receipts) {
+    it(`"${text}" with no design in the chat is 'other', not a brief`, () => {
+      expect(isAcknowledgement(text)).toBe(true);
+      const res = classifyWithHeuristics(text, false, false);
+      expect(res).toMatchObject({ kind: 'other', intent: 'question_or_other', reason: 'Acknowledgement' });
+      expect(res.needsClarification).toBeFalsy();
+      // After a delivery the chat has a recent design; the receipt is not a change to it either.
+      expect(classifyWithHeuristics(text, true, false).kind).toBe('other');
+    });
+  }
+
+  it('is answered without a model call when the model is allowed', async () => {
+    const fetcher = vi.fn();
+    const res = await classifyInboundTelegramMessage({ messageText: 'Thank you, we received the files.', recentTask: null },
+      { ...allowedEgress, apiKey: 'test-key', fetcher });
+    expect(res.kind).toBe('other');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('keeps one-line briefs that open with thanks or mention receiving something', () => {
+    for (const text of [
+      'Thank you, we received the files. Please make a poster for the gala on 5 May',
+      'Thanks! New poster for the KAAE open day',
+      'We received an award, make a poster',
+      'received the accreditation certificate, design a congratulation post',
+      'Poster for KAAE open day',
+      'سوپاس، پۆستەرێکی نوێ بۆ ڕۆژی کراوە',
+    ]) {
+      expect(isAcknowledgement(text), text).toBe(false);
+      expect(classifyWithHeuristics(text, false, false).kind, text).toBe('new_brief');
+    }
+  });
+
+  it('keeps a change that follows a receipt a change', () => {
+    expect(isAcknowledgement('received, but please change the date')).toBe(false);
+    expect(classifyWithHeuristics('got it, now make the title gold', true, true).kind).toBe('feedback');
+  });
+});
