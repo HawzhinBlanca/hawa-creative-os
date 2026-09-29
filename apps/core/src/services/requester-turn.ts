@@ -348,6 +348,8 @@ export function parseChoice(text: string, ask: Pick<PendingAsk, 'options' | 'all
     }
     if (SAYS_LAST.test(t) && n > 1) return { option: n - 1 };
     if (n === 1 && SAYS_CHANGE.test(t)) return { option: 0 };
+    // "OK" answers "is this for …?", not "change or new?".
+    if (n === 1 && !ask.allowNew && /^(?:ok(?:ay)?|sure|correct|right|باشە|ڕاستە)(?![\p{L}\p{N}])/iu.test(t)) return { option: 0 };
     if (n === 1 && ask.allowNew && /^(?:no|nope|نەخێر|نا)\b/iu.test(t)) return { new: true };
   }
   // A design's name ("the Nawroz one"), in a short answer: a longer message is read on its own.

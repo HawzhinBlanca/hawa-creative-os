@@ -7,6 +7,25 @@ request. It covers the legacy path (Core intake → outbox → `TaskWorkflow` �
 outcome → Desk approval → delivery) and the admitted Restate lifecycle slices.
 The dated run histories below preserve their original scope and limitations.
 
+## Natural requester messages (2026-09-29, ADR-144)
+
+```sh
+npx tsx packages/testkit/chaos/run.ts --poller worker --only R1.NL.THANKS,R1.NL.DESIGNING,R1.NL.CANCEL,R1.NL.TWO
+```
+
+Plain messages through the worker's poller, ChatInbox and Core's intent routing:
+
+- `R1.NL.THANKS`: the office sends a draft back for changes; the requester's "thanks 👍" is thanked
+  (with a reminder) and starts nothing; "Please make the title gold" then starts exactly one round,
+  keyed by its own update.
+- `R1.NL.DESIGNING`: a correction sent right after the brief (possibly before RequestLifecycle has
+  projected the request: intake answers `REQUEST_OPENING` and ChatInbox tries again) is kept on that
+  request for the office; one request, one task, one office alert, one plain answer.
+- `R1.NL.CANCEL`: "please cancel the poster" under a draft in review asks the office, and Deliver is
+  refused with `LATE_REQUESTER_CHANGE` until an office member reads it; nothing new starts.
+- `R1.NL.TWO`: two designs wait for changes; a change asks "Which design is this for? 1. … 2. …";
+  "2" applies the kept words to the second design only.
+
 ## R10 clean-host restore (2026-09-28, ADR-134)
 
 `r10-restore.ts` runs the real nightly backup with the Restate backup on, twice, against its own source

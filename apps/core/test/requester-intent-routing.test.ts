@@ -150,6 +150,10 @@ describe('the rules read a message the same way in English, Sorani and both', ()
     expect(parseChoice('change', one)).toEqual({ option: 0 });
     expect(parseChoice('بەڵێ', one)).toEqual({ option: 0 });
     expect(parseChoice('new', one)).toEqual({ new: true });
+    // "OK" answers "is this for …?", but not "change or new?".
+    expect(parseChoice('ok', { ...one, allowNew: false })).toEqual({ option: 0 });
+    expect(parseChoice('باشە', { ...one, allowNew: false })).toEqual({ option: 0 });
+    expect(parseChoice('ok', one)).toBeNull();
   });
 });
 
