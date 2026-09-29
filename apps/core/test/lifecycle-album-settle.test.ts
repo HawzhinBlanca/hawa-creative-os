@@ -189,6 +189,8 @@ describe('an album settles by itself (ADR-143)', () => {
     expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { rawText: expect.stringContaining('Annual Report 2026'),
       lifecycleAlbum: { updateId: parts[1].update_id, images: [1, 2].map((n) => ({ sha256: sha(photo(n)) })) } } });
     expect(await f.settle(brief)).toMatchObject({ settle: 'skipped' });
+    // The brief replayed later (a second Restate key) answers that the album took it.
+    expect(await f.intake(brief, { briefHold: true })).toMatchObject({ intakeStatus: 200, duplicate: true, settle: 'skipped' });
     expect(await f.opens()).toBe(1);
     expect((await project(f.app, opened)).status).toBe(200);
     expect(await f.tasks()).toHaveLength(1);
@@ -203,6 +205,9 @@ describe('an album settles by itself (ADR-143)', () => {
     expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { rawText: expect.stringContaining('Annual Report 2026') } });
     expect(opened.draft.lifecycleAlbum).toBeUndefined();
     expect(await f.settle(brief)).toMatchObject({ duplicate: true, requestId: opened.requestId });
+    // The brief replayed later (a second Restate key) replays the same open, not another hold.
+    expect(await f.intake(brief, { briefHold: true })).toMatchObject({ intakeStatus: 200, duplicate: true,
+      lifecycleAction: 'open-request', requestId: opened.requestId });
     // A worker that does not schedule settles (briefHold absent) still gets an immediate open.
     const g = setup();
     expect(await g.intake(g.text(BRIEF))).toMatchObject({ lifecycleAction: 'open-request' });

@@ -33,7 +33,7 @@ import { blobStoreFor } from '../services/blob-store-context.js';
 import { lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
-  albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
+  albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, overdueSettles, settleAlbum,
   settleHeldBrief } from '../services/lifecycle-album.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
@@ -302,13 +302,16 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             'core.intake.after-album-settle');
           if (settled) return settled;
         } else if (textMessage) {
+          const heldReplay = settle ? 'none' : await tx((trx) => heldBriefReplay(trx, DEFAULT_TENANT_ID, source));
           if (settle) {
             const held = await tx((trx) => settleHeldBrief(trx, DEFAULT_TENANT_ID, source));
             if (held === 'skip') return handled(200, { settle: 'skipped' });
             if (held === 'wait') return settleLater('brief', albumSettleMs());
             // `release`: intake decides the brief below as it decides any brief, now without a hold.
-          } else if (await tx((trx) => isHeldBrief(trx, DEFAULT_TENANT_ID, source))) {
-            return settleLater('brief', briefPhotoWaitMs());
+          } else if (heldReplay !== 'none') {
+            // A replay of a held brief: still waiting, taken by an album, or decided (replayed below).
+            if (heldReplay === 'held') return settleLater('brief', briefPhotoWaitMs());
+            if (heldReplay === 'consumed') return handled(200, { duplicate: true, settle: 'skipped' });
           } else if (senderAllowed) {
             const bound = await admit(await tx((trx) => bindTextToAlbum(trx, DEFAULT_TENANT_ID, source, {
               linkedReply: async (chat, replyId) => (await linkedLifecycleReplies(trx, DEFAULT_TENANT_ID, chat, replyId)).length > 0 ||

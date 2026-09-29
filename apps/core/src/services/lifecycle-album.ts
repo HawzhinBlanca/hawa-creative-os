@@ -481,6 +481,13 @@ export async function isHeldBrief(trx: Tx, tenant: string, update: Update): Prom
   if (stored && stored.payload_hash !== hash(update)) throw new AlbumConflict('This held brief changed after it was saved.');
   return Boolean(stored);
 }
+/**
+ * A replayed held brief: `held` answers "settle later" again, `released` replays the decision intake
+ * recorded for it, `consumed` answers that an album took it; `none` if it was never held.
+ */
+export async function heldBriefReplay(trx: Tx, tenant: string, update: Update): Promise<'none' | HeldState> {
+  return await isHeldBrief(trx, tenant, update) ? heldBriefState(trx, tenant, update.update_id) : 'none';
+}
 
 /**
  * The held brief's settle: `skip` when an album took it (or it was never held), `wait` while an album
