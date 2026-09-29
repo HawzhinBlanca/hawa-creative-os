@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T07:32:48Z",
+  "generatedAt": "2026-09-29T07:43:27Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 523,
+  "fileCount": 524,
   "files": [
     {
       "path": ".dockerignore",
@@ -789,8 +789,8 @@
     },
     {
       "path": "adrs/140_thanks_and_receipts_open_no_request.md",
-      "sha256": "d0b997aa5745881b0c715ee3a0ac9ce69726a9b16a3c83140d86b4063221d9ca",
-      "bytes": 5809
+      "sha256": "2c47298a0374596dd36f7228646d4344913673f90d75629e77254f30c6645010",
+      "bytes": 6613
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1226,6 +1226,11 @@
       "path": "plans/backlog.csv",
       "sha256": "8cbc0f12962aaed8f1429e4337d31e020f8129fda4df1a112387aa24cfd73f57",
       "bytes": 26365
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR140_R10_H1_RUN.json",
+      "sha256": "a5c169fa65169df06eaa9ae65f31f9b8ed9f52177f517f619373bc0a9c18cdca",
+      "bytes": 22005
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/BRIEF_CONTRACT_PROOF.json",
