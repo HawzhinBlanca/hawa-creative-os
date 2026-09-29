@@ -86,14 +86,18 @@ restore blobs, pending Restate journals or external effects and starts no worker
   or delivery process can resume. Preserve existing logical dumps and file packs
   during qualification; a database-only PITR pass cannot admit the whole app.
 
-## The office's backups today (updated 2026-09-24, ADR-035)
+## Production backups today (updated 2026-09-29, ADR-035, ADR-141)
 
-What actually runs on the office Mac, and how to restore from it. The sections above describe the
-target process for a clean host; this is the one in use.
+What actually runs on the production host, and how to restore from it. The production host is the
+office Mac today (launch agents); on a Linux server the same scripts run as systemd timers
+(`infra/ops/install_systemd_units.sh`; the jobs, their names and their settings side by side are in
+`infra/ops/README.md`). The sections above describe the target process for a clean host; this is the
+one in use.
 
 ### What is backed up, and where
 
-- **Nightly, 03:30** (`infra/backup/nightly_backup.sh`, launch agent `design.hawa.nightly-backup`):
+- **Nightly, 03:30** (`infra/backup/nightly_backup.sh`, launch agent `design.hawa.nightly-backup`, on
+  Linux `hawa-nightly-backup.timer`):
   1. `pg_dump` of the database, restored into a scratch database to prove it loads (task counts compared).
   2. From that restored copy, every file hash the dump references (`hawa.blob_references`) that has a
      `hawa.blobs` row. The run **fails** if any of them is not on disk in the file store (`~/.hawa/blobs`):
@@ -120,13 +124,15 @@ target process for a clean host; this is the one in use.
 - The store's location is `~/.hawa/blobs` unless `HAWA_BLOBS_DIR` says otherwise. Compose and `deploy.sh`
   read it from the shell or `infra/docker/.env`; the nightly backup, `disk_cleanup.sh` and the watchdog
   read it only from their own environment. Moving the store means setting it in `.env` **and** in the
-  launch agents' environment, or the backup checks a directory the containers do not use (and fails).
+  jobs' environment (the launch agents on a Mac, `/etc/hawa/backup.env` on Linux), or the backup checks
+  a directory the containers do not use (and fails).
 - `infra/ops/disk_cleanup.sh` never deletes from the file store, the packs, `index.tsv` or the
   manifests; it removes only half-written `*.part` files older than a day.
 
 ### Monthly restore drill (data and files)
 
-`infra/backup/restore_drill.sh`, launch agent `design.hawa.restore-drill` (the 1st of each month, 05:00).
+`infra/backup/restore_drill.sh`, launch agent `design.hawa.restore-drill` (on Linux `hawa-restore-drill.timer`;
+the 1st of each month, 05:00).
 It needs `apps/core/dist` in the checkout it runs from (`pnpm build`).
 
 1. Takes the newest archived `hawa_*.dump.enc` and its `hawa_*.blobs` manifest; checks the dump's sha256.
@@ -144,6 +150,43 @@ It needs `apps/core/dist` in the checkout it runs from (`pnpm build`).
 
 The older `infra/backup/backup_restore_drill.sh` (Sundays) only rebuilds the schema from the repository
 and restores no data.
+
+### Off-site copy (ADR-141; off until configured)
+
+The archive sits on the host it protects, and a synchronized folder (iCloud on the Mac) is not a
+verified off-host copy. `infra/backup/offsite_copy.sh` (launch agent `design.hawa.offsite-copy`, on Linux
+`hawa-offsite-copy.timer`; 05:30, two hours after the nightly) copies the newest **complete encrypted
+recovery set** to a second place:
+
+- A set is one night's `hawa_<stamp>.dump.enc` with its checksum, its `hawa_<stamp>.blobs` manifest and
+  every pack that manifest needs, and, when the archive holds pairs, `hawa_<stamp>.restate.json` with
+  the `restate_<UTC>.json` and `.tar.enc` it names. It is complete when every member is there and every
+  hash agrees (the pair and the Restate manifest are authenticated with the archive key; nothing is
+  decrypted). A newer night that is not complete is passed over and named in the log line. An
+  unencrypted archive is refused.
+- `HAWA_OFFSITE_DEST` is an absolute path (a mounted disk) or `[user@]host:path` for rsync over SSH,
+  for example a Hetzner Storage Box (`HAWA_OFFSITE_RSH="ssh -p 23 -i ~/.ssh/<key> -o BatchMode=yes"`).
+  With it empty the job copies nothing and writes nothing: that is the Mac today.
+- It holds the archive lock in shared mode while it reads (a nightly still running is waited for, up
+  to `HAWA_OFFSITE_LOCK_WAIT_SECONDS`, 1800), copies with temporary names, then verifies every file at
+  the destination: read back and hashed with SHA-256 for a path, `rsync --checksum --dry-run` (which
+  compares the content of every file on both sides) for SSH. Only then does it write
+  `hawa_<stamp>.offsite.json`, the set's receipt, with every member's SHA-256. A rerun verifies again
+  and copies only what differs.
+- At the destination it keeps `HAWA_OFFSITE_KEEP` sets (14) and deletes a pack only when no kept
+  receipt lists it. It deletes only names it writes.
+- Each run appends `COPIED`, `CURRENT` or `FAILED` to `infra/backup/snapshots/offsite.log`; a failure is
+  sent to the operator chat. Once that log exists the watchdog (through `backup_status.py`) reports a
+  failed copy, a copied set older than 30 h, and a newer nightly not copied 6 h after it finished. To
+  stop off-site copying for good, remove the setting **and** `offsite.log`.
+
+To restore from the off-site copy, copy one set back into an empty archive directory, rename its
+`hawa_<stamp>.index.tsv` to `blobs/index.tsv`, and follow "Restoring for real" and, for a paired set,
+"Restoring Restate on a clean host". Check the copy first:
+`sha256sum` (or `shasum -a 256`) of each member against `hawa_<stamp>.offsite.json`.
+
+Proved on 2026-09-29 with local destinations on macOS and in an arm64 Debian container, through rsync
+there too (`plans/hosting/LINUX_READINESS_PROOF.json`); an SSH destination has not been exercised yet.
 
 ### Restate single-node volume (R10, ADR-053; local implementation 2026-09-25)
 
@@ -220,7 +263,7 @@ The owner decides; the lead makes every production change. None of this was done
 2. Key: the office archive passphrase the nightly already uses (`HAWA_BACKUP_ARCHIVE_KEYFILE` in the `design.hawa.nightly-backup` agent: `~/.hawa/backup_passphrase`, mode 0600, owner only). Do not create another: the pair and retention verify the dump and the Restate archive with the same key. The owner keeps an off-host copy in the password manager; losing it makes every archive unreadable.
 3. Helper image, local and pinned: `ghcr.io/restatedev/restate@sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9` (the Restate 1.7.10 image production runs; it has GNU tar). `docker image inspect <that reference>` must answer; nothing is pulled at night.
 4. Read-only plan from the main checkout, with the agent's settings: `HAWA_BACKUP_ARCHIVE_DEST=<the agent's value> HAWA_BACKUP_ARCHIVE_KEYFILE=~/.hawa/backup_passphrase HAWA_RESTATE_BACKUP_HELPER_IMAGE=<step 3> python3 infra/backup/restate_nightly.py` must print `{"status": "ready", …, "telegramEnabled": true}`. It reads Core's switch and PostgreSQL's copy of it and changes nothing.
-5. Add `HAWA_RESTATE_BACKUP_ENABLED=on` and `HAWA_RESTATE_BACKUP_HELPER_IMAGE=<step 3>` to the `design.hawa.nightly-backup` agent's EnvironmentVariables and reload it (`bash infra/ops/install_launch_agents.sh` carries every `HAWA_*` setting over). Leave every other `HAWA_RESTATE_BACKUP_*` name unset. The watchdog needs nothing new: `--recover` finds the archive in the run record.
+5. Add `HAWA_RESTATE_BACKUP_ENABLED=on` and `HAWA_RESTATE_BACKUP_HELPER_IMAGE=<step 3>` to the `design.hawa.nightly-backup` agent's EnvironmentVariables and reload it (`bash infra/ops/install_launch_agents.sh` carries every `HAWA_*` setting over); on a Linux host, put both lines in `/etc/hawa/backup.env` instead (the timers read it at their next run). Leave every other `HAWA_RESTATE_BACKUP_*` name unset. The watchdog needs nothing new: `--recover` finds the archive in the run record.
 6. Optionally, run one night by hand at a quiet hour (`bash infra/backup/nightly_backup.sh` from the main checkout with the agent's environment) and watch intake pause for about 15 s.
 7. The first real night: `backup.log` ends `OK <stamp> … restate=paired_archive`; the archive holds `restate_<UTC>.json`, `restate_<UTC>.tar.enc` and `hawa_<stamp>.restate.json`; `python3 infra/backup/restate_nightly.py --verify-pair <archive>/hawa_<stamp>.restate.json` answers `verified_pair`; `~/.hawa/restate-backup.state` does not exist; intake is on. Restate's volume was 4.7 MB on 2026-09-28, so each night adds a few MB (fourteen nights are kept).
 8. Roll back: remove `HAWA_RESTATE_BACKUP_ENABLED` (or set it `off`) and reload the agent. Paired sets already written stay under paired retention (ADR-056), which keeps needing the key, until they age out; the dump and file backup do not change.
@@ -248,17 +291,20 @@ every later deploy would stop at its drain check. The current `deploy.sh` refuse
 (`infra/docker/README.md`), but an older commit's `deploy.sh` does not.
 
 1. Stop what would write or reconnect. The watchdog restarts a stopped Core within five minutes, and
-   the nightly backup and drills connect to the database, so their launch agents go first:
+   the nightly backup and drills connect to the database, so their launch agents (on Linux, timers) go first:
    ```bash
-   for a in design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill design.hawa.restore-drill; do launchctl bootout "gui/$(id -u)/$a" 2>/dev/null || true; done
+   for a in design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill design.hawa.restore-drill design.hawa.offsite-copy; do launchctl bootout "gui/$(id -u)/$a" 2>/dev/null || true; done
    docker stop hawa-production-core-1 hawa-production-worker-blue-1 hawa-production-worker-green-1 2>/dev/null || true
    ```
+   On a Linux host, the first line is
+   `sudo systemctl stop hawa-watchdog.timer hawa-nightly-backup.timer hawa-backup-restore-drill.timer hawa-restore-drill.timer hawa-offsite-copy.timer`.
    (A colour that is not running is simply skipped.)
 2. Pick the dump. For a nightly one: the newest good `hawa_<stamp>.dump.enc` in the archive, decrypted
    with the passphrase in the owner's password manager:
    `openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -in hawa_<stamp>.dump.enc -pass file:<passphrase file> > hawa.dump`.
    For a deploy rollback: `infra/backup/snapshots/predeploy_<stamp>.dump`, checked against the hash
-   beside it: `[[ "$(shasum -a 256 <dump> | cut -d' ' -f1)" == "$(cat <dump>.sha256)" ]] && echo checksum-ok`.
+   beside it: `[[ "$(shasum -a 256 <dump> | cut -d' ' -f1)" == "$(cat <dump>.sha256)" ]] && echo checksum-ok`
+   (a Linux host without perl: `sha256sum <dump>` prints the same first field).
 3. Restore it into a new database, check it, and swap it in. Run this block as it stands, with `DUMP`
    set to the file from step 2 (from the repository root, in bash). It restores in one transaction, so
    an error leaves nothing half-restored and the live database untouched. It then copies what belongs
@@ -321,7 +367,35 @@ every later deploy would stop at its drain check. The current `deploy.sh` refuse
 5. Check before starting anything: from the host,
    `DATABASE_URL=<owner URL> node apps/core/dist/tools/blob-verify.js --dir ~/.hawa/blobs`. `missing` must be 0.
 6. Start the stack with `bash infra/docker/deploy.sh --apply` (from the commit that matches the dump,
-   for a rollback), then load the launch agents again: `bash infra/ops/install_launch_agents.sh`.
+   for a rollback), then load the launch agents again: `bash infra/ops/install_launch_agents.sh`
+   (on Linux: `sudo systemctl start hawa-watchdog.timer hawa-nightly-backup.timer hawa-backup-restore-drill.timer hawa-restore-drill.timer hawa-offsite-copy.timer`,
+   or `sudo bash infra/ops/install_systemd_units.sh --user <user>`).
 7. Once the restored stack is confirmed, drop the database it replaced:
    `docker exec hawa-production-postgres-1 dropdb -U hawa_owner <OLD>`. Until then it takes its own
    disk space; it is also the way back if the restore itself was the mistake.
+
+### Moving production to another host (ADR-141)
+
+The move is the paired nightly backup followed by "Restoring Restate on a clean host" and "Restoring
+for real" on the new host (the hosting plan, `plans/hosting/PRODUCTION_HOSTING_PLAN.md`, sections 7 and
+8, has the whole sequence and the owner's decisions). What the repository adds for it:
+
+1. **New host, before the rehearsal:** `mkdir -p ~/.hawa && echo standby > ~/.hawa/host-role`. Its
+   watchdog and jobs then start nothing, `deploy.sh` runs pre-flight only and records no volume stamp,
+   and `--apply` refuses. Install its jobs (`sudo bash infra/ops/install_systemd_units.sh --user hawa`, or
+   the launch agents on a Mac mini) so they are proved to run, harmlessly.
+2. **Old host, at the cutover, before the final backup:** stop its watchdog and jobs (step 1 of
+   "Restoring for real") so it cannot restart its stack within five minutes, run the final paired
+   backup by hand with the nightly job's settings, stop its worker colours, Core and Restate, then
+   `echo retired > ~/.hawa/host-role`. Even if a launch agent is loaded again by mistake, its watchdog
+   now starts nothing and alerts if production containers run there, `deploy.sh --apply` refuses, and
+   the nightly backup, drills and off-site copy skip. Keep its volumes untouched: they are the rollback.
+3. **New host, after the restore:** `rm ~/.hawa/host-role` (and any `HAWA_HOST_ROLE` in
+   `/etc/hawa/backup.env`), remove any stamps the rehearsal left (`rm -f ~/.hawa/volume-stamps/*`),
+   then `bash infra/docker/deploy.sh --apply`: the first deploy records this host's volume stamps.
+   Then `bash infra/ops/watchdog.sh --announce` and `--status`.
+4. **Rollback before the new host handled real work:** mark the new host `retired`, stop its stack and
+   timers; on the old host `rm ~/.hawa/host-role` and reload its launch agents. After real work, take a
+   paired backup on the new host first and restore it onto the old one the same way.
+
+Never let both hosts be `production` with their stacks running: both would poll the same Telegram bot.

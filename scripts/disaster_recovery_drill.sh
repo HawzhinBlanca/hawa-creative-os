@@ -25,6 +25,8 @@ umask 077
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
+# The SHA-256 tool, chosen per host (ADR-141).
+source "${ROOT_DIR}/infra/ops/host_lib.sh"
 
 PROD_CONTAINER="hawa-production-postgres-1"
 DR_CONTAINER="hawa-clean-host-dr-postgres"
@@ -169,7 +171,7 @@ tar -cf "${RUN_DIR}/hawa_raw_bundle.tar" -C "${RUN_DIR}" \
   assets.tar.gz \
   config.tar.gz
 
-RAW_SHA256="$(shasum -a 256 "${RUN_DIR}/hawa_raw_bundle.tar" | awk '{print $1}')"
+RAW_SHA256="$("${HAWA_SHA256[@]}" "${RUN_DIR}/hawa_raw_bundle.tar" | awk '{print $1}')"
 RAW_SIZE="$(wc -c < "${RUN_DIR}/hawa_raw_bundle.tar" | tr -d ' ')"
 echo "   ✓ Raw backup bundle assembled: ${RAW_SIZE} bytes (SHA256: ${RAW_SHA256})"
 
@@ -180,7 +182,7 @@ openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
   -out "${RUN_DIR}/hawa_backup.enc" \
   -pass "pass:${ENCRYPTION_KEY}"
 
-ENC_SHA256="$(shasum -a 256 "${RUN_DIR}/hawa_backup.enc" | awk '{print $1}')"
+ENC_SHA256="$("${HAWA_SHA256[@]}" "${RUN_DIR}/hawa_backup.enc" | awk '{print $1}')"
 ENC_SIZE="$(wc -c < "${RUN_DIR}/hawa_backup.enc" | tr -d ' ')"
 echo "${ENC_SHA256}" > "${RUN_DIR}/hawa_backup.enc.sha256"
 
@@ -192,7 +194,7 @@ cp "${RUN_DIR}/hawa_backup.enc" "${OFFHOST_DEST}/hawa_${TIMESTAMP}.enc"
 cp "${RUN_DIR}/hawa_backup.enc.sha256" "${OFFHOST_DEST}/hawa_${TIMESTAMP}.enc.sha256"
 
 # Verify destination integrity
-OFFHOST_SHA256="$(shasum -a 256 "${OFFHOST_DEST}/hawa_${TIMESTAMP}.enc" | awk '{print $1}')"
+OFFHOST_SHA256="$("${HAWA_SHA256[@]}" "${OFFHOST_DEST}/hawa_${TIMESTAMP}.enc" | awk '{print $1}')"
 [[ "${OFFHOST_SHA256}" == "${ENC_SHA256}" ]] || {
   echo "FATAL: Off-host replica checksum mismatch" >&2
   exit 1
@@ -242,7 +244,7 @@ openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 \
   -out "${RUN_DIR}/restore/hawa_raw_bundle.tar" \
   -pass "pass:${ENCRYPTION_KEY}"
 
-DECRYPTED_SHA256="$(shasum -a 256 "${RUN_DIR}/restore/hawa_raw_bundle.tar" | awk '{print $1}')"
+DECRYPTED_SHA256="$("${HAWA_SHA256[@]}" "${RUN_DIR}/restore/hawa_raw_bundle.tar" | awk '{print $1}')"
 [[ "${DECRYPTED_SHA256}" == "${RAW_SHA256}" ]] || {
   echo "FATAL: Decrypted bundle SHA-256 (${DECRYPTED_SHA256}) does not match original (${RAW_SHA256})" >&2
   exit 1

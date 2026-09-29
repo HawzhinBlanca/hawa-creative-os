@@ -206,3 +206,55 @@ it, and those routes accept nothing else. Without it the worker does not start i
   or newer once applied) and `experimental-enable-vqueue-obsolete-cleanup` (1.7.9; needs 1.7.10 or
   newer once applied). A `restate_data` volume on which any of them has run cannot go back to 1.7.0.
   Test a minor upgrade (1.8) on a copy of `restate_data` first: it migrates partitions one way.
+
+## Volume stamps and the host role (ADR-141)
+
+`deploy.sh` steps 1b and 1c refuse to deploy when an external volume
+(`hawa-production_postgres_data`, `hawa-production_restate_data`) is missing, or when its creation time
+differs from the one recorded for this host: a recreated volume is an empty one (the Postgres volume
+was recreated, and emptied, by a deploy on 2026-09-17).
+
+The recorded times are **host-local** in `~/.hawa/volume-stamps/<volume>.created` (directory 0700, files
+0600; `HAWA_VOLUME_STAMP_DIR` overrides). Until ADR-141 they were `infra/docker/.postgres_volume_created`
+and `.restate_volume_created`, tracked in git with this Mac's times, so every other host refused to
+deploy, and correcting them made the checkout dirty, which `deploy.sh` also refuses. Those two names are
+now gitignored. For each volume `deploy.sh`:
+
+1. uses the host-local stamp when it exists;
+2. otherwise, when the old repository file is still there, adopts its value into the host-local stamp
+   once, says so, and checks against it (the old file is no longer read after that);
+3. otherwise records the volume's creation time and goes on. This is what a deploy did before with no
+   stamp file, and what a **brand-new host** does on its first deploy: the stamps it records are then
+   checked on every later deploy;
+4. refuses, as before, when the time differs from what it used.
+
+On a host marked `standby` or `retired` (`~/.hawa/host-role`, infra/ops/README.md) nothing is recorded:
+the rehearsal's throwaway volumes must not become the new host's stamps. `deploy.sh --apply` refuses
+on such a host before any step, and pre-flight says it ran on one.
+
+### One-time step on the office Mac when ADR-141 is merged
+
+Merging deletes the two tracked stamp files from the main checkout's working tree. Without them the
+next deploy would record the volumes' current creation times (step 3): safe while the volumes are the
+same ones, but that one deploy would not notice a recreated volume. Before merging, copy them:
+
+```bash
+mkdir -p ~/.hawa/volume-stamps && chmod 700 ~/.hawa/volume-stamps
+cp infra/docker/.postgres_volume_created ~/.hawa/volume-stamps/hawa-production_postgres_data.created
+cp infra/docker/.restate_volume_created  ~/.hawa/volume-stamps/hawa-production_restate_data.created
+chmod 600 ~/.hawa/volume-stamps/*.created
+docker volume inspect hawa-production_postgres_data hawa-production_restate_data --format '{{.CreatedAt}}'
+cat ~/.hawa/volume-stamps/*.created    # must equal the two lines above
+```
+
+If the merge happened first, put the old files back from git (they are ignored now, so the tree stays
+clean) and the next deploy adopts them (step 2):
+`git show a7a29c7a:infra/docker/.postgres_volume_created > infra/docker/.postgres_volume_created`, and the
+same for `.restate_volume_created`.
+
+### Another host
+
+A new host (a Linux server or a Mac mini) runs the same `deploy.sh`. Create the two external volumes
+(or restore them, `runbooks/10_backup_restore.md`), keep the host `standby` through the rehearsal, then
+remove the marker and deploy: the first deploy records that host's stamps. Deploying over SSH, host
+requirements and the firewall: infra/ops/README.md, "The production host: macOS or Linux".

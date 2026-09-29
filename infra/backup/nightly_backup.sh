@@ -24,6 +24,8 @@
 #   HAWA_BACKUP_MIN_BYTES, HAWA_BLOBS_DIR, HAWA_BLOB_GC_CMD (or HAWA_BLOB_GC=off).
 set -Eeuo pipefail; umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
+# GNU or BSD stat and the SHA-256 tool, chosen by uname; the host role (ADR-141).
+source "$ROOT/infra/ops/host_lib.sh"
 DIR="${HAWA_BACKUP_SNAPSHOT_DIR:-$ROOT/infra/backup/snapshots}"; mkdir -p "$DIR"; chmod 700 "$DIR"
 LOG="$DIR/backup.log"; PROD="${HAWA_BACKUP_NOTIFY_ENV:-$ROOT/infra/docker/.env.production}"
 PG="${HAWA_BACKUP_PG_CONTAINER:-hawa-production-postgres-1}"; DB="${HAWA_BACKUP_DB:-hawa}"
@@ -73,6 +75,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# A standby or retired host takes no backup (ADR-141): production runs on another host, and a paired
+# run here would stop this host's Restate and pause its intake. The skip is logged (backup_status.py
+# reads only OK and FAIL lines) and alerts nobody. A role this script does not know fails the night.
+HOST_ROLE="$(trap - ERR; hawa_host_role)" || fail "unrecognised host role '${HOST_ROLE}' in $(hawa_host_role_source) (production, standby or retired); no backup was taken"
+if [[ "$HOST_ROLE" != production ]]; then
+  echo "$(date -u +%FT%TZ) SKIP ${STAMP}: this host is ${HOST_ROLE} ($(hawa_host_role_source)); production runs elsewhere, no backup was taken" | tee -a "$LOG"
+  exit 0
+fi
+
 # The collector deletes a file once it has been unreferenced for GRACE_DAYS. The oldest dump the archive
 # keeps is ARCHIVE_KEEP nights old, and every file it references must still be packed or on disk when
 # it is restored: so the grace must be longer than the retention (15 days against 14 nightly copies).
@@ -113,9 +124,9 @@ DUMP_START="$(date +%s)"
 DUMP_STARTED=1
 docker exec "$PG" pg_dump -U hawa_owner -Fc --no-owner --compress=zstd:long "$DB" > "$OUT" || fail "pg_dump exited non-zero"
 DUMP_S=$(( $(date +%s) - DUMP_START ))
-SIZE="$(stat -f '%z' "$OUT" 2>/dev/null || stat -c '%s' "$OUT")"
+SIZE="$(hawa_file_size "$OUT")"
 [[ "$SIZE" -gt "$MIN_BYTES" ]] || fail "dump is only ${SIZE} bytes"
-shasum -a 256 "$OUT" | awk '{print $1}' > "$OUT.sha256" || fail "could not checksum the dump"
+"${HAWA_SHA256[@]}" "$OUT" | awk '{print $1}' > "$OUT.sha256" || fail "could not checksum the dump"
 
 # Restore verification: the dump must actually load, and hold the same task count as the live database.
 # Scratch database names end in this run's suffix, so two runs (a manual one beside the nightly, or
@@ -160,7 +171,7 @@ if [[ "$HAS_STORE" == t ]]; then
   fi
   BLOB_COUNT="$(wc -l < "$WORK/manifest" | tr -d ' ')"
   if [[ "$BLOB_COUNT" -gt 0 ]]; then
-    BLOB_BYTES="$(cd "$BLOBS" && tr '\n' '\0' < "$WORK/manifest" | xargs -0 stat -f '%z' 2>/dev/null | awk '{s+=$1} END {print s+0}')" || BLOB_BYTES="?"
+    BLOB_BYTES="$(cd "$BLOBS" && tr '\n' '\0' < "$WORK/manifest" | xargs -0 "${HAWA_STAT_SIZE[@]}" 2>/dev/null | awk '{s+=$1} END {print s+0}')" || BLOB_BYTES="?"
   fi
   # The nightly restore check for files: no file the dump references with a row may be missing.
   sed -E 's#^.*/([0-9a-f]{64})\.[a-z]+$#\1#' "$WORK/manifest" | LC_ALL=C sort -u > "$WORK/present"
@@ -187,10 +198,10 @@ if [[ -n "$ARCHIVE_KEYFILE" ]]; then
     || fail "could not encrypt the archive copy"
   # Proves the copy decrypts with this passphrase before the plain dump is ever pruned.
   openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -in "$OUT.enc" -pass "file:$ARCHIVE_KEYFILE" \
-    | shasum -a 256 | cut -d' ' -f1 > "$OUT.enc.plain.sha256" || fail "the encrypted archive copy does not decrypt"
+    | "${HAWA_SHA256[@]}" | cut -d' ' -f1 > "$OUT.enc.plain.sha256" || fail "the encrypted archive copy does not decrypt"
   [[ "$(cat "$OUT.enc.plain.sha256")" == "$(cut -d' ' -f1 < "$OUT.sha256")" ]] \
     || fail "the encrypted archive copy does not decrypt back to the dump"
-  shasum -a 256 "$OUT.enc" | cut -d' ' -f1 > "$OUT.enc.sha256" || fail "could not checksum the encrypted copy"
+  "${HAWA_SHA256[@]}" "$OUT.enc" | cut -d' ' -f1 > "$OUT.enc.sha256" || fail "could not checksum the encrypted copy"
   rm -f "$OUT.enc.plain.sha256"
   ARCHIVE_SRC="$OUT.enc"
   ARCHIVE_SRC_SHA="$OUT.enc.sha256"
@@ -203,8 +214,8 @@ archive_publish() {
   [[ ! -e "$target" && ! -L "$target" ]] || fail "an archive member with this timestamp already exists"
   ARCHIVE_PART="$(mktemp "$ARCHIVE_DEST/.publish_${STAMP}.XXXXXX")" || fail "could not stage an archive member"
   cat "$source" > "$ARCHIVE_PART" || fail "could not copy an archive member"
-  expected="$(trap - ERR; shasum -a 256 "$source" | cut -d' ' -f1)" || fail "could not checksum the archive source"
-  actual="$(trap - ERR; shasum -a 256 "$ARCHIVE_PART" | cut -d' ' -f1)" || fail "could not checksum the staged archive copy"
+  expected="$(trap - ERR; "${HAWA_SHA256[@]}" "$source" | cut -d' ' -f1)" || fail "could not checksum the archive source"
+  actual="$(trap - ERR; "${HAWA_SHA256[@]}" "$ARCHIVE_PART" | cut -d' ' -f1)" || fail "could not checksum the staged archive copy"
   [[ "$expected" =~ ^[0-9a-f]{64}$ && "$actual" == "$expected" ]] \
     || fail "archive copy checksum differs from its source"
   # Same-directory rename publishes atomically under the exclusive archive lock.
@@ -241,7 +252,7 @@ if [[ "$HAS_STORE" == t ]]; then
     fi
     (cd "$WORK/check" && find . -type f | sed 's#^\./##' | LC_ALL=C sort) > "$WORK/unpacked"
     cmp -s "$WORK/unpacked" "$WORK/new" || fail "the file pack does not hold exactly the ${NEW_BLOBS} new files"
-    BAD="$(cd "$WORK/check" && tr '\n' '\0' < "$WORK/new" | xargs -0 shasum -a 256 | awk '{ n=$2; sub(/^.*\//, "", n); sub(/\.[a-z]+$/, "", n); if (n != $1) print $2 }' | head -1)"
+    BAD="$(cd "$WORK/check" && tr '\n' '\0' < "$WORK/new" | xargs -0 "${HAWA_SHA256[@]}" | awk '{ n=$2; sub(/^.*\//, "", n); sub(/\.[a-z]+$/, "", n); if (n != $1) print $2 }' | head -1)"
     [[ -z "$BAD" ]] || fail "a file in the pack does not hash to its name (${BAD})"
     mv -f "$PACK_PART" "$ARCHIVE_BLOBS/$PACK"; PACK_PART=""
     { cat "$INDEX"; awk -v p="$PACK" '{ print $0 "\t" p }' "$WORK/new"; } > "$INDEX.new" && mv -f "$INDEX.new" "$INDEX" \

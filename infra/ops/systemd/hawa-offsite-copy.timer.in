@@ -1,0 +1,12 @@
+# Rendered by infra/ops/install_systemd_units.sh (ADR-141); edit the template in infra/ops/systemd/, not the copy.
+[Unit]
+Description=Hawa off-site backup copy, 05:30 Asia/Baghdad (it copies nothing until HAWA_OFFSITE_DEST is set)
+
+[Timer]
+OnCalendar=*-*-* 05:30:00 Asia/Baghdad
+Persistent=true
+AccuracySec=1min
+Unit=hawa-offsite-copy.service
+
+[Install]
+WantedBy=timers.target

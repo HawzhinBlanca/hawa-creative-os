@@ -10,6 +10,8 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# The SHA-256 tool and the host role, chosen per host (ADR-141).
+source "${ROOT_DIR}/infra/ops/host_lib.sh"
 COMPOSE=(docker compose -f "${SCRIPT_DIR}/docker-compose.prod.yml")
 [[ -f "${SCRIPT_DIR}/canva-release.override.yml" ]] && COMPOSE+=(-f "${SCRIPT_DIR}/canva-release.override.yml")
 APPLY=0; [[ "${1:-}" == "--apply" ]] && APPLY=1
@@ -224,6 +226,65 @@ apply_vector_config() {
   [[ "$(vector_seen)" == "$VECTOR_WANT" ]] || { echo "ERROR: vector does not see the deployed vector.yaml even after a restart"; exit 1; }
   echo "✓ vector restarted onto the new vector.yaml"
 }
+# ADR-141: only a production host deploys. A standby host (being prepared for a cutover) and a retired
+# one (production moved away) refuse --apply before anything is changed: two live hosts would poll the
+# same Telegram bot. Pre-flight still runs there (the rehearsal needs it) and records no volume stamp.
+# $1 is the role hawa_host_role printed, $2 its exit status.
+HOST_ROLE="production"
+refuse_inactive_host() {
+  local role="$1" rc="${2:-0}" where
+  where="$(hawa_host_role_source)"
+  if [[ "$rc" != 0 ]]; then
+    echo "ERROR: unrecognised host role '${role}' in ${where}; expected production, standby or retired (infra/ops/host_lib.sh). Nothing was changed." >&2
+    exit 1
+  fi
+  [[ "$role" == production ]] && return 0
+  if [[ "$APPLY" == 1 ]]; then
+    echo "ERROR: this host is marked ${role} (${where}): production runs on another host, and two live hosts would poll the same Telegram bot. Refusing to deploy; nothing was changed. To make this host production again, remove the marker (runbooks/10_backup_restore.md, Moving production to another host)." >&2
+    exit 1
+  fi
+  echo "NOTE: this host is marked ${role} (${where}): pre-flight only, and no volume stamp is recorded."
+}
+# Durability of an external volume: it must exist, and its creation time must be the one recorded for
+# this host. The stamps are host-local (ADR-141), in ${HAWA_VOLUME_STAMP_DIR:-~/.hawa/volume-stamps}:
+# they were tracked in git with one Mac's times, so every other host refused to deploy. A host that
+# still has the old repository file (infra/docker/.<kind>_volume_created, now untracked) adopts its
+# value once. With no stamp at all the time is recorded and the deploy goes on, as before; on a standby
+# or retired host nothing is recorded.
+# $1 volume, $2 label (Postgres, Restate), $3 host-local stamp file, $4 legacy repository stamp file,
+# $5 1 to record a missing stamp.
+check_volume_stamp() {
+  local volume="$1" label="$2" stamp="$3" legacy="$4" record="${5:-1}" created expected="" lower
+  lower="$(tr '[:upper:]' '[:lower:]' <<< "$label")"
+  if ! docker volume inspect "$volume" >/dev/null 2>&1; then
+    echo "ERROR: ${label} volume '$volume' does not exist! Refusing to start or recreate." >&2
+    exit 1
+  fi
+  created="$(docker volume inspect "$volume" --format '{{.CreatedAt}}')"
+  if [[ -f "$stamp" ]]; then
+    expected="$(tr -d '[:space:]' < "$stamp")"
+  elif [[ -f "$legacy" ]]; then
+    expected="$(tr -d '[:space:]' < "$legacy")"
+    if [[ "$record" == 1 ]]; then
+      mkdir -p "$(dirname "$stamp")" && chmod 700 "$(dirname "$stamp")"
+      printf '%s\n' "$expected" > "$stamp" && chmod 600 "$stamp"
+      echo "✓ ${lower} volume stamp adopted once from ${legacy#"$ROOT_DIR"/} into ${stamp} (ADR-141); the repository file is no longer read"
+    fi
+  fi
+  if [[ -n "$expected" ]]; then
+    if [[ "$created" != "$expected" ]]; then
+      echo "ERROR: ${label} volume creation timestamp changed! Expected: '$expected', Got: '$created'. Refusing deployment to prevent data loss." >&2
+      exit 1
+    fi
+  elif [[ "$record" == 1 ]]; then
+    mkdir -p "$(dirname "$stamp")" && chmod 700 "$(dirname "$stamp")"
+    printf '%s\n' "$created" > "$stamp" && chmod 600 "$stamp"
+    echo "✓ ${lower} volume stamp recorded for this host in ${stamp}"
+  else
+    echo "NOTE: no ${lower} volume stamp for this host, and none recorded (host role ${HOST_ROLE})"
+  fi
+  echo "✓ ${lower} volume '$volume' verified (created at ${created})"
+}
 # The running build must be able to say which commit it is (GET /v1/system/cutover/status).
 # Unstamped deployments are strictly refused.
 if [[ -n "${HAWA_BUILD_COMMIT+x}" ]]; then
@@ -269,48 +330,19 @@ fi
 
 echo "=== Hawa Creative OS production deployment ($([[ $APPLY == 1 ]] && echo apply || echo pre-flight)) ==="
 echo "Build stamp: ${HAWA_BUILD_COMMIT}"
+HOST_ROLE_RC=0; HOST_ROLE="$(hawa_host_role)" || HOST_ROLE_RC=$?
+refuse_inactive_host "$HOST_ROLE" "$HOST_ROLE_RC"
 
 # 1. Prerequisites
 command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required"; exit 1; }
 docker compose version >/dev/null 2>&1 || { echo "ERROR: docker compose is required"; exit 1; }
 
-# 1b. Postgres volume durability verification: volume must exist and creation timestamp must match
-VOLUME_NAME="hawa-production_postgres_data"
-VOLUME_STAMP_FILE="${SCRIPT_DIR}/.postgres_volume_created"
-if ! docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
-  echo "ERROR: Postgres volume '$VOLUME_NAME' does not exist! Refusing to start or recreate." >&2
-  exit 1
-fi
-VOLUME_CREATED="$(docker volume inspect "$VOLUME_NAME" --format '{{.CreatedAt}}')"
-if [[ -f "$VOLUME_STAMP_FILE" ]]; then
-  EXPECTED_STAMP="$(tr -d '[:space:]' < "$VOLUME_STAMP_FILE")"
-  if [[ "$VOLUME_CREATED" != "$EXPECTED_STAMP" ]]; then
-    echo "ERROR: Postgres volume creation timestamp changed! Expected: '$EXPECTED_STAMP', Got: '$VOLUME_CREATED'. Refusing deployment to prevent data loss." >&2
-    exit 1
-  fi
-else
-  echo "$VOLUME_CREATED" > "$VOLUME_STAMP_FILE"
-fi
-echo "✓ postgres volume '$VOLUME_NAME' verified (created at ${VOLUME_CREATED})"
-
-# 1c. Restate volume durability verification: volume must exist and creation timestamp must match
-RESTATE_VOLUME_NAME="hawa-production_restate_data"
-RESTATE_VOLUME_STAMP_FILE="${SCRIPT_DIR}/.restate_volume_created"
-if ! docker volume inspect "$RESTATE_VOLUME_NAME" >/dev/null 2>&1; then
-  echo "ERROR: Restate volume '$RESTATE_VOLUME_NAME' does not exist! Refusing to start or recreate." >&2
-  exit 1
-fi
-RESTATE_VOLUME_CREATED="$(docker volume inspect "$RESTATE_VOLUME_NAME" --format '{{.CreatedAt}}')"
-if [[ -f "$RESTATE_VOLUME_STAMP_FILE" ]]; then
-  EXPECTED_RESTATE_STAMP="$(tr -d '[:space:]' < "$RESTATE_VOLUME_STAMP_FILE")"
-  if [[ "$RESTATE_VOLUME_CREATED" != "$EXPECTED_RESTATE_STAMP" ]]; then
-    echo "ERROR: Restate volume creation timestamp changed! Expected: '$EXPECTED_RESTATE_STAMP', Got: '$RESTATE_VOLUME_CREATED'. Refusing deployment to prevent data loss." >&2
-    exit 1
-  fi
-else
-  echo "$RESTATE_VOLUME_CREATED" > "$RESTATE_VOLUME_STAMP_FILE"
-fi
-echo "✓ restate volume '$RESTATE_VOLUME_NAME' verified (created at ${RESTATE_VOLUME_CREATED})"
+# 1b/1c. Volume durability: each external volume must exist and keep the creation time recorded for
+# this host (check_volume_stamp).
+VOLUME_STAMP_DIR="${HAWA_VOLUME_STAMP_DIR:-${HOME}/.hawa/volume-stamps}"
+RECORD_STAMPS=1; [[ "$HOST_ROLE" == production ]] || RECORD_STAMPS=0
+check_volume_stamp hawa-production_postgres_data Postgres "${VOLUME_STAMP_DIR}/hawa-production_postgres_data.created" "${SCRIPT_DIR}/.postgres_volume_created" "$RECORD_STAMPS"
+check_volume_stamp hawa-production_restate_data Restate "${VOLUME_STAMP_DIR}/hawa-production_restate_data.created" "${SCRIPT_DIR}/.restate_volume_created" "$RECORD_STAMPS"
 
 
 # 2. Configuration must exist and must be real
@@ -443,7 +475,7 @@ BACKUP_BYTES="$(wc -c < "$PARTIAL" | tr -d ' ')"
 [[ "$BACKUP_BYTES" -gt 100000 ]] || backup_failed "the backup is only ${BACKUP_BYTES} bytes"
 docker exec -i hawa-production-postgres-1 pg_restore --list < "$PARTIAL" >/dev/null \
   || backup_failed "the backup's table of contents cannot be read"
-{ shasum -a 256 "$PARTIAL" | awk '{print $1}' > "$BACKUP.sha256" && mv -f "$PARTIAL" "$BACKUP"; } \
+{ "${HAWA_SHA256[@]}" "$PARTIAL" | awk '{print $1}' > "$BACKUP.sha256" && mv -f "$PARTIAL" "$BACKUP"; } \
   || backup_failed "the backup could not be recorded"
 echo "✓ backup written: infra/backup/snapshots/predeploy_${STAMP}.dump (${BACKUP_BYTES} bytes)"
 
@@ -473,11 +505,11 @@ echo "✓ cut-out engine tests passed in the shipped image"
 # until nginx was restarted. The new file is checked first in a one-off container (it mounts the file
 # afresh), so a broken file never replaces a working one; then nginx is reloaded if it sees the new
 # file, or restarted so that it binds it, and must see it afterwards.
-NGINX_WANT="$(shasum -a 256 "${SCRIPT_DIR}/nginx.conf" | cut -d' ' -f1)"
+NGINX_WANT="$("${HAWA_SHA256[@]}" "${SCRIPT_DIR}/nginx.conf" | cut -d' ' -f1)"
 nginx_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx sha256sum /etc/nginx/nginx.conf 2>/dev/null | cut -d' ' -f1 || true; }
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T nginx nginx -t >/dev/null 2>&1 \
   || { echo "ERROR: infra/docker/nginx.conf fails nginx -t; nothing was started with it"; exit 1; }
-VECTOR_WANT="$(shasum -a 256 "${SCRIPT_DIR}/vector.yaml" | cut -d' ' -f1)"
+VECTOR_WANT="$("${HAWA_SHA256[@]}" "${SCRIPT_DIR}/vector.yaml" | cut -d' ' -f1)"
 validate_vector_config
 # Core keeps the Telegram poller it runs with until 7b has registered the new worker colour.
 CORE_POLLER_WANTED="$(telegram_poller_of "$(compose_value HAWA_TELEGRAM_POLLER worker)")"

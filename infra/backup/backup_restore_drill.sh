@@ -8,6 +8,14 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
+# The SHA-256 tool and the host role, chosen per host (ADR-141).
+source "${ROOT_DIR}/infra/ops/host_lib.sh"
+# A standby or retired host runs no drill (ADR-141): production, and its database, live elsewhere.
+HAWA_ROLE_NOW="$(hawa_host_role)" || { echo "unrecognised host role '${HAWA_ROLE_NOW}' in $(hawa_host_role_source) (production, standby or retired); no drill was run" >&2; exit 1; }
+if [[ "$HAWA_ROLE_NOW" != production ]]; then
+  echo "$(date -u +%FT%TZ) SKIP: this host is ${HAWA_ROLE_NOW} ($(hawa_host_role_source)); production runs elsewhere, no drill was run"
+  exit 0
+fi
 
 echo "================================================================================"
 echo "⚡ Hawa Creative OS: schema/RLS/seed parity drill (data backups: infra/backup/nightly_backup.sh)"
@@ -83,7 +91,7 @@ cat db/rls.sql >> "${SNAPSHOT_FILE}"
 echo "" >> "${SNAPSHOT_FILE}"
 cat db/seed.sql >> "${SNAPSHOT_FILE}"
 
-SNAPSHOT_SHA256="$(shasum -a 256 "${SNAPSHOT_FILE}" | awk '{print $1}')"
+SNAPSHOT_SHA256="$("${HAWA_SHA256[@]}" "${SNAPSHOT_FILE}" | awk '{print $1}')"
 SNAPSHOT_SIZE="$(wc -c < "${SNAPSHOT_FILE}" | tr -d ' ')"
 
 echo "   ✓ Snapshot created: ${SNAPSHOT_FILE}"

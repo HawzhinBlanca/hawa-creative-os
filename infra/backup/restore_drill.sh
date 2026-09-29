@@ -17,6 +17,14 @@
 # infra/docker/.env as deploy.sh does), HAWA_BACKUP_NOTIFY_ENV.
 set -Eeuo pipefail; umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
+# The SHA-256 tool and the host role, chosen per host (ADR-141).
+source "$ROOT/infra/ops/host_lib.sh"
+# A standby or retired host runs no drill (ADR-141): production, and its database, live elsewhere.
+HAWA_ROLE_NOW="$(hawa_host_role)" || { echo "unrecognised host role '${HAWA_ROLE_NOW}' in $(hawa_host_role_source) (production, standby or retired); no drill was run" >&2; exit 1; }
+if [[ "$HAWA_ROLE_NOW" != production ]]; then
+  echo "$(date -u +%FT%TZ) SKIP: this host is ${HAWA_ROLE_NOW} ($(hawa_host_role_source)); production runs elsewhere, no drill was run"
+  exit 0
+fi
 ARCHIVE_DEST="${HAWA_BACKUP_ARCHIVE_DEST:-$HOME/.hawa/snapshots_archive}"
 ARCHIVE_KEYFILE="${HAWA_BACKUP_ARCHIVE_KEYFILE:-}"
 PG="${HAWA_BACKUP_PG_CONTAINER:-hawa-production-postgres-1}"; LIVE_DB="${HAWA_BACKUP_DB:-hawa}"
@@ -101,7 +109,7 @@ TARGET="$(sed -E 's/^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2
 MANIFEST="$ARCHIVE_DEST/hawa_${STAMP}.blobs"
 [[ -f "$MANIFEST" ]] || fail "$DUMP_NAME has no file manifest (hawa_${STAMP}.blobs); it predates the file store or its night failed"
 if [[ -f "$DUMP.sha256" ]]; then
-  [[ "$(shasum -a 256 "$DUMP" | cut -d' ' -f1)" == "$(cut -d' ' -f1 < "$DUMP.sha256")" ]] || fail "$DUMP_NAME does not match its checksum"
+  [[ "$("${HAWA_SHA256[@]}" "$DUMP" | cut -d' ' -f1)" == "$(cut -d' ' -f1 < "$DUMP.sha256")" ]] || fail "$DUMP_NAME does not match its checksum"
 fi
 
 # 2. Verify all required packs and extract only validated regular files into a new

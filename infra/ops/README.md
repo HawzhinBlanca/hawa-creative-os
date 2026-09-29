@@ -1,15 +1,127 @@
 # infra/ops
 
-Scripts the owner runs on the office Mac. Each explains itself in its header.
+Scripts the owner runs on the production host. Each explains itself in its header. Production runs on
+the office Mac today; the repository is prepared for an arm64 Linux server or a Mac mini as well
+(ADR-141). Which host is the owner's decision (`plans/hosting/PRODUCTION_HOSTING_PLAN.md`, section 10).
 
 | Script | What it does |
 |---|---|
-| `install_launch_agents.sh` | Installs the watchdog and the nightly backup as launch agents |
-| `watchdog.sh` | Starts Docker and the stack at login, alerts the operator chat |
+| `install_launch_agents.sh` | macOS: installs the watchdog, the nightly backup, both drills and the off-site copy as launch agents |
+| `install_systemd_units.sh` | Linux: the same five jobs as systemd timers (`systemd/*.in`), run as the checkout's user |
+| `host_lib.sh` | Sourced by the host scripts: GNU or BSD `stat` and `date`, `shasum` or `sha256sum`, and the host role |
+| `watchdog.sh` | Starts Docker and the stack at login or boot, alerts the operator chat |
 | `stack_containers.sh` | The watchdog's container checks: the six stack services by name, the worker, Vector |
 | `disk_cleanup.sh` | Keeps dumps, Docker's build cache and container logs (30 days, 2 GB) bounded |
 | `rotate_app_role.sh` | Rotates the application's database password without downtime (below) |
 | `../../scripts/request_logs.ts` | Prints every log line of one request or task (below) |
+
+## The production host: macOS or Linux (ADR-141)
+
+### The unattended jobs
+
+| Job | Script | macOS (launch agent) | Linux (systemd timer) |
+|---|---|---|---|
+| Watchdog | `infra/ops/watchdog.sh` | `design.hawa.watchdog`: at login, every 5 min | `hawa-watchdog.timer`: 1 min after boot, every 5 min |
+| Nightly backup | `infra/backup/nightly_backup.sh` | `design.hawa.nightly-backup`: 03:30 local | `hawa-nightly-backup.timer`: 03:30 Asia/Baghdad, `Persistent=true` (a night missed while the host was off runs at boot) |
+| Schema drill | `infra/backup/backup_restore_drill.sh` | `design.hawa.backup-restore-drill`: Sundays 04:00 | `hawa-backup-restore-drill.timer`: Sundays 04:00 |
+| Data drill | `infra/backup/restore_drill.sh` | `design.hawa.restore-drill`: the 1st, 05:00 | `hawa-restore-drill.timer`: the 1st, 05:00 |
+| Off-site copy | `infra/backup/offsite_copy.sh` | `design.hawa.offsite-copy`: 05:30 | `hawa-offsite-copy.timer`: 05:30 |
+
+Logs go to `~/.hawa/logs/<launch agent label>.log` on both hosts. The settings the jobs need
+(`HAWA_BACKUP_ARCHIVE_DEST`, `HAWA_BACKUP_ARCHIVE_KEYFILE`, `HAWA_BACKUP_ARCHIVE_KEEP`,
+`HAWA_RESTATE_BACKUP_ENABLED`, `HAWA_RESTATE_BACKUP_HELPER_IMAGE`, `HAWA_OFFSITE_*`) live:
+
+- on a Mac, in the launch agents' `EnvironmentVariables`. `install_launch_agents.sh` carries them over
+  on every refresh; the off-site agent takes the nightly agent's archive settings and keeps its own
+  `HAWA_OFFSITE_*`, which are added to its plist by hand
+  (`/usr/libexec/PlistBuddy -c "Add :EnvironmentVariables:HAWA_OFFSITE_DEST string <dest>" ~/Library/LaunchAgents/design.hawa.offsite-copy.plist`,
+  then run the installer again to reload it).
+- on Linux, in `/etc/hawa/backup.env` (root-owned, mode 0600; systemd reads it before dropping to the
+  job's user). The first install writes it from those variables when they are set in the calling
+  shell, and as commented lines otherwise; later installs never rewrite it.
+
+```bash
+bash infra/ops/install_launch_agents.sh                     # macOS: install or refresh (--uninstall removes)
+sudo bash infra/ops/install_systemd_units.sh --user hawa    # Linux: install or refresh, enable and start the timers
+sudo bash infra/ops/install_systemd_units.sh --uninstall    # Linux: remove the units, keep /etc/hawa/backup.env
+systemctl list-timers 'hawa-*'                              # Linux: what runs next
+bash infra/ops/install_systemd_units.sh --render /tmp/units --user hawa   # write the units only, to read them
+```
+
+The Linux units are system units run by an unprivileged user (`--user`, else the user who ran sudo)
+who owns the checkout and is in the `docker` group, so they run from boot without anyone logging in.
+Launch agents run only while their user is logged in (see the hosting plan, section 4.1, for a Mac mini).
+
+### The host role: a host that must not run production
+
+`~/.hawa/host-role` (its first word), or `HAWA_HOST_ROLE`, which wins and can be set in
+`/etc/hawa/backup.env`, says what this host is:
+
+| Role | Meaning | Watchdog | `deploy.sh` | Nightly backup, drills, off-site copy |
+|---|---|---|---|---|
+| `production`, or no marker | today's behaviour | starts and checks the stack | deploys | run |
+| `standby` | being prepared for a cutover (the rehearsal) | starts nothing; reports production containers running here | pre-flight only, records no volume stamp; `--apply` refuses | skip with a log line |
+| `retired` | production moved away | as standby | as standby | as standby |
+
+Any other value is refused everywhere and nothing is started. Two hosts must never run production at
+once: both would poll the same Telegram bot and could send messages twice. Mark the old host
+`retired` before the new one goes live, and mark a new host `standby` until its cutover
+(`runbooks/10_backup_restore.md`, "Moving production to another host").
+
+```bash
+echo retired > ~/.hawa/host-role        # this host no longer runs production
+rm ~/.hawa/host-role                    # it does again (after a rollback)
+bash infra/ops/watchdog.sh --status     # says "retired host (...)", or reports production containers running here
+```
+
+### Host requirements
+
+`deploy.sh` and the jobs need, on the host: `git`; Node 22 and `pnpm` (`npx tsx` in blue/green,
+`upgrade.ts` and the receipt; the data drill runs `apps/core/dist`); `python3` 3.10 or newer, with
+PyYAML for `scripts/validate_pack.py`; `curl`; `openssl`; `rsync` for an off-site copy to an SSH
+target; a SHA-256 tool (`shasum` from perl, or `sha256sum` from coreutils: `host_lib.sh` takes
+whichever exists); Docker with Compose 5.5.1 or newer (the blue/green profile behaviour was verified on
+it); and the build tools `pnpm build` needs (`build-essential`, `pkg-config`, `libpango1.0-dev` on Debian
+or Ubuntu). GNU and BSD `stat` and `date` both work. On Linux, Docker Engine must be enabled at boot
+(`sudo systemctl enable --now docker`): the watchdog reports a stopped `docker.service` but cannot start it.
+
+### Deploying over SSH
+
+A server has no desktop: everything runs over SSH (over Tailscale, hosting plan section 5.2) as the
+checkout's user.
+
+```bash
+ssh hawa@<host>
+cd ~/Hawdesign && git fetch && git checkout <release commit>
+pnpm install --frozen-lockfile && pnpm build
+bash infra/docker/deploy.sh            # pre-flight
+tmux new -s deploy                     # so a dropped connection does not stop the deploy halfway
+bash infra/docker/deploy.sh --apply
+```
+
+Host-only files are copied over SSH, never by chat or email: `infra/docker/.env` and `.env.production`,
+`~/.hawa/backup_passphrase` (0600) and the two model files in `~/.hawa/models`.
+
+### Firewall (Linux server)
+
+- No inbound port except SSH until Tailscale works, then none: the provider's firewall where it has
+  one, plus nftables or ufw on the host. Cloudflare Tunnel and Tailscale both connect outwards.
+- Keep `HAWA_BIND_IP=127.0.0.1` and Postgres on `127.0.0.1:54332`. Docker's published ports bypass
+  ufw, so a port published on `0.0.0.0` would be open whatever the firewall says.
+
+### What is proven and what is only prepared (2026-09-29)
+
+Proven in a throwaway arm64 Debian 13 container and on this Mac (`plans/hosting/LINUX_READINESS_PROOF.json`):
+the scripts' GNU forms; a whole nightly backup against a PostgreSQL in the container; the off-site
+copy to a path and through rsync; the watchdog's Linux and host-role paths; `deploy.sh` up to its
+configuration check on a fresh host (both volume stamps recorded, a recreated volume refused, a
+retired host refused); and the systemd units installed under a real systemd 257 (timers active, jobs
+run as the user with the settings file, reinstall and uninstall). On macOS the four existing launch
+agents render byte-identical and the nightly backup's end-to-end tests pass.
+
+Not proven: a real server; Docker Engine on Linux running this stack; `deploy.sh --apply` there; the
+off-site copy over SSH to a Storage Box; the cutover. They belong to the rehearsal (hosting plan,
+section 7.3).
 
 ## Logs of one request
 
@@ -108,11 +220,11 @@ The script (`packages/db/src/rotate-app-role.ts`, run by `rotate_app_role.sh`):
 
 ### The owner's sequence (production)
 
-From the repository root on the office Mac, with the stack running. Nothing is printed that holds a
+From the repository root on the production host, with the stack running. Nothing is printed that holds a
 password. Allow 10 minutes; the services are down only for the few seconds step 4 recreates them.
 
 ```bash
-cd /Users/hawzhin/Hawdesign
+cd /Users/hawzhin/Hawdesign    # the production checkout (on a Linux server: ~/Hawdesign)
 CONN=(--url postgresql://hawa_owner@127.0.0.1:54332/hawa --production \
       --password-env-file infra/docker/.env --password-key POSTGRES_PASSWORD)
 

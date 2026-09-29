@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T08:44:18Z",
+  "generatedAt": "2026-09-29T09:06:37Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 519,
+  "fileCount": 525,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "7e2df760ac17ed2a633cf7facc17f1c1498f49d159d85350409360d7feb947ea",
-      "bytes": 3977
+      "sha256": "0014e5693edbd625a06c5f54ec6463e20ffe87c8175d3bc296bfbd6044ed65d7",
+      "bytes": 3971
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -768,6 +768,16 @@
       "bytes": 5975
     },
     {
+      "path": "adrs/140_thanks_and_receipts_open_no_request.md",
+      "sha256": "2c47298a0374596dd36f7228646d4344913673f90d75629e77254f30c6645010",
+      "bytes": 6613
+    },
+    {
+      "path": "adrs/141_production_host_portability.md",
+      "sha256": "9e3c8f8c22855560611f112fce7943dc5050f1776ae133dc41a3fd57254b5a50",
+      "bytes": 13248
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1109,8 +1119,8 @@
     },
     {
       "path": "docs/25_OPERATIONS_RUNBOOK.md",
-      "sha256": "47c583d9dcaf52fe6bd3bc208b62917d4bda4b184a0ad546d95cedec88e6570d",
-      "bytes": 20323
+      "sha256": "3315952afe83a146288e0ceb444929d94b76bf7fe0d4ab800a3ed9e3f0689ec1",
+      "bytes": 22197
     },
     {
       "path": "docs/26_WHAT_NOT_TO_BUILD.md",
@@ -1203,9 +1213,19 @@
       "bytes": 26365
     },
     {
+      "path": "plans/hosting/LINUX_READINESS_PROOF.json",
+      "sha256": "aea12b41591a378c41546ea517b8fdeb25988a263b46226f47e5f856955d1060",
+      "bytes": 12838
+    },
+    {
       "path": "plans/hosting/PRODUCTION_HOSTING_PLAN.md",
       "sha256": "3afb30ad563bb0beaad62886feb329565ab10967be45e1e7610e8a9757d1dcbb",
       "bytes": 47459
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR140_R10_H1_RUN.json",
+      "sha256": "a5c169fa65169df06eaa9ae65f31f9b8ed9f52177f517f619373bc0a9c18cdca",
+      "bytes": 22005
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/BRIEF_CONTRACT_PROOF.json",
@@ -1799,8 +1819,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "cad784818c070fd269a5ea85122ca6812abf28cba5bd842f7c2c06798370bd64",
-      "bytes": 477257
+      "sha256": "2466089161ef66de5c9078270de5d2ff0a948724b3837b845dc62f6ef1c067bf",
+      "bytes": 478746
     },
     {
       "path": "plans/user-stories.csv",
@@ -1879,8 +1899,8 @@
     },
     {
       "path": "runbooks/10_backup_restore.md",
-      "sha256": "0e3f179fdcf4b38c1adad2f1c6e800488e1f38a24e07e6d89ed6e52dbbcd4183",
-      "bytes": 34180
+      "sha256": "a12b1bdaddc58ecc6b1d13c1edf04165af3c9baa509b3678859e18d2061b2c0f",
+      "bytes": 40121
     },
     {
       "path": "runbooks/11_upgrade.md",
@@ -2094,8 +2114,8 @@
     },
     {
       "path": "scripts/disaster_recovery_drill.sh",
-      "sha256": "19dda40fed73d6b696ab3300785ca1c00c3a024417d36901fef270d1e2373042",
-      "bytes": 24624
+      "sha256": "31f6e430eb9ebf9e4cb146cbb0d2a1a04c46c509b1009a49b1a47b8c90aaabe7",
+      "bytes": 24738
     },
     {
       "path": "scripts/dispatch_authentic_kaae_telegram.ts",
@@ -2109,8 +2129,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "03c2f8ab381cff144df92a1c9b98983feb15f8763cfb86afa4e8b2a565a71cc0",
-      "bytes": 19038
+      "sha256": "8a43811d49a9ebbc3c2ef74966632658d51947c52e47efc8035ec1ef54f9e8e9",
+      "bytes": 19183
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",
@@ -2331,6 +2351,16 @@
       "path": "scripts/proofs/gate-baseline.json",
       "sha256": "17a8eba1cb6598fde8e3305dafdf484da4050f54561b50444f7e4472d45148db",
       "bytes": 11710
+    },
+    {
+      "path": "scripts/proofs/linux_host_readiness.sh",
+      "sha256": "2c0e0562af903201fda01fe42947c8b9a8df188e6aba40db869c9465b47760ee",
+      "bytes": 16972
+    },
+    {
+      "path": "scripts/proofs/linux_systemd_install.sh",
+      "sha256": "5863a4a8b5600ca13afdff6d719c45614124958e6d5a65454bc331a2af391fde",
+      "bytes": 6155
     },
     {
       "path": "scripts/proofs/measure_candidate_diversity.ts",
@@ -2564,8 +2594,8 @@
     },
     {
       "path": "scripts/validate_pack.py",
-      "sha256": "903e00cf5245d3d9d77a661ec7f76c91fb12e766711b14485e9a22bf6d55d12d",
-      "bytes": 24275
+      "sha256": "4fa773c814ccf7a3141c197f5fac15e2eeb72ef0b1a7fcdb1ca6dfd0f608ad16",
+      "bytes": 24615
     },
     {
       "path": "scripts/verify_live_h01_h03.ts",

@@ -34,7 +34,10 @@ IGNORED_TOP_LEVEL = {
     "exports", "hawdesign-creative-os-figma-agent-studio", ".tmp_render_figma",
     "scratch", ".hawa-state", "data", "archive"
 }
-IGNORED_ANYWHERE = {"__pycache__", ".DS_Store"}
+# Tool caches are never package files. .pytest_cache in the main checkout (python3 -m pytest
+# infra/backup run from the root) was recorded in MANIFEST.json and SHA256SUMS.txt, so every fresh
+# clone, which has no cache, failed "manifest target exists" and deploy.sh step 4 with it (ADR-141).
+IGNORED_ANYWHERE = {"__pycache__", ".DS_Store", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 WORKSPACE_ROOT_FILES = {
     ".gitignore", "package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml",
     "tsconfig.json", "tsconfig.base.json", "vitest.config.ts", "vitest.workspace.ts"
