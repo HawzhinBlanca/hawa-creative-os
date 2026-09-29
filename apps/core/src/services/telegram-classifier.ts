@@ -142,25 +142,52 @@ export function startsWithWord(text: string, words: string[]): boolean {
  */
 const ACKNOWLEDGEMENT_PHRASES = [
   'ok', 'okay', 'thanks', 'thank you', 'thank u', 'thanks a lot', 'thanks so much', 'thank you so much', 'thank you very much',
-  'many thanks', 'thx', 'ty', 'great', 'great work', 'great job', 'good job', 'good work', 'nice work', 'nice job', 'well done',
+  'thanks again', 'thank you again', 'many thanks', 'thx', 'ty', 'great', 'great work', 'great job', 'good job', 'good work',
+  'nice work', 'nice job', 'well done',
   'perfect', 'nice', 'good', 'cool', 'looks good', 'looks great', 'looks perfect', 'looks nice', 'all good', 'got it', 'received',
   'noted', 'done', 'super', 'excellent', 'wonderful', 'amazing', 'love it', 'approved', 'appreciated', 'much appreciated',
+  'with thanks', 'with many thanks',
   'سوپاس', 'زۆر سوپاس', 'سوپاس بۆ تۆ', 'سوپاست دەکەم', 'زۆر سوپاست دەکەم', 'سپاس', 'مەمنون', 'باشە', 'زۆر باشە',
   'دەستت خۆش', 'دەستت خۆش بێت', 'دەستخۆش', 'دەستخۆشی', 'ناوازەیە', 'جوانە', 'زۆر جوانە',
+  'شکرا', 'شكرا', 'شکراً', 'شكراً',
+];
+
+/**
+ * A receipt: the requester saying the files or the design reached them, as a whole clause from a
+ * closed vocabulary ("we received the files", "got them", "all files received", "پێمان گەیشت",
+ * "فایلەکانمان وەرگرت"). "Thank you, we received the files." after a delivery opened a request in
+ * the Desk and told the requester an art director would review it (chaos R10.H1, 2026-09-29).
+ * Nothing else may stand in the clause, so a sentence that goes on to ask for something is not one.
+ */
+const RECEIPT_OBJECT =
+  '(?:it|them|this|that|everything|all(?:\\s+of\\s+(?:it|them))?|' +
+  '(?:(?:the|your|all\\s+(?:the|your)|both|all)\\s+)?(?:final\\s+)?' +
+  '(?:files?|designs?|posters?|flyers?|banners?|pdfs?|images?|photos?|pictures?|drafts?|documents?|messages?|versions?|work))';
+const RECEIPT_ADVERB = '(?:\\s+(?:safely|successfully|already|now|well|fine|in\\s+full|thanks|thank\\s+you))?';
+const RECEIPT_CLAUSES = [
+  // "we received the files", "I've got them", "we have just received everything"
+  `(?:(?:i|we)(?:\\s*['’]ve|\\s+have)?(?:\\s+just|\\s+already)?\\s+)?(?:received|recieved|got)(?:\\s+${RECEIPT_OBJECT})?${RECEIPT_ADVERB}`,
+  // "files received", "all received", "the design arrived", "everything has been received"
+  `${RECEIPT_OBJECT}\\s+(?:(?:is|are|was|were|has\\s+been|have\\s+been)\\s+)?(?:received|recieved|arrived|came\\s+through)${RECEIPT_ADVERB}`,
+  // Sorani: "گەیشت" (it arrived), "پێمان گەیشت" (it reached us), "فایلەکان گەیشتن" (the files
+  // arrived), "هەموو فایلەکان گەیشتن" (all the files arrived), "وەرمانگرت" (we received it), "فایلەکانمان وەرگرت" (we received our files), "وەرگیرا" (received).
+  '(?:(?:فایل|دیزاین|پۆستەر|وێنە|بەڵگەنامە|هەموو)[\\p{L}\\p{M}\\u200c]*\\s+){0,2}(?:(?:پێم|پێمان)\\s+)?' +
+    '(?:گەیشت(?:ن|ووە|وون)?|وەر(?:م|مان)?گرت(?:ن)?|وەرگیرا(?:ن)?)',
 ];
 const ACKNOWLEDGEMENT = new RegExp(
-  `^(?:(?:${[...ACKNOWLEDGEMENT_PHRASES].sort((a, b) => b.length - a.length).map(wordPattern).join('|')})[\\s!.،,؛]*|[\\p{Extended_Pictographic}\\u200d\\s]+)+$`,
+  `^(?:(?:${[...ACKNOWLEDGEMENT_PHRASES].sort((a, b) => b.length - a.length).map(wordPattern).join('|')}|${RECEIPT_CLAUSES.join('|')})` +
+    `${NOT_BEFORE_WORD}[\\s!.،,؛:;]*|[\\p{Extended_Pictographic}\\u200d]+[\\s!.،,؛:;]*)+$`,
   'iu'
 );
 
 /**
- * Short enough to rule out backtracking on a long message, and nothing but thanks or an OK. Skin
- * tones (U+1F3FB–1F3FF) and the emoji presentation selector are not pictographs themselves, so
- * "👍🏻" failed until they were dropped.
+ * Short enough to rule out backtracking on a long message, and nothing but thanks, an OK or a
+ * receipt. Skin tones (U+1F3FB–1F3FF) and the emoji presentation selector are not pictographs
+ * themselves, so "👍🏻" failed until they were dropped.
  */
 export function isAcknowledgement(text: string): boolean {
   const t = text.replace(/[\u{1F3FB}-\u{1F3FF}\uFE0F]/gu, '').trim();
-  return t.length > 0 && t.length <= 60 && ACKNOWLEDGEMENT.test(t);
+  return t.length > 0 && t.length <= 100 && ACKNOWLEDGEMENT.test(t);
 }
 
 function acknowledgement(documentKind: DocumentKind): MessageClassification {

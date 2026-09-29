@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T00:51:30Z",
+  "generatedAt": "2026-09-29T08:02:46Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 522,
+  "fileCount": 520,
   "files": [
     {
       "path": ".dockerignore",
@@ -31,26 +31,6 @@
       "path": ".github/workflows/ci.yml",
       "sha256": "dfef4edb419a6a2ab67151c98306ea1dd8cc7e8c5176cc6c5b0d556c9f97d7d1",
       "bytes": 6283
-    },
-    {
-      "path": ".pytest_cache/.gitignore",
-      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
-      "bytes": 37
-    },
-    {
-      "path": ".pytest_cache/CACHEDIR.TAG",
-      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
-      "bytes": 191
-    },
-    {
-      "path": ".pytest_cache/README.md",
-      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
-      "bytes": 302
-    },
-    {
-      "path": ".pytest_cache/v/cache/nodeids",
-      "sha256": "96e2286dd4eccf949d6c287a6f5c0979259f2ba46e0b290f605470f02e2b0af1",
-      "bytes": 4044
     },
     {
       "path": "AGENTS.md",
@@ -89,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "7e2df760ac17ed2a633cf7facc17f1c1498f49d159d85350409360d7feb947ea",
-      "bytes": 3977
+      "sha256": "0014e5693edbd625a06c5f54ec6463e20ffe87c8175d3bc296bfbd6044ed65d7",
+      "bytes": 3971
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -788,6 +768,11 @@
       "bytes": 5975
     },
     {
+      "path": "adrs/140_thanks_and_receipts_open_no_request.md",
+      "sha256": "2c47298a0374596dd36f7228646d4344913673f90d75629e77254f30c6645010",
+      "bytes": 6613
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1221,6 +1206,11 @@
       "path": "plans/backlog.csv",
       "sha256": "8cbc0f12962aaed8f1429e4337d31e020f8129fda4df1a112387aa24cfd73f57",
       "bytes": 26365
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/ADR140_R10_H1_RUN.json",
+      "sha256": "a5c169fa65169df06eaa9ae65f31f9b8ed9f52177f517f619373bc0a9c18cdca",
+      "bytes": 22005
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/BRIEF_CONTRACT_PROOF.json",
@@ -1814,8 +1804,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "cad784818c070fd269a5ea85122ca6812abf28cba5bd842f7c2c06798370bd64",
-      "bytes": 477257
+      "sha256": "c40c746e8a9b021e434ef1ab3e34b70ff29cd7ada0eef0ddd9a3e3d50a3053ca",
+      "bytes": 477996
     },
     {
       "path": "plans/user-stories.csv",

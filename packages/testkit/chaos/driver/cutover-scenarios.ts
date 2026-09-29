@@ -213,17 +213,6 @@ async function followUp(chat: string, parent: string, act: () => Promise<number>
     answers: (await sentTo(chat)).filter((s) => s.seq > seq).map(gist) };
 }
 
-/**
- * The same kind of answer as the control: as many new tasks and revisions. Since ADR-135 a message
- * the old intake read as a new brief opens a lifecycle request instead, whose acknowledgement is
- * worded differently, so the words are compared only when neither made a new task.
- */
-const sameKindAs = (label: string, after: FollowUp, control: FollowUp): InvariantResult => {
-  const shape = (f: FollowUp) => JSON.stringify({ newTasks: f.newTasks, children: f.children, ...(f.newTasks ? {} : { answers: f.answers }) });
-  return { name: `${label}: answered as the previous release answered the same action (a new request stays a new request)`,
-    ok: shape(after) === shape(control), detail: `after=${JSON.stringify(after)} control=${JSON.stringify(control)}` };
-};
-
 /** What a chat holds, for the report: its tasks and what the bot said. */
 async function chatSummary(name: string, chat: string): Promise<string> {
   const tasks = await query<{ id: string; state: string; pin: string; parent: string | null }>(sql`SELECT t.id::text, t.state::text AS state,
@@ -380,7 +369,8 @@ export async function handoffOfOldRequests(newChat: () => string, events: string
   });
 
   // D: delivered before the deploy; the requester thanked the office during it (above) and now replies
-  // to the delivered file with a photo. The thanks is answered as legacy intake answered G's. The photo
+  // to the delivered file with a photo. The previous release read the thanks as a new brief (G, the
+  // control, made a task of it); since ADR-140 it is an acknowledgement: no request, thanked back. The photo
   // asked for a change to a finished legacy design: before ADR-135 (G, the control) that was a paid
   // revision on the old path; since, the old intake starts no new work and the requester is asked for
   // /new (ADR-135, "Consequences").
@@ -391,15 +381,17 @@ export async function handoffOfOldRequests(newChat: () => string, events: string
     const askedForNew = (await sentTo(chat.D)).some((s) => /Please send \/new followed by/i.test(s.fullText ?? s.text ?? ''));
     events.push(`D: photo reply ${JSON.stringify(photo)}; downloads ${downloads.length}; control ${JSON.stringify(controlPhoto)}`);
     return [
-      ...(windowThanks ? [sameKindAs('D thanks (sent during the deploy)', windowThanks, controlThanks)] : []),
+      ...(windowThanks ? [{ name: 'D thanks (sent during the deploy): starts nothing and is thanked back (ADR-140)',
+        ok: (windowThanks as FollowUp).newTasks === 0 && (windowThanks as FollowUp).children === 0 &&
+          (windowThanks as FollowUp).answers.some((a) => /^🙏 Thank you\.$/u.test(a)) &&
+          !(windowThanks as FollowUp).answers.some((a) => /Request received|Brief received|art director/i.test(a)),
+        detail: `after=${JSON.stringify(windowThanks)} control (previous release)=${JSON.stringify(controlThanks)}` }] : []),
       { name: 'D photo reply: a change to a finished legacy design starts nothing and asks for /new (ADR-135)',
         ok: photo.newTasks === 0 && photo.children === 0 && askedForNew, detail: JSON.stringify({ photo, askedForNew }) },
       { name: 'D: the photo was downloaded at most once', ok: downloads.length <= 1, detail: `downloads=${downloads.length}` },
-      // The previous release read the thanks as a new brief (the control made a task of it); this one
-      // opens a lifecycle request for it, and nothing else in D does.
-      { name: 'D: a lifecycle request only for a message the previous release also read as a new request',
-        ok: (await requestsOf(chat.D)).length === (windowThanks ? (windowThanks as FollowUp).newTasks : 0) &&
-          (await requestsOf(chat.D)).every((r) => r.owner === 'restate'), detail: JSON.stringify(await requestsOf(chat.D)) },
+      // Neither the thanks (ADR-140) nor the photo reply (ADR-135) opens a lifecycle request.
+      { name: 'D: no lifecycle request in the chat', ok: (await requestsOf(chat.D)).length === 0,
+        detail: JSON.stringify(await requestsOf(chat.D)) },
       ...(await updateChecks('D', chat.D, [photo.update, ...(windowUpdate ? [windowUpdate] : [])])),
       ...(await chatChecks('D', chat.D, ['/new required'])),
     ];
