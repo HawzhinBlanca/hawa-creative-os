@@ -517,5 +517,16 @@
     ],
     "passed": 53,
     "invariantsTotal": 755
+  },
+  "r10": {
+    "command": "--only R10.K1,R10.K2 --previous-release 73b75f44",
+    "first": {
+      "R10.K2": "passed (89 s)",
+      "R10.K1": "failed one check: the W acknowledgement matched only the previous release wording; the brief was acknowledged in ADR-145 wording after the forward deploy"
+    },
+    "rerun": {
+      "R10.K1": "passed, 54/54 invariants, 131 s, no uncovered model call",
+      "fix": "packages/testkit/chaos/driver/cutover-scenarios.ts accepts either release acknowledgement"
+    }
   }
 }

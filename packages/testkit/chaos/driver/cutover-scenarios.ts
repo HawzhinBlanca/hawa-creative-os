@@ -288,7 +288,9 @@ export async function rollbackToPreviousRelease(newChat: () => string, events: s
     const task = await briefToDraftSent(chat.W);
     const tasks = await tasksOfChat(chat.W);
     const requests = await requestsOf(chat.W);
-    const acks = (await sentTo(chat.W)).filter((s) => /Request (received|saved)/i.test(s.fullText ?? ''));
+    // The previous release acknowledges "Request received."; this one (ADR-145) "Got it. I'm making a first
+    // draft of …" or "Got it. A designer will make …". The brief may be answered by either.
+    const acks = (await sentTo(chat.W)).filter((s) => /Request (received|saved)|I'm making a first draft of|A designer will make/i.test(s.fullText ?? ''));
     events.push(`W: brief ${windowBrief} → task ${task} pin ${await pinOf(task)}, requests ${requests.length}, acknowledgements ${acks.length}`);
     return [
       { name: 'W: one lifecycle request, one task and one acknowledgement for the brief sent during the rollback', ok: tasks.length === 1 && acks.length === 1 &&
