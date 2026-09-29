@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createChatCampaignIntake, isCopyIntroducer } from '../src/services/chat-campaign-intake.js';
+import { savedDesignCopy } from '../src/services/saved-design-copy.js';
+import { designName } from '../src/services/requester-turn.js';
 
 /**
  * Production, 2026-09-29: a Telegram album caption ended its instructions with "Here is the text and
@@ -123,5 +125,36 @@ describe('a line that introduces the text is not copy', () => {
       'Here is the text and the photos', 'KAAE K-12 Pilot Study', 'وشەی سەرۆک:', 'بەروار:',
       'Details:',
     ]) expect(isCopyIntroducer(line), line).toBe(false);
+  });
+});
+
+/**
+ * Task ba4469f2 was stored by the old intake: copy block 0 the introducer, the title and subtitle one
+ * paragraph. An office retry (ADR-142) designs that stored task again, so the copy it reads and the
+ * name the requester hears follow the new rule without rewriting the stored request.
+ */
+describe('a request stored before the fix is read by the same rule (ADR-142)', () => {
+  const stored = { payload: { title: 'KAAE: Here is the text and the photos:…', designInstructions: OWNER_INSTRUCTIONS,
+    exactCopy: [
+      { id: 'copy_0', role: 'headline', text: 'Here is the text and the photos:' },
+      { id: 'copy_1', role: 'body', text: 'KAAE K-12 Pilot Study\nField Visit Report' },
+      { id: 'copy_2', role: 'body', text: 'Insights from KAAE school field visits and next steps toward' },
+    ] } };
+
+  it('reads the owner\'s stored copy as the three lines, the introducer among the instructions', () => {
+    const read = savedDesignCopy(stored, '');
+    expect(read.copy).toEqual(['KAAE K-12 Pilot Study', 'Field Visit Report', 'Insights from KAAE school field visits and next steps toward']);
+    expect(read.instructions).toContain(OWNER_INSTRUCTIONS);
+    expect(read.instructions).toContain('Here is the text and the photos:');
+  });
+
+  it('leaves stored copy without an introducer as it was, paragraphs included', () => {
+    const plain = { payload: { exactCopy: [{ text: 'Speakers:' }, { text: 'Dr. Aram\nDr. Shno' }] } };
+    expect(savedDesignCopy(plain, '').copy).toEqual(['Speakers:', 'Dr. Aram\nDr. Shno']);
+  });
+
+  it('names a task titled from its introducer "your design" to the requester, and any other title as before', () => {
+    expect(designName('KAAE: Here is the text and the photos:…', 'en')).toBe(designName('', 'en'));
+    expect(designName('KAAE: KAAE K-12 Pilot Study…', 'en')).toBe('<b>KAAE K-12 Pilot Study…</b>');
   });
 });

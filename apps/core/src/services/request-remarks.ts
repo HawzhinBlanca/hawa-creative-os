@@ -1,3 +1,4 @@
+import { normalizeKurdishIncomingText } from '@hawa/integrations';
 /**
  * A closing remark addressed to the designer is not copy.
  *
@@ -35,4 +36,52 @@ export function peelTrailingRemarks(text: string): { copy: string; remarks: stri
     remarks.unshift(paragraphs.pop()!.trim());
   }
   return { copy: paragraphs.join('\n\n').trim(), remarks: remarks.join('\n') };
+}
+
+/**
+ * A line that introduces the copy is an instruction, never copy (production, 2026-09-29).
+ *
+ * A Telegram album caption ended its instructions with "Here is the text and the photos:" on a line
+ * of its own. Intake took that line for copy: the task was titled "KAAE: Here is the text and the
+ * photos:…" and the line became copy block 0 of the design. The rule: a line that ends with a colon,
+ * speaks of the text (text, copy, wording, words, content; Sorani دەق, نووسین, ناوەڕۆک, وشە) and is
+ * addressed to the designer — it opens with here/below/this/please/use/"I want"…, or ئەمە/ئەمانە/ئەم/
+ * تکایە…, or it is the bare noun ("Text:", "Text to use:", "دەقەکە:", "دەق و وێنەکان:") — introduces
+ * the copy. A line of real copy that ends with a colon ("Speakers:", "Date:", "Mission:",
+ * "Content Strategy Workshop:", "وشەی سەرۆک:") names no text, or names it with other words after it,
+ * and is not one.
+ */
+const EN_TEXT_WORD = String.raw`(?:texts?|copy|wording|words|contents?)`;
+const EN_COPY_INTRODUCER = new RegExp(
+  String.raw`^(?:and\s+|so\s+)?(?:` +
+    // "Here is the text and the photos:", "Please use this text:", "Below is the copy:"
+    String.raw`(?:here|below|following|this|these|please|kindly|use|add|put|write|include|(?:i|we)\s+(?:want|need|would\s+like|have))\b` +
+    String.raw`[^\n:]{0,60}?\b${EN_TEXT_WORD}\b[^\n:]{0,60}` +
+    `|` +
+    // "Text:", "The text:", "Text to use:", "Copy for the poster:", "The text and the photos:"
+    String.raw`(?:the\s+|our\s+|my\s+)?(?:following\s+)?${EN_TEXT_WORD}` +
+    String.raw`(?:\s+(?:and|&)\s+(?:the\s+)?(?:photos?|pictures?|images?|pics?|logos?))?` +
+    String.raw`(?:\s+(?:to|for|below|here|is|are|goes|of\s+(?:the|this|our|my))\b[^\n:]{0,50})?` +
+  String.raw`)\s*[:：]$`,
+  'iu'
+);
+const CKB_COPY_INTRODUCER = new RegExp(
+  `^(?:` +
+    // "ئەمە دەقەکەیە:", "ئەمانە دەقەکانن:", "ئەم دەقە بنووسە:", "تکایە ئەم نووسینە دابنێ:"
+    String.raw`(?:ئەمەش|ئەمە|ئەمانە|ئەم|ئەوە|ئەوانە|ئەو|تکایە|لێرەدا|لێرە|لەخوارەوە|لە\s+خوارەوە)(?![\p{L}\p{M}])` +
+    String.raw`[^\n:]{0,60}?(?:دەق|نووسین|ناوەڕۆک|وشە)[^\n:]{0,40}` +
+    `|` +
+    // "دەقەکە:", "نووسینەکە:", "دەقەکان:", "دەق:", "دەق و وێنەکان:"
+    String.raw`(?:دەق|نووسین|ناوەڕۆک)(?:ەکە|ەکان)?(?:\s+و\s+وێنە[\p{L}\p{M}]*)?` +
+    `|` +
+    // "دەقەکەی خوارەوە:", "دەقی پۆستەرەکە:"; not "وشەی سەرۆک:" (the president's word), a heading
+    String.raw`(?:دەق|نووسین)(?:ەکەی|ەکانی|ی)\s+[^\n:]{1,40}` +
+  String.raw`)\s*[:：]$`,
+  'u'
+);
+
+export function isCopyIntroducer(line: string): boolean {
+  const text = normalizeKurdishIncomingText(String(line || '')).replace(/[​-‏‪-‮⁦-⁩]/g, '').trim();
+  if (!text || text.length > 120) return false;
+  return EN_COPY_INTRODUCER.test(text) || CKB_COPY_INTRODUCER.test(text);
 }

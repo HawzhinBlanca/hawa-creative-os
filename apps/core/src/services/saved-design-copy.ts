@@ -1,5 +1,5 @@
 import { CanvaFlowError } from './canva-flow-error.js';
-import { isDesignerRemark, peelTrailingRemarks } from './request-remarks.js';
+import { isCopyIntroducer, isDesignerRemark, peelTrailingRemarks } from './request-remarks.js';
 
 /**
  * Only labelled, separately saved Desk fields establish a language. Historical exactCopy.language
@@ -113,10 +113,16 @@ function savedDesignCopyAsSent(payload:any,description:string):{copy:string[];in
     // Requests saved before 2026-09-22 kept a closing remark to the designer ("I attached the
     // panelists pictures and a reference for the graphic") as their last copy block. It is read as
     // an instruction here, by the same rule intake now applies, so those requests are fixed too.
-    const texts=blocks.map(b=>b.text);
+    let texts=blocks.map(b=>b.text);
     const remarks:string[]=[];
     while(texts.length>1&&isDesignerRemark(texts[texts.length-1]))remarks.unshift(texts.pop()!.trim());
-    const instructions=[String(p.designInstructions||body.designInstructions||''),...remarks].filter(Boolean).join('\n');
+    // Requests saved before 2026-09-29 (task ba4469f2, the owner's report cover) kept the line that
+    // introduces the text ("Here is the text and the photos:") as copy block 0, and the lines after it
+    // in paragraphs. It is an instruction, and each line after it one block, by the rule intake now
+    // applies (ADR-142), so a design made again of such a request prints only the requester's text.
+    const introducer=texts.length>1&&!texts[0].trim().includes('\n')&&isCopyIntroducer(texts[0])?texts[0].trim():null;
+    if(introducer)texts=texts.slice(1).flatMap((text:string)=>text.split('\n').map((line:string)=>line.trim()).filter(Boolean));
+    const instructions=[String(p.designInstructions||body.designInstructions||''),introducer,...remarks].filter(Boolean).join('\n');
     return {copy:texts,instructions};
   }
   if(body.headlineEn&&typeof body.copyEn==='string')return {copy:[body.headlineEn,body.copyEn].filter(Boolean),instructions:String(body.designInstructions||'')};
