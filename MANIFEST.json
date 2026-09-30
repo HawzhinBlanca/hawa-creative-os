@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T21:45:25Z",
+  "generatedAt": "2026-09-30T22:57:40Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 664,
+  "fileCount": 668,
   "files": [
     {
       "path": ".dockerignore",
@@ -893,6 +893,11 @@
       "bytes": 4748
     },
     {
+      "path": "adrs/184_durable_requester_design_holds.md",
+      "sha256": "26fb3c929c1f4210dbb15e94d1ef4b0fb15c20158ab9d849ded3828e62f266f2",
+      "bytes": 2341
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -909,8 +914,8 @@
     },
     {
       "path": "api/task-controls.openapi.json",
-      "sha256": "2f2a966ef74ce3945ce66daef462dfdf4449d6c5968161f5bb56d163274a3e0c",
-      "bytes": 12539
+      "sha256": "b863fb647555388f97fea56ad472ec169692b83dddfa3180a1e24adad7cd97ce",
+      "bytes": 12754
     },
     {
       "path": "config/asset-workflows.example.yaml",
@@ -1544,8 +1549,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "967c55937fb24a842b08495cffc62e93561af979fa3a8379d6d2796085fab0c5",
-      "bytes": 57562
+      "sha256": "eebf98bb622068ab982cfcfe0b7c6d50bc0fa3a8d93c6349a0b936d89ea85fb3",
+      "bytes": 58687
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2003,6 +2008,16 @@
       "bytes": 3384
     },
     {
+      "path": "plans/requester-hold-reliability-2026-10-01/LOCAL_PROOF.json",
+      "sha256": "e4ee17b2f1935095645e934318b1922ed19eac3f431fa809eaf9818681b9b216",
+      "bytes": 3261
+    },
+    {
+      "path": "plans/requester-hold-reliability-2026-10-01/PLAN.md",
+      "sha256": "9565bd209b1344bd452d0bb285138dc61b9b83385bf771ccf7e334d1a5cc825f",
+      "bytes": 1798
+    },
+    {
       "path": "plans/requirements.csv",
       "sha256": "919555f9e0b586c227a6537387c08a25108e912b2cee566ac3744a8028e1077a",
       "bytes": 15546
@@ -2449,8 +2464,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "5c6e02c4e3fbce4df75d6c6292f60d642c175eeab915e75c5a68af7f74404028",
-      "bytes": 557868
+      "sha256": "591171f9ea2d2ddc8d555bfc78895a3999d2c0562c16dcc98e5ac6216181d404",
+      "bytes": 561234
     },
     {
       "path": "plans/user-stories.csv",
@@ -2616,6 +2631,11 @@
       "path": "runbooks/PRODUCTION_RELEASE_DIRECTORIES.md",
       "sha256": "00e8b5ee53894b577e7f15ae0232f7309f64108860df87996fec532dc1a84033",
       "bytes": 24467
+    },
+    {
+      "path": "runbooks/REQUESTER_DESIGN_HOLDS.md",
+      "sha256": "9d7c07887a4da0728fa8d537170c47078ea6b57226b994d80fe3d3c11bab936e",
+      "bytes": 2064
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",

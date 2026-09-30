@@ -15,7 +15,7 @@ export function isModelCallHoldError(err: unknown): boolean {
       'code' in err && (err.code === 'MODEL_CALL_ADMISSION_CONFLICT' ||
         err.code === 'MODEL_STAGE_REPLAY_UNSAFE' || err.code === 'STUDIO_VISUAL_INPUTS_UNSAFE' || err.code === 'BRIEF_CONTRACT_CHANGED' || err.code === 'STUDIO_RUN_STATUS_CHANGED' || err.code === 'NATIVE_REVISION_HANDOFF_REQUIRED' ||
         err.code === 'MODEL_CALL_FINALIZATION_CONFLICT' || err.code === 'MODEL_CALL_ACCOUNTING_FAILED' ||
-        err.code === 'TASK_GENERATION_BLOCKED' ||
+        err.code === 'TASK_PAUSED' || err.code === 'TASK_GENERATION_BLOCKED' ||
         err.code === 'STUDIO_BUDGET_INVALID' || err.code === 'STUDIO_BUDGET_UNQUOTABLE' ||
         err.code === 'STUDIO_BUDGET_RESERVATION_EXCEEDED' || err.code === 'STUDIO_BUDGET_HISTORY_INCOMPLETE'));
 }

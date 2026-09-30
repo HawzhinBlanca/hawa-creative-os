@@ -46,7 +46,7 @@ export interface OpenLifecycleResult {
 }
 
 export class LifecycleProjectionConflict extends Error {
-  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR' | 'APPROVAL_EVIDENCE_CHANGED' | 'INVALID_CONFIRMATION' | 'WRONG_CHAT' | 'APPROVAL_CHANGED' | 'EVIDENCE_CHANGED' | 'INCOMPLETE_OBSERVATION' | 'EVIDENCE_MISMATCH' | 'PARENT_BRIEF_MISSING' | 'DAILY_CAP_REACHED' | 'RETRY_LIMIT_REACHED', message: string) {
+  constructor(readonly code: 'TASK_PAUSED' | 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR' | 'APPROVAL_EVIDENCE_CHANGED' | 'INVALID_CONFIRMATION' | 'WRONG_CHAT' | 'APPROVAL_CHANGED' | 'EVIDENCE_CHANGED' | 'INCOMPLETE_OBSERVATION' | 'EVIDENCE_MISMATCH' | 'PARENT_BRIEF_MISSING' | 'DAILY_CAP_REACHED' | 'RETRY_LIMIT_REACHED', message: string) {
     super(message);
   }
 }
@@ -407,10 +407,13 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     if (request.owner !== 'restate' || request.stage !== 'designing' || request.current_task_id !== taskId) {
       throw new LifecycleProjectionConflict('WRONG_STAGE', 'This request is not designing the named task');
     }
-    const task = await trx.selectFrom('tasks').select(['id', 'request_id', 'client_id', 'title', 'current_design_revision_id'])
-      .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirst();
+    const task = await trx.selectFrom('tasks').select(['id', 'request_id', 'client_id', 'title', 'state', 'current_design_revision_id'])
+      .where('tenant_id', '=', tenantId).where('id', '=', taskId).forUpdate().executeTakeFirst();
     if (!task || task.request_id !== requestId) {
       throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The task is not owned by this request');
+    }
+    if (task.state === 'paused') {
+      throw new LifecycleProjectionConflict('TASK_PAUSED', 'The admitted outcome is retained; the office must resume the task before review advances.');
     }
     const status = report.status;
     const hasDraft = outcomeHasDraft(status, report.designId);

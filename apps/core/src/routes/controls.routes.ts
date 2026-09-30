@@ -34,7 +34,7 @@ export function registerControlsRoutes(ctx: RouteContext): void {
     if (!['operator', 'administrator', 'art_director', 'creative_director', 'designer'].includes(auth.role || '')) {
       return problem(c, 403, 'Task Control Forbidden', 'An office operator or designer is required.');
     }
-    const lifecycleRefusal = await rejectLegacyTaskDesignWrite(ctx, c, auth);
+    const lifecycleRefusal = control === 'resume' ? null : await rejectLegacyTaskDesignWrite(ctx, c, auth);
     if (lifecycleRefusal) return lifecycleRefusal;
     if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
     if (!db) return problem(c, 503, 'Database Required', 'Task controls require a durable checkpoint.');

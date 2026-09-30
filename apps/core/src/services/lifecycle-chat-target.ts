@@ -200,7 +200,9 @@ const isLateStage = (value: unknown): value is LateChangeStage =>
 export interface LateRequesterChange {
   requestId: string; taskId: string; requestRev: number; requestStage: LateChangeStage; text: string;
   /** ADR-144: a change (the default) or a request to cancel. */
-  kind?: 'change' | 'cancel';
+  kind?: 'change' | 'cancel' | 'hold';
+  /** Only true after the task's durable pause and this note commit together. */
+  held?: boolean;
   /** ADR-144: what the requester was told, given again word for word on a replay. */
   answer?: string;
   /** ADR-144: the request's title, for the office's alert. */
@@ -212,14 +214,16 @@ const ROUTING_CODES = new Set(['AMBIGUOUS_REQUEST', 'STALE_REQUEST_REPLY', 'DAIL
 const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function parseLateChange(payload: Record<string, unknown>): LateRequesterChange | null {
-  const { requestId, taskId, requestRev, requestStage, text, kind, answer, title } = payload;
+  const { requestId, taskId, requestRev, requestStage, text, kind, answer, title, held } = payload;
   if (typeof requestId !== 'string' || !UUID_TEXT.test(requestId) || typeof taskId !== 'string' ||
       !UUID_TEXT.test(taskId) || !Number.isSafeInteger(requestRev) || !isLateStage(requestStage) ||
       typeof text !== 'string' || !text.trim() ||
-      (kind !== undefined && kind !== 'change' && kind !== 'cancel') ||
+      (kind !== undefined && kind !== 'change' && kind !== 'cancel' && kind !== 'hold') ||
+      (held !== undefined && (typeof held !== 'boolean' || kind !== 'hold')) ||
       (answer !== undefined && (typeof answer !== 'string' || !answer || answer.length > 4000)) ||
       (title !== undefined && (typeof title !== 'string' || title.length > 500))) return null;
   return { requestId, taskId, requestRev: requestRev as number, requestStage, text,
+    ...(held !== undefined ? { held } : {}),
     ...(kind ? { kind } : {}), ...(answer ? { answer } : {}), ...(title !== undefined ? { title } : {}) };
 }
 
@@ -338,7 +342,9 @@ export function lateChangeOfficeAlert(late: LateRequesterChange, requesterChatId
       ? 'The design had already been delivered.'
       : 'Deliver will ask someone in the Desk to read and acknowledge these words first.';
   const named = late.title ? ` "${late.title}"` : '';
-  const opening = late.kind === 'cancel'
+  const opening = late.kind === 'hold'
+    ? `The requester in chat ${requesterChatId} asked to hold the design${named}. ${late.held ? 'New automatic design work is paused. Read their words before resuming the saved task checkpoint in the Desk; an admitted call may still finish.' : 'The request had moved beyond the automatic pause boundary; please handle the hold and tell the requester what can be stopped.'}`
+    : late.kind === 'cancel'
     ? `The requester in chat ${requesterChatId} asked to cancel the design${named} while it was ${STAGE_WORDS[late.requestStage]}. Nothing was stopped automatically.`
     : late.requestStage === 'designing' || late.requestStage === 'manual' || late.requestStage === 'awaiting_answer'
       ? `The requester in chat ${requesterChatId} sent a change for the design${named} while it was ${STAGE_WORDS[late.requestStage]}. It was not applied to any design; fold it into the next round or the review.`
@@ -395,4 +401,3 @@ export async function acknowledgeLateChange(trx: Kysely<Database>, tenantId: str
       ${createHash('sha256').update(payload).digest('hex')}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
 }
-

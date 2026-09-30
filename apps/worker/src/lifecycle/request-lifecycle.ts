@@ -227,6 +227,8 @@ export interface AutomaticOpenContext {
   key: string;
   get(name: string): Promise<LifecycleState | null>;
   run<T>(name: string, action: () => Promise<T>): Promise<T>;
+  /** Durable wait for an explicit task hold; absent only in plain test harnesses. */
+  sleep?(millis: number): Promise<void>;
   set(name: string, value: LifecycleState): void;
   send(message: OutboundMessage): void;
   startDesign(input: DesignRunInput): void;
@@ -529,7 +531,7 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
   }
 
   if (prior.stage !== 'designing') throw invalid('request is not designing');
-  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+  const project = () => core.post<{
     v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer';
     status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
     question?: { id: string; text: string; options: string[] };
@@ -540,7 +542,28 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
     v: 1, expectedRev: prior.rev, rev: nextRev,
     key: `${event.requestId}:${nextRev}:designFinished:${event.runId}`,
     ops: [{ kind: 'recordOutcome', taskId: event.taskId, runId: event.runId, report: event.report }],
-  }));
+  });
+  let held = 0;
+  let projected: Awaited<ReturnType<typeof project>>;
+  for (;;) {
+    const attempt = await ctx.run(held ? `project:${nextRev}:after-task-pause:${held}` : `project:${nextRev}`, async () => {
+      try { return await project(); }
+      catch (error) {
+        if (/\bHTTP 409 TASK_PAUSED\b/.test(String((error as Error)?.message))) return { __hawaTaskPaused: true as const };
+        throw error;
+      }
+    });
+    if (!attempt || typeof attempt !== 'object') throw new Error('Core did not return a valid design outcome projection');
+    if ('__hawaTaskPaused' in attempt) {
+      if (attempt.__hawaTaskPaused !== true) throw new Error('Core did not return a valid design pause checkpoint');
+      if (!ctx.sleep) throw new Error('TASK_PAUSED: the design outcome remains pending until the office resumes it');
+      held++;
+      await ctx.sleep(Math.min(300_000,30_000 * 2 ** Math.min(held - 1,4)));
+      continue;
+    }
+    projected = attempt;
+    break;
+  }
   if (projected?.v !== 1 || projected.requestId !== event.requestId ||
       projected.taskId !== event.taskId || projected.rev !== nextRev ||
       !['in_review', 'manual', 'awaiting_answer'].includes(projected.stage) ||
@@ -1138,6 +1161,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             key: ctx.key,
             get: (name) => ctx.get<LifecycleState>(name),
             run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
+            sleep: millis => ctx.sleep(millis),
             set: (name, value) => ctx.set(name, value),
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
               .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),

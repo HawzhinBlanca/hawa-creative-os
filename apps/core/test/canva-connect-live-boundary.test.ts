@@ -72,12 +72,12 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
   const bind=()=>tx(d=>new CanvaBindingRepository(d).createBinding({tenantId:tenant,taskId,clientId,canvaDesignId:designId,editUrl:`https://www.canva.com/design/${designId}/edit`}));
   it.each(['complete','cancelled','rejected','paused','approved','publishing'])('refuses blank creation and new imports on a %s task',async state=>{
     await sql`UPDATE hawa.tasks SET state=${state}::hawa.task_state WHERE id=${taskId}::uuid`.execute(db);
-    await expect(service.createDesign(scope,taskId,'closed-blank-key',1080,1080)).rejects.toMatchObject({code:'TASK_GENERATION_BLOCKED',status:409});
+    await expect(service.createDesign(scope,taskId,'closed-blank-key',1080,1080)).rejects.toMatchObject({code:state==='paused'?'TASK_PAUSED':'TASK_GENERATION_BLOCKED',status:409});
     const sourceBytes=Buffer.from('Synthetic editable source bytes long enough for transport.');
     const {createHash}=await import('node:crypto');
     await expect(service.importEditableDesign(scope,taskId,'closed-import-key',{
       bytes:sourceBytes,sha256:createHash('sha256').update(sourceBytes).digest('hex'),manifest:{copy:['Exact copy']},
-    })).rejects.toMatchObject({code:'TASK_GENERATION_BLOCKED',status:409});
+    })).rejects.toMatchObject({code:state==='paused'?'TASK_PAUSED':'TASK_GENERATION_BLOCKED',status:409});
     expect(createCalls).toBe(0);
     expect((await sql`SELECT id FROM hawa.canva_remote_operations WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
   });

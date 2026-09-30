@@ -196,7 +196,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
     expect(await repo.getCallsForRun(runId, tenantA)).toHaveLength(1);
   });
 
-  it.each(['cancellation', 'abandonment'])('serializes call admission behind %s and still finalizes an earlier admitted call', async closure => {
+  it.each(['cancellation', 'abandonment', 'pause'])('serializes call admission behind %s and still finalizes an earlier admitted call', async closure => {
     const taskId = await createTask(tenantA, clientA);
     const runId = randomUUID();
     await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
@@ -212,6 +212,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       await withRlsContext(db, { tenantId: tenantA }, async trx => {
         await sql`SELECT id FROM hawa.tasks WHERE id=${taskId}::uuid FOR UPDATE`.execute(trx);
         if (closure === 'cancellation') await sql`UPDATE hawa.tasks SET state='cancelled' WHERE id=${taskId}::uuid`.execute(trx);
+        else if (closure === 'pause') await sql`UPDATE hawa.tasks SET state='paused' WHERE id=${taskId}::uuid`.execute(trx);
         else await repo.updateRunStatus(runId, tenantA, 'abandoned', {}, trx);
         pending = new DesignStudioRepository(peer).recordCallStart(call(randomUUID(), 2)).catch(error => error);
         // Confirm the peer actually reached the task lock before releasing cancellation.
@@ -227,7 +228,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
         }
         expect(blocked).toBe(true);
       });
-      expect(await pending).toMatchObject({ code: 'TASK_GENERATION_BLOCKED' });
+      expect(await pending).toMatchObject({ code: closure==='pause'?'TASK_PAUSED':'TASK_GENERATION_BLOCKED' });
       await repo.finalizeCall({ id: admittedId, tenantId: tenantA, status: 'ok',
         inputTokens: 100, outputTokens: 10, usdEstimate: 0.01, responseId: 'synthetic-paid-reply' });
       expect(await repo.getCallsForRun(runId, tenantA)).toMatchObject([{ id: admittedId, status: 'ok', response_id: 'synthetic-paid-reply' }]);

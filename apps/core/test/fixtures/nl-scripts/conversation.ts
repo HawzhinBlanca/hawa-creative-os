@@ -338,10 +338,10 @@ export const CONVERSATION_SCRIPTS: Script[] = [
   {
     id: 'S086', title: '"wait, don\'t make it yet" is heard as "hold it", not as an added change', kinds: ['cancel', 'mind'],
     natural: 'The requester hears the office will hold the design for the new date; the office is asked to hold it (the automatic draft is not left running as if nothing was said).',
-    open: 'a request to hold a design is kept as a change note ("I have added that to ..."); the automatic draft carries on',
     async play(p) {
       await p.say(KAAE_EVENING);
       const hold = await p.say("wait, don't make it yet, we are changing the date", { after: 60_000 });
+      expect(await p.h.taskState(p.request())).toMatchObject({ state: 'paused' });
       expect(p.answer(hold)).toMatch(/hold|wait|pause/i);
     },
   },

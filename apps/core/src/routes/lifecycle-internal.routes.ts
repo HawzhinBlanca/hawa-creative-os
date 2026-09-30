@@ -46,6 +46,7 @@ import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
+import { pauseRequesterDesign } from '../services/requester-hold.js';
 import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
   readRevisionPhotoDecision, recordRevisionPhotoDecision,
   readRoutingRefusal, recordRoutingRefusal,
@@ -1333,11 +1334,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                         : albumUsed === 'added' ? `[The requester sent ${admittedAlbum!.ref.images.length} photos with this. They were added to the design's files.]`
                           : admittedAlbum ? '[The requester also sent an album of photos with these words. They are in the Telegram chat.]' : '';
                     const words = photoLine ? `${photoWithoutWords ? '(no words)' : plan.words}\n${photoLine}` : plan.words;
+                    const held = plan.note === 'hold' && await pauseRequesterDesign(trx,TENANT,
+                      {requestId:target.requestId,taskId:target.currentTaskId,requestRev:target.rev,requestStage:target.stage,text:words},update.update_id);
                     const said = photoWithoutWords && material ? say(MEDIA_MESSAGES.photoPassed, lang, { title })
-                      : noteText(plan.note, target.stage, target.title, lang);
+                      : noteText(plan.note, target.stage, target.title, lang, held);
                     const late: LateRequesterChange = { requestId: target.requestId, taskId: target.currentTaskId,
                       requestRev: target.rev, requestStage: target.stage as LateChangeStage, text: words,
-                      kind: plan.note, title: shortTitle(target.title), answer: said };
+                      kind: plan.note, ...(plan.note === 'hold' ? {held} : {}), title: shortTitle(target.title), answer: said };
                     const refusal = await recordRoutingRefusal(trx, TENANT, update.update_id,
                       { code: 'LATE_REQUESTER_CHANGE', chatId, payloadHash, late });
                     if (refusal.payloadHash !== payloadHash || refusal.chatId !== chatId ||

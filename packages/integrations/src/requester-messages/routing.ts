@@ -11,6 +11,10 @@
 import type { PhraseBook } from './types.js';
 
 export const ROUTING_MESSAGES = {
+  statusHeld: {
+    en: '{title} is paused at your request. New design work is waiting for the office to resume it; work already admitted may still finish.',
+    ckb: '{title} بە داواکاریی تۆ ڕاگیراوە. کاری نوێی دیزاین چاوەڕێیە ئۆفیسەکە دووبارە دەستی پێ بکاتەوە؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت.',
+  },
   // Where a design stands ("how is my poster?", "when will it be ready?").
   statusDesigning: {
     en: '{title} is being designed right now. The draft usually takes a few minutes; the office checks it before it comes to you.',
@@ -114,6 +118,14 @@ export const ROUTING_MESSAGES = {
   cancelAsked: {
     en: "OK. I've asked the office to cancel {title}.",
     ckb: 'باشە. داوام لە ئۆفیسەکە کرد کە {title} هەڵبوەشێنێتەوە.',
+  },
+  holdConfirmed: {
+    en: "I've paused {title}. New design work will wait until the office resumes it; work already in progress may still finish.",
+    ckb: '{title} ڕاگیرا. کاری نوێی دیزاین چاوەڕێ دەکات تا ئۆفیس دووبارە دەستی پێبکات؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت.',
+  },
+  holdAsked: {
+    en: "I've asked the office to hold {title}. I'll keep your message with the design.",
+    ckb: 'داوام لە ئۆفیس کرد {title} ڕابگرێت. نامەکەت لەگەڵ دیزاینەکە دەپارێزم.',
   },
   changeAddedWhileDesigning: {
     en: "Got it. I've added that to {title}; the office will see it before the design is sent to you.",

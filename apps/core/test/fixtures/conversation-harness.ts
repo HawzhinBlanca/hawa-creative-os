@@ -122,6 +122,13 @@ export class ConversationHarness {
   private cause: number | null = null;
   private step = -1;
   readonly app: ReturnType<typeof createApp>;
+  /** Inspect authoritative task state; a polite answer alone is not a durable hold. */
+  async taskState(requestId: string) {
+    return withRlsContext(this.o.db, SCOPE, async trx => (await sql<{state:string;version:number}>`
+      SELECT t.state,t.version::integer AS version FROM hawa.tasks t
+      JOIN hawa.requests r ON r.tenant_id=t.tenant_id AND r.current_task_id=t.id
+      WHERE r.tenant_id=${TENANT}::uuid AND r.request_id=${requestId}::uuid`.execute(trx)).rows[0]);
+  }
   private readonly core: ReturnType<typeof createCoreClient>;
   private readonly internal: { post<T>(path: string, body: unknown): Promise<T> };
   private readonly senderDeps: TelegramSenderDeps;

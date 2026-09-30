@@ -215,7 +215,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     await sql`UPDATE hawa.tasks SET state=${state}::hawa.task_state WHERE id=${taskId}::uuid`.execute(db);
     const {planner,api}=make(fetcher);
     await expect(planner.generate(scope,taskId,`closed-${randomUUID()}`,1200,1697))
-      .rejects.toMatchObject({code:'TASK_GENERATION_BLOCKED',status:409});
+      .rejects.toMatchObject({code:state==='paused'?'TASK_PAUSED':'TASK_GENERATION_BLOCKED',status:409});
     expect(fetcher).not.toHaveBeenCalled();
     expect(api.importEditableDesign).not.toHaveBeenCalled();
     expect((await sql`SELECT id FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
@@ -863,7 +863,8 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
       const paused=await intake(),pausedKey='k0-paused-'+randomUUID();
       const pausedClaim=await killAtPlannerPoint(paused,pausedKey,'core.planner.after-claim');
       await sql`UPDATE hawa.tasks SET state='paused'::hawa.task_state WHERE id=${paused}::uuid`.execute(db);
-      expect(await planner.resume(scope,paused,pausedClaim.planId)).toMatchObject({status:'failed',message:'TASK_GENERATION_BLOCKED'});
+      await expect(planner.resume(scope,paused,pausedClaim.planId)).rejects.toMatchObject({code:'TASK_PAUSED'});
+      expect((await sql<{status:string}>`SELECT status FROM hawa.canva_design_plans WHERE id=${pausedClaim.planId}::uuid`.execute(db)).rows[0]?.status).toBe('planning');
       expect(never).not.toHaveBeenCalled();expect(api.importEditableDesign).not.toHaveBeenCalled();
       expect((await sql<any>`SELECT id FROM hawa.canva_planner_calls WHERE task_id IN (${changed}::uuid,${paused}::uuid)`.execute(db)).rows).toHaveLength(0);
     },45000);

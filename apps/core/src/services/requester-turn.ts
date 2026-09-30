@@ -25,7 +25,7 @@ import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, request
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
 
-export type TurnIntent = 'acknowledgement' | 'status' | 'approval' | 'delivery_request' | 'cancel' | 'deadline' |
+export type TurnIntent = 'acknowledgement' | 'status' | 'approval' | 'delivery_request' | 'cancel' | 'hold' | 'deadline' |
   'change' | 'new_brief' | 'conversation' | 'unclear';
 
 export interface IntentReading {
@@ -70,6 +70,8 @@ export interface ChatRequestView {
   question: { id: string; text: string; options: string[] } | null;
   /** The Telegram user who sent its brief, when known. */
   requesterId: string | null;
+  /** Current task is at its requester hold checkpoint, rather than making a draft. */
+  requesterHold?: boolean;
 }
 
 /** A question this bot asked the sender, still open: its own update, the words it holds, the options. */
@@ -92,7 +94,7 @@ export type TellNote = 'approval' | 'deadline' | 'delivery';
 export type TurnPlan =
   | { kind: 'open'; text: string; instructionOnly: boolean; resolves?: number }
   | { kind: 'revise'; requestId: string; directive: string; resolves?: number }
-  | { kind: 'note'; note: 'change' | 'cancel'; requestId: string; words: string; resolves?: number }
+  | { kind: 'note'; note: 'change' | 'cancel' | 'hold'; requestId: string; words: string; resolves?: number }
   | { kind: 'tell'; note: TellNote; requestId: string; words: string; resolves?: number }
   | { kind: 'reply'; what: 'thanks' | 'status' | 'nothing-to-change'; requestIds: string[] }
   /**
@@ -202,6 +204,19 @@ const CANCEL_EN = new RegExp(
 /** Sorani: cancel it, stop it, not needed, we don't need it, don't make it, leave it, give it up. */
 const CANCEL_CKB = ['هەڵیوەشێنەوە', 'هەڵبوەشێنەوە', 'هەڵوەشێنەوە', 'هەڵیبوەشێنەوە', 'ڕایبگرە', 'بیوەستێنە',
   'ڕاوەستە', 'پێویست ناکات', 'پێویستمان نییە', 'پێویستم نییە', 'مەیکە', 'لێی گەڕێ', 'وازی لێ بێنە'];
+
+/** A temporary stop of the design, never a quoted instruction or a pause of a design element. */
+export function readsAsHold(text: string): boolean {
+  const t = corePhrase(text);
+  if (!t || t.length > 500) return false;
+  // Pronouns must name the whole job, not a design element ("hold this button", "pause it animation").
+  const wholeJobTail = '(?=$|[\\s,.!:-]+(?:please\\b|for\\s+now\\b|until\\b|while\\b|because\\b|we\\b|i\\b)|[,.!:-])';
+  return /^(?:(?:wait|hold\s+on|hang\s+on)[\s,.!:-]+)?(?:don['’]?t|do\s+not)\s+(?:make|start|continue|proceed\s+with)\s+(?:it|this|that|the\s+(?:design|poster|draft))\s+(?:yet|for\s+now)\b/i.test(t) ||
+    new RegExp('^(?:hold|pause)\\s+(?:it|this|that|the\\s+(?:design|poster|draft))' + wholeJobTail, 'i').test(t) ||
+    new RegExp('^put\\s+(?:it|this|that|the\\s+(?:design|poster|draft))\\s+on\\s+hold' + wholeJobTail, 'i').test(t) ||
+    /^(?:wait|hold\s+on|hang\s+on)[\s!.]*$/i.test(t) ||
+    /^(?:ڕایبگرە|ڕاوەستە)(?:[\s،,.!]|$)/u.test(t);
+}
 
 const STATUS_EN: RegExp[] = [
   /^(?:so\s+)?when\s+(?:will|would|can|could|is|are|do|does|should|shall)\b[^?]*\b(?:ready|done|finish(?:ed)?|complete(?:d)?|be\s+sent|be\s+delivered|arrive|get\s+(?:it|them|the\s+\p{L}+)|receive|see\s+(?:it|them|the\s+\p{L}+)|have\s+(?:it|them|the\s+\p{L}+))\b/iu,
@@ -408,6 +423,7 @@ export function readIntentByRules(text: string): IntentReading {
   if (readsAsDeliveryRequest(t, core)) return rules('delivery_request', 'Asks the office about the files (again, a format, an email, a resolution)');
   if (readsAsApproval(t, core)) return rules('approval', 'Approval words; the office decides');
   if (isAcknowledgement(t) || (core && isAcknowledgement(core) && core.length <= 60)) return rules('acknowledgement', 'Thanks, an OK or a receipt');
+  if (readsAsHold(core)) return rules('hold', 'Asks to pause the current design');
   if (readsAsCancel(core)) return rules('cancel', 'Asks to cancel or stop');
   if (readsAsStatus(core)) return rules('status', 'Asks how a design is going');
   if (readsAsDeadline(t, core)) return rules('deadline', 'Gives a deadline or urgency');
@@ -671,6 +687,7 @@ function applyTo(intent: PendingAsk['intent'], request: ChatRequestView, words: 
   confidence: number | undefined, resolves?: number): TurnPlan | null {
   const r = resolves ? { resolves } : {};
   switch (intent) {
+    case 'hold': return { kind: 'note', note: 'hold', requestId: request.requestId, words, ...r };
     case 'cancel': return { kind: 'note', note: 'cancel', requestId: request.requestId, words, ...r };
     case 'approval': return { kind: 'tell', note: 'approval', requestId: request.requestId, words, ...r };
     case 'deadline': return { kind: 'tell', note: 'deadline', requestId: request.requestId, words, ...r };
@@ -755,6 +772,7 @@ export function planTurn(input: TurnInput): TurnPlan {
       return reading.question ? { kind: 'forward', words, question: true } : { kind: 'conversation' };
     case 'approval':
     case 'deadline':
+    case 'hold':
     case 'cancel': {
       const picked = pickRequest(input, open, true);
       if ('request' in picked) return applyTo(reading.intent, picked.request, words, picked.how, reading.confidence) ?? ask(reading.intent, [picked.request], false);
@@ -858,6 +876,7 @@ export function statusText(requests: ChatRequestView[], lang: Lang, slow: Readon
   return requests.map((r) => {
     const key = r.stage === 'manual' && r.rev >= 3 ? 'manual-waiting' : r.stage;
     const q = r.question?.text ? escapeTelegramHtml(r.question.text) : '';
+    if (r.stage === 'designing' && r.requesterHold) return say(ROUTING_MESSAGES.statusHeld, lang, {title:title(r)});
     if (r.stage === 'designing' && slow.has(r.requestId)) return say(ROUTING_MESSAGES.statusDesigningSlow, lang, { title: title(r) });
     return say(STATUS_LINE[key], lang, { title: title(r), question: q });
   }).join('\n\n');
@@ -868,7 +887,7 @@ export const SLOW_DESIGN_MS = 30 * 60_000;
 
 /** The designs among `requests` still being designed after `SLOW_DESIGN_MS`. */
 export function slowDesigns(requests: ChatRequestView[], now: number): ChatRequestView[] {
-  return requests.filter((r) => r.stage === 'designing' && now - Date.parse(r.activeAt) > SLOW_DESIGN_MS);
+  return requests.filter((r) => r.stage === 'designing' && !r.requesterHold && now - Date.parse(r.activeAt) > SLOW_DESIGN_MS);
 }
 
 /** The office's alert when a requester asks about a design that is taking longer than usual. */
@@ -928,9 +947,10 @@ export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang): s
 }
 
 /** The requester's answer to a note kept on a request (a change or a cancel). */
-export function noteText(note: 'change' | 'cancel', stage: string, requestTitle: string, lang: Lang): string {
+export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requestTitle: string, lang: Lang, held = false): string {
   const t = { title: title({ title: requestTitle }) };
   if (note === 'cancel') return say(ROUTING_MESSAGES.cancelAsked, lang, t);
+  if (note === 'hold') return say(held ? ROUTING_MESSAGES.holdConfirmed : ROUTING_MESSAGES.holdAsked, lang, t);
   if (stage === 'designing' || stage === 'manual' || stage === 'awaiting_answer') return say(ROUTING_MESSAGES.changeAddedWhileDesigning, lang, t);
   if (stage === 'delivering') return say(ROUTING_MESSAGES.changePassedDelivering, lang, t);
   if (stage === 'delivered') return say(ROUTING_MESSAGES.changePassedDelivered, lang, t);

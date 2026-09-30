@@ -65,6 +65,29 @@ function projected(e: OpenAutomaticEvent, taskId = randomUUID()) {
 }
 
 describe('request-owned automatic design', () => {
+  it('keeps an admitted outcome at the pause boundary, including a restart at its durable timer', async () => {
+    const e=automatic(),ctx=new Context(e.requestId) as Context & {sleep:(ms:number)=>Promise<void>};
+    const opened=projected(e);await openAutomaticRequest(ctx,coreInternalFixture(opened),e);
+    const finish:DesignFinishedEvent={v:1,eventId:`dr-finished:dr-${opened.taskId}`,requestId:e.requestId,
+      runId:`dr-${opened.taskId}`,round:0,taskId:opened.taskId,report:{status:'DESIGN_REJECTED',code:'COPY_REQUIRED'}};
+    const core=coreInternalFixture({v:1,requestId:e.requestId,taskId:opened.taskId,rev:2,stage:'manual',
+      status:'DESIGN_REJECTED',message:{text:'The office will follow up.',parseMode:'HTML'}});
+    core.remote.mockResolvedValueOnce(Response.json({code:'TASK_PAUSED'},{status:409}));
+    core.remote.mockResolvedValueOnce(Response.json({code:'TASK_PAUSED'},{status:409}));
+    ctx.sleep=vi.fn(async()=>{throw new Error('synthetic process stop at saved pause timer');});
+    await expect(recordDesignFinished(ctx,core,finish)).rejects.toThrow('synthetic process stop');
+    expect(ctx.state).toMatchObject({stage:'designing',rev:1});
+    expect(ctx.started).toHaveLength(1);expect(ctx.sent.filter(m=>m.key.endsWith(':design-outcome'))).toEqual([]);
+    expect(core.remote).toHaveBeenCalledTimes(1);
+    const sleeps:number[]=[];ctx.sleep=async ms=>{sleeps.push(ms);};
+    expect(await recordDesignFinished(ctx,core,finish)).toMatchObject({stage:'manual',rev:2});
+    expect(sleeps).toEqual([30_000,60_000]);expect(core.remote).toHaveBeenCalledTimes(3);
+    const bodies=core.remote.mock.calls.map(call=>JSON.parse(String(call[1]?.body)));
+    expect(bodies[1]).toEqual(bodies[0]);expect(bodies[2]).toEqual(bodies[0]);
+    expect(ctx.started).toHaveLength(1);expect(ctx.sent.filter(m=>m.key.endsWith(':design-outcome'))).toHaveLength(1);
+    await recordDesignFinished(ctx,core,finish);expect(core.remote).toHaveBeenCalledTimes(3);
+  });
+
   it('starts one stable DesignRun from the persisted projection and can resume after the send boundary', async () => {
     const e = automatic(); const ctx = new Context(e.requestId);
     const answer = projected(e);

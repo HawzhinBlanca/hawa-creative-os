@@ -14,13 +14,18 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
   chatId: string): Promise<ChatRequestView[]> {
   const rows = (await sql<{ request_id: string; rev: string | number; stage: string; current_task_id: string;
     client_id: string | null; title: string | null; created_at: Date | string; updated_at: Date | string;
-    question: ChatRequestView['question']; requester_id: string | null }>`
+    question: ChatRequestView['question']; requester_id: string | null; requester_hold:boolean }>`
     SELECT r.request_id::text, r.rev, r.stage, r.current_task_id::text, t.client_id::text,
       coalesce(root.title, t.title) AS title, r.created_at, r.updated_at,
       p.result->'question' AS question,
-      coalesce(src.payload->'message'->'from'->>'id', opener.sender_id) AS requester_id
+      coalesce(src.payload->'message'->'from'->>'id', opener.sender_id) AS requester_id,
+      (t.state='paused' AND hold.data->>'requesterHoldRequestId'=r.request_id::text
+        AND hold.data->>'requesterHoldRequestRev'=r.rev::text) AS requester_hold
     FROM hawa.requests r
     JOIN hawa.tasks t ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id
+    LEFT JOIN LATERAL (SELECT e.data FROM hawa.task_events e
+      WHERE e.tenant_id=t.tenant_id AND e.task_id=t.id AND e.event_type='task.state_changed'
+      ORDER BY e.aggregate_version DESC LIMIT 1) hold ON t.state='paused'
     LEFT JOIN hawa.tasks root ON root.tenant_id = r.tenant_id AND root.id = r.root_task_id
     LEFT JOIN hawa.lifecycle_projections p ON p.tenant_id = r.tenant_id
       AND p.request_id = r.request_id AND p.rev = r.rev
@@ -48,6 +53,7 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
     createdAt: iso(row.created_at), activeAt: iso(row.updated_at),
     question: row.question && typeof row.question === 'object' && typeof row.question.text === 'string' ? row.question : null,
     requesterId: row.requester_id,
+    ...(row.requester_hold ? {requesterHold:true} : {}),
   }));
 }
 

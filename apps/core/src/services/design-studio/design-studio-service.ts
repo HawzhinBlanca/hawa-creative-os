@@ -2391,7 +2391,7 @@ export class DesignStudioService {
           return { runId, status: run.status };
       }
     } catch (err: any) {
-      if (['TASK_GENERATION_BLOCKED', 'STUDIO_BUDGET_INVALID', 'STUDIO_BUDGET_HISTORY_INCOMPLETE',
+      if (['TASK_PAUSED', 'TASK_GENERATION_BLOCKED', 'STUDIO_BUDGET_INVALID', 'STUDIO_BUDGET_HISTORY_INCOMPLETE',
         'STUDIO_BUDGET_UNQUOTABLE', 'STUDIO_BUDGET_RESERVATION_EXCEEDED'].includes(err?.code)) {
         throw new CanvaFlowError(409, err.code, err.message);
       }

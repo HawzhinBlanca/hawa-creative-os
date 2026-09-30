@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { continuesBrief } from '../src/services/lifecycle-brief-parts.js';
+import { readsAsHold } from '../src/services/requester-turn.js';
+import { isModelCallHoldError } from '../src/services/design-studio/types.js';
 import { asksForNewDesign, isPlainQuestion, planTurn, readIntentByRules, readsAsBriefContinuation, slowDesigns, statusText,
   withoutBotMentions, type ChatRequestView, type TurnInput } from '../src/services/requester-turn.js';
 
@@ -7,6 +9,23 @@ import { asksForNewDesign, isPlainQuestion, planTurn, readIntentByRules, readsAs
  * ADR-182: the rules behind the natural-language stress suite's fixes (natural-language-stress.test.ts
  * plays the conversations; these pin the readings). Sorani lines carry their meaning in a comment.
  */
+describe('temporary holds are a workflow instruction', () => {
+  it.each(["wait, don't make it yet, we are changing the date", 'pause the design please',
+    'hold it until we confirm the date', 'put the poster on hold', 'wait', 'ڕاوەستە'])('%s holds', words => {
+    expect(readsAsHold(words)).toBe(true);
+    expect(readIntentByRules(words).intent).toBe('hold');
+    expect(readsAsBriefContinuation(words, 'KAAE poster')).toBe(false);
+  });
+  it.each(['pause the animation', 'hold this button', 'pause the design animation',
+    'Headline: "wait, don’t make it yet"', 'cancel it', 'never mind, cancel it'])('%s is not a hold', words => {
+    expect(readsAsHold(words)).toBe(false);
+  });
+  it('a paused paid admission propagates through all stage fallbacks', () => {
+    expect(isModelCallHoldError({code:'TASK_PAUSED'})).toBe(true);
+    expect(isModelCallHoldError({code:'PROVIDER_UNAVAILABLE'})).toBe(false);
+  });
+});
+
 describe('cancelling said around other words', () => {
   it.each(['never mind, cancel it', 'no need anymore, thanks', 'no, stop', 'ok forget it, sorry', 'no need anymore',
     // "No, cancel it"
