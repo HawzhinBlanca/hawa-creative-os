@@ -71,7 +71,9 @@ describe('HAWA_WORKER_TOKEN_PREVIOUS during a worker token rotation', () => {
   });
 
   it('every place Core signs for the worker uses the signing secret, not HAWA_WORKER_TOKEN directly', () => {
-    for (const file of ['routes/native-review.routes.ts', 'routes/decisions.routes.ts', 'routes/delivery.routes.ts', 'services/lifecycle-delivery-projection.ts']) {
+    // The Desk's request-owned decision and delivery sign in services/office-decisions.ts since the
+    // ADR-040 addendum (the Desk routes and the office's Telegram turn share them).
+    for (const file of ['routes/native-review.routes.ts', 'services/office-decisions.ts', 'services/lifecycle-delivery-projection.ts']) {
       const source = readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8');
       expect(source, file).toMatch(/workerSigningSecretOf\(\)/);
       expect(source, file).not.toMatch(/process\.env\.HAWA_WORKER_TOKEN/);

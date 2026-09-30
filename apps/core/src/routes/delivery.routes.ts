@@ -13,7 +13,7 @@ import { acknowledgeLateChange, acknowledgedLateChanges, pendingLateChanges } fr
 import { readRequesterSendEvidence } from '../services/requester-send-evidence.js';
 import { confirmRequesterSendVisible } from '../services/requester-send-resolution.js';
 import { LifecycleProjectionConflict } from '../services/lifecycle-projection.js';
-import { workerSigningSecretOf } from '../services/worker-credential.js';
+import { startRequestOwnedDelivery } from '../services/office-decisions.js';
 
 /**
  * Delivery of an approved design and what it left behind (architecture programme 1.3, group G5,
@@ -107,88 +107,9 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       if (!db || !taskRepo || !publicationRepo) return problem(c, 503, 'Database Unavailable',
         'Request-owned delivery requires the persistent request ledger');
       const tenantId = auth.tenantId || DEFAULT_TENANT_ID;
-      const requestId = task.requestId;
-      const current = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, async (trx) => {
-        const request = await trx.selectFrom('requests').select(['rev', 'owner', 'stage', 'current_task_id'])
-          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
-        const approval = await trx.selectFrom('approvals').select(['id', 'design_revision_id'])
-          .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).where('decision', '=', 'approved')
-          .orderBy('created_at', 'desc').executeTakeFirst();
-        const receipts = await trx.selectFrom('lifecycle_projections').select(['rev', 'result'])
-          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
-          .where('idempotency_key', 'like', `${requestId}:%:officeDecision:desk:${actionId}`)
-          .orderBy('rev', 'desc').executeTakeFirst();
-        return { request, approval, receipts };
-      });
-      if (!current.request || current.request.owner !== 'restate' || current.request.current_task_id !== taskId ||
-          !current.approval) {
-        return problem(c, 409, 'Lifecycle Owner Mismatch', 'This task has no current request-owned approval');
-      }
-      const approvalId = String(body.approvalId || current.approval.id);
-      if (approvalId !== current.approval.id) return problem(c, 409, 'Approval Changed', 'The requested approval is not current');
-      const expectedRev = current.receipts ? Number(current.receipts.rev) - 1 : Number(current.request.rev);
-      const ingress = (process.env.RESTATE_INGRESS_URL || '').trim().replace(/\/+$/, '');
-      const secret = workerSigningSecretOf() || '';
-      if (!ingress || !secret) return problem(c, 503, 'Lifecycle Delivery Unavailable',
-        'The signed delivery gateway is not configured; retry this action later');
-      // Words the requester sent after the design reached the office hold a new delivery until an
-      // office member has read them (finding 13). A replay of an action already recorded is not new.
-      if (!current.receipts) {
-        const acknowledged = (body.acknowledgeLateChanges as string[] | undefined) ?? [];
-        const system = { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
-        const late = await withRlsContext(db, system, async (trx) => ({
-          pending: await pendingLateChanges(trx, tenantId, requestId),
-          done: await acknowledgedLateChanges(trx, tenantId, requestId),
-        }));
-        const unknown = acknowledged.filter((id) => !late.pending.some((change) => change.updateId === id) &&
-          !late.done.includes(id));
-        if (unknown.length) return problem(c, 422, 'Unknown Requester Change',
-          'An acknowledged change does not belong to this request; refresh the task');
-        const unread = late.pending.filter((change) => !acknowledged.includes(change.updateId));
-        if (unread.length) {
-          return c.json({ type: 'https://hawa.design/errors/409', title: 'Requester Change Received', status: 409,
-            detail: 'The requester sent words after this design reached the office. Read them and acknowledge them before delivering.',
-            instance: new URL(c.req.url).pathname, code: 'LATE_REQUESTER_CHANGE', lateChanges: unread }, 409);
-        }
-        const reading = late.pending.filter((change) => acknowledged.includes(change.updateId));
-        if (reading.length) {
-          await withRlsContext(db, system, async (trx) => {
-            for (const change of reading) {
-              await acknowledgeLateChange(trx, tenantId, { requestId, updateId: change.updateId,
-                actorUserId: auth.userId, actorRole: officeRole, actionId });
-            }
-          });
-        }
-      }
-      const event = { v: 1 as const, kind: 'deliver' as const, eventId: `desk:${actionId}`,
-        requestId, taskId, revisionId: current.approval.design_revision_id, approvalId, actionId,
-        expectedRev, actor: { userId: auth.userId, role: officeRole }, reason: 'Deliver approved files' };
-      const signature = signLifecycleOfficeEvent(secret, event);
-      try {
-        const response = await fetch(`${ingress}/OfficeDecisionGateway/decide`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ v: 1, event, signature }), signal: AbortSignal.timeout(15_000),
-        });
-        const result = await response.json().catch(() => null) as Record<string, unknown> | null;
-        if (response.ok && result?.accepted === true && result.requestId === requestId &&
-            result.taskId === taskId && result.approvalId === approvalId && result.actionId === actionId &&
-            typeof result.deliveryId === 'string' && Number.isInteger(result.rev) && Number(result.rev) >= 4) {
-          const status = result.stage === 'delivered' ? 'COMPLETE'
-            : result.stage === 'approved' ? 'DELIVERY_RETRY_REQUIRED' : 'PUBLISHING';
-          return c.json({ taskId, requestId, deliveryId: result.deliveryId, workflowId: result.deliveryId,
-            executor: 'restate', status,
-            requestRev: result.rev, acceptedAt: new Date().toISOString() }, result.stage === 'delivering' ? 202 : 200);
-        }
-        if (response.ok && result?.accepted === false) return problem(c, 409, 'Stale Lifecycle Delivery',
-          'The request is no longer approved for this delivery; refresh the task');
-        if (response.status === 400 || response.status === 409) return problem(c, 409, 'Lifecycle Action Conflict',
-          'This action key, approval or request revision no longer matches; refresh the task');
-        log.warn(`[core:publish] Lifecycle gateway HTTP ${response.status} for request ${requestId}`);
-      } catch (error) {
-        log.warn(`[core:publish] Lifecycle gateway did not answer for request ${requestId}:`, error);
-      }
-      return problem(c, 503, 'Lifecycle Delivery Uncertain',
-        'Delivery may have started. Retry with the same action key; no second workflow will be created');
+      const answer = await startRequestOwnedDelivery({ db }, { tenantId, taskId, requestId: task.requestId, actionId,
+        auth: { userId: auth.userId, role: auth.role }, officeRole, body, instance: new URL(c.req.url).pathname });
+      return answer.ok ? c.json(answer.body, answer.status) : problem(c, answer.status, answer.title, answer.detail);
     }
 
     const body = await c.req.json().catch(() => ({}));
