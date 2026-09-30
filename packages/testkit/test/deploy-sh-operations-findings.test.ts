@@ -33,7 +33,8 @@ function run(functions: string[], body: string, stubs = '', env: Record<string, 
   const script = [
     'set -Eeuo pipefail',
     'exec 9>&2',
-    'CORE_CONTAINER=hawa-production-core-1; INTERP_FILE=/dev/null',
+    // ROOT_DIR: the release the one-off vector check binds its file from (ADR-158).
+    'CORE_CONTAINER=hawa-production-core-1; INTERP_FILE=/dev/null; ROOT_DIR=/srv/hawa-release',
     // The compose command is recorded with the poller value it would interpolate.
     'record() { echo "CALL $* [poller=${HAWA_TELEGRAM_POLLER:-}]" >&9; return 0; }',
     'COMPOSE=(record compose)',

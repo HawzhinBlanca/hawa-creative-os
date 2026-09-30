@@ -1,0 +1,193 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_b89eb39aa0b6ef02 and hawa_tpl_repair_b89eb39aa0b6ef02 (38 ms)
+stderr | apps/core/test/studio-substep-replay.test.ts > semantic Studio substeps recover retained work across branches and failed attempts > replays an interleaved definite image refusal and resumes the retained image and verdict
+[StudioArt] OpenAI image generation failed HTTP 400
+
+stderr | apps/core/test/studio-substep-replay.test.ts > semantic Studio substeps recover retained work across branches and failed attempts > replays an interleaved definite image refusal and resumes the retained image and verdict
+[StudioArt] Generation attempt 2 stopped: STUDIO_BUDGET_UNQUOTABLE
+
+{"level":"warn","time":"2026-09-30T11:10:10.351Z","service":"core","msg":"[studio] run 3bfbaf2d-4c49-4ba9-9d6a-843e55ffbdc5: the briefing resume did not read 1 saved result(s): a8f85128-8f8e-42c5-91df-966c621ff0b1 (brief/request attempt 1)."}
+stderr | apps/core/test/studio-substep-replay.test.ts > semantic Studio substeps recover retained work across branches and failed attempts > changing a date keeps the retained art and its asset hash, and holds the layout that carried the old date
+[StudioArt] Generation attempt 1 stopped: STUDIO_BUDGET_UNQUOTABLE
+
+stderr | apps/core/test/studio-retained-replay.test.ts > retained paid replies recover across service instances > recovers art without repeating generation (interrupted before vision: false)
+[StudioArt] Generation attempt 1 stopped: STUDIO_BUDGET_UNQUOTABLE
+
+stderr | apps/core/test/studio-retained-replay.test.ts > retained paid replies recover across service instances > recovers art without repeating generation (interrupted before vision: true)
+[StudioArt] Generation attempt 1 stopped: MODEL_CALL_ACCOUNTING_FAILED
+
+stderr | apps/core/test/studio-retained-replay.test.ts > retained paid replies recover across service instances > recovers art without repeating generation (interrupted before vision: true)
+[StudioArt] Generation attempt 1 stopped: STUDIO_BUDGET_UNQUOTABLE
+
+ ❯ apps/core/test/studio-substep-replay.test.ts (9 tests | 4 failed) 608ms
+     × resumes a persisted rebrief branch from the retained concept board without transport or charge 108ms
+     × still holds the rebrief branch when the persisted brief no longer matches the retained concept board 68ms
+     × replays an interleaved definite image refusal and resumes the retained image and verdict 86ms
+     × changing a date keeps the retained art and its asset hash, and holds the layout that carried the old date 83ms
+ ❯ apps/core/test/studio-retained-replay.test.ts (9 tests | 2 failed) 774ms
+     × recovers art without repeating generation (interrupted before vision: false) 74ms
+     × recovers art without repeating generation (interrupted before vision: true) 62ms
+ ❯ apps/core/test/album-report-cover-studio.test.ts (5 tests | 2 failed) 1560ms
+     × six photos and the owner's brief at production prices: the layout call is admitted and a draft placing the photos is transferred 283ms
+     × a layout request larger than the run has left fails with its own diagnostic, sends nothing, and never claims QA refused a candidate 275ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/album-report-cover-studio.test.ts > the owner's report cover is laid out within the run's limit (ADR-142) > six photos and the owner's brief at production prices: the layout call is admitted and a draft placing the photos is transferred
+Error: Sol image count unavailable; no completion dispatched.
+ ❯ DesignStudioService.doResume apps/core/src/services/design-studio/design-studio-service.ts:2366:15
+    2364|       if (['TASK_GENERATION_BLOCKED', 'STUDIO_BUDGET_INVALID', 'STUDIO…
+    2365|         'STUDIO_BUDGET_UNQUOTABLE', 'STUDIO_BUDGET_RESERVATION_EXCEEDE…
+    2366|         throw new CanvaFlowError(409, err.code, err.message);
+       |               ^
+    2367|       }
+    2368|       if (isModelCallHoldError(err)) {
+ ❯ DesignStudioService.resume apps/core/src/services/design-studio/design-studio-service.ts:1357:14
+ ❯ apps/core/test/album-report-cover-studio.test.ts:222:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  apps/core/test/album-report-cover-studio.test.ts > the owner's report cover is laid out within the run's limit (ADR-142) > a layout request larger than the run has left fails with its own diagnostic, sends nothing, and never claims QA refused a candidate
+Error: Sol image count unavailable; no completion dispatched.
+ ❯ DesignStudioService.doResume apps/core/src/services/design-studio/design-studio-service.ts:2366:15
+    2364|       if (['TASK_GENERATION_BLOCKED', 'STUDIO_BUDGET_INVALID', 'STUDIO…
+    2365|         'STUDIO_BUDGET_UNQUOTABLE', 'STUDIO_BUDGET_RESERVATION_EXCEEDE…
+    2366|         throw new CanvaFlowError(409, err.code, err.message);
+       |               ^
+    2367|       }
+    2368|       if (isModelCallHoldError(err)) {
+ ❯ DesignStudioService.resume apps/core/src/services/design-studio/design-studio-service.ts:1357:14
+ ❯ apps/core/test/album-report-cover-studio.test.ts:263:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  apps/core/test/studio-retained-replay.test.ts > retained paid replies recover across service instances > recovers art without repeating generation (interrupted before vision: false)
+StudioReservationError: Sol image count is invalid; no completion dispatched.
+ ❯ OpenAiStudioClient.countSolImages packages/creative/src/studio/openai-studio-client.ts:391:15
+    389|       if (count.object !== 'response.input_tokens' || typeof count.inp…
+    390|           !Number.isSafeInteger(count.input_tokens) || count.input_tok…
+    391|         throw new StudioReservationError('Sol image count is invalid; …
+       |               ^
+    392|       }
+    393|       return { version: 1, model: 'gpt-6.1-sol', requestSha256,
+ ❯ OpenAiStudioClient.createStructuredCompletion packages/creative/src/studio/openai-studio-client.ts:528:25
+ ❯ complete apps/core/src/services/design-studio/design-studio-service.ts:1085:18
+ ❯ runVisionCheck packages/creative/src/studio/gemini-image-provider.ts:193:18
+ ❯ generateArtImage packages/creative/src/studio/gemini-image-provider.ts:311:25
+ ❯ apps/core/test/studio-retained-replay.test.ts:140:49
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  apps/core/test/studio-retained-replay.test.ts > retained paid replies recover across service instances > recovers art without repeating generation (interrupted before vision: true)
+StudioReservationError: Sol image count is invalid; no completion dispatched.
+ ❯ OpenAiStudioClient.countSolImages packages/creative/src/studio/openai-studio-client.ts:391:15
+    389|       if (count.object !== 'response.input_tokens' || typeof count.inp…
+    390|           !Number.isSafeInteger(count.input_tokens) || count.input_tok…
+    391|         throw new StudioReservationError('Sol image count is invalid; …
+       |               ^
+    392|       }
+    393|       return { version: 1, model: 'gpt-6.1-sol', requestSha256,
+ ❯ OpenAiStudioClient.createStructuredCompletion packages/creative/src/studio/openai-studio-client.ts:528:25
+ ❯ complete apps/core/src/services/design-studio/design-studio-service.ts:1085:18
+ ❯ runVisionCheck packages/creative/src/studio/gemini-image-provider.ts:193:18
+ ❯ generateArtImage packages/creative/src/studio/gemini-image-provider.ts:311:25
+ ❯ apps/core/test/studio-retained-replay.test.ts:156:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  apps/core/test/studio-substep-replay.test.ts > semantic Studio substeps recover retained work across branches and failed attempts > resumes a persisted rebrief branch from the retained concept board without transport or charge
+AssertionError: expected Error: Sol image count is invalid; no com… { …(3) } to match object { Object (code) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "code": "MODEL_CALL_ACCOUNTING_FAILED",
++ CanvaFlowError {
++   "code": "STUDIO_BUDGET_UNQUOTABLE",
+  }
+
+ ❯ interruptedAfterRebrief apps/core/test/studio-substep-replay.test.ts:102:54
+    100|     });
+    101|     Object.assign(service, { repo: brokenRepo, imagesForRun: async () …
+    102|     await expect(service.resume(scope, taskId, runId)).rejects.toMatch…
+       |                                                      ^
+    103|     expect(fetcher.mock.calls.map(([, init]) => schemaOf(init))).toEqu…
+    104|     const run = await repo.getRunById(runId, scope.tenantId);
+ ❯ apps/core/test/studio-substep-replay.test.ts:114:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  apps/core/test/studio-substep-replay.test.ts > semantic Studio substeps recover retained work across branches and failed attempts > still holds the rebrief branch when the persisted brief no longer matches the retained concept board
+AssertionError: expected Error: Sol image count is invalid; no com… { …(3) } to match object { Object (code) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "code": "MODEL_CALL_ACCOUNTING_FAILED",
++ CanvaFlowError {
++   "code": "STUDIO_BUDGET_UNQUOTABLE",
+  }
+
+ ❯ interruptedAfterRebrief apps/core/test/studio-substep-replay.test.ts:102:54
+    100|     });
+    101|     Object.assign(service, { repo: brokenRepo, imagesForRun: async () …
+    102|     await expect(service.resume(scope, taskId, runId)).rejects.toMatch…
+       |                                                      ^
+    103|     expect(fetcher.mock.calls.map(([, init]) => schemaOf(init))).toEqu…
+    104|     const run = await repo.getRunById(runId, scope.tenantId);
+ ❯ apps/core/test/studio-substep-replay.test.ts:140:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  apps/core/test/studio-substep-replay.test.ts > semantic Studio substeps recover retained work across branches and failed attempts > replays an interleaved definite image refusal and resumes the retained image and verdict
+AssertionError: expected StudioReservationError: Sol image count i… { code: '…' } to match object { Object (code) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "code": "MODEL_CALL_ACCOUNTING_FAILED",
++ StudioReservationError {
++   "code": "STUDIO_BUDGET_UNQUOTABLE",
+  }
+
+ ❯ interleavedArt apps/core/test/studio-substep-replay.test.ts:175:60
+    173|         if (++receipts === 3) throw new Error('Synthetic interruption …
+    174|       }, []);
+    175|     await expect(first.artProvider!.generateArt(artRequest)).rejects.t…
+       |                                                            ^
+    176|     const calls = await repo.getCallsForRun(runId, scope.tenantId);
+    177|     expect(calls).toMatchObject([
+ ❯ apps/core/test/studio-substep-replay.test.ts:185:36
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  apps/core/test/studio-substep-replay.test.ts > semantic Studio substeps recover retained work across branches and failed attempts > changing a date keeps the retained art and its asset hash, and holds the layout that carried the old date
+StudioReservationError: Sol image count is invalid; no completion dispatched.
+ ❯ OpenAiStudioClient.countSolImages packages/creative/src/studio/openai-studio-client.ts:391:15
+    389|       if (count.object !== 'response.input_tokens' || typeof count.inp…
+    390|           !Number.isSafeInteger(count.input_tokens) || count.input_tok…
+    391|         throw new StudioReservationError('Sol image count is invalid; …
+       |               ^
+    392|       }
+    393|       return { version: 1, model: 'gpt-6.1-sol', requestSha256,
+ ❯ OpenAiStudioClient.createStructuredCompletion packages/creative/src/studio/openai-studio-client.ts:528:25
+ ❯ complete apps/core/src/services/design-studio/design-studio-service.ts:1085:18
+ ❯ runVisionCheck packages/creative/src/studio/gemini-image-provider.ts:193:18
+ ❯ generateArtImage packages/creative/src/studio/gemini-image-provider.ts:311:25
+ ❯ apps/core/test/studio-substep-replay.test.ts:212:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  3 failed | 6 passed (9)
+      Tests  8 failed | 65 passed (73)
+   Start at  14:10:08
+   Duration  3.39s (transform 2.30s, setup 899ms, import 3.63s, tests 2.97s, environment 0ms)

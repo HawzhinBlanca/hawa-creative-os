@@ -16,7 +16,8 @@
 # HAWA_DRILL_DIR, HAWA_DRILL_DATABASE_URL (the owner's URL on the same server; without it, built from
 # infra/docker/.env as deploy.sh does), HAWA_BACKUP_NOTIFY_ENV.
 set -Eeuo pipefail; umask 077
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
+# pwd -P: started through ~/.hawa/current, the run stays on that release even if a deploy switches it (ADR-158).
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"; cd "$ROOT"
 # The SHA-256 tool and the host role, chosen per host (ADR-141).
 source "$ROOT/infra/ops/host_lib.sh"
 # A standby or retired host runs no drill (ADR-141): production, and its database, live elsewhere.

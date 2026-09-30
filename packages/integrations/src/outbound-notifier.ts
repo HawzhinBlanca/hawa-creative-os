@@ -24,6 +24,8 @@ export interface CampaignReviewDispatchPayload {
     landscape?: string;
   };
   callbackBaseUrl?: string;
+  /** The clock the links' expiry is set from (tests pass a fixed one). */
+  now?: number;
 }
 
 export interface InteractiveActionDescriptor {
@@ -47,13 +49,43 @@ export interface OutboundDispatchReceipt {
   status: 'SENT' | 'QUEUED';
 }
 
-export interface InboundActionPayload {
+/**
+ * A review link (ADR-159). The link itself only opens a confirmation page: a GET never approves or
+ * publishes, since link-preview bots fetch every link a chat shows. The confirmation POSTs the same
+ * claims. The signature covers the task, the action, whether it publishes, the expiry and the phone
+ * it was sent to, so none of them can be changed in the address.
+ */
+export const ACTION_LINK_TTL_MS = 72 * 3_600_000;
+export interface ActionLinkClaims {
   taskId: string;
-  clientId: string;
   action: 'approve' | 'revision';
-  signature: string;
-  feedbackNotes?: string;
-  senderPhone: string;
+  publish: boolean;
+  /** Unix seconds after which the link is refused. */
+  exp: number;
+  phone?: string;
+}
+const linkText = (c: ActionLinkClaims) => `v2:${c.taskId}:${c.action}:${c.publish ? 1 : 0}:${c.exp}:${c.phone ?? ''}`;
+function actionKey(secretKey?: string): string {
+  const key = secretKey || process.env.HAWA_ACTION_HMAC_SECRET;
+  if (!key) throw new Error('HAWA_ACTION_HMAC_SECRET is not configured; action signatures cannot be produced or verified');
+  return key;
+}
+export function signActionLink(claims: ActionLinkClaims, secretKey?: string): string {
+  return crypto.createHmac('sha256', actionKey(secretKey)).update(linkText(claims)).digest('hex');
+}
+/** True only for this exact claim set, signed, and not yet expired at `now`. */
+export function verifyActionLink(claims: ActionLinkClaims, signature: unknown, now = Date.now(), secretKey?: string):
+  'valid' | 'invalid' | 'expired' {
+  if (typeof signature !== 'string' || !/^[0-9a-f]{64}$/.test(signature) || !Number.isSafeInteger(claims.exp)) return 'invalid';
+  const expected = Buffer.from(signActionLink(claims, secretKey)), given = Buffer.from(signature);
+  if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) return 'invalid';
+  return claims.exp * 1000 <= now ? 'expired' : 'valid';
+}
+export function actionLinkQuery(claims: ActionLinkClaims, signature: string): string {
+  const q = new URLSearchParams({ taskId: claims.taskId, action: claims.action, publish: claims.publish ? 'true' : 'false',
+    exp: String(claims.exp), sig: signature });
+  if (claims.phone) q.set('phone', claims.phone);
+  return q.toString();
 }
 
 /**
@@ -103,8 +135,11 @@ export function buildOutboundReviewDispatch(
   const dispatchId = `disp_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
   const baseUrl = payload.callbackBaseUrl || 'http://localhost:3001';
 
-  const approveSig = computeActionSignature(payload.taskId, 'approve', secretKey);
-  const revisionSig = computeActionSignature(payload.taskId, 'revision', secretKey);
+  const exp = Math.floor(((payload.now ?? Date.now()) + ACTION_LINK_TTL_MS) / 1000);
+  const approve: ActionLinkClaims = { taskId: payload.taskId, action: 'approve', publish: false, exp, phone: payload.recipientPhone };
+  const revision: ActionLinkClaims = { ...approve, action: 'revision' };
+  const approveSig = signActionLink(approve, secretKey);
+  const revisionSig = signActionLink(revision, secretKey);
 
   const actions: InteractiveActionDescriptor[] = [
     {
@@ -112,7 +147,7 @@ export function buildOutboundReviewDispatch(
       action: 'approve',
       labelCkb: '✅ پەسەندکردن و بڵاوکردنەوە',
       labelEn: 'Approve & Publish',
-      callbackUrl: `${baseUrl}/api/webhooks/whatsapp/actions?taskId=${payload.taskId}&action=approve&sig=${approveSig}&phone=${encodeURIComponent(payload.recipientPhone)}`,
+      callbackUrl: `${baseUrl}/api/webhooks/whatsapp/actions?${actionLinkQuery(approve, approveSig)}`,
       signature: approveSig,
     },
     {
@@ -120,7 +155,7 @@ export function buildOutboundReviewDispatch(
       action: 'revision',
       labelCkb: '✏️ داواکاری چاککردنەوە',
       labelEn: 'Request Revision',
-      callbackUrl: `${baseUrl}/api/webhooks/whatsapp/actions?taskId=${payload.taskId}&action=revision&sig=${revisionSig}&phone=${encodeURIComponent(payload.recipientPhone)}`,
+      callbackUrl: `${baseUrl}/api/webhooks/whatsapp/actions?${actionLinkQuery(revision, revisionSig)}`,
       signature: revisionSig,
     },
   ];

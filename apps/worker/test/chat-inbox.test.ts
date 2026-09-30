@@ -492,6 +492,14 @@ describe('chat answers (ADR-135 stage 2c)', () => {
       await expect(client.intake(update, 'legacy')).rejects.toThrow('invalid chat answer');
     }
   });
+
+  it('refuses an answer whose text fields are not text, instead of acting on it (ADR-159)', async () => {
+    for (const extra of [{ chatId: 555 }, { chatId: { id: '555' } }, { lifecycleAction: ['chat-answer'] },
+      { lifecycleAction: 'requester-revision', requestId: 'r', newTaskId: 't', round: 1, directive: { text: 'x' }, priorTaskId: 'p' }]) {
+      const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () => Response.json(answer(extra)) });
+      await expect(client.intake(update, 'legacy')).rejects.toThrow('non-text');
+    }
+  });
 });
 
 describe('album collection notices', () => {
@@ -598,6 +606,25 @@ describe('requester intent answers (ADR-144)', () => {
     expect(requester).toMatchObject({ chatId: '555', parseMode: 'HTML', text: expect.stringContaining('happy with') });
     expect(office).toMatchObject({ chatId: '9000', class: 'critical', text: expect.stringContaining('Nothing was approved') });
     expect(office.parseMode).toBeUndefined();
+  });
+
+  it('ADR-155 section 6: sends Core\'s intake alert to every office member, the first under the key it always had', async () => {
+    const text = 'The requester in chat 555 asks about the files of "Poster".';
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () => Response.json({ v: 1, kind: 'handled',
+      intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: '555', chatAnswer: { text: 'Got it.' },
+      officeAlert: { chatId: '9000', text }, officeAlerts: [{ chatId: '9000', text }, { chatId: '9001', text }] }) });
+    const ctx = new FakeContext();
+    await handleUpdate(ctx, input, client);
+    await handleUpdate(ctx, input, client);
+    const office = (ctx.notices as any[]).filter((n) => n.key.startsWith('notify.office:'));
+    expect([...new Map(office.map((n) => [n.key, n.chatId])).entries()]).toEqual([
+      [`notify.office:requester-note:${update.update_id}`, '9000'], [`notify.office:requester-note:${update.update_id}:9001`, '9001']]);
+    // A list whose first entry is not `officeAlert`, or with an invalid entry, is refused.
+    for (const officeAlerts of [[{ chatId: '9001', text }], [{ chatId: '9000', text }, { chatId: '', text }]]) {
+      const bad = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () => Response.json({ v: 1, kind: 'handled',
+        intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: '555', chatAnswer: { text: 'Got it.' }, officeAlert: { chatId: '9000', text }, officeAlerts }) });
+      await expect(bad.intake(update, 'legacy')).rejects.toThrow('invalid office alerts');
+    }
   });
 
   it('tells the requester Core\'s own words for a change kept while the design is being made', async () => {

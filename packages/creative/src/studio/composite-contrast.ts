@@ -160,3 +160,41 @@ export function evaluateCompositeContrast(
     failures,
   };
 }
+
+/**
+ * The box a block's lines occupy inside its text box: the widest measured line, placed by the
+ * block's alignment, and the lines' height centred in the box, as the renderer draws them. A block
+ * that could not be measured is its whole box.
+ */
+export function inkBoxOf(
+  t: TextElement,
+  measurement?: { status: string; maxLineWidthPx?: number; requiredHeightPx?: number }
+): Box {
+  if (measurement?.status !== 'measured' || !measurement.maxLineWidthPx || !measurement.requiredHeightPx) {
+    return { x: t.x, y: t.y, width: t.width, height: t.height };
+  }
+  const width = Math.min(t.width, measurement.maxLineWidthPx);
+  const height = Math.min(t.height, measurement.requiredHeightPx);
+  const x = t.align === 'left' ? t.x : t.align === 'right' ? t.x + t.width - width : t.x + (t.width - width) / 2;
+  return { x, y: t.y + (t.height - height) / 2, width, height };
+}
+
+/**
+ * ADR-157: each block's 5th-percentile contrast against the no-text composite, sampled under its
+ * lines (`inkBoxOf`) rather than across its whole box, so a generous box edge on another surface
+ * does not count against copy that never reaches it.
+ */
+export function measuredInkContrast(
+  compositePngBuffer: Buffer,
+  layout: Pick<StudioLayoutV2, 'text'>,
+  measurements: Array<{ copyIndex: number; status: string; maxLineWidthPx?: number; requiredHeightPx?: number }> = [],
+  sampleStep = 2
+): Record<number, number> {
+  const composite = PNG.sync.read(compositePngBuffer);
+  const out: Record<number, number> = {};
+  for (const t of layout.text) {
+    const m = measurements.find((x) => x.copyIndex === t.copyIndex);
+    out[t.copyIndex] = computeBoxP05Contrast(composite, inkBoxOf(t, m), t.color, sampleStep);
+  }
+  return out;
+}

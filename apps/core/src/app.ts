@@ -11,7 +11,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getCookie } from 'hono/cookie';
 import { SYSTEM_AUTOMATION_USER_ID, PRIMARY_OPERATOR_USER_ID, TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
-import { type ClientDNA, type DesignBrief, resolveModel, resolveImageSettings, activeModelTier } from '@hawa/domain';
+import { type ClientDNA, type DesignBrief, resolveModel, resolveImageSettings, activeModelTier, spendingPolicyValidity } from '@hawa/domain';
 import {
   createDb,
   withRlsContext,
@@ -35,7 +35,7 @@ try {
   // Ignore in environments where env file loading is handled externally
 }
 
-import { CreativeDirectorRunner, resolveOrnamentSettings } from '@hawa/creative';
+import { CreativeDirectorRunner, resolveOrnamentSettings, STUDIO_SPENDING_POLICY } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
 import {
   GooglePublisher,
@@ -48,6 +48,8 @@ import {
   HistoricalDesignMigrator,
   CanvaNativeAdapter,
   CircuitBreaker,
+  GATEWAY_SPENDING_POLICY,
+  GATEWAY_SPENDING_POLICY_REVIEW_BY,
 } from '@hawa/integrations';
 import { PostgresIngressPersistenceAdapter } from './ingress-persistence-adapter.js';
 import { DurableEvaluationService } from './services/durable-evaluations.js';
@@ -114,6 +116,7 @@ import { createOmnichannelDelivery } from './services/omnichannel-delivery.js';
 import { PostgresDriveUploadIdentityStore } from './services/drive-upload-reservation.js';
 import { PostgresSheetExpectationStore } from './services/publication-expectations.js';
 import { PublicationInspectionService, startPublicationInspectionSchedule } from './services/publication-inspections.js';
+import { StudioCallSettlementService } from './services/studio-call-settlement.js';
 import { registerPublicationInspectionRoutes } from './routes/publication-inspections.routes.js';
 import { officeAccessPolicy, permitsOfficeRequest } from './services/office-access.js';
 
@@ -234,15 +237,7 @@ export function createApp(options?: CreateAppOptions) {
     options?.telegramBridge ||
     new TelegramBridgeDaemon({
       botToken: process.env.TELEGRAM_BOT_TOKEN,
-      secretToken: process.env.TELEGRAM_WEBHOOK_SECRET || '',
       targetIngressUrl: 'http://127.0.0.1:8080/api/webhooks/telegram',
-      deskBaseUrl:
-        process.env.PUBLIC_TUNNEL_URL ||
-        process.env.HAWA_PUBLIC_URL ||
-        process.env.HAWA_DESK_BASE_URL ||
-        'http://127.0.0.1:8080',
-      actionTokenService: telegramActionTokenService,
-      allowedUserIds: telegramAllowedUsers,
     });
   // The office's switches, kept in Postgres so a restart keeps a thrown one (architecture programme
   // 1.3, G8; services/channel-kill-switches.ts). Without a database they are this app's alone.
@@ -548,7 +543,9 @@ export function createApp(options?: CreateAppOptions) {
   }
 
   // Honest Health & Readiness Probes (CV-20, FR-064, FR-073, R1/F10) - Zero hardcoded health!
-  let lastVerifiedProgressAt = new Date().toISOString();
+  // Null until a paid probe has actually been sent: it used to start at boot time, and so reported
+  // "verified progress" for a Core that had verified nothing (ADR-158).
+  let lastVerifiedProgressAt: string | null = null;
 
   // The scheduled call records its result in Postgres. Health never turns a configured key or a
   // result from another key/model into proof that the current model can take paid traffic.
@@ -695,7 +692,10 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const modelHealth = await paidModelHealth();
-    const modelProviderStatus = modelHealth.status;
+    // ADR-158: with HAWA_BILLING_PROBE_ENABLED off there is no probe to wait for. "disabled" says so,
+    // and it is not counted as degraded (production was "degraded" permanently for this alone).
+    const paidProbeScheduled = !(options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule);
+    const modelProviderStatus = !paidProbeScheduled && modelHealth.status === 'unverified' ? 'disabled' : modelHealth.status;
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
     // Restate can only register the worker once it is running.
@@ -734,9 +734,19 @@ export function createApp(options?: CreateAppOptions) {
     // People cut out of client photos (ADR-032). Down, photos are placed framed and the requester is
     // told; the watchdog alerts on 'unreachable' so the office knows before a request needs one.
     const cutoutStatus = await healthCutouts.health();
+    // ADR-159: the price policies' review dates. From 14 days before, a warning the watchdog pages on;
+    // from the date, the Canva planner sends nothing until a person renews the prices.
+    const policyChecks = [
+      { policy: STUDIO_SPENDING_POLICY.id, ...spendingPolicyValidity(STUDIO_SPENDING_POLICY.reviewBy) },
+      { policy: GATEWAY_SPENDING_POLICY, ...spendingPolicyValidity(GATEWAY_SPENDING_POLICY_REVIEW_BY) },
+    ];
+    const spendingPolicyStatus = policyChecks.some((p) => p.status === 'expired') ? 'expired'
+      : policyChecks.some((p) => p.status === 'expiring') ? 'expiring' : 'valid';
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
-    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || (isProduction && canvaStatus === 'unverified') || channelKillSwitches.telegram || channelKillSwitches.waha
-      || (isProduction && modelProviderStatus !== 'connected')
+    // Canva's "unverified" is not degraded: no Canva probe exists, so it could never become "connected"
+    // (ADR-158). An expired connection is "reconnect_required" and a failing one opens the breaker.
+    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
+      || (isProduction && modelProviderStatus !== 'connected' && modelProviderStatus !== 'disabled')
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
       || modelProviderStatus === 'billing_exhausted' || modelProviderStatus === 'rate_limited'
       || modelProviderStatus === 'http_error' || modelProviderStatus === 'budget_held' || modelProviderStatus === 'reconciliation_required'
@@ -744,7 +754,8 @@ export function createApp(options?: CreateAppOptions) {
       || restateStatus === 'unregistered' || restateStatus === 'unreachable'
       || funnelStatus === 'stalled' || (Boolean(db) && funnelStatus === 'unknown')
       || parkedUpdates > 0
-      || (restateWork.paused ?? 0) > 0;
+      || (restateWork.paused ?? 0) > 0
+      || spendingPolicyStatus !== 'valid';
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
 
     return c.json({
@@ -753,6 +764,9 @@ export function createApp(options?: CreateAppOptions) {
       buildCommit: process.env.HAWA_BUILD_COMMIT || 'unknown',
       flags: {
         DESIGN_PIPELINE_V3: process.env.DESIGN_PIPELINE_V3 || 'off',
+        // How many chats DESIGN_PIPELINE_V3_CHATS enrols in v3 while the flag above is off, read as
+        // isV3PilotChat reads it; never which chats (ADR-158). "off" alone hid two pilot chats.
+        DESIGN_PIPELINE_V3_CHATS: new Set((process.env.DESIGN_PIPELINE_V3_CHATS || '').split(',').map((c) => c.trim()).filter(Boolean)).size,
         DESIGN_STUDIO_V2: process.env.DESIGN_STUDIO_V2 || 'off',
       },
       // Who is meant to ask Telegram for updates: the watchdog then requires a polling worker colour
@@ -761,16 +775,19 @@ export function createApp(options?: CreateAppOptions) {
       lastVerifiedProgressAt,
       lastPaidProbe: {
         at: modelHealth.at,
-        status: modelHealth.status,
+        status: modelProviderStatus,
         observedStatus: modelHealth.observedStatus,
         schemaVersion: modelHealth.schemaVersion,
         detail: modelHealth.spendingStatus || null,
         callId: modelHealth.callId || null,
         lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
-        everyMinutes: billingProbeMs / 60_000,
+        // Null when no schedule runs: "30" read as a probe every half hour that was never sent.
+        everyMinutes: paidProbeScheduled ? billingProbeMs / 60_000 : null,
       },
       funnel: funnelMetrics,
       restateInvocations: restateWork,
+      spendingPolicy: { status: spendingPolicyStatus, policies: policyChecks,
+        ...(spendingPolicyStatus !== 'valid' ? { warning: 'Re-check the provider prices and renew the price policy (runbooks/SPENDING_POLICY.md).' } : {}) },
       // Which models new requests will use: HAWA_MODEL_TIER=dev is the owner's cheap tier, and
       // HAWA_MODEL_<ROLE> / HAWA_IMAGE_* override single settings. Never shows a key, only whether
       // the selected image provider has one.
@@ -812,6 +829,7 @@ export function createApp(options?: CreateAppOptions) {
         funnel: funnelStatus,
         cutout: cutoutStatus,
         ...(funnelMetrics?.alert ? { funnelAlert: funnelMetrics.alert } : {}),
+        ...(spendingPolicyStatus !== 'valid' ? { spendingPolicy: spendingPolicyStatus } : {}),
         ...(bridgeStatus?.lastError ? { telegramLastError: bridgeStatus.lastError.code } : {}),
       },
     }, isUnhealthy ? 503 : 200);
@@ -1005,7 +1023,7 @@ export function createApp(options?: CreateAppOptions) {
 
   if (db && options?.enablePublicationInspections) {
     const inspections = new PublicationInspectionService(db,options.publicationInspector || new GooglePublisher());
-    startPublicationInspectionSchedule(inspections,defaultTenantId,() => log.warn('[publication-inspections] Pass not confirmed; durable claims retain their state.'));
+    startPublicationInspectionSchedule(inspections,defaultTenantId,(cause) => log.warn(`[publication-inspections] Pass not confirmed (${cause}); durable claims retain their state.`));
   }
 
   // (Reminders about drafts a requester had not answered went with ADR-135 stage 2d: they reminded
@@ -1037,6 +1055,40 @@ export function createApp(options?: CreateAppOptions) {
     setTimeout(pass, 120_000).unref?.();
   }
 
+  // Requests waiting too long for a person (in review, approved and not sent, handed to the office after
+  // a failed design, a question unanswered after its reminders): every office member hears of each once
+  // per stage (ADR-155, services/lifecycle-stale-sweep.ts). Started with the Canva sweeper.
+  if (db && options?.enableCanvaSweeper) {
+    const staleDb = db;
+    const stalePass = async () => {
+      try {
+        const { sweepStaleLifecycleRequests } = await import('./services/lifecycle-stale-sweep.js');
+        const alerted = await sweepStaleLifecycleRequests(staleDb, { tenantId: DEFAULT_TENANT_ID, officeChatIds: telegramAllowedUsers, nowMs: Date.now() });
+        if (alerted.length) log.info(`[lifecycle-stale] alerted the office about ${alerted.length} waiting request(s):`, JSON.stringify(alerted));
+      } catch (err) {
+        log.warn('[lifecycle-stale] pass failed:', (err as Error)?.message || err);
+      }
+    };
+    setInterval(stalePass, 15 * 60_000).unref?.();
+    setTimeout(stalePass, 180_000).unref?.();
+  }
+
+  // A paid call with no provider outcome for hours is charged its whole reservation, recorded as
+  // System Automation's evidence, so it stops blocking its task and every later office day (ADR-159).
+  if (db && options?.enableUncertainCallExpiry) {
+    const settlement = new StudioCallSettlementService(db);
+    const expire = async () => {
+      try {
+        const charged = await settlement.settleExpired(DEFAULT_TENANT_ID);
+        if (charged.studioRuns.length || charged.plannerCalls.length) log.warn('[uncertain-calls] charged in full:', JSON.stringify(charged));
+      } catch (err) {
+        log.warn('[uncertain-calls] pass failed:', (err as Error)?.message || err);
+      }
+    };
+    setInterval(expire, 15 * 60_000).unref?.();
+    setTimeout(expire, 180_000).unref?.();
+  }
+
   // Client DNA as the office saved it in PostgreSQL, loaded before the port opens (a test may have
   // seeded invented offices above; the database wins: see client-dna-hydration.ts). Production
   // refuses to start when it cannot be read.
@@ -1065,7 +1117,7 @@ export function createApp(options?: CreateAppOptions) {
   if ((isProduction || (process.env.HAWA_TELEGRAM_POLLER || '').trim().toLowerCase() === 'worker') && !serviceTokenOf()) {
     log.error('[core:internal] HAWA_WORKER_TOKEN is not usable here: the worker cannot hand updates to intake, and Core does not poll. Set HAWA_WORKER_TOKEN in .env.production (infra/docker/README.md).');
   }
-  for (const retired of retiredTelegramSettings(process.env, { production: isProduction })) log.error(`[core] ${retired}`);
+  for (const retired of retiredTelegramSettings(process.env, { production: isProduction })) log[retired.level](`[core] ${retired.message}`);
 
   // index.ts awaits clientDnaHydrated before it opens the port.
   return Object.assign(app, { clientDnaHydrated });

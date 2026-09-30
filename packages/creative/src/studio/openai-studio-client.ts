@@ -357,6 +357,13 @@ export class OpenAiStudioClient {
 
   get circuitBreaker() { return this.breaker; }
 
+  /** Quote a separately admitted exact request (e.g. the Canva planner) without generating output. */
+  async countImageInputTokens(body: string): Promise<StudioNativeInputCount | undefined> {
+    const payload = JSON.parse(body) as { model: string; messages: OpenAiMessage[] };
+    assertModelAllowed(payload.model);
+    return this.countSolImages(body, payload.model, payload.messages);
+  }
+
   /** ADR-149: native image count is bound to the unchanged completion body, before paid admission. */
   private async countSolImages(body: string, model: string, messages: OpenAiMessage[]): Promise<StudioNativeInputCount | undefined> {
     if (model !== 'gpt-6.1-sol') return undefined;

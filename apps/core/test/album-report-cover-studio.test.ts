@@ -208,6 +208,8 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
   it('six photos and the owner\'s brief at production prices: the layout call is admitted and a draft placing the photos is transferred', async () => {
     const env = { tier: process.env.HAWA_MODEL_TIER, v3: process.env.DESIGN_PIPELINE_V3 };
     process.env.HAWA_MODEL_TIER = 'production';
+    // ADR-142 boundary uses its original Astra prices; ADR-149 separately checks Sol counted images.
+    for (const role of ['TEXT', 'LAYOUT', 'CRITIQUE']) vi.stubEnv(`HAWA_MODEL_${role}`, 'gpt-6-astra');
     process.env.DESIGN_PIPELINE_V3 = 'on';
     try {
       const { taskId } = await openOwnersAlbum('sweep');
@@ -251,6 +253,7 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
   it('a layout request larger than the run has left fails with its own diagnostic, sends nothing, and never claims QA refused a candidate', async () => {
     const env = { tier: process.env.HAWA_MODEL_TIER, v3: process.env.DESIGN_PIPELINE_V3 };
     process.env.HAWA_MODEL_TIER = 'production';
+    for (const role of ['TEXT', 'LAYOUT', 'CRITIQUE']) vi.stubEnv(`HAWA_MODEL_${role}`, 'gpt-6-astra');
     process.env.DESIGN_PIPELINE_V3 = 'on';
     try {
       const { taskId, requestId } = await openOwnersAlbum('settle');

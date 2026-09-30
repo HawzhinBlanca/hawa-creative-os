@@ -1,0 +1,60 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_b89eb39aa0b6ef02 and hawa_tpl_repair_b89eb39aa0b6ef02 (41 ms)
+{"level":"warn","time":"2026-09-30T11:16:11.143Z","service":"core","msg":"[canva-planner] Plan f9616b47-5166-4896-9590-272fbfbcfdf8 of task 2eb52b93-a218-475a-92bc-aa8983f7a1d8 was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:16:15.476Z","service":"core","msg":"[canva-planner] Plan 309290c3-bbdb-4af1-ba79-ee31bea70685 of task 0e4fb2e8-1fdf-40b5-a584-dd2a3a9954d0 was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:16:16.009Z","service":"core","msg":"[canva-planner] Plan e0ee8054-b09f-4a21-900c-9ebde4ef1f50 of task ab7b5562-c31e-44ba-8bef-7b2b6d97786a was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:16:16.012Z","service":"core","msg":"[canva-planner] Plan e0ee8054-b09f-4a21-900c-9ebde4ef1f50 of task ab7b5562-c31e-44ba-8bef-7b2b6d97786a was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:16:16.933Z","service":"core","msg":"[canva-planner] Plan 5d4a40fc-6640-41e0-953e-444595facd4b of task 3beda197-5894-4def-b2eb-b2a734d7fbb1 was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+ ❯ apps/core/test/canva-design-planner.test.ts (58 tests | 2 failed) 7639ms
+     × uses the office Sol default with native image counts, low reasoning and durable editable-source recovery 77ms
+     × a failed Sol image count retains a visible refusal and admits no paid planner call 52ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > uses the office Sol default with native image counts, low reasoning and durable editable-source recovery
+AssertionError: expected 'uncertain' to be 'submitted' // Object.is equality
+
+Expected: "submitted"
+Received: "uncertain"
+
+ ❯ apps/core/test/canva-design-planner.test.ts:161:29
+    159|       const {planner,api}=make(remote);
+    160|       const result=await planner.generate(scope,taskId,'sol-office-'+r…
+    161|       expect(result.status).toBe('submitted');expect(remote).toHaveBee…
+       |                             ^
+    162|       const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plan…
+    163|       expect(saved.request.model).toBe('gpt-6.1-sol');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > a failed Sol image count retains a visible refusal and admits no paid planner call
+AssertionError: expected { …(4) } to match object { status: 'failed', …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "message": "STUDIO_BUDGET_UNQUOTABLE",
+-   "status": "failed",
++   "message": "This call requires terminal cost evidence in Operations. Resume after reconciliation; the model is never called again.",
++   "status": "uncertain",
+  }
+
+ ❯ apps/core/test/canva-design-planner.test.ts:177:10
+    175|       const {planner,api}=make(remote);
+    176|       expect(await planner.generate(scope,taskId,'sol-count-refusal-'+…
+    177|         .toMatchObject({status:'failed',message:'STUDIO_BUDGET_UNQUOTA…
+       |          ^
+    178|       expect(remote).toHaveBeenCalledTimes(1);expect(api.importEditabl…
+    179|       expect((await sql`SELECT id FROM hawa.canva_planner_calls WHERE …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 4 passed (5)
+      Tests  2 failed | 96 passed (98)
+   Start at  14:16:09
+   Duration  8.68s (transform 1.49s, setup 433ms, import 2.27s, tests 8.37s, environment 0ms)

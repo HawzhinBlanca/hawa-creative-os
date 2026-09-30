@@ -28,20 +28,28 @@ import { readSourceUpload, readSourceExtraction, readSourceConfirmation, saveSou
   voiceInspectionHash, sourceHash, SourceConflict,
   type PendingSource, type SourceUpload, type SourceExtraction, type SourceIntakeAnswer } from './lifecycle-source-store.js';
 import { admitResolved, admitSource, sourceLanguage, sourceNotice as notice, sourceQuestionText } from './lifecycle-source-admission.js';
-import { askAboutSource, openSourceQuestion, readCandidate, readResolution, readSourceReply, recordCandidate, resolveSource,
-  resolveSourceClient, unconfirmedSource, type SourceNeed } from './lifecycle-source-natural.js';
+import { askAboutSource, openSourceQuestion, plainClientAnswer, readCandidate, readResolution, readSourceReply, recordCandidate,
+  resolveSource, resolveSourceClient, unconfirmedSource, type SourceNeed } from './lifecycle-source-natural.js';
 import { parseChoice } from './requester-turn.js';
 import { readIntentReceipt } from './requester-turn-store.js';
 import { pendingEditWords } from './lifecycle-media-intake.js';
-import type { ChatIntake } from './chat-intake.js';
+import { chatAutoDraftsEnabled, type ChatIntake } from './chat-intake.js';
 import { transcribeRetainedVoice, holdVoiceForManualReview } from './lifecycle-voice.js';
 import { audioAsOggOpus, MediaConversionError } from './media-conversion.js';
+import { bindSourceToCutAlbum, type AlbumOutcome } from './lifecycle-album.js';
 
 type Answer = SourceIntakeAnswer;
+/**
+ * An answer, or (ADR-160 F8, ADR-156) the album whose cut caption the confirmed words completed: intake
+ * then reads that album as it reads an album bound by typed words.
+ */
+export type SourceIntakeResult = Answer | { album: Extract<AlbumOutcome, { kind: 'snapshot' | 'reply' }> };
 const requestIdFor = (chat: string, id: number) => {
   const hex = createHash('sha256').update(`telegram-source:${chat}:${id}`).digest('hex');
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-4${hex.slice(13,16)}-a${hex.slice(17,20)}-${hex.slice(20,32)}`;
 };
+/** "yes" or "no": never an organisation's name. */
+const YES_OR_NO = (text: string) => ['yes', 'no'].includes(readSourceReply(text).kind);
 /** Words short enough to be confirmed as they are with "yes"; longer ones are sent by the requester. */
 const CONFIRMABLE_CHARS = 1500;
 const PREVIEW_CHARS = 600;
@@ -194,7 +202,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
   }
 
   /** The words confirmed (the requester's "yes", their corrected text, or "/use_source"): the design starts. */
-  async function confirm(update: unknown, confirmationUpdateId: number, sourceUpdateId: number, copy: string): Promise<Answer> {
+  async function confirm(update: unknown, confirmationUpdateId: number, sourceUpdateId: number, copy: string): Promise<SourceIntakeResult> {
     const upload = await tx(trx => readSourceUpload(trx, scope.tenantId, sourceUpdateId));
     if (!upload) throw new SourceConflict('The saved original source is unavailable');
     const extraction = await tx(trx => readSourceExtraction(trx, scope.tenantId, upload.updateId));
@@ -234,6 +242,11 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
       if (existing.payloadHash !== saved.payloadHash || existing.requestId !== requestId) throw new SourceConflict('Confirmation decision changed');
       return { status: 200, extra: { duplicate: true, lifecycleAction: 'open-request', requestId, chatId: upload.chatId, draft: existing.draft } };
     }
+    // ADR-160 F8 (the remainder): words sent as the rest of a caption Telegram cut, by voice or in a PDF,
+    // join that album once confirmed, as typed words would: one request, not a second one beside it.
+    const album = await tx((trx) => bindSourceToCutAlbum(trx, scope.tenantId,
+      { update: update as { update_id: number }, sourceUpdateId: upload.updateId, copy: saved.copy }));
+    if (album.kind === 'snapshot' || album.kind === 'reply') return { album };
     await tx(trx => verifyReviewedSource(trx, store(), { ...scope, clientId: upload.clientId,
       chatId: upload.chatId, requestId, ref, copy: saved.copy }));
     const rtl = /[؀-ۿ]/.test(saved.copy);
@@ -243,7 +256,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
       designInstructions: instructions !== null ? sourceClientSelection(instructions).instructions : upload.instructions,
       exactCopy: [{ id: 'reviewed_source_copy', text: saved.copy,
         role: 'body', language: rtl ? 'ckb' : 'en', direction: rtl ? 'rtl' : 'ltr', approved: true }],
-      autoGenerate: true, lifecycleSource: ref, variant: upload.variant ?? { width: 1080, height: 1350 } };
+      autoGenerate: chatAutoDraftsEnabled(), lifecycleSource: ref, variant: upload.variant ?? { width: 1080, height: 1350 } };
     const decision = await tx(trx => recordNewBriefDecision(trx, scope.tenantId, confirmationUpdateId,
       { requestId, chatId: upload.chatId, payloadHash: saved.payloadHash, draft,
         sourceUpdate: { original: upload.sourceUpdate, confirmation: saved.sourceUpdate } }));
@@ -257,7 +270,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
    * update is neither (it is then read as any message is).
    */
   async function naturalReply(update: unknown, envelope: NonNullable<ReturnType<typeof sourceMessageScope>>, text: string,
-    payloadHash: string): Promise<Answer | null> {
+    payloadHash: string): Promise<SourceIntakeResult | null> {
     const who = { chatId: envelope.chatId, senderId: envelope.senderId, topicId: envelope.topicId };
     if (await decidedElsewhere(envelope.updateId, envelope.chatId)) return null;
     const lang = requesterLang(text);
@@ -265,7 +278,9 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
     if (question) {
       const said = question.need === 'target'
         ? parseChoice(text, { options: question.options, allowNew: true }) : null;
-      const clientId = question.need === 'client'
+      // ADR-156 (audit #13): "Which organisation is it for?" is answered by a plain answer ("KAAE", "it's
+      // for the engineers' union", "Client: KAAE"), never by a new brief or a change that names a client.
+      const clientId = question.need === 'client' && (plainClientAnswer(text) || Boolean(sourceClientSelection(text).client))
         ? await tx(async (trx) => {
           const line = sourceClientSelection(text).client;
           if (line) {
@@ -289,9 +304,9 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
         });
         return continueAnswered(question.sourceUpdateId, envelope.updateId);
       }
-      // A short answer that names no organisation this office works with: asked again, kindly.
-      const reading = readSourceReply(text);
-      if (question.need === 'client' && reading.kind === 'copy' && text.trim().split(/\s+/).length <= 6) {
+      // A short answer that names no organisation this office works with: asked again, kindly. Anything
+      // else is read as any message is, and the question stays open (ADR-156).
+      if (question.need === 'client' && plainClientAnswer(text) && !YES_OR_NO(text)) {
         const answer = notice(envelope.chatId, envelope.updateId, say(SOURCE_MESSAGES.clientNotFound, lang));
         await tx((trx) => saveSourceAdmission(trx, scope.tenantId, envelope.updateId, { payloadHash, result: { kind: 'answer', answer } }));
         return answer;
@@ -300,9 +315,11 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
     }
     const sourceUpdateId = await tx((trx) => unconfirmedSource(trx, scope.tenantId, who));
     if (!sourceUpdateId) return null;
-    const reply = readSourceReply(text);
-    if (reply.kind === 'other') return null;
     const candidate = await tx((trx) => readCandidate(trx, scope.tenantId, sourceUpdateId));
+    // ADR-156: only a confirmation or words that look like the copy answer "is this exactly the text?";
+    // anything else is read as any message is, and the words shown stay waiting for their answer.
+    const reply = readSourceReply(text, candidate?.text ?? '');
+    if (reply.kind === 'other') return null;
     if (reply.kind === 'no' || (reply.kind === 'yes' && !candidate?.confirmable)) {
       const answer = notice(envelope.chatId, envelope.updateId,
         say(reply.kind === 'no' ? SOURCE_MESSAGES.sendCorrected : SOURCE_MESSAGES.sendExactWords, lang));
@@ -335,7 +352,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
     return keepAndRead(kept.resolved, noticeUpdateId);
   }
 
-  return async (update: unknown): Promise<Answer | null> => {
+  return async (update: unknown): Promise<SourceIntakeResult | null> => {
     const envelope = sourceMessageScope(update), pdf = telegramSource(update), confirmation = sourceCopyConfirmation(update);
     if (!envelope) return null;
     const message = (update as { message?: Record<string, unknown> }).message;

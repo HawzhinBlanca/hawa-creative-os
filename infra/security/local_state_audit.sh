@@ -16,8 +16,24 @@ PATTERN='^(export )?[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|_KEY|CREDENT
 # on Linux: there `stat -f` is "file-system status", prints several lines and fails, and both outputs
 # reached the mode check below (plans/hosting section 3.6).
 source "$ROOT/infra/ops/host_lib.sh"
-mode_of() { hawa_file_mode "$1"; }
-size_of() { hawa_file_size "$1"; }
+# In a release directory (ADR-158) the credentials and the snapshot folder are links to ~/.hawa/shared.
+# The mode and size are the file's, not the link's (a link reads 755), so links are followed first.
+real_of() {
+  local p="$1" t n=0
+  while [[ -L "$p" && $n -lt 10 ]]; do t="$(readlink "$p")"; [[ "$t" == /* ]] || t="$(dirname "$p")/$t"; p="$t"; n=$((n + 1)); done
+  printf '%s' "$p"
+}
+mode_of() { hawa_file_mode "$(real_of "$1")"; }
+size_of() { hawa_file_size "$(real_of "$1")"; }
+# git cannot answer for a path beyond a link ("beyond a symbolic link"): a file in the linked snapshot
+# folder is committable only if the link itself is.
+ignored() {
+  local p="$1" top
+  for top in infra/backup/snapshots .hawa-state; do
+    if [[ -L "$top" && "$p" == "$top"/* ]]; then p="$top"; fi
+  done
+  git check-ignore -q "$p" 2>/dev/null
+}
 
 exposed=0; committable=0; total=0
 printf '%-6s %-10s %-22s %s\n' MODE BYTES KIND PATH
@@ -35,11 +51,12 @@ while IFS= read -r f; do
   mode="$(mode_of "$f")"
   flags=""
   if [[ "$((8#$mode & 8#077))" -ne 0 ]]; then flags="$flags EXPOSED"; exposed=$((exposed + 1)); fi
-  if ! git check-ignore -q "$f" 2>/dev/null; then flags="$flags COMMITTABLE"; committable=$((committable + 1)); fi
+  if ! ignored "$f"; then flags="$flags COMMITTABLE"; committable=$((committable + 1)); fi
   printf '%-6s %-10s %-22s %s%s\n' "$mode" "$(size_of "$f")" "$kind" "$f" "$flags"
 done < <(
-  { find .hawa-state infra/backup/snapshots -type f 2>/dev/null || true
-    find infra/docker . -maxdepth 1 -type f -name '.env*' ! -name '*.example' 2>/dev/null || true
+  # -H follows a snapshot folder that is a link, as in a release directory; env files may be links too.
+  { find -H .hawa-state infra/backup/snapshots -type f 2>/dev/null || true
+    find infra/docker . -maxdepth 1 \( -type f -o -type l \) -name '.env*' ! -name '*.example' 2>/dev/null || true
   } | sed 's#^\./##' | sort -u
 )
 

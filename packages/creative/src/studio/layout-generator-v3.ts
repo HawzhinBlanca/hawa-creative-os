@@ -1018,7 +1018,7 @@ export const LAYOUT_V3_JSON_SCHEMA = {
           photos: {
             type: 'array',
             description:
-              "The client's photographs, one element per photo provided (photoIndex 0..n-1), each placed once as content, in the same 0..1 coordinates as everything else. Empty when no photographs were provided.",
+              "The client's photographs placed as content (photoIndex 0..n-1), each at most once, in the same 0..1 coordinates as everything else: every photo provided, unless the brief says the client lets you choose among them. Empty when no photographs were provided.",
             items: {
               type: 'object',
               properties: {

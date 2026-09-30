@@ -95,6 +95,8 @@ export interface CreateAppOptions {
   skipTelegramProbe?: boolean;
   /** Settle Canva imports and exports nobody is following any more (sweepStrandedOperations). */
   enableCanvaSweeper?: boolean;
+  /** Charge Studio and planner calls with no outcome for hours their whole reservation (ADR-159). */
+  enableUncertainCallExpiry?: boolean;
   enablePublicationInspections?: boolean;
   publicationInspector?: import('@hawa/contracts').PublicationInspector;
   persistDnaToDisk?: boolean;

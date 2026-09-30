@@ -127,4 +127,12 @@ export const ROUTING_MESSAGES = {
     en: "Noted. I've told the office about the timing for {title}.",
     ckb: 'تێبینی کرا. سەبارەت بە کاتی {title} ئۆفیسەکەم ئاگادار کردەوە.',
   },
+  /**
+   * ADR-156: "send it again", "it didn't arrive", "as a PDF", "to my email", "higher resolution": the
+   * office has the request about the files (nothing is sent or approved by itself).
+   */
+  deliveryRequestPassed: {
+    en: "Got it. I've passed your request about {title} to the office; they'll follow up here.",
+    ckb: 'تێگەیشتم. داواکارییەکەتم سەبارەت بە {title} گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',
+  },
 } as const satisfies PhraseBook;

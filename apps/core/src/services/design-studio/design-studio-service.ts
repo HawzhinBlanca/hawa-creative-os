@@ -41,8 +41,10 @@ import {
   probeFontScripts,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
-import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError } from '@hawa/domain';
+import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError, OfficeDayExhaustedError, parseStudioImagery, parseStudioTier, type StudioImagery, type StudioTier } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, thumbnailPlaybookPrompt, type OrnamentSettings } from '@hawa/creative';
+import { fitPhotoBoxesToImages, photoSelectionFromInstructions } from '@hawa/creative';
+import { recordedPhotoSelection, studioCopyBlocks } from './design-quality.js';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { buildRunBriefContract, StudioBriefContractError, StudioRunStatusChangedError } from './brief-contract.js';
 import { blockingBriefConflicts, briefContractIdentitySha256, verifyBriefContractIntegrity, type BriefProposalInput, type ExecutableBriefContract } from '@hawa/domain';
@@ -118,6 +120,7 @@ import {
   runJudgeStageV3,
   judgeBriefForStageV3,
   rankStudioCandidatesV3,
+  copyForStageV3,
   V3_CANDIDATE_SLOTS,
   pendingV3Concept,
 } from './stages/index.js';
@@ -129,6 +132,7 @@ class RequestOwnedImageUnavailable extends Error {}
 
 /** ADR-142: the run's failure code when one request's reservation is larger than the run has left. */
 export const STUDIO_RUN_LIMIT_TOO_SMALL = 'STUDIO_RUN_LIMIT_TOO_SMALL';
+export const OFFICE_DAY_EXHAUSTED = 'OFFICE_DAY_EXHAUSTED';
 
 const optionalImages = (error: unknown): string[] => {
   if (error instanceof RequestOwnedImageUnavailable) throw error;
@@ -219,8 +223,8 @@ export function isPipelineV3Run(run: { request?: unknown }): boolean {
 export interface CreateStudioRunInput {
   width: number;
   height: number;
-  tier?: 'standard' | 'premium';
-  imagery?: 'auto' | 'none' | 'generated';
+  tier?: StudioTier;
+  imagery?: StudioImagery;
   previews?: number;
   holdForSelection?: boolean;
 }
@@ -511,12 +515,7 @@ export class DesignStudioService {
     }
 
     const copyLocales = savedDesignCopyLocales(task.source, content.copy);
-    const copyBlocks: CopyBlock[] = content.copy.map((text, idx) => ({
-      text,
-      script: copyScripts[idx] === 'arabic' ? 'arabic' : 'latin',
-      locale: copyLocales[idx],
-      localeCopySha256: createHash('sha256').update(text).digest('hex'),
-    }));
+    const copyBlocks: CopyBlock[] = studioCopyBlocks(content.copy, copyScripts, copyLocales);
     qualifiedStudioFonts(reference, copyBlocks);
 
     return {
@@ -551,7 +550,7 @@ export class DesignStudioService {
     const imagery =
       params.imagery ||
       this.options.defaultImagery ||
-      (process.env.DESIGN_STUDIO_IMAGERY_DEFAULT as any) ||
+      parseStudioImagery(process.env.DESIGN_STUDIO_IMAGERY_DEFAULT) ||
       'auto';
 
     await this.tx(s, db => assertNativeRevisionAdmission(db, s.tenantId, taskId));
@@ -1168,7 +1167,7 @@ export class DesignStudioService {
               responseSha256: result ? hash(result.imageBuffer) : null,
               inputTokens: result?.inputTokens ?? 0, outputTokens: result?.outputTokens ?? 0,
               images: result ? 1 : 0, usdEstimate: cost, status: result ? 'ok' : 'error',
-              costBasis: !result ? 'not_accepted' : result.costSource === 'usage' ? 'usage' : 'estimate',
+              costBasis: !result ? 'not_accepted' : result.costSource === 'usage' || result.costSource === 'price_list' ? result.costSource : 'estimate',
               errorCode: result ? null : 'IMAGE_REQUEST_REJECTED', latencyMs: Date.now() - started, attempts: 1,
               ...(result ? { retainedResult: { kind: 'image' as const,
                 payload: { ...result, imageBuffer: undefined }, image: result.imageBuffer } } : {}) });
@@ -1304,7 +1303,7 @@ export class DesignStudioService {
       actorId: s.actorId,
       width: request.width,
       height: request.height,
-      tier: run.tier as any,
+      tier: parseStudioTier(run.tier) ?? 'standard',
       instructions: request.instructions,
       copyBlocks: request.copyBlocks,
       referencePack,
@@ -1483,7 +1482,7 @@ export class DesignStudioService {
           ctx.attachedImage = undefined;
           const reread = await inStudioSubstep('brief/images-rebrief', () => runBriefStage(ctx));
           const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
-          stages.brief = { ...reread, photosSent, imagesRebrief: true };
+          stages.brief = { ...reread, photosSent, photoSelection: photoSelectionFromInstructions(ctx.instructions, photosSent), imagesRebrief: true };
           await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
           stages.brief = await this.briefAsStored(s, runId, stages.brief);
           briefSoFar = stages.brief as LateReferenceBrief;
@@ -1521,6 +1520,8 @@ export class DesignStudioService {
         if (!classified && ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
           ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
         }
+
+        ctx.photoSelection = recordedPhotoSelection(stages.brief, ctx.photos?.length ?? 0); // ADR-157
 
         // People cut out of their photos (ADR-032), when the request, the brief's reading of the
         // reference, or the design being changed calls for them. They are made once, at the layout
@@ -1584,7 +1585,9 @@ export class DesignStudioService {
           const brief = await inStudioSubstep('brief/request', () => runBriefStage(ctx));
           // Recorded on the run so the requester's note can say what became of their photos.
           const photosSent = (brief.imageRoles || []).filter((r) => r.role === 'content_photo').length || (ctx.photos?.length ?? 0);
-          stages.brief = { ...brief, photosSent };
+          // ADR-157: "choose the best photos" and its like, read from the requester's words, no call.
+          const photoSelection = photoSelectionFromInstructions(ctx.instructions, photosSent);
+          stages.brief = { ...brief, photosSent, photoSelection };
           await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
           return { runId, status: 'conceiving', stage: 'brief', spentUsd: budget.spentUsd };
         }
@@ -1751,6 +1754,8 @@ export class DesignStudioService {
               const f = focus[p.photoIndex];
               if (f && p.treatment !== 'cutout') p.focus = { x: f.x, y: f.y };
             }
+            // A row of framed photos divided closer to each photo's own shape, so less is cropped away (ADR-157).
+            fitPhotoBoxesToImages(cand.currentLayout, sizes, copyForStageV3(ctx), focus);
           }
           // Every photo with a cut-out is shown cut out, set as a designer sets people: standing on
           // the bottom edge, heads matched, clear of the text. Before the art, which works around them.
@@ -2532,17 +2537,28 @@ export class DesignStudioService {
       }
     }
 
+    const exhausted = error?.code ?? 'BUDGET_EXHAUSTED';
     if (bestCandidate) {
       await this.repo.updateRunStatus(run.id, s.tenantId, 'transferring', {
         winnerCandidateId: bestCandidate.id,
-        diagnostic: `BUDGET_EXHAUSTED${cap}${reason ? `: ${reason}` : ''}: proceeded with best candidate passing hard QA.`,
+        diagnostic: `${exhausted}${cap}${reason ? `: ${reason}` : ''}: proceeded with best candidate passing hard QA.`,
       });
       return {
         runId: run.id,
         status: 'transferring',
-        diagnostic: 'BUDGET_EXHAUSTED',
+        diagnostic: exhausted,
         winnerCandidateId: bestCandidate.id,
       };
+    }
+
+    // ADR-159: the shared office day is used up, not this run's limit, and nothing QA refused. The
+    // office is told that, and when the day resets; it was reported as "no candidates passed hard QA".
+    if (error instanceof OfficeDayExhaustedError) {
+      const diagnostic = `${OFFICE_DAY_EXHAUSTED} at stage ${run.status}: ${error.message} Nothing was sent for the next ` +
+        `model request. Retry the design after the reset, or raise the daily limit in the spending policy.`;
+      await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', { diagnostic });
+      return { runId: run.id, status: 'failed', stage: run.status, code: OFFICE_DAY_EXHAUSTED, diagnostic, message: diagnostic,
+        ...(budget ? { spentUsd: budget.spentUsd } : {}) };
     }
 
     // ADR-142: one request larger than what the run has left, with no candidate made yet, is not a run
@@ -2699,8 +2715,9 @@ export class DesignStudioService {
     try {
       judgeProtocol = resolveStudioJudgeProtocol(process.env.HAWA_STUDIO_JUDGE_PROTOCOL);
       judgeProtocolResolved = true;
-      outcome = await runJudgeStageV3(ctx, candidateStates, judgeProtocol === 'incumbent' ? {} : {
-        protocol: judgeProtocol,
+      // ADR-157: both protocols read the request; the incumbent carries it in the calls it already makes.
+      outcome = await runJudgeStageV3(ctx, candidateStates, {
+        ...(judgeProtocol === 'incumbent' ? {} : { protocol: judgeProtocol }),
         brief: judgeBriefForStageV3(ctx, (stages.brief || {}) as Partial<CreativeBrief>),
       });
     } catch (err) {

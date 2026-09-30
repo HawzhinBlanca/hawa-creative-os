@@ -8,17 +8,25 @@ import { createHash } from 'node:crypto';
 import * as restate from '@restatedev/restate-sdk';
 import type { BlobRef, DeliveryInput, DeliveryOutcome, OutboundMessage } from '@hawa/contracts';
 import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
-import { withInvocationLogContext } from '../logging.js';
-import { coreInternalFromEnv, DeliveryApi, type CoreInternal } from './delivery.js';
+import { log, withInvocationLogContext } from '../logging.js';
+import { coreInternalFromEnv, DeliveryApi, outcomeReportCore, type CoreInternal } from './delivery.js';
+import { officeAlertKey, officeChatIdsFromEnv } from './office-chats.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { DesignRunApi, type DesignRunInput } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
-import { LIFECYCLE_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
+import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PROJECT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000, maxRetryDuration: 30 * 60_000 };
+/**
+ * A projection step asks Core again, backing off to 30 s, with no limit of its own (ADR-155): the
+ * object's retry policy pauses the invocation after its 300 attempts (about five hours), where a person
+ * sees it (/v1/health restateInvocations) and resumes it once Core is back. The 30-minute limit it had
+ * ended the invocation for good after a longer Core outage: a brief that never became a request, and
+ * nobody told.
+ */
+export const PROJECT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000 };
 // A DesignRun has already ended when it sends this event. Keep its sole outcome pending through a
 // Core outage; a bounded step here could abandon the only report of paid work.
 const OUTCOME_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000 };
@@ -86,7 +94,9 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
   round?: number;
   designInput: DesignRunInput;
   outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
-    message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string } };
+    message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string };
+    /** ADR-155: the alert to every office member (the first is `officeAlert`, kept for older receipts). */
+    officeAlerts?: Array<{ chatId: string; text: string }> };
   question?: { id: string; text: string; options: string[]; taskId: string; rev: number;
     /** Derived from the confirmed Telegram send mark, never from outcome projection time. */
     sentAtMs?: number; messageId?: string };
@@ -291,6 +301,69 @@ function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
   });
 }
 
+/** What a step Core refused for good was doing, and whose words it carried (ADR-155). */
+interface TerminalFailure {
+  /** Names the alert's keys and the journaled read of the office: unique within the invocation. */
+  step: string;
+  requestId: string; tenantId: string; taskId?: string;
+  /** "start this brief", "record the finished design", ... */
+  what: string;
+  /** The requester's own words, quoted to the office so nothing they sent is lost. */
+  words?: string;
+  /**
+   * Who to tell, and in which words: `officeTold` when an office member heard of it, else `alone`.
+   * Without `alone`, a requester with no office to hand it to is told nothing rather than something
+   * untrue ("the office will follow up"), and the failure is logged.
+   */
+  requester?: { chatId: string; state: Parameters<typeof requesterOf>[0]; officeTold: Phrase; alone?: Phrase };
+}
+
+/**
+ * ADR-155: a step Core refused for good ends the invocation (a genuine conflict, or an answer asking
+ * again cannot change), but never silently. Every office member hears which request and task, what
+ * Core said and the requester's own words; the requester, when there is one to tell, is told the truth:
+ * that it went wrong on our side, and that the office has it (only when an office member was told).
+ * Who the office is, is read in a journaled step, so a replay alerts the same people under the same keys.
+ */
+async function reportTerminalFailure(ctx: Pick<AutomaticOpenContext, 'run' | 'send'>, failure: TerminalFailure, error: unknown): Promise<void> {
+  const members = await ctx.run(`office-chats:${failure.step}`, async () => officeChatIdsFromEnv());
+  const refusal = Array.from(error instanceof Error ? error.message : String(error)).slice(0, 300).join('');
+  const words = failure.words?.trim() ? `\nThe requester wrote: ${Array.from(failure.words.trim()).slice(0, 800).join('')}` : '';
+  const text = `Hawa could not ${failure.what} for request ${failure.requestId}${failure.taskId ? ` (task ${failure.taskId})` : ''}: ` +
+    `${refusal}\nA person needs to follow it up in Hawa Desk.${words}`;
+  const about = { tenantId: failure.tenantId, ...(failure.taskId ? { taskId: failure.taskId } : {}) };
+  for (const [index, chatId] of members.entries()) {
+    ctx.send({ v: 1, key: officeAlertKey(`${failure.requestId}:${failure.step}:failed-alert`, index, chatId), chatId,
+      kind: 'text', text, class: 'critical', ...about });
+  }
+  const phrase = members.length ? failure.requester?.officeTold : failure.requester?.alone;
+  if (failure.requester && phrase) {
+    ctx.send({ v: 1, key: `${failure.requestId}:${failure.step}:failed-notice`, chatId: failure.requester.chatId, kind: 'text',
+      text: requesterText(failure.requester.state, phrase), parseMode: 'HTML', class: 'critical', ...about });
+  }
+  if (!members.length) {
+    log.error(`[RequestLifecycle] could not ${failure.what} for request ${failure.requestId}, and no office chat is configured to hear of it: ${refusal}`);
+  }
+}
+
+/** The step's answer; a refusal for good is reported (reportTerminalFailure) before it is thrown on. */
+async function reportedIfRefused<T>(ctx: Pick<AutomaticOpenContext, 'run' | 'send'>, step: () => Promise<T>, failure: TerminalFailure): Promise<T> {
+  try {
+    return await step();
+  } catch (error) {
+    if (error instanceof restate.TerminalError) await reportTerminalFailure(ctx, failure, error);
+    throw error;
+  }
+}
+
+/** ADR-155: a brief Core refused to open; the office has its words, the requester hears the truth. */
+const openFailure = (event: OpenManualEvent | OpenAutomaticEvent): TerminalFailure => ({
+  step: 'open', requestId: event.requestId, tenantId: event.tenantId, what: 'start this brief',
+  words: event.draft.rawText,
+  requester: { chatId: event.chatId, state: requesterFields(event.draft),
+    officeTold: OUTCOME_MESSAGES.couldNotStart },
+});
+
 /** A replay after `set` still emits the same fenced message key, so a crash cannot lose the ack. */
 export async function openManualRequest(ctx: OpenContext, core: CoreInternal, event: OpenManualEvent): Promise<OpenManualResult> {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
@@ -309,10 +382,10 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
     sendAcknowledgement(ctx, prior);
     return { accepted: true, taskId: prior.taskId, stage: 'manual', rev: 1 };
   }
-  const projected = await ctx.run('project:1', () => core.post<{ v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean }>(
+  const projected = await reportedIfRefused(ctx, () => ctx.run('project:1', () => core.post<{ v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean }>(
     `/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
     { v: 1, expectedRev: 0, rev: 1, key: `${event.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: event.draft }] },
-  ));
+  )), openFailure(event));
   if (projected?.v !== 1 || !UUID.test(projected.taskId) || projected.stage !== 'manual' || projected.rev !== 1 || projected.autoGenerate !== false) {
     throw new Error('Core did not return a manual request projection; do not acknowledge it');
   }
@@ -358,12 +431,13 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
     if (prior.rev === 1) ctx.startDesign(prior.designInput);
     return { accepted: true as const, taskId: prior.taskId, stage: prior.stage, rev: prior.rev };
   }
-  const projected = await ctx.run('project:1', () => core.post<{
+  const projected = await reportedIfRefused(ctx, () => ctx.run('project:1', () => core.post<{
     v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean;
     design?: { clientId: string; rawText: string; sourcePlatform: string;
       variant?: { width: number; height: number }; designStudio: boolean; studioOptions?: DesignRunInput['studioOptions'] };
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
-    { v: 1, expectedRev: 0, rev: 1, key: `${event.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: event.draft }] }));
+    { v: 1, expectedRev: 0, rev: 1, key: `${event.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: event.draft }] })),
+    openFailure(event));
   if (projected?.v !== 1 || !UUID.test(projected.taskId) || projected.rev !== 1) {
     throw new Error('Core did not return an automatic design projection; do not start the run');
   }
@@ -404,7 +478,32 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
   return { accepted: true as const, taskId: state.taskId, stage: state.stage, rev: state.rev };
 }
 
+/**
+ * The only report of a finished design (ADR-155). Core is asked through outcomeReportCore: only a
+ * genuine idempotency conflict is final, anything else is asked again until the invocation pauses.
+ * A refusal for good is reported to every office member, and the requester is told the truth.
+ */
 export async function recordDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal, event: DesignFinishedEvent) {
+  try {
+    return await applyDesignFinished(ctx, outcomeReportCore(core), event);
+  } catch (error) {
+    if (!(error instanceof restate.TerminalError) || !UUID.test(String(event?.requestId)) || ctx.key !== event.requestId) throw error;
+    const state = await ctx.get('lc');
+    // An outcome already recorded (a replay with other content) is not lost: nobody needs telling.
+    if (state && 'runId' in state && state.outcome?.eventId === event.eventId) throw error;
+    const draftMade = Boolean(event.report?.designId) && event.report?.status === 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW';
+    await reportTerminalFailure(ctx, {
+      step: `design-finished:${String(event.runId).slice(0, 80)}`, requestId: event.requestId,
+      tenantId: state?.tenantId || DEFAULT_TENANT_ID, taskId: UUID.test(String(event.taskId)) ? event.taskId : undefined,
+      what: `record the finished design (${String(event.report?.status).slice(0, 60)}${event.report?.designId ? `, Canva ${String(event.report.designId).slice(0, 40)}` : ''})`,
+      ...(state && 'runId' in state && state.runId === event.runId ? { requester: { chatId: state.chatId, state,
+        officeTold: draftMade ? OUTCOME_MESSAGES.draftMadeNotSaved : OUTCOME_MESSAGES.couldNotFinish } } : {}),
+    }, error);
+    throw error;
+  }
+}
+
+async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal, event: DesignFinishedEvent) {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId || !UUID.test(event.taskId) ||
       (event.runId !== `dr-${event.taskId}` && !new RegExp(`^dr-${event.taskId}-a[1-9][0-9]*$`).test(event.runId)) ||
       event.eventId !== `dr-finished:${event.runId}` ||
@@ -431,6 +530,7 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
     status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
     question?: { id: string; text: string; options: string[] };
     officeAlert?: { chatId: string; text: string };
+    officeAlerts?: Array<{ chatId: string; text: string }>;
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/design-outcome`, {
     v: 1, expectedRev: prior.rev, rev: nextRev,
     key: `${event.requestId}:${nextRev}:designFinished:${event.runId}`,
@@ -450,6 +550,7 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
       ...(projected.revisionId ? { revisionId: projected.revisionId } : {}),
       ...(projected.message ? { message: projected.message } : {}),
       ...(projected.officeAlert ? { officeAlert: projected.officeAlert } : {}),
+      ...(Array.isArray(projected.officeAlerts) && projected.officeAlerts.length ? { officeAlerts: projected.officeAlerts } : {}),
     },
   };
   ctx.set('lc', next);
@@ -719,8 +820,30 @@ export async function recordOfficeDeliveryStart(ctx: AutomaticOpenContext, core:
     deliveryId: projected.delivery.deliveryId, stage: 'delivering', rev: nextRev };
 }
 
-/** The workflow reports only to its private request owner; Core applies a versioned final projection. */
+/**
+ * The workflow reports only to its private request owner; Core applies a versioned final projection.
+ * It is the only report of the delivery (ADR-155): asked through outcomeReportCore, and a refusal for
+ * good is reported to every office member (the requester already has the files, or the office's word).
+ */
 export async function recordDeliveryFinished(ctx: AutomaticOpenContext, core: CoreInternal,
+  event: DeliveryFinishedEvent): Promise<DeliveryFinishedReply> {
+  try {
+    return await applyDeliveryFinished(ctx, outcomeReportCore(core), event);
+  } catch (error) {
+    if (!(error instanceof restate.TerminalError) || !UUID.test(String(event?.requestId)) || ctx.key !== event.requestId) throw error;
+    const state = await ctx.get('lc');
+    // A result already recorded (a replay with other content) is not lost: nobody needs telling.
+    if (state && reviewOwned(state) && state.delivery?.finishEventId === event.eventId) throw error;
+    await reportTerminalFailure(ctx, {
+      step: `delivery-finished:${String(event.deliveryId).slice(0, 120)}`, requestId: event.requestId,
+      tenantId: state?.tenantId || DEFAULT_TENANT_ID, taskId: UUID.test(String(event.taskId)) ? event.taskId : undefined,
+      what: `record how the delivery ended (${String(event.outcome?.outcome).slice(0, 20)})`,
+    }, error);
+    throw error;
+  }
+}
+
+async function applyDeliveryFinished(ctx: AutomaticOpenContext, core: CoreInternal,
   event: DeliveryFinishedEvent): Promise<DeliveryFinishedReply> {
   if (event?.v !== 1 || ctx.key !== event.requestId || !UUID.test(event.requestId) ||
       !UUID.test(event.taskId) || !UUID.test(event.approvalId) ||
@@ -836,9 +959,12 @@ function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleS
       taskId: state.taskId, questionId: state.question.id,
     } } : {}),
   });
-  const alert = state.outcome?.officeAlert;
-  if (alert) ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:office-alert`, chatId: alert.chatId,
-    kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+  // ADR-155: every office member hears it; a receipt from before names only the first (officeAlert).
+  const alerts = state.outcome?.officeAlerts ?? (state.outcome?.officeAlert ? [state.outcome.officeAlert] : []);
+  for (const [index, alert] of alerts.entries()) {
+    ctx.send({ v: 1, key: officeAlertKey(`${state.requestId}:${state.rev}:office-alert`, index, alert.chatId), chatId: alert.chatId,
+      kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+  }
 }
 
 /**
@@ -899,7 +1025,7 @@ export async function recordRequesterDecision(
   if (event.questionId && !updateMatch) {
     throw invalid('clarification answers require the persisted Telegram update identity');
   }
-  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+  const projected = await reportedIfRefused(ctx, () => ctx.run(`project:${nextRev}`, () => core.post<{
     v: 1; requestId: string; priorTaskId: string; newTaskId: string;
     round: number; rev: number; stage: 'designing'; runId: string; directive?: string;
     questionId?: string;
@@ -912,7 +1038,12 @@ export async function recordRequesterDecision(
     : { v: 1, expectedRev, rev: nextRev,
         key: `${event.requestId}:${nextRev}:requesterRevision:r${event.round}`,
         ops: [{ kind: 'requesterRevision', priorTaskId: event.priorTaskId, newTaskId,
-          round: event.round, directive: event.directive.trim() }] }));
+          round: event.round, directive: event.directive.trim() }] })), {
+    // ADR-155: the requester's change, refused for good, is not lost: the office has their words.
+    step: `requester-decision:${nextRev}`, requestId: event.requestId, tenantId: prior.tenantId, taskId: prior.taskId,
+    what: `start the requester's change (round ${event.round})`, words: event.directive,
+    requester: { chatId: prior.chatId, state: prior, officeTold: INBOX_MESSAGES.changeToOfficeToFinish, alone: INBOX_MESSAGES.changeNotStarted },
+  });
   if (projected?.v !== 1 || projected.requestId !== event.requestId ||
       projected.priorTaskId !== event.priorTaskId || projected.newTaskId !== newTaskId ||
       projected.round !== event.round || projected.rev !== nextRev || projected.stage !== 'designing' ||
@@ -1071,7 +1202,9 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             get: (name) => ctx.get<LifecycleState>(name),
             run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
             set: (name, value) => ctx.set(name, value),
-            send: () => { throw new Error('deliveryFinished cannot send from this transition'); },
+            // Only a refusal for good sends anything here: the office's alert (ADR-155).
+            send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+              .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
             startDesign: () => { throw new Error('deliveryFinished cannot start a design run'); },
           }, core, event)),
       ),

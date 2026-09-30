@@ -7,7 +7,7 @@ import {
 import { CanvaConnectService, CanvaFlowError } from '../services/canva-connect-service.js';
 import { DesignStudioRepository, sql, withRlsContext, type CandidateImageKind } from '@hawa/db';
 import { isSha256Hex } from '@hawa/contracts';
-import { isRenderedStudioCandidate, StudioBudgetEvidenceError, StudioBudgetExhaustedError } from '@hawa/domain';
+import { isRenderedStudioCandidate, parseStudioImagery, parseStudioTier, StudioBudgetEvidenceError, StudioBudgetExhaustedError } from '@hawa/domain';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { blobStoreFor, storedFileLost } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
@@ -127,12 +127,17 @@ export function registerDesignStudioRoutes(
 
       const width = Number(body.width || 1080);
       const height = Number(body.height || 1350);
+      // One vocabulary with intake (ADR-159): an unknown tier or imagery is refused, not stored.
+      const tier = parseStudioTier(body.tier), imagery = parseStudioImagery(body.imagery);
+      if (tier === null || imagery === null) {
+        return ctx.problem(c, 422, 'STUDIO_OPTIONS_INVALID', 'tier is standard or premium; imagery is auto, none or generated');
+      }
 
       const result = await svc.createOrGetRun(s, taskId, key, {
         width,
         height,
-        tier: body.tier,
-        imagery: body.imagery,
+        tier,
+        imagery,
         previews: body.previews,
         holdForSelection: body.holdForSelection,
       });

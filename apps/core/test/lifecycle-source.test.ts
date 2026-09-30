@@ -329,6 +329,32 @@ describe('PDFs in plain words (ADR-145)', () => {
     expect(row.payload.reviewedSource).toMatchObject({ confirmation: 'request_copy_reviewed', copySha256: hash(copy) });
   });
 
+  // ADR-156 (audit #13): only a confirmation or words that look like the copy answer "is this exactly
+  // the text?". A new brief, a change or a question is read as any message is, and the words keep waiting.
+  it('a new brief, a change or a question while the words wait is read as usual, and the words keep waiting', async () => {
+    const f = await fixture(); f.update.message.caption = `For ${f.code}`;
+    await intake(f.update);
+    for (const words of ['Also make the background blue', 'Can you make a poster for the book fair on 3 November?', 'what fonts do you have?']) {
+      const answer = await intake(text(f, words));
+      expect(answer.draft?.lifecycleSource, words).toBeUndefined();
+      expect(answer.lifecycleAction === 'open-request' ? answer.draft.rawText : words, words).toBe(words);
+    }
+    const opened = await intake(text(f, 'Yes, correct'));
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { rawText: 'Source page 1\n\nSource page 2',
+      lifecycleSource: expect.anything() } });
+  });
+
+  it('"Which organisation is it for?" is answered by a plain answer, not by a brief that names one', async () => {
+    const f = await fixture(); f.update.message.caption = 'Some document';
+    expect(await intake(f.update)).toMatchObject({ sourceMessage: 'Thanks for the PDF! Which organisation is it for?' });
+    const brief = await intake(text(f, `Can you make a poster for ${f.code} for the book fair on 3 November, 10am at the fair grounds?`));
+    expect(brief.sourceMessage).toBeUndefined();
+    expect(brief.draft?.lifecycleSource).toBeUndefined();
+    // The question is still open: the organisation's name answers it, and the PDF is read.
+    expect(await intake(text(f, f.code))).toMatchObject({ lifecycleAction: 'source-message',
+      sourceMessage: expect.stringContaining('Here is the text I found in your PDF') });
+  });
+
   it('thanks or a status question while the words wait is read as usual, not taken as the words', async () => {
     const f = await fixture(); f.update.message.caption = `For ${f.code}`;
     await intake(f.update);

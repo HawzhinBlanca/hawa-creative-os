@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-30T01:03:30+03:00",
+  "generatedAt": "2026-09-30T12:40:22+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "3a2bc544bf3dca6cea4d15dee64d8c24d4f00e82",
+    "commit": "3dd9e8e27032ca4c4ac59ad49ceb5e451937fdee",
     "treeClean": true,
-    "commitTimestamp": "2026-09-30T01:03:30+03:00",
-    "branch": "codex/research-grade-design-system"
+    "commitTimestamp": "2026-09-30T12:40:22+03:00",
+    "branch": "claude/release-audit-fixes"
   },
   "migrations": {
-    "targetVersion": "070_reviewed_preview_retention",
-    "latestMigrationFile": "070_reviewed_preview_retention.sql",
-    "totalMigrations": 70
+    "targetVersion": "071_uncertain_call_expiry",
+    "latestMigrationFile": "071_uncertain_call_expiry.sql",
+    "totalMigrations": 71
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,8 +39,8 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "96ff143128ac6e7aab988def5b400ff8a3495770d576e1430f9e750e6987d2d7",
-        "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
+        "apps/core/src/app.ts": "f05255620255b6cb8b9ba25a818fd0780aaae098f3a470ab7ffc94c43f288293",
+        "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
     },
@@ -73,9 +73,9 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "fd0445d25b6d31813b9dae01049745b6a6e9b06b80bd1344b73c169e693704ae",
-      "packages/creative/src/studio/layout-generator-v3.ts": "81813207c7ae2327115e743254db2cf05242cc6cc4f1e85dd5672ee44908bccb",
-      "packages/creative/src/studio/pairwise-judge-v3.ts": "5ecf25768a864e8e7c1b243bfb6d9aa1c06c2cb8f544cc255d5e78fa9de4fddd",
+      "apps/core/src/services/canva-design-planner.ts": "96967282aed080bb37e57d6792acae2f5f49af980dcf948918fc8a70bdd8ba41",
+      "packages/creative/src/studio/layout-generator-v3.ts": "6bb4cbc698a3ee572a303cc1059d0684a9944afdd539a2c620586991843d8e85",
+      "packages/creative/src/studio/pairwise-judge-v3.ts": "9092fadc3b9a5ab1def397e1be560d2483bff04689661b59f0c1ce87bcd41e7c",
       "packages/creative/src/studio/box-critique-v3.ts": "8584e3f9ced35d200c821c29250329e830b11760bec615b344e059d69dac76ec"
     }
   },
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "1910bd8aa13e1c8a39e8537822281a5aed5295087588b7f5a899226e4d057030"
+  "sha256": "165be1ecd64c93099f53dbb4b115dd0771cb0b276ed50287ee8de2475bef43bc"
 }

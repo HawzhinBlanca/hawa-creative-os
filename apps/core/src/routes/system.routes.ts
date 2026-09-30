@@ -333,8 +333,9 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   // What is still on the old Telegram path (ADR-135): open legacy Telegram tasks, Core requester
-  // sends still queued and legacy Delivery workflow runs in flight. Stage 2 of the retirement, which
-  // deletes the code that finishes them, waits for `stage2Ready`. Read-only; administrators only.
+  // sends still queued and legacy Delivery workflow runs in flight. Stage 2 of the retirement has
+  // merged, so this is a standing check that every count stays 0 (legacy-path-status.ts).
+  // Read-only; administrators only.
   registerRoute('get', '/operations/legacy-path', async (c: Context) => {
     const denied = requireAdministrator(c); if (denied) return denied;
     if (!db) return problem(c, 503, 'Database Unavailable', 'The legacy path is read from PostgreSQL');
@@ -355,7 +356,8 @@ export function registerSystemRoutes(ctx: RouteContext) {
     const hasWaha = Boolean(process.env.WAHA_API_KEY || process.env.WAHA_BASE_URL);
     const hasDrive = Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_DRIVE_FOLDER_ID);
     const hasSheets = Boolean(process.env.GOOGLE_SHEETS_ID || process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-    const hasPhoenix = Boolean(process.env.PHOENIX_COLLECTOR_URL);
+    // Production names it PHOENIX_COLLECTOR_ENDPOINT (.env.production.example); both are accepted (ADR-159).
+    const hasPhoenix = Boolean(process.env.PHOENIX_COLLECTOR_URL || process.env.PHOENIX_COLLECTOR_ENDPOINT);
 
     const canvaBreaker = globalCanvaCircuitBreaker?.getSnapshot();
     const observedAt = new Date().toISOString();

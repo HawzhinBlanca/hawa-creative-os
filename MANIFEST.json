@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T09:33:47Z",
+  "generatedAt": "2026-09-30T11:28:36Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 628,
+  "fileCount": 643,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "13912165e256b8a6fd8bf49f6919a3403f886b332a4a7af3a9fca24cdfd257ca",
-      "bytes": 3985
+      "sha256": "d05bcacc27e6eda1ca11a92e9564da706a1eb5c312ee2049a2c2ab7fefab37ac",
+      "bytes": 3967
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -818,6 +818,41 @@
       "bytes": 2913
     },
     {
+      "path": "adrs/155_request_durability_on_the_one_path.md",
+      "sha256": "01c12091a04fca04afe65f2063ef23ab81a0b615cf3d9bf2026647725a3cba48",
+      "bytes": 8000
+    },
+    {
+      "path": "adrs/156_natural_language_intake_friction_repairs.md",
+      "sha256": "3c158ffc5053cca9789befb414a83356b5532fad4d6e9a1a997c852efa9d50ea",
+      "bytes": 20532
+    },
+    {
+      "path": "adrs/157_design_output_quality_review_findings.md",
+      "sha256": "0421bc3bc518244ac45c7aba3048bab796d8f8dbed8bf0305b012eac134cffd5",
+      "bytes": 7306
+    },
+    {
+      "path": "adrs/158_production_release_directories_and_operations_repairs.md",
+      "sha256": "f621d99734f5a975dbb1acb393e233a069bd5af07522f0f6f835a7df2ce35c37",
+      "bytes": 8515
+    },
+    {
+      "path": "adrs/159_budget_expiry_uncertain_calls_config_and_dead_code.md",
+      "sha256": "4ea7b2bb23b1b0982b3c3fc45a8af4e48f650f67494efeca2f0600366c4b2838",
+      "bytes": 8997
+    },
+    {
+      "path": "adrs/160_caption_limit_holds_album.md",
+      "sha256": "dc5bd5ba00ca37d36c787c9897a0e23e947e1103d74a7360a6b0b4f5b88038e2",
+      "bytes": 16823
+    },
+    {
+      "path": "adrs/161_owner_directed_sol61_office_primary.md",
+      "sha256": "1f539bef0104e0f82a834b0d3d1de0b4191a0476d1b8372101d690c91fd51ef0",
+      "bytes": 3369
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1069,8 +1104,8 @@
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "5f49f2f14f4fffe6f9c84d176993ec5ab856f042c9f475b3b0317cf5e3d666a0",
-      "bytes": 19742
+      "sha256": "c6f2629c07aed8321c645c79a8096c4a05210d149925b4343ecd3b11954662fb",
+      "bytes": 20261
     },
     {
       "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
@@ -1469,8 +1504,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "3b18d2c2cc22a5af23dbadd0ab3817f5387bc9e4d19c0bfe3d61275750f2b440",
-      "bytes": 44123
+      "sha256": "7628d96a5d9d83837b7e4a8719d91ba7ad7a1088e637659d4dc2cc242e918784",
+      "bytes": 47471
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -1541,6 +1576,11 @@
       "path": "plans/model-migration-2026-09-30/MATCHED_SCREEN.json",
       "sha256": "85c7ba9296ed18a8f2b45091af40787db1a9190963ea81662014d891cb08a496",
       "bytes": 834
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/OFFICE_SWITCH.json",
+      "sha256": "6190ac5a6c3df006d96e889b64b29f9fb7a9961b0813a365af91374106e97415",
+      "bytes": 1727
     },
     {
       "path": "plans/model-migration-2026-09-30/PRODUCTION.json",
@@ -1806,6 +1846,36 @@
       "path": "plans/model-migration-2026-09-30/lint.log",
       "sha256": "cd10cac775845476ff749df2dbb8c40a5cc31a2ad3c58acfc430a71e3a11a3f6",
       "bytes": 401
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/office-switch-logs/final-planner.log",
+      "sha256": "86343ea89dbf552643f8bde193bd36000951f7329a3ea3c6ca8ed0cbe6996f7c",
+      "bytes": 1380
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/office-switch-logs/initial-focused.log",
+      "sha256": "7c12d3356d95da9150cb626931f02f2aebb5819617ee81fcc51b7bfa9f606fcd",
+      "bytes": 12660
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/office-switch-logs/initial-planner.log",
+      "sha256": "b4aeb29cbc419325b766fdb6d2c2d1a8defa851bfacb5ff331974e44b4b4a805",
+      "bytes": 4035
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/office-switch-logs/lint.log",
+      "sha256": "60fe01171710ba97da8888cf6035b4a597bb1ddb68781d4c837c35118f299f42",
+      "bytes": 401
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/office-switch-logs/merged-focused.log",
+      "sha256": "c343dcf03b5cbce592de5f8cca479068f4895798b98299865824a7ea9003b55d",
+      "bytes": 2198
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/office-switch-logs/test-types.log",
+      "sha256": "9d6652b7d7291561a758d283b1511f6916cde47299272aee09eb63dc2bb4234a",
+      "bytes": 155
     },
     {
       "path": "plans/model-migration-2026-09-30/test-types.log",
@@ -2304,8 +2374,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "afd420dc3b6262b01155026275f481e6096f70c0b9fcfef84cc80ada2e6c5c17",
-      "bytes": 512825
+      "sha256": "aa7061a4578ad498799dd4c7c9fe15da5275487b2df789097d827ffa501b512a",
+      "bytes": 536203
     },
     {
       "path": "plans/user-stories.csv",
@@ -2434,8 +2504,8 @@
     },
     {
       "path": "runbooks/CONFIRMED_PHOTO_ALBUMS.md",
-      "sha256": "3955e960b66ce30af1357aab4e4328822a1757fab515ddfd0dc43ad6637a805b",
-      "bytes": 6946
+      "sha256": "1fb652b5efb292ef5855aaea563a9e21fe8932be2a016a9df5ec87f16f44f8b8",
+      "bytes": 9554
     },
     {
       "path": "runbooks/EVALUATION_RECOVERY.md",
@@ -2468,6 +2538,11 @@
       "bytes": 3180
     },
     {
+      "path": "runbooks/PRODUCTION_RELEASE_DIRECTORIES.md",
+      "sha256": "b53f5825fe90e0b9084d45b70bed4434900f57aa3e49d271d8e03a4a7c1675ed",
+      "bytes": 13860
+    },
+    {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
       "sha256": "9029fdbb6a6610da10319988521f1e4d94f60dab28e0a9764e8e2400228b299e",
       "bytes": 9814
@@ -2479,8 +2554,8 @@
     },
     {
       "path": "runbooks/SPENDING_POLICY.md",
-      "sha256": "5c446f324348f643705fa7f8e91562b9b3cba8db244d7612856ca5082bd0dbbf",
-      "bytes": 2861
+      "sha256": "53f72ce27d7000bdb1f04f49f7478a8c228cb35771ea302172394414a3ba3787",
+      "bytes": 4012
     },
     {
       "path": "runbooks/STUDIO_DAILY_BUDGETS.md",
@@ -2489,8 +2564,8 @@
     },
     {
       "path": "runbooks/STUDIO_RECOVERY.md",
-      "sha256": "dfe9aec63226fcb3402d3184b04991bca717400741551f9bc2f894cdaa01b51b",
-      "bytes": 11789
+      "sha256": "1e540f7533e5e8b102f618b9be063b0b6246edb5c6ca851814ac4f0580185059",
+      "bytes": 12866
     },
     {
       "path": "schemas/ApprovalDecision.schema.json",
@@ -2619,8 +2694,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "8a43811d49a9ebbc3c2ef74966632658d51947c52e47efc8035ec1ef54f9e8e9",
-      "bytes": 19183
+      "sha256": "fbd7de67e10b784bd45fa88471bbb5fc8e828db73245f0bb2cc71344ef3399ba",
+      "bytes": 19988
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",
@@ -3029,8 +3104,8 @@
     },
     {
       "path": "scripts/sorani_review_list.ts",
-      "sha256": "1271637f6bc87327c1ae30c7c78e45a65f31bd51a942a57bdf1e4bf3326b536d",
-      "bytes": 2581
+      "sha256": "c9864e37f032ec81f058117fd39660b5351b4ec0cb7f329ad385f7cf27d2f115",
+      "bytes": 2919
     },
     {
       "path": "scripts/studio_fault_injection.ts",

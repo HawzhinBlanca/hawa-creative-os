@@ -5,8 +5,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { encodeEditableTransfer, creativeAssetPath, reserveStudioText, EditableTransferValidationError, type EditableTransferPlan } from '@hawa/creative';
-import { assertModelAllowed, resolveModel } from '@hawa/domain';
+import { encodeEditableTransfer, creativeAssetPath, reserveStudioText, STUDIO_SPENDING_POLICY, OpenAiStudioClient, StudioReservationError, EditableTransferValidationError, checkCopyCompleteness, type EditableTransferPlan } from '@hawa/creative';
+import { assertModelAllowed, resolveModel, spendingPolicyValidity } from '@hawa/domain';
 import { z } from 'zod';
 import { plannerLayout as layout, executePlannerCall, type PlannerCallMetadata } from './canva-planner-call.js';
 import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js';
@@ -24,7 +24,8 @@ type Scope={tenantId:string;actorId:string};
 const hash=(value:string|Buffer)=>createHash('sha256').update(value).digest('hex');
 const safeFontName=(value:unknown):value is string=>typeof value==='string'&&value.trim()===value&&
   /^[\p{L}\p{N} ._+()-]{1,80}$/u.test(value)&&/[\p{L}\p{N}]/u.test(value);
-export interface PlannerOptions {apiKey?:string;fetcher?:typeof fetch;planningSlots?:number}
+/** `now`: the clock the price policy's review date is read against (tests pass a fixed one). */
+export interface PlannerOptions {apiKey?:string;fetcher?:typeof fetch;planningSlots?:number;now?:()=>number}
 
 /**
  * How many designs the office plans at once. It was a literal 2 from the Canva cutover (bf7a017,
@@ -584,9 +585,16 @@ export class CanvaDesignPlanner {
             }
           },
           max_completion_tokens: 4000, service_tier:'default',
+          ...(request.model === 'gpt-6.1-sol' ? { reasoning_effort: 'low' } : {}),
         });
-      if(Date.now()>=Date.parse('2026-11-22T00:00:00Z'))throw new Error('SPENDING_POLICY_EXPIRED');
-      const reservation=reserveStudioText(body);
+
+      // The rates this call is reserved at need a person's re-check by their review date (ADR-159,
+      // runbooks/SPENDING_POLICY.md): from then on nothing is sent, and the plan fails with its own code.
+      if(spendingPolicyValidity(STUDIO_SPENDING_POLICY.reviewBy,(this.options.now??Date.now)()).status==='expired')
+        throw new CanvaFlowError(503,'SPENDING_POLICY_EXPIRED',`The Studio price policy ${STUDIO_SPENDING_POLICY.id} passed its review date `+
+          `(${STUDIO_SPENDING_POLICY.reviewBy}); a person must re-check the prices and publish a renewed policy before paid planning.`);
+      const nativeCount=await new OpenAiStudioClient({apiKey,fetcher:this.options.fetcher||fetch,timeoutMs:20000}).countImageInputTokens(body);
+      const reservation=reserveStudioText(body,nativeCount);
       const metadata:PlannerCallMetadata={expectedTaskVersion:taskVersion,isRevision:Boolean(directiveMatch||request.parentTaskId),
         conversationalRevision:Boolean(claim.priorPlanRow&&priorLayout&&!isRedesignRequest),
         isRedesign:isRedesignRequest,hasReferenceImage:Boolean(referenceImageUrl),
@@ -635,7 +643,7 @@ export class CanvaDesignPlanner {
         WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid`.execute(db)).rows[0]);
       if(admitted||call)return {planId:claim.row.id,status:'uncertain',callId:claim.row.id,
         message:'The paid attempt is retained. Resume its saved result or reconcile its outcome; do not repeat the request.'};
-      const code=error instanceof CanvaFlowError?error.code:
+      const code=error instanceof CanvaFlowError||error instanceof StudioReservationError?error.code:
         error instanceof Error&&error.message.startsWith('OFFICE_BUDGET_')?error.message.split(':')[0]:'PLANNER_NOT_DISPATCHED';
       await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status='failed',diagnostic=${code},updated_at=now()
         WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid AND status='planning'`.execute(db));
@@ -741,6 +749,8 @@ export class CanvaDesignPlanner {
         rtlFont:request.rtlFont,
         rtlFontProvisional:Boolean(request.rtlFont),
         rtlBlocks,
+        // ADR-157: copy that may be cut short or has marks that do not pair, recorded for review; never a failure.
+        reviewFindings:checkCopyCompleteness(Object.fromEntries(request.copy.map((text:string,i:number)=>[i,text]))),
         ...call.metadata,
         referenceImageSha256:request.ownedReferenceImage?.sha256||null,
         ...(request.ownedReferenceImages?{referenceImageSha256s:request.ownedReferenceImages.map(image=>image.sha256)}:{}),

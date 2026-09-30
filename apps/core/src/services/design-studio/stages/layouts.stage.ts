@@ -9,6 +9,8 @@ import {
   normalizeStudioLayout,
   prepareGeneratedLayoutV3,
   type CopyBlockSlotInput,
+  type PhotoSelection,
+  photoSelectionPrompt,
 } from '@hawa/creative';
 import { renderBriefContractForPrompt } from '@hawa/domain';
 import { buildP0SystemPrompt, buildP3Prompt } from '../prompts.js';
@@ -318,6 +320,7 @@ export async function runLayoutsStage(
       copyCount: ctx.copyBlocks.length,
       copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
       photoCount: ctx.photos?.length ?? 0,
+      ...(ctx.photoSelection ? { photoSelection: ctx.photoSelection } : {}),
       reference: {
         rules: {
           fontFamily: ctx.latinFont,
@@ -397,7 +400,14 @@ function styleSummary(style: StageContext['style']): string {
 }
 
 /** The line that tells the layout model what photographs it has to place, and how. */
-export function photosBrief(photos: StageContext['photos'] | undefined, width: number, height: number, cutouts?: StageContext['photoCutouts']): string {
+export function photosBrief(
+  photos: StageContext['photos'] | undefined,
+  width: number,
+  height: number,
+  cutouts?: StageContext['photoCutouts'],
+  /** ADR-157: the requester let the design choose among the photos. */
+  selection?: PhotoSelection
+): string {
   if (!photos?.length) return '';
   const minSide = Math.round(Math.min(width, height) * 0.22);
   const list = photos
@@ -411,8 +421,10 @@ export function photosBrief(photos: StageContext['photos'] | undefined, width: n
       `give each a tall box in the lower part of the canvas, side by side, reaching the bottom edge, and keep all text ` +
       `and the logo above them or beside them, never on them; they may overlap each other a little.`
     : '';
+  const choosing = selection?.mode === 'choose';
   return (
-    `Client photographs to place (${photos.length}): ${list}. Each appears exactly once in photos[], as content ` +
+    `Client photographs to place (${photos.length}): ${list}. ` +
+    (choosing ? `${photoSelectionPrompt(selection, photos.length)} Each chosen photo appears once in photos[], as content ` : `Each appears exactly once in photos[], as content `) +
     `(a speaker's portrait, a product), its short side at least 22% of the canvas's short side (${minSide}px here), ` +
     `never under text or the logo, cropped by cover-fit so give the box close to the photo's aspect. ` +
     `Compose the copy around them; they are the point of the design.` +
@@ -423,7 +435,7 @@ export function photosBrief(photos: StageContext['photos'] | undefined, width: n
 export function layoutBriefV3(
   brief: Pick<CreativeBrief, 'occasion' | 'audience' | 'toneWords' | 'must'> & Partial<CreativeBrief>,
   ctx: Pick<StageContext, 'instructions' | 'requestedBackground' | 'reference' | 'style' | 'photos' | 'photoCutouts' | 'width' | 'height'> &
-    Partial<Pick<StageContext, 'briefContract'>>
+    Partial<Pick<StageContext, 'briefContract' | 'photoSelection'>>
 ): string {
   return (
     [
@@ -434,7 +446,7 @@ export function layoutBriefV3(
       ctx.instructions ? `Client instructions: ${JSON.stringify(ctx.instructions)}` : '',
       ctx.requestedBackground ? `Background: ${ctx.requestedBackground}, as the client asked` : '',
       ctx.reference ? `Client reference image (attached): ${ctx.reference.notes || 'follow its design'}` : '',
-      photosBrief(ctx.photos, ctx.width, ctx.height, ctx.photoCutouts),
+      photosBrief(ctx.photos, ctx.width, ctx.height, ctx.photoCutouts, ctx.photoSelection),
       styleSummary(ctx.style),
     ]
       .filter(Boolean)

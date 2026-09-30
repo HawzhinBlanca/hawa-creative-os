@@ -1,7 +1,7 @@
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
-import { renderLayoutV2, measureWrappedLines, balancedBoxWidths, admittedFontFace, findAdmittedFontFace, type RenderLayoutOptions } from './render-layout-v2.js';
+import { renderLayoutV2, measureWrappedLines, measureTextGeometry, balancedBoxWidths, admittedFontFace, findAdmittedFontFace, type RenderLayoutOptions } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
 import { generateBoxGroundedCritique, type BoxCritiqueResult } from './box-critique-v3.js';
 import { refineCandidate, type RefinementCandidateResult } from './refinement-engine-v3.js';
@@ -25,7 +25,8 @@ import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-q
 import { computeLayoutMetrics } from './layout-metrics.js';
 import type { ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
-import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
+import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance, inkBoxOf } from './composite-contrast.js';
+import { coverCrop } from './photo-crop.js';
 import { normalizeHex } from './validate-layout-v2.js';
 import { applyStyleSpec, colourDecisionsOnly, composeStyleSpec, layoutDefectCount, MOVEMENT_DECISIONS, ornamentForStyle, withoutDecision, type StyleSpec } from './style-spec.js';
 import { photosMayOverlap } from './photo-cutout.js';
@@ -791,7 +792,10 @@ export function prepareGeneratedLayoutV3(
   const balance = canvas.ornament?.balance ?? true;
   const spread = canvas.style?.composition === 'spread';
   const finish = (l: StudioLayoutV2) => {
-    const finished = settlePhotos(balanceLineBreaks(compose(l), copy));
+    // A photo design is re-spaced around its logo, unless the reference's spread composition placed
+    // it; every design's multi-block panels are centred on their lines (ADR-157).
+    const composed = balanceLineBreaks(compose(l), copy);
+    const finished = settlePhotos(centerPanelStacks(spread ? composed : fitLogoBand(composed, copy), copy));
     if (canvas.allowArt === false) delete finished.art;
     return finished;
   };
@@ -1075,6 +1079,215 @@ export function balanceVertically(layout: StudioLayoutV2, copy: PipelineV3Copy):
   return layout;
 }
 
+/** Text over the art that is not inside its calm region: what the validator's ART_SAFETY refuses. */
+function textOutsideCalmArt(layout: StudioLayoutV2): number {
+  const art = layout.art;
+  if (!art?.calmRegion) return 0;
+  const box = (art.box as Rect | undefined) || { x: 0, y: 0, width: layout.width, height: layout.height };
+  const calm = art.calmRegion as Rect;
+  const inside = (t: Rect) => t.x >= calm.x && t.y >= calm.y && t.x + t.width <= calm.x + calm.width && t.y + t.height <= calm.y + calm.height;
+  return layout.text.filter((t) => intersects(t, box) && !inside(t)).length;
+}
+
+/** A change a guarded pass may keep: no new layout defect and no metric that passed now failing. */
+function keepsQuality(before: StudioLayoutV2, after: StudioLayoutV2, copy: PipelineV3Copy): boolean {
+  if (layoutDefectCount(after, copy) > layoutDefectCount(before, copy)) return false;
+  if (textOutsideCalmArt(after) > textOutsideCalmArt(before)) return false;
+  if (computeLayoutMetrics(after).overlapCount > computeLayoutMetrics(before).overlapCount) return false;
+  const failing = new Set(measureDesignV3(before, copy).failingMetrics);
+  return measureDesignV3(after, copy).failingMetrics.every((f) => failing.has(f));
+}
+
+const isFullBleed = (s: Rect, W: number, H: number) => s.width >= 0.98 * W && s.height >= 0.98 * H;
+
+/**
+ * Centres the text of a panel holding two or more blocks as one unit, on the lines it actually
+ * sets, not on the boxes (ADR-157). The KAAE report cover (2026-09-30) set title, rule, subtitle and
+ * body in a navy panel with about 50px above the first line and 90px below the last, which read as
+ * a stack slipping to the top; `centerLoneTextInPanels` only ever touched a panel with one block.
+ *
+ * The stack moves rigidly: its blocks and the rules and small shapes between them keep their
+ * spacing. Nothing leaves the panel. A panel with a photo on it, or reaching into the logo's clear
+ * space, is a composed card (a speaker card, a badge, a logo header) and is left alone, as is any
+ * defect it already has, which is refinement's to rearrange. Kept only if it adds no defect and
+ * fails no metric that passed.
+ */
+export function centerPanelStacks(layout: StudioLayoutV2, copy: PipelineV3Copy): StudioLayoutV2 {
+  const W = layout.width;
+  const H = layout.height;
+  let current = layout;
+  const panelIndices = (layout.shapes || [])
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }) => s.role === 'panel' && s.width > 0 && s.height > 0 && !isFullBleed(s, W, H))
+    .map(({ i }) => i);
+  for (const index of panelIndices) {
+    const next = JSON.parse(JSON.stringify(current)) as StudioLayoutV2;
+    const panel = next.shapes[index];
+    const within = (r: Rect) =>
+      r.x >= panel.x - 1 && r.x + r.width <= panel.x + panel.width + 1 && r.y >= panel.y - 1 && r.y + r.height <= panel.y + panel.height + 1;
+    const blocks = next.text.filter(within);
+    if (blocks.length < 2) continue;
+    if ((next.photos || []).some((p) => intersects(p, panel))) continue;
+    if (next.logo && next.logo.width > 0 && intersects(logoClearZone(next.logo), panel)) continue;
+    const measured = measureTextGeometry(next, copy.text);
+    const inks = blocks.map((t) => {
+      const m = measured.find((x) => x.copyIndex === t.copyIndex);
+      return inkBoxOf(t, m?.status === 'measured' ? m : undefined);
+    });
+    const top = Math.min(...blocks.map((t) => t.y));
+    const bottom = Math.max(...blocks.map((t) => t.y + t.height));
+    // The rules and accents inside the panel between the first and the last block travel with them.
+    const riders = next.shapes.filter(
+      (s, i) => i !== index && within(s) && s.y >= top - 1 && s.y + s.height <= bottom + 1 && s.height < panel.height / 2
+    );
+    const inkTop = Math.min(...inks.map((b) => b.y));
+    const inkBottom = Math.max(...inks.map((b) => b.y + b.height));
+    const moving: Rect[] = [...blocks, ...riders];
+    // Every box stays inside the panel.
+    const roomUp = Math.max(0, Math.min(...moving.map((r) => r.y - panel.y)));
+    const roomDown = Math.max(0, Math.min(...moving.map((r) => panel.y + panel.height - (r.y + r.height))));
+    const delta = Math.max(-roomUp, Math.min(roomDown, Math.round(panel.y + panel.height / 2 - (inkTop + inkBottom) / 2)));
+    if (Math.abs(delta) < 4) continue;
+    for (const r of moving) r.y += delta;
+    if (!keepsQuality(current, next, copy)) continue;
+    current = next;
+  }
+  if (current !== layout) Object.assign(layout, current);
+  return layout;
+}
+
+/**
+ * Sizes the band a logo stands in to the logo and its clear space, in a design built around the
+ * client's photographs (ADR-157). The KAAE report cover (2026-09-30) put a 100x80 logo in a 232px
+ * band above its photo grid, 82px of navy between the logo and the photos where its clear space is
+ * 40, and pressed its panel against the bottom margin. `balanceVertically` skips every design with
+ * photos, so nothing re-spaced it.
+ *
+ * When the logo stands alone above everything else (or below it), the content moves towards it
+ * until the gap is the logo's clear space, and then the whole composition, logo included, is
+ * centred between the margins, so the space the band gave up is shared top and bottom. Sizes, the
+ * content's own spacing and every horizontal position are unchanged. A layout with artwork in a
+ * region of its own, or with a band on the canvas edge, is composed where it stands. Kept only if it
+ * adds no defect and fails no metric that passed.
+ */
+export function fitLogoBand(layout: StudioLayoutV2, copy: PipelineV3Copy): StudioLayoutV2 {
+  const W = layout.width;
+  const H = layout.height;
+  const m = layout.grid?.margin ?? 0;
+  const logo = layout.logo;
+  if (!layout.photos?.length || !logo || !(logo.width > 0 && logo.height > 0)) return layout;
+  if (layout.art?.box && !isFullBleed(layout.art.box as Rect, W, H)) return layout;
+  const isBorder = (s: Rect & { role?: string }) => isFullBleed(s, W, H) || (s.role === 'frame' && s.width >= 0.85 * W && s.height >= 0.85 * H);
+  const shapes = (layout.shapes || []).filter((s) => !isBorder(s));
+  if (shapes.some((s) => s.y <= 1 || s.y + s.height >= H - 1)) return layout;
+  const content: Rect[] = [...layout.text, ...layout.photos, ...shapes];
+  const top = Math.min(...content.map((r) => r.y));
+  const bottom = Math.max(...content.map((r) => r.y + r.height));
+  const clear = logo.y - logoClearZone(logo).y;
+  const above = logo.y + logo.height <= top;
+  const below = logo.y >= bottom;
+  if (!above && !below) return layout;
+  const gap = above ? top - (logo.y + logo.height) : logo.y - bottom;
+  const excess = Math.floor(gap - clear);
+  if (excess < 8) return layout;
+
+  const next = JSON.parse(JSON.stringify(layout)) as StudioLayoutV2;
+  const moved: Rect[] = [...next.text, ...(next.photos || []), ...(next.shapes || []).filter((s) => !isBorder(s))];
+  const shift = (rects: Rect[], dy: number) => {
+    for (const r of rects) r.y += dy;
+    if (next.art?.calmRegion) next.art.calmRegion = { ...next.art.calmRegion, y: next.art.calmRegion.y + dy };
+  };
+  shift(moved, above ? -excess : excess);
+  // The whole composition, centred between the margins.
+  const all: Rect[] = [...moved, next.logo!];
+  const first = Math.min(...all.map((r) => r.y));
+  const last = Math.max(...all.map((r) => r.y + r.height));
+  shift(all, Math.round((m + (H - m) - (first + last)) / 2));
+  if (next.logo!.y < m || next.logo!.y + next.logo!.height > H - m || all.some((r) => r.y < 0 || r.y + r.height > H)) return layout;
+  if (!keepsQuality(layout, next, copy)) return layout;
+  Object.assign(layout, next);
+  return layout;
+}
+
+/** The share of a photograph that a cover crop into a box of this shape throws away. */
+export function coverCropLoss(box: { width: number; height: number }, image: { width: number; height: number }): number {
+  const crop = coverCrop(box, image);
+  return 1 - (crop.sw * crop.sh) / (image.width * image.height);
+}
+
+/**
+ * Re-divides a row of framed photos so each box is closer to its own photograph's shape (ADR-157).
+ * A framed photo is cover-cropped into its box, so a portrait in a wide box loses its top and
+ * bottom: the KAAE cover's door photo lost the top of the door and half its sign. The row keeps its
+ * height, its ends and its gaps; only where the widths divide changes, towards the photos' own
+ * aspects, as far as every photo keeps its minimum size. Where a face was detected, a crop shorter
+ * than the face costs extra, so a row is never re-divided into cutting one. There is no text
+ * detector, so lettering in a photo is not protected (future work, ADR-157).
+ *
+ * Photos of unknown size, cut-outs, masked photos and photos alone in their row keep their boxes.
+ * Kept only if the row loses less of its photographs than before and the layout gains no defect.
+ */
+export function fitPhotoBoxesToImages(
+  layout: StudioLayoutV2,
+  sizes: Array<{ width: number; height: number } | null | undefined>,
+  copy: PipelineV3Copy,
+  faces: Array<{ x: number; y: number; faceShare?: number } | null | undefined> = []
+): StudioLayoutV2 {
+  const W = layout.width;
+  const H = layout.height;
+  const known = (i: number) => {
+    const s = sizes[i];
+    return s && s.width > 0 && s.height > 0 ? s : undefined;
+  };
+  const framed = (layout.photos || []).filter((p) => p.treatment !== 'cutout' && !p.mask && known(p.photoIndex));
+  const rows: Array<typeof framed> = [];
+  for (const p of [...framed].sort((a, b) => a.y - b.y || a.x - b.x)) {
+    const row = rows.find((r) => Math.abs(r[0].y - p.y) <= 2 && Math.abs(r[0].height - p.height) <= 2);
+    if (row) row.push(p);
+    else rows.push([p]);
+  }
+  const cost = (box: { width: number; height: number }, photoIndex: number) => {
+    const image = known(photoIndex)!;
+    const face = faces[photoIndex];
+    const crop = coverCrop(box, image, face ? { x: face.x, y: face.y } : undefined);
+    const faceCut = face?.faceShare && face.faceShare * image.height > crop.sh ? 0.5 : 0;
+    return 1 - (crop.sw * crop.sh) / (image.width * image.height) + faceCut;
+  };
+  let current = layout;
+  for (const row of rows.filter((r) => r.length >= 2)) {
+    row.sort((a, b) => a.x - b.x);
+    if (row.some((p, k) => k > 0 && p.x < row[k - 1].x + row[k - 1].width)) continue;
+    const gaps = row.slice(1).map((p, k) => p.x - (row[k].x + row[k].width));
+    const available = row.reduce((sum, p) => sum + p.width, 0);
+    const h = row[0].height;
+    const aspects = row.map((p) => known(p.photoIndex)!.width / known(p.photoIndex)!.height);
+    const aspectSum = aspects.reduce((a, b) => a + b, 0);
+    const ideal = aspects.map((a) => (available * a) / aspectSum);
+    const minSide = row.map((p) => Math.round(Math.min(W, H) * (p.role === 'inset' ? 0.12 : 0.22)));
+    const before = row.reduce((sum, p) => sum + cost(p, p.photoIndex), 0);
+    for (const t of [1, 0.75, 0.5, 0.25]) {
+      const widths = row.map((p, k) => Math.round(p.width + t * (ideal[k] - p.width)));
+      widths[widths.length - 1] = available - widths.slice(0, -1).reduce((a, b) => a + b, 0);
+      if (widths.some((w, k) => Math.min(w, h) < minSide[k])) continue;
+      const after = row.reduce((sum, p, k) => sum + cost({ width: widths[k], height: h }, p.photoIndex), 0);
+      if (after >= before - 0.01) break;
+      const next = JSON.parse(JSON.stringify(current)) as StudioLayoutV2;
+      let x = row[0].x;
+      row.forEach((p, k) => {
+        const target = next.photos!.find((q) => q.photoIndex === p.photoIndex)!;
+        target.x = x;
+        target.width = widths[k];
+        x += widths[k] + (gaps[k] ?? 0);
+      });
+      if (layoutDefectCount(next, copy) > layoutDefectCount(current, copy)) continue;
+      current = next;
+      break;
+    }
+  }
+  if (current !== layout) Object.assign(layout, current);
+  return layout;
+}
+
 /**
  * House rules, with the client's style spec enforced as far as it can be without making the design
  * worse than it would be with no spec at all. See `styleSpecLadder`.
@@ -1272,7 +1485,18 @@ function compareCandidatesV3(
   const qaB = b.hardQa ? b.hardQa.passed : true;
   if (qaA !== qaB) return qaA ? -1 : 1;
   if (a.metrics.passed !== b.metrics.passed) return a.metrics.passed ? -1 : 1;
-  return b.metrics.compositeScore - a.metrics.compositeScore;
+  const byComposite = b.metrics.compositeScore - a.metrics.compositeScore;
+  // Equal composites (at the precision they are reported): fewer review findings first (ADR-157).
+  if (Math.abs(byComposite) < 0.0005 && findingCount(a) !== findingCount(b)) return findingCount(a) - findingCount(b);
+  return byComposite;
+}
+
+/** ADR-157: review findings a candidate carries; copy-level ones are the same for every candidate. */
+const findingCount = (c: { hardQa?: HardQaOutcome }) => c.hardQa?.findings?.length ?? 0;
+
+/** The pair with the candidate carrying fewer review findings first; the given order when equal. */
+export function fewerFindingsFirst<T extends { hardQa?: HardQaOutcome }>(first: T, second: T): [T, T] {
+  return findingCount(second) < findingCount(first) ? [second, first] : [first, second];
 }
 
 /**
@@ -1280,15 +1504,16 @@ function compareCandidatesV3(
  * retaining failed candidates here lets the bounded refinement stage inspect their defects.
  */
 export function rankCandidatesV3(
-  candidates: Array<{ sourceIndex: number; layout: StudioLayoutV2; renderedPng?: Buffer }>,
+  candidates: Array<{ sourceIndex: number; layout: StudioLayoutV2; renderedPng?: Buffer; compositePng?: Buffer }>,
   copy: PipelineV3Copy,
   qa?: HardQaContext
 ): RankedCandidateV3[] {
   return candidates
-    .map((c) => ({
+    .map(({ compositePng, ...c }) => ({
       ...c,
       metrics: measureDesignV3(c.layout, copy),
-      ...(qa ? { hardQa: evaluateHardQa(c.layout, withCopy(qa, copy)) } : {}),
+      // A candidate's own no-text composite, when it has one, is where its contrast is measured.
+      ...(qa ? { hardQa: evaluateHardQa(c.layout, withCopy(compositePng ? { ...qa, renderedComposite: compositePng } : qa, copy)) } : {}),
     }))
     .sort(compareCandidatesV3);
 }
@@ -1490,6 +1715,9 @@ export async function selectWinnerV3(
     client: options.client,
     model: options.model || resolveModel('judge'),
     renderOptions: { ...options.renderOptions, copyText: copy.text },
+    // ADR-157: the incumbent judge reads the request too. No call is added; the same four calls
+    // carry the instructions and the exact copy.
+    ...(options.judgeBrief ? { brief: { instructions: options.judgeBrief.instructions, copy: options.judgeBrief.copy } } : {}),
   };
   const renderOptionsFor = (candidate: RankedCandidateV3): RenderLayoutOptions => ({
     ...options.renderOptions, ...options.renderOptionsForCandidate?.(candidate), copyText: copy.text,
@@ -1530,12 +1758,15 @@ export async function selectWinnerV3(
   const canaryPassed = canaryMatch.winnerId === 'chosen';
   const canary = { passed: canaryPassed, match: canaryMatch, subject: tentative };
 
+  // Where the judge did not decide, the review findings break the tie (ADR-157): a design a person
+  // would have to query goes second. Otherwise the higher composite stands, as before.
+  const [lead, next] = fewerFindingsFirst(first, second);
   if (!judgePick) {
-    return { winner: first, runnerUp: second, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed,
+    return { winner: lead, runnerUp: next, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed,
       protocol, humanChoiceRecommended: false };
   }
   if (!canaryPassed) {
-    return { winner: first, runnerUp: second, decidedBy: 'composite_judge_unreliable', match, canary, judgeReliable: false,
+    return { winner: lead, runnerUp: next, decidedBy: 'composite_judge_unreliable', match, canary, judgeReliable: false,
       protocol, humanChoiceRecommended: false };
   }
   return {

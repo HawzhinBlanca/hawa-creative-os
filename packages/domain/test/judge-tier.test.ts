@@ -25,12 +25,11 @@ describe('the judge runs on the cheap tier in production, by measurement', () =>
     process.env = { ...saved };
   });
 
-  it('resolves the judge to gpt-4.1-mini in production while the design stages stay on gpt-6-astra', () => {
+  it('resolves the judge to gpt-4.1-mini while the owner-selected design roles use Sol 6.1', () => {
     expect(resolveModel('judge', 'production')).toBe('gpt-4.1-mini');
-    // Layout invents the composition: design quality is decided there, so it does not move.
-    expect(resolveModel('layout', 'production')).toBe('gpt-6-astra');
-    expect(resolveModel('critique', 'production')).toBe('gpt-6-astra');
-    expect(resolveModel('text', 'production')).toBe('gpt-6-astra');
+    expect(resolveModel('layout', 'production')).toBe('gpt-6.1-sol');
+    expect(resolveModel('critique', 'production')).toBe('gpt-6.1-sol');
+    expect(resolveModel('text', 'production')).toBe('gpt-6.1-sol');
   });
 
   it('admits the judge model to the production allowlist, so the call is not refused at dispatch', () => {

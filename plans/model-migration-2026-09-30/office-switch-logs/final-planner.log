@@ -1,0 +1,13 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_4660eaf4c92cb512 and hawa_tpl_repair_4660eaf4c92cb512 (30 ms)
+{"level":"warn","time":"2026-09-30T11:27:08.354Z","service":"core","msg":"[canva-planner] Plan 5c70edf8-8552-4693-9860-a9fcd88708da of task 66ec0d02-cb35-45b9-afff-a5fd94b59af5 was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:27:08.881Z","service":"core","msg":"[canva-planner] Plan dd5e125e-f0b1-4fc9-b33d-dbc590a6e319 of task 2e5fd534-c779-48df-a2f7-e501ed6e9708 was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:27:08.885Z","service":"core","msg":"[canva-planner] Plan dd5e125e-f0b1-4fc9-b33d-dbc590a6e319 of task 2e5fd534-c779-48df-a2f7-e501ed6e9708 was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:27:09.890Z","service":"core","msg":"[canva-planner] Plan a3572c44-c890-4128-b716-55faf795bb6d of task 84c550e5-3605-4d30-a32b-11f829d96a77 was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+
+ Test Files  1 passed (1)
+      Tests  61 passed (61)
+   Start at  14:27:01
+   Duration  9.44s (transform 663ms, setup 141ms, import 930ms, tests 8.22s, environment 0ms)

@@ -28,6 +28,8 @@ describe.skipIf(!url)('retained paid replies recover across service instances', 
   let taskId: string, runId: string, request: Record<string, unknown>;
   beforeEach(async () => {
     vi.stubEnv('HAWA_MODEL_TIER', 'production');
+    // Historical Astra receipts retain their exact model/pricing profile after ADR-150.
+    for (const role of ['TEXT', 'LAYOUT', 'CRITIQUE']) vi.stubEnv(`HAWA_MODEL_${role}`, 'gpt-6-astra');
     scope.actorId = randomUUID(); taskId = randomUUID(); runId = randomUUID();
     await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${scope.actorId}::uuid,${scope.actorId+'@example.test'},'Replay operator')`.execute(db);
     await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${scope.tenantId}::uuid,${scope.actorId}::uuid,'operator')`.execute(db);

@@ -21,7 +21,7 @@ import { ACCESS_MESSAGES, MEDIA_MESSAGES, bold, requesterLang, say, type Request
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { blobStoreFor } from './blob-store-context.js';
 import { heldPhotoCandidate, retainLifecyclePhoto } from './lifecycle-photo.js';
-import { replyLanguage } from './lifecycle-album.js';
+import { actsInGroup, isGroupChat, replyLanguage } from './lifecycle-album.js';
 import { shortTitle } from './requester-turn.js';
 import { claimPhoto, holdPhoto, markPhotoAsked, pendingHeldBrief, readHeldPhoto, readMediaAnswer, readPhotoUse,
   recentOpenBy, recordMediaAnswer, unlistedReplyDue, type HeldPhoto, type StoredAnswer } from './lifecycle-media-intake.js';
@@ -44,6 +44,20 @@ export function unusableMedia(message: Json | null): 'video' | 'file' | null {
   if (['photo', 'document', 'voice', 'audio', 'sticker'].some((key) => message[key] !== undefined)) return null;
   if (['video', 'video_note', 'animation', 'live_photo'].some((key) => message[key] !== undefined)) return 'video';
   return null;
+}
+
+const MEDIA_KEYS = ['photo', 'document', 'voice', 'audio', 'video', 'video_note', 'animation', 'live_photo', 'sticker'];
+/**
+ * ADR-144 §2.7 (ADR-160): in a group, a member's photo with words, file, voice note, video or sticker
+ * that is not addressed to the bot (a reply to it, a mention of it in the caption, a command) and whose
+ * words are no clear brief is not read, as such a text would not be. An album is judged whole at its
+ * settle, and a photo with no words is kept quietly for its sender's words (its settle says nothing).
+ */
+export function groupMediaNotAddressed(update: Json): boolean {
+  const message = record(update.message);
+  if (!message || !isGroupChat(message) || message.media_group_id !== undefined) return false;
+  if (!MEDIA_KEYS.some((key) => message[key] !== undefined) || heldPhotoCandidate(update)) return false;
+  return !actsInGroup(message);
 }
 
 /** The words of a message, as its sender wrote them (text or caption). */
@@ -141,6 +155,12 @@ export function createMediaRoute(ctx: Pick<CoreContext, 'db' | 'telegramBridge' 
       if (!waitsForChanges) return joinOrPass(update, chatId, photo, target, opened.album, late);
     }
     const message = record(update.message);
+    // ADR-144 §2.7 (ADR-160): in a group, a photo addressed to no one is not asked about. It stays kept
+    // for its sender's own words to the bot within the join window, and nothing is said.
+    if (isGroupChat(message)) {
+      return answerOnce(update.update_id, `settle:${update.update_id}`, async () =>
+        ({ status: 200, extra: { settle: 'skipped', media: 'photo-quiet' } }));
+    }
     return answerOnce(update.update_id, `settle:${update.update_id}`, async (trx) => {
       await markPhotoAsked(trx, DEFAULT_TENANT_ID, update.update_id);
       return chatAnswer(chatId, say(MEDIA_MESSAGES.photoHeld, await langFor(trx, chatId, message)), { media: 'photo-held' });

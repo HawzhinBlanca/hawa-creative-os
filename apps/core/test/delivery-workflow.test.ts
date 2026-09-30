@@ -137,7 +137,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
       botToken: () => ['bot', 'token'].join('_'),
       bridge: () => telegram.bridge,
       readExportBytes: readStoredExportBytes,
-      officeChatId: () => OFFICE,
+      officeChatIds: () => [OFFICE],
       markRetryDelaysMs: [10],
     };
     // A one-way send to another chat's TelegramSender carries the message's key as its idempotency

@@ -926,7 +926,8 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(claimed.publication).toMatchObject({ executor: 'restate', executor_run: 1, executor_finished_run: 0 });
     const delivery = state.delivery!.input;
     await expect(runDelivery({
-      run: async () => { throw new Error('no prepare should run'); },
+      // ADR-155: the claim verdict is itself a journaled step; nothing after it may run.
+      run: async (name, action) => { if (name === 'verify-claim') return action(); throw new Error('no prepare should run'); },
       send: async () => { throw new Error('no send should run'); },
       reportLifecycle: async () => { throw new Error('no report should run'); },
     }, deliveryCore, { ...delivery, chatId: '1234567' })).rejects.toThrow('INVALID_LIFECYCLE_DELIVERY_CLAIM');

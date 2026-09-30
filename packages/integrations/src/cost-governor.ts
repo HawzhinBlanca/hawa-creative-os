@@ -6,6 +6,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveModel } from '@hawa/domain';
 
 export interface CostReceipt {
   id: string;
@@ -322,7 +323,7 @@ export class CostGovernor {
   public checkPreFlight(
     clientId: string,
     tokensOrCost: number | { input: number; output: number },
-    model = 'gpt-6-astra',
+    model = resolveModel('text'),
     provider = 'openai'
   ): BudgetCheckResult {
     let estimatedCost: number;

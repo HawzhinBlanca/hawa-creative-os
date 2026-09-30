@@ -321,7 +321,9 @@ const STAGE_WORDS: Record<LateChangeStage, string> = {
 
 /**
  * The office's alert for a late change. Plain text (no parse mode): the requester's words are quoted as
- * they were sent. Null when there is no office chat, or the office chat is the requester's own.
+ * they were sent. Null when there is no office chat, or the office chat is the requester's own. Intake
+ * names the first office member other than the requester (`officeChatFor`) and sends the same alert to
+ * every other member (`withOfficeAlerts`, ADR-155 section 6).
  */
 export function lateChangeOfficeAlert(late: LateRequesterChange, requesterChatId: string,
   officeChatId: string | null | undefined): { chatId: string; text: string } | null {

@@ -67,6 +67,11 @@ function updateAggregateId(update: PolledUpdate): string {
 export interface ParkOptions {
   /** The office chat to alert; the alert is written to the outbox with the dead letter, once per update. */
   officeChatId?: string;
+  /**
+   * Every office member to alert (ADR-155 section 6), after `officeChatId`: the first keeps the alert's
+   * key, the others add their chat, so an alert written before is never written again.
+   */
+  officeChatIds?: readonly string[];
   /** Runs in the same transaction, after the dead letter: Core moves the stored offset past the update here. */
   alongside?: (trx: Kysely<Database>) => Promise<void>;
 }
@@ -95,13 +100,15 @@ export async function parkTelegramUpdate(
         ${payloadHash}, true, ${reason.slice(0, 2000)}
       WHERE NOT EXISTS (SELECT 1 FROM hawa.inbox_events WHERE tenant_id = ${identity.tenantId}::uuid
         AND source_account_id = 'telegram' AND source_event_id = ${sourceEventId})`.execute(trx);
-    const office = options.officeChatId;
     // The sender's own chat already gets the notice; alerting it again would only repeat it.
-    if (office && office !== parkedUpdateChat(update)) {
+    const offices = [...new Set([...(options.officeChatId ? [options.officeChatId] : []), ...(options.officeChatIds ?? [])])]
+      .filter((office) => office && office !== parkedUpdateChat(update));
+    for (const [index, office] of offices.entries()) {
       const message = { text: composeParkedUpdateAlert(update, reason) };
+      const key = `notify.office:telegram-update-parked:${update.update_id}${index === 0 ? '' : `:${office}`}`;
       await sql`INSERT INTO hawa.outbox_commands (tenant_id, aggregate_type, aggregate_id, command_type, idempotency_key, payload)
         VALUES (${identity.tenantId}::uuid, 'telegram_update', ${updateAggregateId(update)}::uuid, 'notify.telegram',
-          ${`notify.office:telegram-update-parked:${update.update_id}`}, ${JSON.stringify({ chatId: office, message })}::jsonb)
+          ${key}, ${JSON.stringify({ chatId: office, message })}::jsonb)
         ON CONFLICT (tenant_id, idempotency_key) DO NOTHING`.execute(trx);
     }
     if (options.alongside) await options.alongside(trx);

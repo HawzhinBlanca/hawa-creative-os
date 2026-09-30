@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "date": "2026-09-30",
+  "authority": "Explicit owner: change astra to sol 6.1",
+  "adr": "ADR-161",
+  "requirements": [
+    "FR-056",
+    "FR-057",
+    "FR-058",
+    "FR-059",
+    "FR-060",
+    "FR-062",
+    "FR-079"
+  ],
+  "roleDefaults": {
+    "text": "gpt-6.1-sol",
+    "layout": "gpt-6.1-sol",
+    "critique": "gpt-6.1-sol",
+    "judge": "gpt-4.1-mini",
+    "image": "gpt-image-2.5-sunburst"
+  },
+  "credential": "existing authorized credential reused; no value retained",
+  "mergedProduction": "1737c8f2b7a5cf8cec50ed59a7ce9695ec179abd",
+  "deploymentLocation": "~/.hawa/releases/<exact commit>; current symlink; shared configuration",
+  "focused": {
+    "files": 13,
+    "passed": 175,
+    "failed": 0,
+    "providerTransport": "mocked; real isolated PostgreSQL",
+    "log": "office-switch-logs/merged-focused.log"
+  },
+  "initialFailures": {
+    "focused": 8,
+    "planner": 2,
+    "reason": "historical Astra fixtures required explicit pinning; new Sol image fixture initially passed an ignored argument. Corrected to retained request conditioning, verified refusal-before-admission and zero-transport recovery."
+  },
+  "lint": "passed",
+  "testTypes": {
+    "roots": 624,
+    "status": "passed"
+  },
+  "engineeringReleaseGate": "pending deployment preflight",
+  "productionReadback": "pending; current production still Astra",
+  "remainingResearchGates": [
+    "200-brief corpus",
+    "blinded/native creative review",
+    "staged canary; owner exception for this private-office switch"
+  ],
+  "liveEvidenceAfterDeploy": "output/repairs/2026-09-30-sol-office-switch/ and shared deployment receipt; not preclaimed",
+  "finalPlanner": {
+    "tests": 61,
+    "failed": 0,
+    "status": "passed"
+  }
+}

@@ -55,6 +55,8 @@ describe.skipIf(!url)('semantic Studio substeps recover retained work across bra
   let taskId: string, runId: string, request: Record<string, unknown>, palette: string[];
   beforeEach(async () => {
     vi.stubEnv('HAWA_MODEL_TIER', 'production');
+    // This fixture replays historical Astra calls, independently of the new office default.
+    for (const role of ['TEXT', 'LAYOUT', 'CRITIQUE']) vi.stubEnv(`HAWA_MODEL_${role}`, 'gpt-6-astra');
     scope.actorId = randomUUID(); taskId = randomUUID(); runId = randomUUID();
     await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${scope.actorId}::uuid,${scope.actorId+'@example.test'},'Substep operator')`.execute(db);
     await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${scope.tenantId}::uuid,${scope.actorId}::uuid,'operator')`.execute(db);

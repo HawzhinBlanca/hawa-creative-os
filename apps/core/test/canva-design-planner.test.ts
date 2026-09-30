@@ -11,6 +11,8 @@ import { CanvaDesignPlanner,assertPlannerLogoRules,buildPlannerSystemPrompt,corr
 import { CanvaConnectService, CanvaFlowError } from '../src/services/canva-connect-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { checkCanvaPptx } from '@hawa/qa';
+import { STUDIO_SPENDING_POLICY } from '@hawa/creative';
+import { StudioCallSettlementService } from '../src/services/studio-call-settlement.js';
 import { computeDnaHash } from '../src/core-helpers.js';
 
 describe('planning slot policy (ADR-131)',()=>{
@@ -113,8 +115,11 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   // The mocked provider answers as the production model, and the planner rejects a receipt for any
   // model it did not request; so this suite runs the planner on the production tier.
   const priorTier=process.env.HAWA_MODEL_TIER;
-  beforeAll(()=>{process.env.HAWA_MODEL_TIER='production';});
-  afterAll(()=>{if(priorTier===undefined)delete process.env.HAWA_MODEL_TIER;else process.env.HAWA_MODEL_TIER=priorTier;});
+  const priorText=process.env.HAWA_MODEL_TEXT;
+  // Historical transport/price/recovery fixtures pin Astra; the Sol cases below use the new default.
+  beforeAll(()=>{process.env.HAWA_MODEL_TIER='production';process.env.HAWA_MODEL_TEXT='gpt-6-astra';});
+  afterAll(()=>{if(priorTier===undefined)delete process.env.HAWA_MODEL_TIER;else process.env.HAWA_MODEL_TIER=priorTier;
+    if(priorText===undefined)delete process.env.HAWA_MODEL_TEXT;else process.env.HAWA_MODEL_TEXT=priorText;});
   const db=createDb(url||'postgres://localhost/hawa_repair');
   const scope={tenantId:'00000000-0000-4000-a000-000000000001',actorId:'00000000-0000-4000-b000-000000000001'};
   const clientId='c1000000-0000-4000-8000-000000000002';
@@ -129,12 +134,57 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   const plan={width:1200,height:1697,background:'#081F35',shapes:[],logo:{x:500,y:50,width:200,height:200/ratio},text:[
     {copyIndex:0,x:100,y:600,width:1000,height:100,fontSize:32,fontFamily:'Verdana',color:'#fff2db',align:'center'},
     {copyIndex:1,x:100,y:750,width:1000,height:100,fontSize:24,fontFamily:'Verdana',color:'#fff2db',align:'left'}]};
-  const intake=async()=> (await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Plan',rawText:'Use navy.\n---\nEXACT TITLE\n\nExact body. Never rewrite it.',designInstructions:'Use navy.',exactCopy:[]})).task.id;
+  const intake=async(includeExemplarImages=false)=>{
+    // Legacy planner-only flag is retained alongside a normalized option by chat intake.
+    const studioOptions=includeExemplarImages?{tier:'standard' as const,includeExemplarImages:true}:undefined;
+    return (await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Plan',rawText:'Use navy.\n---\nEXACT TITLE\n\nExact body. Never rewrite it.',designInstructions:'Use navy.',exactCopy:[],studioOptions})).task.id;
+  };
   const make=(fetcher:any)=>{const api={importEditableDesign:vi.fn().mockResolvedValue({operationId:randomUUID(),status:'submitted'})} as unknown as CanvaConnectService;return {api,planner:new CanvaDesignPlanner(db,api,{apiKey:'test-only',fetcher})};};
   const response=(model='gpt-6-astra',value:any=plan)=>Response.json({id:'chatcmpl-real-shaped-test',model,choices:[{finish_reason:'stop',message:{content:typeof value==='string'?value:JSON.stringify({...value,text:value.text?.map((t:any)=>({role:t.copyIndex===0?'headline':'body',bold:false,...t}))})}}],usage:{prompt_tokens:123,completion_tokens:456,total_tokens:579}});
   beforeAll(async()=>{await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${scope.actorId}::uuid,'isolated-operator@example.test','Test') ON CONFLICT DO NOTHING`.execute(db);
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${clientId}::uuid,${scope.tenantId}::uuid,'kaae','KAAE') ON CONFLICT DO NOTHING`.execute(db);});
   afterAll(()=>db.destroy());
+  it('uses the office Sol default with native image counts, low reasoning and durable editable-source recovery',async()=>{
+    delete process.env.HAWA_MODEL_TEXT;
+    try{
+      const taskId=await intake(true);
+      const remote=vi.fn<typeof fetch>(async(url,init)=>{
+        if(String(url).endsWith('/responses/input_tokens')){
+          const sent=JSON.parse(String(init?.body));expect(sent.model).toBe('gpt-6.1-sol');
+          expect(sent.input[0].content.length).toBeGreaterThan(0);
+          expect(sent.input[0].content.every((image:any)=>image.image_url.startsWith('data:image/'))).toBe(true);
+          expect((await sql`SELECT id FROM hawa.canva_planner_calls WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+          return Response.json({object:'response.input_tokens',input_tokens:1700});
+        }
+        const sent=JSON.parse(String(init?.body));expect(sent).toMatchObject({model:'gpt-6.1-sol',reasoning_effort:'low'});
+        const call=(await sql<any>`SELECT reservation FROM hawa.canva_planner_calls WHERE task_id=${taskId}::uuid`.execute(db)).rows[0];
+        expect(call.reservation.nativeInputCount).toMatchObject({model:'gpt-6.1-sol',inputTokens:1700,
+          requestSha256:createHash('sha256').update(String(init?.body)).digest('hex')});
+        return response('gpt-6.1-sol');
+      });
+      const {planner,api}=make(remote);
+      const result=await planner.generate(scope,taskId,'sol-office-'+randomUUID(),1200,1697);
+      expect(result.status).toBe('submitted');expect(remote).toHaveBeenCalledTimes(2);
+      const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows[0];
+      expect(saved.request.model).toBe('gpt-6.1-sol');
+      expect(saved.result.manifest.copy).toEqual(['EXACT TITLE','Exact body. Never rewrite it.']);
+      expect(saved.result.receipt.returnedModel).toBe('gpt-6.1-sol');
+      const noTransport=vi.fn<typeof fetch>();
+      await new CanvaDesignPlanner(db,api,{apiKey:'test-only',fetcher:noTransport}).resume(scope,taskId,saved.id);
+      expect(noTransport).not.toHaveBeenCalled();
+    }finally{process.env.HAWA_MODEL_TEXT='gpt-6-astra';}
+  });
+  it('a failed Sol image count retains a visible refusal and admits no paid planner call',async()=>{
+    delete process.env.HAWA_MODEL_TEXT;
+    try{
+      const taskId=await intake(true),remote=vi.fn<typeof fetch>(async()=>new Response('Unavailable',{status:503}));
+      const {planner,api}=make(remote);
+      expect(await planner.generate(scope,taskId,'sol-count-refusal-'+randomUUID(),1200,1697))
+        .toMatchObject({status:'failed',message:'STUDIO_BUDGET_UNQUOTABLE'});
+      expect(remote).toHaveBeenCalledTimes(1);expect(api.importEditableDesign).not.toHaveBeenCalled();
+      expect((await sql`SELECT id FROM hawa.canva_planner_calls WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+    }finally{process.env.HAWA_MODEL_TEXT='gpt-6-astra';}
+  });
   it('cannot bypass a held Studio request through the alternate planner',async()=>{
     const taskId=await intake(),fetcher=vi.fn<typeof fetch>(),repo=new DesignStudioRepository(db),runId=randomUUID();
     await repo.createRun({id:runId,tenantId:scope.tenantId,taskId,clientId,actorId:scope.actorId,
@@ -168,6 +218,8 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(saved.request.copyLocales).toEqual(['und','und']);
     expect(saved.result.manifest.copyLocales).toEqual(['und','und']);
     expect(saved.result.receipt.returnedModel).toBe('gpt-6-astra');
+    // ADR-157: finished copy records no review finding.
+    expect(saved.result.manifest.reviewFindings).toEqual([]);
     // The source is in the file store too (ADR-035), under the hash the plan names, and the import reads it.
     const stored=await blobStoreFromEnv(db).read(saved.source_sha256,{verify:true});
     expect(stored.equals(Buffer.from(saved.source_content))).toBe(true);
@@ -176,6 +228,15 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     await expect(sql`UPDATE hawa.canva_design_plans SET request='{}'::jsonb WHERE id=${saved.id}::uuid`.execute(db)).rejects.toThrow('immutable');
     await expect(planner.resume({...scope,actorId:randomUUID()},id,saved.id)).rejects.toThrow('not found');
     await expect(sql`UPDATE hawa.tasks SET client_id=NULL WHERE id=${id}::uuid`.execute(db)).rejects.toThrow();
+  });
+  it('records copy that ends mid-phrase as a review finding in the manifest, and plans it all the same (ADR-157)',async()=>{
+    const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Cut copy',
+      rawText:'Use navy.\n---\nEXACT TITLE\n\nInsights from school field visits and next steps toward',designInstructions:'Use navy.',exactCopy:[]})).task.id;
+    const {planner}=make(vi.fn<typeof fetch>(async()=>response()));
+    expect((await planner.generate(scope,id,'cut-copy-key-01',1200,1697)).status).toBe('submitted');
+    const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
+    expect(saved.status).toBe('planned');
+    expect(saved.result.manifest.reviewFindings).toEqual([expect.objectContaining({code:'COPY_DANGLING_END',copyIndex:1,severity:'warning'})]);
   });
   it('sets Sorani blocks right-to-left in the provisional script typeface and records it in the manifest',async()=>{
     const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Sorani plan',
@@ -325,6 +386,44 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(good).not.toHaveBeenCalled();expect(api2.importEditableDesign).not.toHaveBeenCalled();
     expect((await planner2.generate(scope,id,'abandon-key-01',1200,1697)).status).toBe('abandoned');
 
+  });
+  it('charges an uncertain planner call its reservation after the wait; once abandoned, the task plans again (ADR-159)',async()=>{
+    const id=await intake(),lost=vi.fn(async()=>{throw new Error('lost');}),{planner}=make(lost);
+    const stuck=await planner.generate(scope,id,'expiry-key-01',1200,1697);expect(stuck.status).toBe('uncertain');
+    await planner.abandon(scope,id,stuck.planId,'Model outage; the charge is unknown.');
+    const call=(await sql<any>`SELECT reservation FROM hawa.canva_planner_calls WHERE id=${stuck.planId}::uuid`.execute(db)).rows[0];
+    const settlement=new StudioCallSettlementService(db);
+    // Too young: left for the office to record the real charge.
+    expect((await settlement.settleExpired(scope.tenantId,6*3_600_000)).plannerCalls).not.toContain(stuck.planId);
+    await db.transaction().execute(async tx=>{
+      await sql`ALTER TABLE hawa.canva_planner_calls DISABLE TRIGGER enforce_canva_planner_call`.execute(tx);
+      await sql`UPDATE hawa.canva_planner_calls SET started_at=now()-interval '8 hours' WHERE id=${stuck.planId}::uuid`.execute(tx);
+      await sql`ALTER TABLE hawa.canva_planner_calls ENABLE TRIGGER enforce_canva_planner_call`.execute(tx);
+    });
+    expect((await settlement.settleExpired(scope.tenantId,6*3_600_000)).plannerCalls).toContain(stuck.planId);
+    const attested=(await sql<any>`SELECT * FROM hawa.call_cost_attestations WHERE call_kind='canva_planner' AND call_id=${stuck.planId}::uuid`.execute(db)).rows;
+    expect(attested).toEqual([expect.objectContaining({evidence_type:'reservation_expiry',conclusion:'reservation_charged',
+      actor_user_id:'00000000-0000-4000-b000-000000000011'})]);
+    expect(Number(attested[0].reported_cost_usd)).toBe(call.reservation.usd);
+    expect((await settlement.settleExpired(scope.tenantId,6*3_600_000)).plannerCalls).not.toContain(stuck.planId);
+    const good=vi.fn(async()=>response()),next=make(good);
+    expect((await next.planner.generate(scope,id,'expiry-key-02',1200,1697)).status).toBe('submitted');
+    expect(good).toHaveBeenCalledTimes(1);
+  });
+  it('refuses paid planning from the price policy\'s review date with its own code, and sends nothing (ADR-159)',async()=>{
+    const id=await intake(),fetcher=vi.fn(async()=>response());
+    const at=(iso:string)=>new CanvaDesignPlanner(db,{importEditableDesign:vi.fn().mockResolvedValue({operationId:randomUUID(),status:'submitted'})} as unknown as CanvaConnectService,
+      {apiKey:'test-only',fetcher,now:()=>Date.parse(iso)});
+    const expired=await at(STUDIO_SPENDING_POLICY.reviewBy).generate(scope,id,'policy-expired-01',1200,1697);
+    expect(expired).toMatchObject({status:'failed',message:'SPENDING_POLICY_EXPIRED'});
+    expect(fetcher).not.toHaveBeenCalled();
+    expect((await sql`SELECT id FROM hawa.canva_planner_calls WHERE task_id=${id}::uuid`.execute(db)).rows).toHaveLength(0);
+    expect((await sql<any>`SELECT diagnostic FROM hawa.canva_design_plans WHERE id=${expired.planId}::uuid`.execute(db)).rows[0].diagnostic)
+      .toBe('SPENDING_POLICY_EXPIRED');
+    // The day before, the same request is planned (and /v1/health has been warning for two weeks).
+    const dayBefore=new Date(Date.parse(STUDIO_SPENDING_POLICY.reviewBy)-86_400_000).toISOString();
+    expect((await at(dayBefore).generate(scope,await intake(),'policy-valid-01',1200,1697)).status).toBe('submitted');
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it('a Canva rate limit on the import is a named wait: the paid plan is kept and the same key imports it, with no second model call',async()=>{
     const id=await intake(),remote=vi.fn(async()=>response()),{api,planner}=make(remote);

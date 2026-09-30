@@ -5,6 +5,8 @@
 
 export const ALLOWED_MODELS = [
   'gpt-6-astra',
+  // ADR-161: owner-directed private-office primary; broader research admission remains open.
+  'gpt-6.1-sol',
   'gpt-image-2.5-sunburst',
   // Admitted to production for the judge role alone, on measurement rather than on price.
   // See PRODUCTION_MODELS.judge below for the experiment and its numbers.
@@ -15,8 +17,8 @@ export type AllowedModel = (typeof ALLOWED_MODELS)[number];
 
 /** The models production runs on. Changing these changes what every proof is evidence about. */
 export const PRODUCTION_MODELS = {
-  layout: 'gpt-6-astra',
-  critique: 'gpt-6-astra',
+  layout: 'gpt-6.1-sol',
+  critique: 'gpt-6.1-sol',
   /**
    * The judge is the one stage that invents nothing: it compares two already-rendered posters on
    * five named dimensions and is handed the deterministic metric scores as stated facts. It was
@@ -45,7 +47,7 @@ export const PRODUCTION_MODELS = {
    * HAWA_MODEL_JUDGE still overrides this for one run or one deployment.
    */
   judge: 'gpt-4.1-mini',
-  text: 'gpt-6-astra',
+  text: 'gpt-6.1-sol',
   image: 'gpt-image-2.5-sunburst',
 } as const;
 
@@ -74,8 +76,6 @@ export const DEV_MODELS = {
 
 export const DEV_ALLOWED_MODELS = [
   ...ALLOWED_MODELS,
-  // ADR-148: candidate only; production promotion requires measured admission.
-  'gpt-6.1-sol',
   'gpt-4.1-mini',
   'gpt-4o-mini',
   'o4-mini',

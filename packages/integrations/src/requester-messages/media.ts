@@ -32,6 +32,21 @@ export const MEDIA_MESSAGES = {
     en: "I couldn't open that picture. Could you send it again as a photo?",
     ckb: 'نەمتوانی ئەو وێنەیە بکەمەوە. دەتوانیت دووبارە وەک وێنە بینێریتەوە؟',
   },
+  /** ADR-156: a logo sent as an SVG file, passed to the office for the sender's one open design. */
+  svgPassedForDesign: {
+    en: "Thanks for the logo. I can't place this kind of file myself, so I've passed it to the office to add to {title}.",
+    ckb: 'سوپاس بۆ لۆگۆکە. خۆم ناتوانم ئەم جۆرە فایلە دابنێم، بۆیە گەیاندمە ئۆفیسەکە بۆ ئەوەی بۆ {title} زیادی بکەن.',
+  },
+  /** ADR-156: an SVG file with no single open design it belongs to: the office has it. */
+  svgPassed: {
+    en: "Thanks for the file. I can't place this kind of file myself, so I've passed it to the office; they'll follow up here.",
+    ckb: 'سوپاس بۆ فایلەکە. خۆم ناتوانم ئەم جۆرە فایلە دابنێم، بۆیە گەیاندمە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  /** ADR-156: the same, with no office chat to tell: it is kept for the office. */
+  svgKept: {
+    en: "Thanks for the file. I can't place this kind of file myself, so I've kept it for the office; they'll follow up here.",
+    ckb: 'سوپاس بۆ فایلەکە. خۆم ناتوانم ئەم جۆرە فایلە دابنێم، بۆیە بۆ ئۆفیسەکەم هەڵگرت؛ لێرە وەڵامت دەدەنەوە.',
+  },
   /** A video, a round video message or a GIF with no words. */
   videoNotUsed: {
     en: "Thanks! I can't put videos on a design. Could you send a photo instead? You can also just tell me what the design should say.",

@@ -1,5 +1,14 @@
 # Model Registry and Evaluation System
 
+## Private-office owner override — 2026-09-30
+
+ADR-161 records the owner's explicit instruction to switch Astra design roles to
+exact `gpt-6.1-sol` after the report disclosed the outstanding research gates.
+The private-office text/layout/critique defaults change under that instruction;
+FR-057's full corpus, native/blinded review and staged canary remain unexecuted
+and are not certified by this override. Customer admission and all hard QA,
+approval, budget and retained-request identity requirements still apply.
+
 ## 1. Principle
 
 Models are volatile components, not architecture. The system resolves a **role** to an exact tested deployment.

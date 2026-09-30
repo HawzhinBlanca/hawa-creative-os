@@ -16,6 +16,8 @@
  *  - a change while a design is being made, or after it reached the office, is kept on the request
  *    for the office (the late-change store, whose Deliver gate an office member clears in the Desk);
  *  - approval words are passed to the office and approve nothing (ADR-022);
+ *  - "send it again", "it didn't arrive", "as a PDF", "to my email", "higher resolution" ask the office
+ *    about the files: they are passed on, and are never approval (ADR-156);
  *  - only a new brief opens a request; a message that could be either asks one short question.
  */
 import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, say as sayPhrase, type Phrase,
@@ -23,8 +25,8 @@ import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, request
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
 
-export type TurnIntent = 'acknowledgement' | 'status' | 'approval' | 'cancel' | 'deadline' | 'change' |
-  'new_brief' | 'conversation' | 'unclear';
+export type TurnIntent = 'acknowledgement' | 'status' | 'approval' | 'delivery_request' | 'cancel' | 'deadline' |
+  'change' | 'new_brief' | 'conversation' | 'unclear';
 
 export interface IntentReading {
   intent: TurnIntent;
@@ -75,13 +77,21 @@ export interface PendingAsk {
   words: string;
   options: Array<{ requestId: string; title: string }>;
   allowNew: boolean;
+  /**
+   * ADR-156: the question was asked about a photo with these words. The photo is kept under the
+   * question's own update (`lifecycle_photo_held`), and the answer carries it to the design it names.
+   */
+  photo?: boolean;
 }
+
+/** What a `tell` passes to the office: approval words, a deadline, or a request about the files (ADR-156). */
+export type TellNote = 'approval' | 'deadline' | 'delivery';
 
 export type TurnPlan =
   | { kind: 'open'; text: string; instructionOnly: boolean; resolves?: number }
   | { kind: 'revise'; requestId: string; directive: string; resolves?: number }
   | { kind: 'note'; note: 'change' | 'cancel'; requestId: string; words: string; resolves?: number }
-  | { kind: 'tell'; note: 'approval' | 'deadline'; requestId: string; words: string; resolves?: number }
+  | { kind: 'tell'; note: TellNote; requestId: string; words: string; resolves?: number }
   | { kind: 'reply'; what: 'thanks' | 'status' | 'nothing-to-change'; requestIds: string[] }
   /** Words about a design this bot cannot find (a reply to an old message): passed to the office. */
   | { kind: 'forward'; words: string }
@@ -125,6 +135,45 @@ const APPROVAL_PHRASES = [
 ];
 /** Praise that goes with approval and is not a change: "looks good", "perfect". */
 const PRAISE = /\b(?:it\s+)?(?:looks?|is|it'?s)?\s*(?:very\s+|really\s+|so\s+)?(?:good|great|perfect|fine|nice|lovely|excellent|beautiful|amazing|all\s+good|ok(?:ay)?)\b/giu;
+
+/**
+ * ADR-156 (audit #9): words that ask the office about the files themselves: to send them again, that
+ * they did not arrive, in another format, to an email address or another app, or at a higher
+ * resolution. "Send it again" contains "send it", but it is never approval: the office hears it.
+ */
+const DELIVERY_EN: RegExp[] = [
+  /\bre-?send\b/i,
+  /\b(?:send|share|forward|give)\b[^.!?\n]{0,40}\b(?:again|once\s+more|one\s+more\s+time)\b/i,
+  /\b(?:did(?:n'?t|\s+not)|has(?:n'?t|\s+not)|have(?:n'?t|\s+not)|never)\s+(?:arrive[d]?|come|came|reach(?:ed)?|receive[d]?|get|got)\b/i,
+  /\b(?:not|never)\s+(?:yet\s+)?(?:received|arrived|delivered)\b/i,
+  /\b(?:can'?t|cannot|could(?:n'?t|\s+not)|unable\s+to)\s+(?:open|download|find|see)\s+(?:it|them|the\s+(?:file|link|pdf|png|jpe?g|design|image|attachment)s?)\b/i,
+  /\b(?:to|by|via|through|over|on)\s+(?:my\s+|our\s+|the\s+|his\s+|her\s+)?(?:e-?mail|gmail|whats\s?app|viber)\b/i,
+  /\be-?mail\s+(?:it|them|me|us)\b/i,
+  /[\w.+-]+@[\w-]+\.[a-z]{2,}/i,
+];
+/** A file format or a resolution: about the files, unless the words name a part of the design ("a higher resolution logo"). */
+const DELIVERY_FORMAT_EN: RegExp[] = [
+  /\b(?:as|in|into)\s+(?:a\s+|an\s+)?(?:pdf|png|jpe?g|svg|tiff?|eps|psd|word\s+file|docx?)\b/i,
+  /\b(?:pdf|png|jpe?g|svg|tiff?|eps|psd)\s+(?:version|file|format|copy)\b/i,
+  /\b(?:high(?:er)?|better|full|max(?:imum)?|original|print)[-\s]?(?:res(?:olution)?|quality|size)\b|\bhi-?res\b/i,
+];
+const DESIGN_PART = /\b(?:logo|photo|image|picture|background|icon|font|text|title|colou?r)s?\b/i;
+/** Words that make the message a change after all ("the email on the poster should be …", "add my email"). */
+const DELIVERY_IS_CHANGE = /\b(?:should|must)\s+(?:be|say|read|show)\b|\binstead\s+of\b|\b(?:wrong|typo|mistake|incorrect)\b|\b(?:add|include|put|write|remove|delete|change|replace)\b/i;
+/**
+ * Sorani: send it again (three spellings), it did not arrive, it has not arrived, it did not reach me,
+ * by email, to the email, my email, high quality, high resolution.
+ */
+const DELIVERY_CKB = ['دووبارە بینێرەوە', 'دووبارە بنێرەوە', 'دووبارەی بنێرەوە', 'نەگەیشت', 'نەگەیشتووە', 'پێم نەگەیشت',
+  'بە ئیمەیڵ', 'بۆ ئیمەیڵ', 'ئیمەیڵەکەم', 'کوالیتی بەرز', 'ڕیزۆلووشنی بەرز'];
+
+function readsAsDeliveryRequest(text: string, core: string): boolean {
+  if (!core || core.length > 300 || asksForNewDesign(text) || DELIVERY_IS_CHANGE.test(core)) return false;
+  if (DELIVERY_EN.some((p) => p.test(core)) || any(core, DELIVERY_CKB)) return true;
+  if (DESIGN_PART.test(core)) return false;
+  // A file type named among Sorani words: "بە pdf بینێرە" (send it as a PDF).
+  return DELIVERY_FORMAT_EN.some((p) => p.test(core)) || (isSoraniText(core) && /\b(?:pdf|png|jpe?g|svg)\b/i.test(core));
+}
 
 const CANCEL_EN = new RegExp(
   '^(?:(?:just|kindly)\\s+)?(?:cancel|stop|scrap|drop|abort|withdraw|forget(?:\\s+about)?|never\\s?mind|nvm|' +
@@ -237,8 +286,28 @@ function readsAsStatus(core: string): boolean {
   return (containsKeyword(core, STATUS_CKB_WHEN) && any(core, STATUS_CKB_WITH)) || any(core, STATUS_CKB);
 }
 
+/** A date or a time of day ("5 October", "October 5", "7pm", "19:30"). */
+const DATE_OR_TIME = /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\p{L}*|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\p{L}*\s+\d{1,2}\b|\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b\d{1,2}:\d{2}\b/iu;
+/** Words that name an event or its details, in English and Sorani (day, time, place, hall, invitation, seminar, conference, celebration, festival). */
+const EVENT_WORDS = /\b(?:date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|ceremony|conference|seminar|workshop|party|dinner|meeting|graduation|wedding|festival|celebration|exhibition|fair|concert|launch)\b|(?:ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس|ئاهەنگ|فێستیڤاڵ)/giu;
+
+/**
+ * ADR-156 (audit #15): a deadline said beside the event's own copy ("Invitation card for the graduation
+ * ceremony at the hotel, 5 October 7pm, needed by Thursday") is a brief with a deadline, not only a
+ * deadline. Without the words that give the deadline, the rest still names the event and a date or a
+ * time, or several event details.
+ */
+export function carriesBriefCopy(core: string): boolean {
+  const rest = core.replace(DEADLINE_WHEN, ' ')
+    .replace(/\b(?:needed|need(?:s|ed)?\s+(?:it|them)|required|due|urgent(?:ly)?|asap)\b/gi, ' ');
+  const events = rest.match(EVENT_WORDS)?.length ?? 0;
+  const words = rest.split(/\s+/).filter(Boolean).length;
+  if (DATE_OR_TIME.test(rest) && (events > 0 || new RegExp(`\\b(?:${DESIGN_NOUNS})s?\\b`, 'i').test(rest))) return true;
+  return events >= 2 && words >= 10;
+}
+
 function readsAsDeadline(text: string, core: string): boolean {
-  if (!core || core.length > 160 || asksForNewDesign(text)) return false;
+  if (!core || core.length > 160 || asksForNewDesign(text) || carriesBriefCopy(core)) return false;
   if (URGENT.test(core)) return true;
   if (DEADLINE_WHEN.test(core) && DEADLINE_NEED.test(core)) return true;
   if (/^(?:by|before)\s+/i.test(core) && DEADLINE_WHEN.test(core)) return true;
@@ -260,6 +329,7 @@ export function readIntentByRules(text: string): IntentReading {
     ({ intent, reason, source: 'rules', ...extra });
   if (!t) return rules('conversation', 'No words');
   if (t.startsWith('/')) return rules('conversation', 'A chat command');
+  if (readsAsDeliveryRequest(t, core)) return rules('delivery_request', 'Asks the office about the files (again, a format, an email, a resolution)');
   if (readsAsApproval(t, core)) return rules('approval', 'Approval words; the office decides');
   if (isAcknowledgement(t) || (core && isAcknowledgement(core) && core.length <= 60)) return rules('acknowledgement', 'Thanks, an OK or a receipt');
   if (readsAsCancel(core)) return rules('cancel', 'Asks to cancel or stop');
@@ -289,6 +359,11 @@ export function readIntentByRules(text: string): IntentReading {
     { substantial, instructionOnly: heuristics.isInstructionOnly === true });
   }
   if (heuristics.kind === 'feedback') return rules('change', 'Asks for a change or a correction');
+  // ADR-156 (audit #15): event copy with a deadline beside it is a brief, even where the heuristics
+  // read it as chat ("Invitation card for the graduation ceremony …, 5 October 7pm, needed by Thursday").
+  if (substantial && carriesBriefCopy(core)) {
+    return rules('new_brief', 'Carries event copy and a date', { substantial: true, instructionOnly: false });
+  }
   return rules('conversation', heuristics.reason);
 }
 
@@ -475,6 +550,7 @@ function applyTo(intent: PendingAsk['intent'], request: ChatRequestView, words: 
     case 'cancel': return { kind: 'note', note: 'cancel', requestId: request.requestId, words, ...r };
     case 'approval': return { kind: 'tell', note: 'approval', requestId: request.requestId, words, ...r };
     case 'deadline': return { kind: 'tell', note: 'deadline', requestId: request.requestId, words, ...r };
+    case 'delivery_request': return { kind: 'tell', note: 'delivery', requestId: request.requestId, words, ...r };
     default: return changeFor(request, words, how, confidence, resolves);
   }
 }
@@ -525,6 +601,8 @@ export function planTurn(input: TurnInput): TurnPlan {
   // 3. A reply to a bot message about no current request: thanks, a status question, chatter and a
   // brief of its own are read as usual; anything else is about another design, so the requester is
   // asked which current design they mean, or, with none, the words go to the office.
+  // Asked about the files of that other design (ADR-156): the office finds them.
+  if (input.foreignReply && reading.intent === 'delivery_request') return { kind: 'forward', words };
   if (input.foreignReply && !['acknowledgement', 'status', 'conversation'].includes(reading.intent) &&
       !(reading.intent === 'new_brief' && (reading.explicitNew || reading.substantial))) {
     const among = [...(reading.intent === 'change' || reading.intent === 'unclear' || reading.intent === 'new_brief' ? changeable : open)]
@@ -551,6 +629,14 @@ export function planTurn(input: TurnInput): TurnPlan {
       if ('ambiguous' in picked) return ask(reading.intent, picked.ambiguous, false);
       // Nothing open: thanks, or where the chat stands, is all there is to say.
       return { kind: 'reply', what: reading.intent === 'approval' ? 'thanks' : 'status', requestIds: [] };
+    }
+    case 'delivery_request': {
+      // ADR-156: about the files of a design, delivered ones included: the office hears it, and nothing
+      // is approved or sent by itself. A design this chat no longer lists is the office's to find.
+      const picked = pickRequest(input, changeable, true);
+      if ('request' in picked) return applyTo('delivery_request', picked.request, words, picked.how, reading.confidence)!;
+      if ('ambiguous' in picked) return ask('delivery_request', picked.ambiguous, false);
+      return { kind: 'forward', words };
     }
     case 'new_brief': {
       if (reading.explicitNew || !changeable.length) {
@@ -655,6 +741,16 @@ export function forwardOfficeAlert(chatId: string, words: string): string {
     '', 'Their words:', quoted].join('\n');
 }
 
+/**
+ * The office's alert for words the bot could not apply because their design moved on while they were
+ * read (a round planned on it could not start, ADR-156). The requester was told the office has them.
+ */
+export function conflictOfficeAlert(chatId: string, words: string): string {
+  const quoted = words.length > 1500 ? `${words.slice(0, 1500)}…` : words;
+  return [`The requester in chat ${chatId} sent words the bot could not apply: the design they are about changed while they were read, so nothing was started. Please read them and answer in the chat.`,
+    '', 'Their words:', quoted].join('\n');
+}
+
 export function nothingToChangeText(lang: Lang): string {
   return say(ROUTING_MESSAGES.nothingToChange, lang);
 }
@@ -679,20 +775,34 @@ export function noteText(note: 'change' | 'cancel', stage: string, requestTitle:
   return say(ROUTING_MESSAGES.changePassedInReview, lang, t);
 }
 
-/** The requester's answer when approval or timing words were passed to the office. */
-export function tellText(note: 'approval' | 'deadline', requestTitle: string, lang: Lang): string {
+/**
+ * The requester's answer when approval, timing or file words were passed to the office. `alerted`: the
+ * office chat was told; a request about the files with no office chat to tell is only kept (ADR-156).
+ */
+export function tellText(note: TellNote, requestTitle: string, lang: Lang, alerted = true): string {
+  if (note === 'delivery') {
+    return alerted ? say(ROUTING_MESSAGES.deliveryRequestPassed, lang, { title: title({ title: requestTitle }) })
+      : say(ROUTING_MESSAGES.keptForOffice, lang);
+  }
   return say(note === 'approval' ? ROUTING_MESSAGES.approvalPassed : ROUTING_MESSAGES.deadlinePassed, lang,
     { title: title({ title: requestTitle }) });
 }
 
-/** The office's alert for approval or timing words (plain text: the words are quoted as sent). */
-export function tellOfficeAlert(note: 'approval' | 'deadline', input: { chatId: string; requestId: string;
-  taskId: string; title: string; words: string }): string {
+const TELL_STAGE: Record<RequestStage, string> = {
+  designing: 'still being designed', awaiting_answer: 'waiting for their answer to a question', in_review: 'waiting for office review',
+  manual: 'with a designer', approved: 'approved', delivering: 'being delivered', delivered: 'delivered',
+};
+
+/** The office's alert for approval, timing or file words (plain text: the words are quoted as sent). */
+export function tellOfficeAlert(note: TellNote, input: { chatId: string; requestId: string;
+  taskId: string; title: string; words: string; stage?: RequestStage }): string {
   const words = input.words.length > 1500 ? `${input.words.slice(0, 1500)}…` : input.words;
   return [
     note === 'approval'
       ? `The requester in chat ${input.chatId} says they are happy with "${shortTitle(input.title)}". Nothing was approved: approval stays in the Desk.`
-      : `The requester in chat ${input.chatId} gave a deadline or asked for speed on "${shortTitle(input.title)}".`,
+      : note === 'delivery'
+        ? `The requester in chat ${input.chatId} asks about the files of "${shortTitle(input.title)}"${input.stage ? ` (${TELL_STAGE[input.stage]})` : ''}: to send them again, in another format, to an address or at a higher resolution. Nothing was sent automatically; please answer them in the chat.`
+        : `The requester in chat ${input.chatId} gave a deadline or asked for speed on "${shortTitle(input.title)}".`,
     `Task ${input.taskId}, request ${input.requestId}.`,
     '',
     'Their words:',

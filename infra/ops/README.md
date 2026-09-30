@@ -9,11 +9,23 @@ the office Mac today; the repository is prepared for an arm64 Linux server or a 
 | `install_launch_agents.sh` | macOS: installs the watchdog, the nightly backup, both drills and the off-site copy as launch agents |
 | `install_systemd_units.sh` | Linux: the same five jobs as systemd timers (`systemd/*.in`), run as the checkout's user |
 | `host_lib.sh` | Sourced by the host scripts: GNU or BSD `stat` and `date`, `shasum` or `sha256sum`, and the host role |
-| `watchdog.sh` | Starts Docker and the stack at login or boot, alerts the operator chat |
+| `release_lib.sh` | Sourced by `deploy.sh`, the watchdog and the installers: release directories `~/.hawa/releases/<commit>`, the `~/.hawa/current` link, the shared host-local files in `~/.hawa/shared` (ADR-158) |
+| `release.sh` | The same by hand: `status`, the one-time `adopt`, `activate`, `prune` (`runbooks/PRODUCTION_RELEASE_DIRECTORIES.md`) |
+| `watchdog.sh` | Starts Docker and the stack at login or boot, alerts the operator chat (a new or changed problem at once, the same one every 30 minutes; Postgres crash recovery and Restate lag from their logs; disk by free space) |
 | `stack_containers.sh` | The watchdog's container checks: the six stack services by name, the worker, Vector |
 | `disk_cleanup.sh` | Keeps dumps, Docker's build cache and container logs (30 days, 2 GB) bounded |
 | `rotate_app_role.sh` | Rotates the application's database password without downtime (below) |
 | `../../scripts/request_logs.ts` | Prints every log line of one request or task (below) |
+
+## Where production runs from (ADR-158)
+
+Not from a checkout. `deploy.sh` makes `~/.hawa/releases/<commit>` (a detached git worktree of the
+commit it was started at), links the host-local files from `~/.hawa/shared` into it, installs and
+builds it, and continues from there; `--apply` points `~/.hawa/current` at it just before its
+containers start. The jobs below run `~/.hawa/current/infra/...`, and compose binds nginx.conf,
+vector.yaml and the database init files through `~/.hawa/current`. Paths in this file such as
+`infra/docker/.env` mean the release's, which are links to `~/.hawa/shared`. The switch-over from the
+old layout, rollback and verification are in `runbooks/PRODUCTION_RELEASE_DIRECTORIES.md`.
 
 ## The production host: macOS or Linux (ADR-141)
 
@@ -93,14 +105,13 @@ checkout's user.
 ```bash
 ssh hawa@<host>
 cd ~/Hawdesign && git fetch && git checkout <release commit>
-pnpm install --frozen-lockfile && pnpm build
-bash infra/docker/deploy.sh            # pre-flight
+bash infra/docker/deploy.sh            # pre-flight, from ~/.hawa/releases/<commit> (it installs and builds there)
 tmux new -s deploy                     # so a dropped connection does not stop the deploy halfway
 bash infra/docker/deploy.sh --apply
 ```
 
-Host-only files are copied over SSH, never by chat or email: `infra/docker/.env` and `.env.production`,
-`~/.hawa/backup_passphrase` (0600) and the two model files in `~/.hawa/models`.
+Host-only files are copied over SSH, never by chat or email: `~/.hawa/shared/infra/docker/.env` and
+`.env.production` (ADR-158), `~/.hawa/backup_passphrase` (0600) and the two model files in `~/.hawa/models`.
 
 ### Firewall (Linux server)
 
@@ -224,7 +235,7 @@ From the repository root on the production host, with the stack running. Nothing
 password. Allow 10 minutes; the services are down only for the few seconds step 4 recreates them.
 
 ```bash
-cd /Users/hawzhin/Hawdesign    # the production checkout (on a Linux server: ~/Hawdesign)
+cd ~/.hawa/current    # the release production runs (ADR-158); its infra/docker/.env is the shared file
 CONN=(--url postgresql://hawa_owner@127.0.0.1:54332/hawa --production \
       --password-env-file infra/docker/.env --password-key POSTGRES_PASSWORD)
 

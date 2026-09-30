@@ -166,7 +166,7 @@ check_worker_token_rotation() {
 # and vector is restarted when what it sees is not the deployed file.
 vector_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T vector sha256sum /etc/vector/vector.yaml 2>/dev/null | cut -d' ' -f1 || true; }
 validate_vector_config() {
-  "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T vector validate --no-environment /etc/vector/vector.yaml >/dev/null 2>&1 \
+  HAWA_RELEASE_ROOT="$ROOT_DIR" "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T vector validate --no-environment /etc/vector/vector.yaml >/dev/null 2>&1 \
     || { echo "ERROR: infra/docker/vector.yaml fails vector validate; nothing was started with it"; exit 1; }
 }
 apply_vector_config() {
@@ -281,6 +281,27 @@ echo "=== Hawa Creative OS production deployment ($([[ $APPLY == 1 ]] && echo ap
 echo "Build stamp: ${HAWA_BUILD_COMMIT}"
 HOST_ROLE_RC=0; HOST_ROLE="$(hawa_host_role)" || HOST_ROLE_RC=$?
 refuse_inactive_host "$HOST_ROLE" "$HOST_ROLE_RC"
+
+# 0. The release directory (ADR-158). Production never runs from the checkout this was started in (on
+# 2026-09-30 that was /Users/hawzhin/Hawdesign, on another tool's branch): the commit gets its own
+# detached worktree, ~/.hawa/releases/<commit>, linked to the host-local files in ~/.hawa/shared,
+# installed and built there, and this script continues from that copy. Everything below, pre-flight
+# included, reads that release's files; step 7 points ~/.hawa/current at it just before its containers
+# start. HAWA_RELEASE_DIRS=off runs from this checkout as before (a host not yet switched over).
+source "${ROOT_DIR}/infra/ops/release_lib.sh"
+if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
+  RELEASE_DIR="$(hawa_release_prepare "$ROOT_DIR" "$BUILD_COMMIT")" || exit 1
+  hawa_release_install "$RELEASE_DIR" || exit 1
+  if [[ "$(hawa_physical "$ROOT_DIR")" != "$(hawa_physical "$RELEASE_DIR")" ]]; then
+    echo "✓ release directory ${RELEASE_DIR} (from ${ROOT_DIR}); continuing there"
+    exec bash "${RELEASE_DIR}/infra/docker/deploy.sh" "$@"
+  fi
+  echo "✓ running from release directory ${RELEASE_DIR}"
+else
+  # Compose binds nginx.conf, vector.yaml and the database init files through HAWA_RELEASE_ROOT.
+  export HAWA_RELEASE_ROOT="$ROOT_DIR"
+  echo "NOTE: HAWA_RELEASE_DIRS=off: running from ${ROOT_DIR} itself, not a release directory"
+fi
 
 # 1. Prerequisites
 command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required"; exit 1; }
@@ -410,7 +431,11 @@ POSTGRES_PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' "$INTERP_FILE" | cut -d= -f2-
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 umask 077   # dumps hold briefs, chat ids and sealed tokens: owner-only from the first byte
 BACKUP_DIR="${ROOT_DIR}/infra/backup/snapshots"; mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
-"${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d postgres
+# --no-recreate: start Postgres if it is down, but never replace it here. A changed definition (a new
+# command, or ADR-158's bind paths through ~/.hawa/current, which is switched only below) is applied by
+# the full `up -d` after the switch; recreating it here started it before current existed, and Docker
+# made the missing init files as empty directories (2026-09-30).
+"${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-recreate postgres
 until docker exec hawa-production-postgres-1 pg_isready -U hawa_owner -d hawa >/dev/null 2>&1; do sleep 1; done
 # Custom format with zstd's long-distance matching: a dump repeats the same images many times, so it
 # is about 40 MB instead of 550 MB of plain SQL, in a second instead of thirteen. Restore it with
@@ -457,10 +482,19 @@ echo "✓ cut-out engine tests passed in the shipped image"
 # file, or restarted so that it binds it, and must see it afterwards.
 NGINX_WANT="$("${HAWA_SHA256[@]}" "${SCRIPT_DIR}/nginx.conf" | cut -d' ' -f1)"
 nginx_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx sha256sum /etc/nginx/nginx.conf 2>/dev/null | cut -d' ' -f1 || true; }
-"${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T nginx nginx -t >/dev/null 2>&1 \
+# The one-off checks bind this release's files (HAWA_RELEASE_ROOT); the running services bind them
+# through ~/.hawa/current, which still names the release in production until the switch below.
+HAWA_RELEASE_ROOT="$ROOT_DIR" "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T nginx nginx -t >/dev/null 2>&1 \
   || { echo "ERROR: infra/docker/nginx.conf fails nginx -t; nothing was started with it"; exit 1; }
 VECTOR_WANT="$("${HAWA_SHA256[@]}" "${SCRIPT_DIR}/vector.yaml" | cut -d' ' -f1)"
 validate_vector_config
+# ADR-158: from here production is this release. ~/.hawa/current is switched in one rename, so the
+# watchdog, the launch agents and every bind mount read this release's files from the next container
+# start on; ~/.hawa/previous names the release before it (the rollback: deploy that one).
+if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
+  hawa_release_activate "$ROOT_DIR" || { echo "ERROR: could not point $(hawa_current_link) at ${ROOT_DIR}; nothing was started"; exit 1; }
+  echo "✓ $(hawa_current_link) -> ${ROOT_DIR}"
+fi
 HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
 if [[ "$(nginx_seen)" == "$NGINX_WANT" ]]; then
   "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null && echo "✓ nginx configuration reloaded"
@@ -592,5 +626,9 @@ printf '%s' "$HEALTH" | (cd "$ROOT_DIR" && npx tsx scripts/record_deployment_rec
 
 # 9. Hawa's own disk use: older pre-deploy dumps, Docker's build cache (a full disk is an outage).
 bash "${ROOT_DIR}/infra/ops/disk_cleanup.sh" | sed 's/^/disk: /' || echo "! disk cleanup did not finish (the deploy itself succeeded)"
+# Old releases: current, previous and the newest HAWA_RELEASES_KEEP (5) stay for a rollback (ADR-158).
+if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
+  hawa_release_prune | sed 's/^/releases: /' || echo "! pruning old releases did not finish (the deploy itself succeeded)"
+fi
 echo ""
 echo "=== Deployment complete. Next: requeue dead-lettered commands if any (POST /v1/system/outbox/requeue as administrator with {\"all\":true}). Uncertain Telegram sends stay dead-lettered and are listed as keptUncertain: check the requester's chat, and requeue one only if it did not arrive, by id with \"confirmUncertainReplay\":true ==="

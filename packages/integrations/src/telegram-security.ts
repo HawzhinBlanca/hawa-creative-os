@@ -33,24 +33,6 @@ export interface ActionVerificationSuccess {
 export type ActionVerificationResult = ActionVerificationSuccess | ActionVerificationFailure;
 
 /**
- * Storage interface for Telegram durable offset persistence
- */
-export interface TelegramOffsetStorage {
-  getOffset(): Promise<number>;
-  setOffset(offset: number): Promise<void>;
-}
-
-export class MemoryTelegramOffsetStorage implements TelegramOffsetStorage {
-  private offset = 0;
-  async getOffset(): Promise<number> {
-    return this.offset;
-  }
-  async setOffset(offset: number): Promise<void> {
-    this.offset = Math.max(this.offset, offset);
-  }
-}
-
-/**
  * Manages cryptographically bound Telegram callback action tokens.
  * Enforces binding to task, revision, action, actor, expiry, and single-use nonces.
  */

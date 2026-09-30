@@ -1,0 +1,16 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_4660eaf4c92cb512 and hawa_tpl_repair_4660eaf4c92cb512 (32 ms)
+{"level":"warn","time":"2026-09-30T11:24:56.880Z","service":"core","msg":"[studio] run 6e6136bb-bc49-4c1e-850c-bb54649cb434: the conceiving resume did not read 1 saved result(s): 3649b1df-53b0-4165-82f1-cdefdd10a6f6 (brief/images-rebrief attempt 1)."}
+{"level":"warn","time":"2026-09-30T11:24:56.985Z","service":"core","msg":"[studio] run 09be15f9-573f-4ada-ac5f-488f85380215: the briefing resume did not read 1 saved result(s): 164bf06e-c449-43ca-a779-89ec6546f913 (brief/request attempt 1)."}
+{"level":"warn","time":"2026-09-30T11:24:57.026Z","service":"core","msg":"[studio] run 59bacf85-8570-49d5-ba8c-db72974b02d0: the conceiving resume did not read 2 saved result(s): eae8a6ba-0796-4347-b37d-36da635bc31b (brief/images-rebrief attempt 1), ecf61e8b-0993-4ae9-b55a-f99439f3b8ca (concepts/board attempt 1)."}
+{"level":"warn","time":"2026-09-30T11:25:01.828Z","service":"core","msg":"[canva-planner] Plan ff987e01-29d8-446c-b2c7-62c5c2252001 of task 80e72780-cf37-48e8-93b6-671daf9834ed was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:25:02.375Z","service":"core","msg":"[canva-planner] Plan d6a13329-c94d-4015-a588-d2ec051c3391 of task f020496f-054c-4840-b849-7d148c24d56f was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:25:02.378Z","service":"core","msg":"[canva-planner] Plan d6a13329-c94d-4015-a588-d2ec051c3391 of task f020496f-054c-4840-b849-7d148c24d56f was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+{"level":"warn","time":"2026-09-30T11:25:03.365Z","service":"core","msg":"[canva-planner] Plan ecc516cc-09ab-4814-be03-5fa3fed8a64b of task bfbad590-c41d-414b-9d88-15d4e705caea was claimed with no paid call admitted (its Core stopped); carrying it on (ADR-138)."}
+
+ Test Files  13 passed (13)
+      Tests  175 passed (175)
+   Start at  14:24:55
+   Duration  12.83s (transform 2.59s, setup 912ms, import 4.58s, tests 21.99s, environment 1ms)

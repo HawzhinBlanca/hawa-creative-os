@@ -2,19 +2,22 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { assertModelAllowed, modelSupportsReasoningEffort, resolveModel } from '../src/provider-policy.js';
 import { StudioSubstepReplay } from '../src/studio-substeps.js';
 
-describe('ADR-148 Sol remains an explicit candidate', () => {
+describe('ADR-161 Sol office primary preserves explicit identity and replay guards', () => {
   const saved = { ...process.env };
   afterEach(() => { process.env = { ...saved }; });
-  it('permits evaluation but refuses production before measured promotion', () => {
+  it('admits exact Sol for the owner-directed office switch and preserves the visual judge', () => {
     process.env.HAWA_MODEL_TIER = 'dev';
     expect(() => assertModelAllowed('gpt-6.1-sol')).not.toThrow();
     expect(modelSupportsReasoningEffort('gpt-6.1-sol')).toBe(true);
     process.env.HAWA_MODEL_TEXT = 'gpt-6.1-sol';
     expect(resolveModel('text', 'dev')).toBe('gpt-6.1-sol');
     process.env.HAWA_MODEL_TIER = 'production';
-    expect(() => assertModelAllowed('gpt-6.1-sol')).toThrow();
+    expect(() => assertModelAllowed('gpt-6.1-sol')).not.toThrow();
     delete process.env.HAWA_MODEL_TEXT;
-    expect(resolveModel('text', 'production')).toBe('gpt-6-astra');
+    for (const role of ['text', 'layout', 'critique'] as const) {
+      expect(resolveModel(role, 'production')).toBe('gpt-6.1-sol');
+    }
+    expect(() => assertModelAllowed('gpt-6-astra')).not.toThrow();
     expect(resolveModel('judge', 'production')).toBe('gpt-4.1-mini');
     expect(() => assertModelAllowed('jev-1.13.0')).toThrow();
     expect(() => assertModelAllowed('gpt-6.1-sol-latest')).toThrow();

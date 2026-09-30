@@ -235,6 +235,17 @@ if git -C "${ROOT_DIR}" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev
     exit 1
   fi
   echo "    [PASS] Branch agrees with ${UPSTREAM} (${LOCAL_AHEAD} ahead, 0 behind)."
+elif ! git -C "${ROOT_DIR}" symbolic-ref -q HEAD >/dev/null 2>&1; then
+  # A release directory (ADR-158) is a detached worktree of one commit, so it tracks nothing. What this
+  # check protects is that the certified commit is published: accept it when a remote branch contains it.
+  git -C "${ROOT_DIR}" fetch --quiet origin 2>/dev/null || true
+  PUBLISHED_ON="$(git -C "${ROOT_DIR}" branch -r --contains HEAD 2>/dev/null | head -1 | tr -d ' ')"
+  if [ -z "${PUBLISHED_ON}" ]; then
+    echo "FATAL: detached commit $(git -C "${ROOT_DIR}" rev-parse --short HEAD) is on no remote branch, so it is not published or backed up off this host."
+    echo "       Push the branch that holds it, then run the gate again."
+    exit 1
+  fi
+  echo "    [PASS] Detached release commit is published on ${PUBLISHED_ON}."
 else
   echo "FATAL: this branch tracks no remote, so nothing here is published or backed up off this host."
   echo "       A remote was deleted from this repository's config on 2026-09-21; restore it before certifying."

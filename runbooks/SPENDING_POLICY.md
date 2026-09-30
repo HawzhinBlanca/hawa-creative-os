@@ -44,3 +44,21 @@ table mutations remain denied; the scoped SQL function is the runtime writer.
 
 Production changes require the actual office configuration and release admission.
 Synthetic test limits and administrators do not establish live spending authority.
+
+## Renewing the price policy (ADR-159)
+
+The rates the Studio and the gateway reserve at were checked by hand on 2026-09-27 and must be
+checked again before their review date, 2026-11-22 00:00 UTC. From 14 days before, `/v1/health`
+shows `spendingPolicy.status: expiring` (and `dependencies.spendingPolicy`), and the watchdog
+alerts. From the date, the Canva planner sends nothing and each plan fails with
+`SPENDING_POLICY_EXPIRED`.
+
+1. Read each provider's published price page for every model the policies price (ADR-091, ADR-093
+   and `packages/creative/src/studio/pricing.json` list them), including long-context tiers and
+   image tokens. Record the pages and the date read.
+2. Where a rate changed, change it in `spending-reservation.ts` or `gateway-spending.ts` with a new
+   policy version, in an ADR that cites the pages.
+3. Set the new `reviewBy` (no later than the earliest "valid through" any page states) in
+   `packages/creative/src/studio/price-review.ts` and `GATEWAY_SPENDING_POLICY_REVIEW_BY`, with
+   `pricesCheckedOn` set to today. Never move the date without steps 1 and 2.
+4. Release as usual; `/v1/health` shows `valid` again.

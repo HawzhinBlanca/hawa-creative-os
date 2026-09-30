@@ -11,8 +11,17 @@
 #   bash infra/ops/install_launch_agents.sh --render <dir>   # write the plists to <dir> only; launchctl is not called
 # Logs: ~/.hawa/logs/. Agents run only while this user is logged in (that is how launchd works on a Mac).
 # On a Linux host use infra/ops/install_systemd_units.sh instead (the same jobs as systemd timers).
+#
+# The agents run the scripts of the release production runs, through the link ~/.hawa/current (ADR-158),
+# never a checkout's: a deploy switches the link, and the next run of every agent follows it without a
+# reinstall. Until a release exists (a host not yet switched over) they run this checkout's, as before,
+# and say so. HAWA_AGENT_ROOT names another directory.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/infra/ops/release_lib.sh"
+if [[ -n "${HAWA_AGENT_ROOT:-}" ]]; then ROOT="$HAWA_AGENT_ROOT"
+elif [[ -d "$(hawa_current_link)" ]]; then ROOT="$(hawa_current_link)"
+else echo "NOTE: no release at $(hawa_current_link) yet: the agents run this checkout's scripts ($ROOT) until the first deploy with release directories (runbooks/PRODUCTION_RELEASE_DIRECTORIES.md)"; fi
 AGENTS="${HAWA_LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}"; LOGS="$HOME/.hawa/logs"
 OUT="$AGENTS"; RENDER=0
 if [[ "${1:-}" == "--render" ]]; then OUT="${2:?--render needs a directory}"; RENDER=1; mkdir -p "$OUT"; else mkdir -p "$AGENTS" "$LOGS"; fi

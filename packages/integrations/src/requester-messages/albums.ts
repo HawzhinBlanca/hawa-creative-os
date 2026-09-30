@@ -18,6 +18,30 @@ export const ALBUM_MESSAGES = {
     en: "This photo arrived after I had started your design, so it isn't part of it. When the draft is ready, just send the photo again and tell me what to change.",
     ckb: 'ئەم وێنەیە دوای دەستپێکردنی دیزاینەکەت گەیشت، بۆیە بەشێک نییە لێی. کاتێک ڕەشنووسەکە ئامادە بوو، تەنها وێنەکە دووبارە بنێرەوە و پێم بڵێ چی بگۆڕدرێت.',
   },
+  /**
+   * ADR-160: the album's caption reached Telegram's caption limit, so Telegram kept only its start.
+   * `{tail}` is the last few words that arrived. Nothing is designed until the rest arrives (or the
+   * wait ends).
+   */
+  captionCut: {
+    en: 'I have your photos, but Telegram cut your text short: it stops at "…{tail}". Please send me the rest, or the whole text again, and I\'ll use it with these photos.',
+    ckb: 'وێنەکانتم پێگەیشت، بەڵام تێلیگرام دەقەکەتی کورت کردەوە: لە «…{tail}» دەوەستێت. تکایە ئەوەی ماوەتەوە بۆم بنێرە، یان هەموو دەقەکە دووبارە بنێرەوە، و لەگەڵ ئەم وێنانە بەکاری دەهێنم.',
+  },
+  /** ADR-160: asked again (the requester said "ok" or "yes"): shorter than the first question. */
+  captionCutAgain: {
+    en: 'I still need the rest of your text after "…{tail}". Please send it as a message, or send the whole text again.',
+    ckb: 'هێشتا پێویستم بە ماوەی دەقەکەتە دوای «…{tail}». تکایە وەک نامەیەک بینێرە، یان هەموو دەقەکە دووبارە بنێرەوە.',
+  },
+  /** ADR-160: the requester called the held album off ("cancel", "never mind"). */
+  captionCutCancelled: {
+    en: "OK, I won't make anything with these photos. Send them again whenever you're ready.",
+    ckb: 'باشە، هیچ شتێک بەم وێنانە دروست ناکەم. هەر کاتێک ئامادە بوویت دووبارە بیاننێرەوە.',
+  },
+  /** ADR-160: the rest did not come within the wait, and what arrived is not enough for a design. */
+  captionCutLapsed: {
+    en: "I didn't receive the rest of your text, so I haven't started a design with these photos. Whenever you're ready, send the photos again and then the whole text as a message.",
+    ckb: 'ماوەی دەقەکەتم پێنەگەیشت، بۆیە هێشتا دیزاینم بەم وێنانە دەست پێنەکردووە. هەر کاتێک ئامادە بوویت، وێنەکان دووبارە بنێرەوە و پاشان هەموو دەقەکە وەک نامەیەک بنێرە.',
+  },
   photoMissing: {
     en: 'One of your photos could not be saved, so I have not started a design. Please send the photos again.',
     ckb: 'یەکێک لە وێنەکانت پاشەکەوت نەکرا، بۆیە هێشتا دیزاینم دەست پێنەکردووە. تکایە وێنەکان دووبارە بنێرەوە.',
