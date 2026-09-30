@@ -98,6 +98,9 @@ services:
     user: root
     restart: "no"
     logging: *logging
+    mem_limit: 64m
+    memswap_limit: 64m
+    cpus: 0.5
     command: ["sh", "-c", "mkdir -p /var/lib/hawa/blobs/sha256 /var/lib/hawa/blobs/tmp && printf 'sha256-v1\\n' > /var/lib/hawa/blobs/.hawa-blob-store && chown -R 10001:10001 /var/lib/hawa/blobs"]
     volumes:
       - chaos_blobs:/var/lib/hawa/blobs
