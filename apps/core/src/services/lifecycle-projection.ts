@@ -1,6 +1,6 @@
 import { officeReviewUrl } from './desk-review-link.js';
 import { createHash } from 'node:crypto';
-import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef, type LifecycleAlbumRef, type LifecycleSourceRef } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef, type DraftImageRef, type LifecycleAlbumRef, type LifecycleSourceRef } from '@hawa/contracts';
 import { sourceCopyConfirmation } from '@hawa/domain';
 import { type BlobStore } from '@hawa/db';
 import { blobStoreFor } from './blob-store-context.js';
@@ -12,9 +12,10 @@ import { persistChatIntake, type ChatIntake } from './chat-intake.js';
 import { decisionDraftFor, linkedLifecycleReplies, readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-chat-target.js';
 import { lifecyclePhotoInput } from './lifecycle-photo.js';
 import { verifyAlbumSnapshot } from './lifecycle-album.js';
-import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
+import { DRAFT_READY_STATUSES, bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage, officeDayExhaustedNote } from './canva-status-message.js';
+import { canvaEditUrl, composeOfficeDraftAlert, findDraftImage } from './office-draft-alert.js';
 import { designName } from './requester-turn.js';
 import { namedOfficeReviewMode } from './google-oidc.js';
 import { lockNamedReviewAuthority } from './named-review-authority.js';
@@ -363,6 +364,12 @@ export interface DesignOutcomeResult {
    * `officeAlert`, which a worker from before this change still reads).
    */
   officeAlerts?: Array<{ chatId: string; text: string }>;
+  /**
+   * ADR-155 addendum: the draft's alert as a photo, one per entry of `officeAlerts` with the same words
+   * (a caption, and the text sent instead when the picture cannot be read). Only for a draft with a
+   * picture; a worker from before this field sends `officeAlerts`.
+   */
+  officePhotoAlerts?: Array<{ chatId: string; text: string; image: DraftImageRef }>;
 }
 
 /**
@@ -433,8 +440,9 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       : question ? 'The design is waiting for the requester to answer a clarification question.'
       : `Automatic design ended ${status}${report.code ? ` (${report.code})` : ''}; an operator must follow up.`;
     let revisionId: string | undefined;
+    let creation: { payload: Record<string, unknown> } | undefined;
     if (hasDraft) {
-      const creation = await trx.selectFrom('outbox_commands').select('payload')
+      creation = await trx.selectFrom('outbox_commands').select('payload')
         .where('tenant_id', '=', tenantId).where('aggregate_id', '=', taskId)
         .where('command_type', '=', 'task.created').executeTakeFirst();
       const bridged = await bridgeCanvaDraftRevision(trx, {
@@ -477,12 +485,28 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       // is sent: every office member below hears of it (ADR-155).
       officeAlerted: officeChats.length > 0,
     });
-    const officeText = (hasDraft
-      ? `A design is ready for office review in Hawa Desk. Task ${taskId}.`
-      : `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.` +
-        (report.code === 'OFFICE_DAY_EXHAUSTED' ? officeDayExhaustedNote() : '')) +
-      (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '');
+    // ADR-155 addendum: a draft's alert names the design, who it is for and its Canva link, with no
+    // internal IDs, and goes as a photo of the draft (officePhotoAlerts). `officeAlerts` keeps the same
+    // words as text for a worker from before, and is what is sent when the picture cannot be.
+    let officeText: string;
+    let draftImage: DraftImageRef | undefined;
+    if (hasDraft) {
+      const client = task.client_id ? await trx.selectFrom('clients').select('name')
+        .where('tenant_id', '=', tenantId).where('id', '=', task.client_id).executeTakeFirst() : undefined;
+      const requestedBy = typeof creation?.payload.senderName === 'string' ? creation.payload.senderName : undefined;
+      officeText = composeOfficeDraftAlert({ title: requestTitle, clientName: client?.name, requestedBy,
+        revised: taskId !== request.root_task_id, canvaUrl: canvaEditUrl(report.designId!), reviewUrl,
+        ...(DRAFT_READY_STATUSES.has(status) ? {} : { check: `${status}${report.code ? ` (${report.code})` : ''}` }) });
+      draftImage = await findDraftImage(trx, { tenantId, taskId, designId: report.designId! });
+    } else {
+      // No design was named (an outcome naming one is a draft, outcomeHasDraft), so there is no Canva
+      // link to give: the draft alert above carries it for every outcome that has a design.
+      officeText = `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.` +
+        (report.code === 'OFFICE_DAY_EXHAUSTED' ? officeDayExhaustedNote() : '') +
+        (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '');
+    }
     const officeAlerts = officeChats.map((chatId) => ({ chatId, text: officeText }));
+    const officePhotoAlerts = draftImage ? officeChats.map((chatId) => ({ chatId, text: officeText, image: draftImage! })) : [];
     // #14 (ADR-145): the question in plain words, answered with a number or in the requester's own words.
     const questionText = question
       ? say(LIFECYCLE_MESSAGES.oneQuestion, lang, {
@@ -497,6 +521,7 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       ...(question ? { question } : {}),
       ...(messageText ? { message: { text: messageText, parseMode: 'HTML' as const } } : {}),
       ...(officeAlerts.length ? { officeAlert: officeAlerts[0], officeAlerts } : {}),
+      ...(officePhotoAlerts.length ? { officePhotoAlerts } : {}),
     };
     await trx.insertInto('lifecycle_projections').values({
       tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,

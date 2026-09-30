@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { OUTBOX_SEND_MARK_SOURCE, sql, type Database, type Kysely } from '@hawa/db';
+import type { DraftImageRef } from '@hawa/contracts';
+import { OUTBOX_SEND_MARK_SOURCE, sql, type BlobStore, type Database, type Kysely } from '@hawa/db';
 import { LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type RequesterLang } from '@hawa/integrations';
 
 /**
@@ -25,6 +26,8 @@ export interface TelegramSender {
     filename: string,
     options?: { mimeType?: string; caption?: string; parseMode?: 'HTML' | 'Markdown'; timeoutMs?: number }
   ): Promise<TelegramSendResult>;
+  /** A picture with a plain caption (the office's draft alert, ADR-155 addendum); Telegram recompresses it. */
+  dispatchOutboundPhoto?(chatId: string | number, photo: Buffer, caption?: string): Promise<TelegramSendResult>;
 }
 
 /** A delivered file as Core names it in the `notify.published` payload. */
@@ -55,6 +58,29 @@ export const readStoredExportBytes: ExportBytesReader = async (db, tenantId, tas
     WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND id = ${artifactId}::uuid`.execute(db)).rows[0];
   return row?.content ? new Uint8Array(row.content) : null;
 };
+
+/** The bytes of a draft picture for the office's alert, read under its tenant; null when they cannot be. */
+export type DraftImageReader = (db: Kysely<Database>, ref: DraftImageRef) => Promise<Uint8Array | null>;
+
+/**
+ * A draft picture by its reference: a Canva export from its row, a Studio preview from the file store
+ * when it has the file (read verified), else from the candidate's row. The caller checks the hash.
+ */
+export function draftImageReader(readExport: ExportBytesReader, blobStore: () => BlobStore | null): DraftImageReader {
+  return async (db, ref) => {
+    if (ref.source === 'canva_export') return readExport(db, ref.tenantId, ref.taskId, ref.id);
+    if (ref.source !== 'studio_preview' || ![ref.tenantId, ref.taskId, ref.id].every((id) => UUID.test(String(id)))) return null;
+    const row = (await sql<{ preview_png: Buffer | null; preview_sha256: string | null }>`SELECT c.preview_png, c.preview_sha256
+      FROM hawa.design_studio_candidates c JOIN hawa.design_studio_runs r ON r.id = c.run_id AND r.tenant_id = c.tenant_id
+      WHERE c.tenant_id = ${ref.tenantId}::uuid AND c.id = ${ref.id}::uuid AND r.task_id = ${ref.taskId}::uuid`.execute(db)).rows[0];
+    if (!row) return null;
+    const store = blobStore();
+    if (store && row.preview_sha256) {
+      try { return new Uint8Array(await store.read(row.preview_sha256, { verify: true })); } catch { /* the row's bytes, if any */ }
+    }
+    return row.preview_png?.length ? new Uint8Array(row.preview_png) : null;
+  };
+}
 
 export const sha256Hex = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 

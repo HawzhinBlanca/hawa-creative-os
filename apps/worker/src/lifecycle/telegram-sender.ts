@@ -28,22 +28,25 @@
  * case the office must check by hand. Courtesy messages skip the marks and accept Telegram's own
  * at-least-once window.
  *
- * The file bytes are read here, by reference (exportRef) and checked against their hash, so no file
- * ever travels through Restate's journal.
+ * The file bytes are read here, by reference (exportRef, or imageRef for the picture of an office draft
+ * alert) and checked against their hash, so no file ever travels through Restate's journal. A draft
+ * alert whose picture cannot be read or is refused is sent as its words instead (ADR-155 addendum).
  */
 import * as restate from '@restatedev/restate-sdk';
 import type { OutboundMessage, SendResult } from '@hawa/contracts';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { withRlsContext, type Database, type Kysely } from '@hawa/db';
+import { blobStoreFromEnv, withRlsContext, type BlobStore, type Database, type Kysely } from '@hawa/db';
 import { TelegramBridge } from '@hawa/integrations';
 import { chaosPoint } from '@hawa/observability';
 import {
   composeDeliveryUncertainAlert,
   composeMessageUncertainAlert,
+  draftImageReader,
   readSendMark,
   readStoredExportBytes,
   sha256Hex,
   writeSendMark,
+  type DraftImageReader,
   type ExportBytesReader,
   type SendMarkOutcome,
   type SendStepKind,
@@ -63,6 +66,8 @@ export interface TelegramSenderDeps {
   botToken(): string | null;
   bridge(botToken: string): TelegramBridgeLike;
   readExportBytes: ExportBytesReader;
+  /** The picture of an office draft alert (ADR-155 addendum); without it such an alert is sent as text. */
+  readDraftImage?: DraftImageReader;
   /**
    * Every office member, who hear about a message that may not have arrived or could not be sent
    * (ADR-155; it was the first member only). Read inside a journaled step.
@@ -73,11 +78,20 @@ export interface TelegramSenderDeps {
 }
 
 export function telegramSenderDepsFromEnv(db: Kysely<Database> | undefined): TelegramSenderDeps {
+  // The file store both colours mount (ADR-035), for a Studio preview kept only there.
+  let store: BlobStore | null | undefined;
+  const blobStore = () => {
+    if (store === undefined) {
+      try { store = db && process.env.HAWA_BLOB_DIR ? blobStoreFromEnv(db) : null; } catch { store = null; }
+    }
+    return store;
+  };
   return {
     db,
     botToken: () => process.env.TELEGRAM_BOT_TOKEN || null,
     bridge: (botToken) => new TelegramBridge({ botToken }) as unknown as TelegramBridgeLike,
     readExportBytes: readStoredExportBytes,
+    readDraftImage: draftImageReader(readStoredExportBytes, blobStore),
     officeChatIds: () => officeChatIdsFromEnv(),
   };
 }
@@ -119,6 +133,18 @@ export type AttemptAnswer = SendResult
   | { outcome: 'not_sent'; error: string; retryAfterMs: number | null }
   | { outcome: 'stuck'; error: string; retryAfterMs: number };
 
+/** Telegram's limit for a photo; a larger draft picture goes as a file (up to 50 MB), which shows it too. */
+const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * An office draft alert as the plain message it also carries (ADR-155 addendum): what is sent when its
+ * picture cannot be read, has changed, or is refused, so the office is never left without the alert.
+ */
+export function photoAsText(m: OutboundMessage): OutboundMessage {
+  const { imageRef: _image, caption, ...rest } = m;
+  return { ...rest, kind: 'text', text: m.text || caption || '' };
+}
+
 /** The wait before another attempt after a pre-connection failure or an unknown refusal. */
 const NOT_SENT_RETRY_MS = 5000;
 /**
@@ -132,7 +158,8 @@ const STUCK_MAX_WAIT_MS = 5 * 60_000;
  * One attempt at one message: the body of the handler's `ctx.run('send')`. It answers, or throws an
  * error Restate retries (a RetryableError carrying Telegram's retry_after on a 429).
  */
-export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage): Promise<AttemptAnswer> {
+export async function sendAttempt(deps: TelegramSenderDeps, message: OutboundMessage): Promise<AttemptAnswer> {
+  let m = message;
   const critical = m.class === 'critical';
   const tenantId = tenantOf(m);
   const markId = markIdOf(m.key);
@@ -170,11 +197,23 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
     if (sha256Hex(bytes) !== ref.sha256) {
       return { outcome: 'refused', error: `DELIVERED_FILE_CHANGED: the stored export ${ref.artifactId} no longer matches its approved hash` };
     }
+  } else if (m.kind === 'photo') {
+    // ADR-155 addendum: the draft's picture, read by reference and checked against its hash like an
+    // approved file. One that cannot be read, or has changed, sends the alert's words instead.
+    const ref = m.imageRef;
+    const read = ref && deps.db && deps.readDraftImage && (await withRlsContext(deps.db,
+      { tenantId: ref.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) => deps.readDraftImage!(trx, ref)));
+    if (read && sha256Hex(read) === ref!.sha256) bytes = read;
+    else {
+      log.warn(`[TelegramSender] The draft picture for ${m.key} ${read ? 'no longer matches its hash' : 'could not be read'}; its alert is sent as text.`);
+      m = photoAsText(m);
+    }
   }
 
   // Written (and committed) before the send: if this process dies after it, a retry finds it.
   if (critical) await mark('attempted');
   const bridge = deps.bridge(botToken);
+  if (m.kind === 'photo' && !bridge.dispatchOutboundPhoto) m = photoAsText(m);
   let res: TelegramSendResult;
   try {
     res = m.kind === 'document'
@@ -183,7 +222,11 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
           caption: m.caption,
           ...(m.parseMode ? { parseMode: m.parseMode } : {}),
         })
-      : await bridge.dispatchOutboundMessage(m.chatId, { text: m.text || '', ...(m.parseMode ? { parse_mode: m.parseMode } : {}) });
+      : m.kind === 'photo'
+        ? bytes!.length > PHOTO_MAX_BYTES
+          ? await bridge.dispatchOutboundDocument(m.chatId, bytes!, 'draft.png', { mimeType: 'image/png', caption: m.caption || m.text })
+          : await bridge.dispatchOutboundPhoto!(m.chatId, Buffer.from(bytes!), m.caption || m.text)
+        : await bridge.dispatchOutboundMessage(m.chatId, { text: m.text || '', ...(m.parseMode ? { parse_mode: m.parseMode } : {}) });
   } catch (err) {
     // The bridge answers with a result; a throw is unexpected, and whether anything left is unknown.
     res = { success: false, error: `TELEGRAM_DELIVERY_UNCERTAIN: ${err instanceof Error ? err.message : String(err)}` };
@@ -238,6 +281,16 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
   if (/NETWORK_ERROR|NOT_CONFIGURED/.test(error)) {
     if (!failedRecorded) return { outcome: 'not_sent', error, retryAfterMs: NOT_SENT_RETRY_MS };
     throw new Error(`${error}: Telegram did not take ${m.key}; asked again`);
+  }
+  // A draft picture Telegram would not take (too large, odd dimensions, an answer this table does not
+  // know): the alert's words go instead, under the same key, now that its mark says 'failed'. Without
+  // that mark the photo is asked again once the mark is written, and then falls back here.
+  if (m.kind === 'photo') {
+    if (failedRecorded) {
+      log.warn(`[TelegramSender] Telegram refused the draft picture of ${m.key} (${error}); its alert is sent as text.`);
+      return sendAttempt(deps, photoAsText(m));
+    }
+    return { outcome: 'not_sent', error, retryAfterMs: NOT_SENT_RETRY_MS };
   }
   if (REFUSED.test(error)) {
     return failedRecorded ? { outcome: 'refused', error } : { outcome: 'not_sent', error, retryAfterMs: null };

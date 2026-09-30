@@ -21,16 +21,36 @@ export interface ExportRef {
   sha256: string;
 }
 
+/**
+ * A draft picture for the office's "design ready" alert (ADR-155 addendum), read by the sender itself
+ * and checked against its hash like an ExportRef: a retrieved Canva PNG export (hawa.canva_export_bytes
+ * row `id`), or the Studio winner's preview (hawa.design_studio_candidates row `id`) when no export is
+ * there yet.
+ */
+export interface DraftImageRef {
+  source: 'canva_export' | 'studio_preview';
+  tenantId: string;
+  taskId: string;
+  id: string;
+  sha256: string;
+}
+
 /** One message for TelegramSender (a Virtual Object keyed by chat id). */
 export interface OutboundMessage {
   v: 1;
   /** Deterministic: the same logical message always has the same key (PHASE2_DESIGN.md 2.9). */
   key: string;
   chatId: string;
-  kind: 'text' | 'document';
+  /**
+   * photo (ADR-155 addendum): `imageRef` with `caption`, and `text` as the plain message sent instead
+   * when the picture cannot be read or Telegram refuses it. A sender from before 'photo' existed sends
+   * `text` alone, so the office still hears of it.
+   */
+  kind: 'text' | 'document' | 'photo';
   text?: string;
   parseMode?: 'HTML';
   exportRef?: ExportRef;
+  imageRef?: DraftImageRef;
   filename?: string;
   caption?: string;
   mimeType?: string;

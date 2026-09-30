@@ -6,7 +6,7 @@
  */
 import { createHash } from 'node:crypto';
 import * as restate from '@restatedev/restate-sdk';
-import type { BlobRef, DeliveryInput, DeliveryOutcome, OutboundMessage } from '@hawa/contracts';
+import type { BlobRef, DeliveryInput, DeliveryOutcome, DraftImageRef, OutboundMessage } from '@hawa/contracts';
 import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
 import { log, withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, outcomeReportCore, type CoreInternal } from './delivery.js';
@@ -96,7 +96,9 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
   outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
     message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string };
     /** ADR-155: the alert to every office member (the first is `officeAlert`, kept for older receipts). */
-    officeAlerts?: Array<{ chatId: string; text: string }> };
+    officeAlerts?: Array<{ chatId: string; text: string }>;
+    /** ADR-155 addendum: the same alerts with the draft's picture, sent in their place when Core gives them. */
+    officePhotoAlerts?: OfficePhotoAlert[] };
   question?: { id: string; text: string; options: string[]; taskId: string; rev: number;
     /** Derived from the confirmed Telegram send mark, never from outcome projection time. */
     sentAtMs?: number; messageId?: string };
@@ -531,6 +533,7 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
     question?: { id: string; text: string; options: string[] };
     officeAlert?: { chatId: string; text: string };
     officeAlerts?: Array<{ chatId: string; text: string }>;
+    officePhotoAlerts?: OfficePhotoAlert[];
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/design-outcome`, {
     v: 1, expectedRev: prior.rev, rev: nextRev,
     key: `${event.requestId}:${nextRev}:designFinished:${event.runId}`,
@@ -551,6 +554,7 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
       ...(projected.message ? { message: projected.message } : {}),
       ...(projected.officeAlert ? { officeAlert: projected.officeAlert } : {}),
       ...(Array.isArray(projected.officeAlerts) && projected.officeAlerts.length ? { officeAlerts: projected.officeAlerts } : {}),
+      ...photoAlertsOf(projected.officePhotoAlerts),
     },
   };
   ctx.set('lc', next);
@@ -961,10 +965,33 @@ function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleS
   });
   // ADR-155: every office member hears it; a receipt from before names only the first (officeAlert).
   const alerts = state.outcome?.officeAlerts ?? (state.outcome?.officeAlert ? [state.outcome.officeAlert] : []);
+  // ADR-155 addendum: a draft's alert goes as a photo of it, under the same key as its text, so each
+  // member hears of each revision once, whichever build sends it. Only office members get the picture;
+  // a requester who is not one gets their message alone (the draft reaches them on approval, ADR-022).
+  const photos = new Map((state.outcome?.officePhotoAlerts ?? []).map((photo) => [photo.chatId, photo]));
   for (const [index, alert] of alerts.entries()) {
-    ctx.send({ v: 1, key: officeAlertKey(`${state.requestId}:${state.rev}:office-alert`, index, alert.chatId), chatId: alert.chatId,
-      kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+    const photo = photos.get(alert.chatId);
+    const key = officeAlertKey(`${state.requestId}:${state.rev}:office-alert`, index, alert.chatId);
+    ctx.send(photo
+      ? { v: 1, key, chatId: alert.chatId, kind: 'photo', imageRef: photo.image, caption: photo.text, text: alert.text,
+        class: 'critical', tenantId: state.tenantId, taskId: state.taskId }
+      : { v: 1, key, chatId: alert.chatId, kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
   }
+}
+
+/** An office draft alert as Core gives it (ADR-155 addendum); the picture is read by the sender. */
+export interface OfficePhotoAlert { chatId: string; text: string; image: DraftImageRef }
+
+/** Core's photo alerts, kept only when each names a chat, its words and a picture by hash. */
+function photoAlertsOf(value: unknown): { officePhotoAlerts?: OfficePhotoAlert[] } {
+  if (!Array.isArray(value)) return {};
+  const valid = value.filter((a): a is OfficePhotoAlert => typeof a?.chatId === 'string' && typeof a.text === 'string' &&
+    (a.image?.source === 'canva_export' || a.image?.source === 'studio_preview') &&
+    [a.image.tenantId, a.image.taskId, a.image.id].every((id: unknown) => typeof id === 'string' && UUID.test(id)) &&
+    typeof a.image.sha256 === 'string' && /^[0-9a-f]{64}$/.test(a.image.sha256))
+    .map((a) => ({ chatId: a.chatId, text: a.text, image: { source: a.image.source, tenantId: a.image.tenantId,
+      taskId: a.image.taskId, id: a.image.id, sha256: a.image.sha256 } }));
+  return valid.length ? { officePhotoAlerts: valid } : {};
 }
 
 /**
