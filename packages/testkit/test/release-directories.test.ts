@@ -123,6 +123,38 @@ describe('release_lib: preparing a release', () => {
 });
 
 describe('release_lib: switching and keeping releases', () => {
+  it('replaces the empty placeholder directories Docker makes for missing bind sources, and refuses one holding a file', () => {
+    const s = setup();
+    const a = sh(s, `hawa_release_prepare '${s.src}' ${s.head}`).out;
+    const current = path.join(s.home, '.hawa', 'current');
+    // What a container started through ~/.hawa/current before the switch leaves behind (2026-09-30).
+    fs.mkdirSync(path.join(current, 'db', 'seed.sql'), { recursive: true });
+    fs.mkdirSync(path.join(current, 'infra', 'docker', '00-init-roles.sql'), { recursive: true });
+    const placeholder = sh(s, `hawa_release_activate '${a}'`);
+    expect(placeholder.code).toBe(0);
+    expect(fs.readlinkSync(current)).toBe(a);
+    expect(fs.existsSync(path.join(s.home, '.hawa', 'previous'))).toBe(false);
+
+    const t = setup();
+    const b = sh(t, `hawa_release_prepare '${t.src}' ${t.head}`).out;
+    const real = path.join(t.home, '.hawa', 'current');
+    fs.mkdirSync(path.join(real, 'db'), { recursive: true });
+    fs.writeFileSync(path.join(real, 'db', 'kept.sql'), 'select 1;');
+    const refused = sh(t, `hawa_release_activate '${b}'`);
+    expect(refused.code).not.toBe(0);
+    expect(refused.err).toMatch(/holding files/);
+    expect(fs.readFileSync(path.join(real, 'db', 'kept.sql'), 'utf8')).toBe('select 1;');
+  });
+
+  it('never recreates Postgres before current is switched (deploy.sh starts it with --no-recreate)', () => {
+    const deploy = fs.readFileSync(path.join(here, '..', '..', '..', 'infra', 'docker', 'deploy.sh'), 'utf8');
+    const activate = deploy.indexOf('hawa_release_activate "$ROOT_DIR"');
+    const ups = [...deploy.matchAll(/up -d[^\n]*postgres/g)].filter((m) => (m.index ?? 0) < activate);
+    expect(activate).toBeGreaterThan(0);
+    expect(ups.length).toBeGreaterThan(0);
+    for (const m of ups) expect(m[0]).toContain('--no-recreate');
+  });
+
   it('points current at a release in one rename and previous at the one before, never inside the old release', () => {
     const s = setup();
     const a = sh(s, `hawa_release_prepare '${s.src}' ${s.head}`).out;

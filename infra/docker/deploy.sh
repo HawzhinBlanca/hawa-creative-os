@@ -431,7 +431,11 @@ POSTGRES_PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' "$INTERP_FILE" | cut -d= -f2-
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 umask 077   # dumps hold briefs, chat ids and sealed tokens: owner-only from the first byte
 BACKUP_DIR="${ROOT_DIR}/infra/backup/snapshots"; mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
-"${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d postgres
+# --no-recreate: start Postgres if it is down, but never replace it here. A changed definition (a new
+# command, or ADR-158's bind paths through ~/.hawa/current, which is switched only below) is applied by
+# the full `up -d` after the switch; recreating it here started it before current existed, and Docker
+# made the missing init files as empty directories (2026-09-30).
+"${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-recreate postgres
 until docker exec hawa-production-postgres-1 pg_isready -U hawa_owner -d hawa >/dev/null 2>&1; do sleep 1; done
 # Custom format with zstd's long-distance matching: a dump repeats the same images many times, so it
 # is about 40 MB instead of 550 MB of plain SQL, in a second instead of thirteen. Restore it with

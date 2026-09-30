@@ -102,3 +102,14 @@ release directory is a detached worktree, which tracks nothing. The check exists
 commit is certified, so `scripts/enforce_release_gate.sh` now also accepts a detached HEAD that some remote
 branch contains, and still refuses a detached commit that is on no remote branch (checked both ways by hand
 against `~/.hawa/releases/973f725d…` and an unpushed empty commit on top of it).
+
+## Addendum 2 (2026-09-30, the first --apply)
+
+The first `--apply` stopped before any service changed except Postgres: deploy.sh's pre-backup `up -d postgres`
+recreated Postgres with its new definition (syncfs, the init files bound through `~/.hawa/current`) before
+`current` existed, so Docker created the missing bind sources as empty directories, and the switch then refused
+to rename over that directory. Data was unaffected (the init files are read only for an empty data directory;
+same volume, clean shutdown). Fixes: the pre-backup start is `up -d --no-recreate postgres` (the definition is
+applied by the full `up -d` after the switch), and `hawa_release_activate` removes a `current` that is a tree of
+empty directories and refuses one holding any file. Tests: `packages/testkit/test/release-directories.test.ts`
+(the placeholder case fails without the fix; a guard that no pre-switch `up -d … postgres` lacks `--no-recreate`).

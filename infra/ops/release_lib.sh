@@ -103,6 +103,16 @@ hawa_release_activate() { # release
   release="$(hawa_physical "$1")" || { echo "ERROR: no release at $1" >&2; return 1; }
   link="$(hawa_current_link)"; previous="$(hawa_previous_link)"
   mkdir -p "$(dirname "$link")"
+  # Docker creates a missing bind-mount source as a directory. If a container was ever started through
+  # ~/.hawa/current before it existed, current is a real directory of empty directories: remove those
+  # (empty directories only; anything holding a file or a link stops the deploy for a person to look).
+  if [[ -d "$link" && ! -L "$link" ]]; then
+    if [[ -n "$(find "$link" ! -type d -print -quit)" ]]; then
+      echo "ERROR: $link is a real directory holding files, not a release link; look at it by hand" >&2; return 1
+    fi
+    find "$link" -depth -type d -empty -delete || return 1
+    echo "! removed $link, a directory of empty placeholders Docker made for missing bind-mount sources" >&2
+  fi
   old="$(hawa_physical "$link" || true)"
   if [[ "$old" != "$release" ]]; then
     tmp="${link}.new.$$"; rm -f "$tmp"; ln -s "$release" "$tmp"
