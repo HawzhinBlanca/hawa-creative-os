@@ -94,3 +94,11 @@ publication-inspection-schedule, app-role-rotation, watchdog-host-role (free-spa
 core and paid-model-health ("disabled"). Each new test failed against 6bd479c1's files and passes now.
 Nothing was run against production or its VM settings; the switch-over itself is unexercised until
 the lead runs the runbook.
+
+## Addendum (2026-09-30, found at the first pre-flight)
+
+The release gate's stage 7 refused the first release directory: it required a branch with an upstream, and a
+release directory is a detached worktree, which tracks nothing. The check exists so that only a published
+commit is certified, so `scripts/enforce_release_gate.sh` now also accepts a detached HEAD that some remote
+branch contains, and still refuses a detached commit that is on no remote branch (checked both ways by hand
+against `~/.hawa/releases/973f725d…` and an unpushed empty commit on top of it).
