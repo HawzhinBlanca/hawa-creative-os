@@ -23,7 +23,9 @@ const me = os.userInfo().username;
 describe('systemd units (Linux)', () => {
   const out = path.join(tmp, 'units');
   const res = spawnSync(BASH, [path.join(repo, 'infra/ops/install_systemd_units.sh'), '--render', out, '--user', me], {
-    encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HAWA_UNIT_PATH: '/usr/local/bin:/usr/bin:/bin' },
+    encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HAWA_UNIT_PATH: '/usr/local/bin:/usr/bin:/bin',
+      // No release on this host for the checkout's own rendering (release-directories.test.ts has the other case).
+      HAWA_CURRENT_LINK: path.join(tmp, 'no-release') },
   });
   const unit = (name: string) => fs.readFileSync(path.join(out, name), 'utf8');
   const home = os.userInfo().homedir;

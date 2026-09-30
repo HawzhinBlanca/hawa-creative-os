@@ -24,7 +24,7 @@
  * they are written only to a file under ~/.hawa/db-roles with mode 0600.
  */
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -605,10 +605,14 @@ export function installEnv(envFile: string, secretFile: string, keys: string[], 
   chmodSync(backupDir, 0o700);
   const backup = path.join(backupDir, `${path.basename(envFile).replace(/^\./, '')}.${stamp()}.bak`);
   writeFileSync(backup, before, { mode: 0o600, flag: 'wx' });
-  const mode = statSync(envFile).mode & 0o777;
-  const tmp = `${envFile}.rotate-${process.pid}`;
+  // In a release directory infra/docker/.env is a link to ~/.hawa/shared (ADR-158): the new file
+  // replaces the file the link names, beside it, so the link and every other release keep reading it.
+  // Renaming onto the link itself would have left the shared file on the old credential.
+  const target = realpathSync(envFile);
+  const mode = statSync(target).mode & 0o777;
+  const tmp = `${target}.rotate-${process.pid}`;
   writeFileSync(tmp, after, { mode: mode & 0o700 });
-  renameSync(tmp, envFile);
+  renameSync(tmp, target);
   const targets = keys.map((key) => {
     const u = new URL(readEnvValue(after, key));
     return `${key} -> ${u.username}@${u.host}${u.pathname}`;

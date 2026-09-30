@@ -34,8 +34,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     try {
       const res = await app.request('/health');
       const json = await res.json();
-      expect(json.dependencies.modelProvider).toBe('unverified');
-      expect(json.lastPaidProbe.status).toBe('unverified');
+      // This app schedules no paid probe: "disabled", never "connected" (ADR-158; "unverified" is
+      // for a scheduled probe that has not answered yet, health-semantics.test.ts).
+      expect(json.dependencies.modelProvider).toBe('disabled');
+      expect(json.lastPaidProbe.status).toBe('disabled');
       expect(json.lastPaidProbe.at).toBeNull();
     } finally {
       if (previous === undefined) delete process.env.OPENAI_API_KEY;

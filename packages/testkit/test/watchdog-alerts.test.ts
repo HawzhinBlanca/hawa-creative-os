@@ -1,0 +1,200 @@
+import { afterAll, describe, expect, it } from 'vitest';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * infra/ops/watchdog.sh after the 2026-09-30 outage (ADR-158).
+ *
+ * - One 30-minute cooldown covered every problem: an alert at 07:17 about something else kept the
+ *   Postgres outage of 07:26-07:38 from being sent until 07:47. A new or changed problem now alerts at
+ *   once; the cooldown only holds back the same problems again (their numbers aside).
+ * - Postgres crash recovery and Restate's "Severe lag" (the Docker VM stalling, minutes before both
+ *   crashes) are read from the containers' logs since the last pass and alerted.
+ * - Every line the watchdog writes carries its UTC time.
+ * - It works on the release ~/.hawa/current points to: compose files, backups and build stamp.
+ * - The disk is judged by free space, not percent.
+ * - Core's "disabled" paid probe (HAWA_BILLING_PROBE_ENABLED off) is not a problem.
+ *
+ * A full stack is stubbed: docker, curl, sleep and open on PATH; the release is a directory whose infra
+ * links to this checkout's, with a valid nightly backup receipt of its own.
+ */
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repo = path.resolve(here, '../../..');
+const watchdog = path.join(repo, 'infra/ops/watchdog.sh');
+const BASH = fs.existsSync('/bin/bash') ? '/bin/bash' : 'bash';
+const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-watchdog-alerts-')));
+afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+const STACK = ['nginx', 'desk', 'core', 'cutout', 'postgres', 'restate', 'vector', 'worker-blue'].map((s) => `hawa-production-${s}-1`);
+const WORKER = JSON.stringify({ status: 'healthy', background: 'live', outbox: {}, telegramPoller: { mode: 'on', background: 'live' } });
+const health = (over: Record<string, unknown> = {}, status = 'healthy') => JSON.stringify({ status, telegramPoller: 'worker', dependencies: {
+  postgres: 'connected', parkedClientMessages: 0, canva: 'unverified', canvaCircuitBreaker: 'CLOSED', telegram: 'active', waha: 'unconfigured',
+  disk: 'writable', restate: 'connected', restatePausedInvocations: 0, modelProvider: 'disabled', telegramApi: 'connected', funnel: 'idle',
+  cutout: 'connected', ...over } });
+
+let n = 0;
+function setup(opts: { freeKb?: number; running?: string[] } = {}) {
+  const t = path.join(tmp, `case-${++n}`);
+  const bin = path.join(t, 'bin'); const home = path.join(t, 'home'); const release = path.join(t, 'release');
+  for (const d of [bin, path.join(home, '.hawa', 'watchdog'), path.join(release, 'infra', 'backup', 'snapshots')]) fs.mkdirSync(d, { recursive: true });
+  // The release production runs: this checkout's scripts, its own backups, its own commit.
+  for (const d of ['docker', 'ops']) fs.symlinkSync(path.join(repo, 'infra', d), path.join(release, 'infra', d));
+  fs.symlinkSync(path.join(repo, 'infra/backup/restate_nightly.py'), path.join(release, 'infra/backup/restate_nightly.py'));
+  const stamp = new Date(Date.now() - 3600_000).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  const dump = path.join(release, 'infra/backup/snapshots', `hawa_${stamp}.dump`);
+  fs.writeFileSync(dump, 'dump');
+  const sha = createHash('sha256').update('dump').digest('hex');
+  fs.writeFileSync(`${dump}.sha256`, `${sha}\n`);
+  fs.writeFileSync(path.join(release, 'infra/backup/snapshots/backup.log'), `2026-09-30T03:30:00Z OK ${stamp} bytes=4 sha256=${sha.slice(0, 16)}\n`);
+  execFileSync('git', ['init', '-q', release]);
+  execFileSync('git', ['-C', release, '-c', 'user.email=t@example.invalid', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'release']);
+  fs.symlinkSync(release, path.join(home, '.hawa', 'current'));
+  fs.writeFileSync(path.join(home, '.hawa', 'watchdog', 'state'), `last_cleanup=${Math.floor(Date.now() / 1000)}\n`);
+  const f = (name: string) => path.join(t, name);
+  fs.writeFileSync(f('running'), `${(opts.running ?? STACK).join('\n')}\n`);
+  fs.writeFileSync(f('health'), health());
+  fs.writeFileSync(path.join(bin, 'docker'), `#!/bin/bash
+case "$*" in
+  "info"*) exit 0 ;;
+  "ps --filter name=hawa-production- --filter status=running"*) cat '${f('running')}' ;;
+  "ps -a"*) ;;
+  "exec "*) echo '${WORKER}' ;;
+  "logs --since "*" hawa-production-postgres-1") echo "docker $*" >> '${f('calls')}'; cat '${f('pg.log')}' 2>/dev/null ;;
+  "logs --since "*" hawa-production-restate-1") cat '${f('restate.log')}' 2>/dev/null ;;
+  "compose "*) echo "docker $* stamp=$HAWA_BUILD_COMMIT" >> '${f('calls')}' ;;
+  *) echo "docker $*" >> '${f('calls')}' ;;
+esac
+exit 0
+`, { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, 'curl'), `#!/bin/bash
+case "$*" in
+  *"/v1/health"*) cat '${f('health')}' ;;
+  *sendMessage*) for a in "$@"; do [[ "$a" == text=* ]] && printf '%s\\n' "ALERT \${a#text=}" >> '${f('calls')}'; done ;;
+esac
+exit 0
+`, { mode: 0o755 });
+  for (const tool of ['sleep', 'open']) fs.writeFileSync(path.join(bin, tool), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
+  const kb = opts.freeKb ?? 500 * 1048576;
+  fs.writeFileSync(path.join(bin, 'df'), `#!/bin/bash
+case "$1" in
+  -h) echo "Filesystem Size Used Avail Capacity Mounted"; echo "/dev/x 1Ti 1Ti $(( ${kb} / 1048576 ))Gi 97% /" ;;
+  *) echo "Filesystem 1024-blocks Used Available Capacity Mounted"; echo "/dev/x 1000000000 970000000 ${kb} 97% /" ;;
+esac
+`, { mode: 0o755 });
+  const envFile = f('env.production');
+  fs.writeFileSync(envFile, `TELEGRAM_BOT_TOKEN=${['700', 'stub', 'alerts'].join(':')}\nTELEGRAM_ALLOWED_USERS=9000003\n`, { mode: 0o600 });
+  return {
+    t, home, release, f,
+    alerts: () => (fs.existsSync(f('calls')) ? fs.readFileSync(f('calls'), 'utf8').split('\n').filter((l) => l.startsWith('ALERT ')) : []),
+    calls: () => (fs.existsSync(f('calls')) ? fs.readFileSync(f('calls'), 'utf8') : ''),
+    state: () => fs.readFileSync(path.join(home, '.hawa', 'watchdog', 'state'), 'utf8'),
+    setState: (key: string, value: string | number) => {
+      const file = path.join(home, '.hawa', 'watchdog', 'state');
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(new RegExp(`^${key}=.*$`, 'm'), `${key}=${value}`));
+    },
+    run: (args: string[] = []) => {
+      const res = spawnSync(BASH, [watchdog, ...args], { encoding: 'utf8', timeout: 60_000, env: {
+        PATH: `${bin}:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin`, HOME: home, HAWA_WATCHDOG_ENV_FILE: envFile,
+        HAWA_RESTATE_BACKUP_HEALTH_SECONDS: '0' } });
+      return { code: res.status, stdout: res.stdout, out: `${res.stdout}\n${res.stderr}` };
+    },
+  };
+}
+
+const PG_CRASH = [
+  '2026-09-30 07:26:02.100 UTC [1] LOG:  server process (PID 190195) exited with exit code 2',
+  '2026-09-30 07:26:02.101 UTC [1] LOG:  terminating any other active server processes',
+  '2026-09-30 07:27:08.084 UTC [190213] LOG:  database system was interrupted; last known up at 2026-09-30 07:25:50 UTC',
+].join('\n');
+const RESTATE_LAG = [
+  '\u001b[2m2026-09-30T07:21:16.100Z\u001b[0m \u001b[33mWARN\u001b[0m restate_node::failure_detector',
+  '  \u001b[1;33mSevere lag (5.499412096s) was detected in failure detector internal timer, this indicates an overload or a stall.\u001b[0m',
+  '  \u001b[1;33mSevere lag (16.542756546s) was detected in failure detector internal timer, this indicates an overload or a stall.\u001b[0m',
+].join('\n');
+
+describe('the watchdog\'s alerts', () => {
+  it('a healthy pass on the current release: every line timestamped, no alert, the disabled paid probe is not a problem', () => {
+    const s = setup();
+    const r = s.run();
+    expect(r.code, r.out).toBe(0);
+    const lines = r.stdout.split('\n').filter(Boolean);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect(line).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ /);
+    expect(lines.at(-1)).toMatch(/Z healthy$/);
+    expect(s.alerts()).toEqual([]);
+    // An older Core that still calls itself degraded for an unverified Canva is read as before.
+    fs.writeFileSync(s.f('health'), health({}, 'degraded'));
+    const older = s.run(['--status']);
+    expect(older.code, older.out).toBe(0);
+    expect(older.stdout).toMatch(/Z healthy\n$/);
+  });
+
+  it('sends a new or changed problem at once, and holds back only the same problems for 30 minutes', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('health'), health({ parkedClientMessages: 1 }, 'degraded'));
+    expect(s.run().code).toBe(1);
+    expect(s.alerts()).toHaveLength(1);
+    expect(s.alerts()[0]).toContain('parkedClientMessages');
+    // The same problem with another count: a repeat.
+    fs.writeFileSync(s.f('health'), health({ parkedClientMessages: 2 }, 'degraded'));
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+    // 2026-09-30: nine minutes after that alert, Postgres crashed. It is sent now, not at the next half hour.
+    fs.writeFileSync(s.f('pg.log'), PG_CRASH);
+    s.run();
+    expect(s.alerts()).toHaveLength(2);
+    expect(s.alerts()[1]).toMatch(/Postgres crashed and ran crash recovery since the last check \(2 log lines/);
+    s.run();
+    expect(s.alerts()).toHaveLength(2);
+    // The same problems half an hour after the last alert: reminded.
+    s.setState('last_alert', Math.floor(Date.now() / 1000) - 1801);
+    s.run();
+    expect(s.alerts()).toHaveLength(3);
+    // Postgres recovered, the parked message is still there: a changed set, sent at once.
+    fs.rmSync(s.f('pg.log'));
+    s.run();
+    expect(s.alerts()).toHaveLength(4);
+    expect(s.alerts()[3]).not.toMatch(/Postgres/);
+    // All clear: the recovery is announced.
+    fs.writeFileSync(s.f('health'), health());
+    expect(s.run().code).toBe(0);
+    expect(s.alerts().at(-1)).toMatch(/^ALERT ✅ Hawa is back to normal/);
+  });
+
+  it('reads the logs only since its last pass', () => {
+    const s = setup();
+    s.run();
+    const lastPass = /^last_pass=(\d+)$/m.exec(s.state())![1];
+    s.run();
+    expect(s.calls()).toContain(`docker logs --since ${lastPass} hawa-production-postgres-1`);
+  });
+
+  it('alerts on Restate\'s severe lag, with how often and the longest', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('restate.log'), RESTATE_LAG);
+    expect(s.run().code).toBe(1);
+    expect(s.alerts()[0]).toMatch(/Restate reported severe lag 2 times since the last check \(longest 16 s\): the Docker VM is overloaded or stalling/);
+  });
+
+  it('restarts the stack from the current release, stamped with its commit, not from the checkout it was started from', () => {
+    const s = setup({ running: STACK.filter((c) => !c.includes('desk')) });
+    s.run();
+    const commit = execFileSync('git', ['-C', s.release, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    expect(s.calls()).toContain(`docker compose -f ${s.release}/infra/docker/docker-compose.prod.yml -f ${s.release}/infra/docker/canva-release.override.yml --env-file ${s.release}/infra/docker/.env start stamp=${commit}`);
+    expect(s.calls()).not.toContain(`-f ${repo}/infra/docker`);
+  });
+
+  it('judges the disk by free space: 97% used with 30 GiB free is fine, 20 GiB free is reported', () => {
+    const fine = setup({ freeKb: 30 * 1048576 });
+    expect(fine.run().code).toBe(0);
+    const low = setup({ freeKb: 20 * 1048576 });
+    const r = low.run();
+    expect(r.code).toBe(1);
+    expect(r.stdout).toMatch(/Z PROBLEM: disk 20 GiB free$/m);
+    expect(low.alerts()[0]).toMatch(/The production host's disk has 20 GB free \(97% used; the alert is below 25 GB\)/);
+  });
+});

@@ -1,32 +1,47 @@
 #!/usr/bin/env bash
 # Hawa watchdog: starts Docker and the stack after a login or reboot, checks core and worker health,
-# and tells the operator on Telegram when something is wrong (once per 30 minutes) and when it recovers.
+# and tells the operator on Telegram when something is wrong and when it recovers. A new or changed
+# problem is sent at once; the same problems again at most once per 30 minutes (ADR-158: one cooldown
+# for everything hid the 2026-09-30 Postgres outage behind an alert sent nine minutes before it).
 # It runs on the production host: a Mac (launch agent, infra/ops/install_launch_agents.sh) or a Linux
 # server (systemd timer, infra/ops/install_systemd_units.sh). On a host marked standby or retired
 # (infra/ops/host_lib.sh, ADR-141) it never starts anything, and reports production containers running there.
-# A nearly full disk is cleaned first (Hawa's own old backups and build cache, disk_cleanup.sh); what
+# A disk short of space is cleaned first (Hawa's own old backups and build cache, disk_cleanup.sh); what
 # is left is reported every 6 hours, with how much of it is Hawa's, so it is not mistaken for an outage.
+# It reads the stack's own logs since its last pass: Postgres crash recovery and Restate's "severe lag"
+# (the Docker VM stalling, which came before both Postgres crashes) are alerted as problems.
+#
+# Production runs from ~/.hawa/current (ADR-158): the compose files, credentials, backups and build
+# stamp it uses are that release's, whichever checkout this script itself was started from.
 #
 #   bash infra/ops/watchdog.sh              # one pass (what the launch agent runs every 5 minutes)
 #   bash infra/ops/watchdog.sh --status     # print the assessment only, never alert
 #   bash infra/ops/watchdog.sh --announce   # send "watchdog armed" once (proves alerts reach you)
 set -Eeuo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 source "$ROOT/infra/ops/host_lib.sh"
+source "$ROOT/infra/ops/release_lib.sh"
+# The release production runs (ADR-158), or this checkout on a host not yet switched over.
+DEPLOY_ROOT="$(hawa_deployed_root "$ROOT")"; cd "$DEPLOY_ROOT"
+# Every line the watchdog writes starts with the UTC time: its log is read after an outage.
+say() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
 # HAWA_WATCHDOG_ENV_FILE points the alerts at another file: the tests use it, so a run of the test suite in
 # this checkout never reads production's Telegram credential (2026-09-28: a test logged it).
-PROD="${HAWA_WATCHDOG_ENV_FILE:-$ROOT/infra/docker/.env.production}"; STATE_DIR="$HOME/.hawa/watchdog"; mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
+PROD="${HAWA_WATCHDOG_ENV_FILE:-$DEPLOY_ROOT/infra/docker/.env.production}"; STATE_DIR="$HOME/.hawa/watchdog"; mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
 STATE="$STATE_DIR/state"; COOLDOWN=1800; NOW="$(date +%s)"; MODE="${1:-}"
-COMPOSE=(docker compose -f "$ROOT/infra/docker/docker-compose.prod.yml" -f "$ROOT/infra/docker/canva-release.override.yml" --env-file "$ROOT/infra/docker/.env")
+COMPOSE=(docker compose -f "$DEPLOY_ROOT/infra/docker/docker-compose.prod.yml" -f "$DEPLOY_ROOT/infra/docker/canva-release.override.yml" --env-file "$DEPLOY_ROOT/infra/docker/.env")
 # alerted: the operator has been told about the problem now under way, so its end is announced too
 # (a problem that cleared before any alert was sent ends quietly). alerted_other: what the last red
-# alert named, so its recovery is announced even while the disk is still full. disk_was_full: the
-# disk counts as full until it drops below 88%, so a disk hovering at 89-90% does not flap.
+# alert named, so its recovery is announced even while the disk is still short. alert_key: the same,
+# with its numbers left out, to tell a new or changed problem from a repeat. disk_was_full: the disk
+# counts as short until it has 5 GiB more than the alert threshold, so it does not flap.
+# last_pass: when the previous pass read the logs, so each pass reads only what is new.
 last_status=""; last_alert=0; last_disk_alert=0; last_cleanup=0; last_msg=""; alerted=0; alerted_other=""; disk_was_full=0
+alert_key=""; last_pass=0
 [[ -f "$STATE" ]] && source "$STATE"
 save() {
-  printf 'last_status=%q\nlast_alert=%q\nlast_disk_alert=%q\nlast_cleanup=%q\nlast_msg=%q\nalerted=%q\nalerted_other=%q\ndisk_was_full=%q\n' \
-    "$1" "$last_alert" "$last_disk_alert" "$last_cleanup" "$last_msg" "$alerted" "$alerted_other" "$disk_was_full" > "$STATE"
+  printf 'last_status=%q\nlast_alert=%q\nlast_disk_alert=%q\nlast_cleanup=%q\nlast_msg=%q\nalerted=%q\nalerted_other=%q\ndisk_was_full=%q\nalert_key=%q\nlast_pass=%q\n' \
+    "$1" "$last_alert" "$last_disk_alert" "$last_cleanup" "$last_msg" "$alerted" "$alerted_other" "$disk_was_full" "$alert_key" "$NOW" > "$STATE"
 }
 notify() {
   # `|| true`: under set -e and pipefail a missing file or line ended the whole pass here (exit 2), as
@@ -35,6 +50,12 @@ notify() {
   [[ -n "$token" && -n "$chat" ]] || return 0
   curl -s -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" || true
 }
+# What a problem list is, without its numbers: "only 5/6 stack containers" and "only 4/6" are the same
+# problem, "core degraded" and "Postgres crashed" are not.
+problem_key() { printf '%s' "$1" | sed -E 's/[0-9]+([.:][0-9]+)*/#/g'; }
+# A red alert goes out when the problems differ from what the last one named, or when the same ones
+# have lasted another 30 minutes since it.
+alert_due() { [[ "$(problem_key "$1")" != "$alert_key" ]] || (( NOW - last_alert >= COOLDOWN )); }
 
 # ADR-141: on a standby or retired host production runs elsewhere. This pass never starts Docker or a
 # hawa-production container, never touches Restate (the recovery below can start it), and checks one
@@ -44,7 +65,7 @@ if [[ "$HOST_ROLE_RC" != 0 || "$HOST_ROLE" != production ]]; then
   where="$(hawa_host_role_source)"
   if [[ "$MODE" == "--announce" ]]; then
     notify "🟢 Hawa watchdog on $(hostname -s): this host is ${HOST_ROLE} (${where}). It never starts production here, and reports production containers running here."
-    echo "announced"; exit 0
+    say "announced"; exit 0
   fi
   role_problems=()
   [[ "$HOST_ROLE_RC" == 0 ]] || role_problems+=("unrecognised host role '${HOST_ROLE}' in ${where} (production, standby or retired): the watchdog starts nothing until it is fixed")
@@ -54,20 +75,21 @@ if [[ "$HOST_ROLE_RC" != 0 || "$HOST_ROLE" != production ]]; then
   fi
   [[ -z "$here" ]] || role_problems+=("this ${HOST_ROLE} host is running production containers (${here}); stop them here, since two live hosts poll the same Telegram bot")
   if [[ ${#role_problems[@]} -eq 0 ]]; then
-    echo "${HOST_ROLE} host (${where}): production runs elsewhere; nothing was started"
+    say "${HOST_ROLE} host (${where}): production runs elsewhere; nothing was started"
     [[ "$MODE" == "--status" ]] && exit 0
     [[ "$alerted" != 1 ]] || notify "✅ Hawa ($(hostname -s), ${HOST_ROLE} host): back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
-    last_msg=""; alerted=0; alerted_other=""; save healthy; exit 0
+    last_msg=""; alerted=0; alerted_other=""; alert_key=""; save healthy; exit 0
   fi
-  msg="$(printf '%s; ' "${role_problems[@]}")"; echo "PROBLEM: ${msg%; }"
+  msg="$(printf '%s; ' "${role_problems[@]}")"; say "PROBLEM: ${msg%; }"
   [[ "$MODE" == "--status" ]] && exit 1
   last_msg="${msg%; }"
-  if (( NOW - last_alert >= COOLDOWN )); then
+  if alert_due "${msg%; }"; then
     notify "🔴 Hawa ($(hostname -s), ${HOST_ROLE} host) needs attention ($(date '+%H:%M')): ${msg%; }."; last_alert="$NOW"; alerted=1; alerted_other="${msg%; }"
+    alert_key="$(problem_key "${msg%; }")"
   fi
   save problem; exit 1
 fi
-if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login or boot, nightly backup 03:30."; echo "announced"; exit 0; fi
+if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login or boot, nightly backup 03:30."; say "announced"; exit 0; fi
 
 # The worker Telegram poller (Phase 2.1). With HAWA_TELEGRAM_POLLER=worker Core does not poll, and a
 # colour whose poller was off, never started or failing left every check green while no client message
@@ -88,6 +110,23 @@ telegram_poller_problem() {
   fi
   return 0
 }
+# What the stack's own logs say since the last pass (ADR-158). Both Postgres crashes (2026-09-29 09:11,
+# 2026-09-30 07:26) followed minutes of Restate "Severe lag … detected in failure detector internal
+# timer" (the Docker VM stalling), and Postgres then ran crash recovery with every client refused.
+# $1 is the Postgres log and $2 Restate's, as `docker logs` prints them; one problem per line out.
+log_problems() {
+  local pg="$1" restate="$2" n longest
+  n="$(printf '%s\n' "$pg" | grep -cE 'terminating any other active server processes|database system was interrupted|all server processes terminated; reinitializing|was terminated by signal' || true)"
+  if [[ "${n:-0}" -gt 0 ]]; then
+    echo "Postgres crashed and ran crash recovery since the last check (${n} log lines; clients were refused meanwhile): the Docker VM is short of memory or stalled; stop test, chaos and build work on this host"
+  fi
+  n="$(printf '%s\n' "$restate" | grep -c 'Severe lag' || true)"
+  if [[ "${n:-0}" -gt 0 ]]; then
+    longest="$(printf '%s\n' "$restate" | sed -nE 's/.*Severe lag \(([0-9]+)(\.[0-9]+)?s\).*/\1/p' | sort -n | tail -1 || true)"
+    echo "Restate reported severe lag ${n} times since the last check (longest ${longest:-?} s): the Docker VM is overloaded or stalling, which came before both Postgres crashes; stop test, chaos and build work on this host"
+  fi
+  return 0
+}
 
 # The nightly Restate backup (infra/backup/restate_nightly.py, ADR-053/054) pauses Telegram intake and
 # stops Restate for the length of a cold copy. While that run holds the archive lock, starting Restate
@@ -97,22 +136,22 @@ telegram_poller_problem() {
 backup_problem_restate=""
 rb_rc=0
 if [[ "$MODE" == "--status" ]]; then
-  rb_out="$(python3 "$ROOT/infra/backup/restate_nightly.py" --recovery-status 2>&1)" || rb_rc=$?
+  rb_out="$(python3 "$DEPLOY_ROOT/infra/backup/restate_nightly.py" --recovery-status 2>&1)" || rb_rc=$?
   [[ $rb_rc == 2 ]] && backup_problem_restate="a cut-off Restate backup left Restate or intake to put back (the next pass does it)"
 else
-  rb_out="$(python3 "$ROOT/infra/backup/restate_nightly.py" --recover 2>&1)" || rb_rc=$?
+  rb_out="$(python3 "$DEPLOY_ROOT/infra/backup/restate_nightly.py" --recover 2>&1)" || rb_rc=$?
   if [[ $rb_rc == 0 && "$rb_out" == recovered:* ]]; then
-    echo "the nightly Restate backup was cut off; ${rb_out}"
+    say "the nightly Restate backup was cut off; ${rb_out}"
     notify "🟠 The nightly Restate backup was cut off before it finished; the watchdog put back: ${rb_out#recovered: }."
   fi
 fi
-if [[ $rb_rc == 75 ]]; then echo "the nightly Restate backup is running; this pass is skipped"; exit 0; fi
+if [[ $rb_rc == 75 ]]; then say "the nightly Restate backup is running; this pass is skipped"; exit 0; fi
 # backup_holds_lock: recovery failed while a backup still holds the archive lock (a run stuck for over
 # two hours). Step 2 then starts every other container but never Restate, which would tear the copy.
 backup_holds_lock=0
 if [[ $rb_rc != 0 && $rb_rc != 2 ]]; then
   backup_problem_restate="${rb_out:-Restate backup recovery failed}"
-  rs_rc=0; python3 "$ROOT/infra/backup/restate_nightly.py" --recovery-status >/dev/null 2>&1 || rs_rc=$?
+  rs_rc=0; python3 "$DEPLOY_ROOT/infra/backup/restate_nightly.py" --recovery-status >/dev/null 2>&1 || rs_rc=$?
   [[ $rs_rc != 75 ]] || backup_holds_lock=1
 fi
 
@@ -153,7 +192,8 @@ if [[ "$docker_up" == 1 ]]; then
   running="$(count_stack)"; workers="$(count_workers)"
   if [[ "$running" -lt "$STACK_SIZE" || "$workers" -lt 1 ]] || ! vector_running; then
     if [[ "$MODE" != "--status" ]]; then
-      export HAWA_BUILD_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+      # The deployed release's commit (ADR-158), not whatever branch a checkout happens to be on.
+      export HAWA_BUILD_COMMIT="$(git -C "$DEPLOY_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
       # Existing containers first, exactly as they were deployed. `up` then only creates what is
       # missing and never recreates a running one: this checkout can be ahead of the deploy (merged,
       # its gate not yet passed), and on 2026-09-23 `up -d` rebuilt Core from the newer compose file
@@ -187,6 +227,12 @@ if [[ "$docker_up" == 1 ]]; then
     vector_running || problems+=("vector is not running: container logs are not reaching ~/.hawa/logs")
     [[ "$workers" -ge 1 ]] || problems+=("no worker container is running (run infra/docker/deploy.sh --apply to start one)")
   fi
+  # 2b. Postgres crash recovery and Restate's severe lag, from their logs since the last pass (at most
+  #     the last 10 minutes on a first pass).
+  since="$last_pass"; [[ "$since" =~ ^[0-9]+$ && "$since" -gt 0 && "$since" -le "$NOW" ]] || since=$((NOW - 600))
+  pg_log="$(docker logs --since "$since" hawa-production-postgres-1 2>&1 || true)"
+  restate_log="$(docker logs --since "$since" hawa-production-restate-1 2>&1 || true)"
+  while IFS= read -r line; do [[ -z "$line" ]] || problems+=("$line"); done < <(log_problems "$pg_log" "$restate_log")
 fi
 [[ -z "$backup_problem_restate" ]] || problems=("$backup_problem_restate" ${problems[@]+"${problems[@]}"})
 # 3. Core and worker health
@@ -204,9 +250,10 @@ if isinstance(paused,int) and paused>0: bad["restatePausedInvocations"]=paused
 # "unverified" is not a failure: in production Core reports Canva and the model provider unverified until
 # a scheduled probe has answered (e981e59f, ADR-100), and its status is then "degraded" with nothing
 # broken. Alerting on that alone would page the office every 30 minutes; it is shown, not alerted.
+# "disabled" is the paid probe switched off (HAWA_BILLING_PROBE_ENABLED, ADR-158): nothing to verify.
 # The funnel is "in_progress" while a recent brief has no draft yet; a real stall is "stalled", with
 # its own alert (apps/core/src/services/funnel-monitor.ts), and is still reported.
-ok={"connected","writable","unconfigured","active","idle","in_progress","CLOSED","healthy","unverified"}
+ok={"connected","writable","unconfigured","active","idle","in_progress","CLOSED","healthy","unverified","disabled"}
 others={k:v for k,v in d.items() if not isinstance(v,(int,float)) and v not in ok}
 unverified=sorted(k for k,v in d.items() if v=="unverified")
 status=h.get("status","?")
@@ -241,61 +288,67 @@ if [[ "$workers_seen" -gt 0 ]]; then
   [[ -z "$poller_problem" ]] || problems+=("$poller_problem")
 fi
 
-# 4. Disk and backup freshness (a full disk or a stale backup is an outage in waiting). From 88% Hawa
-#    cleans up after itself, at most hourly; from 90% what is left is reported (below).
-disk_used() { df -P "$ROOT" | awk 'NR==2{gsub("%","",$5); print $5}'; }
-used="$(disk_used)"
-if [[ "${used:-0}" -ge 88 && "$MODE" != "--status" ]] && (( NOW - last_cleanup >= 3600 )); then
+# 4. Disk and backup freshness (a full disk or a stale backup is an outage in waiting). Measured in free
+#    space, not percent (ADR-158): on this 1 TB disk 90% still left 96 GiB, and the percentage alert
+#    wrote over a thousand lines about a disk that was fine. Below HAWA_DISK_CLEAN_GIB (40) free Hawa
+#    cleans up after itself, at most hourly; below HAWA_DISK_ALERT_GIB (25) what is left is reported.
+DISK_CLEAN_GIB="${HAWA_DISK_CLEAN_GIB:-40}"; DISK_ALERT_GIB="${HAWA_DISK_ALERT_GIB:-25}"; DISK_URGENT_GIB="${HAWA_DISK_URGENT_GIB:-10}"
+disk_free_gib() { df -Pk "$DEPLOY_ROOT" | awk 'NR==2{printf "%d\n", $4/1048576}'; }
+disk_used_pct() { df -P "$DEPLOY_ROOT" | awk 'NR==2{gsub("%","",$5); print $5}'; }
+free_gib="$(disk_free_gib)"; [[ "$free_gib" =~ ^[0-9]+$ ]] || free_gib=9999
+if [[ "$free_gib" -lt "$DISK_CLEAN_GIB" && "$MODE" != "--status" ]] && (( NOW - last_cleanup >= 3600 )); then
   mkdir -p "$HOME/.hawa/logs"
-  { date -u +%FT%TZ; bash "$ROOT/infra/ops/disk_cleanup.sh"; } >> "$HOME/.hawa/logs/disk_cleanup.log" 2>&1 || true
-  last_cleanup="$NOW"; used="$(disk_used)"
+  { date -u +%FT%TZ; bash "$DEPLOY_ROOT/infra/ops/disk_cleanup.sh"; } >> "$HOME/.hawa/logs/disk_cleanup.log" 2>&1 || true
+  last_cleanup="$NOW"; free_gib="$(disk_free_gib)"; [[ "$free_gib" =~ ^[0-9]+$ ]] || free_gib=9999
 fi
 disk_full=0
-if [[ "${used:-0}" -ge 90 ]] || [[ "$disk_was_full" == 1 && "${used:-0}" -ge 88 ]]; then disk_full=1; fi
-backup_problem="$(python3 "$ROOT/infra/backup/backup_status.py" --snapshots "$ROOT/infra/backup/snapshots" 2>/dev/null)" \
+if [[ "$free_gib" -lt "$DISK_ALERT_GIB" ]] || [[ "$disk_was_full" == 1 && "$free_gib" -lt $((DISK_ALERT_GIB + 5)) ]]; then disk_full=1; fi
+backup_problem="$(python3 "$ROOT/infra/backup/backup_status.py" --snapshots "$DEPLOY_ROOT/infra/backup/snapshots" 2>/dev/null)" \
   || problems+=("${backup_problem:-nightly backup status unavailable}")
 
 if [[ ${#problems[@]} -eq 0 && "$disk_full" -eq 0 ]]; then
-  echo "healthy"
+  say "healthy"
   [[ "$MODE" == "--status" ]] && exit 0
   if [[ "$alerted" == 1 ]]; then
     notify "✅ Hawa is back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
   fi
-  last_msg=""; alerted=0; alerted_other=""; disk_was_full=0; save healthy; exit 0
+  last_msg=""; alerted=0; alerted_other=""; alert_key=""; disk_was_full=0; save healthy; exit 0
 fi
 
 if [[ "$disk_full" -eq 1 ]]; then
+  used="$(disk_used_pct)"
   # macOS df prints 12Gi, GNU df 12G.
-  free="$(df -h "$ROOT" | awk 'NR==2{print $4}' | sed -E 's/Ti$/ TB/; s/Gi$/ GB/; s/Mi$/ MB/; s/([0-9])T$/\1 TB/; s/([0-9])G$/\1 GB/; s/([0-9])M$/\1 MB/')"
+  free="$(df -h "$DEPLOY_ROOT" | awk 'NR==2{print $4}' | sed -E 's/Ti$/ TB/; s/Gi$/ GB/; s/Mi$/ MB/; s/([0-9])T$/\1 TB/; s/([0-9])G$/\1 GB/; s/([0-9])M$/\1 MB/')"
   # Both sources may fail (Docker down, no archive folder yet): the alert still goes, with "?".
-  backups="$( { du -sch "$ROOT/infra/backup/snapshots" "$HOME/.hawa/snapshots_archive" 2>/dev/null || true; } | tail -1 | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/')"
+  # The trailing slash follows the link a release has to the shared backups (ADR-158).
+  backups="$( { du -sch "$DEPLOY_ROOT/infra/backup/snapshots/" "$HOME/.hawa/snapshots_archive" 2>/dev/null || true; } | tail -1 | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/')"
   cache="$( { docker system df --format '{{.Type}} {{.Size}}' 2>/dev/null || true; } | awk '/^Build Cache/{print $3}' | sed -E 's/([0-9])([KMGT]B)$/\1 \2/')"
   # The file store (ADR-035): client photos and design sources, deleted only by the collector.
   files="$( { du -sh "${HAWA_BLOBS_DIR:-$HOME/.hawa/blobs}" 2>/dev/null || true; } | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/; s/K$/ KB/')"
   if [[ "$HAWA_HOST_OS" == Darwin ]]; then where_hint="System Settings, General, Storage"; else where_hint="sudo du -xh --max-depth=2 / | sort -h | tail shows where it went"; fi
-  disk_msg="The production host's disk is ${used}% full (${free} free). Hawa has already cleaned up after itself: its backups take ${backups:-?}, its stored pictures and design files ${files:-0} and Docker's build cache ${cache:-?}. The rest is other files on this host, so please free some space (${where_hint})."
+  disk_msg="The production host's disk has ${free} free (${used}% used; the alert is below ${DISK_ALERT_GIB} GB). Hawa has already cleaned up after itself: its backups take ${backups:-?}, its stored pictures and design files ${files:-0} and Docker's build cache ${cache:-?}. The rest is other files on this host, so please free some space (${where_hint})."
 fi
 if [[ ${#problems[@]} -eq 0 ]]; then
-  # Only the disk: a reminder every 6 hours, hourly past 97%, instead of every 30 minutes.
-  echo "PROBLEM: disk ${used}% used"
+  # Only the disk: a reminder every 6 hours, hourly below 10 GiB, instead of every 30 minutes.
+  say "PROBLEM: disk ${free_gib} GiB free"
   [[ "$MODE" == "--status" ]] && exit 1
   if [[ -n "$alerted_other" ]]; then
     # What the last red alert named has cleared; without this the next word would be hours away.
-    notify "✅ Back to normal apart from the disk ($(date '+%H:%M')). It was: ${alerted_other}. The disk is still ${used}% full."; alerted_other=""
+    notify "✅ Back to normal apart from the disk ($(date '+%H:%M')). It was: ${alerted_other}. The disk still has only ${free} free."; alerted_other=""; alert_key=""
   fi
-  last_msg="disk ${used}% full"; disk_was_full=1
-  every=21600; [[ "${used:-0}" -lt 97 ]] || every=3600
+  last_msg="disk ${free_gib} GiB free"; disk_was_full=1
+  every=21600; [[ "$free_gib" -ge "$DISK_URGENT_GIB" ]] || every=3600
   if (( NOW - last_disk_alert >= every )); then
     notify "💾 ${disk_msg} Next reminder in $(( every / 3600 )) h."; last_disk_alert="$NOW"; alerted=1
   fi
   save problem; exit 1
 fi
-msg="$(printf '%s; ' "${problems[@]}")"; echo "PROBLEM: $msg"
+msg="$(printf '%s; ' "${problems[@]}")"; say "PROBLEM: $msg"
 [[ "$MODE" == "--status" ]] && exit 1
-last_msg="${msg%; }${disk_msg:+; disk ${used}% full}"; disk_was_full="$disk_full"
-if (( NOW - last_alert >= COOLDOWN )); then
+last_msg="${msg%; }${disk_msg:+; disk ${free_gib} GiB free}"; disk_was_full="$disk_full"
+if alert_due "${msg%; }"; then
   notify "🔴 Hawa needs attention ($(date '+%H:%M')): ${msg%; }.${disk_msg:+ Also: ${disk_msg}}"; last_alert="$NOW"
-  alerted=1; alerted_other="${msg%; }"
+  alerted=1; alerted_other="${msg%; }"; alert_key="$(problem_key "${msg%; }")"
   [[ -z "${disk_msg:-}" ]] || last_disk_alert="$NOW"
 fi
 save problem; exit 1

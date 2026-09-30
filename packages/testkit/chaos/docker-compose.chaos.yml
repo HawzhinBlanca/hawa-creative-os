@@ -8,7 +8,10 @@
 # ADR-134) sets them to run its own projects beside a shared hawa-chaos run.
 #
 # Core and the workers are on the `chaos` network only, which is internal: they cannot reach the
-# internet at all. The provider hosts written into the code (api.telegram.org, api.openai.com, …)
+# internet at all. Every service has a memory ceiling with no swap beyond it and a CPU share: the
+# stack runs in production's Docker VM, which swapped 14.5 of 15 GB on 2026-09-30 before production's
+# Postgres crashed (ADR-158). A chaos container that needs more is killed, not production.
+# The provider hosts written into the code (api.telegram.org, api.openai.com, …)
 # are network aliases of the fakes container there, and the fakes' CA is trusted through
 # NODE_EXTRA_CA_CERTS, so the real URL code runs unchanged and every call lands in the fakes. A host
 # nobody faked does not resolve: no request can become a paid call by accident.
@@ -81,6 +84,8 @@ x-worker: &worker
   restart: "no"
   logging: *logging
   mem_limit: 384m
+  memswap_limit: 384m
+  cpus: 1.0
   networks: [chaos]
   volumes:
     - chaos_ca:/chaos-ca:ro
@@ -95,6 +100,9 @@ services:
     user: root
     restart: "no"
     logging: *logging
+    mem_limit: 64m
+    memswap_limit: 64m
+    cpus: 0.5
     command: ["sh", "-c", "mkdir -p /var/lib/hawa/blobs/sha256 /var/lib/hawa/blobs/tmp && printf 'sha256-v1\\n' > /var/lib/hawa/blobs/.hawa-blob-store && chown -R 10001:10001 /var/lib/hawa/blobs"]
     volumes:
       - chaos_blobs:/var/lib/hawa/blobs
@@ -105,6 +113,8 @@ services:
     restart: "no"
     logging: *logging
     mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
     shm_size: 128mb
     environment:
       POSTGRES_DB: hawa_chaos
@@ -143,6 +153,8 @@ services:
     restart: "no"
     logging: *logging
     mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 1.0
     environment:
       RESTATE_NODE_NAME: hawa-restate-chaos-1
       # The default RocksDB budget is sized for a server; the chaos stack runs beside production.
@@ -169,6 +181,8 @@ services:
     restart: "no"
     logging: *logging
     mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
     working_dir: /repo/packages/testkit/chaos
     command: ["node", "/repo/packages/testkit/chaos/fakes/server.ts"]
     environment:
@@ -211,6 +225,8 @@ services:
     restart: "no"
     logging: *logging
     mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 1.0
     environment:
       <<: *app-environment
       PORT: 3001
@@ -270,6 +286,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     mem_limit: 768m
+    memswap_limit: 768m
     cpus: 1.0
     pids_limit: 32
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
@@ -290,6 +307,8 @@ services:
     image: hawa-chaos-desk:local
     restart: "no"
     mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.5
     networks: [chaos]
 
   nginx:
@@ -297,6 +316,8 @@ services:
     image: nginx:1.27-alpine-slim
     restart: "no"
     mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.5
     ports: ["127.0.0.1:56081:80"]
     volumes:
       - ../../../infra/docker/nginx.conf:/etc/nginx/nginx.conf:ro

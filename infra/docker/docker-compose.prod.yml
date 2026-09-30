@@ -67,7 +67,12 @@ services:
     ports:
       - "${HAWA_BIND_IP:-127.0.0.1}:${HAWA_PORT:-8080}:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Files from the repository are bound through ~/.hawa/current, the release production runs
+      # (ADR-158), never through the directory compose was started from: the path stays the same from
+      # one deploy to the next, so a deploy does not recreate a container only because its release
+      # directory changed, and no bind mount points into a checkout people work in. deploy.sh sets
+      # HAWA_RELEASE_ROOT to the new release for its one-off nginx -t and vector validate runs.
+      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/infra/docker/nginx.conf:/etc/nginx/nginx.conf:ro
       # The file store, read-only, for the internal /_blobs/ location that Core's X-Accel-Redirect
       # answers point at (ADR-035). Files are 0444 and directories 0755, so nginx's user can read them.
       - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/srv/hawa-blobs:ro
@@ -218,13 +223,25 @@ services:
       - shared_buffers=${PG_SHARED_BUFFERS:-512MB}
       - -c
       - max_connections=${PG_MAX_CONNECTIONS:-100}
+      # Crash recovery first syncs the whole data directory. File by file (fsync, the default) it took
+      # over a minute on 2026-09-29 and 2026-09-30 while the Docker VM was swapping, and every client
+      # was refused "the database system is in recovery mode" meanwhile. syncfs syncs the file system
+      # once (Linux; the container is Linux on every host). ADR-158.
+      - -c
+      - recovery_init_sync_method=syncfs
+    # The test and chaos stacks share this Docker VM. Their Postgres, Restate, Core and workers now have
+    # memory and CPU limits (docker-compose.test.yml, packages/testkit/chaos/docker-compose.chaos.yml),
+    # and this reservation (cgroup memory.low) keeps production's buffers from being reclaimed first
+    # when the VM runs short: on 2026-09-30 it swapped 14.5 of 15 GB and Postgres crashed. ADR-158.
+    mem_reservation: 1g
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./00-init-roles.sql:/docker-entrypoint-initdb.d/00-init-roles.sql:ro
-      - ../../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ../../db/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
-      - ../../db/03-grants.sql:/docker-entrypoint-initdb.d/03-grants.sql:ro
-      - ../../db/seed.sql:/docker-entrypoint-initdb.d/04-seed.sql:ro
+      # Through ~/.hawa/current, like nginx.conf (ADR-158); read only when the data directory is empty.
+      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/infra/docker/00-init-roles.sql:/docker-entrypoint-initdb.d/00-init-roles.sql:ro
+      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/db/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
+      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/db/03-grants.sql:/docker-entrypoint-initdb.d/03-grants.sql:ro
+      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/db/seed.sql:/docker-entrypoint-initdb.d/04-seed.sql:ro
     networks:
       - core
       - edge
@@ -265,7 +282,7 @@ services:
     logging: *logging
     command: ["--config", "/etc/vector/vector.yaml"]
     volumes:
-      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/infra/docker/vector.yaml:/etc/vector/vector.yaml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${HAWA_CONTAINER_LOGS_DIR:-${HOME}/.hawa/logs/containers}:/logs
     network_mode: none

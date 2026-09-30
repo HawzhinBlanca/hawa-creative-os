@@ -130,10 +130,22 @@ export async function readPublicationInspections(db: Kysely<Database>, actor: { 
   });
 }
 
+/**
+ * Why a pass failed, for the log: the error's class, code and first line, with addresses and long
+ * token-like strings taken out (a provider's message can carry a signed URL). A pass used to log only
+ * "not confirmed", and the 2026-09-30 failures could not be told apart from the Postgres outage.
+ */
+export function inspectionFailureCause(err: unknown): string {
+  if (!(err instanceof Error)) return `non-error ${typeof err}`;
+  const code = (err as { code?: unknown }).code;
+  const first = (err.message || '').split('\n')[0].replace(/https?:\/\/\S+/g, '<url>').replace(/[A-Za-z0-9_.~+/-]{32,}=*/g, '<redacted>').slice(0, 160);
+  return `${err.name}${typeof code === 'string' || typeof code === 'number' ? ` ${code}` : ''}: ${first || '(no message)'}`;
+}
+
 /** Timer is merely a wakeup. PostgreSQL determines whether any work is due. */
-export function startPublicationInspectionSchedule(service: PublicationInspectionService, tenantId: string, onError: () => void) {
+export function startPublicationInspectionSchedule(service: PublicationInspectionService, tenantId: string, onError: (cause: string) => void) {
   let running = false;
-  const pass = async () => { if (running) return; running = true; try { await service.runPass(tenantId); } catch { onError(); } finally { running = false; } };
+  const pass = async () => { if (running) return; running = true; try { await service.runPass(tenantId); } catch (err) { onError(inspectionFailureCause(err)); } finally { running = false; } };
   const timer = setInterval(() => { void pass(); },60_000); timer.unref?.();
   const initial = setTimeout(() => { void pass(); },30_000); initial.unref?.();
   return () => { clearInterval(timer); clearTimeout(initial); };
