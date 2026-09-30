@@ -358,6 +358,11 @@ export interface DesignOutcomeResult {
   status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
   question?: { id: string; text: string; options: string[] };
   officeAlert?: { chatId: string; text: string };
+  /**
+   * ADR-155: the same alert to every office member, the requester too when they are one (the first is
+   * `officeAlert`, which a worker from before this change still reads).
+   */
+  officeAlerts?: Array<{ chatId: string; text: string }>;
 }
 
 /**
@@ -454,7 +459,10 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during outcome projection');
     const reviewUrl = officeReviewUrl({ taskId, ...(revisionId ? { revisionId } : {}) });
-    const officeChat = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
+    // ADR-155: every office member (TELEGRAM_ALLOWED_USERS). It was the first only, and nobody when that
+    // member was the requester (the owner's own requests), while the requester was still told that
+    // someone from the office had been alerted.
+    const officeChats = [...new Set((process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).filter(Boolean))];
     // ADR-145: the requester hears the design by the name they know (the request's first task: a
     // revision task is titled by its change) and in the language their brief was written in.
     const root = await trx.selectFrom('tasks').select(['title', 'description'])
@@ -465,15 +473,15 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       taskId, title: requestTitle, status, code: report.code, lang,
       reviewUrl,
       canvaUrl: report.designId ? `https://www.canva.com/design/${report.designId}/edit` : undefined,
-      // #15: with no office chat to alert, "someone from the office will follow up here".
-      officeAlerted: Boolean(officeChat),
+      // #15: with no office chat to alert, "someone from the office will follow up here". It says what
+      // is sent: every office member below hears of it (ADR-155).
+      officeAlerted: officeChats.length > 0,
     });
-    const officeAlert = officeChat && officeChat !== request.chat_id
-      ? { chatId: officeChat, text: (hasDraft
-          ? `A design is ready for office review in Hawa Desk. Task ${taskId}.`
-          : `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.`) +
-          (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '') }
-      : undefined;
+    const officeText = (hasDraft
+      ? `A design is ready for office review in Hawa Desk. Task ${taskId}.`
+      : `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.`) +
+      (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '');
+    const officeAlerts = officeChats.map((chatId) => ({ chatId, text: officeText }));
     // #14 (ADR-145): the question in plain words, answered with a number or in the requester's own words.
     const questionText = question
       ? say(LIFECYCLE_MESSAGES.oneQuestion, lang, {
@@ -487,7 +495,7 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       ...(revisionId ? { revisionId } : {}),
       ...(question ? { question } : {}),
       ...(messageText ? { message: { text: messageText, parseMode: 'HTML' as const } } : {}),
-      ...(officeAlert ? { officeAlert } : {}),
+      ...(officeAlerts.length ? { officeAlert: officeAlerts[0], officeAlerts } : {}),
     };
     await trx.insertInto('lifecycle_projections').values({
       tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,

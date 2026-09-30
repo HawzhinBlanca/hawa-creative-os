@@ -31,17 +31,27 @@ export class WorkflowTerminalError extends Error {
  */
 const RETRIED_REFUSALS = new Set(['CANVA_RECONNECT_REQUIRED']);
 
-/** Core answered with an HTTP error. 4xx (except 408/429) is terminal: the request itself was refused. */
+/**
+ * Core answered with an HTTP error. 4xx (except 408/429) is terminal: the request itself was refused.
+ * A deployment fault is not (ADR-155): Core refused the worker's own credential (401, 403) or has no
+ * such route (a 404 without a problem body, which is Hono's answer to an unknown path). Nothing about
+ * the design is wrong, and asking again once the deployment is fixed succeeds. On 2026-09-29 (ADR-146)
+ * every design ended DESIGN_REJECTED on a 401 like this, using up one of the office's three retries.
+ */
 export class CoreBoundaryError extends Error {
   readonly terminal: boolean;
   /** A 409 that is retried before it is believed (RETRIED_REFUSALS). */
   readonly retriedRefusal: boolean;
+  /** 401, 403 or a route-level 404: the deployment, not the design, is wrong (ADR-155). */
+  readonly deploymentFault: boolean;
   /** retryAfterMs: Core's Retry-After on a busy answer, when it named one (ADR-131). */
   constructor(readonly httpStatus: number, readonly code?: string, readonly retryAfterMs?: number) {
     super(`Canva workflow Core boundary HTTP ${httpStatus}${code ? ` ${code}` : ''}`);
     this.name = 'CoreBoundaryError';
     this.retriedRefusal = httpStatus === 409 && Boolean(code && RETRIED_REFUSALS.has(code));
-    this.terminal = httpStatus >= 400 && httpStatus < 500 && httpStatus !== 408 && httpStatus !== 429 && !this.retriedRefusal;
+    this.deploymentFault = httpStatus === 401 || httpStatus === 403 || (httpStatus === 404 && !code);
+    this.terminal = httpStatus >= 400 && httpStatus < 500 && httpStatus !== 408 && httpStatus !== 429 &&
+      !this.retriedRefusal && !this.deploymentFault;
   }
 }
 
@@ -71,6 +81,39 @@ const boundaryOf = (error: unknown): CoreBoundaryError | null => {
   const match = BOUNDARY_MESSAGE.exec(String((error as any)?.message ?? ''));
   return match ? new CoreBoundaryError(Number(match[1]), match[2]) : null;
 };
+
+/** The wait between two rounds of a step whose Core kept refusing the worker (ADR-155). */
+export const DEPLOYMENT_FAULT_WAIT_MS = 5 * 60_000;
+
+/**
+ * Every step of the run, made patient of a deployment fault (ADR-155). The step itself retries a 401,
+ * a 403 or a route-level 404 like an outage, within its own window; when that window is spent, the
+ * step is not reported as the design's failure: the run waits (a durable sleep) and asks the same
+ * question again under a new step name, for as long as the fault lasts, then carries on where it was.
+ * The first round keeps the step's own name, so a journal written before this change replays as it was.
+ * A context without a durable sleep (a plain test journal) cannot wait: the fault is thrown to its caller.
+ */
+function patientOfDeploymentFaults(ctx: WorkflowDurableContext, taskId: string): WorkflowDurableContext {
+  const patient: WorkflowDurableContext = {
+    ...(ctx.key !== undefined ? { key: ctx.key } : {}),
+    run: async <T>(name: string, action: () => Promise<T>, options?: Parameters<WorkflowDurableContext['run']>[2]): Promise<T> => {
+      for (let round = 0; ; round++) {
+        try {
+          return await ctx.run(round === 0 ? name : `${name}-after-deployment-fault-${round}`, action, options);
+        } catch (error) {
+          const boundary = boundaryOf(error);
+          if (!boundary?.deploymentFault || !stepGaveUp(error) || !ctx.sleep) throw error;
+          log.error(`[worker] Task ${taskId}: Core still answers HTTP ${boundary.httpStatus}${boundary.code ? ` ${boundary.code}` : ''} to step ${name}; ` +
+            `this is the deployment (the worker's credential or Core's routes), not the design. Waiting ${DEPLOYMENT_FAULT_WAIT_MS / 60000} minutes before asking again.`);
+          await ctx.sleep(DEPLOYMENT_FAULT_WAIT_MS);
+        }
+      }
+    },
+  };
+  if (ctx.sleep) patient.sleep = (millis) => ctx.sleep!(millis);
+  if (ctx.console) patient.console = ctx.console;
+  return patient;
+}
 
 /** Historical tasks carried no requested size; the print-oriented portrait default stays for them. */
 export const DEFAULT_CANVA_VARIANT = { width: 1200, height: 1697 } as const;
@@ -302,6 +345,7 @@ export async function runCanvaDraft(
 ): Promise<WorkflowOutput> {
   const output = (status: string, documentId?: string): WorkflowOutput =>
     ({ taskId: input.taskId, status, documentId, qcPassed: false, auditEventsCount: 0, executedSteps: [], replayedSteps: [] });
+  ctx = patientOfDeploymentFaults(ctx, input.taskId);
   const call = coreClient(input, fetcher, lifecycle);
   // A re-drive is a new run of the same task: its keys must not collide with the first run's, or
   // Core would hand back the first run's (failed) answer instead of starting again.
@@ -394,6 +438,8 @@ export async function runCanvaDraft(
 
   const handleBoundaryError = async (error: unknown, fallbackStatus: string = 'DESIGN_REJECTED', designId?: string) => {
     const boundary = boundaryOf(error);
+    // A deployment fault is never the design's outcome (ADR-155): the run waits for the deployment.
+    if (boundary?.deploymentFault) throw error;
     if (boundary?.terminal) {
       return finish(fallbackStatus, designId, boundary.code || `HTTP_${boundary.httpStatus}`);
     }

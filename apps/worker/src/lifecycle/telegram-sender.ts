@@ -14,7 +14,11 @@
  * - a definite pre-connection failure: `failed`, and an error Restate retries;
  * - a 5xx: `uncertain`, since the provider may have accepted the message before failing;
  * - Telegram's answer lost or not a valid receipt: `uncertain`, not retried;
- * - any other 4xx (bot blocked, chat not found, file too large): `failed`, answered `refused`.
+ * - any other 4xx (bot blocked, chat not found, file too large): `failed`, answered `refused`;
+ * - an answer this table does not know, or an approved file that cannot be read yet: `failed` (or no
+ *   mark), asked again a bounded number of times (ADR-155), then answered `refused` and the office
+ *   alerted. It used to be asked again for about three hours, and the chat's later messages (its
+ *   queue is this object) waited behind it the whole time.
  * A 'failed' mark that cannot be written is never left as 'attempted' for good: the refusal is
  * journaled, a step of its own writes the mark (retried until Postgres takes it), and only then is the
  * message tried again or answered `refused` (finding 22 of the Phase 4 review).
@@ -48,6 +52,7 @@ import {
   validTelegramMessageId,
 } from '../delivery-notification.js';
 import { log, withInvocationLogContext } from '../logging.js';
+import { officeAlertKey, officeChatIdsFromEnv } from './office-chats.js';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 
@@ -58,8 +63,11 @@ export interface TelegramSenderDeps {
   botToken(): string | null;
   bridge(botToken: string): TelegramBridgeLike;
   readExportBytes: ExportBytesReader;
-  /** The office chat that hears about a message that may not have arrived. */
-  officeChatId(): string | null;
+  /**
+   * Every office member, who hear about a message that may not have arrived or could not be sent
+   * (ADR-155; it was the first member only). Read inside a journaled step.
+   */
+  officeChatIds(): string[];
   /** The waits between attempts at the mark written after Telegram answered (tests shorten them). */
   markRetryDelaysMs?: number[];
 }
@@ -70,7 +78,7 @@ export function telegramSenderDepsFromEnv(db: Kysely<Database> | undefined): Tel
     botToken: () => process.env.TELEGRAM_BOT_TOKEN || null,
     bridge: (botToken) => new TelegramBridge({ botToken }) as unknown as TelegramBridgeLike,
     readExportBytes: readStoredExportBytes,
-    officeChatId: () => (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((s) => s.trim()).find(Boolean) || null,
+    officeChatIds: () => officeChatIdsFromEnv(),
   };
 }
 
@@ -103,12 +111,22 @@ const stepKind = (m: OutboundMessage): SendStepKind => (m.kind === 'document' ? 
 /**
  * What one attempt journals: a result, or a message Telegram definitely did not take whose 'failed'
  * mark could not be written. `retryAfterMs` is the wait before the next attempt, or null when the
- * refusal is final (a 4xx: answered `refused` once the mark is written).
+ * refusal is final (a 4xx: answered `refused` once the mark is written). `stuck` (ADR-155): not sent,
+ * nothing left 'attempted', and asking again may not help (a refusal this sender does not know, an
+ * approved file that cannot be read); asked again a bounded number of times, then answered `refused`.
  */
-export type AttemptAnswer = SendResult | { outcome: 'not_sent'; error: string; retryAfterMs: number | null };
+export type AttemptAnswer = SendResult
+  | { outcome: 'not_sent'; error: string; retryAfterMs: number | null }
+  | { outcome: 'stuck'; error: string; retryAfterMs: number };
 
 /** The wait before another attempt after a pre-connection failure or an unknown refusal. */
 const NOT_SENT_RETRY_MS = 5000;
+/**
+ * How often a stuck message is tried (ADR-155), its waits doubling from 5 s to at most 5 minutes:
+ * about ten minutes in all, and then the chat's later messages go ahead of it.
+ */
+export const STUCK_ATTEMPTS = 8;
+const STUCK_MAX_WAIT_MS = 5 * 60_000;
 
 /**
  * One attempt at one message: the body of the handler's `ctx.run('send')`. It answers, or throws an
@@ -144,8 +162,11 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
     if (!deps.db) throw new Error('DATABASE_NOT_CONFIGURED: the approved file is read from Postgres');
     bytes = await withRlsContext(deps.db, { tenantId: ref.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
       deps.readExportBytes(trx, ref.tenantId, ref.taskId, ref.artifactId));
-    // Not readable yet (a database that is catching up): asked again.
-    if (!bytes) throw new Error(`DELIVERED_FILE_UNREADABLE: the approved export ${ref.artifactId} of task ${ref.taskId} could not be read`);
+    // Not readable yet (a database that is catching up): asked again, a bounded number of times (ADR-155).
+    if (!bytes) {
+      return { outcome: 'stuck', error: `DELIVERED_FILE_UNREADABLE: the approved export ${ref.artifactId} of task ${ref.taskId} could not be read`,
+        retryAfterMs: NOT_SENT_RETRY_MS };
+    }
     if (sha256Hex(bytes) !== ref.sha256) {
       return { outcome: 'refused', error: `DELIVERED_FILE_CHANGED: the stored export ${ref.artifactId} no longer matches its approved hash` };
     }
@@ -221,9 +242,10 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
   if (REFUSED.test(error)) {
     return failedRecorded ? { outcome: 'refused', error } : { outcome: 'not_sent', error, retryAfterMs: null };
   }
-  // An answer this table does not know: it did not arrive (Telegram said no), so asking again is safe.
+  // An answer this table does not know: it did not arrive (Telegram said no), so asking again is safe,
+  // a bounded number of times (ADR-155).
   if (!failedRecorded) return { outcome: 'not_sent', error, retryAfterMs: NOT_SENT_RETRY_MS };
-  throw new Error(`${error}: Telegram refused ${m.key} for a reason this sender does not know; asked again`);
+  return { outcome: 'stuck', error: `${error}: Telegram refused ${m.key} for a reason this sender does not know`, retryAfterMs: NOT_SENT_RETRY_MS };
 }
 
 /**
@@ -247,8 +269,28 @@ export async function recordDefiniteRefusal(deps: TelegramSenderDeps, m: Outboun
   }
 }
 
+/** An office alert itself: one that goes wrong is logged, never alerted again (no chain of alerts). */
+const OFFICE_ALERT_KEY = /^notify\.office:|:(office|failed|uncertain|stuck)-alert(:|$)/;
+
+/** The office's alert for a critical message that could not be sent after its bounded attempts (ADR-155). */
+export function stuckAlertFor(m: OutboundMessage, error: string, officeChatId: string, index = 0): OutboundMessage {
+  const what = m.kind === 'document' ? `the approved file ${m.filename || ''}`.trim() : /:notice$/.test(m.key) ? 'the delivery notice' : 'a message';
+  return {
+    v: 1,
+    key: officeAlertKey(`${m.key}:stuck-alert`, index, officeChatId),
+    chatId: officeChatId,
+    kind: 'text',
+    text: `Hawa could not send ${what} to chat ${m.chatId} (task ${m.taskId || 'unknown'}) after ${STUCK_ATTEMPTS} attempts, ` +
+      `and stopped trying so that chat's later messages are not held up: ${Array.from(error).slice(0, 300).join('')}\n` +
+      'Please check the chat and send it by hand.',
+    class: 'critical',
+    tenantId: tenantOf(m),
+    ...(m.taskId ? { taskId: m.taskId } : {}),
+  };
+}
+
 /** The office's alert for a critical message that may not have arrived. */
-export function uncertainAlertFor(m: OutboundMessage, error: string, officeChatId: string): OutboundMessage {
+export function uncertainAlertFor(m: OutboundMessage, error: string, officeChatId: string, index = 0): OutboundMessage {
   const taskId = m.taskId || 'unknown';
   const what = m.kind === 'document' ? `the approved file ${m.filename || ''}`.trim() : /:notice$/.test(m.key) ? 'the delivery notice' : 'a message';
   const text = m.kind === 'document' || /:notice$/.test(m.key)
@@ -256,7 +298,7 @@ export function uncertainAlertFor(m: OutboundMessage, error: string, officeChatI
     : composeMessageUncertainAlert(taskId, m.chatId, error);
   return {
     v: 1,
-    key: `${m.key}:uncertain-alert`,
+    key: officeAlertKey(`${m.key}:uncertain-alert`, index, officeChatId),
     chatId: officeChatId,
     kind: 'text',
     text,
@@ -281,9 +323,21 @@ export async function handleSend(ctx: SenderContext, deps: TelegramSenderDeps, m
   }
   if (onSent && !ctx.notifySent) throw new Error('QUESTION_CALLBACK_UNAVAILABLE: the sender cannot confirm this question');
   let result: SendResult;
+  let stuck = 0;
+  let gaveUp = false;
   for (let round = 0; ; round++) {
     const step = round === 0 ? 'send' : `send-${round}`;
     const answer = await ctx.run(step, () => sendAttempt(deps, m));
+    if (answer.outcome === 'stuck') {
+      // ADR-155: bounded, so a message that cannot be sent never holds the chat's queue for hours.
+      if (++stuck >= STUCK_ATTEMPTS) {
+        result = { outcome: 'refused', error: `${answer.error} (not sent after ${stuck} attempts)` };
+        gaveUp = true;
+        break;
+      }
+      await ctx.sleep?.(Math.min(answer.retryAfterMs * 2 ** (stuck - 1), STUCK_MAX_WAIT_MS));
+      continue;
+    }
     if (answer.outcome !== 'not_sent') {
       result = answer;
       break;
@@ -301,13 +355,19 @@ export async function handleSend(ctx: SenderContext, deps: TelegramSenderDeps, m
     if (!result.messageId) throw new Error('QUESTION_SEND_RECEIPT_MISSING: a confirmed question needs a Telegram message ID');
     await ctx.notifySent!(m, result.messageId);
   }
-  if (m.class === 'critical' && result.outcome === 'uncertain') {
-    const office = deps.officeChatId();
-    if (office && office !== String(m.chatId)) {
-      // Keyed by the message: the alert is sent once however often this message is asked for.
-      ctx.sendTo(uncertainAlertFor(m, result.error, office));
-    } else {
-      log.error(`[TelegramSender] ${m.key} may not have reached chat ${m.chatId} (${result.error}); the office was not alerted: ${office ? 'the message was to the office chat' : 'no office chat is configured'}.`);
+  if (m.class === 'critical' && (result.outcome === 'uncertain' || gaveUp)) {
+    // Every office member but the chat the message was for (ADR-155), read in a journaled step so a
+    // replay alerts the same people; keyed by the message, so each hears of it once however often it
+    // is asked for. An office alert that went wrong is logged, never alerted in turn.
+    const error = result.outcome === 'sent' ? '' : result.error;
+    const members = OFFICE_ALERT_KEY.test(m.key) ? [] : await ctx.run('office-chats', async () => deps.officeChatIds());
+    const office = members.filter((chatId) => chatId !== String(m.chatId));
+    for (const [index, chatId] of office.entries()) {
+      ctx.sendTo(gaveUp ? stuckAlertFor(m, error, chatId, index) : uncertainAlertFor(m, error, chatId, index));
+    }
+    if (!office.length) {
+      log.error(`[TelegramSender] ${m.key} ${gaveUp ? 'could not be sent to' : 'may not have reached'} chat ${m.chatId} (${error}); the office was not alerted: ${
+        OFFICE_ALERT_KEY.test(m.key) ? 'it was an office alert itself' : members.length ? 'the message was to the only office chat' : 'no office chat is configured'}.`);
     }
   }
   if (result.outcome === 'refused') log.warn(`[TelegramSender] Telegram refused ${m.key} for chat ${m.chatId}: ${result.error}`);

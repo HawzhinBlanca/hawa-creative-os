@@ -101,7 +101,7 @@ describe('Delivery workflow', () => {
     const h = harness({ prepare: async () => prepared(i.taskId, 1) });
     h.ctx.reportLifecycle = async () => { throw new restate.TerminalError('Core refused stale report', { errorCode: 409 }); };
     await expect(runDelivery(h.ctx, h.core, i)).rejects.toThrow('Core refused stale report');
-    expect(h.steps).toEqual(['prepare']);
+    expect(h.steps).toEqual(['verify-claim', 'prepare']);
     expect(h.posts).toHaveLength(1);
     expect(h.sends.filter((m) => m.chatId === i.chatId)).toHaveLength(2);
   });
@@ -119,7 +119,7 @@ describe('Delivery workflow', () => {
     // ADR-145 (#31, #32): the requester's words only, each file captioned with the design's name.
     expect(h.sends[2].text).toMatch(/^Here is your final <b>KAAE ceremony<\/b>\. 🎉/);
     expect(h.sends.slice(0, 2).map((s) => s.caption)).toEqual(['KAAE ceremony, final', 'KAAE ceremony, final']);
-    expect(h.steps).toEqual(['prepare']);
+    expect(h.steps).toEqual(['verify-claim', 'prepare']);
     expect(h.posts.map((p) => p.path)).toEqual([`/internal/lifecycle/${i.requestId}/deliveries/${i.approvalId}/prepare`]);
     expect(h.reports).toEqual([{ input: i, outcome }]);
   });

@@ -45,7 +45,7 @@ function depsWith(bridge: BridgeLike, files: Record<string, Uint8Array> = {}): T
     botToken: () => botToken,
     bridge: () => bridge,
     readExportBytes: async (_trx, _tenant, _task, artifactId) => files[artifactId] ?? null,
-    officeChatId: () => OFFICE,
+    officeChatIds: () => [OFFICE],
     markRetryDelaysMs: [10, 10],
   };
 }

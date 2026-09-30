@@ -1037,6 +1037,24 @@ export function createApp(options?: CreateAppOptions) {
     setTimeout(pass, 120_000).unref?.();
   }
 
+  // Requests waiting too long for a person (in review, approved and not sent, handed to the office after
+  // a failed design, a question unanswered after its reminders): every office member hears of each once
+  // per stage (ADR-155, services/lifecycle-stale-sweep.ts). Started with the Canva sweeper.
+  if (db && options?.enableCanvaSweeper) {
+    const staleDb = db;
+    const stalePass = async () => {
+      try {
+        const { sweepStaleLifecycleRequests } = await import('./services/lifecycle-stale-sweep.js');
+        const alerted = await sweepStaleLifecycleRequests(staleDb, { tenantId: DEFAULT_TENANT_ID, officeChatIds: telegramAllowedUsers, nowMs: Date.now() });
+        if (alerted.length) log.info(`[lifecycle-stale] alerted the office about ${alerted.length} waiting request(s):`, JSON.stringify(alerted));
+      } catch (err) {
+        log.warn('[lifecycle-stale] pass failed:', (err as Error)?.message || err);
+      }
+    };
+    setInterval(stalePass, 15 * 60_000).unref?.();
+    setTimeout(stalePass, 180_000).unref?.();
+  }
+
   // Client DNA as the office saved it in PostgreSQL, loaded before the port opens (a test may have
   // seeded invented offices above; the database wins: see client-dna-hydration.ts). Production
   // refuses to start when it cannot be read.
