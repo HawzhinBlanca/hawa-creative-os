@@ -16,6 +16,13 @@ export async function pauseRequesterDesign(trx: Kysely<Database>, tenantId: stri
   const task = await trx.selectFrom('tasks').select(['state','version','request_id'])
     .where('tenant_id','=',tenantId).where('id','=',late.taskId).forUpdate().executeTakeFirst();
   if (!task || task.request_id !== late.requestId) return false;
+  // A hold received while already paused creates no new state event. Its committed intake
+  // receipt is still authoritative: a duplicate that waited behind resume must not pause again.
+  const routed = await trx.selectFrom('inbox_events').select('payload')
+    .where('tenant_id','=',tenantId).where('source_account_id','=','lifecycle_chat_routing')
+    .where('source_event_id','=',String(updateId)).executeTakeFirst();
+  if (routed) return routed.payload?.kind === 'hold' && routed.payload.held === true &&
+    routed.payload.requestId === late.requestId && routed.payload.taskId === late.taskId;
   // A concurrently replayed update must never re-pause a task the office already resumed.
   const prior = await trx.selectFrom('task_events').select('id')
     .where('tenant_id','=',tenantId).where('task_id','=',late.taskId)

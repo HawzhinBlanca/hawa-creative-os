@@ -15,9 +15,10 @@
   "qualification": "CONNECTED_PASS_FULL_SEALED_REGRESSION_PENDING",
   "connected": {
     "files": 16,
-    "passed": 778,
+    "passed": 779,
     "failed": 0,
-    "expectedFail": 2
+    "expectedFail": 2,
+    "note": "778 cases in the connected run plus one new repeated-hold regression; the ten-case replay rerun is not added again."
   },
   "build": "PASS",
   "typecheck": {
@@ -47,7 +48,8 @@
     "New hold tests first run:122 pass/2 PostgreSQL bigint fixture assertion failures, repaired without relaxing behavior",
     "Test typing: late requestStage inferred too narrowly; typed against the actual service input",
     "Lint ran before updated integrations declarations were built; rebuilt package dependencies",
-    "Unsealed first full run:6242 pass/6 fail/2 expected fail/67 skip. Failures: stale Canva pause expectation; missing Desk dist; old generic-resume expectation; cached integration phrase export; three unlisted native-review phrases; dirty/stale release manifest. Corrected source/build prerequisites and expectations; manifest refusal retained until sealed"
+    "Unsealed first full run:6242 pass/6 fail/2 expected fail/67 skip. Failures: stale Canva pause expectation; missing Desk dist; old generic-resume expectation; cached integration phrase export; three unlisted native-review phrases; dirty/stale release manifest. Corrected source/build prerequisites and expectations; manifest refusal retained until sealed",
+    "Second sealed full run intentionally stopped before completion after review found a delayed duplicate of a second hold could re-pause after office resume. Saved routing receipt now fences that replay; ten hold tests pass. No result is claimed for the stopped full run."
   ],
   "fullRegression": {
     "status": "PENDING_SEALED_RUN"
@@ -61,7 +63,9 @@
     "hawa-hold-connected-2.log": "c24f322482b88955ad6b8fb12d201948fd4bd89b65121cebf0d0c40736f4e26d",
     "hawa-hold-typecheck-2.log": "40e29137397070167e2f2969047228cf487ec2faee5ad2362568999d0edf5764",
     "hawa-hold-lint-2.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
-    "hawa-hold-desk-build.log": "96e69e1b849885b294dff9db019b4402bf00c2f0d70fac65219580fe49a7e86a"
+    "hawa-hold-desk-build.log": "96e69e1b849885b294dff9db019b4402bf00c2f0d70fac65219580fe49a7e86a",
+    "hawa-hold-replay-3.log": "7437072b322f20dacd7dc69ea00d14fdf41422678454b6d4c16678f72a5129e0",
+    "hawa-hold-typecheck-3.log": "40e29137397070167e2f2969047228cf487ec2faee5ad2362568999d0edf5764"
   },
   "limitations": [
     "Early brief settlement versus first paid admission remains unqualified",
@@ -70,5 +74,16 @@
     "New Sorani lines listed but awaiting native review",
     "67 tests skipped in first full regression",
     "Broader content-aware/native/Canva/human design qualification remains open"
-  ]
+  ],
+  "replayFollowup": {
+    "passed": 10,
+    "failed": 0,
+    "newDistinctCases": 1,
+    "reason": "a second hold while already paused has no state-change event; its committed routing receipt must also fence duplicates after resume"
+  },
+  "blueprint": {
+    "passed": 1488,
+    "warnings": 0,
+    "failed": 0
+  }
 }

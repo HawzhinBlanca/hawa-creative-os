@@ -5,6 +5,7 @@ import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { createApp } from '../src/app.js';
 import { pauseRequesterDesign } from '../src/services/requester-hold.js';
 import { controlTask } from '../src/services/task-control-service.js';
+import { recordRoutingRefusal } from '../src/services/lifecycle-chat-target.js';
 import { ConversationHarness } from './fixtures/conversation-harness.js';
 import { Play } from './fixtures/conversation-script.js';
 import { KAAE_EVENING } from './fixtures/nl-scripts/briefs.js';
@@ -45,6 +46,18 @@ const resume=(taskId:string,version:number,key=randomUUID())=>controlTask(db,off
   expectedVersion:version,key,reason:'Requester confirmed the date; continue the saved design'});
 
 describe('requester hold checkpoint and current owner',()=>{
+  it('a duplicate of a second hold made while already paused cannot undo office resume',async()=>{
+    const {late}=await opened();await hold(late,10);
+    await withRlsContext(db,scope,async trx=>{
+      expect(await pauseRequesterDesign(trx,tenantId,late,11)).toBe(true);
+      await recordRoutingRefusal(trx,tenantId,11,{code:'LATE_REQUESTER_CHANGE',chatId:'synthetic',payloadHash:'a'.repeat(64),
+        late:{...late,kind:'hold',held:true,answer:'The design is paused.'}});
+    });
+    await resume(late.taskId,Number((await state(late.taskId)).version));
+    const resumed=await state(late.taskId);
+    expect(await hold(late,11)).toBe(true);expect(await state(late.taskId)).toEqual(resumed);
+  });
+
   it('resumes the actual checkpoint once; a replayed old hold cannot re-pause it',async()=>{
     const {app,late}=await opened();const before=await state(late.taskId);
     expect(await hold(late)).toBe(true);

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T22:58:49Z",
+  "generatedAt": "2026-09-30T23:02:29Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 668,
+  "fileCount": 669,
   "files": [
     {
       "path": ".dockerignore",
@@ -2008,9 +2008,14 @@
       "bytes": 3384
     },
     {
+      "path": "plans/requester-hold-reliability-2026-10-01/LIVE_INFRA_READBACK.json",
+      "sha256": "4a78564a01357a15c6e80d994c878dc6fb3f8e3675afdc294bc0906d35903704",
+      "bytes": 471
+    },
+    {
       "path": "plans/requester-hold-reliability-2026-10-01/LOCAL_PROOF.json",
-      "sha256": "e4ee17b2f1935095645e934318b1922ed19eac3f431fa809eaf9818681b9b216",
-      "bytes": 3261
+      "sha256": "d88e8483c1a50f5567ecae8930b433b208c24114c2d4751fd421a440a033d168",
+      "bytes": 4181
     },
     {
       "path": "plans/requester-hold-reliability-2026-10-01/PLAN.md",
@@ -2464,8 +2469,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "591171f9ea2d2ddc8d555bfc78895a3999d2c0562c16dcc98e5ac6216181d404",
-      "bytes": 561234
+      "sha256": "98ee7033552578161e4053521f34ec04d94d1d60d6235a51cd7cd03cae0dc45a",
+      "bytes": 561534
     },
     {
       "path": "plans/user-stories.csv",
