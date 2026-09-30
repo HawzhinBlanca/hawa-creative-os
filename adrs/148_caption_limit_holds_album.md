@@ -1,70 +1,123 @@
 # ADR-148: A Caption Telegram Cut Waits for the Rest
 
-**Date:** 2026-09-30
-**Status:** Implemented and locally tested on branch `claude/caption-limit-hold`; not deployed.
+**Date:** 2026-09-30 (reworked the same day after the adversarial review, audit 2026-09-30 item 22)
+**Status:** Implemented and locally tested on branch `claude/caption-limit-hold-v2` (rebased onto production `6bd479c1`); not deployed. Supersedes the first version on `claude/caption-limit-hold`, which was not merged.
 **Requirements:** FR-004 (a repeated source event gives no more than one task), FR-005 (passive messages become tasks only through an approved classifier policy), NFR-001 (no acknowledged event is silently lost).
-**Changes a foundation:** none. ADR-143's album settle and ADR-145's natural wording are kept. An album whose caption is at Telegram's caption limit is now held, as an album with no words is, instead of being designed from its caption.
-**Builds on:** ADR-143 (albums settle by themselves; a waiting album takes its sender's words), ADR-145 (the requester message catalogue; plain words only), commit a2e9f6af (a line that introduces the copy is an instruction).
-**Number:** 147 is the highest ADR on every branch, remote and worktree (`git log --all -- adrs/`, 2026-09-30); 148 is free.
+**Changes a foundation:** the lifecycle album contract (`parseLifecycleAlbumRef`, `packages/contracts`) now allows up to 20 photos instead of 10 (section 2.8). ADR-143's album settle, ADR-144's group rule and ADR-145's natural wording are kept.
+**Builds on:** ADR-143 (albums settle by themselves; a waiting album takes its sender's words), ADR-144 (requester intent rules; section 2.7, groups), ADR-145 (the requester message catalogue; plain words only), commit a2e9f6af (a line that introduces the copy is an instruction).
+**Number:** 148 is reserved for this stream.
 
 ## 1. Context
 
-The owner's six-photo album of 2026-09-29 (ADR-143 section 2.5) had a caption of exactly 1,024 characters. That is Telegram's caption limit for standard accounts: Telegram kept the first 1,024 UTF-16 units and dropped the rest without telling anyone. The caption's last line ended mid-sentence ("…and next steps toward"). ADR-143's settle took the caption as the whole brief (`isBriefText`), and the design shipped the cut sentence as its subtitle. (The 1,024 is the production reading reported with this task; the copy of that caption kept in `apps/core/test/brief-introducer-copy.test.ts` measures 1,018 units, so that copy is not byte-exact. This change detects only captions of 1,024 units or more; section 3.)
+The owner's six-photo album of 2026-09-29 (ADR-143 section 2.5) had a caption of exactly 1,024 characters. That is Telegram's caption limit for standard accounts: Telegram kept the first 1,024 UTF-16 units and dropped the rest without telling anyone. The caption's last line ended mid-sentence ("…and next steps toward"). ADR-143's settle took the caption as the whole brief, and the design shipped the cut sentence as its subtitle.
+
+The first version of this ADR held such an album and joined the sender's next message onto the caption. Its adversarial review found that it joined "cancel", "hello" and questions as "the rest" (each a paid design), glued an unrelated brief sent 31 minutes later onto the old caption (the album accepted words for its 2-hour window), held complete Premium captions longer than 1,024 as cut, could open a design whose whole brief was a one-word label, let another group member's request silently drop the album, joined a word cut in two with a line break ("tow" / "ard"), doubled a resent tail, and never left the `asked` state (the sweep revisited it). This version fixes those; the review's seven probes are regression tests.
 
 The requester cannot know that Telegram cut their text. Requesters only write natural messages: no commands, no formats, no reply targets.
 
 ## 2. Decision
 
-### 2.1 A caption at the limit is not a whole brief
+### 2.1 Which captions were cut
 
-A caption is **possibly cut** when its length, counted as Telegram counts it (UTF-16 code units, the JavaScript string length), is at or above `TELEGRAM_CAPTION_LIMIT` (1024, `packages/integrations/src/telegram-bridge.ts`, the constant the bridge already uses for outgoing captions). `captionMayBeCut` in `lifecycle-album.ts` is the only test for it.
+A caption is **possibly cut** (`captionMayBeCut`) when its length, counted as Telegram counts it (UTF-16 code units, the JavaScript string length), is:
 
-When an album with such a caption settles (ADR-143, the newest photo's settle), nothing is drafted:
+- exactly `TELEGRAM_CAPTION_LIMIT` (1,024); or
+- at most 4 units short of it and ending mid-sentence (Telegram can drop trailing spaces or line breaks after its cut); or
+- exactly 4,096, Telegram Premium's caption limit.
 
-- the album is marked asked (`lifecycle_album_settled`, state `asked`) and the question is recorded once per album (`lifecycle_album_cut`, keyed by the album, with the asking photo's update ID);
-- Core answers `settle-later` (kind `album`) with a delay of `CUT_CAPTION_WAIT_MS`, and says one plain sentence beside it (`notice`): "Telegram kept only the first part of the text you sent with the photos. Please send the rest as a message and I'll use it with these photos." (Sorani in a Sorani chat; `ALBUM_MESSAGES.captionCut`, listed in `SORANI_REVIEW.md` for native review.) ChatInbox sends a notice once per update (`chatinbox:notice:<update_id>`), so a replayed or repeated settle does not ask twice.
+Any other caption longer than 1,024 came whole from a Premium account and is drafted as any caption is.
 
-The worker is unchanged: `settle-later` with a `notice` and a delay of at most 10 minutes is already a valid answer.
+### 2.2 The question
 
-### 2.2 The next message is the rest
+When an album with a possibly cut caption settles (ADR-143, the newest photo's settle), nothing is drafted. The question is recorded once per album (`lifecycle_album_cut`, keyed by the album's first group, with the asking update), the album is marked `asked`, and Core answers `settle-later` (kind `album`) with a delay of `CUT_CAPTION_WAIT_MS` and one sentence beside it (`notice`), quoting the last words that arrived (`captionTail`, at most five words):
 
-The album's sender's next text in that chat and topic (ADR-143's `bindTextToAlbum` scope) is joined onto the caption: the request's words are **the caption, a newline, then the message**, and the request opens with all the photos under that message's update ID, as any brief next to an album does. Nothing needs to be a brief by the classifier's rule: the rest of a sentence is rarely one. Only these are not taken as the rest:
+> I have your photos, but Telegram cut your text short: it stops at "…next steps tow". Please send me the rest, or the whole text again, and I'll use it with these photos.
 
-- an OK ("ok", "yes", "go ahead"): the requester is asked for the rest again (`album-rest:<update_id>`), and the album keeps waiting;
-- thanks or a receipt (`isAcknowledgement`), and `/`-commands: left to intake as before.
+(`ALBUM_MESSAGES.captionCut`; Sorani in a Sorani chat, with «…» quotes.) ChatInbox sends a notice once per update, so a replayed or repeated settle does not ask twice. If an "ok" arrives before the settle, the question is asked then and recorded under that message instead.
 
-When the message repeats what Telegram kept, the repeat replaces it instead of doubling it: the whole brief sent again is the brief, and a message that starts with the cut last line (the sentence sent again whole) replaces that line.
+### 2.3 What counts as the rest
 
-### 2.3 The wait is bounded; nothing is lost
+While the album waits, its sender's words (ADR-143's `bindTextToAlbum` scope: same chat, sender and topic) are read by `readCutReply`, which uses the requester-turn rules of ADR-144 (`readIntentByRules`, and the classifier's greeting and question reading) rather than word lists of its own:
 
-The album waits for `CUT_CAPTION_WAIT_MS`, which is the held-brief window (`HELD_BRIEF_MS`, 10 minutes: "a held brief is never held longer"). The timer is ADR-143's own mechanism: the durable Restate delayed call of the album's settle, which Core asks for in its `settle-later` answer. The poller's settle sweep (ADR-143, every five minutes) also lists a cut album whose question is more than 11 minutes old and less than the album brief window (2 hours) old and which has not opened, in case the delayed call was lost.
+| The words | What happens |
+|---|---|
+| a cancel ("cancel", "never mind, wrong photos": a cancel said first, then why) | the album is closed (`cancelled`) and the requester is told: "OK, I won't make anything with these photos. Send them again whenever you're ready." |
+| an OK or approval words ("ok", "yes", "go ahead") | asked again, in fewer and different words (`captionCutAgain`): "I still need the rest of your text after "…next steps tow". Please send it as a message, or send the whole text again." |
+| thanks, a greeting, a question, a status question, a lasting preference | left to intake, answered as usual; the album keeps waiting |
+| "that's the whole text", "nothing else" (English and a few Sorani phrases) | the caption opens as it arrived |
+| anything else | the rest |
 
-When the settle comes after the window and no rest has arrived, the album opens **with the caption's complete lines only**: the cut last line is dropped (`withoutCutLine`). A caption of a single line keeps its complete sentences. The requester's words are therefore not lost, and the cut line never becomes copy. A caption with no complete line or sentence left (one unbroken run of 1,024 characters) opens nothing; the requester was asked, and the album lapses with its window like an album with no words.
+Words that a voice note or a PDF waits on (ADR-145's "Is this exactly the text?") are that source's, not the rest.
 
-The settle's other ADR-143 rules still apply: a late settle starts nothing once the chat has opened another request after the photos, and one album opens at most one request (the freeze is under the album lock; the outcome is stored under the source update).
+A **photo with words** sent while the album waits is read the same way; as the rest, its words join the caption and its picture joins the album (one request, the album's photos then this one).
 
-### 2.4 A title is not a headline
+### 2.4 The join
 
-The task list (`GET /v1/tasks`) showed a task's title as its English headline when the task had none (`headline_en || title`). A lifecycle draft carries no `headlineEn`, so every Telegram task showed its title there, and a task made before a2e9f6af showed "KAAE: Here is the text and the photos:…" as its headline. The fallback now drops a title that quotes a line introducing the copy (`isCopyIntroducer`, from a2e9f6af); other titles are shown as before.
+The rest joins the caption where Telegram cut it (`joinCutCaption`):
+
+- the whole text sent again (it starts with the caption's first 80 characters) replaces the caption;
+- a rest that repeats the end of what arrived overlaps it once: the longest overlap of at least three characters that starts at a word of the caption, compared with spaces and line breaks folded and case ignored ("…steps tow" then "steps toward better…" gives "…steps toward better…");
+- otherwise a cut mid-word joins with nothing between ("tow" + "ard"): the caption ends with a letter and the rest starts with a lower-case or uncased letter (Sorani has no case), or both are digits; a cut mid-sentence joins with a space; a caption that ended a sentence joins with a line break.
+
+### 2.5 The wait
+
+The album takes the rest only until `CUT_CAPTION_WAIT_MS` (10 minutes) after the question (or after its newest photo, before the question), not for the album's 2-hour window. The wait is one durable settle: `CUT_CAPTION_WAIT_MS` equals the worker's longest settle delay (`MAX_SETTLE_DELAY_MS` in `apps/worker/src/lifecycle/core-client.ts`, which refuses a longer one), and a test fails if either changes alone. The poller's sweep (ADR-143) also lists a cut album whose question is more than 11 minutes old and which is neither frozen nor closed, in case the delayed call was lost.
+
+At the end of the wait, with no rest:
+
+- the caption without its unfinished sentence (`withoutCutSentence`: only the last line is trimmed, back to its last finished sentence, or away when it has none) opens, if it is still a brief: `isBriefText` and a `new_brief` by the requester-turn rules, so a lone label such as "KAAE" is not;
+- otherwise the album **lapses**: it is closed (`expired`) and the requester is told "I didn't receive the rest of your text, so I haven't started a design with these photos. Whenever you're ready, send the photos again and then the whole text as a message."
+
+Words sent after the wait are read by intake as any message; they never join the old caption.
+
+### 2.6 Final states are recorded
+
+`inbox_events` is append-only, so ADR-143's `lifecycle_album_settled` row, once `asked`, could never change. A final state reached later (`superseded`, `expired`, `cancelled`, `refused`) is its own row, `lifecycle_album_closed`, which `settledState` reads first. A closed album is not settled, bound or swept again.
+
+### 2.7 Groups (ADR-144 section 2.7)
+
+- A late settle is superseded only by a later request **of the album's sender** (found through the open decision's source update or its intent receipt). Another member's request says nothing about this member's photos. In a private chat any later request supersedes, as before.
+- Media follows the rule text follows: in a group, only what is addressed to the bot (a reply to it, a mention of it in the text or caption, a command) or is a clear brief (said to be new, a divider, a copy heading) acts (`actsInGroup`).
+  - A photo with words, a file, a voice note, a video or a sticker that does not act is kept as a passive message (`MESSAGE_ONLY`) before anything is downloaded, and nothing is said.
+  - An album that does not act is marked `asked` quietly at its settle: no question, no design; its sender's own words that act can still bind it. A refused photo in a group album is said at the settle, only if the album acts.
+  - A photo with no words is kept, as ADR-145 keeps it, but its settle asks nothing in a group; its sender's words within the join window can take it.
+  - Words that do not act never bind an album.
+
+### 2.8 Albums sent back to back
+
+Telegram sends at most ten photos per album and splits more into albums delivered one right after the other. Albums from one sender (chat and topic) whose photos follow each other within the album quiet period (`HAWA_ALBUM_SETTLE_MS`), and that are not started or closed, are one **set** (`albumSet`): the newest photo of the set settles it, it is asked about once ("I have your 13 photos …"), a brief binds every photo of the set, and every group of the set is frozen or closed together. The album contract allows up to 20 photos (`MAX_ALBUM_IMAGES`); a set with more is refused as too large ("These photos are too large together. Please send fewer or smaller photos.").
+
+### 2.9 A stranger's video (audit S5)
+
+A video from a sender outside the intake list is refused before `mediaRoute.unusable` records anything of it; the sender hears ADR-145's once-a-day line, and only its rate-limit row is kept.
+
+### 2.10 A title is not a headline
+
+The task list (`GET /v1/tasks`) showed a task's title as its English headline when the task had none. The fallback now shows nothing when the title quotes a line introducing the copy, with a client prefix ("KAAE: Here is the text and the photos:…") or without one ("Here is the text and the photos:…").
 
 ## 3. Consequences
 
-- An album whose caption was cut starts about as soon as the requester sends the rest, or 10 to 15 minutes after the photos if they send nothing. A rest sent after the album opened is read by intake as any later message from the requester (ADR-144 routing).
-- A Telegram Premium account can send captions up to 4,096 units. Its complete caption of 1,024 units or more is also held and asked about; the requester's reply is joined, or after the window the caption opens without its last line. The office's accounts are standard; this is accepted.
-- If Telegram strips whitespace after cutting, a cut caption can arrive one unit short of the limit and is not detected. The owner's caption arrived at exactly 1,024.
-- The rest of a sentence that was cut mid-word ("…next steps tow" then "ard a better future") is joined after a newline, as specified, so the design reads it as the next line. A requester who sends the whole last sentence again gets it as one line (section 2.2).
-- A single captioned photo (not an album) whose caption is at the limit is not covered by this change: ADR-145's photo path still opens it with its caption. It is recorded as open work.
-- Every text message from a sender now runs ADR-143's album lookup unless it is thanks, an OK or a command (previously only briefs and OKs did): two indexed reads and a transaction-scoped advisory lock, no write unless an album is bound.
-- No migration. New `inbox_events` account: `lifecycle_album_cut`. Core only; the worker and the Restate services are unchanged. The Sorani sentence is the implementer's and awaits native review.
+- An album whose caption was cut starts as soon as the requester sends the rest, or about 10 minutes after the question if they send nothing and what arrived is still a brief; otherwise the requester is told it lapsed.
+- A requester who answers the question with a greeting or a question gets the usual answer, and the album keeps waiting; a cancel is honoured. Each of these was a paid design before.
+- A cut that falls exactly at the end of a word, followed by a rest that starts with a new lower-case word, is joined without a space ("steps" + "toward" gives "stepstoward"): the join cannot tell this from a word cut in two. The question quotes the last words, so a requester who sends the rest from the start of that word is joined correctly by the overlap rule.
+- A caption of 1,020 to 1,023 units that ends mid-sentence but was not cut is asked about; the requester's "that's the whole text" opens it.
+- The album contract now allows 20 photos. Every model call that receives a request's photos can receive up to twice as many images (more input tokens per call, no additional calls). Core and the worker must run the same `@hawa/contracts` build: an older worker refuses a draft with more than 10 photos.
+- In a group, media that is not addressed to the bot is now passive: photos and files from members no longer start designs or questions (audit item 14). A captionless photo in a group is still kept for its sender's words.
+- A single captioned photo (not an album) whose caption is at the limit is not covered: ADR-145's photo path still opens it with its caption.
+- A voice note sent as the rest is not joined: the source flow (ADR-145, `lifecycle-source-intake.ts`, owned by the intake stream) opens its confirmed words as their own request, and the album then lapses or is superseded. Joining it needs that flow to bind a waiting cut album on confirmation; the album contract cannot carry a source reference and an album together today.
+- Every text message from a sender runs ADR-143's album lookup (two indexed reads and a transaction-scoped advisory lock, no write unless an album is bound); in a group, a message is read by the requester-turn rules once more.
+- No migration. New `inbox_events` accounts: `lifecycle_album_cut`, `lifecycle_album_closed`. Core, `@hawa/contracts` and one worker constant change. The Sorani sentences and the Sorani "that is the whole text" phrases are the implementer's and await native review (`SORANI_REVIEW.md`).
 
 ## 4. Verification
 
-- `apps/core/test/lifecycle-album-caption-limit.test.ts` (9 tests, per-file PostgreSQL, the worker intake route):
-  - six photo updates, the first with a 1,024-character caption ending mid-word (built from parts): no task, no open, and exactly one requester sentence, the plain question, beside a 10-minute settle; a repeated settle is still waiting;
-  - the next plain message: the draft's `rawText` is the caption, a newline and the message; the headline is the title line, not the introducer; a replay gives the recorded decision; the album's own settle then does nothing; one task after projection;
-  - a 1,023-character caption drafts at the settle, as before;
-  - an OK is asked again; after the window the sweep lists the album and its settle opens it without the cut line (no copy block or draft field contains it); the replay is a duplicate and the sweep lists it no more;
-  - the whole brief sent again replaces the cut caption;
-  - helpers: the UTF-16 count (an emoji is two units), dropping the cut line or sentence, the join and its repeat rules, and the title fallback.
-- Neighbouring suites re-run unchanged: `lifecycle-album-settle`, `lifecycle-album`, `brief-introducer-copy`, `natural-media-intake`, `natural-language-friction-audit`, `lifecycle-internal-intake`, `lifecycle-source`, `lifecycle-voice`, `route-inventory`, `core`, `no-invented-copy-routes` (Core); `chat-inbox`, `telegram-poller` (worker); `requester-messages`, `telegram-message-length` (integrations).
-- Not run: chaos scenarios, live Telegram, a real Premium account, and a native Sorani review.
+- `apps/core/test/lifecycle-album-caption-limit.test.ts` (24 tests, per-file PostgreSQL, the worker intake route). Run against the first version's code, 23 of the 24 fail; with this change all pass:
+  - the six-photo album: no task, one question that quotes the last words; the rest joins a word cut in two; the rest before the settle; a resent tail and the whole text sent again are not doubled; an OK is asked again in fewer words; the sweep and the settle open without the unfinished sentence;
+  - F1: "cancel" and "never mind, …" close the album and say so; "hello", "what do you mean?", "thanks" and "when will it be ready?" are never joined; "that's the whole text" opens the caption; `readCutReply` cases;
+  - F2/F5: a rest after the wait is not joined; a caption with no finished sentence lapses, says so, is not swept again, and a brief 30 minutes later opens alone; "KAAE" plus an unfinished paragraph lapses;
+  - F4: 1,500 and 1,019 units and a finished 1,023 draft at once; 1,022 mid-sentence and 4,096 are held; the UTF-16 count;
+  - F6: another member's request does not supersede; the sender's own request does, and the album is not swept again; un-addressed group albums, photos with words, voice notes and captionless photos start nothing and say nothing, and addressed words bind the album;
+  - F8: a photo with words as the rest gives one request with seven photos; F8-albums: 10 + 3 photos are asked about once and bind all 13;
+  - S5: a stranger's video leaves only the rate-limit row; Sorani question; F10 title; F11 wait against `MAX_SETTLE_DELAY_MS`; the trim and join helpers.
+- `apps/core/test/lifecycle-album.test.ts`: the contract bound (20 accepted, 21 refused).
+- Neighbouring suites re-run: see the traceability rows and the branch report.
+- Not run: chaos scenarios, live Telegram, a real Premium account, a real two-album upload, and a native Sorani review.
