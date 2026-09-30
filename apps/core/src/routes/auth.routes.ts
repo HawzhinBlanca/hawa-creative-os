@@ -160,7 +160,7 @@ export function registerAuthRoutes(ctx: RouteContext) {
     // The worker's credential is a service principal on /v1/internal/* and nothing else, so it never
     // becomes an office session, whatever other key it might also match (ADR-128).
     const serviceToken = serviceTokenOf();
-    if (key && serviceToken && same(key, serviceToken)) {
+    if (key && (same(key, serviceToken) || same(key, process.env.HAWA_DESIGN_WORKER_TOKEN))) {
       return problem(c, 401, 'Unauthorized', 'Invalid credentials or access key');
     }
 

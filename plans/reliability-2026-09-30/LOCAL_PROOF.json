@@ -90,6 +90,12 @@
       "passed": 1458,
       "warnings": 0,
       "failed": 0
+    },
+    {
+      "command": "final service-key exchange/ordinary auth/worker boundaries/named review regression",
+      "files": 5,
+      "passed": 53,
+      "failed": 0
     }
   ],
   "retainedInitialFailures": [
@@ -182,6 +188,14 @@
       "scope": "evidence writer",
       "reason": "Used incorrect existing JSON property name; source checkpoint dc87893f contains implementation before updated proof",
       "resolution": "Append to retainedInitialFailures; evidence recorded in this follow-up commit"
+    },
+    {
+      "scope": "initial exact-candidate chaos boot",
+      "seal": "8628f7fc",
+      "failedSuiteHooks": 1,
+      "executedScenarios": 0,
+      "reason": "Port56090 held by historical model comparison preview server",
+      "resolution": "Existing configureStack fixture uses56091; production and preview server preserved"
     }
   ],
   "unexecuted": [
@@ -207,5 +221,13 @@
     "apiCalls": 0,
     "nativeCanvaInspection": "not performed",
     "humanCreativeEvaluation": "not performed"
-  }
+  },
+  "predecessorRecovery": {
+    "seal": "8628f7fc",
+    "passedScenarios": 7,
+    "uncoveredModelCalls": 0,
+    "proof": "output/release-gate/recovery/r1-chaos-8628f7fc.json",
+    "finalCandidateRecovery": "must rerun after auth/session service-exchange repair"
+  },
+  "finalReviewRepair": "Reject body credential aliases in auth/session when they equal the scoped design credential, even if the retired operator alias matches. 53 related auth tests pass; seal8628f7fc not deployed."
 }

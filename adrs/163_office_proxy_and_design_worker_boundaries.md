@@ -54,6 +54,14 @@ until it drains. No new dependency or authentication UI is introduced.
 
 ## Evidence required
 
+Final review found the retired operator alias could still be exchanged through
+`POST /auth/session` because that route reads credentials from the body outside
+the general bearer guard. Refuse the design credential before any ordinary key
+or named-token lookup, under every body alias and API route alias. No Desk
+session, cookie or stream ticket may be minted from it. Distinct Office keys
+and named sessions remain supported. This closes privilege escalation rather
+than relying on worker code to avoid the login endpoint.
+
 Real Core tests reject forged office headers, wrong proofs, wrong origins,
 cookie writes without CSRF and worker requests outside the allowlist. Both
 office modes must pass the real worker-to-Core design contract. Environment

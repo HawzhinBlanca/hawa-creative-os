@@ -145,6 +145,16 @@ it('restricts the design credential in both modes, including when office headers
     vi.stubEnv('HAWA_DESK_AUTH_MODE',mode);
     const app = createApp({db});
     const headers = {Authorization:'Bearer '+token, 'X-Hawa-Office-Request':'1'};
+    // Login takes a key in its body, outside the bearer guard. Retired operator aliases must
+    // never exchange the service credential for an unrestricted office cookie/session.
+    for (const path of ['/v1/auth/session', '/api/auth/session', '/api/v1/auth/session']) {
+      for (const field of ['key', 'token', 'apiKey', 'password']) {
+        const response = await proxiedRequest(app, origin+path, {method:'POST',
+          headers:{'Content-Type':'application/json','X-Hawa-Office-Request':'1'},body:JSON.stringify({[field]:token})});
+        expect(response.status).toBe(401);
+        expect(response.headers.get('set-cookie')).toBeNull();
+      }
+    }
     for (const path of ['/v1/tasks','/v1/system/providers','/v1/auth/session']) {
       expect((await proxiedRequest(app,origin+path,{headers})).status).toBe(401);
     }
