@@ -28,8 +28,8 @@ import { readSourceUpload, readSourceExtraction, readSourceConfirmation, saveSou
   voiceInspectionHash, sourceHash, SourceConflict,
   type PendingSource, type SourceUpload, type SourceExtraction, type SourceIntakeAnswer } from './lifecycle-source-store.js';
 import { admitResolved, admitSource, sourceLanguage, sourceNotice as notice, sourceQuestionText } from './lifecycle-source-admission.js';
-import { askAboutSource, openSourceQuestion, readCandidate, readResolution, readSourceReply, recordCandidate, resolveSource,
-  resolveSourceClient, unconfirmedSource, type SourceNeed } from './lifecycle-source-natural.js';
+import { askAboutSource, openSourceQuestion, plainClientAnswer, readCandidate, readResolution, readSourceReply, recordCandidate,
+  resolveSource, resolveSourceClient, unconfirmedSource, type SourceNeed } from './lifecycle-source-natural.js';
 import { parseChoice } from './requester-turn.js';
 import { readIntentReceipt } from './requester-turn-store.js';
 import { pendingEditWords } from './lifecycle-media-intake.js';
@@ -42,6 +42,8 @@ const requestIdFor = (chat: string, id: number) => {
   const hex = createHash('sha256').update(`telegram-source:${chat}:${id}`).digest('hex');
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-4${hex.slice(13,16)}-a${hex.slice(17,20)}-${hex.slice(20,32)}`;
 };
+/** "yes" or "no": never an organisation's name. */
+const YES_OR_NO = (text: string) => ['yes', 'no'].includes(readSourceReply(text).kind);
 /** Words short enough to be confirmed as they are with "yes"; longer ones are sent by the requester. */
 const CONFIRMABLE_CHARS = 1500;
 const PREVIEW_CHARS = 600;
@@ -265,7 +267,9 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
     if (question) {
       const said = question.need === 'target'
         ? parseChoice(text, { options: question.options, allowNew: true }) : null;
-      const clientId = question.need === 'client'
+      // ADR-156 (audit #13): "Which organisation is it for?" is answered by a plain answer ("KAAE", "it's
+      // for the engineers' union", "Client: KAAE"), never by a new brief or a change that names a client.
+      const clientId = question.need === 'client' && (plainClientAnswer(text) || Boolean(sourceClientSelection(text).client))
         ? await tx(async (trx) => {
           const line = sourceClientSelection(text).client;
           if (line) {
@@ -289,9 +293,9 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
         });
         return continueAnswered(question.sourceUpdateId, envelope.updateId);
       }
-      // A short answer that names no organisation this office works with: asked again, kindly.
-      const reading = readSourceReply(text);
-      if (question.need === 'client' && reading.kind === 'copy' && text.trim().split(/\s+/).length <= 6) {
+      // A short answer that names no organisation this office works with: asked again, kindly. Anything
+      // else is read as any message is, and the question stays open (ADR-156).
+      if (question.need === 'client' && plainClientAnswer(text) && !YES_OR_NO(text)) {
         const answer = notice(envelope.chatId, envelope.updateId, say(SOURCE_MESSAGES.clientNotFound, lang));
         await tx((trx) => saveSourceAdmission(trx, scope.tenantId, envelope.updateId, { payloadHash, result: { kind: 'answer', answer } }));
         return answer;
@@ -300,9 +304,11 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
     }
     const sourceUpdateId = await tx((trx) => unconfirmedSource(trx, scope.tenantId, who));
     if (!sourceUpdateId) return null;
-    const reply = readSourceReply(text);
-    if (reply.kind === 'other') return null;
     const candidate = await tx((trx) => readCandidate(trx, scope.tenantId, sourceUpdateId));
+    // ADR-156: only a confirmation or words that look like the copy answer "is this exactly the text?";
+    // anything else is read as any message is, and the words shown stay waiting for their answer.
+    const reply = readSourceReply(text, candidate?.text ?? '');
+    if (reply.kind === 'other') return null;
     if (reply.kind === 'no' || (reply.kind === 'yes' && !candidate?.confirmable)) {
       const answer = notice(envelope.chatId, envelope.updateId,
         say(reply.kind === 'no' ? SOURCE_MESSAGES.sendCorrected : SOURCE_MESSAGES.sendExactWords, lang));

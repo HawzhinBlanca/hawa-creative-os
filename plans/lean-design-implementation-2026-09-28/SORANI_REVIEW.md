@@ -49,6 +49,9 @@ the "that is the whole text" words in `apps/core/src/services/lifecycle-album.ts
 | `media.photoPassed` | Got the photo. {title} is already being made, so I've passed the photo to the office to use. | وێنەکەم وەرگرت. {title} پێشتر دەستی پێکراوە، بۆیە وێنەکەم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاری بهێنن. | needs native review |
 | `media.photosUnplaced` | Got the photos, but I'm not sure which design they're for. Please send them again together with what you'd like designed. | وێنەکانم وەرگرت، بەڵام دڵنیا نیم بۆ کام دیزاینن. تکایە دووبارە بیاننێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
 | `media.photoUnreadable` | I couldn't open that picture. Could you send it again as a photo? | نەمتوانی ئەو وێنەیە بکەمەوە. دەتوانیت دووبارە وەک وێنە بینێریتەوە؟ | needs native review |
+| `media.svgPassedForDesign` | Thanks for the logo. I can't place this kind of file myself, so I've passed it to the office to add to {title}. | سوپاس بۆ لۆگۆکە. خۆم ناتوانم ئەم جۆرە فایلە دابنێم، بۆیە گەیاندمە ئۆفیسەکە بۆ ئەوەی بۆ {title} زیادی بکەن. | new or reworded in ADR-156; needs native review |
+| `media.svgPassed` | Thanks for the file. I can't place this kind of file myself, so I've passed it to the office; they'll follow up here. | سوپاس بۆ فایلەکە. خۆم ناتوانم ئەم جۆرە فایلە دابنێم، بۆیە گەیاندمە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | new or reworded in ADR-156; needs native review |
+| `media.svgKept` | Thanks for the file. I can't place this kind of file myself, so I've kept it for the office; they'll follow up here. | سوپاس بۆ فایلەکە. خۆم ناتوانم ئەم جۆرە فایلە دابنێم، بۆیە بۆ ئۆفیسەکەم هەڵگرت؛ لێرە وەڵامت دەدەنەوە. | new or reworded in ADR-156; needs native review |
 | `media.videoNotUsed` | Thanks! I can't put videos on a design. Could you send a photo instead? You can also just tell me what the design should say. | سوپاس! ناتوانم ڤیدیۆ لەسەر دیزاین دابنێم. دەتوانیت لە جیاتی ئەوە وێنەیەک بنێریت؟ یان تەنها پێم بڵێ دیزاینەکە چی لەسەر بنووسرێت. | needs native review |
 | `media.videoWordsUsed` | I can't put the video itself on a design, so I've used your words. Send photos if you'd like pictures on it. | ناتوانم خودی ڤیدیۆکە لەسەر دیزاین دابنێم، بۆیە وشەکانتم بەکارهێنا. ئەگەر وێنەت دەوێت لەسەری بێت، وێنە بنێرە. | needs native review |
 | `media.fileUnsupported` | I couldn't open that file. Could you send it as a photo or a PDF, or paste the text here? | نەمتوانی ئەو فایلە بکەمەوە. دەتوانیت وەک وێنە یان PDF بینێریت، یان دەقەکە لێرە بنووسیت؟ | needs native review |
@@ -72,7 +75,7 @@ the "that is the whole text" words in `apps/core/src/services/lifecycle-album.ts
 | `inbox.changeToOffice` | I've passed your change to the office; they'll make it and send the design here. There's no need to send it again. | گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە؛ ئەوان دەیکەن و دیزاینەکە لێرە بۆت دەنێرن. پێویست ناکات دووبارەی بنێریتەوە. | needs native review |
 | `inbox.answerToOffice` | I've passed your answer to the office; they'll finish this design and send it here. | وەڵامەکەتم گەیاندە ئۆفیسەکە؛ ئەوان ئەم دیزاینە تەواو دەکەن و لێرە بۆت دەنێرن. | needs native review |
 | `inbox.changeToOfficeToFinish` | I've passed your change to the office; they'll finish this design and send it here. | گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە؛ ئەوان ئەم دیزاینە تەواو دەکەن و لێرە بۆت دەنێرن. | needs native review |
-| `inbox.changeNotStarted` | I couldn't make this change by myself just now. Please let the office know, and they'll take care of it. | ئێستا نەمتوانی خۆم ئەم گۆڕانکارییە بکەم. تکایە ئۆفیسەکە ئاگادار بکەرەوە، ئەوان بۆت دەکەن. | needs native review |
+| `inbox.changeNotStarted` | I couldn't make this change by myself just now, so I've kept it for the office; they'll follow up here. There's no need to send it again. | ئێستا نەمتوانی خۆم ئەم گۆڕانکارییە بکەم، بۆیە بۆ ئۆفیسەکەم هەڵگرت؛ لێرە وەڵامت دەدەنەوە. پێویست ناکات دووبارەی بنێریتەوە. | new or reworded in ADR-156; needs native review |
 | `inbox.buttonPopup` | The office has this design now. Just tell me here if anything should change. | ئەم دیزاینە ئێستا لای ئۆفیسەکەیە. ئەگەر شتێک پێویستی بە گۆڕین هەیە، لێرە پێم بڵێ. | needs native review |
 | `inbox.couldNotRead` | Sorry, I couldn't read that message just now. I've passed it to the office and they'll follow up here. | ببورە، ئێستا نەمتوانی ئەو پەیامە بخوێنمەوە. گەیاندمە ئۆفیسەکە و لێرە وەڵامت دەدەنەوە. | needs native review |
 
@@ -112,6 +115,7 @@ the "that is the whole text" words in `apps/core/src/services/lifecycle-album.ts
 | `routing.changePassedDelivered` | {title} was already delivered; I've passed your change to the office. | {title} پێشتر گەیەندرابوو؛ گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە. | needs native review |
 | `routing.approvalPassed` | Thanks! I've told the office you're happy with {title}. They give it a final check before it's sent. | سوپاس! بە ئۆفیسەکەم ڕاگەیاند کە تۆ ڕازیت بە {title}. پێش ناردن بۆ دواجار سەیری دەکەن. | needs native review |
 | `routing.deadlinePassed` | Noted. I've told the office about the timing for {title}. | تێبینی کرا. سەبارەت بە کاتی {title} ئۆفیسەکەم ئاگادار کردەوە. | needs native review |
+| `routing.deliveryRequestPassed` | Got it. I've passed your request about {title} to the office; they'll follow up here. | تێگەیشتم. داواکارییەکەتم سەبارەت بە {title} گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | new or reworded in ADR-156; needs native review |
 
 ## conversation
 

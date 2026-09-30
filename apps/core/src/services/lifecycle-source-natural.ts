@@ -150,12 +150,44 @@ const NO = /^(?:no|nope|nah|wrong|incorrect|not\s+(?:right|correct)|that'?s\s+(?
 
 export type SourceReply = { kind: 'yes' } | { kind: 'no' } | { kind: 'copy'; copy: string } | { kind: 'other' };
 
+/** Words of three letters or more (two in Arabic script), for comparing a correction with the words shown. */
+const wordsOf = (text: string) => new Set(text.toLowerCase().normalize('NFKC').split(/[^\p{L}\p{N}]+/u)
+  .filter((w) => w.length >= (/[؀-ۿ]/.test(w) ? 2 : 3)));
+
+/** Whether a reply repeats much of the words shown (a corrected copy of them), not other words. */
+export function repeatsShownWords(reply: string, shown: string): boolean {
+  const said = wordsOf(reply);
+  const candidate = wordsOf(shown);
+  if (!said.size || !candidate.size) return false;
+  const shared = [...said].filter((w) => candidate.has(w)).length;
+  return shared >= 2 && shared / Math.min(said.size, candidate.size) >= 0.4;
+}
+
+/** A question, not copy: it ends in a question mark, or opens as one. */
+const QUESTION = /[?؟]\s*$|^(?:what|which|how|who|where|when|why|can|could|would|will|do|does|is|are)\b[^\n]*$/i;
+
+/**
+ * ADR-156 (audit #13): a plain answer to "Which organisation is it for?": a few words ("KAAE", "it's for
+ * the engineers' union"), not a question, a change, a new brief or any other request. A longer message
+ * that happens to name an organisation is read as any message is, and the question stays open.
+ */
+export function plainClientAnswer(text: string): boolean {
+  const t = text.trim();
+  if (!t || t.startsWith('/') || isAcknowledgement(t) || t.split(/\s+/).length > 6 || QUESTION.test(t)) return false;
+  const reading = readIntentByRules(t);
+  return !['status', 'cancel', 'approval', 'deadline', 'delivery_request', 'change'].includes(reading.intent) && !reading.explicitNew;
+}
+
 /**
  * What a text message means while its sender's words wait to be confirmed: "yes" confirms them, "no"
- * asks for the corrected text, thanks, a status question, a cancel or a command are read as usual, and
- * anything else is the corrected text itself (exactly as sent).
+ * asks for the corrected text, and the corrected text itself is taken exactly as sent.
+ *
+ * ADR-156 (audit #13): only words that look like the copy are the corrected text: words that repeat
+ * much of what was shown, or copy-shaped words that are not a request, a change, a question or chat.
+ * Everything else (thanks, a status question, a cancel, a new brief, "also make the background blue",
+ * "what fonts do you have?", "hello") is read as any message is, and the words stay unconfirmed.
  */
-export function readSourceReply(text: string): SourceReply {
+export function readSourceReply(text: string, shown = ''): SourceReply {
   const t = text.trim();
   if (!t) return { kind: 'other' };
   if (YES.test(t)) return { kind: 'yes' };
@@ -163,6 +195,8 @@ export function readSourceReply(text: string): SourceReply {
   if (t.startsWith('/')) return { kind: 'other' };
   if (isAcknowledgement(t)) return { kind: 'other' };
   const reading = readIntentByRules(t);
-  if (['acknowledgement', 'status', 'cancel', 'approval', 'deadline'].includes(reading.intent)) return { kind: 'other' };
+  if (['acknowledgement', 'status', 'cancel', 'approval', 'deadline', 'delivery_request'].includes(reading.intent)) return { kind: 'other' };
+  if (shown && repeatsShownWords(t, shown)) return { kind: 'copy', copy: text };
+  if (reading.intent === 'change' || reading.intent === 'conversation' || reading.explicitNew || QUESTION.test(t)) return { kind: 'other' };
   return { kind: 'copy', copy: text };
 }
