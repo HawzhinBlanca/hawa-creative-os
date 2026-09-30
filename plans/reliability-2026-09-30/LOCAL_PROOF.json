@@ -12,7 +12,9 @@
     "FR-066",
     "FR-071",
     "FR-074",
-    "FR-079"
+    "FR-079",
+    "FR-041",
+    "FR-034"
   ],
   "checks": [
     {
@@ -59,6 +61,35 @@
     {
       "command": "tsc chaos harness",
       "status": "passed"
+    },
+    {
+      "command": "pnpm typecheck (integrated)",
+      "testRoots": 635,
+      "status": "passed"
+    },
+    {
+      "command": "photo policy, rendering, Core report/brief, retained inputs and status",
+      "files": 11,
+      "passed": 176,
+      "failed": 0
+    },
+    {
+      "command": "nginx production image, proof overwrite and release fixtures",
+      "files": 4,
+      "passed": 38,
+      "failed": 0
+    },
+    {
+      "command": "Desk build",
+      "entryChunkBudgetBytes": 512000,
+      "entryChunkApproxBytes": 491630,
+      "status": "passed"
+    },
+    {
+      "command": "blueprint validation",
+      "passed": 1458,
+      "warnings": 0,
+      "failed": 0
     }
   ],
   "retainedInitialFailures": [
@@ -106,6 +137,51 @@
       "scope": "pre-commit security scan",
       "reason": "Two explicitly synthetic fixture literals matched the quoted credential-assignment rule",
       "resolution": "Use the repository convention of constructing synthetic fixture tokens; no scanner rule relaxed and no production secret involved"
+    },
+    {
+      "scope": "Claude integration before rebuilding exported packages",
+      "failedFiles": 2,
+      "passed": 138,
+      "resolution": "Rebuilt package exports; 5 files/151 passed"
+    },
+    {
+      "scope": "new photo tests",
+      "reason": "Transfer test first called the positional API as an object and then used photoFiles instead of photos; old mocks omitted image reports or counted image_url twice",
+      "resolution": "Use the real transfer API; validate real image count and update fixture expectations. Local transfer/geometry checks pass."
+    },
+    {
+      "scope": "integrated photo test typecheck",
+      "reason": "New test inferred wide string arrays for scripts and roles",
+      "resolution": "Use contract types; all 635 roots pass"
+    },
+    {
+      "scope": "first whole-suite run before seal",
+      "failedFiles": 11,
+      "passedFiles": 617,
+      "skippedFiles": 6,
+      "failedTests": 13,
+      "passedTests": 5842,
+      "skippedTests": 79,
+      "failedSuiteHooks": 3,
+      "reason": "Migration list, new env files/proxy proof, per-image notes, missing Desk bundle, unsealed source manifest",
+      "resolution": "Fix integration fixtures without relaxing production guards; build Desk; final sealed full gate remains required"
+    },
+    {
+      "scope": "first fixture repair script",
+      "reason": "Stopped on incorrect expected synthetic chaos secret fixture shape",
+      "resolution": "Updated actual secret field-name list; continued fixture repairs"
+    },
+    {
+      "scope": "fixture repair rerun",
+      "failedTests": 3,
+      "passedTests": 97,
+      "reason": "Two standalone nginx -t runs lacked the proof mount; bind-path expectation omitted the generated shared file",
+      "resolution": "Mount the synthetic proof for standalone validation and include the new bind; 38 related nginx/release tests pass"
+    },
+    {
+      "scope": "evidence writer",
+      "reason": "Used incorrect existing JSON property name; source checkpoint dc87893f contains implementation before updated proof",
+      "resolution": "Append to retainedInitialFailures; evidence recorded in this follow-up commit"
     }
   ],
   "unexecuted": [
@@ -117,5 +193,19 @@
   ],
   "noProductionCredentialChanges": true,
   "deployment": "not started",
-  "rollbackCompatibility": "Existing worker-used static operator value adopted as the restricted design principal; static aliases retired by the same pre-key verification. Previous Core still recognizes the value during rollback."
+  "rollbackCompatibility": "Existing worker-used static operator value adopted as the restricted design principal; static aliases retired by the same pre-key verification. Previous Core still recognizes the value during rollback.",
+  "claudeIntegration": {
+    "branch": "claude/art-direction",
+    "commit": "fc5739a1d04e8c71bfd0dd8894638e93c1689ffb",
+    "mergeCommit": "d2c0bb61",
+    "focusedPassed": 151
+  },
+  "photoSourceCommit": "dc87893f",
+  "photoProof": {
+    "scope": "synthetic local preview and native PPTX structure only",
+    "path": "output/release-gate/required-photo",
+    "apiCalls": 0,
+    "nativeCanvaInspection": "not performed",
+    "humanCreativeEvaluation": "not performed"
+  }
 }
