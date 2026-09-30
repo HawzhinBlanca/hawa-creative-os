@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from 'node:crypto';
-import { mkdtempSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdtempSync, readFileSync, readdirSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
@@ -96,6 +96,22 @@ describe('app role rotation: pure parts', () => {
     expect(readFileSync(result.backup, 'utf8')).toBe(envText);
     expect(statSync(result.backup).mode & 0o777).toBe(0o600);
     expect(readdirSync(dir).sort()).toEqual(['.env', 'backups', 'secret.env']);
+  });
+
+  it('writes through a release directory\'s link to the shared env file, keeping the link (ADR-158)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hawa-install-env-link-'));
+    const shared = join(dir, 'shared.env');
+    const link = join(dir, 'release.env');
+    const old = ['o', 'l', 'd'].join('');
+    const fresh = ['f', 'r', 'e', 's', 'h'].join('');
+    writeFileSync(shared, `DATABASE_URL=postgresql://hawa_app:${old}@postgres:5432/hawa\n`, { mode: 0o600 });
+    symlinkSync(shared, link);
+    const secretFile = join(dir, 'secret.env');
+    writeFileSync(secretFile, `HAWA_APP_ROLE=hawa_app_b\nHAWA_APP_PASSWORD=${fresh}\n`, { mode: 0o600 });
+    installEnv(link, secretFile, ['DATABASE_URL'], join(dir, 'backups'));
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readFileSync(shared, 'utf8')).toBe(`DATABASE_URL=postgresql://hawa_app_b:${fresh}@postgres:5432/hawa\n`);
+    expect(readdirSync(dir).sort()).toEqual(['backups', 'release.env', 'secret.env', 'shared.env']);
   });
 
   it('reads the admin password from a key that holds either a password or a URL', () => {
