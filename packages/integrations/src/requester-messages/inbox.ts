@@ -57,10 +57,13 @@ export const INBOX_MESSAGES = {
     en: "I've passed your change to the office; they'll finish this design and send it here.",
     ckb: 'گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە؛ ئەوان ئەم دیزاینە تەواو دەکەن و لێرە بۆت دەنێرن.',
   },
-  /** A change or an answer the bot could not start by itself, with no office chat to pass it to. */
+  /**
+   * A change or an answer the bot could not start by itself, with no office chat to pass it to. The
+   * requester is never asked to contact the office themselves (ADR-156): the update's refusal is kept.
+   */
   changeNotStarted: {
-    en: "I couldn't make this change by myself just now. Please let the office know, and they'll take care of it.",
-    ckb: 'ئێستا نەمتوانی خۆم ئەم گۆڕانکارییە بکەم. تکایە ئۆفیسەکە ئاگادار بکەرەوە، ئەوان بۆت دەکەن.',
+    en: "I couldn't make this change by myself just now, so I've kept it for the office; they'll follow up here. There's no need to send it again.",
+    ckb: 'ئێستا نەمتوانی خۆم ئەم گۆڕانکارییە بکەم، بۆیە بۆ ئۆفیسەکەم هەڵگرت؛ لێرە وەڵامت دەدەنەوە. پێویست ناکات دووبارەی بنێریتەوە.',
   },
   /** The pop-up under a button of an old draft (at most 200 characters). */
   buttonPopup: {

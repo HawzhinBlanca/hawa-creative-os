@@ -260,6 +260,12 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
     if (command && /^(task|brief|design|campaign)$/.test(command)) {
       return { status: 422, extra: { code: 'NEW_BRIEF_REQUIRED', lifecycleAction: 'new-brief-required', chatId } };
     }
+    // ADR-156 (audit P3): a sticker, or a message with no words at all, is not a greeting. Nothing is
+    // said; the update is recorded so that a repeat says nothing again.
+    if (!text) {
+      await record(chatId, updateId, 'no_words', 200, null);
+      return { status: 200, extra: { status: 'NO_WORDS', ...(msg.sticker ? { sticker: true } : {}) } };
+    }
     // Group conversation is kept as a passive message, not answered (FR-005).
     if (groupChat && !command) {
       await record(chatId, updateId, 'message_only', 200, null);
