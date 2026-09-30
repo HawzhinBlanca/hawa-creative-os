@@ -31,6 +31,11 @@ export interface CoreClientOptions {
 }
 
 /** Codes Core's intake route gives when it cannot take any update now; the update waits. */
+/**
+ * The longest settle Core may ask for (ADR-143). ADR-148's wait for the rest of a cut caption is one
+ * such settle; a Core test ties CUT_CAPTION_WAIT_MS to this, so neither changes alone.
+ */
+export const MAX_SETTLE_DELAY_MS = 10 * 60_000;
 const WAIT_CODES = new Set(['DATABASE_UNAVAILABLE', 'INTAKE_PAUSED', 'NOT_CONFIGURED']);
 const retryable = (status: number) => status >= 500 || status === 429 || status === 408;
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -113,7 +118,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
           if (body.lifecycleAction === 'settle-later') {
             const settle = body.settle as { kind?: unknown; delayMs?: unknown } | undefined;
             if (!body.chatId || !settle || (settle.kind !== 'album' && settle.kind !== 'brief' && settle.kind !== 'photo') ||
-                !Number.isSafeInteger(settle.delayMs) || Number(settle.delayMs) < 0 || Number(settle.delayMs) > 10 * 60_000)
+                !Number.isSafeInteger(settle.delayMs) || Number(settle.delayMs) < 0 || Number(settle.delayMs) > MAX_SETTLE_DELAY_MS)
               throw new Error(`Core returned an invalid settle for update ${update.update_id}`);
             return { ...base, lifecycleAction: 'settle-later', chatId: body.chatId,
               settle: { kind: settle.kind, delayMs: Number(settle.delayMs) } };

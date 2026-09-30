@@ -16,12 +16,14 @@ import { isCopyIntroducer } from '../services/chat-campaign-intake.js';
 
 /**
  * The title shown where a task has no English headline (a lifecycle draft carries none), unless the
- * title quotes the line that introduced the copy: before 2026-09-29 a chat request could be titled
- * "KAAE: Here is the text and the photos:…", and that line is an instruction, never a headline.
+ * title quotes the line that introduced the copy, with a client prefix or without: before 2026-09-29 a
+ * chat request could be titled "KAAE: Here is the text and the photos:…" or "Here is the text and the
+ * photos:…", and that line is an instruction, never a headline. Then nothing is shown.
  */
 export function titleAsHeadline(title: string): string | undefined {
-  const quoted = String(title || '').replace(/^[^:\n]{1,80}:\s*/u, '').replace(/…$/u, '').trim();
-  return quoted && isCopyIntroducer(quoted) ? undefined : title;
+  const whole = String(title || '').replace(/…$/u, '').trim();
+  const quoted = whole.replace(/^[^:\n]{1,80}:\s*/u, '').trim();
+  return [whole, quoted].some((line) => line && isCopyIntroducer(line)) ? undefined : title;
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

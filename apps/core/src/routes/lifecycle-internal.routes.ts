@@ -32,7 +32,7 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { heldPhotoCandidate, lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
-import { createMediaRoute, wordsOf } from '../services/lifecycle-media-route.js';
+import { createMediaRoute, groupMediaNotAddressed, unusableMedia, wordsOf } from '../services/lifecycle-media-route.js';
 import { deferMessage, pendingHeldBrief, readDeferral, releaseDeferral, overdueDeferrals, overduePhotos,
   claimPhoto, pendingEditWords, readMediaAnswer, waitingPhotos } from '../services/lifecycle-media-intake.js';
 import { createEditIntake } from '../services/lifecycle-edit-intake.js';
@@ -40,7 +40,7 @@ import { INBOX_MESSAGES, MEDIA_MESSAGES, requesterLang, say } from '@hawa/integr
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
   albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
-  settleHeldBrief } from '../services/lifecycle-album.js';
+  settleHeldBrief, cutAlbumWaits } from '../services/lifecycle-album.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log } from '../logging.js';
@@ -345,7 +345,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // A kept photo's settle (ADR-145) is decided below; any other settle of a non-album, non-text
     // update has nothing to do.
     if (settle && !albumPart && !textMessage && !heldPhotoCandidate(preparedUpdate)) return handled(200, { settle: 'skipped' });
-    if (albumPart || repliedConfirmation || (textMessage && (db || settle))) {
+    // ADR-148: a photo with words may be the rest of a caption Telegram cut (bound below if a cut album waits).
+    const restPhoto = !albumPart && !settle && Boolean(db) && lifecyclePhotoInput(preparedUpdate)?.captionless === false;
+    if (albumPart || repliedConfirmation || (textMessage && (db || settle)) || restPhoto) {
       if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
       const tx = <T>(fn: (trx: import('@hawa/db').Kysely<import('@hawa/db').Database>) => Promise<T>) =>
         withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
@@ -374,6 +376,14 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         await chaosPoint(point, { updateId: source.update_id, chat: chatId });
         return null;
       };
+      const albumDeps = (trx: import('@hawa/db').Kysely<import('@hawa/db').Database>) => ({
+        linkedReply: async (chat: string, replyId: string) => (await linkedLifecycleReplies(trx, DEFAULT_TENANT_ID, chat, replyId)).length > 0 ||
+          (await lateChangeTargets(trx, DEFAULT_TENANT_ID, chat, replyId)).length > 0,
+        decided: async (chat: string, updateId: number) => Boolean(await readNewBriefDecision(trx, DEFAULT_TENANT_ID, updateId) ||
+          await readRoutingRefusal(trx, DEFAULT_TENANT_ID, updateId) ||
+          await readRevisionPhotoDecision(trx, DEFAULT_TENANT_ID, updateId)) ||
+          (await revisionIntakeReceipts(trx, DEFAULT_TENANT_ID, chat, updateId)).length > 0,
+      });
       try {
         if (albumPart && settle) {
           if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
@@ -392,15 +402,23 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             if (heldReplay === 'held') return settleLater('brief', briefPhotoWaitMs());
             if (heldReplay === 'consumed') return handled(200, { duplicate: true, settle: 'skipped' });
           } else if (senderAllowed) {
-            const bound = await admit(await tx((trx) => bindTextToAlbum(trx, DEFAULT_TENANT_ID, source, {
-              linkedReply: async (chat, replyId) => (await linkedLifecycleReplies(trx, DEFAULT_TENANT_ID, chat, replyId)).length > 0 ||
-                (await lateChangeTargets(trx, DEFAULT_TENANT_ID, chat, replyId)).length > 0,
-              decided: async (chat, updateId) => Boolean(await readNewBriefDecision(trx, DEFAULT_TENANT_ID, updateId) ||
-                await readRoutingRefusal(trx, DEFAULT_TENANT_ID, updateId) ||
-                await readRevisionPhotoDecision(trx, DEFAULT_TENANT_ID, updateId)) ||
-                (await revisionIntakeReceipts(trx, DEFAULT_TENANT_ID, chat, updateId)).length > 0,
-            })), 'core.intake.after-album-confirmation');
+            const bound = await admit(await tx((trx) => bindTextToAlbum(trx, DEFAULT_TENANT_ID, source, albumDeps(trx))),
+              'core.intake.after-album-confirmation');
             if (bound) return bound;
+          }
+        } else if (restPhoto) {
+          // ADR-148: the rest sent as a photo with words: its words join the cut caption, its picture the album.
+          if (senderAllowed && await tx((trx) => cutAlbumWaits(trx, DEFAULT_TENANT_ID, source))) {
+            const photo = lifecyclePhotoInput(source)!;
+            const kept = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
+              (id) => ctx.telegramBridge?.downloadFile(id) ?? Promise.resolve(null), photo.fileId);
+            if (kept.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
+            if (kept.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
+            if (kept.kind === 'stored') {
+              const bound = await admit(await tx((trx) => bindTextToAlbum(trx, DEFAULT_TENANT_ID, source, albumDeps(trx),
+                { words: photo.directive, image: kept.ref })), 'core.intake.after-album-confirmation');
+              if (bound) return bound;
+            }
           }
         } else if (albumPart) {
           const priorPart = await tx((trx) => readAlbumPart(trx, DEFAULT_TENANT_ID, source));
@@ -573,6 +591,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
     }
 
+    // ADR-144 §2.7 (ADR-148): in a group, a member's media is read only when addressed to the bot; it is
+    // kept as a passive message, as group conversation is (lifecycle-chat-answers.ts, a group PDF).
+    if (!settle && groupMediaNotAddressed(update)) return handled(200, { status: 'MESSAGE_ONLY' });
     const sourceAnswer = await sourceIntake(update);
     if (sourceAnswer) return handled(sourceAnswer.status, sourceAnswer.extra);
 
@@ -589,8 +610,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         if (held) return handled(held.status, held.extra);
       }
       if (!settle) {
+        // A stranger's video is refused before anything of it is recorded (audit S5).
+        if (unusableMedia(update.message as Record<string, unknown>) && !senderAllowedFor(update)) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
         const unusable = await mediaRoute.unusable(update, chatOf(update), hash);
-        if (unusable && !senderAllowedFor(update)) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
         if (unusable && 'answer' in unusable) return handled(unusable.answer.status, unusable.answer.extra);
         if (unusable) beside = unusable.notice;
       }
