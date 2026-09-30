@@ -140,7 +140,8 @@ export function calculateCallCost(
   cacheDiscountUsd: number;
   netCostUsd: number;
 } {
-  const defaultPricing = {
+  const defaultPricing: Record<string, { inputPerMillion: number; outputPerMillion: number; cacheReadPerMillion: number }> = {
+    'gpt-6.1-sol': { inputPerMillion: 2, outputPerMillion: 10, cacheReadPerMillion: 0.1 },
     'gpt-6-astra': {
       inputPerMillion: 10.0,
       outputPerMillion: 50.0,
@@ -148,21 +149,24 @@ export function calculateCallCost(
     },
   };
 
-  const rates = pricingTable?.models?.[model] || defaultPricing['gpt-6-astra'];
+  const family = model.replace(/-\d{4}-\d{2}-\d{2}$/, '');
+  const rates = pricingTable?.models?.[model] || pricingTable?.models?.[family] || defaultPricing[family] || defaultPricing['gpt-6-astra']!;
 
   const inTok = usage.inputTokens || 0;
   const cachedTok = usage.cachedTokens || 0;
   const outTok = usage.outputTokens || 0;
   const regularInTok = Math.max(0, inTok - cachedTok);
+  const longContext = family === 'gpt-6.1-sol' && inTok > 272000;
+  const inputMultiplier = longContext ? 2 : 1, outputMultiplier = longContext ? 1.5 : 1;
 
   // Gross cost without caching
-  const grossInCost = (inTok / 1_000_000) * rates.inputPerMillion;
-  const outCost = (outTok / 1_000_000) * rates.outputPerMillion;
+  const grossInCost = (inTok / 1_000_000) * rates.inputPerMillion * inputMultiplier;
+  const outCost = (outTok / 1_000_000) * rates.outputPerMillion * outputMultiplier;
   const grossCostUsd = Number((grossInCost + outCost).toFixed(6));
 
   // Net cost with cached read discount
-  const regularInCost = (regularInTok / 1_000_000) * rates.inputPerMillion;
-  const cachedInCost = (cachedTok / 1_000_000) * rates.cacheReadPerMillion;
+  const regularInCost = (regularInTok / 1_000_000) * rates.inputPerMillion * inputMultiplier;
+  const cachedInCost = (cachedTok / 1_000_000) * rates.cacheReadPerMillion * inputMultiplier;
   const netCostUsd = Number((regularInCost + cachedInCost + outCost).toFixed(6));
 
   const cacheDiscountUsd = Number((grossCostUsd - netCostUsd).toFixed(6));

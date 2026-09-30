@@ -1,5 +1,5 @@
 import { escapeTelegramHtml } from '@hawa/integrations';
-import { resolveModel } from '@hawa/domain';
+import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
 import { isStandingRule } from './standing-rules-chat.js';
 import { PICTURE_ONLY_DIRECTIVE } from './chat-intake.js';
 import { log } from '../logging.js';
@@ -547,7 +547,7 @@ Also fill:
             content: userContent,
           },
         ],
-        ...(model === 'gpt-6-astra' ? { reasoning_effort: 'low' } : {}),
+        ...(modelSupportsReasoningEffort(model) ? { reasoning_effort: 'low' } : {}),
         response_format: {
           type: 'json_schema',
           json_schema: {

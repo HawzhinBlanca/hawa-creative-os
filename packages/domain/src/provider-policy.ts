@@ -74,6 +74,8 @@ export const DEV_MODELS = {
 
 export const DEV_ALLOWED_MODELS = [
   ...ALLOWED_MODELS,
+  // ADR-148: candidate only; production promotion requires measured admission.
+  'gpt-6.1-sol',
   'gpt-4.1-mini',
   'gpt-4o-mini',
   'o4-mini',
@@ -211,8 +213,8 @@ export function assertImageModelAllowed(provider: string, model: string): void {
   if (!allowed || !allowed.includes(model)) throw new DisallowedProviderError(`${provider}/${model}`);
 }
 
-/** Models that reject `reasoning_effort`; sending it to them is a 400. */
-const REASONING_EFFORT_MODELS = new Set(['gpt-6-astra', 'o4-mini']);
+/** Models that accept `reasoning_effort`; other models reject that parameter. */
+const REASONING_EFFORT_MODELS = new Set(['gpt-6-astra', 'gpt-6.1-sol', 'o4-mini']);
 
 export function modelSupportsReasoningEffort(model: string): boolean {
   const normalized = (model || '').trim().toLowerCase();
@@ -236,7 +238,7 @@ export class DisallowedProviderError extends Error {
   readonly code = 'DISALLOWED_PROVIDER_ERROR';
 
   constructor(modelOrProvider: string) {
-    super(`Model or provider '${modelOrProvider}' is rejected by strict OpenAI-only policy (ADR-030). Only gpt-6-astra and gpt-image-2.5-sunburst are permitted.`);
+    super(`Model or provider '${modelOrProvider}' is rejected by strict OpenAI-only policy (ADR-030). The model must be explicitly allowlisted for the active tier.`);
     this.name = 'DisallowedProviderError';
   }
 }

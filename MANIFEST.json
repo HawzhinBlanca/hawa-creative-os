@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T22:03:49Z",
+  "generatedAt": "2026-09-30T08:32:33Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 550,
+  "fileCount": 564,
   "files": [
     {
       "path": ".dockerignore",
@@ -808,6 +808,11 @@
       "bytes": 9089
     },
     {
+      "path": "adrs/148_sol61_candidate_and_jev_capability_review.md",
+      "sha256": "0ed3ae030bd845ad905562eb5bd2932564311a0f453e9893a583ebd0f82a14dd",
+      "bytes": 4229
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1498,6 +1503,66 @@
       "bytes": 8447
     },
     {
+      "path": "plans/model-migration-2026-09-30/ACCESS.json",
+      "sha256": "f45f5262c135051adf5bff4936545fc02e94631cc56c026ff19a136f654b7cdc",
+      "bytes": 384
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/CANDIDATE.json",
+      "sha256": "5fad2761cf34cdc99cf54b18979e5f09cf76b400789df87e26841259a6159bdc",
+      "bytes": 1406
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/PRODUCTION.json",
+      "sha256": "9fc106d8a1bff70f6b559c29a4d7d6d919e625dcde91aefcdf7f6ed8cb433d4c",
+      "bytes": 291
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/README.md",
+      "sha256": "f108c37210885c676bcc30cf532115107c50426780a126d72f6afc6ba4fbe020",
+      "bytes": 2654
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/VERIFICATION.json",
+      "sha256": "a05732fe8c82d1cd2c3c1c611b98316d57e523de0d4e7c1f1cadfec6c6feea04",
+      "bytes": 1603
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/lint.log",
+      "sha256": "cd10cac775845476ff749df2dbb8c40a5cc31a2ad3c58acfc430a71e3a11a3f6",
+      "bytes": 401
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/test-types.log",
+      "sha256": "50720a698e7d13b1d022d305cf9ce9ec6b96edc10427b36816b75d03b1f19b0a",
+      "bytes": 155
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/tests-candidate-final.log",
+      "sha256": "30a5f9b8bf5d5bd7fe7075ec47ae356f3fc0139d5e5cd5f3dcb14d69e4bbc89d",
+      "bytes": 322
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/tests-focused.log",
+      "sha256": "de1698a55befd1da3796e894ad1f3de32ef9ab9abd3791f41f1fa907fccf84c7",
+      "bytes": 325
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/tests-initial.log",
+      "sha256": "64de3d2ab7c7bcd04c642d1451c66a2e52215d3735937fdde1a659ccbb1143ac",
+      "bytes": 2729
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/tests-intake-final.log",
+      "sha256": "45fc51b839356ed720f81114c49a545601985cfd0e83424b30163425e5d2a81a",
+      "bytes": 325
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/tests-regression.log",
+      "sha256": "fe9c876ef1619d1d5e9da64ecc0f23f8521ddee2f64efd77438487fd2f0141f2",
+      "bytes": 2011
+    },
+    {
       "path": "plans/mvp-checklist.md",
       "sha256": "e9467a48c4c24d16cc78a2cb3695444df5eba32c8422143c9f6a0807e3379613",
       "bytes": 2120
@@ -1929,8 +1994,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "632b05a7c6a60a1420c9544b5baa41e27de52b0b2d536e4c4bbdbd6295dddb7a",
-      "bytes": 505480
+      "sha256": "4dc73cc582ae26d6f39625f28eeaafaf7fb9c21b60f4a66d3714a1fda018a906",
+      "bytes": 508044
     },
     {
       "path": "plans/user-stories.csv",
@@ -2261,6 +2326,11 @@
       "path": "scripts/experiments/prompt-cache-probe.ts",
       "sha256": "79578a670a1853cffd4ebdf717f3cda131daaac52a273a034a730066d32fd8f0",
       "bytes": 3239
+    },
+    {
+      "path": "scripts/experiments/sol61-access.ts",
+      "sha256": "ae132d3126cc6de33e00f3b5765114c73a34ef230051744c112f2d2f844db899",
+      "bytes": 2363
     },
     {
       "path": "scripts/export_live_f04_proof.ts",

@@ -59,6 +59,13 @@
         "4K": 0.24
       },
       "note": "ai.google.dev/gemini-api/docs/pricing, read 2026-09-18"
+    },
+    "gpt-6.1-sol": {
+      "inputPerMillion": 2,
+      "outputPerMillion": 10,
+      "cacheReadPerMillion": 0.1,
+      "cacheWritePerMillion": 2.5,
+      "note": "ADR-148 candidate only; official model card verified 2026-09-30. Full-request long-context multipliers applied by the client."
     }
   },
   "devTierPricesUnverified": true

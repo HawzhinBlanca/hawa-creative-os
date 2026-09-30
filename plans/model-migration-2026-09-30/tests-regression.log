@@ -1,0 +1,18 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_b89eb39aa0b6ef02 and hawa_tpl_repair_b89eb39aa0b6ef02 (35 ms)
+{"level":"warn","time":"2026-09-30T08:25:46.380Z","service":"core","msg":"[studio] run 97886d52-a425-477d-b7b5-c9f5f5166b41: the conceiving resume did not read 1 saved result(s): 396ef494-21d8-4f82-9294-8307dbfe379d (brief/images-rebrief attempt 1)."}
+{"level":"warn","time":"2026-09-30T08:25:46.574Z","service":"core","msg":"[studio] run 7ea1b9c8-e62d-45f8-8ad5-a44eb5826d9f: the briefing resume did not read 1 saved result(s): dccc4770-778e-4256-b5a1-9adeea2445b3 (brief/request attempt 1)."}
+{"level":"warn","time":"2026-09-30T08:25:46.593Z","service":"core","msg":"[studio] run 9e6a65a4-6538-4a10-acf2-dc608900641d: the conceiving resume did not read 2 saved result(s): f2b0b826-00f9-44a5-b1b9-33175cfc11ef (brief/images-rebrief attempt 1), 48be4a5e-3035-4de1-bdd4-264610b493a1 (concepts/board attempt 1)."}
+{"level":"warn","time":"2026-09-30T08:25:47.531Z","service":"core","msg":"[telegram-classifier] model classification failed; keyword rules decide: The operation timed out."}
+{"level":"warn","time":"2026-09-30T08:25:47.532Z","service":"core","msg":"[telegram-classifier] model classification failed; keyword rules decide: The operation timed out."}
+{"level":"warn","time":"2026-09-30T08:25:47.532Z","service":"core","msg":"[telegram-classifier] model classification failed; keyword rules decide: The operation timed out."}
+{"level":"warn","time":"2026-09-30T08:25:47.532Z","service":"core","msg":"[telegram-classifier] model classification failed; keyword rules decide: The operation timed out."}
+{"level":"warn","time":"2026-09-30T08:25:47.533Z","service":"core","msg":"[telegram-classifier] model classification failed; keyword rules decide: The operation timed out."}
+
+ Test Files  7 passed (7)
+      Tests  177 passed (177)
+   Start at  11:25:44
+   Duration  13.80s (transform 3.82s, setup 1.10s, import 5.96s, tests 18.73s, environment 0ms)
+

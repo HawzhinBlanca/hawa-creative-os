@@ -31,8 +31,15 @@ function quote(body: string, inputTokens: number, outputTokens: number, inputRat
 // Worst standard-tier input (including cache writing) and output rates.
 // The conservative input bound chooses the context tier; cache discounts never enlarge admission.
 const TEXT_RATES: Record<string, [number, number]> = {
-  'gpt-6-astra': [45, 75], 'gpt-4.1-mini': [0.4, 1.6], 'gpt-4o-mini': [0.15, 0.6], 'o4-mini': [1.1, 4.4],
+  'gpt-6.1-sol': [9, 15], 'gpt-6-astra': [45, 75], 'gpt-4.1-mini': [0.4, 1.6], 'gpt-4o-mini': [0.15, 0.6], 'o4-mini': [1.1, 4.4],
 };
+// Sol's policy is separate: changing old policy IDs would invalidate retained replay bindings.
+const SOL_POLICY = 'studio-sol61-2026-09-30-v1';
+function textRates(model: string, input: number): [number, number] {
+  if (model === 'gpt-6.1-sol' && input <= 272000) return [4.5, 10];
+  if (model === 'gpt-6-astra' && input <= 272000) return [22.5, 50];
+  return TEXT_RATES[model]!;
+}
 function family(model: string): string {
   return Object.keys(TEXT_RATES).find(m => model === m ||
     (model.startsWith(m + '-') && /^\d{4}-\d{2}-\d{2}$/.test(model.slice(m.length + 1))))
@@ -56,7 +63,7 @@ export function studioTextUsage(requested: string, served: string | null, raw: u
   if (!count(input) || !count(output) || !count(usage.total_tokens) || usage.total_tokens !== input + output) return null;
   try {
     const model = family(served);
-    const [inputRate, outputRate] = model === 'gpt-6-astra' && input <= 272000 ? [22.5, 50] : TEXT_RATES[model]!;
+    const [inputRate, outputRate] = textRates(model, input);
     return { inputTokens: input, outputTokens: output,
       estimatedCostUsd: studioUsdMicros((input * inputRate + output * outputRate) / 1_000_000) / 1_000_000,
       modelMatches: studioTextModelMatches(requested,served) };
@@ -64,6 +71,7 @@ export function studioTextUsage(requested: string, served: string | null, raw: u
 }
 
 function visionTokens(model: string, image: Record<string, unknown>): number {
+  if (model === 'gpt-6.1-sol') refuse('Sol 6.1 image token bounds are not qualified (ADR-148).');
   const detail = image.detail ?? 'auto';
   if (!['auto', 'low', 'high', 'original'].includes(String(detail))) refuse('Unpriced image detail.');
   const dims = dataUriPixelSize(str(image.url));
@@ -102,7 +110,7 @@ export function reserveStudioText(body: string): StudioCallReservation {
   const messages = p.messages;
   if (!Array.isArray(messages) || messages.length > 200) return refuse('Invalid message count.');
   const outputTokens = positiveInt(p.max_completion_tokens);
-  if (outputTokens > 131072) refuse('Output limit exceeds the qualified reservation range.');
+  if (outputTokens > (model === 'gpt-6.1-sol' ? 128000 : 131072)) refuse('Output limit exceeds the qualified reservation range.');
   let inputTokens = 1024 + 128 * messages.length + SCHEMA_TOKENS_PER_BYTE * bytes(JSON.stringify(p.response_format));
   for (const value of messages) {
     const message = record(value);
@@ -117,9 +125,10 @@ export function reserveStudioText(body: string): StudioCallReservation {
     }
     else refuse('Invalid message content.');
   }
-  const [inputRate, outputRate] = model === 'gpt-6-astra' && inputTokens <= 272000
-    ? [22.5, 50] : TEXT_RATES[model]!;
-  return quote(body, inputTokens, outputTokens, inputRate, outputRate);
+  if (model === 'gpt-6.1-sol' && inputTokens + outputTokens > 1050000) refuse('Sol 6.1 context bound exceeded.');
+  const [inputRate, outputRate] = textRates(model, inputTokens);
+  const reservation = quote(body, inputTokens, outputTokens, inputRate, outputRate);
+  return model === 'gpt-6.1-sol' ? { ...reservation, policy: SOL_POLICY } : reservation;
 }
 
 export function reserveStudioImage(provider: string, body: string): StudioCallReservation {

@@ -68,6 +68,7 @@ export class CostGovernor {
   private reservations = new Map<string, BudgetReservation>();
 
   public readonly pricingRates: Record<string, { inputPer1M: number; outputPer1M: number; cacheReadPer1M?: number; cacheWritePer1M?: number; gpuPerSec?: number; imagePer1M?: number }> = {
+    'openai:gpt-6.1-sol': { inputPer1M: 2, outputPer1M: 10, cacheReadPer1M: 0.1, cacheWritePer1M: 2.5 },
     'openai:gpt-6-astra': { inputPer1M: 10.0, outputPer1M: 50.0, cacheReadPer1M: 1.0, cacheWritePer1M: 12.5 },
     'openai:gpt-image-2.5-sunburst': { inputPer1M: 0.0, outputPer1M: 0.0, imagePer1M: 30.0, gpuPerSec: 0.04 },
     'openai:gpt-4o': { inputPer1M: 2.5, outputPer1M: 10.0 },
@@ -262,13 +263,15 @@ export class CostGovernor {
     gpuSeconds = 0
   ): number {
     const key = `${provider}:${model}`.toLowerCase();
-    const rates = this.pricingRates[key] || { inputPer1M: 0.5, outputPer1M: 1.5, gpuPerSec: 0.0003 };
+    const solFamilyKey = /^gpt-6\.1-sol(?:-\d{4}-\d{2}-\d{2})?$/.test(model) ? `${provider}:gpt-6.1-sol` : key;
+    const rates = this.pricingRates[key] || this.pricingRates[solFamilyKey] || { inputPer1M: 0.5, outputPer1M: 1.5, gpuPerSec: 0.0003 };
 
     const safeInput = Math.max(0, Number(tokens?.input) || 0);
     const safeOutput = Math.max(0, Number(tokens?.output) || 0);
     const safeGpu = Math.max(0, Number(gpuSeconds) || 0);
 
-    const tokenCost = (safeInput * rates.inputPer1M + safeOutput * rates.outputPer1M) / 1_000_000;
+    const longContext = /^gpt-6\.1-sol(?:-\d{4}-\d{2}-\d{2})?$/.test(model) && safeInput > 272000;
+    const tokenCost = (safeInput * rates.inputPer1M * (longContext ? 2 : 1) + safeOutput * rates.outputPer1M * (longContext ? 1.5 : 1)) / 1_000_000;
     const gpuCost = safeGpu * (rates.gpuPerSec || 0.0003);
 
     return Number((tokenCost + gpuCost).toFixed(6));

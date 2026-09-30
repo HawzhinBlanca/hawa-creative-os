@@ -373,6 +373,7 @@ export class OpenAiStudioClient {
     return {
       currency: 'USD',
       models: {
+        'gpt-6.1-sol': { inputPerMillion: 2, outputPerMillion: 10, cacheReadPerMillion: 0.1, cacheWritePerMillion: 2.5 },
         'gpt-6-astra': { inputPerMillion: 10.0, outputPerMillion: 50.0, cacheReadPerMillion: 1.0, cacheWritePerMillion: 12.5 },
         'gpt-image-2.5-sunburst': { outputPerMillionImageTokens: 30.0, image1k: 0.04, image2k: 0.08, image4k: 0.16 },
         'gpt-4.1-mini': { inputPerMillion: 0.4, outputPerMillion: 1.6, cacheReadPerMillion: 0.1 },
@@ -412,8 +413,8 @@ export class OpenAiStudioClient {
     const cacheWriteTokens = usage.cache_creation_input_tokens ?? 0;
     const regularInputTokens = Math.max(0, inTok - cacheReadTokens);
 
-    // Astra prices the entire request at long-context rates above 272K input tokens.
-    const longContext = /^gpt-6-astra(?:-\d{4}-\d{2}-\d{2})?$/.test(model) && inTok > 272000;
+    // Astra and Sol 6.1 price the entire request at long-context rates above 272K input tokens.
+    const longContext = /^(?:gpt-6-astra|gpt-6\.1-sol)(?:-\d{4}-\d{2}-\d{2})?$/.test(model) && inTok > 272000;
     const inputMultiplier = longContext ? 2 : 1, outputMultiplier = longContext ? 1.5 : 1;
     const inCost = (regularInputTokens / 1_000_000) * rates.inputPerMillion * inputMultiplier;
     const outCost = (outTok / 1_000_000) * rates.outputPerMillion * outputMultiplier;
@@ -465,11 +466,11 @@ export class OpenAiStudioClient {
     // critique and judge run on gpt-4.1-mini — so the client decides, once, for all of them.
     if (options.reasoningEffort && modelSupportsReasoningEffort(model)) {
       payload.reasoning_effort = options.reasoningEffort;
-    } else if (model === 'gpt-6-astra') {
+    } else if (/^(?:gpt-6-astra|gpt-6\.1-sol)(?:-\d{4}-\d{2}-\d{2})?$/.test(model)) {
       payload.reasoning_effort = 'low';
     }
 
-    if (options.temperature !== undefined && model !== 'gpt-6-astra') {
+    if (options.temperature !== undefined && !modelSupportsReasoningEffort(model)) {
       payload.temperature = options.temperature;
     }
 

@@ -1,0 +1,46 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_b89eb39aa0b6ef02 and hawa_tpl_repair_b89eb39aa0b6ef02 (37 ms)
+ ❯ packages/creative/test/sol61-candidate.test.ts (4 tests | 2 failed) 11ms
+     × preserves explicit low reasoning, omits unsupported temperature and sends admitted bytes 3ms
+     × refuses unqualified image accounting and model limits before paid dispatch 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/creative/test/sol61-candidate.test.ts > ADR-148 Sol 6.1 candidate transport and budget > preserves explicit low reasoning, omits unsupported temperature and sends admitted bytes
+DisallowedProviderError: Model or provider 'gpt-6.1-sol' is rejected by strict OpenAI-only policy (ADR-030). Only gpt-6-astra and gpt-image-2.5-sunburst are permitted.
+ ❯ assertModelAllowed packages/domain/src/provider-policy.ts:274:11
+    272|   // The allowlist widens only on the dev tier, and never to another p…
+    273|   // DEV_ALLOWED_MODELS is an OpenAI model, so ADR-030's OpenAI-only r…
+    274|   const permitted: readonly string[] = isDevModelTier() ? DEV_ALLOWED_…
+       |           ^
+    275|   if (!permitted.includes(model)) {
+    276|     throw new DisallowedProviderError(model);
+ ❯ OpenAiStudioClient.createStructuredCompletion packages/creative/src/studio/openai-studio-client.ts:438:5
+ ❯ packages/creative/test/sol61-candidate.test.ts:24:33
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  packages/creative/test/sol61-candidate.test.ts > ADR-148 Sol 6.1 candidate transport and budget > refuses unqualified image accounting and model limits before paid dispatch
+AssertionError: expected [Function] to throw error including 'image token bounds are not qualified' but got 'Model or provider \'gpt-6.1-sol\' is …'
+
+Expected: "image token bounds are not qualified"
+Received: "Model or provider 'gpt-6.1-sol' is rejected by strict OpenAI-only policy (ADR-030). Only gpt-6-astra and gpt-image-2.5-sunburst are permitted."
+
+ ❯ packages/creative/test/sol61-candidate.test.ts:62:7
+     60|       messages: [{ role: 'user', content: [{ type: 'image_url', image_…
+     61|       jsonSchema: { name: 'test', schema: { type: 'object' } }, before…
+     62|     })).rejects.toThrow('image token bounds are not qualified');
+       |       ^
+     63|     expect(fetcher).not.toHaveBeenCalled();
+     64|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 6 passed (7)
+      Tests  2 failed | 71 passed (73)
+   Start at  11:23:13
+   Duration  500ms (transform 521ms, setup 273ms, import 531ms, tests 100ms, environment 0ms)
+

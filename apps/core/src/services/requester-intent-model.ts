@@ -17,7 +17,7 @@
 import { randomUUID } from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { resolveModel } from '@hawa/domain';
+import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
 import { reserveStudioText, studioTextUsage } from '@hawa/creative';
 import { officeSpendingRefusal } from './office-spending.js';
 import { log } from '../logging.js';
@@ -42,7 +42,7 @@ export function intentRequestBody(model: string, text: string, requests: ChatReq
   return JSON.stringify({
     model,
     service_tier: 'default',
-    ...(model === 'gpt-6-astra' ? { reasoning_effort: 'low' } : {}),
+    ...(modelSupportsReasoningEffort(model) ? { reasoning_effort: 'low' } : {}),
     max_completion_tokens: 400,
     messages: [
       { role: 'system', content: 'You route messages that non-technical requesters send to a design office bot, in English, Kurdish (Sorani) or both. Output only JSON that matches the schema.' },

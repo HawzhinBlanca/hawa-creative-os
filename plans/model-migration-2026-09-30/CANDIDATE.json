@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "revision": "sol61-candidate-2026-09-30",
+  "admission": "candidate",
+  "roles": [
+    "text",
+    "layout",
+    "critique"
+  ],
+  "provider": "openai",
+  "exactModelId": "gpt-6.1-sol",
+  "transport": "chat_completions_without_tools",
+  "contextTokens": 1050000,
+  "maxOutputTokens": 128000,
+  "parameterProfile": {
+    "reasoning_effort": "low",
+    "service_tier": "default",
+    "temperature": "omitted"
+  },
+  "capabilities": {
+    "textInput": true,
+    "textOutput": true,
+    "imageInputDocumented": true,
+    "strictStructuredOutputDocumented": true,
+    "liveStrictSchemaVisionVerified": false,
+    "imageReservationQualified": false
+  },
+  "costPolicy": "studio-sol61-2026-09-30-v1",
+  "costPerMillion": {
+    "input": 2,
+    "cacheRead": 0.1,
+    "cacheWrite": 2.5,
+    "output": 10,
+    "longContextThreshold": 272000,
+    "longInputMultiplier": 2,
+    "longOutputMultiplier": 1.5
+  },
+  "evaluation": {
+    "access": "blocked",
+    "offlineCreativeComparison": "not_run",
+    "canary": "not_run",
+    "blindedHumanReview": "not_run"
+  },
+  "fallback": "No silent fallback. Existing Astra production remains active; retained identity drift holds.",
+  "sources": [
+    "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+    "https://developers.openai.com/api/docs/guides/latest-model",
+    "https://docs.typesafe.ai/models"
+  ],
+  "checkedAt": "2026-09-30"
+}

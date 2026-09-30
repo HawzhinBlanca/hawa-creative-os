@@ -1,0 +1,12 @@
+{
+  "checkedAt": "2026-09-30T08:29:49.875Z",
+  "status": "degraded",
+  "buildCommit": "6bd479c17db58e7abdaa3fba13057aed4bcfc3e8",
+  "models": {
+    "tier": "production",
+    "text": "gpt-6-astra",
+    "layout": "gpt-6-astra",
+    "critique": "gpt-6-astra",
+    "judge": "gpt-4.1-mini"
+  }
+}

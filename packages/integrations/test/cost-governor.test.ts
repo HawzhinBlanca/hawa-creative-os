@@ -31,6 +31,11 @@ describe('CostGovernor: Token & GPU Budget Controller (B-082, FR-079)', () => {
     expect(gpuCost).toBeCloseTo(0.003, 4);
   });
 
+  it('quotes Sol 6.1 and its dated served identity at exact context-tier prices', () => {
+    expect(governor.calculateEstimatedCost('openai', 'gpt-6.1-sol', { input: 272000, output: 1000 })).toBe(0.554);
+    expect(governor.calculateEstimatedCost('openai', 'gpt-6.1-sol-2026-09-30', { input: 300000, output: 1000 })).toBe(1.215);
+  });
+
   it('permits operations within budget and flags warning threshold at >= 80%', () => {
     // Client with $5.00 cap
     const check1 = governor.checkBudget('client-aster', 1.0);

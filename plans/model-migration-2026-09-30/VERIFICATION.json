@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "date": "2026-09-30",
+  "verdict": "CANDIDATE_IMPLEMENTATION_VERIFIED_PRODUCTION_PROMOTION_BLOCKED",
+  "requirements": [
+    "FR-056",
+    "FR-057",
+    "FR-058",
+    "FR-059",
+    "FR-060",
+    "FR-062",
+    "FR-079"
+  ],
+  "tests": {
+    "focused": {
+      "files": 9,
+      "passed": 84,
+      "failed": 0
+    },
+    "regression": {
+      "files": 7,
+      "passed": 177,
+      "failed": 0
+    },
+    "finalIntake": {
+      "files": 1,
+      "passed": 62,
+      "failed": 0,
+      "overlapsRegression": 61
+    },
+    "uniquePassed": 262,
+    "fullSuite": "not_run_for_this_candidate_change",
+    "firstAttempt": {
+      "passed": 71,
+      "failed": 2,
+      "cause": "Stale built workspace domain package; corrected by tsc -b, focused rerun84/84"
+    },
+    "finalCandidate": {
+      "files": 2,
+      "passed": 6,
+      "failed": 0,
+      "overlapsFocused": 6
+    }
+  },
+  "typeChecks": {
+    "productionBuild": "passed",
+    "scripts": "passed",
+    "testRoots": 603,
+    "tests": "passed"
+  },
+  "lint": "passed",
+  "paidCalls": 0,
+  "deployment": "not_performed",
+  "unexecuted": [
+    "Live Sol strict structured output and images",
+    "Sol-specific vision bound qualification",
+    "Matched Astra/Sol creative-quality and latency comparison",
+    "Blinded native-language human review",
+    "5% and 25% production canary",
+    "Evaluated Sol fallback/promotion"
+  ],
+  "jev": {
+    "exactStableVersion": "jev-1.13.0",
+    "sameVisualJudgeWork": false,
+    "reason": "Official catalog explicitly text only",
+    "integrated": false
+  },
+  "accessEvidence": "ACCESS.json"
+}

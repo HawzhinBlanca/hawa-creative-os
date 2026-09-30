@@ -5,7 +5,7 @@ import { resolveModel } from '@hawa/domain';
 import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { pendingLateChanges } from '../src/services/lifecycle-chat-target.js';
-import { createRequesterIntentModel, type RequesterIntentModel } from '../src/services/requester-intent-model.js';
+import { createRequesterIntentModel, intentRequestBody, type RequesterIntentModel } from '../src/services/requester-intent-model.js';
 import { parseChoice, readIntentByRules, type ChatRequestView } from '../src/services/requester-turn.js';
 
 /**
@@ -28,6 +28,12 @@ const worker = { 'Content-Type': 'application/json', Authorization: `Bearer ${WO
 const db = createDb(process.env.TEST_DATABASE_URL!);
 const owner = createDb(process.env.TEST_DATABASE_OWNER_URL!);
 const saved = { ...process.env };
+it('ADR-148 preserves low reasoning for Sol intake while Mini has no unsupported reasoning parameter', () => {
+  expect(JSON.parse(intentRequestBody('gpt-6.1-sol', 'Please change the title', [])))
+    .toMatchObject({ reasoning_effort: 'low', max_completion_tokens: 400, service_tier: 'default' });
+  expect(JSON.parse(intentRequestBody('gpt-4.1-mini', 'Please change the title', [])))
+    .not.toHaveProperty('reasoning_effort');
+});
 beforeAll(() => {
   process.env.TELEGRAM_ALLOWED_USERS = String(OFFICE);
   process.env.AUTO_GENERATE_DAILY_CAP_GLOBAL = '1000000';
