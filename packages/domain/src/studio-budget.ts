@@ -41,10 +41,10 @@ export function nextOfficeDayStart(now: number = Date.now()): Date {
 export class OfficeDayExhaustedError extends StudioBudgetExhaustedError {
   override readonly code = 'OFFICE_DAY_EXHAUSTED' as const;
   constructor(readonly scope: string, readonly neededUsd: number | null, readonly availableUsd: number | null,
-    readonly resetsAt: Date) {
+    readonly resetsAt: Date, databaseDetail?: string) {
     super(`The ${scope === 'office' ? "office's" : scope === 'client' ? "client's" : `${scope} role's`} daily model allowance is used up` +
       `${neededUsd !== null && availableUsd !== null ? ` ($${neededUsd.toFixed(2)} needed, $${availableUsd.toFixed(2)} left)` : ''}; ` +
-      `it resets at ${resetsAt.toISOString()} (midnight in Baghdad).`);
+      `it resets at ${resetsAt.toISOString()} (midnight in Baghdad).${databaseDetail ? ` [${databaseDetail}]` : ''}`);
     this.name = 'OfficeDayExhaustedError';
   }
 }
@@ -54,7 +54,8 @@ export function officeDayExhaustedFrom(message: string, now: number = Date.now()
   const m = /^STUDIO_SCOPE_BUDGET_EXHAUSTED:\s*(\S+) needs \$([0-9.]+); \$([0-9.]+) available/.exec(message);
   if (!m && !message.startsWith('STUDIO_SCOPE_BUDGET_EXHAUSTED:')) return null;
   const amount = (v: string | undefined) => (v !== undefined && Number.isFinite(Number(v)) ? Number(v) : null);
-  return new OfficeDayExhaustedError(m?.[1] ?? 'office', amount(m?.[2]), amount(m?.[3]), nextOfficeDayStart(now));
+  // The database's own words stay at the end, for the logs and the run's diagnostic.
+  return new OfficeDayExhaustedError(m?.[1] ?? 'office', amount(m?.[2]), amount(m?.[3]), nextOfficeDayStart(now), message.slice(0, 300));
 }
 
 /**

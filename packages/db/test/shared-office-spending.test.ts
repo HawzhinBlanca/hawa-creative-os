@@ -113,7 +113,7 @@ describe('shared office admission over original PostgreSQL ledgers',()=>{
     const f=await fixture({officeUsd:.02}),e=await f.evaluation(.01);await f.finishEval(e.id,.03);
     expect(office(await f.daily())).toMatchObject({spentUsd:.03,remainingUsd:0});
     await expect(f.voice(.006)).rejects.toThrow('OFFICE_BUDGET_EXHAUSTED');
-    await expect(f.studio(.006)).rejects.toMatchObject({code:'BUDGET_EXHAUSTED'});
+    await expect(f.studio(.006)).rejects.toMatchObject({code:'OFFICE_DAY_EXHAUSTED'});
   });
   it('does not invent historical evaluation usage or a missing reservation',async()=>{
     const f=await fixture(),e=await f.evaluation(.01);await f.finishEval(e.id,.001,'unknown');
