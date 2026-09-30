@@ -156,6 +156,18 @@ export function addressedToBot(message: Message | null): boolean {
   });
 }
 
+/**
+ * What acts in a group (ADR-144 §2.7, the rule planTurn applies to text): words addressed to the bot, or
+ * a clear brief (said to be new, or with a divider or a copy heading). Always true in a private chat.
+ */
+export function actsInGroup(message: Message | null): boolean {
+  if (addressedToBot(message)) return true;
+  const words = typeof message?.text === 'string' ? message.text : typeof message?.caption === 'string' ? message.caption : '';
+  const reading = readIntentByRules(words);
+  return reading.intent === 'new_brief' && (reading.explicitNew === true || /\n\s*[_\-=*]{3,}\s*\n/.test(words) ||
+    /\n\s*(?:content|copy|text|details|دەق|ناوەڕۆک)\s*:/i.test(words));
+}
+
 /** The caller supplies a tenant-scoped transaction runner, not a long transaction around Telegram. */
 export async function retainAlbumPart(tx: <T>(fn: (trx: Tx) => Promise<T>) => Promise<T>, tenant: string,
   update: Update, store: BlobStore | null, download: (id: string) => Promise<Buffer | null | undefined>): Promise<AlbumMessage> {
@@ -608,7 +620,7 @@ function albumShape(selected: Part[]) {
   const replies = [...new Set(messages.map((message) => positiveId(record(message.reply_to_message)?.message_id)).filter(Boolean))] as string[];
   const mixedReplies = replies.length > 1 || (replies.length === 1 && messages.some((message) => !record(message.reply_to_message)));
   return { messages, captions, replies, mixedReplies, cutCaption: cutCaptionOf(messages),
-    group: isGroupChat(messages[0] ?? null), addressed: messages.some(addressedToBot) };
+    group: isGroupChat(messages[0] ?? null), addressed: messages.some(actsInGroup) };
 }
 
 /**
@@ -912,7 +924,7 @@ export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, d
   if (!text || (text.startsWith('/') && !confirmation && !NEW_COMMAND.test(text))) return { kind: 'none' };
   const prior = await readAlbumConfirmation(trx, tenant, update);
   if (prior) return outcomeOf(prior);
-  if (!addressedToBot(msg)) return { kind: 'none' };
+  if (!actsInGroup(msg)) return { kind: 'none' };
   const affirmative = confirmation || isAffirmativeOnly(text);
   const brief = !affirmative && isBriefText(text);
   // An update intake already decided keeps that decision, even if an album has arrived since.
@@ -997,7 +1009,7 @@ export async function cutAlbumWaits(trx: Tx, tenant: string, update: Update): Pr
   const { msg, chatId, senderId, topic } = messageScope(update);
   if (!msg || !senderId || msg.media_group_id !== undefined || typeof msg.caption !== 'string' || !msg.caption.trim()) return false;
   if (await readAlbumConfirmation(trx, tenant, update)) return true;
-  if (msg.reply_to_message || !addressedToBot(msg)) return false;
+  if (msg.reply_to_message || !actsInGroup(msg)) return false;
   const album = await waitingAlbum(trx, tenant, { chatId, senderId, topic });
   return Boolean(album && albumShape(album.selected).cutCaption !== null);
 }

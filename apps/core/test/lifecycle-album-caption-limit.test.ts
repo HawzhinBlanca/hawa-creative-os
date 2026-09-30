@@ -433,16 +433,17 @@ describe('group chats (F6, audit item 14)', () => {
     const quiet = await f.settle(parts[2]);
     expect(quiet).toMatchObject({ settle: 'skipped' });
     expect(saidTo(quiet)).toEqual([]);
-    // The sender's words not addressed to the bot bind nothing; words addressed to it bind the album.
-    const unaddressed = await f.intake(f.text('Please design a poster for the science fair on 12 October 2026 at the Erbil hall'), { briefHold: true });
+    // The sender's conversation not addressed to the bot binds nothing; words addressed to it bind the album.
+    const unaddressed = await f.intake(f.text('these came out well, the hall looked great on the day'), { briefHold: true });
     expect(unaddressed.draft).toBeUndefined();
-    const addressed = f.text(`${BOT} Please design a poster for the science fair on 12 October 2026 at the Erbil hall`);
+    expect(saidTo(unaddressed)).toEqual([]);
+    const addressed = f.text(`${BOT} use these for the science fair poster, 12 October 2026 at the Erbil hall`);
     const bound = await f.intake(addressed, { briefHold: true });
     expect(bound).toMatchObject({ lifecycleAction: 'open-request', draft: { lifecycleAlbum: { updateId: addressed.update_id } } });
 
     const g = setup('group');
     const downloads = g.download.mock.calls.length;
-    const photoWithWords = await g.intake(g.captioned(40, 'Please design a poster for the science fair on 12 October 2026'), { briefHold: true });
+    const photoWithWords = await g.intake(g.captioned(40, 'the hall looked great on the day'), { briefHold: true });
     expect(photoWithWords).toMatchObject({ intakeStatus: 200, status: 'MESSAGE_ONLY' });
     expect(saidTo(photoWithWords)).toEqual([]);
     const voice = await g.intake({ update_id: ++id, message: { message_id: ++id, date: 1790000000, from: { id: SENDER, first_name: 'R' },

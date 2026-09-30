@@ -21,7 +21,7 @@ import { ACCESS_MESSAGES, MEDIA_MESSAGES, bold, requesterLang, say, type Request
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { blobStoreFor } from './blob-store-context.js';
 import { heldPhotoCandidate, retainLifecyclePhoto } from './lifecycle-photo.js';
-import { addressedToBot, isGroupChat, replyLanguage } from './lifecycle-album.js';
+import { actsInGroup, isGroupChat, replyLanguage } from './lifecycle-album.js';
 import { shortTitle } from './requester-turn.js';
 import { claimPhoto, holdPhoto, markPhotoAsked, pendingHeldBrief, readHeldPhoto, readMediaAnswer, readPhotoUse,
   recentOpenBy, recordMediaAnswer, unlistedReplyDue, type HeldPhoto, type StoredAnswer } from './lifecycle-media-intake.js';
@@ -49,15 +49,15 @@ export function unusableMedia(message: Json | null): 'video' | 'file' | null {
 const MEDIA_KEYS = ['photo', 'document', 'voice', 'audio', 'video', 'video_note', 'animation', 'live_photo', 'sticker'];
 /**
  * ADR-144 §2.7 (ADR-148): in a group, a member's photo with words, file, voice note, video or sticker
- * that is not addressed to the bot (a reply to it, a mention of it in the caption, a command) is not
- * read, as a text would not be. An album is judged whole at its settle, and a photo with no words is kept
- * quietly for its sender's words to the bot (its settle says nothing in a group).
+ * that is not addressed to the bot (a reply to it, a mention of it in the caption, a command) and whose
+ * words are no clear brief is not read, as such a text would not be. An album is judged whole at its
+ * settle, and a photo with no words is kept quietly for its sender's words (its settle says nothing).
  */
 export function groupMediaNotAddressed(update: Json): boolean {
   const message = record(update.message);
   if (!message || !isGroupChat(message) || message.media_group_id !== undefined) return false;
   if (!MEDIA_KEYS.some((key) => message[key] !== undefined) || heldPhotoCandidate(update)) return false;
-  return !addressedToBot(message);
+  return !actsInGroup(message);
 }
 
 /** The words of a message, as its sender wrote them (text or caption). */
