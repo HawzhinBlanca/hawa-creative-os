@@ -55,7 +55,11 @@ exit 0
   if (opts.diskPercent) {
     fs.writeFileSync(path.join(bin, 'df'), `#!/bin/bash
 echo "Filesystem Size Used Avail Capacity Mounted"
-if [[ "$1" == -h ]]; then echo "/dev/x 100G 95G 5${opts.os === 'Darwin' ? 'Gi' : 'G'} ${opts.diskPercent}% /"; else echo "/dev/x 100 95 5 ${opts.diskPercent}% /"; fi
+case "$1" in
+  -h) echo "/dev/x 100G 95G 5${opts.os === 'Darwin' ? 'Gi' : 'G'} ${opts.diskPercent}% /" ;;
+  -Pk) echo "/dev/x 104857600 99614720 5242880 ${opts.diskPercent}% /" ;;
+  *) echo "/dev/x 209715200 199229440 10485760 ${opts.diskPercent}% /" ;;
+esac
 `, { mode: 0o755 });
   }
   const envFile = path.join(t, 'env.production');
@@ -179,11 +183,12 @@ describe('the watchdog on a Linux host', () => {
   it('the disk alert names the production host, with a Linux or a macOS hint', () => {
     const linux = setup({ os: 'Linux', diskPercent: 95 });
     run(linux);
-    expect(linux.calls()).toMatch(/The production host's disk is 95% full \(5 GB free\)/);
+    // Free space, not percent, since ADR-158 (the stub has 5 GiB free).
+    expect(linux.calls()).toMatch(/The production host's disk has 5 GB free \(95% used; the alert is below 25 GB\)/);
     expect(linux.calls()).toMatch(/du -xh --max-depth=2/);
     expect(linux.calls()).not.toMatch(/System Settings|Mac/);
     const mac = setup({ os: 'Darwin', diskPercent: 95 });
     run(mac);
-    expect(mac.calls()).toMatch(/The production host's disk is 95% full \(5 GB free\).*System Settings, General, Storage/);
+    expect(mac.calls()).toMatch(/The production host's disk has 5 GB free \(95% used; the alert is below 25 GB\).*System Settings, General, Storage/);
   });
 });
