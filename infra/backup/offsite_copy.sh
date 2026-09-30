@@ -18,7 +18,8 @@
 # is also sent to the operator's Telegram chat. Once off-site copying has run here, removing the
 # setting is not enough to stop it being expected: remove snapshots/offsite.log as well.
 set -Eeuo pipefail; umask 077
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
+# pwd -P: started through ~/.hawa/current, the run stays on that release even if a deploy switches it (ADR-158).
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"; cd "$ROOT"
 source "$ROOT/infra/ops/host_lib.sh"
 ARCHIVE_DEST="${HAWA_BACKUP_ARCHIVE_DEST:-$HOME/.hawa/snapshots_archive}"
 DIR="${HAWA_BACKUP_SNAPSHOT_DIR:-$ROOT/infra/backup/snapshots}"; LOG="$DIR/offsite.log"

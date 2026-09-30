@@ -23,7 +23,8 @@
 #   HAWA_BACKUP_SNAPSHOT_DIR, HAWA_BACKUP_PG_CONTAINER, HAWA_BACKUP_DB, HAWA_BACKUP_NOTIFY_ENV,
 #   HAWA_BACKUP_MIN_BYTES, HAWA_BLOBS_DIR, HAWA_BLOB_GC_CMD (or HAWA_BLOB_GC=off).
 set -Eeuo pipefail; umask 077
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
+# pwd -P: started through ~/.hawa/current, the run stays on that release even if a deploy switches it (ADR-158).
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"; cd "$ROOT"
 # GNU or BSD stat and the SHA-256 tool, chosen by uname; the host role (ADR-141).
 source "$ROOT/infra/ops/host_lib.sh"
 DIR="${HAWA_BACKUP_SNAPSHOT_DIR:-$ROOT/infra/backup/snapshots}"; mkdir -p "$DIR"; chmod 700 "$DIR"

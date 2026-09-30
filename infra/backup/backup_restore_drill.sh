@@ -6,7 +6,8 @@ set -euo pipefail
 # This is NOT a data backup: production data backups are taken by infra/backup/nightly_backup.sh.
 # ==============================================================================
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# pwd -P: started through ~/.hawa/current, the run stays on that release even if a deploy switches it (ADR-158).
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "${ROOT_DIR}"
 # The SHA-256 tool and the host role, chosen per host (ADR-141).
 source "${ROOT_DIR}/infra/ops/host_lib.sh"

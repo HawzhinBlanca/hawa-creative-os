@@ -61,6 +61,12 @@ if command -v getent >/dev/null; then RUN_HOME="$(getent passwd "$RUN_USER" | cu
 RUN_GROUP="$(id -gn "$RUN_USER")"
 [[ "$RUN_HOME" == /* ]] || die "no home directory for '$RUN_USER'"
 LOGS="$RUN_HOME/.hawa/logs"
+# The units run the release production runs, through its link (ADR-158; install_launch_agents.sh says
+# why); this checkout only until a first deploy has made one. HAWA_AGENT_ROOT names another directory.
+CURRENT="${HAWA_CURRENT_LINK:-$RUN_HOME/.hawa/current}"
+if [[ -n "${HAWA_AGENT_ROOT:-}" ]]; then ROOT="$HAWA_AGENT_ROOT"
+elif [[ -d "$CURRENT" ]]; then ROOT="$CURRENT"
+else echo "NOTE: no release at $CURRENT yet: the units run this checkout's scripts ($ROOT) until the first deploy with release directories"; fi
 if [[ -z "${HAWA_UNIT_PATH:-}" ]]; then
   # node and pnpm (deploy.sh, the monthly drill's blob-verify), docker, python3: wherever this shell finds them.
   UNIT_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

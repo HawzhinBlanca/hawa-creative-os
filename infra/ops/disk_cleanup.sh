@@ -22,7 +22,8 @@
 #   bash infra/ops/disk_cleanup.sh --backups   # the dumps and the container logs (what the nightly backup runs)
 #   bash infra/ops/disk_cleanup.sh --report    # report only, delete nothing
 set -Eeuo pipefail; umask 077
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# pwd -P: started through ~/.hawa/current, the run stays on that release even if a deploy switches it (ADR-158).
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 DIR="${HAWA_BACKUP_SNAPSHOT_DIR:-$ROOT/infra/backup/snapshots}"
 ARCHIVE="${HAWA_BACKUP_ARCHIVE_DIR:-$HOME/.hawa/snapshots_archive}"
 BLOBS="${HAWA_BLOBS_DIR:-$HOME/.hawa/blobs}"

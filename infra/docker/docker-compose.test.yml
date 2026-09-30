@@ -20,6 +20,13 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "127.0.0.1:55432:5432"
+    # It runs in the same Docker VM as production. On 2026-09-30 the VM swapped 14.5 of 15 GB and
+    # production's Postgres crashed (ADR-158): a full parallel suite may use at most this much of the
+    # VM's memory and CPUs. A running container takes new limits without a restart:
+    #   docker update --memory 2g --memory-swap 2g --cpus 3 hawa-test-postgres
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: 3.0
     command:
       - postgres
       # Disposable data on a host that is short of memory: small buffers, no durability work.
