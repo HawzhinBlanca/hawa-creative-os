@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T21:13:25Z",
+  "generatedAt": "2026-09-30T21:26:22Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "35fe9d362378ad7147930cbca3f817111e23ec50ebf7491fd608bb59da163762",
-      "bytes": 3980
+      "sha256": "9c23ca6c51ec846ac5928231a69d4a3a456a0cc501ca383f6933a426e6efa96d",
+      "bytes": 3979
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -834,8 +834,8 @@
     },
     {
       "path": "adrs/158_production_release_directories_and_operations_repairs.md",
-      "sha256": "f621d99734f5a975dbb1acb393e233a069bd5af07522f0f6f835a7df2ce35c37",
-      "bytes": 8515
+      "sha256": "9b7997d84e153f77bf0cfa383a679a2e0102c853c46d906419e3bb2eb57a758f",
+      "bytes": 15039
     },
     {
       "path": "adrs/159_budget_expiry_uncertain_calls_config_and_dead_code.md",
@@ -2439,8 +2439,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "bd7d8d5f27637e803e10ae817b8d35d02fa220dbbcbcbff644e45e04a7cd0849",
-      "bytes": 554901
+      "sha256": "04ee57b47ece6c673550f4874c30e06e7ab3924531dd032c8be3c1522e3f817d",
+      "bytes": 555928
     },
     {
       "path": "plans/user-stories.csv",
@@ -2604,8 +2604,8 @@
     },
     {
       "path": "runbooks/PRODUCTION_RELEASE_DIRECTORIES.md",
-      "sha256": "c77ec5204c271300ac7aba89ee3198083cf75eabc435bce183aae9f16731743a",
-      "bytes": 18859
+      "sha256": "00e8b5ee53894b577e7f15ae0232f7309f64108860df87996fec532dc1a84033",
+      "bytes": 24467
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
@@ -3209,8 +3209,8 @@
     },
     {
       "path": "scripts/test/nginx-reload.test.ts",
-      "sha256": "57eaf0fe54a06e859bf9195d19c415f06abb5825456d4d0922983bdec32fd712",
-      "bytes": 2767
+      "sha256": "8c2f8fe1460a62c9325376f523b40b9c65c1612fb84a8fc1552f06325c734fed",
+      "bytes": 3500
     },
     {
       "path": "scripts/test/provider-credential-update.test.ts",
