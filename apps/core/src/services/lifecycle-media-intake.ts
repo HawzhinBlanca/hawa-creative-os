@@ -84,7 +84,8 @@ export async function holdPhoto(trx: Tx, tenantId: string, photo: Omit<HeldPhoto
   return (await readHeldPhoto(trx, tenantId, photo.updateId))!;
 }
 
-export interface PhotoUse { byUpdateId: number; how: 'brief' | 'revision' | 'joined' | 'passed'; requestId?: string }
+/** `album`: the photo is one of a photo burst (ADR-160 addendum), decided with its set by the album settle. */
+export interface PhotoUse { byUpdateId: number; how: 'brief' | 'revision' | 'joined' | 'passed' | 'album'; requestId?: string }
 
 export async function readPhotoUse(trx: Tx, tenantId: string, photoUpdateId: number): Promise<PhotoUse | null> {
   const row = await readRow(trx, tenantId, 'lifecycle_photo_used', String(photoUpdateId));
