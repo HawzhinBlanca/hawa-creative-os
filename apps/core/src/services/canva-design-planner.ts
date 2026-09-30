@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { encodeEditableTransfer, creativeAssetPath, reserveStudioText, EditableTransferValidationError, type EditableTransferPlan } from '@hawa/creative';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
+import { checkCopyCompleteness } from '@hawa/creative';
 import { z } from 'zod';
 import { plannerLayout as layout, executePlannerCall, type PlannerCallMetadata } from './canva-planner-call.js';
 import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js';
@@ -741,6 +742,8 @@ export class CanvaDesignPlanner {
         rtlFont:request.rtlFont,
         rtlFontProvisional:Boolean(request.rtlFont),
         rtlBlocks,
+        // ADR-157: copy that may be cut short or has marks that do not pair, recorded for review; never a failure.
+        reviewFindings:checkCopyCompleteness(Object.fromEntries(request.copy.map((text:string,i:number)=>[i,text]))),
         ...call.metadata,
         referenceImageSha256:request.ownedReferenceImage?.sha256||null,
         ...(request.ownedReferenceImages?{referenceImageSha256s:request.ownedReferenceImages.map(image=>image.sha256)}:{}),

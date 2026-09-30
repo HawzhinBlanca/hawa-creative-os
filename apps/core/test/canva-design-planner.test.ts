@@ -168,6 +168,8 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(saved.request.copyLocales).toEqual(['und','und']);
     expect(saved.result.manifest.copyLocales).toEqual(['und','und']);
     expect(saved.result.receipt.returnedModel).toBe('gpt-6-astra');
+    // ADR-157: finished copy records no review finding.
+    expect(saved.result.manifest.reviewFindings).toEqual([]);
     // The source is in the file store too (ADR-035), under the hash the plan names, and the import reads it.
     const stored=await blobStoreFromEnv(db).read(saved.source_sha256,{verify:true});
     expect(stored.equals(Buffer.from(saved.source_content))).toBe(true);
@@ -176,6 +178,15 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     await expect(sql`UPDATE hawa.canva_design_plans SET request='{}'::jsonb WHERE id=${saved.id}::uuid`.execute(db)).rejects.toThrow('immutable');
     await expect(planner.resume({...scope,actorId:randomUUID()},id,saved.id)).rejects.toThrow('not found');
     await expect(sql`UPDATE hawa.tasks SET client_id=NULL WHERE id=${id}::uuid`.execute(db)).rejects.toThrow();
+  });
+  it('records copy that ends mid-phrase as a review finding in the manifest, and plans it all the same (ADR-157)',async()=>{
+    const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Cut copy',
+      rawText:'Use navy.\n---\nEXACT TITLE\n\nInsights from school field visits and next steps toward',designInstructions:'Use navy.',exactCopy:[]})).task.id;
+    const {planner}=make(vi.fn<typeof fetch>(async()=>response()));
+    expect((await planner.generate(scope,id,'cut-copy-key-01',1200,1697)).status).toBe('submitted');
+    const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
+    expect(saved.status).toBe('planned');
+    expect(saved.result.manifest.reviewFindings).toEqual([expect.objectContaining({code:'COPY_DANGLING_END',copyIndex:1,severity:'warning'})]);
   });
   it('sets Sorani blocks right-to-left in the provisional script typeface and records it in the manifest',async()=>{
     const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Sorani plan',

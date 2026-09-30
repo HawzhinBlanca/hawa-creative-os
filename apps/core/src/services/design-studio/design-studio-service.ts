@@ -43,6 +43,8 @@ import {
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, thumbnailPlaybookPrompt, type OrnamentSettings } from '@hawa/creative';
+import { fitPhotoBoxesToImages, photoSelectionFromInstructions } from '@hawa/creative';
+import { recordedPhotoSelection, studioCopyBlocks } from './design-quality.js';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { buildRunBriefContract, StudioBriefContractError, StudioRunStatusChangedError } from './brief-contract.js';
 import { blockingBriefConflicts, briefContractIdentitySha256, verifyBriefContractIntegrity, type BriefProposalInput, type ExecutableBriefContract } from '@hawa/domain';
@@ -118,6 +120,7 @@ import {
   runJudgeStageV3,
   judgeBriefForStageV3,
   rankStudioCandidatesV3,
+  copyForStageV3,
   V3_CANDIDATE_SLOTS,
   pendingV3Concept,
 } from './stages/index.js';
@@ -511,12 +514,7 @@ export class DesignStudioService {
     }
 
     const copyLocales = savedDesignCopyLocales(task.source, content.copy);
-    const copyBlocks: CopyBlock[] = content.copy.map((text, idx) => ({
-      text,
-      script: copyScripts[idx] === 'arabic' ? 'arabic' : 'latin',
-      locale: copyLocales[idx],
-      localeCopySha256: createHash('sha256').update(text).digest('hex'),
-    }));
+    const copyBlocks: CopyBlock[] = studioCopyBlocks(content.copy, copyScripts, copyLocales);
     qualifiedStudioFonts(reference, copyBlocks);
 
     return {
@@ -1471,7 +1469,7 @@ export class DesignStudioService {
           ctx.attachedImage = undefined;
           const reread = await inStudioSubstep('brief/images-rebrief', () => runBriefStage(ctx));
           const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
-          stages.brief = { ...reread, photosSent, imagesRebrief: true };
+          stages.brief = { ...reread, photosSent, photoSelection: photoSelectionFromInstructions(ctx.instructions, photosSent), imagesRebrief: true };
           await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
           stages.brief = await this.briefAsStored(s, runId, stages.brief);
           briefSoFar = stages.brief as LateReferenceBrief;
@@ -1509,6 +1507,8 @@ export class DesignStudioService {
         if (!classified && ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
           ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
         }
+
+        ctx.photoSelection = recordedPhotoSelection(stages.brief, ctx.photos?.length ?? 0); // ADR-157
 
         // People cut out of their photos (ADR-032), when the request, the brief's reading of the
         // reference, or the design being changed calls for them. They are made once, at the layout
@@ -1572,7 +1572,9 @@ export class DesignStudioService {
           const brief = await inStudioSubstep('brief/request', () => runBriefStage(ctx));
           // Recorded on the run so the requester's note can say what became of their photos.
           const photosSent = (brief.imageRoles || []).filter((r) => r.role === 'content_photo').length || (ctx.photos?.length ?? 0);
-          stages.brief = { ...brief, photosSent };
+          // ADR-157: "choose the best photos" and its like, read from the requester's words, no call.
+          const photoSelection = photoSelectionFromInstructions(ctx.instructions, photosSent);
+          stages.brief = { ...brief, photosSent, photoSelection };
           await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
           return { runId, status: 'conceiving', stage: 'brief', spentUsd: budget.spentUsd };
         }
@@ -1739,6 +1741,8 @@ export class DesignStudioService {
               const f = focus[p.photoIndex];
               if (f && p.treatment !== 'cutout') p.focus = { x: f.x, y: f.y };
             }
+            // A row of framed photos divided closer to each photo's own shape, so less is cropped away (ADR-157).
+            fitPhotoBoxesToImages(cand.currentLayout, sizes, copyForStageV3(ctx), focus);
           }
           // Every photo with a cut-out is shown cut out, set as a designer sets people: standing on
           // the bottom edge, heads matched, clear of the text. Before the art, which works around them.
@@ -2687,8 +2691,9 @@ export class DesignStudioService {
     try {
       judgeProtocol = resolveStudioJudgeProtocol(process.env.HAWA_STUDIO_JUDGE_PROTOCOL);
       judgeProtocolResolved = true;
-      outcome = await runJudgeStageV3(ctx, candidateStates, judgeProtocol === 'incumbent' ? {} : {
-        protocol: judgeProtocol,
+      // ADR-157: both protocols read the request; the incumbent carries it in the calls it already makes.
+      outcome = await runJudgeStageV3(ctx, candidateStates, {
+        ...(judgeProtocol === 'incumbent' ? {} : { protocol: judgeProtocol }),
         brief: judgeBriefForStageV3(ctx, (stages.brief || {}) as Partial<CreativeBrief>),
       });
     } catch (err) {

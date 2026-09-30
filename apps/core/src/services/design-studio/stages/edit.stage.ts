@@ -77,6 +77,9 @@ export async function runDirectedEditStage(
   const system = buildP0SystemPrompt({ referencePackJson: JSON.stringify(ctx.referencePack), promotedRules: ctx.promotedRules || 'None' });
   const shortEdge = Math.min(ctx.width, ctx.height);
   const logoConstraints = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number } | undefined;
+  // ADR-157: a design that chose among the photos keeps its choice through a change.
+  const photoSelection = hardQaContextFor(ctx).photoSelection;
+  const placedCount = (parent.layout.photos ?? []).length;
   const constraints = [
     `canvas ${ctx.width}x${ctx.height}px`,
     `margin >= ${Math.round(shortEdge * 0.06)}px`,
@@ -88,7 +91,11 @@ export async function runDirectedEditStage(
     ctx.referencePack.admittedDisplayFonts
       ? `Latin font ${ctx.latinFont} or [${ctx.referencePack.admittedDisplayFonts.latin.join(', ')}]; Sorani font ${ctx.arabicFont} or [${ctx.referencePack.admittedDisplayFonts.arabic.join(', ')}]; no other fonts`
       : '',
-    ctx.photos?.length ? `all ${ctx.photos.length} client photo(s) stay placed, clear of text and logo` : '',
+    ctx.photos?.length
+      ? photoSelection?.mode === 'choose' && placedCount < ctx.photos.length
+        ? `the ${placedCount} placed client photo(s) stay placed, clear of text and logo`
+        : `all ${ctx.photos.length} client photo(s) stay placed, clear of text and logo`
+      : '',
   ].filter(Boolean).join('; ');
 
   const validation: LayoutValidationContext = {
@@ -97,6 +104,7 @@ export async function runDirectedEditStage(
     copyCount: ctx.copyBlocks.length,
     copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
     photoCount: ctx.photos?.length ?? 0,
+    ...(photoSelection ? { photoSelection } : {}),
     reference: {
       rules: { fontFamily: ctx.latinFont, palette: ctx.referencePack.palette, scriptFonts: { arabic: ctx.arabicFont },
         admittedDisplayFonts: ctx.referencePack.admittedDisplayFonts },
@@ -215,7 +223,12 @@ export async function runDirectedEditStage(
     const metrics = computeLayoutMetrics(layout, { copyText, measuredLines: render.wrappedLines, contrastValues });
     // The 'qa' stage reads the layout and metrics back from the candidate row, so they are
     // measured here as stored: the gate cannot pass here and fail there.
-    const qa = evaluateHardQa(JSON.parse(JSON.stringify(layout)), qaContext, JSON.parse(JSON.stringify(metrics)));
+    // Contrast measured on this render's pixels, and its font fidelity, as the 'qa' stage does (ADR-157).
+    const qa = evaluateHardQa(
+      JSON.parse(JSON.stringify(layout)),
+      { ...qaContext, ...(render.noTextPng ? { renderedComposite: render.noTextPng } : {}), fontFidelity: render.fontFidelity },
+      JSON.parse(JSON.stringify(metrics))
+    );
     return { layout, droppedAccents, render, metrics, qa };
   };
   const settle = (layout: StudioLayoutV2) =>

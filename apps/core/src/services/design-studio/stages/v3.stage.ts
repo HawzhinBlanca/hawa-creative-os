@@ -14,6 +14,7 @@ import {
   type HardQaContext,
   type BriefBoundJudgeBrief,
   type StudioJudgeProtocol,
+  photoSelectionFromInstructions,
 } from '@hawa/creative';
 import type { StageContext, CandidateState, Concept, Archetype, MotifKind, CreativeBrief } from '../types.js';
 import { candidateRenderOptions } from './asset-inputs.js';
@@ -144,10 +145,15 @@ export function conceptFromV3Candidate(
 
 /** The hard-QA context of this run: the gate its winner must pass. */
 export function hardQaContextFor(
-  ctx: Pick<StageContext, 'width' | 'height' | 'copyBlocks' | 'latinFont' | 'arabicFont' | 'referencePack' | 'logoAspect' | 'photos' | 'playbook'>
+  ctx: Pick<StageContext, 'width' | 'height' | 'copyBlocks' | 'latinFont' | 'arabicFont' | 'referencePack' | 'logoAspect' | 'photos' | 'playbook'> &
+    Partial<Pick<StageContext, 'instructions' | 'photoSelection'>>
 ): HardQaContext {
+  const photoCount = ctx.photos?.length ?? 0;
   return {
-    photoCount: ctx.photos?.length ?? 0,
+    photoCount,
+    // ADR-157: the brief's recorded choice, else the instructions read now; `all` when neither says.
+    photoSelection: ctx.photoSelection ?? photoSelectionFromInstructions(ctx.instructions, photoCount),
+    ...(ctx.instructions ? { instructions: ctx.instructions } : {}),
     ...(ctx.playbook ? { playbook: ctx.playbook } : {}),
     width: ctx.width,
     height: ctx.height,
@@ -214,6 +220,8 @@ export function rankStudioCandidatesV3(
       layout: c.currentLayout,
       // The render the client will see, with art where there is art and the copy set on it.
       renderedPng: judgeRenderFor(c),
+      // Its no-text composite: contrast is measured on these pixels, not only declared (ADR-157).
+      ...(c.compositePng ? { compositePng: c.compositePng } : {}),
     })),
     copy,
     hardQaContextFor(ctx)
