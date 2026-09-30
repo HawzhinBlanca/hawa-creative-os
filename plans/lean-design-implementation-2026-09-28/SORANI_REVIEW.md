@@ -11,7 +11,9 @@ re-run the script. `⏎` is a line break; `{title}`, `{text}`, `{list}` are fill
 quoted words, a numbered list) and must stay as they are.
 
 Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status, deadline and change phrases in
-`apps/core/src/services/requester-turn.ts`, and the yes-words in `apps/core/src/services/lifecycle-source-reply.ts`).
+`apps/core/src/services/requester-turn.ts`, and the yes-words in `apps/core/src/services/lifecycle-source-reply.ts`),
+and the Sorani the design studio reads (ADR-157): the photo-choice phrases in `packages/creative/src/studio/photo-selection.ts`
+and the phrase-ending words and language names in `packages/creative/src/studio/copy-completeness.ts`.
 
 ## sources
 
