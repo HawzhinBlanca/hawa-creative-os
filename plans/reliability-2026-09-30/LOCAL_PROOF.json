@@ -208,6 +208,20 @@
       "executedRecoveryScenarios": 0,
       "reason": "Missing internal service token is null; constant-time helper type accepted only undefined",
       "resolution": "Accept null as an absent configured credential; runtime null guard unchanged. Full635-root typecheck and Core dependency build pass."
+    },
+    {
+      "scope": "latest Claude live-trial integration",
+      "passed": 151,
+      "failed": 9,
+      "reason": "Single-photo controls assumed recipe photo waivers; Core read predecessor built package exports",
+      "resolution": "Explicit choose minimum 1 controls; rebuild creative exports; 226 passed/8 files, original six-photo guards preserved"
+    },
+    {
+      "scope": "latest Claude intermediate rerun",
+      "passed": 159,
+      "failed": 1,
+      "reason": "Core still read predecessor creative package exports",
+      "resolution": "Build current creative exports; combined 226 passed"
     }
   ],
   "unexecuted": [
@@ -239,7 +253,33 @@
     "passedScenarios": 7,
     "uncoveredModelCalls": 0,
     "proof": "output/release-gate/recovery/r1-chaos-8628f7fc.json",
-    "finalCandidateRecovery": "must rerun after auth/session service-exchange repair"
+    "finalCandidateRecovery": "must rerun after auth/session service-exchange repair",
+    "finalServiceExchangeSeal": {
+      "seal": "c011f3c3",
+      "r1Scenarios": 7,
+      "rollbackScenarios": 2,
+      "failedInvariants": 0,
+      "uncoveredModelCalls": 0,
+      "qualification": "Predecessor after latest Claude source integration; not reused as final combined-candidate proof"
+    }
   },
-  "finalReviewRepair": "Reject body credential aliases in auth/session when they equal the scoped design credential, even if the retired operator alias matches. 53 related auth tests pass; seal8628f7fc not deployed."
+  "finalReviewRepair": "Reject body credential aliases in auth/session when they equal the scoped design credential, even if the retired operator alias matches. 53 related auth tests pass; seal8628f7fc not deployed.",
+  "latestClaudeIntegration": {
+    "productionSeal": "6af16cb8e68c0f91142a944683e4c85b010d8a39",
+    "localChecks": {
+      "files": 8,
+      "passed": 226,
+      "failed": 0,
+      "log": "/tmp/hawa-latest-integrated-final.log"
+    },
+    "repairs": [
+      "Choose minimum is a lower bound; storyboard uses at least two supplied photos",
+      "House prior preserves human review on a tied/unreliable judge",
+      "Missing historical hero enlargement cannot win sharpness preference"
+    ],
+    "limitations": [
+      "No new paid creative study or native/human approvals fabricated",
+      "Exact combined-source recovery/full release gates still pending"
+    ]
+  }
 }

@@ -187,9 +187,15 @@ export function computeGridAppropriateness(layout: StudioLayoutV2): MetricResult
     }
   }
 
+  // ADR-170: a recipe's gold frame follows the canvas edge, not the grid (nor does the tab that backs
+  // its logo, which is aligned by the logo), and its corner logo and
+  // flush-left (or, in Sorani, flush-right) text column are set on the margin. Counted as off-grid,
+  // they ranked the office's own report layout (hero_fade_report, example 3) last in every live
+  // trial of 2026-09-30 and kept it from the judge; a centred plate won on grid alone.
+  const recipe = Boolean(layout.artDirection);
   const allBoxes: Box[] = [
     ...layout.text,
-    ...layout.shapes.filter(s => s.role !== 'panel' || (s.width < width * 0.9 && s.height < layout.height * 0.9)),
+    ...layout.shapes.filter(s => !(recipe && (s.role === 'frame' || s.surface === 'tab')) && (s.role !== 'panel' || (s.width < width * 0.9 && s.height < layout.height * 0.9))),
     layout.logo
   ].filter(Boolean);
 
@@ -217,7 +223,8 @@ export function computeGridAppropriateness(layout: StudioLayoutV2): MetricResult
     // (1) Left and right edges align to grid column lines, OR
     // (2) Centered on a column / canvas axis within margins, OR
     // (3) Left edge aligns to a column start and width spans within margin
-    if ((leftOnCol && rightOnCol) || (isCentered && left >= margin - tolerance && right <= width - margin + tolerance) || (leftOnCol && isCentered)) {
+    const flush = recipe && (Math.abs(left - margin) <= tolerance || Math.abs(right - (width - margin)) <= tolerance);
+    if ((leftOnCol && rightOnCol) || (isCentered && left >= margin - tolerance && right <= width - margin + tolerance) || (leftOnCol && isCentered) || flush) {
       alignedElements++;
     }
   }

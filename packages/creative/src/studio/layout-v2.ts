@@ -119,6 +119,11 @@ export interface ArtDirectionRecord {
   omittedPhotos: number[];
   /** Right-to-left form: text blocks mirrored, photos never flipped. */
   rtl: boolean;
+  /**
+   * How much the hero's own pixels are enlarged to fill its box (1 = shown at its size). Over 1.3 a
+   * photo starts to look soft; over 1.5 it is a QA warning and ranks behind a sharper candidate.
+   */
+  heroUpscale?: number;
 }
 
 export interface TextElement extends Box {
@@ -349,6 +354,11 @@ export const overlayElementSchema = boxSchema.extend({
   purpose: z.enum(['fade', 'scrim', 'paper']),
 }).strict();
 
+/** A hero enlarged up to this much stays sharp; recipes plan for it (ADR-170 live trials). */
+export const HERO_SHARP_UPSCALE = 1.3;
+/** Over this, a hero looks soft: a QA warning, and it ranks behind a sharper candidate. */
+export const HERO_SOFT_UPSCALE = 1.5;
+
 export const artDirectionRecordSchema = z.object({
   recipe: z.enum(RECIPE_IDS),
   conceptNote: z.string().max(400).optional(),
@@ -358,6 +368,7 @@ export const artDirectionRecordSchema = z.object({
   cutoutPhotoIndex: z.number().int().nonnegative().optional(),
   omittedPhotos: z.array(z.number().int().nonnegative()).max(12),
   rtl: z.boolean(),
+  heroUpscale: z.number().positive().max(50).optional(),
 }).strict();
 
 export const textElementSchema = boxSchema.extend({

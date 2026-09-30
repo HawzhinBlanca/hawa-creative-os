@@ -28,6 +28,8 @@ const PHOTOS: Array<PhotoFacts & { width: number; height: number }> = Array.from
   subjectFit: i === 0 ? 5 : i === 4 ? 4 : 2,
   shot: i === 4 ? 'group_or_crowd' : 'classroom_or_interior',
   sharpness: i === 2 ? 0.3 : 0.7,
+  // Photo 3 has a quiet top, where a title plate can sit (hero_plate needs one).
+  ...(i === 3 ? { quietArea: 'top' as const, quiet: 'top' as const } : {}),
 }));
 
 const concept = (over: Partial<RawArtDirectionConcept>): RawArtDirectionConcept => ({
@@ -55,9 +57,13 @@ describe('art-director prompt and concepts (ADR-170)', () => {
     expect(user).toMatch(/sharpness 0\.30 \(soft\)/);
   });
 
-  it('offers a cut-out recipe only with a cut-out, and a sky title only with a calm top or bottom', () => {
-    expect(eligibleRecipes(PHOTOS)).not.toContain('cutout_speaker');
-    expect(eligibleRecipes(PHOTOS)).not.toContain('sky_title');
+  it('offers a cut-out recipe only with a cut-out, and a sky title or title plate only with a calm top or bottom', () => {
+    const busy = PHOTOS.map(({ quietArea: _q, quiet: _r, ...p }: any) => p);
+    expect(eligibleRecipes(busy)).not.toContain('cutout_speaker');
+    expect(eligibleRecipes(busy)).not.toContain('sky_title');
+    // A title plate sits in a quiet region too, never on the people (live trial, 2026-09-30).
+    expect(eligibleRecipes(busy)).not.toContain('hero_plate');
+    expect(eligibleRecipes(PHOTOS)).toEqual(expect.arrayContaining(['hero_plate', 'sky_title']));
     expect(eligibleRecipes([{ ...PHOTOS[0], cutout: true, localQuiet: 'top' }])).toEqual(expect.arrayContaining(['cutout_speaker', 'sky_title']));
     expect(eligibleRecipes([])).toEqual(['typographic']);
     expect(rankPhotosForHero(PHOTOS)[0].photoIndex).toBe(0);

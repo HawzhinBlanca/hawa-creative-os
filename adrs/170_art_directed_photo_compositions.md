@@ -90,3 +90,78 @@ input, about -$0.023 output. The brief adds about 150 output tokens (+$0.0015), 
 - Changing `kaae-reference.json` changes the KAAE reference hash: runs created before it must be
   re-planned (`CLIENT_REFERENCE_CHANGED`), as with any reference change.
 - The layout model's recipe choices are unmeasured until the lead's paid trials.
+
+## Addendum: paid live trials (2026-09-30, branch `claude/art-direction-trials`)
+
+`scripts/art_direction_live_trial.ts` runs the owner's KAAE K-12 album (task ba4469f2's caption and
+its six photos) through Telegram album intake, the lifecycle projection and `DesignStudioService` on
+pipeline v3 with the production models (`HAWA_MODEL_TIER=production`: Sol for brief and layout,
+gpt-4.1-mini for the judge), against a throwaway clone of the test template database, and stops
+when the run is ready for Canva. Five paid runs: $0.331 in all, 6 calls and $0.058-0.079 a design
+(the ADR's ~$0.60 estimate was high), about 80 s each. Runs 3-5 used a local container of the
+production cut-out image for faces; runs 1-2 had none.
+
+- The layout model proposed the same three concepts every time: `hero_fade_report` (the library
+  photo as hero, the crowd photo blended into the fade: the office's example 3), `scrim_caption` and
+  `hero_plate`. The recipe and hero choices were sound.
+- The cut caption no longer reaches the Studio as cut: intake asks for the rest (ADR-160) and, with
+  no answer, opens with the two finished lines.
+
+Fixed on this branch, each with a regression test that fails before the fix:
+
+1. **The office's layout never reached the judge.** Composite ranking counted a recipe's gold frame
+   and corner logo as off-grid, so `hero_fade_report` ranked last in all four runs and the judge
+   compared the other two. Grid appropriateness now leaves a recipe's frame out and counts a box set
+   flush on the margin as aligned (`design-metrics.ts`).
+2. **A title plate across two faces.** `hero_plate` put its plate in the upper third whatever the
+   photo showed. The solver now maps the detected face through the hero's cover crop, moves the plate
+   below it, and refuses any recipe whose copy, plate or logo would cover it.
+3. **"Field Visit Report" at body size.** With the two-line copy the model slotted the report's name
+   as body. A short line beside the title that the brief calls a subtitle is now the gold accent line.
+4. **A face that was not there.** The face service answers the centre, with no face height, for a
+   photo with no face; that centre was taken for a face ("faces found", and a centre crop instead of
+   the measured detail). Only a point with a face height counts now.
+
+Still open, not fixed here: the gpt-4.1-mini judge is position-biased on these pairs (two of five
+runs were ties decided by composite, which prefers the centred plate), and it reported "photos tiled
+in a grid" for single-photo designs; landscape album photos (1280x853) are enlarged about 1.6x to
+fill the portrait canvas in `scrim_caption`, `hero_plate` and `hero_card`; titles are not set in
+capitals as the office sets them (copy is set as written); body text is about 2.6% of the width
+against about 3.3% in example 3; and the logo sits on the photo with no carrier.
+
+## Addendum: second round (2026-09-30)
+
+1. **Ties go to the house prior.** When the pairwise judge leaves two art-directed candidates
+   undecided (inconsistent across its two orders, or a pick that fails its canary), the winner is
+   chosen by `art-direction/prior.ts`, not by the typographic composite: first the house recipe for
+   the brief's subject tags (report release or field visit → `hero_fade_report`; meeting →
+   `scrim_caption`; event → `cutout_speaker`, `hero_plate`; occasion → `sky_title`; …), then the
+   sharper hero. The run records `decidedBy: art_direction_prior` and the reason
+   (`stages.tournament.prior`). The judge is told how many photos each layout places, and
+   "photos tiled in a grid" is recorded only for a layout with two or more framed photos.
+2. **`hero_plate` sits in the photo's quiet top or bottom** (brief reading, else the local
+   measurement), is refused for a photo with neither, and never uses a quiet floor in a photo with
+   faces, because the people are standing there. A plate concept on an unsuitable photo moves to
+   the best photo that has a quiet region. Every recipe prefers a one-line title when it fits at 80%
+   of its natural size or more. `hero_plate` is eligible only when some photo is calm at its top or
+   bottom.
+3. **Sharpness.** Every recipe records `artDirection.heroUpscale`. `scrim_caption` and `hero_plate`
+   set a landscape photo as a band at no more than 1.3x, with the canvas's navy below it; the scrim
+   or fade closes over the photo's edge at 98% opacity. A hero over 1.5x is a `HERO_UPSCALED`
+   review warning, ranks behind a sharp candidate, and its concept is replaced when a sharp recipe
+   can carry it.
+4. **Type as in example 3** (fade and scrim, portrait and square): body at 3.3% of the width, on a
+   68% measure, at a 1.3 leading. Letter case is left exactly as the requester wrote it. The title
+   stays Verdana Bold: the admitted heavier faces are not qualified renderer fonts.
+5. **The corner logo is never bare on a photo:** a small cream rounded tab carries it where no plate
+   or card does.
+
+Two paid runs with the full copy and the face service cost $0.118 (runs 6 and 7: 6 calls,
+$0.058–0.060 and about 80 s each). Both winners are `hero_fade_report`:
+
+- Run 6: the judge tied again; the house prior chose the library hero with the crowd blended in,
+  essentially example 3.
+- Run 7: the judge chose consistently, the courtyard hero without a texture. Its photo edge showed
+  as a line in the fade; that was fixed afterwards and re-solved without a paid call.
+
+Total for both rounds: $0.449.

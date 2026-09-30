@@ -334,6 +334,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
 
     const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.match?.winnerId).toBe('TIE_DISCARDED');
+    expect(result.humanChoiceRecommended).toBe(true);
     expect(result.decidedBy).toBe('composite_after_tie');
     expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
     // A judge that picks by position cannot pass a two-order canary either.
@@ -354,6 +355,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
 
     const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.decidedBy).toBe('composite_judge_unreliable');
+    expect(result.humanChoiceRecommended).toBe(true);
     expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
     expect(result.judgeReliable).toBe(false);
   });

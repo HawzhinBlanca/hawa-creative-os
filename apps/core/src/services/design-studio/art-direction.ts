@@ -29,7 +29,12 @@ export async function photoFactsFor(
   const out: Array<PhotoFacts & SolverPhoto> = [];
   for (const [photoIndex, photo] of (ctx.photos ?? []).entries()) {
     const size = (photo.width && photo.height ? { width: photo.width, height: photo.height } : imagePixelSize(photo.bytes)) ?? { width: 1, height: 1 };
-    const face = ctx.photoFaces?.[photoIndex] ?? undefined;
+    // The detector answers every photo it reads; with no face it answers the centre and no face
+    // height. That centre is not a face: counted as one, it told the art director "faces found" for a
+    // photo of a woman in profile and cropped on the middle instead of the photo's measured detail
+    // (live trial, 2026-09-30). Only a point with a face height is a face.
+    const detected = ctx.photoFaces?.[photoIndex] ?? undefined;
+    const face = detected && typeof detected.faceShare === 'number' && detected.faceShare > 0 ? detected : undefined;
     const cut = ctx.photoCutouts?.[photoIndex];
     let analysis: Awaited<ReturnType<typeof analysePhotoAsync>> | undefined;
     try {

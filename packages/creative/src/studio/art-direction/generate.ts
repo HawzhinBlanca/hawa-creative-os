@@ -1,6 +1,6 @@
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
 import type { StudioLayoutV2, RecipeId } from '../layout-v2.js';
-import { studioLayoutV2Schema } from '../layout-v2.js';
+import { studioLayoutV2Schema, HERO_SOFT_UPSCALE } from '../layout-v2.js';
 import type { OpenAiStudioClient, OpenAiStructuredResponse } from '../openai-studio-client.js';
 import type { LayoutVisualInput } from '../visual-conditioning.js';
 import { clientReferenceInstruction, clientReferencePart, type ClientReference } from '../client-reference.js';
@@ -266,7 +266,10 @@ export function defaultChoice(
   copyBlocks: CopyBlockSlotInput[]
 ): ArtDirectionChoice {
   const ranked = rankPhotosForHero(photos);
-  const hero = recipe === 'cutout_speaker' ? ranked.find((p) => p.cutout) ?? ranked[0] : ranked[0];
+  // A title plate or a sky title needs a hero calm at its top or bottom: the best such photo.
+  const calm = (p: PhotoFacts) => [p.quietArea, p.localQuiet].some((q) => q === 'top' || q === 'bottom');
+  const hero = recipe === 'cutout_speaker' ? ranked.find((p) => p.cutout) ?? ranked[0]
+    : recipe === 'hero_plate' || recipe === 'sky_title' ? ranked.find(calm) ?? ranked[0] : ranked[0];
   const texture = RECIPES[recipe].texture ? ranked.find((p) => p.photoIndex !== hero?.photoIndex && (p.shot === 'group_or_crowd' || p.shot === 'classroom_or_interior')) : undefined;
   const titleAt = copyBlocks.findIndex((b) => b.role === 'title');
   return {
@@ -390,7 +393,13 @@ export function solveConcepts(
   const kept: ArtDirectionChoice[] = [];
   const replaced: GenerateArtDirectedResult['replaced'] = [];
   choices.forEach((choice, index) => {
-    const tries = [choice, ...eligible.filter((r) => r !== choice.recipe).map((r) => defaultChoice(r, options.photos, options.copyBlocks))];
+    // The concept as given; then its recipe on the photo the house would pick for it (a plate on a
+    // photo with no quiet region keeps the plate, on another photo); then the other recipes.
+    const own = { ...defaultChoice(choice.recipe, options.photos, options.copyBlocks), slots: choice.slots, params: choice.params, conceptNote: choice.conceptNote };
+    const tries = [choice, ...(own.heroPhotoIndex !== choice.heroPhotoIndex ? [own] : []),
+      ...eligible.filter((r) => r !== choice.recipe).map((r) => defaultChoice(r, options.photos, options.copyBlocks))];
+    // A concept whose hero would be enlarged past 1.5x is kept only when no sharp one can replace it.
+    let soft: { layout: StudioLayoutV2; attempt: ArtDirectionChoice } | undefined;
     for (const attempt of tries) {
       if (attempt !== choice && kept.some((k) => k.recipe === attempt.recipe)) continue;
       try {
@@ -399,6 +408,11 @@ export function solveConcepts(
           throw new RecipeInfeasibleError(attempt.recipe, 'required requester photo coverage not met');
         const parsed = studioLayoutV2Schema.safeParse(layout);
         if (!parsed.success) throw new RecipeInfeasibleError(attempt.recipe, parsed.error.message.slice(0, 200));
+        if ((layout.artDirection?.heroUpscale ?? 0) > HERO_SOFT_UPSCALE) {
+          soft ??= { layout, attempt };
+          replaced.push({ index, recipe: attempt.recipe, reason: `HERO_UPSCALED: the hero would be enlarged ${layout.artDirection!.heroUpscale}x` });
+          continue;
+        }
         layouts.push(layout);
         kept.push(attempt);
         return;
@@ -406,6 +420,10 @@ export function solveConcepts(
         if (!(err instanceof RecipeInfeasibleError)) throw err;
         replaced.push({ index, recipe: attempt.recipe, reason: err.message });
       }
+    }
+    if (soft && !kept.some((k) => k.recipe === soft!.attempt.recipe)) {
+      layouts.push(soft.layout);
+      kept.push(soft.attempt);
     }
   });
   return { layouts, choices: kept, replaced };

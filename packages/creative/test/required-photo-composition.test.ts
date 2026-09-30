@@ -52,6 +52,12 @@ describe('ADR-171 required photo composition', () => {
     const duplicate = { ...layout, photos: [layout.photos![0], layout.photos![0], layout.photos![2]] };
     expect(validateLayoutV2(duplicate, { ...context(1080, 1350), photoSelection: requested })).toMatchObject({ ok: false, code: 'PHOTOS' });
   });
+  it('a choose minimum of one still permits the two-photo storyboard without dropping its recipe minimum', () => {
+    const requested = { mode: 'choose' as const, minimum: 1 };
+    const layout = solveRecipe({ ...input(), photoSelection: requested });
+    expect(layout.photos).toHaveLength(2);
+    expect(validateLayoutV2(layout, { ...context(1080, 1350), photoSelection: requested })).toMatchObject({ ok: true });
+  });
   it('normalizes an invalid model concept under the default all-photo contract and solves all six', () => {
     const blocks: CopyBlockSlotInput[] = Object.entries(copy).map(([index, text]) => ({ index: Number(index), text, role: Number(index) === 0 ? 'title' : Number(index) === 2 ? 'cta' : 'body', script: 'latin' as const }));
     const choices = normalizeConcepts([{

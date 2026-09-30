@@ -1,5 +1,6 @@
 import { evaluateThumbnailLayout } from './thumbnail-rules.js';
 import type { StudioLayoutV2 } from './layout-v2.js';
+import { HERO_SOFT_UPSCALE } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
 import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
@@ -355,7 +356,7 @@ export function evaluateHardQa(
  * for every candidate of a run; a substituted face depends on the candidate's own type choices.
  */
 export function reviewFindings(
-  layout: Pick<StudioLayoutV2, 'text'>,
+  layout: Pick<StudioLayoutV2, 'text'> & Partial<Pick<StudioLayoutV2, 'artDirection'>>,
   ctx: Pick<HardQaContext, 'copyText' | 'instructions' | 'copyOrigin' | 'fontFidelity'>
 ): ReviewFinding[] {
   const findings: ReviewFinding[] = [];
@@ -373,6 +374,16 @@ export function reviewFindings(
       code: 'FONT_SUBSTITUTED',
       severity: 'warning',
       message: `FONT_SUBSTITUTED: the renderer drew a stand-in for ${family} (block${blocks.length === 1 ? '' : 's'} ${blocks.join(', ')}); the preview does not show the face the design names.`,
+    });
+  }
+  // ADR-170: a hero shown much larger than its own pixels looks soft (the album's 1280x853 photos
+  // stretched 1.6x over a 1080x1350 canvas in the live trials). A warning, never a failure.
+  const upscale = layout.artDirection?.heroUpscale;
+  if (typeof upscale === 'number' && upscale > HERO_SOFT_UPSCALE) {
+    findings.push({
+      code: 'HERO_UPSCALED',
+      severity: 'warning',
+      message: `HERO_UPSCALED: the main photo is shown at ${upscale.toFixed(1)}x its own size and may look soft; a larger original would be sharper.`,
     });
   }
   return findings;

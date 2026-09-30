@@ -6,7 +6,8 @@ import { requiredContrast } from '../src/studio/house-rules.js';
 import { copyOrderViolations } from '../src/studio/hard-qa.js';
 import { evaluateDesignMetrics } from '../src/studio/design-metrics.js';
 import { measureWrappedLines } from '../src/studio/render-layout-v2.js';
-import { prepareGeneratedLayoutV3, settlePhotos, fitPhotoBoxesToImages } from '../src/studio/pipeline-v3.js';
+import { prepareGeneratedLayoutV3, settlePhotos, fitPhotoBoxesToImages, rankCandidatesV3 } from '../src/studio/pipeline-v3.js';
+import { coverCrop } from '../src/studio/photo-crop.js';
 import {
   RecipeInfeasibleError,
   brandTones,
@@ -50,7 +51,7 @@ const RECIPES: RecipeId[] = ['hero_fade_report', 'hero_card', 'hero_plate', 'scr
 function choice(recipe: RecipeId): ArtDirectionChoice {
   return {
     recipe,
-    heroPhotoIndex: recipe === 'sky_title' ? 5 : 0,
+    heroPhotoIndex: recipe === 'sky_title' || recipe === 'hero_plate' ? 5 : 0,
     texturePhotoIndex: 4,
     cutoutPhotoIndex: recipe === 'cutout_speaker' ? 3 : null,
     slots: [{ copyIndex: 0, slot: 'title' }, { copyIndex: 1, slot: 'accent' }, { copyIndex: 2, slot: 'body' }, { copyIndex: 3, slot: 'cta' }],
@@ -83,6 +84,12 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
     for (const [w, h] of SIZES) {
       for (const rtl of [false, true]) {
         it(`${recipe} ${w}x${h} ${rtl ? 'RTL' : 'LTR'}`, () => {
+          // A landscape photo on a 9:16 story leaves the plate no quiet band below the story's unsafe
+          // top without enlarging the photo past 1.3x: the recipe is refused, not forced.
+          if (recipe === 'hero_plate' && h / w >= 1.7) {
+            expect(() => solve(recipe, w, h, rtl)).toThrow(RecipeInfeasibleError);
+            return;
+          }
           const layout = solve(recipe, w, h, rtl);
           expect(studioLayoutV2Schema.safeParse(layout).success).toBe(true);
           const result = validateLayoutV2(layout, context(w, h, rtl));
@@ -122,6 +129,7 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
       for (const rtl of [false, true]) {
         it(`${recipe} ${w}x${h} ${rtl ? 'RTL' : 'LTR'} with three blocks and no call to action`, () => {
           const text = rtl ? { 0: SORANI[0], 1: SORANI[1], 2: SORANI[2] } : { 0: LATIN[0], 1: LATIN[1], 2: LATIN[2] };
+          if (recipe === 'hero_plate' && h / w >= 1.7) return;
           const layout = solveRecipe({
             width: w, height: h, copy: { text }, photos: PHOTOS, palette: PALETTE, logoAspect: 1,
             choice: { ...choice(recipe), slots: choice(recipe).slots.slice(0, 3) },
@@ -230,5 +238,76 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
     expect(prepared.art).toBeUndefined();
     expect(settlePhotos(JSON.parse(JSON.stringify(layout)))).toEqual(before);
     expect(fitPhotoBoxesToImages(JSON.parse(JSON.stringify(layout)), PHOTOS, { text: LATIN })).toEqual(before);
+  });
+
+  // Found in the paid live trials of 2026-09-30 on the owner's KAAE K-12 album.
+  describe('live-trial defects (2026-09-30)', () => {
+    const OWNER = { 0: 'KAAE K-12 Pilot Study', 1: 'Field Visit Report', 2: 'Insights from KAAE school field visits and next steps toward education quality improvement.' };
+    /** Photo 3 of the album: two visitors talking, with the detector's face point and tallest face as measured. */
+    const faces: SolverPhoto[] = PHOTOS.map((p) => (p.photoIndex === 3 ? { ...p, focus: { x: 0.3078, y: 0.3282 }, faceShare: 0.17, cutoutSize: undefined } : p));
+    const plateOn = (photos: SolverPhoto[]) => solveRecipe({
+      width: 1080, height: 1350, copy: { text: OWNER }, photos, palette: PALETTE, logoAspect: 1,
+      choice: { recipe: 'hero_plate', heroPhotoIndex: 3, texturePhotoIndex: null, cutoutPhotoIndex: null,
+        slots: [{ copyIndex: 0, slot: 'accent' }, { copyIndex: 1, slot: 'title' }, { copyIndex: 2, slot: 'body' }], params: { frame: 'inset', align: 'center' } },
+    });
+    /** The face as the renderer draws it: the detector's point through the hero's cover crop, one face tall. */
+    const faceBandOf = (layout: StudioLayoutV2, src: SolverPhoto = faces[3]) => {
+      const hero = layout.photos!.find((p) => p.role === 'hero')!;
+      const crop = coverCrop(hero, src, hero.focus);
+      const scale = hero.height / crop.sh;
+      const cy = hero.y + (src.focus!.y * src.height - crop.sy) * scale;
+      const half = 0.5 * src.faceShare! * src.height * scale;
+      return { top: cy - half, bottom: cy + half };
+    };
+
+    it('hero_plate sets its plate in the photo\'s quiet region, never on the people', () => {
+      // Photo 3 (two visitors) has no quiet top or bottom: in round one the plate sat on their faces,
+      // then, moved below them, on their bodies. The recipe is refused for it.
+      expect(() => plateOn(faces)).toThrow(/no quiet top or bottom/);
+      // A photo quiet at the top with its people low: the plate stays in the top band, above them.
+      const calm: SolverPhoto[] = faces.map((p) => (p.photoIndex === 3 ? { ...p, quiet: 'top', focus: { x: 0.4, y: 0.72 } } : p));
+      const layout = plateOn(calm);
+      const plate = layout.shapes.find((s) => s.surface === 'plate')!;
+      const hero = layout.photos!.find((p) => p.role === 'hero')!;
+      expect(plate.y + plate.height).toBeLessThanOrEqual(hero.y + 0.45 * hero.height);
+      expect(plate.y + plate.height).toBeLessThanOrEqual(faceBandOf(layout, calm[3]).top);
+      expect(validateLayoutV2(layout, { ...context(1080, 1350, false), copyCount: 3, copyScripts: ['latin', 'latin', 'latin'] })).toMatchObject({ ok: true });
+      // Quiet at the top but with the faces there too: refused rather than set on them.
+      const crowded: SolverPhoto[] = faces.map((p) => (p.photoIndex === 3 ? { ...p, quiet: 'top', focus: { x: 0.5, y: 0.3 } } : p));
+      expect(() => plateOn(crowded)).toThrow(/cover the faces/);
+    });
+
+    it('refuses a recipe whose copy would sit on a face rather than set it there', () => {
+      // Faces low in the frame: the lines of a scrim caption would be set across them.
+      const low: SolverPhoto[] = faces.map((p) => (p.photoIndex === 3 ? { ...p, focus: { x: 0.3, y: 0.86 } } : p));
+      expect(() => solveRecipe({
+        width: 1080, height: 1350, copy: { text: OWNER }, photos: low, palette: PALETTE, logoAspect: 1,
+        choice: { recipe: 'scrim_caption', heroPhotoIndex: 3, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: [], params: { frame: 'none', align: 'start' } },
+      })).toThrow(/cover the faces/);
+    });
+
+    it('a short line beside the title that the brief calls its subtitle is the gold line, not body text', () => {
+      // The cut caption's two lines: the model set the report's own name at body size.
+      const bodySlot = { ...choice('scrim_caption'), slots: [{ copyIndex: 0, slot: 'title' as const }, { copyIndex: 1, slot: 'body' as const }] };
+      expect(normalizeSlots({ choice: bodySlot, copy: { text: { 0: OWNER[0], 1: OWNER[1] } }, briefRoles: { 0: 'title', 1: 'subtitle' } }))
+        .toEqual([{ copyIndex: 0, slot: 'title' }, { copyIndex: 1, slot: 'accent' }]);
+      // A sentence stays body text, and so does a line the brief does not call a subtitle.
+      expect(normalizeSlots({ choice: bodySlot, copy: { text: { 0: OWNER[0], 1: OWNER[2] } }, briefRoles: { 0: 'title', 1: 'subtitle' } })[1].slot).toBe('body');
+      expect(normalizeSlots({ choice: bodySlot, copy: { text: { 0: OWNER[0], 1: OWNER[1] } }, briefRoles: { 0: 'title', 1: 'body' } })[1].slot).toBe('body');
+    });
+
+    it('ranks the office\'s report layout among the two the judge sees: a frame and a corner logo are not off-grid', () => {
+      // The three concepts the layout model proposed in all four runs.
+      const slots = [{ copyIndex: 0, slot: 'accent' as const }, { copyIndex: 1, slot: 'title' as const }, { copyIndex: 2, slot: 'body' as const }];
+      const concept = (recipe: RecipeId, hero: number, texture: number | null, align: 'start' | 'center') => solveRecipe({
+        width: 1080, height: 1350, copy: { text: OWNER }, photos: PHOTOS, palette: PALETTE, logoAspect: 1,
+        choice: { recipe, heroPhotoIndex: hero, texturePhotoIndex: texture, cutoutPhotoIndex: null, slots, params: { frame: 'inset', align, fadeShare: 0.46 } },
+      });
+      const layouts = [concept('hero_fade_report', 0, 4, 'start'), concept('scrim_caption', 3, null, 'start'), concept('hero_plate', 5, null, 'center')];
+      const fade = evaluateDesignMetrics(layouts[0], { wrappedLines: measureWrappedLines(layouts[0], OWNER) });
+      expect(fade.metrics.gridAppropriateness.passed).toBe(true);
+      const ranked = rankCandidatesV3(layouts.map((layout, sourceIndex) => ({ sourceIndex, layout })), { text: OWNER });
+      expect(ranked.slice(0, 2).map((r) => r.layout.artDirection!.recipe)).toContain('hero_fade_report');
+    });
   });
 });
