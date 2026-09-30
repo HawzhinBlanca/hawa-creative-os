@@ -20,7 +20,7 @@ const ctx = (attachedImage?: string, completeJson = vi.fn()) => ({
 
 describe('the brief reads an attached image', () => {
   it('sends the image and keeps what the model read in it', async () => {
-    const completeJson = vi.fn(async () => reply({ referenceRole: 'style_reference', referenceNotes: 'gold frame' }));
+    const completeJson = vi.fn(async () => reply({ referenceRole: 'style_reference', referenceNotes: 'gold frame', imageRoles: [{ index: 0, role: 'style_reference', notes: 'gold frame' }] }));
     const brief = await runBriefStage(ctx('data:image/jpeg;base64,/9j/AAAA', completeJson));
     const params = (completeJson.mock.calls[0] as any)[0];
     expect(params.images).toEqual([{ mediaType: 'image/jpeg', data: '/9j/AAAA' }]);
@@ -46,7 +46,6 @@ describe('the brief says what each of several images is', () => {
           { index: 0, role: 'content_photo', notes: 'panelist in white' },
           { index: 1, role: 'content_photo', notes: 'panelist in black' },
           { index: 2, role: 'style_reference', notes: 'finished poster mock-up' },
-          { index: 7, role: 'logo', notes: 'out of range' },
         ],
       })
     );
@@ -68,14 +67,10 @@ describe('the brief says what each of several images is', () => {
     expect(brief.referenceSeen).toBe(true);
   });
 
-  it('an image the model did not classify is unrelated, never guessed', async () => {
+  it('an image the model did not classify fails visibly instead of becoming unrelated', async () => {
     const completeJson = vi.fn(async () => reply({ referenceRole: 'none', referenceNotes: '', imageRoles: [{ index: 0, role: 'content_photo', notes: '' }] }));
     const c = { ...ctx(undefined, completeJson), requestImages: ['data:image/jpeg;base64,/9j/A', 'data:image/jpeg;base64,/9j/B'] };
-    const brief = await runBriefStage(c);
-    expect(brief.imageRoles).toEqual([
-      { index: 0, role: 'content_photo', notes: '' },
-      { index: 1, role: 'unrelated', notes: '' },
-    ]);
+    await expect(runBriefStage(c)).rejects.toThrow('missing report for image 2');
   });
 });
 

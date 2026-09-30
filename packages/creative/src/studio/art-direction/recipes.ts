@@ -53,6 +53,17 @@ export interface RecipeSpec {
 }
 
 export const RECIPES: Record<RecipeId, RecipeSpec> = {
+  hero_storyboard: {
+    id: 'hero_storyboard',
+    reference: 'ADR-171 engineering composition; human creative qualification pending',
+    summary: 'A dominant hero next to a supporting image sequence, with measured live copy on a solid brand surface. Uses every required photo exactly once.',
+    bestFor: 'multi-photo reports, visits and event narratives with required image coverage',
+    minPhotos: 2,
+    texture: false,
+    needsCutout: false,
+    shots: ['classroom_or_interior', 'group_or_crowd', 'event_or_stage'],
+    canva: 'every photo is a native re-croppable image; text and brand surfaces remain native',
+  },
   hero_fade_report: {
     id: 'hero_fade_report',
     reference: 'example 3 (KAAE K-12 Pilot Study / Field Visit Report)',
@@ -163,12 +174,13 @@ export interface PhotoFacts {
 }
 
 /** The recipes eligible for a request with these photos. `typographic` only when there are none. */
-export function eligibleRecipes(photos: PhotoFacts[]): RecipeId[] {
+export function eligibleRecipes(photos: PhotoFacts[], minimum = 1): RecipeId[] {
   if (!photos.length) return ['typographic'];
   const out: RecipeId[] = [];
   for (const id of PHOTO_RECIPE_IDS) {
     const spec = RECIPES[id];
     if (photos.length < spec.minPhotos) continue;
+    if (minimum > 1 && id !== 'hero_storyboard') continue;
     if (spec.needsCutout && !photos.some((p) => p.cutout)) continue;
     // A title in the sky needs a photo calm at its top or bottom, by the brief or the pixels.
     if (id === 'sky_title' && !photos.some((p) => isCalmTopOrBottom(p))) continue;

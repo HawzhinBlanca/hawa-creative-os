@@ -128,7 +128,7 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
       referencePack: { palette: PALETTE, referenceFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }, clientId: REFERENCE.clientId },
       promotedRules: REFERENCE.rules.colorUsage, latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 1,
       logo: KAAE_TEST_CLIENT_LOGO, client: client as any, pipelineV3: true, imageryStrategy: 'photographic',
-      photoSelection: { mode: 'choose', minimum: 3, matched: "you don't have to use all the photos" },
+      photoSelection: { mode: 'choose', minimum: 1, matched: "you don't have to use all the photos" },
       artDirectionRules: artDirectionRulesFromRaw(REFERENCE),
       photos: photos.map((p, i) => {
         const size = imagePixelSize(p.bytes)!;
@@ -148,6 +148,7 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
       must: [], mustNot: [], imageryStrategy: 'photographic', imageryRationale: '', kurdishLeads: false, riskFlags: [],
     } as unknown as CreativeBrief;
 
+    // This single-hero control explicitly permits one. ADR-171 separately checks the default six.
     const candidates = await runLayoutsStage(ctx, brief, [], [0, 1, 2].map((ordinal) => ({ id: randomUUID(), ordinal })));
     // The model was shown the photos at high detail and the house rules as data.
     const user = requests[0].messages[1].content;

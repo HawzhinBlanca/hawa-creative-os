@@ -184,6 +184,14 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
   }
   notes.push(...softPhotoNotes(shippedPhotos, stages.photoSizes));
   const roles: Array<{ role?: unknown; notes?: unknown } | null> = Array.isArray(stages.brief?.imageRoles) ? stages.brief.imageRoles : [];
+  // ADR-171: individual reports preserve source order even when only a subset is placed.
+  let contentIndex = 0;
+  for (const [imageIndex, report] of roles.slice(0, 10).entries()) {
+    if (!report) continue;
+    const photoIndex = report.role === 'content_photo' ? contentIndex++ : undefined;
+    const use = photoIndex === undefined ? 'not placed as a content photo' : shippedPhotos.some(p => p?.photoIndex === photoIndex) ? 'placed' : 'not placed';
+    notes.push(`Image ${imageIndex + 1} — ${plain(report.role, 30).replace(/_/g, ' ')} (${use}): ${plain(report.notes, 240) || 'No individual analysis recorded.'}`);
+  }
   const reference = roles.find((r) => r?.role === 'style_reference');
   if (reference) {
     // The design places photos whole, in boxes. A reference with its people cut out cannot be
@@ -199,14 +207,10 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
 }
 
 /** True when the requester let the design choose among the photos and it placed a permitted subset. */
-function choseAmongPhotos(stages: any, placed: number, sent: number | undefined, shipped?: any): boolean {
+function choseAmongPhotos(stages: any, placed: number, sent: number | undefined, _shipped?: any): boolean {
   const selection = stages?.brief?.photoSelection;
   if (selection?.mode === 'choose' && sent !== undefined && placed < sent && placed >= Math.min(sent, Number(selection.minimum) || 1)) return true;
-  // ADR-170: an art-direction recipe chose its hero and dropped the rest, which hard QA recorded;
-  // allowed only when the requester did not insist on every photo.
-  const recipe = shipped?.artDirection?.recipe;
-  return Boolean(recipe) && recipe !== 'typographic' && selection?.insisted !== true && sent !== undefined && placed >= 1 && placed < sent &&
-    Array.isArray(stages?.qa?.omittedPhotos) && stages.qa.omittedPhotos.length === sent - placed;
+  return false;
 }
 
 /** The photos a design left out, numbered from 1 as the requester counts them. */

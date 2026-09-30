@@ -93,7 +93,7 @@ function recipeLayout(): { layout: StudioLayoutV2; photos: Buffer[] } {
 
 const qaContext = (extra: Partial<HardQaContext> = {}): HardQaContext => ({
   width: 1080, height: 1350, copyScripts: ['latin', 'latin', 'latin', 'latin'], latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic',
-  palette: PALETTE, logoAspect: 1, copyText: COPY, photoCount: 6, photoSelection: { mode: 'all', minimum: 6 }, ...extra,
+  palette: PALETTE, logoAspect: 1, copyText: COPY, photoCount: 6, photoSelection: { mode: 'choose', minimum: 2 }, ...extra,
 });
 
 describe('validator: text over a photo (ADR-170)', () => {

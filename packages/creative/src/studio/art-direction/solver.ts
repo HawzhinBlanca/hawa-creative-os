@@ -14,6 +14,7 @@ import { calculateLuminanceContrastRatio, hexToLuminance } from '../composite-co
 import { hexToRgb } from '../color-science.js';
 import { maxStrokeWidth } from '../studio-normalize.js';
 import type { QuietArea } from './recipes.js';
+import type { PhotoSelection } from '../photo-selection.js';
 
 /**
  * ADR-170: the recipe solver. It turns the layout model's art-direction choice (a recipe, which
@@ -91,6 +92,7 @@ export interface SolveRecipeInput {
   briefRoles?: Record<number, string>;
   /** Every content photo of the request, by photoIndex. */
   photos: SolverPhoto[];
+  photoSelection?: PhotoSelection;
   palette: string[];
   logoAspect: number;
   logoMinimumWidthPx?: number;
@@ -279,6 +281,7 @@ export function solveRecipe(input: SolveRecipeInput): StudioLayoutV2 {
   const ctx = new SolveContext(input);
   switch (recipe) {
     case 'hero_fade_report': return ctx.heroFadeReport();
+    case 'hero_storyboard': return ctx.heroStoryboard();
     case 'hero_card': return ctx.heroCard();
     case 'hero_plate': return ctx.heroPlate();
     case 'scrim_caption': return ctx.scrimCaption();
@@ -696,6 +699,46 @@ class SolveContext {
    * white line and a gold line), the body and the call to action sit on the fade, anchored to the
    * bottom margin. On a wide canvas the fade and the text take the start side instead.
    */
+  heroStoryboard(): StudioLayoutV2 {
+    const hero = this.hero();
+    const count = this.input.photoSelection?.mode === 'choose'
+      ? Math.max(1, Math.min(this.input.photos.length, this.input.photoSelection.minimum))
+      : this.input.photos.length;
+    const supporting = this.input.photos.filter(p => p.photoIndex !== hero.photoIndex).slice(0, count - 1);
+    if (!supporting.length || count > 10) throw new RecipeInfeasibleError(this.recipe, 'storyboard needs 2 to 10 photos');
+    const colours = surfacePalette(this.tones, this.input.choice.params.surfaceTone === 'cream' ? 'cream' : 'navy');
+    const background = this.input.choice.params.surfaceTone === 'cream' ? this.tones.cream : this.tones.navy;
+    const align = this.align();
+    const bottom = this.safe.y + this.safe.height;
+    const [set] = this.fitScale([{ blocks: this.blocks, width: this.safe.width, colours, align }],
+      ([g]) => this.stackHeight(g) <= (this.wide ? 0.34 : 0.32) * this.H, 3);
+    const h = this.stackHeight(set);
+    const textTop = bottom - h;
+    const gap = Math.max(8, Math.round(0.014 * this.s));
+    const bandH = Math.floor(textTop - 2 * gap);
+    const heroW = Math.round((this.input.choice.params.frame === 'outer' ? 0.58 : 0.62) * this.W);
+    this.placeHero(hero, { x: 0, y: 0, width: heroW, height: bandH });
+    const supportX = heroW + gap;
+    const supportW = this.W - supportX;
+    const columns = supporting.length > 6 ? 3 : supporting.length > 3 ? 2 : 1;
+    const rows = Math.ceil(supporting.length / columns);
+    const cellH = (bandH - (rows - 1) * gap) / rows;
+    for (let row = 0, at = 0; row < rows; row++) {
+      const inRow = Math.min(columns, supporting.length - at);
+      const cellW = (supportW - (inRow - 1) * gap) / inRow;
+      if (Math.min(cellW, cellH) < Math.round(0.12 * this.s))
+        throw new RecipeInfeasibleError(this.recipe, 'supporting photos would be too small; use a larger format or fewer photos with permission');
+      for (let col = 0; col < inRow; col++, at++) this.placeHero(supporting[at],
+        { x: supportX + col * (cellW + gap), y: row * (cellH + gap), width: cellW, height: cellH }, 'inset');
+    }
+    const text = this.placeStack(set, this.safe.x, this.safe.width, textTop, align, colours);
+    // A solid tab keeps the official logo clear of busy pixels; copy stays below the photo sequence.
+    const logo = this.logoAt('top-start');
+    const clear = this.logoClear(logo);
+    this.shapes.push({ kind: 'rect', role: 'panel', layer: 'overlay', surface: 'tab', color: this.tones.navy, ...intBox(clear) });
+    return this.finish({ background, text, logo, titleZone: { x: this.safe.x, y: textTop, width: this.safe.width, height: h }, hero });
+  }
+
   heroFadeReport(): StudioLayoutV2 {
     const hero = this.hero();
     const texture = this.texture(hero);

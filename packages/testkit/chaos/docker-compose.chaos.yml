@@ -32,6 +32,8 @@ x-app-environment: &app-environment
   # The worker's own credential for Core's /v1/internal/* endpoints (a service principal).
   HAWA_WORKER_TOKEN: ${CHAOS_WORKER_TOKEN:?}
   HAWA_DESIGN_WORKER_TOKEN: ${CHAOS_DESIGN_WORKER_TOKEN:?}
+  # ADR-163 rollback: previous Core recognizes the retired key; current Core scopes it first.
+  HAWA_API_KEY: ${CHAOS_DESIGN_WORKER_TOKEN:?}
   # Every chat's requests are RequestLifecycle's (ADR-135): HAWA_LIFECYCLE_CHATS, which listed the
   # flagged chats until 2026-09-28, no longer exists. The R10 scenarios set it only for the previous
   # release's containers, in the release override the cutover driver writes (driver/cutover.ts).

@@ -1,6 +1,5 @@
 import { evaluateThumbnailLayout } from './thumbnail-rules.js';
 import type { StudioLayoutV2 } from './layout-v2.js';
-import { photoRecipeOf } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
 import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
@@ -342,10 +341,8 @@ export function evaluateHardQa(
   }
 
   const findings = [...reviewFindings(layout, ctx), ...unmeasured];
-  // Photos a design left out, where leaving them out was allowed: the requester let it choose, or an
-  // art-direction recipe chose (ADR-170) and the requester did not insist on every photo.
-  const recipeChose = Boolean(photoRecipeOf(layout)) && ctx.photoSelection?.insisted !== true;
-  const omittedPhotos = ctx.photoSelection?.mode === 'choose' || recipeChose ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
+  // ADR-171: only requester-authorized omissions are review evidence.
+  const omittedPhotos = ctx.photoSelection?.mode === 'choose' ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
 
   return {
     passed: defectCodes.length === 0, defectCodes, messages, metrics, layout, textMeasurements, findings, omittedPhotos,

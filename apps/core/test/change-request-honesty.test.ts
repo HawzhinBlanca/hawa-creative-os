@@ -202,6 +202,9 @@ describe('the requester reads plain words', () => {
       '✅ Done: spread the text to reduce empty space.',
       '❌ Not possible automatically: cut the panelists out of their photos (the people need cutting out of their photo backgrounds). The office has been told, and a designer will do it.',
       'Your 2 photos are on the design.',
+      'Image 1 — content photo (placed): No individual analysis recorded.',
+      'Image 2 — content photo (placed): No individual analysis recorded.',
+      'Image 3 — style reference (not placed as a content photo): paired cutout portraits anchored at the bottom left',
     ]);
     expect(notes.join(' ')).not.toMatch(/\d+ × \d|at \(\d|models|score|Studio v/);
   });
@@ -212,7 +215,7 @@ describe('the requester reads plain words', () => {
       '⚠️ Your reference shows the people cut out of their photos. This draft shows your photos as you sent them, because cut-outs cannot be made automatically yet; the art director can make them in Canva.'
     );
     const plainRef = { winner_candidate_id: 'w', stages: { brief: { imageRoles: [{ role: 'style_reference', notes: 'heavy left-aligned title on a blue field' }] } } };
-    expect(requesterDraftNotes({ run: plainRef, candidates: [candidate(0)] })).toEqual(['Styled after the reference design you sent.']);
+    expect(requesterDraftNotes({ run: plainRef, candidates: [candidate(0)] })).toEqual(['Image 1 — style reference (not placed as a content photo): heavy left-aligned title on a blue field', 'Styled after the reference design you sent.']);
   });
 
   it('warns when photos went missing', () => {

@@ -101,7 +101,7 @@ http {
   server {
     listen 3001;
     location ~ \\.png$ { add_header X-Accel-Redirect /_blobs/sha256/ab/missing-file always; return 200 ''; }
-    location / { default_type text/plain; return 200 "core $request_uri"; }
+    location / { add_header X-Test-Office-Proof $http_x_hawa_office_proof always; default_type text/plain; return 200 "core $request_uri"; }
   }
 }
 `;
@@ -113,6 +113,7 @@ http { server { listen 80; location / { default_type text/plain; return 200 "des
     fs.writeFileSync(path.join(dir, 'core.conf'), stubCore);
     fs.writeFileSync(path.join(dir, 'desk.conf'), stubDesk);
     fs.copyFileSync(confPath, path.join(dir, 'nginx.conf'));
+    fs.writeFileSync(path.join(dir, 'office-proof.conf'), `proxy_set_header X-Hawa-Office-Proof "${'a'.repeat(64)}";\n`, { mode: 0o644 });
     fs.mkdirSync(path.join(dir, 'blobs'));
     for (const f of ['core.conf', 'desk.conf', 'nginx.conf']) fs.chmodSync(path.join(dir, f), 0o644);
     fs.chmodSync(path.join(dir, 'blobs'), 0o755);
@@ -127,10 +128,16 @@ http { server { listen 80; location / { default_type text/plain; return 200 "des
     must(['run', '-d', '--pull=never', '--name', `${tag}-desk`, '--network', tag, '--network-alias', 'desk',
       '-v', `${dir}/desk.conf:/etc/nginx/nginx.conf:ro`, IMAGE]);
     must(['run', '-d', '--pull=never', '--name', `${tag}-edge`, '--network', tag, '-p', '127.0.0.1::80',
-      '-v', `${dir}/nginx.conf:/etc/nginx/nginx.conf:ro`, '-v', `${dir}/blobs:/srv/hawa-blobs:ro`, IMAGE]);
+      '-v', `${dir}/nginx.conf:/etc/nginx/nginx.conf:ro`, '-v', `${dir}/office-proof.conf:/etc/nginx/hawa-office-proof.conf:ro`, '-v', `${dir}/blobs:/srv/hawa-blobs:ro`, IMAGE]);
     const port = must(['port', `${tag}-edge`, '80/tcp']).split('\n')[0].split(':').pop();
     base = `http://127.0.0.1:${port}`;
   }, 120_000);
+
+  it('overwrites a caller-supplied office proof with the server-only proof before proxying to Core', async () => {
+    await get('/v1/tasks');
+    const response = await fetch(base + '/v1/tasks', { headers: { 'X-Hawa-Office-Proof': 'forged-client-proof' } });
+    expect(response.headers.get('X-Test-Office-Proof')).toBe('a'.repeat(64));
+  });
 
   afterAll(() => {
     docker(['rm', '-f', `${tag}-edge`, `${tag}-core`, `${tag}-desk`]);

@@ -70,7 +70,7 @@ function context(w: number, h: number, rtl: boolean, insisted = false): LayoutVa
     expectedWidth: w, expectedHeight: h, copyCount: 4,
     copyScripts: rtl ? ['arabic', 'arabic', 'arabic', 'latin'] : ['latin', 'latin', 'latin', 'latin'],
     photoCount: 6,
-    photoSelection: { mode: 'all', minimum: 6, ...(insisted ? { insisted: true } : {}) },
+    photoSelection: insisted ? { mode: 'all', minimum: 6, insisted: true } : { mode: 'choose', minimum: 1 },
     reference: { rules: { fontFamily: 'Verdana', palette: PALETTE }, logoAspect: 1 },
   };
 }
@@ -202,14 +202,14 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
       .toThrow(RecipeInfeasibleError);
   });
 
-  it('dropping photos counts as choosing only while the requester has not insisted on every one', () => {
+  it('a recipe cannot waive the default all-photo contract or the recorded selection minimum', () => {
     const layout = solve('hero_fade_report', 1080, 1350, false);
     expect(validateLayoutV2(layout, context(1080, 1350, false)).ok).toBe(true);
     expect(validateLayoutV2(layout, context(1080, 1350, false, true))).toMatchObject({ ok: false, code: 'PHOTOS' });
-    // "Choose the best ones" with no count: the half-the-photos guess does not bind a recipe's choice
-    // (the owner's K-12 request); a stated count ("pick 3") does.
+    // ADR-171: both stored minimums bind; a recipe is never authority to reduce them.
     const guessed = { ...context(1080, 1350, false), photoSelection: { mode: 'choose' as const, minimum: 3 } };
-    expect(validateLayoutV2(layout, guessed).ok).toBe(true);
+    expect(validateLayoutV2(layout, guessed)).toMatchObject({ ok: false, code: 'PHOTOS' });
+    expect(validateLayoutV2(layout, { ...guessed, photoSelection: undefined })).toMatchObject({ ok: false, code: 'PHOTOS' });
     const counted = { ...context(1080, 1350, false), photoSelection: { mode: 'choose' as const, minimum: 3, counted: true } };
     expect(validateLayoutV2(layout, counted)).toMatchObject({ ok: false, code: 'PHOTOS' });
   });

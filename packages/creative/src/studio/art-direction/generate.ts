@@ -15,6 +15,7 @@ import {
   rankPhotosForHero,
   type PhotoFacts,
 } from './recipes.js';
+import type { PhotoSelection } from '../photo-selection.js';
 import { RecipeInfeasibleError, TEXT_SLOTS, solveRecipe, type ArtDirectionChoice, type SolverPhoto, type TextSlot } from './solver.js';
 
 /**
@@ -105,9 +106,9 @@ PRINCIPLES
 ================================================================================
 - One hero photo that literally shows the subject, used boldly: full-bleed or dominant, running off the edges, never a small framed tile in the middle of empty space.
 - Text always sits on something: a fade, a scrim, a plate, a card or a pill; never bare on a busy photo.
-- A second photo is at most a texture blended into the text zone; never a grid.
+- For hero_storyboard, supporting photos form a sequence beside the dominant hero. Other recipes use at most a texture. Required photo coverage comes first.
 - The photo is never mirrored, tilted or recoloured.
-- The client's own house art-direction rules, listed in the request (R1, R2, ...), come first.
+- Required requester photo coverage is a hard constraint. House art-direction rules govern style within that constraint; they cannot authorize omission.
 
 ================================================================================
 RECIPES (closed set; use only those the request lists as eligible)
@@ -139,7 +140,7 @@ PHOTOS
 ================================================================================
 - The hero must literally show the subject, be sharp, and ideally have a quiet region (sky, wall, blur). Use the photo review and the local measurements given for each photo; look at the photos yourself.
 - A texture photo is optional, only in recipes that allow it, and never the hero. Choose a busy, related scene (a crowd, a classroom) that reads well faded into navy.
-- Leave every other photo out. Never propose a grid of photos.
+- Leave other photos out only when the requester selection permits it. Use hero_storyboard when multiple photos are required. Never replace a required photo with a texture or reference.
 - heroPhotoIndex, texturePhotoIndex and cutoutPhotoIndex are photoIndex values from the list.
 
 ================================================================================
@@ -153,7 +154,11 @@ PARAMETERS
 ================================================================================
 DIVERGENCE
 ================================================================================
-The three concepts must use at least two different recipes, and preferably three. Give each a typicality from 0 (unexpected) to 1 (the most typical treatment). Make one concept the house's most typical answer for the subject, and at least one a less typical but still on-brand answer. Different concepts may pick different heroes when the photos support it.`;
+When more than one recipe is eligible, use at least two different recipes. When only one is eligible, vary the hero and surface treatment within it. Give each a typicality from 0 (unexpected) to 1 (the most typical treatment). Make one concept the house's most typical answer for the subject, and at least one a less typical but still on-brand answer. Different concepts may pick different heroes when the photos support it.`;
+}
+
+function requiredPhotoCount(selection: PhotoSelection | undefined, count: number): number {
+  return selection?.mode === 'choose' ? Math.max(1, Math.min(count, selection.minimum)) : count;
 }
 
 export interface GenerateArtDirectedOptions {
@@ -165,6 +170,7 @@ export interface GenerateArtDirectedOptions {
   canvasHeight: number;
   /** Every content photo, by photoIndex: pixel size, faces, the brief's review and the local analysis. */
   photos: Array<PhotoFacts & SolverPhoto>;
+  photoSelection?: PhotoSelection;
   /** The office exemplars attached as images, described in text: file, recipe and descriptor. */
   exemplars?: Array<{ label: string }>;
   isRtl?: boolean;
@@ -202,7 +208,7 @@ export interface GenerateArtDirectedResult {
 }
 
 export function buildArtDirectorUserPrompt(options: Omit<GenerateArtDirectedOptions, 'client'>): string {
-  const eligible = eligibleRecipes(options.photos);
+  const eligible = eligibleRecipes(options.photos, requiredPhotoCount(options.photoSelection, options.photos.length));
   const ranked = rankPhotosForHero(options.photos);
   const photoLines = options.photos
     .map((p) => {
@@ -244,12 +250,13 @@ PHOTOS (the images attached as "Photo N" are these, at high detail):
 ${photoLines}
 Ranked for the hero by the local review (best first): ${ranked.map((p) => p.photoIndex).join(', ')}.
 
+REQUIRED PHOTO COVERAGE: at least ${requiredPhotoCount(options.photoSelection, options.photos.length)} of ${options.photos.length}; ${options.photoSelection?.mode === 'choose' ? 'the requester permits selection' : 'every content photo is required'}.
 ELIGIBLE RECIPES for these photos: ${eligible.join(', ')}.
 
 OFFICE EXEMPLARS (published designs of this client; the attached example images are these):
 ${exemplarLines}
 
-TASK: Return exactly three concepts. Use only eligible recipes, at least two different ones. Give every copy block exactly one slot.`;
+TASK: Return exactly three concepts. Use only eligible recipes. ${eligible.length > 1 ? "Use at least two different recipes." : "Vary the hero and surface treatment within the eligible recipe."} Give every copy block exactly one slot.`;
 }
 
 /** The concept a request falls back to for a recipe: best hero, texture where allowed, slots from the brief. */
@@ -286,9 +293,10 @@ export function defaultChoice(
 export function normalizeConcepts(
   raw: RawArtDirectionConcept[] | undefined,
   photos: PhotoFacts[],
-  copyBlocks: CopyBlockSlotInput[]
+  copyBlocks: CopyBlockSlotInput[],
+  selection?: PhotoSelection
 ): ArtDirectionChoice[] {
-  const eligible = eligibleRecipes(photos);
+  const eligible = eligibleRecipes(photos, requiredPhotoCount(selection, photos.length));
   const indices = new Set(photos.map((p) => p.photoIndex));
   const ranked = rankPhotosForHero(photos);
   const choices: ArtDirectionChoice[] = (raw ?? []).slice(0, 3).map((c) => {
@@ -370,13 +378,14 @@ export function solveConcepts(
       copy: { text, scripts },
       briefRoles: options.briefRoles ?? Object.fromEntries(options.copyBlocks.map((b) => [b.index, b.role])),
       photos: options.photos,
+      photoSelection: options.photoSelection,
       palette: options.palette,
       logoAspect: options.logoAspect || 1,
       logoMinimumWidthPx: options.logoMinimumWidthPx,
       logoClearSpacePx: options.logoClearSpacePx,
       fontsDir: options.fontsDir,
     });
-  const eligible = eligibleRecipes(options.photos);
+  const eligible = eligibleRecipes(options.photos, requiredPhotoCount(options.photoSelection, options.photos.length));
   const layouts: StudioLayoutV2[] = [];
   const kept: ArtDirectionChoice[] = [];
   const replaced: GenerateArtDirectedResult['replaced'] = [];
@@ -386,6 +395,8 @@ export function solveConcepts(
       if (attempt !== choice && kept.some((k) => k.recipe === attempt.recipe)) continue;
       try {
         const layout = solve(attempt);
+        if ((layout.photos?.length ?? 0) < requiredPhotoCount(options.photoSelection, options.photos.length))
+          throw new RecipeInfeasibleError(attempt.recipe, 'required requester photo coverage not met');
         const parsed = studioLayoutV2Schema.safeParse(layout);
         if (!parsed.success) throw new RecipeInfeasibleError(attempt.recipe, parsed.error.message.slice(0, 200));
         layouts.push(layout);
@@ -431,7 +442,7 @@ export async function generateArtDirectedCandidatesV3(options: GenerateArtDirect
     ...(modelSupportsReasoningEffort(model) ? { reasoningEffort: layoutReasoningEffort() } : {}),
     timeoutMs: 240000,
   });
-  const choices = normalizeConcepts(response.data?.concepts, options.photos, options.copyBlocks);
+  const choices = normalizeConcepts(response.data?.concepts, options.photos, options.copyBlocks, options.photoSelection);
   const solved = solveConcepts(choices, options);
   if (solved.layouts.length < 2) {
     throw new Error(`Only ${solved.layouts.length} art-direction concept(s) could be solved: ${solved.replaced.map((r) => r.reason).join(' | ')}`);

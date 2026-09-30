@@ -33,7 +33,7 @@ describe.skipIf(compose.status !== 0)('the Docker VM production shares', () => {
   it('production Postgres: syncfs crash recovery and a memory reservation', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-vm-'));
     for (const f of ['docker-compose.prod.yml', 'canva-release.override.yml']) fs.copyFileSync(path.join(repo, 'infra/docker', f), path.join(dir, f));
-    fs.writeFileSync(path.join(dir, '.env.production'), '');
+    for (const file of ['.env.production', '.env.worker', '.env.service-boundaries']) fs.writeFileSync(path.join(dir, file), '');
     try {
       const pg = config([path.join(dir, 'docker-compose.prod.yml')], { DATABASE_URL: 'postgresql://x', POSTGRES_PASSWORD: 'x' }).postgres;
       expect(pg.command).toEqual(expect.arrayContaining(['recovery_init_sync_method=syncfs']));
@@ -49,7 +49,7 @@ describe.skipIf(compose.status !== 0)('the Docker VM production shares', () => {
   });
 
   it('every chaos service, in every profile, has a memory ceiling without swap and a CPU share', () => {
-    const secrets = ['CHAOS_APP_PASSWORD', 'CHAOS_WORKER_TOKEN', 'CHAOS_BEARER_TOKEN', 'CHAOS_REVIEWER_KEY', 'CHAOS_ADMIN_KEY', 'CHAOS_HMAC_SECRET',
+    const secrets = ['CHAOS_APP_PASSWORD', 'CHAOS_WORKER_TOKEN', 'CHAOS_DESIGN_WORKER_TOKEN', 'CHAOS_BEARER_TOKEN', 'CHAOS_REVIEWER_KEY', 'CHAOS_ADMIN_KEY', 'CHAOS_HMAC_SECRET',
       'CHAOS_BOT_TOKEN', 'CHAOS_WEBHOOK_SECRET', 'CHAOS_CANVA_SECRET', 'CHAOS_CANVA_KEY', 'CHAOS_OWNER_PASSWORD', 'CHAOS_AVAILABILITY_SECRET'];
     const services = config([path.join(repo, 'packages/testkit/chaos/docker-compose.chaos.yml')], Object.fromEntries(secrets.map((k) => [k, 'x'])), ['green', 'candidate']);
     expect(Object.keys(services).length).toBeGreaterThanOrEqual(10);

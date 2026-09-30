@@ -15,13 +15,13 @@ export interface PhotoSelection {
   /** The phrase that set `choose`, for the record. */
   matched?: string;
   /**
-   * ADR-170: the requester asked for every photo in so many words ("use all the photos"). Only then
-   * must an art-direction recipe place them all; otherwise its own choice of hero counts as choosing.
+   * The requester explicitly said every photo. Retained as wording evidence only; ADR-171
+   * makes all mode binding even without this flag. A recipe cannot authorize omission.
    */
   insisted?: boolean;
   /**
-   * ADR-170: the requester stated how many ("pick 3"). Without a stated count the minimum is a
-   * guess (half the photos), which an art-direction recipe's own choice of one hero overrides.
+   * The requester stated how many ("pick 3"). Retained as wording evidence; ADR-171
+   * binds both explicit and default recorded minimums throughout generation and QA.
    */
   counted?: boolean;
 }
