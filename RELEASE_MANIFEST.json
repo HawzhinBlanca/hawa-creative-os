@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-30T18:01:58+03:00",
+  "generatedAt": "2026-09-30T18:22:03+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "68e2b035028455d4ad2e3e6e6256c9137d3d6833",
+    "commit": "5c6d55461545f261f9d7b1b0b4c66de58174dc27",
     "treeClean": true,
-    "commitTimestamp": "2026-09-30T18:01:58+03:00",
+    "commitTimestamp": "2026-09-30T18:22:03+03:00",
     "branch": "codex/reliability-and-design-hardening"
   },
   "migrations": {
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "62655ecc9d02c1e34987f3e8ed551ded58762b90434999afe09b8957213972a3"
+  "sha256": "d34baf95118a03bfe81eba34a40c9784d2aad4baebe1e764e52c6f42b04ebecc"
 }
