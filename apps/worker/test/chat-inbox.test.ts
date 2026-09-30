@@ -298,6 +298,26 @@ describe('the Core client ChatInbox uses', () => {
       chatId: '555', class: 'critical', text: expect.stringContaining('same design') }]);
   });
 
+  it('ADR-182: a change that starts the next draft is answered, once, in the requester\'s language', async () => {
+    const answer = { v: 1, kind: 'handled', intakeStatus: 200, lifecycleAction: 'requester-revision', requestId: 'req-x',
+      newTaskId: 'task-new', priorTaskId: 'task-old', round: 1, directive: 'make the logo bigger', chatId: '555' };
+    const c = client(async () => Response.json(answer));
+    const ctx = new FakeContext();
+    await handleUpdate(ctx, input, c);
+    expect(ctx.lifecycleDecisions).toMatchObject([{ requestId: 'req-x', event: { round: 1, newTaskId: 'task-new' } }]);
+    expect(ctx.notices).toMatchObject([{ key: `chatinbox:change-taken:${update.update_id}`, chatId: '555', class: 'critical',
+      text: expect.stringContaining("I'm making those changes") }]);
+    // A replay of the same update sends the same key: TelegramSender sends it once.
+    await handleUpdate(ctx, input, c);
+    expect(new Set((ctx.notices as Array<{ key: string }>).map((n) => n.key))).toEqual(new Set([`chatinbox:change-taken:${update.update_id}`]));
+    // In Sorani, in Sorani ("make the logo bigger").
+    const sorani = { v: 1 as const, update: { ...update, update_id: update.update_id + 7,
+      message: { ...(update as any).message, text: 'لۆگۆکە گەورەتر بکە' } } };
+    const ckb = new FakeContext();
+    await handleUpdate(ckb, sorani, c);
+    expect(ckb.notices).toMatchObject([{ text: expect.stringContaining('گۆڕانکارییانە') }]);
+  });
+
   it('a Core that does not answer at all waits; one that answers too slowly is a retryable answer', async () => {
     await expect(client(async () => { throw new TypeError('fetch failed'); }).intake(update, 'legacy')).rejects.toThrow(/Core/);
     const slow = client(async (_url, init) => new Promise<Response>((_, reject) => init.signal.addEventListener('abort', () => reject(Object.assign(new Error('timed out'), { name: 'TimeoutError' })))));

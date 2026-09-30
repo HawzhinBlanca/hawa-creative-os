@@ -1272,8 +1272,8 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
   it.each([
     ['a greeting', 'hello', /^👋 Hi! What would you like designed\? Tell me in your own words/],
     ['a Kurdish greeting', 'سڵاو', /^👋 سڵاو! چیت دەوێت دیزاین بکرێت؟/],
-    // "when will it be ready?" is a status question since ADR-144 (requester-intent-routing.test.ts).
-    ['a question', 'what fonts can you use?', /^Happy to help\. Tell me what you'd like designed/],
+    // "when will it be ready?" is a status question since ADR-144 (requester-intent-routing.test.ts), and
+    // "what fonts can you use?" a question for the office since ADR-182 (below).
     ['/start', '/start', /^👋 Hi! Tell me what you'd like designed, in English or Kurdish/],
     ['/help@hawa_bot', '/help@hawa_bot', /^👋 Hi! Tell me what you'd like designed/],
     ['a Kurdish /start', '/start سڵاو', /^👋 سڵاو! پێم بڵێ چیت دەوێت دیزاین بکرێت/],
@@ -1295,6 +1295,20 @@ describe('what intake answers when an update opens no request (ADR-135 stage 2c)
       const again = await intake(createApp({ db, telegramBridge: bridge } as any), update);
       expect(again.body).toMatchObject({ duplicate: true, lifecycleAction: 'chat-answer', chatAnswer: first.body.chatAnswer });
     }
+  });
+
+  it('ADR-182: passes a question the bot cannot answer to the office, starts nothing, and gives the same answer again', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    vi.stubEnv('TELEGRAM_ALLOWED_USERS', '91000099');
+    const chat = chatId();
+    const update = text(chat, 'what fonts can you use?');
+    const first = await intake(createApp({ db, telegramBridge: bridgeStub() } as any), update);
+    expect(first.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: String(chat),
+      chatAnswer: { text: "I can't answer that myself, so I've passed your question to the office; they'll reply here." },
+      officeAlert: { chatId: '91000099', text: expect.stringContaining('what fonts can you use?') } });
+    expect(await tasksInChat(chat)).toHaveLength(0);
+    const again = await intake(createApp({ db, telegramBridge: bridgeStub() } as any), update);
+    expect(again.body).toMatchObject({ duplicate: true, chatAnswer: first.body.chatAnswer });
   });
 
   it('answers /approve, /publish, /revise and /reject with the office\'s final check, and changes nothing', async () => {

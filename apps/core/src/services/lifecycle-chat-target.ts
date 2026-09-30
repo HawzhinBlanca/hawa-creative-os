@@ -299,7 +299,10 @@ export async function lateChangeTargets(trx: Kysely<Database>, tenantId: string,
     SELECT DISTINCT r.request_id::text, r.rev, r.stage, r.current_task_id::text
     FROM hawa.inbox_events e JOIN hawa.requests r
       ON r.tenant_id = e.tenant_id
-      AND e.source_event_id LIKE ('lc:' || r.request_id::text || ':%')
+      AND (e.source_event_id LIKE ('lc:' || r.request_id::text || ':%')
+        -- ADR-182: the delivered files and their notice are keyed by task and approval (lc:dl-<task>-…).
+        OR (e.source_event_id LIKE 'lc:dl-%' AND EXISTS (SELECT 1 FROM hawa.tasks t WHERE t.tenant_id = r.tenant_id
+          AND t.request_id = r.request_id AND t.id::text = substring(e.source_event_id from 7 for 36))))
     WHERE e.tenant_id = ${tenantId}::uuid AND r.chat_id = ${chatId}
       AND r.owner = 'restate' AND e.source_account_id = 'telegram_delivery'
       AND e.event_kind IN ('telegram_message_sent', 'telegram_document_sent')

@@ -9,7 +9,7 @@ import { lifecycleStillImageFile, retainLifecyclePhoto } from './lifecycle-photo
 import { classifyWithHeuristics, isSoraniText } from './telegram-classifier.js';
 import { readIntentByRules, shortTitle } from './requester-turn.js';
 import { unconfirmedSource } from './lifecycle-source-natural.js';
-import { briefParts, joinedWords } from './lifecycle-brief-parts.js';
+import { briefParts, joinedWords, lastBriefPartAt } from './lifecycle-brief-parts.js';
 import { claimPhoto, recentOpenBy } from './lifecycle-media-intake.js';
 import { addPhotoMaterial } from './lifecycle-photo-material.js';
 import type { LateChangeStage, LateRequesterChange } from './lifecycle-chat-target.js';
@@ -874,6 +874,10 @@ export async function settleHeldBrief(trx: Tx, tenant: string, update: Update): 
   if (state === 'released') return 'release';
   const now = Number((await sql<{ now: number }>`SELECT (extract(epoch FROM now()) * 1000)::float8 AS now`.execute(trx)).rows[0].now);
   if (now - held.at < HELD_BRIEF_MS) {
+    // ADR-182: a brief its sender is still typing (a part joined within the hold) waits until they
+    // have been quiet for as long as a brief waits for photos.
+    const lastPart = await lastBriefPartAt(trx, tenant, held.updateId);
+    if (lastPart !== null && now - lastPart < briefPhotoWaitMs()) return 'wait';
     const groups = (await sql<{ group_key: string }>`SELECT DISTINCT payload->>'groupKey' AS group_key FROM hawa.inbox_events
       WHERE tenant_id = ${tenant}::uuid AND source_account_id IN ('lifecycle_album_part', 'lifecycle_album_pending')
         AND payload->>'chatId' = ${held.chatId} AND payload->>'senderId' = ${held.senderId}
