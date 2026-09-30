@@ -249,11 +249,11 @@ export const SettingsScreen: React.FC = () => {
           <h2>Model registry</h2>
           <div className="rule">
             <b>Reasoning, layout, critique & judge</b>
-            <p>OpenAI only (ADR-030) · gpt-6-astra on the production tier, gpt-4.1-mini and o4-mini on the cheap tier (HAWA_MODEL_TIER) · HAWA_MODEL_&lt;ROLE&gt; overrides one role</p>
+            <p>Production defaults: GPT-6.1 Sol for text, layout and critique; GPT-4.1 mini for visual judging. Current model settings appear in Operations.</p>
           </div>
           <div className="rule">
             <b>Artwork</b>
-            <p>gpt-image-2.5-sunburst by default, or a Google Gemini image model when HAWA_IMAGE_PROVIDER=google · only when a concept asks for generated imagery; zero image calls otherwise · live settings in core /health → models</p>
+            <p>gpt-image-2.5-sunburst by default, or a Google Gemini image model when HAWA_IMAGE_PROVIDER=google · only when a concept asks for generated imagery; zero image calls otherwise · live settings in core /v1/health → models</p>
           </div>
           <div className="rule">
             <b>Voice notes</b>

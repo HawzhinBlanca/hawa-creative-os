@@ -69,5 +69,12 @@
     "failed": 0,
     "log": "office-switch-logs/full-followup.log"
   },
-  "focusedDistinctTests": 205
+  "focusedDistinctTests": 205,
+  "supersededEngineeringAttempt": {
+    "release": "4f8ce740f67644631f88aaccdb589ecb2f402f0f",
+    "status": "stopped before deployment during full suite",
+    "reason": "Final UI inspection found a hardcoded Astra production description; corrected to match Sol defaults and preserve accurate user-visible state. No passing full-suite claim for the interrupted run.",
+    "liveChanged": false
+  },
+  "settingsCopy": "Production defaults name Sol text/layout/critique and Mini judge; status location retained."
 }
