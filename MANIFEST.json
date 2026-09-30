@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T11:29:02Z",
+  "generatedAt": "2026-09-30T11:36:10Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 643,
+  "fileCount": 644,
   "files": [
     {
       "path": ".dockerignore",
@@ -1579,8 +1579,8 @@
     },
     {
       "path": "plans/model-migration-2026-09-30/OFFICE_SWITCH.json",
-      "sha256": "6190ac5a6c3df006d96e889b64b29f9fb7a9961b0813a365af91374106e97415",
-      "bytes": 1727
+      "sha256": "dcc695fe997b8fd972f13323c246832fbc4afe905539f00143c34266a2d83ca7",
+      "bytes": 2335
     },
     {
       "path": "plans/model-migration-2026-09-30/PRODUCTION.json",
@@ -1851,6 +1851,11 @@
       "path": "plans/model-migration-2026-09-30/office-switch-logs/final-planner.log",
       "sha256": "86343ea89dbf552643f8bde193bd36000951f7329a3ea3c6ca8ed0cbe6996f7c",
       "bytes": 1380
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/office-switch-logs/full-followup.log",
+      "sha256": "d0ea259fe7d67310ba78bec9d0998afe68bddfcf24618dd1ceea8780e5a3dba6",
+      "bytes": 2210
     },
     {
       "path": "plans/model-migration-2026-09-30/office-switch-logs/initial-focused.log",

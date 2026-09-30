@@ -1,0 +1,21 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_4660eaf4c92cb512 and hawa_tpl_repair_4660eaf4c92cb512 (32 ms)
+{"level":"warn","time":"2026-09-30T11:34:48.300Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:48.314Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:51.337Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:51.345Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:52.564Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:52.573Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:53.692Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:53.700Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:54.839Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:54.849Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:56.052Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-30T11:34:56.062Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+
+ Test Files  2 passed (2)
+      Tests  30 passed (30)
+   Start at  14:34:46
+   Duration  18.41s (transform 1.43s, setup 255ms, import 2.15s, tests 17.34s, environment 0ms)

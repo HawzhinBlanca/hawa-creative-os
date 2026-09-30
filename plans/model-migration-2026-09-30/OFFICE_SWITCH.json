@@ -51,5 +51,23 @@
     "tests": 61,
     "failed": 0,
     "status": "passed"
-  }
+  },
+  "firstEngineeringAttempt": {
+    "release": "04b4ebe8fac1f754984a369df6eb5ec17ced9d7d",
+    "passedTests": 5661,
+    "failedTests": 5,
+    "skippedTests": 67,
+    "passedFiles": 615,
+    "failedFiles": 2,
+    "skippedFiles": 6,
+    "liveChanged": false,
+    "reason": "Legacy art ledger fixtures did not pin their Astra verifier; production v3 fixture omitted native counting endpoint. Test fixtures corrected, no further runtime change."
+  },
+  "additionalFocused": {
+    "files": 2,
+    "passed": 30,
+    "failed": 0,
+    "log": "office-switch-logs/full-followup.log"
+  },
+  "focusedDistinctTests": 205
 }

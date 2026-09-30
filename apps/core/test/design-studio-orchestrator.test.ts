@@ -82,6 +82,11 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
   const createMockFetch = (overrides: Record<string, any> = {}) => {
     return vi.fn().mockImplementation(async (_url: string, init: any) => {
       const body = JSON.parse(init.body || '{}');
+      if (_url.endsWith('/responses/input_tokens')) {
+        expect(body.model).toBe('gpt-6.1-sol');
+        expect(body.input[0].content.every((image: {image_url:string}) => image.image_url.startsWith('data:image/'))).toBe(true);
+        return Response.json({object:'response.input_tokens',input_tokens:1000});
+      }
       const promptText = (
         Array.isArray(body.messages)
           ? body.messages.map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')).join(' ')

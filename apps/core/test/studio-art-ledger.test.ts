@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { renderMotifPng } from '@hawa/creative';
 import type { Database, Kysely, DesignStudioRepository, RecordCallStartParams, FinalizeCallParams } from '@hawa/db';
@@ -57,6 +57,8 @@ async function harness(fetcher: typeof fetch, options: { maxCalls?: number; maxU
 }
 
 describe('each Studio art request has its own durable admission', () => {
+  // Historical paid-receipt, lost-response and exact-price fixtures preserve their Astra verifier.
+  beforeEach(() => vi.stubEnv('HAWA_MODEL_CRITIQUE','gpt-6-astra'));
   afterEach(() => vi.unstubAllEnvs());
 
   it('makes zero text or image transports when PostgreSQL refuses the office daily allocation', async () => {
