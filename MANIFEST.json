@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T16:08:51Z",
+  "generatedAt": "2026-09-30T17:16:51Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "172e66954c5cbb94e1ed0dace7531448983e8770293f3b90d9b4ced72c782c76",
-      "bytes": 3987
+      "sha256": "c6ab42db64caa9d1c608add5543c2a71ca78e336ad557f4f11df9d5b3357a29c",
+      "bytes": 3980
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -269,8 +269,8 @@
     },
     {
       "path": "adrs/040_authenticated_office_decision_gateway.md",
-      "sha256": "cf2f125111076a882801f1c47ecfd2563294abaaef4bb6634b7d9c8f804151d0",
-      "bytes": 2731
+      "sha256": "a8abdf894c1136e9cb8b5ed9ac3246e3ada2c78db381e0765661a2a7fc59dfe7",
+      "bytes": 12940
     },
     {
       "path": "adrs/041_nullable_qa_for_nonapproval_decisions.md",
@@ -394,8 +394,8 @@
     },
     {
       "path": "adrs/065_chat_review_desk_handoff.md",
-      "sha256": "31b088ae5af6e5a84b3d07bd86836003a5b9a417727f9f223d182bcd4572d38a",
-      "bytes": 2456
+      "sha256": "779d2123b5a88967917f70c1f30e39a8a1cee24ece541d9945f24066d5ad5966",
+      "bytes": 2713
     },
     {
       "path": "adrs/066_registered_client_desk_scope.md",
@@ -819,8 +819,8 @@
     },
     {
       "path": "adrs/155_request_durability_on_the_one_path.md",
-      "sha256": "01c12091a04fca04afe65f2063ef23ab81a0b615cf3d9bf2026647725a3cba48",
-      "bytes": 8000
+      "sha256": "3c6148aff0dd00b18e12d58e81b5ab3de6dc141daa0ebcf43dd411e97a6a07a1",
+      "bytes": 13806
     },
     {
       "path": "adrs/156_natural_language_intake_friction_repairs.md",
@@ -1529,8 +1529,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "941e143bec185f80f991df84b5cfbb779539d1b20aa5b39109e458dcf541113c",
-      "bytes": 48025
+      "sha256": "b83c400bd51687d1b16042522ab19ebe9a19ec49d1d37980d591143390dc8c81",
+      "bytes": 55632
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2414,8 +2414,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "52734cf4c6df2b793d2abeb4221374de0f05df12ec6517ccb1eb074ab5d880c2",
-      "bytes": 547150
+      "sha256": "eee3b8949177a64f44af9e529ea9dc4a7009880d70b42cd0571bd8d2378089dd",
+      "bytes": 550181
     },
     {
       "path": "plans/user-stories.csv",
@@ -3149,8 +3149,8 @@
     },
     {
       "path": "scripts/sorani_review_list.ts",
-      "sha256": "c9864e37f032ec81f058117fd39660b5351b4ec0cb7f329ad385f7cf27d2f115",
-      "bytes": 2919
+      "sha256": "d81a01baf77386612accac5fcc45cb4f2123048c9457214838dcb34137a242a3",
+      "bytes": 3038
     },
     {
       "path": "scripts/studio_fault_injection.ts",
