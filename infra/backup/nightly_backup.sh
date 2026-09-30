@@ -272,7 +272,10 @@ if [[ -n "$ARCHIVE_KEYFILE" ]]; then rm -f "$OUT.enc" "$OUT.enc.sha256"; fi
 { ls -1t "$DIR"/hawa_*.dump 2>/dev/null || true; } | tail -n +15 | while read -r old; do rm -f "$old" "$old.sha256" "$old.enc" "$old.enc.sha256" "${old%.dump}.blobs"; done
 # Pre-deploy dumps have their own retention (the newest ten, compressed). They were once copied,
 # unencrypted, into the archive destination, which is off this machine: never again.
-bash "$ROOT/infra/ops/disk_cleanup.sh" --backups >/dev/null 2>&1 || echo "WARNING: disk_cleanup.sh --backups did not finish" >&2
+# What it removed, freed and could not do goes to its own log (ADR-158), not to /dev/null.
+mkdir -p "$HOME/.hawa/logs"
+{ date -u +%FT%TZ; bash "$ROOT/infra/ops/disk_cleanup.sh" --backups; } >> "$HOME/.hawa/logs/disk_cleanup.log" 2>&1 \
+  || echo "WARNING: disk_cleanup.sh --backups did not finish (~/.hawa/logs/disk_cleanup.log)" >&2
 
 # R10: the Restate journal lives in a different volume from PostgreSQL and the file store. Opt in
 # only after its immutable helper image, key and isolated restore rehearsal are configured. A failed
