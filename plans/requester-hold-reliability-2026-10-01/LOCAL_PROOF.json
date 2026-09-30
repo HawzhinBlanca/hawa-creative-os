@@ -12,7 +12,7 @@
     "NFR-001",
     "NFR-006"
   ],
-  "qualification": "CONNECTED_PASS_FULL_SEALED_REGRESSION_PENDING",
+  "qualification": "SOURCE_DESIGNING_HOLD_SLICE_PASS_NOT_DEPLOYED",
   "connected": {
     "files": 16,
     "passed": 779,
@@ -52,7 +52,15 @@
     "Second sealed full run intentionally stopped before completion after review found a delayed duplicate of a second hold could re-pause after office resume. Saved routing receipt now fences that replay; ten hold tests pass. No result is claimed for the stopped full run."
   ],
   "fullRegression": {
-    "status": "PENDING_SEALED_RUN"
+    "status": "PASS",
+    "testedSeal": "6959e969",
+    "passed": 6249,
+    "failed": 0,
+    "expectedFail": 2,
+    "skipped": 67,
+    "filesPassed": 642,
+    "filesSkipped": 6,
+    "seconds": 201.38
   },
   "logSha256": {
     "hawa-requester-hold-red.log": "6706d8a00af5780e6552c1b4f811c73a0c2a738cc6f4c68e8dd9c1e045660015",
@@ -65,14 +73,17 @@
     "hawa-hold-lint-2.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
     "hawa-hold-desk-build.log": "96e69e1b849885b294dff9db019b4402bf00c2f0d70fac65219580fe49a7e86a",
     "hawa-hold-replay-3.log": "7437072b322f20dacd7dc69ea00d14fdf41422678454b6d4c16678f72a5129e0",
-    "hawa-hold-typecheck-3.log": "40e29137397070167e2f2969047228cf487ec2faee5ad2362568999d0edf5764"
+    "hawa-hold-typecheck-3.log": "40e29137397070167e2f2969047228cf487ec2faee5ad2362568999d0edf5764",
+    "hawa-hold-full-3.log": "de93258e43d26f05083943ca0fcc0de3a6fdef7997abeff4b9a7f060324bdae0",
+    "hawa-hold-manifest-3.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
+    "hawa-hold-lint-3.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5"
   },
   "limitations": [
     "Early brief settlement versus first paid admission remains unqualified",
     "Later-stage holds are passed to office, without claiming automatic pause",
     "Two ADR182 title/multi-design defects remain expected failures",
     "New Sorani lines listed but awaiting native review",
-    "67 tests skipped in first full regression",
+    "67 tests skipped in qualified sealed regression",
     "Broader content-aware/native/Canva/human design qualification remains open"
   ],
   "replayFollowup": {

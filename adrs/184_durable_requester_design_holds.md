@@ -1,6 +1,6 @@
 # ADR184: Durable requester holds at design boundaries
 
-Date: 2026-10-01. Status: implementation and qualification in progress.
+Date: 2026-10-01. Status: accepted current-designing-task source candidate; live qualification pending.
 Requirements: FR-004, FR-005, FR-060, FR-063, NFR-001, NFR-006.
 
 ## Evidence and decision
@@ -37,3 +37,13 @@ retention of admitted outcomes, worker journal replay and office resume authorit
 Do not call the slice complete until the connected tests and traceability pass.
 Live deployment remains separately qualified; the current stable runtime repair
 must be preserved. No new dependency, framework or paid provider call is needed.
+
+## Source qualification — 2026-10-01
+
+Seal `6959e969` passes 6,249 tests, 0 failed, 2 existing expected failures and 67 skipped.
+The connected boundary set has 779 distinct passes; 649 test roots, build, Desk and
+architecture checks pass. A second hold while already paused creates no transition
+event: its committed routing receipt must also fence a delayed duplicate after office
+resume. A dedicated real-database regression verifies this case. See LOCAL_PROOF.json
+and REQUESTER_DESIGN_HOLDS.md. Initial-brief settlement/first-admission ordering,
+native Sorani review, live rollout and the broader design-quality gates remain open.

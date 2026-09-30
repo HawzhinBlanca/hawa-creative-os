@@ -29,3 +29,13 @@ claim an automatic task pause. The two ADR182 defects in title extraction and
 multi-design requests remain expected failures. Broader W3/W5/W6 design work,
 exact photo counts, native typography/Canva and human-quality proof remain open.
 The overall implementation goal remains active.
+
+## Qualified current-task checkpoint
+
+Source `0747f8d4` / seal `6959e969`: full suite: 6,249 passed / 0 failed / 2 expected failures / 67 skipped;
+779 distinct connected cases; 649 typed test roots; builds, architecture/egress and
+manifest verification pass. Full run 2 was stopped after finding a genuine repeat-hold
+replay race; its repaired guard is covered in full run 3. Production remains `4e500451`,
+verified healthy with stable nginx proof, independent token, restricted worker
+login and unsafe releases absent. See LOCAL_PROOF.json and LIVE_INFRA_READBACK.json.
+No paid provider calls or live rollout of this hold slice occurred.
