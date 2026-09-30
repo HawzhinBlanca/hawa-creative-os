@@ -13,6 +13,7 @@ import { HOUSE_RULES, getSafeZoneBox, isStoryFormat, logoClearZone, minLogoWidth
 import { calculateLuminanceContrastRatio, hexToLuminance } from '../composite-contrast.js';
 import { hexToRgb } from '../color-science.js';
 import { maxStrokeWidth } from '../studio-normalize.js';
+import { coverCrop } from '../photo-crop.js';
 import type { QuietArea } from './recipes.js';
 
 /**
@@ -72,6 +73,8 @@ export interface SolverPhoto {
   height: number;
   /** The detector's face focus (share of width and height). */
   focus?: { x: number; y: number };
+  /** The tallest face's height as a share of the photo's height, when the detector found a face. */
+  faceShare?: number;
   /** The local analysis' centre of detail, used when there is no face. */
   salient?: { x: number; y: number };
   /** Where the photo is calm. */
@@ -213,12 +216,32 @@ export function normalizeSlots(input: Pick<SolveRecipeInput, 'choice' | 'copy' |
     if (accentSeen) s.slot = 'body';
     accentSeen = true;
   }
+  // A short line beside the title that the brief calls its subtitle is the title's gold line, not
+  // body text (rulebook item 8). In the live trial of 2026-09-30 the layout model set the owner's
+  // "Field Visit Report", the report's own name, at body size under "KAAE K-12 Pilot Study".
+  if (!slots.some((s) => s.slot === 'accent')) {
+    const at = slots.findIndex((s) => s.slot === 'title');
+    for (const k of [at + 1, at - 1]) {
+      const s = slots[k];
+      const role = s ? input.briefRoles?.[s.copyIndex] : undefined;
+      if (s?.slot === 'body' && (role === 'subtitle' || role === 'eyebrow') && isHeadlineLine(input.copy.text[s.copyIndex] || '')) {
+        s.slot = 'accent';
+        break;
+      }
+    }
+  }
   // A call to action is short: longer copy is body text, never cut to fit a pill.
   for (const s of slots) {
     const text = (input.copy.text[s.copyIndex] || '').trim();
     if (s.slot === 'cta' && (text.length > 48 || text.includes('\n'))) s.slot = 'body';
   }
   return slots;
+}
+
+/** A line that reads as part of a title: a few words on one line, not a finished sentence. */
+function isHeadlineLine(text: string): boolean {
+  const t = text.trim();
+  return t.length > 0 && t.length <= 48 && !t.includes('\n') && t.split(/\s+/).length <= 7 && !/[.!?؟،]$/.test(t);
 }
 
 const ARABIC = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/;
@@ -360,6 +383,22 @@ class SolveContext {
     const el: PhotoElement = { photoIndex: p.photoIndex, role, ...intBox(box), radius: 0, focus: this.focusOf(p) };
     this.photos.push(el);
     return el;
+  }
+
+  /**
+   * Where the hero's faces land on the canvas, as a box, when the detector found faces: the face
+   * point mapped through the same cover crop the renderer draws, grown to the tallest face's height
+   * and a margin for hair and chin. Undefined for a photo with no detected face.
+   */
+  faceBox(el: PhotoElement): Box | undefined {
+    const p = this.photo(el.photoIndex);
+    if (!p?.focus || !p.faceShare || el.treatment === 'cutout') return undefined;
+    const crop = coverCrop(el, p, el.focus ?? p.focus);
+    const scale = el.height / crop.sh;
+    const cx = el.x + (p.focus.x * p.width - crop.sx) * scale;
+    const cy = el.y + (p.focus.y * p.height - crop.sy) * scale;
+    const half = 0.75 * p.faceShare * p.height * scale;
+    return { x: cx - half, y: cy - half, width: 2 * half, height: 2 * half };
   }
 
   /**
@@ -675,6 +714,15 @@ class SolveContext {
       inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
     const clear = this.logoClear(layout.logo);
     if (!inside(this.safe, layout.logo)) throw new RecipeInfeasibleError(this.recipe, 'the logo leaves the safe area');
+    // No title, plate or card over a face the detector found in the hero: on 2026-09-30 a navy plate
+    // sat across both visitors' faces in the live trial, and every check passed it.
+    for (const photo of layout.photos ?? []) {
+      if (photo.role !== 'hero') continue;
+      const face = this.faceBox(photo);
+      if (!face) continue;
+      const covers = [...layout.text, ...layout.shapes.filter((sh) => sh.role === 'panel' && sh.fill !== 'none'), layout.logo].find((b) => hit(b, face));
+      if (covers) throw new RecipeInfeasibleError(this.recipe, 'the copy or its plate would cover the faces in the hero photo');
+    }
     for (const t of layout.text) {
       if (!inside(this.safe, t)) throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} leaves the safe area`);
       if (hit(t, clear)) throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} is in the logo's clear space`);
@@ -826,7 +874,7 @@ class SolveContext {
    */
   heroPlate(): StudioLayoutV2 {
     const hero = this.hero();
-    this.placeHero(hero, this.canvas());
+    const heroEl = this.placeHero(hero, this.canvas());
     this.frame(this.input.choice.params?.frame === 'inset' ? 'inset' : 'none');
     const logo = this.logoAt('top-center');
     const navy = surfacePalette(this.tones, 'navy');
@@ -839,7 +887,7 @@ class SolveContext {
     const plateColW = Math.round((this.wide ? 0.6 : 0.78) * this.W);
     const padX = Math.round(0.045 * this.s);
     const padY = Math.round(0.035 * this.s);
-    const plateTop = logo.y + logo.height + Math.round(0.5 * logo.height) + Math.round(0.025 * this.s);
+    let plateTop = logo.y + logo.height + Math.round(0.5 * logo.height) + Math.round(0.025 * this.s);
     const bottom = this.safe.y + this.safe.height;
     const restW = this.safe.width;
     const sets = this.fitScale(
@@ -855,6 +903,16 @@ class SolveContext {
     const plateW = Math.min(plateColW, widest + 2 * padX + 8);
     const plateX = Math.round((this.W - plateW) / 2);
     const plateH = hh + 2 * padY;
+    const rTop = sets[1] ? bottom - this.stackHeight(sets[1]) : bottom;
+    // The plate never sits on the people: when the hero's faces are where the plate would go, it
+    // moves down below them, and a plate that then meets the lines at the bottom is not carried.
+    const face = this.faceBox(heroEl);
+    if (face && face.x < plateX + plateW && face.x + face.width > plateX && face.y < plateTop + plateH && face.y + face.height > plateTop) {
+      plateTop = Math.ceil(face.y + face.height + 0.02 * this.s);
+      if (plateTop + plateH > rTop - Math.round(0.03 * this.s)) {
+        throw new RecipeInfeasibleError(this.recipe, 'the title plate would cover the faces in the hero photo');
+      }
+    }
     this.shapes.push({
       kind: 'rect', role: 'panel', layer: 'overlay', surface: 'plate', color: this.tones.deep === this.tones.navy ? this.tones.navy : this.tones.deep,
       x: plateX, y: plateTop, width: plateW, height: plateH, radius: Math.round(0.012 * this.s),
@@ -863,8 +921,6 @@ class SolveContext {
     // The plate's own colour decides the text colours: the second navy still carries white and gold.
     const text = this.placeStack(headSet, plateX + padX, plateW - 2 * padX, plateTop + padY, 'center', navy);
     if (sets[1]) {
-      const rh = this.stackHeight(sets[1]);
-      const rTop = bottom - rh;
       text.push(...this.placeStack(sets[1], this.safe.x, restW, rTop, 'center', navy));
       const scrimH = Math.round(Math.min(this.H * 0.55, (this.H - rTop) / 0.6));
       this.overlays.push({

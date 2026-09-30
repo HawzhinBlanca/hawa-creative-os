@@ -17,7 +17,7 @@ import {
 } from '@hawa/creative';
 import type { CandidateState, CreativeBrief, StageContext } from '../src/services/design-studio/types.js';
 import { runLayoutsStage, runRenderStage, runQAStage, rankStudioCandidatesV3, photosBrief } from '../src/services/design-studio/stages/index.js';
-import { briefPhotoFacts } from '../src/services/design-studio/art-direction.js';
+import { briefPhotoFacts, photoFactsFor } from '../src/services/design-studio/art-direction.js';
 
 /**
  * ADR-170, end to end: the owner's KAAE K-12 brief with its six field-visit photos, through the real
@@ -93,6 +93,20 @@ const MODEL_ANSWER = {
 };
 
 describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)', () => {
+  it('counts a detector point as a face only when it carries a face height (live trial, 2026-09-30)', async () => {
+    // The face service answers the centre, with no face height, for a photo with no face in it (the
+    // album's woman in profile at the bookshelf). Taken for a face, it told the art director "faces
+    // found" and cropped the hero on the middle instead of the photo's measured detail.
+    const [bytes] = albumPhotos().map((p) => p.bytes);
+    const size = imagePixelSize(bytes)!;
+    const photo = { bytes, mimeType: 'image/png' as const, dataUrl: '', width: size.width, height: size.height };
+    const [none, face] = await photoFactsFor({ photos: [photo, photo], photoFaces: [{ x: 0.5, y: 0.5 }, { x: 0.3, y: 0.33, faceShare: 0.17 }] } as any);
+    expect(none.faces).toBeUndefined();
+    expect(none.focus).toBeUndefined();
+    expect(none.salient).toBeDefined();
+    expect(face).toMatchObject({ faces: true, focus: { x: 0.3, y: 0.33 } });
+  });
+
   it('retrieves the office\'s own K-12 field-visit report among the photo exemplars', () => {
     const manifest = JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'));
     const brief = {
