@@ -121,3 +121,13 @@ The task list (`GET /v1/tasks`) showed a task's title as its English headline wh
 - `apps/core/test/lifecycle-album.test.ts`: the contract bound (20 accepted, 21 refused).
 - Neighbouring suites re-run: see the traceability rows and the branch report.
 - Not run: chaos scenarios, live Telegram, a real Premium account, a real two-album upload, and a native Sorani review.
+
+## 5. Addendum (integration, 2026-09-30): a voice note or a PDF sent as the rest
+
+Section 3 left this open: the source flow opened a voice note's confirmed words as their own request. On the integration branch (`claude/integrate-audit-fixes`), once a voice note's or a PDF's words are confirmed ("yes", or the corrected text), `confirm` in `lifecycle-source-intake.ts` first calls `bindSourceToCutAlbum` (`lifecycle-album.ts`). If the sender's cut album waited when the source arrived (after the photos, within `CUT_CAPTION_WAIT_MS` of the question), the confirmed words join the caption by the section 2.4 rules under the confirming message's update, and intake reads that album as it reads one bound by typed words. The result is one request with the photos and the whole text.
+
+- **The contract is unchanged.** It still refuses a draft with a source reference and an album. The bound draft carries only the album: the confirmed words travel as the album's words, as typed words do. The voice note or PDF stays kept, confirmed and held for manual review for the office, but the task does not carry `reviewedSource`.
+- **The wait.** While such a source waits for its confirmation, the settle keeps the album waiting (quietly, one settle at a time) up to `SOURCE_REST_WAIT_MS` (30 minutes) after the question, and the sweep skips it until then. After that, the album opens or lapses as section 2.5 says. A source still waiting for "which organisation?" has no words to show yet, so it does not extend the wait.
+- **Replays.** An update that bound an album replays through its recorded album decision (now read before the command check, so a `/use_source` confirmation replays too). Intake no longer reads an admitted album's words as a source's answer.
+
+Test: `apps/core/test/intake-cross-stream-adr148-156.test.ts` (F8 remainder: one request, the draft without `lifecycleSource`, a replay, the settle skipped; the 11-minute wait kept and not swept). Before the change, the first test opened a second request with only the heard words, and the second test opened the album at its settle.

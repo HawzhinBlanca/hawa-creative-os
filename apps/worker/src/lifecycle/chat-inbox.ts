@@ -28,6 +28,7 @@ import { withInvocationLogContext, log } from '../logging.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
 import type { OpenAutomaticEvent, OpenManualEvent, RequesterDecisionEvent } from './request-lifecycle.js';
 import { TelegramSenderApi } from './telegram-sender.js';
+import { officeAlertKey } from './office-chats.js';
 import { ACCESS_MESSAGES, INBOX_MESSAGES, requesterLang, say, type RequesterLang } from '@hawa/integrations';
 
 /** Fields are only ever added, and only as optional (PHASE2_DESIGN.md section 4). */
@@ -85,7 +86,9 @@ export type IntakeAnswer =
        * late-change: the stage the request was in. late-change and chat-answer: Core's alert for the
        * office chat (if any), e.g. "the requester is happy with it" (ADR-144).
        */
-      requestStage?: LateChangeStage; officeAlert?: { chatId: string; text: string }; }
+      requestStage?: LateChangeStage; officeAlert?: { chatId: string; text: string };
+      /** ADR-155 section 6: the same alert for every office member; the first is `officeAlert`. */
+      officeAlerts?: Array<{ chatId: string; text: string }>; }
   | { kind: 'retry'; reason: string };
 
 /** The Core calls ChatInbox makes (core-client.ts). A thrown error means "wait and try again". */
@@ -251,6 +254,15 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
 ): Promise<HandleUpdateResult> {
   const { mode, lifecycleRequestId, at } = info;
   const settling = info.settleAttempt !== undefined;
+  /**
+   * Core's office alert to every office member (ADR-155 section 6); a Core from before sends one. The
+   * first keeps the key the single alert always had, so an alert sent before is never sent again.
+   */
+  const alertOffice = (key: string) => {
+    const alerts = done.officeAlerts?.length ? done.officeAlerts : done.officeAlert ? [done.officeAlert] : [];
+    alerts.forEach((alert, index) => ctx.sendNotice({ v: 1, key: officeAlertKey(key, index, alert.chatId),
+      chatId: alert.chatId, kind: 'text', class: 'critical', text: alert.text }));
+  };
   {
     if (done.lifecycleAction === 'settle-later') {
       if (!done.settle) throw new Error('Core returned an incomplete settle');
@@ -274,10 +286,7 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
         kind: 'text', class: 'critical', text: done.chatAnswer.text,
         ...(done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) });
       // ADR-144: approval or timing words passed to the office (never an approval by themselves).
-      if (done.officeAlert) {
-        ctx.sendNotice({ v: 1, key: `notify.office:requester-note:${update.update_id}`,
-          chatId: done.officeAlert.chatId, kind: 'text', class: 'critical', text: done.officeAlert.text });
-      }
+      alertOffice(`notify.office:requester-note:${update.update_id}`);
     }
     if (done.lifecycleAction === 'album-message') {
       if (!done.chatId || !done.albumMessage || !done.albumNoticeKey) throw new Error('Core returned an incomplete album notice');
@@ -348,10 +357,7 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
       if (done.code !== 'LATE_REQUESTER_CHANGE' || !done.chatId || !done.requestId || !done.requestStage) {
         throw new Error('Core returned an incomplete late change');
       }
-      if (done.officeAlert) {
-        ctx.sendNotice({ v: 1, key: `notify.office:late-change:${done.requestId}:${update.update_id}`,
-          chatId: done.officeAlert.chatId, kind: 'text', class: 'critical', text: done.officeAlert.text });
-      }
+      alertOffice(`notify.office:late-change:${done.requestId}:${update.update_id}`);
       // ADR-144: Core words the answer (in the requester's language) when it has the request's name;
       // otherwise these, which say what happened without a refusal.
       const lang = languageOf(update);
@@ -379,10 +385,7 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
           done.code === 'QUESTION_MISSING')) {
       // ADR-145: the requester's words go to the office, which makes the change; the requester is told
       // so, and is never asked to send it again. Without an office chat to tell, they are told plainly.
-      if (done.officeAlert) {
-        ctx.sendNotice({ v: 1, key: `notify.office:revision-blocked:${update.update_id}`,
-          chatId: done.officeAlert.chatId, kind: 'text', class: 'critical', text: done.officeAlert.text });
-      }
+      alertOffice(`notify.office:revision-blocked:${update.update_id}`);
       const lang = languageOf(update);
       ctx.sendNotice({ v: 1, key: `chatinbox:revision-blocked:${update.update_id}`,
         chatId: done.chatId, kind: 'text', class: 'critical',

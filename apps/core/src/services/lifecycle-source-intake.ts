@@ -36,8 +36,14 @@ import { pendingEditWords } from './lifecycle-media-intake.js';
 import type { ChatIntake } from './chat-intake.js';
 import { transcribeRetainedVoice, holdVoiceForManualReview } from './lifecycle-voice.js';
 import { audioAsOggOpus, MediaConversionError } from './media-conversion.js';
+import { bindSourceToCutAlbum, type AlbumOutcome } from './lifecycle-album.js';
 
 type Answer = SourceIntakeAnswer;
+/**
+ * An answer, or (ADR-148 F8, ADR-156) the album whose cut caption the confirmed words completed: intake
+ * then reads that album as it reads an album bound by typed words.
+ */
+export type SourceIntakeResult = Answer | { album: Extract<AlbumOutcome, { kind: 'snapshot' | 'reply' }> };
 const requestIdFor = (chat: string, id: number) => {
   const hex = createHash('sha256').update(`telegram-source:${chat}:${id}`).digest('hex');
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-4${hex.slice(13,16)}-a${hex.slice(17,20)}-${hex.slice(20,32)}`;
@@ -196,7 +202,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
   }
 
   /** The words confirmed (the requester's "yes", their corrected text, or "/use_source"): the design starts. */
-  async function confirm(update: unknown, confirmationUpdateId: number, sourceUpdateId: number, copy: string): Promise<Answer> {
+  async function confirm(update: unknown, confirmationUpdateId: number, sourceUpdateId: number, copy: string): Promise<SourceIntakeResult> {
     const upload = await tx(trx => readSourceUpload(trx, scope.tenantId, sourceUpdateId));
     if (!upload) throw new SourceConflict('The saved original source is unavailable');
     const extraction = await tx(trx => readSourceExtraction(trx, scope.tenantId, upload.updateId));
@@ -236,6 +242,11 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
       if (existing.payloadHash !== saved.payloadHash || existing.requestId !== requestId) throw new SourceConflict('Confirmation decision changed');
       return { status: 200, extra: { duplicate: true, lifecycleAction: 'open-request', requestId, chatId: upload.chatId, draft: existing.draft } };
     }
+    // ADR-148 F8 (the remainder): words sent as the rest of a caption Telegram cut, by voice or in a PDF,
+    // join that album once confirmed, as typed words would: one request, not a second one beside it.
+    const album = await tx((trx) => bindSourceToCutAlbum(trx, scope.tenantId,
+      { update: update as { update_id: number }, sourceUpdateId: upload.updateId, copy: saved.copy }));
+    if (album.kind === 'snapshot' || album.kind === 'reply') return { album };
     await tx(trx => verifyReviewedSource(trx, store(), { ...scope, clientId: upload.clientId,
       chatId: upload.chatId, requestId, ref, copy: saved.copy }));
     const rtl = /[؀-ۿ]/.test(saved.copy);
@@ -259,7 +270,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
    * update is neither (it is then read as any message is).
    */
   async function naturalReply(update: unknown, envelope: NonNullable<ReturnType<typeof sourceMessageScope>>, text: string,
-    payloadHash: string): Promise<Answer | null> {
+    payloadHash: string): Promise<SourceIntakeResult | null> {
     const who = { chatId: envelope.chatId, senderId: envelope.senderId, topicId: envelope.topicId };
     if (await decidedElsewhere(envelope.updateId, envelope.chatId)) return null;
     const lang = requesterLang(text);
@@ -341,7 +352,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
     return keepAndRead(kept.resolved, noticeUpdateId);
   }
 
-  return async (update: unknown): Promise<Answer | null> => {
+  return async (update: unknown): Promise<SourceIntakeResult | null> => {
     const envelope = sourceMessageScope(update), pdf = telegramSource(update), confirmation = sourceCopyConfirmation(update);
     if (!envelope) return null;
     const message = (update as { message?: Record<string, unknown> }).message;

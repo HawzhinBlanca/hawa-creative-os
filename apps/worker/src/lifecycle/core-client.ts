@@ -43,6 +43,18 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 const validAlert = (alert: { chatId?: unknown; text?: unknown } | null | undefined): boolean =>
   alert === undefined || (Boolean(alert) && typeof alert!.chatId === 'string' && Boolean(alert!.chatId) &&
     typeof alert!.text === 'string' && Boolean(alert!.text) && (alert!.text as string).length <= 4000);
+/**
+ * ADR-155 section 6: Core's intake alert for every office member. The first is `officeAlert`; a Core
+ * from before this change sends only that one. Invalid entries refuse the whole answer, as an invalid
+ * `officeAlert` does.
+ */
+function officeAlertsOf(alert: { chatId?: unknown; text?: unknown } | null | undefined, alerts: unknown):
+  { officeAlerts?: Array<{ chatId: string; text: string }> } {
+  if (alerts === undefined) return {};
+  if (!Array.isArray(alerts) || alerts.length > 50 || !alerts.every((a) => a !== undefined && validAlert(a)) ||
+      !alert || (alerts[0] as { chatId: string }).chatId !== alert.chatId) throw new Error('Core returned invalid office alerts');
+  return { officeAlerts: alerts.map((a: { chatId: string; text: string }) => ({ chatId: a.chatId, text: a.text })) };
+}
 const isTimeout = (err: unknown) => err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
 
 export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
@@ -83,7 +95,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
         albumMessage?: string; albumNoticeKey?: string; settle?: unknown;
         sourceMessage?: string; sourceNoticeKey?: string;
         chatAnswer?: { text?: unknown; parseMode?: unknown } | null;
-        requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null;
+        requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null; officeAlerts?: unknown;
         notice?: { text?: unknown; parseMode?: unknown } | null; quiet?: unknown;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
@@ -113,7 +125,8 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
               throw new Error(`Core returned an invalid chat answer for update ${update.update_id}`);
             return { ...base, lifecycleAction: 'chat-answer', chatId: body.chatId,
               chatAnswer: { text: answer.text, ...(answer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) },
-              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}) };
+              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}),
+              ...officeAlertsOf(alert, body.officeAlerts) };
           }
           if (body.lifecycleAction === 'settle-later') {
             const settle = body.settle as { kind?: unknown; delayMs?: unknown } | undefined;
@@ -186,6 +199,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
             return { ...base, lifecycleAction: 'late-change', code: body.code, chatId: body.chatId,
               requestId: body.requestId, requestStage: body.requestStage as LateChangeStage,
               ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}),
+              ...officeAlertsOf(alert, body.officeAlerts),
               ...(answer ? { chatAnswer: { text: String(answer.text), ...(answer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) } } : {}) };
           }
           if (body.lifecycleAction === 'request-choice-required' && body.chatId &&
@@ -201,7 +215,8 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
             return { ...base, lifecycleAction: 'revision-blocked',
               chatId: body.chatId, code: body.code,
               // ADR-145: the words the requester sent go to the office, which makes the change.
-              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}) };
+              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}),
+              ...officeAlertsOf(alert, body.officeAlerts) };
           }
           return base;
         }

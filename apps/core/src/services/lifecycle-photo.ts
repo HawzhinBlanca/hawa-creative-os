@@ -27,6 +27,8 @@ export function lifecycleStillImageFile(message: unknown, allowAlbum = false): s
       Number(file.file_size) < 1 || Number(file.file_size) > MAX_TELEGRAM_PHOTO_BYTES)) return null;
   if (hasDocument && file.mime_type !== undefined &&
       (typeof file.mime_type !== 'string' || !['image/png', 'image/jpeg', 'image/webp', 'application/octet-stream',
+        // Some senders label JPEG files 'image/jpg' (ADR-156 P3); the bytes are sniffed after download.
+        'image/jpg',
         // An iPhone photo sent "as a file" (ADR-145): converted to JPEG once its bytes say it is HEIF.
         'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence']
         .includes(file.mime_type.trim().toLowerCase()))) return null;

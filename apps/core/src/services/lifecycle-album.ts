@@ -9,6 +9,7 @@ import { lifecycleStillImageFile, retainLifecyclePhoto } from './lifecycle-photo
 import { classifyWithHeuristics, isSoraniText } from './telegram-classifier.js';
 import { readIntentByRules } from './requester-turn.js';
 import { unconfirmedSource } from './lifecycle-source-natural.js';
+import { briefParts, joinedWords } from './lifecycle-brief-parts.js';
 import { ALBUM_MESSAGES, TELEGRAM_CAPTION_LIMIT, requesterLang, say } from '@hawa/integrations';
 
 type Update = { update_id: number; [key: string]: unknown };
@@ -359,6 +360,11 @@ export function captionMayBeCut(caption: unknown): boolean {
  * (apps/worker core-client.ts; a test ties the two), so one delayed settle ends the wait.
  */
 export const CUT_CAPTION_WAIT_MS = HELD_BRIEF_MS;
+/**
+ * How long, after it was asked for the rest, a cut album waits for the words of a voice note or a PDF its
+ * sender sent within `CUT_CAPTION_WAIT_MS` as that rest: they must be read out and confirmed first.
+ */
+export const SOURCE_REST_WAIT_MS = 30 * 60_000;
 
 /**
  * The caption without its unfinished last sentence: only the last line is trimmed, back to its last
@@ -828,6 +834,12 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
       return { kind: 'wait', delayMs: Math.min(CUT_CAPTION_WAIT_MS, Math.max(albumSettleMs(), Math.ceil(CUT_CAPTION_WAIT_MS - waited))),
         notice: asked.updateId === update.update_id ? question : null };
     }
+    // A voice note or a PDF sent as the rest waits for its words to be confirmed (bindSourceToCutAlbum).
+    if (waited < SOURCE_REST_WAIT_MS &&
+        await sourceRestPending(trx, tenant, { chatId, senderId: part.senderId, topic: part.topic }, times.last, asked.at)) {
+      return { kind: 'wait', delayMs: Math.min(CUT_CAPTION_WAIT_MS, Math.max(albumSettleMs(), Math.ceil(SOURCE_REST_WAIT_MS - waited))),
+        notice: null };
+    }
     // No rest came. What arrived, without its unfinished sentence, opens only if it is still a brief (by
     // the intake's rule, and a brief of its own by the requester-turn rules: a lone label such as "KAAE"
     // is not); otherwise the album lapses, and the requester hears so in plain words.
@@ -850,8 +862,10 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
       VALUES (${tenant}::uuid, 'lifecycle_brief_consumed', ${String(held.updateId)}, 'lifecycle_brief_consumed',
         ${JSON.stringify({ groupKey, updateId: update.update_id })}::jsonb, ${hash({ groupKey, updateId: update.update_id })}, true)
       ON CONFLICT DO NOTHING`.execute(trx);
+    // A brief Telegram split into several messages (ADR-156) is taken whole: its parts joined while it
+    // waited follow its first words, in the order sent.
     return freeze(trx, tenant, { keys, selected, identity: update, chatId,
-      base: heldMessage, text: heldMessage.text, replyId: null });
+      base: heldMessage, text: joinedWords(heldMessage.text, await briefParts(trx, tenant, held.updateId)), replyId: null });
   }
   if (late && times.now - times.last > briefWindowMs()) {
     await markSettled(trx, tenant, keys, 'expired', update.update_id);
@@ -873,7 +887,7 @@ interface WaitingAlbum { keys: string[]; selected: Part[] }
  * after its question ends (ADR-148); its settle then says that it lapsed.
  */
 async function waitingAlbum(trx: Tx, tenant: string, scope: { chatId: string; senderId: string; topic: string },
-  onlyGroup?: string): Promise<WaitingAlbum | null> {
+  onlyGroup?: string, sourceAt?: number): Promise<WaitingAlbum | null> {
   const rows = (await sql<{ group_key: string }>`SELECT payload->>'groupKey' AS group_key
     FROM hawa.inbox_events WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_album_part'
       AND payload->>'chatId' = ${scope.chatId} AND payload->>'senderId' = ${scope.senderId}
@@ -894,9 +908,12 @@ async function waitingAlbum(trx: Tx, tenant: string, scope: { chatId: string; se
     const { captions, cutCaption } = albumShape(selected);
     const times = await albumTimes(trx, tenant, keys);
     if (cutCaption !== null) {
-      const asked = await cutAsked(trx, tenant, keys[0]);
-      if (times.now - (asked?.at ?? times.last) > CUT_CAPTION_WAIT_MS) continue;
-    } else if (!captions.length && times.now - times.last > briefWindowMs()) continue;
+      const since = (await cutAsked(trx, tenant, keys[0]))?.at ?? times.last;
+      // A voice note or a PDF (`sourceAt`, when it arrived) is the rest only if it came after the photos
+      // and within the wait; its words are confirmed later, within SOURCE_REST_WAIT_MS.
+      if (sourceAt === undefined ? times.now - since > CUT_CAPTION_WAIT_MS
+        : sourceAt < times.last || sourceAt - since > CUT_CAPTION_WAIT_MS || times.now - since > SOURCE_REST_WAIT_MS) continue;
+    } else if (sourceAt !== undefined || (!captions.length && times.now - times.last > briefWindowMs())) continue;
     return { keys, selected };
   }
   return null;
@@ -921,9 +938,11 @@ export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, d
   if (!msg || typeof words !== 'string' || msg.media_group_id !== undefined || !senderId) return { kind: 'none' };
   const text = words.trim();
   const confirmation = !media && isAlbumConfirmation(update);
-  if (!text || (text.startsWith('/') && !confirmation && !NEW_COMMAND.test(text))) return { kind: 'none' };
+  // A decision recorded for this update replays first: a "/use_source" that confirmed a voice note's
+  // words as a cut caption's rest (bindSourceToCutAlbum) is such an update.
   const prior = await readAlbumConfirmation(trx, tenant, update);
   if (prior) return outcomeOf(prior);
+  if (!text || (text.startsWith('/') && !confirmation && !NEW_COMMAND.test(text))) return { kind: 'none' };
   if (!actsInGroup(msg)) return { kind: 'none' };
   const affirmative = confirmation || isAffirmativeOnly(text);
   const brief = !affirmative && isBriefText(text);
@@ -1000,6 +1019,50 @@ export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, d
   return freeze(trx, tenant, { keys, selected, identity: update, chatId, base: msg, text: briefText, replyId: replies[0] ?? null });
 }
 
+/** When a kept voice note or PDF arrived (database time, ms), or null. */
+async function sourceArrival(trx: Tx, tenant: string, sourceUpdateId: number): Promise<number | null> {
+  const at = (await sql<{ at: number | null }>`SELECT (extract(epoch FROM min(received_at)) * 1000)::float8 AS at
+    FROM hawa.inbox_events WHERE tenant_id = ${tenant}::uuid
+      AND source_account_id IN ('lifecycle_source_admission', 'lifecycle_source_upload')
+      AND source_event_id = ${String(sourceUpdateId)}`.execute(trx)).rows[0]?.at;
+  return at === null || at === undefined ? null : Number(at);
+}
+
+/** Whether the sender's voice note or PDF, sent after the photos and within the wait, awaits its confirmation. */
+async function sourceRestPending(trx: Tx, tenant: string, scope: { chatId: string; senderId: string; topic: string },
+  photosAt: number, askedAt: number): Promise<boolean> {
+  const sourceUpdateId = await unconfirmedSource(trx, tenant, { chatId: scope.chatId, senderId: scope.senderId, topicId: scope.topic });
+  const at = sourceUpdateId === null ? null : await sourceArrival(trx, tenant, sourceUpdateId);
+  return at !== null && at >= photosAt && at - askedAt <= CUT_CAPTION_WAIT_MS;
+}
+
+/**
+ * ADR-148 F8 (the remainder), ADR-156: the confirmed words of a voice note or a PDF that its sender sent
+ * while their cut album waited are the caption's rest, as typed words would be. `update` is the message
+ * that confirmed them (it becomes the album's source update); `copy` the confirmed words. The album opens
+ * with the joined caption; the draft carries the album and not the source, because the draft contract
+ * refuses both (the voice note or PDF stays kept and confirmed for the office). None when no such album waits.
+ */
+export async function bindSourceToCutAlbum(trx: Tx, tenant: string, input: { update: Update; sourceUpdateId: number; copy: string }):
+  Promise<AlbumOutcome> {
+  const { msg, chatId, senderId, topic } = messageScope(input.update);
+  if (!msg || !senderId || !/^-?\d{1,20}$/.test(chatId) || !input.copy.trim()) return { kind: 'none' };
+  const prior = await readAlbumConfirmation(trx, tenant, input.update);
+  if (prior) return outcomeOf(prior);
+  const sourceAt = await sourceArrival(trx, tenant, input.sourceUpdateId);
+  if (sourceAt === null) return { kind: 'none' };
+  await senderLock(trx, tenant, chatId, senderId);
+  const album = await waitingAlbum(trx, tenant, { chatId, senderId, topic }, undefined, sourceAt);
+  if (!album) return { kind: 'none' };
+  const { keys, selected } = album;
+  await lockSet(trx, tenant, keys);
+  for (const key of keys) if (await frozen(trx, tenant, key)) return { kind: 'none' };
+  const { captions, replies, mixedReplies, cutCaption } = albumShape(selected);
+  if (cutCaption === null || captions.length !== 1 || mixedReplies) return { kind: 'none' };
+  return freeze(trx, tenant, { keys, selected, identity: input.update, chatId, base: msg,
+    text: joinCutCaption(cutCaption, input.copy.trim()), replyId: replies[0] ?? null });
+}
+
 /**
  * Whether a captioned photo from this sender may be the rest of a cut caption (ADR-148): a cut album of
  * theirs waits, or this update already has an album decision. Read before the photo is downloaded, so
@@ -1043,21 +1106,27 @@ export async function overdueSettles(trx: Tx, tenant: string, limit = 50): Promi
   // overdue: its settle opens it without its unfinished sentence or says that it lapsed (or finds that
   // the rest came). An album that lapsed, was cancelled or superseded is closed and not listed again.
   const cutSecs = (CUT_CAPTION_WAIT_MS + 60_000) / 1000;
-  const cuts = (await sql<{ group_key: string }>`SELECT c.source_event_id AS group_key FROM hawa.inbox_events c
+  const cuts = (await sql<{ group_key: string; asked_at: number; now: number }>`SELECT c.source_event_id AS group_key,
+      (extract(epoch FROM c.received_at) * 1000)::float8 AS asked_at, (extract(epoch FROM now()) * 1000)::float8 AS now
+    FROM hawa.inbox_events c
     WHERE c.tenant_id = ${tenant}::uuid AND c.source_account_id = 'lifecycle_album_cut'
       AND c.received_at < now() - make_interval(secs => ${cutSecs})
       AND c.received_at > now() - make_interval(secs => ${briefWindowMs() / 1000})
       AND NOT EXISTS (SELECT 1 FROM hawa.inbox_events f WHERE f.tenant_id = c.tenant_id
         AND f.source_account_id IN ('lifecycle_album_frozen', 'lifecycle_album_closed') AND f.source_event_id = c.source_event_id)
     ORDER BY c.received_at LIMIT ${limit}`.execute(trx)).rows;
-  for (const { group_key: groupKey } of cuts) {
+  for (const { group_key: groupKey, asked_at: askedAt, now } of cuts) {
     if (due.length >= limit) break;
     if (await settledState(trx, tenant, groupKey) !== 'asked') continue;
     const first = (await parts(trx, tenant, groupKey))[0];
     if (!first) continue;
-    const selected = await setParts(trx, tenant, await albumSet(trx, tenant, first));
+    const keys = await albumSet(trx, tenant, first);
+    const selected = await setParts(trx, tenant, keys);
     const newest = selected.reduce<Part | null>((a, p) => !a || p.source.update_id > a.source.update_id ? p : a, null);
     if (!newest || await event(trx, tenant, 'lifecycle_album_confirm', String(newest.source.update_id))) continue;
+    // Still waiting for a voice note's or a PDF's words sent as the rest: its own delayed settle ends that.
+    if (Number(now) - Number(askedAt) < SOURCE_REST_WAIT_MS + 60_000 &&
+        await sourceRestPending(trx, tenant, first, (await albumTimes(trx, tenant, keys)).last, Number(askedAt))) continue;
     due.push({ chatId: newest.chatId, update: newest.source });
   }
   const heldSecs = (briefPhotoWaitMs() + 60_000) / 1000;

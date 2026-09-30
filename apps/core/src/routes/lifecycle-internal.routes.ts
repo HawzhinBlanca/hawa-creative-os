@@ -59,6 +59,7 @@ import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, 
   shortTitle, statusText, tellOfficeAlert, tellText, thanksText, waitsForRequester, type ChatRequestView, type IntentReading,
   type TurnPlan } from '../services/requester-turn.js';
 import { briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
+import { officeChatFor, officeChatsFor, withOfficeAlerts } from '../services/office-chats.js';
 import { addPhotoMaterial, MATERIAL_STAGES, photoMaterialLine } from '../services/lifecycle-photo-material.js';
 import { createRequesterIntentModel, type RequesterIntentModel } from '../services/requester-intent-model.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
@@ -101,7 +102,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * (finding 13 of the Phase 4 review). The same stored change always gives the same answer.
  */
 function lateChangeAnswer(chatId: string, late: LateRequesterChange): Record<string, unknown> {
-  const officeAlert = lateChangeOfficeAlert(late, chatId, officeChatId());
+  const officeAlert = lateChangeOfficeAlert(late, chatId, officeChatFor(chatId));
   return { code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change', chatId,
     requestId: late.requestId, requestStage: late.requestStage, ...(officeAlert ? { officeAlert } : {}),
     // ADR-144: what the requester is told comes from Core, in their language, and replays as it was.
@@ -125,7 +126,7 @@ const SYSTEM_SCOPE = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_US
  * office has it (ADR-145), so the office must, with the words quoted. Null without an office chat.
  */
 function revisionBlockedAlert(chatId: string, code: string, update: UpdateLike): { chatId: string; text: string } | null {
-  const office = officeChatId();
+  const office = officeChatFor(chatId);
   if (!office || office === chatId || !['DAILY_CAP_REACHED', 'PARENT_BRIEF_MISSING', 'QUESTION_MISSING'].includes(code)) return null;
   const message = update.message && typeof update.message === 'object' ? update.message as Record<string, unknown> : null;
   const words = String(message?.text ?? message?.caption ?? '').trim();
@@ -136,8 +137,6 @@ function revisionBlockedAlert(chatId: string, code: string, update: UpdateLike):
     '', 'Their words:', (words.length > 1500 ? `${words.slice(0, 1500)}…` : words) || '(a photo or file, in the chat)'].join('\n') };
 }
 
-/** The office's Telegram chat: the first office member (TELEGRAM_ALLOWED_USERS). */
-const officeChatId = () => (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
 
 function requestIdForUpdate(chatId: string, updateId: number): string {
   const bytes = Buffer.from(createHash('sha256').update(`telegram-new-brief:${chatId}:${updateId}`).digest().subarray(0, 16));
@@ -273,7 +272,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
 
     const handled = (intakeStatus: number, extra: Record<string, unknown> = {}) =>
-      c.json({ v: 1, kind: 'handled', intakeStatus, ...extra, ...(beside && !extra.notice ? { notice: beside } : {}) }, 200);
+      // ADR-155 section 6: an office alert reaches every office member, not only the first (office-chats.ts).
+      c.json({ v: 1, kind: 'handled', intakeStatus, ...withOfficeAlerts(extra), ...(beside && !extra.notice ? { notice: beside } : {}) }, 200);
 
     const senderAllowedFor = (u: UpdateLike): boolean => {
       const carrier = (u.message ?? u.edited_message ?? u.channel_post) as Record<string, any> | undefined;
@@ -315,7 +315,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           answer: say(MEDIA_MESSAGES.svgPassedForDesign, lang, { title: bold(shortTitle(target.title)) }) });
         return handled(kept.status, kept.extra);
       }
-      const office = officeChatId();
+      const office = officeChatFor(chatId);
       const alerted = Boolean(office && office !== chatId);
       const answer = { status: 200, extra: { lifecycleAction: 'chat-answer', chatId, media: 'svg',
         chatAnswer: { text: say(alerted ? MEDIA_MESSAGES.svgPassed : MEDIA_MESSAGES.svgKept, lang), parseMode: 'HTML' },
@@ -538,15 +538,15 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       const edited = await edits.handle(preparedUpdate, {
         senderAllowed: senderAllowedFor(preparedUpdate),
         recordLate: (late) => recordLate(preparedUpdate, late),
-        officeChatId: officeChatId(),
+        officeChatId: officeChatFor(chatOf(preparedUpdate)),
       });
       if (edited.kind === 'answer') return handled(edited.answer.status, edited.answer.extra);
       if (edited.kind === 'reread') preparedUpdate = edited.update;
     }
 
-    const update = preparedUpdate;
+    let update = preparedUpdate;
     // An album admitted above or a released held brief is decided now, not held again.
-    const mayHoldBrief = holdBriefs && !settle && !releasedDeferral && !admittedAlbum && briefPhotoWaitMs() > 0;
+    let mayHoldBrief = holdBriefs && !settle && !releasedDeferral && !admittedAlbum && briefPhotoWaitMs() > 0;
 
     // A decision must replay even if the flag changed after the first answer was lost.
     const sourceChat = chatOf(update);
@@ -645,8 +645,19 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // ADR-144 §2.7 (ADR-148): in a group, a member's media is read only when addressed to the bot; it is
     // kept as a passive message, as group conversation is (lifecycle-chat-answers.ts, a group PDF).
     if (!settle && groupMediaNotAddressed(update)) return handled(200, { status: 'MESSAGE_ONLY' });
-    const sourceAnswer = await sourceIntake(update);
-    if (sourceAnswer) return handled(sourceAnswer.status, sourceAnswer.extra);
+    // An admitted album's words were bound to its photos: they answer no voice note or PDF (a replay of
+    // one that completed a cut caption, below, is admitted above by its recorded album decision).
+    const sourceAnswer = admittedAlbum ? null : await sourceIntake(update);
+    if (sourceAnswer && 'album' in sourceAnswer) {
+      // ADR-148 F8 (the remainder): a voice note's or a PDF's confirmed words completed a cut caption;
+      // the album is read now as an album bound by typed words is.
+      const { album } = sourceAnswer;
+      if (album.kind === 'reply') return handled(album.reply.status, { lifecycleAction: 'album-message', chatId: chatOf(update),
+        albumMessage: album.reply.message, albumNoticeKey: album.reply.noticeKey });
+      admittedAlbum = album.snapshot;
+      update = normalizedAlbumUpdate(admittedAlbum);
+      mayHoldBrief = false;
+    } else if (sourceAnswer) return handled(sourceAnswer.status, sourceAnswer.extra);
 
     // ADR-145: a photo with no words is kept for its sender's words (and settled later); a video is
     // explained, and its words, if any, are read as a message. Nothing is parked for an operator.
@@ -1000,7 +1011,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     text.slice(e.offset, e.offset + e.length).toLowerCase())) ||
                 (e?.type === 'text_mention' && e.user?.is_bot === true));
               const groupCommand = /^\/(?:task|brief|design|campaign)(?:@\w+)?(?:\s+|$)/i.exec(text);
-              const addressed = !group || message.reply_to_message?.from?.is_bot === true || mentionsBot || text.startsWith('/');
+              // An album admitted in a group already passed ADR-148's gate (`actsInGroup`: addressed to the
+              // bot, or a clear brief) when its photos settled or its sender's words bound them; its frozen
+              // message keeps the words but not their mention entities, so it is not read for them again.
+              const addressed = !group || mediaKind === 'album' || message.reply_to_message?.from?.is_bot === true ||
+                mentionsBot || text.startsWith('/');
               const { requests, bindings, opening } = await withRlsContext(db, system, async (trx) => ({
                 requests: await activeChatRequests(trx, TENANT, chatId),
                 bindings: replyMessageId ? await replyBindings(trx, TENANT, chatId, replyMessageId)
@@ -1163,7 +1178,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   return await decided(200, chatAnswer(askText(plan, lang), { choiceRequired: true }));
                 }
                 case 'forward': {
-                  const office = officeChatId();
+                  const office = officeChatFor(chatId);
                   const alerted = Boolean(office && office !== chatId);
                   return await decided(200, chatAnswer(forwardText(lang, alerted),
                     alerted ? { officeAlert: { chatId: office!, text: retried
@@ -1172,7 +1187,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 case 'tell': {
                   const target = byId(plan.requestId);
                   if (!target) return await decided(200, chatAnswer(statusText([], lang)));
-                  const office = officeChatId();
+                  const office = officeChatFor(chatId);
                   const alert = office && office !== chatId ? { chatId: office, text: tellOfficeAlert(plan.note, {
                     chatId, requestId: target.requestId, taskId: target.currentTaskId, title: target.title, words: plan.words,
                     stage: target.stage }) } : null;
@@ -1334,7 +1349,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               }
               // Treat projection conflicts as a handled non-retryable result (409-like). ADR-156 (audit P2):
               // never without an answer: the requester hears the office has the words, and the office does.
-              const office = officeChatId();
+              const office = officeChatFor(chatId);
               const alerted = Boolean(office && office !== chatId);
               return handled(409, { code: err.code, detail: err.message, lifecycleAction: 'chat-answer', chatId,
                 chatAnswer: { text: forwardText(photoInput?.captionless ? 'en' : langOf(rawText), alerted), parseMode: 'HTML' },
@@ -1392,9 +1407,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         (await sql<{ one: number }>`SELECT 1 AS one FROM hawa.inbox_events WHERE tenant_id = ${scope.tenantId}::uuid
           AND source_account_id = 'telegram' AND source_event_id = ${sourceEventId}`.execute(trx)).rows.length > 0);
       if (!already) {
-        const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
-        // The offset is the worker poller's: it moved past the update when Restate accepted it.
-        await parkTelegramUpdate(db, scope, update, reason, { officeChatId: office });
+        // The offset is the worker poller's: it moved past the update when Restate accepted it. Every
+        // office member but the sender's own chat hears of it (ADR-155 section 6).
+        await parkTelegramUpdate(db, scope, update, reason, { officeChatIds: officeChatsFor(parkedUpdateChat(update)) });
         log.error(`[core:internal] update ${update.update_id} parked for an operator: ${reason}`);
         const chat = parkedUpdateChat(update);
         if (body?.notifySender !== false && chat && ctx.telegramBridge) {
