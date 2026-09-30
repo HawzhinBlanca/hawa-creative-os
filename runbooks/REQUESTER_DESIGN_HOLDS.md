@@ -27,7 +27,7 @@ clarification pause, stale task or different request revision cannot resume here
 The worker waits using durable timers: 30, 60, 120, 240 seconds, then at most
 five minutes between checks. Resume may therefore take up to five minutes to be
 observed. It continues the saved run; it does not start a replacement design or
-clear uncertain model calls. A hold message still needs the existing delivery-note
+clear uncertain model calls. A projected hold retained as a delivery note still needs the existing delivery-note
 acknowledgement before delivery. Resume alone does not acknowledge it.
 An early-brief hold is retained in its own receipt and checkpoint; reading its words
 and resuming that checkpoint does not acknowledge any later delivery notes either.

@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T23:31:27Z",
+  "generatedAt": "2026-09-30T23:36:44Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -899,8 +899,8 @@
     },
     {
       "path": "adrs/185_requester_holds_before_task_projection.md",
-      "sha256": "1dcc4466c648ceb982d112d0e704599ceb22bed978bb782120bd8fd6b7cf19ca",
-      "bytes": 3004
+      "sha256": "145bf6ceb51f85289ffe8305c0e80137ebdedadecb9b84385c3cd0bae901c4f8",
+      "bytes": 3395
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1339,18 +1339,18 @@
     },
     {
       "path": "plans/early-requester-hold-2026-10-01/LIVE_INFRA_READBACK.json",
-      "sha256": "932994cc94b0a8a593419fc0722dc365b742b8ce7b1590346230cf91a07592f8",
-      "bytes": 487
+      "sha256": "34c5d12ff78069c96658379c205dc08437e9d623765da2c0abaf9dcef81bd2ee",
+      "bytes": 699
     },
     {
       "path": "plans/early-requester-hold-2026-10-01/LOCAL_PROOF.json",
-      "sha256": "5b98370c6640d0cc860a6fc40e80afc1e40ccf5cdb2a6b6c88bc03b8b56276dd",
-      "bytes": 1440
+      "sha256": "d5fd95a15d1b4a6a087e132a5703418bf5e8ddf10483f7b7cd26081c3d2c1f11",
+      "bytes": 4338
     },
     {
       "path": "plans/early-requester-hold-2026-10-01/PLAN.md",
-      "sha256": "03e885e5d5c4fb2030976212dde9efe23b9b00526cb00235b7fcca85d37cdf52",
-      "bytes": 2137
+      "sha256": "fb5db30ef1a9cb10e9aed802e0ffa501082f48e2fd05941fce14db3605b2ee51",
+      "bytes": 2377
     },
     {
       "path": "plans/hosting/LINUX_READINESS_PROOF.json",
@@ -2039,8 +2039,8 @@
     },
     {
       "path": "plans/requester-hold-reliability-2026-10-01/PLAN.md",
-      "sha256": "ee456af51a4901b1b0051e087bc34b6aa40e5e3a1032e922c78cb767e042009b",
-      "bytes": 2438
+      "sha256": "9209b1370fbbc6795aed4544126503a9c8b5732f5498d1a0d639cb29a8423490",
+      "bytes": 2525
     },
     {
       "path": "plans/requirements.csv",
@@ -2489,8 +2489,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "7e086e713f004657d91abfeb693071b58baf312fd44aefeb2551944b3130d442",
-      "bytes": 563718
+      "sha256": "7b945b0185da9dc4a269c1bb01cf64ae7d262eaf9e4a44945d2cfe59120f339f",
+      "bytes": 564426
     },
     {
       "path": "plans/user-stories.csv",
@@ -2659,8 +2659,8 @@
     },
     {
       "path": "runbooks/REQUESTER_DESIGN_HOLDS.md",
-      "sha256": "ebd66dd7f52dd382cf81f2083c84af1fca0ee4c3d2038815391b4a2a22d5c58a",
-      "bytes": 2594
+      "sha256": "daeabe6ac3eb39a28f88257ea86b8840c9b49128f12b4ccc9e3f84f4d28af21f",
+      "bytes": 2624
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",

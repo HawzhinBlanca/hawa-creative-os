@@ -24,7 +24,10 @@ docs/10_WORKFLOW_RELIABILITY.md; MASTER_SPEC.md.
 Connected 13-file suite: 299 passed, zero failed, two existing expected failures.
 Production remains healthy4e500451 with nginx validation, stable proof bind, independent
 worker token, restricted worker login and unsafe releases absent. See LIVE_INFRA_READBACK.json.
-Full sealed regression, final typing and manifest gates are pending in this source checkpoint.
+Tested seal cdc8e311 (source fb5051c8): full6,262 passed/0failed/2existing expected
+failures/67skipped,650 typed roots, lint and source manifest pass. All source changes
+after this tested seal are qualification metadata/manifests; runtime/test bytes stay
+unchanged. See LOCAL_PROOF.json for log digests and retained negative evidence.
 
 The two unrelated ADR182 title and multiple-design defects remain open. Later-stage
 holds, permanent cancellation, native Sorani admission and broader content-aware

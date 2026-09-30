@@ -1,7 +1,7 @@
 # ADR-185 — Requester holds before task projection
 
 Date: 2026-10-01
-Status: accepted for implementation; local and live qualification pending
+Status: accepted; local sealed candidate qualified; live rollout pending
 Requirements: FR-004, FR-005, FR-060, FR-063, NFR-001, NFR-006
 Sources: docs/09_MESSAGING_AND_OFFICE_INBOX.md; docs/10_WORKFLOW_RELIABILITY.md;
 MASTER_SPEC.md; ADR-184.
@@ -47,3 +47,9 @@ Use the actual paid-call ledger to prove zero admissions while paused and one af
 office resume. Cover replay after resume, receipt rollback, album anchor transfer,
 language siblings, ownership/topic/reply ambiguity and both lock orderings. A failed
 or unexecuted case remains an open gate; live deployment is a separate gate.
+
+Tested seal cdc8e311 (source fb5051c8): full6,262 pass/0fail/2existing expected
+failures/67skip; connected299 pass;650 typed roots; lint and source seal pass.
+The paid-admission fixture runs at actual worker dispatch, observes zero ledger
+rows while paused and one after human resume. Both lock orderings observe a real
+blocked PostgreSQL backend. No provider call or hold rollout occurred.

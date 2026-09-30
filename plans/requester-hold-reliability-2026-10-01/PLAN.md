@@ -23,7 +23,8 @@ Decision: ADR184. Specification: messaging/inbox, workflow reliability and secur
 
 ## Remaining boundaries
 
-Initial-brief settlement versus the first paid admission remains unqualified.
+Original-brief settlement and first design-paid admission are now locally qualified
+in ADR185 and plans/early-requester-hold-2026-10-01; that candidate is not live.
 Later-stage holds pass to the office with existing delivery fencing; they do not
 claim an automatic task pause. The two ADR182 defects in title extraction and
 multi-design requests remain expected failures. Broader W3/W5/W6 design work,
