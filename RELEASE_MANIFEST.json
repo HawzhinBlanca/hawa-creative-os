@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-30T23:58:34+03:00",
+  "generatedAt": "2026-10-01T00:02:24+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "184fe2e0f6bc9224e6877932acd0325600bcd1a6",
+    "commit": "ef17851cecaef9cdbc8259233500b8c23cb5ba89",
     "treeClean": true,
-    "commitTimestamp": "2026-09-30T23:58:34+03:00",
+    "commitTimestamp": "2026-10-01T00:02:24+03:00",
     "branch": "codex/service-boundary-repair"
   },
   "migrations": {
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "d0a4c65ac61d1fe5ba58532be0102c8ef8c98a2588c6330a2c4a49f27545b85e"
+  "sha256": "7ec911eb8b01851facc48eaa6b55b2c86b05a275eb87be5e2955b6fe4622a044"
 }
