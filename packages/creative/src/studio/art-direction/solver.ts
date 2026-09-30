@@ -496,20 +496,6 @@ class SolveContext {
     overlay.stops = stops;
   }
 
-  /**
-   * The corner logo never sits bare on a photograph: where no plate or card already carries it, it
-   * gets a small cream tab, rounded, inside which its own clear space is kept (rulebook item 4).
-   */
-  backLogo(logo: Box): void {
-    const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
-    const holds = (a: Box, b: Box) => b.x >= a.x && b.y >= a.y && b.x + b.width <= a.x + a.width && b.y + b.height <= a.y + a.height;
-    if (!this.photos.some((p) => p.treatment !== 'cutout' && hit(p, logo))) return;
-    if (this.shapes.some((sh) => sh.role === 'panel' && sh.fill !== 'none' && holds(sh, logo))) return;
-    const pad = Math.max(4, Math.round(0.07 * logo.height));
-    const box = intBox({ x: logo.x - pad, y: logo.y - pad, width: logo.width + 2 * pad, height: logo.height + 2 * pad });
-    this.shapes.push({ kind: 'roundRect', role: 'panel', layer: 'overlay', surface: 'tab', color: this.tones.cream, ...box, radius: Math.round(0.2 * box.height) });
-  }
-
   /** How much the hero's own pixels are enlarged in its box, as the renderer crops it. */
   heroUpscale(): number | undefined {
     const el = this.photos.find((p) => p.role === 'hero');
@@ -767,7 +753,9 @@ class SolveContext {
     art?: StudioLayoutV2['art'];
   }): StudioLayoutV2 {
     const used = new Set(this.photos.map((p) => p.photoIndex));
-    this.backLogo(parts.logo);
+    // ADR-180: the logo is set bare. Whether its ground needs a scrim or a thin tab is read from the
+    // rendered pixels afterwards (settleLogoGround), not assumed from the geometry: a cream tab on
+    // every logo that touched a photo was a box the office does not draw on a calm wall or sky.
     const upscale = this.heroUpscale();
     const layout: StudioLayoutV2 = {
       version: 2,
@@ -924,10 +912,10 @@ class SolveContext {
         { x: supportX + col * (cellW + gap), y: row * (cellH + gap), width: cellW, height: cellH }, 'inset');
     }
     const text = this.placeStack(set, this.safe.x, this.safe.width, textTop, align, colours);
-    // A solid tab keeps the official logo clear of busy pixels; copy stays below the photo sequence.
+    // ADR-180: no box behind the logo. A navy square the size of its whole clear space was drawn here
+    // whatever lay under it (owner, 2026-09-30: "current design has logo background"); the logo's
+    // ground is now measured on the pixels (settleLogoGround) and lifted only where it is busy.
     const logo = this.logoAt('top-start');
-    const clear = this.logoClear(logo);
-    this.shapes.push({ kind: 'rect', role: 'panel', layer: 'overlay', surface: 'tab', color: this.tones.navy, ...intBox(clear) });
     return this.finish({ background, text, logo, titleZone: { x: this.safe.x, y: textTop, width: this.safe.width, height: h }, hero });
   }
 

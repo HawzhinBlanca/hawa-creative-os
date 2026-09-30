@@ -1454,6 +1454,17 @@ export function shapeShadowFilterSvg(id: string, s: Pick<ShapeElement, 'x' | 'y'
  * into a transparent PNG of its own, so the photo under it stays a native, swappable picture.
  */
 export function overlaySvg(o: OverlayElement, id: string): { defs: string; svg: string } {
+  if (o.direction === 'radial') {
+    // ADR-180: a logo's soft scrim, strongest at the centre and gone at the edge of the ellipse.
+    const radial = [...o.stops]
+      .sort((a, b) => a.at - b.at)
+      .map((st) => `<stop offset="${st.at}" stop-color="${o.color}" stop-opacity="${st.opacity}"/>`)
+      .join('');
+    return {
+      defs: `<radialGradient id="${id}-gradient" cx="0.5" cy="0.5" r="0.5">${radial}</radialGradient>`,
+      svg: `<rect id="${id}" x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" fill="url(#${id}-gradient)"/>`,
+    };
+  }
   const [x1, y1, x2, y2] =
     o.direction === 'to-bottom' ? [0, 0, 0, 1] : o.direction === 'to-top' ? [0, 1, 0, 0] : o.direction === 'to-right' ? [0, 0, 1, 0] : [1, 0, 0, 0];
   const stops = [...o.stops]

@@ -249,5 +249,6 @@ and the phrase-ending words and language names in `packages/creative/src/studio/
 | `office.notRecorded` | I couldn't record that for {title}, so nothing was changed. Please use Hawa Desk. | نەمتوانی ئەوە بۆ {title} تۆمار بکەم، بۆیە هیچ شتێک نەگۆڕدرا. تکایە Hawa Desk بەکاربهێنە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
 | `office.you` | you | تۆ | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
 | `office.theRequester` | the requester | داواکارەکە | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.draftAlertDecide` | Reply to this picture with “approved” to send it to {requester}, or say what to change. You can also decide in Hawa Desk. | بە «پەسەندە» وەڵامی ئەم وێنەیە بدەرەوە بۆ ئەوەی بۆ {requester} بنێردرێت، یان بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت. | needs native review (ADR-180, the office draft photo alert, 2026-09-30) |
 
-183 lines.
+184 lines.

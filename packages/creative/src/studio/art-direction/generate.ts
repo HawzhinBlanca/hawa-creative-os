@@ -16,7 +16,7 @@ import {
   rankPhotosForHero,
   type PhotoFacts,
 } from './recipes.js';
-import type { PhotoSelection } from '../photo-selection.js';
+import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
 import { RecipeInfeasibleError, TEXT_SLOTS, solveRecipe, type ArtDirectionChoice, type SolverPhoto, type TextSlot } from './solver.js';
 
 /**
@@ -114,9 +114,9 @@ PRINCIPLES
 ================================================================================
 - One hero photo that literally shows the subject, used boldly: full-bleed or dominant, running off the edges, never a small framed tile in the middle of empty space.
 - Text always sits on something: a fade, a scrim, a plate, a card or a pill; never bare on a busy photo.
-- For hero_storyboard, supporting photos form a sequence beside the dominant hero. Other recipes use at most a texture. Required photo coverage comes first.
+- A second photo is at most a texture blended into the text zone; never a grid. hero_storyboard, a hero beside a sequence of photos, is only for a requester who asked for more photos in so many words.
 - The photo is never mirrored, tilted or recoloured.
-- Required requester photo coverage is a hard constraint. House art-direction rules govern style within that constraint; they cannot authorize omission.
+- The client's own house art-direction rules, listed in the request (R1, R2, ...), come first. The requester's explicit words about photos ("use all the photos", "pick 3") bind; the request states them as REQUIRED PHOTOS.
 
 ================================================================================
 RECIPES (closed set; use only those the request lists as eligible)
@@ -148,7 +148,7 @@ PHOTOS
 ================================================================================
 - The hero must literally show the subject, be sharp, and ideally have a quiet region (sky, wall, blur). Use the photo review and the local measurements given for each photo; look at the photos yourself.
 - A texture photo is optional, only in recipes that allow it, and never the hero. Choose a busy, related scene (a crowd, a classroom) that reads well faded into navy.
-- Leave other photos out only when the requester selection permits it. Use hero_storyboard when multiple photos are required. Never replace a required photo with a texture or reference.
+- Leave every other photo out, unless the request's REQUIRED PHOTOS asks for more; then use only the eligible recipes, which can place them. The office reviews the photos left out.
 - heroPhotoIndex, texturePhotoIndex and cutoutPhotoIndex are photoIndex values from the list.
 
 ================================================================================
@@ -168,8 +168,9 @@ DIVERGENCE
 When more than one recipe is eligible, use at least two different recipes. When only one is eligible, vary the hero and surface treatment within it. Give each a typicality from 0 (unexpected) to 1 (the most typical treatment). Make one concept the house's most typical answer for the subject, and at least one a less typical but still on-brand answer. Different concepts may pick different heroes when the photos support it.`;
 }
 
+/** The fewest photos a concept must place (ADR-180: the requester's explicit words only). */
 function requiredPhotoCount(selection: PhotoSelection | undefined, count: number): number {
-  return selection?.mode === 'choose' ? Math.max(1, Math.min(count, selection.minimum)) : count;
+  return recipePhotoMinimum(selection, count);
 }
 
 export interface GenerateArtDirectedOptions {
@@ -219,6 +220,14 @@ export interface GenerateArtDirectedResult {
   degeneracyCheck: CandidateSetDegeneracyResult;
 }
 
+/** What the request says about its photos, for the art director (ADR-180). */
+function requiredPhotosLine(selection: PhotoSelection | undefined, count: number): string {
+  const least = requiredPhotoCount(selection, count);
+  if (least >= count && count > 1) return `all ${count}: the requester asked for every photo in so many words.`;
+  if (least > 1) return `at least ${least} of ${count}: the requester asked for ${least} in so many words.`;
+  return `one hero of ${count}, with at most a blended texture, in the house style; the photos left out are listed for office review.`;
+}
+
 export function buildArtDirectorUserPrompt(options: Omit<GenerateArtDirectedOptions, 'client'>): string {
   const eligible = eligibleRecipes(options.photos, requiredPhotoCount(options.photoSelection, options.photos.length));
   const ranked = rankPhotosForHero(options.photos);
@@ -264,7 +273,7 @@ PHOTOS (the images attached as "Photo N" are these, at high detail):
 ${photoLines}
 Ranked for the hero by the local review (best first): ${ranked.map((p) => p.photoIndex).join(', ')}.
 
-REQUIRED PHOTO COVERAGE: at least ${requiredPhotoCount(options.photoSelection, options.photos.length)} of ${options.photos.length}; ${options.photoSelection?.mode === 'choose' ? 'the requester permits selection' : 'every content photo is required'}.
+REQUIRED PHOTOS: ${requiredPhotosLine(options.photoSelection, options.photos.length)}
 ELIGIBLE RECIPES for these photos: ${eligible.join(', ')}.
 
 OFFICE EXEMPLARS (published designs of this client; the attached example images are these):

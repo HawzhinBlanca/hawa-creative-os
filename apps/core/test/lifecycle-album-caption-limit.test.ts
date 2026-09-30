@@ -186,7 +186,8 @@ describe('a caption Telegram cut at its limit (ADR-160)', () => {
     expect(opened.draft.rawText).toContain(SUPPORTING);
     // The headline is the title line; the line that introduced the text is an instruction (a2e9f6af).
     expect(headlineOf(opened.draft)).toBe(TITLE);
-    expect(opened.draft.title.startsWith(`KAAE: ${TITLE}`)).toBe(true);
+    // ADR-180: the headline already names the client, so the title does not repeat it.
+    expect(opened.draft.title.startsWith(TITLE)).toBe(true);
     expect(opened.draft.title).not.toContain('Here is the text');
     expect(opened.notice).toBeUndefined();
     // A replay gives the recorded decision; the album's own delayed settle then does nothing.

@@ -376,6 +376,32 @@ export function evaluateCanvaExportQc(
  * UTF-16 units and left half an emoji at the cut, a lone surrogate that Telegram may refuse along with
  * the whole message (review of 2026-09-24).
  */
+/** Direction marks and spaces a line may start with: a Sorani keyboard puts U+200F before Latin copy. */
+const LEADING_MARKS = /^[\s\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069\uFEFF]+/u;
+
+/** A line without the invisible direction marks and spaces it starts with. */
+export function stripLeadingMarks(text: string): string {
+  return text.replace(LEADING_MARKS, '');
+}
+
+/** Whether a line starts with a name as whole words, ignoring case and leading direction marks. */
+export function startsWithName(line: string, name: string): boolean {
+  const text = stripLeadingMarks(line);
+  const n = name.trim();
+  return n.length > 0 && text.slice(0, n.length).toLowerCase() === n.toLowerCase() && !/[\p{L}\p{N}]/u.test(text.charAt(n.length));
+}
+
+/**
+ * ADR-180: a title "<Client>: <line>" whose line already starts with the client's name or acronym,
+ * without the repeat. The office's photo alert read "KAAE: \u200FKAAE K-12 Pilot Study…" (2026-09-30).
+ * Any other title is returned as it is.
+ */
+export function withoutRepeatedClient(title: string): string {
+  const m = title.match(/^([^:\n]{1,40}):\s*([\s\S]*)$/u);
+  if (!m) return title;
+  return startsWithName(m[2], m[1]) ? stripLeadingMarks(m[2]) : title;
+}
+
 export function cutText(text: string, max: number): string {
   return text.length <= max ? text : Array.from(text).slice(0, max).join('');
 }

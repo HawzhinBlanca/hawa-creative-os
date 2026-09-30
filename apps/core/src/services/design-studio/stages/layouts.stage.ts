@@ -11,6 +11,8 @@ import {
   type CopyBlockSlotInput,
   type PhotoSelection,
   photoSelectionPrompt,
+  settleLogoGround,
+  faceBoxesOf,
   generateArtDirectedCandidatesV3,
 } from '@hawa/creative';
 import { photoFactsFor } from '../art-direction.js';
@@ -18,7 +20,7 @@ import { renderBriefContractForPrompt } from '@hawa/domain';
 import { buildP0SystemPrompt, buildP3Prompt } from '../prompts.js';
 import { copyForStageV3, conceptFromV3Candidate } from './v3.stage.js';
 import { log } from '../../../logging.js';
-import { layoutVisualInputs } from './asset-inputs.js';
+import { candidateRenderOptions, layoutVisualInputs } from './asset-inputs.js';
 import { studioSubstepKey } from '@hawa/domain';
 import { inStudioSubstep } from '../substeps.js';
 
@@ -278,6 +280,20 @@ export async function runLayoutsStage(
         status: 'draft' as const,
       };
     });
+    // ADR-180: each recipe's logo is set bare, and its ground is read on the rendered pixels: it is
+    // lifted (a soft scrim, else a thin cream tab) only where the photo under it is busy.
+    if (artDirected) {
+      for (const candidate of prepared) {
+        const settled = await settleLogoGround(candidate.currentLayout, {
+          render: candidateRenderOptions(ctx, {}),
+          clearSpacePx: logoConstraintsV3?.clearSpacePx,
+          faces: faceBoxesOf(candidate.currentLayout, photoFacts),
+          palette: ctx.referencePack.palette,
+        });
+        candidate.currentLayout = settled;
+        candidate.layouts = [settled];
+      }
+    }
     const replaced = 'replaced' in v3Result ? (v3Result.replaced as Array<{ reason: string }>) : [];
     if (replaced.length) log.warn(`[LayoutsStage] ${replaced.length} art-direction concept(s) replaced: ${replaced.map((r) => r.reason).join(' | ')}`);
     const distinct: CandidateState[] = [];

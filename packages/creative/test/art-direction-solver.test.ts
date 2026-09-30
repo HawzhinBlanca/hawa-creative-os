@@ -210,14 +210,18 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
       .toThrow(RecipeInfeasibleError);
   });
 
-  it('a recipe cannot waive the default all-photo contract or the recorded selection minimum', () => {
+  it('the house style chooses the hero; only the requester\'s explicit words bind more photos (ADR-180)', () => {
     const layout = solve('hero_fade_report', 1080, 1350, false);
     expect(validateLayoutV2(layout, context(1080, 1350, false)).ok).toBe(true);
+    // "Use all the photos" binds every one.
     expect(validateLayoutV2(layout, context(1080, 1350, false, true))).toMatchObject({ ok: false, code: 'PHOTOS' });
-    // ADR-171: both stored minimums bind; a recipe is never authority to reduce them.
+    // "Choose the best ones" with no count (the half-the-photos guess), and photos sent with nothing
+    // said about them: the owner's "office house style" (2026-09-30) supersedes ADR-171's minimum.
     const guessed = { ...context(1080, 1350, false), photoSelection: { mode: 'choose' as const, minimum: 3 } };
-    expect(validateLayoutV2(layout, guessed)).toMatchObject({ ok: false, code: 'PHOTOS' });
-    expect(validateLayoutV2(layout, { ...guessed, photoSelection: undefined })).toMatchObject({ ok: false, code: 'PHOTOS' });
+    expect(validateLayoutV2(layout, guessed).ok).toBe(true);
+    expect(validateLayoutV2(layout, { ...guessed, photoSelection: undefined }).ok).toBe(true);
+    expect(validateLayoutV2(layout, { ...guessed, photoSelection: { mode: 'all' as const, minimum: 6 } }).ok).toBe(true);
+    // "Pick 3" binds three.
     const counted = { ...context(1080, 1350, false), photoSelection: { mode: 'choose' as const, minimum: 3, counted: true } };
     expect(validateLayoutV2(layout, counted)).toMatchObject({ ok: false, code: 'PHOTOS' });
   });

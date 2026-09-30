@@ -13,6 +13,8 @@
  */
 import type { DraftImageRef } from '@hawa/contracts';
 import { sql, type Database, type Kysely } from '@hawa/db';
+import { OFFICE_MESSAGES, say } from '@hawa/integrations';
+import { withoutRepeatedClient } from '../core-helpers.js';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
@@ -59,6 +61,13 @@ export interface OfficeDraftAlertInput {
   reviewUrl?: string;
   /** The outcome, when the draft came with a failed automatic check (a copy or font mismatch). */
   check?: string;
+  /**
+   * ADR-180: the words go with the draft's picture, and office members may decide on it in Telegram
+   * (ADR-040 addendum): the caption says to reply to the picture. The text alert, sent without the
+   * picture (or by a worker from before), keeps pointing to Hawa Desk: approving in Telegram needs the
+   * picture that member was sent.
+   */
+  telegramDecision?: boolean;
 }
 
 /**
@@ -67,7 +76,8 @@ export interface OfficeDraftAlertInput {
  * than giving a link that only works on the office computer.
  */
 export function composeOfficeDraftAlert(input: OfficeDraftAlertInput): string {
-  const title = input.title.trim() || 'Untitled design';
+  // "KAAE: KAAE K-12 Pilot Study…" was titled before ADR-180: the client is not named twice.
+  const title = withoutRepeatedClient(input.title.trim()) || 'Untitled design';
   const who = [input.clientName?.trim() ? `For ${input.clientName.trim()}` : '',
     input.requestedBy?.trim() && !title.startsWith(`${input.requestedBy.trim()}:`) ? `requested by ${input.requestedBy.trim()}` : '']
     .filter(Boolean).join(', ');
@@ -76,8 +86,12 @@ export function composeOfficeDraftAlert(input: OfficeDraftAlertInput): string {
     who ? `${who.charAt(0).toUpperCase()}${who.slice(1)}.` : '',
     input.check ? `The automatic check reported ${input.check}: look closely before approving.` : '',
     input.canvaUrl ? `Edit in Canva: ${input.canvaUrl}` : '',
-    input.reviewUrl
-      ? `Approve or send it back in Hawa Desk (office sign-in required): ${input.reviewUrl}`
-      : 'Approve or send it back in Hawa Desk on the office computer.',
+    input.telegramDecision
+      ? say(OFFICE_MESSAGES.draftAlertDecide, 'en', { requester: input.requestedBy?.trim() || say(OFFICE_MESSAGES.theRequester, 'en') }) +
+        `\n${say(OFFICE_MESSAGES.draftAlertDecide, 'ckb', { requester: input.requestedBy?.trim() || say(OFFICE_MESSAGES.theRequester, 'ckb') })}` +
+        (input.reviewUrl ? `\nHawa Desk (office sign-in required): ${input.reviewUrl}` : '')
+      : input.reviewUrl
+        ? `Approve or send it back in Hawa Desk (office sign-in required): ${input.reviewUrl}`
+        : 'Approve or send it back in Hawa Desk on the office computer.',
   ].filter(Boolean).join('\n');
 }

@@ -1,0 +1,67 @@
+{
+  "date": "2026-09-30",
+  "parents": [
+    "becef8d5",
+    "36369a12afb82589131452c858ccaecb122a3002"
+  ],
+  "scope": "Current deployed release foundation integration with W1/W2 retained; W3 not finally qualified",
+  "productionPointerObserved": "36369a12afb82589131452c858ccaecb122a3002",
+  "runtimeHealthRevalidated": false,
+  "productionChangedByThisWork": false,
+  "paidCalls": 0,
+  "tests": {
+    "files": 14,
+    "passed": 634,
+    "failed": 0,
+    "skipped": 0,
+    "log": "/tmp/hawa-house-style-tests.log",
+    "command": "pnpm --config.verifyDepsBeforeRun=false exec vitest run packages/creative/test/protected-regions.test.ts packages/creative/test/content-background.test.ts packages/creative/test/house-style-logo-ground.test.ts packages/creative/test/art-direction-solver.test.ts packages/creative/test/art-direction-round2.test.ts packages/creative/test/art-direction-render-qa.test.ts packages/creative/test/required-photo-composition.test.ts packages/creative/test/photo-selection.test.ts apps/core/test/photo-cutouts.test.ts apps/core/test/art-direction-e2e.test.ts apps/core/test/studio-visual-inputs.test.ts apps/core/test/office-caption-and-title.test.ts apps/core/test/lifecycle-office-draft-alert.test.ts packages/integrations/test/requester-messages.test.ts"
+  },
+  "build": {
+    "passed": true,
+    "log": "/tmp/hawa-house-style-build.log"
+  },
+  "conflictResolution": [
+    "hardQA retains both independent subject checks and logo-backing checks",
+    "Core e2e keeps requested-background controls and incoming logo/office behavior",
+    "traceability retains both additive evidence histories; generated manifests refreshed"
+  ],
+  "addedRegression": "logo relocation protects each measured person in supporting images; invalid/empty evidence differentiated",
+  "open": [
+    "W3 visibility statistic and actual archive/native/human qualification",
+    "W4 several explicitly coverage-safe topologies",
+    "W5 image color/local refinement/cache/cost",
+    "W6 genuine preference data/held-out calibration",
+    "full sealed release/recovery/deployment",
+    "Canva native field/typography and professional comparison"
+  ],
+  "sourceHashes": {
+    "packages/creative/src/studio/art-direction/logo-ground.ts": "16edebbc3d2747c0725821ba8b9098ab732f52cd03e51267adc03c3012c7ee48",
+    "packages/creative/src/studio/hard-qa.ts": "b90e04a4ea58856ee1c9d7427a594e59c1bb0fedd6d787846fc44a7782c20ce0",
+    "apps/core/src/services/design-studio/stages/layouts.stage.ts": "24e93d90edb5eece423da1ba88e8f336fc349eb90252ab7ca39abe24e04d863f",
+    "packages/creative/src/studio/art-direction/solver.ts": "e13a185bbf8c1cac91229094e277ef2672fa0c1541a234faf34bf80570afb11f",
+    "packages/creative/src/studio/art-direction/generate.ts": "b6b4e03b356292fda396377fa3500404392fcb6aea3ec245cd77c34cfa322069"
+  },
+  "lint": {
+    "passed": true,
+    "log": "/tmp/hawa-house-style-lint.log",
+    "anyCount": 937,
+    "ceiling": 1053,
+    "providerEgress": "passed with 10 existing exceptions"
+  },
+  "testTypes": {
+    "passed": true,
+    "roots": 644,
+    "log": "/tmp/hawa-house-style-types.log"
+  },
+  "ownerClarification": {
+    "date": "2026-09-30",
+    "pendingNextSlice": "Keep explicit-only coverage and conditional logo; remove global hero-only eligibility. KAAE hero/navy fade is client-specific, not global."
+  },
+  "blueprint": {
+    "passed": 1478,
+    "warned": 0,
+    "failed": 0,
+    "log": "/tmp/hawa-house-style-pack.log"
+  }
+}

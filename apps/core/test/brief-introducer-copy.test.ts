@@ -42,7 +42,8 @@ describe('a line that introduces the text is not copy', () => {
 
     expect(draft.clientId).toBe('c1000000-0000-4000-8000-000000000002');
     expect(draft.headlineEn).toBe('KAAE K-12 Pilot Study');
-    expect(draft.title.startsWith('KAAE: KAAE K-12 Pilot Study')).toBe(true);
+    // ADR-180: the headline already names the client, so the title does not say "KAAE: KAAE …".
+    expect(draft.title).toBe('KAAE K-12 Pilot Study…');
     expect(texts(draft)).toEqual([
       'KAAE K-12 Pilot Study',
       'Field Visit Report',
@@ -86,7 +87,7 @@ describe('a line that introduces the text is not copy', () => {
 
     expect(texts(draft)).toEqual(['KAAE Annual Conference', 'کۆنفرانسی ساڵانەی کەی ئەی ئەی']);
     expect(blocks(draft).map((b) => [b.language, b.direction])).toEqual([['en', 'ltr'], ['ckb', 'rtl']]);
-    expect(draft.title).toBe('KAAE: KAAE Annual Conference…');
+    expect(draft.title).toBe('KAAE Annual Conference…');
     expect(draft.designInstructions).toBe('Please design a KAAE poster in navy and yellow, formal and clean.\nHere is the text:');
   });
 

@@ -3,7 +3,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { solveRecipe, type SolveRecipeInput } from '../src/studio/art-direction/solver.js';
-import { normalizeConcepts, solveConcepts } from '../src/studio/art-direction/generate.js';
+import { normalizeConcepts, solveConcepts, type RawArtDirectionConcept } from '../src/studio/art-direction/generate.js';
 import type { CopyBlockSlotInput } from '../src/studio/layout-generator-v3.js';
 import { validateLayoutV2, type LayoutValidationContext } from '../src/studio/validate-layout-v2.js';
 import { evaluateHardQa } from '../src/studio/hard-qa.js';
@@ -43,12 +43,13 @@ describe('ADR-171 required photo composition', () => {
     expect(layout.photos![0].x).toBe(0);
     expect(layout.photos).toHaveLength(6);
   });
-  it('preserves the requester minimum in selection and refuses a forged recipe omission', () => {
-    const requested = { mode: 'choose' as const, minimum: 3 };
+  it('preserves a stated count ("pick 3") and refuses a forged recipe omission', () => {
+    const requested = { mode: 'choose' as const, minimum: 3, counted: true };
     const layout = solveRecipe({ ...input(), photoSelection: requested });
     expect(layout.photos).toHaveLength(3);
     expect(validateLayoutV2(layout, { ...context(1080, 1350), photoSelection: requested })).toMatchObject({ ok: true });
-    expect(validateLayoutV2(layout, context(1080, 1350))).toMatchObject({ ok: false, code: 'PHOTOS' });
+    // ADR-180: "use all the photos" binds all six.
+    expect(validateLayoutV2(layout, { ...context(1080, 1350), photoSelection: { mode: 'all', minimum: 6, insisted: true } })).toMatchObject({ ok: false, code: 'PHOTOS' });
     const duplicate = { ...layout, photos: [layout.photos![0], layout.photos![0], layout.photos![2]] };
     expect(validateLayoutV2(duplicate, { ...context(1080, 1350), photoSelection: requested })).toMatchObject({ ok: false, code: 'PHOTOS' });
   });
@@ -58,15 +59,26 @@ describe('ADR-171 required photo composition', () => {
     expect(layout.photos).toHaveLength(2);
     expect(validateLayoutV2(layout, { ...context(1080, 1350), photoSelection: requested })).toMatchObject({ ok: true });
   });
-  it('normalizes an invalid model concept under the default all-photo contract and solves all six', () => {
+  it('with no words about the photos a single-hero concept stands: the house style (ADR-180)', () => {
+    const blocks: CopyBlockSlotInput[] = Object.entries(copy).map(([index, text]) => ({ index: Number(index), text, role: Number(index) === 0 ? 'title' : Number(index) === 2 ? 'cta' : 'body', script: 'latin' as const }));
+    const concept: RawArtDirectionConcept = { id: 'hero', conceptNote: 'One hero', recipe: 'scrim_caption', typicality: .7,
+      heroPhotoIndex: 1, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: [], titleAccentWords: null,
+      fadeShare: null, surfaceTone: 'navy', frame: 'none', align: 'start' };
+    for (const selection of [undefined, { mode: 'all' as const, minimum: 6 }, { mode: 'choose' as const, minimum: 3 }]) {
+      const choices = normalizeConcepts([concept], photos, blocks, selection);
+      expect(choices[0].recipe).toBe('scrim_caption');
+      expect(choices.some((c) => c.recipe === 'hero_storyboard')).toBe(false);
+    }
+  });
+  it('normalizes an invalid model concept when the requester asked for every photo and solves all six', () => {
     const blocks: CopyBlockSlotInput[] = Object.entries(copy).map(([index, text]) => ({ index: Number(index), text, role: Number(index) === 0 ? 'title' : Number(index) === 2 ? 'cta' : 'body', script: 'latin' as const }));
     const choices = normalizeConcepts([{
       id: 'untrusted', conceptNote: 'Discard five photos', recipe: 'hero_card', typicality: .7,
       heroPhotoIndex: 99, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: [], titleAccentWords: null,
       fadeShare: null, surfaceTone: 'navy', frame: 'none', align: 'start',
-    }], photos, blocks);
+    }], photos, blocks, { mode: 'all', minimum: 6, insisted: true });
     expect(choices.every(c => c.recipe === 'hero_storyboard')).toBe(true);
-    const solved = solveConcepts(choices, { brief: '', copyBlocks: blocks, palette, photos, canvasWidth: 1080, canvasHeight: 1350 });
+    const solved = solveConcepts(choices, { brief: '', copyBlocks: blocks, palette, photos, canvasWidth: 1080, canvasHeight: 1350, photoSelection: { mode: 'all', minimum: 6, insisted: true } });
     expect(solved.layouts).toHaveLength(3);
     expect(solved.layouts.every(l => l.photos?.length === 6)).toBe(true);
   });

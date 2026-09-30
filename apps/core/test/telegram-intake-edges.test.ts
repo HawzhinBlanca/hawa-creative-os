@@ -20,7 +20,8 @@ describe('review of 2026-09-24: intake edges', () => {
       platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: String(55000000 + Math.floor(Math.random() * 1e6)),
       senderName: 'Office', rawText: text, rawJson: { message: { text } }, autoGenerate: true, isInstructionOnly: false,
     });
-    expect(draft.title.startsWith('KAAE: KAAE aaaa')).toBe(true);
+    // ADR-180: the headline already names the client, so it is not prefixed with it again.
+    expect(draft.title.startsWith('KAAE aaaa')).toBe(true);
     expect(LONE_SURROGATE.test(draft.title)).toBe(false);
   });
 });

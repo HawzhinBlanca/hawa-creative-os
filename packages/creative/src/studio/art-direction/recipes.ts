@@ -56,8 +56,8 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_storyboard: {
     id: 'hero_storyboard',
     reference: 'ADR-171 engineering composition; human creative qualification pending',
-    summary: 'A dominant hero next to a supporting image sequence, with measured live copy on a solid brand surface. Uses every required photo exactly once.',
-    bestFor: 'multi-photo reports, visits and event narratives with required image coverage',
+    summary: 'A dominant hero next to a supporting image sequence, with measured live copy on a solid brand surface. Only for a requester who asked for more photos in so many words ("use all the photos", "pick 3").',
+    bestFor: 'requests that say how many photos to use, or to use them all',
     minPhotos: 2,
     texture: false,
     needsCutout: false,
@@ -180,7 +180,9 @@ export function eligibleRecipes(photos: PhotoFacts[], minimum = 1): RecipeId[] {
   for (const id of PHOTO_RECIPE_IDS) {
     const spec = RECIPES[id];
     if (photos.length < spec.minPhotos) continue;
-    if (minimum > 1 && id !== 'hero_storyboard') continue;
+    // ADR-180: the house style places a hero and at most a blended texture. A storyboard is for a
+    // requester who asked for more photos in so many words; a texture recipe can carry a stated two.
+    if (id === 'hero_storyboard' ? minimum < 2 : minimum > (spec.texture ? 2 : 1)) continue;
     if (spec.needsCutout && !photos.some((p) => p.cutout)) continue;
     // A title in the sky, or a title plate, needs a photo calm at its top or bottom, by the brief or
     // the pixels: a plate anywhere else sits on what the photo shows (live trial, 2026-09-30).

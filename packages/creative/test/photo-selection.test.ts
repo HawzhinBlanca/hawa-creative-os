@@ -64,7 +64,8 @@ describe('photo selection from the requester\'s words (ADR-157, audit #17)', () 
 
   it('has nothing to choose with fewer than two photos, and a count of all of them is all', () => {
     expect(photoSelectionFromInstructions('choose the best ones', 1)).toEqual({ mode: 'all', minimum: 1 });
-    expect(photoSelectionFromInstructions('use 6 of them', 6)).toEqual({ mode: 'all', minimum: 6 });
+    // ADR-180: a count that covers every photo is every photo, in so many words.
+    expect(photoSelectionFromInstructions('use 6 of them', 6)).toEqual({ mode: 'all', minimum: 6, insisted: true });
   });
 
   it('checks a stored selection and clamps it to the photos present', () => {

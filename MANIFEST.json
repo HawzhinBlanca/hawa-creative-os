@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T18:55:49Z",
+  "generatedAt": "2026-09-30T19:09:36Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 661,
+  "fileCount": 663,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "c6ab42db64caa9d1c608add5543c2a71ca78e336ad557f4f11df9d5b3357a29c",
-      "bytes": 3980
+      "sha256": "30dbe5afb17de4a15e83e87e47ff716f12526e338eb3c213156d4de75bdfdd37",
+      "bytes": 3973
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -879,8 +879,13 @@
     },
     {
       "path": "adrs/172_content_aware_editable_art_direction.md",
-      "sha256": "71ed8a0562f5cf66c85c5525723de314027199c52d895b3b1b05cf8e630c7b28",
-      "bytes": 4855
+      "sha256": "d48bdab2c270f620464386fcb707d4b01d33ab643725ba72d447c815974bf87a",
+      "bytes": 5584
+    },
+    {
+      "path": "adrs/180_owner_house_style_and_office_caption.md",
+      "sha256": "a9bbb3a2da6723bebc0b31261e3e68a626d7268f9d9e216558fd8217a604a300",
+      "bytes": 7918
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1323,9 +1328,14 @@
       "bytes": 13380
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/CURRENT_RELEASE_INTEGRATION_PROOF.json",
+      "sha256": "4ba8982b9b73abfcd37e61059147c525223f5a1d3859778ad81e1165e5cd4f63",
+      "bytes": 3449
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "ed955052b178403a29ad990d578889939b14099e51d3fb40468fd668c691a1f9",
-      "bytes": 4239
+      "sha256": "5156f404a30ef217687ee9357196242d38aefac41dcefe19ea0557d3287b452d",
+      "bytes": 5251
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1554,8 +1564,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "b83c400bd51687d1b16042522ab19ebe9a19ec49d1d37980d591143390dc8c81",
-      "bytes": 55632
+      "sha256": "90d1e96e4b8fa0c5ff891a77a0cae29bd334adb0ae30245b3f1b982e7bef97e5",
+      "bytes": 56084
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2439,8 +2449,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "013d4b83233a51d1caeb12d6f3c975fb5d67008457fc2d81075ddc43e569069d",
-      "bytes": 551881
+      "sha256": "4c5f3415cdffe6c19b2daee209eebb6970b3240fd7f9f5598367c90c23814384",
+      "bytes": 553713
     },
     {
       "path": "plans/user-stories.csv",

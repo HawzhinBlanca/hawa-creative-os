@@ -1,16 +1,17 @@
 import { evaluateThumbnailLayout } from './thumbnail-rules.js';
 import type { StudioLayoutV2 } from './layout-v2.js';
-import { HERO_SOFT_UPSCALE } from './layout-v2.js';
+import { HERO_SOFT_UPSCALE, photoRecipeOf } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
 import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast, measuredInkContrast } from './composite-contrast.js';
 import { checkCopyCompleteness, instructionLanguageFindings, type CopyOrigin, type ReviewFinding } from './copy-completeness.js';
-import { omittedPhotoIndices, type PhotoSelection } from './photo-selection.js';
+import { omittedPhotoIndices, recipePhotoMinimum, type PhotoSelection } from './photo-selection.js';
 import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } from './render-layout-v2.js';
 import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
 import { photoRegionViolations, type PhotoRegionEvidence } from './protected-regions.js';
+import { logoBackingExcess } from './art-direction/logo-ground.js';
 
 /**
  * The studio's hard QA gate, shared so the qualification applies exactly the gate a production
@@ -344,6 +345,14 @@ export function evaluateHardQa(
     messages.push(...thumbnail.messages);
   }
 
+  // ADR-180 (owner, 2026-09-30: "current design has logo background"): nothing behind the logo may
+  // reach past its clear space, and a solid tab stays thin; the navy square filled the whole box.
+  const backingExcess = logoBackingExcess(checked, ctx.logoClearSpacePx ?? 0);
+  if (backingExcess > 1) {
+    defectCodes.push('LOGO_BACKING');
+    messages.push(`LOGO_BACKING: what is drawn behind the logo reaches ${backingExcess}px past the thin tab or clear-space box it may cover`);
+  }
+
   const findings = [...reviewFindings(layout, ctx), ...unmeasured];
   if (ctx.photoRegions) {
     for (const message of photoRegionViolations(layout, ctx.photoRegions)) {
@@ -357,8 +366,11 @@ export function evaluateHardQa(
         message: `Photo ${photo.photoIndex + 1}: individual subject regions were not measured; crop and subject visibility need human review.` });
     }
   }
-  // ADR-171: only requester-authorized omissions are review evidence.
-  const omittedPhotos = ctx.photoSelection?.mode === 'choose' ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
+  // Photos a design left out where leaving them out was allowed, for office review: the requester let
+  // it choose (ADR-157), or a recipe followed the house style and no words of the requester bound
+  // every photo (ADR-180).
+  const recipeChose = Boolean(photoRecipeOf(layout)) && recipePhotoMinimum(ctx.photoSelection, ctx.photoCount ?? 0) < (ctx.photoCount ?? 0);
+  const omittedPhotos = ctx.photoSelection?.mode === 'choose' || recipeChose ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
 
   return {
     passed: defectCodes.length === 0, defectCodes, messages, metrics, layout, textMeasurements, findings, omittedPhotos,

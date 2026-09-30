@@ -82,7 +82,11 @@ export interface OverlayElement extends Box {
   purpose: 'fade' | 'scrim' | 'paper';
 }
 
-export const OVERLAY_DIRECTIONS = ['to-bottom', 'to-top', 'to-left', 'to-right'] as const;
+/**
+ * `radial` (ADR-180) is opaque at the centre of its box and clear at the edge of the ellipse inside
+ * it, with `at` the share of the way out: the soft scrim a logo gets on a busy part of a photo.
+ */
+export const OVERLAY_DIRECTIONS = ['to-bottom', 'to-top', 'to-left', 'to-right', 'radial'] as const;
 export type OverlayDirection = (typeof OVERLAY_DIRECTIONS)[number];
 
 /**
@@ -125,6 +129,22 @@ export interface ArtDirectionRecord {
    * photo starts to look soft; over 1.5 it is a QA warning and ranks behind a sharper candidate.
    */
   heroUpscale?: number;
+  /**
+   * ADR-180: the ground under the logo, measured on the rendered pixels, and what it was given: none
+   * on a quiet ground, a soft radial scrim, or (only when a scrim cannot make it read) a thin cream tab.
+   */
+  logoGround?: LogoGroundRecord;
+}
+
+/** ADR-180: the logo's measured ground and its treatment. */
+export interface LogoGroundRecord {
+  treatment: 'none' | 'scrim' | 'tab';
+  /** The logo's contrast on its ground as drawn (95th percentile of its ink pixels: its lettering and outline). */
+  contrast: number;
+  /** The ground's busyness under the logo box (standard deviation of its luma, 0..1). */
+  busyness: number;
+  /** The logo moved to the calmer top corner of the design. */
+  moved?: boolean;
 }
 
 export interface TextElement extends Box {
@@ -379,6 +399,12 @@ export const artDirectionRecordSchema = z.object({
   omittedPhotos: z.array(z.number().int().nonnegative()).max(12),
   rtl: z.boolean(),
   heroUpscale: z.number().positive().max(50).optional(),
+  logoGround: z.object({
+    treatment: z.enum(['none', 'scrim', 'tab']),
+    contrast: z.number().min(1).max(21),
+    busyness: z.number().min(0).max(1),
+    moved: z.boolean().optional(),
+  }).strict().optional(),
 }).strict();
 
 export const textElementSchema = boxSchema.extend({

@@ -2,6 +2,7 @@ import { backgroundFieldSchema } from './background-field.js';
 import type { StudioLayoutV2, Box } from './layout-v2.js';
 import { photoRecipeOf } from './layout-v2.js';
 import { photosMayOverlap } from './photo-cutout.js';
+import { recipePhotoMinimum } from './photo-selection.js';
 import { carrierOf, shapePaintsOver } from './art-direction/surfaces.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast, isStoryFormat, getSafeZoneBox } from './house-rules.js';
 
@@ -347,12 +348,16 @@ export function validateLayoutV2(
   // In `choose` mode (ADR-157) the requester said the design need not use them all: a distinct
   // subset of at least the minimum is the request done. Every other rule below applies unchanged.
   //
-  // ADR-171: a recipe cannot authorize omission; only the recorded requester selection can.
+  // ADR-180 (owner decision, "office house style"): in an art-direction recipe the hero, with at most a
+  // blended texture, is the choice unless the requester's own words bind more: "use all the photos"
+  // binds every one, "pick 3" binds three. The half-the-photos guess and a request that says nothing
+  // about its photos do not (this supersedes ADR-171's default minimum for recipes).
   const photoCount = context.photoCount ?? 0;
   const photos = layout.photos ?? [];
   const recipe = photoRecipeOf(layout);
-  const choosing = context.photoSelection?.mode === 'choose' && photoCount > 0;
-  const fewest = choosing ? Math.max(1, Math.min(photoCount, context.photoSelection!.minimum)) : photoCount;
+  const recipeMinimum = recipe ? recipePhotoMinimum(context.photoSelection, photoCount) : photoCount;
+  const choosing = photoCount > 0 && (recipe ? recipeMinimum < photoCount : context.photoSelection?.mode === 'choose');
+  const fewest = !choosing ? photoCount : recipe ? recipeMinimum : Math.max(1, Math.min(photoCount, context.photoSelection!.minimum));
   if (choosing ? photos.length < fewest || photos.length > photoCount : photos.length !== photoCount) {
     return {
       ok: false,

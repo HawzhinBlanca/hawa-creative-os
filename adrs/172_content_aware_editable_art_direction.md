@@ -76,3 +76,15 @@ Resolve requester color before surface/type choices. A forbidden palette request
 refuses instead of silently substituting. Compatible reference texture and actual
 copy density constrain optional fields. Existing photographs remain unchanged;
 background decisions recolor the recipe's matching ground/fade, never its photo.
+
+## ADR180 integration
+
+The current release36369a12 records the owner's office-style preference when no
+explicit photo count/all instruction is present. Preserve that foundation: only
+explicit requester coverage binds a recipe; every received image still gets its own
+report, and omissions remain visible. Required images in items3–4 above mean those
+explicitly bound inputs. Merge the measured logo-ground implementation and office
+message fixes; use individual W1 regions for logo relocation rather than losing
+separate people to the incoming aggregate helper. Further visibility calibration
+and actual native admission remain necessary; a p95 changed-pixel statistic alone
+cannot establish readability of most logo details.
