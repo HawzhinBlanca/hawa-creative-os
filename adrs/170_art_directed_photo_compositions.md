@@ -128,3 +128,40 @@ in a grid" for single-photo designs; landscape album photos (1280x853) are enlar
 fill the portrait canvas in `scrim_caption`, `hero_plate` and `hero_card`; titles are not set in
 capitals as the office sets them (copy is set as written); body text is about 2.6% of the width
 against about 3.3% in example 3; and the logo sits on the photo with no carrier.
+
+## Addendum: second round (2026-09-30)
+
+1. **Ties go to the house prior.** When the pairwise judge leaves two art-directed candidates
+   undecided (inconsistent across its two orders, or a pick that fails its canary), the winner is
+   chosen by `art-direction/prior.ts`, not by the typographic composite: first the house recipe for
+   the brief's subject tags (report release or field visit → `hero_fade_report`; meeting →
+   `scrim_caption`; event → `cutout_speaker`, `hero_plate`; occasion → `sky_title`; …), then the
+   sharper hero. The run records `decidedBy: art_direction_prior` and the reason
+   (`stages.tournament.prior`). The judge is told how many photos each layout places, and
+   "photos tiled in a grid" is recorded only for a layout with two or more framed photos.
+2. **`hero_plate` sits in the photo's quiet top or bottom** (brief reading, else the local
+   measurement), is refused for a photo with neither, and never uses a quiet floor in a photo with
+   faces, because the people are standing there. A plate concept on an unsuitable photo moves to
+   the best photo that has a quiet region. Every recipe prefers a one-line title when it fits at 80%
+   of its natural size or more. `hero_plate` is eligible only when some photo is calm at its top or
+   bottom.
+3. **Sharpness.** Every recipe records `artDirection.heroUpscale`. `scrim_caption` and `hero_plate`
+   set a landscape photo as a band at no more than 1.3x, with the canvas's navy below it; the scrim
+   or fade closes over the photo's edge at 98% opacity. A hero over 1.5x is a `HERO_UPSCALED`
+   review warning, ranks behind a sharp candidate, and its concept is replaced when a sharp recipe
+   can carry it.
+4. **Type as in example 3** (fade and scrim, portrait and square): body at 3.3% of the width, on a
+   68% measure, at a 1.3 leading. Letter case is left exactly as the requester wrote it. The title
+   stays Verdana Bold: the admitted heavier faces are not qualified renderer fonts.
+5. **The corner logo is never bare on a photo:** a small cream rounded tab carries it where no plate
+   or card does.
+
+Two paid runs with the full copy and the face service cost $0.118 (runs 6 and 7: 6 calls,
+$0.058–0.060 and about 80 s each). Both winners are `hero_fade_report`:
+
+- Run 6: the judge tied again; the house prior chose the library hero with the crowd blended in,
+  essentially example 3.
+- Run 7: the judge chose consistently, the courtyard hero without a texture. Its photo edge showed
+  as a line in the fade; that was fixed afterwards and re-solved without a paid call.
+
+Total for both rounds: $0.449.

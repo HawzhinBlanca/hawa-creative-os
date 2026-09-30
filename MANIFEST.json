@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T13:56:53Z",
+  "generatedAt": "2026-09-30T14:23:40Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -854,8 +854,8 @@
     },
     {
       "path": "adrs/170_art_directed_photo_compositions.md",
-      "sha256": "d54afe748117638ec2d18780970077edf1356a6fc35ac547778209b2e08fb490",
-      "bytes": 10038
+      "sha256": "a4381c1b272e2bdd57d631fc7507449931478aa34b22c24e9d8209b90171ebc7",
+      "bytes": 12644
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2384,8 +2384,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "e26bcb605634abb5ca169d8cd6424f58e66d8b758b6097d2bfce978ead0c5ffa",
-      "bytes": 540950
+      "sha256": "fda15e18f0ebef51d42e3e9d5b2879dfdb750eabeb605684b6efa7e798634695",
+      "bytes": 541754
     },
     {
       "path": "plans/user-stories.csv",
@@ -2639,8 +2639,8 @@
     },
     {
       "path": "scripts/art_direction_live_trial.ts",
-      "sha256": "d7038327e7bada49accbc21b02cbbd00de8eb1b48f42f16c32cb90e4bbfc82e5",
-      "bytes": 25812
+      "sha256": "39929063dc7cc25f2fe55077afa86f403b22e11022324e3ac92f226643827117",
+      "bytes": 26259
     },
     {
       "path": "scripts/bench_cutout_outline.ts",
