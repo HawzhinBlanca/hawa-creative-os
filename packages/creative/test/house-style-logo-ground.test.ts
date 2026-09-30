@@ -62,8 +62,8 @@ describe('ADR-180: office house style wins over default photo coverage', () => {
     expect(recipePhotoMinimum(photoSelectionFromInstructions('pick 6 photos', 6), 6)).toBe(6);
   });
 
-  it('offers the collage only when the requester asked for more photos in so many words', () => {
-    expect(eligibleRecipes(PHOTOS, 1)).not.toContain('hero_storyboard');
+  it('keeps multi-photo options available without forcing coverage (ADR-181)', () => {
+    expect(eligibleRecipes(PHOTOS, 1)).toContain('hero_storyboard');
     expect(eligibleRecipes(PHOTOS, 1)).toContain('hero_fade_report');
     expect(eligibleRecipes(PHOTOS, 2)).toEqual(expect.arrayContaining(['hero_storyboard', 'hero_fade_report']));
     expect(eligibleRecipes(PHOTOS, 3)).toEqual(['hero_storyboard']);

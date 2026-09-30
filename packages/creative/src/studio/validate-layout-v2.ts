@@ -348,8 +348,7 @@ export function validateLayoutV2(
   // In `choose` mode (ADR-157) the requester said the design need not use them all: a distinct
   // subset of at least the minimum is the request done. Every other rule below applies unchanged.
   //
-  // ADR-180 (owner decision, "office house style"): in an art-direction recipe the hero, with at most a
-  // blended texture, is the choice unless the requester's own words bind more: "use all the photos"
+  // ADR-181: a recipe may choose one or several relevant photos. Only requester words bind coverage: "use all the photos"
   // binds every one, "pick 3" binds three. The half-the-photos guess and a request that says nothing
   // about its photos do not (this supersedes ADR-171's default minimum for recipes).
   const photoCount = context.photoCount ?? 0;

@@ -367,8 +367,8 @@ export function evaluateHardQa(
     }
   }
   // Photos a design left out where leaving them out was allowed, for office review: the requester let
-  // it choose (ADR-157), or a recipe followed the house style and no words of the requester bound
-  // every photo (ADR-180).
+  // it choose (ADR-157), or a recipe chose a content-aware subset and no requester words bound
+  // every photo (ADR-180/181).
   const recipeChose = Boolean(photoRecipeOf(layout)) && recipePhotoMinimum(ctx.photoSelection, ctx.photoCount ?? 0) < (ctx.photoCount ?? 0);
   const omittedPhotos = ctx.photoSelection?.mode === 'choose' || recipeChose ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
 

@@ -56,8 +56,8 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_storyboard: {
     id: 'hero_storyboard',
     reference: 'ADR-171 engineering composition; human creative qualification pending',
-    summary: 'A dominant hero next to a supporting image sequence, with measured live copy on a solid brand surface. Only for a requester who asked for more photos in so many words ("use all the photos", "pick 3").',
-    bestFor: 'requests that say how many photos to use, or to use them all',
+    summary: 'A dominant hero next to a supporting image sequence, with measured live copy on a solid brand surface. Use when several images add distinct evidence or a visual sequence to the message, or explicit coverage requires them.',
+    bestFor: 'processes, comparisons, related scenes and explicit multi-photo requests',
     minPhotos: 2,
     texture: false,
     needsCutout: false,
@@ -67,7 +67,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_fade_report: {
     id: 'hero_fade_report',
     reference: 'example 3 (KAAE K-12 Pilot Study / Field Visit Report)',
-    summary: 'Full-bleed hero photo; a navy gradient fade over the bottom 40-50%; optionally a second photo blended into the fade; a two-colour title on the fade (white line + gold line), body text, a call-to-action pill.',
+    summary: 'Full-bleed hero photo; an approved dark gradient fade over the bottom 40-50%; optionally a second photo blended into the fade; a two-colour title on the fade (readable ink + approved accent), body text, a call-to-action pill.',
     bestFor: 'report releases, studies, field visits, news with a strong scene photo',
     minPhotos: 1,
     texture: true,
@@ -78,7 +78,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_card: {
     id: 'hero_card',
     reference: 'examples 1-2 (Why Accreditation? carousel)',
-    summary: 'Full-bleed hero photo inside a gold outer frame; a cream card over the bottom 22-25% holding the title and body in navy; a navy tab holding the logo straddles the card\'s top edge.',
+    summary: 'Full-bleed hero photo inside a approved accent outer frame; a approved light card over the bottom 22-25% holding the title and body in the approved dark ink; a approved dark tab holding the logo straddles the card\'s top edge.',
     bestFor: 'carousels, series, explainers, educational posts',
     minPhotos: 1,
     texture: false,
@@ -89,7 +89,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_plate: {
     id: 'hero_plate',
     reference: 'example 8 (Global Partnership)',
-    summary: 'Full-bleed hero photo; a navy title plate with a soft shadow set in the photo\'s quiet top or bottom (sky, wall, floor), never on the people; supporting lines on a bottom scrim. Needs a hero with a quiet top or bottom.',
+    summary: 'Full-bleed hero photo; a approved dark title plate with a soft shadow set in the photo\'s quiet top or bottom (sky, wall, floor), never on the people; supporting lines on a bottom scrim. Needs a hero with a quiet top or bottom.',
     bestFor: 'partnerships, agreements, headline statements over a busy or top-down photo',
     minPhotos: 1,
     texture: false,
@@ -100,7 +100,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   scrim_caption: {
     id: 'scrim_caption',
     reference: 'example 7 (event photo with bottom caption)',
-    summary: 'An untouched group or event photo; a bottom navy scrim; the caption on it and a short gold rule.',
+    summary: 'An untouched group or event photo; a bottom approved dark scrim; the caption on it and a short approved accent rule.',
     bestFor: 'meetings, visits, delegations, events where the people are the news',
     minPhotos: 1,
     texture: false,
@@ -121,8 +121,8 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   },
   cutout_speaker: {
     id: 'cutout_speaker',
-    reference: 'examples 4-5 (speaker cut-out on navy with rays)',
-    summary: 'A person cut out of their photo at the bottom corner, bleeding off the edge, on navy with a sunburst motif behind; the text block beside them.',
+    reference: 'examples 4-5 (speaker cut-out on an approved brand surface with rays)',
+    summary: 'A person cut out of their photo at the bottom corner, bleeding off the edge, on an approved brand surface with a sunburst motif behind; the text block beside them.',
     bestFor: 'speakers, forums, webinars, interviews: one person is the news',
     minPhotos: 1,
     texture: false,
@@ -133,7 +133,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   fade_to_paper: {
     id: 'fade_to_paper',
     reference: 'example 6 (photo fading into grid paper)',
-    summary: 'A photo fading into cream paper; the title on a navy plate and the text on the paper.',
+    summary: 'A photo fading into an approved light editorial surface; the title on an approved dark plate and the text on the paper.',
     bestFor: 'calls for applications, notices, announcements with a supporting photo',
     minPhotos: 1,
     texture: false,
@@ -180,9 +180,9 @@ export function eligibleRecipes(photos: PhotoFacts[], minimum = 1): RecipeId[] {
   for (const id of PHOTO_RECIPE_IDS) {
     const spec = RECIPES[id];
     if (photos.length < spec.minPhotos) continue;
-    // ADR-180: the house style places a hero and at most a blended texture. A storyboard is for a
-    // requester who asked for more photos in so many words; a texture recipe can carry a stated two.
-    if (id === 'hero_storyboard' ? minimum < 2 : minimum > (spec.texture ? 2 : 1)) continue;
+    // ADR-181: coverage is a minimum, not a single-hero style restriction.
+    // Multi-photo compositions remain available without an explicit count.
+    if (id !== 'hero_storyboard' && minimum > (spec.texture ? 2 : 1)) continue;
     if (spec.needsCutout && !photos.some((p) => p.cutout)) continue;
     // A title in the sky, or a title plate, needs a photo calm at its top or bottom, by the brief or
     // the pixels: a plate anywhere else sits on what the photo shows (live trial, 2026-09-30).

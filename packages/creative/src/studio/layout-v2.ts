@@ -483,7 +483,7 @@ export const studioLayoutV2Schema = z.object({
   text: z.array(textElementSchema).min(1).max(40),
   logo: boxSchema,
   typeScale: typeScaleSchema.optional(),
-  photos: z.array(photoElementSchema).max(6).optional(),
+  photos: z.array(photoElementSchema).max(10).optional(),
   overlays: z.array(overlayElementSchema).max(6).optional(),
   artDirection: artDirectionRecordSchema.optional(),
 }).strict();

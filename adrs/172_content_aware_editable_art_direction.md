@@ -88,3 +88,13 @@ message fixes; use individual W1 regions for logo relocation rather than losing
 separate people to the incoming aggregate helper. Further visibility calibration
 and actual native admission remain necessary; a p95 changed-pixel statistic alone
 cannot establish readability of most logo details.
+
+
+## Owner clarification — ADR181
+
+The owner's later 2026-09-30 direction makes the KAAE one-hero/navy-fade style a scoped
+client preference. Retain ADR180's explicit-only coverage and conditional logo changes,
+but remove its universal hero-only limit. Multiple meaningful images can be selected
+without a count; an absent count does not force a collage. ADR181 records the amended
+composition contract and the distinction between this engineering slice and full
+W4–W6/human qualification.

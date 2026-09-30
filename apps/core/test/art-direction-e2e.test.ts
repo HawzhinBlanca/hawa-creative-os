@@ -139,11 +139,12 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     const photos = albumPhotos();
     expect(photos).toHaveLength(6);
     const requests: any[] = [];
+    let modelAnswer: unknown = MODEL_ANSWER;
     const client = {
       createStructuredCompletion: async (req: any) => {
         requests.push(req);
         return {
-          data: MODEL_ANSWER, rawText: JSON.stringify(MODEL_ANSWER),
+          data: modelAnswer, rawText: JSON.stringify(modelAnswer),
           receipt: { responseId: 'resp_e2e', xRequestId: null, model: 'mock', inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, costUsd: 0, latencyMs: 0 },
         };
       },
@@ -239,6 +240,23 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     for (const r of rankStudioCandidatesV3({ ...ctx, requestedBackground: '#1E3A5F' }, requestedRenders)) {
       expect(r.hardQa?.passed, r.hardQa?.messages.join(' | ')).toBe(true);
     }
+
+    // ADR-181: a different client/content direction may choose several meaningful images
+    // without a counted instruction. Existing per-client KAAE fade evidence above stays intact.
+    modelAnswer = { concepts: [{ ...MODEL_ANSWER.concepts[0], recipe: 'hero_storyboard',
+      heroPhotoIndex: 0, texturePhotoIndex: null, supportingPhotoIndices: [5, 2], surfaceTone: 'cream',
+      conceptNote: 'Primary scene followed by two related moments' }, ...MODEL_ANSWER.concepts.slice(1)] };
+    const flexibleCtx = { ...ctx, instructions: 'Create an editorial announcement; choose photos for the strongest composition.',
+      artDirectionRules: [], photoSelection: photoSelectionFromInstructions(undefined, 6) };
+    const flexible = await runLayoutsStage(flexibleCtx, brief, [], [0, 1, 2].map(ordinal => ({ id: randomUUID(), ordinal })));
+    expect(requests).toHaveLength(3); // one existing model call for each generation, no new role/call
+    const story = flexible.find(c => c.currentLayout.artDirection?.recipe === 'hero_storyboard');
+    expect(story).toBeDefined();
+    expect(story!.currentLayout.photos?.map(p => p.photoIndex)).toEqual([0, 5, 2]);
+    expect(story!.currentLayout.artDirection?.omittedPhotos).toEqual([1, 3, 4]);
+    const flexibleRendered = await runRenderStage(flexibleCtx, [story!]);
+    const flexibleRanked = rankStudioCandidatesV3(flexibleCtx, flexibleRendered);
+    expect(flexibleRanked[0].hardQa?.passed, flexibleRanked[0].hardQa?.messages.join(' | ')).toBe(true);
 
     if (out) {
       writeFileSync(join(out, 'e2e_hero_fade_report.layout.json'), JSON.stringify(layout, null, 2));

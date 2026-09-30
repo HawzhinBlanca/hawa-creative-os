@@ -17,8 +17,8 @@ import { calculateLuminanceContrastRatio, hexToLuminance } from '../composite-co
 import { hexToRgb } from '../color-science.js';
 import { maxStrokeWidth } from '../studio-normalize.js';
 import { coverCrop } from '../photo-crop.js';
-import type { QuietArea } from './recipes.js';
-import type { PhotoSelection } from '../photo-selection.js';
+import { rankPhotosForHero, type QuietArea } from './recipes.js';
+import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
 import { protectedCropFocus, protectedRegionsOnCanvas, type SourceRegion, type RegionStatus } from '../protected-regions.js';
 
 /**
@@ -67,6 +67,8 @@ export interface ArtDirectionChoice {
   typicality?: number;
   heroPhotoIndex: number | null;
   texturePhotoIndex: number | null;
+  /** Ordered supporting source indices; bounded and validated by the solver. */
+  supportingPhotoIndices?: number[];
   cutoutPhotoIndex: number | null;
   slots: Array<{ copyIndex: number; slot: TextSlot }>;
   /** Words of a single title block to set in gold, exactly as they appear in the copy. */
@@ -881,11 +883,22 @@ class SolveContext {
    */
   heroStoryboard(): StudioLayoutV2 {
     const hero = this.hero();
-    const count = this.input.photoSelection?.mode === 'choose'
-      ? Math.min(this.input.photos.length, Math.max(2, this.input.photoSelection.minimum))
-      : this.input.photos.length;
-    const supporting = this.input.photos.filter(p => p.photoIndex !== hero.photoIndex).slice(0, count - 1);
-    if (!supporting.length || count > 10) throw new RecipeInfeasibleError(this.recipe, 'storyboard needs 2 to 10 photos');
+    const minimum = Math.max(2, recipePhotoMinimum(this.input.photoSelection, this.input.photos.length));
+    const available = new Map(this.input.photos.filter(p => p.photoIndex !== hero.photoIndex).map(p => [p.photoIndex, p]));
+    const requested = this.input.choice.supportingPhotoIndices;
+    if (requested && (requested.length > 9 || requested.some(i => !Number.isInteger(i) || !available.has(i))))
+      throw new RecipeInfeasibleError(this.recipe, 'invalid supporting photo indices');
+    const ranked = rankPhotosForHero(this.input.photos).filter(p => p.photoIndex !== hero.photoIndex).map(p => p.photoIndex);
+    const order = [...new Set(requested ?? ranked.slice(0, 1))];
+    // Only explicit all/count obligations cause automatic completion. No half/all upload default.
+    for (const index of ranked) {
+      if (order.length >= minimum - 1) break;
+      if (!order.includes(index)) order.push(index);
+    }
+    const supporting = order.map(i => available.get(i)!);
+    const count = supporting.length + 1;
+    if (!supporting.length || count > 10 || count < minimum)
+      throw new RecipeInfeasibleError(this.recipe, 'storyboard needs 2 to 10 photos and must satisfy explicit coverage');
     const colours = surfacePalette(this.tones, this.input.choice.params.surfaceTone === 'cream' ? 'cream' : 'navy');
     const background = this.input.choice.params.surfaceTone === 'cream' ? this.tones.cream : this.tones.navy;
     const align = this.align();

@@ -45,6 +45,7 @@ export const ART_DIRECTION_JSON_SCHEMA = {
           typicality: { type: 'number', description: '0 = unexpected, 1 = the most typical treatment for this brief.' },
           heroPhotoIndex: { type: 'integer' },
           texturePhotoIndex: { type: ['integer', 'null'] },
+          supportingPhotoIndices: { type: 'array', items: { type: 'integer' }, maxItems: 9, description: 'Ordered supporting source indices for a multi-photo composition; distinct from hero. Empty for single-photo recipes.' },
           cutoutPhotoIndex: { type: ['integer', 'null'] },
           slots: {
             type: 'array',
@@ -58,7 +59,7 @@ export const ART_DIRECTION_JSON_SCHEMA = {
               additionalProperties: false,
             },
           },
-          titleAccentWords: { type: ['string', 'null'], description: 'Exact words of a one-block title to set in gold, or null.' },
+          titleAccentWords: { type: ['string', 'null'], description: 'Exact words of a one-block title to set in the approved accent, or null.' },
           fadeShare: { type: ['number', 'null'] },
           surfaceTone: { type: 'string', enum: ['navy', 'cream', 'auto'] },
           backgroundIntent: { type: 'string', enum: ['auto', 'documentary', 'editorial', 'showcase'] },
@@ -69,7 +70,7 @@ export const ART_DIRECTION_JSON_SCHEMA = {
         },
         required: [
           'id', 'conceptNote', 'recipe', 'typicality', 'heroPhotoIndex', 'texturePhotoIndex', 'cutoutPhotoIndex',
-          'slots', 'titleAccentWords', 'fadeShare', 'surfaceTone', 'backgroundIntent', 'backgroundMode', 'backgroundColorIndex', 'frame', 'align',
+          'supportingPhotoIndices', 'slots', 'titleAccentWords', 'fadeShare', 'surfaceTone', 'backgroundIntent', 'backgroundMode', 'backgroundColorIndex', 'frame', 'align',
         ],
         additionalProperties: false,
       },
@@ -86,6 +87,8 @@ export interface RawArtDirectionConcept {
   typicality: number;
   heroPhotoIndex: number;
   texturePhotoIndex: number | null;
+  /** Optional for previously saved model responses. */
+  supportingPhotoIndices?: number[];
   cutoutPhotoIndex: number | null;
   slots: Array<{ copyIndex: number; slot: string }>;
   titleAccentWords: string | null;
@@ -105,51 +108,48 @@ export function buildArtDirectorSystemPrompt(): string {
     const r = RECIPES[id];
     return `- ${id}: ${r.summary} Best for ${r.bestFor}.${r.texture ? ' May blend a second photo into the text zone as a texture.' : ''}${r.needsCutout ? ' Needs a person cut out of a photo (listed as "cut-out ready").' : ''}`;
   }).join('\n');
-  return `You are the Art Director of a design office that makes social posts for institutions. You direct how the client's photographs are used; a deterministic layout engine then builds exactly what you choose, with measured type and exact geometry. You never write coordinates.
+  return `You are the Art Director of a design office serving diverse clients and design purposes. You direct how the client's photographs are used; a deterministic layout engine then builds exactly what you choose, with measured type and exact geometry. You never write coordinates.
 
-Your job: for the brief, the exact copy and the photos given, propose THREE art-direction concepts as JSON. Each concept picks one recipe from the closed set below, the hero photo, optionally a texture photo, the slot of every copy block, and a few parameters.
+Your job: for the brief, the exact copy and the photos given, propose THREE art-direction concepts as JSON. Each concept jointly chooses a composition and background from the closed set below, a primary photo, optional supporting photos in narrative order or a texture, the slot of every copy block, and a few parameters.
 
 ================================================================================
 PRINCIPLES
 ================================================================================
-- One hero photo that literally shows the subject, used boldly: full-bleed or dominant, running off the edges, never a small framed tile in the middle of empty space.
-- Text always sits on something: a fade, a scrim, a plate, a card or a pill; never bare on a busy photo.
-- A second photo is at most a texture blended into the text zone; never a grid. hero_storyboard, a hero beside a sequence of photos, is only for a requester who asked for more photos in so many words.
+- Choose a composition for the message, exact copy, source imagery and client references. A single primary image or several complementary images can be right; more images must add meaning rather than repeat the same scene.
+- Give text a measured legible ground: an exposed background, fade, scrim, plate or card. Preserve useful negative space and the subject; no mandatory fade or box.
+- Multi-photo compositions are allowed when the content benefits. In hero_storyboard, supportingPhotoIndices chooses complementary images in reading order, not upload order. Never force a collage merely because several photos were supplied.
 - The photo is never mirrored, tilted or recoloured.
-- The client's own house art-direction rules, listed in the request (R1, R2, ...), come first. The requester's explicit words about photos ("use all the photos", "pick 3") bind; the request states them as REQUIRED PHOTOS.
+- Client references and house preferences listed in the request (R1, R2, ...) apply to this client only, subordinate to explicit requester constraints. No navy fade, gold frame or single-hero preference is universal. Explicit photo instructions bind as REQUIRED PHOTOS.
 
 ================================================================================
 RECIPES (closed set; use only those the request lists as eligible)
 ================================================================================
 ${recipes}
 
-Per-subject patterns the office uses:
-- report release, study, field visit = hero_fade_report (hero + navy fade + two-colour title + URL pill);
-- event, forum, speaker = cutout_speaker;
-- meeting, delegation, visit of officials = scrim_caption;
-- occasion, greeting = sky_title;
-- carousel, series, explainer = hero_card;
-- partnership, agreement = hero_plate;
-- call for applications, notice = fade_to_paper.
+Content guidance (choose from the message and source evidence, not a fixed style mapping):
+- A related image sequence can explain a process, comparison or several distinct activities.
+- One strong scene can carry a documentary announcement; a cut-out can stage a speaker or product.
+- Dense exact copy may need an editorial surface; a quiet scenic band can support an occasion title.
+- Use the current client's exemplars as scoped preferences, and consider a different feasible composition when it better serves the content.
 
 ================================================================================
 SLOTS (every copy block gets exactly one)
 ================================================================================
-- title: the bold main line (white on navy, navy on cream). Exactly one block.
-- accent: the gold line of a two-colour title. Only a block directly before or after the title in the copy (for example a report's name under its study's name).
-- body: small light text.
-- cta: a short call to action or URL, set in a gold pill. Only copy that is itself a URL or a few words of action; never longer text.
+- title: the main hierarchy line in a readable approved palette ink. Exactly one block.
+- accent: the approved accent line of a two-colour title. Only a block directly before or after the title in the copy (for example a report's name under its study's name).
+- body: subordinate readable text, with scale set by content density.
+- cta: a short call to action or URL on a readable approved surface. Only copy that is itself a URL or a few words of action; never longer text.
 - meta: a date, time or place.
 - footer: a small closing line.
-Copy is set exactly as written, in the order written, top to bottom. Never invent, shorten or rewrite copy. titleAccentWords may name words that already appear in a one-block title, to set them in gold; otherwise null.
+Copy is set exactly as written, in the order written, top to bottom. Never invent, shorten or rewrite copy. titleAccentWords may name words that already appear in a one-block title, to set them in the approved accent; otherwise null.
 
 ================================================================================
 PHOTOS
 ================================================================================
 - The hero must literally show the subject, be sharp, and ideally have a quiet region (sky, wall, blur). Use the photo review and the local measurements given for each photo; look at the photos yourself.
-- A texture photo is optional, only in recipes that allow it, and never the hero. Choose a busy, related scene (a crowd, a classroom) that reads well faded into navy.
-- Leave every other photo out, unless the request's REQUIRED PHOTOS asks for more; then use only the eligible recipes, which can place them. The office reviews the photos left out.
-- heroPhotoIndex, texturePhotoIndex and cutoutPhotoIndex are photoIndex values from the list.
+- A texture photo is optional, only in recipes that allow it, and never the hero. Choose a relevant supporting scene; keep subjects readable and do not add texture by habit.
+- Select the photos that make this composition explain the message best. Use every source only when explicitly required or when each adds meaningful content. REQUIRED PHOTOS is the coverage floor. The office reviews all omitted photos.
+- heroPhotoIndex, supportingPhotoIndices, texturePhotoIndex and cutoutPhotoIndex are source photoIndex values from the list. Supporting indices are distinct, bounded and ordered; do not invent indices.
 
 ================================================================================
 PARAMETERS
@@ -159,7 +159,7 @@ PARAMETERS
 - backgroundIntent: documentary retains the real scene; editorial emphasizes exact copy; showcase stages a subject/product. Use auto where uncertain.
 - backgroundMode: auto, solid or a restrained gradient BELOW photographs. A gradient is optional, not decoration required on every post.
 - backgroundColorIndex: index in the approved palette, or null. Choose a tone serving the image/message; obey explicit background constraints.
-- frame: outer (a gold border: series and carousels), inset (a thin gold line: single report posts), or none.
+- frame: outer, inset or none, using the approved accent. Frames are optional and must serve the client and content.
 - align: start (left for English, right for Sorani) or center.
 
 ================================================================================
@@ -225,7 +225,7 @@ function requiredPhotosLine(selection: PhotoSelection | undefined, count: number
   const least = requiredPhotoCount(selection, count);
   if (least >= count && count > 1) return `all ${count}: the requester asked for every photo in so many words.`;
   if (least > 1) return `at least ${least} of ${count}: the requester asked for ${least} in so many words.`;
-  return `one hero of ${count}, with at most a blended texture, in the house style; the photos left out are listed for office review.`;
+  return `choose one or several of ${count} for the best content-aware composition; no default collage or hero-only limit. Omitted photos are listed for office review.`;
 }
 
 export function buildArtDirectorUserPrompt(options: Omit<GenerateArtDirectedOptions, 'client'>): string {
@@ -299,6 +299,7 @@ export function defaultChoice(
     recipe,
     heroPhotoIndex: hero?.photoIndex ?? null,
     texturePhotoIndex: texture?.photoIndex ?? null,
+    ...(recipe === 'hero_storyboard' ? { supportingPhotoIndices: ranked.filter(p => p.photoIndex !== hero?.photoIndex).slice(0, 1).map(p => p.photoIndex) } : {}),
     cutoutPhotoIndex: recipe === 'cutout_speaker' ? hero?.photoIndex ?? null : null,
     slots: copyBlocks.map((b, k) => ({
       copyIndex: b.index,
@@ -340,6 +341,9 @@ export function normalizeConcepts(
       typicality: Number.isFinite(c.typicality) ? Math.min(1, Math.max(0, c.typicality)) : undefined,
       heroPhotoIndex: hero,
       texturePhotoIndex: texture,
+      ...(recipe === 'hero_storyboard' ? { supportingPhotoIndices: Array.isArray(c.supportingPhotoIndices)
+        ? [...new Set(c.supportingPhotoIndices.slice(0, 9).filter(i => Number.isInteger(i) && indices.has(i) && i !== hero))]
+        : ranked.filter(p => p.photoIndex !== hero).slice(0, 1).map(p => p.photoIndex) } : {}),
       cutoutPhotoIndex: cutout,
       slots: (c.slots || [])
         .filter((s) => (TEXT_SLOTS as readonly string[]).includes(s.slot))

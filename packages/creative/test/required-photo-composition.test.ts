@@ -16,7 +16,7 @@ const palette = ['#0A1628', '#1E3A5F', '#4770A3', '#F7B500', '#FDF8F3', '#FFFFFF
 const copy = { 0: 'School Field Visit', 1: 'Learning together across six schools', 2: 'kaae.org' };
 const photos = Array.from({ length: 6 }, (_, photoIndex) => ({ photoIndex, width: 1280, height: 853, focus: { x: .5, y: .4 } }));
 function input(width = 1080, height = 1350): SolveRecipeInput {
-  return { width, height, photos, palette, logoAspect: 1, copy: { text: copy },
+  return { width, height, photos, palette, logoAspect: 1, photoSelection: { mode: 'all', minimum: 6, insisted: true }, copy: { text: copy },
     choice: { recipe: 'hero_storyboard', heroPhotoIndex: 2, texturePhotoIndex: null, cutoutPhotoIndex: null,
       slots: [{ copyIndex: 0, slot: 'title' }, { copyIndex: 1, slot: 'body' }, { copyIndex: 2, slot: 'cta' }], params: {} } };
 }
@@ -59,7 +59,7 @@ describe('ADR-171 required photo composition', () => {
     expect(layout.photos).toHaveLength(2);
     expect(validateLayoutV2(layout, { ...context(1080, 1350), photoSelection: requested })).toMatchObject({ ok: true });
   });
-  it('with no words about the photos a single-hero concept stands: the house style (ADR-180)', () => {
+  it('with no words about the photos a single-hero concept stands without restricting other compositions (ADR-181)', () => {
     const blocks: CopyBlockSlotInput[] = Object.entries(copy).map(([index, text]) => ({ index: Number(index), text, role: Number(index) === 0 ? 'title' : Number(index) === 2 ? 'cta' : 'body', script: 'latin' as const }));
     const concept: RawArtDirectionConcept = { id: 'hero', conceptNote: 'One hero', recipe: 'scrim_caption', typicality: .7,
       heroPhotoIndex: 1, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: [], titleAccentWords: null,
@@ -67,7 +67,8 @@ describe('ADR-171 required photo composition', () => {
     for (const selection of [undefined, { mode: 'all' as const, minimum: 6 }, { mode: 'choose' as const, minimum: 3 }]) {
       const choices = normalizeConcepts([concept], photos, blocks, selection);
       expect(choices[0].recipe).toBe('scrim_caption');
-      expect(choices.some((c) => c.recipe === 'hero_storyboard')).toBe(false);
+      const multi = normalizeConcepts([{ ...concept, recipe: 'hero_storyboard' }], photos, blocks, selection);
+      expect(multi[0].recipe).toBe('hero_storyboard');
     }
   });
   it('normalizes an invalid model concept when the requester asked for every photo and solves all six', () => {

@@ -249,7 +249,7 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
       // ADR-180 (owner, 2026-09-30: "office house style"): "you don't have to use all the photos, choose
       // the best ones" states no count, so the recorded half-the-photos guess does not bind the art
       // director. Under ADR-171 it did, and this brief shipped as a three-photo collage. The design is
-      // one hero (and at most a blended texture); the rest are recorded for office review.
+      // single-photo/texture concepts in this mocked answer; ADR181 also permits meaningful multi-photo concepts.
       const winner = (await sql<any>`SELECT layouts FROM hawa.design_studio_candidates WHERE run_id = ${run.id}::uuid AND status = 'winner'`.execute(owner)).rows[0];
       const layouts = typeof winner.layouts === 'string' ? JSON.parse(winner.layouts) : winner.layouts;
       const shipped = layouts.at(-1);
@@ -276,7 +276,7 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
     try {
       const { taskId, requestId } = await openOwnersAlbum('settle');
       const calls: Array<{ schema: string }> = [];
-      // A run limit of $1: the brief ($0.81 reserved, $0.15 spent) is admitted, the layout ($1.61) is not.
+      // A $1 run admits the brief, but refuses the layout reservation before sending it.
       const service = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher: fakeProvider(calls) as any, defaultTier: 'standard', maxUsd: 1 });
       const { run } = await service.createOrGetRun(studioScope, taskId, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350, tier: 'standard' });
       let result: any = { status: run.status };
@@ -284,9 +284,13 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
         result = await service.resume(studioScope, taskId, run.id);
       }
       expect(result).toMatchObject({ status: 'failed', stage: 'laying_out', code: 'STUDIO_RUN_LIMIT_TOO_SMALL' });
-      // ADR-170: the art-direction call reserves 6,000 output tokens where three full layouts reserved
-      // 16,000, so the same request now needs about $1.03 rather than $1.61, still over what is left.
-      expect(result.diagnostic).toMatch(/^STUDIO_RUN_LIMIT_TOO_SMALL at stage laying_out: the next model request needs a \$1\.0\d advance reservation and the run has \$0\.8\d of its \$1 limit left \(\$0\.15 spent\)\. Nothing was sent for it and no layout was made\./);
+      // Check the budget boundary rather than a stale decimal tied to one prompt length.
+      const reservation = result.diagnostic.match(/^STUDIO_RUN_LIMIT_TOO_SMALL at stage laying_out: the next model request needs a \$([0-9]+\.[0-9]{2}) advance reservation and the run has \$([0-9]+\.[0-9]{2}) of its \$1 limit left \(\$0\.15 spent\)\. Nothing was sent for it and no layout was made\./);
+      expect(reservation).not.toBeNull();
+      expect(Number(reservation![1])).toBeGreaterThan(Number(reservation![2]));
+      expect(Number(reservation![1])).toBeGreaterThan(1);
+      expect(Number(reservation![1])).toBeLessThan(1.3); // bounded prompt growth, not an inflated run limit
+      expect(Number(reservation![2])).toBe(.85);
       expect(result.diagnostic).not.toMatch(/hard QA/);
       expect(calls.map((c) => c.schema)).toEqual(['CreativeBrief']);
       const stored = (await sql<any>`SELECT status, diagnostic FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(owner)).rows[0];
@@ -319,7 +323,7 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
       expect(next.status).toBe('transferred');
       const winner = (await sql<any>`SELECT layouts FROM hawa.design_studio_candidates WHERE run_id = ${second.id}::uuid AND status = 'winner'`.execute(owner)).rows[0];
       const layouts = typeof winner.layouts === 'string' ? JSON.parse(winner.layouts) : winner.layouts;
-      // ADR-180: art-directed, as in the first run of this file: a hero, at most a texture, the rest left out.
+      // This mock proposes hero/texture recipes; ADR181 does not require that style globally.
       expect(layouts.at(-1).artDirection?.recipe).toBeTruthy();
       expect(layouts.at(-1).artDirection?.recipe).not.toBe('hero_storyboard');
       expect(layouts.at(-1).photos.length).toBeLessThanOrEqual(2);
