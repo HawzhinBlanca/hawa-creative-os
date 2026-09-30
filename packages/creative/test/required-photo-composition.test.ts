@@ -70,6 +70,27 @@ describe('ADR-171 required photo composition', () => {
     expect(solved.layouts).toHaveLength(3);
     expect(solved.layouts.every(l => l.photos?.length === 6)).toBe(true);
   });
+  it('final QA detects individual subjects lost in supporting-photo crops after solving', () => {
+    const layout = solveRecipe(input());
+    const outcome = evaluateHardQa(layout, { width: 1080, height: 1350, copyScripts: ['latin', 'latin', 'latin'],
+      latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', palette, logoAspect: 1, copyText: copy, photoCount: 6,
+      photoRegions: photos.map((p, i) => ({ width: p.width, height: p.height, regionStatus: 'measured', regions: i === 1 ? [
+        { kind: 'face', x: .02, y: .15, width: .1, height: .1 },
+        { kind: 'face', x: .85, y: .15, width: .1, height: .1 },
+      ] : [] })) });
+    expect(outcome.passed).toBe(false);
+    expect(outcome.defectCodes).toContain('PHOTO_SUBJECT_CROPPED');
+    expect(outcome.messages.some(m => m.includes('photo 1 region'))).toBe(true);
+  });
+
+  it('shows absent detector evidence explicitly without fabricating a measured empty result', () => {
+    const layout = solveRecipe(input());
+    const outcome = evaluateHardQa(layout, { width: 1080, height: 1350, copyScripts: ['latin', 'latin', 'latin'],
+      latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', palette, logoAspect: 1, copyText: copy, photoCount: 6,
+      photoRegions: photos.map(() => undefined) });
+    expect(outcome.findings.filter(f => f.code === 'PHOTO_REGIONS_UNMEASURED')).toHaveLength(6);
+  });
+
   it('passes measured local QA and carries six native images plus exact live text into the Canva deck', async () => {
     const layout = solveRecipe(input());
     const photoFiles = photos.map((p, i) => ({ bytes: syntheticPhoto(p.width, p.height, i + 1) }));

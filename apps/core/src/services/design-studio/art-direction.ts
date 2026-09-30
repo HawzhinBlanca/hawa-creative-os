@@ -47,6 +47,7 @@ export async function photoFactsFor(
       photoIndex,
       width: size.width,
       height: size.height,
+      ...(detected?.regionStatus ? { regionStatus: detected.regionStatus, ...(detected.regions ? { regions: detected.regions } : {}) } : {}),
       ...(photo.review?.subjectFit ? { subjectFit: photo.review.subjectFit } : {}),
       ...(photo.review?.shot ? { shot: photo.review.shot } : {}),
       ...(photo.review?.quietArea ? { quietArea: photo.review.quietArea } : {}),

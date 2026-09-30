@@ -24,7 +24,7 @@ export type CopyFindingCode = 'COPY_DANGLING_END' | 'COPY_UNBALANCED' | 'COPY_AT
 
 /** A non-blocking review finding. It is shown to the office and never stops a design. */
 export interface ReviewFinding {
-  code: CopyFindingCode | 'FONT_SUBSTITUTED' | 'CONTRAST_UNMEASURED' | 'HERO_UPSCALED';
+  code: CopyFindingCode | 'FONT_SUBSTITUTED' | 'CONTRAST_UNMEASURED' | 'HERO_UPSCALED' | 'PHOTO_REGIONS_UNMEASURED';
   severity: 'warning';
   copyIndex?: number;
   message: string;

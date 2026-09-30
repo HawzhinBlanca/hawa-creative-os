@@ -122,6 +122,34 @@ describe('a framed photo is cropped around its faces', () => {
   const photo = (tag: string) => ({ dataUrl: '', bytes: Buffer.from(`photo ${tag}`), mimeType: 'image/jpeg' as const });
   const faces = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
+  it('preserves distinct normalized face regions, not just their average focus', async () => {
+    const reply = faces({ ok: true, orientation: 1, width: 1000, height: 500,
+      focus: { x: 0.5, y: 0.2 }, faces: [
+        { x: 50, y: 50, width: 100, height: 100 },
+        { x: 800, y: 100, width: 150, height: 100 },
+      ] });
+    const [out] = await new PhotoCutouts({ url: 'http://cutout:8090', fetcher: vi.fn(async () => reply) as typeof fetch }).focusFor([photo('group')]);
+    expect(out).toMatchObject({ regionStatus: 'measured', regions: [
+      { kind: 'face', x: 0.05, y: 0.1, width: 0.1, height: 0.2 },
+      { kind: 'face', x: 0.8, y: 0.2, width: 0.15, height: 0.2 },
+    ] });
+  });
+
+  it('records malformed region evidence instead of claiming no faces were found', async () => {
+    const reply = faces({ ok: true, width: 1000, height: 500, focus: { x: 0.5, y: 0.2 },
+      faces: [{ x: 50, y: 50, width: -100, height: 100 }] });
+    const [out] = await new PhotoCutouts({ url: 'http://cutout:8090', fetcher: vi.fn(async () => reply) as typeof fetch }).focusFor([photo('invalid')]);
+    expect(out).toMatchObject({ regionStatus: 'invalid' });
+    expect(out).not.toHaveProperty('regions');
+  });
+
+  it('records a measured empty detection separately from legacy aggregate evidence', async () => {
+    const reply = faces({ ok: true, width: 1000, height: 500, focus: { x: 0.5, y: 0.5 }, faces: [] });
+    const [out] = await new PhotoCutouts({ url: 'http://cutout:8090', fetcher: vi.fn(async () => reply) as typeof fetch }).focusFor([photo('empty')]);
+    expect(out).toMatchObject({ regionStatus: 'measured', regions: [] });
+    expect(out).not.toHaveProperty('faceShare');
+  });
+
   it('asks the service where the faces are in each photo, and keeps the point inside the photo', async () => {
     const replies = [faces({ ok: true, orientation: 1, focus: { x: 0.42, y: 0.18 } }), faces({ ok: true, focus: { x: 1.2, y: -0.1 } })];
     const fetcher = vi.fn(async () => replies.shift()!);

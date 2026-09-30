@@ -1,0 +1,70 @@
+{
+  "baseline": "38f84442644f74bb111685ca270dcddbd52a6249",
+  "scope": "W1 local engineering: service -> saved visual inputs -> source-region crop/solver -> independent final QA; qualification and other five workstreams still pending",
+  "tests": {
+    "files": 7,
+    "passed": 199,
+    "failed": 0,
+    "skipped": 0,
+    "log": "/tmp/hawa-content-aware-w1-final.log",
+    "command": "pnpm exec vitest run packages/creative/test/protected-regions.test.ts packages/creative/test/art-direction-solver.test.ts packages/creative/test/art-direction-round2.test.ts packages/creative/test/required-photo-composition.test.ts apps/core/test/photo-cutouts.test.ts apps/core/test/art-direction-e2e.test.ts apps/core/test/studio-visual-inputs.test.ts"
+  },
+  "build": {
+    "passed": true,
+    "log": "/tmp/hawa-content-aware-build-green.log"
+  },
+  "types": {
+    "roots": 641,
+    "passed": true,
+    "log": "/tmp/hawa-content-aware-w1-types-final.log"
+  },
+  "retainedFailures": [
+    {
+      "scope": "pre-repair service regression",
+      "passed": 14,
+      "failed": 3,
+      "log": "/tmp/hawa-content-aware-red.log"
+    },
+    {
+      "scope": "initial type checker invocation",
+      "status": "sandbox refused tsx IPC socket; no test type checking executed",
+      "log": "/tmp/hawa-content-aware-w1-types.log"
+    },
+    {
+      "scope": "first source commit",
+      "status": "hook refused stale manifest; no commit created"
+    },
+    {
+      "scope": "fresh worktree blueprint",
+      "passed": 1464,
+      "failed": 1,
+      "status": "historical ignored audit report absent; restored link to original shared evidence, never fabricated report",
+      "log": "/tmp/hawa-content-aware-w1-pack.log"
+    }
+  ],
+  "paidCalls": 0,
+  "productionChanged": false,
+  "sourceHashes": {
+    "packages/creative/src/studio/protected-regions.ts": "6ad65e3c223bd77aa6f973302e560c3b7863274b74c329dfabbada91e54e113a",
+    "packages/creative/src/studio/art-direction/solver.ts": "df7871e191695a936b8c152fb440de9cfcfbeb288c76fc34bdd79461dc275621",
+    "packages/creative/src/studio/hard-qa.ts": "0d44f3360f8b7b61ea486d9c8f5176f2213d6b4b3e6099aa15162514536ff14f",
+    "apps/core/src/services/design-studio/photo-cutouts.ts": "38ea478f4d3d860217c537afb5ab750c59f01579301b8e5a82056e0b4c88e4a2",
+    "apps/core/src/services/design-studio/art-direction.ts": "318c6eb5ea49f0f72e01dd0cbd8ee69e12fd736fbc0ed96b909a8159017891fe",
+    "apps/core/src/services/design-studio/stages/v3.stage.ts": "2f49aff6ce422f725b9a7510ad07571312a1973234c177ba546bcdfb5f5b8d4a"
+  },
+  "open": [
+    "W2 background planning",
+    "W3 conditional logo",
+    "W4 varied coverage-safe compositions",
+    "W5 color and local refinement",
+    "W6 human-calibrated preferences",
+    "final sealed gates/deployment",
+    "genuine native/human comparative qualification"
+  ],
+  "blueprint": {
+    "passed": 1466,
+    "warnings": 0,
+    "failed": 0,
+    "log": "/tmp/hawa-content-aware-w1-pack-final.log"
+  }
+}

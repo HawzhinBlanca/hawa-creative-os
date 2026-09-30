@@ -10,6 +10,7 @@ import { omittedPhotoIndices, type PhotoSelection } from './photo-selection.js';
 import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } from './render-layout-v2.js';
 import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
+import { photoRegionViolations, type PhotoRegionEvidence } from './protected-regions.js';
 
 /**
  * The studio's hard QA gate, shared so the qualification applies exactly the gate a production
@@ -38,6 +39,8 @@ export interface HardQaContext {
    * and refused every design that placed the client's photos (2026-09-22, run b7fc5555).
    */
   photoCount?: number;
+  /** ADR-172: source regions bound to the saved face stage; independent of solved geometry. */
+  photoRegions?: Array<PhotoRegionEvidence | undefined>;
   /**
    * The client's playbook (ADR-127). A video thumbnail also answers to the thumbnail rules: nothing
    * under the platform's badge or buttons, and a hook legible at listing size.
@@ -342,6 +345,18 @@ export function evaluateHardQa(
   }
 
   const findings = [...reviewFindings(layout, ctx), ...unmeasured];
+  if (ctx.photoRegions) {
+    for (const message of photoRegionViolations(layout, ctx.photoRegions)) {
+      const code = message.split(':', 1)[0];
+      if (!defectCodes.includes(code)) defectCodes.push(code);
+      messages.push(message);
+    }
+    for (const photo of layout.photos ?? []) {
+      if (photo.treatment === 'cutout' || ctx.photoRegions[photo.photoIndex]?.regionStatus) continue;
+      findings.push({ code: 'PHOTO_REGIONS_UNMEASURED', severity: 'warning',
+        message: `Photo ${photo.photoIndex + 1}: individual subject regions were not measured; crop and subject visibility need human review.` });
+    }
+  }
   // ADR-171: only requester-authorized omissions are review evidence.
   const omittedPhotos = ctx.photoSelection?.mode === 'choose' ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
 

@@ -17,6 +17,7 @@ import { maxStrokeWidth } from '../studio-normalize.js';
 import { coverCrop } from '../photo-crop.js';
 import type { QuietArea } from './recipes.js';
 import type { PhotoSelection } from '../photo-selection.js';
+import { protectedCropFocus, protectedRegionsOnCanvas, type SourceRegion, type RegionStatus } from '../protected-regions.js';
 
 /**
  * ADR-170: the recipe solver. It turns the layout model's art-direction choice (a recipe, which
@@ -77,6 +78,8 @@ export interface SolverPhoto {
   focus?: { x: number; y: number };
   /** The tallest face's height as a share of the photo's height, when the detector found a face. */
   faceShare?: number;
+  regions?: SourceRegion[];
+  regionStatus?: RegionStatus;
   /** The local analysis' centre of detail, used when there is no face. */
   salient?: { x: number; y: number };
   /** Where the photo is calm. */
@@ -400,7 +403,11 @@ class SolveContext {
   }
 
   placeHero(p: SolverPhoto, box: Box, role: PhotoElement['role'] = 'hero'): PhotoElement {
-    const el: PhotoElement = { photoIndex: p.photoIndex, role, ...intBox(box), radius: 0, focus: this.focusOf(p) };
+    let focus: { x: number; y: number } | null;
+    try { focus = protectedCropFocus(intBox(box), p, this.focusOf(p)); }
+    catch { throw new RecipeInfeasibleError(this.recipe, `photo ${p.photoIndex} has invalid subject regions`); }
+    if (!focus) throw new RecipeInfeasibleError(this.recipe, `photo ${p.photoIndex} cannot retain every subject in this crop`);
+    const el: PhotoElement = { photoIndex: p.photoIndex, role, ...intBox(box), radius: 0, focus };
     this.photos.push(el);
     return el;
   }
@@ -412,6 +419,11 @@ class SolveContext {
    */
   faceBox(el: PhotoElement): Box | undefined {
     const p = this.photo(el.photoIndex);
+    if (p?.regions?.length && el.treatment !== 'cutout') {
+      const boxes = protectedRegionsOnCanvas(el, p);
+      const x = Math.min(...boxes.map(b => b.x)), y = Math.min(...boxes.map(b => b.y));
+      return { x, y, width: Math.max(...boxes.map(b => b.x + b.width)) - x, height: Math.max(...boxes.map(b => b.y + b.height)) - y };
+    }
     if (!p?.focus || !p.faceShare || el.treatment === 'cutout') return undefined;
     const crop = coverCrop(el, p, el.focus ?? p.focus);
     const scale = el.height / crop.sh;
@@ -843,11 +855,13 @@ class SolveContext {
     // No title, plate or card over a face the detector found in the hero: on 2026-09-30 a navy plate
     // sat across both visitors' faces in the live trial, and every check passed it.
     for (const photo of layout.photos ?? []) {
-      if (photo.role !== 'hero') continue;
-      const face = this.faceBox(photo);
-      if (!face) continue;
-      const covers = [...layout.text, ...layout.shapes.filter((sh) => sh.role === 'panel' && sh.fill !== 'none'), layout.logo].find((b) => hit(b, face));
-      if (covers) throw new RecipeInfeasibleError(this.recipe, 'the copy or its plate would cover the faces in the hero photo');
+      const p = this.photo(photo.photoIndex);
+      const fallback = this.faceBox(photo);
+      const boxes = p?.regions?.length && photo.treatment !== 'cutout' ? protectedRegionsOnCanvas(photo, p) : fallback ? [fallback] : [];
+      for (const face of boxes) {
+        const covers = [...layout.text, ...layout.shapes.filter((sh) => sh.role === 'panel' && sh.fill !== 'none'), layout.logo].find((b) => hit(b, face));
+        if (covers) throw new RecipeInfeasibleError(this.recipe, `the copy or its plate would cover the faces in photo ${photo.photoIndex}`);
+      }
     }
     for (const t of layout.text) {
       if (!inside(this.safe, t)) throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} leaves the safe area`);

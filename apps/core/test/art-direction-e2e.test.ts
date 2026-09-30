@@ -107,6 +107,19 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     expect(face).toMatchObject({ faces: true, focus: { x: 0.3, y: 0.33 } });
   });
 
+  it('retains measured individual and invalid region evidence through the art-direction adapter', async () => {
+    const bytes = PNG.sync.write(new PNG({ width: 100, height: 100 }));
+    const photo = { bytes, mimeType: 'image/png' as const, dataUrl: '', width: 100, height: 100 };
+    const regions = [{ kind: 'face' as const, x: .1, y: .2, width: .15, height: .2 }];
+    const [measured, invalid] = await photoFactsFor({ photos: [photo, photo], photoFaces: [
+      { x: .2, y: .3, faceShare: .2, regionStatus: 'measured', regions },
+      { x: .5, y: .5, regionStatus: 'invalid' },
+    ] });
+    expect(measured).toMatchObject({ regionStatus: 'measured', regions });
+    expect(invalid).toMatchObject({ regionStatus: 'invalid' });
+    expect(invalid.faces).toBeUndefined();
+  });
+
   it('retrieves the office\'s own K-12 field-visit report among the photo exemplars', () => {
     const manifest = JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'));
     const brief = {

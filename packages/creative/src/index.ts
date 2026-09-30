@@ -17,6 +17,7 @@ export * from './font-policy.js';
 export * from './studio/layout-v2.js';
 export * from './studio/photo-cutout.js';
 export * from './studio/photo-crop.js';
+export * from './studio/protected-regions.js';
 export * from './studio/photo-upright.js';
 export * from './studio/svg-files.js';
 export * from './studio/photo-treatments.js';

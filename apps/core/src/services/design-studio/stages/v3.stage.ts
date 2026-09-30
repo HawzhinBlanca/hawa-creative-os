@@ -15,6 +15,7 @@ import {
   type BriefBoundJudgeBrief,
   type StudioJudgeProtocol,
   photoSelectionFromInstructions,
+  imagePixelSize,
 } from '@hawa/creative';
 import type { StageContext, CandidateState, Concept, Archetype, MotifKind, CreativeBrief } from '../types.js';
 import { candidateRenderOptions } from './asset-inputs.js';
@@ -146,11 +147,19 @@ export function conceptFromV3Candidate(
 /** The hard-QA context of this run: the gate its winner must pass. */
 export function hardQaContextFor(
   ctx: Pick<StageContext, 'width' | 'height' | 'copyBlocks' | 'latinFont' | 'arabicFont' | 'referencePack' | 'logoAspect' | 'photos' | 'playbook'> &
-    Partial<Pick<StageContext, 'instructions' | 'photoSelection'>>
+    Partial<Pick<StageContext, 'instructions' | 'photoSelection' | 'photoFaces'>>
 ): HardQaContext {
   const photoCount = ctx.photos?.length ?? 0;
   return {
     photoCount,
+    ...(ctx.photoFaces ? { photoRegions: (ctx.photos ?? []).map((p, i) => {
+      const faces = ctx.photoFaces?.[i];
+      if (!faces) return undefined;
+      const size = imagePixelSize(p.bytes);
+      return { width: size?.width ?? p.width ?? 0, height: size?.height ?? p.height ?? 0,
+        ...(faces.regionStatus ? { regionStatus: faces.regionStatus } : {}),
+        ...(faces.regions ? { regions: faces.regions } : {}) };
+    }) } : {}),
     // ADR-157: the brief's recorded choice, else the instructions read now; `all` when neither says.
     photoSelection: ctx.photoSelection ?? photoSelectionFromInstructions(ctx.instructions, photoCount),
     ...(ctx.instructions ? { instructions: ctx.instructions } : {}),
