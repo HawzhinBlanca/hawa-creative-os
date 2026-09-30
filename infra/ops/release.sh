@@ -5,7 +5,8 @@
 #   bash infra/ops/release.sh status                  # current, previous, the releases on disk, recent activations
 #   bash infra/ops/release.sh adopt <checkout>        # once: move the checkout's host-local files into ~/.hawa/shared
 #   bash infra/ops/release.sh activate <commit>       # point ~/.hawa/current at an existing release (no deploy)
-#   bash infra/ops/release.sh prune [keep]            # remove all but current, previous and the newest [keep] (5)
+#   bash infra/ops/release.sh prune [keep]            # remove all but current, previous, the newest [keep] (5) and any a container binds
+#   bash infra/ops/release.sh runtime-sync [commit]   # copy the files compose binds into ~/.hawa/runtime, in place (default: current)
 set -Eeuo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$HERE/release_lib.sh"
@@ -16,6 +17,7 @@ case "${1:-status}" in
     echo "current:  $(readlink "$(hawa_current_link)" 2>/dev/null || echo none)"
     echo "previous: $(readlink "$(hawa_previous_link)" 2>/dev/null || echo none)"
     echo "shared:   $(hawa_shared_dir)"
+    echo "runtime:  $(hawa_runtime_dir)"
     echo "releases in $(hawa_releases_dir):"
     ls -1t "$(hawa_releases_dir)" 2>/dev/null | grep -E '^[0-9a-f]{40}$' | sed 's/^/  /' || true
     echo "recent activations:"
@@ -61,5 +63,16 @@ case "${1:-status}" in
     echo "  Containers are not changed by this; deploy that release (bash $release/infra/docker/deploy.sh --apply) to run it."
     ;;
   prune) hawa_release_prune "${2:-}" ;;
-  *) die "unknown command $1 (status, adopt, activate, prune)" ;;
+  runtime-sync)
+    # What deploy.sh does just before `up -d` (addendum 3), for a runtime directory lost or edited by hand.
+    # It does not reload anything: a changed nginx.conf or office proof needs `nginx -t` and a reload
+    # (or a restart) of nginx, a changed vector.yaml a restart of vector; the init files are read only
+    # when Postgres starts on an empty data directory.
+    if [[ -n "${2:-}" ]]; then release="$(hawa_release_path "$2")"; else release="$(hawa_physical "$(hawa_current_link)")" || die "no current release"; fi
+    [[ -d "$release" ]] || die "no release at $release"
+    changed="$(hawa_runtime_sync "$release")" || die "the runtime files were not all copied (above)"
+    echo "✓ $(hawa_runtime_dir) holds the files of $release${changed:+; changed:}"
+    [[ -z "$changed" ]] || sed 's/^changed /  /' <<< "$changed"
+    ;;
+  *) die "unknown command $1 (status, adopt, activate, prune, runtime-sync)" ;;
 esac

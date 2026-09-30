@@ -9,23 +9,18 @@ function control(mode: string) {
   const log=join(directory,'calls'), restarted=join(directory,'restarted'), fake=join(directory,'compose');
   writeFileSync(fake,`#!/bin/bash
 printf '%s\\n' "$*" >> "$CALL_LOG"
-if [[ "$*" == *inspect* ]]; then
-  if [[ "$CONTROL_MODE" == stale_paths || "$CONTROL_MODE" == recreate_failed ]]; then
-    if [[ ! -e "$RESTARTED" ]]; then echo 'retired|retired'; exit 0; fi
-  fi
-  echo '/current/infra/docker/nginx.conf|/current/infra/docker/.office-proxy-header.conf'; exit 0
-fi
-if [[ "$*" == *'--force-recreate nginx'* ]]; then
-  [[ "$CONTROL_MODE" != recreate_failed ]] || exit 1
-  touch "$RESTARTED"; exit 0
-fi
 if [[ "$*" == *'restart nginx'* ]]; then
   [[ "$CONTROL_MODE" != restart_failed ]] || exit 1
   touch "$RESTARTED"; exit 0
 fi
+if [[ "$*" == *'--force-recreate nginx'* ]]; then
+  [[ "$CONTROL_MODE" == pinned_until_recreate ]] && CONTROL_MODE=ok && touch "$RESTARTED.recreated"; exit 0
+fi
+[[ -e "$RESTARTED.recreated" ]] && CONTROL_MODE=ok
 if [[ "$*" == *sha256sum* ]]; then
   if [[ "$*" == *hawa-office-proof.conf* ]]; then
-    if [[ "$CONTROL_MODE" == stale_proof || "$CONTROL_MODE" == restart_failed || "$CONTROL_MODE" == stale_after_restart ]]; then
+    if [[ "$CONTROL_MODE" == stale_proof || "$CONTROL_MODE" == restart_failed || "$CONTROL_MODE" == stale_after_restart || "$CONTROL_MODE" == pinned_until_recreate ]]; then
+      [[ "$CONTROL_MODE" == pinned_until_recreate ]] && { echo 'old  file'; exit 0; }
       if [[ ! -e "$RESTARTED" || "$CONTROL_MODE" == stale_after_restart ]]; then echo 'old  file'; exit 0; fi
     fi
     echo 'proof  file'
@@ -38,7 +33,7 @@ elif [[ "$*" == *'nginx -s reload'* ]]; then
 fi
 `,{mode:0o700});
   try {
-    const result=spawnSync('/bin/bash',['-c','set -Eeuo pipefail; COMPOSE=("$FAKE"); INTERP_FILE=unused; ROOT_DIR=/current; docker() { \"$FAKE\" \"$@\"; }; NGINX_WANT=config; OFFICE_PROOF_WANT=proof; source "$LIB"; hawa_nginx_reload'],{
+    const result=spawnSync('/bin/bash',['-c','set -Eeuo pipefail; COMPOSE=("$FAKE"); INTERP_FILE=unused; NGINX_WANT=config; OFFICE_PROOF_WANT=proof; source "$LIB"; hawa_nginx_reload'],{
       encoding:'utf8',env:{...process.env,FAKE:fake,LIB:resolve('infra/ops/nginx_reload.sh'),CONTROL_MODE:mode,CALL_LOG:log,RESTARTED:restarted},
     });
     return {status:result.status,calls:readFileSync(log,'utf8'),error:result.stderr};
@@ -59,12 +54,9 @@ it.each(['restart_failed','stale_after_restart','invalid','reload_failed'])('rej
   const result=control(mode); expect(result.status).not.toBe(0);
   if(mode!=='reload_failed') expect(result.calls).not.toContain('nginx -s reload');
 });
-
-it('recreates a retired bind path even when both digests match',()=>{
- const result=control('stale_paths'); expect(result.status,result.error).toBe(0);
- expect(result.calls).toContain('--force-recreate nginx'); expect(result.calls).toContain('nginx -s reload');
-});
-it('refuses a failed nginx bind recreation',()=>{
- const result=control('recreate_failed'); expect(result.status).not.toBe(0);
- expect(result.calls).not.toContain('nginx -s reload');
+it('recreates nginx when a restart keeps the pinned mount (ADR-158 addendum 3), then validates and reloads',()=>{
+  const result=control('pinned_until_recreate'); expect(result.status,result.error).toBe(0);
+  expect(result.calls).toContain('restart nginx');
+  expect(result.calls).toContain('up -d --no-deps --force-recreate nginx');
+  expect(result.calls).toContain('nginx -s reload');
 });

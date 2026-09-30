@@ -55,3 +55,10 @@ against current, reconciled the same sealed worker image through Restate, draine
 corrected a missing manual build stamp using the immutable image, and recorded the receipt.
 Current/previous design session/operator denials and separate restricted DB login pass live;
 these manual actions do not qualify the unshipped forward deployment-helper change.
+
+Integrated correction, 1 October 2026: ADR158 addendum3 replaces current-link binds with a
+permanent real runtime directory, in-place validated copies, and fail-closed Docker/history-aware
+pruning. This supersedes the temporary 95d4954d source-path helper; both branch histories are kept.
+Live4e500451 verifies all three identity/bind repairs, eight stable mounts and retirement of the
+requested unsafe release directories. Exact proof: plans/service-boundary-repair-2026-09-30/
+LIVE_4E500451_READBACK.json. Do not redeploy the obsolete helper over the newer live runtime.

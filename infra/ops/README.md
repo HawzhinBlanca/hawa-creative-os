@@ -22,8 +22,10 @@ the office Mac today; the repository is prepared for an arm64 Linux server or a 
 Not from a checkout. `deploy.sh` makes `~/.hawa/releases/<commit>` (a detached git worktree of the
 commit it was started at), links the host-local files from `~/.hawa/shared` into it, installs and
 builds it, and continues from there; `--apply` points `~/.hawa/current` at it just before its
-containers start. The jobs below run `~/.hawa/current/infra/...`, and compose binds nginx.conf,
-vector.yaml and the database init files through `~/.hawa/current`. Paths in this file such as
+containers start. The jobs below run `~/.hawa/current/infra/...`. Compose binds nginx.conf, vector.yaml,
+the database init files and the office proof from `~/.hawa/runtime`, a real directory each deploy rewrites
+in place, never through `~/.hawa/current`, whose target Docker Desktop pins at container creation
+(ADR-158 addendum 3; `release.sh runtime-sync` by hand). Paths in this file such as
 `infra/docker/.env` mean the release's, which are links to `~/.hawa/shared`. The switch-over from the
 old layout, rollback and verification are in `runbooks/PRODUCTION_RELEASE_DIRECTORIES.md`.
 
@@ -161,8 +163,8 @@ and then the oldest days until the rest fit in `HAWA_LOG_MAX_MB` (2048; Docker's
 each container at 250 MB, Vector caps nothing). Today's day is never deleted.
 `vector.yaml` is a single-file bind mount and Vector runs without `--watch-config`, so a plain
 `compose up` never applies a changed file. `deploy.sh` checks the file with `vector validate` in a
-one-off container before it starts anything, and restarts `vector` when the running container sees a
-different file (ADR-129), as it does for `nginx.conf`.
+one-off container before it starts anything, and restarts `vector` when the file changed or the running
+container sees a different file (ADR-129, ADR-158 addendum 3); nginx is reloaded, or restarted.
 
 ```bash
 npx tsx scripts/request_logs.ts <requestId>               # one request: nginx, Core, worker, in time order

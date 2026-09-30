@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T21:34:16Z",
+  "generatedAt": "2026-09-30T21:45:05Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 663,
+  "fileCount": 664,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "94ff0d19444806fade6a0325313f49cd4fd265c3d227b1bb3462f781179fe109",
-      "bytes": 3980
+      "sha256": "9c23ca6c51ec846ac5928231a69d4a3a456a0cc501ca383f6933a426e6efa96d",
+      "bytes": 3979
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -834,8 +834,8 @@
     },
     {
       "path": "adrs/158_production_release_directories_and_operations_repairs.md",
-      "sha256": "f621d99734f5a975dbb1acb393e233a069bd5af07522f0f6f835a7df2ce35c37",
-      "bytes": 8515
+      "sha256": "9b7997d84e153f77bf0cfa383a679a2e0102c853c46d906419e3bb2eb57a758f",
+      "bytes": 15039
     },
     {
       "path": "adrs/159_budget_expiry_uncertain_calls_config_and_dead_code.md",
@@ -889,8 +889,8 @@
     },
     {
       "path": "adrs/183_independent_worker_identity_and_bound_mount_validation.md",
-      "sha256": "1639b3d42bdc2c10359a117856170c88fe5fe798097ecca64ce5afb53314d8fd",
-      "bytes": 4174
+      "sha256": "3a4742dd725ec6838ae464bc268ca33b81fc049bd713ca8fed3b06a32313dbeb",
+      "bytes": 4748
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2428,24 +2428,29 @@
       "bytes": 8734
     },
     {
+      "path": "plans/service-boundary-repair-2026-09-30/LIVE_4E500451_READBACK.json",
+      "sha256": "20cd5a3eccab6e8ed706941bffdcedb4fa01f90ddaf502da65409b265f1c5e2e",
+      "bytes": 4679
+    },
+    {
       "path": "plans/service-boundary-repair-2026-09-30/LIVE_A482CF20_READBACK.json",
       "sha256": "47ee5f3c9b7804d1ace05ff74d510a0cff5a47e46ef5f49af9c9d7ff9486785a",
       "bytes": 1399
     },
     {
       "path": "plans/service-boundary-repair-2026-09-30/LOCAL_PROOF.json",
-      "sha256": "f6501e04eb9cf710c5cada2687b52b86e376d84bc15b5e79588fa45627890eea",
-      "bytes": 4972
+      "sha256": "c508b6b116527bac7a1296c2476ffb1e2b48367bb6eccbf95d1354cf2e95e129",
+      "bytes": 6927
     },
     {
       "path": "plans/service-boundary-repair-2026-09-30/PLAN.md",
-      "sha256": "9d059ff8be57c44351a8497c70ac253e701dc2270b3b02009ab3b9b83d386ec7",
-      "bytes": 1975
+      "sha256": "5e51c10cc0698f8adf183660973a5c1d9b86f4245775bce21d646ebd38980412",
+      "bytes": 3877
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "bd7d8d5f27637e803e10ae817b8d35d02fa220dbbcbcbff644e45e04a7cd0849",
-      "bytes": 554901
+      "sha256": "5c6e02c4e3fbce4df75d6c6292f60d642c175eeab915e75c5a68af7f74404028",
+      "bytes": 557868
     },
     {
       "path": "plans/user-stories.csv",
@@ -2609,8 +2614,8 @@
     },
     {
       "path": "runbooks/PRODUCTION_RELEASE_DIRECTORIES.md",
-      "sha256": "c77ec5204c271300ac7aba89ee3198083cf75eabc435bce183aae9f16731743a",
-      "bytes": 18859
+      "sha256": "00e8b5ee53894b577e7f15ae0232f7309f64108860df87996fec532dc1a84033",
+      "bytes": 24467
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
@@ -3214,8 +3219,8 @@
     },
     {
       "path": "scripts/test/nginx-reload.test.ts",
-      "sha256": "4a825c2f19a84cbf28d9a463f25b9ee0d3cee0ece0921cadb1f8ae032f81748e",
-      "bytes": 3704
+      "sha256": "8c2f8fe1460a62c9325376f523b40b9c65c1612fb84a8fc1552f06325c734fed",
+      "bytes": 3500
     },
     {
       "path": "scripts/test/provider-credential-update.test.ts",

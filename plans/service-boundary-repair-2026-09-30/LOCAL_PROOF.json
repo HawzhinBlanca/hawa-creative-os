@@ -9,19 +9,6 @@
     "FR-074",
     "NFR-012"
   ],
-  "sourceSha256": {
-    "infra/ops/prepare_service_boundaries.py": "14afa6a95d30df3306b02caed27a76c9906f7290d56acb6f95ec8b74e241b471",
-    "infra/ops/nginx_reload.sh": "a05690e16ef81f5f0a87a6ec6a371ff653447bfaa498cc1a9acfcc136fcac303",
-    "infra/docker/deploy.sh": "709ab5fb0e83c36d2fa6af18de74cbd58bd004598281ed6965ff87eac11e321b",
-    "infra/docker/docker-compose.prod.yml": "4cd8be057edc2ab0c5086e46dce8fe929ebf7100149b3af56291032f684a82fa",
-    "infra/ops/release_lib.sh": "377faf82a3f2a2fa95116d20580e5fdf1828e7c46da7c2669080165f5f9e5c47",
-    "packages/db/migrations/073_restricted_worker_database.sql": "93edd3192da208139ee78a655325ebcf571c7368e64bbe4a4c4c0254c4972abc",
-    "packages/db/src/provision-worker-role.ts": "faef05e77839743b88b91b62ae5ac4f2c04ddefd6922297a06a3cfef0946c064",
-    "scripts/provision_worker_database.ts": "20093aca911dd9b2df6c8d5f6cea69155e4a84835f8db26fd614b02211ce17eb",
-    "apps/core/src/app.ts": "01f0a470278ce013a26d0c9be8cf19c50efa00e78ac0450b121c35b0078f984b",
-    "apps/core/src/routes/auth.routes.ts": "15d9ee66e304e3e6be2b5df76cfd2ce7e9f1014361e5fe6ed1848bac65523ba2",
-    "scripts/enforce_release_gate.sh": "86d401caefeccfd7a6f2001bf8ca484269fa920044f1cfdd769391e9c5548a1f"
-  },
   "focused": {
     "status": "PASS",
     "distinctTests": 101,
@@ -50,7 +37,8 @@
     "Sealed preflight refused because DATABASE_URL is in canonical Compose .env, not provider .env.production; corrected exact precedence and added test, no live identity changes occurred",
     "Shell helper cleanup removed051d5606 but refused1737c8f2; direct owner-authorized Git worktree removal completed clean inactive unsafe set",
     "Full gate refused6190pass/3fail/3expected-fail/67skip: corrected exact release working directory and two stale expectations; Desk bundle budget preserved; repeated full gate pending",
-    "a482cf20 apply stopped after Core and identity migration because Vector still bound retired1737c8f2; recovered current bind, reconciled same sealed worker, corrected manual build stamp fromunknown through pinned-image restart, drained/deleted green and verified receipt"
+    "a482cf20 apply stopped after Core and identity migration because Vector still bound retired1737c8f2; recovered current bind, reconciled same sealed worker, corrected manual build stamp fromunknown through pinned-image restart, drained/deleted green and verified receipt",
+    "Integration commit hook refused because the shell selected Python without PyYAML; rerun with the configured Homebrew runtime PATH, no hook bypass"
   ],
   "liveBeforeRelease": {
     "nginxTest": "FAIL missing bound proof; nginx restart then PASS",
@@ -58,7 +46,6 @@
     "sharedWorkerOperatorToken": true
   },
   "notYetQualified": [
-    "forward-helper exact full release/deployment",
     "compatible predecessor rollback deliberately refused",
     "broader design W3/W5/W6/native/human qualification"
   ],
@@ -90,7 +77,7 @@
     ],
     "liveApplied": false
   },
-  "liveQualifiedSeal": "a482cf20",
+  "liveQualifiedSeal": "4e500451",
   "fullGate": {
     "seal": "a482cf20",
     "status": "PASS",
@@ -108,6 +95,57 @@
     "files": 2,
     "tests": 31,
     "status": "PASS",
-    "fullResealAndLive": "PENDING"
+    "fullResealAndLive": "SUPERSEDED_BY_4e500451_STABLE_RUNTIME"
+  },
+  "historySourceSha256": {
+    "infra/ops/prepare_service_boundaries.py": "14afa6a95d30df3306b02caed27a76c9906f7290d56acb6f95ec8b74e241b471",
+    "infra/ops/nginx_reload.sh": "a05690e16ef81f5f0a87a6ec6a371ff653447bfaa498cc1a9acfcc136fcac303",
+    "infra/docker/deploy.sh": "709ab5fb0e83c36d2fa6af18de74cbd58bd004598281ed6965ff87eac11e321b",
+    "infra/docker/docker-compose.prod.yml": "4cd8be057edc2ab0c5086e46dce8fe929ebf7100149b3af56291032f684a82fa",
+    "infra/ops/release_lib.sh": "377faf82a3f2a2fa95116d20580e5fdf1828e7c46da7c2669080165f5f9e5c47",
+    "packages/db/migrations/073_restricted_worker_database.sql": "93edd3192da208139ee78a655325ebcf571c7368e64bbe4a4c4c0254c4972abc",
+    "packages/db/src/provision-worker-role.ts": "faef05e77839743b88b91b62ae5ac4f2c04ddefd6922297a06a3cfef0946c064",
+    "scripts/provision_worker_database.ts": "20093aca911dd9b2df6c8d5f6cea69155e4a84835f8db26fd614b02211ce17eb",
+    "apps/core/src/app.ts": "01f0a470278ce013a26d0c9be8cf19c50efa00e78ac0450b121c35b0078f984b",
+    "apps/core/src/routes/auth.routes.ts": "15d9ee66e304e3e6be2b5df76cfd2ce7e9f1014361e5fe6ed1848bac65523ba2",
+    "scripts/enforce_release_gate.sh": "86d401caefeccfd7a6f2001bf8ca484269fa920044f1cfdd769391e9c5548a1f"
+  },
+  "sourceSha256": {
+    "infra/ops/prepare_service_boundaries.py": "14afa6a95d30df3306b02caed27a76c9906f7290d56acb6f95ec8b74e241b471",
+    "infra/ops/nginx_reload.sh": "0b67cef255c8e7ce46f4902c4df55b435b245a8fb7e1d7b274485388ad1dd7e0",
+    "infra/docker/deploy.sh": "ae0b923bc634e3967415f9f1771b17f6696dcebcd29918ba127db74641093d4e",
+    "infra/docker/docker-compose.prod.yml": "df9156fef0469ab94ff0d7657484904e1bbcabfbe53183d4f4d35c44e0cbd429",
+    "infra/ops/release_lib.sh": "f7620d445d142f62da75ba6b09b6e613316c68a80b2244b5391b5f51463f8ff8",
+    "packages/db/migrations/073_restricted_worker_database.sql": "93edd3192da208139ee78a655325ebcf571c7368e64bbe4a4c4c0254c4972abc",
+    "packages/db/src/provision-worker-role.ts": "faef05e77839743b88b91b62ae5ac4f2c04ddefd6922297a06a3cfef0946c064",
+    "scripts/provision_worker_database.ts": "20093aca911dd9b2df6c8d5f6cea69155e4a84835f8db26fd614b02211ce17eb",
+    "apps/core/src/app.ts": "01f0a470278ce013a26d0c9be8cf19c50efa00e78ac0450b121c35b0078f984b",
+    "apps/core/src/routes/auth.routes.ts": "15d9ee66e304e3e6be2b5df76cfd2ce7e9f1014361e5fe6ed1848bac65523ba2",
+    "scripts/enforce_release_gate.sh": "86d401caefeccfd7a6f2001bf8ca484269fa920044f1cfdd769391e9c5548a1f"
+  },
+  "stableRuntimeIntegration": {
+    "runtimeSource": "4e500451",
+    "sourceAndTestsIdenticalToLiveRelease": true,
+    "focused": {
+      "files": 3,
+      "passed": 62,
+      "failed": 0
+    },
+    "liveReadback": "LIVE_4E500451_READBACK.json",
+    "qualified": true,
+    "obsoleteDeploymentStoppedBeforeActivation": true,
+    "obsoleteFullSuite": {
+      "release": "95d4954d",
+      "passed": 6199,
+      "failed": 0,
+      "expectedFail": 3,
+      "skipped": 67
+    },
+    "fullSuiteRepeated": false,
+    "blueprint": {
+      "passed": 1480,
+      "warn": 0,
+      "failed": 0
+    }
   }
 }

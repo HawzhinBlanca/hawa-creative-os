@@ -33,8 +33,8 @@ function run(functions: string[], body: string, stubs = '', env: Record<string, 
   const script = [
     'set -Eeuo pipefail',
     'exec 9>&2',
-    // ROOT_DIR: the release the one-off vector check binds its file from (ADR-158).
-    'CORE_CONTAINER=hawa-production-core-1; INTERP_FILE=/dev/null; ROOT_DIR=/srv/hawa-release',
+    // CANDIDATE_RUNTIME: the checked copy the one-off vector check binds its file from (ADR-158, addendum 3).
+    'CORE_CONTAINER=hawa-production-core-1; INTERP_FILE=/dev/null; ROOT_DIR=/srv/hawa-release; CANDIDATE_RUNTIME=/srv/hawa-runtime.candidate',
     // The compose command is recorded with the poller value it would interpolate.
     'record() { echo "CALL $* [poller=${HAWA_TELEGRAM_POLLER:-}]" >&9; return 0; }',
     'COMPOSE=(record compose)',
@@ -204,33 +204,31 @@ describe('finding 4: a worker token change needs HAWA_WORKER_TOKEN_PREVIOUS', ()
 });
 
 describe('finding 6: a changed vector.yaml reaches the running log shipper', () => {
-  const compose = (seen: string, afterRestart: string, runOk = true, source = '/srv/hawa-release/infra/docker/vector.yaml', recreateOk = true) =>
-    `SEEN='${seen}'; MOUNT_SOURCE='${source}'; docker() { echo "$MOUNT_SOURCE"; }; fake() { echo "CALL $*" >&9; case " $* " in *" exec "*) echo "$SEEN  /etc/vector/vector.yaml" ;; *" --force-recreate "*) ${recreateOk ? "SEEN='" + afterRestart + "'; MOUNT_SOURCE='/srv/hawa-release/infra/docker/vector.yaml'" : 'return 1'} ;; *" run "*) ${runOk ? 'return 0' : 'return 1'} ;; esac; }; COMPOSE=(fake)`;
+  const compose = (seen: string, afterRestart: string, runOk = true, afterRecreate = afterRestart) =>
+    `SEEN='${seen}'; fake() { echo "CALL $*" >&9; case " $* " in *" exec "*) echo "$SEEN  /etc/vector/vector.yaml" ;; *" restart "*) SEEN='${afterRestart}' ;; *" up "*) SEEN='${afterRecreate}' ;; *" run "*) ${runOk ? 'return 0' : 'return 1'} ;; esac; }; COMPOSE=(fake)`;
 
-  it('nothing is restarted when vector already runs the deployed file', () => {
-    const r = run(['vector_seen', 'vector_mount_current', 'apply_vector_config'], 'VECTOR_WANT=aaa; apply_vector_config', compose('aaa', 'aaa'));
+  it('nothing is restarted when vector.yaml did not change and vector already sees it', () => {
+    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=aaa; VECTOR_CHANGED=0; apply_vector_config', compose('aaa', 'aaa'));
     expect(r.code).toBe(0);
-    expect(r.calls.filter((c) => / restart /.test(c))).toEqual([]);
+    expect(r.calls.filter((c) => / (restart|up) /.test(c))).toEqual([]);
   });
 
-  it('a changed file recreates vector, which must then see it', () => {
-    const r = run(['vector_seen', 'vector_mount_current', 'apply_vector_config'], 'VECTOR_WANT=bbb; apply_vector_config', compose('aaa', 'bbb'));
+  it('a file changed in place is already seen but not yet read: vector is restarted (addendum 3)', () => {
+    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; VECTOR_CHANGED=1; apply_vector_config', compose('bbb', 'bbb'));
     expect(r.code).toBe(0);
+    expect(r.calls).toContain('CALL --env-file /dev/null restart vector');
+    expect(r.out).toMatch(/vector restarted onto the deployed vector.yaml/);
+  });
+
+  it('a mount pinned to an old file is restarted, then recreated, and the deploy stops if vector still does not see it', () => {
+    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; VECTOR_CHANGED=0; apply_vector_config', compose('aaa', 'aaa', true, 'bbb'));
+    expect(r.code).toBe(0);
+    expect(r.calls).toContain('CALL --env-file /dev/null restart vector');
     expect(r.calls).toContain('CALL --env-file /dev/null up -d --no-deps --force-recreate vector');
-    expect(r.out).toMatch(/vector recreated onto the current vector.yaml bind/);
-    const stuck = run(['vector_seen', 'vector_mount_current', 'apply_vector_config'], 'VECTOR_WANT=bbb; apply_vector_config', compose('aaa', 'aaa'));
+    expect(r.out).toMatch(/vector recreated onto the deployed vector.yaml/);
+    const stuck = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; VECTOR_CHANGED=1; apply_vector_config', compose('aaa', 'aaa'));
     expect(stuck.code).toBe(1);
-    expect(stuck.out).toMatch(/does not see the deployed vector.yaml/);
-  });
-
-  it('rebinds a retired release path even when the configuration digest is unchanged', () => {
-    const r=run(['vector_seen','vector_mount_current','apply_vector_config'],'VECTOR_WANT=aaa; apply_vector_config',compose('aaa','aaa',true,'/retired/infra/docker/vector.yaml'));
-    expect(r.code).toBe(0);
-    expect(r.calls).toContain('CALL --env-file /dev/null up -d --no-deps --force-recreate vector');
-  });
-  it('refuses a failed recreation even when the old configuration digest matches',()=>{
-    const r=run(['vector_seen','vector_mount_current','apply_vector_config'],'VECTOR_WANT=aaa; apply_vector_config; echo AFTER',compose('aaa','aaa',true,'/retired/infra/docker/vector.yaml',false));
-    expect(r.code).toBe(1); expect(r.out).not.toContain('AFTER');
+    expect(stuck.out).toMatch(/ERROR: vector does not see the deployed vector.yaml even after it was recreated/);
   });
 
   it('an invalid file stops the deploy before anything is started with it', () => {
@@ -243,16 +241,14 @@ describe('finding 6: a changed vector.yaml reaches the running log shipper', () 
     expect(ok.out).toMatch(/AFTER/);
   });
 
+  it('the one-off check binds the candidate copy, not the live runtime directory', () => {
+    const r = run(['validate_vector_config'], 'validate_vector_config', 'fake() { echo "CALL HAWA_RUNTIME_DIR=${HAWA_RUNTIME_DIR:-} $*" >&9; }; COMPOSE=(fake)');
+    expect(r.calls[0]).toBe('CALL HAWA_RUNTIME_DIR=/srv/hawa-runtime.candidate --env-file /dev/null run --rm --no-deps -T vector validate --no-environment /etc/vector/vector.yaml');
+  });
+
   it('the file is validated before step 7 starts anything and applied after it', () => {
     const up = line('HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n');
     expect(line('\nvalidate_vector_config\n')).toBeLessThan(up);
     expect(line('\napply_vector_config\n')).toBeGreaterThan(up);
   });
-});
-
-
-it('retires unsafe release paths only after service binds, worker handoff and receipt qualification',()=>{
- expect(line('hawa_release_prune_unsafe "$ROOT_DIR"')).toBeGreaterThan(line('apply_vector_config\necho "✓ containers started"'));
- expect(line('hawa_release_prune_unsafe "$ROOT_DIR"')).toBeGreaterThan(line('REGISTERED="$(bluegreen register'));
- expect(line('hawa_release_prune_unsafe "$ROOT_DIR"')).toBeGreaterThan(line('"$HEALTH" | (cd "$ROOT_DIR"'));
 });

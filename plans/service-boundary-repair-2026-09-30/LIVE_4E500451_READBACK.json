@@ -1,0 +1,168 @@
+{
+  "date": "2026-10-01",
+  "observedAt": "2026-09-30T21:43:13.141Z",
+  "release": "4e5004519e65ac2350b4c92a8ba35f966d5a5ed4",
+  "credentialMaterial": "withheld",
+  "independentDesignToken": true,
+  "previousDesignTokenNotOperator": true,
+  "auth": {
+    "current": {
+      "task": 404,
+      "list": 401,
+      "providers": 401,
+      "session": 401,
+      "internal": 401
+    },
+    "previous": {
+      "task": 404,
+      "list": 401,
+      "providers": 401,
+      "session": 401,
+      "internal": 401
+    }
+  },
+  "database": {
+    "identity": "hawa_worker_login",
+    "app_member": false,
+    "approval_write": false,
+    "task_write": false,
+    "schema_create": false,
+    "temp_create": false
+  },
+  "workers": [
+    {
+      "color": "green",
+      "username": "hawa_worker_login",
+      "databaseMatches": true,
+      "currentDesign": true,
+      "drainDesign": false,
+      "operatorPresent": false,
+      "build": "4e5004519e65ac2350b4c92a8ba35f966d5a5ed4",
+      "revisionMatches": true,
+      "blobReadOnly": true
+    }
+  ],
+  "nginxTest": true,
+  "officeSessionStatus": 200,
+  "healthStatus": "healthy",
+  "restate": {
+    "status": "ok",
+    "paused": 0,
+    "backingOff": 0,
+    "failed": 0,
+    "inbox": 0,
+    "checkedAt": "2026-09-30T21:41:11.726Z"
+  },
+  "staticMounts": [
+    {
+      "container": "/hawa-production-nginx-1",
+      "destination": "/etc/nginx/hawa-office-proof.conf",
+      "source": "/Users/hawzhin/.hawa/runtime/infra/docker/.office-proxy-header.conf",
+      "readOnly": true
+    },
+    {
+      "container": "/hawa-production-nginx-1",
+      "destination": "/etc/nginx/nginx.conf",
+      "source": "/Users/hawzhin/.hawa/runtime/infra/docker/nginx.conf",
+      "readOnly": true
+    },
+    {
+      "container": "/hawa-production-postgres-1",
+      "destination": "/docker-entrypoint-initdb.d/00-init-roles.sql",
+      "source": "/Users/hawzhin/.hawa/runtime/infra/docker/00-init-roles.sql",
+      "readOnly": true
+    },
+    {
+      "container": "/hawa-production-postgres-1",
+      "destination": "/docker-entrypoint-initdb.d/01-schema.sql",
+      "source": "/Users/hawzhin/.hawa/runtime/db/schema.sql",
+      "readOnly": true
+    },
+    {
+      "container": "/hawa-production-postgres-1",
+      "destination": "/docker-entrypoint-initdb.d/02-rls.sql",
+      "source": "/Users/hawzhin/.hawa/runtime/db/rls.sql",
+      "readOnly": true
+    },
+    {
+      "container": "/hawa-production-postgres-1",
+      "destination": "/docker-entrypoint-initdb.d/03-grants.sql",
+      "source": "/Users/hawzhin/.hawa/runtime/db/03-grants.sql",
+      "readOnly": true
+    },
+    {
+      "container": "/hawa-production-postgres-1",
+      "destination": "/docker-entrypoint-initdb.d/04-seed.sql",
+      "source": "/Users/hawzhin/.hawa/runtime/db/seed.sql",
+      "readOnly": true
+    },
+    {
+      "container": "/hawa-production-vector-1",
+      "destination": "/etc/vector/vector.yaml",
+      "source": "/Users/hawzhin/.hawa/runtime/infra/docker/vector.yaml",
+      "readOnly": true
+    }
+  ],
+  "releaseBound": [],
+  "runtimeFilesMatchCurrent": true,
+  "runtimeProofMatchesShared": true,
+  "runtimeDirectoryReal": true,
+  "unsafeReleases": [
+    {
+      "prefix": "051d5606",
+      "absent": true
+    },
+    {
+      "prefix": "1737c8f2",
+      "absent": true
+    },
+    {
+      "prefix": "353c9e0c",
+      "absent": true
+    },
+    {
+      "prefix": "6af16cb8",
+      "absent": true
+    }
+  ],
+  "imageReceiptMatches": true,
+  "migration": {
+    "declaredTarget": "073_restricted_worker_database",
+    "observedApplied": {
+      "name": "073_restricted_worker_database.sql",
+      "sha256": "93edd3192da208139ee78a655325ebcf571c7368e64bbe4a4c4c0254c4972abc"
+    }
+  },
+  "receiptStatus": "image_runtime_migration_verified",
+  "fullReleaseGate": {
+    "release": "4e5004519e65ac2350b4c92a8ba35f966d5a5ed4",
+    "source": "live release RELEASE_GATE_EVIDENCE.json",
+    "passed": 6210,
+    "failed": 0,
+    "independentlyRepeated": false,
+    "note": "6210 pass / 0 fail is the declared live-release gate result; expected-fail/skip counts were not independently read for this release."
+  },
+  "integrationControls": {
+    "files": 3,
+    "passed": 62,
+    "failed": 0,
+    "logSha256": "c53b5dec0efdf41ab43f54403f750a525987e2295c12d4b58c6534faf7e18ba8"
+  },
+  "outbox": [
+    {
+      "state": "delivered",
+      "count": 1614
+    },
+    {
+      "state": "dead",
+      "count": 18
+    }
+  ],
+  "limitations": [
+    "3 known natural-language defects remain expected failures",
+    "67 tests skipped in release suite",
+    "18 historic legacy dead outbox rows retained",
+    "Full design quality and native/human admission remain open"
+  ],
+  "qualified": true
+}
