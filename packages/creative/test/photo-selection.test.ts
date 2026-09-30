@@ -45,14 +45,21 @@ describe('photo selection from the requester\'s words (ADR-157, audit #17)', () 
     for (const text of [
       '',
       'a report cover with these photos',
-      'use all the photos',
       'use the best colours from our brand',
       "don't use all caps",
       'pick a date in October',
-      'هەموو وێنەکان دابنێ',
     ]) {
       expect(photoSelectionFromInstructions(text, 6), text).toEqual({ mode: 'all', minimum: 6 });
     }
+  });
+
+  it('records when the requester insists on every photo (ADR-170), which binds an art-direction recipe', () => {
+    for (const text of ['use all the photos', 'please include every picture', 'all 6 photos must be on it', 'هەموو وێنەکان دابنێ']) {
+      expect(photoSelectionFromInstructions(text, 6), text).toEqual({ mode: 'all', minimum: 6, insisted: true });
+    }
+    // A choice phrase wins: "you don't have to use all the photos" is the owner's K-12 request.
+    expect(photoSelectionFromInstructions("you don't have to use all the photos, choose the best ones", 6)).toMatchObject({ mode: 'choose' });
+    expect(photoSelectionOrUndefined({ mode: 'all', minimum: 6, insisted: true }, 6)).toEqual({ mode: 'all', minimum: 6, insisted: true });
   });
 
   it('has nothing to choose with fewer than two photos, and a count of all of them is all', () => {

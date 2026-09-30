@@ -47,6 +47,7 @@ export * from './studio/refinement-engine-v3.js';
 export * from './studio/pairwise-judge-v3.js';
 export * from './studio/brief-bound-judge.js';
 export * from './studio/pipeline-v3.js';
+export * from './studio/art-direction/index.js';
 export * from './studio/style-spec.js';
 export * from './studio/studio-normalize.js';
 export * from './studio/hard-qa.js';

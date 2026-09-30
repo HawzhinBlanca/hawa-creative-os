@@ -1,5 +1,7 @@
 import type { StudioLayoutV2, Box, TextElement, ShapeElement } from './layout-v2.js';
-import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
+import { hexToLuminance, calculateLuminanceContrastRatio, declaredBackgroundColour } from './composite-contrast.js';
+import { photoRecipeOf } from './layout-v2.js';
+import { carrierOf } from './art-direction/surfaces.js';
 import { NEGATIVE_SPACE_POLICY, negativeSpacePolicyIdentity, scoreNegativeSpace, type NegativeSpaceMeasure } from './negative-space-policy.js';
 
 export interface MetricResult {
@@ -118,20 +120,9 @@ export function computeTextLegibility(layout: StudioLayoutV2): MetricResult {
       failingIssues.push(`Text ${i} lineHeight ${el.lineHeight} out of range [1.1, 1.9]`);
     }
 
-    // Contrast check
-    // Determine effective background (underlying shape panel or canvas background)
-    let effectiveBg = bgColor;
-    for (let sIdx = (layout.shapes || []).length - 1; sIdx >= 0; sIdx--) {
-      const s = layout.shapes[sIdx];
-      if (s.role === 'panel' || s.kind === 'rect' || s.kind === 'roundRect') {
-        const containsX = el.x >= s.x - 20 && (el.x + el.width) <= (s.x + s.width + 20);
-        const containsY = el.y >= s.y - 20 && (el.y + el.height) <= (s.y + s.height + 20);
-        if (containsX && containsY && s.color && s.color.startsWith('#')) {
-          effectiveBg = s.color;
-          break;
-        }
-      }
-    }
+    // Contrast check against the surface the layout declares behind the block: the same model the
+    // hard gate uses (declaredBackgroundColour), which also reads a recipe's plates, cards and fades.
+    const effectiveBg = declaredBackgroundColour(layout, el) || bgColor;
 
     const effectiveBgLum = hexToLuminance(effectiveBg);
     const textLum = hexToLuminance(el.color);
@@ -548,6 +539,7 @@ export function computeNegativeSpace(
   layout: StudioLayoutV2,
   wrappedLines?: Record<number, number>
 ): MetricResult {
+  if (photoRecipeOf(layout)) return computeRecipeQuietRegion(layout, wrappedLines);
   const totalArea = layout.width * layout.height;
   let occupiedArea = 0;
 
@@ -656,6 +648,42 @@ export function computeNegativeSpace(
       policyId: policy.id,
       policyVersion: policy.version,
       policySha256: policy.sha256,
+    },
+  };
+}
+
+/**
+ * ADR-170: the negative-space check of an art-directed recipe. A full-bleed hero fills the canvas by
+ * design, so counting it as occupied area failed every design that uses a photo the way the office
+ * does. What a recipe needs instead is a quiet region for the title: the title inside the region the
+ * solver reserved (the fade, plate, card or sky), carried by a surface wherever it lies over a photo,
+ * and the copy not crowding the canvas (inked type under 35% of it).
+ */
+export function computeRecipeQuietRegion(layout: StudioLayoutV2, wrappedLines?: Record<number, number>): MetricResult {
+  const zone = layout.artDirection!.titleZone;
+  const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  const inside = (o: Box, i: Box) => i.x >= o.x - 2 && i.y >= o.y - 2 && i.x + i.width <= o.x + o.width + 2 && i.y + i.height <= o.y + o.height + 2;
+  const title = (layout.text || []).find((t) => t.role === 'title');
+  const inZone = title ? inside(zone, title) : false;
+  const bare = (layout.text || []).filter((t) => (layout.photos || []).some((p) => hit(p, t)) && !carrierOf(layout, t));
+  let inked = 0;
+  for (const t of layout.text || []) {
+    const lines = wrappedLines?.[t.copyIndex];
+    inked += t.width * (lines && lines > 0 ? Math.min(t.height, lines * t.fontSize * t.lineHeight) : t.height);
+  }
+  const coverage = inked / (layout.width * layout.height);
+  const crowding = coverage <= 0.35 ? 1 : Math.max(0, 1 - (coverage - 0.35) * 3);
+  const score = (inZone ? 0.45 : 0) + (bare.length ? 0 : 0.35) + 0.2 * crowding;
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed: inZone && !bare.length && crowding >= 0.7,
+    metric: 'negativeSpace',
+    details: {
+      measure: 'recipe_quiet_region',
+      recipe: layout.artDirection!.recipe,
+      titleInQuietRegion: inZone,
+      bareTextOnPhoto: bare.map((t) => t.copyIndex),
+      inkCoverage: parseFloat(coverage.toFixed(3)),
     },
   };
 }

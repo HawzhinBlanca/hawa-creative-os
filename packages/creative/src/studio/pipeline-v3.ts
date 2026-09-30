@@ -1,5 +1,6 @@
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
+import { photoRecipeOf } from './layout-v2.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
 import { renderLayoutV2, measureWrappedLines, measureTextGeometry, balancedBoxWidths, admittedFontFace, findAdmittedFontFace, type RenderLayoutOptions } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
@@ -97,6 +98,18 @@ export interface PipelineV3CallOptions {
   judgeBrief?: BriefBoundJudgeBrief;
   /** Who the client is (its client pack's profile, ADR-127): the judge scores brand fit against it. */
   clientProfile?: string;
+  /** ADR-170: the client's house art-direction rules, which the judge weighs on photo briefs. */
+  houseRules?: string[];
+}
+
+/**
+ * ADR-170: whether a candidate is the plain baseline the judge is anchored against: a design with no
+ * art-direction recipe that shows no photo, or its photos only as plain framed boxes. The judge is
+ * told which one it is, so a safe design does not win by default against an art-directed one.
+ */
+export function isPlainBaseline(layout: StudioLayoutV2): boolean {
+  if (photoRecipeOf(layout)) return false;
+  return (layout.photos ?? []).every((p) => p.treatment !== 'cutout' && !p.mask && !p.fade && !p.filter);
 }
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -191,11 +204,23 @@ let sharedRetrievalIndex: ExemplarRetrievalIndex | null = null;
 
 /** P02: owner-confirmed exemplars selected by Unicode lexical evidence or explicit fallback. Free. */
 export function retrieveExemplarsV3(
-  query: { text: string; width: number; height: number },
+  query: {
+    text: string;
+    width: number;
+    height: number;
+    /** ADR-170: a brief with photos retrieves the office's photo designs of its eligible recipes. */
+    photoCount?: number;
+    subjects?: readonly string[];
+    eligibleRecipes?: readonly string[];
+  },
   index?: ExemplarRetrievalIndex
 ): ExemplarRetrievalMatch[] {
   const retrieval = (index || (sharedRetrievalIndex ??= new ExemplarRetrievalIndex())).retrieveTopExemplars(
-    { text: query.text, format: formatKeyV3(query.width, query.height) },
+    {
+      text: query.text,
+      format: formatKeyV3(query.width, query.height),
+      ...(query.photoCount ? { photoCount: query.photoCount, subjects: query.subjects ?? [], ...(query.eligibleRecipes ? { eligibleRecipes: query.eligibleRecipes } : {}) } : {}),
+    },
     3
   );
   return retrieval.retrievedExemplars;
@@ -778,6 +803,15 @@ export function prepareGeneratedLayoutV3(
     style?: StyleSpec;
   }
 ): StudioLayoutV2 {
+  // ADR-170: a recipe layout is solved whole, with measured type, the logo at its real aspect and
+  // every house rule the validator checks already met. The passes below move boxes the model drew;
+  // on a solved composition they would re-seat its photos, re-centre its text off the fade and add
+  // ornament to a photograph. Only the fonts and the brand palette are re-applied, as they are to
+  // every layout, and the requested background is ignored: a recipe's ground is its photo.
+  if (photoRecipeOf(layout)) {
+    const fonted = sanitizeFontsV3(layout, copy);
+    return canvas.palette?.length ? conformColoursOnly(fonted, canvas.palette) : fonted;
+  }
   // A background the client named is theirs, not the generator's choice: on the cheap tier two of
   // three candidates for "dark blue navy as a background" came back cream and white, and one won
   // (task 3c3a422b, 2026-09-18). Set first, so preparation recolours any text it leaves unreadable.
@@ -821,6 +855,22 @@ export function prepareGeneratedLayoutV3(
   return finish(addBrandOrnament(plain, copy, { ...canvas.ornament, dividers: false }, canvas.palette || []));
 }
 
+/** The brand palette applied to every colour of a layout, and nothing else (a solved recipe). */
+function conformColoursOnly(layout: StudioLayoutV2, palette: string[]): StudioLayoutV2 {
+  layout.background.color = nearestPaletteColour(layout.background.color, palette);
+  for (const s of layout.shapes || []) {
+    s.color = nearestPaletteColour(s.color, palette);
+    if (s.strokeColor) s.strokeColor = nearestPaletteColour(s.strokeColor, palette);
+    if (s.shadow) s.shadow.color = nearestPaletteColour(s.shadow.color, palette);
+  }
+  for (const o of layout.overlays || []) o.color = nearestPaletteColour(o.color, palette);
+  for (const t of layout.text) {
+    t.color = nearestPaletteColour(t.color, palette);
+    if (t.accentColor) t.accentColor = nearestPaletteColour(t.accentColor, palette);
+  }
+  return layout;
+}
+
 /**
  * Re-seats the client's photographs when the passes above left text or the logo on one.
  *
@@ -839,7 +889,9 @@ export function prepareGeneratedLayoutV3(
  */
 export function settlePhotos(layout: StudioLayoutV2): StudioLayoutV2 {
   const photos = layout.photos || [];
-  if (!photos.length) return layout;
+  // ADR-170: a recipe's hero bleeds under its fade and its texture is blended into it on purpose;
+  // re-seating them into a row is the grid the recipe replaces.
+  if (!photos.length || photoRecipeOf(layout)) return layout;
   const W = layout.width;
   const H = layout.height;
   const m = Math.max(0, layout.grid?.margin ?? 0);
@@ -1233,6 +1285,8 @@ export function fitPhotoBoxesToImages(
   copy: PipelineV3Copy,
   faces: Array<{ x: number; y: number; faceShare?: number } | null | undefined> = []
 ): StudioLayoutV2 {
+  // ADR-170: a recipe's photo boxes are the composition, not a row to re-divide.
+  if (photoRecipeOf(layout)) return layout;
   const W = layout.width;
   const H = layout.height;
   const known = (i: number) => {
@@ -1546,7 +1600,8 @@ export interface RefinementOutcomeV3 {
     | 'adopted_now_passes'
     | 'adopted_higher_score'
     | 'rejected_unusable'
-    | 'rejected_no_improvement';
+    | 'rejected_no_improvement'
+    | 'recipe_not_refined';
   result: RefinementCandidateResult;
 }
 
@@ -1585,6 +1640,24 @@ export async function refineCandidateV3(
   copy: PipelineV3Copy,
   options: RefineV3Options = {}
 ): Promise<RefinementOutcomeV3> {
+  // ADR-170: a recipe layout is not handed to the model to redraw. Its geometry is the solver's, and
+  // a model rewrite of coordinates is how a composition turns back into boxes; a recipe that fails
+  // QA is simply not eligible, and nothing is spent on it.
+  if (photoRecipeOf(candidate.layout)) {
+    return {
+      layout: candidate.layout,
+      metrics: candidate.metrics,
+      ...(candidate.hardQa ? { hardQa: candidate.hardQa } : {}),
+      adopted: false,
+      reason: 'recipe_not_refined',
+      result: {
+        candidateId: candidate.sourceIndex, initialLayout: candidate.layout, finalLayout: candidate.layout,
+        initialScore: candidate.metrics.compositeScore, finalScore: candidate.metrics.compositeScore, scoreDelta: 0,
+        roundsRun: 0, gateDecision: 'skip', stopReason: 'recipe layout: solved deterministically, not refined', rounds: [],
+        passed: candidate.metrics.passed,
+      },
+    };
+  }
   const failsQa = candidate.hardQa ? !candidate.hardQa.passed : false;
   const result = await refineCandidate(candidate.sourceIndex, candidate.layout, {
     reference: options.reference,
@@ -1718,6 +1791,7 @@ export async function selectWinnerV3(
     // ADR-157: the incumbent judge reads the request too. No call is added; the same four calls
     // carry the instructions and the exact copy.
     ...(options.judgeBrief ? { brief: { instructions: options.judgeBrief.instructions, copy: options.judgeBrief.copy } } : {}),
+    ...(options.houseRules?.length ? { houseRules: options.houseRules } : {}),
   };
   const renderOptionsFor = (candidate: RankedCandidateV3): RenderLayoutOptions => ({
     ...options.renderOptions, ...options.renderOptionsForCandidate?.(candidate), copyText: copy.text,
@@ -1727,6 +1801,7 @@ export async function selectWinnerV3(
     layout: c.layout,
     deterministicMetrics: c.metrics,
     renderedPng: c.renderedPng || renderLayoutV2(c.layout, renderOptionsFor(c)).png,
+    ...(isPlainBaseline(c.layout) ? { baseline: true } : {}),
   });
 
   const [first, second] = ranked;

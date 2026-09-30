@@ -40,6 +40,84 @@ export interface ShapeElement extends Box {
   strokeWidth?: number;
   strokeColor?: Hex;
   role: 'rule' | 'panel' | 'accent' | 'frame';
+  /**
+   * ADR-170: `overlay` shapes are drawn above the photos and their fades, below the logo and text: a
+   * plate, card, tab or pill a title sits on, or a gold frame over a full-bleed photo. Absent is the
+   * layer every shape had before, under the photos (a panel drawn over a photo used to hide it).
+   */
+  layer?: 'overlay';
+  /** ADR-170: `none` draws only the stroke, as a frame or an inset line around a photo. */
+  fill?: 'none';
+  /** ADR-170: what an overlay panel is, for the recipe checks and the Canva object name. */
+  surface?: ShapeSurface;
+  /** ADR-170: a soft drop shadow under a plate or card. */
+  shadow?: ShapeShadow;
+}
+
+export const SHAPE_SURFACES = ['plate', 'card', 'tab', 'pill'] as const;
+export type ShapeSurface = (typeof SHAPE_SURFACES)[number];
+
+export interface ShapeShadow {
+  color: Hex;
+  /** 0..1 at the shadow's darkest. */
+  opacity: number;
+  /** Gaussian blur radius in layout pixels. */
+  blur: number;
+  /** How far down the shadow falls, in layout pixels. */
+  offsetY: number;
+}
+
+/**
+ * ADR-170: a colour gradient laid over the photos, below the overlay shapes and the text: the navy
+ * fade a report title sits on, a bottom scrim under a caption, the cream a photo fades into. Its
+ * opacity runs along `direction` through `stops` (each `at` a share of the box, 0..1, ascending).
+ */
+export interface OverlayElement extends Box {
+  kind: 'gradient';
+  color: Hex;
+  direction: OverlayDirection;
+  stops: Array<{ at: number; opacity: number }>;
+  /** What the overlay is for: a fade under a title, a scrim under a caption, paper a photo fades into. */
+  purpose: 'fade' | 'scrim' | 'paper';
+}
+
+export const OVERLAY_DIRECTIONS = ['to-bottom', 'to-top', 'to-left', 'to-right'] as const;
+export type OverlayDirection = (typeof OVERLAY_DIRECTIONS)[number];
+
+/**
+ * ADR-170: the art-direction recipes, one closed set shared by the layout model, the solver, the
+ * validator, the judge and the exemplars. `typographic` is a design with no photograph.
+ */
+export const RECIPE_IDS = [
+  'hero_fade_report',
+  'hero_card',
+  'hero_plate',
+  'scrim_caption',
+  'sky_title',
+  'cutout_speaker',
+  'fade_to_paper',
+  'typographic',
+] as const;
+export type RecipeId = (typeof RECIPE_IDS)[number];
+
+/**
+ * ADR-170: which recipe a layout was solved from, and what it decided. A layout with a photo recipe
+ * is checked as art direction (text on a fade, plate or card over a photo; the hero bleeding off
+ * the edges; photos left out), not as a grid of framed photos.
+ */
+export interface ArtDirectionRecord {
+  recipe: RecipeId;
+  /** The model's one-line concept, for the Desk. */
+  conceptNote?: string;
+  /** The region kept quiet for the title: the fade, the plate, the card or the sky. */
+  titleZone: Box;
+  heroPhotoIndex?: number;
+  texturePhotoIndex?: number;
+  cutoutPhotoIndex?: number;
+  /** Photos the recipe left out, by photoIndex. */
+  omittedPhotos: number[];
+  /** Right-to-left form: text blocks mirrored, photos never flipped. */
+  rtl: boolean;
 }
 
 export interface TextElement extends Box {
@@ -90,6 +168,10 @@ export interface StudioLayoutV2 {
    * "a graphic with these texts and two pictures" produced a design with the texts and no pictures.
    */
   photos?: PhotoElement[];
+  /** ADR-170: gradients over the photos, below overlay shapes and text. */
+  overlays?: OverlayElement[];
+  /** ADR-170: the recipe this layout was solved from. Absent: a layout the model drew itself. */
+  artDirection?: ArtDirectionRecord;
 }
 
 /**
@@ -103,7 +185,13 @@ export type PhotoTreatment = (typeof PHOTO_TREATMENTS)[number];
 export interface PhotoElement extends Box {
   /** Index into the request's content photos. */
   photoIndex: number;
-  role: 'hero' | 'portrait' | 'inset';
+  /**
+   * `texture` (ADR-170): a second photo blended into a fade under the title, never a cell of its own;
+   * it takes a fade and an opacity, and text may sit over it on the fade.
+   */
+  role: 'hero' | 'portrait' | 'inset' | 'texture';
+  /** ADR-170: the photo drawn at this opacity (0.2..1), as a texture blended into a fade. */
+  opacity?: number;
   /** Corner radius in px; 0 is square. Round portraits use radius = width / 2. A cut-out has no corners and ignores it. */
   radius?: number;
   /** Absent is framed, as every photo was drawn before cut-outs existed. */
@@ -241,6 +329,34 @@ export const shapeElementSchema = boxSchema.extend({
   strokeWidth: z.number().nonnegative().optional(),
   strokeColor: hexSchema.optional(),
   role: z.enum(['rule', 'panel', 'accent', 'frame']),
+  layer: z.literal('overlay').optional(),
+  fill: z.literal('none').optional(),
+  surface: z.enum(SHAPE_SURFACES).optional(),
+  shadow: z.object({
+    color: hexSchema,
+    opacity: z.number().min(0).max(1),
+    blur: z.number().min(0).max(80),
+    offsetY: z.number().min(0).max(80),
+  }).strict().optional(),
+}).strict();
+
+export const overlayElementSchema = boxSchema.extend({
+  kind: z.literal('gradient'),
+  color: hexSchema,
+  direction: z.enum(OVERLAY_DIRECTIONS),
+  stops: z.array(z.object({ at: z.number().min(0).max(1), opacity: z.number().min(0).max(1) }).strict()).min(2).max(8),
+  purpose: z.enum(['fade', 'scrim', 'paper']),
+}).strict();
+
+export const artDirectionRecordSchema = z.object({
+  recipe: z.enum(RECIPE_IDS),
+  conceptNote: z.string().max(400).optional(),
+  titleZone: boxSchema,
+  heroPhotoIndex: z.number().int().nonnegative().optional(),
+  texturePhotoIndex: z.number().int().nonnegative().optional(),
+  cutoutPhotoIndex: z.number().int().nonnegative().optional(),
+  omittedPhotos: z.array(z.number().int().nonnegative()).max(12),
+  rtl: z.boolean(),
 }).strict();
 
 export const textElementSchema = boxSchema.extend({
@@ -291,7 +407,8 @@ export const photoGlowSchema = z.object({
 
 export const photoElementSchema = boxSchema.extend({
   photoIndex: z.number().int().nonnegative(),
-  role: z.enum(['hero', 'portrait', 'inset']),
+  role: z.enum(['hero', 'portrait', 'inset', 'texture']),
+  opacity: z.number().min(0.2).max(1).optional(),
   radius: z.number().nonnegative().optional(),
   treatment: photoTreatmentSchema.optional(),
   focus: photoFocusSchema.optional(),
@@ -316,4 +433,12 @@ export const studioLayoutV2Schema = z.object({
   logo: boxSchema,
   typeScale: typeScaleSchema.optional(),
   photos: z.array(photoElementSchema).max(6).optional(),
+  overlays: z.array(overlayElementSchema).max(6).optional(),
+  artDirection: artDirectionRecordSchema.optional(),
 }).strict();
+
+/** ADR-170: the recipe of a layout solved as photo art direction, or undefined (typographic or model-drawn). */
+export function photoRecipeOf(layout: Pick<StudioLayoutV2, 'artDirection'>): RecipeId | undefined {
+  const recipe = layout.artDirection?.recipe;
+  return recipe && recipe !== 'typographic' ? recipe : undefined;
+}

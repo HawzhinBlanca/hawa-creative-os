@@ -1,6 +1,7 @@
 import { PNG } from 'pngjs';
 import type { StudioLayoutV2, Box, TextElement } from './layout-v2.js';
 import { hexToRgb } from './color-science.js';
+import { carrierOf } from './art-direction/surfaces.js';
 
 export function channelToLinear(c: number): number {
   const s = c / 255;
@@ -28,9 +29,14 @@ export function calculateLuminanceContrastRatio(lum1: number, lum2: number): num
  * metric uses, so the gate and the metric agree.
  */
 export function declaredBackgroundColour(layout: StudioLayoutV2, box: Box): string {
+  // ADR-170: a plate, card or pill over the photos is on top of everything; then a fade or scrim
+  // opaque enough to carry the text; then the shapes under the photos, as before.
+  const carrier = carrierOf(layout, box);
+  if (carrier) return carrier.kind === 'shape' ? carrier.shape.color : carrier.overlay.color;
   const shapes = layout.shapes || [];
   for (let i = shapes.length - 1; i >= 0; i--) {
     const s = shapes[i];
+    if (s.fill === 'none') continue;
     if (s.role !== 'panel' && s.kind !== 'rect' && s.kind !== 'roundRect') continue;
     const containsX = box.x >= s.x - 20 && box.x + box.width <= s.x + s.width + 20;
     const containsY = box.y >= s.y - 20 && box.y + box.height <= s.y + s.height + 20;

@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as fontkit from 'fontkit';
 import { PNG } from 'pngjs';
-import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
+import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box, OverlayElement } from './layout-v2.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
 import { coverCrop, dataUriPixelSize, imagePixelSize, photoZoomFactor, type CoverCropRect } from './photo-crop.js';
 import { dataUriBytes, imageDataUri, imageFileExtension, relabelDataUri, sniffImageType } from './image-type.js';
@@ -1384,27 +1384,39 @@ export function wrapTextWithFontkit(
   return allLines;
 }
 
-function renderShapesToSvg(shapes: ShapeElement[]): string {
+/**
+ * Shapes as SVG. `indices` keeps each shape's id its index in `layout.shapes` when the shapes are
+ * drawn in two layers (ADR-170): under the photos, and over them (`layer: 'overlay'`).
+ */
+function renderShapesToSvg(shapes: ShapeElement[], indices?: number[]): { svg: string; defs: string[] } {
   const parts: string[] = [];
-  for (let i = 0; i < shapes.length; i++) {
-    const s = shapes[i];
+  const defs: string[] = [];
+  for (let k = 0; k < shapes.length; k++) {
+    const s = shapes[k];
+    const i = indices ? indices[k] : k;
     const opacityAttr = s.opacity !== undefined ? ` opacity="${s.opacity}"` : '';
     const strokeAttr = s.strokeColor ? ` stroke="${s.strokeColor}" stroke-width="${s.strokeWidth || 1}"` : '';
     const transformAttr = s.rotation
       ? ` transform="rotate(${s.rotation} ${s.x + s.width / 2} ${s.y + s.height / 2})"`
       : '';
+    const fill = s.fill === 'none' ? 'none' : s.color;
+    let filterAttr = '';
+    if (s.shadow && s.kind !== 'line') {
+      defs.push(shapeShadowFilterSvg(`shape-shadow-${i}`, s));
+      filterAttr = ` filter="url(#shape-shadow-${i})"`;
+    }
 
     if (s.kind === 'rect') {
       parts.push(
-        `<rect id="shape-${i}" x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" rx="${s.radius || 0}" fill="${s.color}"${opacityAttr}${strokeAttr}${transformAttr}/>`
+        `<rect id="shape-${i}" x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" rx="${s.radius || 0}" fill="${fill}"${opacityAttr}${strokeAttr}${transformAttr}${filterAttr}/>`
       );
     } else if (s.kind === 'roundRect') {
       parts.push(
-        `<rect id="shape-${i}" x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" rx="${s.radius || 12}" fill="${s.color}"${opacityAttr}${strokeAttr}${transformAttr}/>`
+        `<rect id="shape-${i}" x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" rx="${s.radius || 12}" fill="${fill}"${opacityAttr}${strokeAttr}${transformAttr}${filterAttr}/>`
       );
     } else if (s.kind === 'ellipse') {
       parts.push(
-        `<ellipse id="shape-${i}" cx="${s.x + s.width / 2}" cy="${s.y + s.height / 2}" rx="${s.width / 2}" ry="${s.height / 2}" fill="${s.color}"${opacityAttr}${strokeAttr}${transformAttr}/>`
+        `<ellipse id="shape-${i}" cx="${s.x + s.width / 2}" cy="${s.y + s.height / 2}" rx="${s.width / 2}" ry="${s.height / 2}" fill="${fill}"${opacityAttr}${strokeAttr}${transformAttr}${filterAttr}/>`
       );
     } else if (s.kind === 'line') {
       const g = lineGeometry(s);
@@ -1413,8 +1425,47 @@ function renderShapesToSvg(shapes: ShapeElement[]): string {
       );
     }
   }
-  return parts.join('\n  ');
+  return { svg: parts.join('\n  '), defs };
 }
+
+/**
+ * A plate's or card's soft drop shadow (ADR-170): its alpha blurred, moved down, in the shadow's
+ * colour and opacity, under the shape itself. The filter region reaches three blur radii past the
+ * shape, so nothing of the blur is cut.
+ */
+export function shapeShadowFilterSvg(id: string, s: Pick<ShapeElement, 'x' | 'y' | 'width' | 'height' | 'shadow'>): string {
+  const sh = s.shadow!;
+  const reach = Math.ceil(sh.blur * 3 + sh.offsetY);
+  return (
+    `<filter id="${id}" filterUnits="userSpaceOnUse" x="${s.x - reach}" y="${s.y - reach}" width="${s.width + 2 * reach}" height="${s.height + 2 * reach}" color-interpolation-filters="sRGB">` +
+    `<feGaussianBlur in="SourceAlpha" stdDeviation="${sh.blur / 2}" result="blur"/>` +
+    `<feOffset in="blur" dx="0" dy="${sh.offsetY}" result="moved"/>` +
+    `<feFlood flood-color="${sh.color}" flood-opacity="${sh.opacity}" result="tone"/>` +
+    `<feComposite in="tone" in2="moved" operator="in" result="shadow"/>` +
+    `<feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>` +
+    `</filter>`
+  );
+}
+
+/**
+ * An overlay gradient (ADR-170) as SVG: a rect in its colour whose opacity runs through its stops
+ * along its direction. The preview draws it here, and the Canva transfer bakes exactly this markup
+ * into a transparent PNG of its own, so the photo under it stays a native, swappable picture.
+ */
+export function overlaySvg(o: OverlayElement, id: string): { defs: string; svg: string } {
+  const [x1, y1, x2, y2] =
+    o.direction === 'to-bottom' ? [0, 0, 0, 1] : o.direction === 'to-top' ? [0, 1, 0, 0] : o.direction === 'to-right' ? [0, 0, 1, 0] : [1, 0, 0, 0];
+  const stops = [...o.stops]
+    .sort((a, b) => a.at - b.at)
+    .map((st) => `<stop offset="${st.at}" stop-color="${o.color}" stop-opacity="${st.opacity}"/>`)
+    .join('');
+  return {
+    defs: `<linearGradient id="${id}-gradient" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`,
+    svg: `<rect id="${id}" x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" fill="url(#${id}-gradient)"/>`,
+  };
+}
+
+export { overlayOpacityAt } from './art-direction/surfaces.js';
 
 /**
  * The words of `accentText` within the copy, as word indices [from, to): its first occurrence as a
@@ -1886,9 +1937,13 @@ export function renderLayoutV2ToSvg(
     }
   }
 
-  // Shapes Layer
-  if (layout.shapes.length > 0) {
-    bodyPartsNoText.push(renderShapesToSvg(layout.shapes));
+  // Shapes Layer: every shape but the overlay ones (ADR-170), which are drawn over the photos below.
+  const underIndices = layout.shapes.map((_, i) => i).filter((i) => layout.shapes[i].layer !== 'overlay');
+  const overIndices = layout.shapes.map((_, i) => i).filter((i) => layout.shapes[i].layer === 'overlay');
+  if (underIndices.length > 0) {
+    const under = renderShapesToSvg(underIndices.map((i) => layout.shapes[i]), underIndices);
+    defsParts.push(...under.defs);
+    bodyPartsNoText.push(under.svg);
   }
 
   // Photos Layer: above the art, its scrim and the shapes, below the logo and text. Panels are
@@ -1960,6 +2015,18 @@ export function renderLayoutV2ToSvg(
     }
   }
 
+  // ADR-170: the fades and scrims over the photos, then the plates, cards, tabs, pills and frames
+  // that sit over them, all under the logo and the text.
+  (layout.overlays ?? []).forEach((o, i) => {
+    const drawn = overlaySvg(o, `overlay-${i}`);
+    defsParts.push(drawn.defs);
+    bodyPartsNoText.push(drawn.svg);
+  });
+  if (overIndices.length > 0) {
+    const over = renderShapesToSvg(overIndices.map((i) => layout.shapes[i]), overIndices);
+    defsParts.push(...over.defs);
+    bodyPartsNoText.push(over.svg);
+  }
 
   // Logo Layer
   if (layout.logo) {
