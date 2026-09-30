@@ -151,7 +151,7 @@ export function registerAuthRoutes(ctx: RouteContext) {
     let resolvedDisplayName: string = 'Primary Operator';
     
     // Constant-time comparison: a wrong key costs the same whether it differs in the first or last byte.
-    const same = (candidate: string, configured: string | undefined): boolean => {
+    const same = (candidate: string, configured: string | null | undefined): boolean => {
       if (!configured) return false;
       const a = Buffer.from(candidate), b = Buffer.from(configured);
       return a.length === b.length && crypto.timingSafeEqual(a, b);

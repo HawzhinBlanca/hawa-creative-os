@@ -96,6 +96,11 @@
       "files": 5,
       "passed": 53,
       "failed": 0
+    },
+    {
+      "command": "post-service-exchange complete typecheck and Core dependency build",
+      "testRoots": 635,
+      "status": "passed"
     }
   ],
   "retainedInitialFailures": [
@@ -196,6 +201,13 @@
       "executedScenarios": 0,
       "reason": "Port56090 held by historical model comparison preview server",
       "resolution": "Existing configureStack fixture uses56091; production and preview server preserved"
+    },
+    {
+      "scope": "final service exchange container build and local typecheck",
+      "seal": "eb20b9f2",
+      "executedRecoveryScenarios": 0,
+      "reason": "Missing internal service token is null; constant-time helper type accepted only undefined",
+      "resolution": "Accept null as an absent configured credential; runtime null guard unchanged. Full635-root typecheck and Core dependency build pass."
     }
   ],
   "unexecuted": [
