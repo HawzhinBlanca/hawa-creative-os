@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T19:22:28Z",
+  "generatedAt": "2026-09-30T19:56:22Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 665,
+  "fileCount": 671,
   "files": [
     {
       "path": ".dockerignore",
@@ -879,8 +879,8 @@
     },
     {
       "path": "adrs/172_content_aware_editable_art_direction.md",
-      "sha256": "a1456ddc0117a7d69f183be97418f1bcf56e8e70dc6d550edd76988b3ad9b8f3",
-      "bytes": 6078
+      "sha256": "258688efbf8d27ebd64d8972512fd2a922cbb7a353ba7d888e2f1dfe5ff4dbd1",
+      "bytes": 7305
     },
     {
       "path": "adrs/180_owner_house_style_and_office_caption.md",
@@ -1344,8 +1344,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "c3283050bdd4487de0b18d66afeda717b3ed5c057eb73f6ac9d9ae73b9915249",
-      "bytes": 7475
+      "sha256": "7136b5b4d4b49cf847714940f944820732f98650340f66303a8fc843003bb3ec",
+      "bytes": 10034
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1356,6 +1356,21 @@
       "path": "plans/content-aware-design-2026-09-30/W2_BACKGROUND_PROOF.json",
       "sha256": "4091e3acf7b4410d9e0e431664406cdb76ac63ab7848edc8460481c79c1a45b1",
       "bytes": 6832
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W4_COMPOSITION_PROOF.json",
+      "sha256": "999e3bbbfeb50de1f43be00c25566d846ba79ac40d22675f5700328d8f1615f5",
+      "bytes": 7956
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W4_NATIVE_CONTROLS.json",
+      "sha256": "93c3188acbfd8420dba5c1b4b4a846cd9a1c0b271f3ef020c5f1f0806efc13fb",
+      "bytes": 9080
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W4_PACKING_BENCHMARK.json",
+      "sha256": "3ccb83aea7fb2d275de29548cef0d0e4bcc66147235b8ba69b33616a6ab5f6f7",
+      "bytes": 2194
     },
     {
       "path": "plans/hosting/LINUX_READINESS_PROOF.json",
@@ -2459,8 +2474,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "5016d182f54553e766547a71844240b1eb99d22a0b93ab8dfc026cdb9dd8836d",
-      "bytes": 557279
+      "sha256": "a11bdbe344ad3535f72b7afaef84840d77a8c7d9160e26d2a478e30432ab0ace",
+      "bytes": 561173
     },
     {
       "path": "plans/user-stories.csv",
@@ -3028,6 +3043,16 @@
       "bytes": 3692
     },
     {
+      "path": "scripts/proofs/content_topology_probe.mjs",
+      "sha256": "ece0291e9d4153997ceb7a178e064d98669e60d20334390cda94431f2a62c9cb",
+      "bytes": 4768
+    },
+    {
+      "path": "scripts/proofs/content_topology_verify_native.mjs",
+      "sha256": "157bb7c769a3adc2528ff1941d079c49686be3aa4281bd0439d8eb4e54280111",
+      "bytes": 4002
+    },
+    {
       "path": "scripts/proofs/gate-baseline.json",
       "sha256": "17a8eba1cb6598fde8e3305dafdf484da4050f54561b50444f7e4472d45148db",
       "bytes": 11710
@@ -3051,6 +3076,11 @@
       "path": "scripts/proofs/measure_composition_bias.mjs",
       "sha256": "0e62150ce747be208ff2ba5531420370b0fa5cc604f402ceff6e2bf89094ba87",
       "bytes": 5926
+    },
+    {
+      "path": "scripts/proofs/photo_packing_benchmark.mjs",
+      "sha256": "93fdefd2ccd84879df54cdab7e74773b7790df36fdd76969ffa55a4f2691e2fa",
+      "bytes": 1713
     },
     {
       "path": "scripts/proofs/qualification_dry_run_server.mjs",

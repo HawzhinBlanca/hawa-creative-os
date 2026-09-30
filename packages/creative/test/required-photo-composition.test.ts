@@ -78,7 +78,7 @@ describe('ADR-171 required photo composition', () => {
       heroPhotoIndex: 99, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: [], titleAccentWords: null,
       fadeShare: null, surfaceTone: 'navy', frame: 'none', align: 'start',
     }], photos, blocks, { mode: 'all', minimum: 6, insisted: true });
-    expect(choices.every(c => c.recipe === 'hero_storyboard')).toBe(true);
+    expect(new Set(choices.map(c => c.recipe))).toEqual(new Set(['hero_storyboard', 'photo_sequence', 'photo_mosaic']));
     const solved = solveConcepts(choices, { brief: '', copyBlocks: blocks, palette, photos, canvasWidth: 1080, canvasHeight: 1350, photoSelection: { mode: 'all', minimum: 6, insisted: true } });
     expect(solved.layouts).toHaveLength(3);
     expect(solved.layouts.every(l => l.photos?.length === 6)).toBe(true);

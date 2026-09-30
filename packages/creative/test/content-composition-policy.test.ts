@@ -29,7 +29,7 @@ describe('ADR-181 content-aware photo composition policy', () => {
   it('offers multi-photo composition without requiring a counted instruction, and keeps single-photo alternatives', () => {
     expect(eligibleRecipes(photos, 1)).toEqual(expect.arrayContaining(['hero_storyboard', 'scrim_caption', 'hero_card']));
     expect(eligibleRecipes([photos[0]], 1)).not.toContain('hero_storyboard');
-    expect(eligibleRecipes(photos, 3)).toEqual(['hero_storyboard']);
+    expect(eligibleRecipes(photos, 3)).toEqual(['hero_storyboard', 'photo_sequence', 'photo_mosaic']);
   });
   it('accepts a model-selected multi-photo concept rather than silently replacing it with a hero fade', () => {
     const choices = normalizeConcepts([concept], photos, copyBlocks);

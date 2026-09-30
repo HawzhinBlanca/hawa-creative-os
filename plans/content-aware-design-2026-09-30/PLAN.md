@@ -8,7 +8,7 @@ six research recommendations. ADR-172 records the amended foundation and boundar
 | W1 Subject protection | Individual face/subject regions from service through crop/solver/QA; visible unknown/invalid evidence | Malformed-input, group/edge/support crop and occlusion regressions plus saved evidence | Local engineering implemented; qualification pending |
 | W2 Background planning | Typed content-aware background decision; explicit requester/brand/reference precedence; regional legibility | Different content/allowed backgrounds, refusal and rendered/native/replay checks | Local engineering implemented; Canva/human qualification pending |
 | W3 Logo treatment | Conditional carriers; approved byte-preserving variant/placement and clear space | Transparent official asset on varied grounds; local/native identity and pixel checks | ADR-180 foundation integrated; visibility/qualification work pending |
-| W4 Composition | Several coverage-safe native topologies, narrative support order and aspect-aware geometry; meaningful3-concept diversity | One/six/ten photos, LTR/RTL/formats, exact live copy, schema/render/PPTX/native checks | First policy/native subset slice implemented; distinct topologies and qualification pending |
+| W4 Composition | Several coverage-safe native topologies, narrative support order and aspect-aware geometry; meaningful3-concept diversity | One/six/ten photos, LTR/RTL/formats, exact live copy, schema/render/PPTX/native checks | Local geometry/selection implemented; independent native geometry passes; Canva/human/archive qualification pending |
 | W5 Local optimization | Brand-constrained perceptual color decisions and bounded local geometry/type refinement; cache/replay identity | Color/contrast, grid/containment/asymmetry, determinism, cost/call/latency evidence | Pending |
 | W6 Preference calibration | Hard obligations separated from style priors; genuine labels, held-out ranking/calibration, uncertainty/operator selection | Label validity, leakage/bias/abstention regressions, actual comparative qualification | Pending |
 | Final integration | Connected suites, traceability, sealed full/recovery gates, live deployment | Actual commands/receipts, render gallery/native capture, build/model/config readback | Pending |
@@ -97,3 +97,40 @@ brief/human/native qualification remain open. No production deployment or paid c
 
 Earlier research baseline findings and ADR180's initial hero-only wording describe
 dated inspections/decisions; this explicit owner clarification supersedes that limit.
+
+## W4 topology and scoped preference checkpoint
+
+Four additional editable geometries now complement the storyboard: editorial_split,
+photo_diptych, photo_sequence and photo_mosaic. Justified rows weight source aspects,
+keep chosen narrative order and reject unreadable/protected-subject crops. Enumerate
+at most130 contiguous partitions for ten photos/four rows. Header/type fitting and
+photo geometry are solved jointly; RTL changes reading placement without flipping
+pixels. Equal per-source crop loss keeps supporting images in the objective; this
+is a geometry criterion, not a calibrated taste score.
+
+Three distinct recipes are normalized when capacity allows. Six-source Core integration
+actually renders and passes independent hard QA on storyboard/sequence/mosaic, with
+identical live copy and ordered source IDs. Shared capacity/catalogue is used by model,
+normalizer, solver and exemplar retrieval. Fifty initial topology checks pass after
+repairing wide RTL/header and ten-source geometry failures; expanded66 checks cover
+all four formats, LTR/RTL and feasible full coverage or explicit refusal. Connected
+11-file/141-test source run passes; final Core/topology follow-up54 tests passes;
+the expanded66 replaces the earlier50 (157 distinct verified tests, not additive
+141+54+66). Full release/recovery and professional comparison remain open.
+
+Subject tags alone no longer impose a report-fade style prior. A style tie-break needs
+current-client loaded subject-relevant references and a policy identity; mismatched,
+unloaded, unrelated or missing evidence abstains. Measured sharpness remains separate.
+This is the initial scoped preference boundary, not approval-based learned taste.
+
+Five independent native controls compare6,475,710 pixels, including4,228,430 source
+photo pixels, within3/channel outside documented text/logo/boundary masks. Source
+image/logo hashes and live copy remain intact. Independent typography FAILED:
+Verdana was replaced with FrankRuhlHofshi-Bold/LinuxLibertineG. Real Canva import,
+edit/reopen/export, group-photo archive and human taste qualification remain open.
+
+Nine bounded packing microbenchmarks,900 iterations total, are deterministic; worst
+measured p95=2.821459ms under Node22.23.1. This is pure local packing, not a whole
+pipeline SLA. No provider call or deployment. Additional explicit-count cardinality
+and mixed all/count wording adversarial qualification remains before final admission.
+See W4_COMPOSITION_PROOF.json, W4_NATIVE_CONTROLS.json and W4_PACKING_BENCHMARK.json.

@@ -96,6 +96,10 @@ export type OverlayDirection = (typeof OVERLAY_DIRECTIONS)[number];
 export const RECIPE_IDS = [
   'hero_fade_report',
   'hero_storyboard',
+  'editorial_split',
+  'photo_diptych',
+  'photo_sequence',
+  'photo_mosaic',
   'hero_card',
   'hero_plate',
   'scrim_caption',

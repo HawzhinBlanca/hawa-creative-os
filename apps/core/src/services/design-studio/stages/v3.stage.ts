@@ -391,6 +391,11 @@ export async function runJudgeStageV3(
     ...(ctx.artDirectionRules?.length ? { houseRules: ctx.artDirectionRules } : {}),
     // ADR-170: the brief's subject, for the house prior when the judge leaves two recipes undecided.
     ...(judge.subjects?.length ? { subjects: judge.subjects } : {}),
+    ...(ctx.exemplarRetrieval && ctx.exemplarPolicySha256 && typeof ctx.referencePack.clientId === 'string' ? { recipePreferences: {
+      clientId: ctx.clientId, referenceClientId: ctx.referencePack.clientId,
+      policySha256: ctx.exemplarPolicySha256, loadedIds: ctx.exemplarRetrieval.loadedIds,
+      matches: ctx.exemplarRetrieval.matches,
+    } } : {}),
   });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;

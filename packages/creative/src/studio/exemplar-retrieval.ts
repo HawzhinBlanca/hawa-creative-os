@@ -8,9 +8,8 @@ export const EXEMPLAR_RETRIEVAL_VERSION = 'unicode-bm25-v1';
 export const PHOTO_EXEMPLAR_RETRIEVAL_VERSION = 'photo-recipe-subject-v1';
 
 /** The shared photo recipe ids (ADR-170 v1). `typographic` is a brief with no photo. */
-export const PHOTO_RECIPE_IDS = [
-  'hero_fade_report', 'hero_card', 'hero_plate', 'scrim_caption', 'sky_title', 'cutout_speaker', 'fade_to_paper',
-] as const;
+export { PHOTO_RECIPE_IDS } from './art-direction/recipes.js';
+import { PHOTO_RECIPE_IDS } from './art-direction/recipes.js';
 export type PhotoRecipeId = typeof PHOTO_RECIPE_IDS[number];
 export type ExemplarRecipeId = PhotoRecipeId | 'typographic';
 const isPhotoRecipe = (v: unknown): v is PhotoRecipeId => (PHOTO_RECIPE_IDS as readonly unknown[]).includes(v);

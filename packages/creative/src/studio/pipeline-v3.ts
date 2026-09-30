@@ -2,7 +2,7 @@ import { applyContentBackground } from './background-planning.js';
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { photoRecipeOf, HERO_SOFT_UPSCALE } from './layout-v2.js';
-import { artDirectionPrior } from './art-direction/prior.js';
+import { type RecipePreferenceContext, artDirectionPrior } from './art-direction/prior.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
 import { renderLayoutV2, measureWrappedLines, measureTextGeometry, balancedBoxWidths, admittedFontFace, findAdmittedFontFace, type RenderLayoutOptions } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
@@ -104,6 +104,8 @@ export interface PipelineV3CallOptions {
   houseRules?: string[];
   /** ADR-170: the brief's subject tags, for the art-direction prior when the judge does not decide. */
   subjects?: string[];
+  /** Scope-checked loaded reference evidence; absent grants no style tie-break. */
+  recipePreferences?: RecipePreferenceContext;
 }
 
 /**
@@ -1746,7 +1748,7 @@ export interface WinnerSelectionV3 {
    * ADR-170: when the judge left two art-directed candidates undecided (a tie across the two orders,
    * or a pick that failed its canary), the house prior chose instead of the composite, and why.
    */
-  prior?: { basis: 'subject' | 'sharpness'; reason: string; instead: 'composite_after_tie' | 'composite_judge_unreliable' };
+  prior?: { basis: 'client_reference' | 'sharpness'; reason: string; instead: 'composite_after_tie' | 'composite_judge_unreliable' };
   /** The incumbent's match. Null when the challenger judged or no judge ran. */
   match: PairwiseMatchResult | null;
   /** The incumbent's canary run on `subject` — its pick, or the higher composite after a tie. */
@@ -1857,9 +1859,9 @@ export async function selectWinnerV3(
   // would have to query goes second. Otherwise the higher composite stands, as before.
   const [lead, next] = fewerFindingsFirst(first, second);
   // ADR-170: two art-directed candidates the judge did not separate go by the house prior (the
-  // subject's recipe, then the sharper hero), not by a composite built for typographic layouts.
+  // loaded subject-relevant client reference, then measured sharpness), not by a composite built for typographic layouts.
   if (!judgePick || !canaryPassed) {
-    const decision = artDirectionPrior(first.layout, second.layout, options.subjects);
+    const decision = artDirectionPrior(first.layout, second.layout, options.subjects, options.recipePreferences);
     if (decision.winner) {
       const winner = decision.winner === 'a' ? first : second;
       return { winner, runnerUp: winner === first ? second : first, decidedBy: 'art_direction_prior', match, canary,

@@ -258,6 +258,23 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     const flexibleRanked = rankStudioCandidatesV3(flexibleCtx, flexibleRendered);
     expect(flexibleRanked[0].hardQa?.passed, flexibleRanked[0].hardQa?.messages.join(' | ')).toBe(true);
 
+    // Three genuinely distinct native coverage geometries share the same exact source set.
+    modelAnswer = { concepts: ['hero_storyboard', 'photo_sequence', 'photo_mosaic'].map(recipe => ({
+      ...MODEL_ANSWER.concepts[0], recipe, heroPhotoIndex: 0, texturePhotoIndex: null,
+      supportingPhotoIndices: [5, 2, 1, 4, 3], surfaceTone: 'cream', frame: 'none',
+      conceptNote: `Coverage-safe ${recipe}` })) };
+    const allCtx = { ...flexibleCtx, width: 1920, height: 1080, instructions: 'Use all six photos with the exact supplied copy.',
+      photoSelection: photoSelectionFromInstructions('Use all six photos.', 6) };
+    const allCandidates = await runLayoutsStage(allCtx, brief, [], [0, 1, 2].map(ordinal => ({ id: randomUUID(), ordinal })));
+    expect(requests).toHaveLength(4);
+    expect(new Set(allCandidates.map(c => c.currentLayout.artDirection?.recipe))).toEqual(new Set(['hero_storyboard', 'photo_sequence', 'photo_mosaic']));
+    const allRendered = await runRenderStage(allCtx, allCandidates);
+    for (const candidate of rankStudioCandidatesV3(allCtx, allRendered)) {
+      expect(candidate.hardQa?.passed, candidate.hardQa?.messages.join(' | ')).toBe(true);
+      expect(candidate.layout.photos?.map(p => p.photoIndex)).toEqual([0, 5, 2, 1, 4, 3]);
+      expect(candidate.layout.artDirection?.omittedPhotos).toEqual([]);
+    }
+
     if (out) {
       writeFileSync(join(out, 'e2e_hero_fade_report.layout.json'), JSON.stringify(layout, null, 2));
       writeFileSync(join(out, 'e2e_hero_fade_report.pptx'), deck.bytes);

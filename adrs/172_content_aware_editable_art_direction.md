@@ -98,3 +98,21 @@ but remove its universal hero-only limit. Multiple meaningful images can be sele
 without a count; an absent count does not force a collage. ADR181 records the amended
 composition contract and the distinction between this engineering slice and full
 W4–W6/human qualification.
+
+## W4 topology extension and scoped tie-breaks
+
+Add three native geometric alternatives: editorial_split (copy/image columns or stacked
+portrait), photo_diptych (paired images for comparison), and photo_sequence (ordered,
+source-aspect-weighted justified rows). Share bounded source selection/coverage across
+multi-photo recipes. Enumerate a bounded contiguous row partition set for up to ten
+photos; reject unreadable cells and infeasible protected-subject crops before ranking
+local geometry. Preserve source order within the selected narrative; RTL changes reading
+placement, never photo pixel orientation. With at least three eligible alternatives,
+normalize three distinct recipe proposals and retain visible replacement evidence.
+
+Subject tags alone may no longer activate a universal office recipe preference.
+A deterministic style tie-break requires current-client, policy-identified reference
+recipes with actual loaded-source evidence; absent/mismatched evidence abstains from
+style preference. Sharpness evidence remains separate. This is the initial hard/soft
+preference boundary, not learned taste or comparative admission. No new model call,
+provider, generated image or dependency is needed for this extension.

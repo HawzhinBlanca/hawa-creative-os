@@ -17,6 +17,7 @@ import { calculateLuminanceContrastRatio, hexToLuminance } from '../composite-co
 import { hexToRgb } from '../color-science.js';
 import { maxStrokeWidth } from '../studio-normalize.js';
 import { coverCrop } from '../photo-crop.js';
+import { packPhotoSequence } from './photo-packing.js';
 import { rankPhotosForHero, type QuietArea } from './recipes.js';
 import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
 import { protectedCropFocus, protectedRegionsOnCanvas, type SourceRegion, type RegionStatus } from '../protected-regions.js';
@@ -319,6 +320,10 @@ export function solveRecipe(input: SolveRecipeInput): StudioLayoutV2 {
   switch (recipe) {
     case 'hero_fade_report': return ctx.heroFadeReport();
     case 'hero_storyboard': return ctx.heroStoryboard();
+    case 'editorial_split': return ctx.editorialSplit();
+    case 'photo_diptych': return ctx.editorialPhotos(true);
+    case 'photo_sequence': return ctx.editorialPhotos(false);
+    case 'photo_mosaic': return ctx.editorialMosaic();
     case 'hero_card': return ctx.heroCard();
     case 'hero_plate': return ctx.heroPlate();
     case 'scrim_caption': return ctx.scrimCaption();
@@ -875,30 +880,98 @@ class SolveContext {
   // ===============================================================================================
   // Recipes
 
-  /**
-   * Reference example 3. The hero fills the canvas from the top and runs off three edges; a navy fade
-   * rises over its lower part; a second photo, if chosen, is blended into the fade; the title (a
-   * white line and a gold line), the body and the call to action sit on the fade, anchored to the
-   * bottom margin. On a wide canvas the fade and the text take the start side instead.
-   */
-  heroStoryboard(): StudioLayoutV2 {
+  /** Ordered validated source roles, completing only explicit coverage obligations. */
+  selectedPhotos(minimumForRecipe: number, maximum: number): SolverPhoto[] {
     const hero = this.hero();
-    const minimum = Math.max(2, recipePhotoMinimum(this.input.photoSelection, this.input.photos.length));
+    const minimum = Math.max(minimumForRecipe, recipePhotoMinimum(this.input.photoSelection, this.input.photos.length));
     const available = new Map(this.input.photos.filter(p => p.photoIndex !== hero.photoIndex).map(p => [p.photoIndex, p]));
     const requested = this.input.choice.supportingPhotoIndices;
-    if (requested && (requested.length > 9 || requested.some(i => !Number.isInteger(i) || !available.has(i))))
+    if (requested && (requested.length > maximum - 1 || requested.some(i => !Number.isInteger(i) || !available.has(i))))
       throw new RecipeInfeasibleError(this.recipe, 'invalid supporting photo indices');
     const ranked = rankPhotosForHero(this.input.photos).filter(p => p.photoIndex !== hero.photoIndex).map(p => p.photoIndex);
-    const order = [...new Set(requested ?? ranked.slice(0, 1))];
-    // Only explicit all/count obligations cause automatic completion. No half/all upload default.
+    const order = [...new Set(requested ?? ranked.slice(0, Math.max(0, minimumForRecipe - 1)))];
     for (const index of ranked) {
       if (order.length >= minimum - 1) break;
       if (!order.includes(index)) order.push(index);
     }
-    const supporting = order.map(i => available.get(i)!);
-    const count = supporting.length + 1;
-    if (!supporting.length || count > 10 || count < minimum)
-      throw new RecipeInfeasibleError(this.recipe, 'storyboard needs 2 to 10 photos and must satisfy explicit coverage');
+    const result = [hero, ...order.map(i => available.get(i)!)];
+    if (result.length < minimum || result.length > maximum)
+      throw new RecipeInfeasibleError(this.recipe, `requires ${minimum} photos within capacity ${maximum}`);
+    return result;
+  }
+
+  editorialColours(): { background: Hex; colours: Palette } {
+    const tone = this.input.choice.params.surfaceTone ?? 'cream';
+    return { background: this.tones[tone === 'cream' ? 'cream' : 'navy'], colours: surfacePalette(this.tones, tone) };
+  }
+
+  /** Copy/photo split: side by side for square/wide, editorial header above photo for portrait. */
+  editorialSplit(): StudioLayoutV2 {
+    const [hero] = this.selectedPhotos(1, 1);
+    if (this.W / this.H < .9) return this.editorialPhotos(false, [hero]);
+    return this.editorialMosaic([hero]);
+  }
+
+  /** Copy column opposite a justified source-aspect image field; no image under text or logo. */
+  editorialMosaic(selected = this.selectedPhotos(2, 10)): StudioLayoutV2 {
+    const { background, colours } = this.editorialColours();
+    const photoW = Math.round(.56 * this.W), gap = Math.round(.045 * this.s);
+    const photoX = this.rtl ? 0 : this.W - photoW;
+    const copyX = this.rtl ? photoW + gap : this.safe.x;
+    const copyW = Math.floor(this.W - photoW - gap - this.safe.x);
+    const logo = { ...this.logoAt('top-start'), x: this.rtl ? copyX + copyW - this.logoSize().width : copyX };
+    const top = this.logoClear(logo).y + this.logoClear(logo).height + Math.round(.025 * this.s);
+    const availableH = this.safe.y + this.safe.height - top;
+    const align = this.align();
+    const [set] = this.fitScale([{ blocks: this.blocks, width: copyW, colours, align }], ([g]) => this.stackHeight(g) <= availableH, 3);
+    const h = this.stackHeight(set), textTop = Math.round(top + Math.max(0, (availableH - h) * .35));
+    const area = { x: photoX, y: 0, width: photoW, height: this.H };
+    const boxes = selected.length === 1 ? [{ photoIndex: selected[0].photoIndex, ...area }]
+      : packPhotoSequence(selected, area, Math.round(.014 * this.s), this.s, this.rtl);
+    if (!boxes) throw new RecipeInfeasibleError(this.recipe, 'no readable subject-safe editorial photo field');
+    boxes.forEach((b, i) => this.placeHero(selected[i], b, i === 0 ? 'hero' : 'inset'));
+    const text = this.placeStack(set, copyX, copyW, textTop, align, colours);
+    return this.finish({ background, text, logo, titleZone: { x: copyX, y: textTop, width: copyW, height: h }, hero: selected[0] });
+  }
+
+  /** Header above paired/ordered images; source aspects determine unequal widths and row splits. */
+  editorialPhotos(pair: boolean, selected = this.selectedPhotos(2, pair ? 2 : 10)): StudioLayoutV2 {
+    const { background, colours } = this.editorialColours();
+    const logo = this.logoAt('top-start'), align = this.align();
+    const clear = this.logoClear(logo), gap = Math.round(.014 * this.s);
+    const copyX = this.wide && !this.rtl ? Math.ceil(clear.x + clear.width + .025 * this.s) : this.safe.x;
+    const copyRight = this.wide && this.rtl ? Math.floor(clear.x - .025 * this.s) : this.safe.x + this.safe.width;
+    const copyW = copyRight - copyX;
+    const top = this.wide ? this.safe.y : clear.y + clear.height + Math.round(.025 * this.s);
+    const bottom = this.safe.y + this.safe.height;
+    const areaFor = (set: SetBlock[]) => {
+      const imageTop = Math.ceil(Math.max(top + this.stackHeight(set), clear.y + clear.height) + .04 * this.s);
+      return { x: this.safe.x, y: imageTop, width: this.safe.width, height: bottom - imageTop };
+    };
+    const boxesFor = (area: Box): Array<Box & { photoIndex: number }> | null => {
+      let boxes: Array<Box & { photoIndex: number }> | null;
+      if (selected.length === 1) boxes = [{ photoIndex: selected[0].photoIndex, x: 0, y: area.y, width: this.W, height: this.H - area.y }];
+      else if (pair) {
+        const usableW = area.width - gap, aspects = selected.map(p => p.width / p.height);
+        const firstW = Math.round(usableW * aspects[0] / (aspects[0] + aspects[1]));
+        boxes = selected.map((p, i) => ({ photoIndex: p.photoIndex,
+          x: this.rtl ? (i === 0 ? area.x + area.width - firstW : area.x) : (i === 0 ? area.x : area.x + firstW + gap),
+          y: area.y, width: i === 0 ? firstW : usableW - firstW, height: area.height }));
+      } else boxes = packPhotoSequence(selected, area, gap, this.s, this.rtl);
+      if (!boxes || boxes.some((b, i) => Math.min(b.width, b.height) < Math.round(this.s * (i === 0 ? .22 : .12)))) return null;
+      try { if (boxes.some((box, i) => !protectedCropFocus(box, selected[i], this.focusOf(selected[i])))) return null; } catch { return null; }
+      return boxes;
+    };
+    // Joint local fit: largest measured type whose header leaves readable, subject-safe photos.
+    const [set] = this.fitScale([{ blocks: this.blocks, width: copyW, colours, align }], ([g]) => Boolean(boxesFor(areaFor(g))), 3);
+    const h = this.stackHeight(set), boxes = boxesFor(areaFor(set))!;
+    boxes.forEach((b, i) => this.placeHero(selected[i], b, i === 0 ? 'hero' : 'inset'));
+    const text = this.placeStack(set, copyX, copyW, top, align, colours);
+    return this.finish({ background, text, logo, titleZone: { x: copyX, y: top, width: copyW, height: h }, hero: selected[0] });
+  }
+
+  heroStoryboard(): StudioLayoutV2 {
+    const [hero, ...supporting] = this.selectedPhotos(2, 10);
     const colours = surfacePalette(this.tones, this.input.choice.params.surfaceTone === 'cream' ? 'cream' : 'navy');
     const background = this.input.choice.params.surfaceTone === 'cream' ? this.tones.cream : this.tones.navy;
     const align = this.align();

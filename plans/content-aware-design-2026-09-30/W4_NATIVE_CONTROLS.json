@@ -1,0 +1,220 @@
+{
+  "controls": [
+    {
+      "recipe": "editorial_split",
+      "width": 1080,
+      "height": 1350,
+      "photos": 1,
+      "sourceHashes": [
+        "2d4c848dd0e3f990bf4291973a46d79d660b5d1f889fee69c03ca2d04c41326e"
+      ],
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "liveCopy": [
+        "Design for the content",
+        "A measured editorial composition",
+        "example.org"
+      ],
+      "pptxSha256": "bf9c2af886d2b376deb7f3c4054463b4033bbd08e90bf364685b7181f9e71b3b",
+      "previewSha256": "bedde87ea3ec552444891853790dcd3d355db1766479197d796601936b47827f",
+      "hardQaPassed": true,
+      "nativeIdentityPassed": true,
+      "nativeGeometry": {
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm 96 dpi",
+        "comparedPixels": 1122492,
+        "comparedSourcePixels": 792608,
+        "mismatchPixels": 0,
+        "maxDifference": 1,
+        "mismatchSamples": [],
+        "mask": "Text/logo expanded32px and local3px source/shape color boundary neighborhoods in eight directions and photo rectangle edges; extra native page fringe excluded",
+        "pagePixels": {
+          "width": 1080,
+          "height": 1350.0094488188934
+        },
+        "nativeFontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+LinuxLibertineG"
+        ],
+        "pdfSha256": "bb5d4d55d8af11d41b5ac921e36c8eca31f89f11ba720b6dca874617c23e0757",
+        "passed": true
+      }
+    },
+    {
+      "recipe": "photo_diptych",
+      "width": 1080,
+      "height": 1080,
+      "photos": 2,
+      "sourceHashes": [
+        "2d4c848dd0e3f990bf4291973a46d79d660b5d1f889fee69c03ca2d04c41326e",
+        "bb19107ff2e364fdc943e4ec7e6ec2ba6e47c8170838d1adaa1281785f7c4164"
+      ],
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "liveCopy": [
+        "Design for the content",
+        "A measured editorial composition",
+        "example.org"
+      ],
+      "pptxSha256": "22d59ba95818eab5a906049fe1c14ba9f1ebfa0a0c7f9cc9c422b7b952457e9d",
+      "previewSha256": "a84ad89dd8fb180cb96fe0554d962b6a679566b36a937f28acc176653df0426b",
+      "hardQaPassed": true,
+      "nativeIdentityPassed": true,
+      "nativeGeometry": {
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm 96 dpi",
+        "comparedPixels": 816689,
+        "comparedSourcePixels": 349480,
+        "mismatchPixels": 0,
+        "maxDifference": 2,
+        "mismatchSamples": [],
+        "mask": "Text/logo expanded32px and local3px source/shape color boundary neighborhoods in eight directions and photo rectangle edges; extra native page fringe excluded",
+        "pagePixels": {
+          "width": 1080,
+          "height": 1080
+        },
+        "nativeFontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+LinuxLibertineG"
+        ],
+        "pdfSha256": "092e62e403a978029b2c9ccfc5087cc132f6963179b7cd77f41768245f1c23d9",
+        "passed": true
+      }
+    },
+    {
+      "recipe": "photo_sequence",
+      "width": 1920,
+      "height": 1080,
+      "photos": 6,
+      "sourceHashes": [
+        "2d4c848dd0e3f990bf4291973a46d79d660b5d1f889fee69c03ca2d04c41326e",
+        "bb19107ff2e364fdc943e4ec7e6ec2ba6e47c8170838d1adaa1281785f7c4164",
+        "0cd098d06bffc291f59b23ac901c0aea9261dedbcb706d538591896d418ac98e",
+        "c0af4fdeee7326c208e60b1defcf73eedb09ee682b70ec6199ce384006f052c7",
+        "002eaf869d0aaa86af40d069d88c355037a11ae7fe090cca56accb4ad759f4ad",
+        "a12d2711d58e43c14c0beb2de4d325f0ecbca9191846202e221264cd734e6762"
+      ],
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "liveCopy": [
+        "Design for the content",
+        "A measured editorial composition",
+        "example.org"
+      ],
+      "pptxSha256": "34edf2bd2bfcc141c39bacd1130397ba2963bd391645f1a092d9bcfa1f1d5594",
+      "previewSha256": "21afdd443911a271120271b28a0160ef51bdf4299d186869bf3cfc7333403412",
+      "hardQaPassed": true,
+      "nativeIdentityPassed": true,
+      "nativeGeometry": {
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm 96 dpi",
+        "comparedPixels": 1462510,
+        "comparedSourcePixels": 906212,
+        "mismatchPixels": 0,
+        "maxDifference": 2,
+        "mismatchSamples": [],
+        "mask": "Text/logo expanded32px and local3px source/shape color boundary neighborhoods in eight directions and photo rectangle edges; extra native page fringe excluded",
+        "pagePixels": {
+          "width": 1920,
+          "height": 1080
+        },
+        "nativeFontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+LinuxLibertineG"
+        ],
+        "pdfSha256": "fff36ffd83bf06320670eca25f5e0b2d575efc96f18a7b14e1c0f23f1b4e9ed0",
+        "passed": true
+      }
+    },
+    {
+      "recipe": "photo_mosaic",
+      "width": 1920,
+      "height": 1080,
+      "photos": 6,
+      "sourceHashes": [
+        "2d4c848dd0e3f990bf4291973a46d79d660b5d1f889fee69c03ca2d04c41326e",
+        "bb19107ff2e364fdc943e4ec7e6ec2ba6e47c8170838d1adaa1281785f7c4164",
+        "0cd098d06bffc291f59b23ac901c0aea9261dedbcb706d538591896d418ac98e",
+        "c0af4fdeee7326c208e60b1defcf73eedb09ee682b70ec6199ce384006f052c7",
+        "002eaf869d0aaa86af40d069d88c355037a11ae7fe090cca56accb4ad759f4ad",
+        "a12d2711d58e43c14c0beb2de4d325f0ecbca9191846202e221264cd734e6762"
+      ],
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "liveCopy": [
+        "Design for the content",
+        "A measured editorial composition",
+        "example.org"
+      ],
+      "pptxSha256": "6c0b6a235760e2072ce9f64ab19115117a7db3b3fc88d4d716f553f8eb375596",
+      "previewSha256": "9373a3467234ce668fb2217b1dec2a688f32313c2d7bb46c92825c7f7b80ecfc",
+      "hardQaPassed": true,
+      "nativeIdentityPassed": true,
+      "nativeGeometry": {
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm 96 dpi",
+        "comparedPixels": 1633935,
+        "comparedSourcePixels": 1046513,
+        "mismatchPixels": 0,
+        "maxDifference": 2,
+        "mismatchSamples": [],
+        "mask": "Text/logo expanded32px and local3px source/shape color boundary neighborhoods in eight directions and photo rectangle edges; extra native page fringe excluded",
+        "pagePixels": {
+          "width": 1920,
+          "height": 1080
+        },
+        "nativeFontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+LinuxLibertineG"
+        ],
+        "pdfSha256": "d5800c4e07f0d31f4a984a2be50e9acf4ac58ef00c2ccdc3de614d6bd46e5608",
+        "passed": true
+      }
+    },
+    {
+      "recipe": "hero_storyboard",
+      "width": 1920,
+      "height": 1080,
+      "photos": 6,
+      "sourceHashes": [
+        "2d4c848dd0e3f990bf4291973a46d79d660b5d1f889fee69c03ca2d04c41326e",
+        "bb19107ff2e364fdc943e4ec7e6ec2ba6e47c8170838d1adaa1281785f7c4164",
+        "0cd098d06bffc291f59b23ac901c0aea9261dedbcb706d538591896d418ac98e",
+        "c0af4fdeee7326c208e60b1defcf73eedb09ee682b70ec6199ce384006f052c7",
+        "002eaf869d0aaa86af40d069d88c355037a11ae7fe090cca56accb4ad759f4ad",
+        "a12d2711d58e43c14c0beb2de4d325f0ecbca9191846202e221264cd734e6762"
+      ],
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "liveCopy": [
+        "Design for the content",
+        "A measured editorial composition",
+        "example.org"
+      ],
+      "pptxSha256": "a092a0ff13defed4cc6c019de30702482813eb74fca2a32a50292a708102a248",
+      "previewSha256": "37cc6b895cc7782c211393cfe7965584a42c7aa7786c7fb49508db85fe0afba3",
+      "hardQaPassed": true,
+      "nativeIdentityPassed": true,
+      "nativeGeometry": {
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm 96 dpi",
+        "comparedPixels": 1440084,
+        "comparedSourcePixels": 1133617,
+        "mismatchPixels": 0,
+        "maxDifference": 2,
+        "mismatchSamples": [],
+        "mask": "Text/logo expanded32px and local3px source/shape color boundary neighborhoods in eight directions and photo rectangle edges; extra native page fringe excluded",
+        "pagePixels": {
+          "width": 1920,
+          "height": 1080
+        },
+        "nativeFontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+LinuxLibertineG"
+        ],
+        "pdfSha256": "0948802911d1e7430a9b43bb98e696a62e834f470482ba27446a6e4a9b39f95d",
+        "passed": true
+      }
+    }
+  ],
+  "providerCalls": 0,
+  "inputs": "synthetic geometric controls and explicit official test logo; not customer design qualification",
+  "canvaQualification": "not_run",
+  "nativeTypographyQualification": "FAILED: declared Verdana substituted by FrankRuhlHofshi-Bold and LinuxLibertineG in all five independent PDFs. Geometry/photo masks do not certify text or logo visibility.",
+  "sourcePolicy": "Final equal per-source crop-loss objective; synthetic controls only"
+}

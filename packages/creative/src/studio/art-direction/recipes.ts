@@ -44,6 +44,8 @@ export interface RecipeSpec {
   minPhotos: number;
   /** Whether a second photo may be blended into the text zone as a texture. */
   texture: boolean;
+  /** Native photo capacity; absent uses one, or two when texture is supported. */
+  maxPhotos?: number;
   /** Whether it needs a person cut out of their photo. */
   needsCutout: boolean;
   /** Shots it suits best; any shot is allowed, these rank first. */
@@ -55,6 +57,7 @@ export interface RecipeSpec {
 export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_storyboard: {
     id: 'hero_storyboard',
+    maxPhotos: 10,
     reference: 'ADR-171 engineering composition; human creative qualification pending',
     summary: 'A dominant hero next to a supporting image sequence, with measured live copy on a solid brand surface. Use when several images add distinct evidence or a visual sequence to the message, or explicit coverage requires them.',
     bestFor: 'processes, comparisons, related scenes and explicit multi-photo requests',
@@ -63,6 +66,38 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
     needsCutout: false,
     shots: ['classroom_or_interior', 'group_or_crowd', 'event_or_stage'],
     canva: 'every photo is a native re-croppable image; text and brand surfaces remain native',
+  },
+  editorial_split: {
+    id: 'editorial_split', reference: 'ADR172 content-aware engineering; human qualification pending',
+    summary: 'Exact copy on an exposed approved editorial surface beside a large native scene or product photo; on a portrait format the image sits below the editorial header. No mandatory fade, frame or ornamental texture.',
+    bestFor: 'editorial announcements, product explanations and copy-led notices with one meaningful photograph',
+    minPhotos: 1, maxPhotos: 1, texture: false, needsCutout: false,
+    shots: ['detail_or_object', 'portrait', 'scenic_or_building', 'other'],
+    canva: 'photograph is native and re-croppable; copy and approved surface remain editable',
+  },
+  photo_diptych: {
+    id: 'photo_diptych', reference: 'ADR172 comparison engineering; human qualification pending',
+    summary: 'Two complementary native images paired below a measured editorial header. Source aspect determines their unequal widths; each image earns its role as a comparison or related moment, never duplicated.',
+    bestFor: 'comparisons, before/after evidence and two complementary scenes',
+    minPhotos: 2, maxPhotos: 2, texture: false, needsCutout: false,
+    shots: ['detail_or_object', 'classroom_or_interior', 'scenic_or_building', 'event_or_stage'],
+    canva: 'two native photographs, live copy and native base surface',
+  },
+  photo_sequence: {
+    id: 'photo_sequence', reference: 'ADR172 ordered narrative engineering; human qualification pending',
+    summary: 'An ordered sequence of two to ten distinct images in source-aspect-weighted justified rows below an editorial header. Local geometry preserves narrative order and measured source subjects; no upload-count collage obligation.',
+    bestFor: 'processes, visits with several distinct activities and visual evidence sequences',
+    minPhotos: 2, maxPhotos: 10, texture: false, needsCutout: false,
+    shots: ['classroom_or_interior', 'event_or_stage', 'detail_or_object', 'other'],
+    canva: 'every source is a separate re-croppable native photograph; all copy stays live',
+  },
+  photo_mosaic: {
+    id: 'photo_mosaic', reference: 'ADR172 editorial mosaic engineering; human qualification pending',
+    summary: 'A narrow editorial copy column and a large adjacent image field of two to ten source-aspect-weighted photographs. The exposed brand ground carries text; images remain separate with purposeful unequal widths.',
+    bestFor: 'copy-led editorial stories with several complementary photos or explicit coverage',
+    minPhotos: 2, maxPhotos: 10, texture: false, needsCutout: false,
+    shots: ['classroom_or_interior', 'event_or_stage', 'detail_or_object', 'other'],
+    canva: 'separate native photos, live copy and editable brand ground',
   },
   hero_fade_report: {
     id: 'hero_fade_report',
@@ -173,6 +208,14 @@ export interface PhotoFacts {
   cutout?: boolean;
 }
 
+/** Shared capacity: eligibility, model normalization and deterministic coverage agree. */
+export function recipePhotoCapacity(id: RecipeId): number {
+  return RECIPES[id].maxPhotos ?? (RECIPES[id].texture ? 2 : 1);
+}
+export function isMultiPhotoRecipe(id: RecipeId): boolean {
+  return recipePhotoCapacity(id) > 1 && !RECIPES[id].texture;
+}
+
 /** The recipes eligible for a request with these photos. `typographic` only when there are none. */
 export function eligibleRecipes(photos: PhotoFacts[], minimum = 1): RecipeId[] {
   if (!photos.length) return ['typographic'];
@@ -182,7 +225,7 @@ export function eligibleRecipes(photos: PhotoFacts[], minimum = 1): RecipeId[] {
     if (photos.length < spec.minPhotos) continue;
     // ADR-181: coverage is a minimum, not a single-hero style restriction.
     // Multi-photo compositions remain available without an explicit count.
-    if (id !== 'hero_storyboard' && minimum > (spec.texture ? 2 : 1)) continue;
+    if (minimum > recipePhotoCapacity(id)) continue;
     if (spec.needsCutout && !photos.some((p) => p.cutout)) continue;
     // A title in the sky, or a title plate, needs a photo calm at its top or bottom, by the brief or
     // the pixels: a plate anywhere else sits on what the photo shows (live trial, 2026-09-30).

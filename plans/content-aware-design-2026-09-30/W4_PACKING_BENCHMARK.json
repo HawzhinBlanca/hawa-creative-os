@@ -1,0 +1,90 @@
+{
+  "date": "2026-09-30",
+  "node": "v22.23.1",
+  "implementation": "bounded contiguous row partitions <=130, max10 source photos; 128 region input bound",
+  "cases": [
+    {
+      "count": 2,
+      "regionCount": 0,
+      "iterations": 100,
+      "accepted": 100,
+      "p50Ms": 0.0029169999999965057,
+      "p95Ms": 0.010457999999999856,
+      "maxMs": 0.11345899999999887
+    },
+    {
+      "count": 2,
+      "regionCount": 32,
+      "iterations": 100,
+      "accepted": 100,
+      "p50Ms": 0.026499999999998636,
+      "p95Ms": 0.08529100000000511,
+      "maxMs": 0.46049999999999613
+    },
+    {
+      "count": 2,
+      "regionCount": 128,
+      "iterations": 100,
+      "accepted": 100,
+      "p50Ms": 0.03620899999999949,
+      "p95Ms": 0.048166999999999405,
+      "maxMs": 0.1682089999999974
+    },
+    {
+      "count": 6,
+      "regionCount": 0,
+      "iterations": 100,
+      "accepted": 100,
+      "p50Ms": 0.035916999999997756,
+      "p95Ms": 0.06104100000000301,
+      "maxMs": 0.13858299999999701
+    },
+    {
+      "count": 6,
+      "regionCount": 32,
+      "iterations": 100,
+      "accepted": 100,
+      "p50Ms": 0.21762499999999818,
+      "p95Ms": 0.3452079999999995,
+      "maxMs": 0.6300829999999991
+    },
+    {
+      "count": 6,
+      "regionCount": 128,
+      "iterations": 100,
+      "accepted": 100,
+      "p50Ms": 0.5392920000000032,
+      "p95Ms": 0.6088330000000042,
+      "maxMs": 0.7957910000000084
+    },
+    {
+      "count": 10,
+      "regionCount": 0,
+      "iterations": 100,
+      "accepted": 100,
+      "p50Ms": 0.03491600000000972,
+      "p95Ms": 0.04329100000001063,
+      "maxMs": 0.09212499999998158
+    },
+    {
+      "count": 10,
+      "regionCount": 32,
+      "iterations": 100,
+      "accepted": 100,
+      "p50Ms": 0.9262920000000179,
+      "p95Ms": 0.96550000000002,
+      "maxMs": 1.0045829999999967
+    },
+    {
+      "count": 10,
+      "regionCount": 128,
+      "iterations": 100,
+      "accepted": 100,
+      "p50Ms": 2.703958,
+      "p95Ms": 2.8214590000000044,
+      "maxMs": 3.0378330000000346
+    }
+  ],
+  "providerCalls": 0,
+  "qualification": "Local geometry microbenchmark, not whole-pipeline SLA; machine load/warm-up affects timings"
+}

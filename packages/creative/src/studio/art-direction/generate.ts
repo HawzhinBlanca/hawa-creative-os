@@ -13,6 +13,8 @@ import {
   RECIPES,
   defaultRecipeFor,
   eligibleRecipes,
+  isMultiPhotoRecipe,
+  recipePhotoCapacity,
   rankPhotosForHero,
   type PhotoFacts,
 } from './recipes.js';
@@ -117,7 +119,7 @@ PRINCIPLES
 ================================================================================
 - Choose a composition for the message, exact copy, source imagery and client references. A single primary image or several complementary images can be right; more images must add meaning rather than repeat the same scene.
 - Give text a measured legible ground: an exposed background, fade, scrim, plate or card. Preserve useful negative space and the subject; no mandatory fade or box.
-- Multi-photo compositions are allowed when the content benefits. In hero_storyboard, supportingPhotoIndices chooses complementary images in reading order, not upload order. Never force a collage merely because several photos were supplied.
+- Multi-photo compositions are allowed when the content benefits. In multi-photo recipes, supportingPhotoIndices chooses complementary images in reading order, not upload order. Never force a collage merely because several photos were supplied.
 - The photo is never mirrored, tilted or recoloured.
 - Client references and house preferences listed in the request (R1, R2, ...) apply to this client only, subordinate to explicit requester constraints. No navy fade, gold frame or single-hero preference is universal. Explicit photo instructions bind as REQUIRED PHOTOS.
 
@@ -165,7 +167,7 @@ PARAMETERS
 ================================================================================
 DIVERGENCE
 ================================================================================
-When more than one recipe is eligible, use at least two different recipes. When only one is eligible, vary the hero and surface treatment within it. Give each a typicality from 0 (unexpected) to 1 (the most typical treatment). Make one concept the house's most typical answer for the subject, and at least one a less typical but still on-brand answer. Different concepts may pick different heroes when the photos support it.`;
+When more than one recipe is eligible, use three different recipes when at least three are eligible; otherwise use every eligible recipe before repeating. When only one is eligible, vary the hero and surface treatment within it. Give each a typicality from 0 (unexpected) to 1 (the most typical treatment). Make one concept the house's most typical answer for the subject, and at least one a less typical but still on-brand answer. Different concepts may pick different heroes when the photos support it.`;
 }
 
 /** The fewest photos a concept must place (ADR-180: the requester's explicit words only). */
@@ -279,7 +281,7 @@ ELIGIBLE RECIPES for these photos: ${eligible.join(', ')}.
 OFFICE EXEMPLARS (published designs of this client; the attached example images are these):
 ${exemplarLines}
 
-TASK: Return exactly three concepts. Use only eligible recipes. ${eligible.length > 1 ? "Use at least two different recipes." : "Vary the hero and surface treatment within the eligible recipe."} Give every copy block exactly one slot.`;
+TASK: Return exactly three concepts. Use only eligible recipes. ${eligible.length > 1 ? "Use three different recipes when at least three are eligible, otherwise use every feasible recipe before repeating." : "Vary the hero and surface treatment within the eligible recipe."} Give every copy block exactly one slot.`;
 }
 
 /** The concept a request falls back to for a recipe: best hero, texture where allowed, slots from the brief. */
@@ -299,7 +301,7 @@ export function defaultChoice(
     recipe,
     heroPhotoIndex: hero?.photoIndex ?? null,
     texturePhotoIndex: texture?.photoIndex ?? null,
-    ...(recipe === 'hero_storyboard' ? { supportingPhotoIndices: ranked.filter(p => p.photoIndex !== hero?.photoIndex).slice(0, 1).map(p => p.photoIndex) } : {}),
+    ...(isMultiPhotoRecipe(recipe) ? { supportingPhotoIndices: ranked.filter(p => p.photoIndex !== hero?.photoIndex).slice(0, 1).map(p => p.photoIndex) } : {}),
     cutoutPhotoIndex: recipe === 'cutout_speaker' ? hero?.photoIndex ?? null : null,
     slots: copyBlocks.map((b, k) => ({
       copyIndex: b.index,
@@ -341,8 +343,8 @@ export function normalizeConcepts(
       typicality: Number.isFinite(c.typicality) ? Math.min(1, Math.max(0, c.typicality)) : undefined,
       heroPhotoIndex: hero,
       texturePhotoIndex: texture,
-      ...(recipe === 'hero_storyboard' ? { supportingPhotoIndices: Array.isArray(c.supportingPhotoIndices)
-        ? [...new Set(c.supportingPhotoIndices.slice(0, 9).filter(i => Number.isInteger(i) && indices.has(i) && i !== hero))]
+      ...(isMultiPhotoRecipe(recipe) ? { supportingPhotoIndices: Array.isArray(c.supportingPhotoIndices)
+        ? [...new Set(c.supportingPhotoIndices.slice(0, recipePhotoCapacity(recipe) - 1).filter(i => Number.isInteger(i) && indices.has(i) && i !== hero))]
         : ranked.filter(p => p.photoIndex !== hero).slice(0, 1).map(p => p.photoIndex) } : {}),
       cutoutPhotoIndex: cutout,
       slots: (c.slots || [])
@@ -366,11 +368,18 @@ export function normalizeConcepts(
     const next = order.find((r) => !choices.some((c) => c.recipe === r)) ?? order[0];
     choices.push(defaultChoice(next, photos, copyBlocks));
   }
-  // At least two different recipes: the last concept takes the next unused eligible recipe.
-  if (new Set(choices.map((c) => c.recipe)).size < 2 && eligible.length >= 2) {
-    const unused = order.find((r) => !choices.some((c) => c.recipe === r));
-    if (unused) choices[choices.length - 1] = { ...defaultChoice(unused, photos, copyBlocks), slots: choices[choices.length - 1].slots };
-  }
+  // Meaningful recipe divergence: preserve earlier proposals, replace only repeated later ones.
+  const target = Math.min(3, eligible.length);
+  const seen = new Set<RecipeId>();
+  choices.forEach((choice, index) => {
+    if (seen.has(choice.recipe) && seen.size < target) {
+      const unused = order.find(r => !seen.has(r) && !choices.slice(index + 1).some(c => c.recipe === r))
+        ?? order.find(r => !seen.has(r));
+      if (unused) choices[index] = { ...defaultChoice(unused, photos, copyBlocks), slots: choice.slots };
+    }
+    seen.add(choices[index].recipe);
+  });
+
   return choices;
 }
 

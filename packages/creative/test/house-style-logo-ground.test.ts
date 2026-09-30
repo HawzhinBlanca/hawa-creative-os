@@ -66,7 +66,7 @@ describe('ADR-180: office house style wins over default photo coverage', () => {
     expect(eligibleRecipes(PHOTOS, 1)).toContain('hero_storyboard');
     expect(eligibleRecipes(PHOTOS, 1)).toContain('hero_fade_report');
     expect(eligibleRecipes(PHOTOS, 2)).toEqual(expect.arrayContaining(['hero_storyboard', 'hero_fade_report']));
-    expect(eligibleRecipes(PHOTOS, 3)).toEqual(['hero_storyboard']);
+    expect(eligibleRecipes(PHOTOS, 3)).toEqual(['hero_storyboard', 'photo_sequence', 'photo_mosaic']);
   });
 
   it('a hero design is the request done, and the photos left out are recorded for office review', () => {

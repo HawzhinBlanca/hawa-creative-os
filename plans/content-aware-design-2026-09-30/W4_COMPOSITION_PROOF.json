@@ -1,0 +1,153 @@
+{
+  "date": "2026-09-30",
+  "branch": "codex/content-aware-design",
+  "baseCommit": "315e936d",
+  "classificationOfPreviousGoalTurn": "progress: committed owner-scoped source selection/native identity and ADR180 integration",
+  "scope": "W4 distinct local geometry/source/coverage implementation and initial W6 client-scoped preference boundary; not full upgrade admission",
+  "topologies": [
+    "editorial_split",
+    "photo_diptych",
+    "photo_sequence",
+    "photo_mosaic"
+  ],
+  "existingTopology": "hero_storyboard retained",
+  "hardInvariants": [
+    "Explicit-only photo requirements, no forced default collage or universal hero-only limit",
+    "Source aspect/narrative ordering; every measured source region retained or visible infeasible refusal",
+    "Largest measured type solved jointly with readable photo geometry, exact live copy unchanged",
+    "RTL changes reading placement, not original photo pixel orientation",
+    "Native independent sources and original official logo bytes; no flattened factual text",
+    "No global subject-to-client-style prior; loaded same-client subject-matched reference and policy required",
+    "No new dependency/model/provider/framework or added model call"
+  ],
+  "geometrySearch": {
+    "maxPhotos": 10,
+    "maxRows": 4,
+    "maxContiguousPartitions": 130,
+    "objective": "Equal per-source squared log crop-aspect distortion plus small row-fragmentation penalty; not learned/professional taste",
+    "hardConstraints": "Protected crop feasibility, min source-cell side, exact dimensions, copy measurement/safe/contrast/clearance"
+  },
+  "checks": {
+    "connected": {
+      "files": 11,
+      "passed": 141,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/tmp/hawa-topologies-final.log"
+    },
+    "adapterFollowup": {
+      "files": 2,
+      "passed": 54,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/tmp/hawa-topologies-adapter-final.log",
+      "note": "Overlaps original topology/Core tests; includes explicit three-topology six-source stage/render/hard QA evidence"
+    },
+    "expandedTopology": {
+      "files": 1,
+      "passed": 66,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/tmp/hawa-topology-format-coverage.log",
+      "note": "Includes original50 plus16 six/ten-source cross-format LTR/RTL alternative checks; incompatible recipe refuses, at least one feasible alternative per control"
+    },
+    "distinctVerifiedTestCount": 157,
+    "countMethod": "141 connected includes original50; expanded66 replaces50. Follow-up54 overlaps; do not sum141+54+66.",
+    "build": {
+      "passed": true,
+      "log": "/tmp/hawa-topology-final-source-build.log"
+    },
+    "types": {
+      "passed": true,
+      "roots": 646,
+      "log": "/tmp/hawa-topologies-types-verified.log"
+    },
+    "lint": {
+      "passed": true,
+      "anyCount": 937,
+      "ceiling": 1053,
+      "egress": "Pass with10 pre-existing exceptions, not universal policy migration",
+      "log": "/tmp/hawa-topologies-lint.log"
+    },
+    "blueprint": {
+      "passed": 1494,
+      "warned": 0,
+      "failed": 0,
+      "log": "/tmp/hawa-w4-pack.log"
+    }
+  },
+  "nativeControls": {
+    "path": "W4_NATIVE_CONTROLS.json",
+    "controls": 5,
+    "independentRenderer": "LibreOfficeDev26.8alpha PPTX->PDF->pdftoppm96dpi",
+    "comparedPixels": 6475710,
+    "comparedSourcePixels": 4228430,
+    "maxAllowedChannelDifference": 3,
+    "mismatchPixels": 0,
+    "masks": "Text/logo expanded32px, source/color boundaries in8 directions and photo rectangle edges3px; PDF point-rounding fringe excluded",
+    "qualification": "Geometry/photo-fields only; native typography FAILED, Canva NOT_RUN",
+    "files": "/tmp/hawa-topology-controls-final-20260930",
+    "sourceHashesAndLiveCopy": "All included source photos and official control logo match original PPTX media hashes; exact text retained as native DrawingML",
+    "inputs": "Synthetic geometric controls, not a professional/human comparison"
+  },
+  "latency": {
+    "path": "W4_PACKING_BENCHMARK.json",
+    "cases": 9,
+    "iterations": 900,
+    "worstP95Ms": 2.8214590000000044,
+    "node": "v22.23.1",
+    "deterministic": true,
+    "scope": "Pure packing on this host, not whole-pipeline latency guarantee"
+  },
+  "failureHistory": [
+    {
+      "log": "/tmp/hawa-topology-build.log",
+      "reason": "Core referencePack.clientId is untrusted unknown; adapter now requires actual string before scoped preference construction"
+    },
+    {
+      "log": "/tmp/hawa-topologies-tests.log",
+      "passed": 47,
+      "failed": 3,
+      "reason": "Wide RTL header/type and ten-source sequence fixed-share geometry infeasible; repaired by joint header/photo fitting"
+    },
+    {
+      "log": "/tmp/hawa-topologies-types.log",
+      "reason": "New fixture copy roles inferred as string; supplied explicit CopyBlockSlotInput type"
+    },
+    {
+      "log": "/tmp/hawa-native-diagnostic.log",
+      "reason": "Native verifier initial axis-only boundary mask found2/816767 diptych pixels, deltas17 and4 at(608,578)/(494,862). First is diagonal photo corner; other is resampling at source boundary. Mask expanded to8 directions plus3px rectangle edges; same strict3/channel tolerance preserved."
+    },
+    {
+      "reason": "Final independent PDFs substitute declared Verdana with FrankRuhlHofshi-Bold/LinuxLibertineG; no text/Canva qualification claim"
+    }
+  ],
+  "providerCalls": 0,
+  "productionChanged": false,
+  "deployment": "NOT_RUN",
+  "open": [
+    "W3 majority/component logo visibility/archive/native qualification",
+    "W5 approved source-derived perceptual tones, local craft optimization, cache/replay/cost evidence",
+    "W6 actual approvals/corrections and held-out calibration/abstention qualification; current reference boundary is not learned taste",
+    "Explicit-count cardinality/at-least/mixed all-count adversarial qualification",
+    "Full-source sealed/recovery/native Canva typography/edit/reopen/export and human comparative gates",
+    "Permitted study material/spend for large comparative evaluation; no paid batch launched"
+  ],
+  "sourceHashes": {
+    "packages/creative/src/studio/art-direction/photo-packing.ts": "0f7564713149c7bc0c9899124f2aa1ef5ffbc4dbf204b5209f0d917f3155081b",
+    "packages/creative/src/studio/art-direction/solver.ts": "c9d2f22b862e2367094f62fdaf262717466201f96a1d803483eaae3e41ace800",
+    "packages/creative/src/studio/art-direction/recipes.ts": "db1846e662c02115d04899da0fce5969853c6f2bd4608034690bdfb1b858c061",
+    "packages/creative/src/studio/art-direction/generate.ts": "dc300e75bf0daf3c8f8135115258d78b5a224adc06f7604cd7a3ca2b068a571b",
+    "packages/creative/src/studio/art-direction/prior.ts": "c7b9e1cbeb253ac36de8ccbe117e69234f041627731d105719a8e1ebcd0b329b",
+    "packages/creative/src/studio/art-direction/index.ts": "faa81306626b6e371f6e6c696e6d4e27b3a7978e8858ececb684a425acb679ff",
+    "packages/creative/src/studio/exemplar-retrieval.ts": "740afc956de16c94712b56c62d9dddfa4af6f63296ba9a9fef2dbd9b8ef52d2d",
+    "packages/creative/src/studio/layout-v2.ts": "e1650c1f769f3e48eb773e05b991a025afafb58d6863ca646a92e0753b069ef6",
+    "packages/creative/src/studio/pipeline-v3.ts": "d2831097620bbaf60fe6dcc6dca90dc2877b09b674dfc10bc3d637190a8a3db8",
+    "apps/core/src/services/design-studio/stages/v3.stage.ts": "c1c811b49addcad8e465fa790b139cf424b3f9f749a78918e5a05e75eb596949",
+    "apps/core/test/art-direction-e2e.test.ts": "56e50c9d69132909024b705de67f83959c6b92a318016d657da306615fd599a9",
+    "packages/creative/test/content-topologies.test.ts": "0615fc13c54f41c7b1b81209159da48aa0d5062dd12ddfa1af14c186eb7935af",
+    "scripts/proofs/content_topology_probe.mjs": "ece0291e9d4153997ceb7a178e064d98669e60d20334390cda94431f2a62c9cb",
+    "scripts/proofs/content_topology_verify_native.mjs": "157bb7c769a3adc2528ff1941d079c49686be3aa4281bd0439d8eb4e54280111",
+    "scripts/proofs/photo_packing_benchmark.mjs": "93fdefd2ccd84879df54cdab7e74773b7790df36fdd76969ffa55a4f2691e2fa"
+  }
+}

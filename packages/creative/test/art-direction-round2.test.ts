@@ -38,6 +38,9 @@ const round3 = (v: number) => Math.round(v * 1000) / 1000;
 const holds = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
   b.x >= a.x && b.y >= a.y && b.x + b.width <= a.x + a.width && b.y + b.height <= a.y + a.height;
 
+const preferenceEvidence = { clientId: 'fixture-client', referenceClientId: 'fixture-client', policySha256: 'a'.repeat(64),
+  loadedIds: ['fixture-reference'], matches: [{ id: 'fixture-reference', recipe: 'hero_fade_report' as const, subjectMatches: ['report_release', 'field_visit'] }] };
+
 describe('1. the judge\'s ties go to the house prior, not to a composite that favours centred plates', () => {
   it('maps the brief\'s subject to the house recipe', () => {
     expect(houseRecipesFor(['report_release', 'field_visit', 'k12'])[0]).toBe('hero_fade_report');
@@ -51,7 +54,7 @@ describe('1. the judge\'s ties go to the house prior, not to a composite that fa
     const fade = solve('hero_fade_report', 0);
     const scrim = solve('scrim_caption', 3);
     const card = solve('hero_card', 3);
-    expect(artDirectionPrior(scrim, fade, ['report_release', 'field_visit'])).toMatchObject({ winner: 'b', basis: 'subject', reason: expect.stringMatching(/hero_fade_report is the house recipe for report_release, field_visit/) });
+    expect(artDirectionPrior(scrim, fade, ['report_release', 'field_visit'], preferenceEvidence)).toMatchObject({ winner: 'b', basis: 'client_reference', reason: expect.stringMatching(/hero_fade_report matches loaded subject-relevant references/) });
     // No subject between them: the card's hero is enlarged past 1.5x, the scrim's is not.
     expect(card.artDirection!.heroUpscale).toBeGreaterThan(1.5);
     expect(artDirectionPrior(card, scrim, ['school'])).toMatchObject({ winner: 'b', basis: 'sharpness' });
@@ -78,12 +81,12 @@ describe('1. the judge\'s ties go to the house prior, not to a composite that fa
     // Position bias, as in runs 1 and 5: every dimension goes to the design shown second.
     const verdict = { dimensions: Object.fromEntries(PHOTO_JUDGE_DIMENSIONS.map((d) => [d, { winner: 'B', rationale: 'b' }])), majorityWinner: 'B', summary: 's' };
     const client = { createStructuredCompletion: vi.fn().mockResolvedValue({ data: verdict, receipt: { model: 'gpt-4.1-mini', responseId: 'r', xRequestId: null, inputTokens: 1, outputTokens: 1, costUsd: 0, latencyMs: 1 } }) } as any;
-    const selection = await selectWinnerV3(ranked, copy, { client, model: 'gpt-4.1-mini', renderOptions: { logoDataUri: KAAE_TEST_LOGO }, subjects: ['report_release', 'field_visit'] });
+    const selection = await selectWinnerV3(ranked, copy, { client, model: 'gpt-4.1-mini', renderOptions: { logoDataUri: KAAE_TEST_LOGO }, subjects: ['report_release', 'field_visit'], recipePreferences: preferenceEvidence });
     expect(selection.decidedBy).toBe('art_direction_prior');
     expect(selection.humanChoiceRecommended).toBe(true);
     expect(selection.judgeReliable).toBe(false);
     expect(selection.winner.layout.artDirection!.recipe).toBe('hero_fade_report');
-    expect(selection.prior).toMatchObject({ basis: 'subject', instead: 'composite_after_tie' });
+    expect(selection.prior).toMatchObject({ basis: 'client_reference', instead: 'composite_after_tie' });
   }, 60000);
 
   it('never records "photos tiled in a grid" for a design with one photograph, and tells the judge the count', async () => {

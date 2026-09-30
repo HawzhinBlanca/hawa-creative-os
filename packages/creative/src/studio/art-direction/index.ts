@@ -51,4 +51,4 @@ export {
   type GenerateArtDirectedOptions,
   type GenerateArtDirectedResult,
 } from './generate.js';
-export { artDirectionPrior, houseRecipesFor, sharpnessClass, SUBJECT_RECIPES, type ArtDirectionPriorDecision } from './prior.js';
+export { artDirectionPrior, houseRecipesFor, sharpnessClass, SUBJECT_RECIPES, type ArtDirectionPriorDecision, type RecipePreferenceContext, scopedReferenceRecipes } from './prior.js';
