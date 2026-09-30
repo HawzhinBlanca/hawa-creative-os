@@ -204,6 +204,33 @@ describe('deploy.sh and the release directory', () => {
     expect(fs.readlinkSync(path.join(release, 'infra/docker/.env.production'))).toBe(path.join(s.shared, 'infra/docker/.env.production'));
   });
 
+  it('the local state audit deploy.sh runs sees the shared credentials and dumps through a release\'s links', () => {
+    const s = setup();
+    for (const f of ['infra/security/local_state_audit.sh', 'infra/ops/host_lib.sh']) {
+      fs.mkdirSync(path.dirname(path.join(s.src, f)), { recursive: true });
+      fs.copyFileSync(path.join(repo, f), path.join(s.src, f));
+    }
+    git(s.src, 'add', '-A');
+    git(s.src, 'commit', '-q', '-m', 'audit');
+    const head = git(s.src, 'rev-parse', 'HEAD');
+    const envFile = path.join(s.shared, 'infra/docker/.env.production');
+    fs.writeFileSync(envFile, `TELEGRAM_BOT_TOKEN=${'7'.repeat(12)}\n`);
+    fs.chmodSync(envFile, 0o600);
+    const release = sh(s, `hawa_release_prepare '${s.src}' ${head}`).out;
+    const dump = path.join(s.shared, 'infra/backup/snapshots/hawa_20260930T033000Z.dump');
+    fs.writeFileSync(dump, 'x'.repeat(4096));
+    fs.chmodSync(dump, 0o600);
+    const audit = () => spawnSync(BASH, [path.join(release, 'infra/security/local_state_audit.sh')], { encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin' } });
+    const closed = audit();
+    expect(closed.status, closed.stdout + closed.stderr).toBe(0);
+    expect(closed.stdout).toMatch(/^600 +\d+ +plaintext credentials +infra\/docker\/\.env\.production$/m);
+    expect(closed.stdout).toMatch(/^600 +4096 +database dump +infra\/backup\/snapshots\/hawa_20260930T033000Z\.dump$/m);
+    fs.chmodSync(envFile, 0o644);
+    const open = audit();
+    expect(open.status).toBe(1);
+    expect(open.stdout).toMatch(/^644 +\d+ +plaintext credentials +infra\/docker\/\.env\.production EXPOSED$/m);
+  });
+
   it('HAWA_RELEASE_DIRS=off runs from the checkout and makes no release', () => {
     const s = deployRepo();
     const res = spawnSync(BASH, [path.join(s.src, 'infra/docker/deploy.sh')], {
