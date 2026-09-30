@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-30T15:45:30+03:00",
+  "generatedAt": "2026-09-30T18:01:58+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "f525c03fbef0424b28d84e67f9a56a0fa4ca3e6d",
+    "commit": "68e2b035028455d4ad2e3e6e6256c9137d3d6833",
     "treeClean": true,
-    "commitTimestamp": "2026-09-30T15:45:30+03:00",
-    "branch": "claude/fix-photo-burst"
+    "commitTimestamp": "2026-09-30T18:01:58+03:00",
+    "branch": "codex/reliability-and-design-hardening"
   },
   "migrations": {
-    "targetVersion": "071_uncertain_call_expiry",
-    "latestMigrationFile": "071_uncertain_call_expiry.sql",
-    "totalMigrations": 71
+    "targetVersion": "072_verified_office_call_cost",
+    "latestMigrationFile": "072_verified_office_call_cost.sql",
+    "totalMigrations": 72
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "f05255620255b6cb8b9ba25a818fd0780aaae098f3a470ab7ffc94c43f288293",
+        "apps/core/src/app.ts": "3d4dc7a7fa39d39b99686407e33ca92cacbcb1429ebc0bb714d7542000b62a34",
         "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -56,7 +56,7 @@
       "service": "worker",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "b9c5cfe17e3bf5ee9bd8d3ab0b158f83b9c4b725ba940530836104a1eadf1f94"
+        "apps/worker/src/index.ts": "b0e6a32e1b5e410979fca6a08a0af00c6f6bdb9b9d2461c134fda57dc2c51947"
       }
     }
   },
@@ -73,10 +73,10 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "37c8f1723ace5b492615df9a685b2b1c66ac88c3f2f6b3273185857abe773faf",
+      "apps/core/src/services/canva-design-planner.ts": "7eb8e50b0175958be068966ef2db12931aa5eefcca92b7962806429ba78f1e44",
       "packages/creative/src/studio/layout-generator-v3.ts": "6bb4cbc698a3ee572a303cc1059d0684a9944afdd539a2c620586991843d8e85",
-      "packages/creative/src/studio/pairwise-judge-v3.ts": "9092fadc3b9a5ab1def397e1be560d2483bff04689661b59f0c1ce87bcd41e7c",
-      "packages/creative/src/studio/box-critique-v3.ts": "8584e3f9ced35d200c821c29250329e830b11760bec615b344e059d69dac76ec"
+      "packages/creative/src/studio/pairwise-judge-v3.ts": "26711e03f1ac26adcb08ed45601b929e71b65f098d49c23d86ce8d710359f09d",
+      "packages/creative/src/studio/box-critique-v3.ts": "f6a643f5df5aaf69f355f12a6494b2479b942d2b6d702cc1cc42af8d24cb85e2"
     }
   },
   "qa": {
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "ad3e1cf1c02183d0a681ce649a4ecb4a988f5ff25ef9e64d4eeb6ca30d3b9e4b"
+  "sha256": "62655ecc9d02c1e34987f3e8ed551ded58762b90434999afe09b8957213972a3"
 }
