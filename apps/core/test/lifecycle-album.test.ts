@@ -76,7 +76,7 @@ describe('confirmed lifecycle photo albums', () => {
     const manifest = { updateId: 1, sha256: 'b'.repeat(64), images: Array(5).fill(image) };
     expect(parseLifecycleAlbumRef(manifest)).not.toBeNull();
     expect(parseLifecycleAlbumRef({ ...manifest, images: Array(6).fill(image) })).toBeNull();
-    // Two albums Telegram split from one set (ADR-148): up to twenty photos, never more.
+    // Two albums Telegram split from one set (ADR-160): up to twenty photos, never more.
     expect(parseLifecycleAlbumRef({ ...manifest, images: Array(20).fill({ ...image, size: 1 }) })).not.toBeNull();
     expect(parseLifecycleAlbumRef({ ...manifest, images: Array(21).fill({ ...image, size: 1 }) })).toBeNull();
     expect(parseLifecycleAlbumRef({ ...manifest, images: [{ ...image, size: image.size + 1 }, image] })).toBeNull();

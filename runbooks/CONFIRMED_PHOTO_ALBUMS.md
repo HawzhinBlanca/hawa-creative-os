@@ -1,4 +1,4 @@
-# Photo and image-file intake (ADR-068, ADR-069, ADR-143, ADR-148)
+# Photo and image-file intake (ADR-068, ADR-069, ADR-143, ADR-160)
 
 Requirements: FR-002, FR-004, FR-005, FR-011, FR-060, NFR-001, NFR-006.
 Local evidence: `plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md`; ADR-143 section 5.
@@ -41,7 +41,7 @@ words waits two hours (`HAWA_ALBUM_BRIEF_WINDOW_MINUTES`); a captioned one waits
   and for an album with no words is asked again what to design;
 - thanks, greetings and questions are answered as before and the album keeps waiting.
 
-**A caption Telegram cut (ADR-148).** A standard Telegram account can send at most
+**A caption Telegram cut (ADR-160).** A standard Telegram account can send at most
 1,024 characters of caption (UTF-16 units) and Telegram silently drops the rest (Premium:
 4,096). A caption of exactly 1,024 (or up to 4 short of it and ending mid-sentence, or
 exactly 4,096) is never designed from as it is. A longer caption came whole from a Premium
@@ -66,12 +66,12 @@ of your text, so I haven't started a design with these photos. …"). A lapsed, 
 or superseded album is closed and never swept again. A single photo (not an album) with a
 cut caption, and a voice note sent as the rest, are not covered yet.
 
-**Albums sent back to back (ADR-148).** Telegram sends at most ten photos per album and
+**Albums sent back to back (ADR-160).** Telegram sends at most ten photos per album and
 splits more into albums sent one right after the other. Albums from one sender whose photos
 follow each other within the quiet period are one set: asked about once ("I have your 13
 photos …"), and a brief binds every photo of the set (at most 20 per request).
 
-**Group chats (ADR-144 §2.7, ADR-148).** In a group the bot acts only on what is addressed
+**Group chats (ADR-144 §2.7, ADR-160).** In a group the bot acts only on what is addressed
 to it: a reply to one of its messages, a mention of it (in the text or the caption), or a
 command. An album, a photo with words, a file, a voice note or a video that is not
 addressed to it starts nothing and says nothing; a photo or album with no words is kept

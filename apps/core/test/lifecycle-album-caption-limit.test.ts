@@ -1,5 +1,5 @@
 /**
- * ADR-148: Telegram keeps only the first 1024 UTF-16 units of a caption from a standard account. The
+ * ADR-160: Telegram keeps only the first 1024 UTF-16 units of a caption from a standard account. The
  * owner's six-photo album of 2026-09-29 had a caption of exactly 1024 characters, cut mid-sentence, and
  * the design shipped the cut sentence as its subtitle. A caption at the limit is never the whole brief:
  * the album waits for the rest, asked once in plain words, and the sender's next message joins it.
@@ -138,7 +138,7 @@ const saidTo = (answer: any): string[] =>
   [answer?.albumMessage, answer?.chatAnswer?.text, answer?.notice?.text, answer?.sourceMessage].filter((t): t is string => typeof t === 'string' && t.length > 0);
 const question = (cut: string, lang: 'en' | 'ckb' = 'en') => say(ALBUM_MESSAGES.captionCut, lang, { tail: captionTail(cut) });
 
-describe('a caption Telegram cut at its limit (ADR-148)', () => {
+describe('a caption Telegram cut at its limit (ADR-160)', () => {
   it('holds a six-photo album whose caption is 1024 characters: no draft, one plain question quoting where the text stops', async () => {
     const f = setup();
     const { cut } = cutCaption();
@@ -533,7 +533,7 @@ describe('Sorani (F9)', () => {
   });
 });
 
-describe('caption limit helpers (ADR-148)', () => {
+describe('caption limit helpers (ADR-160)', () => {
   it('F10: never shows a title that quotes the line introducing the copy as the English headline, with a client prefix or without', () => {
     expect(titleAsHeadline('KAAE: Here is the text and the photos:…')).toBeUndefined();
     expect(titleAsHeadline('Here is the text and the photos:…')).toBeUndefined();

@@ -1,11 +1,11 @@
 /**
- * Items the caption-limit stream (ADR-148) and the natural-language intake stream (ADR-156) handed to
+ * Items the caption-limit stream (ADR-160) and the natural-language intake stream (ADR-156) handed to
  * each other, and the intake office alerts ADR-155 handed off, as regression tests on the merged intake:
  *
  * - F11 (ADR-156 P3): a JPEG sent as a file labelled `image/jpg` is a picture;
  * - a brief Telegram split into several messages, followed by an album, opens one request with all of
  *   its copy (ADR-156 #10 joined parts, taken by ADR-143's album settle);
- * - F8 remainder (ADR-148): a voice note sent as the rest of a caption Telegram cut joins that album once
+ * - F8 remainder (ADR-160): a voice note sent as the rest of a caption Telegram cut joins that album once
  *   its words are confirmed, instead of opening a second request;
  * - ADR-155 section 6 at intake: an office alert reaches every office member, also when the first member
  *   is the requester.
@@ -106,7 +106,7 @@ describe('a split brief followed by an album (ADR-156 #10 with ADR-143)', () => 
   });
 });
 
-describe('F8 remainder: a voice note sent as the rest of a caption Telegram cut (ADR-148)', () => {
+describe('F8 remainder: a voice note sent as the rest of a caption Telegram cut (ADR-160)', () => {
   const INSTRUCTION = 'Design a formal report cover for KAAE with the supplied photos in a clean collage, navy and yellow brand colours. ';
   const TAIL = '\n\nHere is the text and the photos:\n\nKAAE K-12 Pilot Study\nField Visit Report\n\nInsights from school field visits and next steps tow';
   const cut = (INSTRUCTION.repeat(20).slice(0, TELEGRAM_CAPTION_LIMIT - TAIL.length) + TAIL);

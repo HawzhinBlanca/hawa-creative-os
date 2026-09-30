@@ -32,7 +32,7 @@ export interface CoreClientOptions {
 
 /** Codes Core's intake route gives when it cannot take any update now; the update waits. */
 /**
- * The longest settle Core may ask for (ADR-143). ADR-148's wait for the rest of a cut caption is one
+ * The longest settle Core may ask for (ADR-143). ADR-160's wait for the rest of a cut caption is one
  * such settle; a Core test ties CUT_CAPTION_WAIT_MS to this, so neither changes alone.
  */
 export const MAX_SETTLE_DELAY_MS = 10 * 60_000;

@@ -389,7 +389,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // A kept photo's settle (ADR-145) is decided below; any other settle of a non-album, non-text
     // update has nothing to do.
     if (settle && !albumPart && !textMessage && !heldPhotoCandidate(preparedUpdate)) return handled(200, { settle: 'skipped' });
-    // ADR-148: a photo with words may be the rest of a caption Telegram cut (bound below if a cut album waits).
+    // ADR-160: a photo with words may be the rest of a caption Telegram cut (bound below if a cut album waits).
     const restPhoto = !albumPart && !settle && Boolean(db) && lifecyclePhotoInput(preparedUpdate)?.captionless === false;
     if (albumPart || repliedConfirmation || (textMessage && (db || settle)) || restPhoto) {
       if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
@@ -411,7 +411,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       const admit = async (outcome: AlbumOutcome, point: string): Promise<Response | null> => {
         if (outcome.kind === 'reply') return reply(outcome.reply);
         if (outcome.kind === 'skip') return handled(200, { settle: 'skipped' });
-        // ADR-148: the album waits for the rest of a caption Telegram cut; the question is said beside it.
+        // ADR-160: the album waits for the rest of a caption Telegram cut; the question is said beside it.
         if (outcome.kind === 'wait') return handled(202, { lifecycleAction: 'settle-later', chatId,
           settle: { kind: 'album', delayMs: outcome.delayMs }, ...(outcome.notice ? { notice: { text: outcome.notice } } : {}) });
         if (outcome.kind === 'none') return null;
@@ -451,7 +451,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             if (bound) return bound;
           }
         } else if (restPhoto) {
-          // ADR-148: the rest sent as a photo with words: its words join the cut caption, its picture the album.
+          // ADR-160: the rest sent as a photo with words: its words join the cut caption, its picture the album.
           if (senderAllowed && await tx((trx) => cutAlbumWaits(trx, DEFAULT_TENANT_ID, source))) {
             const photo = lifecyclePhotoInput(source)!;
             const kept = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
@@ -642,14 +642,14 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
     }
 
-    // ADR-144 §2.7 (ADR-148): in a group, a member's media is read only when addressed to the bot; it is
+    // ADR-144 §2.7 (ADR-160): in a group, a member's media is read only when addressed to the bot; it is
     // kept as a passive message, as group conversation is (lifecycle-chat-answers.ts, a group PDF).
     if (!settle && groupMediaNotAddressed(update)) return handled(200, { status: 'MESSAGE_ONLY' });
     // An admitted album's words were bound to its photos: they answer no voice note or PDF (a replay of
     // one that completed a cut caption, below, is admitted above by its recorded album decision).
     const sourceAnswer = admittedAlbum ? null : await sourceIntake(update);
     if (sourceAnswer && 'album' in sourceAnswer) {
-      // ADR-148 F8 (the remainder): a voice note's or a PDF's confirmed words completed a cut caption;
+      // ADR-160 F8 (the remainder): a voice note's or a PDF's confirmed words completed a cut caption;
       // the album is read now as an album bound by typed words is.
       const { album } = sourceAnswer;
       if (album.kind === 'reply') return handled(album.reply.status, { lifecycleAction: 'album-message', chatId: chatOf(update),
@@ -1011,7 +1011,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     text.slice(e.offset, e.offset + e.length).toLowerCase())) ||
                 (e?.type === 'text_mention' && e.user?.is_bot === true));
               const groupCommand = /^\/(?:task|brief|design|campaign)(?:@\w+)?(?:\s+|$)/i.exec(text);
-              // An album admitted in a group already passed ADR-148's gate (`actsInGroup`: addressed to the
+              // An album admitted in a group already passed ADR-160's gate (`actsInGroup`: addressed to the
               // bot, or a clear brief) when its photos settled or its sender's words bound them; its frozen
               // message keeps the words but not their mention entities, so it is not read for them again.
               const addressed = !group || mediaKind === 'album' || message.reply_to_message?.from?.is_bot === true ||

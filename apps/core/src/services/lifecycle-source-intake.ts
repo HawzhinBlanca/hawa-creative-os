@@ -40,7 +40,7 @@ import { bindSourceToCutAlbum, type AlbumOutcome } from './lifecycle-album.js';
 
 type Answer = SourceIntakeAnswer;
 /**
- * An answer, or (ADR-148 F8, ADR-156) the album whose cut caption the confirmed words completed: intake
+ * An answer, or (ADR-160 F8, ADR-156) the album whose cut caption the confirmed words completed: intake
  * then reads that album as it reads an album bound by typed words.
  */
 export type SourceIntakeResult = Answer | { album: Extract<AlbumOutcome, { kind: 'snapshot' | 'reply' }> };
@@ -242,7 +242,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
       if (existing.payloadHash !== saved.payloadHash || existing.requestId !== requestId) throw new SourceConflict('Confirmation decision changed');
       return { status: 200, extra: { duplicate: true, lifecycleAction: 'open-request', requestId, chatId: upload.chatId, draft: existing.draft } };
     }
-    // ADR-148 F8 (the remainder): words sent as the rest of a caption Telegram cut, by voice or in a PDF,
+    // ADR-160 F8 (the remainder): words sent as the rest of a caption Telegram cut, by voice or in a PDF,
     // join that album once confirmed, as typed words would: one request, not a second one beside it.
     const album = await tx((trx) => bindSourceToCutAlbum(trx, scope.tenantId,
       { update: update as { update_id: number }, sourceUpdateId: upload.updateId, copy: saved.copy }));

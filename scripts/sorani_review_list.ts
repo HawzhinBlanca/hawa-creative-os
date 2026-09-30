@@ -27,7 +27,7 @@ const lines: string[] = [
   '',
   'Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status, deadline and change phrases in',
   '`apps/core/src/services/requester-turn.ts`, the yes-words in `apps/core/src/services/lifecycle-source-reply.ts`, and',
-  'the "that is the whole text" words in `apps/core/src/services/lifecycle-album.ts`, ADR-148),',
+  'the "that is the whole text" words in `apps/core/src/services/lifecycle-album.ts`, ADR-160),',
   'and the Sorani the design studio reads (ADR-157): the photo-choice phrases in `packages/creative/src/studio/photo-selection.ts`',
   'and the phrase-ending words and language names in `packages/creative/src/studio/copy-completeness.ts`.',
   '',

@@ -1,11 +1,11 @@
-# ADR-148: A Caption Telegram Cut Waits for the Rest
+# ADR-160: A Caption Telegram Cut Waits for the Rest
 
 **Date:** 2026-09-30 (reworked the same day after the adversarial review, audit 2026-09-30 item 22)
 **Status:** Implemented and locally tested on branch `claude/caption-limit-hold-v2` (rebased onto production `6bd479c1`); not deployed. Supersedes the first version on `claude/caption-limit-hold`, which was not merged.
 **Requirements:** FR-004 (a repeated source event gives no more than one task), FR-005 (passive messages become tasks only through an approved classifier policy), NFR-001 (no acknowledged event is silently lost).
 **Changes a foundation:** the lifecycle album contract (`parseLifecycleAlbumRef`, `packages/contracts`) now allows up to 20 photos instead of 10 (section 2.8). ADR-143's album settle, ADR-144's group rule and ADR-145's natural wording are kept.
 **Builds on:** ADR-143 (albums settle by themselves; a waiting album takes its sender's words), ADR-144 (requester intent rules; section 2.7, groups), ADR-145 (the requester message catalogue; plain words only), commit a2e9f6af (a line that introduces the copy is an instruction).
-**Number:** 148 is reserved for this stream.
+**Number:** 160. First drafted as ADR-148; renumbered on 2026-09-30 because another change took ADR-148 (Sol 6.1 candidate) on the office branch.
 
 ## 1. Context
 
@@ -130,4 +130,4 @@ Section 3 left this open: the source flow opened a voice note's confirmed words 
 - **The wait.** While such a source waits for its confirmation, the settle keeps the album waiting (quietly, one settle at a time) up to `SOURCE_REST_WAIT_MS` (30 minutes) after the question, and the sweep skips it until then. After that, the album opens or lapses as section 2.5 says. A source still waiting for "which organisation?" has no words to show yet, so it does not extend the wait.
 - **Replays.** An update that bound an album replays through its recorded album decision (now read before the command check, so a `/use_source` confirmation replays too). Intake no longer reads an admitted album's words as a source's answer.
 
-Test: `apps/core/test/intake-cross-stream-adr148-156.test.ts` (F8 remainder: one request, the draft without `lifecycleSource`, a replay, the settle skipped; the 11-minute wait kept and not swept). Before the change, the first test opened a second request with only the heard words, and the second test opened the album at its settle.
+Test: `apps/core/test/intake-cross-stream-adr160-156.test.ts` (F8 remainder: one request, the draft without `lifecycleSource`, a replay, the settle skipped; the 11-minute wait kept and not swept). Before the change, the first test opened a second request with only the heard words, and the second test opened the album at its settle.

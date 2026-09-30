@@ -8,7 +8,7 @@ export interface LifecycleAlbumRef {
 
 /**
  * Telegram sends at most ten photos in one album and splits more into albums sent back to back; the
- * photos of two such albums are one request's (ADR-148). More are refused as too many for one design.
+ * photos of two such albums are one request's (ADR-160). More are refused as too many for one design.
  */
 export const MAX_ALBUM_IMAGES = 20;
 

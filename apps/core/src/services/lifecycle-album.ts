@@ -262,7 +262,7 @@ export async function confirmAlbum(trx: Tx, tenant: string, update: Update): Pro
   if (replies.length > 1 || (replies.length === 1 && messages.some((message) => !record(message.reply_to_message))))
     return refuse(say(ALBUM_MESSAGES.mixedReplies, lang));
   if (captions.length > 1) return refuse(say(ALBUM_MESSAGES.captions, lang));
-  // ADR-148: a caption Telegram cut is never the whole brief; the album waits for the rest.
+  // ADR-160: a caption Telegram cut is never the whole brief; the album waits for the rest.
   const cut = cutCaptionOf(messages);
   if (cut !== null) {
     return finish({ status: 202, message: say(ALBUM_MESSAGES.captionCut, lang, { tail: captionTail(cut) }),
@@ -302,7 +302,7 @@ export type AlbumOutcome =
   | { kind: 'skip' }
   | { kind: 'reply'; reply: AlbumMessage }
   | { kind: 'snapshot'; snapshot: AlbumSnapshot }
-  /** ADR-148: settle this album again after `delayMs`; `notice` is said beside it (once, keyed by the update). */
+  /** ADR-160: settle this album again after `delayMs`; `notice` is said beside it (once, keyed by the update). */
   | { kind: 'wait'; delayMs: number; notice: string | null };
 
 type Lang = 'en' | 'ckb';
@@ -325,7 +325,7 @@ const LATE_SETTLE_MS = 5 * 60_000;
 /** A held brief joins an album that started at most this long after it, and is never held longer. */
 const HELD_BRIEF_MS = 10 * 60_000;
 
-// --- ADR-148: a caption Telegram cut at its limit ----------------------------------------------------
+// --- ADR-160: a caption Telegram cut at its limit ----------------------------------------------------
 //
 // A standard Telegram account can send at most TELEGRAM_CAPTION_LIMIT (1024) UTF-16 units of caption,
 // and Telegram silently keeps only the first 1024 (Premium: 4096). A caption at the limit is therefore
@@ -538,12 +538,12 @@ function joinBriefs(first: string, second: string): string {
   return prefix + [first.replace(NEW_COMMAND, '').trim(), second.replace(NEW_COMMAND, '').trim()].filter(Boolean).join('\n\n');
 }
 
-/** `asked`: the album waits for words; every other state is final (`cancelled` by the requester, ADR-148). */
+/** `asked`: the album waits for words; every other state is final (`cancelled` by the requester, ADR-160). */
 type SettledState = 'asked' | 'refused' | 'superseded' | 'expired' | 'cancelled';
 /**
  * Records an album's state, for each group of its set. inbox_events is append-only, so a final state
  * reached after `asked` is its own row (`lifecycle_album_closed`), which settledState reads first: an
- * asked album that lapses, or that a later request supersedes, is not settled or swept again (ADR-148).
+ * asked album that lapses, or that a later request supersedes, is not settled or swept again (ADR-160).
  */
 async function markSettled(trx: Tx, tenant: string, keys: string | string[], state: SettledState, updateId: number): Promise<void> {
   for (const groupKey of typeof keys === 'string' ? [keys] : keys) {
@@ -587,7 +587,7 @@ async function albumTimes(trx: Tx, tenant: string, keys: string[]): Promise<{ fi
 //
 // Telegram sends at most ten photos in one album and splits more into several albums, delivered one
 // right after the other. Albums from one sender (chat and topic) whose photos follow each other within
-// the settle's quiet period are one set (ADR-148): settled once, by the newest photo of the set, asked
+// the settle's quiet period are one set (ADR-160): settled once, by the newest photo of the set, asked
 // about once, and bound to one brief with every photo.
 
 /** The groups of the album set `part` belongs to, oldest first; a started or closed album ends a set. */
@@ -764,7 +764,7 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   const prior = await readAlbumConfirmation(trx, tenant, update);
   if (prior) return outcomeOf(prior);
   await senderLock(trx, tenant, part.chatId, part.senderId);
-  // The album's whole set (ADR-148): the newest photo of the set settles it.
+  // The album's whole set (ADR-160): the newest photo of the set settles it.
   const keys = await albumSet(trx, tenant, part);
   await lockSet(trx, tenant, keys);
   const raced = await readAlbumConfirmation(trx, tenant, update);
@@ -780,7 +780,7 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   const { captions, replies, mixedReplies, cutCaption, group, addressed } = albumShape(selected);
   // A settle long after the photos (a sweep after a lost timer, or an album saved before ADR-143)
   // starts nothing once the chat has moved on to another request; in a group, only to one of this
-  // sender's own requests (ADR-148): another member's request says nothing about this album.
+  // sender's own requests (ADR-160): another member's request says nothing about this album.
   if (late && (await sql`SELECT 1 FROM hawa.requests r
       WHERE r.tenant_id = ${tenant}::uuid AND r.chat_id = ${chatId} AND r.created_at > to_timestamp(${times.last / 1000})
         AND (NOT ${group}::boolean OR EXISTS (SELECT 1 FROM hawa.inbox_events o
@@ -792,7 +792,7 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
     await markSettled(trx, tenant, keys, 'superseded', update.update_id);
     return { kind: 'skip' };
   }
-  // ADR-144 §2.7 (ADR-148): in a group, photos addressed to no one are kept quietly; only the sender's
+  // ADR-144 §2.7 (ADR-160): in a group, photos addressed to no one are kept quietly; only the sender's
   // own words to the bot (bindTextToAlbum) can start a design with them.
   if (group && !addressed) {
     await markSettled(trx, tenant, keys, 'asked', update.update_id);
@@ -819,7 +819,7 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   if (captions.length > 1) return answer(ALBUM_TEXT.captions[lang], 'asked');
   const lastMessage = record(update.message)!;
   const caption = captions[0] ?? '';
-  // ADR-148: Telegram kept only the start of this caption. The album waits for the rest (the sender's
+  // ADR-160: Telegram kept only the start of this caption. The album waits for the rest (the sender's
   // next message joins it in bindTextToAlbum); the requester is asked once, beside a durable settle at
   // the end of the wait. Then it opens without its unfinished sentence, or lapses and says so.
   if (cutCaption !== null) {
@@ -884,7 +884,7 @@ interface WaitingAlbum { keys: string[]; selected: Part[] }
 /**
  * The sender's newest album (with the rest of its set) that still waits for words: not frozen or
  * closed, no refused photo, in its window. An album whose caption Telegram cut waits only until the wait
- * after its question ends (ADR-148); its settle then says that it lapsed.
+ * after its question ends (ADR-160); its settle then says that it lapsed.
  */
 async function waitingAlbum(trx: Tx, tenant: string, scope: { chatId: string; senderId: string; topic: string },
   onlyGroup?: string, sourceAt?: number): Promise<WaitingAlbum | null> {
@@ -925,7 +925,7 @@ async function waitingAlbum(trx: Tx, tenant: string, scope: { chatId: string; se
  * question) is left to intake. A `/use_album` sent as a plain message is such an OK (compatibility).
  * In a group, only words addressed to the bot bind an album (ADR-144 §2.7).
  *
- * While the album's caption waits for its rest (ADR-148), the words are read by `readCutReply`, and a
+ * While the album's caption waits for its rest (ADR-160), the words are read by `readCutReply`, and a
  * photo with a caption (`media`: its words and its saved picture) can be the rest too: the picture
  * joins the album.
  */
@@ -976,7 +976,7 @@ export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, d
   }
   const { captions, replies, mixedReplies, cutCaption } = albumShape(selected);
   if (cutCaption !== null && captions.length === 1 && !mixedReplies) {
-    // ADR-148: the album waits for the rest of its caption. Words a voice note or a PDF waits on ("yes",
+    // ADR-160: the album waits for the rest of its caption. Words a voice note or a PDF waits on ("yes",
     // the corrected text) are that source's, not the rest.
     if (await unconfirmedSource(trx, tenant, { chatId, senderId, topicId: topic })) return { kind: 'none' };
     const said = confirmation ? 'ok' : readCutReply(text);
@@ -1037,7 +1037,7 @@ async function sourceRestPending(trx: Tx, tenant: string, scope: { chatId: strin
 }
 
 /**
- * ADR-148 F8 (the remainder), ADR-156: the confirmed words of a voice note or a PDF that its sender sent
+ * ADR-160 F8 (the remainder), ADR-156: the confirmed words of a voice note or a PDF that its sender sent
  * while their cut album waited are the caption's rest, as typed words would be. `update` is the message
  * that confirmed them (it becomes the album's source update); `copy` the confirmed words. The album opens
  * with the joined caption; the draft carries the album and not the source, because the draft contract
@@ -1064,7 +1064,7 @@ export async function bindSourceToCutAlbum(trx: Tx, tenant: string, input: { upd
 }
 
 /**
- * Whether a captioned photo from this sender may be the rest of a cut caption (ADR-148): a cut album of
+ * Whether a captioned photo from this sender may be the rest of a cut caption (ADR-160): a cut album of
  * theirs waits, or this update already has an album decision. Read before the photo is downloaded, so
  * an ordinary captioned photo goes its usual way.
  */
@@ -1102,7 +1102,7 @@ export async function overdueSettles(trx: Tx, tenant: string, limit = 50): Promi
     if (!await event(trx, tenant, 'lifecycle_album_part', String(newest.source.update_id))) continue;
     due.push({ chatId: newest.chatId, update: newest.source });
   }
-  // ADR-148: an album whose caption Telegram cut, asked for the rest, whose own delayed settle is
+  // ADR-160: an album whose caption Telegram cut, asked for the rest, whose own delayed settle is
   // overdue: its settle opens it without its unfinished sentence or says that it lapsed (or finds that
   // the rest came). An album that lapsed, was cancelled or superseded is closed and not listed again.
   const cutSecs = (CUT_CAPTION_WAIT_MS + 60_000) / 1000;

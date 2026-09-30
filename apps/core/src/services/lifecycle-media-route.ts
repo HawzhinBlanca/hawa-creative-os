@@ -48,7 +48,7 @@ export function unusableMedia(message: Json | null): 'video' | 'file' | null {
 
 const MEDIA_KEYS = ['photo', 'document', 'voice', 'audio', 'video', 'video_note', 'animation', 'live_photo', 'sticker'];
 /**
- * ADR-144 §2.7 (ADR-148): in a group, a member's photo with words, file, voice note, video or sticker
+ * ADR-144 §2.7 (ADR-160): in a group, a member's photo with words, file, voice note, video or sticker
  * that is not addressed to the bot (a reply to it, a mention of it in the caption, a command) and whose
  * words are no clear brief is not read, as such a text would not be. An album is judged whole at its
  * settle, and a photo with no words is kept quietly for its sender's words (its settle says nothing).
@@ -155,7 +155,7 @@ export function createMediaRoute(ctx: Pick<CoreContext, 'db' | 'telegramBridge' 
       if (!waitsForChanges) return joinOrPass(update, chatId, photo, target, opened.album, late);
     }
     const message = record(update.message);
-    // ADR-144 §2.7 (ADR-148): in a group, a photo addressed to no one is not asked about. It stays kept
+    // ADR-144 §2.7 (ADR-160): in a group, a photo addressed to no one is not asked about. It stays kept
     // for its sender's own words to the bot within the join window, and nothing is said.
     if (isGroupChat(message)) {
       return answerOnce(update.update_id, `settle:${update.update_id}`, async () =>
