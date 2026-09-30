@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-01",
+  "adr": 185,
+  "base": "6723d208",
+  "qualification": "CONNECTED_PASS_FULL_SEALED_GATE_PENDING_NOT_DEPLOYED",
+  "requirements": [
+    "FR-004",
+    "FR-005",
+    "FR-060",
+    "FR-063",
+    "NFR-001",
+    "NFR-006"
+  ],
+  "production": "4e500451",
+  "connected": {
+    "files": 13,
+    "passed": 299,
+    "failed": 0,
+    "expectedFail": 2
+  },
+  "redBefore": {
+    "failed": 1,
+    "assertion": "worker dispatch sees received instead of paused",
+    "log": "/tmp/hawa-early-hold-red-4.log"
+  },
+  "retainedFailures": [
+    "Two initial red fixture attempts used the conversation request-id API incorrectly; fixed before meaningful red proof",
+    "Initial production build had six errors from misplaced anchor check, out-of-scope chat answer and review-link argument; repaired",
+    "One connected control asserted an office alert without configuring office members; fixture corrected",
+    "Test typing rejected optional dispatch clientId; explicit automatic-dispatch client guard added"
+  ],
+  "fullSuite": "PENDING",
+  "typecheck": "PENDING_FINAL",
+  "lint": "PASS (939 any <=1053; 10 existing egress exceptions)",
+  "paidProviderCalls": 0,
+  "deployment": "NOT_DEPLOYED",
+  "limits": [
+    "Voice/PDF processing before a brief exists is outside early-hold admission proof",
+    "Existing title/multiple-design expected failures remain",
+    "Native Sorani and broader design-quality proof remain open"
+  ]
+}

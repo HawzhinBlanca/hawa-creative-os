@@ -37,7 +37,7 @@ import { deferMessage, pendingHeldBrief, readDeferral, releaseDeferral, overdueD
   claimPhoto, holdPhoto, markPhotoAsked, pendingEditWords, readHeldPhoto, readMediaAnswer, recordMediaAnswer,
   waitingPhotos } from '../services/lifecycle-media-intake.js';
 import { createEditIntake } from '../services/lifecycle-edit-intake.js';
-import { INBOX_MESSAGES, MEDIA_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
+import { INBOX_MESSAGES, MEDIA_MESSAGES, ROUTING_MESSAGES, LIFECYCLE_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
   albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
@@ -47,6 +47,8 @@ import { createTelegramUpdateState } from '../services/telegram-intake/update-st
 import { log } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { pauseRequesterDesign } from '../services/requester-hold.js';
+import { acceptEarlyHold, EarlyHoldConflict } from '../services/early-requester-hold.js';
+import { briefAnchorFor } from '../services/lifecycle-brief-anchor.js';
 import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
   readRevisionPhotoDecision, recordRevisionPhotoDecision,
   readRoutingRefusal, recordRoutingRefusal,
@@ -554,6 +556,23 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
     }
 
+    // ADR-185: a clear hold must commit before brief settlement can admit the first paid call.
+    if (db && !settle && !admittedAlbum && !boundPhoto &&
+        typeof (preparedUpdate.message as Record<string, unknown> | undefined)?.text === 'string' && senderAllowedFor(preparedUpdate)) {
+      const words = withoutBotMentions(String((preparedUpdate.message as Record<string, unknown>).text));
+      try {
+        const early = await withRlsContext(db, SYSTEM_SCOPE, trx=>acceptEarlyHold(trx, DEFAULT_TENANT_ID, {
+          update:preparedUpdate,text:words,payloadHash:updateHash(preparedUpdate),isHold:readIntentByRules(words).intent==='hold',
+          answer:say(ROUTING_MESSAGES.holdConfirmed,requesterLang(words),{title:say(LIFECYCLE_MESSAGES.yourDesign,requesterLang(words))}),
+        }));
+        if (early) return handled(200, { chatAnswer:{text:early.answer,parseMode:'HTML'}, earlyHold:true, chatId:early.anchor.chatId,
+          ...(early.officeAlerts ? {officeAlerts:early.officeAlerts} : {}) });
+      } catch (error) {
+        if (error instanceof EarlyHoldConflict) return handled(409,{code:'IDEMPOTENCY_CONFLICT'});
+        throw error;
+      }
+    }
+
     // ADR-145: a message from a sender whose brief ADR-143 still holds for photos is read after that
     // brief opens, so a correction to it is a change to it and not a second request. ChatInbox runs one
     // update of a chat at a time, and the brief's own settle queues behind this update: the message is
@@ -966,8 +985,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   const claim = await claimPhoto(trx, TENANT, heldPhoto.updateId, { byUpdateId: update.update_id, how: 'brief', requestId });
                   if (claim.byUpdateId !== update.update_id) return null;
                 }
+                const briefAnchor = await briefAnchorFor(trx,TENANT,update);
                 return recordNewBriefDecision(trx, TENANT, update.update_id,
                   { requestId, chatId, payloadHash, draft,
+                    ...(briefAnchor ? {briefAnchor} : {}),
                     ...((lifecycleImage || admittedAlbum) ? { sourceUpdate: update } : {}),
                     ...(siblings.length ? { siblings } : {}) });
               });

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T23:09:14Z",
+  "generatedAt": "2026-09-30T23:31:02Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 669,
+  "fileCount": 673,
   "files": [
     {
       "path": ".dockerignore",
@@ -898,6 +898,11 @@
       "bytes": 3011
     },
     {
+      "path": "adrs/185_requester_holds_before_task_projection.md",
+      "sha256": "1dcc4466c648ceb982d112d0e704599ceb22bed978bb782120bd8fd6b7cf19ca",
+      "bytes": 3004
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1331,6 +1336,21 @@
       "path": "plans/backlog.csv",
       "sha256": "8cbc0f12962aaed8f1429e4337d31e020f8129fda4df1a112387aa24cfd73f57",
       "bytes": 26365
+    },
+    {
+      "path": "plans/early-requester-hold-2026-10-01/LIVE_INFRA_READBACK.json",
+      "sha256": "932994cc94b0a8a593419fc0722dc365b742b8ce7b1590346230cf91a07592f8",
+      "bytes": 487
+    },
+    {
+      "path": "plans/early-requester-hold-2026-10-01/LOCAL_PROOF.json",
+      "sha256": "5b98370c6640d0cc860a6fc40e80afc1e40ccf5cdb2a6b6c88bc03b8b56276dd",
+      "bytes": 1440
+    },
+    {
+      "path": "plans/early-requester-hold-2026-10-01/PLAN.md",
+      "sha256": "03e885e5d5c4fb2030976212dde9efe23b9b00526cb00235b7fcca85d37cdf52",
+      "bytes": 2137
     },
     {
       "path": "plans/hosting/LINUX_READINESS_PROOF.json",
@@ -2469,8 +2489,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "4f0fe711968d7733e54a401946a61572364f93548001d73472fdff07f056f735",
-      "bytes": 561804
+      "sha256": "7e086e713f004657d91abfeb693071b58baf312fd44aefeb2551944b3130d442",
+      "bytes": 563718
     },
     {
       "path": "plans/user-stories.csv",
@@ -2639,8 +2659,8 @@
     },
     {
       "path": "runbooks/REQUESTER_DESIGN_HOLDS.md",
-      "sha256": "9d7c07887a4da0728fa8d537170c47078ea6b57226b994d80fe3d3c11bab936e",
-      "bytes": 2064
+      "sha256": "ebd66dd7f52dd382cf81f2083c84af1fca0ee4c3d2038815391b4a2a22d5c58a",
+      "bytes": 2594
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",

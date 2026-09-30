@@ -1,0 +1,17 @@
+{
+  "observedAt": "2026-09-30T23:28:00.308Z",
+  "release": "4e5004519e65ac2350b4c92a8ba35f966d5a5ed4",
+  "coreRevision": "4e5004519e65ac2350b4c92a8ba35f966d5a5ed4",
+  "nginxTest": true,
+  "proofUsesStableRuntime": true,
+  "workers": [
+    {
+      "revision": "4e5004519e65ac2350b4c92a8ba35f966d5a5ed4",
+      "databaseUser": "hawa_worker_login",
+      "hasOperatorEnv": false,
+      "independentDesignToken": true
+    }
+  ],
+  "unsafeReleasesAbsent": true,
+  "healthStatus": "healthy"
+}

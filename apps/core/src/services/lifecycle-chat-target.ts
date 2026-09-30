@@ -4,6 +4,7 @@ import { sql, type Database, type Kysely } from '@hawa/db';
 import { parseBlobRef, type BlobRef } from '@hawa/contracts';
 import type { ChatIntake } from './chat-intake.js';
 import type { RequesterRevisionWithIntakeResult } from './lifecycle-projection.js';
+import { parseBriefAnchor, type BriefAnchor } from './lifecycle-brief-anchor.js';
 
 export interface WaitingLifecycleRequest {
   request_id: string;
@@ -26,6 +27,8 @@ export interface NewBriefDecision {
   draft: ChatIntake;
   /** Original image intake evidence stays in Core, outside the Restate draft contract. */
   sourceUpdate?: unknown;
+  /** Core-owned pre-projection hold identity (ADR-185), outside the worker draft. */
+  briefAnchor?: BriefAnchor;
   /**
    * The other requests the same update opens (ADR-139: an English-and-Kurdish brief opens one request
    * per language). Each is opened, projected and replayed exactly as the first.
@@ -99,7 +102,10 @@ export async function readNewBriefDecision(trx: Kysely<Database>, tenantId: stri
   if (siblings !== undefined && (!Array.isArray(siblings) || siblings.some((s) => !s || typeof s !== 'object' ||
       typeof (s as { requestId?: unknown }).requestId !== 'string' || !(s as { draft?: unknown }).draft ||
       typeof (s as { draft?: unknown }).draft !== 'object'))) throw new Error('Invalid stored new-brief decision');
+  const briefAnchor = row.payload.briefAnchor === undefined ? undefined : parseBriefAnchor(row.payload.briefAnchor);
+  if (briefAnchor === null) throw new Error('Invalid stored new-brief anchor');
   return { requestId, chatId, payloadHash: row.payload_hash, draft: draft as ChatIntake,
+    ...(briefAnchor ? { briefAnchor } : {}),
     ...(row.payload.sourceUpdate !== undefined ? { sourceUpdate: row.payload.sourceUpdate } : {}),
     ...(Array.isArray(siblings) && siblings.length ? { siblings: siblings as NewBriefDecision['siblings'] } : {}) };
 }
@@ -112,6 +118,7 @@ export async function recordNewBriefDecision(trx: Kysely<Database>, tenantId: st
       'lifecycle_new_brief_decision',
       ${JSON.stringify({ requestId: decision.requestId, chatId: decision.chatId,
         draft: decision.draft,
+        ...(decision.briefAnchor ? { briefAnchor: decision.briefAnchor } : {}),
         ...(decision.sourceUpdate !== undefined ? { sourceUpdate: decision.sourceUpdate } : {}),
         ...(decision.siblings?.length ? { siblings: decision.siblings } : {}) })}::jsonb, ${decision.payloadHash}, true)
     ON CONFLICT DO NOTHING`.execute(trx);

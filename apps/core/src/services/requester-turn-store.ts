@@ -34,12 +34,13 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
     -- ADR-182: a brief sent as plain words keeps no Telegram update on its task, so its requester is
     -- read from the decision that opened it: the sender its intent was recorded for. Without it every
     -- member of a group could change or cancel anyone's request.
-    LEFT JOIN LATERAL (SELECT coalesce(o.payload->'sourceUpdate'->'message'->'from'->>'id', i.payload->>'senderId') AS sender_id
+    LEFT JOIN LATERAL (SELECT coalesce(o.payload->'briefAnchor'->>'senderId', o.payload->'sourceUpdate'->'message'->'from'->>'id', i.payload->>'senderId') AS sender_id
       FROM hawa.inbox_events o
       LEFT JOIN hawa.inbox_events i ON i.tenant_id = o.tenant_id AND i.source_account_id = 'lifecycle_chat_intent'
         AND i.source_event_id = o.source_event_id
       WHERE o.tenant_id = r.tenant_id AND o.source_account_id = 'lifecycle_chat_open'
-        AND o.payload->>'chatId' = r.chat_id AND o.payload->>'requestId' = r.request_id::text
+        AND o.payload->>'chatId' = r.chat_id AND (o.payload->>'requestId' = r.request_id::text OR
+          EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(o.payload->'siblings','[]'::jsonb)) s WHERE s->>'requestId'=r.request_id::text))
       LIMIT 1) opener ON true
     WHERE r.tenant_id = ${tenantId}::uuid AND r.chat_id = ${chatId} AND r.owner = 'restate'
       AND (r.stage IN ('designing', 'awaiting_answer', 'in_review', 'manual', 'approved', 'delivering')

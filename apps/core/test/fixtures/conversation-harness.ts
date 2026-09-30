@@ -96,6 +96,8 @@ export interface HarnessOptions {
   /** The office members (TELEGRAM_ALLOWED_USERS), in order. */
   office: Person[];
   workerToken: string;
+  /** Observe actual admission when RequestLifecycle dispatches, before the next update is handled. */
+  onDesignStart?: (input: Parameters<AutomaticOpenContext['startDesign']>[0]) => Promise<void>;
 }
 
 /** A thin view of a request the conversation opened. */
@@ -296,7 +298,10 @@ export class ConversationHarness {
       run: async (_n, action) => action(),
       set: (_n, value) => { this.objects.set(requestId, value); },
       send: (message) => { this.background(this.sendOnce(message)); },
-      startDesign: (input) => { this.t.designs.push({ requestId, taskId: input.taskId, runId: input.lifecycle.runId, round: input.lifecycle.round }); },
+      startDesign: (input) => {
+        this.t.designs.push({ requestId, taskId: input.taskId, runId: input.lifecycle.runId, round: input.lifecycle.round });
+        if (this.o.onDesignStart) this.background(this.o.onDesignStart(input));
+      },
       startDelivery: (input) => { this.t.deliveries.push(input.deliveryId); },
       setChatMode: (chatId, id) => {
         const prior = this.inbox.get(chatId);

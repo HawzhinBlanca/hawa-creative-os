@@ -43,7 +43,8 @@ export async function controlTask(db: Kysely<Database>, scope: Scope, taskId: st
       const request = await trx.selectFrom('requests').select(['owner','current_task_id','stage','rev'])
         .where('tenant_id','=',scope.tenantId).where('request_id','=',task.request_id).executeTakeFirst();
       if (data?.requesterHoldRequestId !== task.request_id || request?.owner !== 'restate' ||
-          request.current_task_id !== taskId || request.stage !== 'designing' ||
+          request.current_task_id !== taskId || !(request.stage === 'designing' ||
+            (request.stage==='manual' && Number(request.rev)===1 && data.requesterHoldBeforeProjection===true)) ||
           Number(request.rev) !== data.requesterHoldRequestRev) {
         throw new CanvaFlowError(409,'LIFECYCLE_OWNED','This task has no current requester hold checkpoint to resume.');
       }

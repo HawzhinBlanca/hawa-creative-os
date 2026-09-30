@@ -6,12 +6,12 @@ import type { LateRequesterChange } from './lifecycle-chat-target.js';
 /** Caller records the routing receipt in this same transaction before acknowledging a hold. */
 export async function pauseRequesterDesign(trx: Kysely<Database>, tenantId: string,
   late: Pick<LateRequesterChange, 'requestId' | 'taskId' | 'requestRev' | 'requestStage' | 'text'>,
-  updateId: number): Promise<boolean> {
-  if (late.requestStage !== 'designing') return false;
+  updateId: number, initialBrief = false): Promise<boolean> {
+  if (late.requestStage !== 'designing' && !(initialBrief && late.requestStage==='manual' && late.requestRev===1)) return false;
   await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${late.requestId}`},0))`.execute(trx);
   const request = await trx.selectFrom('requests').select(['owner','stage','rev','current_task_id'])
     .where('tenant_id','=',tenantId).where('request_id','=',late.requestId).executeTakeFirst();
-  if (request?.owner !== 'restate' || request.stage !== 'designing' ||
+  if (request?.owner !== 'restate' || request.stage !== late.requestStage ||
       Number(request.rev) !== late.requestRev || request.current_task_id !== late.taskId) return false;
   const task = await trx.selectFrom('tasks').select(['state','version','request_id'])
     .where('tenant_id','=',tenantId).where('id','=',late.taskId).forUpdate().executeTakeFirst();
@@ -40,6 +40,6 @@ export async function pauseRequesterDesign(trx: Kysely<Database>, tenantId: stri
     fromState:task.state,toState:'paused',actorType:'adapter',actorId:CHANNEL_INGRESS_USER_ID,
     reason:`Requester asked to hold the design: ${late.text}`.slice(0,1000),
     data:{operatorControl:'pause',requesterHoldRequestId:late.requestId,requesterHoldRequestRev:late.requestRev,
-      requesterHoldUpdateId:String(updateId)}},trx);
+      requesterHoldUpdateId:String(updateId),...(initialBrief ? {requesterHoldBeforeProjection:true} : {})}},trx);
   return true;
 }

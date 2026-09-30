@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
-import { createDb, sql, withRlsContext } from '@hawa/db';
+import { createDb, DesignStudioRepository, sql, withRlsContext } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { createApp } from '../src/app.js';
 import { pauseRequesterDesign } from '../src/services/requester-hold.js';
@@ -134,6 +134,42 @@ describe('holds through the actual requester conversation',()=>{
     const h=new ConversationHarness({db,owner,office,workerToken:worker});await h.emptyOfficeQueue();
     const p=new Play(h,office,type);await p.say(KAAE_EVENING);await p.wait(20_000);return p;
   }
+  it('a wait sent before brief settlement blocks the real paid-call ledger until office resume',async()=>{
+    const office=[{id:++officeSeed,name:'Office'}];
+    const initialStates:string[]=[],repo=new DesignStudioRepository(db),runId=randomUUID(),admissionCodes:string[]=[];
+    const call={id:randomUUID(),runId,tenantId,actorId,stage:'briefing',provider:'openai',model:'synthetic-test',
+      reservation:{version:1 as const,policy:'synthetic-test',requestSha256:'a'.repeat(64),usd:0.01,inputTokens:10,outputTokens:10},
+      requestedModel:'synthetic-test',callOrdinal:1,logicalCallSha256:'b'.repeat(64)};
+    const h=new ConversationHarness({db,owner,office,workerToken:worker,onDesignStart:async input=>{
+      initialStates.push((await state(input.taskId)).state);
+      if (!input.clientId) throw new Error('Automatic design dispatch omitted its client');
+      await repo.createRun({id:runId,tenantId,taskId:input.taskId,clientId:input.clientId,
+        actorId,requestKey:`early-hold-${runId}`,requestHash:'a'.repeat(64),request:{},tier:'premium'});
+      try {await repo.recordCallStart(call);admissionCodes.push('ADMITTED');}
+      catch (error) {
+        if ((error as {code?:string}).code!=='TASK_PAUSED') throw error;
+        admissionCodes.push('TASK_PAUSED');
+      }
+    }});await h.emptyOfficeQueue();
+    const p=new Play(h,office);
+    await p.say(KAAE_EVENING);
+    const waiting=await p.say("Wait, don't make it yet",{after:1000});
+    await p.wait(20_000);
+    expect(p.opened).toHaveLength(1);
+    expect(initialStates).toEqual(['paused']);
+    expect(admissionCodes).toEqual(['TASK_PAUSED']);
+    const request=(await h.requests(p.chatId))[0];
+    const current=await h.taskState(request.requestId);
+    expect(current.state).toBe('paused');
+    expect(p.answer(waiting)).toMatch(/paused|wait/i);
+    expect(h.t.sent.filter(s=>s.chatId===p.chatId).map(s=>s.text).join('\n')).not.toMatch(/making a first draft/i);
+    const taskId=request.taskId;
+    await expect(repo.recordCallStart(call)).rejects.toMatchObject({code:'TASK_PAUSED'});
+    expect(await repo.getCallsForRun(runId,tenantId)).toHaveLength(0);
+    await resume(taskId,Number(current.version));
+    await expect(repo.recordCallStart(call)).resolves.toMatchObject({status:'uncertain'});
+    expect(await repo.getCallsForRun(runId,tenantId)).toHaveLength(1);
+  });
   it('asks which design to hold rather than pausing both',async()=>{
     const p=await play();await p.say('Another poster please: KAAE staff football tournament, 14 November 2026 at 4 pm, Franso Hariri stadium.');
     await p.wait(20_000);expect(p.opened).toHaveLength(2);
