@@ -3,7 +3,7 @@ import { log } from '../logging.js';
 import { CHANNEL_INGRESS_USER_ID, isTaskApiStatus } from '@hawa/contracts';
 import { TaskStateMachine } from '@hawa/domain';
 import { withRlsContext } from '@hawa/db';
-import { WahaIngressHandler, verifyActionSignature } from '@hawa/integrations';
+import { WahaIngressHandler, verifyActionLink, type ActionLinkClaims } from '@hawa/integrations';
 import { secretsEqual } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
@@ -235,22 +235,63 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
     });
   });
 
-  // --- Inbound Action Webhook for Two-Way WhatsApp/Telegram Sign-Off (FR-015, FR-082) ---
+  // --- Signed review links for two-way WhatsApp sign-off (FR-015, FR-082; ADR-159) ---
+  // Opening a link (GET) only shows a confirmation: link previews and scanners fetch every link a
+  // chat shows, and a GET used to approve the design, and with publish=true deliver it. The page's
+  // button POSTs the same signed claims. The signature covers the task, the action, whether it
+  // publishes, the expiry and the phone; an altered, expired or older (pre-ADR-159) link is refused.
+  const text = (v: unknown): string | undefined => (typeof v === 'string' && v.length <= 2000 ? v : undefined);
+  const readClaims = (src: Record<string, unknown>): ActionLinkClaims | null => {
+    const taskId = text(src.taskId), action = src.action;
+    if (!taskId || (action !== 'approve' && action !== 'revision') || !/^\d{1,12}$/.test(String(src.exp ?? ''))) return null;
+    const publish = src.publish === true || src.publish === 'true';
+    if (publish && action !== 'approve') return null;
+    const phone = text(src.phone);
+    return { taskId, action, publish, exp: Number(src.exp), ...(phone ? { phone } : {}) };
+  };
+  const escape = (v: string) => v.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+  const refusal = (c: any, check: 'invalid' | 'expired' | 'malformed') => check === 'expired'
+    ? problem(c, 410, 'Link Expired', 'This review link has expired; ask the office for a new one.')
+    : check === 'malformed'
+      ? problem(c, 400, 'Bad Request', 'Missing required fields (taskId, action, exp, sig)')
+      : problem(c, 403, 'Forbidden', 'Invalid action signature');
+
+  const showActionConfirmation = async (c: any) => {
+    const query = c.req.query();
+    const claims = readClaims(query);
+    if (!claims) return refusal(c, 'malformed');
+    const check = verifyActionLink(claims, query.sig);
+    if (check !== 'valid') return refusal(c, check);
+    // The labels the review message itself uses (outbound-notifier.ts), in both languages.
+    const label = claims.action === 'approve'
+      ? { ckb: '✅ پەسەندکردن و بڵاوکردنەوە', en: 'Approve & Publish' }
+      : { ckb: '✏️ داواکاری چاککردنەوە', en: 'Request Revision' };
+    const hidden = Object.entries({ taskId: claims.taskId, action: claims.action, publish: String(claims.publish),
+      exp: String(claims.exp), sig: String(query.sig), ...(claims.phone ? { phone: claims.phone } : {}) })
+      .map(([name, value]) => `<input type="hidden" name="${name}" value="${escape(value)}">`).join('');
+    c.header('Cache-Control', 'no-store');
+    c.header('X-Robots-Tag', 'noindex');
+    return c.html(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"></head>
+      <body style="font-family: system-ui; background: #0B192C; color: #F8FAFC; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center;">
+        <form method="POST" style="background: rgba(255,255,255,0.06); padding: 40px; border-radius: 16px; max-width: 440px;">
+          ${hidden}
+          ${claims.action === 'revision' ? '<textarea name="notes" rows="4" style="width: 100%; margin-bottom: 16px;"></textarea>' : ''}
+          <button type="submit" style="font-size: 18px; padding: 12px 24px; border-radius: 8px;">${escape(label.ckb)}<br>${escape(label.en)}</button>
+          <p style="color: #94A3B8; font-size: 14px;">Task ID: <code>${escape(claims.taskId)}</code></p>
+        </form>
+      </body></html>`);
+  };
+
   const handleActionCallback = async (c: any) => {
-    const isGet = c.req.method === 'GET';
-    const taskId = isGet ? c.req.query('taskId') : (await c.req.json().catch(() => ({}))).taskId;
-    const action = isGet ? c.req.query('action') : (await c.req.json().catch(() => ({}))).action;
-    const sig = isGet ? c.req.query('sig') : (await c.req.json().catch(() => ({}))).sig;
-    const phone = isGet ? c.req.query('phone') : (await c.req.json().catch(() => ({}))).phone;
-    const notes = isGet ? c.req.query('notes') : (await c.req.json().catch(() => ({}))).notes;
-
-    if (!taskId || !action || !sig) {
-      return problem(c, 400, 'Bad Request', 'Missing required query/body params (taskId, action, sig)');
-    }
-
-    if (!verifyActionSignature(taskId, action, sig)) {
-      return problem(c, 403, 'Forbidden', 'Invalid action signature');
-    }
+    // The confirmation page posts a form and is answered with a page; an API caller posts JSON.
+    const asPage = String(c.req.header('content-type') || '').includes('application/x-www-form-urlencoded');
+    const body: Record<string, unknown> = (asPage ? await c.req.parseBody().catch(() => null) : await c.req.json().catch(() => null)) || {};
+    const claims = readClaims(body);
+    if (!claims) return refusal(c, 'malformed');
+    const check = verifyActionLink(claims, body.sig);
+    if (check !== 'valid') return refusal(c, check);
+    const { taskId, action, phone } = claims;
+    const notes = text(body.notes);
 
     // The task as Postgres has it, or 503 when it cannot be read: this approves, delivers or sends
     // back the design. A task this process had cached answered while Postgres was unreachable.
@@ -258,9 +299,7 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
     if (!task) return problem(c, 404, 'Task Not Found');
 
     if (action === 'approve') {
-      const shouldPublish = isGet
-        ? c.req.query('publish') === 'true' || c.req.query('autoPublish') === 'true'
-        : (await c.req.json().catch(() => ({}))).publish === true;
+      const shouldPublish = claims.publish;
 
       if (shouldPublish) {
         const publishRes = await executeOmnichannelPublish(
@@ -277,7 +316,7 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
 
         broadcast('task:approved', { taskId, approvedBy: phone, via: 'whatsapp', publishRes });
 
-        if (isGet) {
+        if (asPage) {
           return c.html(`
             <html>
               <body style="font-family: system-ui; background: #0B192C; color: #F8FAFC; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center;">
@@ -329,7 +368,7 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
 
       broadcast('task:approved', { taskId, approvedBy: phone, via: 'whatsapp' });
 
-      if (isGet) {
+      if (asPage) {
         return c.html(`
           <html>
             <body style="font-family: system-ui; background: #0B192C; color: #F8FAFC; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center;">
@@ -378,7 +417,7 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
       broadcast('task:revision_requested', { taskId, notes, requestedBy: phone });
       broadcastTransition(taskId, isTaskApiStatus(revisionFromStatus) ? revisionFromStatus : null, 'REVISION_REQUESTED', revisionVersion);
 
-      if (isGet) {
+      if (asPage) {
         return c.html(`
           <html>
             <body style="font-family: system-ui; background: #0B192C; color: #F8FAFC; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center;">
@@ -397,5 +436,5 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
   };
 
   registerRoute('post', '/webhooks/whatsapp/actions', handleActionCallback);
-  registerRoute('get', '/webhooks/whatsapp/actions', handleActionCallback);
+  registerRoute('get', '/webhooks/whatsapp/actions', showActionConfirmation);
 }

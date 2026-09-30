@@ -1,12 +1,18 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext, RevisionRepository } from '@hawa/db';
-import { computeActionSignature } from '@hawa/integrations';
+import { signActionLink } from '@hawa/integrations';
 import { createApp, evaluateCanvaExportQc } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { resolveQcProfileId } from '../src/services/canva-task-outcome.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
+
+/** A signed approve-and-publish, posted as the review link's confirmation page does (ADR-159). */
+const signedPublish = (taskId: string) => {
+  const claims = { taskId, action: 'approve' as const, publish: true, exp: Math.floor(Date.now() / 1000) + 3600 };
+  return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...claims, sig: signActionLink(claims) }) };
+};
 
 /**
  * Telegram safety (architecture programme 0.4, 2026-09-24), against hawa-test-postgres as hawa_app
@@ -152,8 +158,7 @@ describe('handlers that act on a task read its status from Postgres', () => {
 
     // A signed WhatsApp approve-and-publish reads the task from Postgres before it acts (Core keeps
     // no copy of it since the cleanup step of the app.ts split), so that read refuses first.
-    const sig = computeActionSignature(taskId, 'approve');
-    const res = await core.request(`/api/webhooks/whatsapp/actions?taskId=${taskId}&action=approve&sig=${sig}&publish=true`);
+    const res = await core.request('/api/webhooks/whatsapp/actions', signedPublish(taskId));
     const body = await res.json();
     expect(res.status).toBe(503);
     expect(body.detail).toMatch(/could not be read from the database/);

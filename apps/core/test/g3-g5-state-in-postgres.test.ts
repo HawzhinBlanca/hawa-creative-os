@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDb, withRlsContext } from '@hawa/db';
-import { computeActionSignature } from '@hawa/integrations';
+import { signActionLink } from '@hawa/integrations';
 import { createApp } from '../src/app.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -195,15 +195,22 @@ describe('what a delivery left is read from publications', () => {
 
     // Before the receipts moved to Postgres the process that delivered answered from its map; the
     // task is COMPLETE, so moving it to PUBLISHING again fails with 409 unless the row answers first.
-    const sig = computeActionSignature(taskId, 'approve');
-    const res = await b.request(`/api/webhooks/whatsapp/actions?taskId=${taskId}&action=approve&sig=${sig}&publish=true`, { method: 'GET' });
+    const claims = { taskId, action: 'approve' as const, publish: true, exp: Math.floor(Date.now() / 1000) + 3600 };
+    const sig = signActionLink(claims);
+    const query = new URLSearchParams({ taskId, action: 'approve', publish: 'true', exp: String(claims.exp), sig });
+    // Opening the link only asks for confirmation (ADR-159); the confirmation's form post acts.
+    const opened = await b.request(`/api/webhooks/whatsapp/actions?${query}`, { method: 'GET' });
+    expect(opened.status).toBe(200);
+    expect(await opened.text()).toContain('<form method="POST"');
+    const res = await b.request('/api/webhooks/whatsapp/actions', { method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: query.toString() });
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain('drive.google.com/drive/folders/');
     const post = await b.request('/api/webhooks/whatsapp/actions', {
       method: 'POST',
       headers: json,
-      body: JSON.stringify({ taskId, action: 'approve', sig, publish: true }),
+      body: JSON.stringify({ ...claims, sig }),
     });
     expect(post.status).toBe(200);
     const answer = (await post.json()).publishRes;

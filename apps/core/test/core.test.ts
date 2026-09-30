@@ -1,6 +1,7 @@
 import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { createDb } from '@hawa/db';
+import { computeActionSignature, signActionLink } from '@hawa/integrations';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
@@ -801,7 +802,13 @@ describe('Core API: Ingress & Task Lifecycle', () => {
 
     // 3. Simulate inbound callback via action webhook
     const actionUrl = approveAction.callbackUrl.replace('http://localhost:3001', '');
-    const callbackRes = await app.request(actionUrl, { method: 'GET' });
+    // Opening the link (a link preview does the same) only shows the confirmation (ADR-159).
+    const opened = await app.request(actionUrl, { method: 'GET' });
+    expect(opened.status).toBe(200);
+    expect(await opened.text()).toContain('<form method="POST"');
+    expect((await (await app.request(`/v1/tasks/${taskId}`)).json()).status).not.toBe('APPROVED');
+    const callbackRes = await app.request('/api/webhooks/whatsapp/actions', { method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: actionUrl.split('?')[1] });
     expect(callbackRes.status).toBe(200);
     const htmlText = await callbackRes.text();
     expect(htmlText).toContain('کەمپینەکە بەسەرکەوتوویی پەسەندکرا');
@@ -810,6 +817,24 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const taskRes = await app.request(`/v1/tasks/${taskId}`);
     const task = await taskRes.json();
     expect(task.status).toBe('APPROVED');
+  });
+
+  it('refuses a review link whose publish flag, expiry or phone was changed, an expired one, and the old unsigned form (ADR-159)', async () => {
+    const taskId = (await (await app.request('/v1/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Link tamper test', clientId: 'client-drustee' }) })).json()).id;
+    const claims = { taskId, action: 'approve' as const, publish: false, exp: Math.floor(Date.now() / 1000) + 3600, phone: '+9647500000000' };
+    const sig = signActionLink(claims);
+    const post = (body: Record<string, unknown>) => app.request('/api/webhooks/whatsapp/actions', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    expect((await post({ ...claims, publish: true, sig })).status).toBe(403);
+    expect((await post({ ...claims, exp: claims.exp + 86_400, sig })).status).toBe(403);
+    expect((await post({ ...claims, phone: '+9647511111111', sig })).status).toBe(403);
+    const old = { ...claims, exp: Math.floor(Date.now() / 1000) - 1 };
+    expect((await post({ ...old, sig: signActionLink(old) })).status).toBe(410);
+    expect((await post({ taskId, action: 'approve', sig: computeActionSignature(taskId, 'approve') })).status).toBe(400);
+    const legacyGet = await app.request(`/api/webhooks/whatsapp/actions?taskId=${taskId}&action=approve&sig=${computeActionSignature(taskId, 'approve')}&publish=true`);
+    expect(legacyGet.status).toBe(400);
+    expect((await (await app.request(`/v1/tasks/${taskId}`)).json()).status).not.toBe('APPROVED');
   });
 
   it('publishes exactly the pinned export to the client\'s Google Drive and Sheets, with an emulated receipt', async () => {
