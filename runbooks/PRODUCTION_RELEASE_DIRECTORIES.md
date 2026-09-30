@@ -254,7 +254,7 @@ No browser-selected provider endpoint is contacted. Never copy these generated
 files or the canonical credentials into the repository, test fixtures, wiki,
 provider prompts or logs.
 
-## Independent worker identities (ADR182, 2026-09-30)
+## Independent worker identities (ADR183, 2026-09-30)
 
 Deploy now prepares an independent design token and worker database URL. Preflight retains an
 existing shared token until apply. After backup/migration and image/configuration qualification,

@@ -340,6 +340,14 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
           text: say(INBOX_MESSAGES.answerTaken, languageOf(update)),
         });
       }
+      // ADR-182: the requester's change started the next draft; they are told so, once, instead of
+      // hearing nothing until the draft reaches the office.
+      if (done.lifecycleAction === 'requester-revision' && done.chatId) {
+        ctx.sendNotice({ v: 1, key: `chatinbox:change-taken:${update.update_id}`,
+          chatId: done.chatId, kind: 'text', class: 'critical',
+          text: say(INBOX_MESSAGES.changeTaken, languageOf(update)),
+        });
+      }
     }
     if (done.lifecycleAction === 'request-choice-required' && done.chatId &&
         (done.code === 'AMBIGUOUS_REQUEST' || done.code === 'STALE_REQUEST_REPLY')) {

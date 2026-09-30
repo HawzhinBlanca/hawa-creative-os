@@ -1,6 +1,6 @@
 # Service-boundary repair — 30 September 2026
 
-Implements ADR182 for NFR-006/FR-060/FR-063/FR-071.
+Implements ADR183 for NFR-006/FR-060/FR-063/FR-071.
 
 1. Keep the nginx proof inode; validate both live binds and configuration, check reload failures.
 2. Separate the design credential and retire matching operator aliases; retain scoped drain identity.

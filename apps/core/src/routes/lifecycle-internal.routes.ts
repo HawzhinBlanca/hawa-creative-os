@@ -55,10 +55,11 @@ import { parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-
 import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.js';
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
   type IntentReceipt } from '../services/requester-turn-store.js';
-import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, readIntentByRules,
-  shortTitle, statusText, tellOfficeAlert, tellText, thanksText, waitsForRequester, type ChatRequestView, type IntentReading,
-  type TurnPlan } from '../services/requester-turn.js';
-import { briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
+import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
+  opensForAPerson, readIntentByRules, readsAsBriefContinuation, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
+  tellText, thanksText, waitsForRequester,
+  withoutBotMentions, type ChatRequestView, type IntentReading, type TurnPlan } from '../services/requester-turn.js';
+import { briefPartSeconds, briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
 import { officeChatFor, officeChatsFor, withOfficeAlerts } from '../services/office-chats.js';
 import { addPhotoMaterial, MATERIAL_STAGES, photoMaterialLine } from '../services/lifecycle-photo-material.js';
 import { createRequesterIntentModel, type RequesterIntentModel } from '../services/requester-intent-model.js';
@@ -578,7 +579,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           await releaseDeferral(trx, DEFAULT_TENANT_ID, source.update_id);
           return 'released' as const;
         }
-        if (!prior && await joinBriefPart(trx, DEFAULT_TENANT_ID, source, held.updateId, hash)) return 'joined' as const;
+        // ADR-182: a brief typed as several messages, a line of style or a forward sent right after it.
+        const typed = { windowSeconds: Math.max(briefPartSeconds(), Math.round(briefPhotoWaitMs() / 1000)),
+          continues: (words: string, soFar: string) => readsAsBriefContinuation(withoutBotMentions(words), withoutBotMentions(soFar)) };
+        if (!prior && await joinBriefPart(trx, DEFAULT_TENANT_ID, source, held.updateId, hash, typed)) return 'joined' as const;
         if (!prior) await deferMessage(trx, DEFAULT_TENANT_ID, source.update_id, scope!, held.updateId, hash, source);
         return 'deferred' as const;
       });
@@ -590,6 +594,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       if (outcome === 'released') releasedDeferral = true;
     }
 
+    // ADR-182: an edited message read again as a new one: thanks corrected into other thanks says nothing.
+    let rereadEdit = false;
     // ADR-145: an edited message or caption. Words still held (a kept photo, a voice note or PDF not yet
     // used) take the new words; words that opened or changed a design become a note to the office on it;
     // words that opened nothing are read again as a new message; an edit to anything else goes to the office.
@@ -600,7 +606,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         officeChatId: officeChatFor(chatOf(preparedUpdate)),
       });
       if (edited.kind === 'answer') return handled(edited.answer.status, edited.answer.extra);
-      if (edited.kind === 'reread') preparedUpdate = edited.update;
+      if (edited.kind === 'reread') {
+        preparedUpdate = edited.update;
+        rereadEdit = true;
+      }
     }
 
     let update = preparedUpdate;
@@ -819,7 +828,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         // brief) is read with its new words; the update itself, and so every receipt, stays the same.
         const editedWords = msg && !photoInput && !admittedAlbum && !boundPhoto
           ? await withRlsContext(db, SYSTEM_SCOPE, (trx) => pendingEditWords(trx, DEFAULT_TENANT_ID, update.update_id)) : null;
-        const rawText: string = (() => {
+        // ADR-182: "@hawa_office_bot" addresses the bot in a group; it is not part of the words, which
+        // become a brief's copy or its title.
+        const rawText: string = withoutBotMentions((() => {
           if (photoInput) return photoInput.directive;
           if (editedWords !== null) return editedWords;
           if (msg && typeof msg === 'object') {
@@ -827,7 +838,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             return typeof t === 'string' ? t : '';
           }
           return '';
-        })();
+        })());
         if (rawText.trim() && chatId) {
           const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
           type RefusalCode = 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' |
@@ -1068,10 +1079,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               const group = ['group', 'supergroup'].includes(String(message.chat?.type || ''));
               const botName = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').toLowerCase();
               const entities = Array.isArray(message.entities) ? message.entities : Array.isArray(message.caption_entities) ? message.caption_entities : [];
+              // Entity offsets count in the message as sent, before the bot's name was taken out of its words.
+              const sent = typeof message.text === 'string' ? message.text : typeof message.caption === 'string' ? message.caption : text;
               const mentionsBot = entities.some((e: any) =>
                 (e?.type === 'mention' && Number.isInteger(e.offset) && Number.isInteger(e.length) &&
                   ((mention: string) => mention.endsWith('bot') || (botName && mention === `@${botName}`))(
-                    text.slice(e.offset, e.offset + e.length).toLowerCase())) ||
+                    sent.slice(e.offset, e.offset + e.length).toLowerCase())) ||
                 (e?.type === 'text_mention' && e.user?.is_bot === true));
               const groupCommand = /^\/(?:task|brief|design|campaign)(?:@\w+)?(?:\s+|$)/i.exec(text);
               // An album admitted in a group already passed ADR-160's gate (`actsInGroup`: addressed to the
@@ -1198,12 +1211,16 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               const carryOut = async (plan: TurnPlan, requests: ChatRequestView[], retried = false): Promise<Response> => {
               const byId = (id: string) => byRequest(requests, id);
               switch (plan.kind) {
-                case 'open':
+                case 'open': {
                   // A brief held for photos was read before it was held: an edit since then gives its words.
                   // ADR-156 (audit #10): the rest of a long message Telegram split, or forwards sent with it,
                   // were joined to the held brief while it waited.
-                  return await openBrief(await withBriefParts(editedWords !== null && !plan.resolves ? editedWords.trim() : plan.text,
-                    plan.resolves ? null : update.update_id), plan.instructionOnly);
+                  const first = editedWords !== null && !plan.resolves ? editedWords.trim() : plan.text;
+                  const words = await withBriefParts(first, plan.resolves ? null : update.update_id);
+                  // ADR-182: a brief typed as several messages is read whole: complete, it is drafted as any
+                  // complete brief is, not left to a designer because its first line alone said little.
+                  return await openBrief(words, words === first ? plan.instructionOnly : plan.instructionOnly && opensForAPerson(words));
+                }
                 case 'revise': {
                   const target = byId(plan.requestId);
                   if (!target || !waitsForRequester(target)) return retried ? carryOut({ kind: 'forward', words: plan.directive }, requests, true)
@@ -1227,10 +1244,19 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   }
                   return await answerChat(update);
                 case 'reply': {
+                  if (rereadEdit && plan.what === 'thanks') return await decided(200, { edit: 'unchanged', intent: reading.intent });
                   const shown = plan.requestIds.map(byId).filter((r): r is ChatRequestView => Boolean(r));
+                  // ADR-182: asked about a design taking longer than usual, the office is told and the
+                  // requester hears so, rather than "it usually takes a few minutes" an hour later.
+                  const now = Date.now();
+                  const slow = plan.what === 'status' ? slowDesigns(shown, now) : [];
+                  const office = slow.length ? officeChatFor(chatId) : undefined;
+                  const alerted = Boolean(office && office !== chatId);
                   const words = plan.what === 'thanks' ? thanksText(shown, lang)
-                    : plan.what === 'status' ? statusText(shown, lang) : nothingToChangeText(lang);
-                  return await decided(200, chatAnswer(words));
+                    : plan.what === 'status' ? statusText(shown, lang, new Set(alerted ? slow.map((r) => r.requestId) : []))
+                      : nothingToChangeText(lang);
+                  return await decided(200, chatAnswer(words, alerted
+                    ? { officeAlert: { chatId: office!, text: slowDesignOfficeAlert(chatId, slow, now) } } : {}));
                 }
                 case 'ask': {
                   // ADR-156: the photo asked about is kept under this update, and the answer carries it.
@@ -1243,9 +1269,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 case 'forward': {
                   const office = officeChatFor(chatId);
                   const alerted = Boolean(office && office !== chatId);
-                  return await decided(200, chatAnswer(forwardText(lang, alerted),
-                    alerted ? { officeAlert: { chatId: office!, text: retried
-                      ? conflictOfficeAlert(chatId, plan.words) : forwardOfficeAlert(chatId, plan.words) } } : {}));
+                  return await decided(200, chatAnswer(forwardText(lang, alerted, plan.question === true),
+                    alerted ? { officeAlert: { chatId: office!, text: retried ? conflictOfficeAlert(chatId, plan.words)
+                      : plan.question ? questionOfficeAlert(chatId, plan.words) : forwardOfficeAlert(chatId, plan.words) } } : {}));
                 }
                 case 'tell': {
                   const target = byId(plan.requestId);

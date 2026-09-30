@@ -1,4 +1,4 @@
-# ADR182 — Independent worker credentials, database grants and nginx admission
+# ADR183 — Independent worker credentials, database grants and nginx admission
 
 Date: 2026-09-30. Status: accepted for implementation; live qualification pending.
 Requirements: NFR-006, FR-060, FR-063, FR-071.

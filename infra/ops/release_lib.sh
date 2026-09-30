@@ -158,7 +158,7 @@ hawa_release_prune() { # [keep]
   done
 }
 
-# ADR182: discard only inactive, clean release worktrees predating the worker route boundary.
+# ADR183: discard only inactive, clean release worktrees predating the worker route boundary.
 # Unlike retention pruning this refuses dirty/non-worktree targets and never falls back to rm -rf.
 hawa_release_prune_unsafe() { # checkout, security foundation commit
   local checkout="$1" floor="$2" dir candidate name head common current previous

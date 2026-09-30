@@ -16,6 +16,11 @@ export const ROUTING_MESSAGES = {
     en: '{title} is being designed right now. The draft usually takes a few minutes; the office checks it before it comes to you.',
     ckb: '{title} ئێستا دیزاین دەکرێت. ڕەشنووسەکە زۆرجار چەند خولەکێک دەخایەنێت؛ ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات.',
   },
+  // ADR-182: asked about a design still being made after half an hour; the office was just told.
+  statusDesigningSlow: {
+    en: "{title} is taking longer than usual. I've asked the office to look into it; they'll follow up here.",
+    ckb: '{title} لە ئاسایی زیاتر دەخایەنێت. داوام لە ئۆفیسەکە کرد سەیری بکەن؛ لێرە وەڵامت دەدەنەوە.',
+  },
   statusManual: {
     en: 'A designer at the office is working on {title}. It will be sent here when it is ready.',
     ckb: 'دیزاینەرێک لە ئۆفیسەکە کار لەسەر {title} دەکات. کە ئامادە بوو لێرە بۆت دەنێردرێت.',
@@ -67,6 +72,15 @@ export const ROUTING_MESSAGES = {
   keptForOffice: {
     en: "I've kept your message for the office; they'll follow up here.",
     ckb: 'پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  // ADR-182: a question the bot cannot answer itself (a price, whether they have the logo): the office does.
+  questionPassed: {
+    en: "I can't answer that myself, so I've passed your question to the office; they'll reply here.",
+    ckb: 'ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  questionKept: {
+    en: "I can't answer that myself, so I've kept your question for the office; they'll reply here.",
+    ckb: 'ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە.',
   },
   nothingToChange: {
     en: "I don't have a design in progress here to change. Tell me what you'd like designed, with the text that should go on it.",

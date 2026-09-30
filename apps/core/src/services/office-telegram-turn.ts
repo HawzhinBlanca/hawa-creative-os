@@ -402,12 +402,17 @@ async function planOf(trx: Kysely<Database>, tenantId: string, m: OfficeMessage)
   if (reading.intent === 'unclear' || (reading.intent === 'change' && asksForNewDesign(m.text))) return null;
   // A change with no reply from a member who has designs of their own on the way (the owner as a
   // requester) is about their own design: requester routing places it, never on someone else's draft.
-  if (reading.intent === 'change' && await ownOpenRequests(trx, tenantId, m.chatId)) return null;
+  const own = await ownOpenRequests(trx, tenantId, m.chatId);
+  if (reading.intent === 'change' && own) return null;
+  // ADR-182: so is a cancellation ("cancel that"). Approval or rejection words with no reply from such a
+  // member ("ok send it when it's ready") may be about their own design too: the one waiting draft is
+  // named and asked about, never decided by guess.
+  if (own && reading.intent === 'reject' && reading.rejectionCategory === 'task') return null;
   const queue = await officeQueue(trx, tenantId);
   if (!queue.length) return null;
   const decision = { intent: reading.intent, words: m.text,
     ...(reading.rejectionCategory ? { rejectionCategory: reading.rejectionCategory } : {}) };
-  return queue.length === 1 ? { kind: 'decide', ...decision, requestId: queue[0].requestId, alertRev: null }
+  return queue.length === 1 && !own ? { kind: 'decide', ...decision, requestId: queue[0].requestId, alertRev: null }
     : { kind: 'ask-which', ...decision, options: queue };
 }
 

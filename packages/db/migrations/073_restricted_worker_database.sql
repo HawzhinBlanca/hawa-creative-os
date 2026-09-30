@@ -1,5 +1,5 @@
 BEGIN;
--- ADR182: service database capabilities, independent of app context and HTTP credentials.
+-- ADR183: service database capabilities, independent of app context and HTTP credentials.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hawa_worker') THEN
     CREATE ROLE hawa_worker NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;

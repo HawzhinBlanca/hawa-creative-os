@@ -1,4 +1,4 @@
-/** ADR182: owner-only provision of the separate worker login. No plaintext reaches SQL/logs. */
+/** ADR183: owner-only provision of the separate worker login. No plaintext reaches SQL/logs. */
 import pg from 'pg';
 import { scramSha256Verifier } from './rotate-app-role.js';
 import { assertTestDatabaseEnv } from './test-database-guard.js';

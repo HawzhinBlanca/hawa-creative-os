@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T20:57:04Z",
+  "generatedAt": "2026-09-30T20:58:34Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 660,
+  "fileCount": 661,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "30dbe5afb17de4a15e83e87e47ff716f12526e338eb3c213156d4de75bdfdd37",
-      "bytes": 3973
+      "sha256": "2e2be3f451b8814dd2feffc66b982652c539cbd8ef0a1d27549862f3f7a2de66",
+      "bytes": 3965
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -883,8 +883,13 @@
       "bytes": 7918
     },
     {
-      "path": "adrs/182_independent_worker_identity_and_bound_mount_validation.md",
-      "sha256": "10629792c0cfdc56660a40efcb4f23f5a0471da7e2986dd1c2ee179c2cf02c5e",
+      "path": "adrs/182_natural_language_stress_suite.md",
+      "sha256": "3c945bb8ccfe5100c4e40b6612da10bcb50542665050c5b45eba253d446ab172",
+      "bytes": 15439
+    },
+    {
+      "path": "adrs/183_independent_worker_identity_and_bound_mount_validation.md",
+      "sha256": "2ae1be89fef626d0daa6dd908f64eac2e89a4126b1994140dcfd0bdb25adfae5",
       "bytes": 2694
     },
     {
@@ -1539,8 +1544,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "90d1e96e4b8fa0c5ff891a77a0cae29bd334adb0ae30245b3f1b982e7bef97e5",
-      "bytes": 56084
+      "sha256": "967c55937fb24a842b08495cffc62e93561af979fa3a8379d6d2796085fab0c5",
+      "bytes": 57562
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2424,18 +2429,18 @@
     },
     {
       "path": "plans/service-boundary-repair-2026-09-30/LOCAL_PROOF.json",
-      "sha256": "afe5fc5241e679923b1268e35028001dd9999f481dc8928714747f030957e994",
-      "bytes": 2927
+      "sha256": "f0805aa109435a6eeccbabf45819ccb304f99fc669f15d58c80aa846e07122ae",
+      "bytes": 3125
     },
     {
       "path": "plans/service-boundary-repair-2026-09-30/PLAN.md",
-      "sha256": "1797fe4622b30384bd3a200ee18735ae901a5ff0deb852cb67536e74748a70d3",
+      "sha256": "7d26330c500afa1507113367caec71e485ed2f7f280819fb8bf606225215490d",
       "bytes": 985
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "ad786726c88a2c9e581432ad0c846c58db953891e4149474271954694d7ef239",
-      "bytes": 552721
+      "sha256": "43c616919ffc41eebcb9fb8b414ce276c8357fd024a89b0c7c7cf1709ba8b188",
+      "bytes": 554549
     },
     {
       "path": "plans/user-stories.csv",
@@ -2599,7 +2604,7 @@
     },
     {
       "path": "runbooks/PRODUCTION_RELEASE_DIRECTORIES.md",
-      "sha256": "5e0acd094e797ccb5d5a98cbc1f42a8e70ef496cd89c11f1d72932cd87aae945",
+      "sha256": "c77ec5204c271300ac7aba89ee3198083cf75eabc435bce183aae9f16731743a",
       "bytes": 18859
     },
     {

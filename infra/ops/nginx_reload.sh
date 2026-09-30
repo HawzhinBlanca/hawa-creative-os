@@ -1,4 +1,4 @@
-# ADR182. Sourced by deploy.sh; COMPOSE, INTERP_FILE and expected digests come from that deploy.
+# ADR183. Sourced by deploy.sh; COMPOSE, INTERP_FILE and expected digests come from that deploy.
 hawa_nginx_seen() {
   "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx sha256sum "$1" 2>/dev/null | cut -d' ' -f1 || true
 }
