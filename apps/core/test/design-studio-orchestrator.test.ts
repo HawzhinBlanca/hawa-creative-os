@@ -614,6 +614,26 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     expect(result.diagnostic).not.toContain('STUDIO_RUN_LIMIT_TOO_SMALL');
   });
 
+  it('4c. an office day used up ends as OFFICE_DAY_EXHAUSTED with its reset, not "no candidates passed hard QA" (ADR-159)', async () => {
+    const taskId = await createTask();
+    const fetcher = createMockFetch();
+    const service = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher, maxUsd: 2, defaultTier: 'standard' });
+    const { run } = await service.createOrGetRun(scope, taskId, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350, tier: 'standard' });
+    const prior = (await sql<any>`SELECT limits FROM hawa.studio_spending_policies WHERE tenant_id=${scope.tenantId}::uuid ORDER BY version DESC LIMIT 1`.execute(db)).rows[0].limits;
+    const policy = (limits: unknown) => sql`INSERT INTO hawa.studio_spending_policies(tenant_id,version,reason,limits)
+      SELECT ${scope.tenantId}::uuid,coalesce(max(version),0)+1,'Synthetic spent office day',${JSON.stringify(limits)}::jsonb
+      FROM hawa.studio_spending_policies WHERE tenant_id=${scope.tenantId}::uuid`.execute(db);
+    await policy({ ...prior, officeUsd: 0 });
+    try {
+      const result = await service.resume(scope, taskId, run.id);
+      expect(result).toMatchObject({ status: 'failed', code: 'OFFICE_DAY_EXHAUSTED' });
+      expect(result.diagnostic).toMatch(/^OFFICE_DAY_EXHAUSTED at stage briefing: The office's daily model allowance is used up .*it resets at \S+T21:00:00\.000Z \(midnight in Baghdad\)/);
+      expect(result.diagnostic).not.toMatch(/hard QA|candidates/i);
+      expect(fetcher).not.toHaveBeenCalled();
+      expect((await sql<any>`SELECT status FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0].status).toBe('failed');
+    } finally { await policy(prior); }
+  });
+
   it('5. a lost layout-model reply holds the run instead of paying for a fallback design', async () => {
     const taskId = await createTask();
     const baseFetch = createMockFetch();

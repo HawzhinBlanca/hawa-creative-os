@@ -1,9 +1,15 @@
 import crypto, { createHash } from 'node:crypto';
 import { describe, expect, it, vi, afterAll } from 'vitest';
 import { createDb } from '@hawa/db';
-import { computeActionSignature } from '@hawa/integrations';
+import { signActionLink } from '@hawa/integrations';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
+
+/** A signed approve-and-publish, posted as the review link's confirmation page does (ADR-159). */
+const signedPublish = (taskId: string) => {
+  const claims = { taskId, action: 'approve' as const, publish: true, exp: Math.floor(Date.now() / 1000) + 3600 };
+  return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...claims, sig: signActionLink(claims) }) };
+};
 
 // Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
 // 1.3, groups G3 and G5), so these apps run on this file's own test database.
@@ -201,9 +207,8 @@ describe('publish-omnichannel delivers exactly the pinned exports', () => {
     // WhatsApp action is the chat path that reaches delivery, and the pin check is what refuses it.
     const { app, taskAwaitingApproval, status } = setup();
     const { taskId } = await taskAwaitingApproval();
-    const sig = computeActionSignature(taskId, 'approve');
 
-    const res = await app.request(`/api/webhooks/whatsapp/actions?taskId=${taskId}&action=approve&sig=${sig}&publish=true`);
+    const res = await app.request('/api/webhooks/whatsapp/actions', signedPublish(taskId));
     expect(res.status).toBe(422);
     expect((await res.json()).detail).toBe('Nothing to deliver: the task has no approval. Approve in the Desk with the captured export selected.');
     expect(await status(taskId)).toBe('AWAITING_APPROVAL');

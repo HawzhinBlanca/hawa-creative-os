@@ -5,7 +5,9 @@ import type { GatewaySpendingReservation } from '@hawa/contracts';
 /** Provider-native bounds and published standard rates; rationale and sources: ADR-093. */
 export const GATEWAY_SPENDING_POLICY = 'gateway-2026-09-27-v1';
 export const GATEWAY_DEFAULT_OUTPUT_TOKENS = 2048;
-const EXPIRES_AT = Date.parse('2026-11-22T00:00:00Z');
+/** When a person must have re-checked these rates (ADR-093, ADR-159); /v1/health warns 14 days before. */
+export const GATEWAY_SPENDING_POLICY_REVIEW_BY = '2026-11-22T00:00:00Z';
+const EXPIRES_AT = Date.parse(GATEWAY_SPENDING_POLICY_REVIEW_BY);
 type ModelRate = { input: number; output: number; imageTokens: number; context: number; maxOutput: number };
 const RATES: Record<string, Record<string, ModelRate>> = {
   google: { 'gemini-3.8-flash': { input: .75, output: 3.75, imageTokens: 2240, context: 1_000_000, maxOutput: 65536 } },

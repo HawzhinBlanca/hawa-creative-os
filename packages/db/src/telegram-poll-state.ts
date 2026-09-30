@@ -1,8 +1,7 @@
 /**
  * Where the Telegram poller keeps its place, in Postgres, per bot (architecture programme 0.4), and
- * the office's Telegram kill switch as the poller reads it. Here, in packages/db, since Phase 2.1:
- * Core's poller and the worker's (apps/worker/src/lifecycle/telegram-poller.ts) share the same row,
- * so switching HAWA_TELEGRAM_POLLER between them carries the offset over.
+ * the office's Telegram kill switch as the poller reads it. The worker's poller
+ * (apps/worker/src/lifecycle/telegram-poller.ts) is the only one since ADR-135; Core's is gone.
  *
  * The offset lived only in Core's memory. After a restart the poller asked Telegram from the start,
  * and Telegram handed back every update it had not yet been told was handled, including the last
@@ -12,8 +11,8 @@
  * No new table: the schema already has a place for an integration's cursor. Each bot is a row in
  * `hawa.integrations` (kind `telegram`, name `bot-<numeric bot id>`; the id is public, the token is
  * not stored) and its position is `hawa.integration_health.cursor_value`, the last update id intake
- * accepted. The update intake keeps failing, and how many times it has failed, is kept in the same
- * row's `detail.failing`, so a restart does not give a failing update a fresh set of attempts.
+ * accepted. Rows written before ADR-159 may also carry `detail.failing` (Core's poller counted a
+ * failing update there); moving the offset past that update still clears it.
  */
 import crypto from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
@@ -31,7 +30,7 @@ export function telegramBotKey(botToken: string): string {
   return id ? `bot-${id}` : `bot-sha256-${crypto.createHash('sha256').update(botToken).digest('hex').slice(0, 16)}`;
 }
 
-// Shaped as @hawa/integrations' TelegramOffsetStorage (getOffset, setOffset), which this package does not import.
+// The worker's poller reads it through its own PollerOffsets interface (getOffset, setOffset).
 export class PostgresTelegramPollState {
   constructor(
     private readonly db: Kysely<Database>,
@@ -72,43 +71,13 @@ export class PostgresTelegramPollState {
     await this.run((trx) => this.advanceWithin(trx, updateId));
   }
 
-  /** setOffset inside a caller's transaction, so a dead letter and the move past it commit together. */
-  async advanceWithin(trx: Kysely<Database>, updateId: number): Promise<void> {
+  private async advanceWithin(trx: Kysely<Database>, updateId: number): Promise<void> {
     const integrationId = await this.ensureRows(trx);
     await sql`UPDATE hawa.integration_health SET
         cursor_value = GREATEST(COALESCE(NULLIF(cursor_value, '')::bigint, 0), ${updateId}::bigint)::text,
         detail = CASE WHEN COALESCE((detail->'failing'->>'updateId')::bigint, 0) <= ${updateId}::bigint THEN detail - 'failing' ELSE detail END,
         state = 'healthy', last_event_at = now(), last_success_at = now(), updated_at = now()
       WHERE integration_id = ${integrationId}::uuid`.execute(trx);
-  }
-
-  /**
-   * Counts one more failed attempt at `updateId` and returns the count. The count is durable: a Core
-   * that restarts while an update keeps failing carries on counting instead of starting again.
-   */
-  async recordFailure(updateId: number, reason: string): Promise<number> {
-    return this.run(async (trx) => {
-      const integrationId = await this.ensureRows(trx);
-      const current = (await sql<{ detail: { failing?: { updateId?: number; attempts?: number; since?: string } } }>`
-        SELECT detail FROM hawa.integration_health WHERE integration_id = ${integrationId}::uuid FOR UPDATE`.execute(trx)).rows[0];
-      const failing = current?.detail?.failing;
-      const same = failing && Number(failing.updateId) === updateId;
-      const attempts = (same ? Number(failing!.attempts) || 0 : 0) + 1;
-      const next = { updateId, attempts, lastError: reason.slice(0, 500), since: same && failing!.since ? failing!.since : new Date().toISOString() };
-      await sql`UPDATE hawa.integration_health SET detail = jsonb_set(detail, '{failing}', ${JSON.stringify(next)}::jsonb),
-          state = 'degraded', last_checked_at = now(), updated_at = now()
-        WHERE integration_id = ${integrationId}::uuid`.execute(trx);
-      return attempts;
-    });
-  }
-
-  /** The failing update and its attempts, if any (for tests and the status report). */
-  async failing(): Promise<{ updateId: number; attempts: number; lastError?: string } | null> {
-    const row = await this.run(async (trx) =>
-      (await sql<{ failing: { updateId: number; attempts: number; lastError?: string } | null }>`SELECT h.detail->'failing' AS failing
-        FROM hawa.integration_health h JOIN hawa.integrations i ON i.id = h.integration_id
-        WHERE i.tenant_id = ${this.scope.tenantId}::uuid AND i.kind = 'telegram' AND i.name = ${this.botKey}`.execute(trx)).rows[0]);
-    return row?.failing ?? null;
   }
 }
 

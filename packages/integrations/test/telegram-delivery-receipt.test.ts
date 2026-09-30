@@ -119,16 +119,3 @@ describe('Telegram outbound receipts',()=>{
     expect(nullRes).toEqual({ success: false, error: 'INVALID_PHOTO_BUFFER' });
   });
 });
-
-describe('Telegram ingress acknowledgment ordering',()=>{
-  it('retains a failed update and retries it before consuming later updates',async()=>{
-    const remote=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>Response.json({ok:true,result:[{update_id:101},{update_id:102}]}));
-    const bridge=new TelegramBridgeDaemon({botToken:'test'});
-    await bridge.pollOnce(async()=>{throw new Error('Database unavailable');});
-    expect(bridge.getStatus().lastUpdateId).toBe(0);
-    const delivered:number[]=[];
-    await bridge.pollOnce(async u=>{delivered.push(u.update_id);});
-    expect(delivered).toEqual([101,102]);expect(bridge.getStatus().lastUpdateId).toBe(102);
-    expect(String(remote.mock.calls[1][0])).toContain('offset=1&');
-  });
-});

@@ -55,5 +55,6 @@ export * from './studio/reference-manager.js';
 export * from './studio/asset-paths.js';
 
 export * from './studio/spending-reservation.js';
+export * from './studio/price-review.js';
 export * from './clients/client-pack.js';
 export * from './studio/thumbnail-rules.js';

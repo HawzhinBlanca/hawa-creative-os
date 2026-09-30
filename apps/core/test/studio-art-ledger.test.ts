@@ -79,8 +79,8 @@ describe('each Studio art request has its own durable admission', () => {
       const fetcher = vi.fn<typeof fetch>(async () => { throw new Error('Unexpected provider transport'); });
       const h = await harness(fetcher, { scope, runId, repository });
       await expect(h.ctx.client.completeJson({ prompt: 'Synthetic request', schema: { type: 'object' }, model: 'gpt-6-astra' }))
-        .rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
-      await expect(h.ctx.artProvider!.generateArt(request)).rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+        .rejects.toMatchObject({ code: 'OFFICE_DAY_EXHAUSTED' });
+      await expect(h.ctx.artProvider!.generateArt(request)).rejects.toMatchObject({ code: 'OFFICE_DAY_EXHAUSTED' });
       expect(fetcher).not.toHaveBeenCalled();
       expect(await repository.getCallsForRun(runId, scope.tenantId)).toHaveLength(0);
     } finally { await db.destroy(); }

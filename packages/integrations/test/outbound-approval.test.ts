@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildOutboundReviewDispatch,
+  ACTION_LINK_TTL_MS,
   computeActionSignature,
+  signActionLink,
+  verifyActionLink,
   verifyActionSignature,
   type CampaignReviewDispatchPayload,
 } from '../src/outbound-notifier.js';
@@ -41,6 +44,24 @@ describe('Two-Way Outbound Approval Dispatcher', () => {
 
     expect(revisionAction.action).toBe('revision');
     expect(revisionAction.callbackUrl).toContain('action=revision');
+  });
+
+  it('signs review links over the action, publish flag, 72-hour expiry and phone (ADR-159)', () => {
+    const now = Date.parse('2026-09-30T08:00:00Z');
+    const [approve] = buildOutboundReviewDispatch({ ...samplePayload, now }).actions;
+    const query = new URL(approve.callbackUrl).searchParams;
+    const exp = Math.floor((now + ACTION_LINK_TTL_MS) / 1000);
+    expect(Object.fromEntries(query)).toEqual({ taskId: 'task_review_123', action: 'approve', publish: 'false',
+      exp: String(exp), sig: approve.signature, phone: samplePayload.recipientPhone });
+    const claims = { taskId: 'task_review_123', action: 'approve' as const, publish: false, exp, phone: samplePayload.recipientPhone };
+    expect(verifyActionLink(claims, approve.signature, now)).toBe('valid');
+    expect(verifyActionLink({ ...claims, publish: true }, approve.signature, now)).toBe('invalid');
+    expect(verifyActionLink({ ...claims, action: 'revision' }, approve.signature, now)).toBe('invalid');
+    expect(verifyActionLink({ ...claims, exp: exp + 1 }, approve.signature, now)).toBe('invalid');
+    expect(verifyActionLink({ ...claims, phone: undefined }, approve.signature, now)).toBe('invalid');
+    expect(verifyActionLink(claims, approve.signature, exp * 1000)).toBe('expired');
+    expect(verifyActionLink(claims, computeActionSignature('task_review_123', 'approve'), now)).toBe('invalid');
+    expect(signActionLink(claims)).toBe(approve.signature);
   });
 
   it('verifies valid HMAC signatures and rejects forged signatures', () => {

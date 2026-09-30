@@ -284,6 +284,24 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(ownership).toEqual({ owner: 'restate', delivery_executor_pin: 'restate' });
   });
 
+  it('drafts nothing automatically when AUTO_GENERATE_CHAT_DESIGNS is not true: the brief is saved for the art director (ADR-159)', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    for (const setting of ['false', '']) {
+      vi.stubEnv('AUTO_GENERATE_CHAT_DESIGNS', setting);
+      const chat = chatId();
+      const opened = await intake(createApp({ db } as any), brief(updateId(), chat));
+      expect(opened.body, `AUTO_GENERATE_CHAT_DESIGNS=${setting}`).toMatchObject({ intakeStatus: 200,
+        lifecycleAction: 'open-request', draft: { autoGenerate: false } });
+      const projected = await createApp({ db } as any).request(`/v1/internal/lifecycle/${opened.body.requestId}/project`, {
+        method: 'POST', headers: worker,
+        body: JSON.stringify({ v: 1, expectedRev: 0, rev: 1, key: `${opened.body.requestId}:1:open`,
+          ops: [{ kind: 'createRequest', draft: opened.body.draft }] }),
+      });
+      expect(await projected.json()).toMatchObject({ stage: 'manual', autoGenerate: false });
+    }
+  });
+
   it('opens an explicit second brief while another lifecycle request awaits a revision', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();

@@ -19,11 +19,58 @@ export interface StudioReservationShortfall {
 }
 
 export class StudioBudgetExhaustedError extends Error {
-  readonly code = 'BUDGET_EXHAUSTED';
+  readonly code: 'BUDGET_EXHAUSTED' | 'OFFICE_DAY_EXHAUSTED' = 'BUDGET_EXHAUSTED';
   constructor(message = 'The Studio run has reached its spending or call limit.', readonly shortfall?: StudioReservationShortfall) {
     super(message);
     this.name = 'StudioBudgetExhaustedError';
   }
+}
+
+/** The office day runs midnight to midnight in Baghdad (UTC+3 all year, no daylight saving). */
+const OFFICE_DAY_OFFSET_MS = 3 * 3_600_000;
+export function nextOfficeDayStart(now: number = Date.now()): Date {
+  const local = new Date(now + OFFICE_DAY_OFFSET_MS);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + 1) - OFFICE_DAY_OFFSET_MS);
+}
+
+/**
+ * The shared daily allowance (office, client or role) is used up, not the run's own limit (ADR-159).
+ * Nothing was sent for the request; it can run again when the office day resets, or once the office
+ * raises its daily limit. It used to be reported as "no candidates passed hard QA".
+ */
+export class OfficeDayExhaustedError extends StudioBudgetExhaustedError {
+  override readonly code = 'OFFICE_DAY_EXHAUSTED' as const;
+  constructor(readonly scope: string, readonly neededUsd: number | null, readonly availableUsd: number | null,
+    readonly resetsAt: Date, databaseDetail?: string) {
+    super(`The ${scope === 'office' ? "office's" : scope === 'client' ? "client's" : `${scope} role's`} daily model allowance is used up` +
+      `${neededUsd !== null && availableUsd !== null ? ` ($${neededUsd.toFixed(2)} needed, $${availableUsd.toFixed(2)} left)` : ''}; ` +
+      `it resets at ${resetsAt.toISOString()} (midnight in Baghdad).${databaseDetail ? ` [${databaseDetail}]` : ''}`);
+    this.name = 'OfficeDayExhaustedError';
+  }
+}
+
+/** Reads the database's "STUDIO_SCOPE_BUDGET_EXHAUSTED: <scope> needs $x; $y available for the office day". */
+export function officeDayExhaustedFrom(message: string, now: number = Date.now()): OfficeDayExhaustedError | null {
+  const m = /^STUDIO_SCOPE_BUDGET_EXHAUSTED:\s*(\S+) needs \$([0-9.]+); \$([0-9.]+) available/.exec(message);
+  if (!m && !message.startsWith('STUDIO_SCOPE_BUDGET_EXHAUSTED:')) return null;
+  const amount = (v: string | undefined) => (v !== undefined && Number.isFinite(Number(v)) ? Number(v) : null);
+  // The database's own words stay at the end, for the logs and the run's diagnostic.
+  return new OfficeDayExhaustedError(m?.[1] ?? 'office', amount(m?.[2]), amount(m?.[3]), nextOfficeDayStart(now), message.slice(0, 300));
+}
+
+/**
+ * A price policy is valid until a person has to check its prices again (runbooks/SPENDING_POLICY.md).
+ * From 14 days before that instant it is `expiring` (a /v1/health warning); from the instant, `expired`
+ * and paid calls priced by it are refused (ADR-093, ADR-159).
+ */
+export function spendingPolicyValidity(reviewBy: string, now: number = Date.now(), warnDays = 14): {
+  status: 'valid' | 'expiring' | 'expired'; reviewBy: string; daysLeft: number;
+} {
+  const until = Date.parse(reviewBy);
+  const left = until - now;
+  const daysLeft = Number.isFinite(left) ? Math.floor(left / 86_400_000) : 0;
+  const status = !Number.isFinite(left) || left <= 0 ? 'expired' : left <= warnDays * 86_400_000 ? 'expiring' : 'valid';
+  return { status, reviewBy, daysLeft: Math.max(0, daysLeft) };
 }
 
 export class StudioBudgetEvidenceError extends Error {
@@ -66,7 +113,8 @@ export interface StudioBudgetCall {
   costBasis?: StudioCostBasis | null;
 }
 
-export type StudioCostBasis = 'usage' | 'estimate' | 'unavailable' | 'not_accepted';
+/** `price_list`: a published per-item price (a Gemini image at its size) is the charge itself (ADR-159). */
+export type StudioCostBasis = 'usage' | 'estimate' | 'unavailable' | 'not_accepted' | 'price_list';
 
 export interface StudioCallReservation {
   version: 1;
@@ -141,7 +189,7 @@ export function studioBudgetUsage(snapshot: unknown, calls: readonly StudioBudge
     if (call.status === 'uncertain' && call.settledUsd === null) usage.unresolvedCalls++;
     if (call.reservedUsd != null) {
       const finalCost = call.settledUsd !== null || call.attestedUsd != null ||
-        (call.status !== 'uncertain' && (call.costBasis === 'usage' || call.costBasis === 'not_accepted'));
+        (call.status !== 'uncertain' && (call.costBasis === 'usage' || call.costBasis === 'not_accepted' || call.costBasis === 'price_list'));
       if (!finalCost) usage.reservedAdditionalUsd += Math.max(0, call.reservedUsd - known);
       if (studioUsdMicros(Math.max(known, attributed)) > studioUsdMicros(call.reservedUsd)) {
         usage.blocker = 'STUDIO_BUDGET_RESERVATION_EXCEEDED';

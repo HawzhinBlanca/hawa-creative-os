@@ -33,7 +33,7 @@ import { askAboutSource, openSourceQuestion, plainClientAnswer, readCandidate, r
 import { parseChoice } from './requester-turn.js';
 import { readIntentReceipt } from './requester-turn-store.js';
 import { pendingEditWords } from './lifecycle-media-intake.js';
-import type { ChatIntake } from './chat-intake.js';
+import { chatAutoDraftsEnabled, type ChatIntake } from './chat-intake.js';
 import { transcribeRetainedVoice, holdVoiceForManualReview } from './lifecycle-voice.js';
 import { audioAsOggOpus, MediaConversionError } from './media-conversion.js';
 import { bindSourceToCutAlbum, type AlbumOutcome } from './lifecycle-album.js';
@@ -256,7 +256,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
       designInstructions: instructions !== null ? sourceClientSelection(instructions).instructions : upload.instructions,
       exactCopy: [{ id: 'reviewed_source_copy', text: saved.copy,
         role: 'body', language: rtl ? 'ckb' : 'en', direction: rtl ? 'rtl' : 'ltr', approved: true }],
-      autoGenerate: true, lifecycleSource: ref, variant: upload.variant ?? { width: 1080, height: 1350 } };
+      autoGenerate: chatAutoDraftsEnabled(), lifecycleSource: ref, variant: upload.variant ?? { width: 1080, height: 1350 } };
     const decision = await tx(trx => recordNewBriefDecision(trx, scope.tenantId, confirmationUpdateId,
       { requestId, chatId: upload.chatId, payloadHash: saved.payloadHash, draft,
         sourceUpdate: { original: upload.sourceUpdate, confirmation: saved.sourceUpdate } }));

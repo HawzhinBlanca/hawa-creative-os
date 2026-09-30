@@ -410,13 +410,6 @@ export class OutboxConsumer {
       });
     }
 
-    if (!this.handlers.has('publish.drive')) {
-      this.handlers.set('publish.drive', async () => {
-        // Effect transport: Drive publication
-        throw new Error('Drive publication transport is not registered; no delivery occurred');
-      });
-    }
-
     if (!this.handlers.has('notify.telegram')) {
       this.handlers.set('notify.telegram', async (cmd, _db, scope) => {
         // Effect transport: Outbound Telegram notification
@@ -467,13 +460,6 @@ export class OutboxConsumer {
           throw new OutboxDeliveryError(`CORE_REFUSED_OUTCOME: Core answered HTTP ${res.status} for task ${taskId}`, 'permanent', 'CORE_REFUSED_OUTCOME');
         }
         throw new Error(`CORE_UNAVAILABLE: Core answered HTTP ${res.status} for task ${taskId}`);
-      });
-    }
-
-    if (!this.handlers.has('notify.whatsapp')) {
-      this.handlers.set('notify.whatsapp', async () => {
-        // Effect transport: Outbound WhatsApp interactive message
-        throw new Error('WhatsApp notification transport is not registered; no message was sent');
       });
     }
 

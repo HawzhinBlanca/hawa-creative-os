@@ -27,7 +27,7 @@ import { sql, withRlsContext } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID, parseBlobRef, parseLifecycleAlbumRef, parseLifecycleSourceRef, type BlobRef, type DeliveryOutcome } from '@hawa/contracts';
 import { createLifecycleSourceIntake } from '../services/lifecycle-source-intake.js';
 import { assertSourceIdentity, SourceConflict } from '../services/lifecycle-source-store.js';
-import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
+import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, parseStudioImagery, parseStudioTier } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
@@ -65,7 +65,7 @@ import { createRequesterIntentModel, type RequesterIntentModel } from '../servic
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
 import { projectLifecycleOfficeRetry } from '../services/lifecycle-office-retry.js';
-import { splitBilingualRequest, type ChatIntake } from '../services/chat-intake.js';
+import { chatAutoDraftsEnabled, splitBilingualRequest, type ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
 import { parseNativeReviewSubmission } from '@hawa/domain';
 import { projectLifecycleNativeReview } from '../services/lifecycle-native-review.js';
@@ -177,8 +177,8 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
   if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options) ||
       JSON.stringify(options).length > 2000 ||
       (Object.keys(options).some((key) => !['tier', 'imagery', 'previews', 'holdForSelection'].includes(key))) ||
-      ((options as any).tier !== undefined && !['fast', 'quality'].includes((options as any).tier)) ||
-      ((options as any).imagery !== undefined && !['none', 'abstract', 'photographic'].includes((options as any).imagery)) ||
+      parseStudioTier((options as { tier?: unknown }).tier) === null ||
+      parseStudioImagery((options as { imagery?: unknown }).imagery) === null ||
       ((options as any).previews !== undefined && (!Number.isInteger((options as any).previews) || (options as any).previews < 1 || (options as any).previews > 4)) ||
       ((options as any).holdForSelection !== undefined && typeof (options as any).holdForSelection !== 'boolean'))) return null;
   const image = d.lifecycleImage;
@@ -856,7 +856,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 platform: 'telegram', sourceEventId: `lc-${part.requestId}-r0`, sourceChannelId: chatId,
                 senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester',
                 rawText: part.text, rawJson: part.lang ? { ...update, hawaLanguageGraphic: part.lang } : update,
-                autoGenerate: !instructionOnly,
+                autoGenerate: !instructionOnly && chatAutoDraftsEnabled(),
                 isInstructionOnly: instructionOnly,
               });
               const prepared = await prepare(parts[0]);

@@ -13,13 +13,26 @@ Requirements FR-060/065/067/079 and NFR-001/014. ADRs 086–088 and 111–112.
 3. Do not re-key a request, erase calls, or switch to the alternate planner to
    bypass uncertainty. Those paths check all unresolved Studio calls for the task.
 
+## Automatic charge after the wait, and the trusted office (ADR-159)
+
+A call with no outcome is charged its whole reservation by System Automation once it is
+`HAWA_UNCERTAIN_CALL_HOLD_HOURS` old (default 6) and its run has stopped. The charge is recorded as
+settlement evidence (`reservation_expiry`), the task can plan again, and later office days no longer
+hold it. The recovery panel shows each call's `chargedInFullAfter`. To record the real charge
+instead, settle before then as below. A planner call is charged the same way, as a call-cost
+attestation; abandon its plan before planning again.
+
+In `trusted_office` mode (ADR-146), the office team settles as the shared office administrator;
+the receipt says `trusted_office_attestation` and `trusted_office_team`, not a person.
+
 ## Obtain evidence and settle
 
 1. Obtain terminal provider receipts or support confirmation for **every unresolved
    call**. Provider-confirmed non-acceptance requires a final cost of zero; confirmed
    completion requires a known final reported cost. Unknown acceptance or cost
    remains held. A request ID or empty dashboard alone is insufficient evidence.
-2. Sign in as a named office administrator. Shared administrator keys cannot settle.
+2. Sign in as a named office administrator (or use the trusted office, above). Shared
+   administrator keys cannot settle.
 3. Reload the recovery evidence. Enter the final cost, provider/support reference,
    digest of the retained evidence, and reason. The optional local file picker
    computes SHA-256 without uploading the evidence file. Keep that file in the
@@ -121,6 +134,9 @@ run budget is a historical snapshot; it is not permission to reset those totals.
 Administrator-reported additional cost is displayed separately. A late receipt
 cannot reduce a higher settled amount used for admission.
 
+- `OFFICE_DAY_EXHAUSTED`: the shared daily allowance (office, client or role) is used up; nothing
+  was sent for the next request. It resets at midnight in Baghdad (21:00 UTC). Retry the design
+  then, or raise the limit in the spending policy (ADR-159).
 - `BUDGET_EXHAUSTED`: no further model call can be admitted on this run. Calls
   already admitted can still finish and record costs. Review the current result
   before explicitly requesting separately billable work.

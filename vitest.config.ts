@@ -92,6 +92,9 @@ export default defineConfig({
       HAWA_SPEND_STATE_DIR: spendStateDir,
       HAWA_BLOB_DIR: blobDir,
       HAWA_RETRY_DELAY_MS: '10',
+      // Production's setting (ADR-159): chat requests are drafted automatically. A test of the switch
+      // turned off stubs it.
+      AUTO_GENERATE_CHAT_DESIGNS: 'true',
       // Tests must opt into a mocked provider explicitly. Never inherit an office key and make a
       // paid, nondeterministic classifier or image call from the local test process.
       OPENAI_API_KEY: '',

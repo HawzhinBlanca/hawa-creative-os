@@ -20,3 +20,4 @@ export * from './canva-connect-client.js';
 export * from './telegram-pick-flow.js';
 export * from './lifecycle-office-auth.js';
 export * from './requester-messages/index.js';
+export { GATEWAY_SPENDING_POLICY, GATEWAY_SPENDING_POLICY_REVIEW_BY } from './gateway-spending.js';

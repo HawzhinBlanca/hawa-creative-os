@@ -11,7 +11,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getCookie } from 'hono/cookie';
 import { SYSTEM_AUTOMATION_USER_ID, PRIMARY_OPERATOR_USER_ID, TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
-import { type ClientDNA, type DesignBrief, resolveModel, resolveImageSettings, activeModelTier } from '@hawa/domain';
+import { type ClientDNA, type DesignBrief, resolveModel, resolveImageSettings, activeModelTier, spendingPolicyValidity } from '@hawa/domain';
 import {
   createDb,
   withRlsContext,
@@ -35,7 +35,7 @@ try {
   // Ignore in environments where env file loading is handled externally
 }
 
-import { CreativeDirectorRunner, resolveOrnamentSettings } from '@hawa/creative';
+import { CreativeDirectorRunner, resolveOrnamentSettings, STUDIO_SPENDING_POLICY } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
 import {
   GooglePublisher,
@@ -48,6 +48,8 @@ import {
   HistoricalDesignMigrator,
   CanvaNativeAdapter,
   CircuitBreaker,
+  GATEWAY_SPENDING_POLICY,
+  GATEWAY_SPENDING_POLICY_REVIEW_BY,
 } from '@hawa/integrations';
 import { PostgresIngressPersistenceAdapter } from './ingress-persistence-adapter.js';
 import { DurableEvaluationService } from './services/durable-evaluations.js';
@@ -114,6 +116,7 @@ import { createOmnichannelDelivery } from './services/omnichannel-delivery.js';
 import { PostgresDriveUploadIdentityStore } from './services/drive-upload-reservation.js';
 import { PostgresSheetExpectationStore } from './services/publication-expectations.js';
 import { PublicationInspectionService, startPublicationInspectionSchedule } from './services/publication-inspections.js';
+import { StudioCallSettlementService } from './services/studio-call-settlement.js';
 import { registerPublicationInspectionRoutes } from './routes/publication-inspections.routes.js';
 import { officeAccessPolicy, permitsOfficeRequest } from './services/office-access.js';
 
@@ -234,15 +237,7 @@ export function createApp(options?: CreateAppOptions) {
     options?.telegramBridge ||
     new TelegramBridgeDaemon({
       botToken: process.env.TELEGRAM_BOT_TOKEN,
-      secretToken: process.env.TELEGRAM_WEBHOOK_SECRET || '',
       targetIngressUrl: 'http://127.0.0.1:8080/api/webhooks/telegram',
-      deskBaseUrl:
-        process.env.PUBLIC_TUNNEL_URL ||
-        process.env.HAWA_PUBLIC_URL ||
-        process.env.HAWA_DESK_BASE_URL ||
-        'http://127.0.0.1:8080',
-      actionTokenService: telegramActionTokenService,
-      allowedUserIds: telegramAllowedUsers,
     });
   // The office's switches, kept in Postgres so a restart keeps a thrown one (architecture programme
   // 1.3, G8; services/channel-kill-switches.ts). Without a database they are this app's alone.
@@ -734,6 +729,14 @@ export function createApp(options?: CreateAppOptions) {
     // People cut out of client photos (ADR-032). Down, photos are placed framed and the requester is
     // told; the watchdog alerts on 'unreachable' so the office knows before a request needs one.
     const cutoutStatus = await healthCutouts.health();
+    // ADR-159: the price policies' review dates. From 14 days before, a warning the watchdog pages on;
+    // from the date, the Canva planner sends nothing until a person renews the prices.
+    const policyChecks = [
+      { policy: STUDIO_SPENDING_POLICY.id, ...spendingPolicyValidity(STUDIO_SPENDING_POLICY.reviewBy) },
+      { policy: GATEWAY_SPENDING_POLICY, ...spendingPolicyValidity(GATEWAY_SPENDING_POLICY_REVIEW_BY) },
+    ];
+    const spendingPolicyStatus = policyChecks.some((p) => p.status === 'expired') ? 'expired'
+      : policyChecks.some((p) => p.status === 'expiring') ? 'expiring' : 'valid';
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
     const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || (isProduction && canvaStatus === 'unverified') || channelKillSwitches.telegram || channelKillSwitches.waha
       || (isProduction && modelProviderStatus !== 'connected')
@@ -744,7 +747,8 @@ export function createApp(options?: CreateAppOptions) {
       || restateStatus === 'unregistered' || restateStatus === 'unreachable'
       || funnelStatus === 'stalled' || (Boolean(db) && funnelStatus === 'unknown')
       || parkedUpdates > 0
-      || (restateWork.paused ?? 0) > 0;
+      || (restateWork.paused ?? 0) > 0
+      || spendingPolicyStatus !== 'valid';
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
 
     return c.json({
@@ -771,6 +775,8 @@ export function createApp(options?: CreateAppOptions) {
       },
       funnel: funnelMetrics,
       restateInvocations: restateWork,
+      spendingPolicy: { status: spendingPolicyStatus, policies: policyChecks,
+        ...(spendingPolicyStatus !== 'valid' ? { warning: 'Re-check the provider prices and renew the price policy (runbooks/SPENDING_POLICY.md).' } : {}) },
       // Which models new requests will use: HAWA_MODEL_TIER=dev is the owner's cheap tier, and
       // HAWA_MODEL_<ROLE> / HAWA_IMAGE_* override single settings. Never shows a key, only whether
       // the selected image provider has one.
@@ -812,6 +818,7 @@ export function createApp(options?: CreateAppOptions) {
         funnel: funnelStatus,
         cutout: cutoutStatus,
         ...(funnelMetrics?.alert ? { funnelAlert: funnelMetrics.alert } : {}),
+        ...(spendingPolicyStatus !== 'valid' ? { spendingPolicy: spendingPolicyStatus } : {}),
         ...(bridgeStatus?.lastError ? { telegramLastError: bridgeStatus.lastError.code } : {}),
       },
     }, isUnhealthy ? 503 : 200);
@@ -1053,6 +1060,22 @@ export function createApp(options?: CreateAppOptions) {
     };
     setInterval(stalePass, 15 * 60_000).unref?.();
     setTimeout(stalePass, 180_000).unref?.();
+  }
+
+  // A paid call with no provider outcome for hours is charged its whole reservation, recorded as
+  // System Automation's evidence, so it stops blocking its task and every later office day (ADR-159).
+  if (db && options?.enableUncertainCallExpiry) {
+    const settlement = new StudioCallSettlementService(db);
+    const expire = async () => {
+      try {
+        const charged = await settlement.settleExpired(DEFAULT_TENANT_ID);
+        if (charged.studioRuns.length || charged.plannerCalls.length) log.warn('[uncertain-calls] charged in full:', JSON.stringify(charged));
+      } catch (err) {
+        log.warn('[uncertain-calls] pass failed:', (err as Error)?.message || err);
+      }
+    };
+    setInterval(expire, 15 * 60_000).unref?.();
+    setTimeout(expire, 180_000).unref?.();
   }
 
   // Client DNA as the office saved it in PostgreSQL, loaded before the port opens (a test may have

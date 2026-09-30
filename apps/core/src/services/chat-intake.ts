@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { log } from '../logging.js';
+import type { StudioImagery, StudioTier } from '@hawa/domain';
 import { type Kysely, type Database, TaskRepository, withRlsContext, sql } from '@hawa/db';
 import { CHANNEL_INGRESS_USER_ID, type BlobRef, type LifecycleAlbumRef, type LifecycleSourceRef, type ReviewedSourceEvidence } from '@hawa/contracts';
 
@@ -33,8 +35,9 @@ export interface ChatIntake {
   reviewedSource?: ReviewedSourceEvidence;
   /** Optional studio generation parameters */
   studioOptions?: {
-    tier?: 'fast' | 'quality';
-    imagery?: 'none' | 'abstract' | 'photographic';
+    /** The Studio's names, or the older intake names the Studio maps (parseStudioTier, ADR-159). */
+    tier?: StudioTier | 'fast' | 'quality';
+    imagery?: StudioImagery | 'abstract' | 'photographic';
     previews?: number;
     holdForSelection?: boolean;
     parentTaskId?: string;
@@ -132,6 +135,30 @@ export function splitBilingualRequest(rawText: string): { en: string; ckb: strin
   };
 }
 
+/**
+ * AUTO_GENERATE_CHAT_DESIGNS=true lets a chat request (Telegram or WhatsApp) be drafted automatically:
+ * a paid model call and a Canva import each. Anything else saves it for the art director, as
+ * .env.production.example documents. Until ADR-159 only WhatsApp read it and every Telegram brief
+ * was drafted whatever it said; production sets it to true (see the ADR), so nothing changes there.
+ */
+export function chatAutoDraftsEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env.AUTO_GENERATE_CHAT_DESIGNS === 'true';
+}
+
+/**
+ * A daily ceiling on automatic drafts: a whole number, or the default when unset. Anything else
+ * (a typo like "20 " is fine, "twenty" or "5 a day" is not) fails closed as 0, so no automatic
+ * draft is made until it is corrected. It used to become NaN, and every comparison with NaN is
+ * false: a mistyped cap switched the cap off (audit 2026-09-30, ADR-159).
+ */
+export function dailyDraftCap(name: string, fallback: number, env: Record<string, string | undefined> = process.env): number {
+  const raw = env[name]?.trim();
+  if (raw === undefined || raw === '') return fallback;
+  if (/^\d+$/.test(raw) && Number.isSafeInteger(Number(raw))) return Number(raw);
+  log.error(`[chat-intake] ${name} is not a whole number; no automatic drafts until it is corrected.`);
+  return 0;
+}
+
 /** Commit the verified original event and its task before broadcasting or acknowledging. */
 export async function persistChatIntake(
   db: Kysely<Database>,
@@ -158,8 +185,8 @@ export async function persistChatIntake(
       const isDirector = input.platform === 'telegram' && allowedUsers.includes(input.sourceChannelId);
 
       if (!isDirector) {
-        const perSender = Math.max(0, Number(process.env.AUTO_GENERATE_DAILY_CAP_PER_SENDER || 5));
-        const global = Math.max(0, Number(process.env.AUTO_GENERATE_DAILY_CAP_GLOBAL || 200));
+        const perSender = dailyDraftCap('AUTO_GENERATE_DAILY_CAP_PER_SENDER', 5);
+        const global = dailyDraftCap('AUTO_GENERATE_DAILY_CAP_GLOBAL', 200);
         const counts = (await sql<{ sender: string; total: string }>`
           SELECT count(*) FILTER (WHERE payload->>'sourcePlatform' = ${input.platform} AND payload->>'sourceChannelId' = ${input.sourceChannelId}) AS sender,
                  count(*) AS total

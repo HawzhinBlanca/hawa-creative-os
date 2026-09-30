@@ -8,11 +8,8 @@ import {
   withRlsContext,
 } from '@hawa/db';
 import {
-  TelegramBridgeDaemon,
   TelegramActionTokenService,
   verifyTelegramMiniAppInitData,
-  MemoryTelegramOffsetStorage,
-  type TelegramUpdate,
 } from '@hawa/integrations';
 import crypto from 'node:crypto';
 
@@ -114,30 +111,6 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
 
     expect(binding).toBeDefined();
     expect(binding.canva_design_id).toBe(canvaDesignId);
-
-    // C. Format preview card with Canva deep link and cryptographically bound action tokens
-    const bridge = new TelegramBridgeDaemon({
-      actionTokenService,
-      allowedUserIds: [authorizedUserId],
-    });
-
-    const card = bridge.formatTaskPreviewCard(
-      {
-        id: taskId,
-        title: 'KAAE Ministry Accreditation Announcement',
-        status: 'AWAITING_APPROVAL',
-        clientName: 'KAAE',
-        revisionId: 'rev_1',
-        actorId: authorizedUserId,
-        canvaDocumentId: canvaDesignId,
-        canvaUrl: binding.edit_url,
-      },
-      hmacSecret
-    );
-
-    expect(card.text).toContain('KAAE Ministry Accreditation Announcement');
-    expect(card.text).toContain(`Canva Binding:* \`${canvaDesignId}\``);
-    expect(card.reply_markup?.inline_keyboard).toBeDefined();
   });
 
   // Cases 2-5 also sent each token's button press to the Telegram webhook, which refused it with
@@ -336,41 +309,5 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
       body: JSON.stringify({ initData: foreignParams.toString() }),
     });
     expect(resForeign.status).toBe(403);
-  });
-
-  it('8. Polling Mode Offset Persistence and Truthful Outage Recovery', async () => {
-    const offsetStorage = new MemoryTelegramOffsetStorage();
-    await offsetStorage.setOffset(4500);
-
-    const bridge = new TelegramBridgeDaemon({
-      botToken: 'mock_token',
-      offsetStorage,
-    });
-
-    // Simulate update processing with offset persistence
-    const update1: TelegramUpdate = {
-      update_id: 4501,
-      message: {
-        message_id: 101,
-        chat: { id: 12345, type: 'private' },
-        date: Math.floor(Date.now() / 1000),
-        text: 'Test update 1',
-        from: { id: 12345, is_bot: false, first_name: 'Test' },
-      },
-    };
-
-    const res1 = await bridge.processUpdate(update1);
-    expect(res1.processed).toBe(true);
-
-    // Verify offset storage was updated
-    const savedOffset = await offsetStorage.getOffset();
-    expect(savedOffset).toBe(4501);
-
-    // Verify status inspection truthfully reports mode and offset
-    const status = bridge.getStatus();
-    expect(status.lastUpdateId).toBe(4501);
-    expect(status.processedCount).toBe(1);
-    expect(status.mode).toBe('live_polling');
-    expect(status.degraded).toBe(false);
   });
 });

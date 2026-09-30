@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newStudioBudget, studioBudgetUsage, assertStudioBudgetAdmission } from '../src/studio-budget.js';
+import { newStudioBudget, studioBudgetUsage, assertStudioBudgetAdmission, nextOfficeDayStart, officeDayExhaustedFrom, spendingPolicyValidity, StudioBudgetExhaustedError } from '../src/studio-budget.js';
 
 describe('Studio budget policy', () => {
   it.each([NaN, Infinity, Number.MAX_SAFE_INTEGER, -1, 0, null, '', '2usd'])('refuses invalid USD limits: %s', value => {
@@ -81,5 +81,40 @@ describe('Studio budget policy', () => {
       reservedUsd: 0.2, costBasis: 'usage', settledUsd: null }]);
     expect(() => assertStudioBudgetAdmission(usage, 0.2)).not.toThrow();
     expect(() => assertStudioBudgetAdmission(usage, 0.200001)).toThrow();
+  });
+});
+
+describe('price policy review and the office day (ADR-159)', () => {
+  const reviewBy = '2026-11-22T00:00:00Z', day = 86_400_000, at = Date.parse(reviewBy);
+  it('is valid until 14 days before its review date, then expiring, then expired from the instant', () => {
+    expect(spendingPolicyValidity(reviewBy, Date.parse('2026-09-30T08:00:00Z'))).toEqual({ status: 'valid', reviewBy, daysLeft: 52 });
+    expect(spendingPolicyValidity(reviewBy, at - 14 * day - 1).status).toBe('valid');
+    expect(spendingPolicyValidity(reviewBy, at - 14 * day)).toMatchObject({ status: 'expiring', daysLeft: 14 });
+    expect(spendingPolicyValidity(reviewBy, at - 1)).toMatchObject({ status: 'expiring', daysLeft: 0 });
+    expect(spendingPolicyValidity(reviewBy, at)).toMatchObject({ status: 'expired', daysLeft: 0 });
+    expect(spendingPolicyValidity('not a date', at - 30 * day).status).toBe('expired');
+  });
+  it('resets at the next midnight in Baghdad (21:00 UTC)', () => {
+    expect(nextOfficeDayStart(Date.parse('2026-09-30T08:00:00Z')).toISOString()).toBe('2026-09-30T21:00:00.000Z');
+    expect(nextOfficeDayStart(Date.parse('2026-09-30T21:00:00Z')).toISOString()).toBe('2026-10-01T21:00:00.000Z');
+    expect(nextOfficeDayStart(Date.parse('2026-09-30T20:59:59Z')).toISOString()).toBe('2026-09-30T21:00:00.000Z');
+  });
+  it('reads the database refusal as office-day exhaustion with its scope, amounts and reset', () => {
+    const now = Date.parse('2026-09-30T08:00:00Z');
+    const error = officeDayExhaustedFrom('STUDIO_SCOPE_BUDGET_EXHAUSTED: office needs $0.4; $0.05 available for the office day', now)!;
+    expect(error).toBeInstanceOf(StudioBudgetExhaustedError);
+    expect(error).toMatchObject({ code: 'OFFICE_DAY_EXHAUSTED', scope: 'office', neededUsd: 0.4, availableUsd: 0.05 });
+    expect(error.resetsAt.toISOString()).toBe('2026-09-30T21:00:00.000Z');
+    expect(error.message).toContain("office's daily model allowance is used up ($0.40 needed, $0.05 left)");
+    expect(error.message).not.toMatch(/hard QA/i);
+    expect(officeDayExhaustedFrom('STUDIO_SCOPE_BUDGET_EXHAUSTED: visual_judge needs $1; $0 available', now)!.message)
+      .toContain('visual_judge role');
+    expect(officeDayExhaustedFrom('STUDIO_BUDGET_INVALID: nope', now)).toBeNull();
+  });
+  it('treats a price-list charge as final: it holds no reservation beyond its price', () => {
+    const call = { status: 'ok' as const, estimatedUsd: 0.067, settledUsd: null, reservedUsd: 0.2 };
+    const snapshot = { maxUsd: 1, maxCalls: 10, spentUsd: 0, calls: 0 };
+    expect(studioBudgetUsage(snapshot, [{ ...call, costBasis: 'price_list' }]).reservedAdditionalUsd).toBe(0);
+    expect(studioBudgetUsage(snapshot, [{ ...call, costBasis: 'estimate' }]).reservedAdditionalUsd).toBeCloseTo(0.133, 6);
   });
 });

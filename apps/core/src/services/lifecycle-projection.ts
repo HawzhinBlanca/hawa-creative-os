@@ -14,7 +14,7 @@ import { lifecyclePhotoInput } from './lifecycle-photo.js';
 import { verifyAlbumSnapshot } from './lifecycle-album.js';
 import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
-import { composeCanvaStatusMessage } from './canva-status-message.js';
+import { composeCanvaStatusMessage, officeDayExhaustedNote } from './canva-status-message.js';
 import { designName } from './requester-turn.js';
 import { namedOfficeReviewMode } from './google-oidc.js';
 import { lockNamedReviewAuthority } from './named-review-authority.js';
@@ -479,7 +479,8 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     });
     const officeText = (hasDraft
       ? `A design is ready for office review in Hawa Desk. Task ${taskId}.`
-      : `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.`) +
+      : `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.` +
+        (report.code === 'OFFICE_DAY_EXHAUSTED' ? officeDayExhaustedNote() : '')) +
       (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '');
     const officeAlerts = officeChats.map((chatId) => ({ chatId, text: officeText }));
     // #14 (ADR-145): the question in plain words, answered with a number or in the requester's own words.

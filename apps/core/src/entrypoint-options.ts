@@ -21,6 +21,7 @@ export function productionAppOptions(env: Record<string, string | undefined> = p
     // Paid verification has a real recurring cost, so the operator opts in explicitly.
     enableBillingProbeSchedule: env.HAWA_BILLING_PROBE_ENABLED === 'on',
     enableCanvaSweeper: true,
+    enableUncertainCallExpiry: true,
     enablePublicationInspections: env.HAWA_PUBLICATION_INSPECTIONS !== 'off',
   };
 }
