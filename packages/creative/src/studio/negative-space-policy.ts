@@ -19,7 +19,7 @@ interface Band { floor: number; rampEnd: number; plateauEnd: number; taperEnd: n
 
 export const NEGATIVE_SPACE_POLICY = Object.freeze({
   id: 'studio.negative-space',
-  version: '2026-09-28.2',
+  version: '2026-09-30.1',
   /** fraction = 1 - occupied area / canvas area, clamped to 0..1. */
   occupancy: Object.freeze({
     /** measured_lines: width x min(box height, measured line count x fontSize x lineHeight). */
@@ -33,7 +33,13 @@ export const NEGATIVE_SPACE_POLICY = Object.freeze({
     canvasFrameShare: 0.85,
     /** Any shape this share of the canvas in both directions is not content. */
     canvasShapeShare: 0.95,
-    photosAndArt: 'not_counted',
+    /**
+     * 2026-09-30.1 (ADR-157): the client's photographs are content. A framed photo occupies its
+     * box; a person cut out of a photo about this share of it. Generated art is still not counted.
+     */
+    photoFramedWeight: 1,
+    photoCutoutWeight: 0.6,
+    art: 'not_counted',
   }),
   bands: Object.freeze({
     measured_lines: Object.freeze({ floor: 0.36, rampEnd: 0.44, plateauEnd: 0.78, taperEnd: 0.84 }),
@@ -45,7 +51,7 @@ export const NEGATIVE_SPACE_POLICY = Object.freeze({
    * a text block spans its whole declared box, not the lines it sets. Added in 2026-09-28.2; the
    * scoring was already this, and no number changed.
    */
-  spans: Object.freeze({ text: 'declared_box_height', logo: 'box', shape: 'box_at_least_min_height_except_rules', photosAndArt: 'not_counted' }),
+  spans: Object.freeze({ text: 'declared_box_height', logo: 'box', shape: 'box_at_least_min_height_except_rules', photo: 'box', art: 'not_counted' }),
   /** Largest vertical gap between consecutive content spans, as a share of canvas height. */
   internalGap: Object.freeze({ penaltyAbove: 0.22, penalty: 0.35, per: 0.10, spanMinHeightPx: 20, rulesAreSpans: false }),
   /** Canvas height below the lowest content span. */
@@ -126,10 +132,10 @@ export function negativeSpacePromptGuidance(measure: NegativeSpaceMeasure = 'mea
     `  * Negative space = 1 - occupied area / canvas area. Occupied: each text box's width x the height its copy actually sets ` +
       `(measured line count x fontSize x lineHeight, capped at the box height); the logo box; panels and frames at ${p.occupancy.panelOrFrameWeight} ` +
       `and other shapes at ${p.occupancy.otherShapeWeight} of their area. A border or background-coloured frame covering ${p.occupancy.canvasFrameShare * 100}% ` +
-      `of the canvas is not content. Photographs and artwork are not counted.`,
+      `of the canvas is not content. Each client photograph counts: a framed photo its whole box, a cut-out person ${p.occupancy.photoCutoutWeight} of its box. Artwork is not counted.`,
     `  * Passing range ${f(pass.min)}-${f(pass.max)}; preferred ${f(band.rampEnd)}-${f(band.plateauEnd)}. Fuller than ${f(pass.min)} or emptier than ${f(pass.max)} fails.`,
     `  * Gaps are measured between content spans: each text box counts at its full declared height (not the lines it sets), ` +
-      `the logo box, and shapes at least ${p.internalGap.spanMinHeightPx}px tall other than rules; photographs and artwork are not spans.`,
+      `the logo box, each photograph's box, and shapes at least ${p.internalGap.spanMinHeightPx}px tall other than rules; artwork is not a span.`,
     `  * The largest vertical gap between consecutive spans is penalised above ${f(limits.internalGap.penaltyAbove)} of canvas height ` +
       `and fails alone above ${f(limits.internalGap.failsAbove)}.`,
     `  * Space below the lowest span is penalised above ${f(limits.bottomVoid.penaltyAbove)} of canvas height and fails alone above ${f(limits.bottomVoid.failsAbove)}.`,

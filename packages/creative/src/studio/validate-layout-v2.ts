@@ -24,6 +24,11 @@ export interface LayoutValidationContext {
   copyScripts: Array<'latin' | 'arabic' | 'unsupported'>;
   /** Content photos the request carries; each must be placed exactly once. Absent or 0: none may appear. */
   photoCount?: number;
+  /**
+   * ADR-157: in `choose` mode the requester let the design choose among the photos, so a distinct
+   * subset of at least `minimum` is placed. Absent is `all`.
+   */
+  photoSelection?: { mode: 'all' | 'choose'; minimum: number };
   reference: ValidationReference;
   draftFont?: string;
   contrastEvaluator?: (box: Box, fontSize: number, bold: boolean) => number;
@@ -314,10 +319,20 @@ export function validateLayoutV2(
   // 6b. PHOTOS: every content photo placed once, inside the canvas, big enough to read as a
   // photograph, never under text or the logo. A photo the client sent and the design dropped is
   // the request not done; a photo the client did not send is invented.
+  // In `choose` mode (ADR-157) the requester said the design need not use them all: a distinct
+  // subset of at least the minimum is the request done. Every other rule below applies unchanged.
   const photoCount = context.photoCount ?? 0;
   const photos = layout.photos ?? [];
-  if (photos.length !== photoCount) {
-    return { ok: false, code: 'PHOTOS', message: `Design places ${photos.length} photo(s); the request has ${photoCount}` };
+  const choosing = context.photoSelection?.mode === 'choose' && photoCount > 0;
+  const fewest = choosing ? Math.max(1, Math.min(photoCount, context.photoSelection!.minimum)) : photoCount;
+  if (choosing ? photos.length < fewest || photos.length > photoCount : photos.length !== photoCount) {
+    return {
+      ok: false,
+      code: 'PHOTOS',
+      message: choosing
+        ? `Design places ${photos.length} photo(s); the requester let the design choose at least ${fewest} of ${photoCount}`
+        : `Design places ${photos.length} photo(s); the request has ${photoCount}`,
+    };
   }
   const seen = new Set<number>();
   for (const p of photos) {

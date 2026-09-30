@@ -3,7 +3,9 @@ import type { StudioLayoutV2 } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
 import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
-import { declaredBackgroundColour, declaredTextContrast } from './composite-contrast.js';
+import { declaredBackgroundColour, declaredTextContrast, measuredInkContrast } from './composite-contrast.js';
+import { checkCopyCompleteness, instructionLanguageFindings, type CopyOrigin, type ReviewFinding } from './copy-completeness.js';
+import { omittedPhotoIndices, type PhotoSelection } from './photo-selection.js';
 import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } from './render-layout-v2.js';
 import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
@@ -40,6 +42,23 @@ export interface HardQaContext {
    * under the platform's badge or buttons, and a hook legible at listing size.
    */
   playbook?: 'institutional-announcement' | 'video-thumbnail';
+  /**
+   * ADR-157: whether the requester let the design choose among the photos. Absent is `all`: every
+   * photo placed, as before.
+   */
+  photoSelection?: PhotoSelection;
+  /** The requester's own instructions, for the language finding. Never a gate. */
+  instructions?: string;
+  /** Where the copy came from, when known: copy at the caption limit may have been cut. */
+  copyOrigin?: CopyOrigin;
+  /**
+   * ADR-157: the no-text composite of the render that ships (art, photos, panels, no copy). When
+   * given, every block is also held to its contrast measured on those pixels under its own lines,
+   * not only against the colour the layout declares behind it.
+   */
+  renderedComposite?: Buffer;
+  /** The renderer's font fidelity for this host (`RenderLayoutV2Result.fontFidelity`). */
+  fontFidelity?: Record<string, 'exact' | 'stand-in'>;
 }
 
 export interface HardQaOutcome {
@@ -51,6 +70,16 @@ export interface HardQaOutcome {
   /** The layout as validated — validation may normalise it, e.g. a script font. */
   layout: StudioLayoutV2;
   textMeasurements: TextMeasurement[];
+  /**
+   * ADR-157: what a person should look at before approving, none of which blocks the design:
+   * copy that may be cut short, a language the instructions name and the copy lacks, a face the
+   * renderer substituted. Shown at office review.
+   */
+  findings: ReviewFinding[];
+  /** The 5th-percentile contrast of each block measured under its lines, when a composite was given. */
+  measuredContrast?: Record<number, number>;
+  /** Photos the design leaves out, by photoIndex: only ever non-empty when the requester let it choose. */
+  omittedPhotos: number[];
 }
 
 export function evaluateHardQa(
@@ -82,6 +111,7 @@ export function evaluateHardQa(
     },
     draftFont: ctx.latinFont || 'Verdana',
     photoCount: ctx.photoCount ?? 0,
+    ...(ctx.photoSelection ? { photoSelection: ctx.photoSelection } : {}),
   };
 
   // Explicit check for unreadable font sizes: fail QA, do NOT mutatively rewrite font sizes
@@ -216,6 +246,35 @@ export function evaluateHardQa(
     }
   }
 
+  // The declared colours say nothing about art, a photo or a gradient under the copy, and the
+  // measured p05 the render stage stored was never read by any gate (audit 2026-09-30 #20). With the
+  // shipping render's no-text composite, each block is also held to the contrast of the pixels
+  // under its own lines. Only the declared check ran before, so a block it passes can fail here.
+  let measuredContrast: Record<number, number> | undefined;
+  const unmeasured: ReviewFinding[] = [];
+  if (ctx.renderedComposite) {
+    try {
+      measuredContrast = measuredInkContrast(ctx.renderedComposite, layout, textMeasurements);
+    } catch (err) {
+      // Said, never silent: the declared check above still applies.
+      unmeasured.push({
+        code: 'CONTRAST_UNMEASURED',
+        severity: 'warning',
+        message: `CONTRAST_UNMEASURED: the render could not be read (${err instanceof Error ? err.message : String(err)}); contrast was judged on the declared colours only.`,
+      });
+    }
+  }
+  for (const t of measuredContrast ? layout.text : []) {
+    const p05 = measuredContrast?.[t.copyIndex];
+    const required = requiredContrast(t.fontSize, Boolean(t.bold));
+    if (p05 === undefined || p05 >= required) continue;
+    if (!defectCodes.includes('CONTRAST')) defectCodes.push('CONTRAST');
+    messages.push(
+      `CONTRAST: block ${t.copyIndex} (${t.role}) ${t.color} measures ${p05.toFixed(2)}:1 (5th percentile) against ` +
+        `the rendered pixels under its lines; it needs ${required}:1`
+    );
+  }
+
   // The client's copy reads in the order they wrote it. A block set above one that precedes it in
   // the same column changes their content: on the cheap tier all three candidates of task 3c3a422b
   // (2026-09-18) put the guest's name above the title the client wrote first.
@@ -270,7 +329,41 @@ export function evaluateHardQa(
     messages.push(...thumbnail.messages);
   }
 
-  return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout, textMeasurements };
+  const findings = [...reviewFindings(layout, ctx), ...unmeasured];
+  const omittedPhotos = ctx.photoSelection?.mode === 'choose' ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
+
+  return {
+    passed: defectCodes.length === 0, defectCodes, messages, metrics, layout, textMeasurements, findings, omittedPhotos,
+    ...(measuredContrast ? { measuredContrast } : {}),
+  };
+}
+
+/**
+ * ADR-157: the review findings of a design, which never fail it. Copy-level findings are the same
+ * for every candidate of a run; a substituted face depends on the candidate's own type choices.
+ */
+export function reviewFindings(
+  layout: Pick<StudioLayoutV2, 'text'>,
+  ctx: Pick<HardQaContext, 'copyText' | 'instructions' | 'copyOrigin' | 'fontFidelity'>
+): ReviewFinding[] {
+  const findings: ReviewFinding[] = [];
+  if (ctx.copyText) {
+    findings.push(...checkCopyCompleteness(ctx.copyText, { origin: ctx.copyOrigin }));
+    findings.push(...instructionLanguageFindings(ctx.instructions, Object.values(ctx.copyText)));
+  }
+  // A face the renderer cannot draw is replaced by a declared stand-in, so the preview the judge
+  // scored is not set in the face the design names, and the Canva deck (which names it) will differ.
+  // It used to be only a console warning.
+  const substituted = [...new Set(layout.text.map((t) => t.fontFamily))].filter((f) => ctx.fontFidelity?.[f] === 'stand-in');
+  for (const family of substituted) {
+    const blocks = layout.text.filter((t) => t.fontFamily === family).map((t) => t.copyIndex);
+    findings.push({
+      code: 'FONT_SUBSTITUTED',
+      severity: 'warning',
+      message: `FONT_SUBSTITUTED: the renderer drew a stand-in for ${family} (block${blocks.length === 1 ? '' : 's'} ${blocks.join(', ')}); the preview does not show the face the design names.`,
+    });
+  }
+  return findings;
 }
 
 /**

@@ -1,6 +1,8 @@
 import type { StageContext, CandidateState, HardQAResult } from '../types.js';
-import { evaluateHardQa, layoutPlacements, type ArtRegionPlan } from '@hawa/creative';
-import { hardQaContextFor } from './v3.stage.js';
+import { evaluateHardQa, layoutPlacements, renderLayoutV2Async, type ArtRegionPlan } from '@hawa/creative';
+import { hardQaContextFor, copyForStageV3 } from './v3.stage.js';
+import { candidateRenderOptions } from './asset-inputs.js';
+import { log } from '../../../logging.js';
 
 export async function runQAStage(
   ctx: StageContext,
@@ -8,7 +10,35 @@ export async function runQAStage(
 ): Promise<HardQAResult> {
   // The gate itself lives in @hawa/creative so the qualification applies exactly this gate, with
   // the context ranking and refinement use — the copy included, so overflowing copy fails here too.
-  const outcome = evaluateHardQa(winner.currentLayout, hardQaContextFor(ctx), winner.metrics);
+  //
+  // ADR-157: the design is rendered here, as it ships, with its art, photos and logo. Its no-text
+  // composite is what contrast is measured on, and the renderer's font fidelity says whether a face
+  // was drawn by a stand-in. Until 2026-09-30 this gate read only the declared colours, and the
+  // art stage leaves CONTRAST to it for v3, so text on art was never measured anywhere.
+  // A render that fails (it needs the client's logo, for one) falls back to the candidate's stored
+  // composite; with neither, the outcome carries CONTRAST_UNMEASURED rather than passing in silence.
+  const render = await renderLayoutV2Async(winner.currentLayout, { ...candidateRenderOptions(ctx, winner), copyText: copyForStageV3(ctx).text })
+    .catch((err: unknown) => {
+      log.warn(`[qa.stage] the winner could not be rendered for measured contrast (${err instanceof Error ? err.message : String(err)}).`);
+      return undefined;
+    });
+  const composite = render?.noTextPng ?? winner.compositePng ?? undefined;
+  const outcome = evaluateHardQa(
+    winner.currentLayout,
+    {
+      ...hardQaContextFor(ctx),
+      ...(composite ? { renderedComposite: composite } : {}),
+      ...(render ? { fontFidelity: render.fontFidelity } : {}),
+    },
+    winner.metrics
+  );
+  if (!composite) {
+    outcome.findings.push({
+      code: 'CONTRAST_UNMEASURED',
+      severity: 'warning',
+      message: 'CONTRAST_UNMEASURED: the design could not be rendered for QA; contrast was judged on the declared colours only.',
+    });
+  }
   winner.currentLayout = outcome.layout;
   winner.metrics = outcome.metrics;
   return {
@@ -18,6 +48,9 @@ export async function runQAStage(
     textMeasurements: outcome.textMeasurements,
     messages: outcome.messages,
     placement: finalPlacement(ctx, winner),
+    findings: outcome.findings,
+    ...(outcome.measuredContrast ? { measuredContrast: outcome.measuredContrast } : {}),
+    ...(outcome.omittedPhotos.length ? { omittedPhotos: outcome.omittedPhotos } : {}),
   };
 }
 

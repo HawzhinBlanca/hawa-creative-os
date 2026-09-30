@@ -65,6 +65,7 @@ export async function runReviseStage(
     copyCount: ctx.copyBlocks.length,
     copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
     photoCount: ctx.photos?.length ?? 0,
+    ...(ctx.photoSelection ? { photoSelection: ctx.photoSelection } : {}),
     reference: {
       rules: {
         fontFamily: ctx.latinFont,

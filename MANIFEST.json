@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T22:03:49Z",
+  "generatedAt": "2026-09-30T09:10:23Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 550,
+  "fileCount": 551,
   "files": [
     {
       "path": ".dockerignore",
@@ -808,6 +808,11 @@
       "bytes": 9089
     },
     {
+      "path": "adrs/157_design_output_quality_review_findings.md",
+      "sha256": "0421bc3bc518244ac45c7aba3048bab796d8f8dbed8bf0305b012eac134cffd5",
+      "bytes": 7306
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1459,8 +1464,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "3b18d2c2cc22a5af23dbadd0ab3817f5387bc9e4d19c0bfe3d61275750f2b440",
-      "bytes": 44123
+      "sha256": "3db0d4520a16a9730bda3967ace82abe8da6ac4201d5a2b3d322b2f28d553e6a",
+      "bytes": 44354
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -1929,8 +1934,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "632b05a7c6a60a1420c9544b5baa41e27de52b0b2d536e4c4bbdbd6295dddb7a",
-      "bytes": 505480
+      "sha256": "5d32361c2157a8771f4640e73c7923fd756ba42d3f2b7abf7d04286df315f1d4",
+      "bytes": 509292
     },
     {
       "path": "plans/user-stories.csv",
@@ -2639,8 +2644,8 @@
     },
     {
       "path": "scripts/sorani_review_list.ts",
-      "sha256": "1271637f6bc87327c1ae30c7c78e45a65f31bd51a942a57bdf1e4bf3326b536d",
-      "bytes": 2581
+      "sha256": "535e568df9bb11c863824d052627656b366ea36cc8ac620a8edb7ca934b871d4",
+      "bytes": 2822
     },
     {
       "path": "scripts/studio_fault_injection.ts",

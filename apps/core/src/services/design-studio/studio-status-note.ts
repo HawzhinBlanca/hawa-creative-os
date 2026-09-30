@@ -3,7 +3,7 @@
 // reads with the draft, in plain words. Every figure comes from the run's own record; a figure the
 // run did not record is left out.
 
-import { coverCrop } from '@hawa/creative';
+import { coverCrop, omittedPhotoIndices } from '@hawa/creative';
 
 const parse = (value: unknown): any => {
   if (typeof value !== 'string') return value;
@@ -81,12 +81,22 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
   const sent = typeof stages.brief?.photosSent === 'number' ? stages.brief.photosSent : undefined;
   const asReference = stages.brief?.referenceSeen === true || stages.brief?.referenceRole === 'style_reference';
   const followed = Array.isArray(stages.brief?.imageRoles) && stages.brief.imageRoles.some((r: any) => r?.role === 'style_reference');
-  if (sent !== undefined && sent > 0) parts.push(placed === sent ? `your ${sent} photo${sent === 1 ? '' : 's'} placed` : `⚠️ ${placed} of your ${sent} photos placed`);
+  // ADR-157: when the requester let the design choose, the photos left out are listed for review.
+  const chose = choseAmongPhotos(stages, placed, sent);
+  if (chose) parts.push(`photos chosen: ${placed} of ${sent} (left out: ${omittedPhotoNumbers(stages, shipped, sent!).join(', ')})`);
+  else if (sent !== undefined && sent > 0) parts.push(placed === sent ? `your ${sent} photo${sent === 1 ? '' : 's'} placed` : `⚠️ ${placed} of your ${sent} photos placed`);
   else if (placed > 0) parts.push(`${placed} photo${placed === 1 ? '' : 's'} placed`);
   const cutShipped = Array.isArray(shipped?.photos) ? (shipped.photos as Array<{ treatment?: unknown } | null>).filter((p) => p?.treatment === 'cutout').length : 0;
   if (Array.isArray(stages.cutouts)) parts.push(`cut-outs: ${cutShipped} of ${stages.cutouts.length} placed`);
   if (followed) parts.push('your reference design followed');
   else if (!(sent && sent > 0) && placed === 0 && asReference) parts.push('your image used as a style reference, not placed');
+
+  // ADR-157: what hard QA found worth a person's look before approval: copy that may be cut short,
+  // a language the instructions name and the copy lacks, a face drawn by a stand-in. Never a failure.
+  const findings = (Array.isArray(stages.qa?.findings) ? stages.qa.findings : [])
+    .map((f: { message?: unknown } | null) => String(f?.message ?? '').replace(/^[A-Z_]+:\s*/, '').trim())
+    .filter(Boolean);
+  if (findings.length) parts.push(`⚠️ check before approving: ${findings.join(' | ')}`);
 
   let rungNote = '';
   if (stages.ladderRung && stages.ladderRung > 1) rungNote = ` · ${stages.ladderNotes || `Rung ${stages.ladderRung} fallback`}`;
@@ -158,7 +168,9 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
   const sent = typeof stages.brief?.photosSent === 'number' ? stages.brief.photosSent : undefined;
   const shippedPhotos: Array<{ photoIndex?: unknown; treatment?: unknown } | null> = Array.isArray(shipped?.photos) ? shipped.photos : [];
   const cutCount = shippedPhotos.filter((p) => p?.treatment === 'cutout').length;
-  if (sent !== undefined && sent > 0) {
+  // A design that chose among the photos, as the requester allowed, has not dropped any (ADR-157):
+  // the office sees which were left out, and the requester is not told their photos went missing.
+  if (sent !== undefined && sent > 0 && !choseAmongPhotos(stages, placed, sent)) {
     if (placed < sent) notes.push(`⚠️ Only ${placed} of your ${sent} photos ${placed === 1 ? 'is' : 'are'} on the design.`);
     else if (cutCount > 0 && cutCount === placed) notes.push(`Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design, the people cut out of their backgrounds.`);
     else notes.push(`Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design.`);
@@ -184,6 +196,21 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
     else if (!photosCut) notes.push('Styled after the reference design you sent.');
   }
   return notes;
+}
+
+/** True when the requester let the design choose among the photos and it placed a permitted subset. */
+function choseAmongPhotos(stages: any, placed: number, sent: number | undefined): boolean {
+  const selection = stages?.brief?.photoSelection;
+  return selection?.mode === 'choose' && sent !== undefined && placed < sent && placed >= Math.min(sent, Number(selection.minimum) || 1);
+}
+
+/** The photos a design left out, numbered from 1 as the requester counts them. */
+function omittedPhotoNumbers(stages: any, shipped: any, sent: number): number[] {
+  const recorded: unknown[] = Array.isArray(stages?.qa?.omittedPhotos) ? stages.qa.omittedPhotos : [];
+  const omitted = recorded.length
+    ? recorded.filter((i): i is number => typeof i === 'number')
+    : omittedPhotoIndices(Array.isArray(shipped?.photos) ? shipped.photos : [], sent);
+  return omitted.map((i) => i + 1);
 }
 
 /** A framed photo shown this many times larger than its own pixels looks soft on the design. */

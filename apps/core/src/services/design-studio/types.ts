@@ -131,6 +131,12 @@ export interface HardQAResult {
   messages: string[];
   /** Where art regions and photo crops landed in the final layout (ADR-123); absent before it. */
   placement?: import('@hawa/creative').LayoutPlacements;
+  /** ADR-157: what the office should look at before approving; never a reason the design failed. */
+  findings?: import('@hawa/creative').ReviewFinding[];
+  /** ADR-157: each block's contrast measured on the render that ships, under its own lines. */
+  measuredContrast?: Record<number, number>;
+  /** ADR-157: photos the requester let the design leave out and it did, by photoIndex. */
+  omittedPhotos?: number[];
 }
 
 export interface ParityResult {
@@ -202,6 +208,12 @@ export interface StageContext {
    * by photoIndex. Content, not style: every one is placed once, or the layout is refused.
    */
   photos?: ContentPhoto[];
+  /**
+   * ADR-157: whether the requester let the design choose among the photos, read from their
+   * instructions when the run was briefed and kept with the brief, so a change to the design
+   * keeps it. Absent is `all`: every photo placed.
+   */
+  photoSelection?: import('@hawa/creative').PhotoSelection;
   /** Hash-verified conditioning pixels retained before the first layout call. */
   visualInputs?: import('@hawa/creative').LayoutVisualInput[];
   /**
