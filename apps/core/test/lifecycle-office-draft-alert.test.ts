@@ -77,12 +77,19 @@ describe('D5 addendum: the office sees the draft it is asked to review', () => {
     expect(caption).toContain('"Autumn workshop poster"');
     expect(caption).toContain(`For ${clientName}`);
     expect(caption).toContain(`Edit in Canva: https://www.canva.com/design/${designId}/edit`);
-    // A local-only Desk address is not given as a link: the caption says where approval happens.
-    expect(caption).toContain('Hawa Desk on the office computer');
+    // ADR-180: office members approve in Telegram (ADR-040 addendum), so the caption says how, in plain
+    // words, in English and Sorani: reply to the picture with "approved", or say what to change.
+    expect(caption).toContain('Reply to this picture with “approved” to send it to the requester, or say what to change. You can also decide in Hawa Desk.');
+    expect(caption).toContain('«پەسەندە»');
+    expect(caption).not.toContain('office computer');
     expect(caption).not.toContain('127.0.0.1');
     expect(caption).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
-    // A worker from before sends the text alerts: the same words, to the same members.
-    expect(result.officeAlerts).toEqual(OFFICE.map((chatId) => ({ chatId, text: caption })));
+    // The text alert goes without the picture (or from a worker from before), and approving in
+    // Telegram needs the picture: it still says where approval happens.
+    const text = result.officeAlerts![0].text;
+    expect(text).toContain('Hawa Desk on the office computer');
+    expect(text).not.toContain('Reply to this picture');
+    expect(result.officeAlerts).toEqual(OFFICE.map((chatId) => ({ chatId, text })));
     expect(result.officeAlert).toEqual(result.officeAlerts![0]);
   });
 

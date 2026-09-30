@@ -104,6 +104,15 @@ export const OFFICE_MESSAGES = {
     en: "I couldn't record that for {title}, so nothing was changed. Please use Hawa Desk.",
     ckb: 'نەمتوانی ئەوە بۆ {title} تۆمار بکەم، بۆیە هیچ شتێک نەگۆڕدرا. تکایە Hawa Desk بەکاربهێنە.',
   },
+  /**
+   * ADR-180: the last line of a draft's photo alert (ADR-155 addendum), now that office members decide
+   * in Telegram (ADR-040 addendum). It said "Approve or send it back in Hawa Desk on the office
+   * computer". The office alert is the one place a reply target is named: the owner asked for it.
+   */
+  draftAlertDecide: {
+    en: 'Reply to this picture with “approved” to send it to {requester}, or say what to change. You can also decide in Hawa Desk.',
+    ckb: 'بە «پەسەندە» وەڵامی ئەم وێنەیە بدەرەوە بۆ ئەوەی بۆ {requester} بنێردرێت، یان بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت.',
+  },
   /** Who asked for the design, when it is the office member themselves. */
   you: {
     en: 'you',

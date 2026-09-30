@@ -494,14 +494,19 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     // internal IDs, and goes as a photo of the draft (officePhotoAlerts). `officeAlerts` keeps the same
     // words as text for a worker from before, and is what is sent when the picture cannot be.
     let officeText: string;
+    let photoCaption: string | undefined;
     let draftImage: DraftImageRef | undefined;
     if (hasDraft) {
       const client = task.client_id ? await trx.selectFrom('clients').select('name')
         .where('tenant_id', '=', tenantId).where('id', '=', task.client_id).executeTakeFirst() : undefined;
       const requestedBy = typeof creation?.payload.senderName === 'string' ? creation.payload.senderName : undefined;
-      officeText = composeOfficeDraftAlert({ title: requestTitle, clientName: client?.name, requestedBy,
+      const alert = { title: requestTitle, clientName: client?.name, requestedBy,
         revised: taskId !== request.root_task_id, canvaUrl: canvaEditUrl(report.designId!), reviewUrl,
-        ...(DRAFT_READY_STATUSES.has(status) ? {} : { check: `${status}${report.code ? ` (${report.code})` : ''}` }) });
+        ...(DRAFT_READY_STATUSES.has(status) ? {} : { check: `${status}${report.code ? ` (${report.code})` : ''}` }) };
+      officeText = composeOfficeDraftAlert(alert);
+      // ADR-180: the photo's caption says the member may reply to it (Telegram approval, ADR-040
+      // addendum), except where decisions need a named reviewer signed in to the Desk (ADR-064).
+      photoCaption = composeOfficeDraftAlert({ ...alert, telegramDecision: !namedOfficeReviewMode() });
       draftImage = await findDraftImage(trx, { tenantId, taskId, designId: report.designId! });
     } else {
       // No design was named (an outcome naming one is a draft, outcomeHasDraft), so there is no Canva
@@ -511,7 +516,7 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
         (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '');
     }
     const officeAlerts = officeChats.map((chatId) => ({ chatId, text: officeText }));
-    const officePhotoAlerts = draftImage ? officeChats.map((chatId) => ({ chatId, text: officeText, image: draftImage! })) : [];
+    const officePhotoAlerts = draftImage ? officeChats.map((chatId) => ({ chatId, text: photoCaption ?? officeText, image: draftImage! })) : [];
     // #14 (ADR-145): the question in plain words, answered with a number or in the requester's own words.
     const questionText = question
       ? say(LIFECYCLE_MESSAGES.oneQuestion, lang, {

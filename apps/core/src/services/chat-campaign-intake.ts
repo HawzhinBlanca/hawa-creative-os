@@ -12,7 +12,7 @@ import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeT
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
 import { autoDraftAllowedFor, clientPackOf, matchRequestClient } from './client-packs.js';
 import { defaultCanvasFor } from '@hawa/creative';
-import { isValidUuid, inlineTemplateCopyMissing, cutText } from '../core-helpers.js';
+import { isValidUuid, inlineTemplateCopyMissing, cutText, startsWithName, stripLeadingMarks } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, DEFAULT_CLIENT_ID } from '../core-context.js';
 import type { CoreContext } from '../core-context.js';
 
@@ -257,9 +257,15 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     let title: string;
 
     const remainingPayloadText = payloadLines.slice(1).join('\n').trim();
-    // With no headline the title says so, rather than ending in an empty ellipsis.
-    const titleFor = (headline: string) =>
-      `${isKaae ? 'KAAE' : senderName}: ${headline ? `${cutText(headline, 45)}…` : 'no copy sent'}`;
+    // With no headline the title says so, rather than ending in an empty ellipsis. A headline that
+    // already starts with the client's name ("KAAE K-12 Pilot Study") is not prefixed with it again,
+    // and the direction marks a Sorani keyboard puts before Latin copy are not part of the name (ADR-180).
+    const titleFor = (headline: string) => {
+      const label = isKaae ? 'KAAE' : senderName;
+      const line = stripLeadingMarks(headline);
+      if (!line) return `${label}: no copy sent`;
+      return startsWithName(line, label) ? `${cutText(line, 45)}…` : `${label}: ${cutText(line, 45)}…`;
+    };
 
     if (input.isInstructionOnly) {
       headlineEn = undefined;
