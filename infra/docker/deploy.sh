@@ -181,34 +181,6 @@ apply_vector_config() {
   [[ "$(vector_seen)" == "$VECTOR_WANT" ]] || { echo "ERROR: vector does not see the deployed vector.yaml even after it was recreated"; exit 1; }
   echo "✓ vector recreated onto the deployed vector.yaml"
 }
-# nginx binds nginx.conf and the office proof (.office-proxy-header.conf) from ~/.hawa/runtime. Both are
-# rewritten in place, so the running nginx sees the new bytes at once, and a reload makes it read them.
-# A file replaced by a rename instead stays at the old inode inside the container (2026-09-30: nginx -t
-# failed there after the proof file was regenerated), so what nginx sees is compared with the runtime
-# copy, and nginx -t is run inside it, before and after: a reload that fails, or a container that does not
-# see the files, is restarted, then recreated, and the deploy stops if it still does not see them.
-nginx_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx cat /etc/nginx/nginx.conf /etc/nginx/hawa-office-proof.conf 2>/dev/null | "${HAWA_SHA256[@]}" | cut -d' ' -f1 || true; }
-nginx_live_ok() {
-  local i
-  for i in 1 2 3 4 5; do
-    if [[ "$(nginx_seen)" == "$NGINX_WANT" ]] && "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -t >/dev/null 2>&1; then return 0; fi
-    sleep 1
-  done
-  return 1
-}
-apply_nginx_config() {
-  if nginx_live_ok && "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null 2>&1; then
-    if [[ "$NGINX_CHANGED" == 1 ]]; then echo "✓ nginx reloaded onto the new nginx.conf and office proof"; else echo "✓ nginx configuration reloaded (unchanged)"; fi
-    return 0
-  fi
-  echo "! nginx does not see the deployed nginx.conf and office proof, fails nginx -t, or refused the reload; restarting it"
-  "${COMPOSE[@]}" --env-file "$INTERP_FILE" restart nginx >/dev/null
-  if nginx_live_ok; then echo "✓ nginx restarted onto the deployed configuration"; return 0; fi
-  echo "! nginx still does not see them after a restart; recreating it"
-  "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --force-recreate nginx >/dev/null
-  nginx_live_ok || { echo "ERROR: nginx does not see the deployed nginx.conf and office proof, or fails nginx -t inside, even after it was recreated"; exit 1; }
-  echo "✓ nginx recreated onto the deployed configuration"
-}
 # ADR-141: only a production host deploys. A standby host (being prepared for a cutover) and a retired
 # one (production moved away) refuse --apply before anything is changed: two live hosts would poll the
 # same Telegram bot. Pre-flight still runs there (the rehearsal needs it) and records no volume stamp.
@@ -394,7 +366,7 @@ compose_value() {
 }
 node --import tsx "${ROOT_DIR}/scripts/check_office_access.ts" "$ENV_FILE" "$(compose_value HAWA_BIND_IP 127.0.0.1)"
 # 2c. The content-addressed file store (ADR-035) is a host directory bind-mounted into Core, both worker
-# colours (read-write) and nginx (read-only). It is created here, before any container starts, with the
+# colours (read-only) and nginx (read-only). It is created here, before any container starts, with the
 # marker the store requires: Docker would otherwise create a missing mount source itself, and the store
 # refuses a directory without the marker, so a mount that went wrong cannot fill an empty directory.
 # Files are 0444 and directories 0755, which nginx's own user needs to read them.
@@ -474,7 +446,7 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 umask 077   # dumps hold briefs, chat ids and sealed tokens: owner-only from the first byte
 BACKUP_DIR="${ROOT_DIR}/infra/backup/snapshots"; mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
 # --no-recreate: start Postgres if it is down, but never replace it here. A changed definition (a new
-# command, or ADR-158's bind paths through ~/.hawa/current, which is switched only below) is applied by
+# command, or new bind paths into ~/.hawa/runtime, whose files are replaced only in step 7) is applied by
 # the full `up -d` after the switch; recreating it here started it before current existed, and Docker
 # made the missing init files as empty directories (2026-09-30).
 # A container created before its bind sources exist gets empty directories in their place, and keeps
@@ -504,6 +476,10 @@ echo "✓ backup written: infra/backup/snapshots/predeploy_${STAMP}.dump (${BACK
 # 6. Versioned schema upgrades (idempotent; checksums of applied files are verified)
 (cd "$ROOT_DIR" && DATABASE_URL="postgresql://hawa_owner:${POSTGRES_PASSWORD}@127.0.0.1:54332/hawa" npx tsx packages/db/src/upgrade.ts)
 echo "✓ schema upgrades applied or verified"
+# Rotation follows the qualified source gate, completed prior drains and the backup/migrations.
+if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
+  hawa_release_prune_unsafe "$ROOT_DIR" 74618004243affaa91fc50795490e175a545dc2a || exit 1
+fi
 
 # 7. Build and start everything but the worker. Its two colours are behind the `worker` compose
 # profile, so the `up -d` below never creates, recreates or stops either; 7b deploys the worker.
@@ -526,20 +502,39 @@ echo "✓ cut-out engine tests passed in the shipped image"
 # laid out like ~/.hawa/runtime, and checked there by one-off containers of the same images with the same
 # mounts (HAWA_RUNTIME_DIR points them at the candidate): nginx -t, with the proof it includes, and vector
 # validate. Only then are those exact bytes copied into ~/.hawa/runtime, in place, just before `up -d`.
-case "$CANDIDATE_RUNTIME" in *.candidate) rm -rf "$CANDIDATE_RUNTIME" ;; esac
-hawa_runtime_sync "$ROOT_DIR" "$CANDIDATE_RUNTIME" "$RUNTIME_SHARED" >/dev/null \
-  || { echo "ERROR: could not stage the files compose binds (the office proof comes from ${RUNTIME_SHARED}/infra/docker/.office-proxy-header.conf); nothing was started"; exit 1; }
-HAWA_RUNTIME_DIR="$CANDIDATE_RUNTIME" "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T nginx nginx -t >/dev/null 2>&1 \
-  || { echo "ERROR: infra/docker/nginx.conf (with the office proof) fails nginx -t; nothing was started with it"; exit 1; }
+stage_runtime_candidate() {
+  case "$CANDIDATE_RUNTIME" in *.candidate) rm -rf "$CANDIDATE_RUNTIME" ;; esac
+  hawa_runtime_sync "$ROOT_DIR" "$CANDIDATE_RUNTIME" "$RUNTIME_SHARED" >/dev/null \
+    || { echo "ERROR: could not stage the files compose binds (the office proof comes from ${RUNTIME_SHARED}/infra/docker/.office-proxy-header.conf); nothing was started"; exit 1; }
+  HAWA_RUNTIME_DIR="$CANDIDATE_RUNTIME" "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T nginx nginx -t >/dev/null 2>&1 \
+    || { echo "ERROR: infra/docker/nginx.conf (with the office proof) fails nginx -t; nothing was started with it"; exit 1; }
+}
+stage_runtime_candidate
 validate_vector_config
+# ADR-183: separate worker identities, after the gates, the backup and the migrations.
+BOUNDARY_DIR="${ROOT_DIR}/infra/docker"
+[[ "${HAWA_RELEASE_DIRS:-on}" == off ]] || BOUNDARY_DIR="$(hawa_shared_dir)/infra/docker"
+python3 "${ROOT_DIR}/infra/ops/prepare_service_boundaries.py" --directory "$BOUNDARY_DIR" --rotate-design || exit 1
+(cd "$ROOT_DIR" && DATABASE_URL="postgresql://hawa_owner:${POSTGRES_PASSWORD}@127.0.0.1:54332/hawa" npx tsx scripts/provision_worker_database.ts "${SCRIPT_DIR}/.env.worker-db" --production) || exit 1
+: > "$BOUNDARY_DIR/.worker-identity-v2"
+chmod 600 "$BOUNDARY_DIR/.worker-identity-v2"
+# That preparation may have rewritten the office proof: nginx must get the proof Core will expect, checked.
+if ! cmp -s "${RUNTIME_SHARED}/infra/docker/.office-proxy-header.conf" "${CANDIDATE_RUNTIME}/infra/docker/.office-proxy-header.conf"; then
+  echo "! the office proof changed while the service boundaries were prepared; checking nginx with the new one"
+  stage_runtime_candidate
+fi
 RUNTIME_CHANGED="$(hawa_runtime_sync "$CANDIDATE_RUNTIME" "$HAWA_RUNTIME_DIR" "$CANDIDATE_RUNTIME")" \
   || { echo "ERROR: could not copy the checked files into ${HAWA_RUNTIME_DIR}; nothing was started with them"; exit 1; }
 rm -rf "$CANDIDATE_RUNTIME"
 echo "✓ ${HAWA_RUNTIME_DIR} holds this release's bound files$([[ -n "$RUNTIME_CHANGED" ]] && printf ' (changed: %s)' "$(sed 's/^changed //' <<< "$RUNTIME_CHANGED" | tr '\n' ' ' | sed 's/ $//')")"
-NGINX_CHANGED=0; grep -qE '^changed infra/docker/(nginx\.conf|\.office-proxy-header\.conf)$' <<< "$RUNTIME_CHANGED" && NGINX_CHANGED=1
 VECTOR_CHANGED=0; grep -qx 'changed infra/docker/vector.yaml' <<< "$RUNTIME_CHANGED" && VECTOR_CHANGED=1
-NGINX_WANT="$(cat "${HAWA_RUNTIME_DIR}/infra/docker/nginx.conf" "${HAWA_RUNTIME_DIR}/infra/docker/.office-proxy-header.conf" | "${HAWA_SHA256[@]}" | cut -d' ' -f1)"
 VECTOR_WANT="$("${HAWA_SHA256[@]}" "${HAWA_RUNTIME_DIR}/infra/docker/vector.yaml" | cut -d' ' -f1)"
+# ADR-183's live-mount check, against what nginx binds: the runtime copies. nginx is reloaded after up -d
+# only once it sees both files and passes nginx -t inside; otherwise restarted, then recreated (a mount
+# pinned to a replaced inode), and the deploy stops if it still does not see them (infra/ops/nginx_reload.sh).
+NGINX_WANT="$("${HAWA_SHA256[@]}" "${HAWA_RUNTIME_DIR}/infra/docker/nginx.conf" | cut -d' ' -f1)"
+OFFICE_PROOF_WANT="$("${HAWA_SHA256[@]}" "${HAWA_RUNTIME_DIR}/infra/docker/.office-proxy-header.conf" | cut -d' ' -f1)"
+source "${ROOT_DIR}/infra/ops/nginx_reload.sh"
 # ADR-158: from here production is this release. ~/.hawa/current is switched in one rename, so the
 # watchdog and the launch agents run this release's scripts from their next run on; ~/.hawa/previous
 # names the release before it (the rollback: deploy that one). No container binds through it.
@@ -550,7 +545,7 @@ fi
 # The first deploy with the runtime directory recreates nginx, vector and postgres once: their bind
 # sources change from ~/.hawa/current/... to ~/.hawa/runtime/... (runbooks/PRODUCTION_RELEASE_DIRECTORIES.md).
 HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
-apply_nginx_config
+hawa_nginx_reload || exit 1
 apply_vector_config
 echo "✓ containers started"
 

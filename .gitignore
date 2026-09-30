@@ -76,3 +76,4 @@ infra/docker/.restate_volume_created
 .office-proxy-header.conf
 .service-boundaries.lock
 .credential-update.lock
+infra/docker/.env.worker-db

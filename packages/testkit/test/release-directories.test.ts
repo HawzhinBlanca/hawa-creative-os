@@ -225,7 +225,7 @@ describe('deploy.sh and the release directory', () => {
       fs.mkdirSync(path.dirname(path.join(s.src, f)), { recursive: true });
       fs.copyFileSync(path.join(repo, f), path.join(s.src, f));
     }
-    const source = 'TELEGRAM_BOT_TOKEN=x\nHAWA_BEARER_TOKEN=' + 'a'.repeat(48) + '\n';
+    const source = 'DATABASE_URL=postgresql://hawa_app:' + 'synthetic@postgres:5432/hawa\nTELEGRAM_BOT_TOKEN=x\nHAWA_BEARER_TOKEN=' + 'a'.repeat(48) + '\n';
     fs.writeFileSync(path.join(s.shared, 'infra/docker/.env.production'), source, { mode: 0o600 });
     fs.writeFileSync(path.join(s.src, 'infra/docker/.env.production'), source, { mode: 0o600 });
     git(s.src, 'add', '-A');
@@ -310,7 +310,12 @@ describe('deploy.sh and the release directory', () => {
     expect(nginxT).toBeLessThan(live);
     expect(at('\nvalidate_vector_config\n')).toBeLessThan(live);
     expect(live).toBeLessThan(up);
-    expect(at('\napply_nginx_config\napply_vector_config\n')).toBeGreaterThan(up);
+    expect(at('\nhawa_nginx_reload || exit 1\napply_vector_config\n')).toBeGreaterThanOrEqual(up);
+    // ADR-183's live-mount check compares nginx with the runtime copies it binds, not the release's files.
+    expect(deploy).toContain('NGINX_WANT="$("${HAWA_SHA256[@]}" "${HAWA_RUNTIME_DIR}/infra/docker/nginx.conf"');
+    expect(deploy).toContain('OFFICE_PROOF_WANT="$("${HAWA_SHA256[@]}" "${HAWA_RUNTIME_DIR}/infra/docker/.office-proxy-header.conf"');
+    // The worker identity preparation (which may rewrite the proof) comes before the live copy.
+    expect(at('prepare_service_boundaries.py" --directory "$BOUNDARY_DIR" --rotate-design')).toBeLessThan(live);
     expect(deploy).not.toContain('HAWA_RELEASE_ROOT');
     // The pre-backup Postgres start never meets a missing bind source: missing runtime files are seeded first.
     const seed = at('hawa_runtime_sync "$ROOT_DIR" "$HAWA_RUNTIME_DIR" "$RUNTIME_SHARED" missing');
@@ -646,5 +651,52 @@ describe('the runtime files in the real images', () => {
     } finally {
       docker(['rm', '-f', name]);
     }
+  });
+});
+
+describe('release security retirement',()=>{
+  it('removes inactive pre-foundation releases while preserving current, previous and shared files',()=>{
+    const s=setup(), unsafe=s.head, floor=s.commit(), safe=s.commit();
+    for(const commit of [unsafe,floor,safe]) expect(sh(s,`hawa_release_prepare '${s.src}' ${commit}`).code).toBe(0);
+    sh(s,`hawa_release_activate '${s.releases}/${floor}'`);
+    sh(s,`hawa_release_activate '${s.releases}/${safe}'`);
+    const result=sh(s,`hawa_release_prune_unsafe '${s.src}' ${floor}`,{PATH:fakeDocker(s.t,[])});
+    expect(result.code,result.err).toBe(0); expect(result.out).toContain(unsafe);
+    expect(fs.existsSync(path.join(s.releases,unsafe))).toBe(false);
+    expect(fs.existsSync(path.join(s.releases,floor))).toBe(true);
+    expect(fs.readFileSync(path.join(s.shared,'infra/docker/.env.production'),'utf8')).toBe('TELEGRAM_BOT_TOKEN=x\n');
+  });
+  it('refuses active or locally changed unsafe worktrees',()=>{
+    const s=setup(), floor=s.commit();
+    sh(s,`hawa_release_prepare '${s.src}' ${s.head}`);
+    sh(s,`hawa_release_activate '${s.releases}/${s.head}'`);
+    expect(sh(s,`hawa_release_prune_unsafe '${s.src}' ${floor}`,{PATH:fakeDocker(s.t,[])}).code).toBe(1);
+    fs.unlinkSync(path.join(s.home,'.hawa/current'));
+    fs.writeFileSync(path.join(s.releases,s.head,'kept.txt'),'preserve');
+    expect(sh(s,`hawa_release_prune_unsafe '${s.src}' ${floor}`,{PATH:fakeDocker(s.t,[])}).code).toBe(1);
+    expect(fs.readFileSync(path.join(s.releases,s.head,'kept.txt'),'utf8')).toBe('preserve');
+  });
+  it('keeps an unsafe release a container still binds, and removes none when it cannot tell (ADR-158 addendum 3)',()=>{
+    const s=setup(), unsafe=s.head, floor=s.commit(), safe=s.commit();
+    for(const commit of [unsafe,floor,safe]) expect(sh(s,`hawa_release_prepare '${s.src}' ${commit}`).code).toBe(0);
+    sh(s,`hawa_release_activate '${s.releases}/${floor}'`);
+    sh(s,`hawa_release_activate '${s.releases}/${safe}'`);
+    const bound=[{Name:'/hawa-production-vector-1',Created:'2026-09-30T09:49:56Z',State:{StartedAt:'2026-09-30T09:49:56Z'},
+      Mounts:[{Type:'bind',Source:`/host_mnt${s.releases}/${unsafe}/infra/docker/vector.yaml`}]}];
+    const kept=sh(s,`hawa_release_prune_unsafe '${s.src}' ${floor}`,{PATH:fakeDocker(s.t,bound)});
+    expect(kept.code,kept.err).toBe(0);
+    expect(kept.out).toContain(`kept unsafe release ${unsafe}`);
+    expect(fs.existsSync(path.join(s.releases,unsafe))).toBe(true);
+    const unsure=sh(s,`hawa_release_prune_unsafe '${s.src}' ${floor}`,{PATH:fakeDocker(s.t,'fail')});
+    expect(unsure.code).toBe(0);
+    expect(unsure.err).toContain('no unsafe release was removed');
+    expect(fs.existsSync(path.join(s.releases,unsafe))).toBe(true);
+  });
+  it('blocks activating a pre-identity rollback once the host has migrated',()=>{
+    const s=setup(); const release=sh(s,`hawa_release_prepare '${s.src}' ${s.head}`).out;
+    fs.writeFileSync(path.join(s.shared,'infra/docker/.worker-identity-v2'),'');
+    const result=sh(s,`hawa_release_activate '${release}'`);
+    expect(result.code).toBe(1); expect(result.err).toContain('independent worker identities');
+    expect(fs.existsSync(path.join(s.home,'.hawa/current'))).toBe(false);
   });
 });

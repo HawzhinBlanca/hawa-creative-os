@@ -1,0 +1,94 @@
+{
+  "date": "2026-09-30",
+  "adr": 183,
+  "requirements": [
+    "NFR-006",
+    "FR-060",
+    "FR-063",
+    "FR-071",
+    "FR-074",
+    "NFR-012"
+  ],
+  "sourceSha256": {
+    "infra/ops/prepare_service_boundaries.py": "14afa6a95d30df3306b02caed27a76c9906f7290d56acb6f95ec8b74e241b471",
+    "infra/ops/nginx_reload.sh": "bdc7c09b1bb563e2d64d739afe6395362c538a7e9d1abe843d0d3509b2f08f5c",
+    "infra/docker/deploy.sh": "31b596157902a35fd3ac6c2f56c79afb8bd5bb76ac2755077c973fcfcd59fef7",
+    "infra/docker/docker-compose.prod.yml": "4cd8be057edc2ab0c5086e46dce8fe929ebf7100149b3af56291032f684a82fa",
+    "infra/ops/release_lib.sh": "377faf82a3f2a2fa95116d20580e5fdf1828e7c46da7c2669080165f5f9e5c47",
+    "packages/db/migrations/073_restricted_worker_database.sql": "93edd3192da208139ee78a655325ebcf571c7368e64bbe4a4c4c0254c4972abc",
+    "packages/db/src/provision-worker-role.ts": "faef05e77839743b88b91b62ae5ac4f2c04ddefd6922297a06a3cfef0946c064",
+    "scripts/provision_worker_database.ts": "20093aca911dd9b2df6c8d5f6cea69155e4a84835f8db26fd614b02211ce17eb",
+    "apps/core/src/app.ts": "01f0a470278ce013a26d0c9be8cf19c50efa00e78ac0450b121c35b0078f984b",
+    "apps/core/src/routes/auth.routes.ts": "15d9ee66e304e3e6be2b5df76cfd2ce7e9f1014361e5fe6ed1848bac65523ba2",
+    "scripts/enforce_release_gate.sh": "86d401caefeccfd7a6f2001bf8ca484269fa920044f1cfdd769391e9c5548a1f"
+  },
+  "focused": {
+    "status": "PASS",
+    "distinctTests": 101,
+    "files": 14,
+    "note": "86 original focused cases plus 15 release execution/startup/native nginx cases; overlapping runs not added"
+  },
+  "typecheck": {
+    "status": "PASS",
+    "testRoots": 644
+  },
+  "build": "PASS",
+  "lint": {
+    "status": "PASS",
+    "anyCount": 937,
+    "anyCeiling": 1053,
+    "providerExceptions": 10
+  },
+  "retainedFailures": [
+    "Initial provision SQL string quoting transform error: 26 tests passed, DB suite failed import",
+    "Root script could not resolve pg: moved database helper into db package, thin CLI retained",
+    "Initial DB privilege probe refused test clone PUBLIC TEMP: reproduce database ACL since PostgreSQL template cloning does not copy database ACL",
+    "Wider focused run:84 passed,1 failed stale explicit migration-list expectation",
+    "Sandbox tsx IPC refusal: rerun typecheck with approved local IPC access",
+    "Commit hook refused two synthetic literal database URLs; fixture URLs composed from synthetic parts and regression suites rerun; scanner not bypassed",
+    "Merge with Claude sealed b7f32cbb had generated manifest conflicts, regenerated; natural-language ADR182 preserved, independent service identity ADR renumbered183",
+    "Sealed preflight refused because DATABASE_URL is in canonical Compose .env, not provider .env.production; corrected exact precedence and added test, no live identity changes occurred",
+    "Shell helper cleanup removed051d5606 but refused1737c8f2; direct owner-authorized Git worktree removal completed clean inactive unsafe set",
+    "Full gate refused6190pass/3fail/3expected-fail/67skip: corrected exact release working directory and two stale expectations; Desk bundle budget preserved; repeated full gate pending"
+  ],
+  "liveBeforeRelease": {
+    "nginxTest": "FAIL missing bound proof; nginx restart then PASS",
+    "health": "healthy after restart",
+    "sharedWorkerOperatorToken": true
+  },
+  "notYetQualified": [
+    "exact sealed release gate",
+    "production newest-dump migration",
+    "independent live design/database identity",
+    "blue-green readback",
+    "compatible rollback (old predecessor deliberately refused)"
+  ],
+  "credentialMaterial": "No values, digests or credential identifiers recorded",
+  "blueprint": {
+    "pass": 1472,
+    "warn": 0,
+    "fail": 0
+  },
+  "integrates": "b7f32cbb",
+  "unsafeReleasesRetired": [
+    "051d5606",
+    "1737c8f2",
+    "353c9e0c",
+    "6af16cb8"
+  ],
+  "updated": "2026-10-01",
+  "failedFullRun": {
+    "commit": "8b517972",
+    "passed": 6190,
+    "failed": 3,
+    "expectedFail": 3,
+    "skipped": 67,
+    "testFiles": 645,
+    "failures": [
+      "startup test still named migration072",
+      "worker blob-mount expectation still required write access",
+      "Desk build artifacts absent because gate commands ran in caller checkout"
+    ],
+    "liveApplied": false
+  }
+}

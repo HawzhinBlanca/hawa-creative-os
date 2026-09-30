@@ -173,3 +173,11 @@ a running container that sees a synced proof at once but not one replaced by a r
 in-place change and recreate for a pinned mount. The new tests fail on b7f32cbb and pass with the change. Read
 against production's containers (`docker inspect`, read-only, 21:05Z), the check keeps 1737c8f2, b2edf657,
 36369a12 and b7f32cbb.
+
+**Merged with ADR-183 (a482cf20, 2026-09-30).** ADR-183's `hawa_release_prune_unsafe`, which retires releases
+older than its security floor in step 6, removed 1737c8f2 a second time under the running vector and Postgres. It
+now uses the same mount check: a bound release is kept (and removed by a later deploy once its container is
+recreated), and when the check cannot be sure none is removed. ADR-183's live-mount admission
+(`infra/ops/nginx_reload.sh`) compares nginx with the runtime copies it binds, and recreates nginx when a restart
+keeps a stale mount. Its worker identity preparation, which may rewrite the office proof, runs before the live
+copy; if the proof changed, the candidate is staged and `nginx -t` checked again.

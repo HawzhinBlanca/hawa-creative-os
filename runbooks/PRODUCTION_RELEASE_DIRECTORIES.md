@@ -319,3 +319,35 @@ presence in the actual running Core; it does not assert provider qualification.
 No browser-selected provider endpoint is contacted. Never copy these generated
 files or the canonical credentials into the repository, test fixtures, wiki,
 provider prompts or logs.
+
+## Independent worker identities (ADR183, 2026-09-30)
+
+Deploy now prepares an independent design token and worker database URL. Preflight retains an
+existing shared token until apply. After backup/migration and image/configuration qualification,
+apply retires matching ordinary operator aliases, retains the old design token only as a scoped
+drain identity, provisions `hawa_worker_login`, then replaces Core and deploys the idle worker color.
+The previous design value is never copied into the new worker environment. Credentials stay in
+owner-private shared files, not command arguments, logs, receipts or Git.
+
+Migration073 preserves existing Core function capabilities explicitly and removes PUBLIC execution
+on application-schema routines. The worker inherits only required RLS helpers and outbox/poll/send
+operations. Poll writes cannot change the office kill switch or create provider configuration.
+Its blob mount is read-only. Production verifies both nginx binds, live `nginx -t`, a checked reload
+and post-reload validation. Missing/stale binds require a checked restart, and a recreate when a restart
+keeps the stale mount; both binds are the `~/.hawa/runtime` copies (ADR-158 addendum 3).
+
+Pre-foundation release worktrees (before74618004) are retired only when inactive, clean and registered
+in this repository. Current/previous and shared files are preserved, and so is any release a container
+still binds (addendum 3: this step removed 1737c8f2 under vector and Postgres on 2026-09-30); it is removed by a
+later deploy once that container has been recreated. Git history remains available.
+Once `.worker-identity-v2` exists, the new release tooling refuses activation of releases missing
+migration073 and its provisioning implementation. The old predecessor is **not a qualified rollback**
+after this identity upgrade: its configuration preparer refuses the independent-token file. Recover
+by redeploying the qualified repair release, or ship a compatible forward fix. A backup does not
+justify reverting migrations or restoring an old full-operator worker credential.
+
+Retaining a previous design token permits a draining color to finish scoped design calls. Remove it
+only after Restate reports no invocations pinned to that deployment and its container is stopped;
+then requalify the Core reload. A finished source test does not prove a running color uses the new
+DB login: inspect only its username and effective privilege booleans, verify health/polling/outbox,
+and exercise current/previous scoped authorization plus negative operator/session controls.
