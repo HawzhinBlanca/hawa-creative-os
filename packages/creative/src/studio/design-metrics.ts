@@ -315,6 +315,16 @@ export function computeBalance(layout: StudioLayoutV2): MetricResult {
     totalWeight += weight;
   }
 
+  // The client's photographs weigh like the imagery they are (ADR-157). They were left out, so a
+  // design whose six photos filled the upper half measured as balanced as the same design without
+  // them (audit 2026-09-30 #19). A cut-out person fills part of its box.
+  for (const p of layout.photos || []) {
+    const weight = p.width * p.height * (p.treatment === 'cutout' ? NEGATIVE_SPACE_POLICY.occupancy.photoCutoutWeight : NEGATIVE_SPACE_POLICY.occupancy.photoFramedWeight);
+    weightedX += (p.x + p.width / 2) * weight;
+    weightedY += (p.y + p.height / 2) * weight;
+    totalWeight += weight;
+  }
+
   if (layout.logo) {
     const logoArea = layout.logo.width * layout.logo.height;
     const weight = logoArea * 1.2;
@@ -585,6 +595,16 @@ export function computeNegativeSpace(
     occupiedArea += layout.logo.width * layout.logo.height;
     substantiveSpans.push({ y1: layout.logo.y, y2: layout.logo.y + layout.logo.height });
     maxSubstantiveY = Math.max(maxSubstantiveY, layout.logo.y + layout.logo.height);
+  }
+
+  // Photographs are content (policy 2026-09-30.1, ADR-157): counted in the occupied area and as
+  // spans. Without them the gap between a logo and a photo grid measured as the gap between the
+  // logo and whatever text sat under the grid, a phantom band, while the real one went unseen.
+  for (const p of layout.photos || []) {
+    const weight = p.treatment === 'cutout' ? NEGATIVE_SPACE_POLICY.occupancy.photoCutoutWeight : NEGATIVE_SPACE_POLICY.occupancy.photoFramedWeight;
+    occupiedArea += p.width * p.height * weight;
+    substantiveSpans.push({ y1: p.y, y2: p.y + p.height });
+    maxSubstantiveY = Math.max(maxSubstantiveY, p.y + p.height);
   }
 
   const fraction = Math.max(0, Math.min(1, 1 - occupiedArea / totalArea));

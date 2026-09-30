@@ -211,8 +211,8 @@ describe('pipeline v3 — fonts', () => {
 describe('pipeline v3 — ranking', () => {
   it('selects the sole hard-QA eligible candidate without a comparison or canary call', async () => {
     const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }, { sourceIndex: 1, layout: asymmetric() }], COPY);
-    ranked[0].hardQa = { textMeasurements: [], passed: false, defectCodes: ['COPY_OVERFLOW'], messages: ['Too long'], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
-    ranked[1].hardQa = { textMeasurements: [], passed: true, defectCodes: [], messages: [], layout: ranked[1].layout, metrics: computeLayoutMetrics(ranked[1].layout) };
+    ranked[0].hardQa = { textMeasurements: [], findings: [], omittedPhotos: [], passed: false, defectCodes: ['COPY_OVERFLOW'], messages: ['Too long'], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
+    ranked[1].hardQa = { textMeasurements: [], findings: [], omittedPhotos: [], passed: true, defectCodes: [], messages: [], layout: ranked[1].layout, metrics: computeLayoutMetrics(ranked[1].layout) };
     const createStructuredCompletion = vi.fn().mockRejectedValue(new Error('unexpected paid comparison'));
     const result = await selectWinnerV3(ranked, COPY, { client: { createStructuredCompletion } as unknown as OpenAiStudioClient });
     expect(result.winner).toBe(ranked[1]);
@@ -223,7 +223,7 @@ describe('pipeline v3 — ranking', () => {
 
   it.each([false, undefined])('refuses a sole candidate when hard-QA pass is %s', async (passed) => {
     const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
-    if (passed === false) ranked[0].hardQa = { textMeasurements: [], passed, defectCodes: ['COPY_OVERFLOW'], messages: [], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
+    if (passed === false) ranked[0].hardQa = { textMeasurements: [], findings: [], omittedPhotos: [], passed, defectCodes: ['COPY_OVERFLOW'], messages: [], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
     const createStructuredCompletion = vi.fn().mockRejectedValue(new Error('unexpected paid comparison'));
     await expect(selectWinnerV3(ranked, COPY, { client: { createStructuredCompletion } as unknown as OpenAiStudioClient })).rejects.toThrow('NO_ELIGIBLE_CANDIDATE');
     expect(createStructuredCompletion).not.toHaveBeenCalled();
@@ -254,7 +254,7 @@ describe('pipeline v3 — ranking', () => {
 // These isolate judge protocol/rendering, using explicit synthetic QA evidence. Production
 // and the qualification script compute hard QA from the actual client context.
 function admitForJudgeFixture(candidate: ReturnType<typeof rankCandidatesV3>[number]): void {
-  candidate.hardQa = { textMeasurements: [], passed: true, defectCodes: [], messages: [], layout: candidate.layout, metrics: computeLayoutMetrics(candidate.layout) };
+  candidate.hardQa = { textMeasurements: [], findings: [], omittedPhotos: [], passed: true, defectCodes: [], messages: [], layout: candidate.layout, metrics: computeLayoutMetrics(candidate.layout) };
 }
 
 describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
