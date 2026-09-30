@@ -48,7 +48,7 @@ afterEach(() => { vi.unstubAllEnvs(); });
 
 describe('HUNT: a studio run the worker gives up on', () => {
   it('DESIGN_STUCK abandons the run it stopped following', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = vi.fn(async (url: unknown) => {
       const u = String(url);
       if (u.endsWith('/resume')) return Response.json({ runId: 'run-stuck', status: 'laying_out' });
@@ -64,7 +64,7 @@ describe('HUNT: a studio run the worker gives up on', () => {
   });
 
   it('an exhausted resume step (DESIGN_SERVER_ERROR) abandons the run too', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = vi.fn(async (url: unknown) => {
       const u = String(url);
       if (u.endsWith('/resume')) return new Response(JSON.stringify({ title: 'Studio Operation Failed' }), { status: 500 });
@@ -79,7 +79,7 @@ describe('HUNT: a studio run the worker gives up on', () => {
   });
 
   it('when Core stays down past the step budget, the outcome is still recorded somewhere', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = vi.fn(async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }); });
     const { ctx, steps } = restateLikeContext();
     const outcome = await runCanvaDraft(input, ctx as any, remote as any).then(

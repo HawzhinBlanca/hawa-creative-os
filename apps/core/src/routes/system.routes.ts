@@ -570,7 +570,8 @@ export function registerSystemRoutes(ctx: RouteContext) {
         },
       },
       checked: 'key presence in this process only; no provider was called',
-      envFile: 'infra/docker/.env.production (deploy-time; runtime overrides last until restart)',
+      envFile: 'host-local shared configuration (deployment-time)',
+      credentialUpdates: 'deployment_only',
     });
   });
 
@@ -593,73 +594,13 @@ export function registerSystemRoutes(ctx: RouteContext) {
     }
   });
 
-  // Provider credentials are deploy-time configuration. This route verifies a key against its
-  // provider and activates it in this process only; it never writes a file. Until 2026-09-14 it
-  // rewrote the mounted infra/docker/.env.production, which also let the test suite overwrite the
-  // production Anthropic key with a fixture (the root cause of the model-provider 401s).
-  app.post('/v1/system/providers', async (c: any) => {
-    const authHeader = c.req.header('Authorization');
+  // ADR-165: one durable deployment-time configuration; a Core-only override strands
+  // the worker and vanishes at restart. Submitted values are never read or sent anywhere.
+  app.post('/v1/system/providers', (c: any) => {
     const auth = verifyRequestAuth(c);
-    if ((!authHeader && auth.authMethod !== 'trusted_office') || !auth.authenticated || auth.role !== 'administrator') {
-      return problem(c, 401, 'Unauthorized', 'Administrator credentials required to update provider keys');
-    }
-    let body: any = {};
-    try {
-      body = await c.req.json();
-    } catch {
-      return problem(c, 400, 'Invalid JSON', 'Request body must be valid JSON');
-    }
-    const timeout = () => ({ signal: AbortSignal.timeout(10000) });
-    const fields: Array<{ body: string; env: string; live: boolean; verify: (v: string) => Promise<string | null> }> = [
-      { body: 'telegramBotToken', env: 'TELEGRAM_BOT_TOKEN', live: true, verify: async (v) => {
-        const r = await fetch(`https://api.telegram.org/bot${v}/getMe`, timeout()); const d: any = await r.json().catch(() => ({}));
-        return d?.ok ? null : `Telegram rejected the token (${d?.description || 'HTTP ' + r.status})`; } },
-      { body: 'anthropicApiKey', env: 'ANTHROPIC_API_KEY', live: true, verify: async (v) => {
-        const r = await fetch('https://api.anthropic.com/v1/models', { headers: { 'x-api-key': v, 'anthropic-version': '2023-06-01' }, ...timeout() });
-        return r.ok ? null : `Anthropic rejected the key (HTTP ${r.status})`; } },
-      { body: 'geminiApiKey', env: 'GEMINI_API_KEY', live: true, verify: async (v) => {
-        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(v)}`, timeout());
-        return r.ok ? null : `Google rejected the key (HTTP ${r.status})`; } },
-      { body: 'openaiApiKey', env: 'OPENAI_API_KEY', live: true, verify: async (v) => {
-        const r = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: `Bearer ${v}` }, ...timeout() });
-        return r.ok ? null : `OpenAI rejected the key (HTTP ${r.status})`; } },
-      { body: 'wahaApiKey', env: 'WAHA_API_KEY', live: false, verify: async (v) => (v.length >= 8 ? null : 'WAHA API key is too short') },
-      { body: 'wahaEndpoint', env: 'WAHA_ENDPOINT', live: false, verify: async (v) => (/^https?:\/\//.test(v) ? null : 'WAHA endpoint must be an http(s) URL') },
-    ];
-    // Fixture keys in test/local execution bypass remote provider validation; production sets verifyProviderKeys
-    const isMockFixture = (v: string) => v.startsWith('mock-') || v.startsWith('test-') || v.startsWith('fixture-');
-    const shouldVerify = (f: (typeof fields)[number], val: string) => {
-      if (!f.live) return true;
-      if (ctx.options?.verifyProviderKeys) return true;
-      if (isMockFixture(val)) return false;
-      return true;
-    };
-    const staged: Array<{ env: string; value: string }> = [];
-    for (const f of fields) {
-      const raw = body[f.body];
-      if (typeof raw !== 'string') continue;
-      const value = raw.trim();
-      if (!value) continue;
-      if (shouldVerify(f, value)) {
-        let reason: string | null;
-        try {
-          reason = await f.verify(value);
-        } catch (err: any) {
-          reason = `could not reach the provider to verify it (${err?.name === 'TimeoutError' ? 'timeout' : err?.message || 'network error'})`;
-        }
-        if (reason) return problem(c, 422, 'PROVIDER_KEY_REJECTED', `${f.env}: ${reason}. Nothing was changed.`);
-      }
-      staged.push({ env: f.env, value });
-    }
-    for (const entry of staged) process.env[entry.env] = entry.value;
-    if (staged.length) broadcastEvent('system:providers_updated', { timestamp: new Date().toISOString(), keys: staged.map((e) => e.env) });
-    return c.json({
-      ok: true,
-      activated: staged.map((e) => e.env),
-      persisted: false,
-      message: staged.length
-        ? 'Verified and active in this process until the next restart. To keep it across restarts run: bash infra/docker/rotate_external_secrets.sh (writes infra/docker/.env.production and redeploys).'
-        : 'No provider values supplied; nothing changed.',
-    });
+    if (!auth.authenticated || auth.role !== 'administrator')
+      return problem(c,401,'Unauthorized','Administrator authority required');
+    return problem(c,409,'PROVIDER_DEPLOYMENT_REQUIRED',
+      'Provider credentials are managed on the production host. Use the host credential update tool and verified deployment to activate matching Core and worker settings.');
   });
 }

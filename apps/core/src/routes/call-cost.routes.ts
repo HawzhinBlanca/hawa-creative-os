@@ -13,7 +13,7 @@ export function registerCallCostRoutes(ctx: RouteContext) {
     if(!['administrator','operator','auditor'].includes(auth.role||'')) return ctx.problem(c,403,'Call Accounting Forbidden');
     if(!service) return ctx.problem(c,503,'Database Required');
     const scope={tenantId:auth.tenantId,userId:auth.userId,role:auth.role,
-      sessionHash:auth.authMethod==='google_oidc'&&token?createHash('sha256').update(token).digest('hex'):undefined};
+      trustedOffice:auth.authMethod==='trusted_office',sessionHash:auth.authMethod==='google_oidc'&&token?createHash('sha256').update(token).digest('hex'):undefined};
     try {
       return c.json(operation==='list' ? await service.list(scope,c.req.query('cursor')) : operation==='get'
         ? await service.get(scope,c.req.param('kind')??'',c.req.param('callId')??'')

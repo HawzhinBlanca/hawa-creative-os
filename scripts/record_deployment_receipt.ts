@@ -28,6 +28,7 @@ export interface DeploymentReceipt {
   images: Record<'core' | 'desk' | 'worker', ImageObservation>;
   runtime: {
     healthStatus: string;
+    configurationRevision?: string;
     postgres: string;
     flags: { DESIGN_PIPELINE_V3: string; DESIGN_STUDIO_V2: string };
     modelTier: string;
@@ -44,6 +45,8 @@ export function buildDeploymentReceipt(input: {
   workerColour: 'blue' | 'green';
   observations: ImageObservation[];
   health: any;
+  workerHealth?: any;
+  expectedConfigurationRevision?: string;
   observedMigration: { name: string; sha256: string };
   observedAt?: string;
 }): DeploymentReceipt {
@@ -61,6 +64,14 @@ export function buildDeploymentReceipt(input: {
   }
   if (input.health?.buildCommit !== input.buildCommit) throw new Error('Core runtime build commit differs from deployed checkout');
   if (!['healthy', 'degraded'].includes(input.health?.status)) throw new Error('Core health is unavailable or unhealthy');
+  if (input.expectedConfigurationRevision !== undefined) {
+    const expected = input.expectedConfigurationRevision;
+    if (!/^[a-f0-9]{64}$/.test(expected) || input.health?.configurationRevision !== expected ||
+        input.workerHealth?.configurationRevision !== expected || input.workerHealth?.buildCommit !== input.buildCommit ||
+        !['healthy','degraded'].includes(input.workerHealth?.status)) {
+      throw new Error('Core/worker runtime configuration differs from the canonical deployed configuration');
+    }
+  }
   const flags = input.health?.flags;
   if (!flags || !['on', 'off'].includes(flags.DESIGN_PIPELINE_V3) || !['on', 'off'].includes(flags.DESIGN_STUDIO_V2)) {
     throw new Error('Runtime design flags are unknown');
@@ -95,6 +106,7 @@ export function buildDeploymentReceipt(input: {
     images,
     runtime: {
       healthStatus: input.health.status,
+      ...(input.expectedConfigurationRevision ? {configurationRevision:input.expectedConfigurationRevision} : {}),
       postgres: String(input.health?.dependencies?.postgres || 'unknown'),
       flags: { DESIGN_PIPELINE_V3: flags.DESIGN_PIPELINE_V3, DESIGN_STUDIO_V2: flags.DESIGN_STUDIO_V2 },
       modelTier: models.tier,
@@ -137,6 +149,9 @@ export function main(args = process.argv.slice(2)): void {
       inspectImage('worker', `hawa-production-worker-${colour}-1`),
     ],
     health: JSON.parse(fs.readFileSync(0, 'utf8')),
+    expectedConfigurationRevision: crypto.createHash('sha256').update(fs.readFileSync(path.join(root,'infra/docker/.env.production'))).digest('hex'),
+    workerHealth: JSON.parse(docker(['exec', `hawa-production-worker-${colour}-1`, 'node', '-e',
+      "fetch('http://localhost:9080/health').then(r=>r.json()).then(d=>console.log(JSON.stringify(d))).catch(()=>process.exit(1))"])),
     observedMigration: { name: migrationName, sha256: migrationSha256 },
   });
   fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });

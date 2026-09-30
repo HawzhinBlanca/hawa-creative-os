@@ -88,7 +88,7 @@ afterEach(() => {
 
 describe('a busy studio', () => {
   it('waits its turn and then designs, telling the requester nothing extra', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = busyCore({ busyStarts: 2 });
     const { ctx, steps, sleeps, journal } = recordingContext();
 
@@ -114,7 +114,7 @@ describe('a busy studio', () => {
   });
 
   it('ends the run as before once the studio has stayed busy for the whole window', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = busyCore({ busyStarts: Number.POSITIVE_INFINITY });
     const { ctx, sleeps } = recordingContext();
 
@@ -131,7 +131,7 @@ describe('a busy studio', () => {
   });
 
   it('waits on a busy resume too, and a report after the window still names the run', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const recovering = busyCore({ busyStarts: 0, busyResumes: 1 });
     const first = recordingContext();
     expect((await runCanvaDraft(input, first.ctx, recovering)).status).toBe('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW');
@@ -146,7 +146,7 @@ describe('a busy studio', () => {
 
 describe('step retry options', () => {
   it('leaves every Core step on the adapter default (the restart window) except the paid parity check and the outcome report', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { ctx, options } = recordingContext();
     await runCanvaDraft(input, ctx, busyCore({ busyStarts: 0 }));
 

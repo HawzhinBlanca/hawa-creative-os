@@ -2,16 +2,18 @@ import { createHash } from 'node:crypto';
 import { sql, withRlsContext, type Kysely, type Database, type RlsContext } from '@hawa/db';
 import { parseEvaluationSettlement } from '@hawa/domain';
 import type { CallCostDetail, CallCostEvidence, CallCostKind, CallCostPage } from '@hawa/contracts';
+import { ADMIN_USER_ID } from '../core-context.js';
 import { lockNamedOfficeAdministrator } from './named-review-authority.js';
 import { CanvaFlowError } from './canva-flow-error.js';
 
-type Scope = RlsContext & { userId: string; sessionHash?: string };
-type Receipt = { id: string; revision: number; request_hash: string; actor_user_id: string; recorded_at: Date };
+type Scope = RlsContext & { userId: string; sessionHash?: string; trustedOffice?: boolean };
+type Receipt = { id: string; revision: number; request_hash: string; actor_user_id: string; recorded_at: Date; evidence_type?: string };
 type PageKey = { startedAt: string; kind: CallCostKind; id: string };
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 const kindOf = (v: unknown): v is CallCostKind => ['studio','evaluation','voice','health_probe','canva_planner'].includes(String(v));
 const fail = (status: number, code: string, message: string): never => { throw new CanvaFlowError(status, code, message); };
-const receiptView = (r: Receipt) => ({ id:r.id, revision:r.revision, actorUserId:r.actor_user_id, recordedAt:new Date(r.recorded_at).toISOString() });
+const receiptView = (r: Receipt) => ({ id:r.id, revision:r.revision, actorUserId:r.actor_user_id, recordedAt:new Date(r.recorded_at).toISOString(),evidenceType:r.evidence_type||'administrator_attestation',
+  ...(r.evidence_type==='trusted_office_attestation'?{actorLabel:'Office team'}:{}) });
 
 /** Records financial evidence only. No provider, workflow, or task-control dependency. */
 export class CallCostAccountingService {
@@ -22,9 +24,17 @@ export class CallCostAccountingService {
     const row = (await sql<{ evidence:CallCostEvidence|null }>`SELECT hawa.office_call_cost_evidence(${kind},${id}::uuid) AS evidence`.execute(tx)).rows[0];
     return row.evidence ?? fail(404,'CALL_COST_NOT_FOUND','Call cost evidence was not found in this office.');
   }
+  private async authority(tx: Kysely<Database>, s: Scope): Promise<'named'|'trusted_office'|null> {
+    if (s.sessionHash && await lockNamedOfficeAdministrator(tx,{...s,sessionHash:s.sessionHash})) return 'named';
+    if (s.trustedOffice && s.role==='administrator' && s.userId===ADMIN_USER_ID) {
+      const row = (await sql<{allowed:boolean}>`SELECT hawa.has_tenant_role(${s.tenantId}::uuid,ARRAY['administrator']::hawa.membership_role[]) AS allowed`.execute(tx)).rows[0];
+      if (row?.allowed) return 'trusted_office';
+    }
+    return null;
+  }
   async get(s: Scope, kind: string, id: string): Promise<CallCostDetail> {
     return this.scoped(s,async tx => ({ ...await this.evidence(tx,kind,id),
-      canRecord:!!s.sessionHash && await lockNamedOfficeAdministrator(tx,{...s,sessionHash:s.sessionHash}) }));
+      canRecord:!!await this.authority(tx,s) }));
   }
   async list(s: Scope, cursor?: string): Promise<CallCostPage> {
     let before: PageKey | null = null;
@@ -50,11 +60,12 @@ export class CallCostAccountingService {
     const input=parseEvaluationSettlement(body);
     if (!kindOf(kind)||!uuid(id)||!uuid(actionId)||!input||input.calls.length!==1||input.calls[0].callId!==id)
       return fail(400,'CALL_COST_INVALID','Supply the exact call, current snapshot, reason and terminal provider evidence with a known final cost.');
-    if (!s.sessionHash) return fail(403,'NAMED_ADMINISTRATOR_REQUIRED','Sign in as a named office administrator.');
-    const requestHash=createHash('sha256').update(JSON.stringify({kind,id,actorId:s.userId,...input})).digest('hex');
+    if (!s.sessionHash && !s.trustedOffice) return fail(403,'NAMED_ADMINISTRATOR_REQUIRED','Use a named administrator session or the verified office.');
+    const requestHash=createHash('sha256').update(JSON.stringify({kind,id,actorId:s.userId,...(s.trustedOffice?{authority:'trusted_office'}:{}),...input})).digest('hex');
     try {
       return await this.scoped(s,async tx => {
-        if (!await lockNamedOfficeAdministrator(tx,{...s,sessionHash:s.sessionHash!}))
+        const authority = await this.authority(tx,s);
+        if (!authority)
           return fail(403,'NAMED_ADMINISTRATOR_REQUIRED','The named administrator session or membership is no longer active.');
         await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`call-cost:${s.tenantId}:${actionId}`},0))`.execute(tx);
         const prior=(await sql<Receipt>`SELECT * FROM hawa.call_cost_attestations WHERE tenant_id=${s.tenantId}::uuid AND action_id=${actionId}::uuid`.execute(tx)).rows[0];
@@ -63,12 +74,13 @@ export class CallCostAccountingService {
           return {replayed:true,receipt:receiptView(prior)};
         }
         const observed=await this.evidence(tx,kind,id), call=input.calls[0];
-        await sql`SELECT set_config('hawa.call_cost_session_hash',${s.sessionHash},true)`.execute(tx);
+        await sql`SELECT set_config('hawa.call_cost_session_hash',${s.sessionHash||''},true)`.execute(tx);
+        await sql`SELECT set_config('hawa.call_cost_auth',${authority==='trusted_office'?'trusted_office':''},true)`.execute(tx);
         const row=(await sql<Receipt>`INSERT INTO hawa.call_cost_attestations
           (tenant_id,call_kind,call_id,revision,action_id,actor_user_id,request_hash,snapshot_hash,reason,
-           conclusion,reported_cost_usd,evidence_reference,evidence_sha256)
+           conclusion,reported_cost_usd,evidence_reference,evidence_sha256,evidence_type)
           VALUES(${s.tenantId}::uuid,${kind},${id}::uuid,${observed.revision+1},${actionId}::uuid,${s.userId}::uuid,
-            ${requestHash},${input.expectedSnapshot},${input.reason},${call.conclusion},${call.reportedCostUsd},${call.evidenceReference},${call.evidenceSha256}) RETURNING *`.execute(tx)).rows[0];
+            ${requestHash},${input.expectedSnapshot},${input.reason},${call.conclusion},${call.reportedCostUsd},${call.evidenceReference},${call.evidenceSha256},${authority==='trusted_office'?'trusted_office_attestation':'administrator_attestation'}) RETURNING *`.execute(tx)).rows[0];
         return {replayed:false,receipt:receiptView(row)};
       });
     } catch (error) {

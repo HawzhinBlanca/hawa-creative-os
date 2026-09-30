@@ -28,8 +28,8 @@ describe('TaskWorkflowRunner has one path', () => {
 
   it('reports the refusal to Core before throwing it, so the task leaves RECEIVED', async () => {
     const { DurableStepJournal } = await import('../src/durable-context.js');
-    const previous = process.env.HAWA_BEARER_TOKEN;
-    process.env.HAWA_BEARER_TOKEN = 'test-only';
+    const previous = process.env.HAWA_DESIGN_WORKER_TOKEN;
+    process.env.HAWA_DESIGN_WORKER_TOKEN = 'test-only';
     try {
       const fetcher = vi.fn(async () => Response.json({ ok: true }));
       const runner = new TaskWorkflowRunner({ fetcher: fetcher as any });
@@ -47,8 +47,8 @@ describe('TaskWorkflowRunner has one path', () => {
       await runner.run({ ...input, canvaAutoGenerate: false, requesterToldAtIntake: true }, new DurableStepJournal()).catch(() => undefined);
       expect(JSON.parse((fetcher.mock.calls[1] as any)[1].body)).toMatchObject({ status: 'CLIENT_REQUIRED', notifyRequester: false });
     } finally {
-      if (previous === undefined) delete process.env.HAWA_BEARER_TOKEN;
-      else process.env.HAWA_BEARER_TOKEN = previous;
+      if (previous === undefined) delete process.env.HAWA_DESIGN_WORKER_TOKEN;
+      else process.env.HAWA_DESIGN_WORKER_TOKEN = previous;
     }
   });
 

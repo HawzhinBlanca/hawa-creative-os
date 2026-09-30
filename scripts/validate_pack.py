@@ -452,8 +452,11 @@ def validate_production_compose() -> None:
     require(not re.search(r"\$\{[A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY)[A-Z0-9_]*:-", text), "production compose declares no default value for any credential variable")
     require(not re.search(r"postgres(?:ql)?://[^\s:/@'\"]+:(?!\$\{)[^\s@'\"]{4,}@", text), "production compose embeds no database password")
     services = compose.get("services", {})
-    for name in ("core", "worker-blue", "worker-green"):
-        require(".env.production" in (services.get(name, {}).get("env_file") or []), f"{name} reads credentials from .env.production")
+    require(".env.production" in (services.get("core", {}).get("env_file") or []), "Core reads canonical provider credentials")
+    require(".env.service-boundaries" in (services.get("core", {}).get("env_file") or []), "Core reads verified proxy and design-worker boundary configuration")
+    for name in ("worker-blue", "worker-green"):
+        files = services.get(name, {}).get("env_file") or []
+        require(".env.worker" in files and ".env.production" not in files, f"{name} reads only allowlisted worker credentials (ADR-163)")
     require(compose.get("networks", {}).get("core", {}).get("internal") is True, "production core network is internal")
     pg_ports = [str(p) for p in services.get("postgres", {}).get("ports", [])]
     require(all(p.startswith("127.0.0.1:") for p in pg_ports), "production PostgreSQL port is bound to loopback only")

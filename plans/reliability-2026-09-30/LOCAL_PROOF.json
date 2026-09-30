@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "date": "2026-09-30",
+  "status": "LOCAL_IMPLEMENTATION_IN_PROGRESS",
+  "baseCommit": "051d5606f58579cfa3c07e702501979ce5c5e48a",
+  "requirements": [
+    "NFR-006",
+    "FR-060",
+    "FR-063",
+    "FR-064",
+    "FR-065",
+    "FR-066",
+    "FR-071",
+    "FR-074",
+    "FR-079"
+  ],
+  "checks": [
+    {
+      "command": "vitest: trusted office, real worker auth, OIDC, outbox outcomes, service boundaries",
+      "passed": 31,
+      "failed": 0
+    },
+    {
+      "command": "vitest: call cost accounting, Studio settlement, Desk accounting, planner recovery",
+      "passed": 30,
+      "failed": 0
+    },
+    {
+      "command": "vitest: Core/provider negative controls, Desk recovery, service config",
+      "passed": 53,
+      "failed": 0
+    },
+    {
+      "command": "vitest: host credential update, planner, Desk recovery, office, accounting",
+      "passed": 92,
+      "failed": 0
+    },
+    {
+      "command": "pnpm typecheck",
+      "testRoots": 626,
+      "status": "passed"
+    },
+    {
+      "command": "vitest: planner/admin visibility, host credential update, service boundary files",
+      "passed": 65,
+      "failed": 0
+    },
+    {
+      "command": "vitest: final boundary/real worker/deployment receipt checks",
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "command": "blueprint validation",
+      "pass": 1454,
+      "warn": 0,
+      "fail": 0
+    },
+    {
+      "command": "tsc chaos harness",
+      "status": "passed"
+    }
+  ],
+  "retainedInitialFailures": [
+    {
+      "scope": "fresh worktree test startup",
+      "reason": "workspace packages needed building",
+      "resolution": "pnpm build before tests"
+    },
+    {
+      "scope": "worker forbidden-route negative control",
+      "reason": "GET used on POST-only internal route",
+      "resolution": "test corrected to actual mutation route; 31 pass"
+    },
+    {
+      "scope": "type check",
+      "reason": "unused React import in findings component",
+      "resolution": "removed unused import"
+    },
+    {
+      "scope": "affected-suite new readback fixture",
+      "failed": 29,
+      "passed": 725,
+      "reason": "Synthetic legacy planner row introduced unresolved spending with no quote",
+      "resolution": "Use real canva-planner-v1 protocol for this unadmitted fixture; planner/configuration rerun 65 passed"
+    },
+    {
+      "scope": "fixture protocol correction",
+      "failed": 1,
+      "passed": 62,
+      "reason": "Fixture used numeric protocol instead of schema-defined text identifier",
+      "resolution": "Use canva-planner-v1; 65 passed"
+    },
+    {
+      "scope": "blueprint validation tooling",
+      "reason": "Default and bundled Python lacked PyYAML",
+      "resolution": "Use existing Homebrew Python with PyYAML; no dependency installed"
+    },
+    {
+      "scope": "initial blueprint validation",
+      "fail": 3,
+      "reason": "Old full-worker-env assertion plus missing host-local historical report link",
+      "resolution": "ADR-163 strengthens validator for allowlisted worker env and Core boundaries; restored host-local report link; 1454/0/0"
+    },
+    {
+      "scope": "pre-commit security scan",
+      "reason": "Two explicitly synthetic fixture literals matched the quoted credential-assignment rule",
+      "resolution": "Use the repository convention of constructing synthetic fixture tokens; no scanner rule relaxed and no production secret involved"
+    }
+  ],
+  "unexecuted": [
+    "final full release preflight",
+    "exact-candidate chaos/rollback and clean-host restore",
+    "live proxy/configuration readback",
+    "200-case paid evaluation",
+    "genuine native/pilot admission"
+  ],
+  "noProductionCredentialChanges": true,
+  "deployment": "not started",
+  "rollbackCompatibility": "Existing worker-used static operator value adopted as the restricted design principal; static aliases retired by the same pre-key verification. Previous Core still recognizes the value during rollback."
+}

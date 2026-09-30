@@ -1,3 +1,4 @@
+import { permitsDesignWorkerRequest } from './services/design-worker-access.js';
 import { hydrateClientDnaFromDb } from './services/client-dna-hydration.js';
 import { ensureClientPackRows } from './services/client-pack-rows.js';
 import { clientPacks } from './services/client-packs.js';
@@ -419,6 +420,17 @@ export function createApp(options?: CreateAppOptions) {
       }
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
     }
+    // ADR-163: no ordinary operator key in the worker. Preserve Canva grant ownership,
+    // but authorize only the worker's task-scoped design endpoints, never approvals or administration.
+    const designToken = process.env.HAWA_DESIGN_WORKER_TOKEN?.trim();
+    const designPresented = ticketCredential || bearerTokenOf(c) || '';
+    if (designToken && designPresented && secretsEqual(designPresented, designToken)) {
+      if (!ticketCredential && permitsDesignWorkerRequest(c.req.path, c.req.method)) {
+        return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId,
+          actorId: 'hawa_design_worker', role: 'operator', displayName: 'Hawa design worker', authMethod: 'design_worker' };
+      }
+      return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
+    }
     let authHeader = ticketCredential ? `Bearer ${ticketCredential}` : c.req.header('Authorization');
     if (!authHeader) {
       const rawCookie = getCookie(c, 'hawa_session');
@@ -438,7 +450,7 @@ export function createApp(options?: CreateAppOptions) {
 
     // Trusted-office mode (ADR-146) lets a request with no credential from the office origin act as the
     // office. A request that presents a credential is verified exactly as in required mode below: the
-    // worker's Canva and Studio calls reach Core from inside the Docker network with HAWA_BEARER_TOKEN,
+    // worker's old Canva and Studio calls reached Core from inside the Docker network with HAWA_BEARER_TOKEN,
     // never from the office origin, and ignoring that key failed every design (2026-09-29 23:31 to the
     // fix). The worker's internal token still authenticates only /v1/internal/*.
     if (officeAccess.mode === 'trusted_office') {
@@ -762,6 +774,7 @@ export function createApp(options?: CreateAppOptions) {
       status,
       timestamp: new Date().toISOString(),
       buildCommit: process.env.HAWA_BUILD_COMMIT || 'unknown',
+      configurationRevision: process.env.HAWA_CONFIGURATION_REVISION || null,
       flags: {
         DESIGN_PIPELINE_V3: process.env.DESIGN_PIPELINE_V3 || 'off',
         // How many chats DESIGN_PIPELINE_V3_CHATS enrols in v3 while the flag above is off, read as
@@ -885,7 +898,7 @@ export function createApp(options?: CreateAppOptions) {
     const guarded = isPublic
       ? handler
         : async (c: any, next: any) => {
-          if (officeAccess.mode !== 'trusted_office' && method !== 'get' && !c.req.header('Authorization')) {
+          if (method !== 'get' && !c.req.header('Authorization')) {
             const cookieSession = getCookie(c, 'hawa_session');
             if (cookieSession) {
               const presented = c.req.header('x-hawa-csrf') || '';

@@ -31,6 +31,7 @@ x-app-environment: &app-environment
   HAWA_CORE_INTERNAL_URL: http://core:3001
   # The worker's own credential for Core's /v1/internal/* endpoints (a service principal).
   HAWA_WORKER_TOKEN: ${CHAOS_WORKER_TOKEN:?}
+  HAWA_DESIGN_WORKER_TOKEN: ${CHAOS_DESIGN_WORKER_TOKEN:?}
   # Every chat's requests are RequestLifecycle's (ADR-135): HAWA_LIFECYCLE_CHATS, which listed the
   # flagged chats until 2026-09-28, no longer exists. The R10 scenarios set it only for the previous
   # release's containers, in the release override the cutover driver writes (driver/cutover.ts).

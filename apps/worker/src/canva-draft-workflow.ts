@@ -170,7 +170,7 @@ type CoreCall = (path: string, body?: unknown, key?: string) => Promise<any>;
 /** The worker's authenticated line to Core for one task. */
 function coreClient(input: Pick<WorkflowInput, 'taskId'>, fetcher: typeof fetch, lifecycle?: Pick<LifecycleOutcomeReporter, 'requestId' | 'runId'>): CoreCall {
   const base = process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001';
-  const token = process.env.HAWA_BEARER_TOKEN;
+  const token = process.env.HAWA_DESIGN_WORKER_TOKEN;
   if (!token) throw new Error('Worker Core credential is not configured');
   return async (path: string, body?: unknown, key?: string) => {
     const method = body === undefined ? 'GET' : 'POST';

@@ -71,3 +71,8 @@ packages/creative/bin/
 # these old repository copies adopts them once on its next deploy; they are never committed again.
 infra/docker/.postgres_volume_created
 infra/docker/.restate_volume_created
+
+# ADR-163: generated host-local reverse proxy credential, never source-controlled.
+.office-proxy-header.conf
+.service-boundaries.lock
+.credential-update.lock

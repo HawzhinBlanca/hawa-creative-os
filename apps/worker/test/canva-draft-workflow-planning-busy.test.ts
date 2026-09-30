@@ -86,7 +86,7 @@ afterEach(() => {
 
 describe('a busy planner, on the legacy TaskWorkflow path', () => {
   it('waits the time Core names, not a doubling backoff, and then designs', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = planningCore({ busy: 4, retryAfter: '3' });
     const { ctx, steps, sleeps, journal } = recordingContext();
 
@@ -121,7 +121,7 @@ describe('a busy planner, on the legacy TaskWorkflow path', () => {
   });
 
   it('replays an answer journalled before this change as the plan it was', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const journal = new Map<string, unknown>([
       ['canva-verify-task-scope', { tenantId: 'tenant', clientId: 'client' }],
       ['canva-create-draft', { planId: 'plan-busy', status: 'retrieved', designId: 'DA_plan' }],
@@ -134,7 +134,7 @@ describe('a busy planner, on the legacy TaskWorkflow path', () => {
   });
 
   it('bounds the named wait to between 1 and 30 seconds', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const long = recordingContext();
     await runCanvaDraft(input, long.ctx, planningCore({ busy: 1, retryAfter: '3600' }));
     expect(long.sleeps[0]).toBe(30000);
@@ -145,7 +145,7 @@ describe('a busy planner, on the legacy TaskWorkflow path', () => {
   });
 
   it('waits the default 25 s when Core names no time, or names it in a form it does not read', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     for (const retryAfter of [null, 'Wed, 21 Oct 2026 07:28:00 GMT', '2.5']) {
       const { ctx, sleeps } = recordingContext();
       await runCanvaDraft(input, ctx, planningCore({ busy: 1, retryAfter }));
@@ -154,7 +154,7 @@ describe('a busy planner, on the legacy TaskWorkflow path', () => {
   });
 
   it('ends the run as a busy server, once, when the planner has stayed busy for the whole window', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = planningCore({ busy: Number.POSITIVE_INFINITY, retryAfter: '10' });
     const { ctx, sleeps } = recordingContext();
 
@@ -186,7 +186,7 @@ describe('a busy planner, on a RequestLifecycle-owned DesignRun', () => {
   };
 
   it('waits the named time with proof on every try, and reports the draft once', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     vi.stubEnv('HAWA_WORKER_TOKEN', ['worker', 'design', 'proof', 'fixture'].join('_'));
     const { run, task } = owned();
     const remote = planningCore({ busy: 2, retryAfter: '4', task });
@@ -211,7 +211,7 @@ describe('a busy planner, on a RequestLifecycle-owned DesignRun', () => {
   });
 
   it('ends a run still refused after the window with one PLANNING_BUSY outcome to RequestLifecycle', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     vi.stubEnv('HAWA_WORKER_TOKEN', ['worker', 'design', 'proof', 'fixture'].join('_'));
     const { run, task } = owned();
     const remote = planningCore({ busy: Number.POSITIVE_INFINITY, retryAfter: '15', task });

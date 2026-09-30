@@ -1,3 +1,4 @@
+import { DesignReviewFindings } from './DesignReviewFindings.js';
 import {taskGenerationBlocker} from '@hawa/contracts/task-status';
 import React,{useEffect,useRef,useState} from 'react';
 import {apiClient} from '../api/client.js';
@@ -74,7 +75,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string;revision?:
         <option value="1200x1697">Portrait invitation</option><option value="1080x1350">Portrait post</option><option value="1080x1080">Square post</option></select></label>
       <button className="btn" disabled={busy||!connected||Boolean(generationBlocker)||plans.some(p=>['planning','planned','uncertain'].includes(p.status))||state.operations?.some((o:any)=>o.kind==='create')} onClick={generate}>Design in Canva</button>
     </div>}
-    {plans.map(p=><div key={p.id}><p>Design plan · {p.status}{p.receipt?` · ${p.receipt.returnedModel}`:''}</p>{p.diagnostic&&<p>{p.diagnostic}</p>}
+    {plans.map(p=><div key={p.id}><p>Design plan · {p.status}{p.receipt?` · ${p.receipt.returnedModel}`:''}</p>{p.diagnostic&&<p>{p.diagnostic}</p>}<DesignReviewFindings findings={p.review_findings}/>
       {p.cost_evidence_required&&<p role="note">Paid call {p.call_id} needs terminal cost evidence in Operations → Call cost accounting. Retiring this plan preserves that obligation.</p>}
       {p.retained_layout&&<p>A validated layout is saved. Resume can recover it without another model call.</p>}
       {['planning','planned','uncertain'].includes(p.status)&&!state?.binding&&<button className="btn" disabled={busy||!connected||Boolean(generationBlocker)} onClick={()=>run(async()=>{const r=await apiClient.canva.resumePlan(taskId,p.id);setMessage(r.message);})}>Resume saved design</button>}

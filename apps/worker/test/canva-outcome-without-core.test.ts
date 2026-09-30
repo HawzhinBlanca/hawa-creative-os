@@ -78,7 +78,7 @@ const coreDown = () => vi.fn(async () => { throw Object.assign(new TypeError('fe
 
 describe('an outcome Core does not take', () => {
   it('is written to the outbox by the worker: the requester, the office and the report, once each', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const chat = String(7500 + Math.floor(Math.random() * 400));
     const taskId = await telegramTask(chat);
     const input: WorkflowInput = { taskId, tenantId, clientId, rawText: '', sourcePlatform: 'telegram', idempotencyKey: 'k', canvaAutoGenerate: true, designStudio: true };
@@ -123,7 +123,7 @@ describe('an outcome Core does not take', () => {
   });
 
   it('is sent to Core again by the outbox until Core takes it', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     vi.stubEnv('HAWA_CORE_INTERNAL_URL', 'http://core.test');
     const taskId = await telegramTask('7498');
     await outcomeRecorder(db, { userId, officeChatId: null })({ tenantId, taskId, report: { status: 'DESIGN_FAILED', code: 'HARD_QA_REFUSED', runId: 'run-2' } });
@@ -149,7 +149,7 @@ describe('an outcome Core does not take', () => {
 
 describe('a Canva token refresh collision', () => {
   it('still reads as the refusal it was once the step has retried it to the end of its window', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const input: WorkflowInput = { taskId: randomUUID(), tenantId: 'tenant', clientId: 'client', rawText: '', sourcePlatform: 'telegram', idempotencyKey: 'k', canvaAutoGenerate: true };
     const reports: any[] = [];
     let exportTries = 0;
@@ -188,14 +188,14 @@ describe('the parity check', () => {
   const input: WorkflowInput = { taskId: '00000000-0000-4000-c000-0000000000ff', tenantId: 'tenant', clientId: 'client', rawText: '', sourcePlatform: 'telegram', idempotencyKey: 'k', canvaAutoGenerate: true, designStudio: true };
 
   it('with no verdict in its answer is unavailable, not a match', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { remote, reports } = studio(() => Response.json({ ok: true, verdict: {} }));
     await runCanvaDraft(input, restateLikeContext().ctx as any, remote as any);
     expect(reports).toEqual([expect.objectContaining({ status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', parity: 'unavailable', parityError: 'PARITY_NO_VERDICT' })]);
   });
 
   it('that Core answered with a 5xx is not asked again: each ask is a paid vision call', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { remote, calls, reports } = studio(() => Response.json({ title: 'PARITY_MODEL_FAILED' }, { status: 500 }));
     await runCanvaDraft(input, restateLikeContext(5).ctx as any, remote as any);
     expect(calls.filter((u) => u.endsWith('/canva/parity-check'))).toHaveLength(1);

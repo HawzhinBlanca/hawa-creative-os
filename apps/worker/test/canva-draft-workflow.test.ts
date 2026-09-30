@@ -6,7 +6,7 @@ const input={taskId:'00000000-0000-4000-c000-000000000001',tenantId:'tenant',cli
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
 describe('native Canva workflow',()=>{
   it('resumes known operations and retrieves a real-shaped preview without approving',async()=>{
-    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN','test-only');
     const replies=[{tenantId:'tenant',clientId:'client'},{status:'submitted',planId:'plan'},
       {status:'retrieved',planId:'plan',designId:'DA_test'},{binding:{designId:'DA_test',version:1}},
       {status:'submitted',operationId:'export'},{status:'retrieved',artifact:{id:'artifact'}},
@@ -18,7 +18,7 @@ describe('native Canva workflow',()=>{
     const firstCalls=remote.mock.calls.length;await runCanvaDraft(input,ctx,remote);expect(remote).toHaveBeenCalledTimes(firstCalls);
   });
   it('recovers a stale preview with a fresh bounded export without another generation',async()=>{
-    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN','test-only');
     const replies=[{tenantId:'tenant',clientId:'client'},{status:'retrieved',designId:'DA_test'},
       {binding:{designId:'DA_test',version:1}},{status:'stale'},
       {binding:{designId:'DA_test',version:1}},{status:'submitted',operationId:'fresh'},
@@ -29,7 +29,7 @@ describe('native Canva workflow',()=>{
     expect(new Headers(remote.mock.calls[5][1]?.headers).get('Idempotency-Key')).toContain('-retry-1');
   });
   it('does not spend on the historical backlog without an explicit generation marker',async()=>{
-    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN','test-only');
     const remote=vi.fn<typeof fetch>(async()=>Response.json({ok:true}));
     const result=await runCanvaDraft({...input,canvaAutoGenerate:false},new DurableStepJournal(),remote);
     expect(result.status).toBe('MANUAL_DESIGN_REQUIRED');
@@ -38,7 +38,7 @@ describe('native Canva workflow',()=>{
     expect(JSON.parse(String(remote.mock.calls[0][1]?.body))).toMatchObject({status:'MANUAL_DESIGN_REQUIRED'});
   });
   it('stops a different client before model or Canva actions, and reports it instead of retrying forever',async()=>{
-    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN','test-only');
     const replies=[{tenantId:'tenant',clientId:'OTHER'},{ok:true}];
     const remote=vi.fn<typeof fetch>(async()=>Response.json(replies.shift()));
     // It used to throw an ordinary error outside any step: Restate retried the invocation without
@@ -53,7 +53,7 @@ describe('native Canva workflow',()=>{
     expect(body.detail).toMatch(/mismatch/);
   });
   it('refuses a direct legacy invocation for a request-owned task before any paid or outcome call', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = vi.fn<typeof fetch>(async () => Response.json({ tenantId: 'tenant', clientId: 'client', requestId: 'request-owned-by-restate' }));
     const ctx = new DurableStepJournal();
     const result = await runCanvaDraft(input, ctx, remote);
@@ -68,7 +68,7 @@ describe('native Canva workflow',()=>{
     expect(remote).toHaveBeenCalledTimes(2);
   });
   it('never turns an uncertain generation into an approval or new request',async()=>{
-    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');const responses=[{tenantId:'tenant',clientId:'client'},{status:'uncertain',planId:'plan'}];
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN','test-only');const responses=[{tenantId:'tenant',clientId:'client'},{status:'uncertain',planId:'plan'}];
     const remote=vi.fn<typeof fetch>(async()=>Response.json(responses.shift() ?? { ok: true }));const result=await runCanvaDraft(input,new DurableStepJournal(),remote);
     expect(result.status).toBe('DESIGN_UNCERTAIN');expect(result.qcPassed).toBe(false);
     // scope check, generation, and one outcome notification; never a second generation
@@ -77,21 +77,21 @@ describe('native Canva workflow',()=>{
     expect(JSON.parse(String(remote.mock.calls[2][1]?.body))).toMatchObject({status:'DESIGN_UNCERTAIN'});
   });
   it('reports a refused generation (4xx) as a terminal outcome instead of retrying it',async()=>{
-    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN','test-only');
     const responses=[Response.json({tenantId:'tenant',clientId:'client'}),Response.json({title:'COPY_UNSUPPORTED'},{status:422}),Response.json({ok:true})];
     const remote=vi.fn<typeof fetch>(async()=>{const next=responses.shift();if(!next)throw new Error('Unexpected fixture request');return next;});const result=await runCanvaDraft(input,new DurableStepJournal(),remote);
     expect(result.status).toBe('DESIGN_REJECTED');expect(remote).toHaveBeenCalledTimes(3);
     expect(JSON.parse(String(remote.mock.calls[2][1]?.body))).toMatchObject({status:'DESIGN_REJECTED',code:'COPY_UNSUPPORTED'});
   });
   it('keeps retrying transient Core failures (5xx) rather than reporting a false outcome',async()=>{
-    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN','test-only');
     const responses=[Response.json({tenantId:'tenant',clientId:'client'}),new Response('down',{status:503})];
     const remote=vi.fn<typeof fetch>(async()=>{const next=responses.shift();if(!next)throw new Error('Unexpected fixture request');return next;});
     await expect(runCanvaDraft(input,new DurableStepJournal(),remote)).rejects.toThrow('HTTP 503');
     expect(remote.mock.calls.some(c=>String(c[0]).includes('/notifications/'))).toBe(false);
   });
   it('reports DESIGN_SERVER_ERROR to requester when retry attempts are exhausted on persistent 5xx', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const responses = [
       Response.json({ tenantId: 'tenant', clientId: 'client' }),
       Response.json({ ok: true }),
@@ -118,7 +118,7 @@ describe('native Canva workflow',()=>{
     });
   });
   it('drafts the size recorded at intake and falls back to the historical default without one',async()=>{
-    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN','test-only');
     const sized=[Response.json({tenantId:'tenant',clientId:'client'}),Response.json({status:'uncertain',planId:'plan'}),Response.json({ok:true})];
     const remote=vi.fn<typeof fetch>(async()=>{const next=sized.shift();if(!next)throw new Error('Unexpected fixture request');return next;});
     await runCanvaDraft({...input,canvaVariant:{width:1080,height:1350}},new DurableStepJournal(),remote);
@@ -127,7 +127,7 @@ describe('native Canva workflow',()=>{
     expect(resolveCanvaVariant({})).toEqual({width:1200,height:1697});
   });
   it('never starts model or Canva work for an unscoped task; it tells the requester instead',async()=>{
-    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN','test-only');
     const remote=vi.fn<typeof fetch>(async()=>Response.json({ok:true}));
     const result=await runCanvaDraft({...input,clientId:undefined},new DurableStepJournal(),remote);
     expect(result.status).toBe('CLIENT_REQUIRED');expect(remote).toHaveBeenCalledTimes(1);
@@ -155,7 +155,7 @@ describe('native Canva workflow',()=>{
     expect(receipt.receiptId).toContain('inv_conflict_reconciled_');
   });
   it('passes updated binding version to pptx check after preview recovery bumps version', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const replies = [
       { tenantId: 'tenant', clientId: 'client' },
       { status: 'retrieved', planId: 'plan', designId: 'DA_test' },
@@ -173,7 +173,7 @@ describe('native Canva workflow',()=>{
     expect(JSON.parse(String(pptxCall![1]?.body)).expectedVersion).toBe(2);
   });
   it('gracefully falls back to CANVA_CHECK_REQUIRED when copy/font check export fails with 4xx terminal error', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const responses = [
       Response.json({ tenantId: 'tenant', clientId: 'client' }),
       Response.json({ status: 'retrieved', planId: 'plan', designId: 'DA_test' }),
@@ -204,7 +204,7 @@ describe('native Canva workflow',()=>{
       },
       sleep: async () => {},
     };
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const checkRefused = [
       Response.json({ tenantId: 'tenant', clientId: 'client' }),
       Response.json({ status: 'retrieved', planId: 'plan', designId: 'DA_test' }),
@@ -226,7 +226,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('gracefully transitions to CANVA_PREVIEW_FAILED when preview export fails with 4xx terminal error', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const responses = [
       Response.json({ tenantId: 'tenant', clientId: 'client' }),
       Response.json({ status: 'retrieved', planId: 'plan', designId: 'DA_test' }),
@@ -241,7 +241,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('gracefully transitions to DESIGN_REJECTED when resume draft fails with 4xx terminal error', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const responses = [
       Response.json({ tenantId: 'tenant', clientId: 'client' }),
       Response.json({ status: 'planning', planId: 'plan_123' }),
@@ -255,7 +255,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('executes Design Studio v2 workflow: studio-start -> studio-resume -> binding -> exports -> parity -> ready', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const studioInput = {
       ...input,
       designStudio: true,
@@ -311,7 +311,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('reports DESIGN_FAILED when design studio returns failed status after ladder', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const studioInput = { ...input, designStudio: true };
     const replies = [
       { tenantId: 'tenant', clientId: 'client' }, // verify scope
@@ -334,7 +334,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('proves both studio path and legacy path reach CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
 
     // Legacy path
     const legacyReplies = [
@@ -420,7 +420,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('ends a BINDING_MISMATCH as a reported outcome, without a design link, instead of retrying forever', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const studioInput = { ...input, designStudio: true };
     const replies = [
       { tenantId: 'tenant', clientId: 'client' }, // verify scope
@@ -445,7 +445,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('reports a failed studio run with a short code, and the diagnostic only as detail', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const diagnostic = 'Studio v3 failed: Winner failed hard QA: TEXT_OVERFLOW, LOGO_CLEARANCE';
     const replies = [
       { tenantId: 'tenant', clientId: 'client' },
@@ -463,7 +463,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('gives a re-drive its own idempotency keys, so Core starts a new studio run', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const replies = [
       { tenantId: 'tenant', clientId: 'client' },
       { runId: 'run-r2', status: 'failed', diagnostic: 'BUDGET_EXHAUSTED' },
@@ -476,7 +476,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('passes parity: unavailable with parityError code to status notification when parity check fails', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const studioInput = { ...input, designStudio: true };
     const replies = [
       { tenantId: 'tenant', clientId: 'client' }, // verify scope
@@ -506,7 +506,7 @@ describe('native Canva workflow',()=>{
   });
 
   it('proves terminal notification transient 503 throws and replaying after Core recovery does not re-run design generation', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const replies = [
       { tenantId: 'tenant', clientId: 'client' }, // scope check
       { status: 'submitted', planId: 'plan-1' }, // canva-design-plan

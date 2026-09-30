@@ -51,7 +51,7 @@ describe('the bodies the worker sends to canva-status', () => {
   const sendsOnly = (body: Record<string, unknown>) => expect(Object.keys(body).filter((k) => !contract.fields.includes(k))).toEqual([]);
 
   it('a draft that passed its check', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { fetcher, reports } = core([
       { tenantId: 'tenant', clientId: 'client' }, { status: 'submitted', planId: 'plan' },
       { status: 'retrieved', planId: 'plan', designId: 'DA_test' }, { binding: { designId: 'DA_test', version: 1 } },
@@ -64,14 +64,14 @@ describe('the bodies the worker sends to canva-status', () => {
   });
 
   it('no automatic draft, when intake already told the requester', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { fetcher, reports } = core([]);
     await runCanvaDraft({ ...input, canvaAutoGenerate: false, requesterToldAtIntake: true }, new DurableStepJournal(), fetcher);
     expect(reports).toEqual([contract.requests.manualDesignToldAtIntake]);
   });
 
   it('a dispatch the runner refuses', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { fetcher, reports } = core([]);
     await reportNotRunnable({ ...input, canvaAutoGenerate: false }, new DurableStepJournal(), fetcher);
     expect(reports).toEqual([contract.requests.notRunnable]);
@@ -79,7 +79,7 @@ describe('the bodies the worker sends to canva-status', () => {
   });
 
   it('a task that belongs to another client', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { fetcher, reports } = core([{ tenantId: 'tenant', clientId: 'OTHER' }]);
     await runCanvaDraft(input, new DurableStepJournal(), fetcher);
     expect(reports).toEqual([contract.requests.scopeMismatch]);
@@ -87,7 +87,7 @@ describe('the bodies the worker sends to canva-status', () => {
   });
 
   it('a generation Core refused', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { fetcher, reports } = core([{ tenantId: 'tenant', clientId: 'client' }, Response.json({ title: 'COPY_UNSUPPORTED' }, { status: 422 })]);
     await runCanvaDraft(input, new DurableStepJournal(), fetcher);
     expect(reports).toEqual([contract.requests.refused]);
@@ -95,7 +95,7 @@ describe('the bodies the worker sends to canva-status', () => {
   });
 
   it('an outcome replayed from the outbox is the recorded report, unchanged', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     vi.stubEnv('HAWA_CORE_INTERNAL_URL', 'http://core.test');
     const { fetcher, reports } = core([]);
     const handler = (new OutboxConsumer({} as never, { coreFetcher: fetcher }) as unknown as { handlers: Map<string, (cmd: unknown, db: unknown) => Promise<void>> }).handlers.get('task.outcome')!;
@@ -116,7 +116,7 @@ describe('what the worker does with each answer Core gives', () => {
   });
 
   it.each(FINAL)('%s: the workflow finishes after one report', async (name) => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { fetcher, reports } = core([], answerOf(name));
     const out = await runCanvaDraft({ ...input, canvaAutoGenerate: false }, new DurableStepJournal(), fetcher);
     expect(out.status).toBe('MANUAL_DESIGN_REQUIRED');
@@ -124,13 +124,13 @@ describe('what the worker does with each answer Core gives', () => {
   });
 
   it.each(RETRIED)('%s: the report step fails, so it is retried', async (name) => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { fetcher } = core([], answerOf(name));
     await expect(runCanvaDraft({ ...input, canvaAutoGenerate: false }, new DurableStepJournal(), fetcher)).rejects.toThrow(`HTTP ${contract.answers[name].status}`);
   });
 
   it.each([...FINAL, ...RETRIED])('%s: the outbox replay treats it the same way', async (name) => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const { fetcher } = core([], answerOf(name));
     const handler = (new OutboxConsumer({} as never, { coreFetcher: fetcher }) as unknown as { handlers: Map<string, (cmd: unknown, db: unknown) => Promise<void>> }).handlers.get('task.outcome')!;
     const outcome = await handler({ aggregate_id: input.taskId, payload: { taskId: input.taskId, report: contract.requests.replayedFromOutbox } }, {})

@@ -27,7 +27,7 @@ HAWA_SHARED_REQUIRED=(infra/docker/.env.production infra/docker/.env)
 HAWA_SHARED_DIRS=(infra/backup/snapshots infra/backup/release-receipts)
 # The test settings the release gate's suite reads, and the one gitignored audit folder validate_pack's
 # link check needs (the commit hook's own trap in a fresh worktree).
-HAWA_SHARED_OPTIONAL=(.env.test output/audits/2026-09-29-product-flow-fixes)
+HAWA_SHARED_OPTIONAL=(.env.test infra/docker/.env.service-boundaries infra/docker/.env.worker infra/docker/.office-proxy-header.conf output/audits/2026-09-29-product-flow-fixes)
 
 hawa_releases_dir() { printf '%s' "${HAWA_RELEASES_DIR:-$HOME/.hawa/releases}"; }
 hawa_current_link() { printf '%s' "${HAWA_CURRENT_LINK:-$HOME/.hawa/current}"; }

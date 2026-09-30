@@ -20,7 +20,7 @@ x-worker-environment: &worker-environment
   # Who asks Telegram for updates (Phase 2.1, ADR-034; ADR-135): the worker, set once in
   # infra/docker/.env for Core and both colours alike; deploy.sh refuses any other value. The live
   # colour polls and hands each update to its chat's ChatInbox, calling Core's /v1/internal/* with
-  # HAWA_WORKER_TOKEN, which comes from .env.production (env_file) like every credential; without it
+  # HAWA_WORKER_TOKEN, which comes from the allowlisted .env.worker (ADR-163); without it
   # the poller does not start.
   HAWA_TELEGRAM_POLLER: ${HAWA_TELEGRAM_POLLER:-worker}
 
@@ -34,7 +34,7 @@ x-worker: &worker
   restart: unless-stopped
   logging: *logging
   env_file:
-    - .env.production
+    - .env.worker
   networks:
     - core
     - egress
@@ -73,6 +73,7 @@ services:
       # directory changed, and no bind mount points into a checkout people work in. deploy.sh sets
       # HAWA_RELEASE_ROOT to the new release for its one-off nginx -t and vector validate runs.
       - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/infra/docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/infra/docker/.office-proxy-header.conf:/etc/nginx/hawa-office-proof.conf:ro
       # The file store, read-only, for the internal /_blobs/ location that Core's X-Accel-Redirect
       # answers point at (ADR-035). Files are 0444 and directories 0755, so nginx's user can read them.
       - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/srv/hawa-blobs:ro
@@ -116,6 +117,7 @@ services:
     logging: *logging
     env_file:
       - .env.production
+      - .env.service-boundaries
     environment:
       # Credentials and office policy (DATABASE_URL, TELEGRAM_WEBHOOK_SECRET,
       # TELEGRAM_ALLOWED_USERS, TELEGRAM_INTAKE_ALLOWED_USERS …) come only from .env.production.

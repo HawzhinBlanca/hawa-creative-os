@@ -34,3 +34,19 @@ it('requires a reason to retire a plan and retains the warning about unresolved 
  expect(calls.filter(c=>c.method==='POST').map(c=>c.path)).toEqual([`/v1/tasks/${taskId}/canva/plans/${planId}/abandon`]);
  expect(view.text()).toContain('Unresolved paid calls still require reconciliation');await view.unmount();
 });
+
+it('shows each saved review warning without rewriting copy or treating it as approval', async()=>{
+ stubCore(c=>{
+  if(c.path.endsWith('/plans'))return json({plans:[{id:planId,status:'imported',review_findings:[
+   {code:'COPY_DANGLING_END',message:'The saved subtitle ends on toward.',copyIndex:1},
+   {code:'LANGUAGE_MISSING',message:'The requested Sorani copy is missing.'},
+   {code:'CONTRAST_UNMEASURED',message:'Contrast on the actual image was not measured.'},
+   {code:'PHOTO_OMITTED',message:'Photo 6 has no placement.'}]}]});
+  if(c.path.includes('/canva/status'))return json({authorized:true});
+  return json({operations:[],artifacts:[]});
+ });
+ const view=await mount(React.createElement(CanvaTaskPanel,{taskId,taskStatus:'REVIEW'}));await flush();
+ expect(view.text()).toContain('Check before approving');expect(view.text()).toContain('Copy block 2');
+ for(const text of ['subtitle ends on toward','Sorani copy is missing','was not measured','Photo 6 has no placement','Original copy is unchanged'])expect(view.text()).toContain(text);
+ await view.unmount();
+});

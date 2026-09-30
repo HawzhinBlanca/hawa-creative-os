@@ -290,6 +290,7 @@ refuse_inactive_host "$HOST_ROLE" "$HOST_ROLE_RC"
 # start. HAWA_RELEASE_DIRS=off runs from this checkout as before (a host not yet switched over).
 source "${ROOT_DIR}/infra/ops/release_lib.sh"
 if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
+  python3 "${ROOT_DIR}/infra/ops/prepare_service_boundaries.py" --directory "$(hawa_shared_dir)/infra/docker" || exit 1
   RELEASE_DIR="$(hawa_release_prepare "$ROOT_DIR" "$BUILD_COMMIT")" || exit 1
   hawa_release_install "$RELEASE_DIR" || exit 1
   if [[ "$(hawa_physical "$ROOT_DIR")" != "$(hawa_physical "$RELEASE_DIR")" ]]; then
@@ -299,6 +300,7 @@ if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
   echo "✓ running from release directory ${RELEASE_DIR}"
 else
   # Compose binds nginx.conf, vector.yaml and the database init files through HAWA_RELEASE_ROOT.
+  python3 "${ROOT_DIR}/infra/ops/prepare_service_boundaries.py" --directory "${ROOT_DIR}/infra/docker" || exit 1
   export HAWA_RELEASE_ROOT="$ROOT_DIR"
   echo "NOTE: HAWA_RELEASE_DIRS=off: running from ${ROOT_DIR} itself, not a release directory"
 fi

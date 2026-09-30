@@ -41,6 +41,11 @@ export * from './outbox-consumer.js';
 export * from './durable-context.js';
 export * from './workflow-dispatcher.js';
 
+if (process.env.NODE_ENV === 'production' && process.env.HAWA_TELEGRAM_POLLER === 'worker' &&
+    !process.env.HAWA_DESIGN_WORKER_TOKEN?.trim()) {
+  throw new Error('Worker design access is not configured: HAWA_DESIGN_WORKER_TOKEN is required');
+}
+
 const dbUrl = process.env.DATABASE_URL;
 const sharedDb = dbUrl ? createDb(dbUrl) : undefined;
 
@@ -265,6 +270,7 @@ const server = http.createServer((req, res) => {
         status: healthy ? (degraded ? 'degraded' : 'healthy') : 'unhealthy',
         worker: 'restate-worker-1',
         buildCommit: process.env.HAWA_BUILD_COMMIT || 'unknown',
+      configurationRevision: process.env.HAWA_CONFIGURATION_REVISION || null,
         flags: {
           DESIGN_PIPELINE_V3: process.env.DESIGN_PIPELINE_V3 || 'off',
           DESIGN_STUDIO_V2: process.env.DESIGN_STUDIO_V2 || 'off',

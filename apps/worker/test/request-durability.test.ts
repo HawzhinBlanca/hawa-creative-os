@@ -64,7 +64,7 @@ function restateLike(attempts = 3) {
 
 describe('D1: a Core deployment fault inside a design is not the design\'s outcome', () => {
   it('a 401 on the task read is thrown to be retried, never reported as DESIGN_REJECTED', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const input = designInput();
     const reports: unknown[] = [];
     const remote = vi.fn<typeof fetch>(async () => problem(401, 'Authentication Required'));
@@ -74,7 +74,7 @@ describe('D1: a Core deployment fault inside a design is not the design\'s outco
   });
 
   it('waits out 401, 403 and an unknown route past each step\'s window, then carries on with the design', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     vi.stubEnv('HAWA_WORKER_TOKEN', 'test-only-worker-token');
     const input = designInput();
     const faults = [...Array(3).fill(401), ...Array(3).fill(403), ...Array(3).fill(404)];
@@ -99,7 +99,7 @@ describe('D1: a Core deployment fault inside a design is not the design\'s outco
   });
 
   it('a 404 Core words as a problem (the task is not there) is still the design\'s refusal', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const input = designInput();
     const reports: Array<{ status: string; code?: string }> = [];
     await runOwnedDesign(input, input.lifecycle.runId, restateLike().ctx, (r) => reports.push(r),
