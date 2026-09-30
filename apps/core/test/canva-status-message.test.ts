@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { composeCanvaStatusMessage } from '../src/services/canva-status-message.js';
+import { composeCanvaStatusMessage, officeDayExhaustedNote } from '../src/services/canva-status-message.js';
 
 const taskId = '00000000-0000-4000-c000-000000000001';
 
@@ -59,6 +59,15 @@ describe('requester-facing Canva outcome messages', () => {
     // With no office chat to alert, nobody would run it again: the requester hears the follow-up line instead.
     expect(composeCanvaStatusMessage({ taskId, title: 'Report', status: 'DESIGN_FAILED', code: 'STUDIO_RUN_LIMIT_TOO_SMALL', officeAlerted: false }).text)
       .toBe('Someone from the office will follow up here.');
+  });
+  it('tells the requester a design stopped by the office day needs more time, and the office when it resets (ADR-159)', () => {
+    const msg = composeCanvaStatusMessage({ taskId, title: 'Report', status: 'DESIGN_FAILED', code: 'OFFICE_DAY_EXHAUSTED' });
+    expect(msg.text).toBe("<b>Report</b> needs a little more time. The office is on it and will send your draft here; you don't need to send anything again.");
+    expect(msg.text).not.toMatch(/limit|budget|allowance|QA|OFFICE_/i);
+    const note = officeDayExhaustedNote(Date.parse('2026-09-30T08:00:00Z'));
+    expect(note).toContain("daily model allowance is used up and nothing was sent for this design");
+    expect(note).toContain('resets at midnight Baghdad time (2026-09-30 21:00 UTC)');
+    expect(note).not.toMatch(/hard QA|candidates/i);
   });
   it('says someone will follow up when there is no office chat to alert (#15)', () => {
     expect(composeCanvaStatusMessage({ taskId, title: 'Invitation', status: 'DESIGN_FAILED', officeAlerted: false }).text)

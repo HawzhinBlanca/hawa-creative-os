@@ -41,7 +41,7 @@ import {
   probeFontScripts,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
-import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError } from '@hawa/domain';
+import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError, OfficeDayExhaustedError } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, thumbnailPlaybookPrompt, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { buildRunBriefContract, StudioBriefContractError, StudioRunStatusChangedError } from './brief-contract.js';
@@ -129,6 +129,7 @@ class RequestOwnedImageUnavailable extends Error {}
 
 /** ADR-142: the run's failure code when one request's reservation is larger than the run has left. */
 export const STUDIO_RUN_LIMIT_TOO_SMALL = 'STUDIO_RUN_LIMIT_TOO_SMALL';
+export const OFFICE_DAY_EXHAUSTED = 'OFFICE_DAY_EXHAUSTED';
 
 const optionalImages = (error: unknown): string[] => {
   if (error instanceof RequestOwnedImageUnavailable) throw error;
@@ -1156,7 +1157,7 @@ export class DesignStudioService {
               responseSha256: result ? hash(result.imageBuffer) : null,
               inputTokens: result?.inputTokens ?? 0, outputTokens: result?.outputTokens ?? 0,
               images: result ? 1 : 0, usdEstimate: cost, status: result ? 'ok' : 'error',
-              costBasis: !result ? 'not_accepted' : result.costSource === 'usage' ? 'usage' : 'estimate',
+              costBasis: !result ? 'not_accepted' : result.costSource === 'usage' || result.costSource === 'price_list' ? result.costSource : 'estimate',
               errorCode: result ? null : 'IMAGE_REQUEST_REJECTED', latencyMs: Date.now() - started, attempts: 1,
               ...(result ? { retainedResult: { kind: 'image' as const,
                 payload: { ...result, imageBuffer: undefined }, image: result.imageBuffer } } : {}) });
@@ -2520,17 +2521,28 @@ export class DesignStudioService {
       }
     }
 
+    const exhausted = error?.code ?? 'BUDGET_EXHAUSTED';
     if (bestCandidate) {
       await this.repo.updateRunStatus(run.id, s.tenantId, 'transferring', {
         winnerCandidateId: bestCandidate.id,
-        diagnostic: `BUDGET_EXHAUSTED${cap}${reason ? `: ${reason}` : ''}: proceeded with best candidate passing hard QA.`,
+        diagnostic: `${exhausted}${cap}${reason ? `: ${reason}` : ''}: proceeded with best candidate passing hard QA.`,
       });
       return {
         runId: run.id,
         status: 'transferring',
-        diagnostic: 'BUDGET_EXHAUSTED',
+        diagnostic: exhausted,
         winnerCandidateId: bestCandidate.id,
       };
+    }
+
+    // ADR-159: the shared office day is used up, not this run's limit, and nothing QA refused. The
+    // office is told that, and when the day resets; it was reported as "no candidates passed hard QA".
+    if (error instanceof OfficeDayExhaustedError) {
+      const diagnostic = `${OFFICE_DAY_EXHAUSTED} at stage ${run.status}: ${error.message} Nothing was sent for the next ` +
+        `model request. Retry the design after the reset, or raise the daily limit in the spending policy.`;
+      await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', { diagnostic });
+      return { runId: run.id, status: 'failed', stage: run.status, code: OFFICE_DAY_EXHAUSTED, diagnostic, message: diagnostic,
+        ...(budget ? { spentUsd: budget.spentUsd } : {}) };
     }
 
     // ADR-142: one request larger than what the run has left, with no candidate made yet, is not a run

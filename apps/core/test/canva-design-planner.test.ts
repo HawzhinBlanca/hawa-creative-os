@@ -11,6 +11,8 @@ import { CanvaDesignPlanner,assertPlannerLogoRules,buildPlannerSystemPrompt,corr
 import { CanvaConnectService, CanvaFlowError } from '../src/services/canva-connect-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { checkCanvaPptx } from '@hawa/qa';
+import { STUDIO_SPENDING_POLICY } from '@hawa/creative';
+import { StudioCallSettlementService } from '../src/services/studio-call-settlement.js';
 import { computeDnaHash } from '../src/core-helpers.js';
 
 describe('planning slot policy (ADR-131)',()=>{
@@ -325,6 +327,44 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(good).not.toHaveBeenCalled();expect(api2.importEditableDesign).not.toHaveBeenCalled();
     expect((await planner2.generate(scope,id,'abandon-key-01',1200,1697)).status).toBe('abandoned');
 
+  });
+  it('charges an uncertain planner call its reservation after the wait; once abandoned, the task plans again (ADR-159)',async()=>{
+    const id=await intake(),lost=vi.fn(async()=>{throw new Error('lost');}),{planner}=make(lost);
+    const stuck=await planner.generate(scope,id,'expiry-key-01',1200,1697);expect(stuck.status).toBe('uncertain');
+    await planner.abandon(scope,id,stuck.planId,'Model outage; the charge is unknown.');
+    const call=(await sql<any>`SELECT reservation FROM hawa.canva_planner_calls WHERE id=${stuck.planId}::uuid`.execute(db)).rows[0];
+    const settlement=new StudioCallSettlementService(db);
+    // Too young: left for the office to record the real charge.
+    expect((await settlement.settleExpired(scope.tenantId,6*3_600_000)).plannerCalls).not.toContain(stuck.planId);
+    await db.transaction().execute(async tx=>{
+      await sql`ALTER TABLE hawa.canva_planner_calls DISABLE TRIGGER enforce_canva_planner_call`.execute(tx);
+      await sql`UPDATE hawa.canva_planner_calls SET started_at=now()-interval '8 hours' WHERE id=${stuck.planId}::uuid`.execute(tx);
+      await sql`ALTER TABLE hawa.canva_planner_calls ENABLE TRIGGER enforce_canva_planner_call`.execute(tx);
+    });
+    expect((await settlement.settleExpired(scope.tenantId,6*3_600_000)).plannerCalls).toContain(stuck.planId);
+    const attested=(await sql<any>`SELECT * FROM hawa.call_cost_attestations WHERE call_kind='canva_planner' AND call_id=${stuck.planId}::uuid`.execute(db)).rows;
+    expect(attested).toEqual([expect.objectContaining({evidence_type:'reservation_expiry',conclusion:'reservation_charged',
+      actor_user_id:'00000000-0000-4000-b000-000000000011'})]);
+    expect(Number(attested[0].reported_cost_usd)).toBe(call.reservation.usd);
+    expect((await settlement.settleExpired(scope.tenantId,6*3_600_000)).plannerCalls).not.toContain(stuck.planId);
+    const good=vi.fn(async()=>response()),next=make(good);
+    expect((await next.planner.generate(scope,id,'expiry-key-02',1200,1697)).status).toBe('submitted');
+    expect(good).toHaveBeenCalledTimes(1);
+  });
+  it('refuses paid planning from the price policy\'s review date with its own code, and sends nothing (ADR-159)',async()=>{
+    const id=await intake(),fetcher=vi.fn(async()=>response());
+    const at=(iso:string)=>new CanvaDesignPlanner(db,{importEditableDesign:vi.fn().mockResolvedValue({operationId:randomUUID(),status:'submitted'})} as unknown as CanvaConnectService,
+      {apiKey:'test-only',fetcher,now:()=>Date.parse(iso)});
+    const expired=await at(STUDIO_SPENDING_POLICY.reviewBy).generate(scope,id,'policy-expired-01',1200,1697);
+    expect(expired).toMatchObject({status:'failed',message:'SPENDING_POLICY_EXPIRED'});
+    expect(fetcher).not.toHaveBeenCalled();
+    expect((await sql`SELECT id FROM hawa.canva_planner_calls WHERE task_id=${id}::uuid`.execute(db)).rows).toHaveLength(0);
+    expect((await sql<any>`SELECT diagnostic FROM hawa.canva_design_plans WHERE id=${expired.planId}::uuid`.execute(db)).rows[0].diagnostic)
+      .toBe('SPENDING_POLICY_EXPIRED');
+    // The day before, the same request is planned (and /v1/health has been warning for two weeks).
+    const dayBefore=new Date(Date.parse(STUDIO_SPENDING_POLICY.reviewBy)-86_400_000).toISOString();
+    expect((await at(dayBefore).generate(scope,await intake(),'policy-valid-01',1200,1697)).status).toBe('submitted');
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it('a Canva rate limit on the import is a named wait: the paid plan is kept and the same key imports it, with no second model call',async()=>{
     const id=await intake(),remote=vi.fn(async()=>response()),{api,planner}=make(remote);

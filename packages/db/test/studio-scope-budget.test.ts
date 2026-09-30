@@ -62,7 +62,7 @@ describe.skipIf(!url)('Studio daily scope admission in PostgreSQL', () => {
       const results = await Promise.allSettled([repo.recordCallStart(f.call(a, 0.3)),
         new DesignStudioRepository(peer).recordCallStart(f.call(b, 0.3))]);
       expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
-      expect(results.filter(r => r.status === 'rejected')).toMatchObject([{ reason: { code: 'BUDGET_EXHAUSTED' } }]);
+      expect(results.filter(r => r.status === 'rejected')).toMatchObject([{ reason: { code: 'OFFICE_DAY_EXHAUSTED' } }]);
       expect((await f.daily(a)).scopes).toContainEqual(expect.objectContaining({ scope: 'office', heldUsd: 0.3, remainingUsd: 0.2 }));
     } finally { await peer.destroy(); }
   });
@@ -74,7 +74,7 @@ describe.skipIf(!url)('Studio daily scope admission in PostgreSQL', () => {
     const next = await f.run(f.otherClient), peer = createDb(url!);
     try {
       await expect(new DesignStudioRepository(peer).recordCallStart(f.call(next, 0.2)))
-        .rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+        .rejects.toMatchObject({ code: 'OFFICE_DAY_EXHAUSTED' });
       expect((await f.daily(next)).scopes).toContainEqual(expect.objectContaining({ scope: 'office', spentUsd: 0, heldUsd: 0.4, remainingUsd: 0.1 }));
     } finally { await peer.destroy(); }
   });
@@ -91,7 +91,40 @@ describe.skipIf(!url)('Studio daily scope admission in PostgreSQL', () => {
   it('holds estimated successful charges from earlier days until exact evidence exists', async () => {
     const f = await fixture({ officeUsd: 0.5 }), a = await f.run(), c = f.call(a, 0.4);
     await repo.recordCallStart(c); await f.finish(c.id, 0.1, 'estimate'); await historical(c.id);
-    await expect(repo.recordCallStart(f.call(await f.run(), 0.2))).rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+    await expect(repo.recordCallStart(f.call(await f.run(), 0.2))).rejects.toMatchObject({ code: 'OFFICE_DAY_EXHAUSTED' });
+    // ADR-159: once its run has stopped, the estimate is the charge and the rest of the reservation
+    // is released; it used to hold $0.40 against every later office day.
+    await repo.updateRunStatus(a, f.tenantId, 'failed');
+    await expect(repo.recordCallStart(f.call(await f.run(), 0.2))).resolves.toMatchObject({ status: 'uncertain' });
+    expect((await f.daily(a)).scopes).toContainEqual(expect.objectContaining({ scope: 'office', heldUsd: 0.2 }));
+  });
+
+  it('settles a price-list charge as final at once, and a stopped zero estimate at its whole reservation (ADR-159)', async () => {
+    const f = await fixture({ officeUsd: 0.5 }), a = await f.run(), c = f.call(a, 0.4, 'art');
+    await repo.recordCallStart(c);
+    await repo.finalizeCall({ id: c.id, tenantId: f.tenantId, inputTokens: 0, outputTokens: 0, usdEstimate: 0.067,
+      status: 'ok', costBasis: 'price_list', images: 1 });
+    await historical(c.id);
+    // Final while its run still works: charged on its own day only, nothing held today.
+    expect((await f.daily(a)).scopes).toContainEqual(expect.objectContaining({ scope: 'office', heldUsd: 0, spentUsd: 0 }));
+    await expect(repo.recordCallStart(f.call(await f.run(), 0.45))).resolves.toMatchObject({ status: 'uncertain' });
+    const g = await fixture({ officeUsd: 0.5 }), b = await g.run(), d = g.call(b, 0.4);
+    await repo.recordCallStart(d); await g.finish(d.id, 0, 'estimate'); await historical(d.id);
+    await repo.updateRunStatus(b, g.tenantId, 'abandoned');
+    const usage = await repo.getBudgetUsage(b, g.tenantId, g.actorId);
+    expect(usage!.daily!.scopes).toContainEqual(expect.objectContaining({ scope: 'office', heldUsd: 0 }));
+  });
+
+  it('names the shared office day, its scope and its reset when it is used up, not the run limit (ADR-159)', async () => {
+    const f = await fixture({ officeUsd: 0.5 }), a = await f.run();
+    await repo.recordCallStart(f.call(a, 0.45));
+    const refused = await repo.recordCallStart(f.call(await f.run(), 0.2)).catch((e: unknown) => e) as
+      { code: string; scope: string; neededUsd: number; availableUsd: number; resetsAt: Date; message: string };
+    expect(refused).toMatchObject({ code: 'OFFICE_DAY_EXHAUSTED', scope: 'office', neededUsd: 0.2, availableUsd: 0.05 });
+    expect(refused.resetsAt.getTime()).toBeGreaterThan(Date.now());
+    expect(refused.resetsAt.getTime() - Date.now()).toBeLessThanOrEqual(86_400_000);
+    expect(refused.resetsAt.toISOString()).toMatch(/T21:00:00\.000Z$/);
+    expect(refused.message).toContain("office's daily model allowance is used up");
   });
 
   it('enforces client and role limits across runs without exhausting unrelated scopes', async () => {
@@ -116,7 +149,7 @@ describe.skipIf(!url)('Studio daily scope admission in PostgreSQL', () => {
   it('records an overrun and blocks new work in a different task once the office cap is spent', async () => {
     const f = await fixture({ officeUsd: 0.5 }), a = await f.run(), c = f.call(a, 0.4);
     await repo.recordCallStart(c); await f.finish(c.id, 0.7);
-    await expect(repo.recordCallStart(f.call(await f.run(f.otherClient), 0.01))).rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+    await expect(repo.recordCallStart(f.call(await f.run(f.otherClient), 0.01))).rejects.toMatchObject({ code: 'OFFICE_DAY_EXHAUSTED' });
     expect((await f.daily(a)).scopes).toContainEqual(expect.objectContaining({ scope: 'office', spentUsd: 0.7, remainingUsd: 0 }));
   });
 

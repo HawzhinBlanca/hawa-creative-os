@@ -1,6 +1,17 @@
 import { LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 import { requesterButtons, questionButtons, type InlineButton } from './requester-actions.js';
 import { designName } from './requester-turn.js';
+import { nextOfficeDayStart } from '@hawa/domain';
+
+/**
+ * The office's alert line for a design stopped by the shared daily allowance (ADR-159): what stopped
+ * it, that nothing was sent, and when the office day resets (midnight in Baghdad).
+ */
+export function officeDayExhaustedNote(now: number = Date.now()): string {
+  const reset = nextOfficeDayStart(now).toISOString().slice(0, 16).replace('T', ' ');
+  return ` The office's daily model allowance is used up and nothing was sent for this design. It resets at midnight ` +
+    `Baghdad time (${reset} UTC); retry the design then, or raise the daily limit in the spending policy.`;
+}
 
 export interface CanvaStatusMessageInput {
   taskId: string;
@@ -99,8 +110,9 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
       question: `<b>${escapeTelegramHtml(asking.question.trim())}</b>`,
       options: asking.options.slice(0, 3).map((o, i) => `${i + 1}. ${escapeTelegramHtml(o.trim())}`).join('\n'),
     }) + (asks.length ? `\n\n${line(OUTCOME_MESSAGES.designerMakesPart, { list: askLines(asks) })}` : '');
-  } else if (code === 'STUDIO_RUN_LIMIT_TOO_SMALL' && input.officeAlerted !== false) {
-    // ADR-142: nothing was made and nothing is wrong with the request; the office runs it again.
+  } else if ((code === 'STUDIO_RUN_LIMIT_TOO_SMALL' || code === 'OFFICE_DAY_EXHAUSTED') && input.officeAlerted !== false) {
+    // ADR-142: nothing was made and nothing is wrong with the request; the office runs it again. So
+    // for the office's daily allowance (ADR-159): the office runs it once the day resets.
     body = line(OUTCOME_MESSAGES.designTakingLonger);
   } else if (code === 'CHANGE_NOT_SUPPORTED') {
     // The run stopped before anything was paid for the edit: nothing it could do was asked for.

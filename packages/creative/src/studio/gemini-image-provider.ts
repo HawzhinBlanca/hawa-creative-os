@@ -51,7 +51,7 @@ export function isStudioArtHoldError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   if ('isUncertain' in error && error.isUncertain === true) return true;
   return 'code' in error && typeof error.code === 'string' &&
-    /^(MODEL_CALL_|MODEL_STAGE_REPLAY_UNSAFE$|TASK_GENERATION_BLOCKED$|STUDIO_BUDGET_|BUDGET_EXHAUSTED$)/.test(error.code);
+    /^(MODEL_CALL_|MODEL_STAGE_REPLAY_UNSAFE$|TASK_GENERATION_BLOCKED$|STUDIO_BUDGET_|BUDGET_EXHAUSTED$|OFFICE_DAY_EXHAUSTED$)/.test(error.code);
 }
 
 export interface ArtVerificationReport {
@@ -504,7 +504,8 @@ export async function requestStudioArtImage(
       inputTokens: data.usage?.total_input_tokens ?? 0,
       outputTokens: data.usage?.total_output_tokens ?? 0,
       costUsd: typeof price === 'number' ? price : 0,
-      costSource: 'price_list',
+      // A listed price is the charge (final, ADR-159); a size with no listed price is only an estimate.
+      costSource: typeof price === 'number' && price > 0 ? 'price_list' : 'estimate',
     };
   }
 

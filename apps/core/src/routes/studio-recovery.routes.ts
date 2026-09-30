@@ -12,8 +12,11 @@ export function registerStudioRecoveryRoutes(ctx:RouteContext) {
     if(!auth.authenticated||!auth.tenantId||!auth.userId) return ctx.problem(c,401,'Authentication Required');
     if(!['administrator','operator','designer','art_director','creative_director'].includes(auth.role||'')) return ctx.problem(c,403,'Studio Recovery Forbidden');
     if(!service) return ctx.problem(c,503,'Database Required');
+    // ADR-159: the trusted office (ADR-146) may record the evidence as the shared office administrator;
+    // the settlement names that evidence type, since no individual signed in.
     const scope={tenantId:auth.tenantId,userId:auth.userId,role:auth.role,
-      sessionHash:auth.authMethod==='google_oidc'&&token?createHash('sha256').update(token).digest('hex'):undefined};
+      sessionHash:auth.authMethod==='google_oidc'&&token?createHash('sha256').update(token).digest('hex'):undefined,
+      trustedOffice:auth.authMethod==='trusted_office'};
     try {
       const result=write
         ?await service.settle(scope,c.req.param('taskId'),c.req.param('runId'),c.req.header('Idempotency-Key'),await c.req.json().catch(()=>null))
