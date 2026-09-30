@@ -48,3 +48,26 @@ it('overwrites caller proof in every nginx Core proxy location and keeps Desk fr
   const compose = readFileSync(resolve('infra/docker/docker-compose.prod.yml'),'utf8');
   expect(compose.slice(compose.indexOf('x-worker:'),compose.indexOf('services:'))).not.toContain('- .env.production');
 });
+
+it('host office preflight reads the same generated proof as Core and still refuses missing, colliding or duplicate fields', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'hawa-office-preflight-'));
+  const source = join(directory, '.env.production');
+  const boundary = join(directory, '.env.service-boundaries');
+  const proof = 'a'.repeat(64);
+  const run = () => spawnSync(process.execPath, ['--import', 'tsx', resolve('scripts/check_office_access.ts'), source, '127.0.0.1'], { encoding: 'utf8' });
+  try {
+    writeFileSync(source, 'HAWA_DESK_AUTH_MODE=trusted_office\nHAWA_TRUSTED_OFFICE_ORIGIN=http://127.0.0.1:8080\n');
+    expect(run().status).not.toBe(0);
+    writeFileSync(boundary, `HAWA_OFFICE_PROXY_PROOF=${proof}\n`);
+    const valid = run();
+    expect(valid.status, valid.stderr).toBe(0);
+    expect(valid.stdout).not.toContain(proof);
+    writeFileSync(source, readFileSync(source, 'utf8') + `HAWA_BEARER_TOKEN=${proof}\n`);
+    expect(run().status).not.toBe(0);
+    writeFileSync(source, 'HAWA_DESK_AUTH_MODE=required\nHAWA_DESK_AUTH_MODE=trusted_office\n');
+    expect(run().status).not.toBe(0);
+    writeFileSync(source, 'HAWA_DESK_AUTH_MODE=required\n');
+    rmSync(boundary);
+    expect(run().status).toBe(0);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});

@@ -222,6 +222,13 @@
       "failed": 1,
       "reason": "Core still read predecessor creative package exports",
       "resolution": "Build current creative exports; combined 226 passed"
+    },
+    {
+      "scope": "first combined sealed deploy preflight",
+      "seal": "f7eaea79",
+      "productionContainersChanged": false,
+      "reason": "Host office checker loaded mode/origin but omitted generated server-only proof; failed before full gate or production switch",
+      "resolution": "Load same ordered canonical/boundary files as Core, retain credential collision and duplicate rejection; dedicated CLI positive/negative regression added"
     }
   ],
   "unexecuted": [
@@ -281,5 +288,15 @@
       "No new paid creative study or native/human approvals fabricated",
       "Exact combined-source recovery/full release gates still pending"
     ]
+  },
+  "runtimePredecessorProof": {
+    "seal": "f7eaea79",
+    "r1": 7,
+    "rollbackToProduction6af16cb8": 2,
+    "restoreChecks": 47,
+    "failedInvariants": 0,
+    "uncoveredModelCalls": 0,
+    "proofDirectory": "output/release-gate/recovery/",
+    "note": "Preserved predecessor proof; final host-preflight source seal still requires deployment gate"
   }
 }
