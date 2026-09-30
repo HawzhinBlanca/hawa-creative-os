@@ -11,8 +11,8 @@
   ],
   "sourceSha256": {
     "infra/ops/prepare_service_boundaries.py": "14afa6a95d30df3306b02caed27a76c9906f7290d56acb6f95ec8b74e241b471",
-    "infra/ops/nginx_reload.sh": "bdc7c09b1bb563e2d64d739afe6395362c538a7e9d1abe843d0d3509b2f08f5c",
-    "infra/docker/deploy.sh": "31b596157902a35fd3ac6c2f56c79afb8bd5bb76ac2755077c973fcfcd59fef7",
+    "infra/ops/nginx_reload.sh": "a05690e16ef81f5f0a87a6ec6a371ff653447bfaa498cc1a9acfcc136fcac303",
+    "infra/docker/deploy.sh": "709ab5fb0e83c36d2fa6af18de74cbd58bd004598281ed6965ff87eac11e321b",
     "infra/docker/docker-compose.prod.yml": "4cd8be057edc2ab0c5086e46dce8fe929ebf7100149b3af56291032f684a82fa",
     "infra/ops/release_lib.sh": "377faf82a3f2a2fa95116d20580e5fdf1828e7c46da7c2669080165f5f9e5c47",
     "packages/db/migrations/073_restricted_worker_database.sql": "93edd3192da208139ee78a655325ebcf571c7368e64bbe4a4c4c0254c4972abc",
@@ -49,7 +49,8 @@
     "Merge with Claude sealed b7f32cbb had generated manifest conflicts, regenerated; natural-language ADR182 preserved, independent service identity ADR renumbered183",
     "Sealed preflight refused because DATABASE_URL is in canonical Compose .env, not provider .env.production; corrected exact precedence and added test, no live identity changes occurred",
     "Shell helper cleanup removed051d5606 but refused1737c8f2; direct owner-authorized Git worktree removal completed clean inactive unsafe set",
-    "Full gate refused6190pass/3fail/3expected-fail/67skip: corrected exact release working directory and two stale expectations; Desk bundle budget preserved; repeated full gate pending"
+    "Full gate refused6190pass/3fail/3expected-fail/67skip: corrected exact release working directory and two stale expectations; Desk bundle budget preserved; repeated full gate pending",
+    "a482cf20 apply stopped after Core and identity migration because Vector still bound retired1737c8f2; recovered current bind, reconciled same sealed worker, corrected manual build stamp fromunknown through pinned-image restart, drained/deleted green and verified receipt"
   ],
   "liveBeforeRelease": {
     "nginxTest": "FAIL missing bound proof; nginx restart then PASS",
@@ -57,11 +58,9 @@
     "sharedWorkerOperatorToken": true
   },
   "notYetQualified": [
-    "exact sealed release gate",
-    "production newest-dump migration",
-    "independent live design/database identity",
-    "blue-green readback",
-    "compatible rollback (old predecessor deliberately refused)"
+    "forward-helper exact full release/deployment",
+    "compatible predecessor rollback deliberately refused",
+    "broader design W3/W5/W6/native/human qualification"
   ],
   "credentialMaterial": "No values, digests or credential identifiers recorded",
   "blueprint": {
@@ -90,5 +89,25 @@
       "Desk build artifacts absent because gate commands ran in caller checkout"
     ],
     "liveApplied": false
+  },
+  "liveQualifiedSeal": "a482cf20",
+  "fullGate": {
+    "seal": "a482cf20",
+    "status": "PASS",
+    "passed": 6194,
+    "failed": 0,
+    "expectedFail": 3,
+    "skipped": 67,
+    "passedFiles": 640,
+    "skippedFiles": 6,
+    "typedRoots": 647,
+    "blueprintPass": 1476,
+    "newestProductionDumpMigration": "PASS"
+  },
+  "forwardHelperRegression": {
+    "files": 2,
+    "tests": 31,
+    "status": "PASS",
+    "fullResealAndLive": "PENDING"
   }
 }

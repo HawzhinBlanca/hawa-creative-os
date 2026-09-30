@@ -163,17 +163,24 @@ check_worker_token_rotation() {
 # vector.yaml is a single-file bind mount like nginx.conf: compose does not recreate vector when only the
 # file changed, and vector runs without --watch-config, so a changed pipeline never reached the running
 # shipper (ADR-129, finding 6). The file is validated in a one-off container before anything starts,
-# and vector is restarted when what it sees is not the deployed file.
+# and Vector is recreated if either its bytes or its actual bind source differ.
 vector_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T vector sha256sum /etc/vector/vector.yaml 2>/dev/null | cut -d' ' -f1 || true; }
 validate_vector_config() {
   HAWA_RELEASE_ROOT="$ROOT_DIR" "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T vector validate --no-environment /etc/vector/vector.yaml >/dev/null 2>&1 \
     || { echo "ERROR: infra/docker/vector.yaml fails vector validate; nothing was started with it"; exit 1; }
 }
+vector_mount_current() {
+  local mounted
+  mounted="$(docker inspect hawa-production-vector-1 --format '{{range .Mounts}}{{if eq .Destination "/etc/vector/vector.yaml"}}{{.Source}}{{end}}{{end}}' 2>/dev/null)" || return 1
+  [[ "$mounted" == "${HAWA_RELEASE_ROOT:-$ROOT_DIR}/infra/docker/vector.yaml" ]]
+}
 apply_vector_config() {
-  if [[ "$(vector_seen)" == "$VECTOR_WANT" ]]; then echo "✓ vector runs the deployed vector.yaml"; return 0; fi
-  "${COMPOSE[@]}" --env-file "$INTERP_FILE" restart vector >/dev/null
-  [[ "$(vector_seen)" == "$VECTOR_WANT" ]] || { echo "ERROR: vector does not see the deployed vector.yaml even after a restart"; exit 1; }
-  echo "✓ vector restarted onto the new vector.yaml"
+  if [[ "$(vector_seen)" == "$VECTOR_WANT" ]] && vector_mount_current; then echo "✓ vector runs the deployed vector.yaml from the current bind"; return 0; fi
+  "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --force-recreate vector >/dev/null || {
+    echo 'ERROR: vector mount recreation failed; deployment is not admitted' >&2; return 1;
+  }
+  [[ "$(vector_seen)" == "$VECTOR_WANT" ]] && vector_mount_current || { echo "ERROR: vector does not see the deployed vector.yaml and current bind after recreation"; return 1; }
+  echo "✓ vector recreated onto the current vector.yaml bind"
 }
 # ADR-141: only a production host deploys. A standby host (being prepared for a cutover) and a retired
 # one (production moved away) refuse --apply before anything is changed: two live hosts would poll the
@@ -460,9 +467,6 @@ echo "✓ backup written: infra/backup/snapshots/predeploy_${STAMP}.dump (${BACK
 (cd "$ROOT_DIR" && DATABASE_URL="postgresql://hawa_owner:${POSTGRES_PASSWORD}@127.0.0.1:54332/hawa" npx tsx packages/db/src/upgrade.ts)
 echo "✓ schema upgrades applied or verified"
 # Rotation follows the qualified source gate, completed prior drains and the backup/migrations.
-if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
-  hawa_release_prune_unsafe "$ROOT_DIR" 74618004243affaa91fc50795490e175a545dc2a || exit 1
-fi
 
 # 7. Build and start everything but the worker. Its two colours are behind the `worker` compose
 # profile, so the `up -d` below never creates, recreates or stops either; 7b deploys the worker.
@@ -637,6 +641,8 @@ printf '%s' "$HEALTH" | (cd "$ROOT_DIR" && npx tsx scripts/record_deployment_rec
 bash "${ROOT_DIR}/infra/ops/disk_cleanup.sh" | sed 's/^/disk: /' || echo "! disk cleanup did not finish (the deploy itself succeeded)"
 # Old releases: current, previous and the newest HAWA_RELEASES_KEEP (5) stay for a rollback (ADR-158).
 if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
+  # Retire only after mounts are rebound and the old worker has drained.
+  hawa_release_prune_unsafe "$ROOT_DIR" 74618004243affaa91fc50795490e175a545dc2a || exit 1
   hawa_release_prune | sed 's/^/releases: /' || echo "! pruning old releases did not finish (the deploy itself succeeded)"
 fi
 echo ""

@@ -43,3 +43,15 @@ before any command; an executable fixture launched elsewhere must show its stage
 runs in the release. Preserve the original failed full run (6190 pass/3fail/3expected-fail/
 67skip), fix the actual boundary and stale migration/mount expectations, and repeat the
 mandatory full gate on a newly sealed source. Do not weaken the Desk bundle budget.
+
+
+Live mount follow-up, 1 October2026: the qualified a482cf20 rollout applied migration073,
+independent credentials and Core, then refused when Vector's restart reused a retired1737c8f2
+bind path. A digest does not prove the bind path is durable. Recreate stale-source nginx/Vector
+containers even when their bytes match; preserve checked restart for a stale nginx inode on a
+current source. Check both sources and hashes after recovery. Retire unsafe releases only after
+bind qualification, worker handoff/drain and a verified receipt. Live recovery recreated Vector
+against current, reconciled the same sealed worker image through Restate, drained/removed green,
+corrected a missing manual build stamp using the immutable image, and recorded the receipt.
+Current/previous design session/operator denials and separate restricted DB login pass live;
+these manual actions do not qualify the unshipped forward deployment-helper change.

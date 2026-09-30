@@ -204,23 +204,33 @@ describe('finding 4: a worker token change needs HAWA_WORKER_TOKEN_PREVIOUS', ()
 });
 
 describe('finding 6: a changed vector.yaml reaches the running log shipper', () => {
-  const compose = (seen: string, afterRestart: string, runOk = true) =>
-    `SEEN='${seen}'; fake() { echo "CALL $*" >&9; case " $* " in *" exec "*) echo "$SEEN  /etc/vector/vector.yaml" ;; *" restart "*) SEEN='${afterRestart}' ;; *" run "*) ${runOk ? 'return 0' : 'return 1'} ;; esac; }; COMPOSE=(fake)`;
+  const compose = (seen: string, afterRestart: string, runOk = true, source = '/srv/hawa-release/infra/docker/vector.yaml', recreateOk = true) =>
+    `SEEN='${seen}'; MOUNT_SOURCE='${source}'; docker() { echo "$MOUNT_SOURCE"; }; fake() { echo "CALL $*" >&9; case " $* " in *" exec "*) echo "$SEEN  /etc/vector/vector.yaml" ;; *" --force-recreate "*) ${recreateOk ? "SEEN='" + afterRestart + "'; MOUNT_SOURCE='/srv/hawa-release/infra/docker/vector.yaml'" : 'return 1'} ;; *" run "*) ${runOk ? 'return 0' : 'return 1'} ;; esac; }; COMPOSE=(fake)`;
 
   it('nothing is restarted when vector already runs the deployed file', () => {
-    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=aaa; apply_vector_config', compose('aaa', 'aaa'));
+    const r = run(['vector_seen', 'vector_mount_current', 'apply_vector_config'], 'VECTOR_WANT=aaa; apply_vector_config', compose('aaa', 'aaa'));
     expect(r.code).toBe(0);
     expect(r.calls.filter((c) => / restart /.test(c))).toEqual([]);
   });
 
-  it('a changed file restarts vector, which must then see it', () => {
-    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; apply_vector_config', compose('aaa', 'bbb'));
+  it('a changed file recreates vector, which must then see it', () => {
+    const r = run(['vector_seen', 'vector_mount_current', 'apply_vector_config'], 'VECTOR_WANT=bbb; apply_vector_config', compose('aaa', 'bbb'));
     expect(r.code).toBe(0);
-    expect(r.calls).toContain('CALL --env-file /dev/null restart vector');
-    expect(r.out).toMatch(/vector restarted onto the new vector.yaml/);
-    const stuck = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; apply_vector_config', compose('aaa', 'aaa'));
+    expect(r.calls).toContain('CALL --env-file /dev/null up -d --no-deps --force-recreate vector');
+    expect(r.out).toMatch(/vector recreated onto the current vector.yaml bind/);
+    const stuck = run(['vector_seen', 'vector_mount_current', 'apply_vector_config'], 'VECTOR_WANT=bbb; apply_vector_config', compose('aaa', 'aaa'));
     expect(stuck.code).toBe(1);
     expect(stuck.out).toMatch(/does not see the deployed vector.yaml/);
+  });
+
+  it('rebinds a retired release path even when the configuration digest is unchanged', () => {
+    const r=run(['vector_seen','vector_mount_current','apply_vector_config'],'VECTOR_WANT=aaa; apply_vector_config',compose('aaa','aaa',true,'/retired/infra/docker/vector.yaml'));
+    expect(r.code).toBe(0);
+    expect(r.calls).toContain('CALL --env-file /dev/null up -d --no-deps --force-recreate vector');
+  });
+  it('refuses a failed recreation even when the old configuration digest matches',()=>{
+    const r=run(['vector_seen','vector_mount_current','apply_vector_config'],'VECTOR_WANT=aaa; apply_vector_config; echo AFTER',compose('aaa','aaa',true,'/retired/infra/docker/vector.yaml',false));
+    expect(r.code).toBe(1); expect(r.out).not.toContain('AFTER');
   });
 
   it('an invalid file stops the deploy before anything is started with it', () => {
@@ -238,4 +248,11 @@ describe('finding 6: a changed vector.yaml reaches the running log shipper', () 
     expect(line('\nvalidate_vector_config\n')).toBeLessThan(up);
     expect(line('\napply_vector_config\n')).toBeGreaterThan(up);
   });
+});
+
+
+it('retires unsafe release paths only after service binds, worker handoff and receipt qualification',()=>{
+ expect(line('hawa_release_prune_unsafe "$ROOT_DIR"')).toBeGreaterThan(line('apply_vector_config\necho "✓ containers started"'));
+ expect(line('hawa_release_prune_unsafe "$ROOT_DIR"')).toBeGreaterThan(line('REGISTERED="$(bluegreen register'));
+ expect(line('hawa_release_prune_unsafe "$ROOT_DIR"')).toBeGreaterThan(line('"$HEALTH" | (cd "$ROOT_DIR"'));
 });
