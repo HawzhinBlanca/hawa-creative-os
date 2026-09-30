@@ -35,6 +35,7 @@ import { requestIdHeaders, withInvocationLogContext } from '../logging.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { RequestLifecycleApi } from './request-lifecycle.js';
 import { acceptedWorkerSecrets } from './worker-secrets.js';
+import { officeAlertKey, officeChatIdsFromEnv, officeRecipients } from './office-chats.js';
 
 /** A Core step's retry: from 2 s doubling to 30 s, for up to 10 minutes (as TaskWorkflow's steps). */
 export const PREPARE_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30000, maxRetryDuration: 10 * 60 * 1000 };
@@ -58,6 +59,9 @@ export interface CoreInternal {
 /**
  * A Core answer the worker can act on: 2xx is the value; 5xx, 408, 429 and no answer throw an error
  * the step retries; any other 4xx is a TerminalError (asking again would get the same answer).
+ * A deployment fault is retried too (ADR-155): Core refusing the worker's own credential (401, 403)
+ * or not knowing the route at all (a 404 with no problem body) says nothing about the request, and
+ * the same call succeeds once the deployment is fixed. It used to end the step for good.
  */
 export function coreInternalFromEnv(fetcher: typeof fetch = fetch): CoreInternal {
   return {
@@ -74,15 +78,55 @@ export function coreInternalFromEnv(fetcher: typeof fetch = fetch): CoreInternal
       const answer = await res.json().catch(() => null) as ({ code?: string; detail?: string } & Record<string, unknown>) | null;
       if (res.ok) return answer as T;
       const what = `Core answered HTTP ${res.status}${answer?.code ? ` ${answer.code}` : ''} for ${path}${answer?.detail ? `: ${String(answer.detail).slice(0, 300)}` : ''}`;
-      if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+      const deploymentFault = res.status === 401 || res.status === 403 || (res.status === 404 && !answer);
+      if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429 && !deploymentFault) {
         throw new restate.TerminalError(what, { errorCode: res.status });
       }
-      throw new Error(what);
+      throw new Error(deploymentFault ? `${what} (a deployment fault: asked again)` : what);
+    },
+  };
+}
+
+/** Core's answer when it recorded this projection key with other content: a genuine idempotency conflict. */
+const IDEMPOTENCY_CONFLICT = /^Core answered HTTP 409 IDEMPOTENCY_CONFLICT\b/;
+export const isIdempotencyConflict = (err: unknown): boolean =>
+  err instanceof restate.TerminalError && IDEMPOTENCY_CONFLICT.test(err.message);
+
+/**
+ * Core's internal API for the report of a finished design or delivery, which is the only report there
+ * is (ADR-155): nothing else ever tells Core that the paid work ended, and a report that fails for good
+ * leaves the request at its stage with nothing to move it. Only a genuine idempotency conflict (this
+ * key recorded with other content: asking again can only get the same answer) stays final; any other
+ * refusal is asked again, inside the step, until Restate's retry policy pauses the invocation for a
+ * person, where it is visible (/v1/health restateInvocations) and can be resumed once Core is fixed.
+ */
+export function outcomeReportCore(core: CoreInternal): CoreInternal {
+  return {
+    async post<T>(path: string, body: unknown): Promise<T> {
+      try {
+        return await core.post<T>(path, body);
+      } catch (err) {
+        if (err instanceof restate.TerminalError && !isIdempotencyConflict(err)) {
+          throw new Error(`${err.message} (the only report of this outcome: kept pending and asked again)`);
+        }
+        throw err;
+      }
     },
   };
 }
 
 const isTerminal = (err: unknown) => err instanceof restate.TerminalError;
+
+/**
+ * What Core's delivery-finished route accepts (lifecycle-internal.routes.ts): a reason of at most 2000
+ * characters, at most 50 uncertain names of 500. A longer one (many refused files, each with Telegram's
+ * words) was refused as a 4xx and left the request `delivering` for good (ADR-155). The start of the
+ * reason is kept: Core reads its leading code (TELEGRAM_REFUSED, NO_REQUESTER_CHAT, ...).
+ */
+const MAX_REPORTED_REASON = 1900;
+const MAX_REPORTED_NAME = 500;
+const MAX_REPORTED_NAMES = 50;
+const capText = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`);
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /** The workflow's body. */
@@ -94,8 +138,12 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
   }
   if (input.reportTo === 'lifecycle') {
     const { claimSignature, ...claim } = input;
-    // HAWA_WORKER_TOKEN, or its previous value while a rotation is under way (ADR-129).
-    if (!acceptedWorkerSecrets().some((secret) => verifyLifecycleDeliveryClaim(secret, claim, claimSignature))) {
+    // HAWA_WORKER_TOKEN, or its previous value while a rotation is under way (ADR-129). The verdict is
+    // journaled, as OfficeDecisionGateway's is (ADR-155): a replay after the rotation finished must not
+    // refuse a delivery that already sent files, and strand the request in `delivering`.
+    const verified = await ctx.run('verify-claim', async () =>
+      acceptedWorkerSecrets().some((secret) => verifyLifecycleDeliveryClaim(secret, claim, claimSignature)), PREPARE_RETRY);
+    if (!verified) {
       throw new restate.TerminalError('INVALID_LIFECYCLE_DELIVERY_CLAIM', { errorCode: 401 });
     }
   }
@@ -106,7 +154,6 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
   }
   const run = Number.isInteger(input.run) && Number(input.run) > 0 ? Number(input.run) : 1;
   const base = deliveryBaseId(input.taskId, input.approvalId);
-  const officeChat = input.officeChatId || (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((s) => s.trim()).find(Boolean) || null;
 
   let prepared: PreparedDelivery | null = null;
   let failure: string | null = null;
@@ -167,27 +214,34 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
 
   const outcome: DeliveryOutcome = {
     outcome: failure || refused.length ? 'failed' : uncertain.length ? 'uncertain' : prepared?.chatOnly ? 'chat_only' : 'delivered',
-    uncertain,
+    // Within what Core accepts for the report (at most 50 names of 500 characters, ADR-155).
+    uncertain: uncertain.slice(0, MAX_REPORTED_NAMES).map((name) => capText(name, MAX_REPORTED_NAME)),
     sheetsConfirmed: alreadyComplete || Boolean(prepared?.sheetsConfirmed),
     archived: alreadyComplete || Boolean(prepared?.archived),
     filesSent,
-    ...(failure || refused.length ? { reason: failure || `TELEGRAM_REFUSED: ${refused.join(', ')}` } : {}),
+    ...(failure || refused.length ? { reason: capText(failure || `TELEGRAM_REFUSED: ${refused.join(', ')}`, MAX_REPORTED_REASON) } : {}),
     ...(alreadyComplete ? { reason: 'DELIVERY_ALREADY_COMPLETE: nothing was sent again' } : {}),
   };
 
-  // A delivery that failed is the office's to follow up; one that may not have arrived was alerted by
-  // TelegramSender, per message.
-  if (outcome.outcome === 'failed' && officeChat && officeChat !== chatId) {
-    await ctx.send({
-      v: 1,
-      key: `${input.deliveryId}:failed-alert`,
-      chatId: officeChat,
-      kind: 'text',
-      text: composeDeliveryFailedAlert(input.taskId, chatId, 1, outcome.reason || 'delivery failed'),
-      class: 'critical',
-      tenantId: input.tenantId,
-      taskId: input.taskId,
-    });
+  // A delivery that failed is the office's to follow up, every member of it (ADR-155), the requester
+  // too when they are one; one that may not have arrived was alerted by TelegramSender, per message.
+  // Who the office is was read from the environment beside the step; it is journaled now, so a replay
+  // alerts the same people under the same keys.
+  if (outcome.outcome === 'failed') {
+    const members = await ctx.run('office-chats', async () => officeChatIdsFromEnv(), PREPARE_RETRY);
+    const recipients = officeRecipients(input.officeChatId, members);
+    for (const [index, officeChat] of recipients.entries()) {
+      await ctx.send({
+        v: 1,
+        key: officeAlertKey(`${input.deliveryId}:failed-alert`, index, officeChat),
+        chatId: officeChat,
+        kind: 'text',
+        text: composeDeliveryFailedAlert(input.taskId, chatId, 1, outcome.reason || 'delivery failed'),
+        class: 'critical',
+        tenantId: input.tenantId,
+        taskId: input.taskId,
+      });
+    }
   }
 
   // This is already a Restate object call. Nesting it inside ctx.run creates an extra journal
