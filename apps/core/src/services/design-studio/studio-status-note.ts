@@ -3,7 +3,7 @@
 // reads with the draft, in plain words. Every figure comes from the run's own record; a figure the
 // run did not record is left out.
 
-import { coverCrop, omittedPhotoIndices } from '@hawa/creative';
+import { coverCrop, omittedPhotoIndices, photoSelectionOrUndefined, recipePhotoMinimum } from '@hawa/creative';
 
 const parse = (value: unknown): any => {
   if (typeof value !== 'string') return value;
@@ -207,10 +207,16 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
 }
 
 /** True when the requester let the design choose among the photos and it placed a permitted subset. */
-function choseAmongPhotos(stages: any, placed: number, sent: number | undefined, _shipped?: any): boolean {
+function choseAmongPhotos(stages: any, placed: number, sent: number | undefined, shipped?: any): boolean {
   const selection = stages?.brief?.photoSelection;
   if (selection?.mode === 'choose' && sent !== undefined && placed < sent && placed >= Math.min(sent, Number(selection.minimum) || 1)) return true;
-  return false;
+  // ADR-180 (owner: "office house style"): an art-direction recipe chose its hero, as the office's
+  // designers do, and hard QA recorded the rest for office review. Only the requester's own words
+  // ("use all the photos", "pick 3") bind more photos than that.
+  const recipe = shipped?.artDirection?.recipe;
+  if (!recipe || recipe === 'typographic' || sent === undefined || placed < 1 || placed >= sent) return false;
+  const least = recipePhotoMinimum(photoSelectionOrUndefined(selection, sent), sent);
+  return placed >= least && Array.isArray(stages?.qa?.omittedPhotos) && stages.qa.omittedPhotos.length === sent - placed;
 }
 
 /** The photos a design left out, numbered from 1 as the requester counts them. */

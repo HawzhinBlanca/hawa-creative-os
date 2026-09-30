@@ -15,13 +15,13 @@ export interface PhotoSelection {
   /** The phrase that set `choose`, for the record. */
   matched?: string;
   /**
-   * The requester explicitly said every photo. Retained as wording evidence only; ADR-171
-   * makes all mode binding even without this flag. A recipe cannot authorize omission.
+   * The requester explicitly said every photo ("use all the photos", or a count that covers them all).
+   * ADR-180: only then must an art-direction recipe place every photo.
    */
   insisted?: boolean;
   /**
-   * The requester stated how many ("pick 3"). Retained as wording evidence; ADR-171
-   * binds both explicit and default recorded minimums throughout generation and QA.
+   * The requester stated how many ("pick 3"). ADR-180: that count binds an art-direction recipe; the
+   * half-the-photos guess made when none is stated does not.
    */
   counted?: boolean;
 }
@@ -99,7 +99,8 @@ export function photoSelectionFromInstructions(instructions: string | undefined,
   const stated = count ? NUMBER_WORDS[count[1].toLowerCase()] ?? digitsToNumber(count[1]) : NaN;
   // A count alone ("use 3 of them") is a choice; "use all 6" never matches the count pattern.
   const minimum = Number.isFinite(stated) && stated >= 1 ? Math.min(photoCount, stated) : Math.ceil(photoCount / 2);
-  if (minimum >= photoCount) return all;
+  // "Pick 6" of six photos is every photo, in so many words.
+  if (minimum >= photoCount) return Number.isFinite(stated) && stated >= 1 ? { ...all, insisted: true } : all;
   return { mode: 'choose', minimum, matched: (phrase ?? count![0]).trim(), ...(Number.isFinite(stated) && stated >= 1 ? { counted: true } : {}) };
 }
 
@@ -110,6 +111,22 @@ export function photoSelectionOrUndefined(value: unknown, photoCount: number): P
   if (mode === 'all') return { mode: 'all', minimum: photoCount, ...(insisted === true ? { insisted: true } : {}) };
   if (mode !== 'choose' || typeof minimum !== 'number' || !Number.isInteger(minimum) || minimum < 1) return undefined;
   return { mode: 'choose', minimum: Math.min(photoCount, minimum), ...(typeof matched === 'string' ? { matched } : {}), ...(counted === true ? { counted: true } : {}) };
+}
+
+/**
+ * ADR-180 (owner decision, 2026-09-30: designs follow the "office house style"): the fewest photos an
+ * art-direction recipe must place. Only the requester's own words bind it: "use all the photos"
+ * binds every photo, and a stated count ("pick 3") binds that count. "Choose the best ones" with no
+ * count, or photos sent with nothing said about them, leaves the choice to the house rulebook: one
+ * hero, at most a second photo blended into the fade (items 1 and 10). The photos left out are
+ * recorded for office review. This supersedes ADR-171's default minimum (half the photos, or all of
+ * them) for recipes; a layout outside a recipe keeps ADR-157's rule.
+ */
+export function recipePhotoMinimum(selection: PhotoSelection | undefined, photoCount: number): number {
+  if (photoCount <= 0) return 0;
+  if (selection?.mode === 'all' && selection.insisted) return photoCount;
+  if (selection?.mode === 'choose' && selection.counted) return Math.max(1, Math.min(photoCount, selection.minimum));
+  return 1;
 }
 
 /** The photos a design leaves out, by photoIndex, in order. */

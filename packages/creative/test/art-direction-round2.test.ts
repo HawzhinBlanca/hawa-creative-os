@@ -191,13 +191,14 @@ describe('4. type set as the office sets example 3', () => {
   }
 });
 
-describe('5. the corner logo never sits bare on a photo', () => {
+describe('5. the corner logo: set bare by the solver, lifted only where its pixels are busy (ADR-180)', () => {
+  // Superseded by the owner's "current design has logo background" (2026-09-30): a cream tab on every
+  // logo that touched a photo was a box the office does not draw. settleLogoGround reads the pixels.
   for (const [recipe, hero] of [['hero_fade_report', 0], ['scrim_caption', 3], ['hero_plate', 5]] as const) {
-    it(`${recipe}: a cream tab carries the logo, with the logo's clear space kept`, () => {
+    it(`${recipe}: no tab behind the logo from the geometry alone`, () => {
       const layout: StudioLayoutV2 = solve(recipe, hero);
-      const tab = layout.shapes.find((s) => s.surface === 'tab')!;
-      expect(tab).toMatchObject({ color: brandTones(PALETTE).cream, layer: 'overlay' });
-      expect(holds(tab, layout.logo)).toBe(true);
+      expect(layout.shapes.filter((s) => s.surface === 'tab' && holds(s, layout.logo))).toEqual([]);
+      expect(brandTones(PALETTE).cream).toBe('#FDF8F3');
       expect(validateLayoutV2(layout, context())).toMatchObject({ ok: true });
     });
   }

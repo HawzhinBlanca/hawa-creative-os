@@ -11,6 +11,7 @@ import {
   eligibleRecipes,
   encodeStudioTransferV2,
   imagePixelSize,
+  photoSelectionFromInstructions,
   renderLayoutV2,
   PNG,
   type StudioLayoutV2,
@@ -142,7 +143,8 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
       referencePack: { palette: PALETTE, referenceFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }, clientId: REFERENCE.clientId },
       promotedRules: REFERENCE.rules.colorUsage, latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 1,
       logo: KAAE_TEST_CLIENT_LOGO, client: client as any, pipelineV3: true, imageryStrategy: 'photographic',
-      photoSelection: { mode: 'choose', minimum: 1, matched: "you don't have to use all the photos" },
+      // The selection the owner's words record: "choose the best ones", no count (half the photos, 3).
+      photoSelection: photoSelectionFromInstructions(INSTRUCTIONS, 6),
       artDirectionRules: artDirectionRulesFromRaw(REFERENCE),
       photos: photos.map((p, i) => {
         const size = imagePixelSize(p.bytes)!;
@@ -162,7 +164,10 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
       must: [], mustNot: [], imageryStrategy: 'photographic', imageryRationale: '', kurdishLeads: false, riskFlags: [],
     } as unknown as CreativeBrief;
 
-    // This single-hero control explicitly permits one. ADR-171 separately checks the default six.
+    // ADR-180 (owner, 2026-09-30: "office house style"): with no stated count the recorded half-the-photos
+    // guess does not bind a recipe. Under ADR-171 it did, and this brief became a three-photo collage.
+    expect(ctx.photoSelection).toMatchObject({ mode: 'choose', minimum: 3 });
+    expect(ctx.photoSelection!.counted).toBeUndefined();
     const candidates = await runLayoutsStage(ctx, brief, [], [0, 1, 2].map((ordinal) => ({ id: randomUUID(), ordinal })));
     // The model was shown the photos at high detail and the house rules as data.
     const user = requests[0].messages[1].content;
@@ -178,6 +183,14 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     for (const c of candidates) expect(c.currentLayout.artDirection?.heroUpscale ?? 1).toBeLessThanOrEqual(1.5);
     const rendered = await runRenderStage(ctx, candidates);
     const ranked = rankStudioCandidatesV3(ctx, rendered);
+    const out = process.env.HAWA_ART_DIRECTION_OUT;
+    const renderOptions = { copyText: Object.fromEntries(COPY.map((c, i) => [i, c])), logoDataUri: `data:image/png;base64,${KAAE_TEST_CLIENT_LOGO.bytes.toString('base64')}`, photoFiles: photos.map((p) => ({ bytes: p.bytes, mediaType: p.mimeType })) };
+    if (out) {
+      mkdirSync(out, { recursive: true });
+      for (const r of ranked) writeFileSync(join(out, `e2e_${r.layout.artDirection?.recipe}.png`), renderLayoutV2(r.layout, renderOptions).png);
+    }
+    // No heavy box behind the logo (owner, 2026-09-30): any backing stays inside its clear space.
+    for (const r of ranked) expect(r.hardQa?.defectCodes).not.toContain('LOGO_BACKING');
     const fade = ranked.find((r) => r.layout.artDirection?.recipe === 'hero_fade_report')!;
     expect(fade.hardQa?.messages).toEqual([]);
     expect(fade.hardQa?.passed).toBe(true);
@@ -201,16 +214,10 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     });
     expect(deck.bytes.length).toBeGreaterThan(1000);
 
-    const out = process.env.HAWA_ART_DIRECTION_OUT;
     if (out) {
-      mkdirSync(out, { recursive: true });
-      for (const r of ranked) {
-        const png = renderLayoutV2(r.layout, { copyText: Object.fromEntries(COPY.map((c, i) => [i, c])), logoDataUri: `data:image/png;base64,${KAAE_TEST_CLIENT_LOGO.bytes.toString('base64')}`, photoFiles: photos.map((p) => ({ bytes: p.bytes, mediaType: p.mimeType })) }).png;
-        writeFileSync(join(out, `e2e_${r.layout.artDirection?.recipe}.png`), png);
-      }
       writeFileSync(join(out, 'e2e_hero_fade_report.layout.json'), JSON.stringify(layout, null, 2));
       writeFileSync(join(out, 'e2e_hero_fade_report.pptx'), deck.bytes);
-      writeFileSync(join(out, 'e2e_sha256.txt'), createHash('sha256').update(renderLayoutV2(layout, { copyText: Object.fromEntries(COPY.map((c, i) => [i, c])), logoDataUri: `data:image/png;base64,${KAAE_TEST_CLIENT_LOGO.bytes.toString('base64')}`, photoFiles: photos.map((p) => ({ bytes: p.bytes, mediaType: p.mimeType })) }).png).digest('hex'));
+      writeFileSync(join(out, 'e2e_sha256.txt'), createHash('sha256').update(renderLayoutV2(layout, renderOptions).png).digest('hex'));
     }
   }, 240000);
 });

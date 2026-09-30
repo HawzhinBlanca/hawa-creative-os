@@ -40,6 +40,13 @@ export function overlayOpacityOver(o: OverlayElement, box: Box): number {
   if (!contains(o, box, 1)) return 0;
   // The share along the overlay's direction of each end of the box.
   const along = (v: number, start: number, length: number) => Math.min(1, Math.max(0, (v - start) / Math.max(1, length)));
+  if (o.direction === 'radial') {
+    // The farthest corner of the box from the centre, as a share of the way out to the ellipse.
+    const cx = o.x + o.width / 2, cy = o.y + o.height / 2;
+    const far = Math.max(...[[box.x, box.y], [box.x + box.width, box.y], [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]
+      .map(([x, y]) => Math.hypot((x - cx) / Math.max(1, o.width / 2), (y - cy) / Math.max(1, o.height / 2))));
+    return far >= 1 ? 0 : overlayOpacityAt(o, far);
+  }
   let a: number, b: number;
   switch (o.direction) {
     case 'to-bottom': a = along(box.y, o.y, o.height); b = along(box.y + box.height, o.y, o.height); break;

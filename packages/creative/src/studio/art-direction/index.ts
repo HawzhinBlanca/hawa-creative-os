@@ -24,6 +24,19 @@ export {
   type SolveRecipeInput,
   type BrandTones,
 } from './solver.js';
+export {
+  settleLogoGround,
+  measureLogoGround,
+  readLogoGround,
+  logoGroundQuiet,
+  nativeLogoContrast,
+  logoBackingExcess,
+  faceBoxesOf,
+  LOGO_MIN_CONTRAST,
+  LOGO_MAX_BUSYNESS,
+  type LogoGroundReading,
+  type SettleLogoOptions,
+} from './logo-ground.js';
 export { analysePhotoAsync, analysePixels, ANALYSIS_EDGE, type PhotoAnalysis } from './photo-analysis.js';
 export { carrierOf, isSurfaceShape, overlayOpacityOver, shapePaintsOver, OVERLAY_CARRY_MIN_OPACITY } from './surfaces.js';
 export {
