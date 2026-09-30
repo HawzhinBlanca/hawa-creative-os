@@ -73,7 +73,8 @@ describe.skipIf(!url)('Studio uses one pinned visual basis',()=>{
     expect(original.exemplarRetrieval?.unavailableIds).toContain('AUK002_kurdi_jpg');
     expect(saved?.manifest).toMatchObject({exemplarRetrieval:original.exemplarRetrieval});
     expect(original.cutoutOutcomes?.[0].derivation).toMatchObject({sourceSha256:hash(currentPhoto),model:'old-model'});
-    expect(original.visualInputs).toHaveLength(Math.min(2,original.exemplars?.length ?? 0)+1);
+    // ADR-170: a brief with photos is shown up to three exemplars.
+    expect(original.visualInputs).toHaveLength(Math.min(3,original.exemplars?.length ?? 0)+(original.photos?.length ?? 0));
     expect(original.visualInputs?.some(v=>v.kind==='approved_example')).toBe(true);
     await sql`INSERT INTO hawa.photo_cutouts(tenant_id,source_sha256,model,model_sha256,passed,png,width,height,report,created_at)
       VALUES(${scope.tenantId}::uuid,${hash(currentPhoto)},'new-model',${hash(runId+'new')},true,${newCut},16,16,'{}'::jsonb,now()+interval '1 hour')`.execute(db);

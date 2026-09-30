@@ -1,5 +1,16 @@
 import type { StageContext, CreativeBrief } from '../types.js';
-import { nearestPaletteColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC, layoutConditioningImage, imagePixelSize } from '@hawa/creative';
+import { nearestPaletteColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC, layoutConditioningImage, imagePixelSize, PHOTO_SHOTS, QUIET_AREAS } from '@hawa/creative';
+
+/**
+ * ADR-170: subject tags the brief may give, the ones the office's photo exemplars are tagged with,
+ * so the art director is shown how the office treated the same kind of subject.
+ */
+export const BRIEF_SUBJECT_TAGS = [
+  'report_release', 'field_visit', 'k12', 'school', 'education_quality', 'carousel', 'accreditation', 'values',
+  'campus', 'higher_education', 'partnership', 'international', 'collaboration', 'global', 'meeting', 'officials',
+  'government', 'high_level_visit', 'occasion', 'holiday', 'eid', 'greeting', 'event_forum', 'speaker', 'conference',
+  'invitation', 'call_for_applications', 'recruitment', 'peer_evaluators',
+] as const;
 import { buildP0SystemPrompt, buildP1Prompt } from '../prompts.js';
 import { log } from '../../../logging.js';
 
@@ -63,10 +74,19 @@ export const CREATIVE_BRIEF_SCHEMA = {
           index: { type: 'integer' },
           role: { type: 'string', enum: ['content_photo', 'style_reference', 'logo', 'unrelated'] },
           notes: { type: 'string' },
+          // ADR-170: the art director's photo review, read here with the images already in view.
+          subjectFit: { type: 'integer', enum: [1, 2, 3, 4, 5], description: 'For a content photo: how literally it shows the subject of the request (5 = exactly the subject). 1 for other images.' },
+          shot: { type: 'string', enum: [...PHOTO_SHOTS], description: 'For a content photo: what kind of shot it is. other for other images.' },
+          quietArea: { type: 'string', enum: [...QUIET_AREAS], description: 'For a content photo: the side calm enough (sky, wall, blur) to carry a title, or none.' },
         },
-        required: ['index', 'role', 'notes'],
+        required: ['index', 'role', 'notes', 'subjectFit', 'shot', 'quietArea'],
         additionalProperties: false,
       },
+    },
+    subjectTags: {
+      type: 'array',
+      items: { type: 'string', enum: [...BRIEF_SUBJECT_TAGS] },
+      description: 'What the design is about, from this list only; empty when none fits.',
     },
     referenceRole: {
       type: 'string',
@@ -104,6 +124,7 @@ export const CREATIVE_BRIEF_SCHEMA = {
     'referenceRole',
     'referenceNotes',
     'styleSpec',
+    'subjectTags',
   ],
   additionalProperties: false,
 };
@@ -174,7 +195,7 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
   const images = several.length > 1 ? several : attached ? [attached] : [];
   const imagePrompt =
     several.length > 1
-      ? `The client sent the ${several.length} images shown, in this order (index 0 first), with the request above. For each, fill imageRoles: which are photographs to place in the design, which is a design to follow, which is a logo. The client's words say what they sent them for. For a style reference also fill referenceRole 'style_reference' and referenceNotes, and fill styleSpec from it and the client's instructions (the instructions win where they differ): these values are enforced on the design.`
+      ? `The client sent the ${several.length} images shown, in this order (index 0 first), with the request above. For each, fill imageRoles: which are photographs to place in the design, which is a design to follow, which is a logo. The client's words say what they sent them for. For each content photo also judge, as an art director choosing a hero, how literally it shows the subject (subjectFit), what kind of shot it is (shot) and which side is calm enough to carry a title (quietArea). For a style reference also fill referenceRole 'style_reference' and referenceNotes, and fill styleSpec from it and the client's instructions (the instructions win where they differ): these values are enforced on the design.`
       : attached
         ? `${opts?.lateReference ? SENT_JUST_AFTER_THE_REQUEST : ATTACHED_WITH_THE_REQUEST} Also fill imageRoles with one entry for it (index 0): 'content_photo' if it is a photograph the client wants placed in the design, otherwise the role that matches referenceRole.\n\nFill styleSpec from the reference and the client's instructions (the instructions win where they differ): these values are enforced on the design, so read them off the image precisely.`
         : `Fill styleSpec only from what the client's instructions ask for explicitly (a font, a palette-accent button, where the logo goes); 'as_generated' for everything else. imageRoles is empty: no image was sent.`;
@@ -199,6 +220,7 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
     brief.referenceNotes = '';
   }
   brief.imageRoles = normalizeImageRoles(brief.imageRoles, images.length);
+  brief.subjectTags = (Array.isArray(brief.subjectTags) ? brief.subjectTags : []).filter((t) => (BRIEF_SUBJECT_TAGS as readonly string[]).includes(t));
   brief.referenceSeen = images.length > 0;
   brief.styleSpec = { ...NEUTRAL_STYLE_SPEC, ...(brief.styleSpec || {}) };
   if (dropped.length > 0) {
@@ -260,6 +282,16 @@ export function normalizeImageRoles(
   const allowed = new Set(['content_photo', 'style_reference', 'logo', 'unrelated']);
   return Array.from({ length: count }, (_, index) => {
     const found = (roles || []).find((r) => r && r.index === index && allowed.has(r.role));
-    return found ? { index, role: found.role, notes: String(found.notes || '') } : { index, role: 'unrelated' as const, notes: '' };
+    if (!found) return { index, role: 'unrelated' as const, notes: '' };
+    // ADR-170: the photo review, kept only when it is one the schema allows.
+    const fit = Number(found.subjectFit);
+    return {
+      index,
+      role: found.role,
+      notes: String(found.notes || ''),
+      ...(Number.isInteger(fit) && fit >= 1 && fit <= 5 ? { subjectFit: fit } : {}),
+      ...((PHOTO_SHOTS as readonly string[]).includes(String(found.shot)) ? { shot: found.shot } : {}),
+      ...((QUIET_AREAS as readonly string[]).includes(String(found.quietArea)) ? { quietArea: found.quietArea } : {}),
+    };
   });
 }

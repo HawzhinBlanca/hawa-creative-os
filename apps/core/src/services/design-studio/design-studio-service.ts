@@ -43,7 +43,8 @@ import {
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError, OfficeDayExhaustedError, parseStudioImagery, parseStudioTier, type StudioImagery, type StudioTier } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, thumbnailPlaybookPrompt, type OrnamentSettings } from '@hawa/creative';
-import { fitPhotoBoxesToImages, photoSelectionFromInstructions } from '@hawa/creative';
+import { fitPhotoBoxesToImages, photoSelectionFromInstructions, photoRecipeOf, eligibleRecipes, artDirectionRulesFromRaw } from '@hawa/creative';
+import { briefPhotoFacts } from './art-direction.js';
 import { recordedPhotoSelection, studioCopyBlocks } from './design-quality.js';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { buildRunBriefContract, StudioBriefContractError, StudioRunStatusChangedError } from './brief-contract.js';
@@ -1236,9 +1237,18 @@ export class DesignStudioService {
     const exemplars: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }> = [];
     if (packagedKaae && !skipExemplarRetrieval) try {
       const retrievalIndex = new ExemplarRetrievalIndex({ manifest: exemplarManifest });
+      // ADR-170: a brief with photos is shown the office's photo designs, of the recipes its photos
+      // allow and the subject the brief names; one without keeps the typographic set, as before.
+      const recordedBrief = runStages(run).brief as CreativeBrief | undefined;
+      const photoCount = typeof recordedBrief?.photosSent === 'number' ? recordedBrief.photosSent : 0;
       const briefQuery = {
         text: [request.instructions, ...request.copyBlocks.map((b: CopyBlock) => b.text)].join('\n'),
         format: request.width === request.height ? '1:1' : request.width / request.height === 0.8 ? '4:5' : undefined,
+        ...(photoCount > 0 ? {
+          photoCount,
+          subjects: recordedBrief?.subjectTags ?? [],
+          eligibleRecipes: eligibleRecipes(briefPhotoFacts(recordedBrief, runStages(run).cutoutsWanted === true)),
+        } : {}),
       };
       const available = new Map<string, { path: string; bytes: Buffer; sha256: string }>();
       const unavailableIds: string[] = [], availabilityWarnings: string[] = [];
@@ -1260,7 +1270,9 @@ export class DesignStudioService {
         warnings: [...retrieval.evidence.warnings, ...availabilityWarnings] };
       for (const item of retrieval.retrievedExemplars) {
         const verified = available.get(item.id)!;
-        exemplars.push({ ...verified, label: `${item.filename}: ${item.descriptor}` });
+        // ADR-170: a photo exemplar's recipe is named with it, so the art director reads which technique it shows.
+        const recipe = (item as { recipe?: string }).recipe;
+        exemplars.push({ ...verified, label: `${item.filename}${recipe && recipe !== 'typographic' ? ` [recipe ${recipe}]` : ''}: ${item.descriptor}` });
       }
     } catch (err: any) {
       exemplarRetrieval = { algorithm: EXEMPLAR_RETRIEVAL_VERSION, manifestSha256: hash(JSON.stringify(exemplarManifest)),
@@ -1324,6 +1336,9 @@ export class DesignStudioService {
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
       ornament: packagedKaae ? ornamentSettings() : undefined,
       style: (runStages(run).brief as CreativeBrief | undefined)?.styleSpec,
+      // ADR-170: the client's house art-direction rules and the brief's subject, for the art director.
+      artDirectionRules: artDirectionRulesFromRaw(reference),
+      subjectTags: (runStages(run).brief as CreativeBrief | undefined)?.subjectTags,
       unconsumedRetainedCalls: () => replayLedger.unconsumed(),
     };
     boundContext = ctx;
@@ -1491,7 +1506,12 @@ export class DesignStudioService {
         const rolesNow = briefSoFar?.imageRoles;
         if (rolesNow && images.length > 0 && rolesNow.length === images.length) {
           classified = true;
-          ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => ({ ...contentPhotoFromDataUrl(images[r.index]), notes: r.notes }));
+          ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => ({
+            ...contentPhotoFromDataUrl(images[r.index]),
+            notes: r.notes,
+            // ADR-170: the brief's photo review, for the art director's hero choice.
+            ...(r.subjectFit || r.shot || r.quietArea ? { review: { ...(r.subjectFit ? { subjectFit: r.subjectFit } : {}), ...(r.shot ? { shot: r.shot } : {}), ...(r.quietArea ? { quietArea: r.quietArea } : {}) } } : {}),
+          }));
           const ref = rolesNow.find((r) => r.role === 'style_reference');
           ctx.attachedImage = ref ? images[ref.index] : undefined;
           if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
@@ -1738,6 +1758,8 @@ export class DesignStudioService {
           const contractStop = await this.admitBriefContract(s, runId, ctx, brief, stages, budget, requestCopy);
           if (contractStop) return contractStop;
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
+          // ADR-170: the faces in each photo, for the recipe solver's crops.
+          if (Array.isArray(stages.photoFocus)) ctx.photoFaces = stages.photoFocus;
 
           const candidateStates = await runLayoutsStage(
             ctx,
@@ -1750,6 +1772,8 @@ export class DesignStudioService {
           const focus: Array<PhotoFaces | null> = Array.isArray(stages.photoFocus) ? stages.photoFocus : [];
           const sizes: Array<{ width: number; height: number } | null> = Array.isArray(stages.photoSizes) ? stages.photoSizes : [];
           for (const cand of candidateStates) {
+            // ADR-170: a recipe's crops, photo boxes and cut-outs are the solver's.
+            if (photoRecipeOf(cand.currentLayout)) continue;
             for (const p of cand.currentLayout.photos ?? []) {
               const f = focus[p.photoIndex];
               if (f && p.treatment !== 'cutout') p.focus = { x: f.x, y: f.y };
@@ -1761,6 +1785,7 @@ export class DesignStudioService {
           // the bottom edge, heads matched, clear of the text. Before the art, which works around them.
           if (ctx.photoCutouts?.some(Boolean)) {
             for (const cand of candidateStates) {
+              if (photoRecipeOf(cand.currentLayout)) continue;
               // A person cut out has their own edge: a frame's mask and crop no longer apply.
               for (const p of cand.currentLayout.photos ?? []) {
                 if (!ctx.photoCutouts[p.photoIndex]) continue;
@@ -1773,7 +1798,7 @@ export class DesignStudioService {
           }
           // Heads matched across the framed photos only, once the people who are cut out are known: a
           // photo matched to a face that then became a cut-out was cropped to the limit for nothing.
-          for (const cand of candidateStates) alignFramedHeads(cand.currentLayout, focus, sizes);
+          for (const cand of candidateStates) if (!photoRecipeOf(cand.currentLayout)) alignFramedHeads(cand.currentLayout, focus, sizes);
           const artCandidates = await runArtStage(ctx, candidateStates);
 
           return await this.finishLayoutsStage(s, runId, stages, budget, candidateRows, artCandidates, Boolean(ctx.pipelineV3));
@@ -2773,6 +2798,10 @@ export class DesignStudioService {
             majorityWinner: order.majorityWinner,
             winnerCandidateId: idFor(order.winnerCandidateId),
             receipt: order.receipt,
+            // ADR-170: a photo brief's weighted totals, its art-direction checklist and the baseline named.
+            ...(order.photoBrief ? { photoBrief: true, weights: order.weights, weightedVotesA: order.weightedVotesA, weightedVotesB: order.weightedVotesB } : {}),
+            ...(order.artDirection ? { artDirection: order.artDirection } : {}),
+            ...(order.baselineCandidateId !== undefined ? { baselineCandidateId: idFor(order.baselineCandidateId) ?? null } : {}),
           } as any,
         });
       }

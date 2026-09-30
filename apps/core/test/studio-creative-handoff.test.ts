@@ -5,11 +5,12 @@ import { runReviseStageV3 } from '../src/services/design-studio/stages/v3.stage.
 import { runArtStage } from '../src/services/design-studio/stages/art.stage.js';
 import { layoutVisualInputs } from '../src/services/design-studio/stages/asset-inputs.js';
 
-const intercepted = vi.hoisted(() => ({ refine: vi.fn(), generate: vi.fn(), rank: vi.fn() }));
+const intercepted = vi.hoisted(() => ({ refine: vi.fn(), generate: vi.fn(), artDirect: vi.fn(), rank: vi.fn() }));
 vi.mock('@hawa/creative', async (original) => ({
   ...await original<typeof import('@hawa/creative')>(),
   refineCandidateV3: intercepted.refine,
   generateLayoutCandidatesV3: intercepted.generate,
+  generateArtDirectedCandidatesV3: intercepted.artDirect,
   rankCandidatesV3: intercepted.rank,
 }));
 
@@ -57,10 +58,13 @@ describe('creative input handoff (ADR-109)', () => {
     const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aQ1kAAAAASUVORK5CYII=', 'base64');
     const context = { ...ctx(), exemplars: [{ path: 'approved.png', label: 'Scoped approved example', bytes, mimeType: 'image/png' }],
       photos: [{ bytes, mimeType: 'image/png' as const, dataUrl: `data:image/png;base64,${bytes.toString('base64')}`, notes: 'Speaker faces left' }] };
-    intercepted.generate.mockRejectedValueOnce(new Error('intercepted before transport'));
+    // ADR-170: a brief with photos goes to the art-director call; its exemplars are the attached ones, described.
+    intercepted.artDirect.mockRejectedValueOnce(new Error('intercepted before transport'));
     await expect(runLayoutsStage(context, brief, [])).rejects.toThrow('intercepted before transport');
-    const args = intercepted.generate.mock.calls.at(-1)![0];
-    expect(args.exemplars).toBeUndefined();
+    expect(intercepted.generate).not.toHaveBeenCalled();
+    const args = intercepted.artDirect.mock.calls.at(-1)![0];
+    expect(args.exemplars).toEqual([{ label: 'Scoped approved example' }]);
+    expect(args.photos).toHaveLength(1);
     expect(args.visualInputs).toHaveLength(2);
     expect(args.visualInputs[0]).toMatchObject({ kind: 'approved_example', label: 'Scoped approved example' });
     expect(args.visualInputs[1]).toMatchObject({ kind: 'content_photo', label: 'Photo 0', notes: 'Speaker faces left' });
