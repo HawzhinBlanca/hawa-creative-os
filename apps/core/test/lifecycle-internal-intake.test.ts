@@ -793,8 +793,10 @@ describe('POST /v1/internal/telegram/intake', () => {
   });
 
   // ADR-145: an unlinked captionless photo is kept for its sender's words (downloaded once, settled
-  // later), never parked; a captionless photo replying to a message no current design knows is still
-  // not applied to any design and not downloaded.
+  // later), never parked. ADR-156 (audit #12) changed the replies deliberately: a captionless photo
+  // replying to a message no current design knows, or to an older notice of the design, is still not
+  // applied to any design, but it is kept for the words that will say what to do with it, instead of
+  // an untrue "that design is now with the office".
   it.each(['unlinked', 'unknown-reply', 'stale-reply'] as const)(
     'never designs from a captionless %s photo, and keeps an unlinked one for its words', async (kind) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
@@ -819,9 +821,9 @@ describe('POST /v1/internal/telegram/intake', () => {
     const result = await intake(createApp({ db, telegramBridge: bridge } as any), update);
     const expected = kind === 'unlinked'
       ? { intakeStatus: 202, lifecycleAction: 'settle-later', settle: { kind: 'photo' } }
-      : { intakeStatus: 409, code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required' };
+      : { intakeStatus: 200, lifecycleAction: 'chat-answer', media: 'photo-held' };
     expect(result.body).toMatchObject(expected);
-    expect(bridge.downloadFile).toHaveBeenCalledTimes(kind === 'unlinked' ? 1 : 0);
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
     expect(await tasksInChat(chat)).toHaveLength(1);
     expect((await intake(createApp({ db } as any), update)).body).toMatchObject(expected);
     expect(await tasksInChat(chat)).toHaveLength(1);
@@ -865,7 +867,10 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(request).toMatchObject({ rev: '3', current_task_id: first.taskId });
   });
 
-  it('requires a unique request before downloading a revision photo', async () => {
+  // ADR-156 (audit #11) changed this deliberately: a captioned photo is read as text is, so with two
+  // designs waiting it asks which one, in words (as a text message does), and keeps the photo (one
+  // download) for the answer. It still starts nothing and never guesses.
+  it('requires a unique request before a revision photo starts anything', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     const app = createApp({ db } as any);
@@ -875,15 +880,17 @@ describe('POST /v1/internal/telegram/intake', () => {
     delete (update.message as any).text;
     (update.message as any).caption = 'Use this image for the revision';
     (update.message as any).photo = [{ file_id: 'ambiguous-photo' }];
-    const bridge = { downloadFile: vi.fn(),
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
+    const bridge = { downloadFile: vi.fn(async () => png),
       dispatchOutboundMessage: vi.fn(async () => ({ success: true })) };
     const result = await intake(createApp({ db, telegramBridge: bridge } as any), update, 'lifecycle');
-    expect(result.body).toMatchObject({ intakeStatus: 409, code: 'AMBIGUOUS_REQUEST',
-      lifecycleAction: 'request-choice-required' });
-    expect(bridge.downloadFile).not.toHaveBeenCalled();
+    expect(result.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer', choiceRequired: true,
+      chatAnswer: { text: expect.stringContaining('Which design is this for?') } });
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
     expect(await tasksInChat(chat)).toHaveLength(2);
     expect((await intake(createApp({ db } as any), update)).body).toMatchObject({
-      intakeStatus: 409, code: 'AMBIGUOUS_REQUEST' });
+      intakeStatus: 200, duplicate: true, choiceRequired: true });
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
   });
 
   it('retains a revision photo decision when the task cannot yet be projected', async () => {
