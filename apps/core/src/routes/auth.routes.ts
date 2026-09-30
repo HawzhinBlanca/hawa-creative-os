@@ -151,7 +151,7 @@ export function registerAuthRoutes(ctx: RouteContext) {
     let resolvedDisplayName: string = 'Primary Operator';
     
     // Constant-time comparison: a wrong key costs the same whether it differs in the first or last byte.
-    const same = (candidate: string, configured: string | undefined): boolean => {
+    const same = (candidate: string, configured: string | null | undefined): boolean => {
       if (!configured) return false;
       const a = Buffer.from(candidate), b = Buffer.from(configured);
       return a.length === b.length && crypto.timingSafeEqual(a, b);
@@ -160,7 +160,7 @@ export function registerAuthRoutes(ctx: RouteContext) {
     // The worker's credential is a service principal on /v1/internal/* and nothing else, so it never
     // becomes an office session, whatever other key it might also match (ADR-128).
     const serviceToken = serviceTokenOf();
-    if (key && serviceToken && same(key, serviceToken)) {
+    if (key && (same(key, serviceToken) || same(key, process.env.HAWA_DESIGN_WORKER_TOKEN))) {
       return problem(c, 401, 'Unauthorized', 'Invalid credentials or access key');
     }
 

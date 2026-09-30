@@ -83,6 +83,7 @@ export default defineConfig({
       // A render given an SVG with an inline data URI over 100 KB throws in tests (ADR-035).
       HAWA_INLINE_DATA_URI_GUARD: 'throw',
       HAWA_BEARER_TOKEN: 'test_bearer',
+      HAWA_DESIGN_WORKER_TOKEN: ['test','design','worker'].join('_'),
       HAWA_DEV_TOKEN: 'hawa_dev_token',
       HAWA_ADMIN_KEY: 'test_admin_key',
       HAWA_ART_DIRECTOR_KEY: 'test_art_director_bearer',

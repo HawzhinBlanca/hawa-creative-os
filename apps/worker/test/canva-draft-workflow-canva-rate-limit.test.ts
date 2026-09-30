@@ -88,7 +88,7 @@ afterEach(() => {
 
 describe('Canva still refusing with 429 after the client retried', () => {
   it('the preview export waits the time Core names and asks again under the same key, then the draft is ready', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = canvaLimitedCore({ png: 2 });
     const { ctx, steps, sleeps, journal } = recordingContext();
 
@@ -110,7 +110,7 @@ describe('Canva still refusing with 429 after the client retried', () => {
   });
 
   it('the copy and font check export waits the same way', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = canvaLimitedCore({ pptx: 1 }, { retryAfter: '7' });
     const { ctx, steps, sleeps } = recordingContext();
 
@@ -122,7 +122,7 @@ describe('Canva still refusing with 429 after the client retried', () => {
   });
 
   it('an import refused inside the generation waits, and the same generation key imports the one saved plan', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = canvaLimitedCore({ generate: 2 });
     const { ctx, sleeps } = recordingContext();
 
@@ -134,7 +134,7 @@ describe('Canva still refusing with 429 after the client retried', () => {
   });
 
   it('an import refused while the plan is resumed waits too', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = canvaLimitedCore({ planResume: 1 }, { planned: true });
     const { ctx, steps, sleeps } = recordingContext();
 
@@ -145,7 +145,7 @@ describe('Canva still refusing with 429 after the client retried', () => {
   });
 
   it('ends the draft as a failed preview, naming the rate limit, when Canva refuses for the whole window', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = canvaLimitedCore({ png: Number.POSITIVE_INFINITY }, { retryAfter: '30' });
     const { ctx, sleeps } = recordingContext();
 
@@ -163,7 +163,7 @@ describe('Canva still refusing with 429 after the client retried', () => {
   });
 
   it('an import still refused after the window ends the draft naming the rate limit, not a planning slot', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = canvaLimitedCore({ generate: Number.POSITIVE_INFINITY }, { retryAfter: '30' });
     const { ctx } = recordingContext();
 
@@ -176,7 +176,7 @@ describe('Canva still refusing with 429 after the client retried', () => {
   });
 
   it('any other refusal of an export stays final: no wait, no second request', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = canvaLimitedCore({ png: 1 }, { refusal: { status: 409, title: 'CANVA_EXPORT_PENDING' } });
     const { ctx, sleeps } = recordingContext();
 

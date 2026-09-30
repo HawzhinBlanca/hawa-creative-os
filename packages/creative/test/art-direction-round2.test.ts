@@ -32,7 +32,7 @@ const solve = (recipe: ArtDirectionChoice['recipe'], hero: number, over: Partial
 });
 const context = (): LayoutValidationContext => ({
   expectedWidth: 1080, expectedHeight: 1350, copyCount: 3, copyScripts: ['latin', 'latin', 'latin'], photoCount: 6,
-  photoSelection: { mode: 'choose', minimum: 3 }, reference: { rules: { fontFamily: 'Verdana', palette: PALETTE }, logoAspect: 1 },
+  photoSelection: { mode: 'choose', minimum: 1 }, reference: { rules: { fontFamily: 'Verdana', palette: PALETTE }, logoAspect: 1 },
 });
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
 const holds = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
@@ -58,6 +58,14 @@ describe('1. the judge\'s ties go to the house prior, not to a composite that fa
     expect(artDirectionPrior(scrim, scrim, ['school'])).toMatchObject({ winner: null });
   });
 
+  it('does not claim an unmeasured historical hero is sharper than a measured one', () => {
+    const measured = solve('scrim_caption', 3);
+    const unknown = { artDirection: { ...measured.artDirection!, heroUpscale: undefined } };
+    const soft = { artDirection: { ...measured.artDirection!, heroUpscale: 2 } };
+    expect(artDirectionPrior(unknown, soft, [])).toMatchObject({ winner: null, basis: null });
+    expect(artDirectionPrior(soft, unknown, [])).toMatchObject({ winner: null, basis: null });
+  });
+
   it('a judge that picks whichever design is second in both orders leaves the pair to the prior, recorded', async () => {
     const scrim = solve('scrim_caption', 3);
     const fade = solve('hero_fade_report', 0);
@@ -72,6 +80,8 @@ describe('1. the judge\'s ties go to the house prior, not to a composite that fa
     const client = { createStructuredCompletion: vi.fn().mockResolvedValue({ data: verdict, receipt: { model: 'gpt-4.1-mini', responseId: 'r', xRequestId: null, inputTokens: 1, outputTokens: 1, costUsd: 0, latencyMs: 1 } }) } as any;
     const selection = await selectWinnerV3(ranked, copy, { client, model: 'gpt-4.1-mini', renderOptions: { logoDataUri: KAAE_TEST_LOGO }, subjects: ['report_release', 'field_visit'] });
     expect(selection.decidedBy).toBe('art_direction_prior');
+    expect(selection.humanChoiceRecommended).toBe(true);
+    expect(selection.judgeReliable).toBe(false);
     expect(selection.winner.layout.artDirection!.recipe).toBe('hero_fade_report');
     expect(selection.prior).toMatchObject({ basis: 'subject', instead: 'composite_after_tie' });
   }, 60000);
@@ -118,7 +128,7 @@ describe('2. hero_plate sits in the photo\'s quiet region, and its title keeps t
     const copyBlocks = [0, 1, 2].map((index) => ({ index, text: OWNER[index as 0 | 1 | 2], script: 'latin' as const, role: index === 1 ? 'title' : index === 0 ? 'subtitle' : 'body' }));
     const facts = PHOTOS.map((p) => ({ ...p, ...(p.quiet === 'top' ? { quietArea: 'top' as const } : {}) }));
     const choice: ArtDirectionChoice = { recipe: 'hero_plate', heroPhotoIndex: 3, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: SLOTS, params: { frame: 'inset', align: 'center' } };
-    const solved = solveConcepts([choice], { brief: '', copyBlocks: copyBlocks as any, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: facts as any, logoAspect: 1 });
+    const solved = solveConcepts([choice], { brief: '', photoSelection: { mode: 'choose', minimum: 1 }, copyBlocks: copyBlocks as any, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: facts as any, logoAspect: 1 });
     expect(solved.layouts[0].artDirection).toMatchObject({ recipe: 'hero_plate', heroPhotoIndex: 5 });
   });
 });
@@ -158,7 +168,7 @@ describe('3. a hero is not enlarged past 1.3x where the recipe can avoid it; pas
   it('replaces a concept whose hero would be soft when a sharp recipe can carry it', () => {
     const copyBlocks = [0, 1, 2].map((index) => ({ index, text: OWNER[index as 0 | 1 | 2], script: 'latin' as const, role: index === 1 ? 'title' : index === 0 ? 'subtitle' : 'body' }));
     const choice: ArtDirectionChoice = { recipe: 'hero_card', heroPhotoIndex: 3, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: SLOTS, params: { frame: 'outer', align: 'center' } };
-    const solved = solveConcepts([choice], { brief: '', copyBlocks: copyBlocks as any, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: PHOTOS as any, logoAspect: 1 });
+    const solved = solveConcepts([choice], { brief: '', photoSelection: { mode: 'choose', minimum: 1 }, copyBlocks: copyBlocks as any, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: PHOTOS as any, logoAspect: 1 });
     expect(solved.layouts[0].artDirection!.recipe).not.toBe('hero_card');
     expect(solved.layouts[0].artDirection!.heroUpscale).toBeLessThanOrEqual(1.5);
     expect(solved.replaced[0].reason).toMatch(/HERO_UPSCALED/);

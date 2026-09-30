@@ -52,6 +52,15 @@ describe('observed deployment receipt', () => {
     expect(JSON.stringify(receipt)).not.toContain('never-copy');
   });
 
+  it('requires matching live Core and worker configuration before recording a coordinated deployment', () => {
+    const revision='d'.repeat(64),workerHealth={buildCommit:commit,status:'healthy',configurationRevision:revision};
+    const input={expectedConfigurationRevision:revision,health:{...health,configurationRevision:revision},workerHealth};
+    expect(build(input).runtime.configurationRevision).toBe(revision);
+    for (const change of [{workerHealth:{...workerHealth,configurationRevision:'e'.repeat(64)}},
+      {health:{...health,configurationRevision:null}},{workerHealth:{...workerHealth,buildCommit:'f'.repeat(40)}}])
+      expect(()=>build({...input,...change})).toThrow('runtime configuration differs');
+  });
+
   it('refuses a tag that points to the wrong image revision or lacks an immutable ID', () => {
     expect(() => build({ observations: images.map((i) => i.service === 'core' ? { ...i, revisionLabel: 'c'.repeat(40) } : i) }))
       .toThrow(/core image identity/);

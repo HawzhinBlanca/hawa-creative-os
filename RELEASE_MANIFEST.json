@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-30T17:24:06+03:00",
+  "generatedAt": "2026-09-30T19:08:27+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "5536525fd1267db637f8cbd5cff1ff269e86bffd",
+    "commit": "6c357dd2303f8f811df4256602590c577f2dbefa",
     "treeClean": true,
-    "commitTimestamp": "2026-09-30T17:24:06+03:00",
-    "branch": "claude/art-direction-trials"
+    "commitTimestamp": "2026-09-30T19:08:27+03:00",
+    "branch": "codex/reliability-and-design-hardening"
   },
   "migrations": {
-    "targetVersion": "071_uncertain_call_expiry",
-    "latestMigrationFile": "071_uncertain_call_expiry.sql",
-    "totalMigrations": 71
+    "targetVersion": "072_verified_office_call_cost",
+    "latestMigrationFile": "072_verified_office_call_cost.sql",
+    "totalMigrations": 72
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "f05255620255b6cb8b9ba25a818fd0780aaae098f3a470ab7ffc94c43f288293",
+        "apps/core/src/app.ts": "3d4dc7a7fa39d39b99686407e33ca92cacbcb1429ebc0bb714d7542000b62a34",
         "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -56,7 +56,7 @@
       "service": "worker",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "b9c5cfe17e3bf5ee9bd8d3ab0b158f83b9c4b725ba940530836104a1eadf1f94"
+        "apps/worker/src/index.ts": "b0e6a32e1b5e410979fca6a08a0af00c6f6bdb9b9d2461c134fda57dc2c51947"
       }
     }
   },
@@ -73,7 +73,7 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "37c8f1723ace5b492615df9a685b2b1c66ac88c3f2f6b3273185857abe773faf",
+      "apps/core/src/services/canva-design-planner.ts": "7eb8e50b0175958be068966ef2db12931aa5eefcca92b7962806429ba78f1e44",
       "packages/creative/src/studio/layout-generator-v3.ts": "6bb4cbc698a3ee572a303cc1059d0684a9944afdd539a2c620586991843d8e85",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "1b13a99680eb8d2fe4c7ae347817947cf73a6f370d742b4f5947fc54382ad3ac",
       "packages/creative/src/studio/box-critique-v3.ts": "f6a643f5df5aaf69f355f12a6494b2479b942d2b6d702cc1cc42af8d24cb85e2"
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "7574967386b08cd225378dc1f65ebe8cf2924bf0737ab3252b03b30ff8ace736"
+  "sha256": "faae478372f7c55719243c8e5d91e4f75a5db96fc273a5ad22268c7010600a19"
 }

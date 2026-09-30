@@ -230,6 +230,7 @@ export async function runLayoutsStage(
       canvasWidth: ctx.width,
       canvasHeight: ctx.height,
       photos: photoFacts,
+      photoSelection: ctx.photoSelection,
       isRtl: ctx.copyBlocks.some((b) => b.script === 'arabic'),
       visualInputs,
       logoAspect: ctx.logoAspect || 1.0,

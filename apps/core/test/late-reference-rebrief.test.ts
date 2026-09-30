@@ -85,6 +85,7 @@ const harness = (over: { status?: string; stages?: Record<string, unknown>; atta
     briefReply({
       referenceRole: 'style_reference',
       referenceNotes: 'gold rule under the title, logo bottom right',
+      imageRoles: [{ index: 0, role: 'style_reference', notes: 'gold rule under the title, logo bottom right' }],
       styleSpec: REFERENCE_SPEC,
     })
   );

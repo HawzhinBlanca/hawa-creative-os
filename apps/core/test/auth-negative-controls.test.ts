@@ -103,7 +103,7 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
       expect(res.status).toBe(401);
     });
 
-    it('allows admin-level POST /v1/system/providers with valid admin credentials', async () => {
+    it('requires coordinated deployment for an authorized provider change', async () => {
       const res = await app.request('/v1/system/providers', {
         method: 'POST',
         headers: {
@@ -112,7 +112,7 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
         },
         body: JSON.stringify({ wahaEndpoint: 'http://127.0.0.1:3000' }),
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(409);
     });
   });
 

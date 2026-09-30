@@ -203,7 +203,7 @@ describe('request-owned automatic design', () => {
   });
 
   it('reports an owned run to RequestLifecycle without posting the legacy outcome', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     vi.stubEnv('HAWA_WORKER_TOKEN', ['worker', 'design', 'proof', 'fixture'].join('_'));
     const taskId = randomUUID(); const requestId = randomUUID();
     const input: DesignRunInput = { v: 1, lifecycle: { requestId, round: 0, runId: `dr-${taskId}` },

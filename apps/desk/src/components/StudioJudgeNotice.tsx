@@ -10,6 +10,8 @@ export interface StudioTournamentStage {
 }
 
 const REASONS: Record<string, string> = {
+  art_direction_prior: 'The judge tied or failed its reliability check. The client style policy supplied the default design.',
+  composite_after_tie: 'The judge could not distinguish the designs consistently across both display orders.',
   composite_judge_uncertain: 'The judge could not decide between the top two designs, or its pick could not be tested.',
   composite_judge_unreliable: 'The judge did not prefer its own pick over a degraded copy of it, so its pick is not trusted.',
   composite_judge_unavailable: 'The judge was unavailable for this run.',

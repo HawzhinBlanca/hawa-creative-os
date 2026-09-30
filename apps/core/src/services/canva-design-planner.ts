@@ -20,7 +20,7 @@ import { clientExemplarManifestOf } from './client-packs.js';
 
 const PPTX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation' as const;
 
-type Scope={tenantId:string;actorId:string};
+type Scope={tenantId:string;actorId:string;role?:string};
 const hash=(value:string|Buffer)=>createHash('sha256').update(value).digest('hex');
 const safeFontName=(value:unknown):value is string=>typeof value==='string'&&value.trim()===value&&
   /^[\p{L}\p{N} ._+()-]{1,80}$/u.test(value)&&/[\p{L}\p{N}]/u.test(value);
@@ -180,7 +180,7 @@ function loadConfirmedExemplars(clientId: string): Array<{ label: string; sha256
 /** Only explicit saved copy is eligible. Never substitute a marketing or template fallback. */
 export class CanvaDesignPlanner {
   constructor(private db:Kysely<Database>,private canva:CanvaConnectService,private options:PlannerOptions={}){}
-  private tx<T>(s:Scope,fn:(db:Kysely<Database>)=>Promise<T>){return withRlsContext(this.db,{tenantId:s.tenantId,userId:s.actorId,role:'operator'},fn);}
+  private tx<T>(s:Scope,fn:(db:Kysely<Database>)=>Promise<T>){return withRlsContext(this.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},fn);}
   private async context(s:Scope,taskId:string,width:number,height:number){
     if(![width,height].every(n=>Number.isInteger(n)&&n>=640&&n<=2400))throw new CanvaFlowError(422,'DIMENSIONS_REQUIRED','Choose dimensions between 640 and 2400 pixels.');
     const task=await this.tx(s,async db=>(await sql<any>`SELECT t.client_id,t.description,t.request_id,t.version,
@@ -285,12 +285,12 @@ export class CanvaDesignPlanner {
   async state(s:Scope,taskId:string){return this.tx(s,async db=>(await sql<any>`SELECT p.id,
     CASE WHEN p.status='planning' AND c.status='completed' AND c.reconciliation_required THEN 'uncertain' ELSE p.status END AS status,
     coalesce(p.diagnostic,c.diagnostic) AS diagnostic,p.request->>'model' AS requested_model,
-    p.result->'receipt' AS receipt,p.result->'manifest'->>'nativeVerification' AS native_verification,p.created_at,
+    p.result->'receipt' AS receipt,p.result->'manifest'->'reviewFindings' AS review_findings,p.result->'manifest'->>'nativeVerification' AS native_verification,p.created_at,
     c.id AS call_id,c.layout IS NOT NULL AS retained_layout,
     coalesce(c.reconciliation_required AND NOT EXISTS(SELECT 1 FROM hawa.call_cost_attestations a
       WHERE a.tenant_id=p.tenant_id AND a.call_kind='canva_planner' AND a.call_id=p.id),false) AS cost_evidence_required
     FROM hawa.canva_design_plans p LEFT JOIN hawa.canva_planner_calls c ON c.id=p.id AND c.tenant_id=p.tenant_id
-    WHERE p.tenant_id=${s.tenantId}::uuid AND p.task_id=${taskId}::uuid AND p.actor_id=${s.actorId}
+    WHERE p.tenant_id=${s.tenantId}::uuid AND p.task_id=${taskId}::uuid AND (p.actor_id=${s.actorId} OR ${['administrator','art_director','creative_director'].includes(s.role||'')})
     ORDER BY p.created_at DESC LIMIT 10`.execute(db)).rows);}
   async generate(s:Scope,taskId:string,key:string,width:number,height:number){
     if(!/^[A-Za-z0-9_-]{8,128}$/.test(key))throw new CanvaFlowError(422,'REQUEST_KEY_REQUIRED','Use a stable generation request key.');

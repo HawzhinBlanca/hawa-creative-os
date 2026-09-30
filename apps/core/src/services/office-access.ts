@@ -1,5 +1,7 @@
-/** ADR-146: explicit private-office trust, never a credential or a public default. */
-export interface OfficeAccessPolicy { mode: 'required' | 'trusted_office'; origin?: string }
+import { timingSafeEqual } from 'node:crypto';
+
+/** ADR-146/163: private origin plus proof from the office reverse proxy. */
+export interface OfficeAccessPolicy { mode: 'required' | 'trusted_office'; origin?: string; proxyProof?: string }
 
 export function officeAccessPolicy(env: NodeJS.ProcessEnv): OfficeAccessPolicy {
   const mode = env.HAWA_DESK_AUTH_MODE || 'required';
@@ -15,13 +17,21 @@ export function officeAccessPolicy(env: NodeJS.ProcessEnv): OfficeAccessPolicy {
     (parts[0] === 127 || parts[0] === 10 || parts[0] === 192 && parts[1] === 168 || parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31);
   if (!privateHost || !['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
       url.pathname !== '/' || url.search || url.hash) throw new Error('Trusted office origin must be a private office HTTP origin');
-  return { mode, origin: url.origin };
+  const proxyProof = env.HAWA_OFFICE_PROXY_PROOF;
+  if (!proxyProof || !/^[a-f0-9]{64}$/.test(proxyProof)) throw new Error('Trusted office access requires a server-only HAWA_OFFICE_PROXY_PROOF');
+  if (['HAWA_DESIGN_WORKER_TOKEN','HAWA_WORKER_TOKEN','HAWA_WORKER_TOKEN_PREVIOUS','HAWA_API_KEY','HAWA_BEARER_TOKEN',
+      'HAWA_ADMIN_KEY','HAWA_ART_DIRECTOR_KEY','HAWA_REVIEWER_KEY','HAWA_DESK_SECRET'].some(key => env[key] === proxyProof))
+    throw new Error('Office proxy proof must be distinct from service and office credentials');
+  return { mode, origin: url.origin, proxyProof };
 }
 
 export function permitsOfficeRequest(policy: OfficeAccessPolicy, request: {
   url: string; method: string; header(name: string): string | undefined;
 }): boolean {
-  if (policy.mode !== 'trusted_office' || !policy.origin) return false;
+  if (policy.mode !== 'trusted_office' || !policy.origin || !policy.proxyProof) return false;
+  const proof = request.header('X-Hawa-Office-Proof') || '';
+  if (Buffer.byteLength(proof) !== Buffer.byteLength(policy.proxyProof) ||
+      !timingSafeEqual(Buffer.from(proof), Buffer.from(policy.proxyProof))) return false;
   const expected = new URL(policy.origin);
   const actualHost = request.header('Host') || new URL(request.url).host;
   if (actualHost.toLowerCase() !== expected.host.toLowerCase()) return false;

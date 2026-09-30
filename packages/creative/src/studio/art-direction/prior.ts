@@ -35,9 +35,9 @@ export function houseRecipesFor(subjects: readonly string[] | undefined): Recipe
   return out;
 }
 
-/** 0 sharp (up to 1.3x), 1 acceptable (up to 1.5x), 2 soft. A layout that does not say is sharp. */
-export function sharpnessClass(upscale: number | undefined): 0 | 1 | 2 {
-  if (upscale === undefined || upscale <= HERO_SHARP_UPSCALE) return 0;
+/** 0 sharp (up to 1.3x), 1 acceptable (up to 1.5x), 2 soft. Missing measurements are unknown and cannot decide a comparison. */
+export function sharpnessClass(upscale: number): 0 | 1 | 2 {
+  if (upscale <= HERO_SHARP_UPSCALE) return 0;
   return upscale <= HERO_SOFT_UPSCALE ? 1 : 2;
 }
 
@@ -64,9 +64,9 @@ export function artDirectionPrior(a: Candidate, b: Candidate, subjects: readonly
   }
   const ua = a.artDirection?.heroUpscale;
   const ub = b.artDirection?.heroUpscale;
-  if (sharpnessClass(ua) !== sharpnessClass(ub)) {
+  if (ua !== undefined && ub !== undefined && sharpnessClass(ua) !== sharpnessClass(ub)) {
     const winner = sharpnessClass(ua) < sharpnessClass(ub) ? 'a' : 'b';
-    return { winner, basis: 'sharpness', reason: `its hero is enlarged ${(winner === 'a' ? ua : ub) ?? 1}x against ${(winner === 'a' ? ub : ua) ?? 1}x` };
+    return { winner, basis: 'sharpness', reason: `its hero is enlarged ${winner === 'a' ? ua : ub}x against ${winner === 'a' ? ub : ua}x` };
   }
   return { winner: null, basis: null, reason: 'same house fit and hero sharpness' };
 }

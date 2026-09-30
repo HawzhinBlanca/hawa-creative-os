@@ -28,15 +28,6 @@ export const SettingsScreen: React.FC = () => {
   const [telegramStatus, setTelegramStatus] = useState<Reading<TelegramAdapterStatus>>({ state: 'loading' });
   const [activeModal, setActiveModal] = useState<'admission' | 'proof' | 'credentials' | null>(null);
   const [providerStatus, setProviderStatus] = useState<Reading<ProviderStatusMap>>({ state: 'loading' });
-  const [savingKeys, setSavingKeys] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
-  const [keysForm, setKeysForm] = useState({
-    geminiApiKey: '',
-    openaiApiKey: '',
-    anthropicApiKey: '',
-    telegramBotToken: '',
-    wahaApiKey: '',
-  });
   const [registeringWebhook, setRegisteringWebhook] = useState(false);
   const [registerWebhookResult, setRegisterWebhookResult] = useState<string | null>(null);
 
@@ -59,22 +50,6 @@ export const SettingsScreen: React.FC = () => {
     fetchProviderStatus();
     fetchTelegramStatus();
   }, []);
-
-  const handleSaveCredentials = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingKeys(true);
-    setSaveStatus(null);
-    try {
-      await apiClient.system.saveProviders(keysForm);
-      setSaveStatus('✓ Verified and active until the next restart. To keep it, run infra/docker/rotate_external_secrets.sh on the server.');
-      await fetchProviderStatus();
-      setTimeout(() => setActiveModal(null), 2200);
-    } catch (err) {
-      setSaveStatus(`✗ ${reasonOf(err)}`);
-    } finally {
-      setSavingKeys(false);
-    }
-  };
 
   // The webhook secret stays on the server. Core asks Telegram how delivery to our webhook is going
   // (getWebhookInfo) and relays the answer; the Desk never posts to the webhook itself.
@@ -109,7 +84,7 @@ export const SettingsScreen: React.FC = () => {
       </div>
     );
   };
-  const keyIsSet = (key: string) => describeProvider(providerStatus, key).configured;
+
 
   return (
     <section id="settings" className="screen active">
@@ -372,117 +347,12 @@ export const SettingsScreen: React.FC = () => {
         >
           <div className="panel" style={{ width: 560, maxWidth: 'calc(100vw - 32px)', boxSizing: 'border-box', padding: 24, boxShadow: '0 24px 48px rgba(0,0,0,0.25)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>🔑 Production API Credentials & Secret Store</h2>
+              <h2 style={{ margin: 0, fontSize: 18 }}>Provider configuration</h2>
               <button className="btn" style={{ fontSize: 11 }} onClick={() => setActiveModal(null)}>✕</button>
             </div>
-            <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 0, marginBottom: 16 }}>
-              Paste your API keys below to activate live model providers. Core verifies each key with its provider and keeps it in memory until the next restart; nothing is written to a file.
-            </p>
-
-            <form onSubmit={handleSaveCredentials} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label htmlFor="openai-api-key-input" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                  OpenAI API Key (GPT-4o / Sol)
-                </label>
-                <input
-                  id="openai-api-key-input"
-                  name="openaiApiKey"
-                  aria-label="OpenAI API Key (GPT-4o / Sol)"
-                  type="password"
-                  className="input"
-                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
-                  placeholder={keyIsSet('openai') ? '••••••••••••••••••••• (configured)' : 'sk-proj-... or sk-...'}
-                  value={keysForm.openaiApiKey}
-                  onChange={(e) => setKeysForm({ ...keysForm, openaiApiKey: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="anthropic-api-key-input" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                  Anthropic API Key (Claude 3.5 Sonnet / Opus)
-                </label>
-                <input
-                  id="anthropic-api-key-input"
-                  name="anthropicApiKey"
-                  aria-label="Anthropic API Key (Claude 3.5 Sonnet / Opus)"
-                  type="password"
-                  className="input"
-                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
-                  placeholder={keyIsSet('anthropic') ? '••••••••••••••••••••• (configured)' : 'sk-ant-api03-...'}
-                  value={keysForm.anthropicApiKey}
-                  onChange={(e) => setKeysForm({ ...keysForm, anthropicApiKey: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="gemini-api-key-input" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                  Google Gemini API Key
-                </label>
-                <input
-                  id="gemini-api-key-input"
-                  name="geminiApiKey"
-                  aria-label="Google Gemini API Key"
-                  type="password"
-                  className="input"
-                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
-                  placeholder={keyIsSet('gemini') ? '••••••••••••••••••••• (configured)' : 'AIza...'}
-                  value={keysForm.geminiApiKey}
-                  onChange={(e) => setKeysForm({ ...keysForm, geminiApiKey: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="telegram-token-input" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                  Telegram Bot Token (Inbound Office Ingress)
-                </label>
-                <input
-                  id="telegram-token-input"
-                  name="telegramBotToken"
-                  aria-label="Telegram Bot Token (Inbound Office Ingress)"
-                  type="text"
-                  className="input"
-                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
-                  placeholder="123456789:ABCdefGhIJKlmNoPQRstuVWXyz"
-                  value={keysForm.telegramBotToken}
-                  onChange={(e) => setKeysForm({ ...keysForm, telegramBotToken: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="waha-api-key-input" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                  WAHA WhatsApp API Key (Quarantined Bridge)
-                </label>
-                <input
-                  id="waha-api-key-input"
-                  name="wahaApiKey"
-                  aria-label="WAHA WhatsApp API Key (Quarantined Bridge)"
-                  type="text"
-                  className="input"
-                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
-                  placeholder="waha_secret_key"
-                  value={keysForm.wahaApiKey}
-                  onChange={(e) => setKeysForm({ ...keysForm, wahaApiKey: e.target.value })}
-                />
-              </div>
-
-              {saveStatus && (
-                <div style={{ padding: 10, borderRadius: 6, fontSize: 12, background: saveStatus.startsWith('✓') ? '#ecfdf5' : '#fef2f2', color: saveStatus.startsWith('✓') ? '#047857' : '#b91c1c', border: '1px solid currentColor' }}>
-                  {saveStatus}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-                <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                  To keep a key across restarts: <code>infra/docker/rotate_external_secrets.sh</code>
-                </span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button type="button" className="btn" onClick={() => setActiveModal(null)}>Cancel</button>
-                  <button type="submit" className="btn primary" disabled={savingKeys}>
-                    {savingKeys ? 'Saving...' : '💾 Save & Activate Live'}
-                  </button>
-                </div>
-              </div>
-            </form>
+            <p>Provider credentials are managed on the production host. A verified deployment activates matching settings for the app and design worker and keeps them across restarts.</p>
+            <p>The host operator can update credentials with <code>bash ~/.hawa/current/infra/docker/rotate_external_secrets.sh</code>. The update is verified and recorded without storing keys in the browser.</p>
+            <button className="btn" onClick={() => setActiveModal(null)}>Close</button>
           </div>
         </div>
       )}

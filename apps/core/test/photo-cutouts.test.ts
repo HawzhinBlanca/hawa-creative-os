@@ -109,6 +109,7 @@ describe('the requester is told what became of their photos', () => {
     const cand = (treatments: string[]) => [{ id: 'w', layouts: [{ photos: treatments.map((t, i) => ({ photoIndex: i, treatment: t })) }] }];
     expect(requesterDraftNotes({ run: run([{ photoIndex: 0, passed: true }, { photoIndex: 1, passed: true }], []), candidates: cand(['cutout', 'cutout']) })).toEqual([
       'Your 2 photos are on the design, the people cut out of their backgrounds.',
+      'Image 1 — style reference (not placed as a content photo): paired cutout portraits',
       'Styled after the reference design you sent.',
     ]);
     const mixed = requesterDraftNotes({ run: run([{ photoIndex: 0, passed: true }, { photoIndex: 1, passed: false, reason: 'the top of the head is cut off in the photo' }], []), candidates: cand(['cutout', 'framed']) });

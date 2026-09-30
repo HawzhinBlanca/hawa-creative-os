@@ -1,3 +1,4 @@
+import { DesignReviewFindings } from './DesignReviewFindings.js';
 import { isRenderedStudioCandidate } from '@hawa/domain/feedback';
 import { useDialogFocus } from '../services/useDialogFocus.js';
 import { taskGenerationBlocker } from '@hawa/contracts/task-status';
@@ -363,6 +364,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
       </header>
 
       {startBlocker && <p role="status">{startBlocker}</p>}
+      {run && <DesignReviewFindings findings={run.stages?.qa?.findings} />}
       {run && <StudioJudgeNotice tournament={run.stages?.tournament} />}
       {run&&<StudioRecoveryPanel key={`${taskId}:${run.id}`} taskId={taskId} runId={run.id} status={run.status}/>}
       {!historyLoaded && <button className="btn" disabled={busy} onClick={() => void refresh()}>Refresh Studio history</button>}
@@ -1133,10 +1135,10 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                             fontSize: '1.25rem',
                             fontWeight: 700,
                             marginTop: 4,
-                            color: Math.abs(activeCandidate.metrics.apcaTitle || 0) >= 60 ? 'var(--ok-text, #4ADE80)' : 'var(--warn-text, #FBBF24)',
+                            color: Math.abs(activeCandidate.metrics.apcaTitle ?? NaN) >= 60 ? 'var(--ok-text, #4ADE80)' : 'var(--warn-text, #FBBF24)',
                           }}
                         >
-                          {(activeCandidate.metrics.apcaTitle || 0).toFixed(1)} Lc
+                          {Number.isFinite(activeCandidate.metrics.apcaTitle) ? `${activeCandidate.metrics.apcaTitle!.toFixed(1)} Lc` : 'Not measured'}
                         </div>
                       </div>
 
@@ -1147,10 +1149,10 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
                             fontSize: '1.25rem',
                             fontWeight: 700,
                             marginTop: 4,
-                            color: Math.abs(activeCandidate.metrics.apcaBody || 0) >= 45 ? 'var(--ok-text, #4ADE80)' : 'var(--warn-text, #FBBF24)',
+                            color: Math.abs(activeCandidate.metrics.apcaBody ?? NaN) >= 45 ? 'var(--ok-text, #4ADE80)' : 'var(--warn-text, #FBBF24)',
                           }}
                         >
-                          {(activeCandidate.metrics.apcaBody || 0).toFixed(1)} Lc
+                          {Number.isFinite(activeCandidate.metrics.apcaBody) ? `${activeCandidate.metrics.apcaBody!.toFixed(1)} Lc` : 'Not measured'}
                         </div>
                       </div>
                     </div>

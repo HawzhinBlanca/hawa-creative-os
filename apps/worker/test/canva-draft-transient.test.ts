@@ -13,7 +13,7 @@ afterEach(() => { vi.unstubAllEnvs(); });
  */
 describe('HUNT: a Canva token refresh collision during the draft\'s exports', () => {
   it('retries the export instead of ending the draft as CANVA_PREVIEW_FAILED', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const responses = [
       Response.json({ tenantId: 'tenant', clientId: 'client' }),
       Response.json({ status: 'retrieved', designId: 'DA_hunt' }),

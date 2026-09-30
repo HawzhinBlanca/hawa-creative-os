@@ -42,7 +42,7 @@ describe('nginx.conf and the compose mounts agree on the file store', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-blob-compose-'));
     try {
       fs.writeFileSync(path.join(dir, 'docker-compose.prod.yml'), compose);
-      fs.writeFileSync(path.join(dir, '.env.production'), '');
+      for (const file of ['.env.production', '.env.worker', '.env.service-boundaries']) fs.writeFileSync(path.join(dir, file), '');
       const res = spawnSync('docker', ['compose', '-f', path.join(dir, 'docker-compose.prod.yml'), '--env-file', '/dev/null', '--profile', 'worker', 'config', '-q'], {
         encoding: 'utf8',
         timeout: 60_000,
@@ -97,10 +97,11 @@ describe.skipIf(!haveImage)(`the /_blobs/ location in ${IMAGE}`, () => {
       .replace('server core:3001 resolve;', `server host.docker.internal:${port} resolve;`)
       .replace('server desk:80 resolve;', `server host.docker.internal:${port} resolve;`);
     fs.writeFileSync(path.join(work, 'nginx.conf'), conf, { mode: 0o644 });
+    fs.writeFileSync(path.join(work, 'office-proof.conf'), `proxy_set_header X-Hawa-Office-Proof "${'a'.repeat(64)}";\n`, { mode: 0o644 });
     // Docker's embedded resolver is available on user-defined networks, as in production.
     const madeNetwork = docker(['network','create',network]);
     if (madeNetwork.status !== 0) throw new Error(`test network did not start: ${madeNetwork.stderr}`);
-    const run = docker(['run', '-d', '--rm', '--network',network, '-p', '127.0.0.1::80', '-v', `${path.join(work, 'nginx.conf')}:/etc/nginx/nginx.conf:ro`, '-v', `${blobs}:/srv/hawa-blobs:ro`, IMAGE]);
+    const run = docker(['run', '-d', '--rm', '--network',network, '-p', '127.0.0.1::80', '-v', `${path.join(work, 'nginx.conf')}:/etc/nginx/nginx.conf:ro`, '-v', `${path.join(work, 'office-proof.conf')}:/etc/nginx/hawa-office-proof.conf:ro`, '-v', `${blobs}:/srv/hawa-blobs:ro`, IMAGE]);
     if (run.status !== 0) throw new Error(`nginx did not start: ${run.stderr}`);
     container = run.stdout.trim();
     const mapped = docker(['port', container, '80']).stdout.split('\n')[0].trim();
@@ -121,7 +122,7 @@ describe.skipIf(!haveImage)(`the /_blobs/ location in ${IMAGE}`, () => {
   });
 
   it('passes nginx -t as committed (upstream names resolved to a stub address)', () => {
-    const res = docker(['run', '--rm', '--add-host', 'core:127.0.0.1', '--add-host', 'desk:127.0.0.1', '-v', `${nginxConf}:/etc/nginx/nginx.conf:ro`, IMAGE, 'nginx', '-t']);
+    const res = docker(['run', '--rm', '--add-host', 'core:127.0.0.1', '--add-host', 'desk:127.0.0.1', '-v', `${nginxConf}:/etc/nginx/nginx.conf:ro`, '-v', `${path.join(work, 'office-proof.conf')}:/etc/nginx/hawa-office-proof.conf:ro`, IMAGE, 'nginx', '-t']);
     expect(res.stderr).toMatch(/test is successful/);
     expect(res.status).toBe(0);
   });

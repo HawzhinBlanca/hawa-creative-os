@@ -190,12 +190,15 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
   // Several images: the model sees all of them, numbered in the order they arrived, and says what
   // each is. One image keeps the single-reference wording the late-reference path depends on.
   const parse = (url: string) => url.match(/^data:([^;]+);base64,(.+)$/);
-  const several = (ctx.requestImages || []).map(parse).filter((m): m is RegExpMatchArray => Boolean(m));
-  const attached = several.length > 1 ? null : ctx.attachedImage?.match(/^data:([^;]+);base64,(.+)$/) || several[0] || null;
-  const images = several.length > 1 ? several : attached ? [attached] : [];
+  const received = ctx.requestImages || [];
+  const several = received.map(parse);
+  if (several.some(m => !m) || received.length > 10) throw new Error('Creative brief failed image validation: unreadable or excessive received images');
+  const validImages = several as RegExpMatchArray[];
+  const attached = validImages.length > 1 ? null : ctx.attachedImage?.match(/^data:([^;]+);base64,(.+)$/) || validImages[0] || null;
+  const images = validImages.length > 1 ? validImages : attached ? [attached] : [];
   const imagePrompt =
-    several.length > 1
-      ? `The client sent the ${several.length} images shown, in this order (index 0 first), with the request above. For each, fill imageRoles: which are photographs to place in the design, which is a design to follow, which is a logo. The client's words say what they sent them for. For each content photo also judge, as an art director choosing a hero, how literally it shows the subject (subjectFit), what kind of shot it is (shot) and which side is calm enough to carry a title (quietArea). For a style reference also fill referenceRole 'style_reference' and referenceNotes, and fill styleSpec from it and the client's instructions (the instructions win where they differ): these values are enforced on the design.`
+    validImages.length > 1
+      ? `The client sent the ${validImages.length} images shown, in this order (index 0 first), with the request above. For each, fill imageRoles: which are photographs to place in the design, which is a design to follow, which is a logo. The client's words say what they sent them for. For each content photo also judge, as an art director choosing a hero, how literally it shows the subject (subjectFit), what kind of shot it is (shot) and which side is calm enough to carry a title (quietArea). For a style reference also fill referenceRole 'style_reference' and referenceNotes, and fill styleSpec from it and the client's instructions (the instructions win where they differ): these values are enforced on the design.`
       : attached
         ? `${opts?.lateReference ? SENT_JUST_AFTER_THE_REQUEST : ATTACHED_WITH_THE_REQUEST} Also fill imageRoles with one entry for it (index 0): 'content_photo' if it is a photograph the client wants placed in the design, otherwise the role that matches referenceRole.\n\nFill styleSpec from the reference and the client's instructions (the instructions win where they differ): these values are enforced on the design, so read them off the image precisely.`
         : `Fill styleSpec only from what the client's instructions ask for explicitly (a font, a palette-accent button, where the logo goes); 'as_generated' for everything else. imageRoles is empty: no image was sent.`;
@@ -274,15 +277,21 @@ export function requestedBackgroundFor(brief: Partial<CreativeBrief> | undefined
 }
 
 
-/** One role per image, in order: missing or out-of-range entries become 'unrelated'. */
+/** ADR-171: one genuine report per received image; missing analysis is never invented. */
 export function normalizeImageRoles(
   roles: CreativeBrief['imageRoles'] | undefined,
   count: number
 ): NonNullable<CreativeBrief['imageRoles']> {
   const allowed = new Set(['content_photo', 'style_reference', 'logo', 'unrelated']);
+  const byIndex = new Map<number, NonNullable<CreativeBrief['imageRoles']>[number]>();
+  for (const report of roles ?? []) {
+    if (!report || !Number.isInteger(report.index) || report.index < 0 || report.index >= count || !allowed.has(report.role) || byIndex.has(report.index))
+      throw new Error('Creative brief failed image validation: invalid or duplicate image report');
+    byIndex.set(report.index, report);
+  }
   return Array.from({ length: count }, (_, index) => {
-    const found = (roles || []).find((r) => r && r.index === index && allowed.has(r.role));
-    if (!found) return { index, role: 'unrelated' as const, notes: '' };
+    const found = byIndex.get(index);
+    if (!found) throw new Error(`Creative brief failed image validation: missing report for image ${index + 1}`);
     // ADR-170: the photo review, kept only when it is one the schema allows.
     const fit = Number(found.subjectFit);
     return {

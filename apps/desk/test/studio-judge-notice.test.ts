@@ -38,3 +38,12 @@ it('is wired into the Studio panel from the run stages', async () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/components/StudioPanel.tsx'), 'utf8');
   expect(source).toMatch(/<StudioJudgeNotice tournament=\{run\.stages\?\.tournament\}/);
 });
+
+it('keeps a style fallback visible as a review choice after judge uncertainty', async () => {
+  const view = await mount(React.createElement(StudioJudgeNotice, { tournament: {
+    decidedBy: 'art_direction_prior', humanChoiceRecommended: true } }));
+  expect(view.text()).toContain('Choose the design yourself');
+  expect(view.text()).toContain('style policy');
+  expect(view.text()).toContain('judge');
+  await view.unmount();
+});

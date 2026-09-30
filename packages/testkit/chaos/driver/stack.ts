@@ -108,6 +108,7 @@ export interface ChaosSecrets {
   CHAOS_CANVA_KEY: string;
   /** HAWA_WORKER_TOKEN (Phase 2.1): the worker's credential for Core's /v1/internal/*. */
   CHAOS_WORKER_TOKEN: string;
+  CHAOS_DESIGN_WORKER_TOKEN: string;
   CHAOS_AVAILABILITY_SECRET: string;
 }
 
@@ -131,6 +132,7 @@ export function secrets(): ChaosSecrets {
     CHAOS_CANVA_SECRET: hex(16),
     CHAOS_CANVA_KEY: hex(32),
     CHAOS_WORKER_TOKEN: hex(24),
+    CHAOS_DESIGN_WORKER_TOKEN: hex(32),
     CHAOS_AVAILABILITY_SECRET: hex(32),
   };
   if (existsSync(ENV_FILE)) {

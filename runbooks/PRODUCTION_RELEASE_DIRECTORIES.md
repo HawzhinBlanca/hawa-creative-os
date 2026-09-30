@@ -206,3 +206,50 @@ Recommended, for the owner to decide in Docker Desktop, Settings, Resources:
 3. Do not run the chaos suite, a full test run and a deploy build at the same time on this Mac; better,
    move tests and chaos to another machine, and production to the dedicated host of
    `plans/hosting/PRODUCTION_HOSTING_PLAN.md`, where none of them share its VM.
+
+## 2026-09-30 — Office and provider service boundaries (ADR-163/165)
+
+The production deploy prepares three owner-only shared files before linking the
+candidate release: `.env.service-boundaries`, `.env.worker` and
+`.office-proxy-header.conf`. nginx overwrites `X-Hawa-Office-Proof` in every Core
+proxy location; Core still checks the private office origin and write header.
+A trusted-office Core without the generated proof refuses to start. The proof is
+never supplied to the Desk or worker.
+
+The worker environment has an explicit allowlist. It contains its internal token,
+Telegram/runtime settings and `HAWA_DESIGN_WORKER_TOKEN`; it excludes provider,
+administrator, proxy and ordinary operator key names. The first migration adopts
+the legacy static operator key's value and restricts it to the design principal
+in current Core. This keeps previous-Core rollback able to finish requests on a
+newer worker. Current Core refuses that key for task listing, office sessions,
+approval, delivery, provider changes and other administrator actions. Separate
+named operator sessions still work. Existing identical static operator aliases
+are retired with the same value. Do not independently rotate it: coordinate the
+previous release, active/draining colours and compatibility before changing it.
+
+The shared configuration revision is read back from Core and the activated
+worker. The deployment receipt refuses a mismatch with the canonical provider
+file, as well as mismatched source/image/migration identities. Older receipts
+remain historical observations and are not rewritten as new configuration proof.
+
+Provider credentials have one activation path:
+
+```sh
+bash ~/.hawa/current/infra/docker/rotate_external_secrets.sh
+```
+
+It verifies each supplied credential (including OpenAI), keeps hidden input in a
+unique owner-only temporary directory, requires an operator reason, records a
+value-free pending-deployment audit receipt, atomically replaces the canonical
+shared file and deploys the active sealed release. A failed deployment is a
+failure, not activation. The matching successful deployment receipt identifies
+which configuration revision actually ran. Replaced credentials are revoked in
+their provider console as applicable; changing an application setting does not
+itself revoke an old provider key. Canva OAuth grant recovery retains its existing
+durable encrypted connection flow.
+
+Settings no longer accepts transient process-only key overrides. Its status is
+presence in the actual running Core; it does not assert provider qualification.
+No browser-selected provider endpoint is contacted. Never copy these generated
+files or the canonical credentials into the repository, test fixtures, wiki,
+provider prompts or logs.

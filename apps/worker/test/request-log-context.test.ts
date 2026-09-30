@@ -60,7 +60,7 @@ describe('a Restate handler logs under the request id it was started with', () =
     });
 
   it('from the x-request-id header: on its log lines and on every call it makes to Core', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     capture = captureLogs();
     const core = stuckCore();
     const ctx = invocation({ 'x-request-id': 'req-from-core-1' });
@@ -77,7 +77,7 @@ describe('a Restate handler logs under the request id it was started with', () =
   });
 
   it('from its input when the header is missing, else from the invocation id', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     capture = captureLogs();
     const ctx = invocation({});
     await withInvocationLogContext(ctx, { ...input, requestId: 'req-in-payload' }, () => runCanvaDraft(input, ctx as any, stuckCore() as any));
@@ -125,7 +125,7 @@ describe('an outbox command carries the id of the request that wrote it to Resta
   });
 
   it('a workflow outcome sent to Core again from the outbox carries the id it was written under', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     vi.stubEnv('HAWA_CORE_INTERNAL_URL', 'http://core.test');
     const coreFetcher = vi.fn(async () => new Response('{}', { status: 200 }));
     // The handler is driven directly, inside the context the consumer gives each command.

@@ -48,6 +48,7 @@ describe.skipIf(!dockerReady)('nginx.conf rate limits, served by the production 
     fs.writeFileSync(path.join(dir, 'core.conf'), 'events {}\nhttp { server { listen 3001; location / { default_type text/plain; return 200 "core $request_uri"; } } }\n');
     fs.writeFileSync(path.join(dir, 'desk.conf'), 'events {}\nhttp { server { listen 80; location / { return 200 "desk"; } } }\n');
     fs.copyFileSync(confPath, path.join(dir, 'nginx.conf'));
+    fs.writeFileSync(path.join(dir, 'office-proof.conf'), `proxy_set_header X-Hawa-Office-Proof "${'a'.repeat(64)}";\n`, { mode: 0o644 });
     fs.mkdirSync(path.join(dir, 'blobs'));
     for (const f of ['core.conf', 'desk.conf', 'nginx.conf']) fs.chmodSync(path.join(dir, f), 0o644);
     const must = (args: string[]) => {
@@ -59,7 +60,7 @@ describe.skipIf(!dockerReady)('nginx.conf rate limits, served by the production 
     must(['run', '-d', '--pull=never', '--name', `${tag}-core`, '--network', tag, '--network-alias', 'core', '-v', `${dir}/core.conf:/etc/nginx/nginx.conf:ro`, IMAGE]);
     must(['run', '-d', '--pull=never', '--name', `${tag}-desk`, '--network', tag, '--network-alias', 'desk', '-v', `${dir}/desk.conf:/etc/nginx/nginx.conf:ro`, IMAGE]);
     must(['run', '-d', '--pull=never', '--name', `${tag}-edge`, '--network', tag, '-p', '127.0.0.1::80',
-      '-v', `${dir}/nginx.conf:/etc/nginx/nginx.conf:ro`, '-v', `${dir}/blobs:/srv/hawa-blobs:ro`, IMAGE]);
+      '-v', `${dir}/nginx.conf:/etc/nginx/nginx.conf:ro`, '-v', `${dir}/office-proof.conf:/etc/nginx/hawa-office-proof.conf:ro`, '-v', `${dir}/blobs:/srv/hawa-blobs:ro`, IMAGE]);
     base = `http://127.0.0.1:${must(['port', `${tag}-edge`, '80/tcp']).split('\n')[0].split(':').pop()}`;
   }, 120_000);
 
@@ -79,7 +80,7 @@ describe.skipIf(!dockerReady)('nginx.conf rate limits, served by the production 
   const tally = (s: number[]) => s.reduce<Record<number, number>>((acc, v) => ({ ...acc, [v]: (acc[v] ?? 0) + 1 }), {});
 
   it('passes nginx -t in the production image', () => {
-    const r = docker(['run', '--rm', '--pull=never', '-v', `${dir}/nginx.conf:/etc/nginx/nginx.conf:ro`, IMAGE, 'nginx', '-t']);
+    const r = docker(['run', '--rm', '--pull=never', '-v', `${dir}/nginx.conf:/etc/nginx/nginx.conf:ro`, '-v', `${dir}/office-proof.conf:/etc/nginx/hawa-office-proof.conf:ro`, IMAGE, 'nginx', '-t']);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stderr).toContain('test is successful');
   }, 60_000);

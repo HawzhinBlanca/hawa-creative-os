@@ -177,7 +177,7 @@ function fakeProvider(calls: Array<{ schema: string; reservation?: number }>) {
     calls.push({ schema });
     const text = JSON.stringify(body.messages);
     const copyCount = (text.match(/\[Index \d+ - /g) || []).length || (text.match(/- Block \d+ \[role/g) || []).length;
-    const imageCount = (text.match(/image_url/g) || []).length;
+    const imageCount = body.messages.flatMap((m: any) => Array.isArray(m.content) ? m.content : []).filter((part: any) => part.type === 'image_url').length;
     if (schema === 'CreativeBrief') {
       // $0.15323 at production prices, the brief the owner's run paid for.
       return reply(body, {
@@ -246,15 +246,13 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
       expect(Number(layout.reserved)).toBeLessThan(1.7);
       expect(Number(final.budget.spentUsd)).toBeLessThan(2);
 
-      // ADR-170: the owner let the design choose ("you don't have to use all the photos"), and the
-      // design is art-directed: one hero (and at most a blended texture), the rest left out and
-      // recorded for the office, not six equal tiles.
+      // ADR-171: the recorded requester minimum binds the art director and the solver.
+      // The supporting sequence supplements a dominant hero; omissions remain recorded.
       const winner = (await sql<any>`SELECT layouts FROM hawa.design_studio_candidates WHERE run_id = ${run.id}::uuid AND status = 'winner'`.execute(owner)).rows[0];
       const layouts = typeof winner.layouts === 'string' ? JSON.parse(winner.layouts) : winner.layouts;
       const shipped = layouts.at(-1);
-      expect(shipped.artDirection?.recipe).toMatch(/^(hero_fade_report|scrim_caption|hero_card)$/);
-      expect(shipped.photos.length).toBeGreaterThanOrEqual(1);
-      expect(shipped.photos.length).toBeLessThanOrEqual(2);
+      expect(shipped.artDirection?.recipe).toBe('hero_storyboard');
+      expect(shipped.photos.length).toBe(final.stages.brief.photoSelection.minimum);
       expect([...shipped.photos.map((p: any) => p.photoIndex), ...final.stages.qa.omittedPhotos].sort()).toEqual([0, 1, 2, 3, 4, 5]);
       expect((canva as any).importEditableDesign).toHaveBeenCalledTimes(1);
     } finally {
@@ -317,7 +315,7 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
       const layouts = typeof winner.layouts === 'string' ? JSON.parse(winner.layouts) : winner.layouts;
       // ADR-170: art-directed, as in the first run of this file: a hero, at most a texture, the rest left out.
       expect(layouts.at(-1).artDirection?.recipe).toBeTruthy();
-      expect(layouts.at(-1).photos.length).toBeLessThanOrEqual(2);
+      expect(layouts.at(-1).photos.length).toBe(3);
     } finally {
       for (const [k, v] of [['HAWA_MODEL_TIER', env.tier], ['DESIGN_PIPELINE_V3', env.v3]] as const) {
         if (v === undefined) delete process.env[k]; else process.env[k] = v;

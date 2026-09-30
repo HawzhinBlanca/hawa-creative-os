@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T14:25:20Z",
+  "generatedAt": "2026-09-30T16:08:51Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 646,
+  "fileCount": 654,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "cb098f9db26f66ef438535e05dae79912be7d15dfe455cd8d3d504afc5c1f2ab",
-      "bytes": 3968
+      "sha256": "172e66954c5cbb94e1ed0dace7531448983e8770293f3b90d9b4ced72c782c76",
+      "bytes": 3987
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -853,9 +853,29 @@
       "bytes": 3369
     },
     {
+      "path": "adrs/163_office_proxy_and_design_worker_boundaries.md",
+      "sha256": "fbe6009463ec36a159eab4754902fd700eede1345d0228f0f051210c5b122db7",
+      "bytes": 4165
+    },
+    {
+      "path": "adrs/164_verified_office_call_cost_evidence.md",
+      "sha256": "73fbd4d1f2505f65163a19b67aea7a46c5ccb7f11f56ff696986ac8b2de3ec76",
+      "bytes": 1548
+    },
+    {
+      "path": "adrs/165_one_deploy_time_provider_configuration.md",
+      "sha256": "9c75c57483e3a2af982ceafac606a8faec4e3d250ab9e800a3664d1922f4ee28",
+      "bytes": 2102
+    },
+    {
       "path": "adrs/170_art_directed_photo_compositions.md",
       "sha256": "a4381c1b272e2bdd57d631fc7507449931478aa34b22c24e9d8209b90171ebc7",
       "bytes": 12644
+    },
+    {
+      "path": "adrs/171_photo_coverage_and_individual_image_evidence.md",
+      "sha256": "3159039e2737c221e3820a4ea8f40a35b8f079395a14f22de359e48260833f5a",
+      "bytes": 3915
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1958,6 +1978,16 @@
       "bytes": 2120
     },
     {
+      "path": "plans/reliability-2026-09-30/LOCAL_PROOF.json",
+      "sha256": "620db236add13a770f1f3667dc4049985b578fd84e117ab4efa664c6ae9b5f67",
+      "bytes": 11267
+    },
+    {
+      "path": "plans/reliability-2026-09-30/PLAN.md",
+      "sha256": "dfee28c60d0888efcec02090c50fe579598460283e3cb203c5c97545dfb90bbf",
+      "bytes": 3384
+    },
+    {
       "path": "plans/requirements.csv",
       "sha256": "919555f9e0b586c227a6537387c08a25108e912b2cee566ac3744a8028e1077a",
       "bytes": 15546
@@ -2384,8 +2414,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "fda15e18f0ebef51d42e3e9d5b2879dfdb750eabeb605684b6efa7e798634695",
-      "bytes": 541754
+      "sha256": "52734cf4c6df2b793d2abeb4221374de0f05df12ec6517ccb1eb074ab5d880c2",
+      "bytes": 547150
     },
     {
       "path": "plans/user-stories.csv",
@@ -2549,8 +2579,8 @@
     },
     {
       "path": "runbooks/PRODUCTION_RELEASE_DIRECTORIES.md",
-      "sha256": "b53f5825fe90e0b9084d45b70bed4434900f57aa3e49d271d8e03a4a7c1675ed",
-      "bytes": 13860
+      "sha256": "77a053bbabc28a8bb9e726d6f8e1b7a3240e5f3493ba04ef351bdb2be2b07eb9",
+      "bytes": 16602
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
@@ -2669,8 +2699,8 @@
     },
     {
       "path": "scripts/check_office_access.ts",
-      "sha256": "0ab7ae734bc2819558112d6518a5acf96a9bb0ec7023abf282245b5c25e6a12a",
-      "bytes": 541
+      "sha256": "63367586bd021162c7a101114d3177b4fa8017528237a4f7e4f82f3efc4a9583",
+      "bytes": 1238
     },
     {
       "path": "scripts/ci/install_render_deps.sh",
@@ -3009,8 +3039,8 @@
     },
     {
       "path": "scripts/record_deployment_receipt.ts",
-      "sha256": "bc3357d689295c15ee057d58f8f1ae49e985662a642e62b7208d3ede4658a17e",
-      "bytes": 7276
+      "sha256": "a6e7c5ead25fc9ffe5ab3ba99cac5e3ef5faab38da4cec4547b705ddc7e07569",
+      "bytes": 8401
     },
     {
       "path": "scripts/recover_stranded_canva_jobs.ts",
@@ -3148,6 +3178,16 @@
       "bytes": 1910
     },
     {
+      "path": "scripts/test/provider-credential-update.test.ts",
+      "sha256": "823ed17a4d585b3d904ead83d7a7fdb6502b535de925caaa1419e3b34e8c48a0",
+      "bytes": 2451
+    },
+    {
+      "path": "scripts/test/service-boundaries.test.ts",
+      "sha256": "2f4261ddbcfadd859065b05d3eb44ad13fb6a9a2ffd7aae8abbf25fff22890d7",
+      "bytes": 4998
+    },
+    {
       "path": "scripts/test/suite-stability-report.test.ts",
       "sha256": "c52d7960de716471800c0d97f2148ff6ea21c603e086e7d87a4e2ab6c9faa71b",
       "bytes": 6344
@@ -3199,8 +3239,8 @@
     },
     {
       "path": "scripts/validate_pack.py",
-      "sha256": "a45cd06e0bd0f370f10d4bfed36787fb44f91fa507d5bd06868a4b42284eb513",
-      "bytes": 25378
+      "sha256": "4267c1324816b2d6febebd83324bbb21534d779be23d41183340893691748fd8",
+      "bytes": 25723
     },
     {
       "path": "scripts/verify_live_h01_h03.ts",

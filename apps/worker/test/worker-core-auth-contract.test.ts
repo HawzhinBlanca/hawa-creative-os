@@ -9,7 +9,7 @@ import { runOwnedDesign, type DesignRunInput } from '../src/lifecycle/design-run
 /**
  * T1 (2026-09-30 audit #21, ADR-155): the worker's real DesignRun against Core's real createApp, with
  * no testAuth, in both office access modes. Every other worker test answered with a fake fetch, which
- * is how ADR-146 reached production: in trusted_office mode Core ignored the worker's HAWA_BEARER_TOKEN
+ * is how ADR-146 reached production: in trusted_office mode Core ignored the worker's HAWA_DESIGN_WORKER_TOKEN
  * (the call comes from core:3001 inside the Docker network, not from the office origin) and answered
  * 401 to every design's first step. The run must get past `canva-verify-task-scope` with Core's own
  * answer. The calls after it are stopped here: they plan with paid models and import into Canva.
@@ -24,12 +24,12 @@ const OFFICE_ORIGIN = 'http://127.0.0.1:8080';
 
 describe.each([
   ['required', {}],
-  ['trusted_office', { HAWA_TRUSTED_OFFICE_ORIGIN: OFFICE_ORIGIN }],
+  ['trusted_office', { HAWA_TRUSTED_OFFICE_ORIGIN: OFFICE_ORIGIN, HAWA_OFFICE_PROXY_PROOF: 'a'.repeat(64) }],
 ] as const)('worker → Core with real auth (HAWA_DESK_AUTH_MODE=%s)', (mode, extra) => {
   it('passes canva-verify-task-scope with the worker credential, from inside the network', async () => {
     vi.stubEnv('HAWA_DESK_AUTH_MODE', mode);
     for (const [key, value] of Object.entries(extra)) vi.stubEnv(key, value);
-    vi.stubEnv('HAWA_BEARER_TOKEN', ['contract', 'service', 'bearer'].join('_'));
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', ['contract', 'service', 'bearer'].join('_'));
     vi.stubEnv('HAWA_WORKER_TOKEN', ['contract', 'worker', 'internal'].join('_'));
     vi.stubEnv('HAWA_CORE_INTERNAL_URL', 'http://core:3001');
     const chat = String(63_000_000 + Math.floor(Math.random() * 8_000_000));

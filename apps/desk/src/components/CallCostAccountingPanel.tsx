@@ -53,7 +53,7 @@ export function CallCostAccountingPanel() {
         {detail.attestations.length>0&&<details><summary>Accounting history ({detail.attestations.length})</summary>
           {detail.attestations.map(a=><article key={a.id}><h4>Revision {a.revision} · {usd(a.reportedCostUsd)}</h4>
             <p>{a.conclusion==='provider_finished'?'Provider finished':'Provider did not accept'} · {a.evidenceReference}</p>
-            <p>{a.reason}</p><p>Attested by {a.actorUserId} at {new Date(a.recordedAt).toLocaleString()}</p>
+            <p>{a.reason}</p><p>Attested by {a.actorLabel || a.actorUserId} at {new Date(a.recordedAt).toLocaleString()}</p>
             <p style={{overflowWrap:'anywhere'}}>Evidence SHA-256: {a.evidenceSha256}</p></article>)}
         </details>}
         {detail.kind==='canva_planner'&&<p role="note">Terminal cost evidence preserves the original call. Resume the saved plan to recover a retained layout without another model call. If no layout was saved, retire the plan before explicitly requesting a new one.</p>}

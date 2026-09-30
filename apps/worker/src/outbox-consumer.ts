@@ -446,8 +446,8 @@ export class OutboxConsumer {
         // an outcome sent twice (a consumer stopped before recording the first) is recorded once.
         const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
         const taskId = String(payload?.taskId || cmd.aggregate_id);
-        const token = process.env.HAWA_BEARER_TOKEN;
-        if (!token) throw new Error('CORE_NOT_CONFIGURED: HAWA_BEARER_TOKEN is not set, so the outcome was not sent to Core');
+        const token = process.env.HAWA_DESIGN_WORKER_TOKEN;
+        if (!token) throw new Error('CORE_NOT_CONFIGURED: HAWA_DESIGN_WORKER_TOKEN is not set, so the outcome was not sent to Core');
         const base = process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001';
         const res = await (this.options.coreFetcher || fetch)(`${base}/v1/tasks/${encodeURIComponent(taskId)}/notifications/canva-status`, {
           method: 'POST',

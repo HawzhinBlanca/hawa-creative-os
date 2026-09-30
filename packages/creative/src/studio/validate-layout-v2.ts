@@ -340,18 +340,12 @@ export function validateLayoutV2(
   // In `choose` mode (ADR-157) the requester said the design need not use them all: a distinct
   // subset of at least the minimum is the request done. Every other rule below applies unchanged.
   //
-  // ADR-170: an art-directed recipe uses one hero and at most a texture and drops the rest, as the
-  // office's designers do (rulebook items 1 and 10). That choice counts as choosing unless the
-  // requester insisted on every photo; then the recipe must place them all or be refused.
+  // ADR-171: a recipe cannot authorize omission; only the recorded requester selection can.
   const photoCount = context.photoCount ?? 0;
   const photos = layout.photos ?? [];
   const recipe = photoRecipeOf(layout);
-  const recipeChooses = Boolean(recipe) && context.photoSelection?.insisted !== true && photoCount > 0;
-  const choosing = (context.photoSelection?.mode === 'choose' || recipeChooses) && photoCount > 0;
-  // A stated count ("pick 3") binds a recipe too; the half-the-photos guess made when none is stated
-  // does not, since a recipe's choice of one hero and a texture is the choice the requester allowed.
-  const statedMinimum = context.photoSelection?.mode === 'choose' && (!recipe || context.photoSelection.counted) ? context.photoSelection.minimum : 1;
-  const fewest = choosing ? Math.max(1, Math.min(photoCount, statedMinimum)) : photoCount;
+  const choosing = context.photoSelection?.mode === 'choose' && photoCount > 0;
+  const fewest = choosing ? Math.max(1, Math.min(photoCount, context.photoSelection!.minimum)) : photoCount;
   if (choosing ? photos.length < fewest || photos.length > photoCount : photos.length !== photoCount) {
     return {
       ok: false,

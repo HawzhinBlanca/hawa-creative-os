@@ -111,7 +111,7 @@ afterEach(() => {
 
 describe('design studio advance loop', () => {
   it('never waits between stages that advanced, the 45 000 ms HEAD spent on every design', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = coreWithStudioStatuses({
       runId: 'run-fast',
       startStatus: 'briefing',
@@ -132,7 +132,7 @@ describe('design studio advance loop', () => {
   });
 
   it('stops at the first poll that says the run was abandoned and reports it once', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = coreWithStudioStatuses({
       runId: 'run-gone',
       startStatus: 'briefing',
@@ -153,7 +153,7 @@ describe('design studio advance loop', () => {
   });
 
   it('ends a run that stopped moving with a terminal status naming the stage it died in', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = coreWithStudioStatuses({
       runId: 'run-stuck',
       startStatus: 'qa',
@@ -177,7 +177,7 @@ describe('design studio advance loop', () => {
   });
 
   it('gives up on a run that idles in bursts once the accumulated wait budget is spent', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     // Runs of eight and nine identical statuses never reach the ten-poll limit, so only the
     // 60 000 ms wait budget can stop this run.
     const statuses = [...Array(8).fill('qa'), ...Array(9).fill('judging'), ...Array(30).fill('qa')];
@@ -195,7 +195,7 @@ describe('design studio advance loop', () => {
   });
 
   it('replays the same journalled steps and the same timers for the same inputs', async () => {
-    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
     const remote = coreWithStudioStatuses({
       runId: 'run-replay',
       startStatus: 'qa',

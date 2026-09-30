@@ -144,6 +144,17 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   beforeAll(async()=>{await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${scope.actorId}::uuid,'isolated-operator@example.test','Test') ON CONFLICT DO NOTHING`.execute(db);
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${clientId}::uuid,${scope.tenantId}::uuid,'kaae','KAAE') ON CONFLICT DO NOTHING`.execute(db);});
   afterAll(()=>db.destroy());
+  it('exposes worker-created review findings to the office administrator, without exposing another tenant',async()=>{
+    const taskId=await intake(),id=randomUUID(),findings=[{code:'COPY_DANGLING_END',severity:'warning',copyIndex:1,message:'Ends on toward.'}];
+    await sql`INSERT INTO hawa.canva_design_plans(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,status,result,paid_protocol)
+      VALUES(${id}::uuid,${scope.tenantId}::uuid,${taskId}::uuid,${clientId}::uuid,${scope.actorId},${id},${'a'.repeat(64)},'{}','failed',
+        ${JSON.stringify({manifest:{reviewFindings:findings}})}::jsonb,'canva-planner-v1')`.execute(db);
+    const {planner}=make(vi.fn());
+    const office={tenantId:scope.tenantId,actorId:'00000000-0000-4000-b000-000000000002',role:'administrator'};
+    expect(await planner.state(office,taskId)).toEqual([expect.objectContaining({id,review_findings:findings})]);
+    expect(await planner.state({...office,role:'operator'},taskId)).toEqual([]);
+    expect(await planner.state({...office,tenantId:randomUUID()},taskId)).toEqual([]);
+  });
   it('uses the office Sol default with native image counts, low reasoning and durable editable-source recovery',async()=>{
     delete process.env.HAWA_MODEL_TEXT;
     try{

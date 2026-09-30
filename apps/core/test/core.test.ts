@@ -903,50 +903,16 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(pubData.sheetRowUrl).toContain('https://docs.google.com/spreadsheets/d/');
   });
 
-  it('never writes provider credentials to a configuration file', async () => {
-    const fs = await import('node:fs');
-    const path = await import('node:path');
-    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
-    const candidates = ['infra/docker/.env.production', '.env.production', '.env.local', '../../infra/docker/.env.production'].map((p) => path.resolve(process.cwd(), p));
-    // Hashes, not contents: a failure here must not print a real configuration file into the test log.
-    const { createHash } = await import('node:crypto');
-    const digest = (p: string) => (fs.existsSync(p) ? createHash('sha256').update(fs.readFileSync(p)).digest('hex') : null);
-    const before = candidates.map(digest);
-    const res = await app.request('/v1/system/providers', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ anthropicApiKey: 'mock-never-written-key-1234567890', wahaEndpoint: 'http://127.0.0.1:3000' }),
-    });
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.persisted).toBe(false);
-    expect(data.activated).toEqual(['ANTHROPIC_API_KEY', 'WAHA_ENDPOINT']);
-    const after = candidates.map(digest);
-    expect(after).toEqual(before);
-  });
-
-  it('rejects a key the provider refuses and changes nothing', async () => {
-    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
-    const savedVitest = process.env.VITEST;
-    const savedKey = process.env.ANTHROPIC_API_KEY;
-    const realFetch = globalThis.fetch;
-    delete process.env.VITEST; // leave the fixture path so the live verifier runs, against a stubbed provider
-    globalThis.fetch = (async () => new Response('{"error":"invalid"}', { status: 401 })) as any;
+  it('requires deployment and neither verifies browser secrets nor changes process or configuration', async () => {
+    const realFetch=globalThis.fetch, calls: unknown[]=[];
+    globalThis.fetch=(async (...args: unknown[])=>{calls.push(args);throw new Error('Must not contact caller endpoint');}) as typeof fetch;
+    const saved=process.env.OPENAI_API_KEY;
     try {
-      const res = await app.request('/v1/system/providers', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ anthropicApiKey: 'rejected-key-0000000000000000' }),
-      });
-      expect(res.status).toBe(422);
-      const body = await res.json();
-      expect(body.title).toBe('PROVIDER_KEY_REJECTED');
-      expect(body.detail).not.toContain('rejected-key-0000000000000000');
-      expect(process.env.ANTHROPIC_API_KEY).toBe(savedKey);
-    } finally {
-      globalThis.fetch = realFetch;
-      process.env.VITEST = savedVitest;
-    }
+      const res=await app.request('/v1/system/providers',{method:'POST',headers:{Authorization:'Bearer test_admin_key','Content-Type':'application/json'},
+        body:JSON.stringify({openaiApiKey:'mock-never-written-key',wahaEndpoint:'http://169.254.169.254/latest/meta-data/'})});
+      expect(res.status).toBe(409);expect(await res.json()).toMatchObject({title:'PROVIDER_DEPLOYMENT_REQUIRED'});
+      expect(calls).toEqual([]);expect(process.env.OPENAI_API_KEY).toBe(saved);
+    }finally{globalThis.fetch=realFetch;}
   });
 
   it('manages system provider credentials via /v1/system/providers', async () => {
@@ -982,31 +948,11 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(geminiData.providers.gemini).toMatchObject({ configured: true, preview: 'mock...4455', status: 'KEY_SET' });
     delete process.env.GEMINI_API_KEY;
 
-    // 2. Update credentials
-    const postRes = await app.request('/v1/system/providers', {
-      method: 'POST',
-      headers: adminHeaders,
-      body: JSON.stringify({
-        openaiApiKey: 'mock-test-openai-key-1234567890',
-        anthropicApiKey: 'mock-test-anthropic-key-0987654321',
-      }),
-    });
-    expect(postRes.status).toBe(200);
-    const postData = await postRes.json();
-    expect(postData.ok).toBe(true);
-
-    // 3. Verify in-memory activation
-    expect(process.env.OPENAI_API_KEY).toBe('mock-test-openai-key-1234567890');
-    expect(process.env.ANTHROPIC_API_KEY).toBe('mock-test-anthropic-key-0987654321');
-
-    const verifyRes = await app.request('/v1/system/providers', {
-      headers: adminHeaders,
-    });
-    const verifyData = await verifyRes.json();
-    expect(verifyData.providers.openai.configured).toBe(true);
-    expect(verifyData.providers.openai.preview).toContain('mock...7890');
-    expect(verifyData.providers.anthropic.configured).toBe(true);
-    expect(verifyData.providers.anthropic.preview).toContain('mock...4321');
+    // Browser changes cannot diverge Core from the worker or disappear on restart.
+    const res=await app.request('/v1/system/providers',{method:'POST',headers:adminHeaders,
+      body:JSON.stringify({openaiApiKey:'mock-test-openai-key',anthropicApiKey:'mock-test-anthropic-key'})});
+    expect(res.status).toBe(409);
+    expect(process.env.OPENAI_API_KEY).toBeUndefined();expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
 
     // Restore the environment the test found
     for (const [envVar, value] of Object.entries(savedKeys)) {

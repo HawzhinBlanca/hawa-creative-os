@@ -46,7 +46,7 @@ describe('art-director prompt and concepts (ADR-170)', () => {
     expect(system).toMatch(/You never write coordinates/);
     expect(createHash('sha256').update(system).digest('hex')).toMatch(/^[0-9a-f]{64}$/);
     const user = buildArtDirectorUserPrompt({
-      brief: 'report release', copyBlocks: COPY, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: PHOTOS,
+      brief: 'report release', copyBlocks: COPY, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: PHOTOS, photoSelection: { mode: 'choose', minimum: 1 },
       houseRules: ['Pick ONE hero photo.', 'Text always sits on something.'], exemplars: [{ label: 'photo01_k12_field_visit_report_en.jpg [recipe hero_fade_report]: the office\'s own report post' }],
     });
     expect(user).toContain('R1. Pick ONE hero photo.');
@@ -70,7 +70,7 @@ describe('art-director prompt and concepts (ADR-170)', () => {
   });
 
   it('makes three concepts diverge: at least two recipes even when the model repeats one', () => {
-    const same = normalizeConcepts([concept({}), concept({ heroPhotoIndex: 1 }), concept({ heroPhotoIndex: 5 })], PHOTOS, COPY);
+    const same = normalizeConcepts([concept({}), concept({ heroPhotoIndex: 1 }), concept({ heroPhotoIndex: 5 })], PHOTOS, COPY, { mode: 'choose', minimum: 1 });
     expect(same).toHaveLength(3);
     expect(new Set(same.map((c) => c.recipe)).size).toBeGreaterThanOrEqual(2);
   });
@@ -80,12 +80,12 @@ describe('art-director prompt and concepts (ADR-170)', () => {
       concept({ recipe: 'cutout_speaker' }),
       concept({ recipe: 'scrim_caption', heroPhotoIndex: 42, texturePhotoIndex: 4 }),
       concept({ recipe: 'hero_card', texturePhotoIndex: 0 }),
-    ], PHOTOS, COPY);
+    ], PHOTOS, COPY, { mode: 'choose', minimum: 1 });
     expect(a.recipe).toBe('hero_fade_report');
     expect(b).toMatchObject({ recipe: 'scrim_caption', heroPhotoIndex: 0, texturePhotoIndex: null });
     expect(c).toMatchObject({ recipe: 'hero_card', texturePhotoIndex: null });
     // Too few concepts are filled from the house's defaults for the photos.
-    expect(normalizeConcepts([concept({})], PHOTOS, COPY)).toHaveLength(3);
+    expect(normalizeConcepts([concept({})], PHOTOS, COPY, { mode: 'choose', minimum: 1 })).toHaveLength(3);
   });
 
   it('sends the photos at high detail, the exemplars at low, and solves every concept into a layout', async () => {
@@ -102,7 +102,7 @@ describe('art-director prompt and concepts (ADR-170)', () => {
     };
     const png = 'data:image/png;base64,iVBORw0KGgo=';
     const result = await generateArtDirectedCandidatesV3({
-      client: client as never, brief: 'report', copyBlocks: COPY, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: PHOTOS, logoAspect: 1,
+      client: client as never, brief: 'report', copyBlocks: COPY, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: PHOTOS, photoSelection: { mode: 'choose', minimum: 1 }, logoAspect: 1,
       visualInputs: [
         { kind: 'approved_example', label: 'ex', sourceSha256: 'a', dataUrl: png },
         { kind: 'content_photo', label: 'Photo 0', sourceSha256: 'b', dataUrl: png },

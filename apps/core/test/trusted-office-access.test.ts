@@ -6,22 +6,29 @@ import { officeAccessPolicy, validateOfficeBind } from '../src/services/office-a
 const db = createDb(process.env.TEST_DATABASE_URL!);
 afterAll(() => db.destroy());
 const origin = 'http://127.0.0.1:8080';
+const proxyProof = 'a'.repeat(64);
+function proxiedRequest(app: ReturnType<typeof createApp>, url: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set('X-Hawa-Office-Proof', proxyProof);
+  return app.request(url, { ...init, headers });
+}
 beforeEach(() => {
   vi.stubEnv('HAWA_DESK_AUTH_MODE', 'trusted_office');
   vi.stubEnv('HAWA_TRUSTED_OFFICE_ORIGIN', origin);
+  vi.stubEnv('HAWA_OFFICE_PROXY_PROOF', proxyProof);
 });
 afterEach(() => vi.unstubAllEnvs());
 
 it('opens the office session and directory without a user credential', async () => {
   const app = createApp({ db });
-  const session = await app.request(origin + '/v1/auth/session');
+  const session = await proxiedRequest(app, origin + '/v1/auth/session');
   expect(session.status).toBe(200);
   expect((await session.json()).user).toMatchObject({ displayName:'Office team',role:'administrator',authMethod:'trusted_office' });
-  expect((await app.request(origin + '/v1/clients')).status).toBe(200);
-  expect((await (await app.request(origin + '/v1/auth/providers')).json()).trustedOffice).toBe(true);
-  expect((await app.request(origin + '/v1/system/providers')).status).toBe(200);
+  expect((await proxiedRequest(app, origin + '/v1/clients')).status).toBe(200);
+  expect((await (await proxiedRequest(app, origin + '/v1/auth/providers')).json()).trustedOffice).toBe(true);
+  expect((await proxiedRequest(app, origin + '/v1/system/providers')).status).toBe(200);
   // Administrator authorization succeeds without a key; an empty selection changes no outbox row.
-  expect((await app.request(origin + '/v1/system/outbox/requeue', {
+  expect((await proxiedRequest(app, origin + '/v1/system/outbox/requeue', {
     method:'POST', headers:{'Content-Type':'application/json','X-Hawa-Office-Request':'1'}, body:'{}',
   })).status).toBe(422);
 });
@@ -30,9 +37,9 @@ it('creates exactly one explicitly scoped request on an unchanged retry', async 
   const app = createApp({ db });
   const input = { method:'POST', headers:{'Content-Type':'application/json','X-Hawa-Office-Request':'1','Idempotency-Key':'trusted-office-retry'},
     body:JSON.stringify({ title:'Office without a login',clientId:'c1000000-0000-4000-8000-000000000001',copyEn:'Exact office copy' }) };
-  const first = await app.request(origin + '/v1/tasks', input);
+  const first = await proxiedRequest(app, origin + '/v1/tasks', input);
   expect(first.status).toBe(201);
-  const second = await app.request(origin + '/v1/tasks', input);
+  const second = await proxiedRequest(app, origin + '/v1/tasks', input);
   expect(second.status).toBeLessThan(300);
   expect((await second.json()).id).toBe((await first.json()).id);
 });
@@ -41,17 +48,17 @@ it('refuses another host, cross-site reads, and writes without the office reques
   const app = createApp({ db });
   const foreignHeaders: Record<string,string>[] = [{Origin:'https://outside.example'},{'Sec-Fetch-Site':'cross-site'}];
   for (const headers of foreignHeaders) {
-    expect((await app.request(origin + '/v1/tasks',{headers})).status).toBe(401);
+    expect((await proxiedRequest(app, origin + '/v1/tasks',{headers})).status).toBe(401);
   }
-  expect((await app.request('http://outside.example/v1/tasks')).status).toBe(401);
-  expect((await app.request(origin + '/v1/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status).toBe(401);
+  expect((await proxiedRequest(app, 'http://outside.example/v1/tasks')).status).toBe(401);
+  expect((await proxiedRequest(app, origin + '/v1/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status).toBe(401);
 });
 
 it('keeps worker routes credentialed and keeps worker credentials out of office access', async () => {
   vi.stubEnv('HAWA_WORKER_TOKEN','test_office_worker_credential');
   const app = createApp({ db });
-  expect((await app.request(origin+'/v1/internal/telegram/intake',{method:'POST',headers:{'Content-Type':'application/json','X-Hawa-Office-Request':'1'},body:'{}'})).status).toBe(401);
-  expect((await app.request(origin+'/v1/tasks',{headers:{Authorization:'Bearer test_office_worker_credential'}})).status).toBe(401);
+  expect((await proxiedRequest(app, origin+'/v1/internal/telegram/intake',{method:'POST',headers:{'Content-Type':'application/json','X-Hawa-Office-Request':'1'},body:'{}'})).status).toBe(401);
+  expect((await proxiedRequest(app, origin+'/v1/tasks',{headers:{Authorization:'Bearer test_office_worker_credential'}})).status).toBe(401);
 });
 
 it('still verifies a presented service key from inside the network, and refuses a wrong one', async () => {
@@ -59,14 +66,14 @@ it('still verifies a presented service key from inside the network, and refuses 
   vi.stubEnv('HAWA_BEARER_TOKEN', serviceKey);
   const app = createApp({ db });
   // The worker's Canva and Studio calls come from the Docker network (host core:3001), not the office.
-  expect((await app.request('http://core:3001/v1/tasks',{headers:{Authorization:`Bearer ${serviceKey}`}})).status).toBe(200);
-  expect((await app.request('http://core:3001/v1/tasks',{headers:{Authorization:'Bearer not_a_configured_key'}})).status).toBe(401);
-  expect((await app.request('http://core:3001/v1/tasks')).status).toBe(401);
+  expect((await proxiedRequest(app, 'http://core:3001/v1/tasks',{headers:{Authorization:`Bearer ${serviceKey}`}})).status).toBe(200);
+  expect((await proxiedRequest(app, 'http://core:3001/v1/tasks',{headers:{Authorization:'Bearer not_a_configured_key'}})).status).toBe(401);
+  expect((await proxiedRequest(app, 'http://core:3001/v1/tasks')).status).toBe(401);
 });
 
 it('issues a stream ticket without placing a secret in the Desk', async () => {
   const app = createApp({ db });
-  const result = await app.request(origin+'/v1/auth/stream-ticket',{method:'POST',headers:{'X-Hawa-Office-Request':'1'}});
+  const result = await proxiedRequest(app, origin+'/v1/auth/stream-ticket',{method:'POST',headers:{'X-Hawa-Office-Request':'1'}});
   expect(result.status).toBe(201);
   expect(await result.json()).toMatchObject({ticket:expect.any(String),expiresInSeconds:expect.any(Number)});
 });
@@ -74,8 +81,8 @@ it('issues a stream ticket without placing a secret in the Desk', async () => {
 it('restores required authentication when the mode is switched back', async () => {
   vi.stubEnv('HAWA_DESK_AUTH_MODE','required');
   const app = createApp({ db });
-  expect((await app.request(origin+'/v1/tasks')).status).toBe(401);
-  expect((await (await app.request(origin+'/v1/auth/providers')).json()).trustedOffice).toBe(false);
+  expect((await proxiedRequest(app, origin+'/v1/tasks')).status).toBe(401);
+  expect((await (await proxiedRequest(app, origin+'/v1/auth/providers')).json()).trustedOffice).toBe(false);
 });
 
 it('refuses accidental public access configuration and unknown modes', () => {
@@ -84,7 +91,7 @@ it('refuses accidental public access configuration and unknown modes', () => {
   }
   expect(() => officeAccessPolicy({HAWA_DESK_AUTH_MODE:'off'})).toThrow();
   expect(officeAccessPolicy({})).toEqual({mode:'required'});
-  const local = officeAccessPolicy({HAWA_DESK_AUTH_MODE:'trusted_office',HAWA_TRUSTED_OFFICE_ORIGIN:origin});
+  const local = officeAccessPolicy({HAWA_DESK_AUTH_MODE:'trusted_office',HAWA_TRUSTED_OFFICE_ORIGIN:origin, HAWA_OFFICE_PROXY_PROOF:proxyProof});
   expect(() => validateOfficeBind(local,'0.0.0.0')).toThrow();
   expect(() => validateOfficeBind(local,'127.0.0.1')).not.toThrow();
 });
@@ -92,20 +99,67 @@ it('refuses accidental public access configuration and unknown modes', () => {
 
 it('redeems the office stream ticket once without accepting its marker as a bearer key', async () => {
   const app=createApp({db});
-  const issued=await app.request(origin+'/v1/auth/stream-ticket',{method:'POST',headers:{'X-Hawa-Office-Request':'1'}});
+  const issued=await proxiedRequest(app, origin+'/v1/auth/stream-ticket',{method:'POST',headers:{'X-Hawa-Office-Request':'1'}});
   const {ticket}=await issued.json();
-  const stream=await app.request(origin+'/v1/events/stream?ticket='+encodeURIComponent(ticket));
+  const stream=await proxiedRequest(app, origin+'/v1/events/stream?ticket='+encodeURIComponent(ticket));
   expect(stream.status).toBe(200);
   expect(stream.headers.get('content-type')).toContain('text/event-stream');
   await stream.body?.cancel();
-  expect((await app.request(origin+'/v1/events/stream?ticket='+encodeURIComponent(ticket))).status).toBe(401);
-  expect((await app.request(origin+'/v1/tasks',{headers:{Authorization:'Bearer hawa_trusted_office'}})).status).toBe(401);
+  expect((await proxiedRequest(app, origin+'/v1/events/stream?ticket='+encodeURIComponent(ticket))).status).toBe(401);
+  expect((await proxiedRequest(app, origin+'/v1/tasks',{headers:{Authorization:'Bearer hawa_trusted_office'}})).status).toBe(401);
 });
 
 it('keeps an office ticket bound to the permitted office origin', async () => {
   const app=createApp({db});
-  const issued=await app.request(origin+'/v1/auth/stream-ticket',{method:'POST',headers:{'X-Hawa-Office-Request':'1'}});
+  const issued=await proxiedRequest(app, origin+'/v1/auth/stream-ticket',{method:'POST',headers:{'X-Hawa-Office-Request':'1'}});
   const {ticket}=await issued.json();
-  const stream=await app.request(origin+'/v1/events/stream?ticket='+encodeURIComponent(ticket),{headers:{Origin:'https://outside.example'}});
+  const stream=await proxiedRequest(app, origin+'/v1/events/stream?ticket='+encodeURIComponent(ticket),{headers:{Origin:'https://outside.example'}});
   expect(stream.status).toBe(401);
+});
+
+it('refuses forged office headers from a container without nginx proof', async () => {
+  const app = createApp({db});
+  for (const proof of [undefined, 'b'.repeat(64), proxyProof + 'x']) {
+    const headers = {Host: '127.0.0.1:8080', 'X-Hawa-Office-Request': '1',
+      ...(proof ? {'X-Hawa-Office-Proof': proof} : {})};
+    expect((await app.request('http://core:3001/v1/tasks', {headers})).status).toBe(401);
+    expect((await app.request('http://core:3001/v1/tasks', {method:'POST',headers,body:'{}'})).status).toBe(401);
+  }
+});
+
+it('fails closed when office proxy configuration is missing', () => {
+  expect(() => officeAccessPolicy({HAWA_DESK_AUTH_MODE:'trusted_office',HAWA_TRUSTED_OFFICE_ORIGIN:origin})).toThrow('HAWA_OFFICE_PROXY_PROOF');
+});
+
+it('enforces cookie CSRF in office mode even through the verified proxy', async () => {
+  const app = createApp({db});
+  const headers = {Cookie:'hawa_session=hawa_sess_unrecognized', 'X-Hawa-Office-Request':'1'};
+  expect((await proxiedRequest(app, origin+'/v1/auth/stream-ticket', {method:'POST',headers})).status).toBe(403);
+});
+
+it('restricts the design credential in both modes, including when office headers are present', async () => {
+  const token = ['dedicated','test','design','token'].join('_');
+  vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN',token);
+  vi.stubEnv('HAWA_BEARER_TOKEN',token);
+  for (const mode of ['trusted_office','required']) {
+    vi.stubEnv('HAWA_DESK_AUTH_MODE',mode);
+    const app = createApp({db});
+    const headers = {Authorization:'Bearer '+token, 'X-Hawa-Office-Request':'1'};
+    // Login takes a key in its body, outside the bearer guard. Retired operator aliases must
+    // never exchange the service credential for an unrestricted office cookie/session.
+    for (const path of ['/v1/auth/session', '/api/auth/session', '/api/v1/auth/session']) {
+      for (const field of ['key', 'token', 'apiKey', 'password']) {
+        const response = await proxiedRequest(app, origin+path, {method:'POST',
+          headers:{'Content-Type':'application/json','X-Hawa-Office-Request':'1'},body:JSON.stringify({[field]:token})});
+        expect(response.status).toBe(401);
+        expect(response.headers.get('set-cookie')).toBeNull();
+      }
+    }
+    for (const path of ['/v1/tasks','/v1/system/providers','/v1/auth/session']) {
+      expect((await proxiedRequest(app,origin+path,{headers})).status).toBe(401);
+    }
+    for (const path of ['/v1/system/outbox/requeue','/v1/internal/telegram/intake','/v1/tasks/c1000000-0000-4000-8000-000000000001/revisions/c1000000-0000-4000-8000-000000000002/decisions']) {
+      expect((await proxiedRequest(app,origin+path,{method:'POST',headers,body:'{}'})).status).toBe(401);
+    }
+  }
 });

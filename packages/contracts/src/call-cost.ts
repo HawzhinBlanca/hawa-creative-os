@@ -2,7 +2,8 @@
 export type CallCostKind = 'studio' | 'evaluation' | 'voice' | 'health_probe' | 'canva_planner';
 export interface CallCostAttestation {
   id: string; revision: number; actorUserId: string; recordedAt: string; reason: string;
-  conclusion: 'provider_finished' | 'provider_not_accepted'; reportedCostUsd: number;
+  evidenceType?: 'administrator_attestation' | 'trusted_office_attestation' | 'reservation_expiry'; actorLabel?: string | null;
+  conclusion: 'provider_finished' | 'provider_not_accepted' | 'reservation_charged'; reportedCostUsd: number;
   evidenceReference: string; evidenceSha256: string;
 }
 export interface CallCostEvidence {

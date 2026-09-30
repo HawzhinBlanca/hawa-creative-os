@@ -1859,17 +1859,17 @@ export async function selectWinnerV3(
     if (decision.winner) {
       const winner = decision.winner === 'a' ? first : second;
       return { winner, runnerUp: winner === first ? second : first, decidedBy: 'art_direction_prior', match, canary,
-        judgeReliable: judgePick ? false : canaryPassed, protocol, humanChoiceRecommended: false,
+        judgeReliable: judgePick ? false : canaryPassed, protocol, humanChoiceRecommended: true,
         prior: { basis: decision.basis!, reason: decision.reason, instead: judgePick ? 'composite_judge_unreliable' : 'composite_after_tie' } };
     }
   }
   if (!judgePick) {
     return { winner: lead, runnerUp: next, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed,
-      protocol, humanChoiceRecommended: false };
+      protocol, humanChoiceRecommended: true };
   }
   if (!canaryPassed) {
     return { winner: lead, runnerUp: next, decidedBy: 'composite_judge_unreliable', match, canary, judgeReliable: false,
-      protocol, humanChoiceRecommended: false };
+      protocol, humanChoiceRecommended: true };
   }
   return {
     winner: judgePick,

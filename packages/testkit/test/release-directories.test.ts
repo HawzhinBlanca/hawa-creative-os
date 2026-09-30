@@ -207,10 +207,13 @@ describe('deploy.sh and the release directory', () => {
   /** A repository holding deploy.sh and the two libraries it sources, committed, and a stubbed docker. */
   function deployRepo() {
     const s = setup();
-    for (const f of ['infra/docker/deploy.sh', 'infra/ops/host_lib.sh', 'infra/ops/release_lib.sh']) {
+    for (const f of ['infra/docker/deploy.sh', 'infra/ops/host_lib.sh', 'infra/ops/release_lib.sh', 'infra/ops/prepare_service_boundaries.py']) {
       fs.mkdirSync(path.dirname(path.join(s.src, f)), { recursive: true });
       fs.copyFileSync(path.join(repo, f), path.join(s.src, f));
     }
+    const source = 'TELEGRAM_BOT_TOKEN=x\nHAWA_BEARER_TOKEN=' + 'a'.repeat(48) + '\n';
+    fs.writeFileSync(path.join(s.shared, 'infra/docker/.env.production'), source, { mode: 0o600 });
+    fs.writeFileSync(path.join(s.src, 'infra/docker/.env.production'), source, { mode: 0o600 });
     git(s.src, 'add', '-A');
     git(s.src, 'commit', '-q', '-m', 'deploy');
     const bin = path.join(s.t, 'bin');
@@ -293,7 +296,7 @@ describe('what production reads, through ~/.hawa/current', () => {
     const dir = path.join(tmp, 'compose');
     fs.mkdirSync(dir, { recursive: true });
     for (const f of ['docker-compose.prod.yml', 'canva-release.override.yml']) fs.copyFileSync(path.join(repo, 'infra/docker', f), path.join(dir, f));
-    fs.writeFileSync(path.join(dir, '.env.production'), '');
+    for (const file of ['.env.production', '.env.worker', '.env.service-boundaries']) fs.writeFileSync(path.join(dir, file), '');
     const res = spawnSync('docker', ['compose', '-f', path.join(dir, 'docker-compose.prod.yml'), '-f', path.join(dir, 'canva-release.override.yml'),
       '--profile', 'worker', 'config', '--format', 'json'], {
       encoding: 'utf8', env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: '/home/hawa', DATABASE_URL: 'postgresql://x', POSTGRES_PASSWORD: 'x' },
@@ -304,7 +307,7 @@ describe('what production reads, through ~/.hawa/current', () => {
     const fromRepo = binds.filter((b) => !b.source.startsWith('/home/hawa/.hawa/') || b.source.startsWith('/home/hawa/.hawa/current'));
     expect(fromRepo.filter((b) => b.source !== '/var/run/docker.sock').map((b) => b.source).sort()).toEqual([
       '/home/hawa/.hawa/current/db/03-grants.sql', '/home/hawa/.hawa/current/db/rls.sql', '/home/hawa/.hawa/current/db/schema.sql',
-      '/home/hawa/.hawa/current/db/seed.sql', '/home/hawa/.hawa/current/infra/docker/00-init-roles.sql',
+      '/home/hawa/.hawa/current/db/seed.sql', '/home/hawa/.hawa/current/infra/docker/.office-proxy-header.conf', '/home/hawa/.hawa/current/infra/docker/00-init-roles.sql',
       '/home/hawa/.hawa/current/infra/docker/nginx.conf', '/home/hawa/.hawa/current/infra/docker/vector.yaml',
     ]);
     for (const b of binds) expect(b.source, b.name).not.toContain(dir);

@@ -217,3 +217,27 @@ it('counts a prior run settlement once and resolves the current conflict only wi
   expect(await f.service.get(f.scope,'studio',id)).toMatchObject({revision:2,accountedCostUsd:.3,evidenceConflict:false,attestations:expect.any(Array)});
   expect(await f.daily()).toMatchObject({spentUsd:.3,heldUsd:0});
 });
+
+it('records verified shared-office evidence with explicit attribution and exact restart replay',async()=>{
+ const f=await fixture(true),id=await f.evaluation(),body=await f.body('evaluation',id),action=randomUUID();
+ const origin='http://127.0.0.1:8080',proxyProof='a'.repeat(64);
+ vi.stubEnv('HAWA_DESK_AUTH_MODE','trusted_office');vi.stubEnv('HAWA_TRUSTED_OFFICE_ORIGIN',origin);vi.stubEnv('HAWA_OFFICE_PROXY_PROOF',proxyProof);
+ try {
+  const path=origin+`/v1/spending/calls/evaluation/${id}/evidence`;
+  const headers={'Content-Type':'application/json','Idempotency-Key':action,'X-Hawa-Office-Request':'1','X-Hawa-Office-Proof':proxyProof};
+  const request={method:'POST',headers,body:JSON.stringify(body)};
+  const first=await createApp({db}).request(path,request);expect(first.status,await first.clone().text()).toBe(200);
+  expect(await first.json()).toMatchObject({replayed:false,receipt:{evidenceType:'trusted_office_attestation',actorLabel:'Office team'}});
+  const replay=await createApp({db}).request(path,request);expect(replay.status).toBe(200);expect(await replay.json()).toMatchObject({replayed:true});
+  const detail=await createApp({db}).request(origin+`/v1/spending/calls/evaluation/${id}`,{headers});
+  expect(await detail.json()).toMatchObject({canRecord:true,attestations:[{evidenceType:'trusted_office_attestation',actorLabel:'Office team'}]});
+  expect((await createApp({db}).request(path,{...request,headers:{...headers,'X-Hawa-Office-Proof':'b'.repeat(64)}})).status).toBe(401);
+  expect((await createApp({db}).request(path,{...request,body:JSON.stringify({...body,reason:'Different evidence'})})).status).toBe(409);
+  const admin={tenantId:f.tenantId,userId:'00000000-0000-4000-b000-000000000002',role:'administrator',trustedOffice:true};
+  await expect(withRlsContext(db,admin,tx=>sql`INSERT INTO hawa.call_cost_attestations
+   (tenant_id,call_kind,call_id,revision,action_id,actor_user_id,request_hash,snapshot_hash,reason,conclusion,reported_cost_usd,evidence_reference,evidence_sha256,evidence_type)
+   VALUES(${f.tenantId}::uuid,'evaluation',${id}::uuid,2,${randomUUID()}::uuid,${admin.userId}::uuid,${hash('direct')},${body.expectedSnapshot},
+    'Direct fixture','provider_finished',0,'synthetic',${hash('evidence')},'trusted_office_attestation')`.execute(tx)))
+    .rejects.toThrow('CALL_COST_OFFICE_ADMINISTRATOR_REQUIRED');
+ }finally{vi.unstubAllEnvs();}
+});
