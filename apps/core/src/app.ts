@@ -548,7 +548,9 @@ export function createApp(options?: CreateAppOptions) {
   }
 
   // Honest Health & Readiness Probes (CV-20, FR-064, FR-073, R1/F10) - Zero hardcoded health!
-  let lastVerifiedProgressAt = new Date().toISOString();
+  // Null until a paid probe has actually been sent: it used to start at boot time, and so reported
+  // "verified progress" for a Core that had verified nothing (ADR-158).
+  let lastVerifiedProgressAt: string | null = null;
 
   // The scheduled call records its result in Postgres. Health never turns a configured key or a
   // result from another key/model into proof that the current model can take paid traffic.
@@ -695,7 +697,10 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const modelHealth = await paidModelHealth();
-    const modelProviderStatus = modelHealth.status;
+    // ADR-158: with HAWA_BILLING_PROBE_ENABLED off there is no probe to wait for. "disabled" says so,
+    // and it is not counted as degraded (production was "degraded" permanently for this alone).
+    const paidProbeScheduled = !(options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule);
+    const modelProviderStatus = !paidProbeScheduled && modelHealth.status === 'unverified' ? 'disabled' : modelHealth.status;
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
     // Restate can only register the worker once it is running.
@@ -735,8 +740,10 @@ export function createApp(options?: CreateAppOptions) {
     // told; the watchdog alerts on 'unreachable' so the office knows before a request needs one.
     const cutoutStatus = await healthCutouts.health();
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
-    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || (isProduction && canvaStatus === 'unverified') || channelKillSwitches.telegram || channelKillSwitches.waha
-      || (isProduction && modelProviderStatus !== 'connected')
+    // Canva's "unverified" is not degraded: no Canva probe exists, so it could never become "connected"
+    // (ADR-158). An expired connection is "reconnect_required" and a failing one opens the breaker.
+    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
+      || (isProduction && modelProviderStatus !== 'connected' && modelProviderStatus !== 'disabled')
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
       || modelProviderStatus === 'billing_exhausted' || modelProviderStatus === 'rate_limited'
       || modelProviderStatus === 'http_error' || modelProviderStatus === 'budget_held' || modelProviderStatus === 'reconciliation_required'
@@ -753,6 +760,9 @@ export function createApp(options?: CreateAppOptions) {
       buildCommit: process.env.HAWA_BUILD_COMMIT || 'unknown',
       flags: {
         DESIGN_PIPELINE_V3: process.env.DESIGN_PIPELINE_V3 || 'off',
+        // How many chats DESIGN_PIPELINE_V3_CHATS enrols in v3 while the flag above is off, read as
+        // isV3PilotChat reads it; never which chats (ADR-158). "off" alone hid two pilot chats.
+        DESIGN_PIPELINE_V3_CHATS: new Set((process.env.DESIGN_PIPELINE_V3_CHATS || '').split(',').map((c) => c.trim()).filter(Boolean)).size,
         DESIGN_STUDIO_V2: process.env.DESIGN_STUDIO_V2 || 'off',
       },
       // Who is meant to ask Telegram for updates: the watchdog then requires a polling worker colour
@@ -761,13 +771,14 @@ export function createApp(options?: CreateAppOptions) {
       lastVerifiedProgressAt,
       lastPaidProbe: {
         at: modelHealth.at,
-        status: modelHealth.status,
+        status: modelProviderStatus,
         observedStatus: modelHealth.observedStatus,
         schemaVersion: modelHealth.schemaVersion,
         detail: modelHealth.spendingStatus || null,
         callId: modelHealth.callId || null,
         lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
-        everyMinutes: billingProbeMs / 60_000,
+        // Null when no schedule runs: "30" read as a probe every half hour that was never sent.
+        everyMinutes: paidProbeScheduled ? billingProbeMs / 60_000 : null,
       },
       funnel: funnelMetrics,
       restateInvocations: restateWork,
@@ -1005,7 +1016,7 @@ export function createApp(options?: CreateAppOptions) {
 
   if (db && options?.enablePublicationInspections) {
     const inspections = new PublicationInspectionService(db,options.publicationInspector || new GooglePublisher());
-    startPublicationInspectionSchedule(inspections,defaultTenantId,() => log.warn('[publication-inspections] Pass not confirmed; durable claims retain their state.'));
+    startPublicationInspectionSchedule(inspections,defaultTenantId,(cause) => log.warn(`[publication-inspections] Pass not confirmed (${cause}); durable claims retain their state.`));
   }
 
   // (Reminders about drafts a requester had not answered went with ADR-135 stage 2d: they reminded
@@ -1065,7 +1076,7 @@ export function createApp(options?: CreateAppOptions) {
   if ((isProduction || (process.env.HAWA_TELEGRAM_POLLER || '').trim().toLowerCase() === 'worker') && !serviceTokenOf()) {
     log.error('[core:internal] HAWA_WORKER_TOKEN is not usable here: the worker cannot hand updates to intake, and Core does not poll. Set HAWA_WORKER_TOKEN in .env.production (infra/docker/README.md).');
   }
-  for (const retired of retiredTelegramSettings(process.env, { production: isProduction })) log.error(`[core] ${retired}`);
+  for (const retired of retiredTelegramSettings(process.env, { production: isProduction })) log[retired.level](`[core] ${retired.message}`);
 
   // index.ts awaits clientDnaHydrated before it opens the port.
   return Object.assign(app, { clientDnaHydrated });

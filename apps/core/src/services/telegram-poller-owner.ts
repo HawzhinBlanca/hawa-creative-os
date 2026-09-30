@@ -17,18 +17,21 @@ export function telegramPollerOf(_env: Record<string, string | undefined> = proc
 
 /**
  * Settings that no longer do anything, named so an operator removes them (Core logs each at start):
- * HAWA_TELEGRAM_POLLER set to anything but `worker` (in production also unset), and
- * HAWA_LIFECYCLE_CHATS at all.
+ * HAWA_TELEGRAM_POLLER set to anything but `worker` (in production also unset), an error because
+ * nobody reads client messages then, and HAWA_LIFECYCLE_CHATS at all, only information: it changes
+ * nothing, and logged as an error at every start it read as a fault that was not there (ADR-158).
  */
+export interface RetiredTelegramSetting { level: 'error' | 'info'; message: string }
+
 export function retiredTelegramSettings(env: Record<string, string | undefined> = process.env,
-  options: { production?: boolean } = {}): string[] {
-  const found: string[] = [];
+  options: { production?: boolean } = {}): RetiredTelegramSetting[] {
+  const found: RetiredTelegramSetting[] = [];
   const poller = (env.HAWA_TELEGRAM_POLLER || '').trim().toLowerCase();
   if (poller !== 'worker' && (poller || options.production)) {
-    found.push(`HAWA_TELEGRAM_POLLER=${poller || '(unset)'}: Core no longer polls Telegram (ADR-135), and the worker polls only with HAWA_TELEGRAM_POLLER=worker, so nobody reads client messages`);
+    found.push({ level: 'error', message: `HAWA_TELEGRAM_POLLER=${poller || '(unset)'}: Core no longer polls Telegram (ADR-135), and the worker polls only with HAWA_TELEGRAM_POLLER=worker, so nobody reads client messages` });
   }
   if (env.HAWA_LIFECYCLE_CHATS !== undefined) {
-    found.push('HAWA_LIFECYCLE_CHATS is set: every Telegram chat is lifecycle-owned (ADR-135) and the setting is ignored; remove it');
+    found.push({ level: 'info', message: 'HAWA_LIFECYCLE_CHATS is set and ignored: every Telegram chat is lifecycle-owned since ADR-135, so it changes nothing; it can be removed from .env.production' });
   }
   return found;
 }

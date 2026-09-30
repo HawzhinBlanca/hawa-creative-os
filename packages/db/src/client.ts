@@ -20,27 +20,45 @@ export function createDb(connectionString?: string, options: { max?: number } = 
     connectionTimeoutMillis: 5000,
   });
 
-  pool.on('error', (err) => {
-    console.error('[db:pool] Unexpected error on idle client:', err);
-  });
+  attachPoolErrorLogging(pool);
 
   pool.on('connect', (client) => {
-    // The pool's own 'error' event covers idle clients only. A connection that dies while checked
-    // out (a PostgreSQL restart, pg_terminate_backend, a dropped socket) emits 'error' on the client,
-    // and an EventEmitter with no listener for it throws: one database restart would take Core down
-    // through uncaughtException. The query in flight still rejects, so the caller sees the failure.
-    client.on('error', (err) => {
-      console.error('[db:pool] Connection lost while in use:', err.message);
-    });
     client
       .query("SET search_path TO hawa, public; SET statement_timeout TO '15s'; SET idle_in_transaction_session_timeout TO '30s';")
-      .catch((err) => console.error('[db:pool] Could not apply session settings:', err.message));
+      .catch((err) => console.error('[db:pool] Could not apply session settings:', describePoolError(err)));
   });
 
   return new Kysely<Database>({
     dialect: new PostgresDialect({
       pool,
     }),
+  });
+}
+
+/**
+ * One line for a pool or connection error: its code and message, never the error object. pg attaches
+ * the Client to an idle-client error (`err.client`), and logging the error printed that whole object,
+ * connection parameters included, on 2026-09-30 (ADR-158).
+ */
+export function describePoolError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const code = (err as { code?: unknown }).code;
+  return `${typeof code === 'string' ? `${code} ` : ''}${err.message}`;
+}
+
+/** Error listeners for a pg.Pool: its idle clients' errors and those of every client it connects. */
+export function attachPoolErrorLogging(pool: pg.Pool): void {
+  pool.on('error', (err) => {
+    console.error('[db:pool] Unexpected error on idle client:', describePoolError(err));
+  });
+  pool.on('connect', (client) => {
+    // The pool's own 'error' event covers idle clients only. A connection that dies while checked
+    // out (a PostgreSQL restart, pg_terminate_backend, a dropped socket) emits 'error' on the client,
+    // and an EventEmitter with no listener for it throws: one database restart would take Core down
+    // through uncaughtException. The query in flight still rejects, so the caller sees the failure.
+    client.on('error', (err) => {
+      console.error('[db:pool] Connection lost while in use:', describePoolError(err));
+    });
   });
 }
 
