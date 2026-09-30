@@ -171,14 +171,20 @@ export async function writeSendMark(
   kind: SendStepKind,
   outcome: SendMarkOutcome,
   messageId?: string,
+  /**
+   * The chat the message went to (ADR-040 addendum): a Telegram message id is unique only within its
+   * chat, and an office member's reply to a draft's picture is matched to the request by chat and id.
+   */
+  chatId?: string,
 ): Promise<void> {
   if (messageId !== undefined && (outcome !== 'sent' || !validTelegramMessageId(messageId))) {
     throw new Error('A Telegram message ID must be positive and belong to a sent mark');
   }
   const key = `${commandId}:${step}`;
+  const chat = chatId !== undefined && /^-?[1-9][0-9]{0,19}$/.test(chatId) ? { chatId } : {};
   await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
     VALUES (${tenantId}::uuid, ${TELEGRAM_DELIVERY_SOURCE}, ${key}, ${`telegram_${kind}_${outcome}`},
-      ${JSON.stringify({ commandId, step, outcome, ...(messageId ? { messageId } : {}) })}::jsonb,
+      ${JSON.stringify({ commandId, step, outcome, ...(messageId ? { messageId } : {}), ...chat })}::jsonb,
       ${`${key}:${outcome}`}, true, clock_timestamp())`.execute(db);
 }
 

@@ -70,6 +70,7 @@ import type { RouteContext } from './types.js';
 import { parseNativeReviewSubmission } from '@hawa/domain';
 import { projectLifecycleNativeReview } from '../services/lifecycle-native-review.js';
 import { CanvaFlowError } from '../services/canva-flow-error.js';
+import { officeTelegramTurn } from '../services/office-telegram-turn.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
 export function isInternalPath(path: string): boolean {
@@ -350,6 +351,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       catch (error) {
         if (error instanceof SourceConflict) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
         throw error;
+      }
+      // ADR-040 addendum: an office member approving, sending back or rejecting a draft in their private
+      // chat, in plain words, through the Desk's own actions. Anything else of theirs is read below.
+      if (!settle) {
+        const office = await officeTelegramTurn({ db, deliverableStore: ctx.deliverableStore, tenantId: DEFAULT_TENANT_ID }, incoming);
+        if (office) return handled(office.status, office.extra);
       }
     }
 
@@ -1640,7 +1647,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         revisionId: op.revisionId as string, actionId: actionId as string,
         actor: { userId: actor.userId as string, role: actor.role as string,
           ...(actor.authMethod === 'google_oidc' ? { authMethod: 'google_oidc' as const,
-            sessionHash: actor.sessionHash as string } : {}) },
+            sessionHash: actor.sessionHash as string } : {}),
+          // ADR-040 addendum: an office member deciding in their private Telegram chat, by its id.
+          ...(actor.authMethod === 'telegram_office' && typeof actor.telegramChatId === 'string' &&
+            /^[1-9][0-9]{0,19}$/.test(actor.telegramChatId) ? { authMethod: 'telegram_office' as const,
+            telegramChatId: actor.telegramChatId } : {}) },
         reason: (op.reason as string).trim(), expectedRev, rev, key: body.key as string,
         ...(revisionRequest ? { revisionRequest } : {}),
         ...(isRejection ? { decision: 'rejected', rejectionCategory: parseRejectionCategory(op.rejectionCategory)! } : {}),

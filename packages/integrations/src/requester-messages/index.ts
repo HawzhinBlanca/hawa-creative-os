@@ -23,6 +23,7 @@ import { CONVERSATION_MESSAGES } from './conversation.js';
 import { LIFECYCLE_MESSAGES } from './lifecycle.js';
 import { OUTCOME_MESSAGES } from './outcomes.js';
 import { ALBUM_MESSAGES } from './albums.js';
+import { OFFICE_MESSAGES } from './office.js';
 
 import type { Phrase, PhraseBook, RequesterLang } from './types.js';
 
@@ -76,7 +77,9 @@ export const REQUESTER_CATALOGUE = {
   lifecycle: LIFECYCLE_MESSAGES,
   outcomes: OUTCOME_MESSAGES,
   albums: ALBUM_MESSAGES,
+  /** ADR-040 addendum: to an office member deciding on a draft in Telegram (office terms allowed). */
+  office: OFFICE_MESSAGES,
 } as const satisfies Record<string, PhraseBook>;
 
 export { SOURCE_MESSAGES, MEDIA_MESSAGES, INBOX_MESSAGES, ACCESS_MESSAGES, ROUTING_MESSAGES, CONVERSATION_MESSAGES,
-  LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ALBUM_MESSAGES };
+  LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ALBUM_MESSAGES, OFFICE_MESSAGES };

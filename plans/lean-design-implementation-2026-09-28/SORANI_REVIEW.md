@@ -12,7 +12,8 @@ quoted words, a numbered list) and must stay as they are.
 
 Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status, deadline and change phrases in
 `apps/core/src/services/requester-turn.ts`, the yes-words in `apps/core/src/services/lifecycle-source-reply.ts`, and
-the "that is the whole text" words in `apps/core/src/services/lifecycle-album.ts`, ADR-160),
+the "that is the whole text" words in `apps/core/src/services/lifecycle-album.ts`, ADR-160, and the office's
+approve and reject words in `apps/core/src/services/office-telegram-turn.ts`, ADR-040 addendum),
 and the Sorani the design studio reads (ADR-157): the photo-choice phrases in `packages/creative/src/studio/photo-selection.ts`
 and the phrase-ending words and language names in `packages/creative/src/studio/copy-completeness.ts`.
 
@@ -223,4 +224,30 @@ and the phrase-ending words and language names in `packages/creative/src/studio/
 | `albums.somethingWrong` | Something went wrong with these photos. Please send them again, with what you would like designed. | کێشەیەک لەگەڵ ئەم وێنانەدا ڕوویدا. تکایە دووبارە بیاننێرەوە، لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
 | `albums.tooLarge` | These photos are too large together. Please send fewer or smaller photos. | ئەم وێنانە پێکەوە زۆر گەورەن. تکایە ژمارەیەکی کەمتر یان وێنەی بچووکتر بنێرە. | needs native review |
 
-160 lines.
+## office
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `office.approvedSending` | Approved. Sending {title} to {requester} now. | پەسەند کرا. ئێستا {title} بۆ {requester} دەنێرم. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.sentBack` | Sent back for changes with your words. {requester} has your note on {title}, and the next draft starts once they answer. | بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. {requester} تێبینییەکەتی لەسەر {title} پێگەیشت، و ڕەشنووسی داهاتوو دوای وەڵامی ئەو دەست پێدەکات. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.sentBackOwn` | Sent back for changes with your words. I have asked you, as the one who asked for {title}, what to change; the next draft starts once you answer. | بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. وەک داواکاری {title} لێت پرسیم چی بگۆڕدرێت؛ ڕەشنووسی داهاتوو دوای وەڵامەکەت دەست پێدەکات. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.rejected` | Rejected: {title}. Nothing was sent to {requester}. | ڕەتکرایەوە: {title}. هیچ شتێک بۆ {requester} نەنێردرا. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.whichDraft` | Which draft do you mean?⏎{list}⏎⏎Answer with the number or the name. | مەبەستت کام ڕەشنووسە؟⏎{list}⏎⏎بە ژمارە یان ناو وەڵام بدەرەوە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.whatToDo` | What should I do with {title}: approve it and send it, send it back with changes, or reject it? Just tell me in your own words. | چی لە {title} بکەم: پەسەندی بکەم و بینێرم، بۆ گۆڕانکاری بیگەڕێنمەوە، یان ڕەتی بکەمەوە؟ تەنها بە وشەکانی خۆت پێم بڵێ. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.lateWords` | Not approved yet: {requester} wrote after {title} reached the office:⏎⏎{words}⏎⏎Should I approve it and send it anyway, or send it back with a change? | هێشتا پەسەند نەکراوە: {requester} دوای ئەوەی {title} گەیشتە ئۆفیس ئەمەی نووسی:⏎⏎{words}⏎⏎سەرەڕای ئەمە پەسەندی بکەم و بینێرم، یان بە گۆڕانکارییەک بیگەڕێنمەوە؟ | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.alreadyApproved` | {title} was already approved, so I did nothing more. | {title} پێشتر پەسەند کرابوو، بۆیە هیچی ترم نەکرد. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.alreadySentBack` | {title} was already sent back for changes, so I did nothing more. | {title} پێشتر بۆ گۆڕانکاری گەڕێندرابووەوە، بۆیە هیچی ترم نەکرد. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.alreadyRejected` | {title} was already rejected, so I did nothing more. | {title} پێشتر ڕەتکرابووەوە، بۆیە هیچی ترم نەکرد. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.olderDraft` | That picture is of an earlier draft of {title}, so I did nothing. A newer draft is waiting for review. | ئەو وێنەیە هی ڕەشنووسێکی پێشووی {title}ـە، بۆیە هیچم نەکرد. ڕەشنووسێکی نوێتر چاوەڕێی پێداچوونەوەیە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.notWaiting` | {title} is not waiting for review right now, so I did nothing. | {title} ئێستا چاوەڕێی پێداچوونەوە نییە، بۆیە هیچم نەکرد. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.checkFailed` | I can't approve {title}: its automatic check did not pass. Tell me what to change, or fix it in Canva and check it again in Hawa Desk. | ناتوانم {title} پەسەند بکەم: پشکنینە خۆکارەکەی سەرنەکەوت. پێم بڵێ چی بگۆڕدرێت، یان لە Canva چاکی بکە و دووبارە لە Hawa Desk بیپشکنەوە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.useDesk` | I can't approve {title} from Telegram: the picture you were sent is not the checked file that would be delivered. Please approve it in Hawa Desk. | ناتوانم لە تێلێگرامەوە {title} پەسەند بکەم: ئەو وێنەیەی بۆت نێردرا ئەو فایلە پشکنراوە نییە کە دەنێردرێت. تکایە لە Hawa Desk پەسەندی بکە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.namedReviewer` | Decisions here need a named reviewer signed in to Hawa Desk, so {title} was not changed. | بڕیاردان لێرە پێویستی بە پێداچوونەوەکارێکی ناودارە کە لە Hawa Desk چووبێتە ژوورەوە، بۆیە {title} نەگۆڕدرا. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.madeByHand` | {title} is being made by hand, so it can't go back for automatic changes. Approve or reject it here, or change it in Hawa Desk. | {title} بە دەست دروست دەکرێت، بۆیە ناتوانرێت بۆ گۆڕانکاری خۆکار بگەڕێندرێتەوە. لێرە پەسەندی بکە یان ڕەتی بکەرەوە، یان لە Hawa Desk بیگۆڕە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.approvedNotSent` | Approved, but not sent yet: {requester} has just written about {title}:⏎⏎{words}⏎⏎Open Hawa Desk to read it and send the design. | پەسەند کرا، بەڵام هێشتا نەنێردراوە: {requester} ئێستا دەربارەی {title} نووسیویەتی:⏎⏎{words}⏎⏎Hawa Desk بکەرەوە بۆ خوێندنەوەی و ناردنی دیزاینەکە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.approvedSendFailed` | Approved, but sending {title} could not start. Please send it from Hawa Desk. | پەسەند کرا، بەڵام ناردنی {title} دەستی پێنەکرد. تکایە لە Hawa Deskـەوە بینێرە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.notRecorded` | I couldn't record that for {title}, so nothing was changed. Please use Hawa Desk. | نەمتوانی ئەوە بۆ {title} تۆمار بکەم، بۆیە هیچ شتێک نەگۆڕدرا. تکایە Hawa Desk بەکاربهێنە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.you` | you | تۆ | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.theRequester` | the requester | داواکارەکە | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+
+183 lines.

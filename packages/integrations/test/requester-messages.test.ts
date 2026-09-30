@@ -25,7 +25,10 @@ describe('requester message catalogue', () => {
     expect(placeholders(phrase.ckb)).toEqual(placeholders(phrase.en));
   });
 
-  it.each(phrases)('%s asks for no command, reply target, format or office term', (_name, phrase) => {
+  it.each(phrases)('%s asks for no command, reply target, format or office term', (name, phrase) => {
+    // ADR-040 addendum: the office section speaks to office members, who may be told of Hawa Desk and
+    // Canva; it still names no command, reply target, format, id or internal term.
+    const office = name.startsWith('office.');
     for (const text of [phrase.en, phrase.ckb]) {
       // A slash command, anywhere ("/new", "/use_source", "/rules").
       expect(text).not.toMatch(/(?:^|[\s(“"«])\/[a-z_]{2,}/i);
@@ -34,7 +37,8 @@ describe('requester message catalogue', () => {
       // Exact formats: "Client: <code>", "Size: WxH", a divider line.
       expect(text).not.toMatch(/\bClient:|\bSize:|---/);
       // The office's own words.
-      expect(text).not.toMatch(/Task ID|task id|request id|\brevision\b|lifecycle|Hawa Desk|\bDesk\b|Canva|https?:\/\//i);
+      expect(text).not.toMatch(office ? /Task ID|task id|request id|\brevision\b|lifecycle|https?:\/\//i
+        : /Task ID|task id|request id|\brevision\b|lifecycle|Hawa Desk|\bDesk\b|Canva|https?:\/\//i);
     }
   });
 

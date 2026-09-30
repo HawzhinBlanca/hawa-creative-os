@@ -53,7 +53,10 @@ export class LifecycleProjectionConflict extends Error {
 
 export interface OfficeDecisionProjection {
   requestId: string; tenantId: string; taskId: string; revisionId: string;
-  actionId: string; actor: { userId: string; role: string; authMethod?: 'google_oidc'; sessionHash?: string }; reason: string;
+  actionId: string;
+  /** `telegram_office` (ADR-040 addendum): an office member's words in their private Telegram chat. */
+  actor: { userId: string; role: string; authMethod?: 'google_oidc' | 'telegram_office'; sessionHash?: string; telegramChatId?: string };
+  reason: string;
   revisionRequest?: StructuredRevisionRequest;
   decision?: 'revision_requested' | 'approved' | 'rejected';
   rejectionCategory?: RejectionCategory;
@@ -154,6 +157,8 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
         ...(namedAuthority ? { authMethod: 'google_oidc', reviewerAssignmentId: namedAuthority.assignmentId,
           reviewerAssignmentVersion: namedAuthority.assignmentVersion,
           reviewClientId: task.client_id, reviewProjectId: task.project_id } : {}),
+        // ADR-040 addendum: who decided in Telegram (the office member's private chat), for the audit.
+        ...(actor.authMethod === 'telegram_office' ? { authMethod: 'telegram_office', telegramChatId: actor.telegramChatId } : {}),
         actionId, requestFingerprint: hash, ...(revisionRequest ? { revisionRequest } : {}),
         ...(input.rejectionCategory ? { rejectionCategory: input.rejectionCategory } : {}),
         ...(input.approvalProof ? { officeApprovalProof: input.approvalProof,

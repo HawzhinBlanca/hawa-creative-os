@@ -133,7 +133,9 @@ export interface OfficeRevisionEvent {
   actionId: string;
   /** expectedRev ≥ 2: first decision is at 2; subsequent revision rounds use 2+2k. */
   expectedRev: number; kind: 'revise' | 'approve' | 'reject';
-  actor: { userId: string; role: string; authMethod?: 'google_oidc'; sessionHash?: string }; reason: string;
+  /** `telegram_office`: an office member's reply in their private Telegram chat (ADR-040 addendum). */
+  actor: { userId: string; role: string; authMethod?: 'google_oidc' | 'telegram_office'; sessionHash?: string; telegramChatId?: string };
+  reason: string;
   rejectionCategory?: RejectionCategory;
   /** Optional only for signed decisions already in flight before the structured-feedback rollout. */
   revisionRequest?: StructuredRevisionRequest;

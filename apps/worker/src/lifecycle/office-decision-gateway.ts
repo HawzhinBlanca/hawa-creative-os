@@ -21,6 +21,18 @@ function signedWithAny(secrets: string | readonly string[], verify: (secret: str
   return (typeof secrets === 'string' ? [secrets] : secrets).some((secret) => Boolean(secret) && verify(secret));
 }
 
+/**
+ * How the office member was identified: a Desk session (no method, as before), a named Google session
+ * (its hash), or, since the ADR-040 addendum of 2026-09-30, an office member's private Telegram chat
+ * (its id; Core admitted them from TELEGRAM_ALLOWED_USERS). Nothing else is accepted.
+ */
+function officeActorAuthValid(actor: { authMethod?: string; sessionHash?: string; telegramChatId?: string }): boolean {
+  if (actor.authMethod === undefined) return actor.sessionHash === undefined && actor.telegramChatId === undefined;
+  if (actor.authMethod === 'google_oidc') return /^[a-f0-9]{64}$/.test(actor.sessionHash || '') && actor.telegramChatId === undefined;
+  return actor.authMethod === 'telegram_office' && actor.sessionHash === undefined &&
+    typeof actor.telegramChatId === 'string' && /^[1-9][0-9]{0,19}$/.test(actor.telegramChatId);
+}
+
 export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: string | readonly string[]): 'ok' | 'invalid' | 'unauthorized' {
   if (input?.v !== 1 || !input.event || typeof input.event !== 'object' || Array.isArray(input.event) ||
       input.event.v !== 1 || !['revise', 'approve', 'reject', 'deliver'].includes(input.event.kind) ||
@@ -36,8 +48,7 @@ export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: s
       input.event.eventId !== `desk:${input.event.actionId}` ||
       !input.event.actor || !UUID.test(input.event.actor.userId) ||
       typeof input.event.actor.role !== 'string' || typeof input.event.reason !== 'string' ||
-      (input.event.kind !== 'deliver' && (input.event.actor.authMethod !== undefined || input.event.actor.sessionHash !== undefined) &&
-        (input.event.actor.authMethod !== 'google_oidc' || !/^[a-f0-9]{64}$/.test(input.event.actor.sessionHash || ''))) ||
+      (input.event.kind !== 'deliver' && !officeActorAuthValid(input.event.actor)) ||
       !input.event.reason.trim() || input.event.reason.length > 2000 ||
       (input.event.kind !== 'deliver' && input.event.revisionRequest !== undefined &&
         (!parseCompleteRevisionRequest(input.event.revisionRequest) ||

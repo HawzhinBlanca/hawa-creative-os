@@ -168,7 +168,7 @@ export async function sendAttempt(deps: TelegramSenderDeps, message: OutboundMes
     return withRlsContext(deps.db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
   };
   const mark = (outcome: SendMarkOutcome, messageId?: string) =>
-    inTenant((trx) => writeSendMark(trx, tenantId, markId, SEND_STEP, stepKind(m), outcome, messageId));
+    inTenant((trx) => writeSendMark(trx, tenantId, markId, SEND_STEP, stepKind(m), outcome, messageId, String(m.chatId)));
 
   if (critical) {
     const prior = await inTenant((trx) => readSendMark(trx, tenantId, markId, SEND_STEP));
