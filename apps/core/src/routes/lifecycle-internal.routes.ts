@@ -31,7 +31,7 @@ import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeAppr
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
-import { heldPhotoCandidate, lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
+import { burstPhotoCandidate, heldPhotoCandidate, lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
 import { createMediaRoute, groupMediaNotAddressed, unusableMedia, wordsOf } from '../services/lifecycle-media-route.js';
 import { deferMessage, pendingHeldBrief, readDeferral, releaseDeferral, overdueDeferrals, overduePhotos,
   claimPhoto, holdPhoto, markPhotoAsked, pendingEditWords, readHeldPhoto, readMediaAnswer, recordMediaAnswer,
@@ -41,7 +41,7 @@ import { INBOX_MESSAGES, MEDIA_MESSAGES, bold, requesterLang, say } from '@hawa/
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
   albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
-  settleHeldBrief, cutAlbumWaits } from '../services/lifecycle-album.js';
+  settleHeldBrief, cutAlbumWaits, actsInGroup, outsideBursts } from '../services/lifecycle-album.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log } from '../logging.js';
@@ -354,6 +354,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
 
     let admittedAlbum: AlbumSnapshot | undefined;
+    // ADR-160 addendum: one burst photo whose cut caption was completed; it opens with these words.
+    let boundPhoto: BlobRef | undefined;
     if (db) {
       try {
         await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
@@ -386,12 +388,20 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         releasedDeferral = true;
       }
     }
+    // ADR-160 addendum: a photo outside an album, with or without words, is kept as a member of a photo
+    // burst while the worker schedules settles (`briefHold`), and settles as an album does: the photos its
+    // sender sent within the album quiet period are one set. A captioned photo in a group that does not
+    // act stays a passive message (below). Its settle is the burst's, whatever its words.
+    const burst = !albumPart && db ? burstPhotoCandidate(preparedUpdate) : null;
+    const burstPart = !settle && holdBriefs && burst !== null && (!burst.captioned || actsInGroup(incomingMessage));
+    const burstSettle = settle && burst !== null && Boolean(await withRlsContext(db!, SYSTEM_SCOPE,
+      (trx) => readAlbumPart(trx, DEFAULT_TENANT_ID, preparedUpdate)));
     // A kept photo's settle (ADR-145) is decided below; any other settle of a non-album, non-text
     // update has nothing to do.
-    if (settle && !albumPart && !textMessage && !heldPhotoCandidate(preparedUpdate)) return handled(200, { settle: 'skipped' });
+    if (settle && !albumPart && !burstSettle && !textMessage && !heldPhotoCandidate(preparedUpdate)) return handled(200, { settle: 'skipped' });
     // ADR-160: a photo with words may be the rest of a caption Telegram cut (bound below if a cut album waits).
     const restPhoto = !albumPart && !settle && Boolean(db) && lifecyclePhotoInput(preparedUpdate)?.captionless === false;
-    if (albumPart || repliedConfirmation || (textMessage && (db || settle)) || restPhoto) {
+    if (albumPart || repliedConfirmation || (textMessage && (db || settle)) || restPhoto || burstPart || burstSettle) {
       if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
       const tx = <T>(fn: (trx: import('@hawa/db').Kysely<import('@hawa/db').Database>) => Promise<T>) =>
         withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
@@ -402,15 +412,28 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       const senderAllowed = !ctx.isProduction || ctx.telegramIntakeUsers.includes('*') ||
         process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*' || ctx.telegramIntakeUsers.includes(senderId);
       // The worker schedules this update's settle (a durable delayed call) instead of sending anything.
-      const settleLater = (kind: 'album' | 'brief', delayMs: number) =>
+      const settleLater = (kind: 'album' | 'brief' | 'photo', delayMs: number) =>
         handled(202, { lifecycleAction: 'settle-later', chatId, settle: { kind, delayMs } });
-      const reply = (answer: { status: number; message: string; noticeKey: string; settle?: true }) => answer.settle
-        ? settleLater('album', albumSettleMs())
+      const reply = (answer: { status: number; message: string; noticeKey: string; settle?: true }, kind: 'album' | 'photo' = 'album') => answer.settle
+        ? settleLater(kind, albumSettleMs())
         : handled(answer.status, { lifecycleAction: 'album-message', chatId,
           albumMessage: answer.message, albumNoticeKey: answer.noticeKey });
       const admit = async (outcome: AlbumOutcome, point: string): Promise<Response | null> => {
         if (outcome.kind === 'reply') return reply(outcome.reply);
-        if (outcome.kind === 'skip') return handled(200, { settle: 'skipped' });
+        if (outcome.kind === 'skip' || outcome.kind === 'alone') return handled(200, { settle: 'skipped' });
+        // ADR-160 addendum: a photo burst sent right after its sender's brief became that design's material.
+        if (outcome.kind === 'answer') return handled(200, { lifecycleAction: 'chat-answer', chatId,
+          chatAnswer: { text: outcome.text, parseMode: 'HTML' }, media: 'photos-joined' });
+        if (outcome.kind === 'late') {
+          const kept = await recordLate(source, outcome.change);
+          return handled(kept.status, kept.extra);
+        }
+        if (outcome.kind === 'photo') {
+          boundPhoto = outcome.image;
+          preparedUpdate = outcome.update;
+          await chaosPoint(point, { updateId: source.update_id, chat: chatId });
+          return null;
+        }
         // ADR-160: the album waits for the rest of a caption Telegram cut; the question is said beside it.
         if (outcome.kind === 'wait') return handled(202, { lifecycleAction: 'settle-later', chatId,
           settle: { kind: 'album', delayMs: outcome.delayMs }, ...(outcome.notice ? { notice: { text: outcome.notice } } : {}) });
@@ -429,11 +452,17 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           (await revisionIntakeReceipts(trx, DEFAULT_TENANT_ID, chat, updateId)).length > 0,
       });
       try {
-        if (albumPart && settle) {
+        if ((albumPart || burstSettle) && settle) {
           if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
-          const settled = await admit(await tx((trx) => settleAlbum(trx, DEFAULT_TENANT_ID, source)),
-            'core.intake.after-album-settle');
-          if (settled) return settled;
+          const outcome = await tx((trx) => settleAlbum(trx, DEFAULT_TENANT_ID, source));
+          if (outcome.kind === 'alone') {
+            // A burst of one photo is read as ADR-145 reads a lone photo: a photo with words as it arrived
+            // (now, after the quiet period), a kept photo with no words by its own settle below.
+            if (burst?.captioned) settle = false;
+          } else {
+            const settled = await admit(outcome, 'core.intake.after-album-settle');
+            if (settled) return settled;
+          }
         } else if (textMessage) {
           const heldReplay = settle ? 'none' : await tx((trx) => heldBriefReplay(trx, DEFAULT_TENANT_ID, source));
           if (settle) {
@@ -450,9 +479,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               'core.intake.after-album-confirmation');
             if (bound) return bound;
           }
-        } else if (restPhoto) {
+        } else if (restPhoto || burstPart) {
           // ADR-160: the rest sent as a photo with words: its words join the cut caption, its picture the album.
-          if (senderAllowed && await tx((trx) => cutAlbumWaits(trx, DEFAULT_TENANT_ID, source))) {
+          if (restPhoto && senderAllowed && await tx((trx) => cutAlbumWaits(trx, DEFAULT_TENANT_ID, source))) {
             const photo = lifecyclePhotoInput(source)!;
             const kept = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
               (id) => ctx.telegramBridge?.downloadFile(id) ?? Promise.resolve(null), photo.fileId);
@@ -463,6 +492,29 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 { words: photo.directive, image: kept.ref })), 'core.intake.after-album-confirmation');
               if (bound) return bound;
             }
+          }
+          if (burstPart && !admittedAlbum && !boundPhoto) {
+            // ADR-160 addendum: kept as a photo of a burst; nothing is said until the burst settles.
+            if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+            const keepForWords = async () => {
+              // A photo with no words is also kept as ADR-145 keeps it, so words sent right after a lone
+              // photo take it as before (a burst's settle claims it for its set).
+              const part = await tx((trx) => readAlbumPart(trx, DEFAULT_TENANT_ID, source));
+              if (burst!.captioned || !part?.image) return;
+              await tx((trx) => holdPhoto(trx, DEFAULT_TENANT_ID, { updateId: source.update_id, chatId, senderId: part.senderId,
+                topic: part.topic, messageId: part.messageId, image: part.image! }, updateHash(source), source));
+            };
+            const priorPart = await tx((trx) => readAlbumPart(trx, DEFAULT_TENANT_ID, source));
+            if (priorPart) {
+              await keepForWords();
+              return reply(partReply(priorPart), 'photo');
+            }
+            const old = await createTelegramUpdateState(ctx).telegramUpdateHandled(chatId, String(source.update_id));
+            if (old) return handled(200, { duplicate: true, ...(old.taskId ? { taskIds: [old.taskId] } : {}) });
+            const kept = await retainAlbumPart(tx, DEFAULT_TENANT_ID, source, blobStoreFor(db, ctx.options?.blobStore),
+              (id) => ctx.telegramBridge?.downloadFile(id) ?? Promise.resolve(null), { burst: true });
+            await keepForWords();
+            return reply(kept, 'photo');
           }
         } else if (albumPart) {
           const priorPart = await tx((trx) => readAlbumPart(trx, DEFAULT_TENANT_ID, source));
@@ -497,7 +549,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // brief opens, so a correction to it is a change to it and not a second request. ChatInbox runs one
     // update of a chat at a time, and the brief's own settle queues behind this update: the message is
     // therefore settled later instead of being made to wait here.
-    if (db && !settle && !releasedDeferral && !admittedAlbum && typeof (preparedUpdate.message as Record<string, unknown> | undefined)?.text === 'string') {
+    if (db && !settle && !releasedDeferral && !admittedAlbum && !boundPhoto && typeof (preparedUpdate.message as Record<string, unknown> | undefined)?.text === 'string') {
       const source = preparedUpdate;
       const scope = senderScopeOf(source);
       const hash = updateHash(source);
@@ -546,7 +598,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
 
     let update = preparedUpdate;
     // An album admitted above or a released held brief is decided now, not held again.
-    let mayHoldBrief = holdBriefs && !settle && !releasedDeferral && !admittedAlbum && briefPhotoWaitMs() > 0;
+    let mayHoldBrief = holdBriefs && !settle && !releasedDeferral && !admittedAlbum && !boundPhoto && briefPhotoWaitMs() > 0;
 
     // A decision must replay even if the flag changed after the first answer was lost.
     const sourceChat = chatOf(update);
@@ -647,7 +699,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     if (!settle && groupMediaNotAddressed(update)) return handled(200, { status: 'MESSAGE_ONLY' });
     // An admitted album's words were bound to its photos: they answer no voice note or PDF (a replay of
     // one that completed a cut caption, below, is admitted above by its recorded album decision).
-    const sourceAnswer = admittedAlbum ? null : await sourceIntake(update);
+    const sourceAnswer = admittedAlbum || boundPhoto ? null : await sourceIntake(update);
     if (sourceAnswer && 'album' in sourceAnswer) {
       // ADR-160 F8 (the remainder): a voice note's or a PDF's confirmed words completed a cut caption;
       // the album is read now as an album bound by typed words is.
@@ -758,7 +810,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         }
         // ADR-145: a message edited before the bot read it (held for photos, or set behind a held
         // brief) is read with its new words; the update itself, and so every receipt, stays the same.
-        const editedWords = msg && !photoInput && !admittedAlbum
+        const editedWords = msg && !photoInput && !admittedAlbum && !boundPhoto
           ? await withRlsContext(db, SYSTEM_SCOPE, (trx) => pendingEditWords(trx, DEFAULT_TENANT_ID, update.update_id)) : null;
         const rawText: string = (() => {
           if (photoInput) return photoInput.directive;
@@ -830,8 +882,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               const sender = (msg as Record<string, { id?: unknown; first_name?: unknown }>).from;
               // ADR-145: the newest photo its sender sent with no words, kept for these words.
               const scope = senderScopeOf(update);
-              const heldPhoto = takeHeldPhoto && !photoInput && !admittedAlbum && scope && !mayHoldBrief
-                ? (await withRlsContext(db, system, (trx) => waitingPhotos(trx, TENANT, scope))).at(-1) ?? null : null;
+              // A photo of a burst still settling with others is not taken alone (ADR-160 addendum).
+              const heldPhoto = takeHeldPhoto && !photoInput && !admittedAlbum && !boundPhoto && scope && !mayHoldBrief
+                ? (await withRlsContext(db, system, async (trx) => outsideBursts(trx, TENANT, await waitingPhotos(trx, TENANT, scope)))).at(-1) ?? null : null;
               if (!senderAllowed) {
                 return handled(403, { code: 'SENDER_NOT_ALLOWED' });
               }
@@ -870,6 +923,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 // A caption never designs without its picture (ADR-069): the picture is asked for again.
                 if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
                 lifecycleImage = { ...photo.ref, updateId: update.update_id };
+              } else if (boundPhoto) {
+                // ADR-160 addendum: the burst photo whose cut caption these words completed.
+                lifecycleImage = { ...boundPhoto, updateId: update.update_id };
               } else if (heldPhoto) {
                 // ADR-145: the photo its sender sent just before (or while the brief waited for photos).
                 lifecycleImage = { ...heldPhoto.image, updateId: update.update_id };
@@ -922,11 +978,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               // Derive the round from the revision number: first office-revise lands at rev=3;
               // subsequent revisions increment by 2 each time (office+requester), so round = (rev - 1) / 2.
               const round = Math.max(1, Math.floor((expectedRev - 1) / 2));
-              let lifecycleImage = priorRevisionPhoto?.image;
+              let lifecycleImage = priorRevisionPhoto?.image ?? boundPhoto;
               // ADR-145: a photo its sender sent with no words just before this change goes with it.
               const scope = senderScopeOf(update);
               const heldPhoto = !photoInput && !lifecycleImage && !admittedAlbum && scope && !openRequest.question
-                ? (await withRlsContext(db, system, (trx) => waitingPhotos(trx, TENANT, scope))).at(-1) ?? null : null;
+                ? (await withRlsContext(db, system, async (trx) => outsideBursts(trx, TENANT, await waitingPhotos(trx, TENANT, scope)))).at(-1) ?? null : null;
               if (heldPhoto) {
                 const stored = await withRlsContext(db, system, async (trx) => {
                   const claim = await claimPhoto(trx, TENANT, heldPhoto.updateId,
@@ -1014,7 +1070,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               // An album admitted in a group already passed ADR-160's gate (`actsInGroup`: addressed to the
               // bot, or a clear brief) when its photos settled or its sender's words bound them; its frozen
               // message keeps the words but not their mention entities, so it is not read for them again.
-              const addressed = !group || mediaKind === 'album' || message.reply_to_message?.from?.is_bot === true ||
+              const addressed = !group || mediaKind === 'album' || Boolean(boundPhoto) || message.reply_to_message?.from?.is_bot === true ||
                 mentionsBot || text.startsWith('/');
               const { requests, bindings, opening } = await withRlsContext(db, system, async (trx) => ({
                 requests: await activeChatRequests(trx, TENANT, chatId),
@@ -1210,6 +1266,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
                     if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
                     image = photo.ref;
+                  } else if (material && boundPhoto && !plan.resolves) {
+                    image = boundPhoto;
                   } else if (material && plan.resolves) {
                     const held = await withRlsContext(db, system, (trx) => readHeldPhoto(trx, TENANT, plan.resolves!));
                     if (held && held.chatId === chatId && held.senderId === senderId) { image = held.image; heldFrom = held.updateId; }
@@ -1222,7 +1280,15 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                       const claim = await claimPhoto(trx, TENANT, heldFrom, { byUpdateId: update.update_id, how: 'joined', requestId: target.requestId });
                       if (claim.byUpdateId !== update.update_id) image = null;
                     }
-                    if (image) used = await addPhotoMaterial(trx, TENANT, { requestId: target.requestId, taskId: target.currentTaskId, stage: target.stage }, image);
+                    const into = { requestId: target.requestId, taskId: target.currentTaskId, stage: target.stage };
+                    if (image) used = await addPhotoMaterial(trx, TENANT, into, image);
+                    // ADR-160 addendum: an album's (or a photo burst's) photos are its material too.
+                    let albumUsed: 'added' | 'passed' | null = null;
+                    if (material && admittedAlbum && !plan.resolves) {
+                      for (const albumImage of admittedAlbum.ref.images) {
+                        if ((albumUsed = await addPhotoMaterial(trx, TENANT, into, albumImage)) === 'passed') break;
+                      }
+                    }
                     // A photo with no words that became the design's own material needs no note (ADR-145's rule).
                     if (used === 'added' && photoWithoutWords) {
                       const answer = { status: 200, extra: chatAnswer(say(MEDIA_MESSAGES.photoAdded, lang, { title }),
@@ -1231,7 +1297,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     }
                     const photoLine = used ? photoMaterialLine(used)
                       : photoInput ? '[The requester also sent a photo. It is in the Telegram chat.]'
-                        : admittedAlbum ? '[The requester also sent an album of photos with these words. They are in the Telegram chat.]' : '';
+                        : albumUsed === 'added' ? `[The requester sent ${admittedAlbum!.ref.images.length} photos with this. They were added to the design's files.]`
+                          : admittedAlbum ? '[The requester also sent an album of photos with these words. They are in the Telegram chat.]' : '';
                     const words = photoLine ? `${photoWithoutWords ? '(no words)' : plan.words}\n${photoLine}` : plan.words;
                     const said = photoWithoutWords && material ? say(MEDIA_MESSAGES.photoPassed, lang, { title })
                       : noteText(plan.note, target.stage, target.title, lang);

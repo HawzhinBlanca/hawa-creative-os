@@ -131,3 +131,53 @@ Section 3 left this open: the source flow opened a voice note's confirmed words 
 - **Replays.** An update that bound an album replays through its recorded album decision (now read before the command check, so a `/use_source` confirmation replays too). Intake no longer reads an admitted album's words as a source's answer.
 
 Test: `apps/core/test/intake-cross-stream-adr160-156.test.ts` (F8 remainder: one request, the draft without `lifecycleSource`, a replay, the settle skipped; the 11-minute wait kept and not swept). Before the change, the first test opened a second request with only the heard words, and the second test opened the album at its settle.
+
+## 6. Addendum (2026-09-30): photos sent one by one are one set (a photo burst)
+
+**Branch:** `claude/fix-photo-burst`, on production `051d5606`. Not deployed. No new ADR number; no migration; no new dependency; no worker change.
+
+### 6.1 The incident
+
+At 12:16 UTC the owner sent the KAAE report-cover request again. Telegram delivered it as six separate photo messages **with no `media_group_id`**, within about 0.6 s: five with no words (updates 641865931 to 641865935), then one whose caption was exactly 1,024 UTF-16 units (641865936), cut mid-sentence. This is ordinary Telegram behaviour: photos picked together with "group" off, and some clients, arrive this way.
+
+- Each of the five photos was kept by ADR-145 and, at its own settle, answered "Got the photo. Send me the text for the design and I'll use it with the photo." Five messages; those photos were never attached.
+- The sixth was a single captioned photo, which section 3 had left uncovered: ADR-145's photo path opened a request (task d34648c9) at once with one photo and the cut words, and a paid design started.
+
+### 6.2 Decision
+
+**A burst is an album.** Every photo (or picture sent as a file) outside an album and not sent as a reply is kept as a one-photo album of its own, under the synthetic group `burst:<update_id>` (the part is marked `burst`). `albumSet` (section 2.8) already joins the albums of one sender (chat and topic) whose photos follow each other within the album quiet period (`HAWA_ALBUM_SETTLE_MS`, 8 s): the same rule now joins a burst's photos, and a burst to an album sent right before or after it. So a burst reuses the whole of ADR-143's and this ADR's machinery: the durable settle of the newest photo, the sweep (`overdueSettles` lists `burst:` groups like any other), the sender lock and the set lock order, one question at most, the caption from whichever photo carries it, a held text brief of the same sender, the cut-caption hold, the group gate, and the requester's words binding the set (`bindTextToAlbum`).
+
+- **The quiet window** is the album's own: 8 s after the newest photo. The incident's burst took 0.6 s; a slow network can spread a burst over a few seconds, and each new photo restarts the window, as it does for an album.
+- **Only while the worker schedules settles** (`briefHold`, which every current worker sends). A caller that does not schedule settles gets ADR-145's answers as before.
+- **Nothing is said on arrival.** Each photo is answered `settle-later` (kind `photo`, 8 s); only the newest photo's settle acts.
+- **A burst of one photo is a lone photo** (`alone`, a final state that replays): its settle hands it to ADR-145 unchanged. A photo with no words is then asked about once ("Got the photo. Send me the text…") or joined to its sender's words or design; a captioned photo is read as it would have been on arrival, now after the quiet period (ADR-156's routing, the keep-and-ask answers, the office notes). A captioned single photo therefore opens about 8 s later than before.
+- **A single captioned photo at the caption limit** (section 2.1: exactly 1,024; 1,020 to 1,023 ending mid-sentence; exactly 4,096) is held as a one-photo set: the section 2.2 question, the section 2.3 reading of the requester's next words, the section 2.4 join, the section 2.5 wait and lapse. The album contract needs two photos, so a one-photo set opens as words with a photo do (`lifecycleImage`, as ADR-145's kept photo): the decision is stored under the update that completed it (`photo` in `lifecycle_album_confirm`) and replays with the same canonical update. A photo with words sent as the rest makes it two photos, an album.
+- **A photo with no words is also kept as ADR-145 keeps it** (`lifecycle_photo_held`), so words sent right after a lone photo take it exactly as before. Once a set of two or more is decided (asked, frozen, joined, refused, lapsed), its kept photos are claimed for the set (`lifecycle_photo_used`, `how: album`); until then, words do not take one of them alone (`outsideBursts` in the intake route's brief and change paths). A burst photo that words took alone before its set settled leaves the set (`albumSet` treats it as closed) and is read alone.
+- **A burst sent while its sender's design is being made** (ADR-156 section 2.3; ADR-145's five-minute rule, `recentOpenBy`): a burst with no brief sent within five minutes after the sender's words opened a request that does not wait for changes is that design's material. Its photos are added to the task while the design has not started using pictures (`addPhotoMaterial`), with one answer, "Got the photos. I've added them to *T*." (`ALBUM_MESSAGES.burstAdded`); otherwise they are passed to the office as one note on that request (the late-change store, so Deliver waits) and the requester hears "Got the photos. *T* is already being made, so I've passed the photos to the office to use." (`burstPassed`). A burst whose words are a brief is read by ADR-156's routing as an album with words; see the ADR-156 addendum for its photos.
+- **Groups.** A captioned photo in a group that does not act (section 2.7) stays a passive message and is never kept. A burst of photos with no words is kept; addressed to no one, it is marked asked quietly, as an album is.
+- **Videos are not burst members.** A video outside an album is still answered by ADR-145 ("I can only use photos…"): an album with a video in it is refused whole, and treating a burst the same way would drop its photos.
+
+### 6.3 Blue/green and rollback
+
+The worker is unchanged: a burst photo's settle is kind `photo` or `album`, both known to every worker since ADR-143, within `MAX_SETTLE_DELAY_MS`. During a switch, a burst photo saved by the new Core whose settle lands on the previous Core is read by the previous rules: a photo with no words is asked about alone (ADR-145), and a captioned one is skipped until the new Core's sweep lists its group again (after the quiet period plus a minute; the sweep runs every five minutes). Rolling Core back to `051d5606` leaves saved `burst:` groups that that Core's `albumSet` can join to a real album sent within 8 s of them; nothing else reads them.
+
+### 6.4 Consequences
+
+- The incident's sequence gives one question and no request, and the rest then opens one request with the six photos and the joined text. The five "send me the text" replies and the paid design from a cut caption do not happen.
+- A photo with words sent alone waits the quiet period (about 8 s) before it is read.
+- No model call is added. A burst's settle reads the ledger and the blob store only; a cut caption held costs nothing until the requester's rest arrives.
+- The Sorani wording of `burstAdded` and `burstPassed` is the implementer's and awaits native review (`SORANI_REVIEW.md`).
+
+### 6.5 Verification
+
+`apps/core/test/lifecycle-photo-burst.test.ts` (11 tests, per-file PostgreSQL, the worker intake route with `briefHold` as the production worker sends it, photos 0.1 s apart, then each photo's settle):
+
+- the incident: five photos with no words and a sixth with a 1,024-unit caption give exactly one outgoing message, the section 2.2 question quoting the tail, and no request; the rest as a plain message opens one request with the six photos in order and the joined text; replays and the burst's later settles say and open nothing more;
+- the cut caption on the first photo instead of the last;
+- a burst of three with a short caption: one request with three photos from the newest photo's settle;
+- a lone photo with no words (asked about once, then taken by words), and a lone captioned photo (one request with its photo);
+- a lone photo whose caption was cut: held, asked, then one request with the photo and the whole text;
+- two bursts two minutes apart: two questions (2 and 3 photos), and words take the newer;
+- a burst right after a brief: one answer and three task files; a burst with change words ("use these logos") for a design being made: one note for the office and both photos added (the ADR-156 addendum); a brief just before a burst: one request with all three photos; a group burst addressed to no one: nothing said or started; a burst whose settles were lost: listed by the sweep, one question.
+
+Against the Core sources of `051d5606` (the test file alone applied), 10 of the 11 fail (the group test passes there too: nothing was said); the incident test fails with five messages where one is expected. With this change all pass. Also run: `npx vitest run apps/core apps/worker packages/integrations packages/contracts` (322 files, 3,415 passed, 4 skipped; the Desk bundle test needs the Desk built first), `pnpm typecheck`, `pnpm lint`. Not run: chaos scenarios, live Telegram, a real client that sends bursts, a native Sorani review.

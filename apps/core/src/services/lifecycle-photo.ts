@@ -52,6 +52,22 @@ export function heldPhotoCandidate(update: unknown): { fileId: string; messageId
     topic: msg.message_thread_id === undefined ? '' : String(msg.message_thread_id) };
 }
 
+/**
+ * A still photo (or a picture sent as a file) outside an album and not a reply, with or without words:
+ * a possible member of a photo burst (ADR-160 addendum). Telegram delivers several photos picked together
+ * with "group" off, and some clients always, as separate messages with no media_group_id, about a second
+ * apart; such a burst is one set of photos, as an album is. Null for anything else.
+ */
+export function burstPhotoCandidate(update: unknown): { captioned: boolean } | null {
+  if (!update || typeof update !== 'object' || Array.isArray(update)) return null;
+  const msg = (update as Record<string, unknown>).message as Record<string, unknown> | undefined;
+  if (!msg || typeof msg !== 'object' || msg.reply_to_message || msg.media_group_id !== undefined) return null;
+  const from = msg.from as { id?: unknown; is_bot?: unknown } | undefined;
+  if (!lifecycleStillImageFile(msg) || !Number.isSafeInteger(from?.id) || Number(from?.id) <= 0 || from?.is_bot === true ||
+      !Number.isSafeInteger(msg.message_id) || Number(msg.message_id) <= 0) return null;
+  return { captioned: typeof msg.caption === 'string' && msg.caption.trim() !== '' };
+}
+
 /** A captionless image needs a reply identity; Core verifies its recorded request/revision. */
 export function lifecyclePhotoInput(update: unknown): {
   fileId: string; directive: string; captionless: boolean; replyMessageId: string | null;
