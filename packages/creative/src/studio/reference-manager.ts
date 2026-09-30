@@ -15,7 +15,8 @@ export interface CircularGuardCheck {
 
 export interface ExemplarEntry {
   rank: number;
-  status: 'CONFIRMED' | 'pending' | 'dropped';
+  /** office-published: the office's own published post, a photo reference only; not owner-confirmed. */
+  status: 'CONFIRMED' | 'pending' | 'dropped' | 'office-published';
   sha256: string;
   path: string;
   filename: string;
@@ -34,6 +35,13 @@ export interface ExemplarEntry {
   craftScore?: number;
   representativenessScore?: number;
   receipt?: any;
+  recipe?: string;
+  subject?: string[];
+  photoCount?: number;
+  descriptor?: string;
+  language?: string;
+  pairedWith?: string;
+  provenance?: Record<string, string>;
 }
 
 export interface KaaeExemplarsManifest {
@@ -43,6 +51,8 @@ export interface KaaeExemplarsManifest {
   confirmedAt: string;
   confirmationMethod: string;
   totalExemplars: number;
+  officePublishedExemplars?: number;
+  officePublishedPolicy?: string;
   notice: string;
   additionsPolicy: string;
   exemplars: ExemplarEntry[];
@@ -53,6 +63,8 @@ export interface KaaeExemplarsManifest {
       filename: string;
       formerRank: number;
       reason: string;
+      reconsideredAt?: string;
+      reconsideration?: string;
     }>;
   };
 }
@@ -369,8 +381,10 @@ export class ReferenceLibraryManager {
     if (params.reason) entry.reason = params.reason;
     if (params.recommendedFor) entry.recommendedFor = params.recommendedFor;
 
-    // Filter confirmed entries for ranking
-    const confirmed = manifest.exemplars.filter(e => e.status !== 'pending' && e.status !== 'dropped');
+    // Filter confirmed entries for ranking. Office-published photo references keep their own
+    // place after the confirmed set; confirming one moves it into the confirmed ranking.
+    const confirmed = manifest.exemplars.filter(e => e.status !== 'pending' && e.status !== 'dropped' && e.status !== 'office-published');
+    const officePublished = manifest.exemplars.filter(e => e.status === 'office-published');
     const pending = manifest.exemplars.filter(e => e.status === 'pending');
 
     // Remove current entry from confirmed list if present, then re-insert at targetRank
@@ -384,7 +398,11 @@ export class ReferenceLibraryManager {
       e.rank = idx + 1;
     });
 
-    manifest.exemplars = [...otherConfirmed, ...pending];
+    officePublished.forEach((e, idx) => {
+      e.rank = otherConfirmed.length + idx + 1;
+    });
+
+    manifest.exemplars = [...otherConfirmed, ...officePublished, ...pending];
     manifest.totalExemplars = otherConfirmed.length;
 
     this.saveManifest(manifest);

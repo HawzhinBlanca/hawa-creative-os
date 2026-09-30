@@ -5,8 +5,12 @@ describe('P02 — Exemplar Retrieval (arXiv 2311.13602 RALF)', () => {
   const index = new ExemplarRetrievalIndex();
 
   it('loads all six confirmed exemplars and filters out dropped and pending entries', () => {
-    const exemplars = index.getConfirmedExemplars();
+    const admitted = index.getConfirmedExemplars();
+    // The twelve office-published photo references are admitted beside them (ADR-170), never as confirmed.
+    expect(admitted.filter(e => e.status === 'office-published').length).toBe(12);
+    const exemplars = admitted.filter(e => e.status === 'CONFIRMED');
     expect(exemplars.length).toBe(6);
+    expect(exemplars.every(e => e.recipe === 'typographic' && e.photoCount === 0)).toBe(true);
 
     const filenames = exemplars.map(e => e.filename);
     expect(filenames).toContain('post1_accreditation_mandate.png');

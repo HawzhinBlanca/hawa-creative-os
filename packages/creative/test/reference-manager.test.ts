@@ -157,8 +157,12 @@ describe('P11 — Reference Library & Ingestion Manager', () => {
     // Re-check: manifest now has 7 confirmed exemplars
     const manifestAfter = manager.getManifest();
     expect(manifestAfter.totalExemplars).toBe(7);
-    const confirmedList = manifestAfter.exemplars.filter(e => e.status !== 'pending' && e.status !== 'dropped');
+    const confirmedList = manifestAfter.exemplars.filter(e => e.status !== 'pending' && e.status !== 'dropped' && e.status !== 'office-published');
     expect(confirmedList.length).toBe(7);
+    // The office-published photo references stay unconfirmed, ranked after the confirmed set.
+    const officePublished = manifestAfter.exemplars.filter(e => e.status === 'office-published');
+    expect(officePublished.length).toBe(12);
+    expect(officePublished.map(e => e.rank)).toEqual(Array.from({ length: 12 }, (_, i) => 8 + i));
     expect(indexBefore.retrieveTopExemplars({ text: 'diploma' }, 1).retrievedExemplars[0].filename).toBe('kurdish_accreditation_diploma_2026.png');
     expect(confirmedList[1].filename).toBe('kurdish_accreditation_diploma_2026.png');
   });
