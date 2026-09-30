@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T17:16:51Z",
+  "generatedAt": "2026-09-30T18:27:12Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 654,
+  "fileCount": 655,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "c6ab42db64caa9d1c608add5543c2a71ca78e336ad557f4f11df9d5b3357a29c",
-      "bytes": 3980
+      "sha256": "30dbe5afb17de4a15e83e87e47ff716f12526e338eb3c213156d4de75bdfdd37",
+      "bytes": 3973
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -878,6 +878,11 @@
       "bytes": 3915
     },
     {
+      "path": "adrs/180_owner_house_style_and_office_caption.md",
+      "sha256": "a9bbb3a2da6723bebc0b31261e3e68a626d7268f9d9e216558fd8217a604a300",
+      "bytes": 7918
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1529,8 +1534,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "b83c400bd51687d1b16042522ab19ebe9a19ec49d1d37980d591143390dc8c81",
-      "bytes": 55632
+      "sha256": "90d1e96e4b8fa0c5ff891a77a0cae29bd334adb0ae30245b3f1b982e7bef97e5",
+      "bytes": 56084
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2414,8 +2419,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "eee3b8949177a64f44af9e529ea9dc4a7009880d70b42cd0571bd8d2378089dd",
-      "bytes": 550181
+      "sha256": "9d1863999a18a5cd810eab8b5431649c0e3c2d88a830d640390f910d2b205d4a",
+      "bytes": 552013
     },
     {
       "path": "plans/user-stories.csv",
