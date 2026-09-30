@@ -26,7 +26,8 @@ const lines: string[] = [
   'quoted words, a numbered list) and must stay as they are.',
   '',
   'Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status, deadline and change phrases in',
-  '`apps/core/src/services/requester-turn.ts`, and the yes-words in `apps/core/src/services/lifecycle-source-reply.ts`).',
+  '`apps/core/src/services/requester-turn.ts`, the yes-words in `apps/core/src/services/lifecycle-source-reply.ts`, and',
+  'the "that is the whole text" words in `apps/core/src/services/lifecycle-album.ts`, ADR-148).',
   '',
 ];
 let count = 0;

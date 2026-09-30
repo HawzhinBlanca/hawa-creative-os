@@ -1,4 +1,4 @@
-# Photo and image-file intake (ADR-068, ADR-069, ADR-143)
+# Photo and image-file intake (ADR-068, ADR-069, ADR-143, ADR-148)
 
 Requirements: FR-002, FR-004, FR-005, FR-011, FR-060, NFR-001, NFR-006.
 Local evidence: `plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md`; ADR-143 section 5.
@@ -40,6 +40,43 @@ words waits two hours (`HAWA_ALBUM_BRIEF_WINDOW_MINUTES`); a captioned one waits
 - "yes", "go ahead", "use them", "بەڵێ" or a plain `/use_album` starts a captioned album,
   and for an album with no words is asked again what to design;
 - thanks, greetings and questions are answered as before and the album keeps waiting.
+
+**A caption Telegram cut (ADR-148).** A standard Telegram account can send at most
+1,024 characters of caption (UTF-16 units) and Telegram silently drops the rest (Premium:
+4,096). A caption of exactly 1,024 (or up to 4 short of it and ending mid-sentence, or
+exactly 4,096) is never designed from as it is. A longer caption came whole from a Premium
+account and is read as any caption. At the settle the bot says once, quoting the last words
+that arrived: "I have your photos, but Telegram cut your text short: it stops at "…next
+steps tow". Please send me the rest, or the whole text again, and I'll use it with these
+photos." (Sorani in a Sorani chat). Then, for 10 minutes after that question:
+
+- the rest, a message or a photo with words, joins the caption where Telegram cut it (a word
+  cut in two is whole again; text sent again that repeats the end is not doubled; the whole
+  text sent again replaces the caption), and one request opens with every photo;
+- "cancel" or "never mind" drops the photos and says so;
+- "ok" or "yes" is asked again, in fewer words; "that's the whole text" opens the caption
+  as it arrived;
+- thanks, greetings, questions and "when will it be ready?" are answered as usual and are
+  never joined.
+
+After 10 minutes (the album's delayed settle, backed by the poller's sweep) nothing more is
+joined. The caption without its unfinished last sentence opens, if that is still a brief;
+otherwise the album lapses and the bot says so in plain words ("I didn't receive the rest
+of your text, so I haven't started a design with these photos. …"). A lapsed, cancelled
+or superseded album is closed and never swept again. A single photo (not an album) with a
+cut caption, and a voice note sent as the rest, are not covered yet.
+
+**Albums sent back to back (ADR-148).** Telegram sends at most ten photos per album and
+splits more into albums sent one right after the other. Albums from one sender whose photos
+follow each other within the quiet period are one set: asked about once ("I have your 13
+photos …"), and a brief binds every photo of the set (at most 20 per request).
+
+**Group chats (ADR-144 §2.7, ADR-148).** In a group the bot acts only on what is addressed
+to it: a reply to one of its messages, a mention of it (in the text or the caption), or a
+command. An album, a photo with words, a file, a voice note or a video that is not
+addressed to it starts nothing and says nothing; a photo or album with no words is kept
+quietly, and the sender's own words to the bot can use it. A later request from another
+member never closes a member's waiting album.
 
 A text brief sent just **before** the photos waits `HAWA_BRIEF_PHOTO_WAIT_MS`
 (default 15 s) for them. An album that follows within that time takes the brief, and

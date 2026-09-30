@@ -11,7 +11,8 @@ re-run the script. `⏎` is a line break; `{title}`, `{text}`, `{list}` are fill
 quoted words, a numbered list) and must stay as they are.
 
 Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status, deadline and change phrases in
-`apps/core/src/services/requester-turn.ts`, and the yes-words in `apps/core/src/services/lifecycle-source-reply.ts`).
+`apps/core/src/services/requester-turn.ts`, the yes-words in `apps/core/src/services/lifecycle-source-reply.ts`, and
+the "that is the whole text" words in `apps/core/src/services/lifecycle-album.ts`, ADR-148).
 
 ## sources
 
@@ -197,6 +198,10 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `albums.question` | I have your {count} photos. What would you like me to design with them? Please tell me what it is for and the exact words to put on it. | {count} وێنەکەتم پێگەیشت. دەتەوێت چ دیزاینێکیان پێ دروست بکەم؟ تکایە بۆم بنووسە بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن. | needs native review |
 | `albums.followUp` | Happy to. What should I design with these photos? Tell me what it is for and the exact words to put on it. | بە دڵخۆشییەوە. چ دیزاینێک بەم وێنانە دروست بکەم؟ پێم بڵێ بۆ چییە و ئەو دەقانەی دەبێت لەسەری بنووسرێن. | needs native review |
 | `albums.latePhoto` | This photo arrived after I had started your design, so it isn't part of it. When the draft is ready, just send the photo again and tell me what to change. | ئەم وێنەیە دوای دەستپێکردنی دیزاینەکەت گەیشت، بۆیە بەشێک نییە لێی. کاتێک ڕەشنووسەکە ئامادە بوو، تەنها وێنەکە دووبارە بنێرەوە و پێم بڵێ چی بگۆڕدرێت. | needs native review |
+| `albums.captionCut` | I have your photos, but Telegram cut your text short: it stops at "…{tail}". Please send me the rest, or the whole text again, and I'll use it with these photos. | وێنەکانتم پێگەیشت، بەڵام تێلیگرام دەقەکەتی کورت کردەوە: لە «…{tail}» دەوەستێت. تکایە ئەوەی ماوەتەوە بۆم بنێرە، یان هەموو دەقەکە دووبارە بنێرەوە، و لەگەڵ ئەم وێنانە بەکاری دەهێنم. | needs native review |
+| `albums.captionCutAgain` | I still need the rest of your text after "…{tail}". Please send it as a message, or send the whole text again. | هێشتا پێویستم بە ماوەی دەقەکەتە دوای «…{tail}». تکایە وەک نامەیەک بینێرە، یان هەموو دەقەکە دووبارە بنێرەوە. | needs native review |
+| `albums.captionCutCancelled` | OK, I won't make anything with these photos. Send them again whenever you're ready. | باشە، هیچ شتێک بەم وێنانە دروست ناکەم. هەر کاتێک ئامادە بوویت دووبارە بیاننێرەوە. | needs native review |
+| `albums.captionCutLapsed` | I didn't receive the rest of your text, so I haven't started a design with these photos. Whenever you're ready, send the photos again and then the whole text as a message. | ماوەی دەقەکەتم پێنەگەیشت، بۆیە هێشتا دیزاینم بەم وێنانە دەست پێنەکردووە. هەر کاتێک ئامادە بوویت، وێنەکان دووبارە بنێرەوە و پاشان هەموو دەقەکە وەک نامەیەک بنێرە. | needs native review |
 | `albums.photoMissing` | One of your photos could not be saved, so I have not started a design. Please send the photos again. | یەکێک لە وێنەکانت پاشەکەوت نەکرا، بۆیە هێشتا دیزاینم دەست پێنەکردووە. تکایە وێنەکان دووبارە بنێرەوە. | needs native review |
 | `albums.onePhoto` | I received only one photo from this album. Please send the photos again together with what you would like designed. | تەنها یەک وێنەم لەم ئەلبومە پێگەیشت. تکایە وێنەکان دووبارە بنێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
 | `albums.captions` | Your photos came with different captions, so I am not sure which one is the brief. Please send the brief again as one message. | وێنەکانت چەند نووسینێکی جیاوازیان لەگەڵ بوو، بۆیە نازانم کامیان داواکارییەکەیە. تکایە داواکارییەکە وەک یەک نامە دووبارە بنێرەوە. | needs native review |
@@ -211,4 +216,4 @@ Also awaiting review: the Sorani words the bot *reads* (approval, cancel, status
 | `albums.somethingWrong` | Something went wrong with these photos. Please send them again, with what you would like designed. | کێشەیەک لەگەڵ ئەم وێنانەدا ڕوویدا. تکایە دووبارە بیاننێرەوە، لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
 | `albums.tooLarge` | These photos are too large together. Please send fewer or smaller photos. | ئەم وێنانە پێکەوە زۆر گەورەن. تکایە ژمارەیەکی کەمتر یان وێنەی بچووکتر بنێرە. | needs native review |
 
-153 lines.
+157 lines.

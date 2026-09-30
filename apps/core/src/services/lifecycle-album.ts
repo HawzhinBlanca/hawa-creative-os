@@ -7,7 +7,9 @@ import { parseLifecycleAlbumRef, type BlobRef, type LifecycleAlbumRef } from '@h
 import { sql, type Database, type Kysely, type BlobStore } from '@hawa/db';
 import { lifecycleStillImageFile, retainLifecyclePhoto } from './lifecycle-photo.js';
 import { classifyWithHeuristics, isSoraniText } from './telegram-classifier.js';
-import { ALBUM_MESSAGES, requesterLang, say } from '@hawa/integrations';
+import { readIntentByRules } from './requester-turn.js';
+import { unconfirmedSource } from './lifecycle-source-natural.js';
+import { ALBUM_MESSAGES, TELEGRAM_CAPTION_LIMIT, requesterLang, say } from '@hawa/integrations';
 
 type Update = { update_id: number; [key: string]: unknown };
 type Message = Record<string, unknown>;
@@ -122,9 +124,48 @@ export async function verifyAlbumSnapshot(trx: Tx, tenant: string, ref: Lifecycl
  * is answered at once.
  */
 export function partReply(part: Part): AlbumMessage {
-  return part.error
+  // In a group, a refused photo is said at the settle, and only if the album was addressed to the bot.
+  return part.error && !isGroupChat(record(part.source.message))
     ? { status: 422, message: part.error, noticeKey: `album-error:${part.source.update_id}` }
     : { status: 202, message: '', noticeKey: `album-received:${part.groupKey}`, settle: true };
+}
+
+/** A group or supergroup, where the bot acts only on what is addressed to it (ADR-144 §2.7). */
+export const isGroupChat = (message: Message | null): boolean =>
+  ['group', 'supergroup'].includes(String(record(message?.chat)?.type ?? ''));
+
+/**
+ * Whether a message is addressed to the bot, by the rule the intake route applies to text (ADR-144
+ * §2.7): a reply to the bot, a mention of it (in the text or the caption), or a command. A message in a
+ * private chat always is.
+ */
+export function addressedToBot(message: Message | null): boolean {
+  if (!message) return false;
+  if (!isGroupChat(message)) return true;
+  if (record(record(message.reply_to_message)?.from)?.is_bot === true) return true;
+  const words = typeof message.text === 'string' ? message.text : typeof message.caption === 'string' ? message.caption : '';
+  if (words.trimStart().startsWith('/')) return true;
+  const entities = Array.isArray(message.entities) ? message.entities : Array.isArray(message.caption_entities) ? message.caption_entities : [];
+  const botName = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').toLowerCase();
+  return entities.some((entity: unknown) => {
+    const e = record(entity);
+    if (e?.type === 'text_mention') return record(e.user)?.is_bot === true;
+    if (e?.type !== 'mention' || !Number.isInteger(e.offset) || !Number.isInteger(e.length)) return false;
+    const mention = words.slice(Number(e.offset), Number(e.offset) + Number(e.length)).toLowerCase();
+    return mention.endsWith('bot') || (Boolean(botName) && mention === `@${botName}`);
+  });
+}
+
+/**
+ * What acts in a group (ADR-144 §2.7, the rule planTurn applies to text): words addressed to the bot, or
+ * a clear brief (said to be new, or with a divider or a copy heading). Always true in a private chat.
+ */
+export function actsInGroup(message: Message | null): boolean {
+  if (addressedToBot(message)) return true;
+  const words = typeof message?.text === 'string' ? message.text : typeof message?.caption === 'string' ? message.caption : '';
+  const reading = readIntentByRules(words);
+  return reading.intent === 'new_brief' && (reading.explicitNew === true || /\n\s*[_\-=*]{3,}\s*\n/.test(words) ||
+    /\n\s*(?:content|copy|text|details|دەق|ناوەڕۆک)\s*:/i.test(words));
 }
 
 /** The caller supplies a tenant-scoped transaction runner, not a long transaction around Telegram. */
@@ -220,6 +261,12 @@ export async function confirmAlbum(trx: Tx, tenant: string, update: Update): Pro
   if (replies.length > 1 || (replies.length === 1 && messages.some((message) => !record(message.reply_to_message))))
     return refuse(say(ALBUM_MESSAGES.mixedReplies, lang));
   if (captions.length > 1) return refuse(say(ALBUM_MESSAGES.captions, lang));
+  // ADR-148: a caption Telegram cut is never the whole brief; the album waits for the rest.
+  const cut = cutCaptionOf(messages);
+  if (cut !== null) {
+    return finish({ status: 202, message: say(ALBUM_MESSAGES.captionCut, lang, { tail: captionTail(cut) }),
+      noticeKey: `album-confirm:${update.update_id}` });
+  }
   if (!captions.length && !replies.length) {
     // No brief: ask what to design (ADR-143); a later brief from this sender binds the album.
     await markSettled(trx, tenant, groupKey, 'asked', update.update_id);
@@ -253,7 +300,9 @@ export type AlbumOutcome =
   | { kind: 'none' }
   | { kind: 'skip' }
   | { kind: 'reply'; reply: AlbumMessage }
-  | { kind: 'snapshot'; snapshot: AlbumSnapshot };
+  | { kind: 'snapshot'; snapshot: AlbumSnapshot }
+  /** ADR-148: settle this album again after `delayMs`; `notice` is said beside it (once, keyed by the update). */
+  | { kind: 'wait'; delayMs: number; notice: string | null };
 
 type Lang = 'en' | 'ckb';
 
@@ -274,6 +323,149 @@ export const albumResumeMs = (): number => envNumber('HAWA_ALBUM_RESUME_HOURS', 
 const LATE_SETTLE_MS = 5 * 60_000;
 /** A held brief joins an album that started at most this long after it, and is never held longer. */
 const HELD_BRIEF_MS = 10 * 60_000;
+
+// --- ADR-148: a caption Telegram cut at its limit ----------------------------------------------------
+//
+// A standard Telegram account can send at most TELEGRAM_CAPTION_LIMIT (1024) UTF-16 units of caption,
+// and Telegram silently keeps only the first 1024 (Premium: 4096). A caption at the limit is therefore
+// never taken as the whole brief: the album waits for the rest (the sender's next message joins it),
+// asked once, until the wait ends. Then it opens without its unfinished last sentence, if what is left
+// is still a brief; otherwise it lapses, and the requester is told.
+
+/** Telegram Premium's caption limit: a caption of exactly this length was cut too. */
+const PREMIUM_CAPTION_LIMIT = 4096;
+/** Telegram can drop trailing spaces or line breaks after its cut: a caption this much short can be cut too. */
+const CUT_TRIM_SLACK = 4;
+/** The end of a finished sentence or line (a closing quote or bracket after it, or an emoji, still ends it). */
+const FINISHED = /[.!?\u061F\u06D4\u2026)\]"'\u00BB\u201D\u2019\p{Extended_Pictographic}]$/u;
+const endsMidSentence = (text: string): boolean => {
+  const t = text.trimEnd();
+  return Boolean(t) && !FINISHED.test(t);
+};
+
+/**
+ * Whether Telegram may have cut this caption, counted as Telegram counts (UTF-16 units, the JavaScript
+ * length): exactly at the standard limit, or a few units short of it and ending mid-sentence, or exactly
+ * at the Premium limit. A longer caption came from a Premium account and arrived whole.
+ */
+export function captionMayBeCut(caption: unknown): boolean {
+  if (typeof caption !== 'string') return false;
+  const n = caption.length;
+  if (n === TELEGRAM_CAPTION_LIMIT || n === PREMIUM_CAPTION_LIMIT) return true;
+  return n < TELEGRAM_CAPTION_LIMIT && n >= TELEGRAM_CAPTION_LIMIT - CUT_TRIM_SLACK && endsMidSentence(caption);
+}
+/**
+ * How long a cut album waits for the rest after it was asked for. It is the worker's longest settle delay
+ * (apps/worker core-client.ts; a test ties the two), so one delayed settle ends the wait.
+ */
+export const CUT_CAPTION_WAIT_MS = HELD_BRIEF_MS;
+
+/**
+ * The caption without its unfinished last sentence: only the last line is trimmed, back to its last
+ * finished sentence (or away, when it has none). A caption that ends a sentence is kept whole.
+ */
+export function withoutCutSentence(caption: string): string {
+  const text = caption.trimEnd();
+  if (!endsMidSentence(text)) return text.trim();
+  const at = text.lastIndexOf('\n');
+  const end = [...text.slice(at + 1).matchAll(/[.!?\u061F\u06D4\u2026](?=\s)/gu)].at(-1);
+  return (end?.index !== undefined ? text.slice(0, at + 1 + end.index + 1) : text.slice(0, Math.max(at, 0))).trim();
+}
+
+/** The last few words that arrived, quoted back so the requester sees where the text stops. */
+export function captionTail(caption: string): string {
+  const words = (caption.trimEnd().split('\n').at(-1) ?? '').trim().split(/\s+/).filter(Boolean);
+  const tail = words.slice(-5).join(' ');
+  return tail.length > 60 ? tail.slice(-60).trimStart() : tail;
+}
+
+/**
+ * How many leading characters of the rest repeat the end of what arrived ("\u2026steps tow" then "steps
+ * toward \u2026"): the longest such overlap of at least three characters that starts at a word of the
+ * caption, compared with spaces and line breaks folded and case ignored. The count is in the rest's
+ * own characters.
+ */
+function overlapLength(kept: string, rest: string): number {
+  const folded: string[] = [];
+  const starts: number[] = [];
+  for (let i = 0; i < rest.length; i++) {
+    if (/\s/u.test(rest[i])) {
+      if (folded.at(-1) !== ' ') { folded.push(' '); starts.push(i); }
+    } else { folded.push(rest[i].toLowerCase()); starts.push(i); }
+  }
+  const tail = kept.replace(/\s+/gu, ' ').toLowerCase();
+  const head = folded.join('');
+  for (let k = Math.min(tail.length, head.length); k >= 3; k--) {
+    if (!tail.endsWith(head.slice(0, k))) continue;
+    if (tail.length > k && /[\p{L}\p{N}]/u.test(tail[tail.length - k - 1])) continue;
+    return k < starts.length ? starts[k] : rest.length;
+  }
+  return 0;
+}
+
+/**
+ * The rest of a cut caption joins it where Telegram cut it. A rest that repeats the end of what arrived
+ * (the cut sentence or word sent again) overlaps it instead of doubling it, and the whole text sent
+ * again replaces the caption. Otherwise: a cut mid-word joins with nothing between ("tow" + "ard"), a
+ * cut mid-sentence with a space, and a caption that ended a sentence with a line break.
+ */
+export function joinCutCaption(caption: string, rest: string): string {
+  const flat = (text: string) => text.replace(/\s+/gu, ' ').trim().toLowerCase();
+  const kept = caption.trimEnd();
+  const more = rest.trim();
+  const head = flat(kept).slice(0, 80);
+  if (head.length >= 40 && flat(more).startsWith(head)) return more;
+  const overlap = overlapLength(kept, more);
+  if (overlap > 0) return kept + more.slice(overlap);
+  const last = kept.at(-1) ?? '';
+  const first = more[0] ?? '';
+  const between = !endsMidSentence(kept) ? '\n'
+    : (/\p{L}/u.test(last) && /[\p{Ll}\p{Lo}]/u.test(first)) || (/\p{N}/u.test(last) && /\p{N}/u.test(first)) ? '' : ' ';
+  return kept + between + more;
+}
+
+/** "That's all", "nothing else", "\u0647\u06CC\u0686\u06CC \u062A\u0631 \u0646\u06CC\u06CC\u06D5": the caption was the whole text after all. */
+const TEXT_COMPLETE = /^(?:(?:no|nope)[\s,]+)?(?:(?:that'?s|that\s+is|this\s+is|it'?s|it\s+is|that\s+was)\s+(?:all|it|everything|the\s+(?:whole|full|complete|entire)\s+(?:text|thing|message|caption)|complete|the\s+end)|(?:there'?s|there\s+is)\s+(?:nothing|no)\s+more|nothing\s+(?:else|more))\b|^(?:\u0647\u06D5\u0645\u0648\u0648\u06CC\s+\u0626\u06D5\u0648\u06D5\u06CC\u06D5|\u0626\u06D5\u0648\u06D5\s+\u0647\u06D5\u0645\u0648\u0648\u06CC\s+\u0628\u0648\u0648|\u0647\u06CC\u0686\u06CC\s+\u062A\u0631\s+\u0646\u06CC\u06CC\u06D5|\u0647\u06CC\u0686\u06CC\s+\u062A\u0631\s+\u0646\u06D5\u0645\u0627\u0648\u06D5)/iu;
+
+/**
+ * What the requester's words mean while their cut album waits for the rest (the requester-turn rules,
+ * ADR-144, not a list of their own): an OK asks again, a cancel drops the album, thanks, a greeting, a
+ * question or a status question are left to intake, "that's all" says the caption was whole, and any
+ * other words are the rest.
+ */
+export function readCutReply(text: string): 'ok' | 'cancel' | 'complete' | 'other' | 'rest' {
+  const words = text.trim();
+  if (isAffirmativeOnly(words)) return 'ok';
+  if (words.length <= 80 && TEXT_COMPLETE.test(words)) return 'complete';
+  const reading = readIntentByRules(words);
+  // "never mind, wrong photos": a cancel said first, then why.
+  const firstClause = words.split(/[,.;!\u061B\u060C\u2014\u2013]/u)[0].trim();
+  if (reading.intent === 'cancel' || (words.length <= 100 && firstClause !== words && readIntentByRules(firstClause).intent === 'cancel')) return 'cancel';
+  if (reading.intent === 'approval') return 'ok';
+  if (reading.intent === 'acknowledgement' || reading.intent === 'status') return 'other';
+  if (reading.intent === 'conversation') {
+    const heard = classifyWithHeuristics(words, false, false);
+    if (heard.kind === 'question' || heard.kind === 'standing_rule' || heard.reason === 'Greeting or command detected') return 'other';
+  }
+  return 'rest';
+}
+
+/** The caption Telegram may have cut, as it arrived, or null. */
+const cutCaptionOf = (messages: Message[]): string | null => {
+  const cut = messages.map((message) => message.caption).find(captionMayBeCut);
+  return typeof cut === 'string' ? cut : null;
+};
+/** The question for the rest, recorded once per album (under its first group): its update and when. */
+async function cutAsked(trx: Tx, tenant: string, groupKey: string): Promise<{ updateId: number; at: number } | null> {
+  const row = (await sql<{ payload: { updateId: number }; at: number }>`SELECT payload,
+      (extract(epoch FROM received_at) * 1000)::float8 AS at FROM hawa.inbox_events
+    WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_album_cut' AND source_event_id = ${groupKey}`.execute(trx)).rows[0];
+  return row ? { updateId: Number(row.payload.updateId), at: Number(row.at) } : null;
+}
+async function recordCutQuestion(trx: Tx, tenant: string, keys: string[], updateId: number, chatId: string): Promise<void> {
+  await save(trx, tenant, 'lifecycle_album_cut', keys[0], { updateId, chatId }, hash({ groupKey: keys[0], updateId }));
+  await markSettled(trx, tenant, keys, 'asked', updateId);
+}
 
 const REFERENCE_DIRECTIVE = 'The requester attached an album with no written instructions. Use it as reference for the existing brief; do not infer or change factual copy from image text.';
 const easternDigits = (n: number) => String(n).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
@@ -340,14 +532,26 @@ function joinBriefs(first: string, second: string): string {
   return prefix + [first.replace(NEW_COMMAND, '').trim(), second.replace(NEW_COMMAND, '').trim()].filter(Boolean).join('\n\n');
 }
 
-type SettledState = 'asked' | 'refused' | 'superseded' | 'expired';
-async function markSettled(trx: Tx, tenant: string, groupKey: string, state: SettledState, updateId: number): Promise<void> {
-  await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
-    VALUES (${tenant}::uuid, 'lifecycle_album_settled', ${groupKey}, 'lifecycle_album_settled',
-      ${JSON.stringify({ state, updateId })}::jsonb, ${hash({ groupKey, state, updateId })}, true)
-    ON CONFLICT DO NOTHING`.execute(trx);
+/** `asked`: the album waits for words; every other state is final (`cancelled` by the requester, ADR-148). */
+type SettledState = 'asked' | 'refused' | 'superseded' | 'expired' | 'cancelled';
+/**
+ * Records an album's state, for each group of its set. inbox_events is append-only, so a final state
+ * reached after `asked` is its own row (`lifecycle_album_closed`), which settledState reads first: an
+ * asked album that lapses, or that a later request supersedes, is not settled or swept again (ADR-148).
+ */
+async function markSettled(trx: Tx, tenant: string, keys: string | string[], state: SettledState, updateId: number): Promise<void> {
+  for (const groupKey of typeof keys === 'string' ? [keys] : keys) {
+    for (const account of state === 'asked' ? ['lifecycle_album_settled'] : ['lifecycle_album_settled', 'lifecycle_album_closed']) {
+      await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+        VALUES (${tenant}::uuid, ${account}, ${groupKey}, ${account},
+          ${JSON.stringify({ state, updateId })}::jsonb, ${hash({ groupKey, state, updateId })}, true)
+        ON CONFLICT DO NOTHING`.execute(trx);
+    }
+  }
 }
 async function settledState(trx: Tx, tenant: string, groupKey: string): Promise<SettledState | null> {
+  const closed = await event<{ state: SettledState }>(trx, tenant, 'lifecycle_album_closed', groupKey);
+  if (closed) return closed.payload.state;
   const row = await event<{ state: SettledState }>(trx, tenant, 'lifecycle_album_settled', groupKey);
   return row?.payload.state ?? null;
 }
@@ -360,48 +564,90 @@ async function albumQuestion(trx: Tx, tenant: string, chatId: string, groupKey: 
   return { status: 202, message: ALBUM_TEXT.question(selected.length, lang), noticeKey: `album-question:${groupKey}` };
 }
 
-/** Receipt times of a group's saved photos, in database time (ms). */
-async function albumTimes(trx: Tx, tenant: string, groupKey: string): Promise<{ first: number; last: number; now: number }> {
+/** Receipt times of an album's saved photos (every group of its set), in database time (ms). */
+async function albumTimes(trx: Tx, tenant: string, keys: string[]): Promise<{ first: number; last: number; now: number }> {
   const row = (await sql<{ first: number | null; last: number | null; now: number }>`SELECT
       (extract(epoch FROM min(received_at)) * 1000)::float8 AS first,
       (extract(epoch FROM max(received_at)) * 1000)::float8 AS last,
       (extract(epoch FROM now()) * 1000)::float8 AS now
     FROM hawa.inbox_events WHERE tenant_id = ${tenant}::uuid
       AND source_account_id IN ('lifecycle_album_part', 'lifecycle_album_pending')
-      AND payload->>'groupKey' = ${groupKey}`.execute(trx)).rows[0];
+      AND payload->>'groupKey' = ANY(${keys}::text[])`.execute(trx)).rows[0];
   const now = Number(row?.now ?? Date.now());
   return { first: Number(row?.first ?? now), last: Number(row?.last ?? now), now };
 }
+
+// --- a set of albums sent back to back ------------------------------------------------------------
+//
+// Telegram sends at most ten photos in one album and splits more into several albums, delivered one
+// right after the other. Albums from one sender (chat and topic) whose photos follow each other within
+// the settle's quiet period are one set (ADR-148): settled once, by the newest photo of the set, asked
+// about once, and bound to one brief with every photo.
+
+/** The groups of the album set `part` belongs to, oldest first; a started or closed album ends a set. */
+async function albumSet(trx: Tx, tenant: string, part: Pick<Part, 'groupKey' | 'chatId' | 'senderId' | 'topic'>): Promise<string[]> {
+  const rows = (await sql<{ group_key: string; first: number; last: number }>`SELECT payload->>'groupKey' AS group_key,
+      (extract(epoch FROM min(received_at)) * 1000)::float8 AS first, (extract(epoch FROM max(received_at)) * 1000)::float8 AS last
+    FROM hawa.inbox_events WHERE tenant_id = ${tenant}::uuid
+      AND source_account_id IN ('lifecycle_album_part', 'lifecycle_album_pending')
+      AND payload->>'chatId' = ${part.chatId} AND payload->>'senderId' = ${part.senderId} AND payload->>'topic' = ${part.topic}
+      AND received_at > now() - make_interval(secs => ${albumResumeMs() / 1000})
+    GROUP BY 1 ORDER BY 2, 1`.execute(trx)).rows;
+  const at = rows.findIndex((row) => row.group_key === part.groupKey);
+  if (at < 0) return [part.groupKey];
+  const gap = albumSettleMs();
+  const open = async (groupKey: string) => !await frozen(trx, tenant, groupKey) &&
+    [null, 'asked'].includes(await settledState(trx, tenant, groupKey));
+  let from = at;
+  let to = at;
+  while (from > 0 && Number(rows[from - 1].last) + gap >= Number(rows[from].first) && await open(rows[from - 1].group_key)) from--;
+  while (to < rows.length - 1 && Number(rows[to].last) + gap >= Number(rows[to + 1].first) && await open(rows[to + 1].group_key)) to++;
+  return rows.slice(from, to + 1).map((row) => row.group_key);
+}
+/** The photos of every group of a set, in message order. */
+async function setParts(trx: Tx, tenant: string, keys: string[]): Promise<Part[]> {
+  const all: Part[] = [];
+  for (const key of keys) all.push(...await parts(trx, tenant, key));
+  return all.sort((a, b) => Number(a.messageId) - Number(b.messageId));
+}
+const lockSet = async (trx: Tx, tenant: string, keys: string[]) => {
+  for (const key of [...keys].sort()) await lock(trx, tenant, key);
+};
 
 function albumShape(selected: Part[]) {
   const messages = selected.map((part) => record(part.source.message)!);
   const captions = [...new Set(messages.map((message) => typeof message.caption === 'string' ? message.caption.trim() : '').filter(Boolean))];
   const replies = [...new Set(messages.map((message) => positiveId(record(message.reply_to_message)?.message_id)).filter(Boolean))] as string[];
   const mixedReplies = replies.length > 1 || (replies.length === 1 && messages.some((message) => !record(message.reply_to_message)));
-  return { messages, captions, replies, mixedReplies };
+  return { messages, captions, replies, mixedReplies, cutCaption: cutCaptionOf(messages),
+    group: isGroupChat(messages[0] ?? null), addressed: messages.some(actsInGroup) };
 }
 
-/** Freeze the selected photos under one source update; the rest of intake reads it like any message. */
-async function freeze(trx: Tx, tenant: string, input: { groupKey: string; selected: Part[]; identity: Update;
-  chatId: string; base: Message; text: string; replyId: string | null }): Promise<AlbumOutcome> {
-  const { base, identity, selected, groupKey } = input;
+/**
+ * Freeze the selected photos (and `extra`, a photo sent with the rest of a cut caption) under one source
+ * update; the rest of intake reads it like any message.
+ */
+async function freeze(trx: Tx, tenant: string, input: { keys: string[]; selected: Part[]; identity: Update;
+  chatId: string; base: Message; text: string; replyId: string | null; extra?: BlobRef }): Promise<AlbumOutcome> {
+  const { base, identity, selected, keys } = input;
   const message: Message = { message_id: base.message_id, date: base.date, chat: base.chat, from: base.from,
     ...(base.message_thread_id !== undefined ? { message_thread_id: base.message_thread_id } : {}),
     text: input.text, ...(input.replyId ? { reply_to_message: { message_id: Number(input.replyId) } } : {}),
     album_source: selected.map((part) => ({ updateId: part.source.update_id, hash: hash(part.source) })) };
   const ref = parseLifecycleAlbumRef({ updateId: identity.update_id,
-    sha256: hash({ groupKey, source: identity, selected }), images: selected.map((part) => part.image) });
+    sha256: hash({ groupKey: keys.length === 1 ? keys[0] : keys, source: identity, selected, ...(input.extra ? { extra: input.extra } : {}) }),
+    images: [...selected.map((part) => part.image), ...(input.extra ? [input.extra] : [])] });
   if (!ref) {
     const reply = { status: 422, message: say(ALBUM_MESSAGES.tooLarge, requesterLang(input.text)),
       noticeKey: `album-confirm:${identity.update_id}` };
     await save(trx, tenant, 'lifecycle_album_confirm', String(identity.update_id), { source: identity, chatId: input.chatId, reply }, hash(identity));
-    await markSettled(trx, tenant, groupKey, 'refused', identity.update_id);
+    await markSettled(trx, tenant, keys, 'refused', identity.update_id);
     return { kind: 'reply', reply };
   }
   const snapshot: AlbumSnapshot = { ref, update: { update_id: identity.update_id, message }, chatId: input.chatId };
   await save(trx, tenant, 'lifecycle_album_confirm', String(identity.update_id),
     { source: identity, chatId: input.chatId, snapshot } satisfies Confirmation, hash(identity));
-  await save(trx, tenant, 'lifecycle_album_frozen', groupKey, { updateId: identity.update_id }, ref.sha256);
+  for (const key of keys) await save(trx, tenant, 'lifecycle_album_frozen', key, { updateId: identity.update_id }, ref.sha256);
   return { kind: 'snapshot', snapshot };
 }
 
@@ -512,37 +758,54 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   const prior = await readAlbumConfirmation(trx, tenant, update);
   if (prior) return outcomeOf(prior);
   await senderLock(trx, tenant, part.chatId, part.senderId);
-  await lock(trx, tenant, part.groupKey);
+  // The album's whole set (ADR-148): the newest photo of the set settles it.
+  const keys = await albumSet(trx, tenant, part);
+  await lockSet(trx, tenant, keys);
   const raced = await readAlbumConfirmation(trx, tenant, update);
   if (raced) return outcomeOf(raced);
   const { groupKey, chatId } = part;
   if (await frozen(trx, tenant, groupKey)) return { kind: 'skip' };
   const state = await settledState(trx, tenant, groupKey);
   if (state && state !== 'asked') return { kind: 'skip' };
-  const selected = await parts(trx, tenant, groupKey);
+  const selected = await setParts(trx, tenant, keys);
   if (Math.max(...selected.map((p) => p.source.update_id)) !== update.update_id) return { kind: 'skip' };
-  const times = await albumTimes(trx, tenant, groupKey);
+  const times = await albumTimes(trx, tenant, keys);
   const late = times.now - times.last > LATE_SETTLE_MS;
+  const { captions, replies, mixedReplies, cutCaption, group, addressed } = albumShape(selected);
   // A settle long after the photos (a sweep after a lost timer, or an album saved before ADR-143)
-  // starts nothing once the chat has moved on to another request.
-  if (late && (await sql`SELECT 1 FROM hawa.requests WHERE tenant_id = ${tenant}::uuid AND chat_id = ${chatId}
-      AND created_at > to_timestamp(${times.last / 1000}) LIMIT 1`.execute(trx)).rows.length) {
-    await markSettled(trx, tenant, groupKey, 'superseded', update.update_id);
+  // starts nothing once the chat has moved on to another request; in a group, only to one of this
+  // sender's own requests (ADR-148): another member's request says nothing about this album.
+  if (late && (await sql`SELECT 1 FROM hawa.requests r
+      WHERE r.tenant_id = ${tenant}::uuid AND r.chat_id = ${chatId} AND r.created_at > to_timestamp(${times.last / 1000})
+        AND (NOT ${group}::boolean OR EXISTS (SELECT 1 FROM hawa.inbox_events o
+          LEFT JOIN hawa.inbox_events i ON i.tenant_id = o.tenant_id AND i.source_account_id = 'lifecycle_chat_intent'
+            AND i.source_event_id = o.source_event_id
+          WHERE o.tenant_id = r.tenant_id AND o.source_account_id = 'lifecycle_chat_open' AND o.payload->>'requestId' = r.request_id::text
+            AND coalesce(o.payload->'sourceUpdate'->'message'->'from'->>'id', i.payload->>'senderId') = ${part.senderId}))
+      LIMIT 1`.execute(trx)).rows.length) {
+    await markSettled(trx, tenant, keys, 'superseded', update.update_id);
+    return { kind: 'skip' };
+  }
+  // ADR-144 §2.7 (ADR-148): in a group, photos addressed to no one are kept quietly; only the sender's
+  // own words to the bot (bindTextToAlbum) can start a design with them.
+  if (group && !addressed) {
+    await markSettled(trx, tenant, keys, 'asked', update.update_id);
     return { kind: 'skip' };
   }
   const first = record(selected[0].source.message);
-  const { captions, replies, mixedReplies } = albumShape(selected);
   const lang = await replyLanguage(trx, tenant, chatId, captions, record(first?.from)?.language_code);
   const answer = async (message: string, settled: SettledState): Promise<AlbumOutcome> => {
-    await markSettled(trx, tenant, groupKey, settled, update.update_id);
+    await markSettled(trx, tenant, keys, settled, update.update_id);
     const reply: AlbumMessage = { status: settled === 'asked' ? 202 : 422, message, noticeKey: `album-settle:${update.update_id}` };
     await save(trx, tenant, 'lifecycle_album_confirm', String(update.update_id), { source: update, chatId, reply }, hash(update));
     return { kind: 'reply', reply };
   };
   if (selected.some((p) => !p.image && !p.error)) return answer(ALBUM_TEXT.photoMissing[lang], 'refused');
-  if (selected.some((p) => p.error)) {
-    // Each refused photo was answered when it arrived.
-    await markSettled(trx, tenant, groupKey, 'refused', update.update_id);
+  const refusedPhoto = selected.find((p) => p.error);
+  if (refusedPhoto) {
+    // In a private chat each refused photo was answered when it arrived; in a group it is said now.
+    if (group) return answer(refusedPhoto.error!, 'refused');
+    await markSettled(trx, tenant, keys, 'refused', update.update_id);
     return { kind: 'skip' };
   }
   if (selected.length < 2) return answer(ALBUM_TEXT.onePhoto[lang], 'refused');
@@ -550,10 +813,33 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   if (captions.length > 1) return answer(ALBUM_TEXT.captions[lang], 'asked');
   const lastMessage = record(update.message)!;
   const caption = captions[0] ?? '';
+  // ADR-148: Telegram kept only the start of this caption. The album waits for the rest (the sender's
+  // next message joins it in bindTextToAlbum); the requester is asked once, beside a durable settle at
+  // the end of the wait. Then it opens without its unfinished sentence, or lapses and says so.
+  if (cutCaption !== null) {
+    const asked = await cutAsked(trx, tenant, keys[0]);
+    const question = say(ALBUM_MESSAGES.captionCut, lang, { tail: captionTail(cutCaption) });
+    if (!asked) {
+      await recordCutQuestion(trx, tenant, keys, update.update_id, chatId);
+      return { kind: 'wait', delayMs: CUT_CAPTION_WAIT_MS, notice: question };
+    }
+    const waited = times.now - asked.at;
+    if (waited < CUT_CAPTION_WAIT_MS) {
+      return { kind: 'wait', delayMs: Math.min(CUT_CAPTION_WAIT_MS, Math.max(albumSettleMs(), Math.ceil(CUT_CAPTION_WAIT_MS - waited))),
+        notice: asked.updateId === update.update_id ? question : null };
+    }
+    // No rest came. What arrived, without its unfinished sentence, opens only if it is still a brief (by
+    // the intake's rule, and a brief of its own by the requester-turn rules: a lone label such as "KAAE"
+    // is not); otherwise the album lapses, and the requester hears so in plain words.
+    const kept = withoutCutSentence(cutCaption);
+    if (kept && isBriefText(kept) && readIntentByRules(kept).intent === 'new_brief') return freeze(trx, tenant, { keys, selected, identity: update, chatId, base: lastMessage,
+      text: kept, replyId: replies[0] ?? null });
+    return answer(say(ALBUM_MESSAGES.captionCutLapsed, lang), 'expired');
+  }
   // Photos sent in reply to a request's notice are that request's reference, as a replied photo is.
-  if (replies.length === 1) return freeze(trx, tenant, { groupKey, selected, identity: update, chatId,
+  if (replies.length === 1) return freeze(trx, tenant, { keys, selected, identity: update, chatId,
     base: lastMessage, text: caption || REFERENCE_DIRECTIVE, replyId: replies[0] });
-  if (caption && isBriefText(caption)) return freeze(trx, tenant, { groupKey, selected, identity: update, chatId,
+  if (caption && isBriefText(caption)) return freeze(trx, tenant, { keys, selected, identity: update, chatId,
     base: lastMessage, text: caption, replyId: null });
   // A brief its sender sent just before the photos is this album's brief.
   const held = await heldBriefBefore(trx, tenant, { chatId, senderId: part.senderId, topic: part.topic },
@@ -564,26 +850,31 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
       VALUES (${tenant}::uuid, 'lifecycle_brief_consumed', ${String(held.updateId)}, 'lifecycle_brief_consumed',
         ${JSON.stringify({ groupKey, updateId: update.update_id })}::jsonb, ${hash({ groupKey, updateId: update.update_id })}, true)
       ON CONFLICT DO NOTHING`.execute(trx);
-    return freeze(trx, tenant, { groupKey, selected, identity: update, chatId,
+    return freeze(trx, tenant, { keys, selected, identity: update, chatId,
       base: heldMessage, text: heldMessage.text, replyId: null });
   }
   if (late && times.now - times.last > briefWindowMs()) {
-    await markSettled(trx, tenant, groupKey, 'expired', update.update_id);
+    await markSettled(trx, tenant, keys, 'expired', update.update_id);
     return { kind: 'skip' };
   }
-  await markSettled(trx, tenant, groupKey, 'asked', update.update_id);
-  const question = await albumQuestion(trx, tenant, chatId, groupKey, selected);
+  await markSettled(trx, tenant, keys, 'asked', update.update_id);
+  const question = await albumQuestion(trx, tenant, chatId, keys[0], selected);
   await save(trx, tenant, 'lifecycle_album_confirm', String(update.update_id), { source: update, chatId, reply: question }, hash(update));
   return { kind: 'reply', reply: question };
 }
 
 // --- the requester's own words bind a waiting album --------------------------------------------
 
-/** The sender's newest album that still waits for words: not frozen, no refused photo, in its window. */
+interface WaitingAlbum { keys: string[]; selected: Part[] }
+
+/**
+ * The sender's newest album (with the rest of its set) that still waits for words: not frozen or
+ * closed, no refused photo, in its window. An album whose caption Telegram cut waits only until the wait
+ * after its question ends (ADR-148); its settle then says that it lapsed.
+ */
 async function waitingAlbum(trx: Tx, tenant: string, scope: { chatId: string; senderId: string; topic: string },
-  onlyGroup?: string): Promise<{ groupKey: string; selected: Part[] } | null> {
-  const rows = (await sql<{ group_key: string; last: number; now: number }>`SELECT payload->>'groupKey' AS group_key,
-      (extract(epoch FROM max(received_at)) * 1000)::float8 AS last, (extract(epoch FROM now()) * 1000)::float8 AS now
+  onlyGroup?: string): Promise<WaitingAlbum | null> {
+  const rows = (await sql<{ group_key: string }>`SELECT payload->>'groupKey' AS group_key
     FROM hawa.inbox_events WHERE tenant_id = ${tenant}::uuid AND source_account_id = 'lifecycle_album_part'
       AND payload->>'chatId' = ${scope.chatId} AND payload->>'senderId' = ${scope.senderId}
       AND payload->>'topic' = ${scope.topic}
@@ -591,37 +882,51 @@ async function waitingAlbum(trx: Tx, tenant: string, scope: { chatId: string; se
       AND received_at > now() - make_interval(secs => ${albumResumeMs() / 1000})
     GROUP BY 1 ORDER BY max(received_at) DESC LIMIT 5`.execute(trx)).rows;
   for (const row of rows) {
-    if (await frozen(trx, tenant, row.group_key)) continue;
-    const state = await settledState(trx, tenant, row.group_key);
-    if (state && state !== 'asked') continue;
-    const selected = await parts(trx, tenant, row.group_key);
+    const keys = await albumSet(trx, tenant, { ...scope, groupKey: row.group_key });
+    let open = true;
+    for (const key of keys) {
+      const state = await settledState(trx, tenant, key);
+      if (await frozen(trx, tenant, key) || (state && state !== 'asked')) open = false;
+    }
+    if (!open) continue;
+    const selected = await setParts(trx, tenant, keys);
     if (selected.length < 2 || selected.some((p) => p.error || !p.image)) continue;
-    const { captions } = albumShape(selected);
-    if (!captions.length && Number(row.now) - Number(row.last) > briefWindowMs()) continue;
-    return { groupKey: row.group_key, selected };
+    const { captions, cutCaption } = albumShape(selected);
+    const times = await albumTimes(trx, tenant, keys);
+    if (cutCaption !== null) {
+      const asked = await cutAsked(trx, tenant, keys[0]);
+      if (times.now - (asked?.at ?? times.last) > CUT_CAPTION_WAIT_MS) continue;
+    } else if (!captions.length && times.now - times.last > briefWindowMs()) continue;
+    return { keys, selected };
   }
   return null;
 }
 
 /**
- * A text from the album's sender, before or after the album settled: a brief starts one request with
+ * Words from the album's sender, before or after the album settled: a brief starts one request with
  * the photos, an OK starts a captioned album or is asked what to design, anything else (thanks, a
  * question) is left to intake. A `/use_album` sent as a plain message is such an OK (compatibility).
+ * In a group, only words addressed to the bot bind an album (ADR-144 §2.7).
+ *
+ * While the album's caption waits for its rest (ADR-148), the words are read by `readCutReply`, and a
+ * photo with a caption (`media`: its words and its saved picture) can be the rest too: the picture
+ * joins the album.
  */
 export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, deps: {
   linkedReply(chatId: string, replyId: string): Promise<boolean>;
   decided(chatId: string, updateId: number): Promise<boolean>;
-}): Promise<AlbumOutcome> {
+}, media?: { words: string; image: BlobRef }): Promise<AlbumOutcome> {
   const { msg, chatId, senderId, topic } = messageScope(update);
-  if (!msg || typeof msg.text !== 'string' || msg.media_group_id !== undefined || !senderId) return { kind: 'none' };
-  const text = msg.text.trim();
-  const confirmation = isAlbumConfirmation(update);
+  const words = media ? media.words : msg?.text;
+  if (!msg || typeof words !== 'string' || msg.media_group_id !== undefined || !senderId) return { kind: 'none' };
+  const text = words.trim();
+  const confirmation = !media && isAlbumConfirmation(update);
   if (!text || (text.startsWith('/') && !confirmation && !NEW_COMMAND.test(text))) return { kind: 'none' };
   const prior = await readAlbumConfirmation(trx, tenant, update);
   if (prior) return outcomeOf(prior);
+  if (!actsInGroup(msg)) return { kind: 'none' };
   const affirmative = confirmation || isAffirmativeOnly(text);
   const brief = !affirmative && isBriefText(text);
-  if (!affirmative && !brief) return { kind: 'none' };
   // An update intake already decided keeps that decision, even if an album has arrived since.
   if (!/^-?\d{1,20}$/.test(chatId) || await deps.decided(chatId, update.update_id)) return { kind: 'none' };
   await senderLock(trx, tenant, chatId, senderId);
@@ -643,11 +948,44 @@ export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, d
   const album = await waitingAlbum(trx, tenant, { chatId, senderId, topic }, onlyGroup);
   const lang = await replyLanguage(trx, tenant, chatId, confirmation ? [] : [text], record(msg.from)?.language_code);
   if (!album) return confirmation ? reply(ALBUM_TEXT.noAlbum[lang], `album-confirm:${update.update_id}`) : { kind: 'none' };
-  await lock(trx, tenant, album.groupKey);
-  if (await frozen(trx, tenant, album.groupKey)) return confirmation
-    ? reply(say(ALBUM_MESSAGES.alreadyStarted, lang), `album-confirm:${update.update_id}`)
-    : { kind: 'none' };
-  const { captions, replies, mixedReplies } = albumShape(album.selected);
+  const { keys, selected } = album;
+  await lockSet(trx, tenant, keys);
+  for (const key of keys) {
+    if (await frozen(trx, tenant, key)) return confirmation
+      ? reply(say(ALBUM_MESSAGES.alreadyStarted, lang), `album-confirm:${update.update_id}`)
+      : { kind: 'none' };
+  }
+  const { captions, replies, mixedReplies, cutCaption } = albumShape(selected);
+  if (cutCaption !== null && captions.length === 1 && !mixedReplies) {
+    // ADR-148: the album waits for the rest of its caption. Words a voice note or a PDF waits on ("yes",
+    // the corrected text) are that source's, not the rest.
+    if (await unconfirmedSource(trx, tenant, { chatId, senderId, topicId: topic })) return { kind: 'none' };
+    const said = confirmation ? 'ok' : readCutReply(text);
+    if (said === 'other') return { kind: 'none' };
+    if (said === 'cancel') {
+      await markSettled(trx, tenant, keys, 'cancelled', update.update_id);
+      return reply(say(ALBUM_MESSAGES.captionCutCancelled, lang), `album-cancel:${update.update_id}`, 200);
+    }
+    const tail = captionTail(cutCaption);
+    if (said === 'ok') {
+      // An OK is not the rest: asked again, in fewer words once the question was asked.
+      if (await cutAsked(trx, tenant, keys[0])) {
+        return reply(say(ALBUM_MESSAGES.captionCutAgain, lang, { tail }), `album-rest:${update.update_id}`, 202);
+      }
+      await recordCutQuestion(trx, tenant, keys, update.update_id, chatId);
+      return reply(say(ALBUM_MESSAGES.captionCut, lang, { tail }), `album-rest:${update.update_id}`, 202);
+    }
+    const prefix = NEW_COMMAND.test(text) ? '/new ' : '';
+    const briefText = said === 'complete' ? cutCaption.trim() : joinCutCaption(cutCaption, text.replace(NEW_COMMAND, '').trim());
+    if (said === 'complete' && !isBriefText(briefText)) {
+      await markSettled(trx, tenant, keys, 'asked', update.update_id);
+      return reply(ALBUM_TEXT.followUp[lang], `album-followup:${update.update_id}`, 202);
+    }
+    return freeze(trx, tenant, { keys, selected, identity: update, chatId, base: msg, text: prefix + briefText,
+      replyId: replies[0] ?? null, ...(media ? { extra: media.image } : {}) });
+  }
+  // Only the rest of a cut caption binds a photo; any other words bind only as a brief or an OK.
+  if (media || (!affirmative && !brief)) return { kind: 'none' };
   if (mixedReplies) return reply(ALBUM_TEXT.mixedReplies[lang], `album-confirm:${update.update_id}`);
   const caption = captions.length === 1 ? captions[0] : '';
   let briefText: string;
@@ -655,12 +993,25 @@ export async function bindTextToAlbum(trx: Tx, tenant: string, update: Update, d
   else if (caption) briefText = caption;
   else if (replies.length === 1) briefText = REFERENCE_DIRECTIVE;
   else {
-    await markSettled(trx, tenant, album.groupKey, 'asked', update.update_id);
+    await markSettled(trx, tenant, keys, 'asked', update.update_id);
     return reply(captions.length > 1 ? ALBUM_TEXT.captions[lang] : ALBUM_TEXT.followUp[lang],
       `album-followup:${update.update_id}`, 202);
   }
-  return freeze(trx, tenant, { groupKey: album.groupKey, selected: album.selected, identity: update, chatId,
-    base: msg, text: briefText, replyId: replies[0] ?? null });
+  return freeze(trx, tenant, { keys, selected, identity: update, chatId, base: msg, text: briefText, replyId: replies[0] ?? null });
+}
+
+/**
+ * Whether a captioned photo from this sender may be the rest of a cut caption (ADR-148): a cut album of
+ * theirs waits, or this update already has an album decision. Read before the photo is downloaded, so
+ * an ordinary captioned photo goes its usual way.
+ */
+export async function cutAlbumWaits(trx: Tx, tenant: string, update: Update): Promise<boolean> {
+  const { msg, chatId, senderId, topic } = messageScope(update);
+  if (!msg || !senderId || msg.media_group_id !== undefined || typeof msg.caption !== 'string' || !msg.caption.trim()) return false;
+  if (await readAlbumConfirmation(trx, tenant, update)) return true;
+  if (msg.reply_to_message || !actsInGroup(msg)) return false;
+  const album = await waitingAlbum(trx, tenant, { chatId, senderId, topic });
+  return Boolean(album && albumShape(album.selected).cutCaption !== null);
 }
 
 // --- the sweep: albums and held briefs whose settle never ran -------------------------------------
@@ -686,6 +1037,27 @@ export async function overdueSettles(trx: Tx, tenant: string, limit = 50): Promi
     if (!newest || await event(trx, tenant, 'lifecycle_album_confirm', String(newest.source.update_id))) continue;
     // A photo still being downloaded has no settle of its own yet; its update's retry schedules one.
     if (!await event(trx, tenant, 'lifecycle_album_part', String(newest.source.update_id))) continue;
+    due.push({ chatId: newest.chatId, update: newest.source });
+  }
+  // ADR-148: an album whose caption Telegram cut, asked for the rest, whose own delayed settle is
+  // overdue: its settle opens it without its unfinished sentence or says that it lapsed (or finds that
+  // the rest came). An album that lapsed, was cancelled or superseded is closed and not listed again.
+  const cutSecs = (CUT_CAPTION_WAIT_MS + 60_000) / 1000;
+  const cuts = (await sql<{ group_key: string }>`SELECT c.source_event_id AS group_key FROM hawa.inbox_events c
+    WHERE c.tenant_id = ${tenant}::uuid AND c.source_account_id = 'lifecycle_album_cut'
+      AND c.received_at < now() - make_interval(secs => ${cutSecs})
+      AND c.received_at > now() - make_interval(secs => ${briefWindowMs() / 1000})
+      AND NOT EXISTS (SELECT 1 FROM hawa.inbox_events f WHERE f.tenant_id = c.tenant_id
+        AND f.source_account_id IN ('lifecycle_album_frozen', 'lifecycle_album_closed') AND f.source_event_id = c.source_event_id)
+    ORDER BY c.received_at LIMIT ${limit}`.execute(trx)).rows;
+  for (const { group_key: groupKey } of cuts) {
+    if (due.length >= limit) break;
+    if (await settledState(trx, tenant, groupKey) !== 'asked') continue;
+    const first = (await parts(trx, tenant, groupKey))[0];
+    if (!first) continue;
+    const selected = await setParts(trx, tenant, await albumSet(trx, tenant, first));
+    const newest = selected.reduce<Part | null>((a, p) => !a || p.source.update_id > a.source.update_id ? p : a, null);
+    if (!newest || await event(trx, tenant, 'lifecycle_album_confirm', String(newest.source.update_id))) continue;
     due.push({ chatId: newest.chatId, update: newest.source });
   }
   const heldSecs = (briefPhotoWaitMs() + 60_000) / 1000;
