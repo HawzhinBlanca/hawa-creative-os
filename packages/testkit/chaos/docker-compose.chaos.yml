@@ -59,6 +59,8 @@ x-app-environment: &app-environment
   DESIGN_STUDIO_V2: "off"
   # One sender makes every scripted request of a run; the office's ceilings (5 a day) would stop
   # the automatic draft after the fifth. Intake still counts and checks them.
+  # Production's setting: chat requests are drafted automatically (ADR-159 made Telegram read it).
+  AUTO_GENERATE_CHAT_DESIGNS: "true"
   AUTO_GENERATE_DAILY_CAP_PER_SENDER: "1000"
   AUTO_GENERATE_DAILY_CAP_GLOBAL: "1000"
   HAWA_CHAOS_CONTROL_URL: http://fakes:9000/__chaos

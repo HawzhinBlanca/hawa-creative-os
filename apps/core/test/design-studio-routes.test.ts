@@ -150,6 +150,23 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       expect(scope.actorId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     });
 
+    it('maps intake tier and imagery names to the Studio\'s and refuses unknown ones (ADR-159)', async () => {
+      const start = (body: Record<string, unknown>) => app.request(`/v1/tasks/${taskId}/canva/studio`, {
+        method: 'POST', headers: { ...headers, 'Idempotency-Key': `options-${randomUUID().slice(0, 8)}` },
+        body: JSON.stringify({ width: 1080, height: 1350, ...body }) });
+      expect((await start({ tier: 'fast', imagery: 'abstract' })).status).toBe(202);
+      expect(mockService.createOrGetRun.mock.calls.at(-1)[3]).toMatchObject({ tier: 'standard', imagery: 'generated' });
+      expect((await start({ tier: 'quality', imagery: 'none' })).status).toBe(202);
+      expect(mockService.createOrGetRun.mock.calls.at(-1)[3]).toMatchObject({ tier: 'premium', imagery: 'none' });
+      const calls = mockService.createOrGetRun.mock.calls.length;
+      for (const bad of [{ tier: 'ultra' }, { imagery: 'painted' }, { tier: 7 }]) {
+        const res = await start(bad);
+        expect(res.status).toBe(422);
+        expect((await res.json()).title).toBe('STUDIO_OPTIONS_INVALID');
+      }
+      expect(mockService.createOrGetRun.mock.calls.length).toBe(calls);
+    });
+
     it('returns 401 when unauthenticated', async () => {
       const res = await app.request(`/v1/tasks/${taskId}/canva/studio`, {
         method: 'POST',

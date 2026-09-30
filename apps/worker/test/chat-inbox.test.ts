@@ -492,6 +492,14 @@ describe('chat answers (ADR-135 stage 2c)', () => {
       await expect(client.intake(update, 'legacy')).rejects.toThrow('invalid chat answer');
     }
   });
+
+  it('refuses an answer whose text fields are not text, instead of acting on it (ADR-159)', async () => {
+    for (const extra of [{ chatId: 555 }, { chatId: { id: '555' } }, { lifecycleAction: ['chat-answer'] },
+      { lifecycleAction: 'requester-revision', requestId: 'r', newTaskId: 't', round: 1, directive: { text: 'x' }, priorTaskId: 'p' }]) {
+      const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () => Response.json(answer(extra)) });
+      await expect(client.intake(update, 'legacy')).rejects.toThrow('non-text');
+    }
+  });
 });
 
 describe('album collection notices', () => {

@@ -81,6 +81,14 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
         requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null;
         notice?: { text?: unknown; parseMode?: unknown } | null; quiet?: unknown;
       };
+      // The fields declared as text are checked, not assumed: a number or object where Core's answer
+      // should carry text is refused, and the update waits (audit 2026-09-30, ADR-159).
+      for (const key of ['code', 'title', 'lifecycleAction', 'requestId', 'newTaskId', 'directive', 'priorTaskId', 'rawText',
+        'chatId', 'questionId', 'reason', 'albumMessage', 'albumNoticeKey', 'sourceMessage', 'sourceNoticeKey', 'requestStage'] as const) {
+        if (body[key] !== undefined && body[key] !== null && typeof body[key] !== 'string') {
+          throw new Error(`Core returned a non-text ${key} for update ${update.update_id}`);
+        }
+      }
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
         if (!retryable(status)) {

@@ -41,7 +41,7 @@ import {
   probeFontScripts,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
-import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError, OfficeDayExhaustedError } from '@hawa/domain';
+import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError, OfficeDayExhaustedError, parseStudioImagery, parseStudioTier, type StudioImagery, type StudioTier } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, thumbnailPlaybookPrompt, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { buildRunBriefContract, StudioBriefContractError, StudioRunStatusChangedError } from './brief-contract.js';
@@ -220,8 +220,8 @@ export function isPipelineV3Run(run: { request?: unknown }): boolean {
 export interface CreateStudioRunInput {
   width: number;
   height: number;
-  tier?: 'standard' | 'premium';
-  imagery?: 'auto' | 'none' | 'generated';
+  tier?: StudioTier;
+  imagery?: StudioImagery;
   previews?: number;
   holdForSelection?: boolean;
 }
@@ -552,7 +552,7 @@ export class DesignStudioService {
     const imagery =
       params.imagery ||
       this.options.defaultImagery ||
-      (process.env.DESIGN_STUDIO_IMAGERY_DEFAULT as any) ||
+      parseStudioImagery(process.env.DESIGN_STUDIO_IMAGERY_DEFAULT) ||
       'auto';
 
     await this.tx(s, db => assertNativeRevisionAdmission(db, s.tenantId, taskId));
@@ -1293,7 +1293,7 @@ export class DesignStudioService {
       actorId: s.actorId,
       width: request.width,
       height: request.height,
-      tier: run.tier as any,
+      tier: parseStudioTier(run.tier) ?? 'standard',
       instructions: request.instructions,
       copyBlocks: request.copyBlocks,
       referencePack,

@@ -355,7 +355,8 @@ export function registerSystemRoutes(ctx: RouteContext) {
     const hasWaha = Boolean(process.env.WAHA_API_KEY || process.env.WAHA_BASE_URL);
     const hasDrive = Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_DRIVE_FOLDER_ID);
     const hasSheets = Boolean(process.env.GOOGLE_SHEETS_ID || process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-    const hasPhoenix = Boolean(process.env.PHOENIX_COLLECTOR_URL);
+    // Production names it PHOENIX_COLLECTOR_ENDPOINT (.env.production.example); both are accepted (ADR-159).
+    const hasPhoenix = Boolean(process.env.PHOENIX_COLLECTOR_URL || process.env.PHOENIX_COLLECTOR_ENDPOINT);
 
     const canvaBreaker = globalCanvaCircuitBreaker?.getSnapshot();
     const observedAt = new Date().toISOString();

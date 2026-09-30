@@ -7,6 +7,7 @@ import { WahaIngressHandler, verifyActionSignature } from '@hawa/integrations';
 import { secretsEqual } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
+import { chatAutoDraftsEnabled } from '../services/chat-intake.js';
 import { intakeRefused, setKillSwitch } from '../services/channel-kill-switches.js';
 
 /**
@@ -74,7 +75,7 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
       return problem(c, 403, 'Forbidden', `WhatsApp group ${normalized.groupJid || 'unknown'} is not in the office allowlist`);
     }
 
-    const shouldGenerateWa = c.req.query('generate') === 'true' || json.autoGenerate === true || process.env.AUTO_GENERATE_CHAT_DESIGNS === 'true';
+    const shouldGenerateWa = c.req.query('generate') === 'true' || json.autoGenerate === true || chatAutoDraftsEnabled();
     const hostHeaderWa = c.req.header('x-forwarded-host') || c.req.header('host');
     const incomingDeskBaseWa = hostHeaderWa ? `https://${hostHeaderWa}` : undefined;
 

@@ -1,5 +1,5 @@
 import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, vi } from 'vitest';
 import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
@@ -314,6 +314,21 @@ describe('Core API: Ingress & Task Lifecycle', () => {
       if (previous === undefined) delete process.env.GOOGLE_DRIVE_FOLDER_ID;
       else process.env.GOOGLE_DRIVE_FOLDER_ID = previous;
     }
+  });
+
+  it('reads the Phoenix collector under the name production uses as well as the old one (ADR-159)', async () => {
+    const phoenix = async () => (await (await app.request('/v1/integrations/health')).json()).items
+      .find((item: any) => item.integrationId === 'int_phoenix');
+    vi.stubEnv('PHOENIX_COLLECTOR_URL', '');
+    vi.stubEnv('PHOENIX_COLLECTOR_ENDPOINT', '');
+    try {
+      expect(await phoenix()).toMatchObject({ configured: false });
+      vi.stubEnv('PHOENIX_COLLECTOR_ENDPOINT', 'http://phoenix:6006/v1/traces');
+      expect(await phoenix()).toMatchObject({ configured: true, reachability: 'unknown' });
+      vi.stubEnv('PHOENIX_COLLECTOR_ENDPOINT', '');
+      vi.stubEnv('PHOENIX_COLLECTOR_URL', 'http://phoenix:6006');
+      expect(await phoenix()).toMatchObject({ configured: true });
+    } finally { vi.unstubAllEnvs(); }
   });
 
   it('streams real-time Server-Sent Events (SSE) and broadcasts task mutations', async () => {
