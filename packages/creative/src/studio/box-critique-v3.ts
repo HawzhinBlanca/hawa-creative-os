@@ -61,6 +61,16 @@ export interface GenerateBoxCritiqueOptions {
   detail?: 'low' | 'high';
 }
 
+/**
+ * Said only when the layout places photographs (JUDGE_ART_DIRECTION.md). Whitespace and proportion
+ * comments used to read a full-bleed hero as crowding and ask for it to shrink into a framed tile,
+ * the safe, template-like result the office rejects.
+ */
+export const PHOTO_ART_DIRECTION_CRITIQUE_NOTE = `
+
+PHOTOGRAPHS:
+A full-bleed or dominant photograph, and text set on a plate, card or fade over it, are deliberate art direction. Never ask to shrink, frame, inset or tile a photograph to create whitespace; judge the breathing room of the text zone instead.`;
+
 const FORBIDDEN_SCOPE_REGEX =
   /\b(colou?r|palette|contrast|darker|lighter|hex|wording|copy|spelling|grammar|rewrite|phrase|phrasing|font\s*family|translation)\b/i;
 
@@ -231,7 +241,7 @@ STRICT PROHIBITIONS:
 - You must NEVER comment on colour, palette, contrast, darkness, or lightness.
 - You must NEVER comment on copy wording, spelling, grammar, language, or phrasing.
 - You must NEVER suggest changes to colors or copy.
-Every critique comment MUST cite an exact boxId from the provided catalog.`;
+Every critique comment MUST cite an exact boxId from the provided catalog.${layout.photos?.length ? PHOTO_ART_DIRECTION_CRITIQUE_NOTE : ''}`;
 
   const factsBlock = `GROUND TRUTH DETERMINISTIC METRICS (arXiv:2402.06945 & LaySPA):
 - Composite Score: ${deterministicMetrics.compositeScore.toFixed(3)} (Pass Threshold >= 0.850, Overall Passed: ${deterministicMetrics.passed})
@@ -259,7 +269,7 @@ CANVAS GEOMETRY:
 - Grid: margin=${layout.grid.margin}px, columns=${layout.grid.columns}, gutter=${layout.grid.gutter}px, baseline=${layout.grid.baseline}px
 
 TASK:
-Inspect the attached annotated render at detail 'low'. Cross-examine the visual image against the deterministic metrics stated above.
+Inspect the attached annotated render at detail '${options.detail || 'low'}'. Cross-examine the visual image against the deterministic metrics stated above.
 Identify any spatial, alignment, margin, or hierarchy defects and return actionable critique comments referencing the exact box IDs.`;
 
   const b64Image = `data:image/png;base64,${annotatedPng.toString('base64')}`;
