@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T18:27:12Z",
+  "generatedAt": "2026-09-30T20:47:22Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 655,
+  "fileCount": 656,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "30dbe5afb17de4a15e83e87e47ff716f12526e338eb3c213156d4de75bdfdd37",
-      "bytes": 3973
+      "sha256": "2e2be3f451b8814dd2feffc66b982652c539cbd8ef0a1d27549862f3f7a2de66",
+      "bytes": 3965
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -883,6 +883,11 @@
       "bytes": 7918
     },
     {
+      "path": "adrs/182_natural_language_stress_suite.md",
+      "sha256": "3c945bb8ccfe5100c4e40b6612da10bcb50542665050c5b45eba253d446ab172",
+      "bytes": 15439
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1534,8 +1539,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "90d1e96e4b8fa0c5ff891a77a0cae29bd334adb0ae30245b3f1b982e7bef97e5",
-      "bytes": 56084
+      "sha256": "967c55937fb24a842b08495cffc62e93561af979fa3a8379d6d2796085fab0c5",
+      "bytes": 57562
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2419,8 +2424,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "9d1863999a18a5cd810eab8b5431649c0e3c2d88a830d640390f910d2b205d4a",
-      "bytes": 552013
+      "sha256": "39bc73b46e17749d5ad7a3f87fca6ecfc6bdf8fa80adf6c4034c3efa675a6a06",
+      "bytes": 553841
     },
     {
       "path": "plans/user-stories.csv",

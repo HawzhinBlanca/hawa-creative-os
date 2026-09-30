@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-30T21:26:26+03:00",
+  "generatedAt": "2026-09-30T23:46:36+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,10 +20,10 @@
     ]
   },
   "build": {
-    "commit": "1d1283159814e7b19ddee2159866094bb3f4a95d",
+    "commit": "b4bda864bbafdf6e8b531818cf55355f9a9b51fa",
     "treeClean": true,
-    "commitTimestamp": "2026-09-30T21:26:26+03:00",
-    "branch": "claude/house-style-fixes"
+    "commitTimestamp": "2026-09-30T23:46:36+03:00",
+    "branch": "claude/nl-stress"
   },
   "migrations": {
     "targetVersion": "072_verified_office_call_cost",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "eded2f5be93c928f8a8f2890c0c952367bf4d148015dca26b0ac252064183b02"
+  "sha256": "0060475e48bc52b1b36c3e3c20711112735b7a5260f213b24418452592f42ce7"
 }
