@@ -36,6 +36,8 @@ export * from './studio/transfer-v2.js';
 export * from './studio/design-metrics.js';
 export * from './studio/negative-space-policy.js';
 export * from './studio/copy-feasibility.js';
+export * from './studio/copy-completeness.js';
+export * from './studio/photo-selection.js';
 export * from './studio/exemplar-retrieval.js';
 export * from './studio/layout-generator-v3.js';
 export * from './studio/visual-conditioning.js';
