@@ -359,7 +359,7 @@ compose_value() {
 }
 node --import tsx "${ROOT_DIR}/scripts/check_office_access.ts" "$ENV_FILE" "$(compose_value HAWA_BIND_IP 127.0.0.1)"
 # 2c. The content-addressed file store (ADR-035) is a host directory bind-mounted into Core, both worker
-# colours (read-write) and nginx (read-only). It is created here, before any container starts, with the
+# colours (read-only) and nginx (read-only). It is created here, before any container starts, with the
 # marker the store requires: Docker would otherwise create a missing mount source itself, and the store
 # refuses a directory without the marker, so a mount that went wrong cannot fill an empty directory.
 # Files are 0444 and directories 0755, which nginx's own user needs to read them.
@@ -459,6 +459,10 @@ echo "✓ backup written: infra/backup/snapshots/predeploy_${STAMP}.dump (${BACK
 # 6. Versioned schema upgrades (idempotent; checksums of applied files are verified)
 (cd "$ROOT_DIR" && DATABASE_URL="postgresql://hawa_owner:${POSTGRES_PASSWORD}@127.0.0.1:54332/hawa" npx tsx packages/db/src/upgrade.ts)
 echo "✓ schema upgrades applied or verified"
+# Rotation follows the qualified source gate, completed prior drains and the backup/migrations.
+if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
+  hawa_release_prune_unsafe "$ROOT_DIR" 74618004243affaa91fc50795490e175a545dc2a || exit 1
+fi
 
 # 7. Build and start everything but the worker. Its two colours are behind the `worker` compose
 # profile, so the `up -d` below never creates, recreates or stops either; 7b deploys the worker.
@@ -483,13 +487,22 @@ echo "✓ cut-out engine tests passed in the shipped image"
 # afresh), so a broken file never replaces a working one; then nginx is reloaded if it sees the new
 # file, or restarted so that it binds it, and must see it afterwards.
 NGINX_WANT="$("${HAWA_SHA256[@]}" "${SCRIPT_DIR}/nginx.conf" | cut -d' ' -f1)"
-nginx_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx sha256sum /etc/nginx/nginx.conf 2>/dev/null | cut -d' ' -f1 || true; }
+OFFICE_PROOF_WANT="$("${HAWA_SHA256[@]}" "${SCRIPT_DIR}/.office-proxy-header.conf" | cut -d' ' -f1)"
+source "${ROOT_DIR}/infra/ops/nginx_reload.sh"
 # The one-off checks bind this release's files (HAWA_RELEASE_ROOT); the running services bind them
 # through ~/.hawa/current, which still names the release in production until the switch below.
 HAWA_RELEASE_ROOT="$ROOT_DIR" "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T nginx nginx -t >/dev/null 2>&1 \
   || { echo "ERROR: infra/docker/nginx.conf fails nginx -t; nothing was started with it"; exit 1; }
 VECTOR_WANT="$("${HAWA_SHA256[@]}" "${SCRIPT_DIR}/vector.yaml" | cut -d' ' -f1)"
 validate_vector_config
+BOUNDARY_DIR="${ROOT_DIR}/infra/docker"
+[[ "${HAWA_RELEASE_DIRS:-on}" == off ]] || BOUNDARY_DIR="$(hawa_shared_dir)/infra/docker"
+python3 "${ROOT_DIR}/infra/ops/prepare_service_boundaries.py" --directory "$BOUNDARY_DIR" --rotate-design || exit 1
+(cd "$ROOT_DIR" && DATABASE_URL="postgresql://hawa_owner:${POSTGRES_PASSWORD}@127.0.0.1:54332/hawa" npx tsx scripts/provision_worker_database.ts "${SCRIPT_DIR}/.env.worker-db" --production) || exit 1
+: > "$BOUNDARY_DIR/.worker-identity-v2"
+chmod 600 "$BOUNDARY_DIR/.worker-identity-v2"
+
+
 # ADR-158: from here production is this release. ~/.hawa/current is switched in one rename, so the
 # watchdog, the launch agents and every bind mount read this release's files from the next container
 # start on; ~/.hawa/previous names the release before it (the rollback: deploy that one).
@@ -498,13 +511,7 @@ if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
   echo "✓ $(hawa_current_link) -> ${ROOT_DIR}"
 fi
 HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
-if [[ "$(nginx_seen)" == "$NGINX_WANT" ]]; then
-  "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null && echo "✓ nginx configuration reloaded"
-else
-  "${COMPOSE[@]}" --env-file "$INTERP_FILE" restart nginx >/dev/null
-  [[ "$(nginx_seen)" == "$NGINX_WANT" ]] || { echo "ERROR: nginx does not see the deployed nginx.conf even after a restart"; exit 1; }
-  echo "✓ nginx restarted onto the new configuration"
-fi
+hawa_nginx_reload || exit 1
 apply_vector_config
 echo "✓ containers started"
 

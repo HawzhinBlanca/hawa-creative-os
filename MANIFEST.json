@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T18:27:12Z",
+  "generatedAt": "2026-09-30T20:57:04Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 655,
+  "fileCount": 660,
   "files": [
     {
       "path": ".dockerignore",
@@ -881,6 +881,11 @@
       "path": "adrs/180_owner_house_style_and_office_caption.md",
       "sha256": "a9bbb3a2da6723bebc0b31261e3e68a626d7268f9d9e216558fd8217a604a300",
       "bytes": 7918
+    },
+    {
+      "path": "adrs/182_independent_worker_identity_and_bound_mount_validation.md",
+      "sha256": "10629792c0cfdc56660a40efcb4f23f5a0471da7e2986dd1c2ee179c2cf02c5e",
+      "bytes": 2694
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2418,9 +2423,19 @@
       "bytes": 8734
     },
     {
+      "path": "plans/service-boundary-repair-2026-09-30/LOCAL_PROOF.json",
+      "sha256": "afe5fc5241e679923b1268e35028001dd9999f481dc8928714747f030957e994",
+      "bytes": 2927
+    },
+    {
+      "path": "plans/service-boundary-repair-2026-09-30/PLAN.md",
+      "sha256": "1797fe4622b30384bd3a200ee18735ae901a5ff0deb852cb67536e74748a70d3",
+      "bytes": 985
+    },
+    {
       "path": "plans/traceability.csv",
-      "sha256": "9d1863999a18a5cd810eab8b5431649c0e3c2d88a830d640390f910d2b205d4a",
-      "bytes": 552013
+      "sha256": "ad786726c88a2c9e581432ad0c846c58db953891e4149474271954694d7ef239",
+      "bytes": 552721
     },
     {
       "path": "plans/user-stories.csv",
@@ -2584,8 +2599,8 @@
     },
     {
       "path": "runbooks/PRODUCTION_RELEASE_DIRECTORIES.md",
-      "sha256": "77a053bbabc28a8bb9e726d6f8e1b7a3240e5f3493ba04ef351bdb2be2b07eb9",
-      "bytes": 16602
+      "sha256": "5e0acd094e797ccb5d5a98cbc1f42a8e70ef496cd89c11f1d72932cd87aae945",
+      "bytes": 18859
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
@@ -3033,6 +3048,11 @@
       "bytes": 5585
     },
     {
+      "path": "scripts/provision_worker_database.ts",
+      "sha256": "20093aca911dd9b2df6c8d5f6cea69155e4a84835f8db26fd614b02211ce17eb",
+      "bytes": 936
+    },
+    {
       "path": "scripts/ratchet_any.ts",
       "sha256": "0a052e5b249767339c9ffa33c9fbdcf1560032a749c2770bfc447864e44aef11",
       "bytes": 2991
@@ -3183,14 +3203,19 @@
       "bytes": 1910
     },
     {
+      "path": "scripts/test/nginx-reload.test.ts",
+      "sha256": "57eaf0fe54a06e859bf9195d19c415f06abb5825456d4d0922983bdec32fd712",
+      "bytes": 2767
+    },
+    {
       "path": "scripts/test/provider-credential-update.test.ts",
       "sha256": "823ed17a4d585b3d904ead83d7a7fdb6502b535de925caaa1419e3b34e8c48a0",
       "bytes": 2451
     },
     {
       "path": "scripts/test/service-boundaries.test.ts",
-      "sha256": "2f4261ddbcfadd859065b05d3eb44ad13fb6a9a2ffd7aae8abbf25fff22890d7",
-      "bytes": 4998
+      "sha256": "cae7a00f6bd8eb330913a18454d2f934bd7bd1e2428954f1ecc595abbbca70e2",
+      "bytes": 8277
     },
     {
       "path": "scripts/test/suite-stability-report.test.ts",

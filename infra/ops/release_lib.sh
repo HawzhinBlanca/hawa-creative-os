@@ -27,7 +27,7 @@ HAWA_SHARED_REQUIRED=(infra/docker/.env.production infra/docker/.env)
 HAWA_SHARED_DIRS=(infra/backup/snapshots infra/backup/release-receipts)
 # The test settings the release gate's suite reads, and the one gitignored audit folder validate_pack's
 # link check needs (the commit hook's own trap in a fresh worktree).
-HAWA_SHARED_OPTIONAL=(.env.test infra/docker/.env.service-boundaries infra/docker/.env.worker infra/docker/.office-proxy-header.conf output/audits/2026-09-29-product-flow-fixes)
+HAWA_SHARED_OPTIONAL=(.env.test infra/docker/.env.service-boundaries infra/docker/.env.worker infra/docker/.env.worker-db infra/docker/.office-proxy-header.conf output/audits/2026-09-29-product-flow-fixes)
 
 hawa_releases_dir() { printf '%s' "${HAWA_RELEASES_DIR:-$HOME/.hawa/releases}"; }
 hawa_current_link() { printf '%s' "${HAWA_CURRENT_LINK:-$HOME/.hawa/current}"; }
@@ -73,6 +73,7 @@ hawa_release_prepare() { # checkout, commit
     git -C "$checkout" worktree add --detach "$release" "$commit" >/dev/null 2>&1 \
       || { echo "ERROR: git worktree add --detach $release $commit failed (from $checkout)" >&2; return 1; }
   fi
+  hawa_release_check_worker_identity "$release" || return 1
   head="$(git -C "$release" rev-parse HEAD 2>/dev/null || true)"
   [[ "$head" == "$commit" ]] || { echo "ERROR: $release is at ${head:-no commit}, not $commit; remove it (git worktree remove --force) and deploy again" >&2; return 1; }
   for rel in "${HAWA_SHARED_REQUIRED[@]}"; do hawa_release_link_shared "$release" "$rel" required || return 1; done
@@ -101,6 +102,7 @@ hawa_release_install() { # release
 hawa_release_activate() { # release
   local release link previous old tmp
   release="$(hawa_physical "$1")" || { echo "ERROR: no release at $1" >&2; return 1; }
+  hawa_release_check_worker_identity "$release" || return 1
   link="$(hawa_current_link)"; previous="$(hawa_previous_link)"
   mkdir -p "$(dirname "$link")"
   # Docker creates a missing bind-mount source as a directory. If a container was ever started through
@@ -154,4 +156,38 @@ hawa_release_prune() { # [keep]
     fi
     rm -f "$dir/.built-$name" "$dir/.build-$name.log"
   done
+}
+
+# ADR182: discard only inactive, clean release worktrees predating the worker route boundary.
+# Unlike retention pruning this refuses dirty/non-worktree targets and never falls back to rm -rf.
+hawa_release_prune_unsafe() { # checkout, security foundation commit
+  local checkout="$1" floor="$2" dir candidate name head common current previous
+  [[ "$floor" =~ ^[0-9a-f]{40}$ ]] && git -C "$checkout" cat-file -e "$floor^{commit}" 2>/dev/null \
+    || { echo 'ERROR: invalid release security foundation' >&2; return 1; }
+  dir="$(hawa_releases_dir)"; [[ -d "$dir" ]] || return 0
+  current="$(hawa_physical "$(hawa_current_link)" || true)"; previous="$(hawa_physical "$(hawa_previous_link)" || true)"
+  common="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir)" || return 1
+  for candidate in "$dir"/*; do
+    name="$(basename "$candidate")"; [[ "$name" =~ ^[0-9a-f]{40}$ ]] || continue
+    [[ ! -L "$candidate" && -d "$candidate" ]] || { echo 'ERROR: invalid release target' >&2; return 1; }
+    head="$(git -C "$candidate" rev-parse HEAD 2>/dev/null)" || return 1
+    [[ "$head" == "$name" && "$(git -C "$candidate" rev-parse --path-format=absolute --git-common-dir)" == "$common" ]] \
+      || { echo 'ERROR: release identity differs from its registered worktree' >&2; return 1; }
+    if git -C "$checkout" merge-base --is-ancestor "$floor" "$head"; then continue; fi
+    [[ "$candidate" != "$current" && "$candidate" != "$previous" ]] \
+      || { echo 'ERROR: an active release predates the worker security foundation' >&2; return 1; }
+    [[ -z "$(git -C "$candidate" status --porcelain)" ]] \
+      || { echo 'ERROR: unsafe release holds local changes; preserve them before pruning' >&2; return 1; }
+    git --git-dir="$common" worktree remove --force "$candidate" \
+      || { echo 'ERROR: unsafe release worktree removal failed' >&2; return 1; }
+    rm -f "$dir/.built-$name" "$dir/.build-$name.log"
+    echo "removed unsafe release $name"
+  done
+}
+
+hawa_release_check_worker_identity() { # release
+  [[ ! -f "$(hawa_shared_dir)/infra/docker/.worker-identity-v2" ]] || \
+    [[ -f "$1/packages/db/migrations/073_restricted_worker_database.sql" && -f "$1/packages/db/src/provision-worker-role.ts" ]] || {
+      echo 'ERROR: this release predates independent worker identities; rollback requires a compatible forward release' >&2; return 1;
+    }
 }

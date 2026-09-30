@@ -211,7 +211,7 @@ describe('deploy.sh and the release directory', () => {
       fs.mkdirSync(path.dirname(path.join(s.src, f)), { recursive: true });
       fs.copyFileSync(path.join(repo, f), path.join(s.src, f));
     }
-    const source = 'TELEGRAM_BOT_TOKEN=x\nHAWA_BEARER_TOKEN=' + 'a'.repeat(48) + '\n';
+    const source = 'DATABASE_URL=postgresql://hawa_app:' + 'synthetic@postgres:5432/hawa\nTELEGRAM_BOT_TOKEN=x\nHAWA_BEARER_TOKEN=' + 'a'.repeat(48) + '\n';
     fs.writeFileSync(path.join(s.shared, 'infra/docker/.env.production'), source, { mode: 0o600 });
     fs.writeFileSync(path.join(s.src, 'infra/docker/.env.production'), source, { mode: 0o600 });
     git(s.src, 'add', '-A');
@@ -342,5 +342,37 @@ describe('what production reads, through ~/.hawa/current', () => {
     for (const f of ['infra/ops/watchdog.sh', 'infra/backup/nightly_backup.sh', 'infra/backup/backup_restore_drill.sh', 'infra/backup/restore_drill.sh', 'infra/backup/offsite_copy.sh']) {
       expect(fs.readFileSync(path.join(repo, f), 'utf8'), f).toMatch(/^ROOT(_DIR)?="\$\(cd "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)\/\.\.\/\.\." && pwd -P\)"/m);
     }
+  });
+});
+
+
+describe('release security retirement',()=>{
+  it('removes inactive pre-foundation releases while preserving current, previous and shared files',()=>{
+    const s=setup(), unsafe=s.head, floor=s.commit(), safe=s.commit();
+    for(const commit of [unsafe,floor,safe]) expect(sh(s,`hawa_release_prepare '${s.src}' ${commit}`).code).toBe(0);
+    sh(s,`hawa_release_activate '${s.releases}/${floor}'`);
+    sh(s,`hawa_release_activate '${s.releases}/${safe}'`);
+    const result=sh(s,`hawa_release_prune_unsafe '${s.src}' ${floor}`);
+    expect(result.code,result.err).toBe(0); expect(result.out).toContain(unsafe);
+    expect(fs.existsSync(path.join(s.releases,unsafe))).toBe(false);
+    expect(fs.existsSync(path.join(s.releases,floor))).toBe(true);
+    expect(fs.readFileSync(path.join(s.shared,'infra/docker/.env.production'),'utf8')).toBe('TELEGRAM_BOT_TOKEN=x\n');
+  });
+  it('refuses active or locally changed unsafe worktrees',()=>{
+    const s=setup(), floor=s.commit();
+    sh(s,`hawa_release_prepare '${s.src}' ${s.head}`);
+    sh(s,`hawa_release_activate '${s.releases}/${s.head}'`);
+    expect(sh(s,`hawa_release_prune_unsafe '${s.src}' ${floor}`).code).toBe(1);
+    fs.unlinkSync(path.join(s.home,'.hawa/current'));
+    fs.writeFileSync(path.join(s.releases,s.head,'kept.txt'),'preserve');
+    expect(sh(s,`hawa_release_prune_unsafe '${s.src}' ${floor}`).code).toBe(1);
+    expect(fs.readFileSync(path.join(s.releases,s.head,'kept.txt'),'utf8')).toBe('preserve');
+  });
+  it('blocks activating a pre-identity rollback once the host has migrated',()=>{
+    const s=setup(); const release=sh(s,`hawa_release_prepare '${s.src}' ${s.head}`).out;
+    fs.writeFileSync(path.join(s.shared,'infra/docker/.worker-identity-v2'),'');
+    const result=sh(s,`hawa_release_activate '${release}'`);
+    expect(result.code).toBe(1); expect(result.err).toContain('independent worker identities');
+    expect(fs.existsSync(path.join(s.home,'.hawa/current'))).toBe(false);
   });
 });

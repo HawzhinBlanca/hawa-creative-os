@@ -1,0 +1,65 @@
+{
+  "date": "2026-09-30",
+  "adr": 182,
+  "requirements": [
+    "NFR-006",
+    "FR-060",
+    "FR-063",
+    "FR-071"
+  ],
+  "sourceSha256": {
+    "infra/ops/prepare_service_boundaries.py": "6dce33af7d235da94db1dbdee0d2e50d8e7dd2f2d0bcfed539b932298cf52ac3",
+    "infra/ops/nginx_reload.sh": "60dec9fb3bcf39afd656ac402b5aa70713a93a925f1cd8aaf189b6dac982a096",
+    "infra/docker/deploy.sh": "31b596157902a35fd3ac6c2f56c79afb8bd5bb76ac2755077c973fcfcd59fef7",
+    "infra/docker/docker-compose.prod.yml": "4cd8be057edc2ab0c5086e46dce8fe929ebf7100149b3af56291032f684a82fa",
+    "infra/ops/release_lib.sh": "3bf45fcdee2853a4a8d0a821fb680c3d85e1cebbe71a2b66bee86ddf56cf4599",
+    "packages/db/migrations/073_restricted_worker_database.sql": "fa755ece58872a638c895cd576b671cf64b3a42f11eb68981a97d954880e8a86",
+    "packages/db/src/provision-worker-role.ts": "4f28623dc8e898ee8c76b573d9f065faa21ebab09d9f829ca195d86fecf066e7",
+    "scripts/provision_worker_database.ts": "20093aca911dd9b2df6c8d5f6cea69155e4a84835f8db26fd614b02211ce17eb",
+    "apps/core/src/app.ts": "01f0a470278ce013a26d0c9be8cf19c50efa00e78ac0450b121c35b0078f984b",
+    "apps/core/src/routes/auth.routes.ts": "15d9ee66e304e3e6be2b5df76cfd2ce7e9f1014361e5fe6ed1848bac65523ba2"
+  },
+  "focused": {
+    "status": "PASS",
+    "distinctTests": 85,
+    "files": 11,
+    "note": "84 passed in wider run; stale migration-list test then repaired and all 3 migration tests rerun; overlapping runs not added"
+  },
+  "typecheck": {
+    "status": "PASS",
+    "testRoots": 644
+  },
+  "build": "PASS",
+  "lint": {
+    "status": "PASS",
+    "anyCount": 937,
+    "anyCeiling": 1053,
+    "providerExceptions": 10
+  },
+  "retainedFailures": [
+    "Initial provision SQL string quoting transform error: 26 tests passed, DB suite failed import",
+    "Root script could not resolve pg: moved database helper into db package, thin CLI retained",
+    "Initial DB privilege probe refused test clone PUBLIC TEMP: reproduce database ACL since PostgreSQL template cloning does not copy database ACL",
+    "Wider focused run:84 passed,1 failed stale explicit migration-list expectation",
+    "Sandbox tsx IPC refusal: rerun typecheck with approved local IPC access",
+    "Commit hook refused two synthetic literal database URLs; fixture URLs composed from synthetic parts and regression suites rerun; scanner not bypassed"
+  ],
+  "liveBeforeRelease": {
+    "nginxTest": "FAIL missing bound proof; nginx restart then PASS",
+    "health": "healthy after restart",
+    "sharedWorkerOperatorToken": true
+  },
+  "notYetQualified": [
+    "exact sealed release gate",
+    "production newest-dump migration",
+    "independent live design/database identity",
+    "blue-green readback",
+    "compatible rollback (old predecessor deliberately refused)"
+  ],
+  "credentialMaterial": "No values, digests or credential identifiers recorded",
+  "blueprint": {
+    "pass": 1472,
+    "warn": 0,
+    "fail": 0
+  }
+}
