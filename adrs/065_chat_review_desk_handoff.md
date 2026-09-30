@@ -4,6 +4,7 @@
 - Status: Accepted
 - Requirements: FR-041, FR-043, FR-044, FR-060, NFR-015
 - Sources: docs/12_HUMAN_REVIEW.md §8; ADR-064
+- Amended 2026-09-30 by the owner's decision recorded in ADR-040's addendum: office members may also approve, send back or reject a draft in their private Telegram chat, through the same Core actions as the Desk. The chat approval route below is unchanged.
 
 ## Decision and reason
 
