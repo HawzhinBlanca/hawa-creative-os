@@ -161,9 +161,13 @@ export const SIX_DROPPED_NEGATIVE_FIXTURES = [
   },
 
   // 2. kaae 5 kurdi.jpg.jpeg (formerRank 4)
-  // Reason: Photograph of officials with a caption bar. Fails semanticLayout (no title/body hierarchy).
+  // Dropped 2026-09-17 as "a photo post, not a layout to learn composition from"; reinstated
+  // 2026-09-30 as the scrim_caption photo exemplar (photo08, ADR-170). The published post has a
+  // bold title and a subtitle on a navy scrim, so it has a hierarchy. This fixture models only
+  // the defect it was once reduced to, a caption-only layout with no title role, which must still
+  // fail semanticLayout.
   {
-    name: 'kaae 5 kurdi (Dropped: Photograph of officials with caption bar)',
+    name: 'Caption-only layout with no title (the reduced model of the reinstated kaae 5 kurdi post)',
     expectedFailingMetric: 'semanticLayout',
     layout: {
       version: 2 as const,

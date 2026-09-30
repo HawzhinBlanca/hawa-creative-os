@@ -672,7 +672,7 @@ export function computeSemanticLayout(layout: StudioLayoutV2): MetricResult {
       score: 0.20,
       passed: false,
       metric: 'semanticLayout',
-      details: { issues: ['Lacks primary title/headline hierarchy — photograph with caption bar cannot establish institutional composition'] }
+      details: { issues: ['Lacks a primary title: a layout with no title role, or a single text element, has no hierarchy'] }
     };
   }
 
