@@ -119,3 +119,21 @@ it('rotates legacy shared aliases with a scoped drain token, and retries without
     expect(readFileSync(join(directory,'.env.service-boundaries'),'utf8')).toBe(boundary);
   } finally {rmSync(directory,{recursive:true,force:true});}
 });
+
+
+it('uses Compose DATABASE_URL precedence and an independent password, never the stale provider-file URL',()=>{
+  const directory=mkdtempSync(join(tmpdir(),'hawa-worker-db-precedence-'));
+  const composeUrl='postgresql://hawa_app_a:'+'synthetic_compose_password@postgres:5432/hawa?sslmode=disable';
+  try {
+    writeFileSync(join(directory,'.env.production'),'DATABASE_URL='+syntheticDatabase+'\n');
+    writeFileSync(join(directory,'.env'),'DATABASE_URL='+composeUrl+'\n');
+    const result=spawnSync('python3',[resolve('infra/ops/prepare_service_boundaries.py'),'--directory',directory],{encoding:'utf8'});
+    expect(result.status,result.stderr).toBe(0);
+    const worker=readFileSync(join(directory,'.env.worker'),'utf8');
+    expect(worker).toContain('@postgres:5432/hawa?sslmode=disable');
+    expect(worker).not.toContain('synthetic_compose_password');
+    expect(worker).not.toContain('synthetic_core_password');
+    writeFileSync(join(directory,'.env.production'),'TELEGRAM_BOT_TOKEN=synthetic\n');
+    expect(spawnSync('python3',[resolve('infra/ops/prepare_service_boundaries.py'),'--directory',directory],{encoding:'utf8'}).status).toBe(0);
+  } finally {rmSync(directory,{recursive:true,force:true});}
+});

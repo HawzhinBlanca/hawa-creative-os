@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T20:59:19Z",
+  "generatedAt": "2026-09-30T21:02:24Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -2429,8 +2429,8 @@
     },
     {
       "path": "plans/service-boundary-repair-2026-09-30/LOCAL_PROOF.json",
-      "sha256": "f0805aa109435a6eeccbabf45819ccb304f99fc669f15d58c80aa846e07122ae",
-      "bytes": 3125
+      "sha256": "74ba888a80493f395641a38b0535778cb81212deb240cb9c4319bc6e2bcf58d3",
+      "bytes": 3530
     },
     {
       "path": "plans/service-boundary-repair-2026-09-30/PLAN.md",
@@ -3219,8 +3219,8 @@
     },
     {
       "path": "scripts/test/service-boundaries.test.ts",
-      "sha256": "cae7a00f6bd8eb330913a18454d2f934bd7bd1e2428954f1ecc595abbbca70e2",
-      "bytes": 8277
+      "sha256": "9456640c5bac90ca2e2a8d272a1ebc6fd701ac2574d3f1ee763ccf5fe9698d65",
+      "bytes": 9495
     },
     {
       "path": "scripts/test/suite-stability-report.test.ts",

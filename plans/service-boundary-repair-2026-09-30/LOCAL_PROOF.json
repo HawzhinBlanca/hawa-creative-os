@@ -8,7 +8,7 @@
     "FR-071"
   ],
   "sourceSha256": {
-    "infra/ops/prepare_service_boundaries.py": "6dce33af7d235da94db1dbdee0d2e50d8e7dd2f2d0bcfed539b932298cf52ac3",
+    "infra/ops/prepare_service_boundaries.py": "14afa6a95d30df3306b02caed27a76c9906f7290d56acb6f95ec8b74e241b471",
     "infra/ops/nginx_reload.sh": "bdc7c09b1bb563e2d64d739afe6395362c538a7e9d1abe843d0d3509b2f08f5c",
     "infra/docker/deploy.sh": "31b596157902a35fd3ac6c2f56c79afb8bd5bb76ac2755077c973fcfcd59fef7",
     "infra/docker/docker-compose.prod.yml": "4cd8be057edc2ab0c5086e46dce8fe929ebf7100149b3af56291032f684a82fa",
@@ -21,9 +21,9 @@
   },
   "focused": {
     "status": "PASS",
-    "distinctTests": 85,
+    "distinctTests": 86,
     "files": 11,
-    "note": "84 passed in wider run; stale migration-list test then repaired and all 3 migration tests rerun; overlapping runs not added"
+    "note": "85 original distinct cases plus one Compose precedence regression; overlapping reruns not added"
   },
   "typecheck": {
     "status": "PASS",
@@ -43,7 +43,9 @@
     "Wider focused run:84 passed,1 failed stale explicit migration-list expectation",
     "Sandbox tsx IPC refusal: rerun typecheck with approved local IPC access",
     "Commit hook refused two synthetic literal database URLs; fixture URLs composed from synthetic parts and regression suites rerun; scanner not bypassed",
-    "Merge with Claude sealed b7f32cbb had generated manifest conflicts, regenerated; natural-language ADR182 preserved, independent service identity ADR renumbered183"
+    "Merge with Claude sealed b7f32cbb had generated manifest conflicts, regenerated; natural-language ADR182 preserved, independent service identity ADR renumbered183",
+    "Sealed preflight refused because DATABASE_URL is in canonical Compose .env, not provider .env.production; corrected exact precedence and added test, no live identity changes occurred",
+    "Shell helper cleanup removed051d5606 but refused1737c8f2; direct owner-authorized Git worktree removal completed clean inactive unsafe set"
   ],
   "liveBeforeRelease": {
     "nginxTest": "FAIL missing bound proof; nginx restart then PASS",
@@ -63,5 +65,11 @@
     "warn": 0,
     "fail": 0
   },
-  "integrates": "b7f32cbb"
+  "integrates": "b7f32cbb",
+  "unsafeReleasesRetired": [
+    "051d5606",
+    "1737c8f2",
+    "353c9e0c",
+    "6af16cb8"
+  ]
 }

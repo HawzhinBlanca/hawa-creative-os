@@ -111,7 +111,10 @@ def prepare(directory, rotate_design=False):
         if any(key in source for key in values):
             raise ValueError('Service boundary keys belong only in .env.service-boundaries')
         db_path = directory / '.env.worker-db'
-        core_url = urlsplit(source.get('DATABASE_URL', ''))
+        interpolation_path = directory / '.env'
+        interpolation = env_lines(interpolation_path) if interpolation_path.exists() else {}
+        # Compose's explicit environment DATABASE_URL overrides its env_file. Match that precedence.
+        core_url = urlsplit(interpolation.get('DATABASE_URL', source.get('DATABASE_URL', '')))
         if core_url.scheme not in {'postgres', 'postgresql'} or not core_url.hostname or not core_url.path or not core_url.password:
             raise ValueError('A literal canonical DATABASE_URL is required for separate worker database access')
         if db_path.exists():
