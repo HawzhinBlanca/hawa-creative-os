@@ -6,8 +6,15 @@
 #   ~/.hawa/releases/<commit>   a detached git worktree of that commit (git worktree add --detach),
 # and ~/.hawa/current is a symbolic link to the release production runs, flipped atomically (a rename)
 # by deploy.sh just before it starts that release's containers; ~/.hawa/previous names the one before.
-# The launch agents run ~/.hawa/current/infra/..., and the compose bind mounts read their files through
-# ~/.hawa/current, so a checkout can be on any branch, dirty or deleted without production noticing.
+# The launch agents run ~/.hawa/current/infra/..., so a checkout can be on any branch, dirty or deleted
+# without production noticing.
+#
+# Containers never bind a file through ~/.hawa/current (addendum 3): Docker Desktop resolves the link
+# when it creates a container and keeps the release path, so a container nothing recreated stayed on an
+# old release until the prune removed it (vector, 2026-09-30). The files compose binds (HAWA_RUNTIME_FILES,
+# and HAWA_RUNTIME_SHARED from ~/.hawa/shared) are copied into ~/.hawa/runtime instead, a real directory
+# that is never switched or pruned, at the same relative paths. They are rewritten in place (the same
+# inode): a single-file bind mount keeps the inode it bound, so a replaced file is never seen.
 #
 # Host-local files (credentials, backups, receipts) live once in ~/.hawa/shared, at the same relative
 # paths, and every release links to them: HAWA_SHARED_REQUIRED must exist there, HAWA_SHARED_DIRS are
@@ -21,7 +28,10 @@
 #   hawa_release_prepare <checkout> <commit>   create (or check) the release, link the shared files; prints its path
 #   hawa_release_install <release>         pnpm install --offline and the build the scripts need ($HAWA_RELEASE_BUILD)
 #   hawa_release_activate <release>        point current at it (atomic), previous at the old one, record history
-#   hawa_release_prune [keep]              remove all but current, previous and the newest <keep> releases
+#   hawa_release_prune [keep]              remove all but current, previous, the newest <keep> releases and
+#                                          any release a container's bind mounts may still use
+#   hawa_runtime_dir                       where the files compose binds live (~/.hawa/runtime)
+#   hawa_runtime_sync <from> [dest] [shared] [missing]   copy them in place; prints "changed <path>" per file
 
 HAWA_SHARED_REQUIRED=(infra/docker/.env.production infra/docker/.env)
 HAWA_SHARED_DIRS=(infra/backup/snapshots infra/backup/release-receipts)
@@ -29,10 +39,16 @@ HAWA_SHARED_DIRS=(infra/backup/snapshots infra/backup/release-receipts)
 # link check needs (the commit hook's own trap in a fresh worktree).
 HAWA_SHARED_OPTIONAL=(.env.test infra/docker/.env.service-boundaries infra/docker/.env.worker infra/docker/.office-proxy-header.conf output/audits/2026-09-29-product-flow-fixes)
 
+# The files compose binds into nginx, vector and postgres, from the release; and from ~/.hawa/shared.
+HAWA_RUNTIME_FILES=(infra/docker/nginx.conf infra/docker/vector.yaml infra/docker/00-init-roles.sql db/schema.sql db/rls.sql db/03-grants.sql db/seed.sql)
+HAWA_RUNTIME_SHARED=(infra/docker/.office-proxy-header.conf)
+HAWA_RELEASE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
 hawa_releases_dir() { printf '%s' "${HAWA_RELEASES_DIR:-$HOME/.hawa/releases}"; }
 hawa_current_link() { printf '%s' "${HAWA_CURRENT_LINK:-$HOME/.hawa/current}"; }
 hawa_previous_link() { printf '%s' "${HAWA_PREVIOUS_LINK:-$(dirname "$(hawa_current_link)")/previous}"; }
 hawa_shared_dir() { printf '%s' "${HAWA_SHARED_DIR:-$HOME/.hawa/shared}"; }
+hawa_runtime_dir() { printf '%s' "${HAWA_RUNTIME_DIR:-$HOME/.hawa/runtime}"; }
 hawa_release_path() { printf '%s/%s' "$(hawa_releases_dir)" "$1"; }
 hawa_physical() { (cd -P "$1" 2>/dev/null && pwd -P); }
 
@@ -128,13 +144,34 @@ hawa_release_activate() { # release
   printf '%s %s\n' "$(date -u +%FT%TZ)" "$(basename "$release")" >> "$(hawa_releases_dir)/.history"
 }
 
+# The releases any container, running or stopped, may still read through a bind mount: sources inside
+# ~/.hawa/releases/<commit>, and sources through ~/.hawa/current or previous resolved against the release
+# history at the container's creation and last start (infra/ops/release_mounts.py). Fails (and the prune
+# removes nothing) when Docker cannot be asked or a mount cannot be resolved for certain.
+hawa_release_mounted() {
+  local ids json
+  command -v docker >/dev/null 2>&1 || { echo "docker is not available to ask which releases containers use" >&2; return 1; }
+  ids="$(docker ps -aq --no-trunc 2>/dev/null)" || { echo "docker ps failed" >&2; return 1; }
+  if [[ -z "$ids" ]]; then json='[]'
+  else
+    # One id per word. A container removed between the two calls fails the inspect: ask once more.
+    # shellcheck disable=SC2086
+    json="$(docker inspect $ids 2>/dev/null)" || json="$(docker inspect $(docker ps -aq --no-trunc) 2>/dev/null)" \
+      || { echo "docker inspect failed" >&2; return 1; }
+  fi
+  printf '%s' "$json" | python3 "$HAWA_RELEASE_LIB_DIR/release_mounts.py" --releases "$(hawa_releases_dir)" \
+    --current "$(hawa_current_link)" --previous "$(hawa_previous_link)" --history "$(hawa_releases_dir)/.history"
+}
+
 # Keeps current, previous and the <keep> most recently activated releases (HAWA_RELEASES_KEEP, 5);
-# a release prepared but never activated counts by its directory's age. Old containers' bind mounts
-# point through ~/.hawa/current, never into a release, so pruning cannot pull a file from under one.
+# a release prepared but never activated counts by its directory's age. A release a container may still
+# bind is kept whatever its age, and when that cannot be known no release is removed (addendum 3: the
+# prune removed the release vector was pinned to, 2026-09-30).
 hawa_release_prune() { # [keep]
-  local keep="${1:-${HAWA_RELEASES_KEEP:-5}}" dir name current previous order kept=0 common
+  local keep="${1:-${HAWA_RELEASES_KEEP:-5}}" dir name current previous order kept=0 common mounted
   dir="$(hawa_releases_dir)"; [[ -d "$dir" ]] || return 0
   current="$(hawa_physical "$(hawa_current_link)" || true)"; previous="$(hawa_physical "$(hawa_previous_link)" || true)"
+  mounted="$(hawa_release_mounted)" || { echo "WARNING: could not tell which releases containers still bind; no release was removed" >&2; return 0; }
   # Newest first: activations (latest occurrence of each), then directories never activated, newest first.
   order="$( { [[ -f "$dir/.history" ]] && awk '{print $2}' "$dir/.history" | sed -n '1!G;h;$p' || true; ls -1t "$dir" 2>/dev/null || true; } \
     | grep -E '^[0-9a-f]{40}$' | awk '!seen[$0]++' || true)"
@@ -143,6 +180,7 @@ hawa_release_prune() { # [keep]
     if [[ "$dir/$name" == "$current" || "$dir/$name" == "$previous" ]]; then continue; fi
     kept=$((kept + 1))
     (( kept > keep )) || continue
+    if grep -qx "$name" <<< "$mounted"; then echo "kept release $name: a container's bind mount may still use it"; continue; fi
     common="$(git -C "$dir/$name" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
     if [[ -n "$common" ]] && git --git-dir="$common" worktree remove --force "$dir/$name" >/dev/null 2>&1; then
       echo "removed release $name"
@@ -153,5 +191,46 @@ hawa_release_prune() { # [keep]
       echo "WARNING: could not remove release $name" >&2
     fi
     rm -f "$dir/.built-$name" "$dir/.build-$name.log"
+  done
+}
+
+# Copies one file in place: an existing destination keeps its inode (truncated and rewritten, never
+# replaced), so a container that binds it sees the new content. Prints "changed" when the content changed.
+# The mode follows the source: owner-only when the source is, else 0644. A directory of empty
+# directories at the destination is Docker's placeholder for a source that was missing, and is removed.
+hawa_runtime_put() { # source, destination
+  local src="$1" dst="$2" mode
+  [[ -f "$src" ]] || { echo "ERROR: $src is missing; it is bound into a container" >&2; return 1; }
+  [[ ! -L "$dst" ]] || { echo "ERROR: $dst is a symbolic link; runtime files are real files" >&2; return 1; }
+  if [[ -d "$dst" ]]; then
+    [[ -z "$(find "$dst" ! -type d -print -quit)" ]] || { echo "ERROR: $dst is a directory holding files; look at it by hand" >&2; return 1; }
+    find "$dst" -depth -type d -empty -delete || return 1
+    echo "! removed $dst, an empty placeholder Docker made for a missing bind-mount source; recreate the container that binds it" >&2
+  fi
+  mode="$(stat -c %a "$src" 2>/dev/null || stat -f %Lp "$src")" || return 1
+  if (( 8#$mode & 8#044 )); then mode=644; else mode=600; fi
+  if [[ -f "$dst" ]] && cmp -s "$src" "$dst"; then chmod "$mode" "$dst"; return 0; fi
+  mkdir -p "$(dirname "$dst")" || return 1
+  [[ -e "$dst" ]] || (umask 077 && : > "$dst") || return 1
+  { chmod "$mode" "$dst" && cat "$src" > "$dst"; } || { echo "ERROR: could not write $dst" >&2; return 1; }
+  cmp -s "$src" "$dst" || { echo "ERROR: $dst does not match $src after the copy" >&2; return 1; }
+  echo changed
+}
+
+# Copies every file compose binds into <dest> (the runtime directory), in place: HAWA_RUNTIME_FILES from
+# <from> (a release, or another runtime directory), HAWA_RUNTIME_SHARED from <shared>. With "missing" as
+# the fourth argument only files not there yet are written. Prints "changed <path>" for each file whose
+# content changed; a missing source fails, naming it.
+hawa_runtime_sync() { # from, [dest], [shared], [missing]
+  local from="$1" dest="${2:-$(hawa_runtime_dir)}" shared="${3:-$(hawa_shared_dir)}" only="${4:-}" rel src out
+  [[ -d "$from" ]] || { echo "ERROR: no directory $from to copy the runtime files from" >&2; return 1; }
+  [[ ! -L "$dest" ]] || { echo "ERROR: $dest is a symbolic link; the runtime directory must be a real directory (Docker would pin its target)" >&2; return 1; }
+  { mkdir -p "$dest" && chmod 700 "$dest"; } || return 1
+  for rel in "${HAWA_RUNTIME_FILES[@]}" "${HAWA_RUNTIME_SHARED[@]}"; do
+    src="$from/$rel"
+    case " ${HAWA_RUNTIME_SHARED[*]} " in *" $rel "*) src="$shared/$rel" ;; esac
+    if [[ "$only" == missing && -f "$dest/$rel" && ! -L "$dest/$rel" ]]; then continue; fi
+    out="$(hawa_runtime_put "$src" "$dest/$rel")" || return 1
+    [[ -z "$out" ]] || echo "changed $rel"
   done
 }

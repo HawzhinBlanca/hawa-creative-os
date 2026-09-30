@@ -33,8 +33,8 @@ function run(functions: string[], body: string, stubs = '', env: Record<string, 
   const script = [
     'set -Eeuo pipefail',
     'exec 9>&2',
-    // ROOT_DIR: the release the one-off vector check binds its file from (ADR-158).
-    'CORE_CONTAINER=hawa-production-core-1; INTERP_FILE=/dev/null; ROOT_DIR=/srv/hawa-release',
+    // CANDIDATE_RUNTIME: the checked copy the one-off vector check binds its file from (ADR-158, addendum 3).
+    'CORE_CONTAINER=hawa-production-core-1; INTERP_FILE=/dev/null; ROOT_DIR=/srv/hawa-release; CANDIDATE_RUNTIME=/srv/hawa-runtime.candidate',
     // The compose command is recorded with the poller value it would interpolate.
     'record() { echo "CALL $* [poller=${HAWA_TELEGRAM_POLLER:-}]" >&9; return 0; }',
     'COMPOSE=(record compose)',
@@ -204,23 +204,31 @@ describe('finding 4: a worker token change needs HAWA_WORKER_TOKEN_PREVIOUS', ()
 });
 
 describe('finding 6: a changed vector.yaml reaches the running log shipper', () => {
-  const compose = (seen: string, afterRestart: string, runOk = true) =>
-    `SEEN='${seen}'; fake() { echo "CALL $*" >&9; case " $* " in *" exec "*) echo "$SEEN  /etc/vector/vector.yaml" ;; *" restart "*) SEEN='${afterRestart}' ;; *" run "*) ${runOk ? 'return 0' : 'return 1'} ;; esac; }; COMPOSE=(fake)`;
+  const compose = (seen: string, afterRestart: string, runOk = true, afterRecreate = afterRestart) =>
+    `SEEN='${seen}'; fake() { echo "CALL $*" >&9; case " $* " in *" exec "*) echo "$SEEN  /etc/vector/vector.yaml" ;; *" restart "*) SEEN='${afterRestart}' ;; *" up "*) SEEN='${afterRecreate}' ;; *" run "*) ${runOk ? 'return 0' : 'return 1'} ;; esac; }; COMPOSE=(fake)`;
 
-  it('nothing is restarted when vector already runs the deployed file', () => {
-    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=aaa; apply_vector_config', compose('aaa', 'aaa'));
+  it('nothing is restarted when vector.yaml did not change and vector already sees it', () => {
+    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=aaa; VECTOR_CHANGED=0; apply_vector_config', compose('aaa', 'aaa'));
     expect(r.code).toBe(0);
-    expect(r.calls.filter((c) => / restart /.test(c))).toEqual([]);
+    expect(r.calls.filter((c) => / (restart|up) /.test(c))).toEqual([]);
   });
 
-  it('a changed file restarts vector, which must then see it', () => {
-    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; apply_vector_config', compose('aaa', 'bbb'));
+  it('a file changed in place is already seen but not yet read: vector is restarted (addendum 3)', () => {
+    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; VECTOR_CHANGED=1; apply_vector_config', compose('bbb', 'bbb'));
     expect(r.code).toBe(0);
     expect(r.calls).toContain('CALL --env-file /dev/null restart vector');
-    expect(r.out).toMatch(/vector restarted onto the new vector.yaml/);
-    const stuck = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; apply_vector_config', compose('aaa', 'aaa'));
+    expect(r.out).toMatch(/vector restarted onto the deployed vector.yaml/);
+  });
+
+  it('a mount pinned to an old file is restarted, then recreated, and the deploy stops if vector still does not see it', () => {
+    const r = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; VECTOR_CHANGED=0; apply_vector_config', compose('aaa', 'aaa', true, 'bbb'));
+    expect(r.code).toBe(0);
+    expect(r.calls).toContain('CALL --env-file /dev/null restart vector');
+    expect(r.calls).toContain('CALL --env-file /dev/null up -d --no-deps --force-recreate vector');
+    expect(r.out).toMatch(/vector recreated onto the deployed vector.yaml/);
+    const stuck = run(['vector_seen', 'apply_vector_config'], 'VECTOR_WANT=bbb; VECTOR_CHANGED=1; apply_vector_config', compose('aaa', 'aaa'));
     expect(stuck.code).toBe(1);
-    expect(stuck.out).toMatch(/does not see the deployed vector.yaml/);
+    expect(stuck.out).toMatch(/ERROR: vector does not see the deployed vector.yaml even after it was recreated/);
   });
 
   it('an invalid file stops the deploy before anything is started with it', () => {
@@ -233,9 +241,76 @@ describe('finding 6: a changed vector.yaml reaches the running log shipper', () 
     expect(ok.out).toMatch(/AFTER/);
   });
 
+  it('the one-off check binds the candidate copy, not the live runtime directory', () => {
+    const r = run(['validate_vector_config'], 'validate_vector_config', 'fake() { echo "CALL HAWA_RUNTIME_DIR=${HAWA_RUNTIME_DIR:-} $*" >&9; }; COMPOSE=(fake)');
+    expect(r.calls[0]).toBe('CALL HAWA_RUNTIME_DIR=/srv/hawa-runtime.candidate --env-file /dev/null run --rm --no-deps -T vector validate --no-environment /etc/vector/vector.yaml');
+  });
+
   it('the file is validated before step 7 starts anything and applied after it', () => {
     const up = line('HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n');
     expect(line('\nvalidate_vector_config\n')).toBeLessThan(up);
     expect(line('\napply_vector_config\n')).toBeGreaterThan(up);
+  });
+});
+
+// ADR-158 addendum 3: nginx binds nginx.conf and the office proof from ~/.hawa/runtime, rewritten in place.
+// On 2026-09-30 the proof was replaced by a rename after nginx started, and `nginx -t` inside failed: the
+// running container kept the old inode. After `up -d` nginx must see both files and pass nginx -t inside,
+// then reload; otherwise it is restarted, then recreated, and the deploy stops rather than go on silently.
+describe('addendum 3: nginx runs the deployed nginx.conf and office proof', () => {
+  const compose = (o: { seen: string; test?: boolean; reload?: boolean; afterRestart?: string; testAfterRestart?: boolean; afterRecreate?: string }) => [
+    `SEEN='${o.seen}'; TEST=${o.test === false ? 1 : 0}; RELOAD=${o.reload === false ? 1 : 0}`,
+    'sleep() { :; }',
+    // The SHA-256 tool, stubbed to pass the content through: what nginx sees is compared by content.
+    "fakesha() { tr -d '\\n'; echo; }; HAWA_SHA256=(fakesha)",
+    'fake() { echo "CALL $*" >&9; case " $* " in',
+    '  *" exec "*" cat "*) printf "%s" "$SEEN" ;;',
+    '  *" exec "*" nginx -t "*) return $TEST ;;',
+    '  *" exec "*" -s reload "*) return $RELOAD ;;',
+    `  *" restart "*) SEEN='${o.afterRestart ?? o.seen}'; TEST=${o.testAfterRestart === false ? 1 : 0} ;;`,
+    `  *" up "*) SEEN='${o.afterRecreate ?? o.afterRestart ?? o.seen}'; TEST=0 ;;`,
+    'esac; }; COMPOSE=(fake)',
+  ].join('\n');
+  const apply = (changed: 0 | 1) => `NGINX_WANT=new; NGINX_CHANGED=${changed}; apply_nginx_config`;
+  const fns = ['nginx_seen', 'nginx_live_ok', 'apply_nginx_config'];
+  const restarts = (calls: string[]) => calls.filter((c) => / (restart|up) /.test(c));
+
+  it('a changed file that nginx sees and that passes nginx -t inside is reloaded, nothing restarted', () => {
+    const r = run(fns, apply(1), compose({ seen: 'new' }));
+    expect(r.code, r.err).toBe(0);
+    expect(r.calls).toContain('CALL --env-file /dev/null exec -T nginx nginx -t');
+    expect(r.calls).toContain('CALL --env-file /dev/null exec -T nginx nginx -s reload');
+    expect(restarts(r.calls)).toEqual([]);
+    expect(r.out).toMatch(/nginx reloaded onto the new nginx.conf and office proof/);
+  });
+
+  it('nginx -t failing inside the live container, or a refused reload, restarts nginx and checks it again', () => {
+    for (const o of [{ seen: 'new', test: false }, { seen: 'new', reload: false }]) {
+      const r = run(fns, apply(1), compose(o));
+      expect(r.code, r.err).toBe(0);
+      expect(r.calls).toContain('CALL --env-file /dev/null restart nginx');
+      expect(r.out).toMatch(/nginx restarted onto the deployed configuration/);
+    }
+  });
+
+  it('a mount pinned to the old inode (2026-09-30) is restarted, then recreated', () => {
+    const r = run(fns, apply(0), compose({ seen: 'old', afterRestart: 'old', afterRecreate: 'new' }));
+    expect(r.code, r.err).toBe(0);
+    expect(r.calls).toContain('CALL --env-file /dev/null up -d --no-deps --force-recreate nginx');
+    expect(r.out).toMatch(/nginx recreated onto the deployed configuration/);
+  });
+
+  it('never goes on silently: nginx that still does not see the files, or fails nginx -t, stops the deploy', () => {
+    const stale = run(fns, `${apply(1)}; echo AFTER`, compose({ seen: 'old', afterRestart: 'old', afterRecreate: 'old' }));
+    expect(stale.code).toBe(1);
+    expect(stale.out).toMatch(/ERROR: nginx does not see the deployed nginx.conf and office proof/);
+    expect(stale.out).not.toMatch(/AFTER/);
+  });
+
+  it('applied after up -d, with the files checked (nginx -t on the candidate) before it', () => {
+    const up = line('HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n');
+    // The needle's leading newline ends the up -d line itself.
+    expect(line('\napply_nginx_config\n')).toBeGreaterThanOrEqual(up);
+    expect(line('HAWA_RUNTIME_DIR="$CANDIDATE_RUNTIME" "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T nginx nginx -t')).toBeLessThan(up);
   });
 });

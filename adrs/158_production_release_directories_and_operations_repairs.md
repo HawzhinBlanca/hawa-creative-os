@@ -113,3 +113,63 @@ same volume, clean shutdown). Fixes: the pre-backup start is `up -d --no-recreat
 applied by the full `up -d` after the switch), and `hawa_release_activate` removes a `current` that is a tree of
 empty directories and refuses one holding any file. Tests: `packages/testkit/test/release-directories.test.ts`
 (the placeholder case fails without the fix; a guard that no pre-switch `up -d … postgres` lacks `--no-recreate`).
+
+## Addendum 3 (2026-09-30, 20:58Z: a pruned release under a running container)
+
+**What happened.** Vector's restart failed with a missing `/host_mnt/Users/hawzhin/.hawa/releases/1737c8f2…/infra/docker/vector.yaml`.
+Compose bound nginx.conf, vector.yaml, the Postgres init files and the office proof through
+`${HOME}/.hawa/current/...`, on the reasoning above that an unchanged bind string means no recreation. That
+reasoning was the fault: Docker Desktop resolves the link when it *creates* the container and keeps the release
+path it found, while `docker inspect` still shows the unresolved string. Because the string never changed,
+nothing recreated vector (created 09:49:56Z, a second after 1737c8f2 was activated), nginx (pinned to
+b2edf657) or Postgres (created before `current` existed, bound to Addendum 2's placeholder directories, since
+deleted), and `hawa_release_prune`, which assumed no container bound into a release, removed 1737c8f2 at the end
+of the 20:58Z deploy. Vector could not restart, and Postgres would not have started after any restart. The lead
+restored the release by hand. Separately, `nginx -t` inside nginx failed: `prepare_service_boundaries.py`
+replaces `.office-proxy-header.conf` by a rename, and a single-file bind mount keeps the inode it bound.
+
+**Decisions.**
+- *A stable runtime directory.* `${HAWA_RUNTIME_DIR:-$HOME/.hawa/runtime}` is a real directory (a link is refused:
+  Docker would pin its target), never switched and never pruned. `hawa_runtime_sync` copies every file compose
+  binds into it at the same relative path (`HAWA_RUNTIME_FILES` from the release, the office proof from
+  `~/.hawa/shared`), writing in place (`cat src > dst`: the same inode, so a running container's single-file
+  mount sees the new bytes; never a rename). Mode follows the source (the proof stays 0600). A missing source,
+  the proof included, fails the deploy naming it. Codex's writer is unchanged; the proof is copied after it runs.
+  `release.sh runtime-sync [commit]` does the same by hand. Compose binds these eight files, for nginx, vector
+  and Postgres, from the runtime directory only; nothing is bound through `current`, `previous` or `releases`.
+  The launch agents and the watchdog still run scripts through `~/.hawa/current`: scripts are not bind-mounted.
+- *Deploy order.* This release's files and the proof are staged into a fresh `~/.hawa/runtime.candidate`, checked
+  by one-off containers of the same images with compose's own mounts pointed at it (`nginx -t` with the proof it
+  includes; `vector validate`), and only those checked bytes are copied into the runtime directory, after the
+  checks and before the switch and `up -d`. Before the pre-backup Postgres start, runtime files that do not exist
+  yet are seeded (only those), so no container is ever created against a missing source (Addendum 2's trap).
+  After `up -d`, nginx must see the runtime nginx.conf and proof and pass `nginx -t` inside before it is reloaded;
+  a failed check or reload restarts it, a restart that does not help recreates it, and the deploy stops if it
+  still does not see them. Vector is restarted when vector.yaml changed (in place, it already sees the bytes but
+  has not read them) or when it does not see the deployed file, recreated if a restart does not help.
+- *Prune safety.* `hawa_release_prune` asks Docker for every container, running or stopped
+  (`infra/ops/release_mounts.py` over `docker inspect`), and keeps any release one may still bind: sources under
+  `~/.hawa/releases/<commit>` (with or without Docker Desktop's `/host_mnt` prefix), and sources through `current`
+  or `previous` resolved against `.history` at the container's Created time and its last start, keeping the
+  releases on both sides of an activation within three seconds (the history line is written just after the
+  switch, and the VM clock may differ). A container created before any activation bound placeholders, not a
+  release. When Docker cannot be asked, the history is missing or a time cannot be read, no release is removed.
+
+**Consequences.** The first deploy with this change recreates nginx, vector and Postgres once, because their bind
+strings change (Postgres: 10 to 30 s of 503s from Core, retried; nginx: a few seconds of refused connections;
+the worker is blue/green as always). Later deploys recreate none of them for a file: the strings stay the same
+and the content is rewritten in place. A rollback to a release before this addendum binds through `current`
+again (recreating the three) and prunes without the check: run it with `HAWA_RELEASES_KEEP=50`.
+
+**Verification.** `packages/testkit/test/release-directories.test.ts`: runtime sync (paths, proof from shared at
+0600, the same inode after a changed sync, missing proof refused, link refused, placeholders, `missing` mode,
+`release.sh runtime-sync`); prune with faked `docker inspect` (the 2026-09-30 replay keeps 1737c8f2 and
+b2edf657, which the old prune removed; direct and `/host_mnt` binds; the activation window and last start;
+nothing removed when unsure); compose's resolved binds (all eight under the runtime directory, none through
+`current`, `previous` or `releases`, and exactly the files the sync copies); deploy order; and in the real
+`nginx:1.27-alpine-slim` image, `nginx -t` with compose's own nginx mounts from a synced runtime directory, and
+a running container that sees a synced proof at once but not one replaced by a rename.
+`deploy-sh-operations-findings.test.ts`: nginx reload, restart, recreate and refusal; vector restart on an
+in-place change and recreate for a pinned mount. The new tests fail on b7f32cbb and pass with the change. Read
+against production's containers (`docker inspect`, read-only, 21:05Z), the check keeps 1737c8f2, b2edf657,
+36369a12 and b7f32cbb.
