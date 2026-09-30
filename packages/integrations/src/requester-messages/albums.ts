@@ -42,6 +42,19 @@ export const ALBUM_MESSAGES = {
     en: "I didn't receive the rest of your text, so I haven't started a design with these photos. Whenever you're ready, send the photos again and then the whole text as a message.",
     ckb: 'ماوەی دەقەکەتم پێنەگەیشت، بۆیە هێشتا دیزاینم بەم وێنانە دەست پێنەکردووە. هەر کاتێک ئامادە بوویت، وێنەکان دووبارە بنێرەوە و پاشان هەموو دەقەکە وەک نامەیەک بنێرە.',
   },
+  /**
+   * ADR-160 addendum: photos sent one by one (a photo burst) right after the brief whose design has not
+   * started using pictures: added to it, in one answer for all of them.
+   */
+  burstAdded: {
+    en: "Got the photos. I've added them to {title}.",
+    ckb: 'وێنەکانم وەرگرت و بۆ {title} زیادم کردن.',
+  },
+  /** ADR-160 addendum: such photos for a design already under way, or with a designer: passed to the office. */
+  burstPassed: {
+    en: "Got the photos. {title} is already being made, so I've passed the photos to the office to use.",
+    ckb: 'وێنەکانم وەرگرت. {title} پێشتر دەستی پێکراوە، بۆیە وێنەکانم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاریان بهێنن.',
+  },
   photoMissing: {
     en: 'One of your photos could not be saved, so I have not started a design. Please send the photos again.',
     ckb: 'یەکێک لە وێنەکانت پاشەکەوت نەکرا، بۆیە هێشتا دیزاینم دەست پێنەکردووە. تکایە وێنەکان دووبارە بنێرەوە.',

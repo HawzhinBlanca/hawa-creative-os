@@ -1,5 +1,6 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
 import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
+import { shapePaintsOver } from './art-direction/surfaces.js';
 
 export interface LayoutMetrics {
   alignmentScore: number; // 0..1 (fraction of edges aligned to grid or other elements)
@@ -49,7 +50,7 @@ export function overlappingPairs(layout: StudioLayoutV2): string[] {
   for (const s of layout.shapes) {
     if (s.role !== 'panel') {
       for (const t of layout.text) {
-        if (boxesIntersect(s, t)) pairs.push(`${name(t)} and the ${s.role} at y=${Math.round(s.y)}`);
+        if (shapePaintsOver(s, t)) pairs.push(`${name(t)} and the ${s.role} at y=${Math.round(s.y)}`);
       }
     }
   }
@@ -85,7 +86,9 @@ export function computeLayoutMetrics(
   // Collect all element edges
   const allElements: Box[] = [
     ...layout.text,
-    ...layout.shapes.filter((s) => s.role !== 'panel' || (s.width < width * 0.9 && s.height < height * 0.9)),
+    // A frame around the canvas is a border, not an element to align (ADR-170: stroke-only frames).
+    ...layout.shapes.filter((s) => (s.role !== 'panel' || (s.width < width * 0.9 && s.height < height * 0.9)) &&
+      !(s.fill === 'none' && s.width >= width * 0.85 && s.height >= height * 0.85)),
     layout.logo,
   ];
 

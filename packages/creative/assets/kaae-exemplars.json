@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-17.1",
+  "version": "2026-09-30.1",
   "status": "CONFIRMED",
   "curator": "Art Director (owner), confirmed by visual review of all twelve candidates",
   "confirmedAt": "2026-09-17",
@@ -185,6 +185,491 @@
         "outputTokens": 146,
         "costUsd": 0.048213
       }
+    },
+    {
+      "rank": 7,
+      "status": "office-published",
+      "sha256": "1519bd6257ca2fa23ad7a41d7df8826288352567940fc02aaae1c0b73b3369f4",
+      "path": "packages/creative/assets/exemplars/photo01_k12_field_visit_report_en.jpg",
+      "filename": "photo01_k12_field_visit_report_en.jpg",
+      "dimensions": {
+        "width": 864,
+        "height": 1080
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 141617,
+      "reason": "The office's own post for the KAAE K-12 Pilot Study field visit report, the same brief the system rendered as one centred photo. Reference for hero_fade_report.",
+      "recommendedFor": [
+        "report_release",
+        "feed_announcement",
+        "study_findings"
+      ],
+      "recipe": "hero_fade_report",
+      "subject": [
+        "report_release",
+        "field_visit",
+        "k12",
+        "school",
+        "education_quality"
+      ],
+      "photoCount": 2,
+      "language": "en",
+      "pairedWith": "photo02_k12_field_visit_report_ckb",
+      "descriptor": "Hero: a real school library classroom with one staff member standing among yellow chairs, literally showing the field visit; it fills the top 55% edge to edge and bleeds off the top, left and right. Second photo: a crowd of pupils with raised hands, blurred and blended upward into the hero at about 45% height, sinking into a navy gradient that becomes solid navy over the bottom 40%; it is texture, not a grid cell. All text sits on the fade, left-aligned at the left margin: a bold uppercase white first line (study name), a bold uppercase gold second line (report type), a light white three-line summary, then a centred 'read the full report at' line above a gold pill holding the URL in navy. A thin gold inset line frames the canvas about 2.5% in from the edge; the logo sits top-left on the bright ceiling. Good because one photo shows the place, the second only adds atmosphere, the fade gives white text strong contrast, and navy, gold and white are the only added colours; the photos keep their natural grade.",
+      "provenance": {
+        "sourceFile": "kaae raphic 10.jpg.jpeg",
+        "sourceFolder": "KAAE Archives /Graphics",
+        "sourceSha256": "3a6bb4d62bbbd5c0d6ccb5fe9a98820528d29dd00d0af3da5b76bd1e2f1b2f7a",
+        "exportedAt": "2026-06-09",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 8,
+      "status": "office-published",
+      "sha256": "713d9d9ba29fdc1d12d3048a7a2c9ab2ad98ae72c290666e443298abd2ca9df1",
+      "path": "packages/creative/assets/exemplars/photo02_k12_field_visit_report_ckb.jpg",
+      "filename": "photo02_k12_field_visit_report_ckb.jpg",
+      "dimensions": {
+        "width": 864,
+        "height": 1080
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 137844,
+      "reason": "Sorani twin of the K-12 field visit report post. Reference for hero_fade_report in right-to-left copy.",
+      "recommendedFor": [
+        "report_release",
+        "feed_announcement",
+        "study_findings"
+      ],
+      "recipe": "hero_fade_report",
+      "subject": [
+        "report_release",
+        "field_visit",
+        "k12",
+        "school",
+        "education_quality"
+      ],
+      "photoCount": 2,
+      "language": "ckb",
+      "pairedWith": "photo01_k12_field_visit_report_en",
+      "descriptor": "Sorani twin of the K-12 field visit report post: the same classroom hero, the same blurred pupil crowd blended into the navy fade, the same gold inset frame; the photos are not mirrored. The two title lines (white first line, gold second line, both bold), the two-line summary and the call-to-action line are right-aligned Sorani in the same boxes the English uses; the gold URL pill with the Latin URL stays centred near the bottom. Shows that the Kurdish version keeps the geometry and changes only text direction and alignment.",
+      "provenance": {
+        "sourceFile": "kaae raphic kurdi 10.jpg.jpeg",
+        "sourceFolder": "KAAE Archives /Graphics",
+        "sourceSha256": "d8e7a4ec9c69605f12a697ebac9fbfab1f0fe452a166fdcb8c34733efc2619e1",
+        "exportedAt": "2026-06-09",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 9,
+      "status": "office-published",
+      "sha256": "cd27ebfd0a5d6bcce74b03e7af133b76d9bbacf68a71046545ecaf3922fd7499",
+      "path": "packages/creative/assets/exemplars/photo03_why_accreditation_card_en.jpg",
+      "filename": "photo03_why_accreditation_card_en.jpg",
+      "dimensions": {
+        "width": 865,
+        "height": 1080
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 231037,
+      "reason": "Cover slide of the office's eight-slide \"Why Accreditation?\" carousel. Reference for hero_card.",
+      "recommendedFor": [
+        "carousel",
+        "feed_announcement",
+        "awareness_series"
+      ],
+      "recipe": "hero_card",
+      "subject": [
+        "carousel",
+        "accreditation",
+        "values",
+        "campus",
+        "higher_education"
+      ],
+      "photoCount": 1,
+      "language": "en",
+      "pairedWith": "photo04_why_accreditation_card_ckb",
+      "descriptor": "Cover slide of a carousel series. Hero: a symmetrical historic university building under a blue sky, framed by trees, filling the whole canvas inside a thick gold outer frame (about 2.5% of the width); the tower rises into the sky and the top-left sky stays quiet for the logo. A cream card covers the bottom 23% of the canvas, inset from the frame so the photo still shows on three sides of it. A navy wordmark tab (KAAE plus the association's full name) straddles the card's top edge, centred. On the card: a centred gold-brown title question in medium weight, two centred lines of small dark body text listing the accreditation values, and a small navy URL at the bottom. Good because the photo carries the mood, the card gives the text a calm surface, the tab bridges photo and card, and the gold frame marks the series.",
+      "provenance": {
+        "sourceFile": "1 (1)(1).jpg",
+        "sourceFolder": "KAAE Stuff/Designs",
+        "sourceSha256": "97feefb4e444c014ce9a4f84281101f285e0a1eea13d20537f8fcdf82eee3d66",
+        "exportedAt": "2025-02-11",
+        "dateSource": "file modification date; the file has no EXIF date",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 10,
+      "status": "office-published",
+      "sha256": "20490a8de652b1bdd289cb8a5030fdfbff5b86a980ae4b9c7ec09b0a8424da56",
+      "path": "packages/creative/assets/exemplars/photo04_why_accreditation_card_ckb.jpg",
+      "filename": "photo04_why_accreditation_card_ckb.jpg",
+      "dimensions": {
+        "width": 865,
+        "height": 1080
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 228014,
+      "reason": "Sorani twin of the \"Why Accreditation?\" carousel cover. Reference for hero_card in right-to-left copy.",
+      "recommendedFor": [
+        "carousel",
+        "feed_announcement",
+        "awareness_series"
+      ],
+      "recipe": "hero_card",
+      "subject": [
+        "carousel",
+        "accreditation",
+        "values",
+        "campus",
+        "higher_education"
+      ],
+      "photoCount": 1,
+      "language": "ckb",
+      "pairedWith": "photo03_why_accreditation_card_en",
+      "descriptor": "Sorani twin of the carousel cover: the same building photo, gold outer frame, cream card and navy wordmark tab (the tab stays in Latin). The title question and the value list are centred Sorani in the same card boxes; the URL stays at the bottom of the card. The photo is not mirrored.",
+      "provenance": {
+        "sourceFile": "1 (1).jpg",
+        "sourceFolder": "KAAE Stuff/Designs",
+        "sourceSha256": "4242b2a5cc93b006dbfb424cd4a7b83dd4c2d496e1a527c3a691da9f5caa93d0",
+        "exportedAt": "2025-02-11",
+        "dateSource": "file modification date; the file has no EXIF date",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 11,
+      "status": "office-published",
+      "sha256": "863d953e920a54e137681e40abb1b440b55b1097282f5a56b9e5df490d38d7f0",
+      "path": "packages/creative/assets/exemplars/photo05_global_partnership_plate_en.jpg",
+      "filename": "photo05_global_partnership_plate_en.jpg",
+      "dimensions": {
+        "width": 864,
+        "height": 1080
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 165294,
+      "reason": "The office's \"Global Partnership\" post: a title plate over a top-down photo. Reference for hero_plate.",
+      "recommendedFor": [
+        "partnership_announcement",
+        "feed_announcement",
+        "membership_milestone"
+      ],
+      "recipe": "hero_plate",
+      "subject": [
+        "partnership",
+        "international",
+        "collaboration",
+        "global"
+      ],
+      "photoCount": 1,
+      "language": "en",
+      "pairedWith": "photo06_global_partnership_plate_ckb",
+      "descriptor": "Hero: a top-down photo of eight people working around a round table printed with a world map, literally showing global collaboration; it fills the lower 70% and bleeds off the left, right and bottom edges. The top 35% fades from the photo into a flat muted steel-blue field, where the logo sits centred. A navy rounded-corner title plate with a soft drop shadow spans about 87% of the width in the upper third, straddling the fade; the two-word title is white, bold geometric sans, centred on one line. The URL and email sit small, white and centred at the bottom over the darker photo edge. Good because one plate carries all the title contrast, the photo is untouched below it, and the map table states the subject without words.",
+      "provenance": {
+        "sourceFile": "hawbash eng (1).jpg",
+        "sourceFolder": "KAAE Stuff/Designs",
+        "sourceSha256": "f932819d3097b286c21e1d7ec0345730b0a474515cfdbc517203ebccd61fdd85",
+        "exportedAt": "2025-08-07",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 12,
+      "status": "office-published",
+      "sha256": "39aefb8804feec9b0f4494cd7c5871d55fc9fdffd66142107a2011e474d1ac0a",
+      "path": "packages/creative/assets/exemplars/photo06_global_partnership_plate_ckb.jpg",
+      "filename": "photo06_global_partnership_plate_ckb.jpg",
+      "dimensions": {
+        "width": 864,
+        "height": 1080
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 164791,
+      "reason": "Sorani twin of the \"Global Partnership\" post. Reference for hero_plate in right-to-left copy.",
+      "recommendedFor": [
+        "partnership_announcement",
+        "feed_announcement",
+        "membership_milestone"
+      ],
+      "recipe": "hero_plate",
+      "subject": [
+        "partnership",
+        "international",
+        "collaboration",
+        "global"
+      ],
+      "photoCount": 1,
+      "language": "ckb",
+      "pairedWith": "photo05_global_partnership_plate_en",
+      "descriptor": "Sorani twin of the partnership post: the same top-down map-table photo, steel-blue fade, logo and shadowed navy plate at the same size and position; the two-word Sorani title is centred in the plate in bold white. Nothing is mirrored.",
+      "provenance": {
+        "sourceFile": "hawbash (1).jpg",
+        "sourceFolder": "KAAE Stuff/Designs",
+        "sourceSha256": "c27bb2cfc1dc82fd797af4d9c6a6a272e20768ad6a38b30606999eaf43004de2",
+        "exportedAt": "2025-08-07",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 13,
+      "status": "office-published",
+      "sha256": "8c9dac38a8c6e61369e8eb2642d3c53a93a2f5f05dced399091c9f70e5c2c280",
+      "path": "packages/creative/assets/exemplars/photo07_prime_minister_meeting_scrim_en.jpg",
+      "filename": "photo07_prime_minister_meeting_scrim_en.jpg",
+      "dimensions": {
+        "width": 1080,
+        "height": 864
+      },
+      "aspectRatio": "5:4",
+      "format": "5:4",
+      "fileSizeBytes": 169040,
+      "reason": "The office's post of its meeting with the Kurdistan Region's Prime Minister: an untouched group photo with a bottom scrim caption. Reference for scrim_caption.",
+      "recommendedFor": [
+        "meeting_news",
+        "feed_announcement",
+        "official_visit"
+      ],
+      "recipe": "scrim_caption",
+      "subject": [
+        "meeting",
+        "officials",
+        "government",
+        "high_level_visit",
+        "education_quality"
+      ],
+      "photoCount": 1,
+      "language": "en",
+      "pairedWith": "photo08_prime_minister_meeting_scrim_ckb",
+      "descriptor": "Untouched event photo: four officials standing in a row in formal suits in an ornate hall with a gilded capital behind them, full-bleed on a landscape 5:4 canvas; faces sit in the upper half and no head is cropped. A navy gradient scrim rises from the bottom edge over the lower 25%, darkening only legs and floor. On the scrim, left-aligned at the left margin: a bold white headline line naming the theme, a regular white second line naming the meeting and who took part, and below them a short gold rule about half the width. The logo sits top-left over the bright wall. No frame, card or second photo. Good because the people remain the design, the caption reads cleanly on the scrim, and the gold rule is the only accent.",
+      "provenance": {
+        "sourceFile": "kaae 5.jpg.jpeg",
+        "sourceFolder": "KAAE Archives /Graphics",
+        "sourceSha256": "344ff907834634c03457b3d55784d5dd6ce64dda8d142fbafaae3c991aa8f7d9",
+        "exportedAt": "2026-05-20",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 14,
+      "status": "office-published",
+      "sha256": "999b6ecc66197ee0b675f2a0be31a93c875cda751743a14de7025ef9490e38b1",
+      "path": "packages/creative/assets/exemplars/photo08_prime_minister_meeting_scrim_ckb.jpg",
+      "filename": "photo08_prime_minister_meeting_scrim_ckb.jpg",
+      "dimensions": {
+        "width": 1080,
+        "height": 864
+      },
+      "aspectRatio": "5:4",
+      "format": "5:4",
+      "fileSizeBytes": 168447,
+      "reason": "Sorani twin of the officials meeting post, reinstated on 2026-09-30 after it was dropped on 2026-09-17 as \"not a layout to learn composition from\". Reference for scrim_caption in right-to-left copy.",
+      "recommendedFor": [
+        "meeting_news",
+        "feed_announcement",
+        "official_visit"
+      ],
+      "recipe": "scrim_caption",
+      "subject": [
+        "meeting",
+        "officials",
+        "government",
+        "high_level_visit",
+        "education_quality"
+      ],
+      "photoCount": 1,
+      "language": "ckb",
+      "pairedWith": "photo07_prime_minister_meeting_scrim_en",
+      "descriptor": "Sorani twin of the officials meeting post: the same untouched group photo and bottom navy scrim. The two Sorani caption lines (bold headline, regular second line) are right-aligned at the right margin, and the short gold rule is right-aligned beneath them. The photo is not mirrored; only the text block changes side.",
+      "provenance": {
+        "sourceFile": "kaae 5 kurdi.jpg.jpeg",
+        "sourceFolder": "KAAE Archives /Graphics",
+        "sourceSha256": "dab921862f7323a59f0f18de406e7263350617db18bbfc87873bc8ae62c29200",
+        "exportedAt": "2026-05-20",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 15,
+      "status": "office-published",
+      "sha256": "cb8f2414dd6caf9066bbd10d61b525002db604b31416e9f6a413e3af41a6ca2c",
+      "path": "packages/creative/assets/exemplars/photo09_eid_al_adha_sky_title.jpg",
+      "filename": "photo09_eid_al_adha_sky_title.jpg",
+      "dimensions": {
+        "width": 864,
+        "height": 1080
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 195677,
+      "reason": "The office's Eid al-Adha greeting: a scenic full-bleed photo with both greetings in the sky. Reference for sky_title.",
+      "recommendedFor": [
+        "occasion_greeting",
+        "feed_announcement"
+      ],
+      "recipe": "sky_title",
+      "subject": [
+        "occasion",
+        "holiday",
+        "eid",
+        "greeting"
+      ],
+      "photoCount": 1,
+      "language": "bilingual",
+      "descriptor": "Occasion greeting. Scenic full-bleed photo of a white modern mosque with domes, a minaret and a flowering garden in warm evening light; the building sits in the lower 60% and the upper 35% is soft cloudy sky. Both greetings are centred in that sky: a bold dark Sorani line on top and an uppercase regular dark English line beneath (one bilingual post). The text is dark because the sky is bright. The logo sits centred at the bottom over the flowers; a thin navy border about 1% wide frames the canvas. No plate, fade or card: the quiet sky is the text zone. Good because the photo carries the whole message and the text uses its one empty region.",
+      "provenance": {
+        "sourceFile": "eid 3.jpg.jpeg",
+        "sourceFolder": "KAAE Archives /Graphics",
+        "sourceSha256": "5c3476fbc42a57972e82ede86fef50813ef7ca7ac805723a38e7c8230914cb91",
+        "exportedAt": "2026-05-26",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 16,
+      "status": "office-published",
+      "sha256": "0e45d4f9a1dce9728fd512d8238060b6e9b03703374eff39f8568ad43ee6fd9c",
+      "path": "packages/creative/assets/exemplars/photo10_educational_forum_speaker_en.jpg",
+      "filename": "photo10_educational_forum_speaker_en.jpg",
+      "dimensions": {
+        "width": 1080,
+        "height": 1080
+      },
+      "aspectRatio": "1:1",
+      "format": "1:1",
+      "fileSizeBytes": 160283,
+      "reason": "The office's invitation to the 4th Kurdistan Educational Forum with a speaker cut-out. Reference for cutout_speaker.",
+      "recommendedFor": [
+        "event_invitation",
+        "feed_announcement",
+        "speaker_announcement"
+      ],
+      "recipe": "cutout_speaker",
+      "subject": [
+        "event_forum",
+        "speaker",
+        "conference",
+        "invitation"
+      ],
+      "photoCount": 1,
+      "language": "en",
+      "descriptor": "Event invitation with a speaker cut-out on a navy background with a faint lighter grid. The speaker is cut out cleanly (no circle mask) and placed on the left, head to below the waist, bleeding off the left and bottom edges and taking about 45% of the width. The text block sits to her right, left-aligned from about 37% of the width: a bold uppercase gold first line, two large white uppercase lines in regular weight naming the forum, a white body paragraph and the theme line. In the lower right a darker navy quarter-disc with short sunburst rays rises behind her shoulder and holds the date, time and venue in small white type; the logo sits in the bottom-right corner. Good because the person breaks the frame, the rays and disc tie the portrait to the information, and gold is used only for the first line.",
+      "provenance": {
+        "sourceFile": "kaae graphic new.jpg.jpeg",
+        "sourceFolder": "KAAE Archives /Graphics",
+        "sourceSha256": "2f6e06c8bba65b82ed2bf3341e40df4bfdefa2ea6e1fdd4d2e9483e76dc81a01",
+        "exportedAt": "2026-07-28",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 17,
+      "status": "office-published",
+      "sha256": "f786170ba08bff4cfb1963998014fd0cad1c1ee7be31ac7548da2d3ac869adfd",
+      "path": "packages/creative/assets/exemplars/photo11_peer_evaluators_call_en.jpg",
+      "filename": "photo11_peer_evaluators_call_en.jpg",
+      "dimensions": {
+        "width": 864,
+        "height": 1080
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 105128,
+      "reason": "The office's call for peer evaluators: a photo fading into grid paper. Reference for fade_to_paper.",
+      "recommendedFor": [
+        "call_for_applications",
+        "feed_announcement",
+        "recruitment"
+      ],
+      "recipe": "fade_to_paper",
+      "subject": [
+        "call_for_applications",
+        "recruitment",
+        "peer_evaluators",
+        "k12",
+        "higher_education"
+      ],
+      "photoCount": 1,
+      "language": "en",
+      "pairedWith": "photo12_peer_evaluators_call_ckb",
+      "descriptor": "Call for applications on grid paper. The background is a pale warm cream with a fine light grid; a photo of hands reviewing documents with a pen sits in the lower-right 40% and fades softly into the paper along its top and left, with no hard edge. The text is on the paper, left-aligned: a gold uppercase first line on a navy tab that bleeds off the left edge, then a very large bold navy word and a large bold navy uppercase second line; a navy rounded panel bleeding off the left edge holds three short white lines with small icons; two bold navy lines name the network and the levels; a navy pill holds the call to action. A navy band runs along the bottom edge and the logo sits top-right. Good because the photo supports the message without competing with the very large title. Weakness to avoid: the area right of the icon panel is empty.",
+      "provenance": {
+        "sourceFile": "call for.jpg.jpeg",
+        "sourceFolder": "KAAE Archives /Graphics",
+        "sourceSha256": "b74866d7835fd9003e956b7edc17fc67fced1bd456c64f5fce6869ac8e7c6221",
+        "exportedAt": "2026-08-17",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
+    },
+    {
+      "rank": 18,
+      "status": "office-published",
+      "sha256": "2bdfe9da7ff297331c769490d3bea61eb9f7a4829db20311431facfa1437180a",
+      "path": "packages/creative/assets/exemplars/photo12_peer_evaluators_call_ckb.jpg",
+      "filename": "photo12_peer_evaluators_call_ckb.jpg",
+      "dimensions": {
+        "width": 864,
+        "height": 1080
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 99069,
+      "reason": "Sorani twin of the call for peer evaluators. Included for its photo-to-paper fade only; it stays dropped as a typographic reference (2026-09-17, large dead areas).",
+      "recommendedFor": [
+        "call_for_applications",
+        "feed_announcement",
+        "recruitment"
+      ],
+      "recipe": "fade_to_paper",
+      "subject": [
+        "call_for_applications",
+        "recruitment",
+        "peer_evaluators",
+        "k12",
+        "higher_education"
+      ],
+      "photoCount": 1,
+      "language": "ckb",
+      "pairedWith": "photo11_peer_evaluators_call_en",
+      "descriptor": "Sorani twin of the call for peer evaluators: the text blocks move to the right (the gold-on-navy tab and the icon panel bleed off the right edge, all lines are right-aligned, the pill sits at the right) and the document photo sits lower-left, fading into the grid paper along its top and right. Here the office also flipped the photo horizontally; the house rule is never to mirror a photo, so do not copy that. Learn the photo fade, not the spacing: the wide empty band left of the title is why the owner dropped this post as a typographic reference.",
+      "provenance": {
+        "sourceFile": "call for kurdi.jpg.jpeg",
+        "sourceFolder": "KAAE Archives /Graphics",
+        "sourceSha256": "fa482314248bc2810a4daab6c2eee53b8099aadceabd43c065d646c0edf95c8e",
+        "exportedAt": "2026-08-17",
+        "dateSource": "EXIF DateTime written by the Photoshop export",
+        "publication": "Publicly published on the office's social channels; downscaled to at most 1080 px, JPEG quality 85, metadata stripped",
+        "selectedAt": "2026-09-30"
+      }
     }
   ],
   "droppedInReview": {
@@ -199,12 +684,16 @@
       {
         "filename": "kaae 5 kurdi.jpg.jpeg",
         "formerRank": 4,
-        "reason": "Photograph of officials with a caption bar. A photo post, not a layout to learn composition from."
+        "reason": "Photograph of officials with a caption bar. A photo post, not a layout to learn composition from.",
+        "reconsideredAt": "2026-09-30",
+        "reconsideration": "Reinstated as an office-published photo exemplar (photo08_prime_minister_meeting_scrim_ckb, with its English twin photo07). The drop judged it against typographic references only; the owner now asks the system to use photos as the office does, and this untouched photo with a bottom navy scrim caption and a gold rule is the office's meeting pattern (recipe scrim_caption). It has a real title and subtitle; the caption bar is a technique, not a missing hierarchy."
       },
       {
         "filename": "call for kurdi.jpg.jpeg",
         "formerRank": 7,
-        "reason": "Real published post but weak composition with large dead areas; owner review dropped it."
+        "reason": "Real published post but weak composition with large dead areas; owner review dropped it.",
+        "reconsideredAt": "2026-09-30",
+        "reconsideration": "Still dropped as a typographic reference (the dead area stands). Admitted separately as an office-published photo exemplar (photo12_peer_evaluators_call_ckb) for its photo-to-paper fade only (recipe fade_to_paper)."
       },
       {
         "filename": "image16.png",
@@ -222,5 +711,7 @@
         "reason": "Extracted 16:9 PowerPoint slide. Wrong aspect ratio and wrong genre."
       }
     ]
-  }
+  },
+  "officePublishedExemplars": 12,
+  "officePublishedPolicy": "Entries with status \"office-published\" are the office's own publicly published social posts, selected on 2026-09-30 to teach photo art direction (ADR-170). They are not owner-confirmed. Retrieval offers them only to briefs that carry photos, by recipe and subject; typographic briefs keep using only the owner-confirmed set. Each has a recipe id, subject tags, a photo count and a descriptor of how the photo is used. The owner may confirm or drop any of them. See assets/exemplars/PHOTO_EXEMPLARS.md."
 }

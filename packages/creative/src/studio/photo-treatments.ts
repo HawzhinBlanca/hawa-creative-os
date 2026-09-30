@@ -170,7 +170,13 @@ function unitRgb(hex: Hex): [number, number, number] {
  * the crop, which the deck can make natively, so the client can still re-crop the photo in Canva.
  */
 export function framedPhotoTreated(photo: PhotoElement): boolean {
-  return Boolean(photo.mask || photo.fade || photo.filter);
+  return Boolean(photo.mask || photo.fade || photo.filter || photoOpacity(photo) < 1);
+}
+
+/** ADR-170: a texture photo's opacity, held to 0.2..1; 1 when none is set. */
+export function photoOpacity(photo: Pick<PhotoElement, 'opacity'>): number {
+  const o = photo.opacity;
+  return typeof o === 'number' && Number.isFinite(o) ? clampTo(o, 0.2, 1) : 1;
 }
 
 /**
@@ -338,8 +344,9 @@ export function framedPhotoFragment(
     (photo.filter ? colourFilterDef(filterId, photo.filter, box) : '');
   // The filter recolours the picture inside the box; the clip and the fade then shape what shows.
   const filtered = photo.filter ? `<g filter="url(#${filterId})">${picture}</g>` : picture;
+  const opacity = photoOpacity(photo);
   const svg =
-    `<g><defs>${defs}</defs>` +
+    `<g${opacity < 1 ? ` opacity="${n(opacity)}"` : ''}><defs>${defs}</defs>` +
     `<g clip-path="url(#${clipId})"${photo.fade ? ` mask="url(#${fadeId})"` : ''}>${filtered}</g>` +
     `</g>`;
   return { defs: '', svg, rect: box, ...(crop ? { sourceScale: crop.sw / box.width } : {}), ...(files ? { files } : {}) };

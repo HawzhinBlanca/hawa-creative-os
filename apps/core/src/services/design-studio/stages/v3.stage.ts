@@ -378,6 +378,8 @@ export async function runJudgeStageV3(
     renderOptionsForCandidate: (candidate) => candidateRenderOptions(ctx, ranked.find((r) => r.sourceIndex === candidate.sourceIndex)!.candidate),
     judgeProtocol: judge.protocol,
     judgeBrief: judge.brief,
+    // ADR-170: the client's house art-direction rules, which the judge weighs on photo briefs.
+    ...(ctx.artDirectionRules?.length ? { houseRules: ctx.artDirectionRules } : {}),
   });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;

@@ -14,6 +14,16 @@ export interface PhotoSelection {
   minimum: number;
   /** The phrase that set `choose`, for the record. */
   matched?: string;
+  /**
+   * ADR-170: the requester asked for every photo in so many words ("use all the photos"). Only then
+   * must an art-direction recipe place them all; otherwise its own choice of hero counts as choosing.
+   */
+  insisted?: boolean;
+  /**
+   * ADR-170: the requester stated how many ("pick 3"). Without a stated count the minimum is a
+   * guess (half the photos), which an art-direction recipe's own choice of one hero overrides.
+   */
+  counted?: boolean;
 }
 
 const NUMBER_WORDS: Record<string, number> = {
@@ -68,27 +78,38 @@ function digitsToNumber(text: string): number {
  * given with it ("pick the best 3") is the minimum, else half the photos, rounded up. A request
  * with fewer than two photos has nothing to choose between.
  */
+/**
+ * "Use all the photos", "include every picture", "all 6 photos", and the Sorani "all the photos"
+ * with a verb of using or putting: the requester wants each photo on the design (ADR-170).
+ */
+const ENGLISH_ALL = new RegExp(
+  `\\b(?:use|include|put|place|add|show|with|keep)\\s+(?:all|every|each)\\s+(?:of\\s+)?(?:the\\s+|these\\s+|those\\s+|my\\s+)?(?:\\d{1,2}\\s+|two\\s+|three\\s+|four\\s+|five\\s+|six\\s+)?${PHOTO}|\\ball\\s+(?:\\d{1,2}|two|three|four|five|six)\\s+${PHOTO}|\\b(?:every|each)\\s+(?:photo|picture|image)\\s+(?:must|should|has to|needs to)\\b`,
+  'i'
+);
+const SORANI_ALL = /هەموو\s*(?:ئەم\s*)?وێنەکان[^.!\u061F\n]{0,30}(?:بەکار\s*بهێنە|دابنێ|بخە|تێدا\s*بێت|دانێ)/u;
+
 export function photoSelectionFromInstructions(instructions: string | undefined, photoCount: number): PhotoSelection {
   const all: PhotoSelection = { mode: 'all', minimum: Math.max(0, photoCount) };
   if (!instructions?.trim() || photoCount < 2) return all;
   const text = normaliseSorani(instructions);
   const phrase = [...ENGLISH_CHOICE, ...SORANI_CHOICE].map((p) => text.match(p)?.[0]).find(Boolean);
   const count = text.match(ENGLISH_COUNT) ?? text.match(SORANI_COUNT);
-  if (!phrase && !count) return all;
+  // Asked for every photo, and nothing gives the design a choice: a recipe must place them all.
+  if (!phrase && !count) return ENGLISH_ALL.test(text) || SORANI_ALL.test(text) ? { ...all, insisted: true } : all;
   const stated = count ? NUMBER_WORDS[count[1].toLowerCase()] ?? digitsToNumber(count[1]) : NaN;
   // A count alone ("use 3 of them") is a choice; "use all 6" never matches the count pattern.
   const minimum = Number.isFinite(stated) && stated >= 1 ? Math.min(photoCount, stated) : Math.ceil(photoCount / 2);
   if (minimum >= photoCount) return all;
-  return { mode: 'choose', minimum, matched: (phrase ?? count![0]).trim() };
+  return { mode: 'choose', minimum, matched: (phrase ?? count![0]).trim(), ...(Number.isFinite(stated) && stated >= 1 ? { counted: true } : {}) };
 }
 
 /** The selection a stored or inherited record states, checked, or undefined when it is not one. */
 export function photoSelectionOrUndefined(value: unknown, photoCount: number): PhotoSelection | undefined {
   if (!value || typeof value !== 'object') return undefined;
-  const { mode, minimum, matched } = value as Record<string, unknown>;
-  if (mode === 'all') return { mode: 'all', minimum: photoCount };
+  const { mode, minimum, matched, insisted, counted } = value as Record<string, unknown>;
+  if (mode === 'all') return { mode: 'all', minimum: photoCount, ...(insisted === true ? { insisted: true } : {}) };
   if (mode !== 'choose' || typeof minimum !== 'number' || !Number.isInteger(minimum) || minimum < 1) return undefined;
-  return { mode: 'choose', minimum: Math.min(photoCount, minimum), ...(typeof matched === 'string' ? { matched } : {}) };
+  return { mode: 'choose', minimum: Math.min(photoCount, minimum), ...(typeof matched === 'string' ? { matched } : {}), ...(counted === true ? { counted: true } : {}) };
 }
 
 /** The photos a design leaves out, by photoIndex, in order. */

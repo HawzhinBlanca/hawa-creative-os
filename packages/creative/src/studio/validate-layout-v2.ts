@@ -1,5 +1,7 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
+import { photoRecipeOf } from './layout-v2.js';
 import { photosMayOverlap } from './photo-cutout.js';
+import { carrierOf, shapePaintsOver } from './art-direction/surfaces.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast, isStoryFormat, getSafeZoneBox } from './house-rules.js';
 
 export interface ValidationReference {
@@ -28,7 +30,7 @@ export interface LayoutValidationContext {
    * ADR-157: in `choose` mode the requester let the design choose among the photos, so a distinct
    * subset of at least `minimum` is placed. Absent is `all`.
    */
-  photoSelection?: { mode: 'all' | 'choose'; minimum: number };
+  photoSelection?: { mode: 'all' | 'choose'; minimum: number; insisted?: boolean; counted?: boolean };
   reference: ValidationReference;
   draftFont?: string;
   contrastEvaluator?: (box: Box, fontSize: number, bold: boolean) => number;
@@ -249,6 +251,16 @@ export function validateLayoutV2(
       };
     }
   }
+  for (const o of layout.overlays || []) {
+    if (!allowedPalette.has(normalizeHex(o.color))) {
+      return { ok: false, code: 'PALETTE', message: `Overlay colour ${o.color} is not in reference palette` };
+    }
+  }
+  for (const s of layout.shapes || []) {
+    if (s.shadow && !allowedPalette.has(normalizeHex(s.shadow.color))) {
+      return { ok: false, code: 'PALETTE', message: `Shadow colour ${s.shadow.color} is not in reference palette` };
+    }
+  }
   for (const t of (layout.text || [])) {
     if (!allowedPalette.has(normalizeHex(t.color))) {
       return {
@@ -292,6 +304,12 @@ export function validateLayoutV2(
     }
   }
 
+  for (const o of layout.overlays || []) {
+    if (!boxContains(canvasBox, o)) {
+      return { ok: false, code: 'BOUNDS', message: `Overlay outside canvas bounds: {x:${o.x},y:${o.y},w:${o.width},h:${o.height}}` };
+    }
+  }
+
   // Check all text boxes are inside safe margin
   for (const t of (layout.text || [])) {
     if (!boxContains(safeMarginBox, t)) {
@@ -321,10 +339,19 @@ export function validateLayoutV2(
   // the request not done; a photo the client did not send is invented.
   // In `choose` mode (ADR-157) the requester said the design need not use them all: a distinct
   // subset of at least the minimum is the request done. Every other rule below applies unchanged.
+  //
+  // ADR-170: an art-directed recipe uses one hero and at most a texture and drops the rest, as the
+  // office's designers do (rulebook items 1 and 10). That choice counts as choosing unless the
+  // requester insisted on every photo; then the recipe must place them all or be refused.
   const photoCount = context.photoCount ?? 0;
   const photos = layout.photos ?? [];
-  const choosing = context.photoSelection?.mode === 'choose' && photoCount > 0;
-  const fewest = choosing ? Math.max(1, Math.min(photoCount, context.photoSelection!.minimum)) : photoCount;
+  const recipe = photoRecipeOf(layout);
+  const recipeChooses = Boolean(recipe) && context.photoSelection?.insisted !== true && photoCount > 0;
+  const choosing = (context.photoSelection?.mode === 'choose' || recipeChooses) && photoCount > 0;
+  // A stated count ("pick 3") binds a recipe too; the half-the-photos guess made when none is stated
+  // does not, since a recipe's choice of one hero and a texture is the choice the requester allowed.
+  const statedMinimum = context.photoSelection?.mode === 'choose' && (!recipe || context.photoSelection.counted) ? context.photoSelection.minimum : 1;
+  const fewest = choosing ? Math.max(1, Math.min(photoCount, statedMinimum)) : photoCount;
   if (choosing ? photos.length < fewest || photos.length > photoCount : photos.length !== photoCount) {
     return {
       ok: false,
@@ -344,9 +371,13 @@ export function validateLayoutV2(
       return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} leaves the canvas` };
     }
     const minSide = Math.round(Math.min(layout.width, layout.height) * (p.role === 'inset' ? 0.12 : 0.22));
+    // A texture blended into a fade (ADR-170) is only in a recipe, and never a cell of its own.
+    if (p.role === 'texture' && !recipe) {
+      return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} is a texture outside an art-direction recipe` };
+    }
     // A person cut out of their photo is as wide as they are: a standing figure is narrow by nature,
     // so a cut-out is held to its height (ADR-032). A framed photo keeps the rule on both sides.
-    if (p.treatment === 'cutout' ? p.height < minSide * 1.5 : Math.min(p.width, p.height) < minSide) {
+    if (p.role !== 'texture' && (p.treatment === 'cutout' ? p.height < minSide * 1.5 : Math.min(p.width, p.height) < minSide)) {
       return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} (${p.role}) is ${p.width}x${p.height}; at least ${p.treatment === 'cutout' ? `${Math.round(minSide * 1.5)}px tall` : `${minSide}px a side`}` };
     }
     // A mask shapes a framed photo's rectangle; a cut-out has none, only the person's own edge. An
@@ -358,19 +389,30 @@ export function validateLayoutV2(
     if (p.treatment !== 'cutout' && (p.outline || p.glow)) {
       return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} is framed and cannot take ${p.outline ? 'an outline' : 'a glow'}; it follows a cut-out person's silhouette` };
     }
+    // In a recipe, text may lie over a photo only on a plate, card, pill, fade or scrim (ADR-170);
+    // hard QA then measures it on the rendered pixels. Anywhere else, never.
     for (const t of layout.text) {
-      if (boxesIntersect(p, t)) {
-        return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} sits under text copyIndex ${t.copyIndex}` };
+      if (boxesIntersect(p, t) && !(recipe && carrierOf(layout, t))) {
+        return {
+          ok: false,
+          code: 'PHOTOS',
+          message: recipe
+            ? `Text copyIndex ${t.copyIndex} sits bare on photo ${p.photoIndex}; in a recipe it must sit on a plate, card, pill, fade or scrim`
+            : `Photo ${p.photoIndex} sits under text copyIndex ${t.copyIndex}`,
+        };
       }
     }
-    if (boxesIntersect(p, layout.logo)) {
+    // The office sets its logo in a corner of the hero (reference examples 3, 8 and 11).
+    if (boxesIntersect(p, layout.logo) && !recipe) {
       return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} sits under the logo` };
     }
   }
   // Two cut-out people may stand a little into each other, as a group does; see photosMayOverlap.
   for (let i = 0; i < photos.length; i++) {
     for (let j = i + 1; j < photos.length; j++) {
-      if (boxesIntersect(photos[i], photos[j]) && !photosMayOverlap(photos[i], photos[j])) {
+      // A texture is blended into the hero's fade (ADR-170): overlapping it is the point.
+      const blended = Boolean(recipe) && (photos[i].role === 'texture' || photos[j].role === 'texture');
+      if (boxesIntersect(photos[i], photos[j]) && !photosMayOverlap(photos[i], photos[j]) && !blended) {
         return { ok: false, code: 'PHOTOS', message: `Photos ${photos[i].photoIndex} and ${photos[j].photoIndex} overlap` };
       }
     }
@@ -401,11 +443,12 @@ export function validateLayoutV2(
     }
   }
 
-  // Shapes with role 'panel' may sit under text; 'rule'/'accent'/'frame' may not intersect text
+  // Shapes with role 'panel' may sit under text; 'rule'/'accent'/'frame' may not intersect text. A
+  // frame drawn as a stroke only paints its band, so text well inside it does not touch it.
   for (const s of layout.shapes) {
     if (s.role !== 'panel') {
       for (const t of layout.text) {
-        if (boxesIntersect(s, t)) {
+        if (shapePaintsOver(s, t)) {
           return {
             ok: false,
             code: 'OVERLAP',

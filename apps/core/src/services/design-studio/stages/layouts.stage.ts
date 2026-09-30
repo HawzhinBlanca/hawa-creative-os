@@ -11,7 +11,9 @@ import {
   type CopyBlockSlotInput,
   type PhotoSelection,
   photoSelectionPrompt,
+  generateArtDirectedCandidatesV3,
 } from '@hawa/creative';
+import { photoFactsFor } from '../art-direction.js';
 import { renderBriefContractForPrompt } from '@hawa/domain';
 import { buildP0SystemPrompt, buildP3Prompt } from '../prompts.js';
 import { copyForStageV3, conceptFromV3Candidate } from './v3.stage.js';
@@ -215,7 +217,30 @@ export async function runLayoutsStage(
     const briefSummary = layoutBriefV3(brief, ctx);
 
     const visualInputs = await layoutVisualInputs(ctx);
-    const v3Result = await inStudioSubstep('layout/set', () => generateLayoutCandidatesV3({
+    // ADR-170: a brief with photos is art-directed. The model picks recipes, photo roles and slots;
+    // the solver computes every layout. The typographic path below is unchanged for no-photo briefs.
+    const artDirected = Boolean(ctx.photos?.length);
+    const photoFacts = artDirected ? await photoFactsFor(ctx) : [];
+    const logoConstraintsV3 = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number } | undefined;
+    const v3Result = artDirected ? await inStudioSubstep('layout/set', () => generateArtDirectedCandidatesV3({
+      client: ctx.client as any,
+      brief: briefSummary,
+      copyBlocks: copyBlockSlots,
+      palette: ctx.referencePack.palette,
+      canvasWidth: ctx.width,
+      canvasHeight: ctx.height,
+      photos: photoFacts,
+      isRtl: ctx.copyBlocks.some((b) => b.script === 'arabic'),
+      visualInputs,
+      logoAspect: ctx.logoAspect || 1.0,
+      logoMinimumWidthPx: logoConstraintsV3?.minimumWidthPx,
+      logoClearSpacePx: logoConstraintsV3?.clearSpacePx,
+      reference: ctx.reference,
+      clientProfile: ctx.clientProfile,
+      houseRules: ctx.artDirectionRules,
+      exemplars: (ctx.exemplars ?? []).filter((e) => e.bytes).slice(0, 3).map((e) => ({ label: e.label })),
+      briefRoles: Object.fromEntries(copyBlockSlots.map((b) => [b.index, b.role])),
+    })) : await inStudioSubstep('layout/set', () => generateLayoutCandidatesV3({
       client: ctx.client as any,
       brief: briefSummary,
       copyBlocks: copyBlockSlots,
@@ -251,6 +276,8 @@ export async function runLayoutsStage(
         status: 'draft' as const,
       };
     });
+    const replaced = 'replaced' in v3Result ? (v3Result.replaced as Array<{ reason: string }>) : [];
+    if (replaced.length) log.warn(`[LayoutsStage] ${replaced.length} art-direction concept(s) replaced: ${replaced.map((r) => r.reason).join(' | ')}`);
     const distinct: CandidateState[] = [];
     for (const candidate of prepared) {
       if (distinct.some((earlier) => checkCandidateSetDegeneracy([earlier.currentLayout, candidate.currentLayout]).isDegenerate)) {

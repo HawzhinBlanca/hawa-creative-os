@@ -2,9 +2,9 @@ import { lineGeometry } from './line-geometry.js';
 import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
-import type { ArtConfig, Box, Hex, StudioLayoutV2 } from './layout-v2.js';
+import type { ArtConfig, Box, Hex, OverlayElement, ShapeElement, StudioLayoutV2 } from './layout-v2.js';
 import { svgFileName } from './svg-files.js';
-import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fittedTextOf, fontFaceSupports, svgToPngAsync } from './render-layout-v2.js';
+import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fittedTextOf, fontFaceSupports, overlaySvg, svgToPngAsync } from './render-layout-v2.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
 import { coverCrop, imagePixelSize, photoZoomFactor, pngPixelSize, type CoverCropRect } from './photo-crop.js';
 import {
@@ -93,6 +93,22 @@ async function bakePhotoFragment(fragment: PhotoFragment, rsvgConvertPath: strin
   if (fragment.raster) return fragment.raster;
   const size = photoBakePixelSize(fragment);
   return svgToPngAsync(photoFragmentDocument(fragment, size), size.width, size.height, rsvgConvertPath ? { rsvgConvertPath } : {}, fragment.files);
+}
+
+/**
+ * ADR-170: an overlay (a recipe's fade or scrim) as a transparent PNG of its own, from the markup the
+ * preview draws, so the deck shows the gradient the judge scored and the photo under it stays a
+ * native picture the client can re-crop or swap in Canva. Baked at half the layout's pixels: a
+ * gradient has no detail to lose, and the PNG stays small.
+ */
+export async function bakeOverlay(o: OverlayElement, index: number, rsvgConvertPath?: string): Promise<Buffer> {
+  const width = Math.max(2, Math.round(o.width / 2));
+  const height = Math.max(2, Math.round(o.height / 2));
+  const drawn = overlaySvg({ ...o, x: 0, y: 0 }, `overlay-${index}`);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${o.width} ${o.height}" preserveAspectRatio="none">` +
+    `<defs>${drawn.defs}</defs>${drawn.svg}</svg>`;
+  return svgToPngAsync(svg, width, height, rsvgConvertPath ? { rsvgConvertPath } : {});
 }
 
 /** One flat piece of the scrim, in layout pixels. */
@@ -421,8 +437,8 @@ export async function encodeStudioTransferV2(
     }
   }
 
-  // 2. Shapes
-  for (const shape of layout.shapes) {
+  // 2. Shapes: every shape but the overlay ones (ADR-170), which go over the photos below.
+  const addShape = (shape: ShapeElement, index: number) => {
     const kind = shape.kind || 'rect';
     const transparency = shape.opacity !== undefined && shape.opacity !== null ? Math.round((1 - shape.opacity) * 100) : 0;
     const geom = {
@@ -448,7 +464,7 @@ export async function encodeStudioTransferV2(
           transparency,
         },
       });
-      continue;
+      return;
     }
 
     const type = kind === 'ellipse'
@@ -460,7 +476,23 @@ export async function encodeStudioTransferV2(
     slide.addShape(type, {
       ...geom,
       rotate,
-      fill: { color: hex(shape.color), transparency },
+      // A plate, card, tab or pill is named for what it is, so the client finds it in Canva's layers.
+      ...(shape.surface ? { objectName: `${shape.surface[0].toUpperCase()}${shape.surface.slice(1)} ${index}` } : shape.role === 'frame' ? { objectName: `Frame ${index}` } : {}),
+      // A stroke-only frame: a fill of zero opacity (pptxgenjs writes no <a:noFill/>, and a shape with
+      // no fill element would take the theme's fill in Canva).
+      fill: shape.fill === 'none' ? { color: hex(shape.color), transparency: 100 } : { color: hex(shape.color), transparency },
+      ...(shape.shadow
+        ? {
+            shadow: {
+              type: 'outer',
+              blur: Math.round(shape.shadow.blur * 0.75),
+              offset: Math.max(0, Math.round(shape.shadow.offsetY * 0.75)),
+              angle: 90,
+              color: hex(shape.shadow.color),
+              opacity: shape.shadow.opacity,
+            },
+          }
+        : {}),
       line: shape.strokeColor
         ? {
             color: hex(shape.strokeColor),
@@ -470,7 +502,10 @@ export async function encodeStudioTransferV2(
         : { color: hex(shape.color), transparency: 100 },
       ...(kind === 'roundRect' && shape.radius ? { rectRadius: shape.radius / 96 } : {}),
     });
-  }
+  };
+  layout.shapes.forEach((shape, i) => {
+    if (shape.layer !== 'overlay') addShape(shape, i);
+  });
 
   // 2b. Client photos, above the shapes and below the text, as the renderer draws them. `cover` with
   // the natural pixel size, as for the art, so Canva crops the way the preview did; a photo with a
@@ -555,6 +590,26 @@ export async function encodeStudioTransferV2(
       ...(rounding > 0 ? { rounding: true } : {}),
     });
   }
+
+  // 2c. ADR-170: each fade or scrim as its own transparent PNG over the photos, then the plates,
+  // cards, tabs, pills and frames over them as native shapes, all under the text and the logo, as
+  // the preview stacks them.
+  for (const [i, o] of (layout.overlays ?? []).entries()) {
+    bounds(o);
+    hex(o.color);
+    const png = await bakeOverlay(o, i, options.rsvgConvertPath);
+    slide.addImage({
+      data: `image/png;base64,${png.toString('base64')}`,
+      x: o.x / 96,
+      y: o.y / 96,
+      w: o.width / 96,
+      h: o.height / 96,
+      objectName: `${o.purpose === 'fade' ? 'Fade' : o.purpose === 'scrim' ? 'Scrim' : 'Paper'} ${i}`,
+    });
+  }
+  layout.shapes.forEach((shape, i) => {
+    if (shape.layer === 'overlay') addShape(shape, i);
+  });
 
   // 3. Text (sorted canonically by copyIndex so PPTX shape tree order matches expected copy order)
   const sortedText = [...layout.text].sort((a, b) => a.copyIndex - b.copyIndex);

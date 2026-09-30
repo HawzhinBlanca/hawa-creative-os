@@ -1,5 +1,6 @@
 import { evaluateThumbnailLayout } from './thumbnail-rules.js';
 import type { StudioLayoutV2 } from './layout-v2.js';
+import { photoRecipeOf } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
 import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
@@ -264,6 +265,17 @@ export function evaluateHardQa(
       });
     }
   }
+  // ADR-170: text over a photo is admitted only on a surface and only when its contrast is measured
+  // on the pixels that ship. Without the render, it is unproven, and unproven is a defect here.
+  if (!measuredContrast) {
+    const hit = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+      a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    for (const t of layout.text) {
+      if (!(layout.photos || []).some((p) => hit(p, t))) continue;
+      if (!defectCodes.includes('CONTRAST')) defectCodes.push('CONTRAST');
+      messages.push(`CONTRAST: block ${t.copyIndex} (${t.role}) lies over a photograph and its contrast was not measured on the rendered pixels`);
+    }
+  }
   for (const t of measuredContrast ? layout.text : []) {
     const p05 = measuredContrast?.[t.copyIndex];
     const required = requiredContrast(t.fontSize, Boolean(t.bold));
@@ -330,7 +342,10 @@ export function evaluateHardQa(
   }
 
   const findings = [...reviewFindings(layout, ctx), ...unmeasured];
-  const omittedPhotos = ctx.photoSelection?.mode === 'choose' ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
+  // Photos a design left out, where leaving them out was allowed: the requester let it choose, or an
+  // art-direction recipe chose (ADR-170) and the requester did not insist on every photo.
+  const recipeChose = Boolean(photoRecipeOf(layout)) && ctx.photoSelection?.insisted !== true;
+  const omittedPhotos = ctx.photoSelection?.mode === 'choose' || recipeChose ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
 
   return {
     passed: defectCodes.length === 0, defectCodes, messages, metrics, layout, textMeasurements, findings, omittedPhotos,
@@ -390,6 +405,18 @@ export interface StudioReferenceRules {
   arabicFont: string;
   /** The reference's colour-usage guidance, given to the model as house rules. */
   promotedRules: string;
+  /**
+   * ADR-170: the client's house art-direction rules (rules.artDirection), short sentences given to
+   * the art-director layout call and the judge as data. Empty when the reference names none.
+   */
+  artDirectionRules: string[];
+}
+
+/** A reference's art-direction rules: at most 16 non-empty strings of at most 240 characters. */
+export function artDirectionRulesFromRaw(rawRef: any): string[] {
+  const list = rawRef?.rules?.artDirection;
+  if (!Array.isArray(list)) return [];
+  return list.filter((r: unknown): r is string => typeof r === 'string' && r.trim().length > 0).map((r) => r.trim().slice(0, 240)).slice(0, 16);
 }
 
 /**
@@ -408,6 +435,7 @@ export function studioReferenceFromRaw(rawRef: any): StudioReferenceRules {
     latinFont: 'Verdana',
     arabicFont: 'Noto Sans Arabic',
     promotedRules: 'Keep title clear and centered. Do not crowd logo. Preserve hierarchy.',
+    artDirectionRules: artDirectionRulesFromRaw(rawRef),
   };
   if (rawRef?.rules?.palette) rules.palette = rawRef.rules.palette;
   if (rawRef?.rules?.fontFamily) rules.latinFont = rawRef.rules.fontFamily;

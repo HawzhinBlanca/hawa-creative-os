@@ -190,6 +190,14 @@ function fakeProvider(calls: Array<{ schema: string; reservation?: number }>) {
         imageRoles: Array.from({ length: imageCount }, (_, index) => ({ index, role: 'content_photo', notes: `Field visit photo ${index + 1}` })),
       }, { prompt_tokens: 10323, completion_tokens: 1000 });
     }
+    if (schema === 'art_direction_concepts') {
+      // ADR-170: a brief with photos is art-directed. The slots are left to the brief's roles.
+      const c = (id: string, recipe: string, hero: number, texture: number | null) => ({ id, conceptNote: id, recipe, typicality: 0.5,
+        heroPhotoIndex: hero, texturePhotoIndex: texture, cutoutPhotoIndex: null, slots: [], titleAccentWords: null,
+        fadeShare: null, surfaceTone: 'navy', frame: 'inset', align: 'start' });
+      return reply(body, { concepts: [c('fade', 'hero_fade_report', 0, 4), c('scrim', 'scrim_caption', 5, null), c('card', 'hero_card', 3, null)] },
+        { prompt_tokens: 14000, completion_tokens: 2500 });
+    }
     if (schema === 'layout_v3_candidates') {
       const photos = (text.match(/"kind\\":\\"content_photo\\"/g) || []).length;
       return reply(body, { layouts: coverLayouts(copyCount, photos) }, { prompt_tokens: 14000, completion_tokens: 9000 });
@@ -238,10 +246,16 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
       expect(Number(layout.reserved)).toBeLessThan(1.7);
       expect(Number(final.budget.spentUsd)).toBeLessThan(2);
 
-      // The draft places the owner's photos (the Studio places every photo the request carries).
+      // ADR-170: the owner let the design choose ("you don't have to use all the photos"), and the
+      // design is art-directed: one hero (and at most a blended texture), the rest left out and
+      // recorded for the office, not six equal tiles.
       const winner = (await sql<any>`SELECT layouts FROM hawa.design_studio_candidates WHERE run_id = ${run.id}::uuid AND status = 'winner'`.execute(owner)).rows[0];
       const layouts = typeof winner.layouts === 'string' ? JSON.parse(winner.layouts) : winner.layouts;
-      expect(layouts.at(-1).photos.map((p: any) => p.photoIndex).sort()).toEqual([0, 1, 2, 3, 4, 5]);
+      const shipped = layouts.at(-1);
+      expect(shipped.artDirection?.recipe).toMatch(/^(hero_fade_report|scrim_caption|hero_card)$/);
+      expect(shipped.photos.length).toBeGreaterThanOrEqual(1);
+      expect(shipped.photos.length).toBeLessThanOrEqual(2);
+      expect([...shipped.photos.map((p: any) => p.photoIndex), ...final.stages.qa.omittedPhotos].sort()).toEqual([0, 1, 2, 3, 4, 5]);
       expect((canva as any).importEditableDesign).toHaveBeenCalledTimes(1);
     } finally {
       for (const [k, v] of [['HAWA_MODEL_TIER', env.tier], ['DESIGN_PIPELINE_V3', env.v3]] as const) {
@@ -266,7 +280,9 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
         result = await service.resume(studioScope, taskId, run.id);
       }
       expect(result).toMatchObject({ status: 'failed', stage: 'laying_out', code: 'STUDIO_RUN_LIMIT_TOO_SMALL' });
-      expect(result.diagnostic).toMatch(/^STUDIO_RUN_LIMIT_TOO_SMALL at stage laying_out: the next model request needs a \$1\.6\d advance reservation and the run has \$0\.8\d of its \$1 limit left \(\$0\.15 spent\)\. Nothing was sent for it and no layout was made\./);
+      // ADR-170: the art-direction call reserves 6,000 output tokens where three full layouts reserved
+      // 16,000, so the same request now needs about $1.03 rather than $1.61, still over what is left.
+      expect(result.diagnostic).toMatch(/^STUDIO_RUN_LIMIT_TOO_SMALL at stage laying_out: the next model request needs a \$1\.0\d advance reservation and the run has \$0\.8\d of its \$1 limit left \(\$0\.15 spent\)\. Nothing was sent for it and no layout was made\./);
       expect(result.diagnostic).not.toMatch(/hard QA/);
       expect(calls.map((c) => c.schema)).toEqual(['CreativeBrief']);
       const stored = (await sql<any>`SELECT status, diagnostic FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(owner)).rows[0];
@@ -277,7 +293,7 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
 
       // The office's retry (ADR-142) designs the same task again: the request records the failed outcome,
       // the retry moves it back to designing, and the worker's attempt run starts a new Studio run under
-      // its own key. With the run limit that fits the request, it transfers a draft with the six photos.
+      // its own key. With the run limit that fits the request, it transfers a draft.
       const firstRun = `dr-${taskId}`;
       await projectLifecycleDesignOutcome(db, { requestId, tenantId, taskId, runId: firstRun, expectedRev: 1, rev: 2,
         key: `${requestId}:2:designFinished:${firstRun}`, report: { status: 'DESIGN_FAILED', code: 'STUDIO_RUN_LIMIT_TOO_SMALL' } });
@@ -299,7 +315,9 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
       expect(next.status).toBe('transferred');
       const winner = (await sql<any>`SELECT layouts FROM hawa.design_studio_candidates WHERE run_id = ${second.id}::uuid AND status = 'winner'`.execute(owner)).rows[0];
       const layouts = typeof winner.layouts === 'string' ? JSON.parse(winner.layouts) : winner.layouts;
-      expect(layouts.at(-1).photos).toHaveLength(6);
+      // ADR-170: art-directed, as in the first run of this file: a hero, at most a texture, the rest left out.
+      expect(layouts.at(-1).artDirection?.recipe).toBeTruthy();
+      expect(layouts.at(-1).photos.length).toBeLessThanOrEqual(2);
     } finally {
       for (const [k, v] of [['HAWA_MODEL_TIER', env.tier], ['DESIGN_PIPELINE_V3', env.v3]] as const) {
         if (v === undefined) delete process.env[k]; else process.env[k] = v;

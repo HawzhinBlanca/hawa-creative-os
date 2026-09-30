@@ -7,10 +7,13 @@ import { parseLifecycleAlbumRef, type BlobRef, type LifecycleAlbumRef } from '@h
 import { sql, type Database, type Kysely, type BlobStore } from '@hawa/db';
 import { lifecycleStillImageFile, retainLifecyclePhoto } from './lifecycle-photo.js';
 import { classifyWithHeuristics, isSoraniText } from './telegram-classifier.js';
-import { readIntentByRules } from './requester-turn.js';
+import { readIntentByRules, shortTitle } from './requester-turn.js';
 import { unconfirmedSource } from './lifecycle-source-natural.js';
 import { briefParts, joinedWords } from './lifecycle-brief-parts.js';
-import { ALBUM_MESSAGES, TELEGRAM_CAPTION_LIMIT, requesterLang, say } from '@hawa/integrations';
+import { claimPhoto, recentOpenBy } from './lifecycle-media-intake.js';
+import { addPhotoMaterial } from './lifecycle-photo-material.js';
+import type { LateChangeStage, LateRequesterChange } from './lifecycle-chat-target.js';
+import { ALBUM_MESSAGES, TELEGRAM_CAPTION_LIMIT, bold, requesterLang, say } from '@hawa/integrations';
 
 type Update = { update_id: number; [key: string]: unknown };
 type Message = Record<string, unknown>;
@@ -50,8 +53,19 @@ export function orderedAlbumImages<T extends { sha256: string; media_type: strin
 interface Part {
   groupKey: string; chatId: string; groupId: string; senderId: string; topic: string;
   messageId: string; source: Update; image: BlobRef | null; error?: string;
+  /** A photo of a burst (ADR-160 addendum): sent outside an album; its group is its own update. */
+  burst?: true;
 }
-interface Confirmation { source: Update; chatId: string; snapshot?: AlbumSnapshot; reply?: AlbumMessage }
+/**
+ * A settle or bind decision, stored under its update. Besides ADR-143's snapshot and reply: `photo`, one
+ * burst photo with its words (the album contract needs two photos, so it opens as a photo with words
+ * does); `answer`, words said when a burst became material of its sender's design; `late`, a burst
+ * passed to the office as a note on that design.
+ */
+interface Confirmation {
+  source: Update; chatId: string; snapshot?: AlbumSnapshot; reply?: AlbumMessage;
+  photo?: { update: Update; image: BlobRef }; answer?: string; late?: LateRequesterChange;
+}
 
 export function albumMessage(update: unknown): Message | null {
   const message = record(record(update)?.message);
@@ -169,20 +183,25 @@ export function actsInGroup(message: Message | null): boolean {
     /\n\s*(?:content|copy|text|details|دەق|ناوەڕۆک)\s*:/i.test(words));
 }
 
-/** The caller supplies a tenant-scoped transaction runner, not a long transaction around Telegram. */
+/**
+ * The caller supplies a tenant-scoped transaction runner, not a long transaction around Telegram.
+ * `burst`: a photo sent outside an album (ADR-160 addendum). It is kept as a one-photo album of its own
+ * (`burst:<update>`); the album set (`albumSet`) joins it to the photos its sender sent around it.
+ */
 export async function retainAlbumPart(tx: <T>(fn: (trx: Tx) => Promise<T>) => Promise<T>, tenant: string,
-  update: Update, store: BlobStore | null, download: (id: string) => Promise<Buffer | null | undefined>): Promise<AlbumMessage> {
+  update: Update, store: BlobStore | null, download: (id: string) => Promise<Buffer | null | undefined>,
+  options: { burst?: boolean } = {}): Promise<AlbumMessage> {
   const prior = await tx((trx) => readAlbumPart(trx, tenant, update));
   if (prior) return partReply(prior);
-  const msg = albumMessage(update)!;
+  const msg = (options.burst ? record(update.message) : albumMessage(update))!;
   const chatId = String(record(msg.chat)?.id ?? '');
-  const groupId = String(msg.media_group_id);
+  const groupId = options.burst ? `burst:${update.update_id}` : String(msg.media_group_id);
   const groupKey = hash([chatId, groupId]);
   const senderId = positiveId(record(msg.from)?.id);
   const messageId = positiveId(msg.message_id);
   if (!senderId || !messageId || !/^-?\d{1,20}$/.test(chatId)) throw new AlbumConflict('The album sender or message identity is unavailable.');
   const base: Part = { groupKey, chatId, groupId, senderId, messageId,
-    topic: String(msg.message_thread_id ?? ''), source: update, image: null };
+    topic: String(msg.message_thread_id ?? ''), source: update, image: null, ...(options.burst ? { burst: true as const } : {}) };
   const check = async (trx: Tx): Promise<string | null> => {
     await lock(trx, tenant, groupKey);
     // The design already started from the settled album; its task files are frozen (ADR-143).
@@ -303,7 +322,15 @@ export type AlbumOutcome =
   | { kind: 'reply'; reply: AlbumMessage }
   | { kind: 'snapshot'; snapshot: AlbumSnapshot }
   /** ADR-160: settle this album again after `delayMs`; `notice` is said beside it (once, keyed by the update). */
-  | { kind: 'wait'; delayMs: number; notice: string | null };
+  | { kind: 'wait'; delayMs: number; notice: string | null }
+  /** A photo burst of one photo (ADR-160 addendum): intake reads it as the lone photo it is (ADR-145). */
+  | { kind: 'alone' }
+  /** One burst photo with its words (a cut caption and its rest): intake opens `update` with `image`. */
+  | { kind: 'photo'; update: Update; image: BlobRef }
+  /** A burst that became material of its sender's design: `text` is said (HTML), once. */
+  | { kind: 'answer'; text: string }
+  /** A burst passed to the office as a note on its sender's design (the late-change store). */
+  | { kind: 'late'; change: LateRequesterChange };
 
 type Lang = 'en' | 'ckb';
 
@@ -538,15 +565,19 @@ function joinBriefs(first: string, second: string): string {
   return prefix + [first.replace(NEW_COMMAND, '').trim(), second.replace(NEW_COMMAND, '').trim()].filter(Boolean).join('\n\n');
 }
 
-/** `asked`: the album waits for words; every other state is final (`cancelled` by the requester, ADR-160). */
-type SettledState = 'asked' | 'refused' | 'superseded' | 'expired' | 'cancelled';
+/**
+ * `asked`: the album waits for words; every other state is final (`cancelled` by the requester, ADR-160;
+ * for a photo burst, `alone`: read as a lone photo, and `joined`: material of its sender's design).
+ */
+type SettledState = 'asked' | 'refused' | 'superseded' | 'expired' | 'cancelled' | 'alone' | 'joined';
 /**
  * Records an album's state, for each group of its set. inbox_events is append-only, so a final state
  * reached after `asked` is its own row (`lifecycle_album_closed`), which settledState reads first: an
  * asked album that lapses, or that a later request supersedes, is not settled or swept again (ADR-160).
  */
 async function markSettled(trx: Tx, tenant: string, keys: string | string[], state: SettledState, updateId: number): Promise<void> {
-  for (const groupKey of typeof keys === 'string' ? [keys] : keys) {
+  const groups = typeof keys === 'string' ? [keys] : keys;
+  for (const groupKey of groups) {
     for (const account of state === 'asked' ? ['lifecycle_album_settled'] : ['lifecycle_album_settled', 'lifecycle_album_closed']) {
       await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
         VALUES (${tenant}::uuid, ${account}, ${groupKey}, ${account},
@@ -554,6 +585,7 @@ async function markSettled(trx: Tx, tenant: string, keys: string | string[], sta
         ON CONFLICT DO NOTHING`.execute(trx);
     }
   }
+  if (state !== 'alone') await claimBurstPhotos(trx, tenant, groups, updateId);
 }
 async function settledState(trx: Tx, tenant: string, groupKey: string): Promise<SettledState | null> {
   const closed = await event<{ state: SettledState }>(trx, tenant, 'lifecycle_album_closed', groupKey);
@@ -603,7 +635,7 @@ async function albumSet(trx: Tx, tenant: string, part: Pick<Part, 'groupKey' | '
   if (at < 0) return [part.groupKey];
   const gap = albumSettleMs();
   const open = async (groupKey: string) => !await frozen(trx, tenant, groupKey) &&
-    [null, 'asked'].includes(await settledState(trx, tenant, groupKey));
+    [null, 'asked'].includes(await settledState(trx, tenant, groupKey)) && !await burstTaken(trx, tenant, groupKey);
   let from = at;
   let to = at;
   while (from > 0 && Number(rows[from - 1].last) + gap >= Number(rows[from].first) && await open(rows[from - 1].group_key)) from--;
@@ -619,6 +651,95 @@ async function setParts(trx: Tx, tenant: string, keys: string[]): Promise<Part[]
 const lockSet = async (trx: Tx, tenant: string, keys: string[]) => {
   for (const key of [...keys].sort()) await lock(trx, tenant, key);
 };
+
+// --- a photo burst: photos sent outside an album, one after the other (ADR-160 addendum) --------------
+//
+// Telegram delivers several photos picked together with "group" off (and some clients always) as
+// separate messages with no media_group_id, about a second apart. Each such photo is kept as a one-photo
+// album of its own (`burst:<update>`), and `albumSet` joins the photos its sender sent within the album
+// quiet period into one set, exactly as it joins albums sent back to back: one settle, one question at
+// most, one caption from any photo, the held brief, ADR-160's hold for a cut caption, the group gate.
+// A set of one photo is a lone photo, read as ADR-145 reads it (`alone`), unless its caption was cut.
+// A photo with no words is also kept as ADR-145 keeps it (`lifecycle_photo_held`), so words sent right
+// after a lone photo take it as before; once its set is decided, that photo is claimed (`album`).
+
+/** Whether this burst photo's group was taken by words as a lone photo (ADR-145) before its set settled. */
+async function burstTaken(trx: Tx, tenant: string, groupKey: string): Promise<boolean> {
+  return (await sql`SELECT 1 FROM hawa.inbox_events p JOIN hawa.inbox_events u ON u.tenant_id = p.tenant_id
+      AND u.source_account_id = 'lifecycle_photo_used' AND u.source_event_id = p.source_event_id AND u.payload->>'how' <> 'album'
+    WHERE p.tenant_id = ${tenant}::uuid AND p.source_account_id IN ('lifecycle_album_part', 'lifecycle_album_pending')
+      AND p.payload->>'groupKey' = ${groupKey} AND p.payload->>'burst' = 'true' LIMIT 1`.execute(trx)).rows.length > 0;
+}
+/** The kept burst photos of a decided set are the set's: no words take one of them alone afterwards. */
+async function claimBurstPhotos(trx: Tx, tenant: string, keys: string[], byUpdateId: number): Promise<void> {
+  for (const key of keys) {
+    for (const part of await parts(trx, tenant, key)) {
+      if (part.burst) await claimPhoto(trx, tenant, part.source.update_id, { byUpdateId, how: 'album' });
+    }
+  }
+}
+/**
+ * The kept photos (ADR-145) that are not one of a photo burst still arriving or settling with others:
+ * words take those whole with the set (`bindTextToAlbum`) or the set is asked about, never one alone.
+ */
+export async function outsideBursts<T extends { updateId: number }>(trx: Tx, tenant: string, photos: T[]): Promise<T[]> {
+  const kept: T[] = [];
+  for (const photo of photos) {
+    const part = (await event<Part>(trx, tenant, 'lifecycle_album_pending', String(photo.updateId)))?.payload;
+    if (part?.burst && !await frozen(trx, tenant, part.groupKey) && !await settledState(trx, tenant, part.groupKey) &&
+        (await setParts(trx, tenant, await albumSet(trx, tenant, part))).length > 1) continue;
+    kept.push(photo);
+  }
+  return kept;
+}
+/** Whether a burst photo was read as a lone photo (its set was one photo): its settle is ADR-145's. */
+export async function isLoneBurstPhoto(trx: Tx, tenant: string, update: Update): Promise<boolean> {
+  const part = await readAlbumPart(trx, tenant, update);
+  return Boolean(part?.burst) && await settledState(trx, tenant, part!.groupKey) === 'alone';
+}
+
+/**
+ * A photo burst with no brief, sent right after its sender's words opened a request (ADR-145's five
+ * minutes), is material for that design (ADR-156 section 2.3), as each of its photos alone would be:
+ * added to the task while the design has not started using pictures, else passed to the office as a
+ * note, with one answer for the set. Null when there is no such request, or it waits for changes (the
+ * set is then asked about, and the sender's words bind it).
+ */
+async function burstMaterial(trx: Tx, tenant: string, input: { keys: string[]; selected: Part[]; update: Update;
+  chatId: string; scope: { chatId: string; senderId: string; topic: string }; firstAt: number; lang: Lang; words: string }): Promise<AlbumOutcome | null> {
+  const opened = await recentOpenBy(trx, tenant, input.scope, input.firstAt);
+  if (!opened) return null;
+  const target = (await sql<{ stage: string; rev: string | number; task_id: string; title: string | null }>`SELECT r.stage, r.rev,
+      r.current_task_id::text AS task_id, coalesce(root.title, t.title) AS title
+    FROM hawa.requests r JOIN hawa.tasks t ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id
+    LEFT JOIN hawa.tasks root ON root.tenant_id = r.tenant_id AND root.id = r.root_task_id
+    WHERE r.tenant_id = ${tenant}::uuid AND r.request_id = ${opened.requestId}::uuid`.execute(trx)).rows[0];
+  // The open is decided but RequestLifecycle has not projected it yet: settle again shortly.
+  if (!target) return { kind: 'wait', delayMs: albumSettleMs(), notice: null };
+  if (target.stage === 'awaiting_answer' || (target.stage === 'manual' && Number(target.rev) >= 3)) return null;
+  const into = { requestId: opened.requestId, taskId: target.task_id, stage: target.stage };
+  let used: 'added' | 'passed' = 'passed';
+  // Photos after a request opened from an album are not joined to it (its album is its pictures).
+  if (!opened.album) {
+    for (const part of input.selected) if ((used = await addPhotoMaterial(trx, tenant, into, part.image!)) === 'passed') break;
+  }
+  await markSettled(trx, tenant, input.keys, 'joined', input.update.update_id);
+  const title = shortTitle(target.title || '');
+  const count = input.selected.length;
+  const said = say(used === 'added' ? ALBUM_MESSAGES.burstAdded : ALBUM_MESSAGES.burstPassed, input.lang, { title: bold(title) });
+  const confirm = (result: Pick<Confirmation, 'answer' | 'late'>) => save(trx, tenant, 'lifecycle_album_confirm',
+    String(input.update.update_id), { source: input.update, chatId: input.chatId, ...result }, hash(input.update));
+  if (used === 'added' && !input.words) {
+    await confirm({ answer: said });
+    return { kind: 'answer', text: said };
+  }
+  const change: LateRequesterChange = { requestId: opened.requestId, taskId: target.task_id, requestRev: Number(target.rev),
+    requestStage: target.stage as LateChangeStage, title, answer: said,
+    text: `${input.words || '(no words)'}\n[The requester sent ${count} photos for this design right after its brief. ${used === 'added'
+      ? "They were added to the design's files." : 'They are in the Telegram chat and were not added to the design.'}]` };
+  await confirm({ late: change });
+  return { kind: 'late', change };
+}
 
 function albumShape(selected: Part[]) {
   const messages = selected.map((part) => record(part.source.message)!);
@@ -636,9 +757,22 @@ function albumShape(selected: Part[]) {
 async function freeze(trx: Tx, tenant: string, input: { keys: string[]; selected: Part[]; identity: Update;
   chatId: string; base: Message; text: string; replyId: string | null; extra?: BlobRef }): Promise<AlbumOutcome> {
   const { base, identity, selected, keys } = input;
-  const message: Message = { message_id: base.message_id, date: base.date, chat: base.chat, from: base.from,
+  const words: Message = { message_id: base.message_id, date: base.date, chat: base.chat, from: base.from,
     ...(base.message_thread_id !== undefined ? { message_thread_id: base.message_thread_id } : {}),
-    text: input.text, ...(input.replyId ? { reply_to_message: { message_id: Number(input.replyId) } } : {}),
+    text: input.text, ...(input.replyId ? { reply_to_message: { message_id: Number(input.replyId) } } : {}) };
+  await claimBurstPhotos(trx, tenant, keys, identity.update_id);
+  if (selected.length === 1 && !input.extra) {
+    // One burst photo whose cut caption is whole again (ADR-160 addendum): the album contract needs two
+    // photos, so it opens as words with a photo do (ADR-145), under the update that completed it.
+    const photo = { update: { update_id: identity.update_id, message: words }, image: selected[0].image! };
+    await save(trx, tenant, 'lifecycle_album_confirm', String(identity.update_id),
+      { source: identity, chatId: input.chatId, photo } satisfies Confirmation, hash(identity));
+    for (const key of keys) await save(trx, tenant, 'lifecycle_album_frozen', key, { updateId: identity.update_id },
+      hash({ groupKey: key, source: identity, image: photo.image }));
+    // JSONB reorders keys: the update intake reads (and hashes) is the canonical one, now and on a replay.
+    return { kind: 'photo', update: JSON.parse(canonical(photo.update)), image: photo.image };
+  }
+  const message: Message = { ...words,
     album_source: selected.map((part) => ({ updateId: part.source.update_id, hash: hash(part.source) })) };
   const ref = parseLifecycleAlbumRef({ updateId: identity.update_id,
     sha256: hash({ groupKey: keys.length === 1 ? keys[0] : keys, source: identity, selected, ...(input.extra ? { extra: input.extra } : {}) }),
@@ -658,7 +792,10 @@ async function freeze(trx: Tx, tenant: string, input: { keys: string[]; selected
 }
 
 const outcomeOf = (prior: Confirmation): AlbumOutcome => prior.snapshot ? { kind: 'snapshot', snapshot: prior.snapshot }
-  : prior.reply ? { kind: 'reply', reply: prior.reply } : { kind: 'skip' };
+  : prior.photo ? { kind: 'photo', update: JSON.parse(canonical(prior.photo.update)), image: prior.photo.image }
+    : prior.answer ? { kind: 'answer', text: prior.answer }
+      : prior.late ? { kind: 'late', change: prior.late }
+        : prior.reply ? { kind: 'reply', reply: prior.reply } : { kind: 'skip' };
 const senderLock = (trx: Tx, tenant: string, chatId: string, senderId: string) => lock(trx, tenant, `sender:${chatId}:${senderId}`);
 
 // --- held briefs: a text brief waits briefly for photos sent right after it ------------------
@@ -764,6 +901,8 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   const prior = await readAlbumConfirmation(trx, tenant, update);
   if (prior) return outcomeOf(prior);
   await senderLock(trx, tenant, part.chatId, part.senderId);
+  // A burst photo read as a lone photo keeps being read so (ADR-145 settles it, perhaps more than once).
+  if (part.burst && await settledState(trx, tenant, part.groupKey) === 'alone') return { kind: 'alone' };
   // The album's whole set (ADR-160): the newest photo of the set settles it.
   const keys = await albumSet(trx, tenant, part);
   await lockSet(trx, tenant, keys);
@@ -775,6 +914,19 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   if (state && state !== 'asked') return { kind: 'skip' };
   const selected = await setParts(trx, tenant, keys);
   if (Math.max(...selected.map((p) => p.source.update_id)) !== update.update_id) return { kind: 'skip' };
+  // A lone burst photo that could not be kept was answered when it arrived.
+  if (part.burst && selected.length === 1 && part.error) {
+    await markSettled(trx, tenant, part.groupKey, 'refused', update.update_id);
+    return { kind: 'skip' };
+  }
+  // ADR-160 addendum: a photo burst of one photo is a lone photo, read as ADR-145 reads it (asked about,
+  // joined to its sender's words or design, or opened with its caption), unless Telegram cut its caption.
+  // So is a burst photo that words took alone before its set settled.
+  if (part.burst && (await burstTaken(trx, tenant, part.groupKey) ||
+      (selected.length === 1 && !captionMayBeCut(record(part.source.message)?.caption)))) {
+    await markSettled(trx, tenant, part.groupKey, 'alone', update.update_id);
+    return { kind: 'alone' };
+  }
   const times = await albumTimes(trx, tenant, keys);
   const late = times.now - times.last > LATE_SETTLE_MS;
   const { captions, replies, mixedReplies, cutCaption, group, addressed } = albumShape(selected);
@@ -814,7 +966,7 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
     await markSettled(trx, tenant, keys, 'refused', update.update_id);
     return { kind: 'skip' };
   }
-  if (selected.length < 2) return answer(ALBUM_TEXT.onePhoto[lang], 'refused');
+  if (selected.length < 2 && !part.burst) return answer(ALBUM_TEXT.onePhoto[lang], 'refused');
   if (mixedReplies) return answer(ALBUM_TEXT.mixedReplies[lang], 'refused');
   if (captions.length > 1) return answer(ALBUM_TEXT.captions[lang], 'asked');
   const lastMessage = record(update.message)!;
@@ -867,6 +1019,12 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
     return freeze(trx, tenant, { keys, selected, identity: update, chatId,
       base: heldMessage, text: joinedWords(heldMessage.text, await briefParts(trx, tenant, held.updateId)), replyId: null });
   }
+  // A photo burst sent right after its sender's words opened a request is that design's material.
+  if (selected.every((p) => p.burst) && !replies.length && captions.length <= 1 && !late) {
+    const material = await burstMaterial(trx, tenant, { keys, selected, update, chatId, lang, words: caption,
+      scope: { chatId, senderId: part.senderId, topic: part.topic }, firstAt: times.first });
+    if (material) return material;
+  }
   if (late && times.now - times.last > briefWindowMs()) {
     await markSettled(trx, tenant, keys, 'expired', update.update_id);
     return { kind: 'skip' };
@@ -904,8 +1062,10 @@ async function waitingAlbum(trx: Tx, tenant: string, scope: { chatId: string; se
     }
     if (!open) continue;
     const selected = await setParts(trx, tenant, keys);
-    if (selected.length < 2 || selected.some((p) => p.error || !p.image)) continue;
     const { captions, cutCaption } = albumShape(selected);
+    // One photo is an album only as a burst photo whose caption Telegram cut (ADR-160 addendum).
+    if (selected.length < 2 && !(selected.length === 1 && selected[0].burst && cutCaption !== null)) continue;
+    if (selected.some((p) => p.error || !p.image)) continue;
     const times = await albumTimes(trx, tenant, keys);
     if (cutCaption !== null) {
       const since = (await cutAsked(trx, tenant, keys[0]))?.at ?? times.last;
@@ -1059,6 +1219,9 @@ export async function bindSourceToCutAlbum(trx: Tx, tenant: string, input: { upd
   for (const key of keys) if (await frozen(trx, tenant, key)) return { kind: 'none' };
   const { captions, replies, mixedReplies, cutCaption } = albumShape(selected);
   if (cutCaption === null || captions.length !== 1 || mixedReplies) return { kind: 'none' };
+  // One burst photo cannot carry confirmed words (a draft carries a source or a photo, not both): the
+  // source opens as its own request (ADR-160 section 3), and the photo's cut caption lapses or opens.
+  if (selected.length < 2) return { kind: 'none' };
   return freeze(trx, tenant, { keys, selected, identity: input.update, chatId, base: msg,
     text: joinCutCaption(cutCaption, input.copy.trim()), replyId: replies[0] ?? null });
 }

@@ -52,7 +52,9 @@ export interface CreativeBrief {
    * the panelists pictures and a reference for the graphic" with three images is two photos to place
    * and one design to follow, which no keyword can tell apart. Absent before 2026-09-22.
    */
-  imageRoles?: Array<{ index: number; role: ImageRole; notes: string }>;
+  imageRoles?: Array<{ index: number; role: ImageRole; notes: string } & PhotoReview>;
+  /** ADR-170: the brief's subject tags, matched against the office's photo exemplars. */
+  subjectTags?: string[];
   /** How many content photos the run was given; recorded for the requester's note. */
   photosSent?: number;
   /** Visual decisions read from the reference and instructions, enforced in preparation. Absent before 2026-09-19. */
@@ -232,15 +234,34 @@ export interface StageContext {
   ornament?: import('@hawa/creative').OrnamentSettings;
   /** The brief's style spec, applied to every layout in preparation. */
   style?: import('@hawa/creative').StyleSpec;
+  /** ADR-170: where the faces are in each photo (stages.photoFocus), for the recipe solver's crops. */
+  photoFaces?: Array<{ x: number; y: number; faceShare?: number } | null>;
+  /** ADR-170: the client's house art-direction rules, from its reference. */
+  artDirectionRules?: string[];
+  /** ADR-170: the brief's subject tags, for photo exemplar retrieval. */
+  subjectTags?: string[];
   /** The run's recorded executable brief contract (ADR-125); set before the first layout call. */
   briefContract?: import('@hawa/domain').ExecutableBriefContract;
 }
 
 export type ImageRole = 'content_photo' | 'style_reference' | 'logo' | 'unrelated';
 
+/**
+ * ADR-170: the brief's reading of a content photo for art direction, folded into the brief call's
+ * own answer (no extra call): how literally it shows the subject, what kind of shot it is, and where
+ * it is calm enough for a title.
+ */
+export interface PhotoReview {
+  subjectFit?: number;
+  shot?: import('@hawa/creative').PhotoShot;
+  quietArea?: import('@hawa/creative').QuietArea;
+}
+
 export interface ContentPhoto {
   /** Subject/crop meaning from the same brief that classified this image as content. */
   notes?: string;
+  /** ADR-170: the brief's review of the photo for art direction. */
+  review?: PhotoReview;
   dataUrl: string;
   bytes: Buffer;
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp';

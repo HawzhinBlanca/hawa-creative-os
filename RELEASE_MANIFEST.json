@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-30T14:41:21+03:00",
+  "generatedAt": "2026-09-30T15:45:30+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,10 +20,10 @@
     ]
   },
   "build": {
-    "commit": "0b51be27538d0526a61ebef5d8cc59c802cda157",
+    "commit": "f525c03fbef0424b28d84e67f9a56a0fa4ca3e6d",
     "treeClean": true,
-    "commitTimestamp": "2026-09-30T14:41:21+03:00",
-    "branch": "codex/research-grade-design-system"
+    "commitTimestamp": "2026-09-30T15:45:30+03:00",
+    "branch": "claude/fix-photo-burst"
   },
   "migrations": {
     "targetVersion": "071_uncertain_call_expiry",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "9e96430974d5117bedaab2531d5e02659988d20b258fe30727101a3dc1085671"
+  "sha256": "ad3e1cf1c02183d0a681ce649a4ecb4a988f5ff25ef9e64d4eeb6ca30d3b9e4b"
 }

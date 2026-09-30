@@ -17,7 +17,8 @@ export function candidateRenderOptions(
 
 export async function layoutVisualInputs(ctx: Pick<StageContext, 'clientId' | 'referencePack' | 'exemplars' | 'photos' | 'visualInputs'>): Promise<LayoutVisualInput[]> {
   if (ctx.visualInputs) return ctx.visualInputs;
-  const selected = (ctx.exemplars ?? []).filter((e) => e.bytes).slice(0, 2);
+  // ADR-170: a photo brief is shown up to three of the office's photo designs, one per recipe.
+  const selected = (ctx.exemplars ?? []).filter((e) => e.bytes).slice(0, ctx.photos?.length ? 3 : 2);
   if (selected.length && ctx.referencePack.clientId !== ctx.clientId) throw new Error('LAYOUT_EXEMPLAR_SCOPE_MISMATCH');
   const inputs: LayoutVisualInput[] = [];
   for (const exemplar of selected) {
@@ -28,7 +29,8 @@ export async function layoutVisualInputs(ctx: Pick<StageContext, 'clientId' | 'r
     inputs.push({ kind: 'approved_example', label: exemplar.label, ...await layoutConditioningImage(bytes) });
   }
   for (const [index, photo] of (ctx.photos ?? []).entries()) {
-    inputs.push({ kind: 'content_photo', label: `Photo ${index}`, notes: photo.notes, ...await layoutConditioningImage(photo.bytes) });
+    // ADR-170: the art director reads the photos at high detail, so they are sent at 1024 px.
+    inputs.push({ kind: 'content_photo', label: `Photo ${index}`, notes: photo.notes, ...await layoutConditioningImage(photo.bytes, 1024) });
   }
   return inputs;
 }

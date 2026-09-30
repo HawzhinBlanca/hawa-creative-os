@@ -61,7 +61,20 @@
       "arabic": "Noto Sans Arabic"
     },
     "scriptFontNote": "Provisional Sorani Kurdish typeface for drafts only: the brand guideline copy in this pack records no Kurdish typeface. The art director confirms the brand font before any release.",
-    "rtl": "Sorani Kurdish blocks are right-to-left: right-align them, keep them separate from Latin blocks, and give them about 20% more width and height than Latin text of the same size."
+    "rtl": "Sorani Kurdish blocks are right-to-left: right-align them, keep them separate from Latin blocks, and give them about 20% more width and height than Latin text of the same size.",
+    "artDirection": [
+      "Pick ONE hero photo that literally shows the subject. A second photo only as a texture blended into the text zone, never a grid cell. No multi-photo grids in social posts.",
+      "The hero fills 60-100% of the canvas and runs off at least two edges. Keep a quiet region (sky, wall, blur) for the title.",
+      "Text always sits on something: a cream card (22-25% of the height), a navy plate or panel, or a navy gradient fade over 35-50% of the height. Never bare text on a busy photo.",
+      "Elements bridge edges: a wordmark tab straddling the card's top edge, a call-to-action tab straddling a card, a portrait breaking over a panel.",
+      "People: cut out, placed bottom-left or left, bleeding off the edge, with the sunburst or grid motif behind. No circle masks.",
+      "A gold border frames series and carousels; a thin gold inset line frames single report posts. Never tilt or rotate photos.",
+      "Colour: navy for fades, plates and scrims; gold only for the first title line, rules, call-to-action pills and frames; cream for card fills. Keep the photo's natural grade (no duotone).",
+      "Type: bold geometric sans. A gold line and a bold white or navy main line for the title, then small light body text. Logo in a corner; the URL in a pill or the footer.",
+      "Bilingual: the same geometry in both languages. Sorani is right-aligned or centred in the same boxes; never mirror the photo.",
+      "With several photos, rank them by subject fit, sharpness and quiet space. Use the best as the hero, optionally one more as a faded texture, and drop the rest."
+    ],
+    "artDirectionSource": "Office art-direction rulebook, from ~20 of KAAE's published photo designs (ADR-170, 2026-09-30)."
   },
   "logoSha256": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc"
 }

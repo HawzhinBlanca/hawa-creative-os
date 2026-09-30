@@ -82,7 +82,7 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
   const asReference = stages.brief?.referenceSeen === true || stages.brief?.referenceRole === 'style_reference';
   const followed = Array.isArray(stages.brief?.imageRoles) && stages.brief.imageRoles.some((r: any) => r?.role === 'style_reference');
   // ADR-157: when the requester let the design choose, the photos left out are listed for review.
-  const chose = choseAmongPhotos(stages, placed, sent);
+  const chose = choseAmongPhotos(stages, placed, sent, shipped);
   if (chose) parts.push(`photos chosen: ${placed} of ${sent} (left out: ${omittedPhotoNumbers(stages, shipped, sent!).join(', ')})`);
   else if (sent !== undefined && sent > 0) parts.push(placed === sent ? `your ${sent} photo${sent === 1 ? '' : 's'} placed` : `⚠️ ${placed} of your ${sent} photos placed`);
   else if (placed > 0) parts.push(`${placed} photo${placed === 1 ? '' : 's'} placed`);
@@ -170,7 +170,7 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
   const cutCount = shippedPhotos.filter((p) => p?.treatment === 'cutout').length;
   // A design that chose among the photos, as the requester allowed, has not dropped any (ADR-157):
   // the office sees which were left out, and the requester is not told their photos went missing.
-  if (sent !== undefined && sent > 0 && !choseAmongPhotos(stages, placed, sent)) {
+  if (sent !== undefined && sent > 0 && !choseAmongPhotos(stages, placed, sent, shipped)) {
     if (placed < sent) notes.push(`⚠️ Only ${placed} of your ${sent} photos ${placed === 1 ? 'is' : 'are'} on the design.`);
     else if (cutCount > 0 && cutCount === placed) notes.push(`Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design, the people cut out of their backgrounds.`);
     else notes.push(`Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design.`);
@@ -199,9 +199,14 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
 }
 
 /** True when the requester let the design choose among the photos and it placed a permitted subset. */
-function choseAmongPhotos(stages: any, placed: number, sent: number | undefined): boolean {
+function choseAmongPhotos(stages: any, placed: number, sent: number | undefined, shipped?: any): boolean {
   const selection = stages?.brief?.photoSelection;
-  return selection?.mode === 'choose' && sent !== undefined && placed < sent && placed >= Math.min(sent, Number(selection.minimum) || 1);
+  if (selection?.mode === 'choose' && sent !== undefined && placed < sent && placed >= Math.min(sent, Number(selection.minimum) || 1)) return true;
+  // ADR-170: an art-direction recipe chose its hero and dropped the rest, which hard QA recorded;
+  // allowed only when the requester did not insist on every photo.
+  const recipe = shipped?.artDirection?.recipe;
+  return Boolean(recipe) && recipe !== 'typographic' && selection?.insisted !== true && sent !== undefined && placed >= 1 && placed < sent &&
+    Array.isArray(stages?.qa?.omittedPhotos) && stages.qa.omittedPhotos.length === sent - placed;
 }
 
 /** The photos a design left out, numbered from 1 as the requester counts them. */
