@@ -1,7 +1,7 @@
 # ADR183 — Independent worker credentials, database grants and nginx admission
 
 Date: 2026-09-30. Status: accepted for implementation; live qualification pending.
-Requirements: NFR-006, FR-060, FR-063, FR-071.
+Requirements: NFR-006, FR-060, FR-063, FR-071, FR-074, NFR-012.
 Sources: MASTER_SPEC, docs/10_WORKFLOW_RELIABILITY.md, docs/14_SECURITY_THREAT_MODEL.md;
 owner's Claude verification handoff, 2026-09-30. Amends ADR163's initial migration.
 
@@ -35,3 +35,11 @@ controls; stable independent credentials and legacy-alias retirement; previous/c
 worker route/session denials; PostgreSQL positive worker operations and negative
 approval/config/function/role/schema controls, tenant isolation, native outbox recovery;
 exact release migration/backup/deploy/readback. A source test is not live qualification.
+
+
+Exact release execution: the 8b517972 full gate found the gate's pnpm commands still ran
+from the launching source checkout after deploy re-exec. Enter the gate's own ROOT_DIR
+before any command; an executable fixture launched elsewhere must show its stage1 pnpm
+runs in the release. Preserve the original failed full run (6190 pass/3fail/3expected-fail/
+67skip), fix the actual boundary and stale migration/mount expectations, and repeat the
+mandatory full gate on a newly sealed source. Do not weaken the Desk bundle budget.

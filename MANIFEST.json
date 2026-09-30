@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T21:03:17Z",
+  "generatedAt": "2026-09-30T21:12:42Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 661,
+  "fileCount": 662,
   "files": [
     {
       "path": ".dockerignore",
@@ -889,8 +889,8 @@
     },
     {
       "path": "adrs/183_independent_worker_identity_and_bound_mount_validation.md",
-      "sha256": "2ae1be89fef626d0daa6dd908f64eac2e89a4126b1994140dcfd0bdb25adfae5",
-      "bytes": 2694
+      "sha256": "50dacf6a6d57862723e72ce5759bfbfb22da170bb3405fc56829a526d54e42d4",
+      "bytes": 3240
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2429,8 +2429,8 @@
     },
     {
       "path": "plans/service-boundary-repair-2026-09-30/LOCAL_PROOF.json",
-      "sha256": "74ba888a80493f395641a38b0535778cb81212deb240cb9c4319bc6e2bcf58d3",
-      "bytes": 3530
+      "sha256": "a2a1b945c7742519e966c40b527147d1aa5fefbd455fae35ab961dbbbdb0a9b8",
+      "bytes": 4292
     },
     {
       "path": "plans/service-boundary-repair-2026-09-30/PLAN.md",
@@ -2439,8 +2439,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "43c616919ffc41eebcb9fb8b414ce276c8357fd024a89b0c7c7cf1709ba8b188",
-      "bytes": 554549
+      "sha256": "bd7d8d5f27637e803e10ae817b8d35d02fa220dbbcbcbff644e45e04a7cd0849",
+      "bytes": 554901
     },
     {
       "path": "plans/user-stories.csv",
@@ -2764,8 +2764,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "fbd7de67e10b784bd45fa88471bbb5fc8e828db73245f0bb2cc71344ef3399ba",
-      "bytes": 19988
+      "sha256": "86d401caefeccfd7a6f2001bf8ca484269fa920044f1cfdd769391e9c5548a1f",
+      "bytes": 20095
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",
@@ -3216,6 +3216,11 @@
       "path": "scripts/test/provider-credential-update.test.ts",
       "sha256": "823ed17a4d585b3d904ead83d7a7fdb6502b535de925caaa1419e3b34e8c48a0",
       "bytes": 2451
+    },
+    {
+      "path": "scripts/test/release-gate-directory.test.ts",
+      "sha256": "30420290147cabebebf8f1d3f3cb9bc957a8c4ddf4bcbe1d481d1650da534a8e",
+      "bytes": 1416
     },
     {
       "path": "scripts/test/service-boundaries.test.ts",

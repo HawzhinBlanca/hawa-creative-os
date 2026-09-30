@@ -6,6 +6,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Qualify this exact release, even when deploy re-execs it from a separate source checkout.
+cd "$ROOT_DIR"
 # The SHA-256 tool, chosen per host (ADR-141): deploy.sh runs this gate on the production host.
 source "${ROOT_DIR}/infra/ops/host_lib.sh"
 # Run evidence is local and ignored. The historical 2026-09-21 dossier stays

@@ -5,7 +5,9 @@
     "NFR-006",
     "FR-060",
     "FR-063",
-    "FR-071"
+    "FR-071",
+    "FR-074",
+    "NFR-012"
   ],
   "sourceSha256": {
     "infra/ops/prepare_service_boundaries.py": "14afa6a95d30df3306b02caed27a76c9906f7290d56acb6f95ec8b74e241b471",
@@ -17,13 +19,14 @@
     "packages/db/src/provision-worker-role.ts": "faef05e77839743b88b91b62ae5ac4f2c04ddefd6922297a06a3cfef0946c064",
     "scripts/provision_worker_database.ts": "20093aca911dd9b2df6c8d5f6cea69155e4a84835f8db26fd614b02211ce17eb",
     "apps/core/src/app.ts": "01f0a470278ce013a26d0c9be8cf19c50efa00e78ac0450b121c35b0078f984b",
-    "apps/core/src/routes/auth.routes.ts": "15d9ee66e304e3e6be2b5df76cfd2ce7e9f1014361e5fe6ed1848bac65523ba2"
+    "apps/core/src/routes/auth.routes.ts": "15d9ee66e304e3e6be2b5df76cfd2ce7e9f1014361e5fe6ed1848bac65523ba2",
+    "scripts/enforce_release_gate.sh": "86d401caefeccfd7a6f2001bf8ca484269fa920044f1cfdd769391e9c5548a1f"
   },
   "focused": {
     "status": "PASS",
-    "distinctTests": 86,
-    "files": 11,
-    "note": "85 original distinct cases plus one Compose precedence regression; overlapping reruns not added"
+    "distinctTests": 101,
+    "files": 14,
+    "note": "86 original focused cases plus 15 release execution/startup/native nginx cases; overlapping runs not added"
   },
   "typecheck": {
     "status": "PASS",
@@ -45,7 +48,8 @@
     "Commit hook refused two synthetic literal database URLs; fixture URLs composed from synthetic parts and regression suites rerun; scanner not bypassed",
     "Merge with Claude sealed b7f32cbb had generated manifest conflicts, regenerated; natural-language ADR182 preserved, independent service identity ADR renumbered183",
     "Sealed preflight refused because DATABASE_URL is in canonical Compose .env, not provider .env.production; corrected exact precedence and added test, no live identity changes occurred",
-    "Shell helper cleanup removed051d5606 but refused1737c8f2; direct owner-authorized Git worktree removal completed clean inactive unsafe set"
+    "Shell helper cleanup removed051d5606 but refused1737c8f2; direct owner-authorized Git worktree removal completed clean inactive unsafe set",
+    "Full gate refused6190pass/3fail/3expected-fail/67skip: corrected exact release working directory and two stale expectations; Desk bundle budget preserved; repeated full gate pending"
   ],
   "liveBeforeRelease": {
     "nginxTest": "FAIL missing bound proof; nginx restart then PASS",
@@ -71,5 +75,20 @@
     "1737c8f2",
     "353c9e0c",
     "6af16cb8"
-  ]
+  ],
+  "updated": "2026-10-01",
+  "failedFullRun": {
+    "commit": "8b517972",
+    "passed": 6190,
+    "failed": 3,
+    "expectedFail": 3,
+    "skipped": 67,
+    "testFiles": 645,
+    "failures": [
+      "startup test still named migration072",
+      "worker blob-mount expectation still required write access",
+      "Desk build artifacts absent because gate commands ran in caller checkout"
+    ],
+    "liveApplied": false
+  }
 }
