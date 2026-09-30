@@ -78,7 +78,7 @@ export type IntakeAnswer =
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
       code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
         'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' | 'LIFECYCLE_MEDIA_NOT_ADMITTED' | 'LATE_REQUESTER_CHANGE' |
-        /** A group "/task …" or a change with no design waiting: with new-brief-required, asks for /new. */
+        /** Reserved for new-brief-required; Core does not send it, and the answer names no command (ADR-144). */
         'NEW_BRIEF_REQUIRED';
       reason?: string;
       /**

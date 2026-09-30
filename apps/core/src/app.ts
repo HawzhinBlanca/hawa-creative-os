@@ -237,15 +237,7 @@ export function createApp(options?: CreateAppOptions) {
     options?.telegramBridge ||
     new TelegramBridgeDaemon({
       botToken: process.env.TELEGRAM_BOT_TOKEN,
-      secretToken: process.env.TELEGRAM_WEBHOOK_SECRET || '',
       targetIngressUrl: 'http://127.0.0.1:8080/api/webhooks/telegram',
-      deskBaseUrl:
-        process.env.PUBLIC_TUNNEL_URL ||
-        process.env.HAWA_PUBLIC_URL ||
-        process.env.HAWA_DESK_BASE_URL ||
-        'http://127.0.0.1:8080',
-      actionTokenService: telegramActionTokenService,
-      allowedUserIds: telegramAllowedUsers,
     });
   // The office's switches, kept in Postgres so a restart keeps a thrown one (architecture programme
   // 1.3, G8; services/channel-kill-switches.ts). Without a database they are this app's alone.

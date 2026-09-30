@@ -1,13 +1,12 @@
 /**
  * Requester messages: conversation (see index.ts). What the bot answers when a message opens no
- * design and changes none (apps/core/src/services/lifecycle-chat-answers.ts, the bridge's own
- * `handleCommand`): a greeting, a question, /start and /help, a typed approval, where the chat's
- * designs stand, and lasting preferences said in chat (standing-rules-chat.ts, telegram-rules-intake.ts).
- * The commands themselves keep working for the office's power users; no answer names one.
+ * design and changes none (apps/core/src/services/lifecycle-chat-answers.ts): a greeting, a
+ * question, /start and /help, a typed approval, where the chat's designs stand, and lasting
+ * preferences said in chat (standing-rules-chat.ts, telegram-rules-intake.ts). The commands
+ * themselves keep working for the office's power users; no answer names one.
  * Every Sorani line awaits native review (SORANI_REVIEW.md).
  *
- * Every phrase here is plain text: no HTML and no Markdown marks, since the bridge sends /start's
- * answer in Markdown and Core sends the others in HTML.
+ * Every phrase here is plain text: no HTML and no Markdown marks; Core sends them in HTML.
  */
 import type { PhraseBook } from './types.js';
 
@@ -40,12 +39,6 @@ export const CONVERSATION_MESSAGES = {
     en: 'The office looks after every design. If something should be made again or changed, just tell me here in your own words.',
     ckb: 'ئۆفیسەکە ئاگای لە هەموو دیزاینەکانە. ئەگەر شتێک دەبێت دووبارە دروست بکرێتەوە یان بگۆڕدرێت، لێرە بە وشەی خۆت پێم بڵێ.',
   },
-  /** An office command sent by someone outside the office (#72). */
-  officeOnly: {
-    en: "That's something the office does.",
-    ckb: 'ئەوە کاری ئۆفیسەکەیە.',
-  },
-
   // /status (#71): the chat's latest designs, in words; no ids, no links.
   statusHeader: {
     en: '📊 Your designs',

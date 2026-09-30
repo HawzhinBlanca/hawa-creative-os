@@ -333,8 +333,9 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   // What is still on the old Telegram path (ADR-135): open legacy Telegram tasks, Core requester
-  // sends still queued and legacy Delivery workflow runs in flight. Stage 2 of the retirement, which
-  // deletes the code that finishes them, waits for `stage2Ready`. Read-only; administrators only.
+  // sends still queued and legacy Delivery workflow runs in flight. Stage 2 of the retirement has
+  // merged, so this is a standing check that every count stays 0 (legacy-path-status.ts).
+  // Read-only; administrators only.
   registerRoute('get', '/operations/legacy-path', async (c: Context) => {
     const denied = requireAdministrator(c); if (denied) return denied;
     if (!db) return problem(c, 503, 'Database Unavailable', 'The legacy path is read from PostgreSQL');
