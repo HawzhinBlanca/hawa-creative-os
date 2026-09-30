@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-09-30T09:07:26.073Z",
+  "model": "gpt-6.1-sol",
+  "id": "ordinary-english",
+  "reservation": {
+    "version": 1,
+    "policy": "studio-sol61-2026-09-30-v2-counted-images",
+    "requestSha256": "a0535898d7672dd7c2cc64fdb7d5fdc56d115319bb49150d18dd221989c78977",
+    "usd": 0.025663,
+    "inputTokens": 3925,
+    "outputTokens": 800
+  },
+  "nativeInputCount": {
+    "version": 1,
+    "model": "gpt-6.1-sol",
+    "requestSha256": "a0535898d7672dd7c2cc64fdb7d5fdc56d115319bb49150d18dd221989c78977",
+    "inputTokens": 1762,
+    "object": "response.input_tokens"
+  },
+  "imageSha256": "3c06940a9504d01ce9740692d41b93e34ca47922b34a969e0ddef4073905c4c7",
+  "syntheticOnly": true
+}

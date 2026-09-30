@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-09-30T09:18:10.288Z",
+  "model": "gpt-6-astra",
+  "briefSha256": "a9e3cf420450c31fe472d2715bdb41e0126e5b42cebc098ac45331c9a35fd19e",
+  "matchedBodySha256": "caf7812f70ce4e5921e982f507c657d1f6e2c187947cf7f6f7d63ffdfd814581",
+  "reservation": {
+    "version": 1,
+    "policy": "studio-2026-09-29-v3",
+    "requestSha256": "b7efff5b28ec948859a5b77f650c32288223c6f41ef4a2353babb81d2b8981e4",
+    "usd": 1.376383,
+    "inputTokens": 25617,
+    "outputTokens": 16000
+  },
+  "syntheticOnly": true
+}

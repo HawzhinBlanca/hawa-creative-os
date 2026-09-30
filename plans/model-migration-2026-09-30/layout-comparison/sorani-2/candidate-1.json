@@ -1,0 +1,124 @@
+{
+  "version": 2,
+  "width": 1080,
+  "height": 1350,
+  "genre": "poster",
+  "grid": {
+    "margin": 65,
+    "columns": 6,
+    "gutter": 22,
+    "baseline": 20
+  },
+  "background": {
+    "color": "#0A1628"
+  },
+  "shapes": [
+    {
+      "x": 76,
+      "y": 334,
+      "width": 929,
+      "height": 878,
+      "role": "panel",
+      "kind": "rect",
+      "color": "#1E3A5F"
+    },
+    {
+      "x": 464,
+      "y": 691,
+      "width": 151,
+      "height": 2,
+      "role": "rule",
+      "kind": "line",
+      "color": "#C5A059"
+    },
+    {
+      "x": 464,
+      "y": 988,
+      "width": 151,
+      "height": 2,
+      "role": "rule",
+      "kind": "line",
+      "color": "#C5A059"
+    }
+  ],
+  "text": [
+    {
+      "copyIndex": 0,
+      "role": "eyebrow",
+      "x": 108,
+      "y": 388,
+      "width": 864,
+      "height": 41,
+      "fontSize": 13,
+      "lineHeight": 1.6,
+      "letterSpacing": 0,
+      "fontFamily": "Noto Sans Arabic",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": true
+    },
+    {
+      "copyIndex": 1,
+      "role": "title",
+      "x": 108,
+      "y": 496,
+      "width": 864,
+      "height": 135,
+      "fontSize": 45,
+      "lineHeight": 1.6,
+      "letterSpacing": 0,
+      "fontFamily": "Amiri",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "rtl": true
+    },
+    {
+      "copyIndex": 2,
+      "role": "body",
+      "x": 108,
+      "y": 752,
+      "width": 864,
+      "height": 135,
+      "fontSize": 20,
+      "lineHeight": 1.6,
+      "letterSpacing": 0,
+      "fontFamily": "Noto Sans Arabic",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": true
+    },
+    {
+      "copyIndex": 3,
+      "role": "footer",
+      "x": 108,
+      "y": 1090,
+      "width": 864,
+      "height": 54,
+      "fontSize": 13,
+      "lineHeight": 1.6,
+      "letterSpacing": 0,
+      "fontFamily": "Noto Sans Arabic",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": true
+    }
+  ],
+  "logo": {
+    "x": 486,
+    "y": 138,
+    "width": 108,
+    "height": 108
+  },
+  "typeScale": {
+    "base": 20,
+    "ratio": 1.5
+  }
+}

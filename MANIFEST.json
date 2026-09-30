@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T08:32:33Z",
+  "generatedAt": "2026-09-30T09:33:47Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 564,
+  "fileCount": 628,
   "files": [
     {
       "path": ".dockerignore",
@@ -809,8 +809,13 @@
     },
     {
       "path": "adrs/148_sol61_candidate_and_jev_capability_review.md",
-      "sha256": "0ed3ae030bd845ad905562eb5bd2932564311a0f453e9893a583ebd0f82a14dd",
-      "bytes": 4229
+      "sha256": "9169b85dd75fa4ff3ae3464cc3b778a3532027446527f310654396ced7d01470",
+      "bytes": 4899
+    },
+    {
+      "path": "adrs/149_sol61_native_image_token_counting.md",
+      "sha256": "20d43bd8f4b0c95f15f2848d87a6d10badf85b69d27d68e79ea01e0c646de0db",
+      "bytes": 2913
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1508,9 +1513,34 @@
       "bytes": 384
     },
     {
+      "path": "plans/model-migration-2026-09-30/ACCESS_CONFIRMED.json",
+      "sha256": "253d25754259f822488af4497cb378157f3857a031fb8655add6a21460d9e964",
+      "bytes": 379
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/ACCESS_INITIAL.json",
+      "sha256": "f45f5262c135051adf5bff4936545fc02e94631cc56c026ff19a136f654b7cdc",
+      "bytes": 384
+    },
+    {
       "path": "plans/model-migration-2026-09-30/CANDIDATE.json",
-      "sha256": "5fad2761cf34cdc99cf54b18979e5f09cf76b400789df87e26841259a6159bdc",
-      "bytes": 1406
+      "sha256": "d9efa31679f16b806f36d21cd724338a9a3d9dfa91809b93daa45bb2c394f503",
+      "bytes": 1699
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/FOLLOWUP_NOTES.md",
+      "sha256": "b7cd1b43bd213e657a7e6a19076a8e83001328e313171c873a6954cea81af0a3",
+      "bytes": 3333
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/FOLLOWUP_VERIFICATION.json",
+      "sha256": "23fe933b48a7087aaf0eac9b35ca4390f89571298e20261a0737a10a94cd8f9c",
+      "bytes": 2109
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/MATCHED_SCREEN.json",
+      "sha256": "85c7ba9296ed18a8f2b45091af40787db1a9190963ea81662014d891cb08a496",
+      "bytes": 834
     },
     {
       "path": "plans/model-migration-2026-09-30/PRODUCTION.json",
@@ -1519,13 +1549,258 @@
     },
     {
       "path": "plans/model-migration-2026-09-30/README.md",
-      "sha256": "f108c37210885c676bcc30cf532115107c50426780a126d72f6afc6ba4fbe020",
-      "bytes": 2654
+      "sha256": "ea89f9f59f64ff9ab98013b627926af9d8fd2ddcb2cf59f0a104329fab4a22db",
+      "bytes": 3738
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/TOKEN_COUNTER_CAPABILITY.json",
+      "sha256": "b38823ecd7efd409e2dbd49207ef426e69354af4881ee4feb62ac8529c822eb0",
+      "bytes": 385
     },
     {
       "path": "plans/model-migration-2026-09-30/VERIFICATION.json",
       "sha256": "a05732fe8c82d1cd2c3c1c611b98316d57e523de0d4e7c1f1cadfec6c6feea04",
       "bytes": 1603
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/build.log",
+      "sha256": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+      "bytes": 303
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/comparison-retained.log",
+      "sha256": "c13b6c950469b1bd8fcb38440c2a6d5dad534a0ab7a7cfe4395712ac8142d1c7",
+      "bytes": 504
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/layout-script-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/lint.log",
+      "sha256": "cd10cac775845476ff749df2dbb8c40a5cc31a2ad3c58acfc430a71e3a11a3f6",
+      "bytes": 401
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/pack.log",
+      "sha256": "d1c70849ef92f58b73e6d1e8a225973dfef2ece4ee1bda8d59f8cfeefc469ff3",
+      "bytes": 70
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/production-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/regression.log",
+      "sha256": "489c4b9fdf4acf1cbba942fc5503691b4678a643096e1112b9ae6ec5566afea6",
+      "bytes": 1138
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/security.log",
+      "sha256": "e051781ac8f688688b382ecd676372d8ef33dff1c59460936dfa87ee929c247a",
+      "bytes": 9059
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/smoke-script-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/followup-logs/test-types.log",
+      "sha256": "079bd522503eb97e5ac4fcc0dfe889dcaaf3ad670842fb1ac78ebef06afba1b6",
+      "bytes": 155
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/COMPARISON.json",
+      "sha256": "05e608225ab4f05f99def3bd08a9110ce0aed66c4f5af87fed85c972b603f969",
+      "bytes": 58641
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/REVIEW.html",
+      "sha256": "b8781dcc0683e0f0e412658ef81e81f891b7981837f877d77b72a85312e7f532",
+      "bytes": 3650
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-1/QA.json",
+      "sha256": "e16e0fa8f0ab155b5ae12ac254a701d18805c941e12a1783994abfad2533bc0b",
+      "bytes": 11234
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-1/admission.json",
+      "sha256": "30da39fa0739f043db08654fc0edf4d434896e59f9ceb5f57a4b92dc365d27d3",
+      "bytes": 520
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-1/candidate-1.json",
+      "sha256": "89d7d2d00b19f076b5765dc4228c95d8ba3c38094bf131af863fc1dcb6c7e2ba",
+      "bytes": 2397
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-1/candidate-1.png",
+      "sha256": "b973c6ae0c566547a9aaf7bed6a00b71a4bb2fd572747120428a77bfca19481b",
+      "bytes": 40893
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-1/candidate-2.json",
+      "sha256": "ad977316745b56cd96870d3705a4b547ff6d460d0c6eabe3e7977465b3957b03",
+      "bytes": 2609
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-1/candidate-2.png",
+      "sha256": "14758ff9c6c7dc1cc61df58679ba38d9c42bf3f433df6acfd03674284afabcfe",
+      "bytes": 45866
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-1/candidate-3.json",
+      "sha256": "0b5e3c533399c94b2e7ac839d3d1b4f25acc068d4f7b0a758ce36088a7ee863d",
+      "bytes": 2393
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-1/candidate-3.png",
+      "sha256": "755c7425f4a01933a9e07a98bebb6751d26adad94b1d1acc05c4886ce39007f5",
+      "bytes": 43523
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-1/response.json",
+      "sha256": "be7cf49cff6a94e2cf5e12d935a3f369c36ec0490885eae827bda1d0fb20d9df",
+      "bytes": 23733
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-2/QA.json",
+      "sha256": "308a660bbdfe64acca095f5837a127649f585aa311faef7c530296ea396fa8ae",
+      "bytes": 11229
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-2/admission.json",
+      "sha256": "db57433452469310807a57cf7595ffdb51c1afa7b55a103f12aa93770c591d75",
+      "bytes": 514
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-2/candidate-1.json",
+      "sha256": "63ebcd2a33fb71f711a31205a088d9a02337d6c7324abbe57640f491aa82898f",
+      "bytes": 2369
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-2/candidate-1.png",
+      "sha256": "ab1a48f24eda0a474c48d65b68f52326f7ea7c56311d246d36185b48c69b718f",
+      "bytes": 41549
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-2/candidate-2.json",
+      "sha256": "c06a6f027be951a35576749a38f66d59d5772bc0ff3a493a1e57b29c46132ea0",
+      "bytes": 2568
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-2/candidate-2.png",
+      "sha256": "1c17171c469b4dce377c9d8331863e746a57c38c61311b9c921584c07fde6978",
+      "bytes": 45366
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-2/candidate-3.json",
+      "sha256": "252b4fffaf309885d2968b2dc8527da0fd356fe440d1fe9e9f9087949e7b89e1",
+      "bytes": 2363
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-2/candidate-3.png",
+      "sha256": "f6dad930c585390b0d462f487b45a4bb8d5cc660bab393a5fa00846e2791b24a",
+      "bytes": 47816
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/english-2/response.json",
+      "sha256": "4b761f804e13830084775ac8a9b680b661b19c3dbd721b5fcc82acdfbd5f5b1f",
+      "bytes": 23519
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-1/QA.json",
+      "sha256": "d70ac68a509ccae92c29eb438fa507ada392e8b3e97edc98a7a35597cca76d6b",
+      "bytes": 11531
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-1/admission.json",
+      "sha256": "478926150e016f59b3cd8e1c2a941b6b4fe7f38cd87cca7f116bca9083f6172f",
+      "bytes": 514
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-1/candidate-1.json",
+      "sha256": "e8eb55bef9180b6d5dc8dae47b45d81e84ea6e4fadeeebb4461870034928b174",
+      "bytes": 2376
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-1/candidate-1.png",
+      "sha256": "004fb90d0ec7e8c0de1bae5a953b46abde86f3ed165c67bead5df8517531c9cd",
+      "bytes": 41927
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-1/candidate-2.json",
+      "sha256": "d8599c40e1896d1c1e7a3f6dc67a32bd1d1fda05fc81ddc7835620d1b3c87d03",
+      "bytes": 2602
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-1/candidate-2.png",
+      "sha256": "d67c5344c2b5845876c997db2c60458107a8a9b57ce6632958761bed6bee4da2",
+      "bytes": 43916
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-1/candidate-3.json",
+      "sha256": "1ad48cddb80d905094bf09c0b07897fadcc07f526862a23dfa42d10632090a1c",
+      "bytes": 2592
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-1/candidate-3.png",
+      "sha256": "4dedb72ba0613051f35858cf9e4b23c2c07106f97a11b5b21b1617a60a69b096",
+      "bytes": 53506
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-1/response.json",
+      "sha256": "ce4e1cb80a853f805dbf71889b5cd700fb6ed8cd7ee66b626ddf1aa266e10ed7",
+      "bytes": 23133
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-2/QA.json",
+      "sha256": "bb16a30b7d0ccb0b0a6a7f777ba8f339fb7c6343b02aaac78f4c10632ac8d26b",
+      "bytes": 11763
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-2/admission.json",
+      "sha256": "373a44d3c74428e23d5625996fb2c7ad3370f3b04cf3ff59e5bfff1fe3891d5e",
+      "bytes": 520
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-2/candidate-1.json",
+      "sha256": "9b5b4a25f2d928aaa5144e2f8c05f31490ee6e0acaff3cce61aa2ad1b9b313de",
+      "bytes": 2258
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-2/candidate-1.png",
+      "sha256": "53f29f81b4291dc95bd0e52214e4125b8fa2a2c7298ab95fbeed448deb42e70a",
+      "bytes": 36968
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-2/candidate-2.json",
+      "sha256": "725206000899c90e1740f1e0124e64f449415066a4760803a77d29b133e74719",
+      "bytes": 2438
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-2/candidate-2.png",
+      "sha256": "3b8b70795961786edcae5dff7343c5f06e68c9969fce16d187427e88f9149804",
+      "bytes": 38971
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-2/candidate-3.json",
+      "sha256": "56caa7df8008df87e86b5cc84b95dd592beb2aa300a649cf63394bc697f401ce",
+      "bytes": 2432
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-2/candidate-3.png",
+      "sha256": "6e30b29cc0627b813ee8d482c1bb062344b646bb5d6c5826262dc668bc281cbc",
+      "bytes": 38038
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/layout-comparison/sorani-2/response.json",
+      "sha256": "d8923eef499ccd7f3bb92e75a3c2f2fab394ee8465b17d2a638550eb615fb83e",
+      "bytes": 24467
     },
     {
       "path": "plans/model-migration-2026-09-30/lint.log",
@@ -1561,6 +1836,41 @@
       "path": "plans/model-migration-2026-09-30/tests-regression.log",
       "sha256": "fe9c876ef1619d1d5e9da64ecc0f23f8521ddee2f64efd77438487fd2f0141f2",
       "bytes": 2011
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/vision-smoke-v2/SUMMARY.json",
+      "sha256": "8e4badbb58547a668de4409c62b83bd9badf375ae340bc729db1965ef24b2c7a",
+      "bytes": 2138
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/vision-smoke-v2/ordinary-english-admission.json",
+      "sha256": "48dfe2171326b7fbfab2f08ce3437732885a70f87202dff5cc592b968584dd6b",
+      "bytes": 696
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/vision-smoke-v2/ordinary-english-result.json",
+      "sha256": "cae2ffb79f44412b4164ad5a92a1b77a1b29628c03fdde4a1ec8e2d5dd1b5816",
+      "bytes": 829
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/vision-smoke-v2/reversed-sorani-admission.json",
+      "sha256": "0b389159938b905a3e96c14c14780ae54f94080d6282e38bcae4e27d20914b47",
+      "bytes": 695
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/vision-smoke-v2/reversed-sorani-result.json",
+      "sha256": "6188c7e5c6203fba6d94a406a364aa061ac4ad1ccdf1e8afbc2ea6858a148069",
+      "bytes": 840
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/vision-smoke/ordinary-english-admission.json",
+      "sha256": "c5da23d45ea406d4a0c5db0a44750a49dc7e603134b2649f958b7872c1601448",
+      "bytes": 696
+    },
+    {
+      "path": "plans/model-migration-2026-09-30/vision-smoke/ordinary-english-result.json",
+      "sha256": "c786149a60621a7ffc92755281ea4145a38fa27eb0c6aa6a498c77f490b08517",
+      "bytes": 829
     },
     {
       "path": "plans/mvp-checklist.md",
@@ -1994,8 +2304,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "4dc73cc582ae26d6f39625f28eeaafaf7fb9c21b60f4a66d3714a1fda018a906",
-      "bytes": 508044
+      "sha256": "afd420dc3b6262b01155026275f481e6096f70c0b9fcfef84cc80ada2e6c5c17",
+      "bytes": 512825
     },
     {
       "path": "plans/user-stories.csv",
@@ -2329,8 +2639,18 @@
     },
     {
       "path": "scripts/experiments/sol61-access.ts",
-      "sha256": "ae132d3126cc6de33e00f3b5765114c73a34ef230051744c112f2d2f844db899",
-      "bytes": 2363
+      "sha256": "0ea6c0bb5ca930b843e5a9fcb140bdd1bc029e94e683c827a13b1709bdd1fff1",
+      "bytes": 2437
+    },
+    {
+      "path": "scripts/experiments/sol61-layout-comparison.ts",
+      "sha256": "a81d0c8c0203c9cfc6de92457ddc949ef473761360daa919ccc954fff92f2811",
+      "bytes": 10401
+    },
+    {
+      "path": "scripts/experiments/sol61-vision-smoke.ts",
+      "sha256": "724879bb3f3c74406aae6b5086b8177605a7840efb05acb77d477754f49202d9",
+      "bytes": 7456
     },
     {
       "path": "scripts/export_live_f04_proof.ts",

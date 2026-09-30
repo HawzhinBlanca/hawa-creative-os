@@ -4,7 +4,7 @@ import { resolve, dirname } from 'node:path';
 
 const target = 'gpt-6.1-sol';
 const envPath = resolve('infra/docker/.env.production');
-const artifact = resolve('plans/model-migration-2026-09-30/ACCESS.json');
+const artifact = resolve(`plans/model-migration-2026-09-30/access-history/${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
 
 async function main(): Promise<void> {
   const local = await readFile(envPath, 'utf8');
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
     catalog, targetAccess, baselineAccess, available, verdict: available ? 'ACCESS_ONLY' : 'BLOCKED_ACCESS',
     paidCalls: 0, productionPromoted: false, creativeQualityEvaluated: false };
   await mkdir(dirname(artifact), { recursive: true });
-  await writeFile(artifact, JSON.stringify(evidence, null, 2) + '\n');
+  await writeFile(artifact, JSON.stringify(evidence, null, 2) + '\n', { flag: 'wx' });
   console.log(JSON.stringify(evidence));
   if (!available) process.exitCode = 2;
 }

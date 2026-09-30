@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { assertModelAllowed, modelSupportsReasoningEffort, resolveModel } from '@hawa/domain';
+import { StudioReservationError, type StudioNativeInputCount } from './spending-reservation.js';
 import {
   StudioModelError,
   StudioModelHttpError,
@@ -21,6 +22,8 @@ export interface OpenAiStudioClientOptions {
   circuitBreaker?: any;
   primaryModel?: string;
   fallbackModel?: string;
+  /** Durable candidate count reuse, before any counting transport. Completion admission still rechecks replay. */
+  retainedInputCount?: (requestSha256: string) => StudioNativeInputCount | undefined;
 }
 
 export interface OpenAiMessage {
@@ -337,6 +340,7 @@ export class OpenAiStudioClient {
   private readonly timeoutMs: number;
   private readonly breaker: any;
   private readonly pricing: any;
+  private readonly retainedInputCount?: OpenAiStudioClientOptions['retainedInputCount'];
   private static readonly unpricedWarned = new Set<string>();
 
   constructor(options: OpenAiStudioClientOptions = {}) {
@@ -346,11 +350,53 @@ export class OpenAiStudioClient {
     this.timeoutMs = options.timeoutMs || 240000;
     this.breaker = options.circuitBreaker || new OpenAiCircuitBreaker();
     this.pricing = this.loadPricing();
+    this.retainedInputCount = options.retainedInputCount;
     this.primaryModel = options.primaryModel || resolveModel('text');
     this.fallbackModel = options.fallbackModel || resolveModel('text');
   }
 
   get circuitBreaker() { return this.breaker; }
+
+  /** ADR-149: native image count is bound to the unchanged completion body, before paid admission. */
+  private async countSolImages(body: string, model: string, messages: OpenAiMessage[]): Promise<StudioNativeInputCount | undefined> {
+    if (model !== 'gpt-6.1-sol') return undefined;
+    const images = messages.flatMap(message => Array.isArray(message.content)
+      ? message.content.filter(part => part.type === 'image_url').map(part => {
+        if (part.type !== 'image_url' || !part.image_url.url.startsWith('data:image/')) {
+          throw new StudioReservationError('Sol counting requires immutable inline images.');
+        }
+        return { type: 'input_image', image_url: part.image_url.url, detail: part.image_url.detail ?? 'auto' };
+      }) : []);
+    if (!images.length) return undefined;
+    const requestSha256 = createHash('sha256').update(body).digest('hex');
+    const retained = this.retainedInputCount?.(requestSha256);
+    if (retained) {
+      if (retained.version !== 1 || retained.model !== model || retained.requestSha256 !== requestSha256 ||
+          retained.object !== 'response.input_tokens' || !Number.isSafeInteger(retained.inputTokens) ||
+          retained.inputTokens <= 0 || retained.inputTokens > 1050000) {
+        throw new StudioReservationError('Retained Sol input count is invalid; no transport permitted.');
+      }
+      return { ...retained };
+    }
+    try {
+      const response = await this.fetcher(`${this.baseUrl}/responses/input_tokens`, {
+        method: 'POST', headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, input: [{ role: 'user', content: images }] }),
+        signal: AbortSignal.timeout(Math.min(this.timeoutMs, 20000)),
+      });
+      if (!response.ok) throw new StudioReservationError('Sol image count was refused; no completion dispatched.');
+      const count = await response.json() as { object?: unknown; input_tokens?: unknown };
+      if (count.object !== 'response.input_tokens' || typeof count.input_tokens !== 'number' ||
+          !Number.isSafeInteger(count.input_tokens) || count.input_tokens <= 0 || count.input_tokens > 1050000) {
+        throw new StudioReservationError('Sol image count is invalid; no completion dispatched.');
+      }
+      return { version: 1, model: 'gpt-6.1-sol', requestSha256,
+        inputTokens: count.input_tokens, object: 'response.input_tokens' };
+    } catch (error) {
+      if (error instanceof StudioReservationError) throw error;
+      throw new StudioReservationError('Sol image count unavailable; no completion dispatched.');
+    }
+  }
 
   private loadPricing(): any {
     // Looks beside the compiled module and beside the source. tsc does not copy JSON, so for a
@@ -431,7 +477,7 @@ export class OpenAiStudioClient {
     timeoutMs?: number;
     temperature?: number;
     maxTokens?: number;
-    beforeDispatch?: (body: string) => Promise<void>;
+    beforeDispatch?: (body: string, nativeCount?: StudioNativeInputCount) => Promise<void>;
     reasoningEffort?: 'low' | 'medium' | 'high';
   }): Promise<OpenAiStructuredResponse<T>> {
     const model = options.model || resolveModel('text');
@@ -478,7 +524,9 @@ export class OpenAiStudioClient {
       throw new TypeError('maxTokens must be a positive safe integer.');
     }
     const body = JSON.stringify(payload);
-    await options.beforeDispatch?.(body);
+    // Read from the frozen body, so caller mutation during counting cannot change the counted images.
+    const nativeCount = await this.countSolImages(body, model, (JSON.parse(body) as { messages: OpenAiMessage[] }).messages);
+    await options.beforeDispatch?.(body, nativeCount);
     const startTime = Date.now();
     const timeout = options.timeoutMs || this.timeoutMs;
 
@@ -630,7 +678,7 @@ export class OpenAiStudioClient {
     timeoutMs?: number;
     temperature?: number;
     maxTokens?: number;
-    beforeDispatch?: (body: string) => Promise<void>;
+    beforeDispatch?: (body: string, nativeCount?: StudioNativeInputCount) => Promise<void>;
   }): Promise<{ data: T; rawText: string; receipt: any }> {
     const model = params.model || this.primaryModel;
     assertModelAllowed(model);

@@ -1,0 +1,30 @@
+{
+  "id": "ordinary-english",
+  "checkedAt": "2026-09-30T09:07:29.442Z",
+  "status": "failed",
+  "data": {
+    "left": "red",
+    "right": "blue",
+    "copied": "Hello, research 2026.",
+    "missingDate": true
+  },
+  "receipt": {
+    "id": "chatcmpl-ETkZb7roVHQYodwLlBrBEEHd9ENm1",
+    "responseId": "chatcmpl-ETkZb7roVHQYodwLlBrBEEHd9ENm1",
+    "xRequestId": "req_11e7564ab52348d899941d77c97e30d6",
+    "model": "gpt-6.1-sol",
+    "inputTokens": 1870,
+    "outputTokens": 34,
+    "reasoningTokens": 0,
+    "cacheCreationTokens": 0,
+    "cacheReadTokens": 0,
+    "costUsd": 0.0204,
+    "costBasis": "estimate",
+    "servedModel": "gpt-6.1-sol",
+    "sha256": "31342e58dd7f3b59818599f01d274cbad52d9aadff39a489ea4bf9fa6d5aaf5a",
+    "latencyMs": 3367,
+    "attempts": 1
+  },
+  "accountedUsd": 0.0204,
+  "creativeAdmission": false
+}

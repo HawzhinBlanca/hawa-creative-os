@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-09-30T09:09:35.241Z",
+  "model": "gpt-6.1-sol",
+  "id": "reversed-sorani",
+  "reservation": {
+    "version": 1,
+    "policy": "studio-sol61-2026-09-30-v2-counted-images",
+    "requestSha256": "e8ebfb553a7dbb807e38be16221a30200ae6bf0d757ad2c6fc509fd8362544c9",
+    "usd": 0.026122,
+    "inputTokens": 4027,
+    "outputTokens": 800
+  },
+  "nativeInputCount": {
+    "version": 1,
+    "model": "gpt-6.1-sol",
+    "requestSha256": "e8ebfb553a7dbb807e38be16221a30200ae6bf0d757ad2c6fc509fd8362544c9",
+    "inputTokens": 1762,
+    "object": "response.input_tokens"
+  },
+  "imageSha256": "c749dbc25d08ec44e4a66e63dcace3ffe108135e8b13e1852a5f21671d751c6a",
+  "syntheticOnly": true
+}

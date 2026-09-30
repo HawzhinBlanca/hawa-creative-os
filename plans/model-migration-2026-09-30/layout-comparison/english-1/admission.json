@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-09-30T09:13:24.638Z",
+  "model": "gpt-6.1-sol",
+  "briefSha256": "43299b870366b1e4f19d9e83cab020dd0a2b2b7fa87d2f4c0bb2220f1ba28bcd",
+  "matchedBodySha256": "ff9030896bf8393e80f3dc03d5d8c24e57d6aca41de956e523c63d3159a86dbe",
+  "reservation": {
+    "version": 1,
+    "policy": "studio-sol61-2026-09-30-v1",
+    "requestSha256": "a92c2485ad5d5f86cba273551e126c20a41632573c3aef12c23065270b6b12a7",
+    "usd": 0.274611,
+    "inputTokens": 25469,
+    "outputTokens": 16000
+  },
+  "syntheticOnly": true
+}

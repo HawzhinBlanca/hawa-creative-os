@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "checkedAt": "2026-09-30T08:49:33.248Z",
+  "requestedModel": "gpt-6.1-sol",
+  "catalog": {
+    "status": 200,
+    "present": true
+  },
+  "targetAccess": {
+    "status": 200
+  },
+  "baselineAccess": {
+    "status": 200
+  },
+  "available": true,
+  "verdict": "ACCESS_ONLY",
+  "paidCalls": 0,
+  "productionPromoted": false,
+  "creativeQualityEvaluated": false
+}

@@ -1,0 +1,3 @@
+$ pnpm build:native && tsc -b && node -e "require('node:fs').copyFileSync('packages/creative/src/studio/pricing.json','packages/creative/dist/studio/pricing.json')"
+$ node packages/creative/native/build.mjs
+{"version":1,"runtime":"pango=1.58.2;cairo=1.18.4;fontconfig=21803;harfbuzz=14.4.0;language=c"}

@@ -1,0 +1,5 @@
+{"id":"english-1","model":"gpt-6.1-sol","costUsd":0.044926,"latencyMs":50072,"candidates":3,"hardQaPassed":3}
+{"id":"english-2","model":"gpt-6-astra","costUsd":0.21423,"latencyMs":59656,"candidates":3,"hardQaPassed":3}
+{"id":"sorani-1","model":"gpt-6-astra","costUsd":0.189681,"latencyMs":62935,"candidates":3,"hardQaPassed":3}
+{"id":"sorani-2","model":"gpt-6.1-sol","costUsd":0.039443,"latencyMs":47726,"candidates":3,"hardQaPassed":3}
+{"status":"SCREEN_ONLY","transportCalls":0,"accountedUsd":0.48828}

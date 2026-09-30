@@ -1,0 +1,30 @@
+{
+  "id": "reversed-sorani",
+  "checkedAt": "2026-09-30T09:09:37.678Z",
+  "status": "passed",
+  "data": {
+    "left": "blue",
+    "right": "red",
+    "copied": "سڵاو، ڕێکەوت ٢٠٢٦",
+    "missingDate": true
+  },
+  "receipt": {
+    "id": "chatcmpl-ETkbfXWAWhH2m9i5RIelnkmJCknwo",
+    "responseId": "chatcmpl-ETkbfXWAWhH2m9i5RIelnkmJCknwo",
+    "xRequestId": "req_42825b52b6ec46bda3c94e307eb5668a",
+    "model": "gpt-6.1-sol",
+    "inputTokens": 1896,
+    "outputTokens": 42,
+    "reasoningTokens": 0,
+    "cacheCreationTokens": 0,
+    "cacheReadTokens": 0,
+    "costUsd": 0.004212,
+    "costBasis": "usage",
+    "servedModel": "gpt-6.1-sol",
+    "sha256": "e4ba33c4af44942f108df4a1254d083961fee3f05dad33e0bd92be8f64b807c2",
+    "latencyMs": 2436,
+    "attempts": 1
+  },
+  "accountedUsd": 0.004212,
+  "creativeAdmission": false
+}

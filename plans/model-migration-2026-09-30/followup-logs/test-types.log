@@ -1,0 +1,3 @@
+$ tsx scripts/typecheck_tests.ts
+[Typecheck:tests] Compiling 604/604 active test roots and their dependencies.
+[Typecheck:tests] All test projects passed.

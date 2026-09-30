@@ -1,0 +1,12 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_b89eb39aa0b6ef02 and hawa_tpl_repair_b89eb39aa0b6ef02 (38 ms)
+{"level":"warn","time":"2026-09-30T09:20:04.454Z","service":"core","msg":"[studio] run fb8b1c4e-d56f-496e-b4dd-8a0f7e4401e3: the conceiving resume did not read 1 saved result(s): d141610c-a719-4a70-9b82-caed0522dbde (brief/images-rebrief attempt 1)."}
+{"level":"warn","time":"2026-09-30T09:20:04.670Z","service":"core","msg":"[studio] run eafb4116-aeba-438f-9a10-5f40ccfebc54: the conceiving resume did not read 2 saved result(s): 757e07c2-cc42-4275-9728-290e825105af (brief/images-rebrief attempt 1), 0e5b66ec-1fcd-4e2d-85bc-1a83cd63a21a (concepts/board attempt 1)."}
+{"level":"warn","time":"2026-09-30T09:20:04.683Z","service":"core","msg":"[studio] run faa5eaaa-88c5-4fb8-8ac0-4f5e2be3293d: the briefing resume did not read 1 saved result(s): 9cc5ce3e-2e5f-40b5-ac8a-c20c7bffd19f (brief/request attempt 1)."}
+
+ Test Files  6 passed (6)
+      Tests  62 passed (62)
+   Start at  12:20:02
+   Duration  14.00s (transform 2.87s, setup 586ms, import 4.27s, tests 14.39s, environment 0ms)

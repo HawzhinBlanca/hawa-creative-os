@@ -161,4 +161,52 @@ describe.skipIf(!url)('retained paid replies recover across service instances', 
       expect(await repo.getCallsForRun(runId, scope.tenantId)).toHaveLength(2);
     } finally { await peer.destroy(); }
   });
+
+  it('retains Sol image counts in admission and recovers the answer without any provider transport', async () => {
+    vi.stubEnv('HAWA_MODEL_TIER', 'dev');
+    await create();
+    await repo.updateRunStatus(runId, scope.tenantId, 'laying_out');
+    const run = (await repo.getRunById(runId, scope.tenantId))!;
+    const png = renderMotifPng('gradient-wash', { width: 16, height: 16, palette: ['#1E3A5F'], seed: 1 });
+    const params = { model: 'gpt-6.1-sol', maxTokens: 1000,
+      messages: [{ role: 'user' as const, content: [{ type: 'image_url' as const,
+        image_url: { url: `data:image/png;base64,${png.toString('base64')}`, detail: 'high' as const } }] }],
+      jsonSchema: { name: 'test', schema: { type: 'object' } } };
+    const fetcher = vi.fn<typeof fetch>(async transport => String(transport).endsWith('/responses/input_tokens')
+      ? new Response(JSON.stringify({ object: 'response.input_tokens', input_tokens: 100 }))
+      : new Response(JSON.stringify({ id: 'synthetic-sol', model: 'gpt-6.1-sol',
+        usage: { prompt_tokens: 120, completion_tokens: 20 },
+        choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }] })));
+    const budget: Budget = { maxUsd: 2, maxCalls: 1, spentUsd: 0, calls: 0 };
+    const first = await (new DesignStudioService(db, undefined, { fetcher, apiKey: 'synthetic-key' }) as unknown as ContextHarness)
+      .createStageContext(scope, run, 'laying_out', budget, async cost => { budget.spentUsd += cost; }, []);
+    const original = await first.client.createStructuredCompletion(params);
+    const calls = await repo.getCallsForRun(runId, scope.tenantId);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(calls).toMatchObject([{ status: 'ok', has_retained_result: true,
+      reservation: { policy: 'studio-sol61-2026-09-30-v2-counted-images',
+        nativeInputCount: { model: 'gpt-6.1-sol', inputTokens: 100, object: 'response.input_tokens' } } }]);
+    const noTransport = vi.fn<typeof fetch>(async () => { throw new Error('No replay transport permitted'); });
+    const noSpend = vi.fn(async (_cost: number) => {});
+    const second = await (new DesignStudioService(db, undefined, { fetcher: noTransport, apiKey: 'synthetic-key' }) as unknown as ContextHarness)
+      .createStageContext(scope, run, 'laying_out', budget, noSpend, calls);
+    expect(await second.client.createStructuredCompletion(params)).toEqual(original);
+    expect(noTransport).not.toHaveBeenCalled(); expect(noSpend).not.toHaveBeenCalled();
+    expect(await repo.getCallsForRun(runId, scope.tenantId)).toHaveLength(1);
+  });
+
+  it('admits no paid call when Sol input counting fails', async () => {
+    vi.stubEnv('HAWA_MODEL_TIER', 'dev'); await create();
+    await repo.updateRunStatus(runId, scope.tenantId, 'laying_out');
+    const run = (await repo.getRunById(runId, scope.tenantId))!;
+    const fetcher = vi.fn<typeof fetch>(async () => new Response('Unavailable', { status: 503 }));
+    const spend = vi.fn(async (_cost: number) => {});
+    const ctx = await (new DesignStudioService(db, undefined, { fetcher, apiKey: 'synthetic-key' }) as unknown as ContextHarness)
+      .createStageContext(scope, run, 'laying_out', { maxUsd: 2, maxCalls: 1, spentUsd: 0, calls: 0 }, spend, []);
+    await expect(ctx.client.createStructuredCompletion({ model: 'gpt-6.1-sol', maxTokens: 1000,
+      messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,fixture' } }] }],
+      jsonSchema: { name: 'test', schema: { type: 'object' } } })).rejects.toMatchObject({ code: 'STUDIO_BUDGET_UNQUOTABLE' });
+    expect(fetcher).toHaveBeenCalledTimes(1); expect(spend).not.toHaveBeenCalled();
+    expect(await repo.getCallsForRun(runId, scope.tenantId)).toHaveLength(0);
+  });
 });

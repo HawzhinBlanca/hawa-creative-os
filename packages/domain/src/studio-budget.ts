@@ -75,6 +75,14 @@ export interface StudioCallReservation {
   usd: number;
   inputTokens: number;
   outputTokens: number;
+  /** Non-content evidence used to bound media input; retained in the admission JSON. */
+  nativeInputCount?: {
+    version: 1;
+    model: string;
+    requestSha256: string;
+    inputTokens: number;
+    object: string;
+  };
 }
 
 /** Round obligations up; tolerate only binary representation error, never a micro-dollar. */
@@ -90,6 +98,10 @@ export function validateStudioReservation(value: StudioCallReservation): void {
       !Number.isSafeInteger(value.inputTokens) || value.inputTokens < 0 ||
       !Number.isSafeInteger(value.outputTokens) || value.outputTokens < 1) throw invalid();
   if (studioUsdMicros(value.usd) / 1_000_000 !== value.usd) throw invalid();
+  const count = value.nativeInputCount;
+  if (count && (count.version !== 1 || typeof count.model !== 'string' || !count.model ||
+      typeof count.object !== 'string' || !count.object || count.requestSha256 !== value.requestSha256 ||
+      !Number.isSafeInteger(count.inputTokens) || count.inputTokens <= 0 || count.inputTokens > value.inputTokens)) throw invalid();
 }
 
 export interface StudioBudgetUsage {

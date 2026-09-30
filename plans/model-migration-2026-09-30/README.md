@@ -2,7 +2,22 @@
 
 Requirements: FR-056–060, FR-062, FR-079. Decision: [ADR-148](../../adrs/148_sol61_candidate_and_jev_capability_review.md).
 
-## Actual state
+## Current follow-up
+
+Sol access is available using the same key. Native image counting, durable reservation evidence and transport-free retained replay are implemented under [ADR-149](../../adrs/149_sol61_native_image_token_counting.md). Two image/schema cases and a matched two-brief layout screen passed. All12 prepared candidates pass hard QA; this small screen is not creative admission. Production stays on Astra/Mini pending the200-task corpus, native/blinded human review and staged canary.
+
+See FOLLOWUP_VERIFICATION.json, FOLLOWUP_NOTES.md and MATCHED_SCREEN.json. Initial evidence below is retained with its original date/state.
+
+Reproduce only after `pnpm build`:
+
+```sh
+pnpm exec tsx scripts/experiments/sol61-vision-smoke.ts
+pnpm exec tsx scripts/experiments/sol61-layout-comparison.ts
+```
+
+Saved successful responses are reused; unresolved admitted requests or failed results are held. Do not delete receipts to trigger retries. The local sample gallery is layout-comparison/REVIEW.html.
+
+## Initial preparation checkpoint (historical)
 
 Candidate implementation is prepared for text dispatch on the development/evaluation tier;
 production model selection has not changed. No paid request, deployment, provider grant,
@@ -22,7 +37,7 @@ but the current official vision sizing guide omits Sol 6.1's sizing/multiplier e
 Images refuse reservation before dispatch; inventing an Astra-equivalent bound would
 make this preparation unsafe. This is a stated remaining implementation gate.
 
-## Reproduce the access check
+## Reproduce the access check (now appends access-history receipts)
 
 From the repository root after owner key-reuse authorization:
 
@@ -33,7 +48,7 @@ pnpm exec tsx scripts/experiments/sol61-access.ts
 This sends only authenticated model metadata reads to OpenAI and writes safe evidence.
 It prints no credential, provider error body, prompt or image. No paid calls are made.
 
-## Promotion remains blocked
+## Initial remaining gates (historical)
 
 1. Enable Sol 6.1 access for the existing OpenAI API project/account; changing a Codex chat model does not enable application API access.
 2. Qualify model-specific image budgeting and actual schema+image behavior.

@@ -61,7 +61,7 @@ describe('ADR-148 Sol 6.1 candidate transport and budget', () => {
     await expect(client.createStructuredCompletion({ model: 'gpt-6.1-sol',
       messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'https://example.com/test.png' } }] }],
       jsonSchema: { name: 'test', schema: { type: 'object' } }, beforeDispatch: async b => { reserveStudioText(b); },
-    })).rejects.toThrow('image token bounds are not qualified');
+    })).rejects.toThrow('immutable inline images');
     expect(fetcher).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,133 @@
+{
+  "version": 2,
+  "width": 1080,
+  "height": 1350,
+  "genre": "poster",
+  "grid": {
+    "margin": 65,
+    "columns": 12,
+    "gutter": 16,
+    "baseline": 18
+  },
+  "background": {
+    "color": "#0A1628"
+  },
+  "shapes": [
+    {
+      "x": 130,
+      "y": 348,
+      "width": 875,
+      "height": 864,
+      "role": "panel",
+      "kind": "rect",
+      "color": "#1E3A5F"
+    },
+    {
+      "x": 1010,
+      "y": 348,
+      "width": 2,
+      "height": 864,
+      "role": "rule",
+      "kind": "line",
+      "color": "#C5A059"
+    },
+    {
+      "x": 486,
+      "y": 732,
+      "width": 151,
+      "height": 2,
+      "role": "rule",
+      "kind": "line",
+      "color": "#C5A059"
+    },
+    {
+      "x": 486,
+      "y": 1023,
+      "width": 151,
+      "height": 2,
+      "role": "rule",
+      "kind": "line",
+      "color": "#C5A059"
+    }
+  ],
+  "text": [
+    {
+      "copyIndex": 0,
+      "role": "eyebrow",
+      "x": 151,
+      "y": 402,
+      "width": 810,
+      "height": 41,
+      "fontSize": 12,
+      "lineHeight": 1.6,
+      "letterSpacing": 0,
+      "fontFamily": "IBM Plex Sans Arabic",
+      "color": "#FDF8F3",
+      "align": "right",
+      "bold": false,
+      "italic": false,
+      "rtl": true
+    },
+    {
+      "copyIndex": 1,
+      "role": "title",
+      "x": 151,
+      "y": 523,
+      "width": 810,
+      "height": 135,
+      "fontSize": 61,
+      "lineHeight": 1.6,
+      "letterSpacing": 0,
+      "fontFamily": "IBM Plex Sans Arabic",
+      "color": "#FDF8F3",
+      "align": "right",
+      "bold": true,
+      "italic": false,
+      "rtl": true
+    },
+    {
+      "copyIndex": 2,
+      "role": "body",
+      "x": 151,
+      "y": 807,
+      "width": 810,
+      "height": 122,
+      "fontSize": 18,
+      "lineHeight": 1.6,
+      "letterSpacing": 0,
+      "fontFamily": "IBM Plex Sans Arabic",
+      "color": "#FDF8F3",
+      "align": "right",
+      "bold": false,
+      "italic": false,
+      "rtl": true
+    },
+    {
+      "copyIndex": 3,
+      "role": "footer",
+      "x": 151,
+      "y": 1118,
+      "width": 810,
+      "height": 54,
+      "fontSize": 12,
+      "lineHeight": 1.6,
+      "letterSpacing": 0,
+      "fontFamily": "IBM Plex Sans Arabic",
+      "color": "#FDF8F3",
+      "align": "right",
+      "bold": false,
+      "italic": false,
+      "rtl": true
+    }
+  ],
+  "logo": {
+    "x": 896,
+    "y": 139,
+    "width": 108,
+    "height": 108
+  },
+  "typeScale": {
+    "base": 18,
+    "ratio": 1.5
+  }
+}

@@ -1,0 +1,518 @@
+{
+  "status": "accepted",
+  "model": "gpt-6-astra",
+  "briefSha256": "a9e3cf420450c31fe472d2715bdb41e0126e5b42cebc098ac45331c9a35fd19e",
+  "accountedUsd": 0.189681,
+  "response": {
+    "data": {
+      "layouts": [
+        {
+          "id": "01",
+          "conceptTitle": "Centered learning monolith",
+          "compositionArchetype": "monolith_centered",
+          "typeScale": {
+            "base": 16,
+            "ratio": 1.5
+          },
+          "grid": {
+            "margin": 0.06,
+            "columns": 6,
+            "gutter": 0.02,
+            "baseline": 0.008
+          },
+          "background": {
+            "color": "#0A1628"
+          },
+          "logo": {
+            "x": 0.45,
+            "y": 0.07,
+            "width": 0.1,
+            "height": 0.08
+          },
+          "photos": [],
+          "art": {
+            "source": "procedural",
+            "prompt": "Fine navy paper grain",
+            "motif": "gradient-wash",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1
+            },
+            "opacity": 0.15,
+            "calmRegion": {
+              "x": 0.06,
+              "y": 0.23,
+              "width": 0.88,
+              "height": 0.59
+            }
+          },
+          "shapes": [
+            {
+              "x": 0.06,
+              "y": 0.23,
+              "width": 0.88,
+              "height": 0.59,
+              "kind": "rect",
+              "color": "#1E3A5F",
+              "opacity": 0.45,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "panel"
+            },
+            {
+              "x": 0.42,
+              "y": 0.46,
+              "width": 0.16,
+              "height": 0.00148148,
+              "kind": "rect",
+              "color": "#C5A059",
+              "opacity": 1,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "rule"
+            },
+            {
+              "x": 0.42,
+              "y": 0.65,
+              "width": 0.16,
+              "height": 0.00148148,
+              "kind": "rect",
+              "color": "#C5A059",
+              "opacity": 1,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "rule"
+            }
+          ],
+          "text": [
+            {
+              "copyIndex": 0,
+              "role": "eyebrow",
+              "x": 0.1,
+              "y": 0.265,
+              "width": 0.8,
+              "height": 0.035,
+              "fontSize": 0.0118518519,
+              "lineHeight": 1.4,
+              "letterSpacing": 0,
+              "fontFamily": "Amiri",
+              "color": "#C5A059",
+              "align": "center",
+              "bold": false,
+              "italic": false,
+              "rtl": true
+            },
+            {
+              "copyIndex": 1,
+              "role": "title",
+              "x": 0.1,
+              "y": 0.33,
+              "width": 0.8,
+              "height": 0.09,
+              "fontSize": 0.04,
+              "lineHeight": 1.35,
+              "letterSpacing": 0,
+              "fontFamily": "Amiri",
+              "color": "#FDF8F3",
+              "align": "center",
+              "bold": true,
+              "italic": false,
+              "rtl": true
+            },
+            {
+              "copyIndex": 2,
+              "role": "body",
+              "x": 0.1,
+              "y": 0.505,
+              "width": 0.8,
+              "height": 0.1,
+              "fontSize": 0.0177777778,
+              "lineHeight": 1.6,
+              "letterSpacing": 0,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#FDF8F3",
+              "align": "center",
+              "bold": false,
+              "italic": false,
+              "rtl": true
+            },
+            {
+              "copyIndex": 3,
+              "role": "footer",
+              "x": 0.1,
+              "y": 0.715,
+              "width": 0.8,
+              "height": 0.04,
+              "fontSize": 0.0118518519,
+              "lineHeight": 1.45,
+              "letterSpacing": 0,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#FDF8F3",
+              "align": "center",
+              "bold": false,
+              "italic": false,
+              "rtl": true
+            }
+          ]
+        },
+        {
+          "id": "02",
+          "conceptTitle": "Right-spined editorial",
+          "compositionArchetype": "asymmetric_editorial",
+          "typeScale": {
+            "base": 16,
+            "ratio": 1.5
+          },
+          "grid": {
+            "margin": 0.06,
+            "columns": 12,
+            "gutter": 0.016,
+            "baseline": 0.008
+          },
+          "background": {
+            "color": "#0A1628"
+          },
+          "logo": {
+            "x": 0.79,
+            "y": 0.07,
+            "width": 0.12,
+            "height": 0.096
+          },
+          "photos": [],
+          "art": {
+            "source": "procedural",
+            "prompt": "Subtle midnight paper grain",
+            "motif": "gradient-wash",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1
+            },
+            "opacity": 0.15,
+            "calmRegion": {
+              "x": 0.08,
+              "y": 0.25,
+              "width": 0.83,
+              "height": 0.65
+            }
+          },
+          "shapes": [
+            {
+              "x": 0.06,
+              "y": 0.33,
+              "width": 0.88,
+              "height": 0.59,
+              "kind": "rect",
+              "color": "#1E3A5F",
+              "opacity": 0.4,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "panel"
+            },
+            {
+              "x": 0.918,
+              "y": 0.25,
+              "width": 0.00185185,
+              "height": 0.65,
+              "kind": "rect",
+              "color": "#C5A059",
+              "opacity": 0.7,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "rule"
+            },
+            {
+              "x": 0.41,
+              "y": 0.529,
+              "width": 0.15,
+              "height": 0.00148148,
+              "kind": "rect",
+              "color": "#C5A059",
+              "opacity": 1,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "rule"
+            },
+            {
+              "x": 0.41,
+              "y": 0.749,
+              "width": 0.15,
+              "height": 0.00148148,
+              "kind": "rect",
+              "color": "#C5A059",
+              "opacity": 1,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "rule"
+            }
+          ],
+          "text": [
+            {
+              "copyIndex": 0,
+              "role": "eyebrow",
+              "x": 0.09,
+              "y": 0.255,
+              "width": 0.79,
+              "height": 0.04,
+              "fontSize": 0.0118518519,
+              "lineHeight": 1.4,
+              "letterSpacing": 0,
+              "fontFamily": "IBM Plex Sans Arabic",
+              "color": "#C5A059",
+              "align": "right",
+              "bold": true,
+              "italic": false,
+              "rtl": true
+            },
+            {
+              "copyIndex": 1,
+              "role": "title",
+              "x": 0.09,
+              "y": 0.395,
+              "width": 0.79,
+              "height": 0.09,
+              "fontSize": 0.04,
+              "lineHeight": 1.35,
+              "letterSpacing": 0,
+              "fontFamily": "IBM Plex Sans Arabic",
+              "color": "#FDF8F3",
+              "align": "right",
+              "bold": true,
+              "italic": false,
+              "rtl": true
+            },
+            {
+              "copyIndex": 2,
+              "role": "body",
+              "x": 0.09,
+              "y": 0.575,
+              "width": 0.79,
+              "height": 0.095,
+              "fontSize": 0.0177777778,
+              "lineHeight": 1.6,
+              "letterSpacing": 0,
+              "fontFamily": "IBM Plex Sans Arabic",
+              "color": "#FDF8F3",
+              "align": "right",
+              "bold": false,
+              "italic": false,
+              "rtl": true
+            },
+            {
+              "copyIndex": 3,
+              "role": "footer",
+              "x": 0.09,
+              "y": 0.83,
+              "width": 0.79,
+              "height": 0.04,
+              "fontSize": 0.0118518519,
+              "lineHeight": 1.45,
+              "letterSpacing": 0,
+              "fontFamily": "IBM Plex Sans Arabic",
+              "color": "#FDF8F3",
+              "align": "right",
+              "bold": false,
+              "italic": false,
+              "rtl": true
+            }
+          ]
+        },
+        {
+          "id": "03",
+          "conceptTitle": "Hero and grounded learning panel",
+          "compositionArchetype": "hero_statement_grid",
+          "typeScale": {
+            "base": 16,
+            "ratio": 1.5
+          },
+          "grid": {
+            "margin": 0.06,
+            "columns": 6,
+            "gutter": 0.024,
+            "baseline": 0.008
+          },
+          "background": {
+            "color": "#0A1628"
+          },
+          "logo": {
+            "x": 0.435,
+            "y": 0.06,
+            "width": 0.13,
+            "height": 0.104
+          },
+          "photos": [],
+          "art": {
+            "source": "procedural",
+            "prompt": "Soft navy grain with muted edge gradients",
+            "motif": "gradient-wash",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1
+            },
+            "opacity": 0.18,
+            "calmRegion": {
+              "x": 0.06,
+              "y": 0.23,
+              "width": 0.88,
+              "height": 0.69
+            }
+          },
+          "shapes": [
+            {
+              "x": 0.06,
+              "y": 0.23,
+              "width": 0.88,
+              "height": 0.24,
+              "kind": "rect",
+              "color": "#1E3A5F",
+              "opacity": 0.3,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "panel"
+            },
+            {
+              "x": 0.06,
+              "y": 0.58,
+              "width": 0.88,
+              "height": 0.35,
+              "kind": "rect",
+              "color": "#1E3A5F",
+              "opacity": 1,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "panel"
+            },
+            {
+              "x": 0.38,
+              "y": 0.509,
+              "width": 0.24,
+              "height": 0.00148148,
+              "kind": "rect",
+              "color": "#C5A059",
+              "opacity": 1,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "rule"
+            },
+            {
+              "x": 0.41,
+              "y": 0.779,
+              "width": 0.18,
+              "height": 0.00148148,
+              "kind": "rect",
+              "color": "#C5A059",
+              "opacity": 1,
+              "radius": 0,
+              "strokeWidth": 0,
+              "strokeColor": null,
+              "role": "rule"
+            }
+          ],
+          "text": [
+            {
+              "copyIndex": 0,
+              "role": "eyebrow",
+              "x": 0.1,
+              "y": 0.25,
+              "width": 0.8,
+              "height": 0.035,
+              "fontSize": 0.0118518519,
+              "lineHeight": 1.4,
+              "letterSpacing": 0,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#C5A059",
+              "align": "center",
+              "bold": true,
+              "italic": false,
+              "rtl": true
+            },
+            {
+              "copyIndex": 1,
+              "role": "title",
+              "x": 0.08,
+              "y": 0.31,
+              "width": 0.84,
+              "height": 0.11,
+              "fontSize": 0.06,
+              "lineHeight": 1.35,
+              "letterSpacing": 0,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#FDF8F3",
+              "align": "center",
+              "bold": true,
+              "italic": false,
+              "rtl": true
+            },
+            {
+              "copyIndex": 2,
+              "role": "body",
+              "x": 0.1,
+              "y": 0.635,
+              "width": 0.8,
+              "height": 0.095,
+              "fontSize": 0.0177777778,
+              "lineHeight": 1.6,
+              "letterSpacing": 0,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#FDF8F3",
+              "align": "right",
+              "bold": false,
+              "italic": false,
+              "rtl": true
+            },
+            {
+              "copyIndex": 3,
+              "role": "footer",
+              "x": 0.1,
+              "y": 0.83,
+              "width": 0.8,
+              "height": 0.04,
+              "fontSize": 0.0118518519,
+              "lineHeight": 1.45,
+              "letterSpacing": 0,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#FDF8F3",
+              "align": "right",
+              "bold": false,
+              "italic": false,
+              "rtl": true
+            }
+          ]
+        }
+      ]
+    },
+    "rawText": "{\n  \"layouts\": [\n    {\n      \"id\": \"01\",\n      \"conceptTitle\": \"Centered learning monolith\",\n      \"compositionArchetype\": \"monolith_centered\",\n      \"typeScale\": { \"base\": 16, \"ratio\": 1.5 },\n      \"grid\": { \"margin\": 0.06, \"columns\": 6, \"gutter\": 0.02, \"baseline\": 0.008 },\n      \"background\": { \"color\": \"#0A1628\" },\n      \"logo\": { \"x\": 0.45, \"y\": 0.07, \"width\": 0.1, \"height\": 0.08 },\n      \"photos\": [],\n      \"art\": {\n        \"source\": \"procedural\",\n        \"prompt\": \"Fine navy paper grain\",\n        \"motif\": \"gradient-wash\",\n        \"box\": { \"x\": 0, \"y\": 0, \"width\": 1, \"height\": 1 },\n        \"opacity\": 0.15,\n        \"calmRegion\": { \"x\": 0.06, \"y\": 0.23, \"width\": 0.88, \"height\": 0.59 }\n      },\n      \"shapes\": [\n        { \"x\": 0.06, \"y\": 0.23, \"width\": 0.88, \"height\": 0.59, \"kind\": \"rect\", \"color\": \"#1E3A5F\", \"opacity\": 0.45, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"panel\" },\n        { \"x\": 0.42, \"y\": 0.46, \"width\": 0.16, \"height\": 0.00148148, \"kind\": \"rect\", \"color\": \"#C5A059\", \"opacity\": 1, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"rule\" },\n        { \"x\": 0.42, \"y\": 0.65, \"width\": 0.16, \"height\": 0.00148148, \"kind\": \"rect\", \"color\": \"#C5A059\", \"opacity\": 1, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"rule\" }\n      ],\n      \"text\": [\n        { \"copyIndex\": 0, \"role\": \"eyebrow\", \"x\": 0.1, \"y\": 0.265, \"width\": 0.8, \"height\": 0.035, \"fontSize\": 0.0118518519, \"lineHeight\": 1.4, \"letterSpacing\": 0, \"fontFamily\": \"Amiri\", \"color\": \"#C5A059\", \"align\": \"center\", \"bold\": false, \"italic\": false, \"rtl\": true },\n        { \"copyIndex\": 1, \"role\": \"title\", \"x\": 0.1, \"y\": 0.33, \"width\": 0.8, \"height\": 0.09, \"fontSize\": 0.04, \"lineHeight\": 1.35, \"letterSpacing\": 0, \"fontFamily\": \"Amiri\", \"color\": \"#FDF8F3\", \"align\": \"center\", \"bold\": true, \"italic\": false, \"rtl\": true },\n        { \"copyIndex\": 2, \"role\": \"body\", \"x\": 0.1, \"y\": 0.505, \"width\": 0.8, \"height\": 0.1, \"fontSize\": 0.0177777778, \"lineHeight\": 1.6, \"letterSpacing\": 0, \"fontFamily\": \"Noto Sans Arabic\", \"color\": \"#FDF8F3\", \"align\": \"center\", \"bold\": false, \"italic\": false, \"rtl\": true },\n        { \"copyIndex\": 3, \"role\": \"footer\", \"x\": 0.1, \"y\": 0.715, \"width\": 0.8, \"height\": 0.04, \"fontSize\": 0.0118518519, \"lineHeight\": 1.45, \"letterSpacing\": 0, \"fontFamily\": \"Noto Sans Arabic\", \"color\": \"#FDF8F3\", \"align\": \"center\", \"bold\": false, \"italic\": false, \"rtl\": true }\n      ]\n    },\n    {\n      \"id\": \"02\",\n      \"conceptTitle\": \"Right-spined editorial\",\n      \"compositionArchetype\": \"asymmetric_editorial\",\n      \"typeScale\": { \"base\": 16, \"ratio\": 1.5 },\n      \"grid\": { \"margin\": 0.06, \"columns\": 12, \"gutter\": 0.016, \"baseline\": 0.008 },\n      \"background\": { \"color\": \"#0A1628\" },\n      \"logo\": { \"x\": 0.79, \"y\": 0.07, \"width\": 0.12, \"height\": 0.096 },\n      \"photos\": [],\n      \"art\": {\n        \"source\": \"procedural\",\n        \"prompt\": \"Subtle midnight paper grain\",\n        \"motif\": \"gradient-wash\",\n        \"box\": { \"x\": 0, \"y\": 0, \"width\": 1, \"height\": 1 },\n        \"opacity\": 0.15,\n        \"calmRegion\": { \"x\": 0.08, \"y\": 0.25, \"width\": 0.83, \"height\": 0.65 }\n      },\n      \"shapes\": [\n        { \"x\": 0.06, \"y\": 0.33, \"width\": 0.88, \"height\": 0.59, \"kind\": \"rect\", \"color\": \"#1E3A5F\", \"opacity\": 0.4, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"panel\" },\n        { \"x\": 0.918, \"y\": 0.25, \"width\": 0.00185185, \"height\": 0.65, \"kind\": \"rect\", \"color\": \"#C5A059\", \"opacity\": 0.7, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"rule\" },\n        { \"x\": 0.41, \"y\": 0.529, \"width\": 0.15, \"height\": 0.00148148, \"kind\": \"rect\", \"color\": \"#C5A059\", \"opacity\": 1, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"rule\" },\n        { \"x\": 0.41, \"y\": 0.749, \"width\": 0.15, \"height\": 0.00148148, \"kind\": \"rect\", \"color\": \"#C5A059\", \"opacity\": 1, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"rule\" }\n      ],\n      \"text\": [\n        { \"copyIndex\": 0, \"role\": \"eyebrow\", \"x\": 0.09, \"y\": 0.255, \"width\": 0.79, \"height\": 0.04, \"fontSize\": 0.0118518519, \"lineHeight\": 1.4, \"letterSpacing\": 0, \"fontFamily\": \"IBM Plex Sans Arabic\", \"color\": \"#C5A059\", \"align\": \"right\", \"bold\": true, \"italic\": false, \"rtl\": true },\n        { \"copyIndex\": 1, \"role\": \"title\", \"x\": 0.09, \"y\": 0.395, \"width\": 0.79, \"height\": 0.09, \"fontSize\": 0.04, \"lineHeight\": 1.35, \"letterSpacing\": 0, \"fontFamily\": \"IBM Plex Sans Arabic\", \"color\": \"#FDF8F3\", \"align\": \"right\", \"bold\": true, \"italic\": false, \"rtl\": true },\n        { \"copyIndex\": 2, \"role\": \"body\", \"x\": 0.09, \"y\": 0.575, \"width\": 0.79, \"height\": 0.095, \"fontSize\": 0.0177777778, \"lineHeight\": 1.6, \"letterSpacing\": 0, \"fontFamily\": \"IBM Plex Sans Arabic\", \"color\": \"#FDF8F3\", \"align\": \"right\", \"bold\": false, \"italic\": false, \"rtl\": true },\n        { \"copyIndex\": 3, \"role\": \"footer\", \"x\": 0.09, \"y\": 0.83, \"width\": 0.79, \"height\": 0.04, \"fontSize\": 0.0118518519, \"lineHeight\": 1.45, \"letterSpacing\": 0, \"fontFamily\": \"IBM Plex Sans Arabic\", \"color\": \"#FDF8F3\", \"align\": \"right\", \"bold\": false, \"italic\": false, \"rtl\": true }\n      ]\n    },\n    {\n      \"id\": \"03\",\n      \"conceptTitle\": \"Hero and grounded learning panel\",\n      \"compositionArchetype\": \"hero_statement_grid\",\n      \"typeScale\": { \"base\": 16, \"ratio\": 1.5 },\n      \"grid\": { \"margin\": 0.06, \"columns\": 6, \"gutter\": 0.024, \"baseline\": 0.008 },\n      \"background\": { \"color\": \"#0A1628\" },\n      \"logo\": { \"x\": 0.435, \"y\": 0.06, \"width\": 0.13, \"height\": 0.104 },\n      \"photos\": [],\n      \"art\": {\n        \"source\": \"procedural\",\n        \"prompt\": \"Soft navy grain with muted edge gradients\",\n        \"motif\": \"gradient-wash\",\n        \"box\": { \"x\": 0, \"y\": 0, \"width\": 1, \"height\": 1 },\n        \"opacity\": 0.18,\n        \"calmRegion\": { \"x\": 0.06, \"y\": 0.23, \"width\": 0.88, \"height\": 0.69 }\n      },\n      \"shapes\": [\n        { \"x\": 0.06, \"y\": 0.23, \"width\": 0.88, \"height\": 0.24, \"kind\": \"rect\", \"color\": \"#1E3A5F\", \"opacity\": 0.3, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"panel\" },\n        { \"x\": 0.06, \"y\": 0.58, \"width\": 0.88, \"height\": 0.35, \"kind\": \"rect\", \"color\": \"#1E3A5F\", \"opacity\": 1, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"panel\" },\n        { \"x\": 0.38, \"y\": 0.509, \"width\": 0.24, \"height\": 0.00148148, \"kind\": \"rect\", \"color\": \"#C5A059\", \"opacity\": 1, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"rule\" },\n        { \"x\": 0.41, \"y\": 0.779, \"width\": 0.18, \"height\": 0.00148148, \"kind\": \"rect\", \"color\": \"#C5A059\", \"opacity\": 1, \"radius\": 0, \"strokeWidth\": 0, \"strokeColor\": null, \"role\": \"rule\" }\n      ],\n      \"text\": [\n        { \"copyIndex\": 0, \"role\": \"eyebrow\", \"x\": 0.1, \"y\": 0.25, \"width\": 0.8, \"height\": 0.035, \"fontSize\": 0.0118518519, \"lineHeight\": 1.4, \"letterSpacing\": 0, \"fontFamily\": \"Noto Sans Arabic\", \"color\": \"#C5A059\", \"align\": \"center\", \"bold\": true, \"italic\": false, \"rtl\": true },\n        { \"copyIndex\": 1, \"role\": \"title\", \"x\": 0.08, \"y\": 0.31, \"width\": 0.84, \"height\": 0.11, \"fontSize\": 0.06, \"lineHeight\": 1.35, \"letterSpacing\": 0, \"fontFamily\": \"Noto Sans Arabic\", \"color\": \"#FDF8F3\", \"align\": \"center\", \"bold\": true, \"italic\": false, \"rtl\": true },\n        { \"copyIndex\": 2, \"role\": \"body\", \"x\": 0.1, \"y\": 0.635, \"width\": 0.8, \"height\": 0.095, \"fontSize\": 0.0177777778, \"lineHeight\": 1.6, \"letterSpacing\": 0, \"fontFamily\": \"Noto Sans Arabic\", \"color\": \"#FDF8F3\", \"align\": \"right\", \"bold\": false, \"italic\": false, \"rtl\": true },\n        { \"copyIndex\": 3, \"role\": \"footer\", \"x\": 0.1, \"y\": 0.83, \"width\": 0.8, \"height\": 0.04, \"fontSize\": 0.0118518519, \"lineHeight\": 1.45, \"letterSpacing\": 0, \"fontFamily\": \"Noto Sans Arabic\", \"color\": \"#FDF8F3\", \"align\": \"right\", \"bold\": false, \"italic\": false, \"rtl\": true }\n      ]\n    }\n  ]\n}",
+    "receipt": {
+      "id": "chatcmpl-ETkk0xBep9ZvUGOoOC7SjWuxgftZj",
+      "responseId": "chatcmpl-ETkk0xBep9ZvUGOoOC7SjWuxgftZj",
+      "xRequestId": "req_229d9803c71949e584b31cd78a2909aa",
+      "model": "gpt-6-astra",
+      "inputTokens": 4546,
+      "outputTokens": 3430,
+      "reasoningTokens": 274,
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 3031,
+      "costUsd": 0.189681,
+      "costBasis": "usage",
+      "servedModel": "gpt-6-astra",
+      "sha256": "583c0e05e6a66ccd7193fea5d73084866ef56dcb4ac748b62b17c8239651dcd2",
+      "latencyMs": 62935,
+      "attempts": 1
+    }
+  }
+}

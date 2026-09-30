@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "completedAt": "2026-09-30T09:09:37.678Z",
+  "model": "gpt-6.1-sol",
+  "capUsd": 0.1,
+  "accountedUsd": 0.028728000000000004,
+  "cases": [
+    {
+      "id": "ordinary-english",
+      "checkedAt": "2026-09-30T09:09:34.793Z",
+      "status": "passed",
+      "data": {
+        "left": "red",
+        "right": "blue",
+        "copied": "Hello, research 2026",
+        "missingDate": true
+      },
+      "receipt": {
+        "id": "chatcmpl-ETkbct1cRkOCVAJJl2ZhRlzCGt0J2",
+        "responseId": "chatcmpl-ETkbct1cRkOCVAJJl2ZhRlzCGt0J2",
+        "xRequestId": "req_b2106528b3e64fd0ba7931326830809e",
+        "model": "gpt-6.1-sol",
+        "inputTokens": 1888,
+        "outputTokens": 34,
+        "reasoningTokens": 0,
+        "cacheCreationTokens": 0,
+        "cacheReadTokens": 0,
+        "costUsd": 0.004116,
+        "costBasis": "usage",
+        "servedModel": "gpt-6.1-sol",
+        "sha256": "6ccf0cd8b0096d894f591f8f14dbcd4a7811dc7ab9f7979e8ab448b6d0c46b8c",
+        "latencyMs": 2547,
+        "attempts": 1
+      },
+      "accountedUsd": 0.004116,
+      "creativeAdmission": false
+    },
+    {
+      "id": "reversed-sorani",
+      "checkedAt": "2026-09-30T09:09:37.678Z",
+      "status": "passed",
+      "data": {
+        "left": "blue",
+        "right": "red",
+        "copied": "سڵاو، ڕێکەوت ٢٠٢٦",
+        "missingDate": true
+      },
+      "receipt": {
+        "id": "chatcmpl-ETkbfXWAWhH2m9i5RIelnkmJCknwo",
+        "responseId": "chatcmpl-ETkbfXWAWhH2m9i5RIelnkmJCknwo",
+        "xRequestId": "req_42825b52b6ec46bda3c94e307eb5668a",
+        "model": "gpt-6.1-sol",
+        "inputTokens": 1896,
+        "outputTokens": 42,
+        "reasoningTokens": 0,
+        "cacheCreationTokens": 0,
+        "cacheReadTokens": 0,
+        "costUsd": 0.004212,
+        "costBasis": "usage",
+        "servedModel": "gpt-6.1-sol",
+        "sha256": "e4ba33c4af44942f108df4a1254d083961fee3f05dad33e0bd92be8f64b807c2",
+        "latencyMs": 2436,
+        "attempts": 1
+      },
+      "accountedUsd": 0.004212,
+      "creativeAdmission": false
+    }
+  ],
+  "status": "CAPABILITY_ONLY",
+  "productionPromoted": false
+}

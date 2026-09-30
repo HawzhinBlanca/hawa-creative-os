@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "sol61-candidate-2026-09-30",
+  "revision": "sol61-counted-vision-candidate-2026-09-30",
   "admission": "candidate",
   "roles": [
     "text",
@@ -22,8 +22,9 @@
     "textOutput": true,
     "imageInputDocumented": true,
     "strictStructuredOutputDocumented": true,
-    "liveStrictSchemaVisionVerified": false,
-    "imageReservationQualified": false
+    "liveStrictSchemaVisionVerified": true,
+    "imageReservationQualified": true,
+    "qualificationScope": "candidate native-count bound; two synthetic image/schema samples, not production admission"
   },
   "costPolicy": "studio-sol61-2026-09-30-v1",
   "costPerMillion": {
@@ -36,8 +37,8 @@
     "longOutputMultiplier": 1.5
   },
   "evaluation": {
-    "access": "blocked",
-    "offlineCreativeComparison": "not_run",
+    "access": "available",
+    "offlineCreativeComparison": "two_synthetic_brief_screen_only",
     "canary": "not_run",
     "blindedHumanReview": "not_run"
   },
@@ -45,7 +46,9 @@
   "sources": [
     "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
     "https://developers.openai.com/api/docs/guides/latest-model",
-    "https://docs.typesafe.ai/models"
+    "https://docs.typesafe.ai/models",
+    "https://developers.openai.com/api/docs/guides/token-counting"
   ],
-  "checkedAt": "2026-09-30"
+  "checkedAt": "2026-09-30",
+  "imageCostPolicy": "studio-sol61-2026-09-30-v2-counted-images"
 }

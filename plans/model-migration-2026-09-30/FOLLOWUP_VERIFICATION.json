@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "date": "2026-09-30",
+  "verdict": "ACCESS_AND_BOUNDED_CANDIDATE_SCREEN_VERIFIED_NO_PRODUCTION_PROMOTION",
+  "requirements": [
+    "FR-056",
+    "FR-057",
+    "FR-058",
+    "FR-059",
+    "FR-060",
+    "FR-062",
+    "FR-079"
+  ],
+  "tests": {
+    "files": 6,
+    "passed": 62,
+    "failed": 0,
+    "skipped": 0,
+    "fullSuite": "not_run_for_this_candidate_change"
+  },
+  "typeChecks": {
+    "productionBuild": "passed",
+    "scripts": "passed",
+    "typedTestRoots": 604,
+    "tests": "passed"
+  },
+  "lint": "passed",
+  "security": "passed;0 real secrets,48 justified synthetic allowlist hits",
+  "access": "ACCESS_CONFIRMED.json",
+  "paidCompletions": 7,
+  "visionSmoke": {
+    "initialAttempt": "one accepted answer failed exact-copy check and loaded stale compiled pricing; preserved in vision-smoke",
+    "correctedCases": 2,
+    "passed": 2,
+    "costBasis": "usage",
+    "usagePricedUsd": 0.008328,
+    "evidence": "vision-smoke-v2/SUMMARY.json"
+  },
+  "matchedLayoutScreen": "MATCHED_SCREEN.json",
+  "deployment": "not_performed",
+  "productionPromoted": false,
+  "unexecuted": [
+    "200-task frozen corpus and holdout comparison",
+    "seeded visual defect calibration for the candidate",
+    "independent blinded human and native Sorani review",
+    "5% and 25% production canary",
+    "evaluated candidate rollback/fallback admission",
+    "full release suite"
+  ],
+  "regressionsProved": [
+    "native image count saved in admission JSON",
+    "identical retained Sol response recovered without counting or completion transport",
+    "failed counting admits no paid completion",
+    "old Astra replay remains valid"
+  ],
+  "historicalEvidence": "ACCESS.json and VERIFICATION.json retain initial blocked-access/preparation state",
+  "gallery": {
+    "path": "layout-comparison/REVIEW.html",
+    "browserLoadedPreviews": 12,
+    "review": "pending initial owner feedback; not a blinded study"
+  },
+  "matchedComparisonRecovery": {
+    "completed": true,
+    "transportCalls": 0,
+    "exactRequestHashChecked": true
+  },
+  "blueprintPack": "passed; see followup-logs/pack.log"
+}

@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { newStudioBudget, studioBudgetUsage, assertStudioBudgetAdmission } from '../src/studio-budget.js';
+import { newStudioBudget, studioBudgetUsage, assertStudioBudgetAdmission, validateStudioReservation } from '../src/studio-budget.js';
 
 describe('Studio budget policy', () => {
+  it('validates persisted native input evidence against its reservation identity and bound', () => {
+    const reservation = { version: 1 as const, policy: 'candidate-test', requestSha256: 'a'.repeat(64),
+      usd: 0.02, inputTokens: 2000, outputTokens: 1000,
+      nativeInputCount: { version: 1 as const, model: 'gpt-6.1-sol', object: 'response.input_tokens', requestSha256: 'a'.repeat(64), inputTokens: 100 } };
+    expect(() => validateStudioReservation(reservation)).not.toThrow();
+    for (const bad of [{ requestSha256: 'b'.repeat(64) }, { inputTokens: 2001 }, { inputTokens: NaN }, { model: '' }]) {
+      expect(() => validateStudioReservation({ ...reservation, nativeInputCount: { ...reservation.nativeInputCount, ...bad } })).toThrow();
+    }
+  });
   it.each([NaN, Infinity, Number.MAX_SAFE_INTEGER, -1, 0, null, '', '2usd'])('refuses invalid USD limits: %s', value => {
     expect(() => newStudioBudget(value)).toThrow();
   });

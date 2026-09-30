@@ -35,6 +35,13 @@ const TEXT_RATES: Record<string, [number, number]> = {
 };
 // Sol's policy is separate: changing old policy IDs would invalidate retained replay bindings.
 const SOL_POLICY = 'studio-sol61-2026-09-30-v1';
+export interface StudioNativeInputCount {
+  version: 1;
+  model: 'gpt-6.1-sol';
+  requestSha256: string;
+  inputTokens: number;
+  object: 'response.input_tokens';
+}
 function textRates(model: string, input: number): [number, number] {
   if (model === 'gpt-6.1-sol' && input <= 272000) return [4.5, 10];
   if (model === 'gpt-6-astra' && input <= 272000) return [22.5, 50];
@@ -103,7 +110,7 @@ const TEXT_TOKENS_PER_BYTE = 1;
 const SCHEMA_TOKENS_PER_BYTE = 2;
 
 /** The serialized body is both quoted here and sent unchanged after database admission. */
-export function reserveStudioText(body: string): StudioCallReservation {
+export function reserveStudioText(body: string, nativeCount?: StudioNativeInputCount): StudioCallReservation {
   const p = record(JSON.parse(body)), model = family(str(p.model));
   onlyKeys(p, ['model', 'messages', 'response_format', 'max_completion_tokens', 'service_tier', 'reasoning_effort', 'temperature']);
   if (p.service_tier !== 'default' || p.tools || p.n || p.stream) refuse('Unsupported paid request options.');
@@ -112,6 +119,7 @@ export function reserveStudioText(body: string): StudioCallReservation {
   const outputTokens = positiveInt(p.max_completion_tokens);
   if (outputTokens > (model === 'gpt-6.1-sol' ? 128000 : 131072)) refuse('Output limit exceeds the qualified reservation range.');
   let inputTokens = 1024 + 128 * messages.length + SCHEMA_TOKENS_PER_BYTE * bytes(JSON.stringify(p.response_format));
+  let hasSolImage = false;
   for (const value of messages) {
     const message = record(value);
     onlyKeys(message, ['role', 'content']);
@@ -120,15 +128,34 @@ export function reserveStudioText(body: string): StudioCallReservation {
     else if (Array.isArray(message.content)) for (const raw of message.content) {
       const part = record(raw);
       if (part.type === 'text') inputTokens += TEXT_TOKENS_PER_BYTE * bytes(str(part.text)) + 32;
-      else if (part.type === 'image_url') inputTokens += visionTokens(model, record(part.image_url)) + 32;
+      else if (part.type === 'image_url') {
+        if (model === 'gpt-6.1-sol') {
+          hasSolImage = true;
+          const image = record(part.image_url);
+          if (!str(image.url).startsWith('data:image/')) refuse('Sol counting requires immutable inline images.');
+          if (!['low', 'high', 'auto', 'original'].includes(String(image.detail ?? 'auto'))) refuse('Invalid image detail.');
+          inputTokens += 32;
+        } else inputTokens += visionTokens(model, record(part.image_url)) + 32;
+      }
       else refuse('This media input needs a bounded reservation policy before paid dispatch.');
     }
     else refuse('Invalid message content.');
   }
+  if (hasSolImage) {
+    if (!nativeCount || nativeCount.version !== 1 || nativeCount.model !== p.model ||
+        nativeCount.object !== 'response.input_tokens' ||
+        nativeCount.requestSha256 !== createHash('sha256').update(body).digest('hex') ||
+        !Number.isSafeInteger(nativeCount.inputTokens) || nativeCount.inputTokens <= 0 || nativeCount.inputTokens > 1050000) {
+      refuse('Sol 6.1 image token bounds are not qualified: a matching native count is required (ADR-149).');
+    }
+    inputTokens += nativeCount!.inputTokens;
+  }
   if (model === 'gpt-6.1-sol' && inputTokens + outputTokens > 1050000) refuse('Sol 6.1 context bound exceeded.');
   const [inputRate, outputRate] = textRates(model, inputTokens);
   const reservation = quote(body, inputTokens, outputTokens, inputRate, outputRate);
-  return model === 'gpt-6.1-sol' ? { ...reservation, policy: SOL_POLICY } : reservation;
+  return model === 'gpt-6.1-sol' ? { ...reservation,
+    ...(hasSolImage ? { nativeInputCount: { ...nativeCount! } } : {}),
+    policy: hasSolImage ? 'studio-sol61-2026-09-30-v2-counted-images' : SOL_POLICY } : reservation;
 }
 
 export function reserveStudioImage(provider: string, body: string): StudioCallReservation {

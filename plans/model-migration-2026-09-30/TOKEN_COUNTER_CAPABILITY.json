@@ -1,0 +1,21 @@
+{
+  "model": "gpt-6.1-sol",
+  "syntheticImagesOnly": true,
+  "completionCalls": 0,
+  "queries": [
+    {
+      "width": 64,
+      "height": 64,
+      "status": 200,
+      "inputTokens": 18,
+      "object": "response.input_tokens"
+    },
+    {
+      "width": 1080,
+      "height": 1350,
+      "status": 200,
+      "inputTokens": 1768,
+      "object": "response.input_tokens"
+    }
+  ]
+}

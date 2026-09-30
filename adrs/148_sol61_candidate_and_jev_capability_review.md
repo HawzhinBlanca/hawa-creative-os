@@ -66,3 +66,7 @@ types,603 test roots and lint pass. Original stale-build failures remain in the
 evidence directory. Full release suite and live Sol/creative/canary gates are not
 executed; this is not a production admission. Fresh runtime metadata still reports
 deployed6bd479c1, Astra text/layout/critique and Mini judge; readiness is degraded.
+
+## Access-enabled follow-up
+
+The owner enabled API access on2026-09-30: catalog and retrieval now return200 with the same existing key. ADR-149 supplies the image-budget bound through native input counts, resolving the initial sizing-table blocker without guessing an Astra multiplier. Two strict-schema vision cases and a two-brief matched layout screen succeeded; all12 prepared layouts pass hard QA. Exact preserved evidence is FOLLOWUP_VERIFICATION.json and MATCHED_SCREEN.json. Production admission still requires the larger frozen corpus, independent native/blinded human review and staged canary; the initial404/no-paid-call checkpoint above remains historical.

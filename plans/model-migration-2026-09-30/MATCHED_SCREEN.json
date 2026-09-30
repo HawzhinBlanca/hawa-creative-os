@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "completedAt": "2026-09-30T09:20:02.580Z",
+  "matchedBodyHashes": {
+    "english": "ff9030896bf8393e80f3dc03d5d8c24e57d6aca41de956e523c63d3159a86dbe",
+    "sorani": "caf7812f70ce4e5921e982f507c657d1f6e2c187947cf7f6f7d63ffdfd814581"
+  },
+  "briefs": 2,
+  "calls": 4,
+  "candidates": 12,
+  "hardQaPassed": 12,
+  "hardQaFailed": 0,
+  "usagePricedUsd": {
+    "sol": 0.084369,
+    "astra": 0.403911
+  },
+  "meanLatencyMs": {
+    "sol": 48899.0,
+    "astra": 61295.5
+  },
+  "observedCostReduction": 0.7911198259022408,
+  "observedMeanLatencyReduction": 0.20224160011746373,
+  "statisticalInference": "none; two synthetic briefs cannot establish quality, tail latency, or production admission",
+  "humanReview": "not_run; requested initial owner feedback is not a blinded research study",
+  "productionPromoted": false
+}

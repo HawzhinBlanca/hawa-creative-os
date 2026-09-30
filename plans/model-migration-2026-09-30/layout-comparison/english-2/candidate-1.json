@@ -1,0 +1,130 @@
+{
+  "version": 2,
+  "width": 1080,
+  "height": 1350,
+  "genre": "poster",
+  "grid": {
+    "margin": 65,
+    "columns": 6,
+    "gutter": 27,
+    "baseline": 15
+  },
+  "background": {
+    "color": "#0A1628"
+  },
+  "shapes": [
+    {
+      "x": 65,
+      "y": 327,
+      "width": 950,
+      "height": 898,
+      "role": "panel",
+      "kind": "rect",
+      "color": "#1E3A5F",
+      "radius": 0,
+      "strokeWidth": 1
+    },
+    {
+      "x": 475,
+      "y": 660,
+      "width": 130,
+      "height": 2,
+      "role": "rule",
+      "kind": "rect",
+      "color": "#C5A059",
+      "radius": 0,
+      "strokeWidth": 1
+    },
+    {
+      "x": 475,
+      "y": 1008,
+      "width": 130,
+      "height": 2,
+      "role": "rule",
+      "kind": "rect",
+      "color": "#C5A059",
+      "radius": 0,
+      "strokeWidth": 1
+    }
+  ],
+  "text": [
+    {
+      "copyIndex": 0,
+      "role": "eyebrow",
+      "x": 108,
+      "y": 375,
+      "width": 864,
+      "height": 41,
+      "fontSize": 15,
+      "lineHeight": 1.3,
+      "letterSpacing": 0.03,
+      "fontFamily": "Cinzel",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": false
+    },
+    {
+      "copyIndex": 1,
+      "role": "title",
+      "x": 86,
+      "y": 489,
+      "width": 907,
+      "height": 101,
+      "fontSize": 51,
+      "lineHeight": 1.25,
+      "letterSpacing": 0,
+      "fontFamily": "Cinzel",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": false
+    },
+    {
+      "copyIndex": 2,
+      "role": "body",
+      "x": 108,
+      "y": 732,
+      "width": 864,
+      "height": 149,
+      "fontSize": 23,
+      "lineHeight": 1.5,
+      "letterSpacing": 0,
+      "fontFamily": "Verdana",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": false
+    },
+    {
+      "copyIndex": 3,
+      "role": "footer",
+      "x": 108,
+      "y": 1137,
+      "width": 864,
+      "height": 41,
+      "fontSize": 15,
+      "lineHeight": 1.4,
+      "letterSpacing": 0,
+      "fontFamily": "Verdana",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": false
+    }
+  ],
+  "logo": {
+    "x": 486,
+    "y": 125,
+    "width": 108,
+    "height": 108
+  },
+  "typeScale": {
+    "base": 15,
+    "ratio": 1.5
+  }
+}

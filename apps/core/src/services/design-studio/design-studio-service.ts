@@ -966,6 +966,18 @@ export class DesignStudioService {
       apiKey,
       fetcher: fetchFn,
       timeoutMs: 240000,
+      retainedInputCount: requestSha256 => {
+        for (const call of runHistory) {
+          const reservation = (typeof call.reservation === 'string' ? JSON.parse(call.reservation) : call.reservation) as StudioCallReservation;
+          if (reservation?.requestSha256 !== requestSha256 || reservation.policy !== 'studio-sol61-2026-09-30-v2-counted-images') continue;
+          const count = reservation.nativeInputCount;
+          if (!count || count.model !== 'gpt-6.1-sol' || count.object !== 'response.input_tokens') {
+            throw new StudioVisualInputsError('The retained Sol image count cannot be verified. No transport is permitted.');
+          }
+          return { ...count, model: 'gpt-6.1-sol', object: 'response.input_tokens' };
+        }
+        return undefined;
+      },
     });
 
     const baseArtProvider = new OpenAiImageProvider(apiKey, fetchFn);
@@ -1065,13 +1077,13 @@ export class DesignStudioService {
           'The provider cost exceeded its reservation. The receipt is saved; review pricing before continuing.');
       }
     };
-    const complete = async <T>(invoke: (beforeDispatch: (body: string) => Promise<void>) => Promise<OpenAiStructuredResponse<T>>) => {
+    const complete = async <T>(invoke: (beforeDispatch: NonNullable<Parameters<OpenAiStudioClient['createStructuredCompletion']>[0]['beforeDispatch']>) => Promise<OpenAiStructuredResponse<T>>) => {
       const callId = randomUUID();
       let reservation: StudioCallReservation | undefined;
       let result: OpenAiStructuredResponse<T>;
       try {
-        result = await invoke(async body => {
-          const quoted = reserveStudioText(body);
+        result = await invoke(async (body, nativeCount) => {
+          const quoted = reserveStudioText(body, nativeCount);
           const parsed = JSON.parse(body) as { model: string; response_format?: { json_schema?: { name?: unknown } } };
           const schema = typeof parsed.response_format?.json_schema?.name === 'string' ? parsed.response_format.json_schema.name : undefined;
           const substep = await replay('structured', currentStageName, 'openai', parsed.model, quoted, schema);

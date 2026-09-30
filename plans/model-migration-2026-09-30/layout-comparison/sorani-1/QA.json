@@ -1,0 +1,461 @@
+[
+  {
+    "index": 1,
+    "hardQaPassed": true,
+    "defectCodes": [],
+    "messages": [],
+    "metrics": {
+      "compositeScore": 0.975,
+      "passed": true,
+      "qualityScore": 0.968,
+      "complianceScore": 1,
+      "exemplarSimilarityScore": 1,
+      "metrics": {
+        "textLegibility": {
+          "score": 1,
+          "passed": true,
+          "metric": "textLegibility",
+          "details": {
+            "failingIssues": [],
+            "count": 4
+          }
+        },
+        "gridAppropriateness": {
+          "score": 1,
+          "passed": true,
+          "metric": "gridAppropriateness",
+          "details": {
+            "alignedElements": 8,
+            "totalElements": 8
+          }
+        },
+        "alignment": {
+          "score": 1,
+          "passed": true,
+          "metric": "alignment",
+          "details": {
+            "widthVariance": 0,
+            "lineUniformityDev": 0,
+            "d": 0
+          }
+        },
+        "balance": {
+          "score": 0.995,
+          "passed": true,
+          "metric": "balance",
+          "details": {
+            "wx": 540,
+            "wy": 684,
+            "offset": 0.0047
+          }
+        },
+        "justification": {
+          "score": 0.95,
+          "passed": true,
+          "metric": "justification",
+          "details": {
+            "counts": {
+              "left": 0,
+              "center": 4,
+              "right": 0
+            },
+            "dominanceRatio": 1
+          }
+        },
+        "regularity": {
+          "score": 0.713,
+          "passed": true,
+          "metric": "regularity",
+          "details": {
+            "meanGap": 101,
+            "std": 45,
+            "cv": 0.402
+          }
+        },
+        "typefacePairing": {
+          "score": 1,
+          "passed": true,
+          "metric": "typefacePairing",
+          "details": {
+            "families": [
+              "Amiri",
+              "Noto Sans Arabic"
+            ],
+            "familyCount": 2,
+            "failures": []
+          }
+        },
+        "negativeSpace": {
+          "score": 0.95,
+          "passed": true,
+          "metric": "negativeSpace",
+          "details": {
+            "fraction": 0.468,
+            "internalGapFraction": 0.08,
+            "bottomVoid": 0.124,
+            "occupiedArea": 775543,
+            "totalArea": 1458000,
+            "measure": "declared_boxes",
+            "policyId": "studio.negative-space",
+            "policyVersion": "2026-09-28.2",
+            "policySha256": "c9d2cbc0c0d68d02468f360e38c72331b7d3707b30c855cb1c592c0f84f8eb69"
+          }
+        },
+        "semanticLayout": {
+          "score": 1,
+          "passed": true,
+          "metric": "semanticLayout",
+          "details": {
+            "issues": []
+          }
+        },
+        "semanticTypography": {
+          "score": 1,
+          "passed": true,
+          "metric": "semanticTypography",
+          "details": {
+            "issues": []
+          }
+        },
+        "occlusion": {
+          "score": 1,
+          "passed": true,
+          "metric": "occlusion",
+          "details": {
+            "hasArt": false
+          }
+        },
+        "typeScale": {
+          "score": 1,
+          "passed": true,
+          "metric": "typeScale",
+          "details": {
+            "declaredBase": 16,
+            "declaredRatio": 1.5,
+            "conforming": 4,
+            "total": 4
+          }
+        },
+        "degeneracy": {
+          "score": 1,
+          "passed": true,
+          "metric": "degeneracy",
+          "details": {
+            "passed": true
+          }
+        }
+      },
+      "failingMetrics": [],
+      "executionTimeMs": 0.12
+    },
+    "preview": "sorani-1/candidate-1.png"
+  },
+  {
+    "index": 2,
+    "hardQaPassed": true,
+    "defectCodes": [],
+    "messages": [],
+    "metrics": {
+      "compositeScore": 0.76,
+      "passed": false,
+      "qualityScore": 0.788,
+      "complianceScore": 0.7,
+      "exemplarSimilarityScore": 0.6,
+      "metrics": {
+        "textLegibility": {
+          "score": 1,
+          "passed": true,
+          "metric": "textLegibility",
+          "details": {
+            "failingIssues": [],
+            "count": 4
+          }
+        },
+        "gridAppropriateness": {
+          "score": 0.111,
+          "passed": false,
+          "metric": "gridAppropriateness",
+          "details": {
+            "alignedElements": 1,
+            "totalElements": 9
+          }
+        },
+        "alignment": {
+          "score": 1,
+          "passed": true,
+          "metric": "alignment",
+          "details": {
+            "widthVariance": 0,
+            "lineUniformityDev": 0,
+            "d": 0
+          }
+        },
+        "balance": {
+          "score": 0.99,
+          "passed": true,
+          "metric": "balance",
+          "details": {
+            "wx": 538,
+            "wy": 695,
+            "offset": 0.0104
+          }
+        },
+        "justification": {
+          "score": 0.95,
+          "passed": true,
+          "metric": "justification",
+          "details": {
+            "counts": {
+              "left": 0,
+              "center": 0,
+              "right": 4
+            },
+            "dominanceRatio": 1
+          }
+        },
+        "regularity": {
+          "score": 0.798,
+          "passed": true,
+          "metric": "regularity",
+          "details": {
+            "meanGap": 158,
+            "std": 42,
+            "cv": 0.253
+          }
+        },
+        "typefacePairing": {
+          "score": 0,
+          "passed": false,
+          "metric": "typefacePairing",
+          "details": {
+            "families": [
+              "IBM Plex Sans Arabic"
+            ],
+            "familyCount": 1,
+            "failures": [
+              "Unadmitted font family: \"IBM Plex Sans Arabic\"",
+              "Unadmitted font family: \"IBM Plex Sans Arabic\"",
+              "F12 Violation: body role using non-body font \"IBM Plex Sans Arabic\"",
+              "Unadmitted font family: \"IBM Plex Sans Arabic\""
+            ]
+          }
+        },
+        "negativeSpace": {
+          "score": 0.95,
+          "passed": true,
+          "metric": "negativeSpace",
+          "details": {
+            "fraction": 0.467,
+            "internalGapFraction": 0.088,
+            "bottomVoid": 0.079,
+            "occupiedArea": 777526,
+            "totalArea": 1458000,
+            "measure": "declared_boxes",
+            "policyId": "studio.negative-space",
+            "policyVersion": "2026-09-28.2",
+            "policySha256": "c9d2cbc0c0d68d02468f360e38c72331b7d3707b30c855cb1c592c0f84f8eb69"
+          }
+        },
+        "semanticLayout": {
+          "score": 1,
+          "passed": true,
+          "metric": "semanticLayout",
+          "details": {
+            "issues": []
+          }
+        },
+        "semanticTypography": {
+          "score": 1,
+          "passed": true,
+          "metric": "semanticTypography",
+          "details": {
+            "issues": []
+          }
+        },
+        "occlusion": {
+          "score": 1,
+          "passed": true,
+          "metric": "occlusion",
+          "details": {
+            "hasArt": false
+          }
+        },
+        "typeScale": {
+          "score": 1,
+          "passed": true,
+          "metric": "typeScale",
+          "details": {
+            "declaredBase": 16,
+            "declaredRatio": 1.5,
+            "conforming": 4,
+            "total": 4
+          }
+        },
+        "degeneracy": {
+          "score": 1,
+          "passed": true,
+          "metric": "degeneracy",
+          "details": {
+            "passed": true
+          }
+        }
+      },
+      "failingMetrics": [
+        "gridAppropriateness",
+        "typefacePairing"
+      ],
+      "executionTimeMs": 0.11
+    },
+    "preview": "sorani-1/candidate-2.png"
+  },
+  {
+    "index": 3,
+    "hardQaPassed": true,
+    "defectCodes": [],
+    "messages": [],
+    "metrics": {
+      "compositeScore": 0.952,
+      "passed": true,
+      "qualityScore": 0.94,
+      "complianceScore": 1,
+      "exemplarSimilarityScore": 1,
+      "metrics": {
+        "textLegibility": {
+          "score": 1,
+          "passed": true,
+          "metric": "textLegibility",
+          "details": {
+            "failingIssues": [],
+            "count": 4
+          }
+        },
+        "gridAppropriateness": {
+          "score": 1,
+          "passed": true,
+          "metric": "gridAppropriateness",
+          "details": {
+            "alignedElements": 9,
+            "totalElements": 9
+          }
+        },
+        "alignment": {
+          "score": 0.999,
+          "passed": true,
+          "metric": "alignment",
+          "details": {
+            "widthVariance": 0,
+            "lineUniformityDev": 0.008,
+            "d": 0.005
+          }
+        },
+        "balance": {
+          "score": 0.962,
+          "passed": true,
+          "metric": "balance",
+          "details": {
+            "wx": 540,
+            "wy": 602,
+            "offset": 0.0381
+          }
+        },
+        "justification": {
+          "score": 0.75,
+          "passed": true,
+          "metric": "justification",
+          "details": {
+            "counts": {
+              "left": 0,
+              "center": 2,
+              "right": 2
+            },
+            "dominanceRatio": 0.5
+          }
+        },
+        "regularity": {
+          "score": 0.609,
+          "passed": true,
+          "metric": "regularity",
+          "details": {
+            "meanGap": 153,
+            "std": 105,
+            "cv": 0.643
+          }
+        },
+        "typefacePairing": {
+          "score": 1,
+          "passed": true,
+          "metric": "typefacePairing",
+          "details": {
+            "families": [
+              "Noto Sans Arabic"
+            ],
+            "familyCount": 1,
+            "failures": []
+          }
+        },
+        "negativeSpace": {
+          "score": 0.95,
+          "passed": true,
+          "metric": "negativeSpace",
+          "details": {
+            "fraction": 0.447,
+            "internalGapFraction": 0.11,
+            "bottomVoid": 0.07,
+            "occupiedArea": 806681,
+            "totalArea": 1458000,
+            "measure": "declared_boxes",
+            "policyId": "studio.negative-space",
+            "policyVersion": "2026-09-28.2",
+            "policySha256": "c9d2cbc0c0d68d02468f360e38c72331b7d3707b30c855cb1c592c0f84f8eb69"
+          }
+        },
+        "semanticLayout": {
+          "score": 1,
+          "passed": true,
+          "metric": "semanticLayout",
+          "details": {
+            "issues": []
+          }
+        },
+        "semanticTypography": {
+          "score": 1,
+          "passed": true,
+          "metric": "semanticTypography",
+          "details": {
+            "issues": []
+          }
+        },
+        "occlusion": {
+          "score": 1,
+          "passed": true,
+          "metric": "occlusion",
+          "details": {
+            "hasArt": false
+          }
+        },
+        "typeScale": {
+          "score": 1,
+          "passed": true,
+          "metric": "typeScale",
+          "details": {
+            "declaredBase": 16,
+            "declaredRatio": 1.5,
+            "conforming": 4,
+            "total": 4
+          }
+        },
+        "degeneracy": {
+          "score": 1,
+          "passed": true,
+          "metric": "degeneracy",
+          "details": {
+            "passed": true
+          }
+        }
+      },
+      "failingMetrics": [],
+      "executionTimeMs": 0.13
+    },
+    "preview": "sorani-1/candidate-3.png"
+  }
+]
