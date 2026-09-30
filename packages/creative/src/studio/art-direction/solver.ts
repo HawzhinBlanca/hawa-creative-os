@@ -1,3 +1,5 @@
+import { applyContentBackground, type BackgroundPlanningInput } from '../background-planning.js';
+import { declaredTextContrast, declaredColorContrast } from '../composite-contrast.js';
 import { HERO_SHARP_UPSCALE } from '../layout-v2.js';
 import type {
   Box,
@@ -49,6 +51,9 @@ export interface ArtDirectionParams {
   fadeShare?: number;
   /** The tone of the surface text sits on where the recipe lets it vary. */
   surfaceTone?: 'navy' | 'cream';
+  backgroundIntent?: 'documentary' | 'editorial' | 'showcase';
+  backgroundMode?: 'solid' | 'gradient';
+  backgroundColorIndex?: number | null;
   /** A gold outer frame (series, carousels) or a thin inset line (single report posts). */
   frame?: 'none' | 'outer' | 'inset';
   /** Text alignment: `start` is left for Latin, right for Sorani. */
@@ -106,6 +111,7 @@ export interface SolveRecipeInput {
   logoClearSpacePx?: number;
   fonts?: { latinDisplay?: string; latinBody?: string; arabicDisplay?: string; arabicBody?: string };
   fontsDir?: string;
+  backgroundPlanning?: BackgroundPlanningInput;
 }
 
 /** A choice this canvas and copy cannot carry: the candidate is dropped, never forced into shape. */
@@ -787,6 +793,7 @@ class SolveContext {
         ...(upscale ? { heroUpscale: upscale } : {}),
       },
     };
+    if (this.input.backgroundPlanning) applyContentBackground(layout, this.input.palette, { ...this.input.backgroundPlanning, photos: this.input.photos });
     this.applyTitleAccent(layout);
     this.balanceWidows(layout);
     this.checkLayout(layout);
@@ -825,7 +832,7 @@ class SolveContext {
     const onNavy = contrast(this.tones.gold, layout.background.color) >= requiredContrast(title.fontSize, true);
     const surface = this.surfaceBehind(layout, title);
     if (!onNavy && surface !== this.tones.navy && surface !== this.tones.deep) return;
-    if (contrast(this.tones.gold, surface) < requiredContrast(title.fontSize, true)) return;
+    if (declaredColorContrast(layout, title, this.tones.gold) < requiredContrast(title.fontSize, true)) return;
     title.accentColor = this.tones.gold;
     title.accentText = want.join(' ');
   }
@@ -868,7 +875,7 @@ class SolveContext {
       if (hit(t, clear)) throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} is in the logo's clear space`);
       for (const u of layout.text) if (u !== t && hit(t, u)) throw new RecipeInfeasibleError(this.recipe, `copy blocks ${t.copyIndex} and ${u.copyIndex} overlap`);
       const surface = this.surfaceBehind(layout, t);
-      const ratio = contrast(t.color, surface);
+      const ratio = declaredTextContrast(layout, t);
       if (ratio < requiredContrast(t.fontSize, Boolean(t.bold))) {
         throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} is ${ratio.toFixed(2)}:1 on its surface`);
       }

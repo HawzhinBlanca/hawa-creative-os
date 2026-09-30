@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { backgroundFieldSchema, type BackgroundField } from './background-field.js';
 
 export type Hex = string;
 
@@ -156,13 +157,22 @@ export interface TypeScaleConfig {
   ratio: number;
 }
 
+/** ADR-172: recorded decision, not a claim that a model understood unmeasured content. */
+export interface BackgroundDecision {
+  policy: 'content-background-v1';
+  basis: 'requester' | 'reference' | 'content' | 'concept';
+  intent: 'documentary' | 'editorial' | 'showcase';
+  mode: 'scene' | 'solid' | 'gradient';
+  textAreaShare: number;
+}
+
 export interface StudioLayoutV2 {
   version: 2;
   width: number;
   height: number;
   genre?: 'social_announcement' | 'invitation' | 'poster' | 'presentation_slide' | 'banner';
   grid: GridConfig;
-  background: { color: Hex };
+  background: { color: Hex; field?: BackgroundField; decision?: BackgroundDecision };
   art?: ArtConfig;
   shapes: ShapeElement[];
   text: TextElement[];
@@ -438,7 +448,10 @@ export const studioLayoutV2Schema = z.object({
   height: z.number().int().positive(),
   genre: z.enum(['social_announcement', 'invitation', 'poster', 'presentation_slide', 'banner']).optional(),
   grid: gridSchema,
-  background: z.object({ color: hexSchema }).strict(),
+  background: z.object({ color: hexSchema, field: backgroundFieldSchema.optional(),
+    decision: z.object({ policy: z.literal('content-background-v1'), basis: z.enum(['requester', 'reference', 'content', 'concept']),
+      intent: z.enum(['documentary', 'editorial', 'showcase']), mode: z.enum(['scene', 'solid', 'gradient']),
+      textAreaShare: z.number().min(0).max(1) }).strict().optional() }).strict(),
   art: artSchema.optional(),
   shapes: z.array(shapeElementSchema).max(40),
   text: z.array(textElementSchema).min(1).max(40),

@@ -1,3 +1,4 @@
+import { backgroundFieldSvg } from './background-field.js';
 import { measurePangoText, measurementRuntimeIdentity, type PangoMeasurement, type MeasurementRuntimeIdentity } from './pango-measurement.js';
 import { lineGeometry } from './line-geometry.js';
 import fs from 'node:fs';
@@ -1879,6 +1880,12 @@ export function renderLayoutV2ToSvg(
   bodyPartsNoText.push(
     `<rect id="background" width="${layout.width}" height="${layout.height}" fill="${layout.background.color}"/>`
   );
+
+  if (layout.background.field) {
+    const field = backgroundFieldSvg(layout.background.field, layout.width, layout.height);
+    defsParts.push(field.defs);
+    bodyPartsNoText.push(field.svg);
+  }
 
   // Art Layer
   if (layout.art) {

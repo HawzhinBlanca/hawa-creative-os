@@ -1,3 +1,4 @@
+import { backgroundFieldSchema } from './background-field.js';
 import type { StudioLayoutV2, Box } from './layout-v2.js';
 import { photoRecipeOf } from './layout-v2.js';
 import { photosMayOverlap } from './photo-cutout.js';
@@ -227,6 +228,12 @@ export function validateLayoutV2(
       code: 'PALETTE',
       message: `Background color ${layout.background.color} is not in reference palette`,
     };
+  }
+  if (layout.background.field) {
+    const field = backgroundFieldSchema.safeParse(layout.background.field);
+    if (!field.success || field.data.stops.some(stop => !allowedPalette.has(normalizeHex(stop.color)))) {
+      return { ok: false, code: 'PALETTE', message: 'BACKGROUND_FIELD: malformed or unapproved field stops' };
+    }
   }
   if (layout.art?.scrim && !allowedPalette.has(normalizeHex(layout.art.scrim.color))) {
     return {

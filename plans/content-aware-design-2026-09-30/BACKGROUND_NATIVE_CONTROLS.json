@@ -1,0 +1,611 @@
+{
+  "controls": [
+    {
+      "direction": "to-right",
+      "nativeGradient": true,
+      "nativeSourceHashes": [
+        "ef32859e21819d00c899567a9d6cff65eb6323e5af2a8df1cb2483f3005bf4e6",
+        "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc"
+      ],
+      "previewSamples": [
+        {
+          "x": 20,
+          "y": 20,
+          "rgb": [
+            11,
+            23,
+            41
+          ]
+        },
+        {
+          "x": 780,
+          "y": 20,
+          "rgb": [
+            30,
+            57,
+            94
+          ]
+        },
+        {
+          "x": 20,
+          "y": 980,
+          "rgb": [
+            11,
+            23,
+            41
+          ]
+        },
+        {
+          "x": 780,
+          "y": 980,
+          "rgb": [
+            30,
+            57,
+            94
+          ]
+        },
+        {
+          "x": 600,
+          "y": 760,
+          "rgb": [
+            190,
+            75,
+            65
+          ]
+        }
+      ],
+      "pptxSha256": "e4fdf869e84c6675c97126ea846dd30fe7127bd34f7ac29773b8a550434a7e4d",
+      "previewSha256": "c14b1878e26c82f919d249603b346864d786e41d7a094a738c18c259e3a2597d",
+      "independentNativeRender": {
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 PDF -> pdftoppm at 96dpi",
+        "samples": [
+          {
+            "x": 20,
+            "y": 20,
+            "rgb": [
+              11,
+              23,
+              41
+            ],
+            "nativeRgb": [
+              10,
+              22,
+              40
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 780,
+            "y": 20,
+            "rgb": [
+              30,
+              57,
+              94
+            ],
+            "nativeRgb": [
+              30,
+              58,
+              95
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 20,
+            "y": 980,
+            "rgb": [
+              11,
+              23,
+              41
+            ],
+            "nativeRgb": [
+              10,
+              22,
+              40
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 780,
+            "y": 980,
+            "rgb": [
+              30,
+              57,
+              94
+            ],
+            "nativeRgb": [
+              30,
+              58,
+              95
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 600,
+            "y": 760,
+            "rgb": [
+              190,
+              75,
+              65
+            ],
+            "nativeRgb": [
+              189,
+              75,
+              65
+            ],
+            "maxChannelDifference": 1
+          }
+        ],
+        "pdfPixels": {
+          "width": 800.0125984251974,
+          "height": 999.9874015748026
+        },
+        "rasterPixels": {
+          "width": 801,
+          "height": 1000
+        },
+        "pageRounding": "PDF point quantization under 0.1px; extra raster fringe excluded",
+        "comparedBackgroundPixels": 648432,
+        "overTolerance": 0,
+        "maxChannelDifference": 2,
+        "pdfSha256": "449b3f332bf47d2cb6db0e35ef5403310b35c477947a9ba49be01cc3027de130",
+        "passed": true
+      }
+    },
+    {
+      "direction": "to-bottom",
+      "nativeGradient": true,
+      "nativeSourceHashes": [
+        "ef32859e21819d00c899567a9d6cff65eb6323e5af2a8df1cb2483f3005bf4e6",
+        "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc"
+      ],
+      "previewSamples": [
+        {
+          "x": 20,
+          "y": 20,
+          "rgb": [
+            10,
+            23,
+            41
+          ]
+        },
+        {
+          "x": 780,
+          "y": 20,
+          "rgb": [
+            10,
+            23,
+            41
+          ]
+        },
+        {
+          "x": 20,
+          "y": 980,
+          "rgb": [
+            30,
+            57,
+            94
+          ]
+        },
+        {
+          "x": 780,
+          "y": 980,
+          "rgb": [
+            30,
+            57,
+            94
+          ]
+        },
+        {
+          "x": 600,
+          "y": 760,
+          "rgb": [
+            190,
+            75,
+            65
+          ]
+        }
+      ],
+      "pptxSha256": "a03cedecf38cf573e1c6f338390a8a242bee22f0eca4d8e709fd5c19290c347c",
+      "previewSha256": "28c9ebff540e0d76c53b56aaf4d0c53b646bcdfae3011c7ee0a13ab1172e8cac",
+      "independentNativeRender": {
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 PDF -> pdftoppm at 96dpi",
+        "samples": [
+          {
+            "x": 20,
+            "y": 20,
+            "rgb": [
+              10,
+              23,
+              41
+            ],
+            "nativeRgb": [
+              10,
+              22,
+              40
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 780,
+            "y": 20,
+            "rgb": [
+              10,
+              23,
+              41
+            ],
+            "nativeRgb": [
+              10,
+              22,
+              40
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 20,
+            "y": 980,
+            "rgb": [
+              30,
+              57,
+              94
+            ],
+            "nativeRgb": [
+              30,
+              58,
+              95
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 780,
+            "y": 980,
+            "rgb": [
+              30,
+              57,
+              94
+            ],
+            "nativeRgb": [
+              30,
+              58,
+              95
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 600,
+            "y": 760,
+            "rgb": [
+              190,
+              75,
+              65
+            ],
+            "nativeRgb": [
+              189,
+              75,
+              65
+            ],
+            "maxChannelDifference": 1
+          }
+        ],
+        "pdfPixels": {
+          "width": 800.0125984251974,
+          "height": 999.9874015748026
+        },
+        "rasterPixels": {
+          "width": 801,
+          "height": 1000
+        },
+        "pageRounding": "PDF point quantization under 0.1px; extra raster fringe excluded",
+        "comparedBackgroundPixels": 648432,
+        "overTolerance": 0,
+        "maxChannelDifference": 2,
+        "pdfSha256": "6d9118b6a4eff22ba6d22e316687bb42adc4a130abf72c273ed079fb222a5678",
+        "passed": true
+      }
+    },
+    {
+      "direction": "to-left",
+      "nativeGradient": true,
+      "nativeSourceHashes": [
+        "ef32859e21819d00c899567a9d6cff65eb6323e5af2a8df1cb2483f3005bf4e6",
+        "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc"
+      ],
+      "previewSamples": [
+        {
+          "x": 20,
+          "y": 20,
+          "rgb": [
+            29,
+            57,
+            94
+          ]
+        },
+        {
+          "x": 780,
+          "y": 20,
+          "rgb": [
+            10,
+            23,
+            41
+          ]
+        },
+        {
+          "x": 20,
+          "y": 980,
+          "rgb": [
+            29,
+            57,
+            94
+          ]
+        },
+        {
+          "x": 780,
+          "y": 980,
+          "rgb": [
+            10,
+            23,
+            41
+          ]
+        },
+        {
+          "x": 600,
+          "y": 760,
+          "rgb": [
+            190,
+            75,
+            65
+          ]
+        }
+      ],
+      "pptxSha256": "e0c1895a0d398d8c002b2d5aa0cdccd279944b95b3dd0fd248b6962ea3806fde",
+      "previewSha256": "43cb002a7315fa6f02f3a7dc8a69beab1b61ffc81466bb52f3db4de3fe8ac730",
+      "independentNativeRender": {
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 PDF -> pdftoppm at 96dpi",
+        "samples": [
+          {
+            "x": 20,
+            "y": 20,
+            "rgb": [
+              29,
+              57,
+              94
+            ],
+            "nativeRgb": [
+              30,
+              58,
+              95
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 780,
+            "y": 20,
+            "rgb": [
+              10,
+              23,
+              41
+            ],
+            "nativeRgb": [
+              10,
+              22,
+              40
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 20,
+            "y": 980,
+            "rgb": [
+              29,
+              57,
+              94
+            ],
+            "nativeRgb": [
+              30,
+              58,
+              95
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 780,
+            "y": 980,
+            "rgb": [
+              10,
+              23,
+              41
+            ],
+            "nativeRgb": [
+              10,
+              22,
+              40
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 600,
+            "y": 760,
+            "rgb": [
+              190,
+              75,
+              65
+            ],
+            "nativeRgb": [
+              189,
+              75,
+              65
+            ],
+            "maxChannelDifference": 1
+          }
+        ],
+        "pdfPixels": {
+          "width": 800.0125984251974,
+          "height": 999.9874015748026
+        },
+        "rasterPixels": {
+          "width": 801,
+          "height": 1000
+        },
+        "pageRounding": "PDF point quantization under 0.1px; extra raster fringe excluded",
+        "comparedBackgroundPixels": 648432,
+        "overTolerance": 0,
+        "maxChannelDifference": 2,
+        "pdfSha256": "9b567cda85f6d463c17d681fc5eae54a96e5d2aa40788ba6adf3beaafa9d5f96",
+        "passed": true
+      }
+    },
+    {
+      "direction": "to-top",
+      "nativeGradient": true,
+      "nativeSourceHashes": [
+        "ef32859e21819d00c899567a9d6cff65eb6323e5af2a8df1cb2483f3005bf4e6",
+        "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc"
+      ],
+      "previewSamples": [
+        {
+          "x": 20,
+          "y": 20,
+          "rgb": [
+            30,
+            57,
+            94
+          ]
+        },
+        {
+          "x": 780,
+          "y": 20,
+          "rgb": [
+            30,
+            57,
+            94
+          ]
+        },
+        {
+          "x": 20,
+          "y": 980,
+          "rgb": [
+            10,
+            23,
+            41
+          ]
+        },
+        {
+          "x": 780,
+          "y": 980,
+          "rgb": [
+            10,
+            23,
+            41
+          ]
+        },
+        {
+          "x": 600,
+          "y": 760,
+          "rgb": [
+            190,
+            75,
+            65
+          ]
+        }
+      ],
+      "pptxSha256": "933980467c133421d6d6c90a718c813785ad5125162489172ba5786e47d25a8d",
+      "previewSha256": "c0da2e8a33483e3be821b43fdf329b0a5ebbc9b177a5fe6dbced4d5f369fd7af",
+      "independentNativeRender": {
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 PDF -> pdftoppm at 96dpi",
+        "samples": [
+          {
+            "x": 20,
+            "y": 20,
+            "rgb": [
+              30,
+              57,
+              94
+            ],
+            "nativeRgb": [
+              30,
+              58,
+              95
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 780,
+            "y": 20,
+            "rgb": [
+              30,
+              57,
+              94
+            ],
+            "nativeRgb": [
+              30,
+              58,
+              95
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 20,
+            "y": 980,
+            "rgb": [
+              10,
+              23,
+              41
+            ],
+            "nativeRgb": [
+              10,
+              22,
+              40
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 780,
+            "y": 980,
+            "rgb": [
+              10,
+              23,
+              41
+            ],
+            "nativeRgb": [
+              10,
+              22,
+              40
+            ],
+            "maxChannelDifference": 1
+          },
+          {
+            "x": 600,
+            "y": 760,
+            "rgb": [
+              190,
+              75,
+              65
+            ],
+            "nativeRgb": [
+              189,
+              75,
+              65
+            ],
+            "maxChannelDifference": 1
+          }
+        ],
+        "pdfPixels": {
+          "width": 800.0125984251974,
+          "height": 999.9874015748026
+        },
+        "rasterPixels": {
+          "width": 801,
+          "height": 1000
+        },
+        "pageRounding": "PDF point quantization under 0.1px; extra raster fringe excluded",
+        "comparedBackgroundPixels": 648432,
+        "overTolerance": 0,
+        "maxChannelDifference": 2,
+        "pdfSha256": "df44cb67b5b86a4847e2eec61b7490f9c62a68b2005f3a37254657cc206f3462",
+        "passed": true
+      }
+    }
+  ],
+  "providerCalls": 0,
+  "canvaQualification": "not_run",
+  "nativeFontQualification": "failed in this independent control: source Verdana substituted with FrankRuhlHofshi-Bold; font-cache warnings retained; background-only proof"
+}

@@ -6,7 +6,7 @@ six research recommendations. ADR-172 records the amended foundation and boundar
 | Workstream | Required deliverable | Evidence needed | Current state |
 |---|---|---|---|
 | W1 Subject protection | Individual face/subject regions from service through crop/solver/QA; visible unknown/invalid evidence | Malformed-input, group/edge/support crop and occlusion regressions plus saved evidence | Local engineering implemented; qualification pending |
-| W2 Background planning | Typed content-aware background decision; explicit requester/brand/reference precedence; regional legibility | Different content/allowed backgrounds, refusal and rendered/native/replay checks | Pending |
+| W2 Background planning | Typed content-aware background decision; explicit requester/brand/reference precedence; regional legibility | Different content/allowed backgrounds, refusal and rendered/native/replay checks | Local engineering implemented; Canva/human qualification pending |
 | W3 Logo treatment | Conditional carriers; approved byte-preserving variant/placement and clear space | Transparent official asset on varied grounds; local/native identity and pixel checks | Pending |
 | W4 Composition | Several coverage-safe native topologies, narrative support order and aspect-aware geometry; meaningful3-concept diversity | One/six/ten photos, LTR/RTL/formats, exact live copy, schema/render/PPTX/native checks | Pending |
 | W5 Local optimization | Brand-constrained perceptual color decisions and bounded local geometry/type refinement; cache/replay identity | Color/contrast, grid/containment/asymmetry, determinism, cost/call/latency evidence | Pending |
@@ -38,3 +38,15 @@ Other workstreams and the full release/native/human gates remain open.
 - W1 first commit hook refused stale manifest; refresh exposed a historical ignored
   audit-report link absent in the new checkout (1464 pass/1 fail). Linked the original
   shared audit evidence and reran:1466 pass/0 warn/0 fail. No verifier bypass.
+
+## W2 verified checkpoint
+
+216 connected tests across9 files passed;642 test roots, build/lint/security passed.
+Requested surface decisions survive solver, Core adapter, preparation and replay.
+Approved gradient fields retain editable DrawingML and reconstruction parameters.
+Four independent native controls match2,593,728 background pixels within3 values
+per channel; source photo/logo hashes remain intact. Independent native font fallback
+(Verdana -> FrankRuhlHofshi-Bold) is explicitly NOT qualified; real Canva field,
+typography and human quality gates remain open. See W2_BACKGROUND_PROOF.json and
+BACKGROUND_NATIVE_CONTROLS.json; no provider calls or production changes.
+Other workstreams and full sealed gates/deployment remain pending.

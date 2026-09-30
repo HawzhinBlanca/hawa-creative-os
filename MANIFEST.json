@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T18:23:20Z",
+  "generatedAt": "2026-09-30T18:55:49Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 657,
+  "fileCount": 661,
   "files": [
     {
       "path": ".dockerignore",
@@ -879,8 +879,8 @@
     },
     {
       "path": "adrs/172_content_aware_editable_art_direction.md",
-      "sha256": "12a2aa1a0557af591e94ae6a8bda1c90a90316658d795fa49a23157c216dece0",
-      "bytes": 3686
+      "sha256": "71ed8a0562f5cf66c85c5525723de314027199c52d895b3b1b05cf8e630c7b28",
+      "bytes": 4855
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1318,14 +1318,24 @@
       "bytes": 26365
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/BACKGROUND_NATIVE_CONTROLS.json",
+      "sha256": "aab71911bc222a67fc96671ccfffcb6f1bada8b64988f8c65e50a3d87ce84e4a",
+      "bytes": 13380
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "0bbab810a5015ecf2215bdc6bb0ad3c6e0e55cc109bcfb1a8a859db2749b708b",
-      "bytes": 3435
+      "sha256": "ed955052b178403a29ad990d578889939b14099e51d3fb40468fd668c691a1f9",
+      "bytes": 4239
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
       "sha256": "f5bc1f13a5b5ea64805017b04a12ac45a5f6334b03f222493429b2fe188769e8",
       "bytes": 2958
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W2_BACKGROUND_PROOF.json",
+      "sha256": "4091e3acf7b4410d9e0e431664406cdb76ac63ab7848edc8460481c79c1a45b1",
+      "bytes": 6832
     },
     {
       "path": "plans/hosting/LINUX_READINESS_PROOF.json",
@@ -2429,8 +2439,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "95ec5f125e3cfaeaa7718153307de09868eeffad52dbc6ccdf7f3d8fe799958a",
-      "bytes": 551083
+      "sha256": "013d4b83233a51d1caeb12d6f3c975fb5d67008457fc2d81075ddc43e569069d",
+      "bytes": 551881
     },
     {
       "path": "plans/user-stories.csv",
@@ -2986,6 +2996,16 @@
       "path": "scripts/proofs/compare_layout_models.ts",
       "sha256": "ce6f9b601d843e29c8c081d34c98124989db48e2f6c6afc33284d65521153fc8",
       "bytes": 7846
+    },
+    {
+      "path": "scripts/proofs/content_background_probe.mjs",
+      "sha256": "d844a99238e22d72889f96a4b43835181c617e0b9969e4f25df7914883e86a1f",
+      "bytes": 3880
+    },
+    {
+      "path": "scripts/proofs/content_background_verify_native.mjs",
+      "sha256": "04f6ed2626eedd546fee8efbd82ab2c7951f4d1194b7208e97d64b1d1f2a3cf1",
+      "bytes": 3692
     },
     {
       "path": "scripts/proofs/gate-baseline.json",

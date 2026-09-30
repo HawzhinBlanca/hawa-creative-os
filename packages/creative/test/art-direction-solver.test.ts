@@ -222,7 +222,7 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
     expect(validateLayoutV2(layout, counted)).toMatchObject({ ok: false, code: 'PHOTOS' });
   });
 
-  it('preparation, settlePhotos and the photo-box fitter leave a solved recipe as it is', () => {
+  it('preparation preserves solved geometry while honoring a requested background; fitters leave it intact', () => {
     const layout = solve('hero_fade_report', 1080, 1350, false);
     const before = JSON.parse(JSON.stringify(layout));
     const prepared = prepareGeneratedLayoutV3(JSON.parse(JSON.stringify(layout)), { text: LATIN }, {
@@ -232,9 +232,9 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
     // Fonts are re-sanitised (rtl made explicit); no box moves and no ornament is added.
     expect(prepared.photos).toEqual(before.photos);
     expect(prepared.shapes).toEqual(before.shapes);
-    expect(prepared.overlays).toEqual(before.overlays);
+    expect(prepared.overlays).toEqual(before.overlays.map((o: { color: string }) => ({ ...o, color: o.color === before.background.color ? '#1E3A5F' : o.color })));
     expect(prepared.text.map((t) => [t.x, t.y, t.width, t.height, t.fontSize])).toEqual(before.text.map((t: any) => [t.x, t.y, t.width, t.height, t.fontSize]));
-    expect(prepared.background).toEqual(before.background);
+    expect(prepared.background).toMatchObject({ color: '#1E3A5F', decision: { basis: 'requester' } });
     expect(prepared.art).toBeUndefined();
     expect(settlePhotos(JSON.parse(JSON.stringify(layout)))).toEqual(before);
     expect(fitPhotoBoxesToImages(JSON.parse(JSON.stringify(layout)), PHOTOS, { text: LATIN })).toEqual(before);

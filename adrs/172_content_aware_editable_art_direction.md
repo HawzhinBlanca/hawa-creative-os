@@ -58,3 +58,21 @@ superiority claim requires matched professional comparisons and confidence inter
 This amends the rigid carrier/recipe behavior of ADR-170 and expands ADR-171 without
 weakening requester coverage. Source-level engineering completion is distinct from
 human quality qualification.
+
+## W2 representation detail
+
+The base field is an optional bounded linear gradient with approved palette stops,
+shared by the SVG preview and a named native DrawingML shape in PPTX. It sits below
+art/photos and never flattens factual copy, source photos or logos. Promote the already
+pinned fflate package from test-only to runtime for bounded OOXML serialization;
+no new package/version is introduced. Transfer plans retain field parameters and
+background decisions; generic reconstruction must retain the same native field.
+Validate stop order/colors at every adapter boundary and use a conservative
+luminance envelope for declared contrast. Actual rendered ink checks still apply.
+Native DrawingML structural proof does not qualify Canva's import/edit/reopen/export;
+that existing gate remains open and must report any import loss honestly.
+
+Resolve requester color before surface/type choices. A forbidden palette request
+refuses instead of silently substituting. Compatible reference texture and actual
+copy density constrain optional fields. Existing photographs remain unchanged;
+background decisions recolor the recipe's matching ground/fade, never its photo.

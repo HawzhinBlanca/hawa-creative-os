@@ -1,3 +1,4 @@
+import { applyContentBackground } from './background-planning.js';
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { photoRecipeOf, HERO_SOFT_UPSCALE } from './layout-v2.js';
@@ -810,8 +811,11 @@ export function prepareGeneratedLayoutV3(
   // every house rule the validator checks already met. The passes below move boxes the model drew;
   // on a solved composition they would re-seat its photos, re-centre its text off the fade and add
   // ornament to a photograph. Only the fonts and the brand palette are re-applied, as they are to
-  // every layout, and the requested background is ignored: a recipe's ground is its photo.
+  // every layout. ADR-172 resolves compatible background choices against the solved boxes.
   if (photoRecipeOf(layout)) {
+    if ((canvas.background || canvas.style?.texture && canvas.style.texture !== 'as_generated') && canvas.palette?.length) {
+      applyContentBackground(layout, canvas.palette, { requestedColor: canvas.background, style: canvas.style });
+    }
     const fonted = sanitizeFontsV3(layout, copy);
     return canvas.palette?.length ? conformColoursOnly(fonted, canvas.palette) : fonted;
   }

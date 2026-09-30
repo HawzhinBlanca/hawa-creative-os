@@ -1,3 +1,4 @@
+import { BACKGROUND_FIELD_OBJECT, encodeNativeBackgroundField } from './background-transfer.js';
 import { lineGeometry } from './line-geometry.js';
 import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
@@ -225,6 +226,7 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
     width: layout.width,
     height: layout.height,
     background: layout.background.color,
+    ...(layout.background.field ? { backgroundField: layout.background.field } : {}),
     shapes: layout.shapes.map((s) => ({
       x: s.x,
       y: s.y,
@@ -386,6 +388,10 @@ export async function encodeStudioTransferV2(
 
   const slide = pptx.addSlide();
   slide.background = { color: hex(layout.background.color) };
+  if (layout.background.field) slide.addShape(pptx.ShapeType.rect, {
+    x: 0, y: 0, w: layout.width / 96, h: layout.height / 96, objectName: BACKGROUND_FIELD_OBJECT,
+    fill: { color: hex(layout.background.color) }, line: { transparency: 100 },
+  });
 
   // 1. Art layer (if provided)
   if (layout.art) {
@@ -691,7 +697,7 @@ export async function encodeStudioTransferV2(
     });
   }
 
-  const bytes = (await pptx.write({ outputType: 'nodebuffer' })) as Buffer;
+  const bytes = encodeNativeBackgroundField((await pptx.write({ outputType: 'nodebuffer' })) as Buffer, layout.background.field);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
 
   const plan = studioLayoutV2ToTransferPlan(layout);
@@ -709,6 +715,7 @@ export async function encodeStudioTransferV2(
       logoSha256: logo?.sha256 || null,
       artSha256: options.artBuffer ? createHash('sha256').update(options.artBuffer).digest('hex') : null,
       plan,
+      backgroundDecision: layout.background.decision ?? null,
       pptxSha256: sha256,
       version: 2,
     },
