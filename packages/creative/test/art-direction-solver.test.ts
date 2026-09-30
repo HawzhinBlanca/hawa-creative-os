@@ -51,7 +51,7 @@ const RECIPES: RecipeId[] = ['hero_fade_report', 'hero_card', 'hero_plate', 'scr
 function choice(recipe: RecipeId): ArtDirectionChoice {
   return {
     recipe,
-    heroPhotoIndex: recipe === 'sky_title' ? 5 : 0,
+    heroPhotoIndex: recipe === 'sky_title' || recipe === 'hero_plate' ? 5 : 0,
     texturePhotoIndex: 4,
     cutoutPhotoIndex: recipe === 'cutout_speaker' ? 3 : null,
     slots: [{ copyIndex: 0, slot: 'title' }, { copyIndex: 1, slot: 'accent' }, { copyIndex: 2, slot: 'body' }, { copyIndex: 3, slot: 'cta' }],
@@ -84,6 +84,12 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
     for (const [w, h] of SIZES) {
       for (const rtl of [false, true]) {
         it(`${recipe} ${w}x${h} ${rtl ? 'RTL' : 'LTR'}`, () => {
+          // A landscape photo on a 9:16 story leaves the plate no quiet band below the story's unsafe
+          // top without enlarging the photo past 1.3x: the recipe is refused, not forced.
+          if (recipe === 'hero_plate' && h / w >= 1.7) {
+            expect(() => solve(recipe, w, h, rtl)).toThrow(RecipeInfeasibleError);
+            return;
+          }
           const layout = solve(recipe, w, h, rtl);
           expect(studioLayoutV2Schema.safeParse(layout).success).toBe(true);
           const result = validateLayoutV2(layout, context(w, h, rtl));
@@ -123,6 +129,7 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
       for (const rtl of [false, true]) {
         it(`${recipe} ${w}x${h} ${rtl ? 'RTL' : 'LTR'} with three blocks and no call to action`, () => {
           const text = rtl ? { 0: SORANI[0], 1: SORANI[1], 2: SORANI[2] } : { 0: LATIN[0], 1: LATIN[1], 2: LATIN[2] };
+          if (recipe === 'hero_plate' && h / w >= 1.7) return;
           const layout = solveRecipe({
             width: w, height: h, copy: { text }, photos: PHOTOS, palette: PALETTE, logoAspect: 1,
             choice: { ...choice(recipe), slots: choice(recipe).slots.slice(0, 3) },
@@ -244,9 +251,8 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
         slots: [{ copyIndex: 0, slot: 'accent' }, { copyIndex: 1, slot: 'title' }, { copyIndex: 2, slot: 'body' }], params: { frame: 'inset', align: 'center' } },
     });
     /** The face as the renderer draws it: the detector's point through the hero's cover crop, one face tall. */
-    const faceBandOf = (layout: StudioLayoutV2) => {
+    const faceBandOf = (layout: StudioLayoutV2, src: SolverPhoto = faces[3]) => {
       const hero = layout.photos!.find((p) => p.role === 'hero')!;
-      const src = faces[3];
       const crop = coverCrop(hero, src, hero.focus);
       const scale = hero.height / crop.sh;
       const cy = hero.y + (src.focus!.y * src.height - crop.sy) * scale;
@@ -254,13 +260,21 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
       return { top: cy - half, bottom: cy + half };
     };
 
-    it('hero_plate keeps its navy plate off the faces the detector found (it sat across both visitors)', () => {
-      const layout = plateOn(faces);
+    it('hero_plate sets its plate in the photo\'s quiet region, never on the people', () => {
+      // Photo 3 (two visitors) has no quiet top or bottom: in round one the plate sat on their faces,
+      // then, moved below them, on their bodies. The recipe is refused for it.
+      expect(() => plateOn(faces)).toThrow(/no quiet top or bottom/);
+      // A photo quiet at the top with its people low: the plate stays in the top band, above them.
+      const calm: SolverPhoto[] = faces.map((p) => (p.photoIndex === 3 ? { ...p, quiet: 'top', focus: { x: 0.4, y: 0.72 } } : p));
+      const layout = plateOn(calm);
       const plate = layout.shapes.find((s) => s.surface === 'plate')!;
-      expect(plate.y).toBeGreaterThanOrEqual(faceBandOf(layout).bottom);
+      const hero = layout.photos!.find((p) => p.role === 'hero')!;
+      expect(plate.y + plate.height).toBeLessThanOrEqual(hero.y + 0.45 * hero.height);
+      expect(plate.y + plate.height).toBeLessThanOrEqual(faceBandOf(layout, calm[3]).top);
       expect(validateLayoutV2(layout, { ...context(1080, 1350, false), copyCount: 3, copyScripts: ['latin', 'latin', 'latin'] })).toMatchObject({ ok: true });
-      // Without a detected face the plate keeps its place in the upper third, under the logo.
-      expect(plateOn(PHOTOS).shapes.find((s) => s.surface === 'plate')!.y).toBeLessThan(plate.y);
+      // Quiet at the top but with the faces there too: refused rather than set on them.
+      const crowded: SolverPhoto[] = faces.map((p) => (p.photoIndex === 3 ? { ...p, quiet: 'top', focus: { x: 0.5, y: 0.3 } } : p));
+      expect(() => plateOn(crowded)).toThrow(/cover the faces/);
     });
 
     it('refuses a recipe whose copy would sit on a face rather than set it there', () => {
@@ -289,7 +303,7 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
         width: 1080, height: 1350, copy: { text: OWNER }, photos: PHOTOS, palette: PALETTE, logoAspect: 1,
         choice: { recipe, heroPhotoIndex: hero, texturePhotoIndex: texture, cutoutPhotoIndex: null, slots, params: { frame: 'inset', align, fadeShare: 0.46 } },
       });
-      const layouts = [concept('hero_fade_report', 0, 4, 'start'), concept('scrim_caption', 5, null, 'start'), concept('hero_plate', 3, null, 'center')];
+      const layouts = [concept('hero_fade_report', 0, 4, 'start'), concept('scrim_caption', 3, null, 'start'), concept('hero_plate', 5, null, 'center')];
       const fade = evaluateDesignMetrics(layouts[0], { wrappedLines: measureWrappedLines(layouts[0], OWNER) });
       expect(fade.metrics.gridAppropriateness.passed).toBe(true);
       const ranked = rankCandidatesV3(layouts.map((layout, sourceIndex) => ({ sourceIndex, layout })), { text: OWNER });

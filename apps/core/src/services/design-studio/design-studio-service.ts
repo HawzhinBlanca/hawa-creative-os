@@ -2744,6 +2744,7 @@ export class DesignStudioService {
       outcome = await runJudgeStageV3(ctx, candidateStates, {
         ...(judgeProtocol === 'incumbent' ? {} : { protocol: judgeProtocol }),
         brief: judgeBriefForStageV3(ctx, (stages.brief || {}) as Partial<CreativeBrief>),
+        ...(Array.isArray(stages.brief?.subjectTags) ? { subjects: stages.brief.subjectTags as string[] } : {}),
       });
     } catch (err) {
       if (isModelCallHoldError(err)) throw err;
@@ -2890,6 +2891,8 @@ export class DesignStudioService {
       judgeProtocol: selection.protocol,
       humanChoiceRecommended: selection.humanChoiceRecommended,
       excludedCandidates: excludedEvidence(ranked),
+      // ADR-170: why the house prior chose, when the judge left the pair undecided.
+      ...(selection.prior ? { prior: selection.prior } : {}),
     };
     stages.canary = { passed: selection.canary?.passed ?? selection.briefBound?.canaryPassed ?? null,
       ...(selection.briefBound?.canaryUnavailable ? { unavailable: selection.briefBound.canaryUnavailable } : {}) };

@@ -362,7 +362,7 @@ export async function runReviseStageV3(
 export async function runJudgeStageV3(
   ctx: StageContext,
   candidates: CandidateState[],
-  judge: { protocol?: StudioJudgeProtocol; brief?: BriefBoundJudgeBrief } = {}
+  judge: { protocol?: StudioJudgeProtocol; brief?: BriefBoundJudgeBrief; subjects?: string[] } = {}
 ): Promise<{
   selection: WinnerSelectionV3;
   winner: CandidateState;
@@ -380,6 +380,8 @@ export async function runJudgeStageV3(
     judgeBrief: judge.brief,
     // ADR-170: the client's house art-direction rules, which the judge weighs on photo briefs.
     ...(ctx.artDirectionRules?.length ? { houseRules: ctx.artDirectionRules } : {}),
+    // ADR-170: the brief's subject, for the house prior when the judge leaves two recipes undecided.
+    ...(judge.subjects?.length ? { subjects: judge.subjects } : {}),
   });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;

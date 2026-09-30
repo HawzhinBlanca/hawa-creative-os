@@ -1,6 +1,7 @@
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
-import { photoRecipeOf } from './layout-v2.js';
+import { photoRecipeOf, HERO_SOFT_UPSCALE } from './layout-v2.js';
+import { artDirectionPrior } from './art-direction/prior.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
 import { renderLayoutV2, measureWrappedLines, measureTextGeometry, balancedBoxWidths, admittedFontFace, findAdmittedFontFace, type RenderLayoutOptions } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
@@ -100,6 +101,8 @@ export interface PipelineV3CallOptions {
   clientProfile?: string;
   /** ADR-170: the client's house art-direction rules, which the judge weighs on photo briefs. */
   houseRules?: string[];
+  /** ADR-170: the brief's subject tags, for the art-direction prior when the judge does not decide. */
+  subjects?: string[];
 }
 
 /**
@@ -1531,13 +1534,21 @@ export function measureDesignV3(layout: StudioLayoutV2, copy: PipelineV3Copy): D
  * Orders two candidates: one that passes production's hard QA beats one that does not, then one
  * that passes the design metrics, then the higher composite. Negative when `a` ranks first.
  */
+const isSoftHero = (layout?: Pick<StudioLayoutV2, 'artDirection'>) =>
+  (layout?.artDirection?.heroUpscale ?? 0) > HERO_SOFT_UPSCALE;
+
 function compareCandidatesV3(
-  a: { metrics: DesignMetricsReport; hardQa?: HardQaOutcome },
-  b: { metrics: DesignMetricsReport; hardQa?: HardQaOutcome }
+  a: { metrics: DesignMetricsReport; hardQa?: HardQaOutcome; layout?: StudioLayoutV2 },
+  b: { metrics: DesignMetricsReport; hardQa?: HardQaOutcome; layout?: StudioLayoutV2 }
 ): number {
   const qaA = a.hardQa ? a.hardQa.passed : true;
   const qaB = b.hardQa ? b.hardQa.passed : true;
   if (qaA !== qaB) return qaA ? -1 : 1;
+  // ADR-170: an art-directed candidate whose hero is enlarged past 1.5x looks soft; a sharp one
+  // ranks before it, whatever the typographic metrics say.
+  const softA = isSoftHero(a.layout);
+  const softB = isSoftHero(b.layout);
+  if (softA !== softB) return softA ? 1 : -1;
   if (a.metrics.passed !== b.metrics.passed) return a.metrics.passed ? -1 : 1;
   const byComposite = b.metrics.compositeScore - a.metrics.compositeScore;
   // Equal composites (at the precision they are reported): fewer review findings first (ADR-157).
@@ -1701,7 +1712,7 @@ export async function refineCandidateV3(
 
   // Adopt only a repair that strictly outranks the original, by the order the ranking uses.
   // (Pass the same `qa` here as to rankCandidatesV3: a missing verdict counts as a pass.)
-  if (compareCandidatesV3({ metrics, hardQa }, candidate) >= 0) {
+  if (compareCandidatesV3({ metrics, hardQa, layout: refined }, candidate) >= 0) {
     return keep('rejected_no_improvement');
   }
   const reason: RefinementOutcomeV3['reason'] =
@@ -1726,7 +1737,12 @@ export interface WinnerSelectionV3 {
    *   self-contradicted pick left the pair undecided, or the degraded canary rendered identically
    *   so the pick could not be tested; the higher composite stands and a human choice is recommended.
    */
-  decidedBy: 'single_candidate' | 'judge' | 'composite_after_tie' | 'composite_judge_unreliable' | 'composite_judge_uncertain';
+  decidedBy: 'single_candidate' | 'judge' | 'composite_after_tie' | 'composite_judge_unreliable' | 'composite_judge_uncertain' | 'art_direction_prior';
+  /**
+   * ADR-170: when the judge left two art-directed candidates undecided (a tie across the two orders,
+   * or a pick that failed its canary), the house prior chose instead of the composite, and why.
+   */
+  prior?: { basis: 'subject' | 'sharpness'; reason: string; instead: 'composite_after_tie' | 'composite_judge_unreliable' };
   /** The incumbent's match. Null when the challenger judged or no judge ran. */
   match: PairwiseMatchResult | null;
   /** The incumbent's canary run on `subject` — its pick, or the higher composite after a tie. */
@@ -1836,6 +1852,17 @@ export async function selectWinnerV3(
   // Where the judge did not decide, the review findings break the tie (ADR-157): a design a person
   // would have to query goes second. Otherwise the higher composite stands, as before.
   const [lead, next] = fewerFindingsFirst(first, second);
+  // ADR-170: two art-directed candidates the judge did not separate go by the house prior (the
+  // subject's recipe, then the sharper hero), not by a composite built for typographic layouts.
+  if (!judgePick || !canaryPassed) {
+    const decision = artDirectionPrior(first.layout, second.layout, options.subjects);
+    if (decision.winner) {
+      const winner = decision.winner === 'a' ? first : second;
+      return { winner, runnerUp: winner === first ? second : first, decidedBy: 'art_direction_prior', match, canary,
+        judgeReliable: judgePick ? false : canaryPassed, protocol, humanChoiceRecommended: false,
+        prior: { basis: decision.basis!, reason: decision.reason, instead: judgePick ? 'composite_judge_unreliable' : 'composite_after_tie' } };
+    }
+  }
   if (!judgePick) {
     return { winner: lead, runnerUp: next, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed,
       protocol, humanChoiceRecommended: false };

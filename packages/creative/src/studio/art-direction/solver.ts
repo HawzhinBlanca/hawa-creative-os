@@ -1,3 +1,4 @@
+import { HERO_SHARP_UPSCALE } from '../layout-v2.js';
 import type {
   Box,
   Hex,
@@ -272,6 +273,8 @@ interface SetBlock {
   /** Measured width of its widest line. */
   lineWidth: number;
   lines: number;
+  /** The measure it was set at: the column, or the narrower body measure. */
+  width: number;
 }
 
 interface Palette {
@@ -312,6 +315,13 @@ export function solveRecipe(input: SolveRecipeInput): StudioLayoutV2 {
   throw new RecipeInfeasibleError(recipe, `unknown recipe ${String(recipe)} for ${W}x${H}`);
 }
 
+/** Body size of the office's report and caption posts, as a share of the width (example 3: ~3.2-3.4%). */
+export const OFFICE_BODY_SHARE = 0.033;
+/** Body measure of those posts, as a share of the width (example 3: about two thirds). */
+export const OFFICE_BODY_MEASURE = 0.68;
+/** How opaque a fade or scrim is where it closes over a photo's lower edge. */
+const SEALED_OPACITY = 0.98;
+
 /** Margin: 7% of the short edge, never under the house's 6%. */
 function marginFor(W: number, H: number): number {
   const s = Math.min(W, H);
@@ -334,6 +344,13 @@ class SolveContext {
   readonly overlays: OverlayElement[] = [];
   readonly photos: PhotoElement[] = [];
   readonly fonts: Required<NonNullable<SolveRecipeInput['fonts']>>;
+  /**
+   * Type set as the office sets its report and caption posts (example 3): body about 3.2% of the
+   * width at a 1.3 leading, on a measure of about two thirds of the width.
+   */
+  officeType = false;
+  /** The widest a body, meta or footer block is set, when narrower than its column. */
+  bodyMaxWidth?: number;
 
   constructor(readonly input: SolveRecipeInput) {
     this.W = input.width;
@@ -402,6 +419,86 @@ class SolveContext {
   }
 
   /**
+   * The largest full-width, top-anchored box a hero can fill without its pixels being enlarged more
+   * than `maxUpscale`: the whole canvas for a photo big enough, otherwise a band as tall as the
+   * photo allows, with the canvas's navy below it (the office's example 7 sets a landscape event
+   * photo the same way). A 1280x853 album photo stretched over a 1080x1350 canvas was enlarged 1.6x
+   * and looked soft in every live trial of 2026-09-30.
+   */
+  sharpHeroBox(p: SolverPhoto, maxUpscale = HERO_SHARP_UPSCALE): Box {
+    const across = this.W / p.width;
+    const height = across <= maxUpscale ? Math.floor(maxUpscale * p.height) : Math.round(across * p.height);
+    return { x: 0, y: 0, width: this.W, height: Math.min(this.H, Math.max(1, height)) };
+  }
+
+  /**
+   * An overlay that covers a photo's lower edge closes over it before the edge, so the edge never
+   * shows as a line against the navy below: the overlay reaches at least 0.35 of the canvas above
+   * the edge and is 98% opaque from the edge down.
+   */
+  sealPhotoEdge(overlay: OverlayElement, edgeY: number): void {
+    if (edgeY >= this.H) return;
+    const top = Math.max(0, Math.min(overlay.y, Math.round(edgeY - 0.35 * this.H)));
+    // The overlay as it was, as a function of y; then a ramp that closes over the edge. Each point
+    // takes the more opaque of the two, so text the overlay carried stays carried.
+    const orig = (y: number) => {
+      const t = (y - overlay.y) / overlay.height;
+      if (t <= 0) return overlay.stops[0].at <= 0 ? overlay.stops[0].opacity : 0;
+      const st = overlay.stops;
+      for (let i = 1; i < st.length; i++) {
+        if (t <= st[i].at) return st[i - 1].opacity + ((st[i].opacity - st[i - 1].opacity) * (t - st[i - 1].at)) / Math.max(1e-9, st[i].at - st[i - 1].at);
+      }
+      return st[st.length - 1].opacity;
+    };
+    const ramp: Array<[number, number]> = [[edgeY - 0.22 * this.H, 0], [edgeY - 0.1 * this.H, 0.6], [edgeY, SEALED_OPACITY]];
+    const rampAt = (y: number) => {
+      if (y <= ramp[0][0]) return 0;
+      if (y >= edgeY) return SEALED_OPACITY;
+      for (let i = 1; i < ramp.length; i++) {
+        if (y <= ramp[i][0]) return ramp[i - 1][1] + ((ramp[i][1] - ramp[i - 1][1]) * (y - ramp[i - 1][0])) / (ramp[i][0] - ramp[i - 1][0]);
+      }
+      return SEALED_OPACITY;
+    };
+    const ys = [...new Set([top, ...overlay.stops.map((st) => overlay.y + st.at * overlay.height), ...ramp.map(([y]) => y), this.H]
+      .map((y) => Math.round(Math.min(this.H, Math.max(top, y)))))].sort((a, b) => a - b);
+    const height = this.H - top;
+    let stops = ys.map((y) => ({ at: round3((y - top) / height), opacity: Math.round(Math.min(SEALED_OPACITY, Math.max(orig(y), rampAt(y))) * 1000) / 1000 }));
+    stops = stops.filter((st, i) => i === 0 || st.at > stops[i - 1].at);
+    // At most eight stops (the schema's limit): the ones nearest in position merge first.
+    while (stops.length > 8) {
+      let k = 1;
+      for (let i = 2; i < stops.length - 1; i++) if (stops[i].at - stops[i - 1].at < stops[k].at - stops[k - 1].at) k = i;
+      stops.splice(k, 1);
+    }
+    overlay.y = top;
+    overlay.height = height;
+    overlay.stops = stops;
+  }
+
+  /**
+   * The corner logo never sits bare on a photograph: where no plate or card already carries it, it
+   * gets a small cream tab, rounded, inside which its own clear space is kept (rulebook item 4).
+   */
+  backLogo(logo: Box): void {
+    const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    const holds = (a: Box, b: Box) => b.x >= a.x && b.y >= a.y && b.x + b.width <= a.x + a.width && b.y + b.height <= a.y + a.height;
+    if (!this.photos.some((p) => p.treatment !== 'cutout' && hit(p, logo))) return;
+    if (this.shapes.some((sh) => sh.role === 'panel' && sh.fill !== 'none' && holds(sh, logo))) return;
+    const pad = Math.max(4, Math.round(0.07 * logo.height));
+    const box = intBox({ x: logo.x - pad, y: logo.y - pad, width: logo.width + 2 * pad, height: logo.height + 2 * pad });
+    this.shapes.push({ kind: 'roundRect', role: 'panel', layer: 'overlay', surface: 'tab', color: this.tones.cream, ...box, radius: Math.round(0.2 * box.height) });
+  }
+
+  /** How much the hero's own pixels are enlarged in its box, as the renderer crops it. */
+  heroUpscale(): number | undefined {
+    const el = this.photos.find((p) => p.role === 'hero');
+    const p = el ? this.photo(el.photoIndex) : undefined;
+    if (!el || !p) return undefined;
+    const crop = coverCrop(el, p, el.focus);
+    return Math.round((el.width / crop.sw) * 100) / 100;
+  }
+
+  /**
    * How much a photo is enlarged to cover a box: over about 2 it looks soft, so a recipe that would
    * fill the whole canvas with a small landscape photo gives it the part of the canvas it can cover.
    */
@@ -445,7 +542,8 @@ class SolveContext {
   /** The type scale at a factor of the canvas's natural sizes; the title at least 2.2x the body. */
   typeScale(factor: number): TypeScale {
     const minBody = Math.ceil(HOUSE_RULES.minBodyShareOfWidth * this.W);
-    const body = Math.max(minBody, Math.round(0.026 * this.s * Math.min(1, factor + 0.12)));
+    const base = this.officeType && !this.wide ? OFFICE_BODY_SHARE * this.W : 0.026 * this.s;
+    const body = Math.max(minBody, Math.round(base * Math.min(1, factor + 0.12)));
     const title = Math.max(Math.ceil(HOUSE_RULES.titleToBodyMin * body), Math.round(0.066 * this.s * factor));
     return { title, accent: Math.round(title * 0.92), body, footer: Math.max(HOUSE_RULES.minFontPx, Math.min(body, Math.round(body * 0.82))) };
   }
@@ -463,7 +561,7 @@ class SolveContext {
     const display = b.slot === 'title' || b.slot === 'accent' || b.slot === 'cta';
     const rangeKey = b.arabic ? 'arabic' : 'latin';
     const lh = HOUSE_RULES.lineHeight[rangeKey];
-    const lineHeight = b.arabic ? (display ? 1.6 : 1.7) : display ? 1.2 : 1.4;
+    const lineHeight = b.arabic ? (display ? 1.6 : 1.7) : display ? 1.2 : this.officeType ? 1.3 : 1.4;
     const el: TextElement = {
       copyIndex: b.copyIndex,
       role: b.role,
@@ -495,9 +593,11 @@ class SolveContext {
     return blocks.map((b) => {
       const fontSize = this.sizeOf(b, scale);
       const color = b.slot === 'title' ? colours.title : b.slot === 'accent' ? colours.accent : b.slot === 'cta' ? colours.pillText : colours.body;
-      const el = this.element(b, { x: 0, y: 0, width: Math.round(width), height: 10 }, fontSize, color, align);
+      const bodyish = b.slot === 'body' || b.slot === 'meta' || b.slot === 'footer';
+      const measureW = Math.round(bodyish && this.bodyMaxWidth ? Math.min(width, this.bodyMaxWidth) : width);
+      const el = this.element(b, { x: 0, y: 0, width: measureW, height: 10 }, fontSize, color, align);
       const measured = this.measure(el, b.text);
-      return { block: b, el, ...measured };
+      return { block: b, el, ...measured, width: measureW };
     });
   }
 
@@ -533,9 +633,10 @@ class SolveContext {
   fitScale(
     groups: Array<{ blocks: Block[]; width: number; colours: Palette; align: 'start' | 'center' }>,
     fits: (sets: SetBlock[][]) => boolean,
-    titleLines = 2
+    titleLines = 2,
+    minFactor = 0.5
   ): SetBlock[][] {
-    for (let factor = 1; factor >= 0.5; factor -= 0.04) {
+    for (let factor = 1; factor >= minFactor - 1e-9; factor -= 0.04) {
       const scale = this.typeScale(factor);
       const sets = groups.map((g) => this.setGroup(g.blocks, g.width, scale, g.colours, g.align));
       const flat = sets.flat();
@@ -544,6 +645,23 @@ class SolveContext {
       if (titleOk && bodyOk && fits(sets)) return sets;
     }
     throw new RecipeInfeasibleError(this.recipe, `the copy does not fit ${this.W}x${this.H} at the house's smallest sizes`);
+  }
+
+  /**
+   * A title set on one line when it fits at no less than 80% of the natural scale, else on two: a
+   * two-word break such as "KAAE K-12 / Pilot Study" (live trial, 2026-09-30) is kept for copy that
+   * cannot stand on one line. Two lines are then balanced by balanceWidows.
+   */
+  fitScalePreferOneLine(
+    groups: Array<{ blocks: Block[]; width: number; colours: Palette; align: 'start' | 'center' }>,
+    fits: (sets: SetBlock[][]) => boolean
+  ): SetBlock[][] {
+    try {
+      return this.fitScale(groups, fits, 1, 0.8);
+    } catch (err) {
+      if (!(err instanceof RecipeInfeasibleError)) throw err;
+      return this.fitScale(groups, fits, 2);
+    }
   }
 
   /**
@@ -571,7 +689,9 @@ class SolveContext {
         y += pillH;
         return;
       }
-      out.push({ ...b.el, ...intBox({ x, y, width, height: b.height + 1 }) });
+      const bw = Math.min(width, b.width);
+      const bx = align === 'center' ? x + (width - bw) / 2 : b.block.arabic || this.rtl ? x + width - bw : x;
+      out.push({ ...b.el, ...intBox({ x: bx, y, width: bw, height: b.height + 1 }) });
       y += b.height + 1;
     });
     return out;
@@ -626,6 +746,8 @@ class SolveContext {
     art?: StudioLayoutV2['art'];
   }): StudioLayoutV2 {
     const used = new Set(this.photos.map((p) => p.photoIndex));
+    this.backLogo(parts.logo);
+    const upscale = this.heroUpscale();
     const layout: StudioLayoutV2 = {
       version: 2,
       width: this.W,
@@ -647,6 +769,7 @@ class SolveContext {
         ...(parts.cutout ? { cutoutPhotoIndex: parts.cutout.photoIndex } : {}),
         omittedPhotos: this.input.photos.map((p) => p.photoIndex).filter((i) => !used.has(i)).sort((a, b) => a - b),
         rtl: this.rtl,
+        ...(upscale ? { heroUpscale: upscale } : {}),
       },
     };
     this.applyTitleAccent(layout);
@@ -760,7 +883,7 @@ class SolveContext {
       const colX = this.rtl ? this.W - this.m - colW : this.m;
       const top = logo.y + logo.height + Math.round(0.5 * logo.height) + Math.round(0.03 * this.H);
       const bottom = this.safe.y + this.safe.height;
-      const [set] = this.fitScale([{ blocks: all, width: colW, colours, align }], ([g]) => this.stackHeight(g) <= bottom - top);
+      const [set] = this.fitScalePreferOneLine([{ blocks: all, width: colW, colours, align }], ([g]) => this.stackHeight(g) <= bottom - top);
       const h = this.stackHeight(set);
       const y = Math.round(top + (bottom - top - h) / 2);
       const text = this.placeStack(set, colX, colW, y, align, colours);
@@ -780,12 +903,17 @@ class SolveContext {
       return this.finish({ background: this.tones.navy, text, logo, titleZone: { x: colX, y, width: colW, height: h }, hero, texture });
     }
 
-    // Portrait and square: the text column is the safe area's width, anchored to its bottom.
+    // Portrait and square: the text column is the safe area's width, anchored to its bottom; the
+    // type is set as example 3 sets it.
     const colX = Math.max(this.safe.x, inner + Math.round(0.035 * this.s));
     const colW = this.W - 2 * colX;
     const bottom = this.safe.y + this.safe.height;
     const maxText = Math.round(0.62 * (fadeShare + 0.08) * this.H);
-    const [set] = this.fitScale([{ blocks: all, width: colW, colours, align }], ([g]) => this.stackHeight(g) <= maxText);
+    this.officeType = true;
+    this.bodyMaxWidth = Math.round(OFFICE_BODY_MEASURE * this.W);
+    // The fade must start below a fifth of the canvas and leave the logo two logo-heights of photo.
+    const maxByFade = Math.min(maxText, bottom - Math.ceil((1 - 0.8 * 0.66) * this.H), bottom - (logo.y + 2 * logo.height));
+    const [set] = this.fitScalePreferOneLine([{ blocks: all, width: colW, colours, align }], ([g]) => this.stackHeight(g) <= maxByFade);
     const h = this.stackHeight(set);
     const textTop = bottom - h;
     // The fade starts far enough above the text that the text sits where it is at least ~80% navy.
@@ -807,13 +935,17 @@ class SolveContext {
       tex.fade = { edge: 'top', length: 0.3 };
       tex.opacity = 0.9;
     }
-    this.overlays.push({
+    const fade: OverlayElement = {
       kind: 'gradient', purpose: 'fade', color: this.tones.navy, direction: 'to-bottom',
       x: 0, y: fadeTop, width: this.W, height: fadeH,
       stops: texture
         ? [{ at: 0, opacity: 0 }, { at: 0.24, opacity: 0.6 }, { at: 0.46, opacity: 0.8 }, { at: 0.72, opacity: 0.92 }, { at: 1, opacity: 0.96 }]
         : [{ at: 0, opacity: 0 }, { at: 0.26, opacity: 0.72 }, { at: 0.42, opacity: 0.88 }, { at: 0.7, opacity: 0.95 }, { at: 1, opacity: 0.97 }],
-    });
+    };
+    // Without a texture below it, a hero that stops above the canvas's foot must not show its edge
+    // as a line in the fade (run 7 of the live trials, 2026-09-30).
+    if (!texture) this.sealPhotoEdge(fade, heroBottom);
+    this.overlays.push(fade);
     return this.finish({ background: this.tones.navy, text, logo, titleZone: { x: colX, y: textTop, width: colW, height: h }, hero, texture });
   }
 
@@ -846,10 +978,9 @@ class SolveContext {
     const cardBottom = Math.min(this.safe.y + this.safe.height + Math.round(0.02 * this.s), this.H - frame - Math.round(0.035 * this.s));
     const colW = cardW - 2 * padX;
     const maxCard = Math.round((this.wide ? 0.8 : 0.4) * this.H);
-    const [set] = this.fitScale(
+    const [set] = this.fitScalePreferOneLine(
       [{ blocks: this.blocks, width: colW, colours, align }],
-      ([g]) => padTop + this.stackHeight(g) + padBottom <= maxCard,
-      2
+      ([g]) => padTop + this.stackHeight(g) + padBottom <= maxCard
     );
     const h = this.stackHeight(set);
     const cardH = Math.max(Math.round((this.wide ? 0.4 : 0.23) * this.H), padTop + h + padBottom);
@@ -874,7 +1005,16 @@ class SolveContext {
    */
   heroPlate(): StudioLayoutV2 {
     const hero = this.hero();
-    const heroEl = this.placeHero(hero, this.canvas());
+    // The plate goes where the photo is quiet (its top or bottom third, by the brief's reading or
+    // else the local measurement), never on what the photo shows: in the live trial of 2026-09-30 it
+    // sat across two visitors' faces, then, moved below them, across their bodies. A hero with no
+    // quiet top or bottom cannot carry a plate, and the concept goes to another recipe.
+    const quiet = hero.quiet === 'top' || hero.quiet === 'bottom' ? hero.quiet : undefined;
+    if (!quiet) throw new RecipeInfeasibleError(this.recipe, 'the hero has no quiet top or bottom for the title plate');
+    // People stand on the floor: a quiet bottom in a photo with faces is where their bodies are.
+    if (quiet === 'bottom' && hero.faceShare) throw new RecipeInfeasibleError(this.recipe, 'the quiet bottom of the hero is where its people stand');
+    const heroBox = this.wide ? this.canvas() : this.sharpHeroBox(hero);
+    this.placeHero(hero, heroBox);
     this.frame(this.input.choice.params?.frame === 'inset' ? 'inset' : 'none');
     const logo = this.logoAt('top-center');
     const navy = surfacePalette(this.tones, 'navy');
@@ -884,18 +1024,24 @@ class SolveContext {
       head = this.blocks;
       rest = [];
     }
-    const plateColW = Math.round((this.wide ? 0.6 : 0.78) * this.W);
+    // As wide as the safe area allows, so a title that can stand on one line does.
+    const plateColW = this.wide ? Math.round(0.6 * this.W) : this.safe.width;
     const padX = Math.round(0.045 * this.s);
     const padY = Math.round(0.035 * this.s);
-    let plateTop = logo.y + logo.height + Math.round(0.5 * logo.height) + Math.round(0.025 * this.s);
     const bottom = this.safe.y + this.safe.height;
     const restW = this.safe.width;
-    const sets = this.fitScale(
+    const underLogo = logo.y + logo.height + Math.round(0.5 * logo.height) + Math.round(0.025 * this.s);
+    const heroBottom = heroBox.y + heroBox.height;
+    const zone = quiet === 'top'
+      ? { top: underLogo, bottom: heroBox.y + Math.round((this.wide ? 0.62 : 0.45) * heroBox.height) }
+      : { top: Math.max(underLogo, heroBox.y + Math.round(0.55 * heroBox.height)), bottom: heroBottom - Math.round(0.02 * this.s) };
+    const restMax = Math.round(0.3 * this.H);
+    const sets = this.fitScalePreferOneLine(
       [
         { blocks: head, width: plateColW - 2 * padX, colours: navy, align: 'center' },
         ...(rest.length ? [{ blocks: rest, width: restW, colours: navy, align: 'center' as const }] : []),
       ],
-      ([h, r]) => plateTop + this.stackHeight(h) + 2 * padY <= (this.wide ? 0.62 : 0.5) * this.H && (!r || this.stackHeight(r) <= (this.wide ? 0.3 : 0.3) * this.H)
+      ([h, r]) => this.stackHeight(h) + 2 * padY <= zone.bottom - zone.top && (!r || this.stackHeight(r) <= restMax)
     );
     const headSet = sets[0];
     const hh = this.stackHeight(headSet);
@@ -904,29 +1050,30 @@ class SolveContext {
     const plateX = Math.round((this.W - plateW) / 2);
     const plateH = hh + 2 * padY;
     const rTop = sets[1] ? bottom - this.stackHeight(sets[1]) : bottom;
-    // The plate never sits on the people: when the hero's faces are where the plate would go, it
-    // moves down below them, and a plate that then meets the lines at the bottom is not carried.
-    const face = this.faceBox(heroEl);
-    if (face && face.x < plateX + plateW && face.x + face.width > plateX && face.y < plateTop + plateH && face.y + face.height > plateTop) {
-      plateTop = Math.ceil(face.y + face.height + 0.02 * this.s);
-      if (plateTop + plateH > rTop - Math.round(0.03 * this.s)) {
-        throw new RecipeInfeasibleError(this.recipe, 'the title plate would cover the faces in the hero photo');
-      }
-    }
+    const plateTop = quiet === 'top' ? zone.top : Math.min(zone.bottom, rTop - Math.round(0.03 * this.s)) - plateH;
+    if (plateTop < zone.top) throw new RecipeInfeasibleError(this.recipe, 'the quiet region is too small for the title plate');
     this.shapes.push({
       kind: 'rect', role: 'panel', layer: 'overlay', surface: 'plate', color: this.tones.deep === this.tones.navy ? this.tones.navy : this.tones.deep,
       x: plateX, y: plateTop, width: plateW, height: plateH, radius: Math.round(0.012 * this.s),
-      shadow: { color: '#000000' === this.tones.navy ? this.tones.navy : this.tones.navy, opacity: 0.45, blur: Math.round(0.022 * this.s), offsetY: Math.round(0.01 * this.s) },
+      shadow: { color: this.tones.navy, opacity: 0.45, blur: Math.round(0.022 * this.s), offsetY: Math.round(0.01 * this.s) },
     });
     // The plate's own colour decides the text colours: the second navy still carries white and gold.
     const text = this.placeStack(headSet, plateX + padX, plateW - 2 * padX, plateTop + padY, 'center', navy);
+    let scrim: OverlayElement | undefined;
     if (sets[1]) {
       text.push(...this.placeStack(sets[1], this.safe.x, restW, rTop, 'center', navy));
       const scrimH = Math.round(Math.min(this.H * 0.55, (this.H - rTop) / 0.6));
-      this.overlays.push({
+      scrim = {
         kind: 'gradient', purpose: 'scrim', color: this.tones.navy, direction: 'to-bottom', x: 0, y: this.H - scrimH, width: this.W, height: scrimH,
         stops: [{ at: 0, opacity: 0 }, { at: 0.38, opacity: 0.8 }, { at: 1, opacity: 0.94 }],
-      });
+      };
+    } else if (heroBottom < this.H) {
+      scrim = { kind: 'gradient', purpose: 'scrim', color: this.tones.navy, direction: 'to-bottom', x: 0, y: heroBottom, width: this.W, height: this.H - heroBottom,
+        stops: [{ at: 0, opacity: 0.97 }, { at: 1, opacity: 0.97 }] };
+    }
+    if (scrim) {
+      this.sealPhotoEdge(scrim, heroBottom);
+      this.overlays.push(scrim);
     }
     return this.finish({ background: this.tones.navy, text, logo, titleZone: { x: plateX, y: plateTop, width: plateW, height: plateH }, hero });
   }
@@ -937,7 +1084,12 @@ class SolveContext {
    */
   scrimCaption(): StudioLayoutV2 {
     const hero = this.hero();
-    this.placeHero(hero, this.canvas());
+    // A landscape photo on a tall canvas keeps its sharpness: a band as tall as it can fill at 1.3x,
+    // navy below, the scrim closing over its lower edge (example 7 sets its event photo this way).
+    const heroBox = this.wide ? this.canvas() : this.sharpHeroBox(hero);
+    this.placeHero(hero, heroBox);
+    this.officeType = !this.wide;
+    this.bodyMaxWidth = this.wide ? undefined : Math.round(OFFICE_BODY_MEASURE * this.W);
     const inner = this.frame(this.input.choice.params?.frame === 'inset' ? 'inset' : 'none');
     const colours = surfacePalette(this.tones, 'navy');
     const align = this.align();
@@ -947,7 +1099,7 @@ class SolveContext {
     const x = this.wide && this.rtl ? this.W - colX - colW : colX;
     const bottom = this.safe.y + this.safe.height;
     const ruleGap = Math.round(0.05 * this.s);
-    const [set] = this.fitScale([{ blocks: this.blocks, width: colW, colours, align }], ([g]) => this.stackHeight(g) + ruleGap <= (this.wide ? 0.6 : 0.4) * this.H);
+    const [set] = this.fitScalePreferOneLine([{ blocks: this.blocks, width: colW, colours, align }], ([g]) => this.stackHeight(g) + ruleGap <= (this.wide ? 0.6 : 0.4) * this.H);
     // The rule sits in its own gap under the headline, centred in it.
     const headEnd = set.reduce((k, b, i) => (b.block.slot === 'title' || b.block.slot === 'accent' ? i : k), 0);
     const h = this.stackHeight(set) + (headEnd < set.length - 1 ? ruleGap : 0);
@@ -966,11 +1118,14 @@ class SolveContext {
       const ruleX = align === 'center' ? Math.round(x + (colW - ruleW) / 2) : this.rtl ? x + colW - ruleW : x;
       this.shapes.push({ kind: 'rect', role: 'rule', layer: 'overlay', color: this.tones.gold, x: ruleX, y: ruleY, width: ruleW, height: ruleH });
     }
-    const scrimH = Math.round(Math.min(0.7 * this.H, (this.H - top) / 0.62));
-    this.overlays.push({
+    // Deep enough that the headline sits where the scrim is already ~80% navy, however tall the copy.
+    const scrimH = Math.round(Math.min(this.H, (this.H - top) / 0.62));
+    const scrim: OverlayElement = {
       kind: 'gradient', purpose: 'scrim', color: this.tones.navy, direction: 'to-bottom', x: 0, y: this.H - scrimH, width: this.W, height: scrimH,
       stops: [{ at: 0, opacity: 0 }, { at: 0.36, opacity: 0.8 }, { at: 1, opacity: 0.95 }],
-    });
+    };
+    this.sealPhotoEdge(scrim, heroBox.y + heroBox.height);
+    this.overlays.push(scrim);
     return this.finish({ background: this.tones.navy, text, logo, titleZone: { x, y: top, width: colW, height: h }, hero });
   }
 
@@ -990,7 +1145,7 @@ class SolveContext {
     const logo = this.logoAt(quiet === 'top' ? 'bottom-center' : 'top-center');
     const colW = this.wide ? Math.round(0.62 * this.W) : this.safe.width;
     const x = Math.round((this.W - colW) / 2);
-    const [set] = this.fitScale([{ blocks: this.blocks, width: colW, colours, align: 'center' }], ([g]) => this.stackHeight(g) <= (this.wide ? 0.56 : 0.36) * this.H);
+    const [set] = this.fitScalePreferOneLine([{ blocks: this.blocks, width: colW, colours, align: 'center' }], ([g]) => this.stackHeight(g) <= (this.wide ? 0.56 : 0.36) * this.H);
     const h = this.stackHeight(set);
     const top = quiet === 'top' ? this.safe.y + Math.round(0.02 * this.s) : this.safe.y + this.safe.height - h;
     const text = this.placeStack(set, x, colW, top, 'center', colours);
@@ -1059,7 +1214,7 @@ class SolveContext {
     const x = this.rtl ? this.safe.x + this.safe.width - colW : this.safe.x;
     const top = logo.y + logo.height + Math.round(0.5 * logo.height) + Math.round(0.02 * this.s);
     const photoTopMin = Math.round((this.wide ? 0 : 0.42) * this.H);
-    const sets = this.fitScale(
+    const sets = this.fitScalePreferOneLine(
       [
         { blocks: head, width: colW - 2 * padX, colours: navy, align: 'start' },
         ...(rest.length ? [{ blocks: rest, width: colW, colours: cream, align: 'start' as const }] : []),

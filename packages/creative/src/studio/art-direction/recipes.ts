@@ -78,7 +78,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_plate: {
     id: 'hero_plate',
     reference: 'example 8 (Global Partnership)',
-    summary: 'Full-bleed hero photo; a navy title plate with a soft shadow in the upper third; supporting lines on a bottom scrim.',
+    summary: 'Full-bleed hero photo; a navy title plate with a soft shadow set in the photo\'s quiet top or bottom (sky, wall, floor), never on the people; supporting lines on a bottom scrim. Needs a hero with a quiet top or bottom.',
     bestFor: 'partnerships, agreements, headline statements over a busy or top-down photo',
     minPhotos: 1,
     texture: false,
@@ -170,8 +170,9 @@ export function eligibleRecipes(photos: PhotoFacts[]): RecipeId[] {
     const spec = RECIPES[id];
     if (photos.length < spec.minPhotos) continue;
     if (spec.needsCutout && !photos.some((p) => p.cutout)) continue;
-    // A title in the sky needs a photo calm at its top or bottom, by the brief or the pixels.
-    if (id === 'sky_title' && !photos.some((p) => isCalmTopOrBottom(p))) continue;
+    // A title in the sky, or a title plate, needs a photo calm at its top or bottom, by the brief or
+    // the pixels: a plate anywhere else sits on what the photo shows (live trial, 2026-09-30).
+    if ((id === 'sky_title' || id === 'hero_plate') && !photos.some((p) => isCalmTopOrBottom(p))) continue;
     out.push(id);
   }
   return out;

@@ -143,7 +143,16 @@ const price = (model: string, input: number, cached: number, output: number) => 
 };
 
 /** What one call could cost at most, taken before it is sent. */
-const reserveFor = (model: string) => (model.includes('mini') ? 0.05 : 0.6);
+/**
+ * What one call could cost at most, taken before it is sent: its output cap at the output price and
+ * 40,000 input tokens (the largest request seen was ~12,000 with six photos) at the input price.
+ */
+const reserveFor = (model: string, body: any) => {
+  const p = PRICING.models[model];
+  if (!p) return Infinity;
+  const maxOut = Number(body.max_completion_tokens ?? body.max_tokens ?? body.max_output_tokens ?? 16000);
+  return (maxOut * (p.outputPerMillion ?? 0) + 40000 * (p.inputPerMillion ?? 0)) / 1e6;
+};
 
 const studioFetch = (async (input: any, init?: any) => {
   const url = String(input?.url ?? input);
@@ -155,7 +164,7 @@ const studioFetch = (async (input: any, init?: any) => {
   const images = (String(init?.body || '').match(/"image_url"/g) || []).length;
   if (stop) throw new Error(`trial stopped: ${stop}`);
   const counting = path.endsWith('/input_tokens');
-  if (!counting && spent + reserveFor(model) > CAP) {
+  if (!counting && spent + reserveFor(model, body) > CAP) {
     stop = `cap: $${spent.toFixed(4)} spent, a ${model} call could take it over $${CAP}`;
     throw new Error(`trial stopped: ${stop}`);
   }

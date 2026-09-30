@@ -435,6 +435,26 @@ export const PAIRWISE_PHOTO_DIMENSION_JSON_SCHEMA = {
   additionalProperties: false,
 };
 
+/**
+ * ADR-170: photos a layout sets as separate framed pictures. A hero with a texture blended into its
+ * fade, or a person cut out, is one photograph used boldly, not a grid.
+ */
+export function framedPhotoCount(layout: Pick<StudioLayoutV2, 'photos'>): number {
+  return (layout.photos ?? []).filter((p) => p.role !== 'texture' && p.treatment !== 'cutout').length;
+}
+
+/** What the layouts place, stated to the judge as fact. */
+function photoPlacementLine(layout: StudioLayoutV2): string {
+  const photos = layout.photos ?? [];
+  const texture = photos.filter((p) => p.role === 'texture').length;
+  const cutout = photos.filter((p) => p.treatment === 'cutout').length;
+  const framed = framedPhotoCount(layout);
+  const parts = [`${framed} photograph${framed === 1 ? '' : 's'} as picture${framed === 1 ? '' : 's'}`];
+  if (texture) parts.push(`${texture} blended into the text area as a texture`);
+  if (cutout) parts.push(`${cutout} person cut out`);
+  return parts.join('; ');
+}
+
 function checklistOf(raw: unknown): ArtDirectionChecklist | null {
   if (!raw || typeof raw !== 'object') return null;
   const c = raw as Record<string, unknown>;
@@ -543,7 +563,8 @@ export async function evaluatePairOrder(
   // The metrics were built for typographic layouts: they count a photograph as occupied area and
   // pull balance to the centre, so a full-bleed hero scores as a flaw. Said once, as a fact.
   const photoMetricsNote = photoBrief
-    ? `\n\nNOTE: these metrics were built for typographic layouts. They count photographs as occupied area and reward centred mass, so a full-bleed or dominant photograph lowers Balance and negative space without being a flaw. Read them for the text blocks; judge the photo use by eye.`
+    ? `\n\nNOTE: these metrics were built for typographic layouts. They count photographs as occupied area and reward centred mass, so a full-bleed or dominant photograph lowers Balance and negative space without being a flaw. Read them for the text blocks; judge the photo use by eye.` +
+      `\n\nPHOTOS PLACED (counted from the layouts): Candidate A: ${photoPlacementLine(candA.layout)}. Candidate B: ${photoPlacementLine(candB.layout)}. A grid means two or more photographs set side by side as separate pictures.`
     : '';
 
   const factsPrompt = `GROUND TRUTH DETERMINISTIC METRICS (arXiv:2402.06945 & LaySPA):
@@ -661,8 +682,12 @@ Examine Candidate A and Candidate B visually and evaluate them independently acr
   const majorityWinner = weightedA > weightedB ? 'A' : 'B';
   const winnerCandidateId = majorityWinner === 'A' ? candA.id : candB.id;
 
-  const checkA = photoBrief ? checklistOf(data.artDirection?.A) : null;
-  const checkB = photoBrief ? checklistOf(data.artDirection?.B) : null;
+  // "Tiled in a grid" is a count, not an opinion: the judge said it of single-photo designs in the
+  // live trials of 2026-09-30. A layout with fewer than two framed photographs is not a grid.
+  const counted = (check: ArtDirectionChecklist | null, layout: StudioLayoutV2) =>
+    check ? { ...check, photosTiledInGrid: check.photosTiledInGrid && framedPhotoCount(layout) >= 2 } : null;
+  const checkA = photoBrief ? counted(checklistOf(data.artDirection?.A), candA.layout) : null;
+  const checkB = photoBrief ? counted(checklistOf(data.artDirection?.B), candB.layout) : null;
   const baselineCandidateId = baseline ? (candA.baseline ? candA.id : candB.id) : undefined;
 
   return {

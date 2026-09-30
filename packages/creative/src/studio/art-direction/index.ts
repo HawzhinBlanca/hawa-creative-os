@@ -38,3 +38,4 @@ export {
   type GenerateArtDirectedOptions,
   type GenerateArtDirectedResult,
 } from './generate.js';
+export { artDirectionPrior, houseRecipesFor, sharpnessClass, SUBJECT_RECIPES, type ArtDirectionPriorDecision } from './prior.js';
