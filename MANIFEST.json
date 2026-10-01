@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T01:09:16Z",
+  "generatedAt": "2026-10-01T01:21:54Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 684,
+  "fileCount": 688,
   "files": [
     {
       "path": ".dockerignore",
@@ -909,8 +909,8 @@
     },
     {
       "path": "adrs/187_final_qa_measures_shipping_layout.md",
-      "sha256": "9d282faf135ce8c82e2e93089c360b10fe2b2fb4f5a612e188e02f0ddb9d5bbf",
-      "bytes": 2258
+      "sha256": "65cc431e25b928b25972d3cf7423310344f75232d5c166d477785b8b3d05ac83",
+      "bytes": 2548
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1363,14 +1363,34 @@
       "bytes": 2377
     },
     {
+      "path": "plans/final-qa-basis-2026-10-01/DEPLOYED_RELEASE_GATE_EVIDENCE.json",
+      "sha256": "08accca0136722dcaea990cf62a393daf0d6af3638dee2498d1952ee5e392b8f",
+      "bytes": 2093
+    },
+    {
+      "path": "plans/final-qa-basis-2026-10-01/LIVE_DEPLOYMENT_PROOF.json",
+      "sha256": "44101bd4bac76f86d1ee4bd6fd65fe6aac11a534273a85bd84e3ef42a2ab3c96",
+      "bytes": 1569
+    },
+    {
+      "path": "plans/final-qa-basis-2026-10-01/LIVE_DEPLOYMENT_RECEIPT.json",
+      "sha256": "35ff1b5062758515db6a6298d845891cdf2d44d154a56c141baab3f7708ee1d2",
+      "bytes": 2077
+    },
+    {
+      "path": "plans/final-qa-basis-2026-10-01/LIVE_INFRA_READBACK.json",
+      "sha256": "d44ca6fb9a02bf44c220b703aad4425bac2005e8525fdaf6ffa40c6bd0e1784b",
+      "bytes": 1492
+    },
+    {
       "path": "plans/final-qa-basis-2026-10-01/LOCAL_PROOF.json",
-      "sha256": "6dd6141e6a0b74dff41d72bda1a91559023d5d91dd1feb6e86d28cbf9700da6f",
-      "bytes": 2673
+      "sha256": "31759aa11e60eb707ca49359ce4e63694e15f86ea5f0cabcbcb0ea2f296cdde9",
+      "bytes": 2895
     },
     {
       "path": "plans/final-qa-basis-2026-10-01/PLAN.md",
-      "sha256": "298039276381c0a966ee0ac8ff203504c6913111089b8d2b600933a5a46fbb82",
-      "bytes": 1103
+      "sha256": "7441ff8338217119073e2a94614ecbdbf9f5256664d89fe1bf8604bca3606db4",
+      "bytes": 1636
     },
     {
       "path": "plans/final-qa-basis-2026-10-01/RELEASE_GATE_EVIDENCE.json",
@@ -2544,8 +2564,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "d388f1851a7f73ec08df8a0668c035b67b479172d5a5518ee8de3a8eb2d21275",
-      "bytes": 576987
+      "sha256": "7c77a4f388865e4de8bc02d5408e22e4d77916f8f001c84e3863713825c53fce",
+      "bytes": 577649
     },
     {
       "path": "plans/user-stories.csv",

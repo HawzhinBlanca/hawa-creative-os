@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-01T01:17:57.969Z",
+  "credentialMaterial": "withheld",
+  "currentDesignIndependent": true,
+  "previousNotOperator": true,
+  "officeProofInodeReadable": true,
+  "currentRelease": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
+  "core": {
+    "build": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
+    "currentMatches": true,
+    "previousMatches": true
+  },
+  "auth": {
+    "current": {
+      "task": 404,
+      "list": 401,
+      "providers": 401,
+      "session": 401,
+      "internal": 401
+    },
+    "previous": {
+      "task": 404,
+      "list": 401,
+      "providers": 401,
+      "session": 401,
+      "internal": 401
+    }
+  },
+  "database": {
+    "identity": "hawa_worker_login",
+    "app_member": false,
+    "approval_write": false,
+    "task_write": false,
+    "schema_create": false,
+    "temp_create": false
+  },
+  "outbox": [
+    {
+      "state": "delivered",
+      "count": 1616
+    },
+    {
+      "state": "dead",
+      "count": 18
+    }
+  ],
+  "workers": [
+    {
+      "color": "green",
+      "username": "hawa_worker_login",
+      "databaseMatches": true,
+      "currentDesign": true,
+      "drainDesign": false,
+      "operatorPresent": false,
+      "build": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
+      "revisionMatches": true,
+      "blobReadOnly": true
+    }
+  ],
+  "health": {
+    "status": "healthy"
+  },
+  "officeSessionStatus": 200,
+  "qualified": true,
+  "stableReadOnlyMounts": true,
+  "proofMatchesHost": true,
+  "unsafeReleasesAbsent": true
+}

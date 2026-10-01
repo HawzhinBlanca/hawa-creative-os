@@ -1,0 +1,57 @@
+{
+  "receiptVersion": 1,
+  "evidenceKind": "observed_deployment",
+  "status": "image_runtime_migration_verified",
+  "observedAt": "2026-10-01T01:16:34.771Z",
+  "buildCommit": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
+  "sourceCandidateCommit": "fab60f181eaaa257ab598523bc8e4df5548d479c",
+  "sourceManifestSha256": "05770b22284879b72ec35c527cf23164ab6b6973a1e57cf330b8fe4d3443d72c",
+  "workerColour": "green",
+  "images": {
+    "core": {
+      "service": "core",
+      "container": "hawa-production-core-1",
+      "imageRef": "hawa-core:canva-only-20260913",
+      "imageId": "sha256:556e546c428757002af75180e4e8e042cb926922b47d9cac04b18d6f437d0c2a",
+      "revisionLabel": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39"
+    },
+    "desk": {
+      "service": "desk",
+      "container": "hawa-production-desk-1",
+      "imageRef": "hawa-desk:canva-only-20260913",
+      "imageId": "sha256:8c58022e95e3179db3d42b0972cfb2e836ed471e5ccfc7b07c7d2fe049387646",
+      "revisionLabel": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39"
+    },
+    "worker": {
+      "service": "worker",
+      "container": "hawa-production-worker-green-1",
+      "imageRef": "hawa-worker:canva-only-20260913-green",
+      "imageId": "sha256:033e4aad02101d7fbb8481551d603e376af52367f52c0a64c316a97809260406",
+      "revisionLabel": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39"
+    }
+  },
+  "runtime": {
+    "healthStatus": "healthy",
+    "configurationRevision": "4a11cd0a259ffbd18fcc0d6f507e4d00884fe9aea422490b18d703ebf574380f",
+    "postgres": "connected",
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    },
+    "modelTier": "production",
+    "models": {
+      "text": "gpt-6.1-sol",
+      "layout": "gpt-6.1-sol",
+      "critique": "gpt-6.1-sol",
+      "judge": "gpt-4.1-mini",
+      "image": "gpt-image-2.5-sunburst"
+    }
+  },
+  "migration": {
+    "declaredTarget": "073_restricted_worker_database",
+    "observedApplied": {
+      "name": "073_restricted_worker_database.sql",
+      "sha256": "93edd3192da208139ee78a655325ebcf571c7368e64bbe4a4c4c0254c4972abc"
+    }
+  }
+}
