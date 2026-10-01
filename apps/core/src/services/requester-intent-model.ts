@@ -16,6 +16,8 @@
  *
  * ADR-200: the office turn reads an office member's words through the same ledger and allowance
  * (`readOnce`, reader `office`; office-intent-model.ts), with no schema change: see `ledgerUpdateId`.
+ * ADR-232: a request written as a sentence has its copy chosen once the same way (reader `copy`;
+ * request-copy-extraction.ts).
  */
 import { randomUUID } from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
@@ -127,10 +129,18 @@ export function createRequesterIntentModel(db: Kysely<Database>, options: { fetc
  * allowance and the replay rule are those of every intake-router row.
  */
 export const OFFICE_UPDATE_OFFSET = 2 ** 52;
-export function ledgerUpdateId(reader: 'requester' | 'office', updateId: number): number {
+/**
+ * ADR-232: a copy reading's row, keyed by the update id plus 2^51 (below the office range, far above
+ * Telegram's update ids), so the same update may also be read by the requester router.
+ */
+export const COPY_UPDATE_OFFSET = 2 ** 51;
+export type IntentReader = 'requester' | 'office' | 'copy';
+export function ledgerUpdateId(reader: IntentReader, updateId: number): number {
   if (reader === 'requester') return updateId;
-  if (!Number.isSafeInteger(updateId) || updateId <= 0 || updateId >= OFFICE_UPDATE_OFFSET) throw new Error('Unkeyable office update');
-  return OFFICE_UPDATE_OFFSET + updateId;
+  // Office rows take [2^52, 2^53), copy rows [2^51, 2^52): the ranges never meet.
+  const offset = reader === 'office' ? OFFICE_UPDATE_OFFSET : COPY_UPDATE_OFFSET;
+  if (!Number.isSafeInteger(updateId) || updateId <= 0 || updateId >= offset) throw new Error(`Unkeyable ${reader} update`);
+  return offset + updateId;
 }
 
 /**
@@ -141,14 +151,17 @@ export function ledgerUpdateId(reader: 'requester' | 'office', updateId: number)
  * admit OpenAI, a refused allowance, a failed call or an answer that does not parse.
  */
 export async function readOnce<D extends object>(db: Kysely<Database>, options: { fetcher?: typeof fetch; apiKey?: () => string | undefined },
-  input: { reader: 'requester' | 'office'; tenantId: string; updateId: number; chatId: string;
+  input: { reader: IntentReader; tenantId: string; updateId: number; chatId: string;
     /** The client the call is charged to (the allowance's client scope); it must be one of `egressClients`. */
     clientId: string;
     /** Every client whose words or titles the request carries: each must admit OpenAI. */
-    egressClients: string[]; body: (model: string) => string; parse: (value: unknown) => D | null }): Promise<D | null> {
+    egressClients: string[]; body: (model: string) => string; parse: (value: unknown) => D | null;
+    /** The largest reservation admitted for this reader (default $0.50). */
+    maxReservationUsd?: number }): Promise<D | null> {
   const key = (options.apiKey ?? (() => process.env.OPENAI_API_KEY))();
   if (!key || key.startsWith('mock-') || !input.egressClients.includes(input.clientId)) return null;
-  if (input.reader === 'office' && !(Number.isSafeInteger(input.updateId) && input.updateId > 0 && input.updateId < OFFICE_UPDATE_OFFSET)) return null;
+  if (input.reader !== 'requester' && !(Number.isSafeInteger(input.updateId) && input.updateId > 0 &&
+      input.updateId < (input.reader === 'office' ? OFFICE_UPDATE_OFFSET : COPY_UPDATE_OFFSET))) return null;
   const ledgerId = ledgerUpdateId(input.reader, input.updateId);
   const model = resolveModel('text');
   const body = input.body(model);
@@ -166,8 +179,8 @@ export async function readOnce<D extends object>(db: Kysely<Database>, options: 
         if (!await egressAllowed(trx, input.tenantId, client)) return { prior: null, skip: true };
       }
       const quote = reserveStudioText(body);
-      const reservation = input.reader === 'office' ? { ...quote, reader: 'office', updateId: input.updateId } : quote;
-      if (reservation.usd > 0.5) return { prior: null, skip: true };
+      const reservation = input.reader !== 'requester' ? { ...quote, reader: input.reader, updateId: input.updateId } : quote;
+      if (reservation.usd > (input.maxReservationUsd ?? 0.5)) return { prior: null, skip: true };
       const id = randomUUID();
       await sql`INSERT INTO hawa.requester_intent_calls (id, tenant_id, update_id, chat_id, client_id, model, request_sha256, reservation)
         VALUES (${id}::uuid, ${input.tenantId}::uuid, ${ledgerId}, ${input.chatId}, ${input.clientId}::uuid, ${model},

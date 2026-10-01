@@ -68,6 +68,11 @@ export interface CreateAppOptions {
    * one, unless `requesterIntentModel` is null (the intake router off turns both readers off).
    */
   officeIntentModel?: import('./services/office-intent-model.js').OfficeIntentModel | null;
+  /**
+   * ADR-232: the copy reading of a request written as a sentence; tests pass their own. Absent: the
+   * real one, unless `requesterIntentModel` is null (the intake router off turns this reader off too).
+   */
+  copyExtractionModel?: import('./services/request-copy-extraction.js').CopyExtractionModel | null;
   canvaOptions?: CanvaServiceOptions;
   canvaConnectService?: CanvaConnectService;
   designStudioOptions?: DesignStudioServiceOptions;

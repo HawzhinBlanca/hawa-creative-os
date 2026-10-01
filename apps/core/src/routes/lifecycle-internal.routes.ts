@@ -77,6 +77,7 @@ import { projectLifecycleNativeReview } from '../services/lifecycle-native-revie
 import { CanvaFlowError } from '../services/canva-flow-error.js';
 import { officeTelegramTurn } from '../services/office-telegram-turn.js';
 import { createOfficeIntentModel, type OfficeIntentModel } from '../services/office-intent-model.js';
+import { createCopyExtractionModel, extractRequestCopy, type CopyExtractionModel } from '../services/request-copy-extraction.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
 export function isInternalPath(path: string): boolean {
@@ -163,6 +164,12 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
       (variant as any).width < 640 || (variant as any).width > 2400 ||
       (variant as any).height < 640 || (variant as any).height > 2400)) return null;
   if (d.designStudio !== undefined && typeof d.designStudio !== 'boolean') return null;
+  // ADR-232: copy taken from a request sentence, and its receipt (server-authored at intake).
+  const copyFields = (['headlineEn', 'headlineCkb', 'copyEn', 'copyCkb'] as const).filter((key) => d[key] !== undefined);
+  if (copyFields.some((key) => typeof d[key] !== 'string' || (d[key] as string).length > 100_000)) return null;
+  const receipt = d.copyExtraction;
+  if (receipt !== undefined && (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) ||
+      (receipt as { v?: unknown }).v !== 1 || JSON.stringify(receipt).length > 20_000)) return null;
   const options = d.studioOptions;
   if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options) ||
       JSON.stringify(options).length > 2000 ||
@@ -192,6 +199,8 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
     ...(d.isInstructionOnly !== undefined ? { isInstructionOnly: d.isInstructionOnly as boolean } : {}),
     ...(variant ? { variant: variant as { width: number; height: number } } : {}),
     ...(d.designStudio !== undefined ? { designStudio: d.designStudio as boolean } : {}),
+    ...Object.fromEntries(copyFields.map((key) => [key, d[key] as string])),
+    ...(receipt !== undefined ? { copyExtraction: receipt as ChatIntake['copyExtraction'] } : {}),
     ...(options ? { studioOptions: options as ChatIntake['studioOptions'] } : {}),
     ...(imageRef ? { lifecycleImage: { ...imageRef, updateId: (image as { updateId: number }).updateId } } : {}),
     ...(album ? { lifecycleAlbum: album } : {}),
@@ -212,6 +221,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   // ADR-200: the same router reads an office member's words when the office turn's rules are not certain.
   const officeModel: OfficeIntentModel | null = ctx.options?.officeIntentModel !== undefined ? ctx.options.officeIntentModel
     : ctx.options?.requesterIntentModel === null ? null : (db ? createOfficeIntentModel(db) : null);
+  // ADR-232: the copy of a request written as a sentence, chosen once per update through the same ledger.
+  const copyModel: CopyExtractionModel | null = ctx.options?.copyExtractionModel !== undefined ? ctx.options.copyExtractionModel
+    : ctx.options?.requesterIntentModel === null ? null : (db ? createCopyExtractionModel(db) : null);
 
   // Registered on /v1/internal/* only (not under every prefix, as registerRoute does): one address,
   // which nginx does not need to serve, for one caller.
@@ -935,7 +947,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               if (unsupported) return handled(422,{code:'UNSUPPORTED_CANVAS',chatAnswer:{
                 text:`The requested ${unsupported.variant!.width} × ${unsupported.variant!.height} canvas is outside the supported 640–2400 pixel range. The office needs to choose a supported production format; none of these designs were opened.`,parseMode:'HTML'}});
               const prepare = async (part: (typeof parts)[number]) => {
-                const draft=await createChatCampaignIntake(ctx).prepareChatCampaignDraft({
+                const prepared=await createChatCampaignIntake(ctx).prepareChatCampaignDraft({
                   platform: 'telegram', sourceEventId: `lc-${part.requestId}-r0`, sourceChannelId: chatId,
                   senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester',
                   rawText: part.text, rawJson: part.lang ? { ...update, hawaLanguageGraphic: part.lang } : update,
@@ -943,6 +955,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   autoGenerate: !instructionOnly && !part.detailsRequired && chatAutoDraftsEnabled(),
                   isInstructionOnly: instructionOnly || part.detailsRequired,
                 });
+                // ADR-232: a request written as a sentence is not its own copy. The model reads one brief per
+                // update (a split brief's parts are taken by the rules); its intake headline fields stay off
+                // the draft, as before, unless the copy was taken from the sentence.
+                const { headlineEn: _he, headlineCkb: _hc, copyEn: _ce, copyCkb: _cc, ...plain } = prepared;
+                const draft = await extractRequestCopy(plain, { model: parts.length === 1 ? copyModel : null, tenantId: TENANT,
+                  updateId: update.update_id, senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester' });
                 return parts.length>1 && allocation.kind==='multiple' ? {...draft,title:`${draft.title} (${parts.indexOf(part)+1}/${parts.length})`} : draft;
               };
               const prepared = await prepare(parts[0]);
