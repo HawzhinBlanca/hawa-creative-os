@@ -41,6 +41,7 @@ import { acknowledgedLateChanges, pendingLateChanges } from './lifecycle-chat-ta
 import { officeChatIds } from './office-chats.js';
 import { decideRequestOwned, startRequestOwnedDelivery, type OfficeActionAnswer } from './office-decisions.js';
 import type { DeliverableStore } from './pinned-deliverables.js';
+import { cleanDraftTitle } from './draft-title.js';
 import { asksForNewDesign, corePhrase, parseChoice, readIntentByRules, readsAsChange } from './requester-turn.js';
 
 const TURN_ACCOUNT = 'office_telegram_turn';
@@ -58,6 +59,15 @@ const OFFICE_APPROVE = /^(?:(?:ok(?:ay)?|yes|yep|yeah|good|great|perfect|fine|ni
 const OFFICE_REJECT = /^(?:no[\s,،!.]+)?(?:reject(?:ed|\s+(?:it|this|that))?|decline(?:d)?|not\s+approved)\b|(?:ڕەتی\s+بکەرەوە|ڕەتکرایەوە|ڕەتدەکرێتەوە|ڕەت\s+کرایەوە|ڕەتی\s+دەکەمەوە)/iu;
 /** "no, cancel this", "cancel it": a rejection of the whole design (category `task`). */
 const OFFICE_CANCEL = /^(?:no[\s,،!.]+)?(?:cancel|scrap|drop|forget)(?:\s+(?:it|this|that|the\s+design))?[\s!.]*$/iu;
+/**
+ * Approval words that refuse it: "the design is not approved", "don't send it", "isn't ready"; Sorani
+ * "not approved", "I don't approve it", "don't send it". The owner's words of 2026-10-01 ("the design is
+ * not approved, the images cut with no content awareness, should have more images…") read as approval,
+ * because "approved" is an approval phrase and nothing after it read as a change.
+ */
+const OFFICE_NOT_APPROVED = /\b(?:not|isn'?t|is\s+not|aren'?t|wasn'?t|never)\s+(?:yet\s+)?(?:approved?|ready|good|ok(?:ay)?|fine|acceptable)\b|\b(?:don'?t|do\s+not|doesn'?t|never)\s+(?:send|approve|ship|publish|print)\b|(?:پەسەند\s*نییە|پەسەند\s*نەکراوە|پەسەندی\s*ناکەم|مەینێرە|مەنێرە|نەینێرە|نەنێرە)/giu;
+/** Words around a refusal that say nothing more about the draft. */
+const REFUSAL_FILLER = /\b(?:the|this|that|it|its|design|draft|poster|picture|one|is|yet|sorry|please|so|and|but)\b|(?:دیزاینەکە|ئەمە|ئەوە|هێشتا)/giu;
 
 /**
  * What an office member's words mean for a draft. A change mixed with approval ("ok but make the title
@@ -69,6 +79,13 @@ export function readOfficeIntent(text: string): { intent: OfficeIntent; rejectio
   const core = corePhrase(t);
   if (OFFICE_CANCEL.test(core) || OFFICE_CANCEL.test(t)) return { intent: 'reject', rejectionCategory: 'task' };
   if (OFFICE_REJECT.test(core) || OFFICE_REJECT.test(t)) return { intent: 'reject', rejectionCategory: 'concept' };
+  // A refusal is never approval. With anything said about the draft it is what to change; "not approved"
+  // alone rejects, as above; "not good", "don't send it" alone are asked about.
+  if (t.match(OFFICE_NOT_APPROVED)) {
+    const rest = t.replace(OFFICE_NOT_APPROVED, ' ').replace(REFUSAL_FILLER, ' ').split(/[\s,،.!:;…-]+/u).filter(Boolean);
+    if (rest.length >= 2) return { intent: 'change' };
+    return /approv|پەسەند/iu.test(t) ? { intent: 'reject', rejectionCategory: 'concept' } : { intent: 'unclear' };
+  }
   // A new brief ("make a poster for Nawroz") is never a change to a draft: intake opens it as before.
   if (asksForNewDesign(t)) return { intent: 'unclear' };
   const reading = readIntentByRules(t);
@@ -86,9 +103,11 @@ export type OfficePlan =
       /** The revision of the alert replied to (null: the draft waiting now). */
       alertRev: number | null; words: string; rejectionCategory?: RejectionCategory;
       /** Late requester words the member was shown and answered (their update ids). */
-      acknowledge?: string[] }
+      acknowledge?: string[];
+      /** Words with no reply, applied to the draft last sent to this member: when it was sent (ISO). */
+      lastSent?: string }
   | { kind: 'ask-which'; intent: 'approve' | 'change' | 'reject'; words: string; rejectionCategory?: RejectionCategory;
-      options: Array<{ requestId: string; title: string }> }
+      options: QueuedDraft[] }
   | { kind: 'ask-what'; requestId: string; alertRev: number | null }
   | { kind: 'ask-late'; requestId: string; alertRev: number | null; updateIds: string[] };
 
@@ -184,15 +203,74 @@ async function alertSentTo(trx: Kysely<Database>, tenantId: string, chatId: stri
   return null;
 }
 
-/** The drafts waiting in the office queue: request-owned, in review, the task awaiting its decision. */
-async function officeQueue(trx: Kysely<Database>, tenantId: string): Promise<Array<{ requestId: string; title: string }>> {
-  return (await sql<{ request_id: string; title: string | null }>`SELECT r.request_id::text, coalesce(root.title, t.title) AS title
+/** A draft in the office queue as the "which draft?" list shows it. */
+export interface QueuedDraft {
+  requestId: string; title: string;
+  /** When its office alert reached this member (ISO), else when it entered review. */
+  sentAt?: string;
+  /** Whether this member was sent its office alert (photo or text) for the waiting revision. */
+  alerted?: boolean;
+  /** The photos sent with the request. */
+  photos?: number;
+  /** Who asked for it: their first name, and whether it is this member. */
+  requester?: string | null; own?: boolean;
+}
+
+/** At most this many drafts are listed, newest first. */
+const QUEUE_LIST = 5;
+
+/**
+ * The drafts waiting in the office queue (request-owned, in review, the task awaiting its decision),
+ * newest first by when this member was sent each one's alert, with the facts that tell them apart.
+ */
+async function officeQueue(trx: Kysely<Database>, tenantId: string, chatId: string): Promise<QueuedDraft[]> {
+  const first = officeChatIds()[0] ?? '';
+  return (await sql<{ request_id: string; title: string | null; copy: unknown; photos: string | number; chat_id: string;
+    first_name: string | null; alerted_at: Date | string | null; updated_at: Date | string }>`SELECT r.request_id::text,
+      coalesce(root.title, t.title) AS title, r.chat_id, r.updated_at,
+      src.payload->'message'->'from'->>'first_name' AS first_name,
+      (SELECT coalesce(e.data->'payload'->'exactCopy', e.data->'exactCopy') FROM hawa.task_events e
+        WHERE e.tenant_id = r.tenant_id AND e.task_id = r.root_task_id AND e.event_type = 'task.created'
+        ORDER BY e.aggregate_version LIMIT 1) AS copy,
+      (SELECT count(DISTINCT f.sha256) FROM hawa.task_files f
+        JOIN hawa.tasks ft ON ft.tenant_id = f.tenant_id AND ft.id = f.task_id
+        WHERE f.tenant_id = r.tenant_id AND f.role = 'reference_image'
+          AND (ft.request_id = r.request_id OR ft.id IN (r.root_task_id, r.current_task_id))) AS photos,
+      (SELECT max(m.received_at) FROM hawa.inbox_events m
+        WHERE m.tenant_id = r.tenant_id AND m.source_account_id = 'telegram_delivery' AND m.event_kind = 'telegram_message_sent'
+          AND (m.source_event_id = 'lc:' || r.request_id::text || ':' || r.rev::text || ':office-alert:' || ${chatId} || ':send'
+            OR (m.source_event_id = 'lc:' || r.request_id::text || ':' || r.rev::text || ':office-alert:send'
+              AND coalesce(m.payload->>'chatId', ${first}) = ${chatId}))) AS alerted_at
     FROM hawa.requests r
     JOIN hawa.tasks t ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id
     LEFT JOIN hawa.tasks root ON root.tenant_id = r.tenant_id AND root.id = r.root_task_id
-    WHERE r.tenant_id = ${tenantId}::uuid AND r.owner = 'restate' AND r.stage = 'in_review' AND t.state = 'human_review'
-    ORDER BY r.updated_at, r.request_id LIMIT 9`.execute(trx)).rows
-    .map((row) => ({ requestId: row.request_id, title: displayTitle(row.title) }));
+    LEFT JOIN hawa.inbox_events src ON src.tenant_id = r.tenant_id AND src.source_account_id = 'telegram'
+      AND src.source_event_id = r.chat_id || ':lc-' || r.request_id::text || '-r0'
+    WHERE r.tenant_id = ${tenantId}::uuid AND r.owner = 'restate' AND r.stage = 'in_review' AND t.state = 'human_review'`.execute(trx)).rows
+    .map((row) => ({ requestId: row.request_id, title: displayTitle(row.title, row.copy),
+      sentAt: new Date(row.alerted_at ?? row.updated_at).toISOString(), alerted: row.alerted_at !== null,
+      photos: Number(row.photos) || 0, requester: row.first_name?.trim() ? row.first_name.trim().slice(0, 60) : null,
+      own: row.chat_id === chatId }))
+    .sort((a, b) => b.sentAt.localeCompare(a.sentAt) || a.requestId.localeCompare(b.requestId))
+    .slice(0, QUEUE_LIST);
+}
+
+/** How recently this member must have been sent a draft for words with no reply to mean it. */
+const RECENT_ALERT_MS = 2 * 60 * 60_000;
+/** Drafts sent closer together than this are not told apart by which came last. */
+const ALERTS_APART_MS = 5 * 60_000;
+
+/**
+ * The draft that words with no reply are about, when there is no doubt: the newest draft this member
+ * was sent, within two hours, and no other waiting draft sent within five minutes of it. Null: ask.
+ */
+export function lastSentDraft(queue: readonly QueuedDraft[], now: number): QueuedDraft | null {
+  const [newest, next] = queue;
+  if (!newest?.alerted || !newest.sentAt) return null;
+  const at = Date.parse(newest.sentAt);
+  if (!(now - at <= RECENT_ALERT_MS)) return null;
+  if (next?.sentAt && at - Date.parse(next.sentAt) < ALERTS_APART_MS) return null;
+  return newest;
 }
 
 /** Whether this chat has requests of its own on the way that are not waiting for the office's decision. */
@@ -202,8 +280,9 @@ async function ownOpenRequests(trx: Kysely<Database>, tenantId: string, chatId: 
     AND stage IN ('designing', 'awaiting_answer', 'manual', 'approved', 'delivering') LIMIT 1`.execute(trx)).rows.length > 0;
 }
 
-const displayTitle = (value: string | null | undefined) => {
-  const t = String(value ?? '').replace(/\s+/g, ' ').trim() || 'Untitled design';
+/** A draft's name for the office, cleaned as it is read (draft-title.ts): old titles show as new ones. */
+const displayTitle = (value: string | null | undefined, copy?: unknown) => {
+  const t = cleanDraftTitle(value, copy) || 'Untitled design';
   return Array.from(t).length > 80 ? `${Array.from(t).slice(0, 79).join('')}…` : t;
 };
 
@@ -285,9 +364,12 @@ interface DraftState {
 
 async function draftState(trx: Kysely<Database>, tenantId: string, requestId: string): Promise<DraftState | null> {
   const row = (await sql<{ rev: string | number; stage: string; current_task_id: string; chat_id: string;
-    current_design_revision_id: string | null; state: string; title: string | null; first_name: string | null }>`
+    current_design_revision_id: string | null; state: string; title: string | null; first_name: string | null; copy: unknown }>`
     SELECT r.rev, r.stage, r.current_task_id::text, r.chat_id, t.current_design_revision_id::text, t.state,
-      coalesce(root.title, t.title) AS title, src.payload->'message'->'from'->>'first_name' AS first_name
+      coalesce(root.title, t.title) AS title, src.payload->'message'->'from'->>'first_name' AS first_name,
+      (SELECT coalesce(e.data->'payload'->'exactCopy', e.data->'exactCopy') FROM hawa.task_events e
+        WHERE e.tenant_id = r.tenant_id AND e.task_id = r.root_task_id AND e.event_type = 'task.created'
+        ORDER BY e.aggregate_version LIMIT 1) AS copy
     FROM hawa.requests r
     JOIN hawa.tasks t ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id
     LEFT JOIN hawa.tasks root ON root.tenant_id = r.tenant_id AND root.id = r.root_task_id
@@ -296,7 +378,7 @@ async function draftState(trx: Kysely<Database>, tenantId: string, requestId: st
     WHERE r.tenant_id = ${tenantId}::uuid AND r.request_id = ${requestId}::uuid AND r.owner = 'restate'`.execute(trx)).rows[0];
   if (!row) return null;
   return { rev: Number(row.rev), stage: row.stage, taskId: row.current_task_id, revisionId: row.current_design_revision_id,
-    taskState: row.state, chatId: row.chat_id, title: displayTitle(row.title),
+    taskState: row.state, chatId: row.chat_id, title: displayTitle(row.title, row.copy),
     requesterName: row.first_name?.trim() ? row.first_name.trim().slice(0, 60) : null };
 }
 
@@ -408,20 +490,30 @@ async function planOf(trx: Kysely<Database>, tenantId: string, m: OfficeMessage)
   // member ("ok send it when it's ready") may be about their own design too: the one waiting draft is
   // named and asked about, never decided by guess.
   if (own && reading.intent === 'reject' && reading.rejectionCategory === 'task') return null;
-  const queue = await officeQueue(trx, tenantId);
+  const queue = await officeQueue(trx, tenantId, m.chatId);
   if (!queue.length) return null;
   const decision = { intent: reading.intent, words: m.text,
     ...(reading.rejectionCategory ? { rejectionCategory: reading.rejectionCategory } : {}) };
-  return queue.length === 1 && !own ? { kind: 'decide', ...decision, requestId: queue[0].requestId, alertRev: null }
-    : { kind: 'ask-which', ...decision, options: queue };
+  if (queue.length === 1 && !own) return { kind: 'decide', ...decision, requestId: queue[0].requestId, alertRev: null };
+  // ADR-040 addendum (2026-10-01): with several waiting, words with no reply are about the draft this
+  // member was sent last, when it came within two hours and no other came close to it. The answer
+  // names that draft first, so a wrong guess shows. A member with designs of their own on the way is
+  // still asked (ADR-182): their words may be about those.
+  const last = own ? null : lastSentDraft(queue, Date.now());
+  if (last) return { kind: 'decide', ...decision, requestId: last.requestId, alertRev: null, lastSent: last.sentAt };
+  return { kind: 'ask-which', ...decision, options: queue };
 }
+
+/** "the newest", "latest one", "the most recent"; Sorani "the newest", "the latest". */
+const NEWEST = /^(?:(?:the\s+)?(?:newest|latest|most\s+recent)(?:\s+(?:one|draft|design))?|نوێترین(?:یان)?|دواهەمین)[\s.!]*$/iu;
 
 /** The member's answer to the bot's question, as a decision, or null when the words do not answer it. */
 function answerTo(ask: OfficePlan, text: string): OfficePlan | null {
   if (ask.kind === 'ask-which') {
     // A brief or a change of the member's own is not an answer, even if it shares a word with a title.
     if (asksForNewDesign(text) || ['new_brief', 'change'].includes(readIntentByRules(text).intent)) return null;
-    const choice = parseChoice(text, { options: ask.options, allowNew: false });
+    // The list is newest first: "the newest" is its first line (parseChoice takes "latest" as the last).
+    const choice = NEWEST.test(corePhrase(text)) ? { option: 0 } : parseChoice(text, { options: ask.options, allowNew: false });
     if (!choice || !('option' in choice)) return null;
     return { kind: 'decide', intent: ask.intent, requestId: ask.options[choice.option].requestId, alertRev: null, words: ask.words,
       ...(ask.rejectionCategory ? { rejectionCategory: ask.rejectionCategory } : {}) };
@@ -438,15 +530,27 @@ function answerTo(ask: OfficePlan, text: string): OfficePlan | null {
 
 type Outcome = { text: string; ask?: OfficePlan; retry?: undefined } | { retry: OfficeTurnAnswer };
 
+/**
+ * Carries out the plan. Words with no reply that were taken to be about the draft last sent to this
+ * member (ADR-040 addendum, 2026-10-01) are answered with that draft named first, and when it was sent.
+ */
 async function carryOut(deps: OfficeTurnDeps, receipt: TurnReceipt): Promise<Outcome> {
+  const outcome = await carryOutPlan(deps, receipt);
+  const plan = receipt.plan;
+  if (outcome.retry || plan.kind !== 'decide' || !plan.lastSent) return outcome;
+  const state = await withRlsContext(deps.db, SYSTEM(deps.tenantId), (trx) => draftState(trx, deps.tenantId, plan.requestId));
+  const about = say(OFFICE_MESSAGES.aboutDraft, receipt.lang,
+    { title: bold(state?.title ?? '?'), when: whenText(Date.parse(plan.lastSent), Date.now(), receipt.lang) });
+  return { ...outcome, text: `${about}\n${outcome.text}` };
+}
+
+async function carryOutPlan(deps: OfficeTurnDeps, receipt: TurnReceipt): Promise<Outcome> {
   const { db, tenantId } = deps;
   const tx = <T>(fn: (trx: Kysely<Database>) => Promise<T>) => withRlsContext(db, SYSTEM(tenantId), fn);
   const lang = receipt.lang;
   const plan = receipt.plan;
   const phrase = (p: Phrase, params: Record<string, string> = {}) => say(p, lang, params);
-  if (plan.kind === 'ask-which') {
-    return { text: phrase(OFFICE_MESSAGES.whichDraft, { list: plan.options.map((o, i) => `${i + 1}. ${bold(o.title)}`).join('\n') }), ask: plan };
-  }
+  if (plan.kind === 'ask-which') return { text: phrase(OFFICE_MESSAGES.whichDraft, { list: choiceList(plan.options, lang, Date.now()) }), ask: plan };
   const state = await tx((trx) => draftState(trx, tenantId, plan.requestId));
   if (!state) return { text: phrase(OFFICE_MESSAGES.notRecorded, { title: bold('?') }) };
   const title = bold(state.title);
@@ -556,6 +660,45 @@ function stageWords(stage: string, phrase: (p: Phrase, params?: Record<string, s
   if (stage === 'rejected') return phrase(OFFICE_MESSAGES.alreadyRejected, { title });
   if (stage === 'manual') return phrase(OFFICE_MESSAGES.alreadySentBack, { title });
   return phrase(OFFICE_MESSAGES.notWaiting, { title });
+}
+
+/** Iraq's clock (UTC+3, no daylight saving): the office's day and time. */
+const IRAQ_OFFSET_MS = 3 * 60 * 60_000;
+const iraqDay = (at: number) => Math.floor((at + IRAQ_OFFSET_MS) / 86_400_000);
+
+/** When a draft was sent, as the member says it: "just now", "12 minutes ago", "yesterday 20:41", "3 days ago". */
+export function whenText(at: number, now: number, lang: RequesterLang): string {
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 1) return say(OFFICE_MESSAGES.justNow, lang);
+  if (minutes < 2) return say(OFFICE_MESSAGES.aMinuteAgo, lang);
+  if (minutes < 60) return say(OFFICE_MESSAGES.minutesAgo, lang, { n: minutes });
+  const local = new Date(at + IRAQ_OFFSET_MS);
+  const time = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
+  const days = iraqDay(now) - iraqDay(at);
+  if (days <= 0) return say(OFFICE_MESSAGES.todayAt, lang, { time });
+  if (days === 1) return say(OFFICE_MESSAGES.yesterdayAt, lang, { time });
+  return say(OFFICE_MESSAGES.daysAgo, lang, { n: days });
+}
+
+/**
+ * The numbered "which draft?" list, newest first, each line with what tells it apart: when it was sent,
+ * its photo count, "newest" on the first, and who asked for it when they are not all the same person.
+ */
+export function choiceList(options: readonly QueuedDraft[], lang: RequesterLang, now: number): string {
+  const requesters = new Set(options.map((o) => (o.own ? 'you' : `${o.requester ?? ''}`)));
+  const comma = lang === 'ckb' ? '، ' : ', ';
+  return options.map((o, i) => {
+    const photos = o.photos ?? 0;
+    const facts = [
+      o.sentAt ? say(OFFICE_MESSAGES.sentWhen, lang, { when: whenText(Date.parse(o.sentAt), now, lang) }) : '',
+      photos === 0 ? say(OFFICE_MESSAGES.noPhotos, lang) : photos === 1 ? say(OFFICE_MESSAGES.onePhoto, lang)
+        : say(OFFICE_MESSAGES.photos, lang, { n: photos }),
+      i === 0 && options.length > 1 ? say(OFFICE_MESSAGES.newest, lang) : '',
+      requesters.size > 1 ? say(OFFICE_MESSAGES.fromRequester, lang, { requester: o.own ? say(OFFICE_MESSAGES.you, lang)
+        : o.requester ? escapeTelegramHtml(o.requester) : say(OFFICE_MESSAGES.theRequester, lang) }) : '',
+    ].filter(Boolean);
+    return `${i + 1}. ${bold(o.title)} (${facts.join(comma)})`;
+  }).join('\n');
 }
 
 const quoted = (texts: string[]) => texts.filter((t) => t.trim()).slice(0, 5)

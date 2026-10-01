@@ -124,16 +124,34 @@ async function emptyQueue() {
  * checked PPTX from one capture, a passing QA run naming them, the office photo alerts Core chose, and
  * TelegramSender's sent marks (message ids) for each member.
  */
-async function draftInReview(title = 'Autumn workshop poster', options: { qcPassed?: boolean } = {}) {
+async function draftInReview(title = 'Autumn workshop poster', options: { qcPassed?: boolean;
+  /** When the office alerts reached the members, in minutes before now (default: now). */
+  alertedMinutesAgo?: number; photos?: number; exactCopy?: string[]; requesterChat?: string; requesterName?: string } = {}) {
   const requestId = randomUUID();
-  const requesterChat = String(66_000_000 + Math.floor(Math.random() * 8_000_000));
+  const requesterChat = options.requesterChat ?? String(66_000_000 + Math.floor(Math.random() * 8_000_000));
   const opened = await projectLifecycleOpen(db, {
     requestId, tenantId, expectedRev: 0, rev: 1, key: `${requestId}:1:open`,
     draft: { platform: 'telegram', sourceEventId: `lc-${requestId}-r0`, sourceChannelId: requesterChat,
-      rawText: title, title, designInstructions: 'Use the exact copy', exactCopy: [title], clientId,
+      rawText: title, title, designInstructions: 'Use the exact copy', exactCopy: options.exactCopy ?? [title], clientId,
       autoGenerate: true, designStudio: false },
   });
   const taskId = opened.taskId;
+  await withRlsContext(db, scope, async (trx) => {
+    for (let i = 0; i < (options.photos ?? 0); i++) {
+      const hash = sha(Buffer.from(`photo ${i} of ${taskId}`));
+      await sql`INSERT INTO hawa.blobs (sha256, size, media_type) VALUES (${hash}, 1, 'image/jpeg') ON CONFLICT DO NOTHING`.execute(trx);
+      await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
+        VALUES (${tenantId}::uuid, ${taskId}::uuid, ${hash}, 'reference_image')`.execute(trx);
+    }
+    if (options.requesterName) {
+      // The request's source message, recorded at open: who sent it.
+      const named = await sql`UPDATE hawa.inbox_events SET payload = payload ||
+          ${JSON.stringify({ message: { from: { id: Number(requesterChat), first_name: options.requesterName } } })}::jsonb
+        WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'telegram'
+          AND source_event_id = ${`${requesterChat}:lc-${requestId}-r0`}`.execute(trx);
+      expect(Number(named.numAffectedRows)).toBe(1);
+    }
+  });
   const designId = `DA${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   const png = Buffer.from(`png of ${taskId}`);
   const pptx = Buffer.from(`pptx of ${taskId}`);
@@ -179,14 +197,15 @@ async function draftInReview(title = 'Autumn workshop poster', options: { qcPass
       await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
         VALUES (${tenantId}::uuid, 'telegram_delivery', ${key}, 'telegram_message_sent',
           ${JSON.stringify({ commandId: key.replace(/:send$/, ''), step: 'send', outcome: 'sent', messageId: messageIds[chat], chatId: String(chat) })}::jsonb,
-          ${`${key}:sent`}, true, clock_timestamp())`.execute(trx);
+          ${`${key}:sent`}, true, clock_timestamp() - ${options.alertedMinutesAgo ?? 0} * interval '1 minute')`.execute(trx);
     }
   });
   objects.set(requestId, { v: 1, requestId, tenantId, chatId: requesterChat, owner: 'restate', stage: 'in_review', rev: 2,
     taskId, runId, lang: 'en', title, outcome: { eventId: `dr-finished:${runId}`, sha256: 'x', status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', revisionId },
     designInput: { v: 1, lifecycle: { requestId, round: 0, runId }, taskId, tenantId, clientId, rawText: title,
       sourcePlatform: 'telegram', idempotencyKey: `lifecycle:${requestId}:${taskId}`, canvaAutoGenerate: true } } as unknown as AutomaticLifecycleState);
-  return { requestId, taskId, revisionId, requesterChat, pngId, pptxId, png, messageIds, title };
+  return { requestId, taskId, revisionId, requesterChat, pngId, pptxId, png, messageIds, title,
+    caption: designed.officePhotoAlerts?.[0]?.text ?? '' };
 }
 
 const rows = async (requestId: string, taskId: string) => withRlsContext(db, scope, async (trx) => ({
@@ -258,12 +277,14 @@ describe('an office member decides on a draft in Telegram (ADR-040 addendum)', (
     const second = await draftInReview('Graduation flyer');
     const { calls } = gateway();
     const asked = await intake(say(OFFICE_A, 'approved'));
-    expect(asked.chatAnswer.text).toBe('Which draft do you mean?\n1. <b>Book fair banner</b>\n2. <b>Graduation flyer</b>\n\nAnswer with the number or the name.');
+    // Sent to the member moments apart, so neither is taken for the one meant: newest first (2026-10-01).
+    expect(asked.chatAnswer.text).toBe('Which draft do you mean?\n1. <b>Graduation flyer</b> (sent just now, no photos, newest)\n' +
+      '2. <b>Book fair banner</b> (sent just now, no photos)\n\nAnswer with the number or the name.');
     expect(calls).toHaveLength(0);
     const answered = await intake(say(OFFICE_A, '2'));
-    expect(answered.chatAnswer.text).toBe('Approved. Sending <b>Graduation flyer</b> to the requester now.');
-    expect((await rows(second.requestId, second.taskId)).request).toMatchObject({ stage: 'delivering' });
-    expect((await rows(first.requestId, first.taskId))).toMatchObject({ request: { stage: 'in_review', rev: '2' }, approvals: [] });
+    expect(answered.chatAnswer.text).toBe('Approved. Sending <b>Book fair banner</b> to the requester now.');
+    expect((await rows(first.requestId, first.taskId)).request).toMatchObject({ stage: 'delivering' });
+    expect((await rows(second.requestId, second.taskId))).toMatchObject({ request: { stage: 'in_review', rev: '2' }, approvals: [] });
   });
 
   it('"ok but make the title bigger" goes back as the Desk\'s revision request with those words', async () => {
@@ -403,5 +424,121 @@ describe('an office member decides on a draft in Telegram (ADR-040 addendum)', (
     const answer = await intake(say(OFFICE_A, 'approved', replyTo(draft.messageIds[OFFICE_A])));
     expect(answer.chatAnswer.text).toContain("I can't approve <b>Menu board</b>: its automatic check did not pass.");
     expect(transport).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ADR-040 addendum (2026-10-01). The owner, an office member, wrote feedback without replying to a
+ * draft's picture while three drafts waited. The bot listed them by stored title only: two read
+ * "KAAE: <RLM>KAAE K-12 Pilot Study…", one "KAAE: Here is the text and the photos:…", and the owner could
+ * not tell them apart. And the words, "the design is not approved…", read as approval.
+ */
+const RLM = String.fromCharCode(0x200f);
+const OWNER_WORDS = 'the design is not approved, the images cut with no content awareness, should have more images organized creatively';
+
+describe('which draft, when several wait (ADR-040 addendum, 2026-10-01)', () => {
+  it.each([
+    [OWNER_WORDS, 'change'], ['the design is not approved', 'reject'], ['not approved yet', 'reject'],
+    ["not good, the colours are too dark", 'change'], ["don't send it", 'unclear'], ['پەسەند نییە', 'reject'],
+  ] as const)('refusing words are never approval: "%s" → %s', (words, intent) => {
+    expect(readOfficeIntent(words).intent).toBe(intent);
+  });
+
+  it('the incident: three drafts, two with the same title, are told apart; "2" applies the kept words', async () => {
+    await emptyQueue();
+    const day = 24 * 60;
+    const intro = await draftInReview('KAAE: Here is the text and the photos:…', { alertedMinutesAgo: 4 * day, photos: 6,
+      exactCopy: ['Here is the text and the photos:', 'KAAE K-12 Pilot Study\nField Visit Report'], requesterName: 'Shno' });
+    const older = await draftInReview(`KAAE: ${RLM}KAAE K-12 Pilot Study…`, { alertedMinutesAgo: 3 * day, photos: 4 });
+    const newer = await draftInReview(`KAAE: ${RLM}KAAE K-12 Pilot Study…`, { alertedMinutesAgo: 2 * day, photos: 5 });
+    const { calls } = gateway();
+    const asked = await intake(say(OFFICE_A, OWNER_WORDS));
+    expect(asked.chatAnswer.text).toBe('Which draft do you mean?\n' +
+      '1. <b>KAAE K-12 Pilot Study…</b> (sent 2 days ago, 5 photos, newest, from the requester)\n' +
+      '2. <b>KAAE K-12 Pilot Study…</b> (sent 3 days ago, 4 photos, from the requester)\n' +
+      '3. <b>KAAE K-12 Pilot Study</b> (sent 4 days ago, 6 photos, from Shno)\n\nAnswer with the number or the name.');
+    const lines = asked.chatAnswer.text.split('\n').filter((l) => /^\d\. /.test(l));
+    expect(new Set(lines.map((l) => l.replace(/^\d\. /, ''))).size).toBe(3);
+    expect(asked.chatAnswer.text).not.toContain(RLM);
+    expect(calls).toHaveLength(0);
+    // The number answers the question; the words are not asked for again.
+    const answered = await intake(say(OFFICE_A, '2'));
+    expect(answered.chatAnswer.text).toBe('Sent back for changes with your words. I have sent your note on <b>KAAE K-12 Pilot Study…</b> ' +
+      'to the requester; the next draft starts once they answer.');
+    expect(calls.map((c) => c.kind)).toEqual(['revise']);
+    expect((await rows(older.requestId, older.taskId)).approvals).toMatchObject([{ decision: 'revision_requested',
+      decision_payload: { revisionRequest: { comment: OWNER_WORDS } } }]);
+    for (const untouched of [intro, newer]) {
+      expect(await rows(untouched.requestId, untouched.taskId)).toMatchObject({ request: { stage: 'in_review', rev: '2' }, approvals: [] });
+    }
+  });
+
+  it('words with no reply go to the draft the member was sent last, within two hours, and the answer names it', async () => {
+    await emptyQueue();
+    const earlier = await draftInReview('Science fair poster', { alertedMinutesAgo: 90 });
+    const latest = await draftInReview('Parents evening invitation', { alertedMinutesAgo: 10, photos: 2 });
+    const { calls } = gateway();
+    const answer = await intake(say(OFFICE_A, 'make the logo smaller'));
+    expect(answer.chatAnswer.text).toBe('About the <b>Parents evening invitation</b> draft I sent you 10 minutes ago:\n' +
+      'Sent back for changes with your words. I have sent your note on <b>Parents evening invitation</b> to the requester; ' +
+      'the next draft starts once they answer.');
+    expect(calls.map((c) => c.kind)).toEqual(['revise']);
+    expect((await rows(latest.requestId, latest.taskId)).approvals).toMatchObject([{ decision: 'revision_requested',
+      decision_payload: { revisionRequest: { comment: 'make the logo smaller' } } }]);
+    expect(await rows(earlier.requestId, earlier.taskId)).toMatchObject({ request: { stage: 'in_review', rev: '2' }, approvals: [] });
+  });
+
+  it('still asks when drafts came minutes apart, or none came in the last two hours; "the newest" is the first line', async () => {
+    await emptyQueue();
+    const a = await draftInReview('Winter camp flyer', { alertedMinutesAgo: 12 });
+    const b = await draftInReview('Teachers day card', { alertedMinutesAgo: 10 });
+    const { calls } = gateway();
+    const close = await intake(say(OFFICE_B, 'approved'));
+    expect(close.chatAnswer.text).toBe('Which draft do you mean?\n1. <b>Teachers day card</b> (sent 10 minutes ago, no photos, newest)\n' +
+      '2. <b>Winter camp flyer</b> (sent 12 minutes ago, no photos)\n\nAnswer with the number or the name.');
+    expect(calls).toHaveLength(0);
+    const chosen = await intake(say(OFFICE_B, 'the newest'));
+    expect(chosen.chatAnswer.text).toBe('Approved. Sending <b>Teachers day card</b> to the requester now.');
+    expect((await rows(a.requestId, a.taskId)).approvals).toEqual([]);
+
+    await emptyQueue();
+    await draftInReview('Old poster one', { alertedMinutesAgo: 5 * 60 });
+    await draftInReview('Old poster two', { alertedMinutesAgo: 3 * 60 });
+    const stale = await intake(say(OFFICE_A, 'make the title bigger'));
+    expect(stale.chatAnswer.text).toMatch(/^Which draft do you mean\?\n1\. <b>Old poster two<\/b> \(sent /);
+    expect(calls.map((c) => c.kind)).toEqual(['approve', 'deliver']);
+  });
+
+  it('names drafts titled before ADR-180 and ADR-142 as new ones are named, in alerts and confirmations', async () => {
+    await emptyQueue();
+    const intro = await draftInReview('KAAE: Here is the text and the photos:…',
+      { exactCopy: ['Here is the text and the photos:', 'KAAE K-12 Pilot Study\nField Visit Report'] });
+    expect(intro.caption).toContain('A new draft is ready for office review: "KAAE K-12 Pilot Study"');
+    gateway();
+    const rejected = await intake(say(OFFICE_A, 'reject', replyTo(intro.messageIds[OFFICE_A])));
+    expect(rejected.chatAnswer.text).toBe('Rejected: <b>KAAE K-12 Pilot Study</b>. Nothing was sent to the requester.');
+    await emptyQueue();
+    const marked = await draftInReview(`KAAE: ${RLM}KAAE K-12 Pilot Study…`);
+    expect(marked.caption).toContain('"KAAE K-12 Pilot Study…"');
+    const sentBack = await intake(say(OFFICE_A, 'make the logo smaller', replyTo(marked.messageIds[OFFICE_A])));
+    expect(sentBack.chatAnswer.text).toContain('your note on <b>KAAE K-12 Pilot Study…</b> to the requester');
+    expect(sentBack.chatAnswer.text).not.toContain(RLM);
+  });
+
+  it('leaves the requester side as it was: a requester\'s words are never applied by the office default', async () => {
+    await emptyQueue();
+    const requesterChat = String(67_000_000 + Math.floor(Math.random() * 1_000_000));
+    const first = await draftInReview(`KAAE: ${RLM}KAAE K-12 Pilot Study…`, { requesterChat, alertedMinutesAgo: 60 });
+    const second = await draftInReview('Open day poster', { requesterChat, alertedMinutesAgo: 10 });
+    const { transport } = gateway();
+    const answer = await intake(say(Number(requesterChat), 'make the logo smaller'));
+    expect(answer.officeTurn).toBeUndefined();
+    expect(transport).not.toHaveBeenCalled();
+    for (const draft of [first, second]) {
+      expect(await rows(draft.requestId, draft.taskId)).toMatchObject({ request: { stage: 'in_review', rev: '2' }, approvals: [] });
+    }
+    expect(answer.chatAnswer.text).toContain('Which design is this for?');
+    expect(answer.chatAnswer.text).toContain('<b>KAAE K-12 Pilot Study…</b>');
+    expect(answer.chatAnswer.text).not.toContain(RLM);
   });
 });
