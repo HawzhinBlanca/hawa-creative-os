@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T05:41:38Z",
+  "generatedAt": "2026-10-01T05:46:45Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 745,
+  "fileCount": 746,
   "files": [
     {
       "path": ".dockerignore",
@@ -964,8 +964,8 @@
     },
     {
       "path": "adrs/196_durable_learning_consumers.md",
-      "sha256": "1fb5d6777037c3acb0186c90d0f340da3f1240e8a5fef5f54c797acd69b3902e",
-      "bytes": 3848
+      "sha256": "ed81eb11239c9322d0a1d8bef0422d3a555d5028e08aacc41ec6a6929a7c081a",
+      "bytes": 4369
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1439,8 +1439,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "52cdff0468d8c1832025d623dcc220c987d161798f1f3b84ae909268f09a4431",
-      "bytes": 34291
+      "sha256": "15ee109d8638f244cff6f2acc01788695d49502e2af2dd6dd0c99b5e2996c10d",
+      "bytes": 34796
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1543,9 +1543,14 @@
       "bytes": 4873
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/W6_LEARNING_CONSUMERS_GATE_EVIDENCE.json",
+      "sha256": "5afff0f1988f271c1630f131b88561481e1e7da515f328081a8f65fa3f9d2afb",
+      "bytes": 2115
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/W6_LEARNING_CONSUMERS_PROOF.json",
-      "sha256": "e150507923a5a28838331df65e471e4f751f1cc33233ff3f85216ec48db34aa7",
-      "bytes": 6133
+      "sha256": "b017326943b1a81dd899307dd24e31cbfb7c9b08635f4990d6f3e8e5de0fa05c",
+      "bytes": 6964
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_LEARNING_GOVERNANCE_GATE_EVIDENCE.json",
@@ -1579,8 +1584,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_TARGET_BOUND_LEARNING_PROOF.json",
-      "sha256": "4724e154321fb95c001ba012cb0d7512560a7c59926b6606a616366aef908a26",
-      "bytes": 12424
+      "sha256": "600551ea36337c4fd31a1e720421ba81a4764ef0e97a2be468bf6762364a5676",
+      "bytes": 12896
     },
     {
       "path": "plans/early-requester-hold-2026-10-01/LIVE_INFRA_READBACK.json",
@@ -2799,8 +2804,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "ef79db469237ea67ce89de8c03c1ee6cf2961e8d81d690d9b175dc44b5262dc2",
-      "bytes": 636023
+      "sha256": "a9bc13e44b3a2bbf62ed9461f7083fead24a6bb3b5e925dd4b388744df54b8c0",
+      "bytes": 637122
     },
     {
       "path": "plans/user-stories.csv",

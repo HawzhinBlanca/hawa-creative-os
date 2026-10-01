@@ -430,3 +430,11 @@ Connected100tests/10files,668 strict roots and lint pass. Intermediate29/4,31/2,
 Evidence: W6_LEARNING_CONSUMERS_PROOF.json. Whole FR077 feedback/revision and
 DNA-less client-category coverage, other fallback callers, native/human/taste
 and broader W5/W6/product remain open.
+
+
+Exact sealed08087d18 passes all8 engineering stages: 6523pass/0fail/67skip,
+668 strict test roots, isolated newest-production-dump checks and mandatory flag
+refusal pass. Connected10files/100pass and all retained failures are recorded in
+W6_LEARNING_CONSUMERS_PROOF.json; exact gate in W6_LEARNING_CONSUMERS_GATE_EVIDENCE.json.
+Evidence-only publication must preserve every runtime/test/migration/infra/gate byte.
+Source not deployed; broader FR077/DNA fallback/native/human/taste/product remains open.

@@ -1,6 +1,6 @@
 # ADR196 — Read durable learning at its consumers
 
-Date: 2026-10-01. Status: implementation and acceptance pending.
+Date: 2026-10-01. Status: exact engineering gate passed; product admission open.
 Requirements: FR-052, FR-053, FR-054, FR-077, NFR-006, NFR-012, NFR-024.
 Sources: MASTER_SPEC.md; docs/17_UI_UX.md; docs/18_FEEDBACK_LEARNING.md;
 ADR193–195; plans/content-aware-design-2026-09-30/PLAN.md.
@@ -55,3 +55,11 @@ revision search coverage and clients without DNA as client-category hits remain
 separate missing capabilities. Other legacy DNA resolver callers still permit
 process fallback; only the explicit strict consumers are qualified here. Broader
 W5/W6, native/Canva/human/taste and whole-product admission remain open.
+
+
+Exact sealed08087d18 passes all8 engineering stages: 6523pass/0fail/67skip,
+668 strict test roots, isolated newest-production-dump checks and mandatory flag
+refusal pass. Connected10files/100pass and all retained failures are recorded in
+W6_LEARNING_CONSUMERS_PROOF.json; exact gate in W6_LEARNING_CONSUMERS_GATE_EVIDENCE.json.
+Evidence-only publication must preserve every runtime/test/migration/infra/gate byte.
+Source not deployed; broader FR077/DNA fallback/native/human/taste/product remains open.

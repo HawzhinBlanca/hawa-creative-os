@@ -176,6 +176,8 @@
     "fullLogSha256": "88f09a65b6810dcef1b6e0bfd7cbd3a031e1d61f012bf3c8edbfdfd849ccd82a",
     "gateLog": "/tmp/hawa-target-learning-content-exact-gate-20261001.log",
     "engineeringOnly": true,
-    "deployed": false
-  }
+    "deployed": false,
+    "fullLogAvailability": "Historical SHA retained; the shared output/release-gate full log was overwritten by the next mandatory run. The copied ADR195 gate JSON and unique orchestration log remain retained; this path must not be used to verify the old detailed log."
+  },
+  "retentionCorrection": "ADR196 preserves its full log under an ignored per-seal qualification directory. ADR195 original detailed log cannot be recovered; no substitute or new test run is claimed."
 }

@@ -2,7 +2,7 @@
   "date": "2026-10-01",
   "adr": 196,
   "baseline": "f98facf32fface1b9f8cb2569390e8fd01845c47",
-  "status": "CONNECTED_ACCEPTANCE_PASSED_EXACT_GATE_PENDING",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_PRODUCT_OPEN",
   "requirements": [
     "FR-052",
     "FR-053",
@@ -56,13 +56,13 @@
   ],
   "limits": [
     "Source only, not deployed; live2c4d61ec unchanged",
-    "Exact sealed full gate pending for current source",
+    "Exact sealed full engineering gate passed; deployment/native/Canva/human/product admission not qualified by these checks",
     "Whole FR077 not complete: feedback/revision search and no-DNA client-category hits remain unqualified",
     "Other legacy DNA resolver callers still allow fallback; only explicit strict consumers are qualified",
     "No paid model or external provider call, dependency/migration, taste calibration or native/Canva/human/product admission"
   ],
   "sourceSha256": {
-    "adrs/196_durable_learning_consumers.md": "1fb5d6777037c3acb0186c90d0f340da3f1240e8a5fef5f54c797acd69b3902e",
+    "adrs/196_durable_learning_consumers.md": "ed81eb11239c9322d0a1d8bef0422d3a555d5028e08aacc41ec6a6929a7c081a",
     "apps/core/src/routes/search.routes.ts": "9bba4415902f019c79c6d8948ec316b902f07bf6fd7f12bd61f89974ba1a246c",
     "apps/core/src/routes/task-pipeline.routes.ts": "6965b1c36ee1e5e0b62b00192c2621028efde88f066e22d90cb187ccca575ad5",
     "apps/core/src/services/chat-campaign-intake.ts": "478030a1760c68d43da676f1e20247b99356c2fdd70adb895f65beed1ff257c1",
@@ -75,8 +75,8 @@
     "apps/core/test/core.test.ts": "ad8c0e8ecd7795b0ab5d19b3e23fde76212c431dfa33efe512f30c0ce1777620",
     "apps/core/test/split-cleanup-no-memory-truth.test.ts": "a78d83c1be047b1b4f6bb3662216afa04b0ceafc8ad0b92e6b2efd7cc5cc909a",
     "apps/core/test/approval-qc-hash.test.ts": "b78b2369ba857dcba29552ff11b3584f3d6ed85a68f857aac493fa0e7ad96de8",
-    "plans/content-aware-design-2026-09-30/PLAN.md": "52cdff0468d8c1832025d623dcc220c987d161798f1f3b84ae909268f09a4431",
-    "plans/traceability.csv": "ef79db469237ea67ce89de8c03c1ee6cf2961e8d81d690d9b175dc44b5262dc2"
+    "plans/content-aware-design-2026-09-30/PLAN.md": "15ee109d8638f244cff6f2acc01788695d49502e2af2dd6dd0c99b5e2996c10d",
+    "plans/traceability.csv": "a9bc13e44b3a2bbf62ed9461f7083fead24a6bb3b5e925dd4b388744df54b8c0"
   },
   "logs": {
     "/tmp/hawa-learning-consumers-cold-search-red-20261001.log": "8ed1a71f1a208c16fffca31d96e86f6eaaf90dad79e0ef92cb6274e0dea0f48a",
@@ -88,6 +88,21 @@
     "/tmp/hawa-learning-consumers-connected-final-20261001.log": "e49e473791bf3fc4c8f7d8ac6ef1c949410d641dd39829df9e1ce78f15a67ee7",
     "/tmp/hawa-learning-consumers-connected-qa-20261001.log": "aa313922ba55f34ff8e31ee3869eae5f5468e7c767207f9f9dcb5d6e450e404f",
     "/tmp/hawa-learning-consumers-types-20261001.log": "bb1a045ecad3d9d777a4e671ac3904611df6cf9931cf5457995ef59296886285",
-    "/tmp/hawa-learning-consumers-lint-20261001.log": "a272690c013e7b1b60d4e41cc17d19cc7699d053e4106e5fb898d96925bf6d0d"
+    "/tmp/hawa-learning-consumers-lint-20261001.log": "a272690c013e7b1b60d4e41cc17d19cc7699d053e4106e5fb898d96925bf6d0d",
+    "/tmp/hawa-learning-consumers-exact-gate-20261001.log": "909b208d2f789b85bd290f9581d67d1856081b45917decd19e7c69a8504e6c08"
+  },
+  "exactQualification": {
+    "seal": "08087d18dc73a1efeba2d6e9ac449ea35565fa17",
+    "stages": 8,
+    "passed": 6523,
+    "failed": 0,
+    "skipped": 67,
+    "typeRoots": 668,
+    "evidence": "plans/content-aware-design-2026-09-30/W6_LEARNING_CONSUMERS_GATE_EVIDENCE.json",
+    "fullLog": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/qualification/2026-10-01/08087d18/FULL_TEST_SUITE_RUN.log",
+    "fullLogSha256": "647561b6a56e79177b2e3f385ece8e85d150a82bb58c167dfce7a57b7b2e86e0",
+    "gateLog": "/tmp/hawa-learning-consumers-exact-gate-20261001.log",
+    "engineeringOnly": true,
+    "deployed": false
   }
 }
