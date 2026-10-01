@@ -60,7 +60,9 @@
     "Build refused an unused React import; removed unused import",
     "First connected120 cases:102pass/18fail; recovery SQL compared text to UUID, corrected types",
     "Next connected123 cases:122pass/1fail;500 historical task holds copied into every rule caused actual10-second response timeout; retain own source and one original representative per hold basis, indexed by scoped target; unchanged10-second request bound",
-    "Expanded18files/168pass; extra authority3files/19pass; final19files/169pass, overlapping counts not added"
+    "Expanded18files/168pass; extra authority3files/19pass; final19files/169pass, overlapping counts not added",
+    "First exact full gate3ea4bc07:6512pass/2fail/67skip; approval and rejection lifecycle assertions expected the old target shape. Read and assert the actual stored source hash.",
+    "First test-only correction put a revision query in the wrong fixture block; focused20pass/2fail retained. Corrected placement,3files/22pass; no runtime change."
   ],
   "migration": {
     "file": "077_revision_learning_sources.sql",
@@ -77,7 +79,7 @@
     "Broader W5/W6/native/Canva/human/product goal remains active"
   ],
   "sourceSha256": {
-    "adrs/195_target_bound_learning_examples.md": "3bea5f2deffdde8611ec858067f1c0e5842d5bdd3165c452587a28a83b97403b",
+    "adrs/195_target_bound_learning_examples.md": "6273ba0417fd7573e00ec58a05798953ca9a0fd4206aa05b2ed44f7f87620420",
     "apps/core/src/routes/design-studio.routes.ts": "3bf8b157272b253d752bddb979b55be5a042e766d3cee959d1ddbc9fb0b9096f",
     "apps/core/src/services/learning-governance.ts": "c41ef7da3985118c3dc09e3ff45beb9763279af84d68b0d3b059a107462654ff",
     "apps/core/src/services/learning-inputs.ts": "a3d25d21f59eefca6c9fee7d690475137da656cba1b577cb6e7f6372ee1b0ce1",
@@ -97,8 +99,10 @@
     "packages/db/src/repositories/revision.repository.ts": "6ccd3f8d2dda22dbba0ebd7ea516221d0df4ce310c68e4fc770effe48650028c",
     "packages/db/test/schema-upgrade.test.ts": "d093d21bb84a480996e03be7fad0e715c42844a04f7b45d56963999c4ca62098",
     "packages/domain/src/feedback.ts": "e0e2dde42273fae9cde1d43a20c20832c3286bfaee7a12fc1bc2c0358d08c38b",
-    "plans/content-aware-design-2026-09-30/PLAN.md": "c946eeb84eda893cab9cfcbf95a0b892872cc42792bb4491fe2d30a7863cde50",
-    "plans/traceability.csv": "e0cae4a3081493b62b503fe1315b2cc6732895d31a2bf58e3b3d50dfc1576d84"
+    "plans/content-aware-design-2026-09-30/PLAN.md": "8613c0277687d8a180536be5dd381a6e8a0bd6ad911a66ece98f1e87b18d72ef",
+    "plans/traceability.csv": "9c695e8738e9af8b99c736769f4145aab6db1e8a0340f994a39b213589e8bce8",
+    "apps/core/test/lifecycle-design-outcome.test.ts": "a03a29d7047de8bc7f5b50764b055fa06c83530ffb6ee94dfee85c1b6671ddf0",
+    "apps/core/test/lifecycle-office-desk-bridge.test.ts": "95b7bf260cc4ec94aec7dfb6171ae031fb7514e42531cb700f285ecfda0b3a71"
   },
   "logs": {
     "/tmp/hawa-target-learning-red-20261001.log": "5cc04e9a145a0a5de4ab558933f3c343220bc0e2d57b62142d0abc5321ca74e6",
@@ -112,7 +116,28 @@
     "/tmp/hawa-target-learning-build-final-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
     "/tmp/hawa-target-learning-desk-build-20261001.log": "87ca06d8c681011a7779ea43bff7bce9b19df0c9463b720b6b988d3b98046552",
     "/tmp/hawa-target-learning-lint-20261001.log": "7297b01a112008246738c27616aa050f787074b116f423108fb17d2471376cb5",
-    "/tmp/hawa-target-learning-desk-final-20261001.log": "5f10ed1c3b216928e983269006c7d8e06584c73e3a9f33938a983a42a21daa4f"
+    "/tmp/hawa-target-learning-desk-final-20261001.log": "5f10ed1c3b216928e983269006c7d8e06584c73e3a9f33938a983a42a21daa4f",
+    "/tmp/hawa-target-learning-first-full-failed-20261001.log": "cff5b9a2250d6dc0034b037980bdeca9c2cabaa26e8473ac96407c64326e1d25",
+    "/tmp/hawa-target-learning-full-gate-20261001.log": "fe3cd38a3755d6c1c109cb8f7aa844e212902e87b1418239280c59617b85c4d4",
+    "/tmp/hawa-target-learning-lifecycle-corrected-20261001.log": "5120811eb99f5b5fad04befac8d809dd30c45eabd79cfaa0860f46ab21c77fc8",
+    "/tmp/hawa-target-learning-lifecycle-final-20261001.log": "f3fe471d1b1b7e80f5cbe1347070262ba2e249528a1342150ac8c99b2a85706d"
   },
-  "deskBuildLog": "/tmp/hawa-target-learning-desk-final-20261001.log"
+  "deskBuildLog": "/tmp/hawa-target-learning-desk-final-20261001.log",
+  "failedFullGate": {
+    "seal": "3ea4bc07f96a964892f4db854ae4164536e3a316",
+    "passed": 6512,
+    "failed": 2,
+    "skipped": 67,
+    "durationSeconds": 219.2,
+    "log": "/tmp/hawa-target-learning-first-full-failed-20261001.log",
+    "reason": "Two exact old target-shape assertions; now read and assert actual stored revision/source hash, no runtime change."
+  },
+  "lifecycleFollowup": {
+    "files": 3,
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0,
+    "log": "/tmp/hawa-target-learning-lifecycle-final-20261001.log",
+    "overlap": "One authority case overlaps the19file/169case connected set; counts are not added."
+  }
 }

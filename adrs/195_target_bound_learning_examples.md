@@ -53,3 +53,9 @@ task-hold basis plus each rule's own source proves the same hold without copying
 every hold into every candidate. Full source histories stay in PostgreSQL.
 Local five-request500-source profile77–82ms; not a production SLO or taste study.
 W6_TARGET_BOUND_LEARNING_PROOF.json records hashes and retained failures. No deploy.
+
+First exact3ea4bc07 full gate retains6512pass/2fail/67skip. Two lifecycle
+assertions expected the old decision target; add exact kind and the actual stored
+revision/source hash, preserving all replay/capture/actor checks. A first test edit
+landed in the wrong block (20pass/2fail retained); corrected3files/22pass. No runtime
+code changed. Resealed exact engineering gate must still pass before publication.

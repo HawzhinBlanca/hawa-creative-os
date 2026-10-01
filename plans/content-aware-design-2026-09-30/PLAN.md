@@ -385,3 +385,9 @@ and role/foreign-task checks included. Synthetic pictures/exports, zero provider
 Exact source gate pending; not deployed. Search/inline cache consumers, true held-out
 taste calibration, broader W5 and native/Canva/human/product admission remain open.
 Evidence: W6_TARGET_BOUND_LEARNING_PROOF.json.
+
+First exact3ea4bc07 retains6512pass/2fail/67skip: two lifecycle assertions expected
+the old target shape. Correct them to require actual stored revision/source hashes
+and kind; no runtime change. First misplaced test edit20pass/2fail retained; final
+3files/22pass includes genuine approval/rejection/lost-answer controls. New seal and
+mandatory repeated exact gate pending. W6_TARGET_BOUND_LEARNING_PROOF.json.
