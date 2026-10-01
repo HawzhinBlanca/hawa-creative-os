@@ -32,6 +32,7 @@ x-app-environment: &app-environment
   # The worker's own credential for Core's /v1/internal/* endpoints (a service principal).
   HAWA_WORKER_TOKEN: ${CHAOS_WORKER_TOKEN:?}
   HAWA_DESIGN_WORKER_TOKEN: ${CHAOS_DESIGN_WORKER_TOKEN:?}
+  HAWA_OFFICE_PROXY_PROOF: ${CHAOS_OFFICE_PROXY_PROOF:?}
   # ADR-163 rollback: previous Core recognizes the retired key; current Core scopes it first.
   HAWA_API_KEY: ${CHAOS_DESIGN_WORKER_TOKEN:?}
   # Every chat's requests are RequestLifecycle's (ADR-135): HAWA_LIFECYCLE_CHATS, which listed the
@@ -77,6 +78,25 @@ x-app-environment: &app-environment
   NODE_EXTRA_CA_CERTS: /chaos-ca/ca.pem
   HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
 
+# Current production worker capabilities; fake infrastructure adds no operator authority.
+x-worker-environment: &worker-environment
+  NODE_ENV: production
+  DATABASE_URL: postgresql://hawa_worker_login:${CHAOS_WORKER_PASSWORD:?}@postgres:5432/hawa_chaos
+  RESTATE_INGRESS_URL: http://restate:8080
+  RESTATE_ADMIN_URL: http://restate:9070
+  HAWA_CORE_INTERNAL_URL: http://core:3001
+  HAWA_WORKER_TOKEN: ${CHAOS_WORKER_TOKEN:?}
+  HAWA_DESIGN_WORKER_TOKEN: ${CHAOS_DESIGN_WORKER_TOKEN:?}
+  TELEGRAM_BOT_TOKEN: ${CHAOS_BOT_TOKEN:?}
+  TELEGRAM_ALLOWED_USERS: "9000001"
+  HAWA_TELEGRAM_POLLER: ${CHAOS_TELEGRAM_POLLER:-worker}
+  HAWA_BLOB_DIR: /var/lib/hawa/blobs
+  DESIGN_PIPELINE_V3: "off"
+  DESIGN_STUDIO_V2: "off"
+  HAWA_CHAOS_CONTROL_URL: http://fakes:9000/__chaos
+  NODE_EXTRA_CA_CERTS: /chaos-ca/ca.pem
+  HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
+
 x-worker: &worker
   build:
     context: ../../..
@@ -92,6 +112,7 @@ x-worker: &worker
   networks: [chaos]
   volumes:
     - chaos_ca:/chaos-ca:ro
+    - chaos_blobs:/var/lib/hawa/blobs:ro
   depends_on:
     fakes: { condition: service_healthy }
     postgres: { condition: service_healthy }
@@ -261,7 +282,7 @@ services:
   worker-blue:
     <<: *worker
     environment:
-      <<: *app-environment
+      <<: *worker-environment
       PORT: 9080
       HAWA_WORKER_COLOUR: blue
       HAWA_WORKER_SELF_URI: http://worker-blue:9080
@@ -272,7 +293,7 @@ services:
     # Started only for a deploy scenario; blue is the live colour.
     profiles: ["green"]
     environment:
-      <<: *app-environment
+      <<: *worker-environment
       PORT: 9080
       HAWA_WORKER_COLOUR: green
       HAWA_WORKER_SELF_URI: http://worker-green:9080
@@ -324,6 +345,7 @@ services:
     ports: ["127.0.0.1:56081:80"]
     volumes:
       - ../../../infra/docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${CHAOS_OFFICE_PROOF_FILE:?}:/etc/nginx/hawa-office-proof.conf:ro
       - chaos_blobs:/srv/hawa-blobs:ro
     networks: [chaos, chaos-edge]
     depends_on:

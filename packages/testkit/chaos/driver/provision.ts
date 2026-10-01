@@ -12,6 +12,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { upgradeCanvaSchema } from '../../../db/src/upgrade.js';
+import { provisionWorkerDatabase } from '../../../db/src/provision-worker-role.js';
 import { CanvaTokenCipher } from '../../../../apps/core/src/services/canva-connect-service.js';
 import { runCli } from '../../../../scripts/restate-bluegreen.js';
 import { PORTS, RESTATE_ADMIN_URL, query, secrets, sql, type Service } from './stack.js';
@@ -24,7 +25,12 @@ export async function upgradeSchema(): Promise<{ applied: string[]; verified: st
   // No grants of its own: db/03-grants.sql ran at init, as in production, and the upgrades grant
   // their own tables. The driver used to grant every table in full, which hid that production's init
   // left the worker unable to lease a command (2026-09-24).
-  return upgradeCanvaSchema(`postgresql://hawa_owner:${secrets().CHAOS_OWNER_PASSWORD}@127.0.0.1:${PORTS.postgres}/hawa_chaos`);
+  const auth = secrets();
+  const adminUrl = `postgresql://hawa_owner:${auth.CHAOS_OWNER_PASSWORD}@127.0.0.1:${PORTS.postgres}/hawa_chaos`;
+  const result = await upgradeCanvaSchema(adminUrl);
+  await provisionWorkerDatabase(adminUrl,
+    `postgresql://hawa_worker_login:${auth.CHAOS_WORKER_PASSWORD}@127.0.0.1:${PORTS.postgres}/hawa_chaos`);
+  return result;
 }
 
 export async function connectCanva(): Promise<void> {

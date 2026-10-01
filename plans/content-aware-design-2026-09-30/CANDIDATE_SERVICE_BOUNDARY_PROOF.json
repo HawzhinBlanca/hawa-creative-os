@@ -1,0 +1,50 @@
+{
+  "adr": "ADR205",
+  "date": "2026-10-01",
+  "status": "CONNECTED_BOUNDARIES_PASS_DEPLOYED_RECOVERY_PENDING",
+  "requirements": [
+    "FR-069",
+    "FR-070",
+    "NFR-012",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "baselineFailed": {
+    "commit": "f73c25ef97b796ffc124a0aba01093e44aee8be1",
+    "filesFailed": 1,
+    "scenariosSkipped": 57,
+    "scope": "nginx exited before candidate scenario ran; independent actual nginx-t confirms missing office-proof include",
+    "receipt": "output/qualification/2026-10-01/candidate-service-boundary-development/INITIAL_REHEARSAL_FAILED.json"
+  },
+  "connected": {
+    "files": 3,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "actual Compose interpolation, real nginx validation, private/inode proof writer, restricted role and existing edge controls"
+  },
+  "strictRoots": 680,
+  "chaosStandaloneTypes": "PASS",
+  "policy": "Fake external providers only; current restricted worker role/service environment/read-only blobs and private independent office proof; no production behavior/grants changed.",
+  "sourceSha256": {
+    "packages/testkit/chaos/docker-compose.chaos.yml": "9f6fc3c0211d70aed9df243a807368f072c5bb780bf8417af63c103919dcc2eb",
+    "packages/testkit/chaos/driver/stack.ts": "8c825e4a405f55995612d4e43c87bb8b33612892f865a1e8b38a08eb9dbbe637",
+    "packages/testkit/chaos/driver/provision.ts": "713bea2be601c80fdeff2791693846a151e5af31aa61bc3f6d9623c27b4f16ad",
+    "packages/testkit/chaos/driver/office-proof.ts": "37414535fa7d37f9a8244c915da25c8335c7cba8550e01efd2f789ea83ef202c",
+    "packages/testkit/chaos/driver/candidate-sources.ts": "19651a729c2aece6650078d0594af2e93b8a2a9329c2cb6d618c4102b1de6e56",
+    "packages/testkit/test/chaos-service-boundaries.test.ts": "6f544e65e706f0fbcc39821de7edb45385219b75646d896622b7a9c7964843cc"
+  },
+  "logs": {
+    "output/qualification/2026-10-01/candidate-service-boundary-development/INITIAL_REHEARSAL_FAILED.log": "b2e72c654f7a96a62e7eb718af9b904565bbec0fbfe1ee325eff830d959e0f78",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-boundaries-types-20261001.log": "c1db62308b13b58e87e73072f07737de89501378ad0d26928581a24f6fd34026",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-boundaries-connected-20261001.log": "12a6fa16ec2c7e8c5b328f73e41d664ff884c28d2255a552134043c4bee63d40",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-boundaries-lint-20261001.log": "56d417c8a9de81139e3da6dc1007e08c7c3423a4d6d4076926bbda337bf4748d",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/NGINX_MISSING_INCLUDE_RED.log": "6c81731c4313c19fb66adc2a67eb3fdaba28e13b86453dca985cd2d86f509426",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-boundaries-chaos-types-20261001.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "deployment": "NO_PRODUCTION_CHANGE",
+  "realProviders": "NOT_RUN",
+  "nativeCanvaHuman": "NOT_RUN",
+  "exactGate": "PENDING",
+  "deployedCandidateRecovery": "PENDING"
+}

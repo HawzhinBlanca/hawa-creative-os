@@ -533,3 +533,10 @@ ADR203 replaces coarse four-percent sizing with bounded distinct integer states 
 ### Joint typography exact qualification
 
 Exact sealeddb24c6179f7184b6f2545e750cdce10469b73543: all8,6616pass/0fail/67skip across672passed files/6skipped;679 strict roots,1702 blueprint checks,newest production dump restored in isolation and mandatory negative-flag refusal pass. Actual measured type-fit/Core alignment defect resolved in source; no deploy/native Canva/human/product admission. W5_JOINT_TYPOGRAPHY_GATE_EVIDENCE.json retains exact gate; local benchmark retains additional infeasible-search cost.
+
+
+## Fresh candidate boundary repair — 1 October 2026
+
+Exact f73c25ef deployed rehearsal fails before scenarios: required office-proof include absent. Actual isolated nginx-t confirms missing file; original hook/receipt retained,57 skipped is no recovery pass. ADR205 generates a per-project private in-place/fsync proof and RO mount, gives workers the actual restricted-role provisioner/service environment and RO blobs, without production grants or auth-policy changes. Actual Compose/nginx/role controls21/0/0 across3files;680 strict roots and standalone chaos types pass. Running identity/denial checks added; fresh deployed recovery and exact gate pending. CANDIDATE_SERVICE_BOUNDARY_PROOF.json. No production/paid call.
+
+Next actual background diagnostic: nearest approved gradient neighbor rejects a long-copy column although a different existing approved stop gives black ink contrast>=6.12/7.12 with unchanged geometry/palette. The refusal also mutates its caller layout. Original shorter-column control accepted and is retained; actual confirmed exported planner diagnostic retained in W2_BACKGROUND_FEASIBILITY_FINDING.json. Acceptance regression NOT_RUN/repair pending; no live failure or human quality claim.

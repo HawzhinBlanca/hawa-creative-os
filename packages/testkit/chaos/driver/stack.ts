@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDb, sql, type Database, type Kysely } from '@hawa/db';
+import { writeOfficeProofInclude } from './office-proof.js';
 
 export const CHAOS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const REPO_ROOT = resolve(CHAOS_DIR, '..', '..', '..');
@@ -83,6 +84,7 @@ function composeEnvironment(): NodeJS.ProcessEnv {
     CHAOS_PORT_RESTATE_ADMIN: String(PORTS.restateAdmin),
     CHAOS_PORT_RESTATE_INGRESS: String(PORTS.restateIngress),
     CHAOS_PORT_FAKES: String(PORTS.fakes),
+    CHAOS_OFFICE_PROOF_FILE: officeProofFile(),
     ...(IMAGE_TAG ? { CHAOS_IMAGE_TAG: IMAGE_TAG } : {}),
   };
 }
@@ -92,12 +94,16 @@ export function envFile(): string {
   return ENV_FILE;
 }
 
+export function officeProofFile(): string { return `${ENV_FILE}.office-proof.conf`; }
+
 export type Service = 'postgres' | 'restate' | 'core' | 'worker-blue' | 'worker-green' | 'fakes' | 'docling' | 'desk' | 'nginx';
 const SERVICES: readonly Service[] = ['postgres', 'restate', 'core', 'worker-blue', 'worker-green', 'fakes', 'docling', 'desk', 'nginx'];
 
 export interface ChaosSecrets {
   CHAOS_OWNER_PASSWORD: string;
   CHAOS_APP_PASSWORD: string;
+  CHAOS_WORKER_PASSWORD: string;
+  CHAOS_OFFICE_PROXY_PROOF: string;
   CHAOS_BEARER_TOKEN: string;
   CHAOS_REVIEWER_KEY: string;
   CHAOS_ADMIN_KEY: string;
@@ -122,6 +128,8 @@ export function secrets(): ChaosSecrets {
   const made: ChaosSecrets = {
     CHAOS_OWNER_PASSWORD: hex(16),
     CHAOS_APP_PASSWORD: hex(16),
+    CHAOS_WORKER_PASSWORD: hex(32),
+    CHAOS_OFFICE_PROXY_PROOF: hex(32),
     CHAOS_BEARER_TOKEN: hex(24),
     CHAOS_REVIEWER_KEY: hex(24),
     CHAOS_ADMIN_KEY: hex(24),
@@ -164,7 +172,7 @@ export function run(cmd: string, args: string[], options: { allowFail?: boolean;
 }
 
 export function compose(args: string[], options: { allowFail?: boolean; timeoutMs?: number } = {}) {
-  secrets();
+  writeOfficeProofInclude(officeProofFile(), secrets().CHAOS_OFFICE_PROXY_PROOF);
   return run('docker', ['compose', '-p', PROJECT, '-f', COMPOSE_FILE,
     ...(PROJECT === DEFAULT_PROJECT && existsSync(RECOVERY_OVERRIDE) ? ['-f', RECOVERY_OVERRIDE] : []),
     ...(PROJECT === DEFAULT_PROJECT && existsSync(RELEASE_OVERRIDE) ? ['-f', RELEASE_OVERRIDE] : []),
@@ -229,6 +237,7 @@ export function down(options: { volumes?: boolean } = {}): void {
   }
   if (options.volumes) {
     rmSync(ENV_FILE, { force: true });
+    rmSync(officeProofFile(), { force: true });
     if (PROJECT === DEFAULT_PROJECT) rmSync(RELEASE_OVERRIDE, { force: true });
     expectFreshDatabase = true;
   }

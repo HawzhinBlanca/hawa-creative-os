@@ -43,6 +43,36 @@ export async function candidateSources(chat: string, events: string[], suiteStar
     ['core', 'worker-blue', 'docling'].every(service => deployment.containers[service]?.networks.length > 0 &&
       deployment.containers[service].networks.every((network: string) => ['hawa-chaos_chaos', 'hawa-chaos_parser'].includes(network))),
     deployment.networks.join(', '));
+  check('running nginx validates the production configuration and its mounted office proof',
+    compose(['exec', '-T', 'nginx', 'nginx', '-t']).status === 0, 'nginx -t passed');
+  const boundaryProbe = compose(['exec', '-T', 'worker-blue', 'node', '--input-type=module', '-e', `
+    const {createDb, sql} = await import('/app/packages/db/dist/index.js');
+    const db = createDb();
+    try {
+      const result = await sql\`SELECT current_user AS identity,
+        pg_has_role(current_user,'hawa_app','MEMBER') AS app_member,
+        has_table_privilege(current_user,'hawa.approvals','INSERT') AS approval_write,
+        has_table_privilege(current_user,'hawa.tasks','UPDATE') AS task_write,
+        has_schema_privilege(current_user,'hawa','CREATE') AS schema_create,
+        has_database_privilege(current_user,current_database(),'TEMPORARY') AS temp_create\`.execute(db);
+      const operatorEnvironment = ['HAWA_BEARER_TOKEN','HAWA_API_KEY','HAWA_ADMIN_KEY','HAWA_ART_DIRECTOR_KEY',
+        'OPENAI_API_KEY','CANVA_CLIENT_SECRET','CANVA_TOKEN_ENCRYPTION_KEY','GOOGLE_APPLICATION_CREDENTIALS']
+        .some(key => !!process.env[key]);
+      const response = await fetch('http://core:3001/v1/tasks', {
+        headers: {Authorization: 'Bearer ' + process.env.HAWA_DESIGN_WORKER_TOKEN}});
+      process.stdout.write(JSON.stringify({...result.rows[0],operatorEnvironment,taskListStatus:response.status}));
+    } finally { await db.destroy(); }
+  `]);
+  const workerBoundary = JSON.parse(boundaryProbe.stdout) as {
+    identity: string; app_member: boolean; approval_write: boolean; task_write: boolean;
+    schema_create: boolean; temp_create: boolean; operatorEnvironment: boolean; taskListStatus: number;
+  };
+  check('running worker has only its restricted database identity', workerBoundary.identity === 'hawa_worker_login' &&
+    ['app_member', 'approval_write', 'task_write', 'schema_create', 'temp_create'].every(key =>
+      workerBoundary[key as keyof typeof workerBoundary] === false), JSON.stringify(workerBoundary));
+  check('running worker has no operator/provider environment and cannot list tasks',
+    workerBoundary.operatorEnvironment === false && [401, 403].includes(workerBoundary.taskListStatus),
+    `operatorEnvironment=${workerBoundary.operatorEnvironment}; taskListStatus=${workerBoundary.taskListStatus}`);
   const page = await fetch(origin);
   const html = await page.text(), script = /<script[^>]+src="([^"]+)"/.exec(html)?.[1];
   check('production Desk HTML is served through production nginx', page.ok && !!script, `HTTP ${page.status}`);

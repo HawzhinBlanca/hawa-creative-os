@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T08:34:44Z",
+  "generatedAt": "2026-10-01T08:46:37Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 776,
+  "fileCount": 779,
   "files": [
     {
       "path": ".dockerignore",
@@ -1008,6 +1008,11 @@
       "bytes": 1787
     },
     {
+      "path": "adrs/205_candidate_service_boundary_parity.md",
+      "sha256": "aa66b75c5d65b081da86209bf6a3ed6e0917725923392f91a921cb22de7ee6ad",
+      "bytes": 2068
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1448,6 +1453,11 @@
       "bytes": 13380
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/CANDIDATE_SERVICE_BOUNDARY_PROOF.json",
+      "sha256": "c61da81d89a9230f9cb1d4f3ee07d8874f4dc4ef6494633a456aa4ce4155f281",
+      "bytes": 3130
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/CURRENT_RELEASE_INTEGRATION_PROOF.json",
       "sha256": "00448349ea9ee35906bb26d7e4eb33300aa78e4958d63d5e30136cea9bbe7221",
       "bytes": 2485
@@ -1479,13 +1489,18 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "c56954a28d75c9dc8d593ff76b7da5cca39d1ad62e84c1f208095927430ae223",
-      "bytes": 47897
+      "sha256": "e00dc8ba2b652b810a4bacd7b565a2645e306b985dc13d3c5a3b644d542d1a3d",
+      "bytes": 49121
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
       "sha256": "f5bc1f13a5b5ea64805017b04a12ac45a5f6334b03f222493429b2fe188769e8",
       "bytes": 2958
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W2_BACKGROUND_FEASIBILITY_FINDING.json",
+      "sha256": "842233a8cbd615d95b51baf4e944b0cbbf868a25a8e80e24d8045ed10697e42f",
+      "bytes": 5130
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W2_BACKGROUND_PROOF.json",
@@ -2944,8 +2959,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "f1b98ff30f57bccc327191f88f74ec41b21b3890ec3b77f0f04a7cabd78f394a",
-      "bytes": 657988
+      "sha256": "c69fc476f830888f9c418d13b3b3be5ffa65ab18cac13ee8fd06106e39abab09",
+      "bytes": 660158
     },
     {
       "path": "plans/user-stories.csv",
