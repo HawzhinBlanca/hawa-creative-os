@@ -224,7 +224,7 @@ export const SettingsScreen: React.FC = () => {
           <h2>Model registry</h2>
           <div className="rule">
             <b>Reasoning, layout, critique & judge</b>
-            <p>Production defaults: GPT-6.1 Sol for text, layout and critique; GPT-4.1 mini for visual judging. Current model settings appear in Operations.</p>
+            <p>Each design records the models used for its run. Visual review is advisory; it cannot waive deterministic QA or human approval.</p>
           </div>
           <div className="rule">
             <b>Artwork</b>

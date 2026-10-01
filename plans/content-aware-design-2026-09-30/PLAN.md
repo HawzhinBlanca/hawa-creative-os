@@ -990,3 +990,12 @@ qualified source; only test catalog typing and generated seals differ. First ful
 7515/4/67 and repaired typing failure preserved. Production-data Stage3 NOT_RUN;
 real native/human/publication/offsite/pilot admission open. No production change.
 See CURRENT_RELEASE_INTEGRATION_PROOF.json for exact provenance.
+
+
+## Current native compatibility readback — 2 October 2026
+
+Actual current health resolves text/layout/critique/judge to gpt-6.1-sol; observed Settings still claimed a GPT-4.1 mini judge. Removed the hardcoded model claim; existing12 status checks and Desk production build PASS. Last whole-source qualification remains1cf34fdb, published6954f175; this small UI follow-up has focused evidence, not a rerun full-gate claim.
+
+Current checker validates all40 original strings/addressable text and declared families in four hash-verified retained actual Canva exports; altered-copy and wrong-font controls refused. The first probe mistakenly read projected fontFamilyPass from lower-level checker; corrected to its actual fontPass field without changing source/assertions. No native operation, saved edit, glyph or human review inferred. Five current white-paper topology transfers retain source hashes/live copy and pass hard QA; independent pinned-font export geometry agrees over6475710 pixels,4228430 within source images, with text/logo/boundary masks. Synthetic diagnostics are not client quality examples.
+
+Read-only UI: Canva account authorized, historical smoke task has no native preview and QA unmeasured; approval/delivery disabled. The newer KAAE2025 Claude worktree is dirty onbaffce10, not a committed mergeable change. Preserve it; finalize/review before integration. Native save approval, production-data transfer, human language/quality, publication, offsite recovery and real pilot stay open. CURRENT_NATIVE_ACCEPTANCE_READBACK.json records current evidence/provenance.
