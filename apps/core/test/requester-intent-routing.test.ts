@@ -229,16 +229,27 @@ describe('a message while designs are open', () => {
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
-  it('"cancel the poster" asks the office to cancel it, holds Deliver, and starts nothing', async () => {
+  // ADR-230 (changed deliberately): a cancel used to be a note for the office that closed nothing. While
+  // nothing is approved, intake now decides a withdraw (RequestLifecycle closes the request, after Core
+  // checks this decision); once approved, the cancel is kept for the office and the requester is told the truth.
+  it('"cancel the poster" in review is decided as a withdraw; once approved it is kept for the office, told truthfully', async () => {
     const chat = chatId();
     const request = await seed(chat, 'in_review', 2, { title: 'Nawroz poster' });
     const answer = await intake(app(), message(chat, 'please cancel the poster'));
-    expect(answer).toMatchObject({ code: 'LATE_REQUESTER_CHANGE', requestStage: 'in_review', intent: 'cancel',
-      chatAnswer: { text: "OK. I've asked the office to cancel <b>Nawroz poster</b>." } });
-    expect(answer.officeAlert.text).toMatch(/asked to cancel the design "Nawroz poster"/);
-    expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, request.requestId))).toHaveLength(1);
-    const sorani = await intake(app(), message(chat, 'هەڵیبوەشێنەوە'));
-    expect(sorani.chatAnswer.text).toContain('هەڵبوەشێنێتەوە');
+    expect(answer).toMatchObject({ lifecycleAction: 'withdraw', requestId: request.requestId, requestStage: 'in_review', intent: 'cancel' });
+    expect(answer.chatAnswer).toBeUndefined();
+    expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, request.requestId))).toHaveLength(0);
+    // Intake decides; the request object closes it.
+    expect(await requestRow(request.requestId)).toMatchObject({ stage: 'in_review' });
+    const approvedChat = chatId();
+    const approved = await seed(approvedChat, 'approved', 3, { title: 'Nawroz poster' });
+    const late = await intake(app(), message(approvedChat, 'please cancel the poster'));
+    expect(late).toMatchObject({ code: 'LATE_REQUESTER_CHANGE', requestStage: 'approved', intent: 'cancel',
+      chatAnswer: { text: "<b>Nawroz poster</b> was already approved, so I can't cancel it myself. I've told the office." } });
+    expect(late.officeAlert.text).toMatch(/asked to cancel the design "Nawroz poster", but it was already approved/);
+    expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, approved.requestId))).toHaveLength(1);
+    const sorani = await intake(app(), message(approvedChat, 'هەڵیبوەشێنەوە'));
+    expect(sorani.chatAnswer.text).toContain('پەسەند کرابوو');
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 

@@ -89,6 +89,34 @@ function core(answers: Array<() => Promise<any>>) {
   return { intake, park };
 }
 
+describe('ChatInbox and a requester\'s cancel (ADR-230)', () => {
+  it('hands a withdraw to RequestLifecycle under the update\'s key, once, and says nothing itself', async () => {
+    const ctx = new FakeContext() as FakeContext & { withdraws: Array<{ requestId: string; event: unknown }>; sendLifecycleWithdraw(r: string, e: unknown): Promise<void> };
+    ctx.withdraws = [];
+    let failOnce = true;
+    ctx.sendLifecycleWithdraw = async (requestId, event) => {
+      if (failOnce) { failOnce = false; throw new Error('withdraw dispatch interrupted'); }
+      ctx.withdraws.push({ requestId, event });
+    };
+    const requestId = '3a4c6ac4-1111-4222-8333-944455556666';
+    const c = core([async () => ({ kind: 'done', intakeStatus: 200, lifecycleAction: 'withdraw', requestId, chatId: '555' })]);
+    expect(await untilSettled(ctx, () => handleUpdate(ctx, input, c))).toMatchObject({ outcome: 'handled' });
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(ctx.withdraws).toEqual([{ requestId, event: { v: 1, kind: 'withdraw', eventId: 'chatinbox:withdraw:4242', requestId, updateId: 4242 } }]);
+    expect(ctx.notices).toEqual([]);
+  });
+
+  it('Core\'s withdraw answer is read by the worker\'s client, and a malformed one waits', async () => {
+    const requestId = '3a4c6ac4-1111-4222-8333-944455556666';
+    const answer = (body: unknown) => createCoreClient({ baseUrl: 'http://core', token: 't',
+      fetch: (async () => new Response(JSON.stringify({ intakeStatus: 200, ...body as object }), { status: 200 })) as unknown as typeof fetch });
+    expect(await answer({ lifecycleAction: 'withdraw', requestId, chatId: '555' }).intake(update, 'lifecycle'))
+      .toMatchObject({ kind: 'done', lifecycleAction: 'withdraw', requestId, chatId: '555' });
+    await expect(answer({ lifecycleAction: 'withdraw', requestId: 'not-a-uuid', chatId: '555' }).intake(update, 'lifecycle'))
+      .rejects.toThrow(/invalid withdraw/);
+  });
+});
+
 describe('ChatInbox.handleUpdate', () => {
   it('dispatches a prepared first brief under a stable open key and recovers after send interruption', async () => {
     const ctx = new FakeContext();

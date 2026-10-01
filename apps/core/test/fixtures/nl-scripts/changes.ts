@@ -184,12 +184,13 @@ export const CHANGE_SCRIPTS: Script[] = [
   },
   {
     id: 'S044', title: 'the office sends it back; the requester changes their mind: "never mind, cancel it"', kinds: ['cancel', 'mind'],
-    natural: 'No round starts; the cancellation is passed to the office.',
+    natural: 'No round starts; the request (sent back for changes, nothing approved) is withdrawn (ADR-230).',
     async play(p) {
       await sentBack(p);
       const cancel = await p.say('never mind, cancel it', { after: 120_000 });
       expect(p.revisions).toHaveLength(0);
-      expect(p.answer(cancel)).toMatch(/cancel|stop/i);
+      expect(p.answer(cancel)).toMatch(/^Cancelled <b>.+<\/b>\. Nothing more will be made for it\.$/);
+      expect(await p.h.taskState(p.request())).toMatchObject({ state: 'cancelled' });
     },
   },
   {

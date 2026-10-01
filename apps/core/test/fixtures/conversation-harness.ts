@@ -41,7 +41,7 @@ import { readStoredExportBytes } from '../../../worker/src/delivery-notification
 import { checkSignedOfficeDecision, type SignedOfficeDecision } from '../../../worker/src/lifecycle/office-decision-gateway.js';
 import {
   openAutomaticRequest, openManualRequest, recordDesignFinished, recordOfficeDeliveryStart, recordOfficeRevision,
-  recordRequesterDecision, type AutomaticOpenContext, type LifecycleState, type OfficeDeliveryStartEvent,
+  recordRequesterDecision, recordWithdraw, type AutomaticOpenContext, type LifecycleState, type OfficeDeliveryStartEvent,
   type OfficeRevisionEvent, type OpenAutomaticEvent, type OpenManualEvent, type RequesterDecisionEvent,
 } from '../../../worker/src/lifecycle/request-lifecycle.js';
 
@@ -292,6 +292,12 @@ export class ConversationHarness {
         await self.open(requestId, event as OpenAutomaticEvent | OpenManualEvent);
       },
       sendLifecycleDecision: async (requestId, event) => { await self.requesterDecision(requestId, event); },
+      // ADR-230: a requester's cancel withdraws the request through its own object.
+      sendLifecycleWithdraw: async (requestId, event) => {
+        await Promise.all(sends.splice(0));
+        await recordWithdraw(self.objectFor(requestId), self.internal, event);
+        await self.drain();
+      },
       scheduleSettle: (input, delayMs, key) => {
         if (self.settleKeys.has(key)) return;
         self.settleKeys.add(key);

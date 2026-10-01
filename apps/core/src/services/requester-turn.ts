@@ -20,7 +20,7 @@
  *    about the files: they are passed on, and are never approval (ADR-156);
  *  - only a new brief opens a request; a message that could be either asks one short question.
  */
-import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
+import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, WITHDRAW_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
   type Phrase, type RequesterLang } from '@hawa/integrations';
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
@@ -859,7 +859,10 @@ function applyTo(intent: PendingAsk['intent'], request: ChatRequestView, words: 
   const r = resolves ? { resolves } : {};
   switch (intent) {
     case 'hold': return { kind: 'note', note: 'hold', requestId: request.requestId, words, ...r };
-    case 'cancel': return { kind: 'note', note: 'cancel', requestId: request.requestId, words, ...r };
+    // ADR-230: a cancel withdraws the request, so it is carried out only when the design is certain (a
+    // reply, the only one, named, or a question answered); one picked by recency is asked about first.
+    case 'cancel': return resolves || ['reply', 'only', 'named'].includes(how)
+      ? { kind: 'note', note: 'cancel', requestId: request.requestId, words, ...r } : null;
     case 'approval': return { kind: 'tell', note: 'approval', requestId: request.requestId, words, ...r };
     case 'deadline': return { kind: 'tell', note: 'deadline', requestId: request.requestId, words, ...r };
     case 'delivery_request': return { kind: 'tell', note: 'delivery', requestId: request.requestId, words, ...r };
@@ -1191,7 +1194,7 @@ export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang): s
   }
   if (plan.options.length === 1 && plan.allowNew) return say(ROUTING_MESSAGES.askChangeOrNew, lang, { title: title(plan.options[0]) });
   if (plan.options.length === 1) {
-    return say(plan.intent === 'cancel' ? ROUTING_MESSAGES.askCancel : ROUTING_MESSAGES.askIsThisOne, lang, { title: title(plan.options[0]) });
+    return say(plan.intent === 'cancel' ? WITHDRAW_MESSAGES.askCancel : ROUTING_MESSAGES.askIsThisOne, lang, { title: title(plan.options[0]) });
   }
   const list = plan.options.map((o, i) => `${i + 1}. ${title(o)}`);
   if (plan.allowNew) list.push(`${plan.options.length + 1}. ${say(ROUTING_MESSAGES.aNewDesign, lang)}`);

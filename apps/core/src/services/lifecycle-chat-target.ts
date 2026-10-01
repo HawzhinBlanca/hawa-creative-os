@@ -360,6 +360,9 @@ export function lateChangeOfficeAlert(late: LateRequesterChange, requesterChatId
   const named = late.title ? ` "${late.title}"` : '';
   const opening = late.kind === 'hold'
     ? `The requester in chat ${requesterChatId} asked to hold the design${named}. ${late.held ? 'New automatic design work is paused. Read their words before resuming the saved task checkpoint in the Desk; an admitted call may still finish.' : 'The request had moved beyond the automatic pause boundary; please handle the hold and tell the requester what can be stopped.'}`
+    // ADR-230: a cancel reaches the office as a note only when it came too late to withdraw the request.
+    : late.kind === 'cancel' && ['approved', 'delivering', 'delivered'].includes(late.requestStage)
+    ? `The requester in chat ${requesterChatId} asked to cancel the design${named}, but it was already ${STAGE_WORDS[late.requestStage]}, so it could not be cancelled and nothing was stopped. They were told so; please tell them what can still be done.`
     : late.kind === 'cancel'
     ? `The requester in chat ${requesterChatId} asked to cancel the design${named} while it was ${STAGE_WORDS[late.requestStage]}. Nothing was stopped automatically.`
     : late.requestStage === 'designing' || late.requestStage === 'manual' || late.requestStage === 'awaiting_answer'
