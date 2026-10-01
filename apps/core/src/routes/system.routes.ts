@@ -14,6 +14,8 @@ import { mayChangeKillSwitch, setKillSwitch, type KillSwitchChannel } from '../s
 import { telegramPollerOf } from '../services/telegram-poller-owner.js';
 import { readLegacyPathStatus } from '../services/legacy-path-status.js';
 import { registerAvailabilityRoutes, availabilityConfig, AvailabilityError, readAvailabilityReport } from './availability.routes.js';
+import { mayReadStreamEvent } from '../services/stream-event-authority.js';
+import { createScopedEventSubscriber } from '../services/scoped-event-subscriber.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
@@ -230,41 +232,24 @@ export function registerSystemRoutes(ctx: RouteContext) {
       });
       let heartbeat: ReturnType<typeof setInterval> | undefined;
       const finish = () => {
+        if (closed) return;
         closed = true;
+        subscription.stop();
         if (heartbeat) clearInterval(heartbeat);
         subscribers.delete(subscriber as any);
         endStream();
       };
 
-      const subscriber = (ev: { id: string; event: string; data: any }) => {
-        if (closed) return;
-        const isSystemEvent = ev.event?.startsWith('system:');
-        if (!isSystemEvent) {
-          const evTenantId = ev.data?.tenantId;
-          const evClientId = ev.data?.clientId;
-          const userTenantId = auth.tenantId;
-          const userClientId = (auth as any).clientId;
-
-          // Tenant isolation (fail-closed): if user is tenant-scoped, domain event MUST have matching tenantId
-          if (userTenantId && auth.role !== 'superadmin') {
-            if (!evTenantId) return; // Fail-closed: missing tenantId on domain event
-            const isDefaultTenant = (t?: string) => t === 'tenant-default' || t === '00000000-0000-4000-a000-000000000001';
-            const matchesTenant = evTenantId === userTenantId || (isDefaultTenant(evTenantId) && isDefaultTenant(userTenantId));
-            if (!matchesTenant) return;
-          }
-
-          // Client isolation (fail-closed): if user is client-scoped, domain event MUST have matching clientId
-          if (userClientId && auth.role !== 'superadmin' && auth.role !== 'administrator') {
-            if (!evClientId) return; // Fail-closed: missing clientId on domain event
-            if (evClientId !== userClientId) return;
-          }
-        }
-        stream.writeSSE({
-          id: ev.id,
-          event: ev.event,
-          data: JSON.stringify(ev.data),
-        }).catch(finish);
-      };
+      const subscription = createScopedEventSubscriber({
+        authorize: async ev => {
+          const currentAuth = await authOf();
+          if (!currentAuth.authenticated) { finish(); return false; }
+          return mayReadStreamEvent(db, currentAuth, ev);
+        },
+        write: ev => stream.writeSSE({ id: ev.id, event: ev.event, data: JSON.stringify(ev.data) }),
+        close: finish,
+      });
+      const subscriber = subscription.receive;
 
       subscribers.add(subscriber as any);
 

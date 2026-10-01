@@ -875,3 +875,13 @@ Original red/failed/cancelled receipts remain retained. Native/human/model/pilot
 admission, offsite/PITR/RPO/RTO and authorized production-dump checks remain open.
 No production deployment, native save or real provider call.
 See plans/content-aware-design-2026-09-30/W6_DURABILITY_REPAIR_PROOF.json.
+
+## Current live-event resource authority — 1 October 2026, ADR223
+
+Actual named-session/runtime-RLS Core stream leaked client B asset metadata to a
+designer assigned only to A. The repaired stream checks current stored task/client
+scope before each disclosure, keeps event order and bounds pending work. Twelve new
+controls; eight connected files/72 tests and701 strict roots/types/lint pass. Exact
+current deployed nginx and full engineering qualification remain pending; whole
+production Gate B/native/human/model/pilot admission remain open. Original red and
+type failures are retained in W6_STREAM_ISOLATION_PROOF.json.

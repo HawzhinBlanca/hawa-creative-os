@@ -1,0 +1,119 @@
+{
+  "date": "2026-10-01",
+  "status": "CONNECTED_CURRENT_RESOURCE_STREAM_AUTHORITY_VERIFIED_DEPLOYED_AND_FULL_ENGINEERING_PENDING",
+  "requirements": [
+    "FR-011",
+    "FR-064",
+    "NFR-006",
+    "NFR-011",
+    "NFR-014"
+  ],
+  "decision": "adrs/223_current_stream_resource_authority.md",
+  "baseCommit": "930d596d24824f03b24800e4f44f48ee0031c456",
+  "reproduction": {
+    "realCoreStream": true,
+    "runtimeRls": true,
+    "actualNamedSessions": true,
+    "syntheticClients": 2,
+    "failedTests": 1,
+    "finding": "A designer assigned only to A received B asset ID, filename and hash while the allowed A event was delivered."
+  },
+  "connected": {
+    "files": 8,
+    "passed": 72,
+    "failed": 0,
+    "skipped": 0,
+    "strictRoots": 701,
+    "runtimeScriptAndTestTypes": "PASS",
+    "chaosTypes": "PASS",
+    "lint": "PASS"
+  },
+  "controls": [
+    "Current task/client rows under runtime RLS before event disclosure",
+    "UUID, exact code and legacy code prefix preserve canonical identity priority",
+    "Task-only scope and task/client/tenant contradiction refusal",
+    "Multi-client grant and withdrawal on a live authenticated stream",
+    "Active tenant membership independent of retained client membership",
+    "Known broad office events only; no system-prefix or claimed-role bypass",
+    "Same-instance session logout before next resource event",
+    "Ordered authorization/writes and 64-event bounded pending queue",
+    "Authority/write failures and cancellation close without queued disclosure",
+    "Existing ticket expiry/spend, heartbeat and Desk reconnect behavior"
+  ],
+  "failureHistory": [
+    "Original real stream regression failed with visible unauthorized asset metadata; retained immutable RED_REAL_STREAM.log.",
+    "Initial typecheck refused nullable database authority; corrected service accepts null and refuses unavailable storage.",
+    "Subsequent typecheck/lint refused UUID guard narrowing of a string-only code branch to never; fixed the predicate overload without changing validation.",
+    "First documentation patch refused an incorrect runbook context; verified no files changed, then applied the correct existing context."
+  ],
+  "qualification": {
+    "fullEngineering": "PENDING",
+    "currentCandidateStreamAndRecovery": "PENDING",
+    "wholeProductionGateB": "OPEN",
+    "productAdmission": false,
+    "productionDump": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION"
+  },
+  "limits": [
+    "External/provider/native/human/whole-product/pilot evidence is not established by these synthetic controls.",
+    "Existing 60-second session refresh cache and 15-second heartbeat remain; no instant cross-instance session-revocation claim.",
+    "Shared trusted-office identity retains existing operator authority; no client membership expansion."
+  ],
+  "productionChanged": false,
+  "realProviderCalls": 0,
+  "nativeSave": false,
+  "sourceSha256": {
+    "apps/core/src/routes/system.routes.ts": "ee59e488bdc7a15416eabac239dd9b6bd20564768caf070b1bb6450c65c0349f",
+    "apps/core/src/services/stream-event-authority.ts": "a3e3ce423a8a9992fee5e9a7fc21fbc5ba8f5c17f5f57ae734416654957fd229",
+    "apps/core/src/services/scoped-event-subscriber.ts": "c82065bb0cf0006f52ab10171a6ed27786b6ec095bbd96c6a8132dcde1f28afc",
+    "apps/core/test/stream-resource-isolation.test.ts": "b67c5e6373e896d8573e6e16e96fb7848db619675780a63c31ac9a188f6471f5",
+    "apps/core/test/scoped-event-subscriber.test.ts": "f474e80e4f345260fd927c64d950fab648744c48fac7a036c3207102496c86fe",
+    "packages/testkit/chaos/driver/candidate-sources.ts": "7fc635882d2a34e90dc9743ca6301668b4cb12ef1e0c0bbf9db2d1398ef78b15",
+    "packages/testkit/chaos/driver/candidate-stream-isolation.ts": "c2dc6863e254abd3781e23797364086ab29774732f98c13a96246390c0f5416b"
+  },
+  "artifacts": [
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CHAOS_TYPECHECK.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CONNECTED_SCOPE.log",
+      "sha256": "a7ff95c2b414afd999abe89cff68a32386a8bab9d5b9b06b707e7dbb84b77675"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FINAL_CONNECTED.log",
+      "sha256": "81a3e20c698731f5ea44df361e3700a906e94e8a8ae872dfd1c5f075c7709f2f"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FINAL_TYPECHECK.log",
+      "sha256": "73db4498b765e0f74a664fa5610d4401905c23b9bbfc3af77958560786e0c5ea"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FIRST_CONNECTED.log",
+      "sha256": "dda9acb59e2ba105fe3f2a54463557e193f5824e4a0432acbd6e0c9b5882d17f"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/LINT.log",
+      "sha256": "49a1ce6e4fca4ce8eff85180cc09b6d061d5cd141cc499914e87680b369e841e"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/RED_REAL_STREAM.log",
+      "sha256": "785334d95747e7e51852d8ad7a72fe13e9b6f4853602821c7f8e505a7f1b7051"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/TYPECHECK.log",
+      "sha256": "ccec991b8424a39c03b9ebc8cf2b10f0f519eaa51520cad69ebd6cb34989c86b"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/VERIFIED_CONNECTED.log",
+      "sha256": "1f3d44ef8701c574ec17ec38ce01f1815e59337e7152b42defd19eaf03b3ea57"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/VERIFIED_LINT.log",
+      "sha256": "1c4abf3b0668a83c4af64174db556d54be92ec898cfc8e017fa50c188e66b7d3"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/VERIFIED_TYPECHECK.log",
+      "sha256": "b5e8c4ff977a02eecb5dcfa58e809d7a11b51c935fc37711d0138b0d6fd38656"
+    }
+  ]
+}

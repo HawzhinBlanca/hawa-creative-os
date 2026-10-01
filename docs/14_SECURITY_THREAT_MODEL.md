@@ -36,6 +36,14 @@ Controls:
 - adversarial leakage tests;
 - no global model context containing unrelated clients.
 
+ADR223 also requires the live event stream to authorize every resource against
+current task/client rows under RLS. Authenticated principals do not carry a single
+client ID; a tenant match alone is insufficient. A task-only event derives scope
+from its stored task, and a declared client must agree. System event names grant
+no bypass. Unknown/unavailable scope is not disclosed; a failed or overloaded
+subscription closes. Current client/tenant grants are read for every event, while
+the existing bounded session refresh policy remains separately applicable.
+
 ### Prompt injection
 
 Messages/documents/assets are data. They cannot change:
