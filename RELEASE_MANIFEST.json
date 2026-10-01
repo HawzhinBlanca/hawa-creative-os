@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-01T18:12:10+03:00",
+  "generatedAt": "2026-10-01T18:31:56+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "e8f2756cefe9f8c22ccb52f913b1b5ead1f051d3",
+    "commit": "8efa35cd996b57292ec771c9c84700a15d7a9ee5",
     "treeClean": true,
-    "commitTimestamp": "2026-10-01T18:12:10+03:00",
+    "commitTimestamp": "2026-10-01T18:31:56+03:00",
     "branch": "codex/content-aware-design"
   },
   "migrations": {
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "42a618770f2b274861f53429d61086e35798ed381f83480d6ac68980a42dcd88"
+  "sha256": "240bce7faafffbfd59fc1feb30c920a326dabf1efffcd688cfd0d5d69ee0f277"
 }
