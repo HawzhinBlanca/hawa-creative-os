@@ -19,6 +19,7 @@ import { maxStrokeWidth } from '../studio-normalize.js';
 import { coverCrop } from '../photo-crop.js';
 import { packPhotoSequence } from './photo-packing.js';
 import { rankPhotosForHero, type QuietArea } from './recipes.js';
+import { candidateRecipeTypeScales, type RecipeTypeScale as TypeScale } from './type-scale-search.js';
 import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
 import { protectedCropFocus, protectedRegionsOnCanvas, type SourceRegion, type RegionStatus } from '../protected-regions.js';
 
@@ -270,13 +271,6 @@ function blocksOf(input: SolveRecipeInput): Block[] {
         : slot === 'meta' ? (input.briefRoles?.[copyIndex] === 'venue' ? 'venue' : 'date') : 'body';
     return { copyIndex, slot, role, text, arabic };
   });
-}
-
-interface TypeScale {
-  title: number;
-  accent: number;
-  body: number;
-  footer: number;
 }
 
 interface SetBlock {
@@ -553,15 +547,6 @@ class SolveContext {
 
   // ----- type ------------------------------------------------------------------------------------
 
-  /** The type scale at a factor of the canvas's natural sizes; the title at least 2.2x the body. */
-  typeScale(factor: number): TypeScale {
-    const minBody = Math.ceil(HOUSE_RULES.minBodyShareOfWidth * this.W);
-    const base = this.officeType && !this.wide ? OFFICE_BODY_SHARE * this.W : 0.026 * this.s;
-    const body = Math.max(minBody, Math.round(base * Math.min(1, factor + 0.12)));
-    const title = Math.max(Math.ceil(HOUSE_RULES.titleToBodyMin * body), Math.round(0.066 * this.s * factor));
-    return { title, accent: Math.round(title * 0.92), body, footer: Math.max(HOUSE_RULES.minFontPx, Math.min(body, Math.round(body * 0.82))) };
-  }
-
   sizeOf(b: Block, scale: TypeScale): number {
     switch (b.slot) {
       case 'title': return scale.title;
@@ -650,8 +635,22 @@ class SolveContext {
     titleLines = 2,
     minFactor = 0.5
   ): SetBlock[][] {
-    for (let factor = 1; factor >= minFactor - 1e-9; factor -= 0.04) {
-      const scale = this.typeScale(factor);
+    let scales: TypeScale[];
+    try {
+      scales = candidateRecipeTypeScales({ naturalTitle: 0.066 * this.s,
+        naturalBody: this.officeType && !this.wide ? OFFICE_BODY_SHARE * this.W : 0.026 * this.s,
+        minimumBody: Math.ceil(HOUSE_RULES.minBodyShareOfWidth * this.W), minimumFont: HOUSE_RULES.minFontPx,
+        titleToBodyMinimum: HOUSE_RULES.titleToBodyMin }, minFactor);
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      throw new RecipeInfeasibleError(this.recipe, error.message);
+    }
+    const measuredSizes = new Set<string>();
+    for (const scale of scales) {
+      // A title-only change does not warrant remeasuring a group containing only body text.
+      const sizes = groups.flatMap(g => g.blocks.map(b => this.sizeOf(b, scale))).join(',');
+      if (measuredSizes.has(sizes)) continue;
+      measuredSizes.add(sizes);
       const sets = groups.map((g) => this.setGroup(g.blocks, g.width, scale, g.colours, g.align));
       const flat = sets.flat();
       const titleOk = flat.every((b) => (b.block.slot === 'title' || b.block.slot === 'accent' ? b.lines <= titleLines : true));

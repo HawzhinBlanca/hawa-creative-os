@@ -523,3 +523,8 @@ ADR202 preserves exact/stand-in/uncovered/unmeasured across actual render and QA
 ### Truthful font review exact qualification
 
 Exact sealedef76a307584e08502e0ae1af590b346f5d9afe8f: all8,6592pass/0fail/67skip across669passed files/6skipped;676 strict roots,1694 blueprint checks,newest production dump restored in isolation and mandatory negative-flag refusal pass. Actual four-state font truth and saved/requester review qualified in source; used-family raster report avoids unrelated probes. Original failures retained. W5_FONT_FIDELITY_REVIEW_GATE_EVIDENCE.json. Not deployed; local samples do not qualify native typography, every weight/copy shape, human taste or broader W5/W6/product admission.
+
+
+## W5 bounded joint typography and declared alignment — 1 October 2026
+
+ADR203 replaces coarse four-percent sizing with bounded distinct integer states under the existing policy, retaining one-line preference, exact copy, fonts, palette, photos and joint geometry constraints. Actual missed-size reproduction now fits56/25px instead of53/24px. ADR204 fixes actual Core rejection of an intentional narrower flush body column; declared left/right/centre axes count, false-centre ragged text still refuses. Threshold0.70 and tolerance0.5% unchanged. Final connected19files379/0/0;679 strict roots/lint pass. Actual Core pixels, QA and editable copy/assets/font transfer pass with zero providers. Retained all red/fixture/strict failures. Eight-case paired local benchmark under10ms, but infeasible mosaic adds about2.7ms median; no pipeline speed or human beauty claim. W5_JOINT_TYPOGRAPHY_PROOF.json retains source/log/benchmark hashes. Exact gate pending; not deployed; broader W5/W6/native/Canva/human/recovery/product admission remains open.
