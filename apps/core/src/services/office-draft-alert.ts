@@ -14,7 +14,7 @@
 import type { DraftImageRef } from '@hawa/contracts';
 import { sql, type Database, type Kysely } from '@hawa/db';
 import { OFFICE_MESSAGES, say } from '@hawa/integrations';
-import { withoutRepeatedClient } from '../core-helpers.js';
+import { cleanDraftTitle } from './draft-title.js';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
@@ -52,6 +52,8 @@ export async function findDraftImage(trx: Kysely<Database>, input: { tenantId: s
 export interface OfficeDraftAlertInput {
   /** The design by the name the requester knows it (the request's first task). */
   title: string;
+  /** The request's stored copy: names a draft titled from the line that introduced it (ADR-142). */
+  copy?: unknown;
   clientName?: string;
   requestedBy?: string;
   /** A later round: the design changed at the requester's or the office's request. */
@@ -76,8 +78,9 @@ export interface OfficeDraftAlertInput {
  * than giving a link that only works on the office computer.
  */
 export function composeOfficeDraftAlert(input: OfficeDraftAlertInput): string {
-  // "KAAE: KAAE K-12 Pilot Study…" was titled before ADR-180: the client is not named twice.
-  const title = withoutRepeatedClient(input.title.trim()) || 'Untitled design';
+  // "KAAE: KAAE K-12 Pilot Study…" was titled before ADR-180: the client is not named twice, and a
+  // title made from "Here is the text and the photos:" is named by its copy (ADR-040 addendum, 2026-10-01).
+  const title = cleanDraftTitle(input.title, input.copy) || 'Untitled design';
   const who = [input.clientName?.trim() ? `For ${input.clientName.trim()}` : '',
     input.requestedBy?.trim() && !title.startsWith(`${input.requestedBy.trim()}:`) ? `requested by ${input.requestedBy.trim()}` : '']
     .filter(Boolean).join(', ');

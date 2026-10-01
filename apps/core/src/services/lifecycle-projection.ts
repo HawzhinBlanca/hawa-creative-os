@@ -16,6 +16,7 @@ import { DRAFT_READY_STATUSES, bridgeCanvaDraftRevision, closeAnsweredQuestion, 
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage, officeDayExhaustedNote } from './canva-status-message.js';
 import { canvaEditUrl, composeOfficeDraftAlert, findDraftImage } from './office-draft-alert.js';
+import { isIntroducerTitle, storedCopy, withoutMarks } from './draft-title.js';
 import { designName } from './requester-turn.js';
 import { namedOfficeReviewMode } from './google-oidc.js';
 import { lockNamedReviewAuthority } from './named-review-authority.js';
@@ -528,7 +529,9 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       const client = task.client_id ? await trx.selectFrom('clients').select('name')
         .where('tenant_id', '=', tenantId).where('id', '=', task.client_id).executeTakeFirst() : undefined;
       const requestedBy = typeof creation?.payload.senderName === 'string' ? creation.payload.senderName : undefined;
-      const alert = { title: requestTitle, clientName: client?.name, requestedBy,
+      const copy = isIntroducerTitle(withoutMarks(requestTitle.replace(/^[^:]{1,40}:\s*/, '')))
+        ? await storedCopy(trx, tenantId, request.root_task_id ?? taskId) : undefined;
+      const alert = { title: requestTitle, copy, clientName: client?.name, requestedBy,
         revised: taskId !== request.root_task_id, canvaUrl: canvaEditUrl(report.designId!), reviewUrl,
         ...(DRAFT_READY_STATUSES.has(status) ? {} : { check: `${status}${report.code ? ` (${report.code})` : ''}` }) };
       officeText = composeOfficeDraftAlert(alert);
