@@ -39,6 +39,8 @@ BEGIN
   END IF;
   RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
 END $$;
+-- PostgreSQL grants new functions to PUBLIC by default; trigger invocation needs no caller EXECUTE grant.
+REVOKE ALL ON FUNCTION hawa.prevent_learning_source_mutation() FROM PUBLIC;
 CREATE TRIGGER feedback_learning_sources_immutable BEFORE UPDATE OR DELETE ON hawa.feedback_events
   FOR EACH ROW EXECUTE FUNCTION hawa.prevent_learning_source_mutation();
 CREATE TRIGGER studio_feedback_sources_immutable BEFORE UPDATE OR DELETE ON hawa.design_feedback

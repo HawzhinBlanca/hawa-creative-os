@@ -57,3 +57,9 @@ provider call. This is a local profiling observation, not a production SLO or
 proof of unbounded scale; no new queue/cache infrastructure is justified yet.
 Evidence and failures: W6_LEARNING_RECOVERY_PROOF.json. No deployment, paid call
 or actual visual/native/Canva/human admission. Exact full gate remains pending.
+
+First exact seal5e5d89c6 retained6499pass/1fail/67skip: new trigger function
+inherited PostgreSQL PUBLIC EXECUTE, violating worker function admission. Revoke
+that default grant; an actual runtime-role source UPDATE must still hit the
+append-only trigger. Worker qualification must retain the original narrow list.
+Corrected exact gate is pending; no deployment.

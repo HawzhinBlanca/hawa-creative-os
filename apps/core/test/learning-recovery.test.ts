@@ -122,6 +122,8 @@ describe('Learning recovery across independent Core processes',()=>{
       body:JSON.stringify({title:'Append-only instruction',category:'layout',ruleText:'Preserve recorded intent'})})).status).toBe(201);
     await expect(sql`UPDATE hawa.feedback_events SET category='changed' WHERE id=${instruction}::uuid`.execute(owner)).rejects.toMatchObject({code:'55000'});
     await expect(sql`DELETE FROM hawa.feedback_events WHERE id=${instruction}::uuid`.execute(owner)).rejects.toMatchObject({code:'55000'});
+    await expect(withRlsContext(db,{tenantId,clientId,userId:actorId,role:'art_director'},trx=>
+      sql`UPDATE hawa.feedback_events SET comment='Runtime source edit' WHERE id=${instruction}::uuid`.execute(trx))).rejects.toMatchObject({code:'55000'});
     const outsider=randomUUID();
     await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${outsider}::uuid,${outsider+'@test.invalid'},'Foreign scope reader')`.execute(owner);
     await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)

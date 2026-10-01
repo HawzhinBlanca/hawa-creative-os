@@ -348,3 +348,8 @@ strict roots/lint pass. Synthetic500-source local recovery profile recorded;
 no cache/queue/model infrastructure is added. Exact engineering gate pending.
 W6_LEARNING_RECOVERY_PROOF.json. Source only; live infrastructure2c4d61ec remains
 independently qualified. Revision polarity/taste/native/Canva/human/product open.
+
+First exact5e5d89c6 gate6499pass/1fail/67skip retained. New trigger's default
+PUBLIC EXECUTE exposed it to the otherwise restricted worker function list.
+Revoke the default function grant; actual runtime source edits must still refuse
+through the trigger. Corrected focused and exact gate pending, no deployment.
