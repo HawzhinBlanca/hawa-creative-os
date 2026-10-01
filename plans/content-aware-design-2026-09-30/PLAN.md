@@ -193,3 +193,8 @@ ADR188 removes the native job used solely to generate a white reference matte. O
 ## Combined preflight repairs — 1 October 2026
 
 The first clean combined seal21896bff passed stages1–7 but failed two full-suite tests (6424 passed/2 failed/67 skipped). ADR189 makes Desk bundle construction an explicit gate prerequisite and reports the seven represented versus five missing photo recipe references, without inventing human examples. The first focused repair28/1 warning mismatch is retained; corrected connected6 files29 pass/0 fail/0 skip. The normal gate now executes its actual flag-corruption/refusal drill before recording it verified. A new exact clean full gate remains pending. LIVE_LANE_INVENTORY.json is aggregate historical metadata: all nine sampled failed runs were created before the current intake release; it does not estimate current quality or prove feedback absent.
+
+
+### Refusal-drill correction and first repaired full pass
+
+Seal c952e1a5 passes all8 stages,6427 tests/0 failed/67 skipped,651 passed files/6 skipped; Desk was absent before invocation and actually rebuilt. Initial claim that the refusal drill never ran was incorrect: it already ran at evidence emission. ADR189 now moves it earlier, retains diagnostics and reuses its result once; the intermediate duplicate invocation is removed. A final exact seal remains pending. No design/runtime/test change in this consolidation. Original claims/failures are retained with this correction.

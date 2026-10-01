@@ -17,9 +17,10 @@ existing office-published data. Five new geometries have no admitted example the
 The historic dataset test incorrectly equated catalogue membership with coverage.
 Neither changing the catalogue nor passing geometry controls creates human examples.
 
-The ordinary gate also marked its negative refusal test as verified without running
-the existing corruption drill in that invocation. A historical result is insufficient
-evidence for a new candidate.
+The ordinary gate already ran its negative refusal drill during evidence emission.
+The earlier implementation checkpoint incorrectly claimed it did not; that claim is
+retracted here. Its output was discarded and a failure was discovered only after the
+full suite. Move the same drill earlier and retain its diagnostic output.
 
 ## Decision
 
@@ -35,8 +36,9 @@ the geometry catalogue; absent human/reference/native admission stays open.
 No example or approval is synthesized, and a warning is not admission evidence.
 
 Run the existing mandatory-flag corruption/refusal drill during manifest verification.
-Store its output separately and fail qualification if the drill fails; only then may
-the resulting gate evidence mark that check as verified.
+Store its output separately and fail immediately if it fails. Reuse that actual result
+at evidence emission rather than running the drill twice. Verification was already
+required before this change; this improves failure timing and diagnostic visibility.
 
 ## Verification
 

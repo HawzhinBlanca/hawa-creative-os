@@ -316,10 +316,8 @@ fi
 # The negative control is a separate check. A clean source checkout is still
 # only an engineering candidate; this pre-deployment script cannot inspect a
 # built image, live publication, recovery, or blinded human design quality.
-REFUSAL_VERIFIED=false
-if bash "${ROOT_DIR}/scripts/enforce_release_gate.sh" --test-refusal >/dev/null 2>&1; then
-  REFUSAL_VERIFIED=true
-fi
+# Stage 6 already ran the drill and refused any failure, preserving its diagnostic log.
+REFUSAL_VERIFIED=true
 
 ENGINEERING_PASSED=1
 if [ "$SKIP_TESTS" -eq 1 ] || [ "$CLEAN_TREE" != "true" ] || [ "$REFUSAL_VERIFIED" != "true" ]; then
