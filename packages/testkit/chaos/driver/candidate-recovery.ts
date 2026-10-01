@@ -4,14 +4,13 @@ import { promisify } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { CHAOS_DIR, FAKES_URL, REPO_ROOT, closeDb, compose, fakes, query, restateQuery, secrets, sql } from './stack.js';
+import { CHAOS_DIR, FAKES_URL, REPO_ROOT, closeDb, compose, composeEnvironment, fakes, query, restateQuery, secrets, sql } from './stack.js';
 import { sentTo, waitUntil, type InvariantResult } from './scenario.js';
 
 const execFileAsync = promisify(execFile);
 
 export async function restorePendingDelivery(taskId: string, chat: string, started: number,
-  events: string[]): Promise<InvariantResult[]> {
-  const checks: InvariantResult[] = [];
+  events: string[], checks: InvariantResult[] = []): Promise<InvariantResult[]> {
   const check = (name: string, ok: boolean, detail: string) => {
     checks.push({name, ok, detail});
     if (!ok) throw new Error(`${name}: ${detail}`);
@@ -23,7 +22,7 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
       // Keep the event loop processing HTTP socket closures during the lengthy restore.
       await execFileAsync('python3', [join(REPO_ROOT, 'infra/backup/candidate_recovery.py'),
         '--task-id', taskId, '--started-after', new Date(started).toISOString(), '--output', output],
-      {cwd: REPO_ROOT, encoding: 'utf8', timeout: 300_000, maxBuffer: 1024 * 1024});
+      {cwd: REPO_ROOT, env: composeEnvironment(), encoding: 'utf8', timeout: 300_000, maxBuffer: 1024 * 1024});
     } catch (error) {
       const failure = error as Error & {stdout?:string;stderr?:string};
       throw new Error(`Coordinated ${phase} restore failed: ${failure.stdout?.slice(-1000)} ${failure.stderr?.slice(-1500)}`);
@@ -114,8 +113,12 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
   const publications = await query<{id:string;state:string}>(sql`SELECT id,state FROM hawa.publications WHERE task_id=${taskId}::uuid`);
   check('restored delivery records exactly one completed publication', publications.length === 1 && publications[0].state === 'complete',
     JSON.stringify(publications));
-  const sheet = await fetch(`${FAKES_URL}/google/v4/spreadsheets/chaos-kaae-tracker/values/A:Z`);
-  const rows = (await sheet.json() as {values?:unknown[][]}).values ?? [];
+  const sheet = await fetch(`${FAKES_URL}/google/v4/spreadsheets/chaos-kaae-tracker/values:batchGetByDataFilter`, {
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dataFilters:[{gridRange:{sheetId:0}}],majorDimension:'ROWS'}),
+  });
+  const rows = (await sheet.json() as {valueRanges?:Array<{valueRange?:{values?:unknown[][]}}>})
+    .valueRanges?.[0]?.valueRange?.values ?? [];
   const matching = rows.filter(row=>row.some(value=>String(value).includes(taskId)));
   check('surviving external sheet contains one task row after both restores', sheet.ok && matching.length === 1, `${matching.length} rows`);
   return checks;

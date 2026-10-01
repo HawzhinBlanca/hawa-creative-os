@@ -10,15 +10,16 @@ import { computeDnaHash } from '../../../../apps/core/src/core-helpers.js';
 import { restorePendingDelivery } from './candidate-recovery.js';
 import { candidateEvaluationSettlement } from './evaluation-settlement.js';
 import { candidateStudioSettlement } from './studio-settlement.js';
-import { chatInboxInvocations, imageDocumentUpdate, sendToChatInbox, tasksOfChat, textUpdate, waitUntil,
+import { appendFixtureCopy } from './fixture-native-edit.js';
+import { chatInboxInvocations, designOutcome, RequestEndedError, imageDocumentUpdate, sendToChatInbox, tasksOfChat, textUpdate, waitUntil,
   type InvariantResult } from './scenario.js';
 
 const origin = 'http://127.0.0.1:56081';
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 type Request = { request_id: string; current_task_id: string; rev: string; stage: string };
 
-export async function candidateSources(chat: string, events: string[], suiteStarted: number): Promise<InvariantResult[]> {
-  const checks: InvariantResult[] = [];
+export async function candidateSources(chat: string, events: string[], suiteStarted: number,
+  checks: InvariantResult[] = []): Promise<InvariantResult[]> {
   const check = (name: string, ok: boolean, detail: string) => {
     checks.push({ name, ok, detail });
     if (!ok) throw new Error(`${name}: ${detail}`);
@@ -85,9 +86,10 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   // Temporary synthetic session for optional browser inspection, never release evidence or logs.
   writeFileSync(join(CHAOS_DIR, '.run', 'candidate-session.json'), JSON.stringify({ origin, token: session.token }), { mode: 0o600 });
   const get = (path: string) => fetch(`${origin}/v1${path}`, { headers: { Authorization: `Bearer ${session.token}` } });
-  const action = async (path: string, body: unknown, key: string = randomUUID(), token = secrets().CHAOS_REVIEWER_KEY) => {
+  const action = async (path: string, body: unknown, key: string = randomUUID(), token = secrets().CHAOS_REVIEWER_KEY,
+    headers: Record<string, string> = {}) => {
     const response = await fetch(`${origin}/v1${path}`, { method: 'POST', headers: {
-      Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Idempotency-Key': key,
+      Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Idempotency-Key': key, ...headers,
     }, body: JSON.stringify(body) });
     const json = await response.json() as any;
     if (!response.ok) throw new Error(`Desk action ${path}: HTTP ${response.status}: ${JSON.stringify(json).slice(0, 300)}`);
@@ -95,7 +97,15 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   };
   const requests = () => query<Request>(sql`SELECT request_id,current_task_id,rev,stage FROM hawa.requests WHERE chat_id=${chat}`);
   const review = (revision: number) => waitUntil(`request review at rev ${revision}`, async () => {
-    const [r] = await requests(); return r?.stage === 'in_review' && Number(r.rev) === revision ? r : null;
+    const [r] = await requests();
+    if (r?.stage === 'in_review' && Number(r.rev) === revision) return r;
+    if (r?.current_task_id) {
+      const outcome = await designOutcome(r.current_task_id);
+      if (outcome && outcome !== 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW') {
+        throw new RequestEndedError(`task ${r.current_task_id}: candidate design ended as ${outcome} at ${r.stage} rev ${r.rev}`);
+      }
+    }
+    return null;
   });
   const retained = async (updateId: number) => waitUntil(`retained source ${updateId}`, async () => {
     const response = await get(`/clients/${KAAE_CLIENT_ID}/source-files`);
@@ -172,8 +182,70 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   check('voice source does not create a child before exact-copy review', (await tasksOfChat(chat)).length === 1, `voice source ${voiceId}`);
   const revisedCopy = `${copy}\nRevised for 27 September 2026`;
   const voiceConfirmation = await confirm(Number(voice.message.message_id), revisedCopy);
-  const child = await review(5);
-  events.push(`voice ${voiceId} → reviewed revision task ${child.current_task_id}`);
+  const manualChild = await waitUntil('revision native handoff at rev 5', async () => {
+    const [r] = await requests();
+    return r?.stage === 'manual' && Number(r.rev) === 5 && r.current_task_id !== first.current_task_id ? r : null;
+  });
+  const [handoffReason] = await query<{code: string}>(sql`SELECT data->>'code' AS code FROM hawa.task_events
+    WHERE task_id=${manualChild.current_task_id}::uuid AND data->>'code'='NATIVE_REVISION_HANDOFF_REQUIRED'`);
+  check('linked revision holds for current-native handoff before fresh generation',
+    handoffReason?.code === 'NATIVE_REVISION_HANDOFF_REQUIRED', 'current native revision admission enforced');
+  const nativeEffectsBefore=(await fakes.canvaLedger()).filter(entry=>['import','design'].includes(entry.kind)).length;
+  const modelCallsBefore=(await fakes.modelLedger()).ledger.length;
+  const manualHeaders = {'X-Hawa-Manual-Request-Id':manualChild.request_id,'X-Hawa-Manual-Request-Rev':String(manualChild.rev)};
+  const nativeState = async () => (await get(`/tasks/${manualChild.current_task_id}/canva`)).json() as Promise<any>;
+  const unlinked = await nativeState();
+  check('handoff resolves the current same-client parent native master',
+    unlinked.revisionHandoff?.available === true && unlinked.revisionHandoff.parentTaskId === first.current_task_id &&
+    unlinked.revisionHandoff.nativeRecovery?.rev === 5, 'current parent and durable owner scope');
+  const copied = await fakes.canvaManualCopy(unlinked.revisionHandoff.parentDesignId);
+  const sourceBytes = Buffer.from(copied.json.contentBase64, 'base64');
+  check('synthetic operator copies the existing source bytes to a separate native identity', copied.status === 200 &&
+    copied.json.designId !== unlinked.revisionHandoff.parentDesignId && hash(sourceBytes) === copied.json.sourceSha256,
+    `fixture SHA-256 ${hash(sourceBytes)}; synthetic operator only`);
+  const editedBytes = appendFixtureCopy(sourceBytes, copy, 'Revised for 27 September 2026');
+  await fakes.canvaManualEdit({designId:copied.json.designId,contentBase64:editedBytes.toString('base64')});
+  await action(`/tasks/${manualChild.current_task_id}/canva-binding`,
+    {editUrl:`https://www.canva.com/design/${copied.json.designId}/edit`},randomUUID(),session.token,manualHeaders);
+  const linked = await nativeState();
+  const confirmationBody = {expectedTaskVersion:linked.revisionHandoff.taskVersion,basisSha256:linked.revisionHandoff.basisSha256,
+    copy:[revisedCopy],reviewedCurrentDesign:true,preservedUnrequestedChanges:true};
+  const confirmationKey=randomUUID();
+  const confirmation = await action(`/tasks/${manualChild.current_task_id}/canva/revision-copy`,confirmationBody,
+    confirmationKey,session.token,manualHeaders);
+  const confirmationReplay = await action(`/tasks/${manualChild.current_task_id}/canva/revision-copy`,confirmationBody,
+    confirmationKey,session.token,manualHeaders);
+  check('synthetic operator exact-copy confirmation replays one immutable event',
+    !!confirmation.confirmationEventId && confirmationReplay.confirmationEventId === confirmation.confirmationEventId &&
+    confirmationReplay.replayed === true,'human preparation is not approval');
+  let checkedArtifact: {id:string;sha256:string} | undefined;
+  for (const format of ['png','pptx'] as const) {
+    const started = await action(`/tasks/${manualChild.current_task_id}/canva/exports`,
+      {format,expectedVersion:linked.binding.version},randomUUID(),session.token,manualHeaders);
+    const captured = await action(`/tasks/${manualChild.current_task_id}/canva/exports/${started.operationId}/resume`,
+      {},randomUUID(),session.token,manualHeaders);
+    check(`native revision ${format} fixture capture is retained`,captured.status === 'retrieved' &&
+      !!captured.artifact?.sha256 && captured.artifact.format === format,`captured ${format}; synthetic Canva transport`);
+    if (format === 'pptx') {
+      checkedArtifact=captured.artifact;
+      check('capture does not independently advance the durable owner',captured.review?.status === 'blocked',
+        'explicit signed review submission remains required');
+    }
+  }
+  const beforeReview=await nativeState();
+  const reviewKey=randomUUID();
+  const reviewBody={requestId:manualChild.request_id,expectedRev:5,expectedTaskVersion:beforeReview.revisionHandoff.taskVersion,
+    artifactId:checkedArtifact!.id,confirmationEventId:confirmation.confirmationEventId};
+  const submission=await action(`/tasks/${manualChild.current_task_id}/native-review`,reviewBody,reviewKey,session.token);
+  const submissionReplay=await action(`/tasks/${manualChild.current_task_id}/native-review`,reviewBody,reviewKey,session.token);
+  check('signed native review and replay adopt one owner revision without approval',submission.accepted === true &&
+    submission.rev === 6 && submissionReplay.revisionId === submission.revisionId && submissionReplay.rev === 6,
+    'manual rev 5 to in_review rev 6');
+  const child = await review(6);
+  check('native handoff reaches review without fresh generation or model calls',
+    (await fakes.canvaLedger()).filter(entry=>['import','design'].includes(entry.kind)).length === nativeEffectsBefore &&
+    (await fakes.modelLedger()).ledger.length === modelCallsBefore,'existing editable master only; fake-provider ledger');
+  events.push(`voice ${voiceId} → separate fixture copy → signed owner review of task ${child.current_task_id}`);
   const [revision] = await query<{id: string}>(sql`SELECT current_design_revision_id AS id FROM hawa.tasks WHERE id=${child.current_task_id}::uuid`);
   const [qc] = await query<{status: string;critical_pass: boolean;report: any}>(sql`SELECT status,critical_pass,report FROM hawa.qc_runs
     WHERE task_id=${child.current_task_id}::uuid AND design_revision_id=${revision.id}::uuid ORDER BY started_at DESC LIMIT 1`);
@@ -181,15 +253,15 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   const approval = await action(`/tasks/${child.current_task_id}/revisions/${revision.id}/decisions`, {
     action: 'approve', reason: 'Synthetic workflow qualification; not a human creative-quality review.', pinnedExportIds: [qc.report.exportArtifactId],
   });
-  await waitUntil('owned approval committed', async () => { const [r] = await requests(); return r?.stage === 'approved' && Number(r.rev) === 6 ? r : null; });
+  await waitUntil('owned approval committed', async () => { const [r] = await requests(); return r?.stage === 'approved' && Number(r.rev) === 7 ? r : null; });
   const recovery = process.env.HAWA_CHAOS_RECOVERY === '1';
   if (recovery) await fakes.hold('core.delivery.after-drive', {mode: 'workflow'});
   await action(`/tasks/${child.current_task_id}/publish`, { approvalId: approval.decisionId });
-  if (recovery) checks.push(...await restorePendingDelivery(child.current_task_id, chat, suiteStarted, events));
+  if (recovery) await restorePendingDelivery(child.current_task_id, chat, suiteStarted, events, checks);
   const delivered = await waitUntil('reviewed source request delivered', async () => { const [r] = await requests(); return r?.stage === 'delivered' ? r : null; });
   const tasks = await tasksOfChat(chat);
   check('PDF new request and voice revision reach one logical simulated delivery', tasks.length === 2 && tasks[1].state === 'complete' &&
-    Number(delivered.rev) === (recovery ? 9 : 8) && delivered.current_task_id === child.current_task_id, JSON.stringify({tasks, delivered}));
+    Number(delivered.rev) === (recovery ? 10 : 9) && delivered.current_task_id === child.current_task_id, JSON.stringify({tasks, delivered}));
   const confirmations = await query<{payload: {copy: string; confirmationUpdateId: number}}>(sql`SELECT payload FROM hawa.inbox_events
     WHERE source_account_id='lifecycle_source_confirmation' AND source_event_id IN (${String(pdfId)},${String(voiceId)})`);
   check('retained confirmations preserve exact source copy', confirmations.length === 2 && confirmations.some(c => c.payload.copy === copy) &&
@@ -320,7 +392,7 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   check('blank capture completes simulated publication with one explicit manual edit and no import',
     ledger.filter(entry=>entry.kind==='manual_edit').length===1 && !ledger.some(entry=>entry.kind==='import'),`task ${blank.id}`);
   events.push(`Blank design ${blank.id} → explicit simulated manual edit → DNA-checked review → simulated approval/publication; real native editing remains unverified`);
-  checks.push(...await candidateEvaluationSettlement(events));
-  checks.push(...await candidateStudioSettlement(events));
+  await candidateEvaluationSettlement(events,checks);
+  await candidateStudioSettlement(events,checks);
   return checks;
 }

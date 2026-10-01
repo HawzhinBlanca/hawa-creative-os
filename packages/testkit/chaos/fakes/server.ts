@@ -150,6 +150,8 @@ export async function startFakes(options: { httpPort?: number; httpsPort?: numbe
       case 'POST /canva/manual-edit':
         canva.editDesign(body.designId, Buffer.from(body.contentBase64, 'base64'));
         return sendJson(res, 200, { ok: true });
+      case 'POST /canva/manual-copy':
+        return sendJson(res, 200, canva.copyDesign(body.designId));
       case 'GET /models/ledger':
         return sendJson(res, 200, { ledger: models.ledger, paid: models.paidCounts(), arrivals: models.arrivals });
       case 'POST /models/delays':

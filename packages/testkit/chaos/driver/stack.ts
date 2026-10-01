@@ -77,7 +77,7 @@ export async function configureStack(target: StackTarget): Promise<void> {
 }
 
 /** The environment compose interpolates for the configured target (ports and image tag). */
-function composeEnvironment(): NodeJS.ProcessEnv {
+export function composeEnvironment(): NodeJS.ProcessEnv {
   return {
     ...process.env,
     CHAOS_PORT_POSTGRES: String(PORTS.postgres),
@@ -472,6 +472,7 @@ export const fakes = {
   googleDelay: (delay: { path: string; delayMs: number; n?: number }) => call('/__fakes/google/faults', { body: delay }),
   canvaLedger: () => call('/__fakes/canva/ledger').then((r) => r.json.ledger as any[]),
   canvaManualEdit: (body: {designId:string;contentBase64:string}) => call('/__fakes/canva/manual-edit', {body}),
+  canvaManualCopy: (designId: string) => call('/__fakes/canva/manual-copy', {body: {designId}}),
   modelLedger: () => call('/__fakes/models/ledger').then((r) => r.json),
   modelDelay: (delay: { schema: string; delayMs: number; n?: number }) => call('/__fakes/models/delays', { body: delay }),
   modelFault: (fault: { schema: string; status: number; n?: number }) => call('/__fakes/models/faults', { body: fault }),

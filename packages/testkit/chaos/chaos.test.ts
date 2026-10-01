@@ -105,12 +105,12 @@ interface Expectation {
 // run.ts --repeat N (HAWA_CHAOS_REPEAT): each selected scenario runs N times, reported as <name>#<n>.
 const repeat = Math.max(1, Math.min(10, Number(process.env.HAWA_CHAOS_REPEAT) || 1));
 
-function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000) {
+function scenario(name: string, what: string, script: (chat: string, events: string[], observed: InvariantResult[]) => Promise<Expectation>, timeoutMs = 12 * 60_000) {
   const run = enabled && (only.length === 0 ? !name.startsWith('R10.') : only.includes(name));
   for (let n = 1; n <= repeat; n++) runScenario(repeat > 1 ? `${name}#${n}` : name, what, script, timeoutMs, run);
 }
 
-function runScenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs: number, run: boolean) {
+function runScenario(name: string, what: string, script: (chat: string, events: string[], observed: InvariantResult[]) => Promise<Expectation>, timeoutMs: number, run: boolean) {
   it.skipIf(!run)(`${name}: ${what}`, async () => {
     const chat = newChat();
     const events: string[] = [];
@@ -120,7 +120,7 @@ function runScenario(name: string, what: string, script: (chat: string, events: 
     try {
       const ledger = await fakes.modelLedger();
       const ledgerSince = Math.max(0, ...(ledger.ledger as any[]).map((l) => l.seq));
-      const expectation = await script(chat, events);
+      const expectation = await script(chat, events, report.invariants);
       await fakes.release();
       if (!expectation.skipQuiescence) await quiescent();
       report.invariants = [
@@ -234,8 +234,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     if (keep) console.log(`[chaos] HAWA_CHAOS_KEEP=1: the hawa-chaos project is still running${seeded ? ' WITH A COPY OF PRODUCTION DATA' : ''}; take it down with \`npx tsx packages/testkit/chaos/run.ts --down\`.`);
   }, 10 * 60_000);
 
-  if (candidate) scenario('R1.S3.SOURCES', 'full-app PDF source to voice revision and simulated approved delivery', async (chat, events) => ({
-    delivered: false, skipRequestChecks: true, skipQuiescence: true, extra: await candidateSources(chat, events, suiteStarted),
+  if (candidate) scenario('R1.S3.SOURCES', 'full-app PDF source to voice revision and simulated approved delivery', async (chat, events, observed) => ({
+    delivered: false, skipRequestChecks: true, skipQuiescence: true, extra: await candidateSources(chat, events, suiteStarted, observed),
   }));
 
   scenario('R1.0', 'happy path: brief, draft, approve, deliver, no faults', async (chat, events) => {

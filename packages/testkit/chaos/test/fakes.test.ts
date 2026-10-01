@@ -179,6 +179,35 @@ describe('fake models and the paid-call ledger', () => {
 });
 
 describe('fake Canva', () => {
+  it('copies an existing synthetic master separately and leaves its source unchanged after editing the copy', async () => {
+    await admin('/reset', {});
+    const original=Buffer.from('PK original fixture bytes longer than thirty-two bytes');
+    const imported=await fetch(`${httpBase}/canva/rest/v1/imports`,{method:'POST',body:original}).then(r=>r.json() as Promise<any>);
+    const read=await fetch(`${httpBase}/canva/rest/v1/imports/${imported.job.id}`).then(r=>r.json() as Promise<any>);
+    const parent=read.job.result.designs[0].id;
+    const copied=await admin('/canva/manual-copy',{designId:parent});
+    expect(copied.designId).not.toBe(parent);
+    expect(Buffer.from(copied.contentBase64,'base64')).toEqual(original);
+    expect(copied.sourceSha256).toBe(crypto.createHash('sha256').update(original).digest('hex'));
+    const changed=Buffer.from('PK revised fixture bytes longer than thirty-two bytes');
+    await admin('/canva/manual-edit',{designId:copied.designId,contentBase64:changed.toString('base64')});
+    const parentAgain=await admin('/canva/manual-copy',{designId:parent});
+    expect(Buffer.from(parentAgain.contentBase64,'base64')).toEqual(original);
+    const copyAgain=await admin('/canva/manual-copy',{designId:copied.designId});
+    expect(Buffer.from(copyAgain.contentBase64,'base64')).toEqual(changed);
+    const {ledger}=await admin('/canva/ledger');
+    expect(ledger.filter((entry:any)=>entry.kind==='import')).toHaveLength(1);
+    expect(ledger.filter((entry:any)=>entry.kind==='design')).toHaveLength(0);
+    expect(ledger.filter((entry:any)=>entry.kind==='manual_edit')).toHaveLength(1);
+  });
+
+  it('refuses a synthetic copy of an unavailable master', async () => {
+    const response=await fetch(`${httpBase}/__fakes/canva/manual-copy`,{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({designId:'missing'})});
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({error:'chaos fakes: Synthetic source design is unavailable'});
+  });
+
   it('imports a deck, exports it back as the same PPTX bytes from the admitted download host, and ledgers each creation', async () => {
     await admin('/reset', {});
     const deck = Buffer.from('PK\u0003\u0004 chaos deck bytes that are longer than thirty-two bytes');

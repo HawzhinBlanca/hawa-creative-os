@@ -5,8 +5,7 @@ import {compose,db,FAKES_URL,query,secrets,sql} from './stack.js';
 import {TENANT_ID,KAAE_CLIENT_ID} from './provision.js';
 import {waitUntil,type InvariantResult} from './scenario.js';
 
-export async function candidateStudioSettlement(events:string[]):Promise<InvariantResult[]> {
-  const checks:InvariantResult[]=[];
+export async function candidateStudioSettlement(events:string[],checks:InvariantResult[]=[]):Promise<InvariantResult[]> {
   const check=(name:string,ok:boolean,detail='Synthetic Studio ledger and named administrator evidence')=>{
     checks.push({name,ok,detail});if(!ok)throw new Error(name);
   };

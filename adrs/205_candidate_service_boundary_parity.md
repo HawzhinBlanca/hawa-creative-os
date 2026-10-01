@@ -33,3 +33,30 @@ worker identity/denials. Run the fresh deployed candidate and authenticated coor
 PostgreSQL/Restate/blob recovery with external-effect reconciliation. Keep real providers,
 native Canva, human decisions and whole-product admission separate from this fake-provider
 workflow rehearsal. Record missing or failed evidence honestly.
+
+The first repaired rehearsal correctly ends its linked revision with
+NATIVE_REVISION_HANDOFF_REQUIRED. Preserve ADR113/114 admission: exercise a synthetic
+office copy/edit of the existing fixture, current request-scoped binding and exact
+copy confirmation, retained PNG/PPTX, and signed owner review before a separate
+reviewer approval. The fake copy operation is test control only, not a new Connect
+API or native-preservation claim. Keep unrelated OOXML parts and shape/style bytes
+unchanged when editing its fixture text. Fail fast on unexpected terminal design
+outcomes and retain checks already observed when later scenario work fails.
+
+The native journey also exposes stale disposable DNA: its seed has no tenant in
+the document, no synthetic office author, and an MD5 content hash. Use the current
+scoped DNA identity/SHA-256 contract and the existing test office actor. This only
+represents fixture authority and cannot establish human authorship or taste quality
+for a real client. Preserve the application's manual export refusal checks.
+
+The next trial reaches signed review and explicit approval, then the recovery
+subprocess refuses Compose interpolation because it inherited no office-proof
+path. Pass the same project-scoped Compose environment to that subprocess; do not
+derive a second configuration or write production files. Share the observed-check
+array through recovery too so later failures retain its completed checks.
+
+Both restores and uncertain-send reconciliation then pass; the last sheet check
+uses an unsupported legacy A:Z read and mistakes its HTTP 500 for no rows. An
+independent current tab-aware read returns the header and actual task row. Use the
+existing Sheets data-filter API and require exactly one matching task row. Do not
+relax publication or mirror checks, synthesize a row, or accept transport failure.
