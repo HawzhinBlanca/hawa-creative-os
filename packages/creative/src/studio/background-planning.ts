@@ -24,6 +24,9 @@ const canon = (c: string) => {
 /** Plan on the solved boxes, before acceptance. No provider, storage or invented scene pixels. */
 export function applyContentBackground(layout: StudioLayoutV2, palette: string[], input: BackgroundPlanningInput): StudioLayoutV2 {
   if (!palette.length) throw new Error('BACKGROUND: no approved palette');
+  if (palette.length > 32 || layout.text.length > 40 || layout.shapes.length > 40 || (layout.overlays?.length ?? 0) > 6) {
+    throw new Error('BACKGROUND: local search bounds exceeded');
+  }
   const allowed = [...new Set(palette.map(canon))];
   const old = canon(layout.background.color);
   const requested = input.requestedColor ? canon(input.requestedColor) : undefined;
@@ -43,41 +46,59 @@ export function applyContentBackground(layout: StudioLayoutV2, palette: string[]
   const fullScene = !cutout && layout.photos?.some(p => p.x === 0 && p.y === 0 && p.width >= layout.width && p.height >= layout.height);
   const mode = input.mode ?? (layout.background.field ? 'gradient' : 'auto');
   const wantsGradient = input.style?.texture !== 'none' && !dense && (mode === 'gradient' || input.style?.texture === 'gradient-wash' || mode !== 'solid' && intent === 'showcase');
-  const field = (() => {
-    if (!wantsGradient || fullScene) return undefined;
+  const neighbors = (() => {
+    if (!wantsGradient || fullScene) return [];
     const lab = rgbToLab(hexToRgb(surface));
     // Keep the field restrained; every stop is approved. No extra color or recoloring of photos.
-    const neighbors = allowed.filter(c => c !== surface && ciede2000(lab, rgbToLab(hexToRgb(c))) <= 25)
-      .sort((a, b) => ciede2000(lab, rgbToLab(hexToRgb(a))) - ciede2000(lab, rgbToLab(hexToRgb(b))));
-    const second = neighbors[0];
-    if (!second) return undefined;
-    return backgroundFieldSchema.parse({ kind: 'linear', direction: layout.width > layout.height ? 'to-right' : 'to-bottom',
-      stops: [{ at: 0, color: surface }, ...(requested ? [{ at: .8, color: surface }] : []), { at: 1, color: second }] });
+    return allowed.filter(c => c !== surface).map(color => ({ color, distance: ciede2000(lab, rgbToLab(hexToRgb(color))) }))
+      .filter(n => n.distance <= 25).sort((a, b) => a.distance - b.distance).map(n => n.color);
   })();
-  layout.background = { color: surface, ...(field ? { field } : {}), decision: {
-    policy: 'content-background-v1', basis, intent, mode: field ? 'gradient' : fullScene ? 'scene' : 'solid',
-    textAreaShare: Math.round(textAreaShare * 1000) / 1000,
-  } };
   // Copy carriers matching the old ground belong to the background decision. A contrasting card,
   // logo carrier, accent or CTA keeps its distinct role. Never recolor an original photograph.
-  for (const shape of layout.shapes) {
-    if (shape.role === 'panel' && shape.surface !== 'tab' && shape.surface !== 'pill' && shape.fill !== 'none' && canon(shape.color) === old) shape.color = surface;
-  }
-  for (const overlay of layout.overlays ?? []) if (canon(overlay.color) === old) overlay.color = surface;
-  if (input.style?.texture === 'none' && layout.art?.source === 'procedural') delete layout.art;
-  // Preserve role colors where readable; repair against the actual chosen surface/envelope.
-  for (const text of layout.text) {
-    const threshold = requiredContrast(text.fontSize, !!text.bold);
-    const on = declaredColorContrastEvaluator(layout, text);
-    if (on(text.color) < threshold) {
-      const candidate = [...allowed].sort((a, b) => on(b) - on(a))[0];
-      if (on(candidate) < threshold) throw new Error(`BACKGROUND: no approved readable ink for block ${text.copyIndex}`);
-      text.color = candidate;
+  const planned: StudioLayoutV2 = { ...layout,
+    shapes: layout.shapes.map(shape => shape.role === 'panel' && shape.surface !== 'tab' && shape.surface !== 'pill' &&
+      shape.fill !== 'none' && canon(shape.color) === old ? { ...shape, color: surface } : shape),
+    ...(layout.overlays ? { overlays: layout.overlays.map(overlay =>
+      canon(overlay.color) === old ? { ...overlay, color: surface } : overlay) } : {}),
+  };
+  let failedBlock: number | undefined;
+  // ADR206: contrast is a joint decision. Do not mutate even an early passing block before
+  // every block admits the same field. Reuse one enclosure per block and trial for all inks.
+  for (const second of neighbors.length ? neighbors : [undefined]) {
+    const field = second ? backgroundFieldSchema.parse({ kind: 'linear',
+      direction: layout.width > layout.height ? 'to-right' : 'to-bottom',
+      stops: [{ at: 0, color: surface }, ...(requested ? [{ at: .8, color: surface }] : []), { at: 1, color: second }] }) : undefined;
+    planned.background = { color: surface, ...(field ? { field } : {}), decision: {
+      policy: 'content-background-v1', basis, intent, mode: field ? 'gradient' : fullScene ? 'scene' : 'solid',
+      textAreaShare: Math.round(textAreaShare * 1000) / 1000,
+    } };
+    const edits: Array<{ color: string; removeAccent: boolean }> = [];
+    for (const text of layout.text) {
+      const threshold = requiredContrast(text.fontSize, !!text.bold);
+      const on = declaredColorContrastEvaluator(planned, text);
+      let color = text.color;
+      if (!(on(color) >= threshold)) {
+        let best = -Infinity;
+        for (const ink of allowed) {
+          const contrast = on(ink);
+          if (contrast > best) { best = contrast; color = ink; }
+        }
+        if (!(best >= threshold)) { failedBlock ??= text.copyIndex; break; }
+      }
+      edits.push({ color, removeAccent: !!text.accentColor && !(on(text.accentColor) >= threshold) });
     }
-    if (text.accentColor && on(text.accentColor) < threshold) {
-      delete text.accentColor; delete text.accentText; delete text.accentParagraph;
-    }
+    if (edits.length !== layout.text.length) continue;
+    // All computations and possible refusals precede this commit. Keep existing node identities.
+    layout.background = planned.background;
+    layout.shapes.forEach((shape, i) => { shape.color = planned.shapes[i].color; });
+    layout.overlays?.forEach((overlay, i) => { overlay.color = planned.overlays![i].color; });
+    layout.text.forEach((text, i) => {
+      text.color = edits[i].color;
+      if (edits[i].removeAccent) { delete text.accentColor; delete text.accentText; delete text.accentParagraph; }
+    });
+    if (input.style?.texture === 'none' && layout.art?.source === 'procedural') delete layout.art;
+    return layout;
   }
-  // A gradient can consume the palette's usable contrast; refuse instead of adding another plaque.
-  return layout;
+  // Do not flatten an infeasible field, invent a color or add another plaque to mask the failure.
+  throw new Error(`BACKGROUND: no approved readable ink for block ${failedBlock}`);
 }

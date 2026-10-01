@@ -1,0 +1,74 @@
+{
+  "adr": "ADR206",
+  "date": "2026-10-01T09:50:54.020149+00:00",
+  "status": "CONNECTED_ENGINEERING_PASS_EXACT_GATE_PENDING",
+  "requirements": [
+    "FR-028",
+    "FR-031",
+    "FR-038",
+    "FR-040",
+    "FR-041",
+    "NFR-012"
+  ],
+  "sourceSha256": {
+    "packages/creative/src/studio/background-planning.ts": "967a8ad7bfbf41e283566958910ec0bb330fa2a4c115f8fa8cfcc18f771450d2",
+    "packages/creative/test/background-feasibility.test.ts": "8877cfb0adcccfe1542ff9598cf8ea9241b29cfd2a84e6bfda1a3ecb3dcd22d9"
+  },
+  "regressions": {
+    "original": {
+      "passed": 2,
+      "failed": 6,
+      "scope": "initial fixture included readable existing black ink outside the test repair palette; atomic fixture corrected to unreadable gray, no thresholds changed"
+    },
+    "correctedBeforeRepair": {
+      "passed": 2,
+      "failed": 7
+    },
+    "firstConnected": {
+      "passed": 35,
+      "failed": 1,
+      "scope": "incorrect test assertion on nativeVerification on Studio transfer instead of reconstruction API; corrected using actual encodeEditableTransfer, no source transfer or policy changed"
+    },
+    "strictInitial": "new test fixtures omitted required titleColor and photo roles; repaired explicitly"
+  },
+  "acceptance": {
+    "connected": {
+      "files": 13,
+      "passed": 337,
+      "failed": 0,
+      "skipped": 0,
+      "scope": "actual local background/solver/render/transfer/refinement/Core paths with synthetic source assets and provider fixtures"
+    },
+    "strictRoots": 682,
+    "lint": "PASS",
+    "actualPixels": "unchanged contrast floors pass against rendered no-text PNG",
+    "editableTransfer": "separate named native gradient, retained approved stops and exact factual live copy; reconstruction retains required native verification",
+    "atomicRefusal": "background/carriers/overlays/art/ink/accents and caller aliases unchanged on infeasible request",
+    "search": "at most32 palette entries/40 texts/40 shapes/6 overlays; no provider dispatch or added repair round"
+  },
+  "benchmark": {
+    "path": "output/qualification/2026-10-01/background-feasibility/BENCHMARK.json",
+    "sha256": "78ac0afd8d4b37314e08b8941dfac705cbbe6212ef05670446d014b9e6f823ef",
+    "scope": "actual local helper only; three warmups/30 iterations each, synthetic approved input. Not pipeline latency, native fidelity or human taste.",
+    "cases": 3,
+    "warmups": 3,
+    "iterationsPerCase": 30
+  },
+  "failureLogs": {
+    "output/qualification/2026-10-01/background-feasibility/TYPES.log": "c93d5b47340c729858cc0390d55c38b85802c0525bf829293ec44855c72bc3f9",
+    "output/qualification/2026-10-01/background-feasibility/RED.log": "bb93f3aa2310b4286d816041111a594789008acf0b6ba2e19f26378f50c251e9",
+    "output/qualification/2026-10-01/background-feasibility/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/background-feasibility/EXPANDED.log": "3127eb0c03f0dbfb60ead8088660937e0f69e6072696679ec2db4e504a772dac",
+    "output/qualification/2026-10-01/background-feasibility/GREEN.log": "a243ce51a896249075ce4cff68743cb7dc60a0fd39ec553be8de08afc9c705e4",
+    "output/qualification/2026-10-01/background-feasibility/CORRECTED-RED.log": "b4921ff506aa4be97f5c9bb21d4857deba37765fd9b0f096fab5e73766ed4bd9",
+    "output/qualification/2026-10-01/background-feasibility/TYPES-GREEN.log": "2f32e1c2efc9664bc08261733a9c430f31bf62e67228bd28047063aafea36b84",
+    "output/qualification/2026-10-01/background-feasibility/CONNECTED.log": "73fe060a1ee023de9a7ca99f72b7e2d1d9940a2e22ba28b91648e5c4ff8f5648"
+  },
+  "exactGate": "NOT_RUN",
+  "nativeCanvaHuman": "NOT_RUN",
+  "productionDeployment": "NOT_PERFORMED",
+  "nextWork": [
+    "valid XML character-reference copy compatibility",
+    "native/real-provider/human/product admission"
+  ]
+}
