@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T13:50:10Z",
+  "generatedAt": "2026-10-01T13:56:10Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 814,
+  "fileCount": 815,
   "files": [
     {
       "path": ".dockerignore",
@@ -1069,8 +1069,8 @@
     },
     {
       "path": "adrs/217_matched_scoped_asset_search.md",
-      "sha256": "6f6080b5ed5b7df8f6c7e892aec30950b393ff0eabe95d42f430e268de498889",
-      "bytes": 2810
+      "sha256": "2dea076b340b9548e88bb46b38c46d73c3901fb5fcea60037e45013067915edf",
+      "bytes": 3390
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1564,8 +1564,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "521d638473e67cb7eb2017372b48fdeaef36af5f3ec1aeda1f88d759d49c53c1",
-      "bytes": 72381
+      "sha256": "82702a13017e5f69972437ffb1e2ef9d6c9ac06a539a230f6677a3a5bcec59b0",
+      "bytes": 72880
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1893,9 +1893,14 @@
       "bytes": 1844
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/W6_SCOPED_ASSET_SEARCH_GATE_EVIDENCE.json",
+      "sha256": "31ccc354e32d1d95cd6f7fa8c47923c66b233ec924489d59fa041d5a45b0b470",
+      "bytes": 1846
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/W6_SCOPED_ASSET_SEARCH_PROOF.json",
-      "sha256": "114eb4dd80f6991d2114001bc1ec43b10d5de2923173a6361121901e5d741419",
-      "bytes": 4212
+      "sha256": "f0e1ca95b0027406c5450a42a79c24bbae29577038f1d7154da361b5581efa82",
+      "bytes": 4588
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_SCOPED_SEARCH_HISTORY_GATE_EVIDENCE.json",
@@ -3134,8 +3139,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2eec2b7a9fde6a9bc6bdff016bb8f5761b7f25f0912362d86c3d6bf483d73eb0",
-      "bytes": 721010
+      "sha256": "b04e59f6f6847462fb3ee290135547acd7647ded936821b6fd75697e3f8e0d2f",
+      "bytes": 722036
     },
     {
       "path": "plans/user-stories.csv",

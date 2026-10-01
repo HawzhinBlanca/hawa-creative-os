@@ -1,6 +1,6 @@
 # ADR217 — Match scoped assets before the search bound
 
-Date: 2026-10-01. Status: qualification pending.
+Date: 2026-10-01. Status: connected and seven-stage engineering verified; production-dump/native/human/product admission pending.
 Requirements: FR-077, FR-011, NFR-012.
 Sources: docs/17_UI_UX.md, docs/08_MEMORY_RAG_CLIENT_DNA.md,
 docs/09_MESSAGING_AND_OFFICE_INBOX.md, MASTER_SPEC.md.
@@ -42,3 +42,5 @@ product admission remain separate; production-dump authorization is still pendin
 ## Connected evidence
 
 ADR217 CONNECTED: actual newest-500 asset-search omission and invented1024B closed with query-before-bound active SQL/RLS, typed fields/ID/Sorani matching, stable timestamp/ID order and explicit missing size. Cold/broad/alias/assigned-designer/foreign-tenant/inactive/read-failure controls plus actual20005 matching-row hard20000/truncation pass; separate inventory500 preserved. Original7fail/1pass retained;9 new tests,6files55pass/0fail/0skip,697 roots/build/lint. FR011 read boundary only. Exact gate/native/human/product pending; no deploy/model/embedding/schema/dependency. W6_SCOPED_ASSET_SEARCH_PROOF.json.
+
+Exact clean seal ad0b2cb1 passes seven engineering stages: 6900 passed / 0 failed / 67 skipped across 690 passed files / 6 skipped; 697 strict roots and 1780 package checks. Mandatory negative-flag refusal passes. Raw production-dump Stage 3 remains skipped: previous automatic approval review requires explicit transfer authorization, still pending. No all-eight qualification, deployment or native/human/product admission claim. W6_SCOPED_ASSET_SEARCH_GATE_EVIDENCE.json retains actual receipts.

@@ -6,7 +6,7 @@
     "FR-011",
     "NFR-012"
   ],
-  "status": "CONNECTED_ENGINEERING_VERIFIED_EXACT_GATE_AND_PRODUCT_ADMISSION_PENDING",
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "sourceSha256": {
     "apps/core/src/routes/search.routes.ts": "20551922090746d0c5c5e236477aad53cd9f4db0d03316972e7f6b129c525dca",
     "apps/core/src/services/uploaded-assets.ts": "a5aa94a23019c1a03fc1dcac4b63c7e8b28fdeca77ee9b5ffb047887d9f27407",
@@ -65,5 +65,13 @@
     "output/qualification/2026-10-01/asset-search/RED.log": "44e6808ab37dd9ae3d361b630afcbc8521ab939f37e59cc28324a4296560c2f5",
     "output/qualification/2026-10-01/asset-search/RED_QUALIFIED.log": "fdd59e6c8900eb48436f324db9c63f3d695a4a81a25b12372ed01161bcca0f21",
     "output/qualification/2026-10-01/asset-search/STRICT_TYPES.log": "664b62ec407f77c54219d71e636989d7d30f175948f8ddce87024eaa7c3b295e"
+  },
+  "sourceCommit": "679ad5f9d674b48ea2b2a834edb2749602510f8e",
+  "releaseGate": {
+    "candidateCommit": "ad0b2cb1bcb00c029682872f689d82b4a47e2bc3",
+    "proof": "plans/content-aware-design-2026-09-30/W6_SCOPED_ASSET_SEARCH_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior explicit transfer approval pending",
+    "allEightQualified": false
   }
 }
