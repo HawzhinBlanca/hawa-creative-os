@@ -35,3 +35,13 @@ RLS controls refuse wrong actor/client/hash/version/privacy, absent prior approv
 service approval, changed privacy and task-policy bypass. Existing grant/withdraw,
 tenant/client isolation and worker-role restrictions remain. Full qualification and
 production-data migration validation are separate gates; no production write here.
+
+## Qualification checkpoint — 2 October 2026
+
+Connected7files90/0/0 and733 strict roots pass. Exact clean4748d969 full
+7714 passed/2 failed/67 skipped: both explicit migration inventories still ended
+at081. Their actual discovery/application returned082. Updated only the explicit
+expected lists; actual startup refuses a missing082 and ordered/repeated migration
+application remain tested. Four connected files38/0/0 pass. Six deployed-candidate
+082 authority/checksum controls added; execution and full repaired rerun pending.
+No production, native or human qualification. Earlier failure receipts retained.

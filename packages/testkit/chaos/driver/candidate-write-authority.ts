@@ -89,4 +89,32 @@ export async function verifyCandidateWriteAuthority(checks: InvariantResult[]): 
   const consentExpected = createHash('sha256').update(readFileSync(join(REPO_ROOT,'packages/db/migrations/081_model_consent_audit_authority.sql'))).digest('hex');
   const consentStored = await query<{sha256:string}>(sql`SELECT sha256 FROM hawa.schema_upgrades WHERE name='081_model_consent_audit_authority.sql'`);
   check('candidate migration081 receipt matches the exact source checksum',consentStored.length === 1 && consentStored[0].sha256 === consentExpected,consentExpected);
+
+  // ADR242: carrying consent has its own exact version-pair authority; the older grant guard stays.
+  const keptVersion = randomUUID();
+  const keptDna = { ...consentDna, version: 3 };
+  const keptHash = createHash('sha256').update(JSON.stringify(keptDna)).digest('hex');
+  await query(sql`UPDATE hawa.client_dna_versions SET status='superseded' WHERE id=${consentVersion}::uuid`);
+  await query(sql`INSERT INTO hawa.client_dna_versions(id,tenant_id,client_id,version,status,dna,content_hash,created_by,approved_by)
+    VALUES(${keptVersion}::uuid,${TENANT_ID}::uuid,${clients[0]}::uuid,3,'active',
+      ${JSON.stringify(keptDna)}::jsonb,${keptHash},${administratorId}::uuid,${administratorId}::uuid)`);
+  const keptAudit = (actor: string, beforeHash = consentHash, task: string | null = null) => runtime(actor,trx => sql`
+    INSERT INTO hawa.audit_events(tenant_id,client_id,task_id,actor_type,actor_id,action,resource_type,resource_id,before_hash,after_hash,data)
+    VALUES(${TENANT_ID}::uuid,${clients[0]}::uuid,${task}::uuid,'user',${actor},
+      'client.model_consent.kept','client_dna_version',${keptVersion},${beforeHash},${keptHash},
+      ${JSON.stringify({via:'dna',fromVersion:2,toVersion:3,privacy:consentDna.privacy,previousApprovedBy:administratorId,
+        actor:{userId:actor,role:'administrator'}})}::jsonb)`.execute(trx));
+  check('candidate administrator can preserve consent only against its exact approved version pair',
+    Number((await keptAudit(administratorId)).numAffectedRows) === 1,'actual hawa_app write');
+  await refuse('candidate operator cannot forge preserved consent',() => keptAudit(operatorId),'42501');
+  await refuse('candidate preserved consent refuses a mismatched preceding hash',
+    () => keptAudit(administratorId,'b'.repeat(64)),'42501');
+  await refuse('candidate task policy cannot bypass preserved consent authority',
+    () => keptAudit(administratorId,consentHash,taskId),'42501');
+  await query(sql`UPDATE hawa.client_dna_versions SET dna=${JSON.stringify({version:3,privacy:{modelEgressMode:'local_only',allowedProviders:[]}})}::jsonb
+    WHERE id=${keptVersion}::uuid`);
+  await refuse('candidate preserved consent refuses changed stored privacy',() => keptAudit(administratorId),'42501');
+  const keptExpected = createHash('sha256').update(readFileSync(join(REPO_ROOT,'packages/db/migrations/082_kept_model_consent_audit_authority.sql'))).digest('hex');
+  const keptStored = await query<{sha256:string}>(sql`SELECT sha256 FROM hawa.schema_upgrades WHERE name='082_kept_model_consent_audit_authority.sql'`);
+  check('candidate migration082 receipt matches the exact source checksum',keptStored.length === 1 && keptStored[0].sha256 === keptExpected,keptExpected);
 }

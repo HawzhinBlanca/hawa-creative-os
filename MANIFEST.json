@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T23:10:42Z",
+  "generatedAt": "2026-10-01T23:19:01Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1184,8 +1184,8 @@
     },
     {
       "path": "adrs/242_kept_model_consent_audit_authority.md",
-      "sha256": "1e9eb9dca1256f08bc34e17a9c79d0a280bfb96925c919683bd9ae8eb53e4af0",
-      "bytes": 2002
+      "sha256": "6ae6ae55cde195bdcae93d521c3f726b187a1a46e93107cd67b755335666d302",
+      "bytes": 2615
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1694,8 +1694,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/LIVE1E_INTEGRATION_PROOF.json",
-      "sha256": "cd6d45d850cf088d96494883064af5303c18ab60bbf47e0952f243b5449da5dc",
-      "bytes": 4564
+      "sha256": "349638a028d05d4083dbfff05889950fd709be8c7c4546a1d79af9ddb205261c",
+      "bytes": 5616
     },
     {
       "path": "plans/content-aware-design-2026-09-30/LIVE_LANE_INVENTORY.json",
@@ -3369,8 +3369,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "b31a504ecc5aeb4bb76421050977baed0e1a785fb3a07dd3e31ad96694fa902c",
-      "bytes": 824637
+      "sha256": "27c27dbda278179ece7b669b23fd442985c10c13e392fa8dd1676112cbcb7b7b",
+      "bytes": 825813
     },
     {
       "path": "plans/user-stories.csv",

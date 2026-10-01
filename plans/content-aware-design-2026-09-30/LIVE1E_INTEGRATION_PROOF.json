@@ -1,6 +1,6 @@
 {
   "date": "2026-10-02",
-  "status": "CONNECTED_PASS_FULL_QUALIFICATION_PENDING",
+  "status": "MIGRATION_INVENTORY_REPAIRED_FULL_RERUN_PENDING",
   "researchParent": "8e813a0e33485c946b753142743e406adbfd28f1",
   "productionParent": "1e0616f083f20aafdd633b58d5dd6b7e577598b1",
   "requirements": [
@@ -107,5 +107,30 @@
     "Native Canva save/edit/reopen/export and Sorani/Arabic reading.",
     "Independent human visual-quality review and real team pilot.",
     "Actual publication and separate-host recovery."
-  ]
+  ],
+  "fullInitial": {
+    "commit": "4748d969ec4404bd4e7842032965a7d51e699eb0",
+    "passed": 7714,
+    "failed": 2,
+    "skipped": 67,
+    "passingFiles": 724,
+    "failedFiles": 2,
+    "skippedFiles": 6,
+    "durationSeconds": 268.33,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/full-initial/FULL_TEST_SUITE_RUN.log",
+    "diagnosis": "Both explicit migration inventories omit082; real discovered/applied upgrade and actual consent controls passed."
+  },
+  "migrationInventoryRepair": {
+    "files": 4,
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/MIGRATION_INVENTORY_REPAIR.log",
+    "changes": [
+      "Explicit startup LAST and upgrade expected inventory now include082; no dynamic self-confirming assertion.",
+      "Added six real candidate restricted-role preserved-consent/checksum checks; execution pending."
+    ],
+    "productionRuntimeChanged": false,
+    "sha256": "20b8e9596e64ad80ac48f09ac3a20cab3d845fd2835c21c997b6d875d5d32f9e"
+  }
 }
