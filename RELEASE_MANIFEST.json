@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-01T21:14:06+03:00",
+  "generatedAt": "2026-10-01T22:38:42+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,10 +20,10 @@
     ]
   },
   "build": {
-    "commit": "325d4d261b609bab127162d574749ac951ba70eb",
+    "commit": "57eb3c9eacecbb07f0940a675650381dedc00700",
     "treeClean": true,
-    "commitTimestamp": "2026-10-01T21:14:06+03:00",
-    "branch": "claude/kaae-light-guideline"
+    "commitTimestamp": "2026-10-01T22:38:42+03:00",
+    "branch": "claude/sol-judge-and-visual-review"
   },
   "migrations": {
     "targetVersion": "073_restricted_worker_database",
@@ -61,11 +61,11 @@
     }
   },
   "models": {
-    "policySourceSha256": "a1e53b8b51fad1f6a6608c575d68ae6b5b0c698023d2631acd4ec140f84e8823",
+    "policySourceSha256": "b60b64d489a9d8be1bca26fa1eca24dbfe1d4afa46ed984f8bb2583dbc51b1c1",
     "productionDefaults": {
       "layout": "gpt-6.1-sol",
       "critique": "gpt-6.1-sol",
-      "judge": "gpt-4.1-mini",
+      "judge": "gpt-6.1-sol",
       "text": "gpt-6.1-sol",
       "image": "gpt-image-2.5-sunburst"
     },
@@ -75,7 +75,7 @@
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
       "apps/core/src/services/canva-design-planner.ts": "71f05ca0976478cb174f5fd4acba4a095da397a666527d0644e9e463e3528d10",
       "packages/creative/src/studio/layout-generator-v3.ts": "400aca197698c929f80da884ef417177dc9fc6401752903c271b129cd36645f0",
-      "packages/creative/src/studio/pairwise-judge-v3.ts": "1b13a99680eb8d2fe4c7ae347817947cf73a6f370d742b4f5947fc54382ad3ac",
+      "packages/creative/src/studio/pairwise-judge-v3.ts": "583f3ed9f0fab9df7ff52dac59e1f5475dbb3f5b0c269159198282fc27074f6e",
       "packages/creative/src/studio/box-critique-v3.ts": "f6a643f5df5aaf69f355f12a6494b2479b942d2b6d702cc1cc42af8d24cb85e2"
     }
   },
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "14bfbbe9066b0bc827edacd875aa2ac2b1da277f642c1ec1f42308de4cce7c65"
+  "sha256": "579be6b20e331eb9dc462f8cb866705beeaa0081da5d116239914d7f57e42d1b"
 }

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T18:14:37Z",
+  "generatedAt": "2026-10-01T19:38:46Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 696,
+  "fileCount": 700,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "7b552f778ebd1716052438282135a0b5678a3f4e1d6b95f1eb06c07f94a9aa5c",
-      "bytes": 3978
+      "sha256": "ef0c32c6cffd09f29b2120b6cd2e8cd695a4a0c637cfd8f409a3b7c0a80749e1",
+      "bytes": 3984
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -951,6 +951,11 @@
       "path": "adrs/236_kaae_brand_guideline_light_first.md",
       "sha256": "0037ba27f1a5ffdd5cd4302a45eebd48211c8a505902a7fe2f539d2231f18129",
       "bytes": 13129
+    },
+    {
+      "path": "adrs/237_sol_judge_and_visual_review.md",
+      "sha256": "0473c3be176a693e6e397bcd9f2a2895ea80a13d13c46342fb212b6c391dfd90",
+      "bytes": 17811
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2598,9 +2603,19 @@
       "bytes": 3877
     },
     {
+      "path": "plans/sol-visual-review-2026-10-01/CODEX_MERGE_NOTE.md",
+      "sha256": "4220bf0bb950bec7808375091c62b6aa0157c494e9cd9acb48039de0b95efbcb",
+      "bytes": 6566
+    },
+    {
+      "path": "plans/sol-visual-review-2026-10-01/LIVE_PROOF.json",
+      "sha256": "876ebff54f54a94b44d83b67ca2703a306db80383f8e548051901ef4a176ea08",
+      "bytes": 35489
+    },
+    {
       "path": "plans/traceability.csv",
-      "sha256": "446c5ae4856863eb069787c8e956dcd0db9574d356381383ff61ab3149c6ac7f",
-      "bytes": 599621
+      "sha256": "3c7350a6c2e8d1ba49b7897eb56fb8891393d27a655f1b4f120bf12ff26cd6d8",
+      "bytes": 602329
     },
     {
       "path": "plans/user-stories.csv",
@@ -3466,6 +3481,11 @@
       "path": "scripts/verify_t8_ratings.ts",
       "sha256": "19e90f897111dad88a02556972cf4ddf440cd45b5582fd896b103bac5803d9a7",
       "bytes": 4287
+    },
+    {
+      "path": "scripts/visual_review_live_trial.ts",
+      "sha256": "8461cde1f2725ed71da9ce1a4929321d76b2b2759118185ebefedb874eac796b",
+      "bytes": 30790
     },
     {
       "path": "tsconfig.scripts.json",
