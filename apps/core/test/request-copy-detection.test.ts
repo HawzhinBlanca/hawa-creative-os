@@ -44,7 +44,8 @@ describe('requests the first rules missed open with their copy, never the reques
     ['an imperative with a client name', 'Design a simple KAAE banner for the Open Day. Saturday 7 November 2026, 10:00 AM to 2:00 PM.',
       ['Open Day', 'Saturday 7 November 2026, 10:00 AM to 2:00 PM']],
     ['lower case, "can u"', 'can u make a quick KAAE post for the staff football tournament? final on 30 October 2026 at 5 PM',
-      ['staff football tournament', 'final on 30 October 2026 at 5 PM']],
+      // ADR-235: the first letter of each line is a capital; the rest as typed.
+      ['Staff football tournament', 'Final on 30 October 2026 at 5 PM']],
     ['"We want a big colourful poster"', 'We want a big colourful poster for the Children\'s Book Week. 9–15 November 2026 at the KAAE library.',
       ['Children\'s Book Week', '9–15 November 2026 at the KAAE library']],
     ['"Can you help us with a poster"', 'Can you help us with a poster for the KAAE Science Fair? It\'s on 14 November 2026 at 9:00 AM.',

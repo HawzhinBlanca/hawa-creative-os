@@ -126,7 +126,7 @@ export const REDO_SCRIPTS: Script[] = [
     natural: 'A new request opens; the delivered design is not redone.',
     async play(p) {
       await delivered(p);
-      await p.say('do a poster for the conference on the 5th', { after: 60 * 60_000 });
+      await p.say('do a KAAE poster for the conference on the 5th', { after: 60 * 60_000 });
       await p.wait(60_000);
       expect(p.opened).toHaveLength(2);
       expect(p.revisions).toHaveLength(0);

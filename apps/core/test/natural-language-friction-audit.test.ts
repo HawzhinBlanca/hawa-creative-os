@@ -139,7 +139,9 @@ describe('F2: a new, unrelated brief while one design waits for changes is swall
     const answer = await intake(app(), message(chat, {
       text: 'New poster please for the graduation ceremony\n\nDate: 12 October 2026\nVenue: Erbil International Hotel' }));
     // Today: lifecycleAction 'requester-revision' against the waiting design.
-    expect(answer.body.lifecycleAction).toBe('open-request');
+    // ADR-235: it names no organisation and the chat is bound to none, so the bot asks who it is for.
+    expect(answer.body.lifecycleAction === 'open-request' || answer.body.clientQuestion === true).toBe(true);
+    expect(answer.body.lifecycleAction).not.toBe('requester-revision');
   });
 });
 

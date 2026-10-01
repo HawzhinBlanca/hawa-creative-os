@@ -60,6 +60,8 @@ export interface CopyExtractionReceipt {
   refused?: Array<{ text: string; why: string }>;
   /** The paid reading's ledger row (hawa.requester_intent_calls.update_id), when the model's copy is used. */
   ledgerUpdateId?: number;
+  /** ADR-235 (owner: "Capitalize first letters"): lines whose first letter was made a capital, as the requester typed them. */
+  capitalised?: string[];
 }
 
 const MAX_MODEL_TEXT = 1500;
@@ -364,6 +366,20 @@ function grounded(source: string, proposal: ProposedCopy, forbidden: Span[]):
   return { headline: head.text, lines, refused: refused.slice(0, 8) };
 }
 
+/**
+ * ADR-235 (owner, 2026-10-01: "Capitalize first letters"): a line taken from a request sentence starts
+ * with a capital when its first character is a lower-case Latin letter ("for school principals" → "For
+ * school principals"). Nothing else changes: the rest keeps the requester's casing, and Sorani, Arabic,
+ * digits and copy the requester laid out or quoted are never touched. The guard rebuilt the line from
+ * the requester's own characters first, so this first letter is the only character not typed as it is.
+ */
+export function capitalFirst(line: string): string {
+  const first = line.charAt(0);
+  if (!/^(?=\p{Script=Latin})\p{Ll}$/u.test(first)) return line;
+  const upper = first.toUpperCase();
+  return upper.length === 1 ? upper + line.slice(1) : line;
+}
+
 const isArabic = (text: string) => /[؀-ۿ]/.test(text);
 
 /** "KAAE: Assessment Literacy Workshop": the client's name once, the headline cut only when long. */
@@ -432,9 +448,14 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
       why: 'The request was one sentence and no words to print could be taken from it safely. It opened for a designer, with its words as the instructions.' };
     return { ...kept, exactCopy: [], isInstructionOnly: true, autoGenerate: false, designInstructions: instructions, copyExtraction: receipt };
   }
-  const { headline, lines } = chosen.copy;
-  const all = [headline, ...lines];
+  // Lines chosen from a request sentence (model or rules) start with a capital; quoted words stay as typed.
+  const capitals = chosen.method === 'model' || chosen.method === 'rules';
+  const typed = [chosen.copy.headline, ...chosen.copy.lines];
+  const all = typed.map((line) => (capitals ? capitalFirst(line) : line));
+  const [headline, ...lines] = all;
+  const capitalised = typed.filter((line, i) => line !== all[i]);
   const receipt: CopyExtractionReceipt = { ...base, method: chosen.method, why: chosen.why, headline, lines,
+    ...(capitalised.length ? { capitalised } : {}),
     ...(chosen.copy.refused.length || refused ? { refused: [...(refused ?? []), ...chosen.copy.refused].slice(0, 8) } : {}),
     ...(ledger !== undefined ? { ledgerUpdateId: ledger } : {}) };
   const label = draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : ctx.senderName;

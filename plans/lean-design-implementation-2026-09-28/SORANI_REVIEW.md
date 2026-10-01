@@ -306,5 +306,14 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `pendingRound.changesKept` | Your draft of {title} was finished before your changes could be added: {changes}. I've kept them for the office, which checks the design before it comes to you. | ڕەشنووسی {title} پێش ئەوەی گۆڕانکارییەکانت زیاد بکرێن تەواو بوو: {changes}. بۆ ئۆفیسەکەم هەڵگرتن، کە پێش ئەوەی دیزاینەکە بۆت بێت سەیری دەکات. | needs native review (ADR-230 addendum, changes sent while a design was being made, 2026-10-01) |
 | `withdraw.nothingToCancel` | There's nothing open for me to cancel right now. | ئێستا هیچ داواکارییەکی کراوە نییە کە هەڵیبوەشێنمەوە. | needs native review (ADR-230 addendum, natural cancel reading, 2026-10-01) |
 | `withdraw.deliveredNotCancellable` | {title} was already delivered, so there is nothing to cancel there. | {title} پێشتر گەیەندرابوو، بۆیە هیچ نییە لەوێ هەڵبوەشێنرێتەوە. | needs native review (ADR-230 addendum, natural cancel reading, 2026-10-01) |
+## clientQuestion (ADR-235)
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `clientQuestion.askClient` | Who is this design for? Tell me the organisation's name. | ئەم دیزاینە بۆ کێیە؟ ناوی دامەزراوەکەم پێ بڵێ. | needs native review |
+| `clientQuestion.askClientNamed` | Who is this design for? Tell me the organisation's name.⏎⏎The ones I know: {list}. | ئەم دیزاینە بۆ کێیە؟ ناوی دامەزراوەکەم پێ بڵێ.⏎⏎ئەوانەی دەیانناسم: {list}. | needs native review |
+| `clientQuestion.passedToOffice` | No problem. I've passed it to the office, and they'll choose the organisation. | کێشە نییە. ناردم بۆ ئۆفیسەکە، ئەوان دامەزراوەکە هەڵدەبژێرن. | needs native review |
+| `clientQuestion.notMatchedToOffice` | I couldn't match that to an organisation I know, so I've passed it to the office to choose. | نەمتوانی ئەوە بە دامەزراوەیەک کە دەیناسم ببەستمەوە، بۆیە ناردم بۆ ئۆفیسەکە بۆ ئەوەی هەڵیبژێرن. | needs native review |
+| `clientQuestion.expiredToOffice` | It's been a while since I asked, so I've passed your request to the office to choose the organisation. | ماوەیەکە پرسیارەکەم کردووە، بۆیە داواکارییەکەت ناردم بۆ ئۆفیسەکە بۆ ئەوەی دامەزراوەکە هەڵبژێرن. | needs native review |
 
 187 lines.
