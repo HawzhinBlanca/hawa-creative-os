@@ -101,3 +101,44 @@ it('shows the actual off reason after brand save and excludes status from the ne
   expect(writes).toHaveLength(2); expect(writes[1].body.version).toBe(2);
   for (const call of writes) expect(call.body).not.toHaveProperty('modelReading');
 });
+
+async function revisionEditor(write: (path: string, body: any) => Response) {
+  const dna = { clientId, name: 'Orchid Books', code: 'orchid', tenantId: 'office', version: 4, status: 'active',
+    colors: [{ name: 'Ink', hex: '#000000', role: 'text' }, { name: 'Canvas', hex: '#ffffff', role: 'background' }],
+    fonts: [], assets: [], defaultLocale: 'en', defaultDirection: 'ltr',
+    guidelines: { layoutRules: [], prohibitedPhrases: [], requiredDisclaimers: [] } };
+  const calls = stubCore(c => c.method === 'POST' ? write(c.path, c.body)
+    : c.path === '/v1/clients' ? json([{ ...dna, colorsCount: 2, rulesCount: 0 }])
+    : c.path === `/v1/clients/${clientId}/dna` ? json(dna)
+    : c.path.endsWith('/snapshots') ? json([]) : c.path.endsWith('/candidate-rules') ? json({ candidateRules: [] }) : undefined);
+  view = await mount(React.createElement(DnaScreen, { initialClientId: clientId })); await advance(50);
+  return { calls, dna };
+}
+it('binds an old brand edit to its read version and preserves it when Core refuses a moved version', async () => {
+  let overwritten = false;
+  const { calls, dna } = await revisionEditor((_path, body) => {
+    // The actual Core route checks this field only when supplied; an omitted field loses the guard.
+    if (body.expectedVersion !== undefined && body.expectedVersion !== 5)
+      return json({ title: 'Conflict', detail: 'Expected brand version 4 but current version is 5' }, 409);
+    overwritten = true;
+    return json({ ...body, version: 6 });
+  });
+  await click(view!.container.querySelector('button[aria-label="Remove Ink color"]')); await advance(50);
+  expect(calls.find(c => c.method === 'POST')?.body.expectedVersion).toBe(dna.version);
+  expect(overwritten).toBe(false);
+  expect(view!.text()).toContain('current version is 5');
+  expect(view!.container.querySelector('button[aria-label="Remove Ink color"]')).toBeTruthy();
+  expect(view!.text()).not.toContain('Brand changes saved');
+});
+it('binds a governance snapshot to its read version and reports the actual model-reading result', async () => {
+  const { calls, dna } = await revisionEditor((_path, body) => json({ snapshotId: 'snapshot-5', clientId, version: 5,
+    sha256: 'a'.repeat(64), commitMessage: body.commitMessage, createdBy: 'administrator', createdAt: new Date().toISOString(),
+    modelReading: { openai: false, reason: 'Privacy changed; review consent.' }, dna: {} }, 201));
+  await click(byText(view!.container, 'button', 'Commit Snapshot')); await advance(50);
+  await input('form textarea', 'Review the brand baseline.');
+  await click(byText(view!.container, 'button', 'Seal & Commit Version')); await advance(50);
+  expect(calls.find(c => c.method === 'POST')?.body.expectedVersion).toBe(dna.version);
+  expect(view!.text()).toContain('Snapshot v5 recorded');
+  expect(view!.text()).toContain('Model reading is now off for this client');
+  expect(view!.text()).toContain('Privacy changed; review consent.');
+});

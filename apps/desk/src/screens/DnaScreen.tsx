@@ -328,7 +328,7 @@ const DnaClientScreen: React.FC<{
     setLoading(true);
     try {
       const { modelReading: _status, ...body } = updatedDna;
-      const saved: ClientDNA = await apiClient.clients.saveDna(updatedDna.clientId, body);
+      const saved: ClientDNA = await apiClient.clients.saveDna(updatedDna.clientId, body, updatedDna.version);
       setCurrentDna(saved);
       setModelReading(saved.modelReading);
       setReviewConsent(false);
@@ -603,6 +603,7 @@ const DnaClientScreen: React.FC<{
       const snap: ClientDnaSnapshot = await apiClient.clients.commitSnapshot(currentDna.clientId, {
         commitMessage: snapshotMessage.trim() || `Manual governance snapshot v${currentDna.version + 1}`,
         createdBy: snapshotAuthor,
+        expectedVersion: currentDna.version,
       });
       setSnapshots((prev) => [snap, ...prev]);
       setModelReading(snap.modelReading);

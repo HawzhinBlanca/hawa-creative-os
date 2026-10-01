@@ -428,10 +428,10 @@ class HawaApiClient {
     recordModelConsent: (clientId: string, body: ClientModelConsentChange) =>
       this.request<{ clientId: string; version: number; modelReading: ClientModelReading }>(
         `/clients/${encodeURIComponent(clientId)}/dna/model-consent`, { method: 'POST', body: JSON.stringify(body) }),
-    saveDna: (clientId: string, dna: unknown) =>
-      this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`, { method: 'POST', body: JSON.stringify(dna) }),
+    saveDna: (clientId: string, dna: object, expectedVersion: number) =>
+      this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`, { method: 'POST', body: JSON.stringify({ ...dna, expectedVersion }) }),
     snapshots: (clientId: string) => this.request<any[]>(`/clients/${encodeURIComponent(clientId)}/snapshots`),
-    commitSnapshot: (clientId: string, body: { commitMessage: string; createdBy: string }) =>
+    commitSnapshot: (clientId: string, body: { commitMessage: string; createdBy: string; expectedVersion: number }) =>
       this.request<any>(`/clients/${encodeURIComponent(clientId)}/snapshots`, { method: 'POST', body: JSON.stringify(body) }),
     candidateRules: (clientId: string) => this.request<any>(`/clients/${encodeURIComponent(clientId)}/candidate-rules`),
     // No role in the body: Core takes the role from the signed-in session.

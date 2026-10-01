@@ -45,3 +45,16 @@ expected lists; actual startup refuses a missing082 and ordered/repeated migrati
 application remain tested. Four connected files38/0/0 pass. Six deployed-candidate
 082 authority/checksum controls added; execution and full repaired rerun pending.
 No production, native or human qualification. Earlier failure receipts retained.
+
+## Existing Desk revision contract repaired
+
+Full migration-inventory corrected source5dbad16e passes7716/0/67; seven
+technical stages and negative flag refusal pass, production-dump Stage3 NOT_RUN.
+A subsequent actual Desk handoff inspection found its full-DNA saves/snapshots
+omitted the server expectedVersion field. Two strict UI cases reproduce missing
+versions (6 pass/2 fail). The typed Desk API now requires that read revision and
+its callers send it; no Core authorization/version check was relaxed. Real Core
+refuses stale DNA/snapshot writes409 with unchanged versions/audits/consent.
+Seven connected files91/0/0 and733 strict roots pass; two missing test-call
+arguments were also corrected with explicit expected bodies. Final whole-source
+qualification remains pending; the earlier7716 result applies only to5dbad16e.

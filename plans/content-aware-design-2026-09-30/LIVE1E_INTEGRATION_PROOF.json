@@ -1,6 +1,6 @@
 {
   "date": "2026-10-02",
-  "status": "MIGRATION_INVENTORY_REPAIRED_FULL_RERUN_PENDING",
+  "status": "DESK_REVISION_GUARD_REPAIRED_FINAL_QUALIFICATION_PENDING",
   "researchParent": "8e813a0e33485c946b753142743e406adbfd28f1",
   "productionParent": "1e0616f083f20aafdd633b58d5dd6b7e577598b1",
   "requirements": [
@@ -98,6 +98,22 @@
     "desk-build": {
       "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-desk-build.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "DESK_REVISION_RED": {
+      "path": "output/qualification/2026-10-02/live1e-integration/DESK_REVISION_RED.log",
+      "sha256": "1031e30a0eff70b12de7377192af65c352463ce3340e1e9649ca09f366ced786"
+    },
+    "DESK_REVISION_FINAL": {
+      "path": "output/qualification/2026-10-02/live1e-integration/DESK_REVISION_FINAL.log",
+      "sha256": "d4009b0a170c78b5f1edbbd74270f1aee566537e10a7ff82be98835baeb45fc0"
+    },
+    "REVISION_TYPECHECK_INITIAL": {
+      "path": "output/qualification/2026-10-02/live1e-integration/REVISION_TYPECHECK_INITIAL.log",
+      "sha256": "7d82515c9ac1499b4a6cfddb093156b1030268264edb1623b68f561c364827fb"
+    },
+    "REVISION_TYPECHECK_FINAL": {
+      "path": "output/qualification/2026-10-02/live1e-integration/REVISION_TYPECHECK_FINAL.log",
+      "sha256": "bafd04bc28f1c2f9994c42f81d54ea4ac7ca67f8e66b31bff0c79c48f1462e9b"
     }
   },
   "open": [
@@ -132,5 +148,44 @@
     ],
     "productionRuntimeChanged": false,
     "sha256": "20b8e9596e64ad80ac48f09ac3a20cab3d845fd2835c21c997b6d875d5d32f9e"
+  },
+  "fullMigrationCorrected": {
+    "commit": "5dbad16e34e37088db8a9aeea85493505cc865d3",
+    "passed": 7716,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 726,
+    "skippedFiles": 6,
+    "durationSeconds": 270.29,
+    "technicalStagesPassed": 7,
+    "productionDumpStage": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
+    "negativeFlagRefusal": true,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/full-corrected/RELEASE_GATE_EVIDENCE.json",
+    "scope": "Before the subsequent Desk expectedVersion handoff repair; do not transfer this result to final source."
+  },
+  "deskRevisionRepair": {
+    "before": {
+      "passed": 6,
+      "failed": 2,
+      "receipt": "output/qualification/2026-10-02/live1e-integration/DESK_REVISION_RED.log"
+    },
+    "connected": {
+      "files": 7,
+      "passed": 91,
+      "failed": 0,
+      "skipped": 0,
+      "receipt": "output/qualification/2026-10-02/live1e-integration/DESK_REVISION_FINAL.log"
+    },
+    "strictTestRoots": 733,
+    "strictTypecheck": "PASS",
+    "originalTypeErrors": "Two test callers omitted the new required expectedVersion; updated explicit request bodies, original log retained.",
+    "changes": [
+      "Typed API requires read-version for every Desk brand save and governance snapshot.",
+      "Current editor/undo version forwarded; server contract and authorization unchanged.",
+      "Real Core stale-save/snapshot control refuses409 without changing active DNA, consent or audit; UI stale edit preserves its view and displays the conflict.",
+      "Snapshot response off-status verified in actual DOM."
+    ],
+    "fullFinalGate": "NOT_RUN_YET",
+    "productionChanges": false
   }
 }

@@ -76,18 +76,18 @@ const CALLS: Array<{ name: string; call: () => Promise<unknown>; method: string;
   { name: 'DNA: client DNA', call: () => apiClient.clients.dna(KAAE), method: 'GET', path: `/v1/clients/${KAAE}/dna` },
   {
     name: 'DNA: save',
-    call: () => apiClient.clients.saveDna(KAAE, { clientId: KAAE, version: 3 }),
+    call: () => apiClient.clients.saveDna(KAAE, { clientId: KAAE, version: 3 }, 3),
     method: 'POST',
     path: `/v1/clients/${KAAE}/dna`,
-    body: { clientId: KAAE, version: 3 },
+    body: { clientId: KAAE, version: 3, expectedVersion: 3 },
   },
   { name: 'DNA: snapshots', call: () => apiClient.clients.snapshots(KAAE), method: 'GET', path: `/v1/clients/${KAAE}/snapshots` },
   {
     name: 'DNA: snapshot commit',
-    call: () => apiClient.clients.commitSnapshot(KAAE, { commitMessage: 'Before the Newroz run', createdBy: 'art_director' }),
+    call: () => apiClient.clients.commitSnapshot(KAAE, { commitMessage: 'Before the Newroz run', createdBy: 'art_director', expectedVersion: 3 }),
     method: 'POST',
     path: `/v1/clients/${KAAE}/snapshots`,
-    body: { commitMessage: 'Before the Newroz run', createdBy: 'art_director' },
+    body: { commitMessage: 'Before the Newroz run', createdBy: 'art_director', expectedVersion: 3 },
   },
   { name: 'DNA: candidate rules', call: () => apiClient.clients.candidateRules(KAAE), method: 'GET', path: `/v1/clients/${KAAE}/candidate-rules` },
   {
