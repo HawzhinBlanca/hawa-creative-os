@@ -458,3 +458,14 @@ affected consumers206pass/3fail/1skip, corrected remaining26pass. Counts overlap
 Actual deferred DNA commit refusal preserves the active version. Exact full gate
 pending. W6_DNA_AUTHORITY_PROOF.json. No deployment or aesthetic admission;
 broader search/direct-map/W5/W6/native/Canva/human/product gates remain open.
+
+
+Exact sealed95ae940a passes all8 required engineering stages: 6534pass/0fail/67skip,
+669 strict test roots,1648 blueprint checks, isolated newest-production-dump
+invariants and mandatory flag refusal. Corrected source consumers pass with
+explicit saved DNA; actual SIGKILL/replay and deferred DNA commit refusal pass.
+The inherited-manifest refusal after a local CLI permission failure remains
+recorded, alongside all unsealed development failures. Detailed full-suite log
+retained per seal. W6_DNA_AUTHORITY_GATE_EVIDENCE.json. Publication must preserve
+tested runtime/test/migration/infra/gate bytes; source not deployed. Broader
+direct-map/search/W5/W6/native/Canva/human/product admission remains open.

@@ -1,7 +1,7 @@
 {
   "date": "2026-10-01",
   "adr": "ADR197",
-  "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_PRODUCT_OPEN",
   "requirements": [
     "FR-021",
     "FR-046",
@@ -102,7 +102,8 @@
     "Old fake transaction failure now truthfully returns503 and makes no unscoped lookup; real deferred SQL commit failure retains active DNA",
     "Frozen retry fake refuses provider calls; archive uncertainty still remains503, not weakened to success",
     "Publication expectation scope and immutability are enforced by existing migration059; no migration was changed",
-    "Initial commit security scan refused a literal synthetic test token; changed it to an ephemeral per-run random UUID. No secret-scanner bypass or exception."
+    "Initial commit security scan refused a literal synthetic test token; changed it to an ephemeral per-run random UUID. No secret-scanner bypass or exception.",
+    "First manifest generator was denied its local IPC endpoint; the attempted seal had no changes and gate correctly refused the inherited ADR196 manifest at Stage6. The normal CLI with permission regenerated a clean source seal; no gate bypass. Refusal log retained."
   ],
   "logs": {
     "/tmp/hawa-dna-authority-build-20261001.log": "d9d6d16b7c5b29838237d2f24c6d157bdf8d6066691ba4aac7ee774b2da4757e",
@@ -124,10 +125,20 @@
     "/tmp/hawa-dna-authority-replay-diagnosis-20261001.log": "1b63421e4a6f6b50be214d5f6f2598469a3da7064fd7f0c131ecb621d1ef412e",
     "/tmp/hawa-dna-authority-types-20261001.log": "3fb969739e70bf903ee9e60a71758b9ff3ad1c745322de1321df022a037cc5be",
     "/tmp/hawa-dna-authority-types-final-20261001.log": "3fb969739e70bf903ee9e60a71758b9ff3ad1c745322de1321df022a037cc5be",
-    "/tmp/hawa-dna-authority-types-seal-20261001.log": "3fb969739e70bf903ee9e60a71758b9ff3ad1c745322de1321df022a037cc5be"
+    "/tmp/hawa-dna-authority-types-seal-20261001.log": "3fb969739e70bf903ee9e60a71758b9ff3ad1c745322de1321df022a037cc5be",
+    "/tmp/hawa-dna-authority-exact-gate-20261001.log": "4a25227efd8013bd70391c0e1fad79e23973ac27a14cfb106c9cc2389d9d5357",
+    "/tmp/hawa-dna-authority-exact-gate-corrected-20261001.log": "93cfc3b4b0efb67af0c0a053d81042ee7eb84c08104c4f8db1a8de09a870f22e",
+    "/tmp/hawa-dna-authority-manifest-20261001.log": "3989225b0837d3b4a0e1cf3b5d2a9fac8b0f44bad13f81cc1b63b223489711b5",
+    "/tmp/hawa-dna-authority-manifest-corrected-20261001.log": "4993abf9eb14c7257eedde6eab08f98ddd85c4a6bb6265d677e1ab2ca89add2b",
+    "/tmp/hawa-dna-authority-pack-20261001.log": "7493c9e3eeec54b7d2afabaf2c6a2b3cfd743f2acd864ca9dac9d8b3f44898af",
+    "/tmp/hawa-dna-authority-pack-seal-20261001.log": "7493c9e3eeec54b7d2afabaf2c6a2b3cfd743f2acd864ca9dac9d8b3f44898af",
+    "/tmp/hawa-dna-authority-seal-commit-20261001.log": "2e336cd5d822246a4c2aac544e341b5da2c18766d749337bfeced441e68f25f2",
+    "/tmp/hawa-dna-authority-seal-commit-corrected-20261001.log": "a0d265c7e0e7e9bf211a7f4101ce453831029b7613b51ca9e9db47391f09835d",
+    "/tmp/hawa-dna-authority-seal-pack-20261001.log": "7493c9e3eeec54b7d2afabaf2c6a2b3cfd743f2acd864ca9dac9d8b3f44898af",
+    "/tmp/hawa-dna-authority-seal-pack-corrected-20261001.log": "7493c9e3eeec54b7d2afabaf2c6a2b3cfd743f2acd864ca9dac9d8b3f44898af"
   },
   "sourceSha256": {
-    "adrs/197_authoritative_client_dna_reads.md": "520691a23e145f47f54804b286da68d24698cf5e7e64b87d0f7d050044f69d90",
+    "adrs/197_authoritative_client_dna_reads.md": "72a1593bb253eca858051bdb569377f43d03668fb042f49771322312d08b674c",
     "apps/core/src/app.ts": "8e85e9b7fc48456372c206bbdc17eaa019e013b5198f58c4b160c9d47e7fe6af",
     "apps/core/src/routes/clients.routes.ts": "0eebc61aa840196900cdaaa8e9d5c27818d35bb9c8f926eb1d996eb28014bd2e",
     "apps/core/src/routes/delivery.routes.ts": "647ea72b84c0cb3596be6932840aa01e058dfd978cd624d99801e54ccfeba3f4",
@@ -173,9 +184,23 @@
     "packages/testkit/test/three-client-production-pilot.test.ts": "f1a7831182692e0b0e6f69065f4652e19d92d00fca359eb0bf78895da23ffbfb"
   },
   "limits": [
-    "Exact sealed engineering gate pending",
+    "Exact engineering gate passed; provider/native/Canva/human/product admission remains open",
     "No paid calls, deployment, independent provider pixels or aesthetic qualification",
     "Other direct process-map consumers, broader search, W5/W6 taste/native/Canva/human/product admission remain open"
   ],
-  "deployed": false
+  "deployed": false,
+  "exactQualification": {
+    "seal": "95ae940aedcb36bf78467f1d1ac581dcc0c0fd8d",
+    "stages": 8,
+    "passed": 6534,
+    "failed": 0,
+    "skipped": 67,
+    "typeRoots": 669,
+    "evidence": "plans/content-aware-design-2026-09-30/W6_DNA_AUTHORITY_GATE_EVIDENCE.json",
+    "fullLog": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/qualification/2026-10-01/95ae940a/FULL_TEST_SUITE_RUN.log",
+    "fullLogSha256": "31a62009c896e57a953fac9b03ceaccefbbae1f71c75a4f94d21ea4ab82a8311",
+    "gateLog": "/tmp/hawa-dna-authority-exact-gate-corrected-20261001.log",
+    "engineeringOnly": true,
+    "deployed": false
+  }
 }
