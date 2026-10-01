@@ -14,7 +14,8 @@
     "apps/desk/src/components/CommandPalette.tsx": "66e678ab55a994240ad6b355ddb8267630192e94f29236669758bc109d10844d",
     "apps/core/test/search-history.test.ts": "b3ae46b7858dbba4d57c3de270222223e7ef2d275ceefa96a7f69ff3e1899bc3",
     "docs/17_UI_UX.md": "9dae75e90fa4122eece61f339093a11fa71963df260074aa1871bc5bbff9d90d",
-    "api/openapi.yaml": "e90f368cd2ef1792e0ceaef0c68c5cf2e873d88da6175931972ae6271c832525"
+    "api/openapi.yaml": "e90f368cd2ef1792e0ceaef0c68c5cf2e873d88da6175931972ae6271c832525",
+    "apps/desk/test/command-palette.test.ts": "b970bbd1d65e8cdf79e1fd6f60defd3581239842c1ba4cdf6774254018093928"
   },
   "diagnosis": {
     "originalRed": {
@@ -35,13 +36,21 @@
     "initialBuild": "required extractSearchTokens import removed too early; restored",
     "strictFixtures": "clientId default inferred UUID template type instead of string; ChatIntake fixture omitted designInstructions; corrected",
     "instructionRed": "one failure / 14 skipped: retained explicit instruction wording absent from feedback category",
-    "emptyCopyRed": "one failure / 15 skipped: textless revision incorrectly presented as copy"
+    "emptyCopyRed": "one failure / 15 skipped: textless revision incorrectly presented as copy",
+    "firstExactGate": {
+      "candidate": "14cf1d53",
+      "passed": 6890,
+      "failed": 1,
+      "skipped": 67,
+      "reason": "Existing Desk notice test asserted matching tasks; truthful notice now applies to all matching history. Assertion and test description updated, behavior retained.",
+      "receipt": "output/qualification/2026-10-01/search-history/FIRST_GATE_FAILURE.json"
+    }
   },
   "acceptance": {
     "newHistoryTests": 16,
     "connected": {
-      "files": 5,
-      "passed": 42,
+      "files": 6,
+      "passed": 47,
       "failed": 0,
       "skipped": 0
     },
@@ -79,6 +88,10 @@
     "output/qualification/2026-10-01/search-history/RED_EMPTY_COPY.log": "5953734294e41f85785b92966764fe554022807f4751cb306e76dc3c01ba7667",
     "output/qualification/2026-10-01/search-history/RED_INSTRUCTION.log": "3dc91cbb35a5efd160b4a4be7caa4d7d34123952464b6cbcaece58454808ed99",
     "output/qualification/2026-10-01/search-history/STRICT_FIXTURE_FAILURE.log": "c06f644b990de9fc542e7110171896de93b9ec7d81f8b6212c6c68b8adea0bf0",
-    "output/qualification/2026-10-01/search-history/STRICT_TYPES.log": "6b6c555ee85c36b65f96c4b631d2dd763b76b749877ddfe8b2f69c5b9f80b6ce"
-  }
+    "output/qualification/2026-10-01/search-history/STRICT_TYPES.log": "6b6c555ee85c36b65f96c4b631d2dd763b76b749877ddfe8b2f69c5b9f80b6ce",
+    "output/qualification/2026-10-01/search-history/CONNECTED_REPAIRED.log": "7fb9392028893c1b2dfb522ad29ad65216cb8c601d5cb4e22307cb11c726a6a0",
+    "output/qualification/2026-10-01/search-history/EXACT_GATE_INITIAL_FAILURE.log": "ada3cd45b94564f0b86d8771d321da908d629e43a5bf5298ab63535d02cac5b4",
+    "output/qualification/2026-10-01/search-history/FULL_SUITE_INITIAL_FAILURE.log": "3ea97dcf028ea0a1472624b57d422ac83de5b97c762de6ed04f160a5c3ea9f75"
+  },
+  "initialSourceCommit": "74c1d247"
 }

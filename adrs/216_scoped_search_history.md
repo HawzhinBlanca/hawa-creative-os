@@ -44,3 +44,5 @@ taste calibration, native Canva, deployment or whole-product admission follows.
 ## Connected evidence
 
 16 actual Core/PostgreSQL history checks and connected five-file42pass/0fail/0skip qualify this slice. Strict696 roots, build/lint and diff checks pass. Original8 failures plus additional instruction/empty-copy reds and introduced build/type failures remain retained. An operator sees peer history while a scoped designer cannot retrieve it via an all-client query. W6_SCOPED_SEARCH_HISTORY_PROOF.json binds source and evidence. Exact clean gate pending; production/native/human/product admission open.
+
+First exact seal14cf1d53 is retained:6890pass/1fail/67skip. The sole failure was an existing Desk test still asserting “matching tasks” after the supported history notice broadened to all matches. Updated its assertion/description; no runtime behavior changed. Expanded6files47pass/0fail/0skip and696 strict roots pass. Corrected exact gate remains pending.

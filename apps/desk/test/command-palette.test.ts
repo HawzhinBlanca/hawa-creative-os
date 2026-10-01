@@ -68,7 +68,7 @@ it('does not retrieve without a selected client and does not offer unsupported t
 
 // Bug hunt 2026-09-29, gap 2: a hit shown on no Desk page (Core answers url: null) used to open the
 // generic review page. It is listed as such, and selecting it keeps the palette open.
-it('lists a hit with no Desk page as such and opens nothing for it; says when older tasks were not searched', async () => {
+it('lists a hit with no Desk page as such and opens nothing for it; says when matching history was truncated', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ truncated: true, results: [
     { id: 'asset-1', title: 'Gala logo.png', subtitle: 'image/png · 2048 B', category: 'ASSETS', url: null },
   ] })));
@@ -78,7 +78,7 @@ it('lists a hit with no Desk page as such and opens nothing for it; says when ol
   await query('gala');
   expect(view.text()).toContain('Gala logo.png');
   expect(view.text()).toContain('Not shown on a Desk page');
-  expect(view.container.querySelector('[role="status"]')?.textContent).toContain('There are more matching tasks');
+  expect(view.container.querySelector('[role="status"]')?.textContent).toContain('There are more matches');
   await click(view.container.querySelector('#cmd-item-asset-1'));
   expect(onClose).not.toHaveBeenCalled();
   expect(window.location.hash).toBe(before);
