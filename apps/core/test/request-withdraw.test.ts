@@ -137,10 +137,12 @@ describe('a requester\'s cancel withdraws a request nothing has been approved fo
     expect(await rows(requestId, taskId)).toEqual({ request: { rev: String(rev + 1), stage: 'cancelled' }, task: { state: 'cancelled' } });
     expect(object.state()).toMatchObject({ stage: 'cancelled', rev: rev + 1, withdrawal: { actor: 'requester', fromStage: stage } });
     const toRequester = object.sent.filter((m) => m.chatId === String(chat));
-    expect(toRequester.map((m) => m.text)).toEqual(['Cancelled <b>do a better design thats similar to earlier ones</b>. Nothing more will be made for it.']);
+    // ADR-231 (merged): a stored title that names no design is "your design" to the requester.
+    expect(toRequester.map((m) => m.text)).toEqual(['Cancelled <b>your design</b>. Nothing more will be made for it.']);
     const toOffice = object.sent.filter((m) => m.chatId === String(OFFICE));
     expect(toOffice).toHaveLength(1);
-    expect(toOffice[0].text).toMatch(/^Sewa cancelled "do a better design thats similar to earlier ones" in the chat while it was /);
+    // ADR-231 (merged): office alerts name the design by `shortTitle`, which calls a sentence title "your design".
+    expect(toOffice[0].text).toMatch(/^Sewa cancelled "your design" in the chat while it was /);
     expect(toOffice[0].text).toContain('nothing more will be made for it');
     // ADR-200's office style: no chat id, no request or task UUID in the alert; the short task id last.
     expect(toOffice[0].text).not.toContain(String(chat));
@@ -309,7 +311,8 @@ describe('the office\'s Cancel in the Desk withdraws a request-owned task (ADR-2
     expect(await rows(requestId, taskId)).toEqual({ request: { rev: '2', stage: 'cancelled' }, task: { state: 'cancelled' } });
     expect(object.state()).toMatchObject({ stage: 'cancelled', withdrawal: { actor: 'office' } });
     expect(object.sent.map((m) => [m.chatId, m.text])).toEqual([[String(chat),
-      'The office has cancelled <b>do a better design thats similar to earlier ones</b>, so nothing more will be made for it. Tell me whenever you need a new design.']]);
+      // ADR-231 (merged): a stored title that names no design is "your design" to the requester.
+      'The office has cancelled <b>your design</b>, so nothing more will be made for it. Tell me whenever you need a new design.']]);
     const again = await desk(taskId, { reason: 'Opened by mistake from a redo message.', expectedVersion }, key);
     expect(again).toMatchObject({ status: 200, body: { status: 'CANCELLED', replayed: true, rev: 2 } });
     expect(calls).toHaveLength(1);

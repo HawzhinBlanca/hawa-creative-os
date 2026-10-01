@@ -94,13 +94,13 @@ export const CHANGE_SCRIPTS: Script[] = [
   },
   {
     id: 'S037', title: 'changing one\'s mind while it is being made ("actually, make it green instead of blue")', kinds: ['change', 'mind'],
-    natural: 'Kept on the design for the office; one request.',
+    natural: 'Kept on the design and added when the current draft is done (ADR-230 section 6); one request.',
     async play(p) {
       await p.say(`${KAAE_EVENING}\nUse blue colours.`);
       const change = await p.say('actually, make it green instead of blue', { after: 90_000 });
       expect(p.opened).toHaveLength(1);
       expect(p.kept).toHaveLength(1);
-      expect(p.answer(change)).toMatch(/added|office/i);
+      expect(p.answer(change)).toMatch(/add that to|added|office/i);
     },
   },
   {
@@ -179,7 +179,7 @@ export const CHANGE_SCRIPTS: Script[] = [
       const second = await p.say('and the date is 5 December, not 4', { after: 60_000 });
       expect(p.revisions).toHaveLength(1);
       expect(p.opened).toHaveLength(1);
-      expect(p.answer(second)).toMatch(/added|office/i);
+      expect(p.answer(second)).toMatch(/add that to|added|office/i);
     },
   },
   {

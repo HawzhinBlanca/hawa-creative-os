@@ -89,7 +89,7 @@ export const MEDIA_SCRIPTS: Script[] = [
       const logo = await p.photo(17, { caption: 'use this logo please', after: 60_000 });
       await p.wait(30_000);
       expect(p.opened).toHaveLength(1);
-      expect(p.answer(logo)).toMatch(/photo|added|kept/i);
+      expect(p.answer(logo)).toMatch(/photo|add that to|added|kept/i);
     },
   },
   {
