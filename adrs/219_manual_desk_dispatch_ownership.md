@@ -51,3 +51,16 @@ correctly sent that draft to human_review. Fix only its expected state, preserve
 the distinct no-job fence, and rerun. All original failures retained.
 
 ADR219 connected: manual Desk creation records an unclaimable MANUAL_DESK_OWNED outbox receipt while preserving atomic task/event/receipt identity. Old source-bound no-job callbacks cannot alter manual task/version; actual default/draft/lifecycle outcome semantics remain. Original Core5pass/2fail and deployed TaskChanged race retained; stale-build and negative-fixture failures retained.14files177passed/0failed/0skipped; actual PDF31checks/four SIGKILL/six restarts/fresh dump+file restore PASS;698 strict roots/build/lint/standalone chaos types PASS. Exact current Docker and engineering gate pending. No deployment/native/human/product/RPO admission. W6_MANUAL_DESK_DISPATCH_PROOF.json.
+
+Exact clean55542978 engineering gate:6922 passed/0 failed/67 skipped,691 passed
+files/six skipped,698 strict roots,1792 package checks,seven stages and mandatory
+negative refusal. Production-dump Stage3 NOT_RUN; prior transfer authorization
+still pending. Its Docker source/download/restore/delivery and manual generation
+passed155 controls before a new fixture sent a generic worker credential to a
+nonexistent /internal design callback and parsed nginx404 HTML as JSON. Retained
+actual readback confirms the worker's real dedicated design credential and exact
+/v1/tasks/:id/notifications/canva-status route return200/MANUAL_DESK_OWNED, no
+notification, received/version1/one recorded receipt and zero TaskWorkflow runs.
+Correct only the harness credential/route to the actual worker implementation.
+Application/test/infra source is unchanged from55542978; full corrected rehearsal
+pending. Both credential boundaries remain strict.

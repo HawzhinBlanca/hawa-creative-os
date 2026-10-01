@@ -291,12 +291,12 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   check('saved bilingual Desk copy imports through the explicit generation action', generated.status === 'retrieved' &&
     !!generated.planId && resumed.planId === generated.planId, `status=${generated.status}; replay=${resumed.status}`);
   for (let replay=0;replay<2;replay++) {
-    const staleNoJob=await fetch(`${origin}/v1/internal/tasks/${manual.id}/notifications/canva-status`, {
-      method:'POST',headers:{Authorization:`Bearer ${secrets().CHAOS_WORKER_TOKEN}`,'Content-Type':'application/json'},
-      body:JSON.stringify({status:'MANUAL_DESIGN_REQUIRED',notifyRequester:false,
-        detail:'Dispatched without an automatic Canva job; nothing was generated or spent.'}),signal:AbortSignal.timeout(15000),
-    });
-    const ignored=await staleNoJob.json();
+    // Match canva-draft-workflow.coreClient: dedicated design credential, exact task route,
+    // through the fake service's existing direct Core network proxy (not /internal or an office key).
+    const staleNoJob=await fakes.core(`/v1/tasks/${manual.id}/notifications/canva-status`,
+      secrets().CHAOS_DESIGN_WORKER_TOKEN,{method:'POST',body:{status:'MANUAL_DESIGN_REQUIRED',notifyRequester:false,
+        detail:'Dispatched without an automatic Canva job; nothing was generated or spent.'}});
+    const ignored=staleNoJob.json;
     check(`old worker no-job callback ${replay+1} cannot take ownership of a manual Desk task`,
       staleNoJob.status===200 && ignored.reason==='MANUAL_DESK_OWNED' && ignored.notified===false,`HTTP ${staleNoJob.status}`);
   }
