@@ -197,3 +197,49 @@ Red before: with `office-telegram-turn.ts` at `baffce10`, the first two fail (th
 Full `apps/core`, `apps/worker` and `packages/integrations` run (348 files, after a Desk `vite build` for the bundle-size check): 4247 passed, 4 skipped, 0 failed (345 files passed, 3 skipped). `pnpm typecheck` (670 test roots) and `pnpm lint` pass.
 
 Not run: live Telegram, a Restate server, chaos, and a native Sorani review.
+
+## 6. Follow-up (canary agent, 2026-10-02)
+
+The canary agent found three more things. The lead added them to this ADR.
+
+### 6.1 A named cancel with an apology withdraws at once
+
+"cancel the … flyer, sorry, it was by mistake" named a withdrawable design but was asked "Do you want me to cancel …?". "it was by mistake" and "I sent it by mistake" were not in ADR-230 §8's list of reasons (requester-turn.ts `CANCEL_REASON`), so the words did not read as a cancel with a reason.
+
+The list now also has:
+
+- "it/this/that was (sent) by mistake/accident";
+- "I/we sent/opened/made/ordered/asked for it by mistake".
+
+The list stays closed: a clause that asks for a change is still never a reason.
+
+Covered by `request-withdraw.test.ts` (+7 words, including "…, sorry", "…, my mistake", "…, wrong one, sorry"). Red before: 3 fail ("sorry, it was by mistake", "it was by mistake", "Sorry, I sent it by mistake"). The rest were already read as cancels and are kept as guards.
+
+### 6.2 The reply to a change sent while designing promises nothing
+
+`routing.changeAddedNextRound` said "Got it. I'll add that to {title} as soon as the current draft is done." Whether the next round can start (the day's allowance, the round limit of 3, the brief) is known only when the draft finishes (ADR-230 addendum L8). When it cannot, the office gets the change and the requester is told.
+
+Checking admission early would not be deterministic, because the allowance moves in the meantime. So the reply now says only what will happen:
+
+- English: "Got it. I'll add that to {title} once the current draft is done, or pass it to the office if I can't."
+- Sorani: "تێگەیشتم. کە ڕەشنووسەکەی ئێستا تەواو بوو، ئەوە بۆ {title} زیاد دەکەم، یان ئەگەر نەمتوانی دەیدەمە ئۆفیسەکە."
+
+The Sorani line is listed in `SORANI_REVIEW.md`.
+
+Changed deliberately, with the reason noted: `truthful-chat-replies.test.ts`, `requester-intent-routing.test.ts`, `requester-intake-friction-adr156.test.ts`, `lifecycle-internal-intake.test.ts`. Red before: those 4 tests and the Sorani review list fail.
+
+### 6.3 Cancel notices name which request
+
+Live: the office cancelled a K-12 Pilot Study request and its redo. The requester got "The office has cancelled KAAE K-12 Pilot Study…" twice, word for word.
+
+`projectLifecycleWithdraw` now names the request with ADR-231's `distinctNames` among the chat's requests of the same name. For example: "The office has cancelled <b>KAAE K-12 Pilot Study…</b> (asked for today at 08:44)", or "(version 2)" when the times cannot tell them apart.
+
+- **Which messages:** every requester notice of a withdraw: the requester's own cancel, the office's Cancel, and the too-late answers.
+- **Unchanged:** a request with a name of its own is named as before.
+- **Stable on replay:** the text is stored on the projection's receipt, so a replay sends the same words.
+
+Covered by `request-withdraw.test.ts` (+1: the office cancels the redo, then the original; the two notices differ, each with when it was asked for). Red before: it fails.
+
+### 6.4 Full run after the follow-up
+
+Full `apps/core`, `apps/worker` and `packages/integrations` run: 4256 passed, 4 skipped, 0 failed (345 files passed, 3 skipped). `pnpm typecheck` and `pnpm lint` pass.
