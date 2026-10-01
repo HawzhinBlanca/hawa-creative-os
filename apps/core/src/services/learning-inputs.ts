@@ -9,4 +9,4 @@ export const explicitLearningInstruction = z.object({
 export const moderationInput = z.object({
     reason: text.max(1000).optional(), role: z.enum(['art_director', 'creative_director', 'administrator']).optional(),
 }).strict();
-export const negativeLearningInput = z.object({ taskId: z.string().uuid(), feedbackText: text.max(4000) }).strict();
+export const negativeLearningInput = z.object({ taskId: z.string().uuid(), revisionId:z.string().uuid().optional(), feedbackText: text.max(4000) }).strict();

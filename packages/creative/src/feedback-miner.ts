@@ -6,7 +6,8 @@
  */
 
 import crypto from 'node:crypto';
-import { canonicalJson } from '@hawa/domain';
+import { canonicalJson,learningTargetKey,learningReceiptKey,mergeLearningReceipts,resolveLearningExamples,
+  type LearningDesignTarget,type LearningExampleReceipt } from '@hawa/domain';
 import { refinementSnapshotFromManifest, refinementSnapshotHash, type ApprovedRefinementEvidence } from './refinement-evidence.js';
 
 export interface CanvasLayerSnapshot {
@@ -48,11 +49,16 @@ export interface RuleProvenance {
 }
 
 export interface RuleExamples {
+  receipts?:LearningExampleReceipt[];
+  positiveExamples?:LearningExampleReceipt[];
+  negativeExamples?:LearningExampleReceipt[];
   positiveExampleTaskIds: string[];
   negativeExampleTaskIds: string[];
 }
 
 export interface DesignFeedbackRecord {
+  target?:LearningDesignTarget;
+  basis?:LearningExampleReceipt['basis'];
   id: string;
   tenantId?: string;
   taskId: string;
@@ -107,6 +113,11 @@ export class FeedbackMiner {
   private refinementEvents = new Map<string, string>();
   private rejectedTaskIds = new Set<string>();
   private feedbackEvents = new Map<string, string>();
+  private learningReceipts=new Map<string,LearningExampleReceipt>();
+  private receiptsByTarget=new Map<string,Map<string,LearningExampleReceipt>>();
+  private scopedTarget(clientId:string,taskId:string,target:LearningDesignTarget):string {
+    return JSON.stringify([clientId,taskId,learningTargetKey(target)]);
+  }
   private negativeFeedbackStore: Array<{
     feedbackId: string;
     taskId: string;
@@ -141,11 +152,19 @@ export class FeedbackMiner {
       for (const value of [record.id, record.taskId, record.actorId]) {
         if (typeof value !== 'string' || !value.trim()) throw new Error('Feedback identity is required');
       }
+      if(!['approve','reject','revise','rating'].includes(record.verdict) ||
+        (record.rating!=null && (!Number.isInteger(record.rating) || record.rating<1 || record.rating>10)) ||
+        (record.createdAt!==undefined && !Number.isFinite(Date.parse(record.createdAt)))) throw new Error('Feedback verdict/rating/time is invalid');
+      if(record.target) learningReceiptKey({feedbackId:record.id,clientId,taskId:record.taskId,target:record.target,
+        verdict:record.verdict,rating:record.rating,actor:{id:record.actorId,role:record.actorRole},
+        recordedAt:record.createdAt ?? new Date().toISOString(),basis:record.basis ??
+          (record.target.kind==='studio_candidate'?'studio_review':record.target.kind==='task'?'task_rejection':'revision_rejection')});
       const key = JSON.stringify([record.tenantId ?? null, record.id]);
       const fingerprint = crypto.createHash('sha256').update(JSON.stringify([
         clientId, record.taskId, record.runId ?? null, record.candidateId ?? null,
         record.actorId, record.actorRole ?? null, record.source ?? 'desk', record.verdict,
         record.rating ?? null, record.notes ?? null, record.createdAt ?? null,
+        record.target ? learningTargetKey(record.target) : null,record.basis ?? null,
       ])).digest('hex');
       const previous = pendingEvents.get(key) ?? this.feedbackEvents.get(key);
       if (previous !== undefined && previous !== fingerprint) throw new Error('Feedback event reuse conflict');
@@ -165,26 +184,18 @@ export class FeedbackMiner {
       const verdict = record.verdict;
       const rating = record.rating !== undefined ? record.rating : null;
 
-      // 1. Negative feedback handling (reject verdict or low rating <= 4)
-      if (verdict === 'reject' || (verdict === 'rating' && rating !== null && rating <= 4)) {
-        this.recordNegativeFeedback(
-          record.taskId,
-          clientId,
-          notes || `Studio design candidate rejected (rating: ${rating ?? 'N/A'})`,
-          actor
-        );
-      }
-
-      // 2. Positive feedback handling (approve verdict or high rating >= 8)
-      if (verdict === 'approve' || (verdict === 'rating' && rating !== null && rating >= 8)) {
-        if (!this.isTaskRejected(record.taskId, clientId)) {
-          for (const rule of this.candidateRules.values()) {
-            if (rule.clientId === clientId && rule.evidenceTaskIds.includes(record.taskId) &&
-                !rule.examples.positiveExampleTaskIds.includes(record.taskId)) {
-              rule.examples.positiveExampleTaskIds.push(record.taskId);
-            }
-          }
-        }
+      let receipt:LearningExampleReceipt|undefined;
+      if(record.target) {
+        receipt={feedbackId:record.id,clientId,taskId:record.taskId,target:structuredClone(record.target),
+          verdict,rating,actor,recordedAt:record.createdAt ?? new Date().toISOString(),
+          basis:record.basis ?? (record.target.kind==='studio_candidate'?'studio_review':record.target.kind==='task'?'task_rejection':'revision_rejection'),notes:record.notes};
+        this.observeLearningReceipt(receipt);
+      } else if(verdict==='reject' || verdict==='revise' || (rating!==null && rating<=4)) {
+        const recordedAt=record.createdAt ?? new Date().toISOString(),feedbackText=notes || 'Unbound historical feedback';
+        receipt={feedbackId:record.id,clientId,taskId:record.taskId,target:{kind:'task'},verdict:'reject',actor,
+          recordedAt,basis:'unresolved_legacy',notes:feedbackText};
+        this.recordNegativeFeedback(record.taskId,clientId,feedbackText,actor,
+          {feedbackId:record.id,recordedAt,basis:'unresolved_legacy'});
       }
 
       // 3. Rule proposal mining from human operator notes
@@ -265,16 +276,15 @@ export class FeedbackMiner {
             recordedAt: record.createdAt || new Date().toISOString(),
           },
           examples: {
-            positiveExampleTaskIds:
-              verdict === 'approve' && !this.isTaskRejected(record.taskId, clientId) ? [record.taskId] : [],
-            negativeExampleTaskIds:
-              verdict === 'reject' || (rating !== null && rating <= 4) ? [record.taskId] : [],
+            positiveExampleTaskIds:[],negativeExampleTaskIds:[],
           },
           conflicts,
           sha256Digest,
           dataLineage: 'client_owned',
         };
 
+        proposal.examples.receipts=receipt?[receipt]:[];
+        this.refreshRuleExamples(proposal);
         const ruleKey = `${clientId}:feedback:${proposal.sha256Digest}`;
         if (!this.candidateRules.has(ruleKey)) {
           this.candidateRules.set(ruleKey, proposal);
@@ -406,6 +416,15 @@ export class FeedbackMiner {
       if (previous && previous!==fingerprint) throw new Error('Refinement event reuse conflict');
       if (previous) return [];
     }
+    const pairReceipts:LearningExampleReceipt[]=evidence ? [
+      {feedbackId:evidence.feedbackId,clientId,taskId,target:{kind:'design_revision',revisionId:evidence.beforeRevisionId,sourceSha256:evidence.beforeSourceSha256},
+        verdict:'corrected',actor:structuredClone(evidence.actor),recordedAt:recordedAt ?? new Date().toISOString(),basis:'approved_refinement'},
+      {feedbackId:evidence.feedbackId,clientId,taskId,target:{kind:'design_revision',revisionId:evidence.afterRevisionId,sourceSha256:evidence.afterSourceSha256},
+        verdict:'approve',actor:structuredClone(evidence.actor),recordedAt:recordedAt ?? new Date().toISOString(),basis:'approved_refinement',
+        approval:{id:evidence.approvalId,actorId:evidence.approvedBy}},
+    ] : [];
+    mergeLearningReceipts(pairReceipts);
+    for(const receipt of pairReceipts) this.observeLearningReceipt(receipt);
     const deltas = this.diffArtboards(initial, final);
     const newlyProposed: CandidateRuleProposal[] = [];
 
@@ -450,9 +469,8 @@ export class FeedbackMiner {
         if (evidence && !proposal.refinementEvidence?.some(e=>e.feedbackId===evidence.feedbackId)) {
           (proposal.refinementEvidence ??= []).push(structuredClone(evidence));
         }
-        if (evidence && !this.isTaskRejected(taskId,clientId) && !proposal.examples.positiveExampleTaskIds.includes(taskId)) {
-          proposal.examples.positiveExampleTaskIds.push(taskId);
-        }
+        proposal.examples.receipts=mergeLearningReceipts(proposal.examples.receipts ?? [],pairReceipts);
+        this.refreshRuleExamples(proposal);
         proposal.confidence = Math.min(0.99, 0.5 + proposal.frequency * 0.15);
       } else {
         const id = `crule_${crypto.createHash('sha256').update(ruleKey).digest('hex')}`;
@@ -482,13 +500,14 @@ export class FeedbackMiner {
             recordedAt: recordedAt ?? new Date().toISOString(),
           },
           examples: {
-            positiveExampleTaskIds: evidence && !this.isTaskRejected(taskId, clientId) ? [taskId] : [],
-            negativeExampleTaskIds: this.isTaskRejected(taskId, clientId) ? [taskId] : [],
+            positiveExampleTaskIds:[],negativeExampleTaskIds:[],
           },
           conflicts: [],
           sha256Digest,
           dataLineage: 'client_owned',
         };
+        proposal.examples.receipts=pairReceipts;
+        this.refreshRuleExamples(proposal);
         this.candidateRules.set(ruleKey, proposal);
         newlyProposed.push(proposal);
       }
@@ -500,6 +519,39 @@ export class FeedbackMiner {
   }
 
   /** Candidates are observed/proposed data; filesystem files never establish human approval. */
+  public observeLearningReceipt(receipt:LearningExampleReceipt):void {
+    const key=learningReceiptKey(receipt),previous=this.learningReceipts.get(key);
+    mergeLearningReceipts(previous?[previous]:[],[receipt]);
+    const stored=structuredClone(receipt);
+    this.learningReceipts.set(key,stored);
+    const targetKey=this.scopedTarget(receipt.clientId,receipt.taskId,receipt.target);
+    const bucket=this.receiptsByTarget.get(targetKey) ?? new Map<string,LearningExampleReceipt>();
+    const alreadyHeld=receipt.target.kind==='task' && [...bucket.values()].some(r=>r.basis===receipt.basis);
+    bucket.set(key,stored);this.receiptsByTarget.set(targetKey,bucket);
+    if(receipt.target.kind==='task' && (receipt.verdict==='reject' || receipt.verdict==='revise')) {
+      this.rejectedTaskIds.add(JSON.stringify([receipt.clientId,receipt.taskId]));
+    }
+    if(alreadyHeld) return;
+    for(const rule of this.candidateRules.values()) if(rule.clientId===receipt.clientId &&
+      ((receipt.target.kind==='task' && rule.evidenceTaskIds.includes(receipt.taskId)) ||
+        rule.examples.receipts?.some(r=>this.scopedTarget(r.clientId,r.taskId,r.target)===targetKey))) this.refreshRuleExamples(rule);
+  }
+
+  private refreshRuleExamples(rule:CandidateRuleProposal):void {
+    const own=rule.examples.receipts ?? [],keys=new Set(own.map(r=>this.scopedTarget(r.clientId,r.taskId,r.target)));
+    for(const taskId of rule.evidenceTaskIds) keys.add(this.scopedTarget(rule.clientId,taskId,{kind:'task'}));
+    const related=[...keys].flatMap(key=>{
+      const values=[...(this.receiptsByTarget.get(key)?.values() ?? [])];
+      if(values[0]?.target.kind!=='task') return values;
+      // One original receipt per hold basis proves ineligibility. Retain each rule's own
+      // source below; copying every task-wide hold into every rule is quadratic evidence.
+      const representatives=new Map<LearningExampleReceipt['basis'],LearningExampleReceipt>();
+      for(const receipt of values) if(!representatives.has(receipt.basis)) representatives.set(receipt.basis,receipt);
+      return [...representatives.values()];
+    });
+    rule.examples=resolveLearningExamples(rule.clientId,mergeLearningReceipts(own,related));
+  }
+
   public getCandidateRules(clientId?: string): CandidateRuleProposal[] {
     const rules = Array.from(this.candidateRules.values());
     if (clientId) {
@@ -532,20 +584,20 @@ export class FeedbackMiner {
     restored.provenance=structuredClone(recorded.provenance);
     restored.promotedAt=recorded.promotedAt;restored.promotedByRole=recorded.promotedByRole;
     restored.moderationRevision=revision;
-    // Rule approval alone is not proof that a referenced design was approved.
-    if(!current) restored.examples.positiveExampleTaskIds=[];
-    const rejected=[...restored.evidenceTaskIds,...(restored.provenance.taskId?[restored.provenance.taskId]:[])]
-      .filter(task=>this.isTaskRejected(task,clientId));
-    restored.examples.negativeExampleTaskIds=[...new Set([...restored.examples.negativeExampleTaskIds,...rejected])];
-    restored.examples.positiveExampleTaskIds=restored.examples.positiveExampleTaskIds
-      .filter(task=>!restored.examples.negativeExampleTaskIds.includes(task));
+    // Moderation alone cannot invent a source or an approved design.
+    if(!current) restored.examples.receipts=[];
+    this.refreshRuleExamples(restored);
     this.candidateRules.set(key,restored);
   }
 
   /** Publish a committed scoped projection without losing newer local feedback. */
   public adoptClientProjection(clientId:string,projection:FeedbackMiner): void {
+    const receipts=[...projection.learningReceipts.values()];
+    if(receipts.some(r=>r.clientId!==clientId)) throw new Error('Learning projection receipt scope conflict');
+    mergeLearningReceipts([...this.learningReceipts.values()],receipts);
     const entries=[...projection.candidateRules.entries()];
     if(entries.some(([,rule])=>rule.clientId!==clientId)) throw new Error('Learning projection scope conflict');
+    for(const receipt of receipts) this.observeLearningReceipt(receipt);
     for(const [key,incoming] of entries) {
       const current=this.candidateRules.get(key);
       if(!current) this.candidateRules.set(key,structuredClone(incoming));
@@ -567,6 +619,7 @@ export class FeedbackMiner {
     for(const rejected of projection.rejectedTaskIds) this.rejectedTaskIds.add(rejected);
     for(const [key,value] of projection.feedbackEvents) this.feedbackEvents.set(key,value);
     for(const [key,value] of projection.refinementEvents) this.refinementEvents.set(key,value);
+    for(const rule of this.candidateRules.values()) if(rule.clientId===clientId) this.refreshRuleExamples(rule);
   }
 
   /**
@@ -621,30 +674,21 @@ export class FeedbackMiner {
     taskId: string,
     clientId: string,
     feedbackText: string,
-    actor: { id: string; role?: string; name?: string }
+    actor: { id: string; role?: string; name?: string },
+    options?:{feedbackId?:string;recordedAt?:string;target?:LearningDesignTarget;basis?:LearningExampleReceipt['basis']}
   ): { feedbackId: string; taskId: string; negativeExampleRecorded: true } {
-    const feedbackId = `fb_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const feedbackId = options?.feedbackId ?? `fb_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const recordedAt=options?.recordedAt ?? new Date().toISOString();
+    this.observeLearningReceipt({feedbackId,clientId,taskId,target:options?.target ?? {kind:'task'},verdict:'reject',
+      actor,recordedAt,basis:options?.basis ?? 'task_rejection',notes:feedbackText});
     this.negativeFeedbackStore.push({
       feedbackId,
       taskId,
       clientId,
       feedbackText,
       actor,
-      recordedAt: new Date().toISOString(),
+      recordedAt,
     });
-
-    // Mark task as rejected so it can never become a positive example
-    this.rejectedTaskIds.add(JSON.stringify([clientId, taskId]));
-
-    // If any candidate rule previously used this task as positive evidence, remove it
-    for (const rule of this.candidateRules.values()) {
-      if (rule.clientId === clientId && (rule.examples.positiveExampleTaskIds.includes(taskId) || rule.evidenceTaskIds.includes(taskId))) {
-        rule.examples.positiveExampleTaskIds = rule.examples.positiveExampleTaskIds.filter((id) => id !== taskId);
-        if (!rule.examples.negativeExampleTaskIds.includes(taskId)) {
-          rule.examples.negativeExampleTaskIds.push(taskId);
-        }
-      }
-    }
 
     return { feedbackId, taskId, negativeExampleRecorded: true };
   }
@@ -697,7 +741,7 @@ export class FeedbackMiner {
       },
       examples: {
         positiveExampleTaskIds: [],
-        negativeExampleTaskIds: taskId && this.isTaskRejected(taskId, clientId) ? [taskId] : [],
+        negativeExampleTaskIds:[],
       },
       conflicts,
       sha256Digest,
@@ -705,6 +749,7 @@ export class FeedbackMiner {
     };
 
     const ruleKey = `${clientId}:explicit:${id}`;
+    this.refreshRuleExamples(proposal);
     this.candidateRules.set(ruleKey, proposal);
     return proposal;
   }
@@ -766,16 +811,14 @@ export class FeedbackMiner {
     }
     // Feedback may commit while moderation waits for its own transaction. Preserve
     // that newer evidence instead of replacing it with the prepared snapshot.
-    const negative=[...new Set([...rule.examples.negativeExampleTaskIds,...prepared.examples.negativeExampleTaskIds])];
-    const positive=[...new Set([...rule.examples.positiveExampleTaskIds,...prepared.examples.positiveExampleTaskIds])]
-      .filter(task=>!negative.includes(task));
+    const receipts=mergeLearningReceipts(rule.examples.receipts ?? [],prepared.examples.receipts ?? []);
     const evidence=[...new Set([...rule.evidenceTaskIds,...prepared.evidenceTaskIds])];
     const refinements=new Map([...rule.refinementEvidence || [],...prepared.refinementEvidence || []]
       .map(receipt=>[receipt.feedbackId,receipt]));
     const frequency=Math.max(rule.frequency,prepared.frequency);
-    Object.assign(rule,structuredClone(prepared),{frequency,evidenceTaskIds:evidence,
-      examples:{positiveExampleTaskIds:positive,negativeExampleTaskIds:negative},
+    Object.assign(rule,structuredClone(prepared),{frequency,evidenceTaskIds:evidence,examples:{receipts},
       ...(refinements.size ? {refinementEvidence:[...refinements.values()]}:{})});
+    this.refreshRuleExamples(rule);
   }
 
   /**

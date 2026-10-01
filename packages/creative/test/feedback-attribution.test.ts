@@ -39,7 +39,7 @@ describe('Authoritative feedback attribution and independent evidence', () => {
   });
   it('refuses changed event reuse and leaves its original evidence intact', () => {
     const miner = new FeedbackMiner();
-    const rule = miner.ingestDesignFeedback(event())[0];
+    const rule = miner.ingestDesignFeedback(event({verdict:'rating',rating:6}))[0];
     expect(() => miner.ingestDesignFeedback(event({ verdict: 'reject' }))).toThrow(/conflict|reuse/i);
     expect(rule.frequency).toBe(1);
     expect(miner.isTaskRejected('task-a')).toBe(false);
@@ -52,15 +52,16 @@ describe('Authoritative feedback attribution and independent evidence', () => {
   });
   it('does not use an unrelated approved design as support for a rule', () => {
     const miner = new FeedbackMiner();
-    const rule = miner.ingestDesignFeedback(event())[0];
+    const target={kind:'studio_candidate' as const,runId:'run',candidateId:'candidate',previewSha256:'a'.repeat(64)};
+    const rule = miner.ingestDesignFeedback(event({verdict:'rating',rating:6,target}))[0];
     miner.ingestDesignFeedback(event({ id: 'feedback-2', taskId: 'task-b', verdict: 'approve', notes: null }));
     expect(rule.examples.positiveExampleTaskIds).toEqual([]);
-    miner.ingestDesignFeedback(event({ id: 'feedback-3', verdict: 'approve', notes: null }));
+    miner.ingestDesignFeedback(event({ id: 'feedback-3', verdict: 'approve', notes: null,target }));
     expect(rule.examples.positiveExampleTaskIds).toEqual(['task-a']);
   });
   it('keeps rejection effects within the stated client', () => {
     const miner = new FeedbackMiner();
-    const a = miner.ingestDesignFeedback(event({ verdict: 'approve' }))[0];
+    const a = miner.ingestDesignFeedback(event({ verdict: 'approve',target:{kind:'studio_candidate',runId:'run',candidateId:'candidate',previewSha256:'a'.repeat(64)} }))[0];
     miner.ingestDesignFeedback(event({ id: 'feedback-2', clientId: 'client-b', verdict: 'reject' }));
     expect(a.examples.positiveExampleTaskIds).toEqual(['task-a']);
     expect(a.examples.negativeExampleTaskIds).toEqual([]);

@@ -66,3 +66,67 @@ export function promoteCandidateRule(
     },
   };
 }
+
+/** An immutable design identity, or an explicitly task-wide rejection. */
+export type LearningDesignTarget =
+  | {kind:'studio_candidate';runId:string;candidateId:string;previewSha256:string}
+  | {kind:'design_revision';revisionId:string;sourceSha256:string}
+  | {kind:'task'};
+export interface LearningExampleReceipt {
+  feedbackId:string;clientId:string;taskId:string;target:LearningDesignTarget;
+  verdict:'approve'|'reject'|'revise'|'rating'|'corrected';rating?:number|null;
+  actor:{id:string;role?:string};recordedAt:string;
+  basis:'studio_review'|'revision_decision'|'revision_rejection'|'approved_refinement'|'task_rejection'|'unresolved_legacy';
+  approval?:{id:string;actorId:string};notes?:string|null;
+}
+const learningId=(value:unknown)=>typeof value==='string' && value.trim().length>0 && value.trim()===value;
+export function learningTargetKey(target:LearningDesignTarget):string {
+  if(!target || typeof target!=='object') throw new Error('Learning target is missing');
+  if(target.kind==='task') return 'task';
+  if(target.kind==='studio_candidate' && learningId(target.runId) && learningId(target.candidateId) && /^[a-f0-9]{64}$/i.test(target.previewSha256)) {
+    return JSON.stringify([target.kind,target.runId,target.candidateId,target.previewSha256.toLowerCase()]);
+  }
+  if(target.kind==='design_revision' && learningId(target.revisionId) && /^[a-f0-9]{64}$/i.test(target.sourceSha256)) {
+    return JSON.stringify([target.kind,target.revisionId,target.sourceSha256.toLowerCase()]);
+  }
+  throw new Error('Learning target identity/hash is invalid');
+}
+export function learningReceiptKey(receipt:LearningExampleReceipt):string {
+  const targetKey=learningTargetKey(receipt.target);
+  if(![receipt.clientId,receipt.taskId,receipt.feedbackId,receipt.actor?.id].every(learningId) ||
+    !Number.isFinite(Date.parse(receipt.recordedAt)) ||
+    !['approve','reject','revise','rating','corrected'].includes(receipt.verdict) ||
+    !['studio_review','revision_decision','revision_rejection','approved_refinement','task_rejection','unresolved_legacy'].includes(receipt.basis) ||
+    (receipt.approval!==undefined && (![receipt.approval?.id,receipt.approval?.actorId].every(learningId))) ||
+    (receipt.verdict==='approve' && ['approved_refinement','revision_decision'].includes(receipt.basis) && !receipt.approval) ||
+    (receipt.target.kind==='task' && !['reject','revise'].includes(receipt.verdict)) ||
+    (receipt.rating!=null && (!Number.isInteger(receipt.rating) || receipt.rating<1 || receipt.rating>10))) {
+    throw new Error('Learning receipt identity/authority is invalid');
+  }
+  return JSON.stringify([receipt.clientId,receipt.taskId,receipt.feedbackId,targetKey]);
+}
+export function mergeLearningReceipts(...groups:readonly LearningExampleReceipt[][]):LearningExampleReceipt[] {
+  const receipts=new Map<string,LearningExampleReceipt>();
+  const fingerprint=(r:LearningExampleReceipt)=>JSON.stringify([r.verdict,r.rating??null,r.actor.id,r.actor.role??null,
+    r.recordedAt,r.basis,r.approval?.id??null,r.approval?.actorId??null,r.notes??null]);
+  for(const group of groups) for(const receipt of group) {
+    const key=learningReceiptKey(receipt),previous=receipts.get(key);
+    if(previous && fingerprint(previous)!==fingerprint(receipt)) throw new Error('Learning receipt reuse conflict');
+    receipts.set(key,structuredClone(receipt));
+  }
+  return [...receipts.values()];
+}
+/** Approval of another target is not support; any contradiction on the exact target holds it. */
+export function resolveLearningExamples(clientId:string,receipts:readonly LearningExampleReceipt[]) {
+  if(receipts.some(r=>r.clientId!==clientId)) throw new Error('Learning example client scope conflict');
+  const admitted=mergeLearningReceipts([...receipts]);
+  const key=(r:LearningExampleReceipt)=>JSON.stringify([r.taskId,learningTargetKey(r.target)]);
+  const negativeExamples=admitted.filter(r=>['reject','revise','corrected'].includes(r.verdict) || (r.rating!=null && r.rating<=4));
+  const rejected=new Set(negativeExamples.map(key));
+  const taskHolds=new Set(negativeExamples.filter(r=>r.target.kind==='task').map(r=>r.taskId));
+  const positiveExamples=admitted.filter(r=>r.verdict==='approve' && r.target.kind!=='task' &&
+    !rejected.has(key(r)) && !taskHolds.has(r.taskId) && ['studio_review','approved_refinement','revision_decision'].includes(r.basis));
+  return {receipts:admitted,positiveExamples,negativeExamples,
+    positiveExampleTaskIds:[...new Set(positiveExamples.map(r=>r.taskId))],
+    negativeExampleTaskIds:[...new Set(negativeExamples.map(r=>r.taskId))]};
+}

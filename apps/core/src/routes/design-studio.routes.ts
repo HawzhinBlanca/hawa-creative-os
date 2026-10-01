@@ -423,7 +423,10 @@ export function registerDesignStudioRoutes(
           return ctx.problem(c, 409, 'Candidate Not Ready', 'No rendered candidate is available to review. Wait for a preview or recover the failed design first.');
         }
 
-        if (body.previewSha256 && body.previewSha256 !== candidate?.preview_sha256) {
+        if (!isSha256Hex(body.previewSha256)) {
+          return ctx.problem(c,422,'Reviewed Preview Required','Inspect the preview and submit its saved hash.');
+        }
+        if (body.previewSha256 !== candidate?.preview_sha256) {
           return ctx.problem(c,409,'Preview Changed','The candidate preview changed. Inspect the current preview before submitting new feedback.');
         }
         if (!candidate?.client_id || candidate.run_client_id !== candidate.client_id) {

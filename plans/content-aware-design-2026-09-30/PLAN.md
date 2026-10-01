@@ -362,3 +362,26 @@ unchanged through subsequent evidence-only sealing. Source not deployed, no paid
 provider calls. Fresh04:22 UTC readback confirms all three owner infrastructure
 repairs remain live on2c4d61ec. Revision polarity/calibrated taste/native/Canva/human/
 whole-product admission remains open.
+
+
+## W6 exact reviewed-target learning — 1 October 2026, ADR195
+
+Candidate/run/picture and revision/source receipts separate rejected originals from
+corrected approved versions. Ratings and unrelated approvals are not positive support.
+New Studio writes require inspected picture hashes; exact legacy retries preserve
+unknown targets. Optional revision rejection resolves stored same-task sources under
+RLS; omitted revision keeps explicit task-wide behavior. Native decisions verify actual
+approval/revision/actor and source-bound passing QC. Migration077 protects their source
+events without editing076 or broadening worker function grants. Original collector and
+approver remain distinct. Desk exposes distinct targets and actual receipts, labels
+scores heuristic, and refuses malformed/foreign evidence.
+
+Initial6 domain failures, SQL102pass/18fail and500-hold response timeout122pass/1fail
+are retained. Scoped receipt indexing and one original task-hold representative per
+basis avoid redundant fan-out while preserving every original source in PostgreSQL.
+Final19files/169pass,667 strict roots, source/Desk build and lint pass. Real Core crash,
+replay, target contradiction, corrected approval, native/hash/refusal, source immutability
+and role/foreign-task checks included. Synthetic pictures/exports, zero provider calls.
+Exact source gate pending; not deployed. Search/inline cache consumers, true held-out
+taste calibration, broader W5 and native/Canva/human/product admission remain open.
+Evidence: W6_TARGET_BOUND_LEARNING_PROOF.json.

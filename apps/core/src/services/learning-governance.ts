@@ -27,7 +27,7 @@ export async function recordLearningRejection(db: Kysely<Database>, auth: AuthCo
                 requestHash?: unknown;
                 actorRole?: string;
             };
-            if (target.kind !== 'task_rejection_v1' || target.requestHash !== requestHash || previous.client_id !== clientId ||
+            if (target.kind !== (input.revisionId?'revision_rejection_v1':'task_rejection_v1') || target.requestHash !== requestHash || previous.client_id !== clientId ||
                 previous.task_id !== task.id || previous.actor_id !== auth.userId)
                 throw new CanvaFlowError(409, 'Feedback Action Conflict', 'This action already records different feedback.');
             return {
@@ -35,10 +35,18 @@ export async function recordLearningRejection(db: Kysely<Database>, auth: AuthCo
                 feedbackText: previous.comment!, recordedAt: previous.created_at.toISOString(), replayed: true
             };
         }
+        let designTarget:Record<string,string>|undefined;
+        if(input.revisionId) {
+          const revision=await trx.selectFrom('design_revisions').select(['id','source_sha256'])
+            .where('tenant_id','=',auth.tenantId!).where('task_id','=',task.id).where('id','=',input.revisionId).forShare().executeTakeFirst();
+          if(!revision || !/^[a-f0-9]{64}$/i.test(revision.source_sha256))
+            throw new CanvaFlowError(409,'Feedback Revision Conflict','No verified revision belongs to this task.');
+          designTarget={kind:'design_revision',revisionId:revision.id,sourceSha256:revision.source_sha256};
+        }
         const saved = await new FeedbackRepository(trx).recordFeedback({
             id: actionId, tenantId: auth.tenantId!, clientId, taskId: task.id,
             projectId: task.project_id, category: 'design_rejection', scope: 'one_time', explicitness: 'direct_instruction', actorId: auth.userId,
-            target: { kind: 'task_rejection_v1', requestHash, actorRole: auth.role }, comment: input.feedbackText, confidence: null
+            target: { kind: designTarget?'revision_rejection_v1':'task_rejection_v1', requestHash, actorRole: auth.role,...(designTarget?{designTarget}:{}) }, comment: input.feedbackText, confidence: null
         }, trx);
         return {
             feedbackId: saved.id, taskId: task.id, clientId, actorId: auth.userId!, actorRole: auth.role,

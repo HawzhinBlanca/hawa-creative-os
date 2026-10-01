@@ -456,6 +456,7 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
           runId,
           candidateId,
           verdict: 'approve',
+          previewSha256:fakeSha,
           rating: 9,
           notes: 'Excellent hierarchy and color harmony with deep navy',
           source: 'desk',
@@ -485,7 +486,7 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       await sql`INSERT INTO hawa.design_studio_candidates(id,run_id,tenant_id,ordinal,concept,status,preview_png,preview_sha256)
         VALUES(${otherCandidate}::uuid,${otherRun}::uuid,${tenantId}::uuid,0,'{}','draft',${fakePng},${fakeSha})`.execute(db);
       const key = randomUUID();
-      const payload = {runId:otherRun,candidateId:otherCandidate,clientId,verdict:'revise',notes:'Increase heading spacing for this client'};
+      const payload = {runId:otherRun,candidateId:otherCandidate,clientId,previewSha256:fakeSha,verdict:'revise',notes:'Increase heading spacing for this client'};
       const response = await app.request(`/v1/tasks/${otherTask}/design-feedback`, {method:'POST',
         headers:{...headers,'Idempotency-Key':key,'x-user-role':'designer'},body:JSON.stringify(payload)});
       expect(response.status).toBe(201);
@@ -507,13 +508,25 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
         DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION hawa.test_feedback_commit_failure()`).execute(db);
       try {
         const response = await app.request(`/v1/tasks/${taskId}/design-feedback`, {method:'POST',
-          headers:{...headers,'Idempotency-Key':key},body:JSON.stringify({runId,candidateId,verdict:'revise',notes:'Spacing adjustment after review'})});
+          headers:{...headers,'Idempotency-Key':key},body:JSON.stringify({runId,candidateId,previewSha256:fakeSha,verdict:'revise',notes:'Spacing adjustment after review'})});
         expect(response.status).toBe(500);
         expect((await sql`SELECT id FROM hawa.design_feedback WHERE id=${key}::uuid`.execute(db)).rows).toHaveLength(0);
         expect(globalFeedbackMiner.getCandidateRules(clientId).some(rule=>rule.provenance.feedbackId===key)).toBe(false);
       } finally {
         await sql.raw('DROP FUNCTION hawa.test_feedback_commit_failure() CASCADE').execute(db);
       }
+    });
+
+    it('requires the inspected hash for new feedback without upgrading an exact legacy replay',async()=>{
+      const key=randomUUID(),payload={runId,candidateId,verdict:'approve',notes:'Legacy recorded feedback'};
+      const post=()=>app.request(`/v1/tasks/${taskId}/design-feedback`,{method:'POST',headers:{...headers,'Idempotency-Key':key},body:JSON.stringify(payload)});
+      expect((await post()).status).toBe(422);
+      await sql`INSERT INTO hawa.design_feedback(id,tenant_id,task_id,run_id,candidate_id,actor_id,source,verdict,notes)
+        VALUES(${key}::uuid,${tenantId}::uuid,${taskId}::uuid,${runId}::uuid,${candidateId}::uuid,${actorId},'desk','approve',${payload.notes})`.execute(db);
+      expect((await post()).status).toBe(200);
+      const rule=globalFeedbackMiner.getCandidateRules(clientId).find(r=>r.provenance.feedbackId===key)!;
+      expect(rule.examples.positiveExampleTaskIds).toEqual([]);
+      expect((await sql<{preview_sha256:string|null}>`SELECT preview_sha256 FROM hawa.design_feedback WHERE id=${key}::uuid`.execute(db)).rows[0].preview_sha256).toBeNull();
     });
 
     it('replays feedback once and refuses action reuse or a changed reviewed preview', async () => {

@@ -85,6 +85,21 @@ describe('Learning recovery across independent Core processes',()=>{
     let list=await send(`/clients/${clientId}/candidate-rules`);
     expect((await list.json()).candidateRules).toContainEqual(original);
     expect((await mine()).status).toBe(200);
+    const beforeKey=randomUUID(),beforeRejection={taskId:pair.taskId,revisionId:pair.beforeRevisionId,feedbackText:'Reject only the earlier revision'};
+    const rejectRevision=(body:unknown,key=beforeKey)=>send(`/clients/${clientId}/negative-feedback`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify(body)});
+    expect((await rejectRevision(beforeRejection)).status).toBe(201);
+    expect((await rejectRevision({...beforeRejection,revisionId:pair.afterRevisionId})).status).toBe(409);
+    expect((await rejectRevision({...beforeRejection,revisionId:randomUUID()},randomUUID())).status).toBe(409);
+    await stop('SIGKILL');send=await start();
+    expect((await rejectRevision(beforeRejection)).status).toBe(200);
+    list=await send(`/clients/${clientId}/candidate-rules`);
+    const corrected=(await list.json()).candidateRules.find((r:{id:string})=>r.id===original.id);
+    expect(corrected.examples.positiveExampleTaskIds).toContain(pair.taskId);
+    expect(corrected.examples.positiveExamples).toContainEqual(expect.objectContaining({target:expect.objectContaining({kind:'design_revision',revisionId:pair.afterRevisionId}),basis:'revision_decision'}));
+    expect(corrected.examples.negativeExamples).toContainEqual(expect.objectContaining({feedbackId:beforeKey,target:expect.objectContaining({revisionId:pair.beforeRevisionId})}));
+    const decisions=(await sql<{id:string}>`SELECT id FROM hawa.feedback_events WHERE task_id=${pair.taskId}::uuid AND category='decision.approved'`.execute(owner)).rows;
+    expect(decisions).toHaveLength(1);
+    await expect(sql`UPDATE hawa.feedback_events SET comment='changed approval' WHERE id=${decisions[0].id}::uuid`.execute(owner)).rejects.toMatchObject({code:'55000'});
     const rejection=await send(`/clients/${clientId}/negative-feedback`,{method:'POST',headers:{'Idempotency-Key':randomUUID()},
       body:JSON.stringify({taskId:pair.taskId,feedbackText:'Reject this reviewed result for current use'})});expect(rejection.status).toBe(201);
     await stop('SIGKILL');send=await start();list=await send(`/clients/${clientId}/candidate-rules`);
@@ -92,6 +107,36 @@ describe('Learning recovery across independent Core processes',()=>{
     expect(recovered.frequency).toBe(1);expect(recovered.examples.negativeExampleTaskIds).toContain(pair.taskId);
     expect(recovered.examples.positiveExampleTaskIds).not.toContain(pair.taskId);
     expect(recovered.refinementEvidence[0].actor).toMatchObject({id:actorId,role:'art_director'});
+    await stop();
+  },30000);
+  it('preserves independent Studio targets and rating observations across a real crash',async()=>{
+    const task=randomUUID(),run=randomUUID(),candidateA=randomUUID(),candidateB=randomUUID();
+    const bytes=Buffer.from('isolated polarity picture'),sha=createHash('sha256').update(bytes).digest('hex');
+    await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES(${task}::uuid,${tenantId}::uuid,${clientId}::uuid,'Polarity source')`.execute(owner);
+    await sql`INSERT INTO hawa.design_studio_runs(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,tier,status,budget,stages)
+      VALUES(${run}::uuid,${tenantId}::uuid,${task}::uuid,${clientId}::uuid,${actorId}::uuid,${randomUUID()},'hash','{}','standard','briefing','{"maxUsd":6,"maxCalls":40,"spentUsd":0,"calls":0}','{}')`.execute(owner);
+    for(const [ordinal,id] of [candidateA,candidateB].entries()) await sql`INSERT INTO hawa.design_studio_candidates(id,run_id,tenant_id,ordinal,concept,status,preview_png,preview_sha256)
+      VALUES(${id}::uuid,${run}::uuid,${tenantId}::uuid,${ordinal},'{}','draft',${bytes},${sha})`.execute(owner);
+    let send=await start();
+    const rating=randomUUID(),rejected=randomUUID(),accepted=randomUUID();
+    const review=(candidateId:string,verdict:string,key:string,notes:string|null,ratingValue?:number)=>send(`/tasks/${task}/design-feedback`,{
+      method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({runId:run,candidateId,previewSha256:sha,verdict,notes:notes??undefined,...(ratingValue?{rating:ratingValue}:{})})});
+    expect((await review(candidateA,'rating',rating,'Deliberate hierarchy for candidate A',9)).status).toBe(201);
+    expect((await review(candidateA,'reject',rejected,null)).status).toBe(201);
+    expect((await review(candidateB,'approve',accepted,'Deliberate hierarchy for candidate B')).status).toBe(201);
+    await stop('SIGKILL');send=await start();
+    const response=await send(`/clients/${clientId}/candidate-rules`);expect(response.status).toBe(200);
+    const rules=(await response.json()).candidateRules;
+    const a=rules.find((r:{provenance:{feedbackId:string}})=>r.provenance.feedbackId===rating);
+    const b=rules.find((r:{provenance:{feedbackId:string}})=>r.provenance.feedbackId===accepted);
+    expect(a.examples.positiveExamples).toEqual([]);
+    expect(a.examples.negativeExamples).toContainEqual(expect.objectContaining({feedbackId:rejected,target:expect.objectContaining({candidateId:candidateA})}));
+    expect(b.examples.positiveExamples).toContainEqual(expect.objectContaining({feedbackId:accepted,target:expect.objectContaining({candidateId:candidateB})}));
+    expect(b.examples.negativeExamples).toEqual([]);
+    expect((await review(candidateB,'approve',accepted,'Deliberate hierarchy for candidate B')).status).toBe(200);
+    expect((await review(candidateA,'approve',randomUUID(),null)).status).toBe(201);
+    const later=await send(`/clients/${clientId}/candidate-rules`);
+    expect((await later.json()).candidateRules.find((r:{id:string})=>r.id===a.id).examples.positiveExamples).toEqual([]);
     await stop();
   },30000);
   it('retains Studio reviewer attribution, source immutability and legacy unknown roles',async()=>{

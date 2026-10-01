@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { extractPaletteFromFile, type ExtractedPalette } from '../services/paletteExtractor.js';
 import { apiClient } from '../api/client.js';
+import {LearningEvidencePanel,learningEvidenceFromCore,type LearningEvidence} from '../components/LearningEvidencePanel.js';
 import { DocumentInspectionPanel } from '../components/DocumentInspectionPanel.js';
 import { read, reasonOf } from '../services/statusReport.js';
 
@@ -116,6 +117,7 @@ export interface CandidateRule {
   evidenceTasks: number | null;
   status: 'proposed' | 'promoted' | 'dismissed';
   rationale: string;
+  examples?:LearningEvidence|null;
 }
 
 const numberOrNull = (value: unknown): number | null =>
@@ -135,6 +137,7 @@ export function candidateRuleFromCore(rule: any): CandidateRule {
     evidenceTasks: Array.isArray(rule?.evidenceTaskIds) ? rule.evidenceTaskIds.length : null,
     status: status === 'promoted' ? 'promoted' : status === 'dismissed' ? 'dismissed' : 'proposed',
     rationale: String(rule?.rationale ?? ''),
+    ...(rule?.examples?{examples:learningEvidenceFromCore(String(rule?.clientId ?? ''),rule.examples.receipts)}:{}),
   };
 }
 
@@ -1565,7 +1568,7 @@ const DnaClientScreen: React.FC<{
                         color: rule.status === 'promoted' ? '#ffffff' : 'var(--accent-text, #0369a1)',
                       }}
                     >
-                      {rule.status === 'promoted' ? '✓ PROMOTED' : rule.confidence === null ? 'confidence not reported' : `${Math.round(rule.confidence * 100)}% CONFIDENCE`}
+                      {rule.status === 'promoted' ? '✓ PROMOTED' : rule.confidence === null ? 'heuristic score not reported' : `Heuristic score: ${rule.confidence.toFixed(2)}`}
                     </span>
                   </div>
                   <p style={{ margin: '4px 0', fontSize: 11, color: rule.status === 'promoted' ? '#166534' : 'var(--muted)' }}>
@@ -1578,6 +1581,7 @@ const DnaClientScreen: React.FC<{
                     <span>Evidence tasks: <b>{rule.evidenceTasks ?? '—'}</b></span>
                   </div>
 
+                  <LearningEvidencePanel evidence={rule.examples}/>
                   {rule.status !== 'promoted' && (
                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                       <button

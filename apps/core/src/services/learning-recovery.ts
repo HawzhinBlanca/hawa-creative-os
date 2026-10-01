@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
-import {canonicalJson,type ClientDNA} from '@hawa/domain';
+import {canonicalJson,type ClientDNA,type LearningDesignTarget,learningTargetKey} from '@hawa/domain';
 import {FeedbackRepository,sql,withRlsContext,type Database,type Kysely} from '@hawa/db';
 import {FeedbackMiner,globalFeedbackMiner,type ArtboardSnapshot,type ApprovedRefinementEvidence,
   type CandidateRuleProposal,type DesignFeedbackRecord} from '@hawa/creative';
@@ -68,9 +68,23 @@ export async function reconstructClientLearning(trx:Kysely<Database>,tenantId:st
   // One MVCC statement keeps the source, moderation and DNA views mutually consistent.
   const bundle=(await sql<{sources:SourceRow[];audits:{resource_id:string;data:{proposal:unknown;ruleRevision?:number}}[];dna:ClientDNA|null}>`
     WITH sources AS (
-      SELECT 'ledger'::text AS kind,f.id,f.created_at,to_jsonb(f) AS data FROM hawa.feedback_events f
+      SELECT 'ledger'::text AS kind,f.id,f.created_at,to_jsonb(f) || jsonb_build_object('verifiedDecision',
+        CASE WHEN a.id IS NOT NULL AND a.task_id=f.task_id AND a.decided_by=f.actor_id
+          AND a.design_revision_id::text=f.target->>'revisionId' AND a.decision::text=f.target->>'decision'
+          AND r.task_id=f.task_id AND t.client_id=f.client_id
+          AND (f.category='decision.' || a.decision::text OR (f.category LIKE 'rejection.%' AND a.decision='rejected'))
+          AND (a.decision<>'approved' OR (q.status='passed' AND q.critical_pass
+            AND a.decision_payload->>'sourceHash'=r.source_sha256
+            AND q.report_sha256 IS NOT NULL AND a.decision_payload->>'qcReportHash'=q.report_sha256))
+          THEN jsonb_build_object('revisionId',r.id,'sourceSha256',r.source_sha256,'approvalId',a.id,'actorId',a.decided_by,'decision',a.decision)
+          ELSE NULL END) AS data FROM hawa.feedback_events f
+        LEFT JOIN hawa.approvals a ON a.tenant_id=f.tenant_id AND a.id::text=f.target->>'approvalId'
+        LEFT JOIN hawa.design_revisions r ON r.tenant_id=f.tenant_id AND r.id=a.design_revision_id
+        LEFT JOIN hawa.tasks t ON t.tenant_id=f.tenant_id AND t.id=f.task_id
+        LEFT JOIN hawa.qc_runs q ON q.tenant_id=f.tenant_id AND q.id=a.qc_run_id AND q.design_revision_id=r.id
         WHERE f.tenant_id=${tenantId}::uuid AND f.client_id=${clientId}::uuid
-          AND f.category IN ('design_refinement','design_rejection','client_rule_instruction')
+          AND (f.category IN ('design_refinement','design_rejection','client_rule_instruction')
+            OR f.category LIKE 'decision.%' OR f.category LIKE 'rejection.%')
       UNION ALL
       SELECT 'studio'::text AS kind,f.id,f.created_at,to_jsonb(f) AS data FROM hawa.design_feedback f
         JOIN hawa.tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id
@@ -97,11 +111,30 @@ export async function reconstructClientLearning(trx:Kysely<Database>,tenantId:st
         runId:row.run_id as string|null,candidateId:row.candidate_id as string|null,actorId:String(row.actor_id),
         ...(typeof row.actor_role==='string'?{actorRole:row.actor_role}:{}),source:row.source as DesignFeedbackRecord['source'],
         verdict:row.verdict as DesignFeedbackRecord['verdict'],rating:row.rating===null?null:Number(row.rating),
-        notes:row.notes as string|null,createdAt});
+        notes:row.notes as string|null,createdAt,
+        ...(typeof row.run_id==='string' && typeof row.candidate_id==='string' && hex.safeParse(row.preview_sha256).success ? {
+          target:{kind:'studio_candidate' as const,runId:row.run_id,candidateId:row.candidate_id,previewSha256:String(row.preview_sha256)},basis:'studio_review' as const,
+        }:{})});
       continue;
     }
-    const target=row.target as {kind?:unknown;input?:unknown;requestHash?:unknown;actorRole?:string;refinementEvidence?:ApprovedRefinementEvidence};
+    const target=row.target as {kind?:unknown;input?:unknown;requestHash?:unknown;actorRole?:string;refinementEvidence?:ApprovedRefinementEvidence;designTarget?:LearningDesignTarget;sourceSha256?:string};
     if(row.client_id!==clientId || !row.actor_id) throw new Error('Learning ledger scope/actor is missing');
+    if(String(row.category).startsWith('decision.') || String(row.category).startsWith('rejection.')) {
+      const proof=row.verifiedDecision as {revisionId:string;sourceSha256:string;approvalId:string;actorId:string;decision:string}|null;
+      if(!proof) {
+        if(target?.kind==='revision_decision_v1') throw new Error('Recorded revision decision authority is inconsistent');
+        excludedLegacySourceIds.push(source.id);continue;
+      }
+      if(target?.kind && target.kind!=='revision_decision_v1') throw new Error('Stored revision decision format is unsupported');
+      if(target?.kind==='revision_decision_v1' && !hex.safeParse(target.sourceSha256).success) throw new Error('Recorded revision decision source hash is missing');
+      if(target?.sourceSha256 && target.sourceSha256!==proof.sourceSha256) throw new Error('Revision decision hash conflict');
+      const verdict=proof.decision==='approved'?'approve':proof.decision==='rejected'?'reject':'revise';
+      miner.observeLearningReceipt({feedbackId:source.id,clientId,taskId:String(row.task_id),
+        target:{kind:'design_revision',revisionId:proof.revisionId,sourceSha256:proof.sourceSha256},
+        verdict,actor:{id:proof.actorId},recordedAt:createdAt,basis:'revision_decision',
+        ...(verdict==='approve'?{approval:{id:proof.approvalId,actorId:proof.actorId}}:{})});
+      continue;
+    }
     if(!target || target.kind===undefined) {excludedLegacySourceIds.push(source.id);continue;}
     if(target.kind==='client_rule_instruction_v1') {
       const input=explicitLearningInstruction.parse(target.input);
@@ -114,9 +147,13 @@ export async function reconstructClientLearning(trx:Kysely<Database>,tenantId:st
         evidence.actor.id!==row.actor_id) throw new Error('Recorded refinement source scope conflict');
       miner.ingestTaskRefinements(clientId,String(row.task_id),row.original_value as ArtboardSnapshot,
         row.corrected_value as ArtboardSnapshot,evidence,createdAt);
-    } else if(target.kind==='task_rejection_v1') {
+    } else if(target.kind==='task_rejection_v1' || target.kind==='revision_rejection_v1') {
+      const designTarget=target.kind==='task_rejection_v1'?{kind:'task' as const}:target.designTarget;
+      if(!designTarget || (target.kind==='revision_rejection_v1' && designTarget.kind!=='design_revision')) throw new Error('Recorded revision rejection target is missing');
+      learningTargetKey(designTarget);
       miner.ingestDesignFeedback({id:source.id,tenantId,clientId,taskId:String(row.task_id),actorId:String(row.actor_id),
-        actorRole:target.actorRole,source:'desk',verdict:'reject',notes:row.comment as string,createdAt});
+        actorRole:target.actorRole,source:'desk',verdict:'reject',notes:row.comment as string,createdAt,target:designTarget,
+        basis:designTarget.kind==='task'?'task_rejection':'revision_rejection'});
     } else if(target.kind===undefined) excludedLegacySourceIds.push(source.id);
     else throw new Error('Stored learning source is unsupported; no evidence was invented');
   }
