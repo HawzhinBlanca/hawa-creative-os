@@ -229,10 +229,12 @@ another host".
 ## Sorani Kurdish drafts
 
 Automatic drafts set English and Sorani Kurdish copy (ADR-028). Kurdish blocks are set right-to-left in
-the script typeface declared in `packages/creative/assets/kaae-reference.json` (`rules.scriptFonts.arabic`,
-currently the provisional `Noto Sans Arabic`; Canva has it and keeps it on export). When the client's
-Kurdish typeface is confirmed, change that one field and delete `scriptFontNote`; requesters stop seeing
-the provisional note automatically. QA evidence on the exported PPTX: `copyPass` (exact copy), `fontPass`
+the script typeface declared in `packages/creative/assets/kaae-reference.json` (`rules.scriptFonts.arabic`).
+KAAE's Brand Guidelines, Excellence Edition (KAAE_Guidelines4.pdf, 2025, p.10) set Sorani in a sans:
+body in `Noto Sans Arabic`, titles in `IBM Plex Sans Arabic` or `Noto Sans Arabic`, right-aligned, in
+KAAE Blue (#4770A3) for titles and leads and Midnight (#0A1628) for body text (ADR-238). Canva has both
+faces and keeps them on export. English is set in `Crimson Pro` Bold titles, `Inter` Italic leads and
+`Inter` body. QA evidence on the exported PPTX: `copyPass` (exact copy), `fontPass`
 (brand font on Latin objects, script typeface on Arabic objects), `rtlNote` (Canva exports omit the
 paragraph direction flag; direction is checked visually). Any other script or emoji is refused before a
 paid call with `COPY_UNSUPPORTED` and saved for manual design.

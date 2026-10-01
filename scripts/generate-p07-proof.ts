@@ -24,12 +24,12 @@ async function main() {
   const layout1: StudioLayoutV2 = JSON.parse(fs.readFileSync(layout1Path, 'utf8'));
   const layout4: StudioLayoutV2 = JSON.parse(fs.readFileSync(layout4Path, 'utf8'));
 
-  // Ensure fonts resolve to bundled font family (e.g. Playfair Display if Lora was specified)
+  // Ensure fonts resolve to bundled font family (e.g. Crimson Pro if Lora was specified)
   for (const item of layout1.text) {
-    if (item.fontFamily === 'Lora') item.fontFamily = 'Playfair Display';
+    if (item.fontFamily === 'Lora') item.fontFamily = 'Crimson Pro';
   }
   for (const item of layout4.text) {
-    if (item.fontFamily === 'Lora') item.fontFamily = 'Playfair Display';
+    if (item.fontFamily === 'Lora') item.fontFamily = 'Crimson Pro';
   }
 
   // 2. First verify Single-Survivor Bypass:

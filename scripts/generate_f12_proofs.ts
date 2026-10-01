@@ -43,7 +43,7 @@ async function main() {
         width: 908,
         height: 60,
         fontSize: 28,
-        fontFamily: 'Cinzel',
+        fontFamily: 'Crimson Pro',
         color: '#F7B500',
         align: 'left',
         bold: true,
@@ -55,7 +55,7 @@ async function main() {
         width: 908,
         height: 44,
         fontSize: 20,
-        fontFamily: 'Cinzel',
+        fontFamily: 'Crimson Pro',
         color: '#FFFFFF',
         align: 'left',
       },
@@ -66,7 +66,7 @@ async function main() {
         width: 908,
         height: 280,
         fontSize: 22,
-        fontFamily: 'Verdana', // Mandated English body for formal documents
+        fontFamily: 'Inter', // Mandated English body for formal documents
         color: '#E0E8F0',
         align: 'left',
       },
@@ -89,7 +89,7 @@ async function main() {
         width: 908,
         height: 40,
         fontSize: 14,
-        fontFamily: 'Verdana',
+        fontFamily: 'Inter',
         color: '#8CA0B8',
         align: 'center',
       },
@@ -97,10 +97,10 @@ async function main() {
   };
 
   const { bytes: formalBytes } = await encodeEditableTransfer(formalPlan, formalCopy, undefined, {
-    extraFonts: ['Noto Sans Arabic', 'Cinzel'],
+    extraFonts: ['Noto Sans Arabic', 'Crimson Pro'],
   });
 
-  const formalCheck = checkCanvaPptx(formalBytes, formalCopy, 'Verdana', {
+  const formalCheck = checkCanvaPptx(formalBytes, formalCopy, 'Inter', {
     documentKind: 'formal_document',
     roles: ['title', 'subtitle', 'body', 'body', 'disclaimer'],
     scriptFonts: { arabic: 'Noto Sans Arabic' },
@@ -120,7 +120,7 @@ async function main() {
   const formalCheckJsonPath = path.join(PROOF_DIR, 'f12-formal-doc-check.json');
   fs.writeFileSync(formalCheckJsonPath, JSON.stringify(formalCheck, null, 2));
 
-  // 2. Invitation Draft (design_piece) with Canva-native Display Fonts (Playfair Display & Cinzel)
+  // 2. Invitation Draft (design_piece) with Canva-native Display Fonts (Inter & Crimson Pro)
   console.log('\n2. Exporting Invitation Draft (documentKind: design_piece)...');
   const invitationCopy = [
     'ANNUAL MINISTERIAL SUMMIT',
@@ -146,7 +146,7 @@ async function main() {
         width: 908,
         height: 50,
         fontSize: 22,
-        fontFamily: 'Cinzel',
+        fontFamily: 'Crimson Pro',
         color: '#F7B500',
         align: 'center',
         bold: true,
@@ -158,7 +158,7 @@ async function main() {
         width: 908,
         height: 160,
         fontSize: 48,
-        fontFamily: 'Playfair Display', // Free choice of Canva-native display font (NOT Verdana)
+        fontFamily: 'Inter', // Free choice of Canva-native display face (the italic lead)
         color: '#FFFFFF',
         align: 'center',
         bold: true,
@@ -170,7 +170,7 @@ async function main() {
         width: 908,
         height: 180,
         fontSize: 24,
-        fontFamily: 'Playfair Display',
+        fontFamily: 'Inter',
         color: '#E0E8F0',
         align: 'center',
       },
@@ -181,7 +181,7 @@ async function main() {
         width: 908,
         height: 80,
         fontSize: 20,
-        fontFamily: 'Cinzel',
+        fontFamily: 'Crimson Pro',
         color: '#F7B500',
         align: 'center',
       },
@@ -192,7 +192,7 @@ async function main() {
         width: 908,
         height: 40,
         fontSize: 14,
-        fontFamily: 'Cinzel',
+        fontFamily: 'Crimson Pro',
         color: '#8CA0B8',
         align: 'center',
       },
@@ -200,10 +200,10 @@ async function main() {
   };
 
   const { bytes: invitationBytes } = await encodeEditableTransfer(invitationPlan, invitationCopy, undefined, {
-    extraFonts: ['Cinzel', 'Playfair Display'],
+    extraFonts: ['Crimson Pro', 'Inter'],
   });
 
-  const invitationCheck = checkCanvaPptx(invitationBytes, invitationCopy, 'Cinzel', {
+  const invitationCheck = checkCanvaPptx(invitationBytes, invitationCopy, 'Crimson Pro', {
     documentKind: 'design_piece',
     roles: ['eyebrow', 'title', 'subtitle', 'date', 'disclaimer'],
   });
@@ -226,24 +226,24 @@ async function main() {
   console.log('\n3. Verifying Two Consecutive Invitation Concepts with Distinct Display Families...');
   const concept1Plan: EditableTransferPlan = {
     ...invitationPlan,
-    text: invitationPlan.text.map((t) => ({ ...t, fontFamily: 'Cinzel' })),
+    text: invitationPlan.text.map((t) => ({ ...t, fontFamily: 'Crimson Pro' })),
   };
   const { bytes: c1Bytes } = await encodeEditableTransfer(concept1Plan, invitationCopy, undefined, {
-    extraFonts: ['Cinzel'],
+    extraFonts: ['Crimson Pro'],
   });
-  const c1Check = checkCanvaPptx(c1Bytes, invitationCopy, 'Cinzel', {
+  const c1Check = checkCanvaPptx(c1Bytes, invitationCopy, 'Crimson Pro', {
     documentKind: 'design_piece',
     roles: ['eyebrow', 'title', 'subtitle', 'date', 'disclaimer'],
   });
 
   const concept2Plan: EditableTransferPlan = {
     ...invitationPlan,
-    text: invitationPlan.text.map((t) => ({ ...t, fontFamily: 'Playfair Display' })),
+    text: invitationPlan.text.map((t) => ({ ...t, fontFamily: 'Inter' })),
   };
   const { bytes: c2Bytes } = await encodeEditableTransfer(concept2Plan, invitationCopy, undefined, {
-    extraFonts: ['Playfair Display'],
+    extraFonts: ['Inter'],
   });
-  const c2Check = checkCanvaPptx(c2Bytes, invitationCopy, 'Playfair Display', {
+  const c2Check = checkCanvaPptx(c2Bytes, invitationCopy, 'Inter', {
     documentKind: 'design_piece',
     roles: ['eyebrow', 'title', 'subtitle', 'date', 'disclaimer'],
   });
@@ -257,7 +257,7 @@ async function main() {
 
   // 4. Fontconfig Resolution Log
   console.log('\n4. Capturing Fontconfig Resolution Log (fc-match)...');
-  const fontsToTest = ['Verdana', 'Noto Sans Arabic', 'Cinzel', 'Playfair Display', 'Cairo', 'Plus Jakarta Sans', 'Vazirmatn', 'Inter'];
+  const fontsToTest = ['Inter', 'Noto Sans Arabic', 'Crimson Pro', 'IBM Plex Sans Arabic', 'Plus Jakarta Sans', 'Vazirmatn'];
   const fcLog: Record<string, string> = {};
   const fontsConf = path.resolve('packages/creative/assets/fonts/fonts.conf');
 
@@ -308,8 +308,8 @@ async function main() {
 **Task:** F12
 **Decision Date:** 2026-09-16 (corrected 13:10)
 **Policy:**
-1. **Formal documents** (letters, certificates, agendas, programmes): English body text is **Verdana**. Kurdish and Arabic body text is **Noto Sans Arabic**.
-2. **General design text** (headlines, titles, display lines, dates, names on invitations, posters, social graphics): Free choice of Canva-native display fonts per concept (Verdana and Noto Sans are NOT imposed on display roles).
+1. **Formal documents** (letters, certificates, agendas, programmes): English body text is **Inter**. Kurdish and Arabic body text is **Noto Sans Arabic**.
+2. **General design text** (headlines, titles, display lines, dates, names on invitations, posters, social graphics): Free choice of Canva-native display fonts per concept (Inter and Noto Sans Arabic are NOT imposed on display roles).
 3. **Total elimination of ${RETIRED_1} & EB ${RETIRED_2}**: Purged from code, prompts, DSL defaults, \`render-fonts.json\`, \`editable-transfer.ts\`, \`transfer-v2.ts\`, font checks, status messages in \`app.ts\`, tests, fixtures, and docs. Private font files and stand-in binaries deleted.
 4. **Intake Classification & Verification**: \`documentKind: 'formal_document' | 'design_piece'\` detected and role-verified in \`checkCanvaPptx\`.
 
@@ -349,14 +349,12 @@ Canva natively supports Google Fonts and standard core font libraries without tr
 
 | Family | Role Suitability | Script Support | Canva Availability | License |
 |---|---|---|---|---|
-| **Verdana** | Formal Body (Latin) | Latin | Universal system font | Proprietary Microsoft / Corefonts |
+| **Inter** | Formal Body and Italic Lead (Latin) | Latin | Google Fonts (Canva native) | SIL OFL 1.1 |
 | **Noto Sans Arabic** | Formal Body (Sorani/Arabic) | Arabic, Sorani | Google Fonts (Canva native) | SIL OFL 1.1 |
-| **Cinzel** | Display / Headlines / Dates | Latin | Google Fonts (Canva native) | SIL OFL 1.1 |
-| **Playfair Display** | Display / Elegant Prose | Latin | Google Fonts (Canva native) | SIL OFL 1.1 |
-| **Cairo** | Display / Bilingual Modern | Arabic, Latin | Google Fonts (Canva native) | SIL OFL 1.1 |
+| **Crimson Pro** | Display / Titles / Stat Numbers | Latin | Google Fonts (Canva native) | SIL OFL 1.1 |
+| **IBM Plex Sans Arabic** | Display (Sorani/Arabic titles) | Arabic, Sorani | Google Fonts (Canva native) | SIL OFL 1.1 |
 | **Plus Jakarta Sans** | Clean Executive / Modern Body | Latin | Google Fonts (Canva native) | SIL OFL 1.1 |
 | **Vazirmatn** | Editorial Kurdish / Arabic | Arabic, Persian, Kurdish | Google Fonts (Canva native) | SIL OFL 1.1 |
-| **Inter** | Screen / Digital Neutral | Latin | Google Fonts (Canva native) | SIL OFL 1.1 |
 
 ---
 
@@ -377,9 +375,9 @@ All requested families resolve directly to exact font binaries without font fall
 ## 5. Formal Document Content-Check JSON
 
 Exported formal document draft (\`documentKind: 'formal_document'\`) with:
-- English body: **Verdana**
+- English body: **Inter**
 - Sorani Kurdish body: **Noto Sans Arabic** (with \`rtl="1"\` and \`lang="ku"\`)
-- Display title and subtitle: **Cinzel**
+- Display title and subtitle: **Crimson Pro**
 
 \`\`\`json
 ${JSON.stringify(formalCheck, null, 2)}
@@ -389,7 +387,7 @@ ${JSON.stringify(formalCheck, null, 2)}
 
 ## 6. Invitation Design Piece Content-Check JSON
 
-Exported invitation draft (\`documentKind: 'design_piece'\`) with admitted non-Verdana display families (\`Playfair Display\` and \`Cinzel\`):
+Exported invitation draft (\`documentKind: 'design_piece'\`) with admitted display families (\`Inter\` and \`Crimson Pro\`):
 
 \`\`\`json
 ${JSON.stringify(invitationCheck, null, 2)}
@@ -402,10 +400,10 @@ ${JSON.stringify(invitationCheck, null, 2)}
 Proof that consecutive invitation concepts generated by the system use different display families when judged acceptable:
 
 - **Concept 1 (Monolithic Roman / Classical)**:
-  - Observed families: \`${JSON.stringify(c1Check.observedFonts)}\` (\`Cinzel\`)
+  - Observed families: \`${JSON.stringify(c1Check.observedFonts)}\` (\`Crimson Pro\`)
   - \`fontPass\`: \`${c1Check.fontPass}\`
-- **Concept 2 (Editorial / High-Elegance Serif)**:
-  - Observed families: \`${JSON.stringify(c2Check.observedFonts)}\` (\`Playfair Display\`)
+- **Concept 2 (Editorial / Italic Sans Lead)**:
+  - Observed families: \`${JSON.stringify(c2Check.observedFonts)}\` (\`Inter\`)
   - \`fontPass\`: \`${c2Check.fontPass}\`
 
 Both concepts pass Canva PPTX inspection with 100% exact copy match and 0 offending font objects.

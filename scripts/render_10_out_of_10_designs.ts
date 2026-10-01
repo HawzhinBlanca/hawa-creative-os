@@ -82,7 +82,7 @@ function generateHorizontalGuilloche(startX: number, endX: number, y: number, am
       const currentY = y + (amplitude + offset * 1.5) * Math.sin((i / steps) * freq * Math.PI * 2 + phase);
       d += (i === 0 ? `M ${x.toFixed(2)} ${currentY.toFixed(2)}` : ` L ${x.toFixed(2)} ${currentY.toFixed(2)}`);
     }
-    paths += `<path d="${d}" fill="none" stroke="#D4A94C" stroke-width="0.8" stroke-opacity="0.6"/>\n`;
+    paths += `<path d="${d}" fill="none" stroke="#F7B500" stroke-width="0.8" stroke-opacity="0.6"/>\n`;
   }
   return paths;
 }
@@ -102,7 +102,7 @@ function generateVerticalGuilloche(startY: number, endY: number, x: number, ampl
       const currentX = x + (amplitude + offset * 1.5) * Math.sin((i / steps) * freq * Math.PI * 2 + phase);
       d += (i === 0 ? `M ${currentX.toFixed(2)} ${y.toFixed(2)}` : ` L ${currentX.toFixed(2)} ${y.toFixed(2)}`);
     }
-    paths += `<path d="${d}" fill="none" stroke="#D4A94C" stroke-width="0.8" stroke-opacity="0.6"/>\n`;
+    paths += `<path d="${d}" fill="none" stroke="#F7B500" stroke-width="0.8" stroke-opacity="0.6"/>\n`;
   }
   return paths;
 }
@@ -129,7 +129,7 @@ const certHtml = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Cinzel:wght@500;600;700;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Crimson+Pro:wght@400;600;700;800;900&display=swap');
   
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -137,7 +137,7 @@ const certHtml = `<!DOCTYPE html>
     height: 2480px;
     overflow: hidden;
     background: #FAF7F2;
-    font-family: 'Cairo', 'Noto Naskh Arabic', sans-serif;
+    font-family: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', sans-serif;
     color: #0A1628;
   }
 
@@ -224,13 +224,13 @@ const certHtml = `<!DOCTYPE html>
   .authority-name-ckb {
     font-size: 36px;
     font-weight: 800;
-    color: #160874;
+    color: #0A1628;
     letter-spacing: -0.5px;
     margin-bottom: 4px;
   }
 
   .authority-name-en {
-    font-family: 'Cinzel', serif;
+    font-family: 'Crimson Pro', serif;
     font-size: 22px;
     font-weight: 700;
     letter-spacing: 6px;
@@ -243,7 +243,7 @@ const certHtml = `<!DOCTYPE html>
   .cert-award-title-ckb {
     font-size: 82px;
     font-weight: 900;
-    background: linear-gradient(135deg, #160874 0%, #35309B 50%, #160874 100%);
+    background: linear-gradient(135deg, #0A1628 0%, #2C5282 50%, #0A1628 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     letter-spacing: -1px;
@@ -253,11 +253,11 @@ const certHtml = `<!DOCTYPE html>
   }
 
   .cert-award-title-en {
-    font-family: 'Cinzel', serif;
+    font-family: 'Crimson Pro', serif;
     font-size: 28px;
     font-weight: 800;
     letter-spacing: 8px;
-    color: #D4A94C;
+    color: #F7B500;
     text-transform: uppercase;
     margin-bottom: 16px;
   }
@@ -272,7 +272,7 @@ const certHtml = `<!DOCTYPE html>
 
   .recipient-card {
     background: rgba(255, 255, 255, 0.9);
-    border: 3px solid #D4A94C;
+    border: 3px solid #F7B500;
     border-radius: 16px;
     padding: 28px 100px 24px;
     box-shadow: 
@@ -288,13 +288,13 @@ const certHtml = `<!DOCTYPE html>
   .recipient-name-ckb {
     font-size: 88px;
     font-weight: 900;
-    color: #160874;
+    color: #0A1628;
     letter-spacing: -1px;
     margin-bottom: 6px;
   }
 
   .recipient-name-en {
-    font-family: 'Cinzel', serif;
+    font-family: 'Crimson Pro', serif;
     font-size: 36px;
     font-weight: 700;
     color: #856404;
@@ -303,13 +303,13 @@ const certHtml = `<!DOCTYPE html>
   }
 
   .program-pill {
-    background: #160874;
+    background: #0A1628;
     color: #FFFFFF;
     font-size: 30px;
     font-weight: 700;
     padding: 10px 48px;
     border-radius: 40px;
-    border: 2px solid #D4A94C;
+    border: 2px solid #F7B500;
     box-shadow: 0 6px 20px rgba(22, 8, 116, 0.3);
   }
 
@@ -351,7 +351,7 @@ const certHtml = `<!DOCTYPE html>
   .sig-separator-line {
     width: 420px;
     height: 3px;
-    background: linear-gradient(90deg, transparent, #160874, transparent);
+    background: linear-gradient(90deg, transparent, #0A1628, transparent);
     margin-bottom: 12px;
   }
 
@@ -381,7 +381,7 @@ const certHtml = `<!DOCTYPE html>
     width: 280px;
     height: 280px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #FFFDF0 0%, #FDE68A 25%, #D4A94C 60%, #854D0E 100%);
+    background: radial-gradient(circle at 35% 30%, #FFFDF0 0%, #FDE68A 25%, #F7B500 60%, #854D0E 100%);
     box-shadow: 
       0 18px 45px rgba(133, 77, 14, 0.5),
       inset 0 4px 8px rgba(255,255,255,0.9),
@@ -425,7 +425,7 @@ const certHtml = `<!DOCTYPE html>
   .ribbon-navy {
     width: 60px;
     height: 130px;
-    background: linear-gradient(180deg, #160874 0%, #0D0446 100%);
+    background: linear-gradient(180deg, #0A1628 0%, #0D0446 100%);
     box-shadow: 0 10px 22px rgba(0,0,0,0.35);
     clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
   }
@@ -433,13 +433,13 @@ const certHtml = `<!DOCTYPE html>
   .ribbon-gold {
     width: 60px;
     height: 130px;
-    background: linear-gradient(180deg, #D4A94C 0%, #996B1F 100%);
+    background: linear-gradient(180deg, #F7B500 0%, #996B1F 100%);
     box-shadow: 0 10px 22px rgba(0,0,0,0.35);
     clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
   }
 
   .seal-caption {
-    font-family: 'Cinzel', serif;
+    font-family: 'Crimson Pro', serif;
     font-size: 15px;
     font-weight: 800;
     letter-spacing: 2px;
@@ -467,7 +467,7 @@ const certHtml = `<!DOCTYPE html>
     font-family: monospace;
     font-size: 18px;
     letter-spacing: 2px;
-    color: #160874;
+    color: #0A1628;
     font-weight: 700;
   }
 </style>
@@ -484,14 +484,14 @@ const certHtml = `<!DOCTYPE html>
     <svg class="cert-frame-svg" viewBox="0 0 3508 2480" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="goldFrameGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#D4A94C"/>
+          <stop offset="0%" stop-color="#F7B500"/>
           <stop offset="50%" stop-color="#FDE68A"/>
           <stop offset="100%" stop-color="#996B1F"/>
         </linearGradient>
       </defs>
 
       <!-- Outer Navy Border -->
-      <rect x="50" y="50" width="3408" height="2380" fill="none" stroke="#160874" stroke-width="6"/>
+      <rect x="50" y="50" width="3408" height="2380" fill="none" stroke="#0A1628" stroke-width="6"/>
       <!-- Outer Gold Inset -->
       <rect x="66" y="66" width="3376" height="2348" fill="none" stroke="url(#goldFrameGrad)" stroke-width="2.5"/>
 
@@ -502,22 +502,22 @@ const certHtml = `<!DOCTYPE html>
       ${rightGuilloche}
 
       <!-- Inner Navy Inset -->
-      <rect x="140" y="140" width="3228" height="2200" fill="none" stroke="#160874" stroke-width="2" stroke-opacity="0.7"/>
+      <rect x="140" y="140" width="3228" height="2200" fill="none" stroke="#0A1628" stroke-width="2" stroke-opacity="0.7"/>
       <!-- Inner Gold Hairline -->
-      <rect x="150" y="150" width="3208" height="2180" fill="none" stroke="#D4A94C" stroke-width="1.2" stroke-opacity="0.9"/>
+      <rect x="150" y="150" width="3208" height="2180" fill="none" stroke="#F7B500" stroke-width="1.2" stroke-opacity="0.9"/>
 
       <!-- Corner Guilloche Rosettes -->
       <path d="${rosetteNW}" fill="none" stroke="url(#goldFrameGrad)" stroke-width="1.2"/>
-      <circle cx="180" cy="180" r="16" fill="#160874" stroke="#D4A94C" stroke-width="3"/>
+      <circle cx="180" cy="180" r="16" fill="#0A1628" stroke="#F7B500" stroke-width="3"/>
 
       <path d="${rosetteNE}" fill="none" stroke="url(#goldFrameGrad)" stroke-width="1.2"/>
-      <circle cx="${3508 - 180}" cy="180" r="16" fill="#160874" stroke="#D4A94C" stroke-width="3"/>
+      <circle cx="${3508 - 180}" cy="180" r="16" fill="#0A1628" stroke="#F7B500" stroke-width="3"/>
 
       <path d="${rosetteSW}" fill="none" stroke="url(#goldFrameGrad)" stroke-width="1.2"/>
-      <circle cx="180" cy="${2480 - 180}" r="16" fill="#160874" stroke="#D4A94C" stroke-width="3"/>
+      <circle cx="180" cy="${2480 - 180}" r="16" fill="#0A1628" stroke="#F7B500" stroke-width="3"/>
 
       <path d="${rosetteSE}" fill="none" stroke="url(#goldFrameGrad)" stroke-width="1.2"/>
-      <circle cx="${3508 - 180}" cy="${2480 - 180}" r="16" fill="#160874" stroke="#D4A94C" stroke-width="3"/>
+      <circle cx="${3508 - 180}" cy="${2480 - 180}" r="16" fill="#0A1628" stroke="#F7B500" stroke-width="3"/>
     </svg>
 
     <!-- Content -->
@@ -558,9 +558,9 @@ const certHtml = `<!DOCTYPE html>
         <!-- Right: Dr. Boushra Rahal (President of KAAE) -->
         <div class="signatory-column">
           <svg class="cursive-signature-svg" viewBox="0 0 340 100" xmlns="http://www.w3.org/2000/svg">
-            <path d="M 30 70 Q 65 10 100 50 T 170 38 Q 200 15 225 60 T 280 42 Q 305 25 320 65" fill="none" stroke="#160874" stroke-width="3" stroke-linecap="round"/>
-            <path d="M 75 55 Q 120 80 195 50 T 290 55" fill="none" stroke="#160874" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="305" cy="45" r="3.5" fill="#160874"/>
+            <path d="M 30 70 Q 65 10 100 50 T 170 38 Q 200 15 225 60 T 280 42 Q 305 25 320 65" fill="none" stroke="#0A1628" stroke-width="3" stroke-linecap="round"/>
+            <path d="M 75 55 Q 120 80 195 50 T 290 55" fill="none" stroke="#0A1628" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="305" cy="45" r="3.5" fill="#0A1628"/>
           </svg>
           <div class="sig-separator-line"></div>
           <div class="signatory-name">د. بوشرا ڕەحاڵ عەلامە · Dr. Boushra Rahal Alameh</div>
@@ -584,9 +584,9 @@ const certHtml = `<!DOCTYPE html>
         <!-- Left: Prof. Dr. Alan Faraidun Ali (Chair of CHE) -->
         <div class="signatory-column">
           <svg class="cursive-signature-svg" viewBox="0 0 340 100" xmlns="http://www.w3.org/2000/svg">
-            <path d="M 25 60 Q 55 15 90 45 T 155 28 Q 195 5 230 55 T 290 38 Q 315 22 325 55" fill="none" stroke="#160874" stroke-width="3" stroke-linecap="round"/>
-            <path d="M 65 65 Q 130 42 215 70 T 300 48" fill="none" stroke="#160874" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="315" cy="52" r="3.5" fill="#160874"/>
+            <path d="M 25 60 Q 55 15 90 45 T 155 28 Q 195 5 230 55 T 290 38 Q 315 22 325 55" fill="none" stroke="#0A1628" stroke-width="3" stroke-linecap="round"/>
+            <path d="M 65 65 Q 130 42 215 70 T 300 48" fill="none" stroke="#0A1628" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="315" cy="52" r="3.5" fill="#0A1628"/>
           </svg>
           <div class="sig-separator-line"></div>
           <div class="signatory-name">پ. د. ئالان فەرەیدوون عەلی · Prof. Dr. Alan Faraidun Ali</div>
@@ -622,14 +622,14 @@ const socialHtml = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     width: 1080px;
     height: 1350px;
     overflow: hidden;
     background: #060B18;
-    font-family: 'Cairo', 'Noto Naskh Arabic', sans-serif;
+    font-family: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', sans-serif;
     color: #FFFFFF;
   }
 
@@ -716,7 +716,7 @@ const socialHtml = `<!DOCTYPE html>
 
   .announcement-pill {
     background: rgba(212, 169, 76, 0.12);
-    border: 1.5px solid #D4A94C;
+    border: 1.5px solid #F7B500;
     border-radius: 30px;
     padding: 8px 24px;
     font-size: 15px;
@@ -764,7 +764,7 @@ const socialHtml = `<!DOCTYPE html>
     box-shadow: 
       0 12px 35px rgba(0,0,0,0.6),
       0 0 25px rgba(212, 169, 76, 0.4);
-    border: 2px solid #D4A94C;
+    border: 2px solid #F7B500;
   }
 
   .headline-main-1 {
@@ -780,7 +780,7 @@ const socialHtml = `<!DOCTYPE html>
     font-size: 44px;
     font-weight: 900;
     line-height: 1.25;
-    background: linear-gradient(135deg, #FFFBEB 0%, #FDE68A 30%, #D4A94C 70%, #996B1F 100%);
+    background: linear-gradient(135deg, #FFFBEB 0%, #FDE68A 30%, #F7B500 70%, #996B1F 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     letter-spacing: -0.5px;
@@ -844,7 +844,7 @@ const socialHtml = `<!DOCTYPE html>
     height: 34px;
     border-radius: 50%;
     background: rgba(212, 169, 76, 0.15);
-    border: 1px solid #D4A94C;
+    border: 1px solid #F7B500;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -864,7 +864,7 @@ const socialHtml = `<!DOCTYPE html>
   .pillar-title-en {
     font-size: 12px;
     font-weight: 600;
-    color: #D4A94C;
+    color: #F7B500;
     letter-spacing: 0.5px;
   }
 
@@ -881,7 +881,7 @@ const socialHtml = `<!DOCTYPE html>
   .legal-decree-cite {
     font-size: 14px;
     font-weight: 700;
-    color: #D4A94C;
+    color: #F7B500;
     letter-spacing: 0.5px;
   }
 
@@ -974,14 +974,14 @@ const quoteHtml = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Cinzel:wght@600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Crimson+Pro:wght@400;600;700;800;900&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     width: 1080px;
     height: 1080px;
     overflow: hidden;
     background: #050814;
-    font-family: 'Cairo', 'Noto Naskh Arabic', sans-serif;
+    font-family: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', sans-serif;
     color: #FFFFFF;
   }
 
@@ -1027,8 +1027,8 @@ const quoteHtml = `<!DOCTYPE html>
     left: 50%;
     transform: translate(-50%, -50%);
     font-size: 380px;
-    font-family: 'Cinzel', serif;
-    color: #D4A94C;
+    font-family: 'Crimson Pro', serif;
+    color: #F7B500;
     opacity: 0.04;
     line-height: 1;
   }
@@ -1073,7 +1073,7 @@ const quoteHtml = `<!DOCTYPE html>
 
   .decree-pill {
     background: rgba(212, 169, 76, 0.12);
-    border: 1.5px solid #D4A94C;
+    border: 1.5px solid #F7B500;
     border-radius: 30px;
     padding: 6px 26px;
     font-size: 15px;
@@ -1090,10 +1090,10 @@ const quoteHtml = `<!DOCTYPE html>
   }
 
   .gold-quote-mark {
-    font-family: 'Cinzel', serif;
+    font-family: 'Crimson Pro', serif;
     font-size: 74px;
     line-height: 0.8;
-    color: #D4A94C;
+    color: #F7B500;
     margin-bottom: 14px;
     filter: drop-shadow(0 4px 10px rgba(212,169,76,0.3));
   }
@@ -1128,7 +1128,7 @@ const quoteHtml = `<!DOCTYPE html>
   .gold-divider-ornament {
     width: 380px;
     height: 2px;
-    background: linear-gradient(90deg, transparent, #D4A94C, transparent);
+    background: linear-gradient(90deg, transparent, #F7B500, transparent);
     margin-bottom: 8px;
     position: relative;
   }
@@ -1138,7 +1138,7 @@ const quoteHtml = `<!DOCTYPE html>
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    color: #D4A94C;
+    color: #F7B500;
     font-size: 11px;
     background: #050814;
     padding: 0 8px;
@@ -1147,7 +1147,7 @@ const quoteHtml = `<!DOCTYPE html>
   .author-name-ckb {
     font-size: 32px;
     font-weight: 800;
-    background: linear-gradient(135deg, #FFFFFF 0%, #FDE68A 50%, #D4A94C 100%);
+    background: linear-gradient(135deg, #FFFFFF 0%, #FDE68A 50%, #F7B500 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 3px;
@@ -1204,9 +1204,9 @@ const quoteHtml = `<!DOCTYPE html>
       <!-- Executive Signatory Plinth -->
       <div class="attribution-plinth">
         <svg class="executive-signature-svg" viewBox="0 0 260 70" xmlns="http://www.w3.org/2000/svg">
-          <path d="M 20 50 Q 50 10 80 40 T 130 30 Q 160 10 180 45 T 220 35 Q 240 20 250 48" fill="none" stroke="#D4A94C" stroke-width="2.5" stroke-linecap="round"/>
-          <path d="M 50 45 Q 90 65 150 42 T 230 45" fill="none" stroke="#D4A94C" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="240" cy="38" r="2.5" fill="#D4A94C"/>
+          <path d="M 20 50 Q 50 10 80 40 T 130 30 Q 160 10 180 45 T 220 35 Q 240 20 250 48" fill="none" stroke="#F7B500" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M 50 45 Q 90 65 150 42 T 230 45" fill="none" stroke="#F7B500" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="240" cy="38" r="2.5" fill="#F7B500"/>
         </svg>
         <div class="gold-divider-ornament"></div>
         <div class="author-name-ckb">د. بوشرا ڕەحاڵ عەلامە · Dr. Boushra Rahal Alameh</div>
@@ -1236,14 +1236,14 @@ const bannerHtml = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Cinzel:wght@600;700;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Crimson+Pro:wght@400;600;700;800;900&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     width: 1920px;
     height: 1080px;
     overflow: hidden;
     background: #060B18;
-    font-family: 'Cairo', 'Noto Naskh Arabic', sans-serif;
+    font-family: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', sans-serif;
     color: #FFFFFF;
   }
 
@@ -1352,7 +1352,7 @@ const bannerHtml = `<!DOCTYPE html>
 
   .summit-badge {
     background: rgba(212, 169, 76, 0.15);
-    border: 2px solid #D4A94C;
+    border: 2px solid #F7B500;
     border-radius: 40px;
     padding: 8px 34px;
     font-size: 18px;
@@ -1376,7 +1376,7 @@ const bannerHtml = `<!DOCTYPE html>
   }
 
   .stage-headline-en {
-    font-family: 'Cinzel', serif;
+    font-family: 'Crimson Pro', serif;
     font-size: 26px;
     font-weight: 800;
     letter-spacing: 6px;
@@ -1405,7 +1405,7 @@ const bannerHtml = `<!DOCTYPE html>
   }
 
   .plinth-separator {
-    color: #D4A94C;
+    color: #F7B500;
     font-size: 24px;
   }
 
@@ -1422,7 +1422,7 @@ const bannerHtml = `<!DOCTYPE html>
     color: #94A3B8;
   }
   .high-council-bar b {
-    color: #D4A94C;
+    color: #F7B500;
   }
 </style>
 </head>

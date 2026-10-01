@@ -33,7 +33,7 @@ for (const brief of briefs) {
     copyBlocks: brief.copyBlocks.map((c) => ({
       index: c.copyIndex, text: c.text, role: c.role as any, script: c.script as any,
     })),
-    palette: ['#0A1628', '#C5A059', '#1E3A5F', '#FDF8F3'],
+    palette: ['#0A1628', '#F7B500', '#1E3A5F', '#FDF8F3'],
     canvasWidth: brief.width,
     canvasHeight: brief.height,
     exemplars: retrieval.retrievedExemplars,

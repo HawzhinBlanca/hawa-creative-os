@@ -1,3 +1,5 @@
+import { gradientSvgDef } from './shape-gradient.js';
+import { ornamentSvg } from './brand-elements.js';
 import { measurePangoText, measurementRuntimeIdentity, type PangoMeasurement, type MeasurementRuntimeIdentity } from './pango-measurement.js';
 import { lineGeometry } from './line-geometry.js';
 import fs from 'node:fs';
@@ -257,6 +259,8 @@ export const ADMITTED_FONT_FAMILIES = [
   // missing from it is never measured for substitution — the exact blindness that let Vazirmatn
   // sit in the registry for days while the renderer drew something else for it.
   'IBM Plex Sans Arabic',
+  // Admitted 2026-10-01 (ADR-238): the serif of KAAE's 2025 guideline titles.
+  'Crimson Pro',
 ] as const;
 
 /** A family name no font can carry, used as the substitution sentinel. */
@@ -1399,7 +1403,12 @@ function renderShapesToSvg(shapes: ShapeElement[], indices?: number[]): { svg: s
     const transformAttr = s.rotation
       ? ` transform="rotate(${s.rotation} ${s.x + s.width / 2} ${s.y + s.height / 2})"`
       : '';
-    const fill = s.fill === 'none' ? 'none' : s.color;
+    let fill = s.fill === 'none' ? 'none' : s.color;
+    // ADR-238: a gradient fill (a title bar, a foot rule, a cover's ground) in place of the flat colour.
+    if (s.gradient && s.fill !== 'none' && s.kind !== 'line') {
+      defs.push(gradientSvgDef(`shape-gradient-${i}`, s.gradient));
+      fill = `url(#shape-gradient-${i})`;
+    }
     let filterAttr = '';
     if (s.shadow && s.kind !== 'line') {
       defs.push(shapeShadowFilterSvg(`shape-shadow-${i}`, s));
@@ -1949,7 +1958,16 @@ export function renderLayoutV2ToSvg(
   }
 
   // Shapes Layer: every shape but the overlay ones (ADR-170), which are drawn over the photos below.
-  const underIndices = layout.shapes.map((_, i) => i).filter((i) => layout.shapes[i].layer !== 'overlay');
+  // ADR-238: a cover's gradient ground first, then the brand elements (a sunburst, a triangle
+  // pattern) over it, then the other shapes.
+  const groundIndices = layout.shapes.map((_, i) => i).filter((i) => layout.shapes[i].layer !== 'overlay' && layout.shapes[i].primitive === 'cover_ground');
+  if (groundIndices.length > 0) {
+    const ground = renderShapesToSvg(groundIndices.map((i) => layout.shapes[i]), groundIndices);
+    defsParts.push(...ground.defs);
+    bodyPartsNoText.push(ground.svg);
+  }
+  (layout.ornaments ?? []).forEach((o, i) => bodyPartsNoText.push(ornamentSvg(o, `ornament-${i}`)));
+  const underIndices = layout.shapes.map((_, i) => i).filter((i) => layout.shapes[i].layer !== 'overlay' && layout.shapes[i].primitive !== 'cover_ground');
   const overIndices = layout.shapes.map((_, i) => i).filter((i) => layout.shapes[i].layer === 'overlay');
   if (underIndices.length > 0) {
     const under = renderShapesToSvg(underIndices.map((i) => layout.shapes[i]), underIndices);

@@ -35,7 +35,7 @@ import {
 import { QUALIFICATION_BRIEFS } from '../run_p10_qualification.js';
 
 const EFFORTS = ['low', 'medium', 'high'] as const;
-const PALETTE = ['#0A1628', '#C5A059', '#1E3A5F', '#FDF8F3'];
+const PALETTE = ['#0A1628', '#F7B500', '#1E3A5F', '#FDF8F3'];
 
 const outDir = process.argv[2];
 if (!outDir) {

@@ -10,7 +10,11 @@ import { omittedPhotoIndices, recipePhotoMinimum, type PhotoSelection } from './
 import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } from './render-layout-v2.js';
 import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
-import { logoBackingExcess } from './art-direction/logo-ground.js';
+import { LOGO_MAX_BUSYNESS, logoBackingExcess } from './art-direction/logo-ground.js';
+import { logoClearZone, usesGuidelineClearSpace } from './house-rules.js';
+import { clientLogoClearSpacePx } from './validate-layout-v2.js';
+import type { Box } from './layout-v2.js';
+import { PNG } from 'pngjs';
 
 /**
  * The studio's hard QA gate, shared so the qualification applies exactly the gate a production
@@ -30,6 +34,8 @@ export interface HardQaContext {
   logoAspect: number;
   logoMinimumWidthPx?: number;
   logoClearSpacePx?: number;
+  /** ADR-238: the client's clear space as a share of the logo's height (KAAE: the height of its K). */
+  logoClearSpaceShareOfHeight?: number;
   /** Required for successful QA. Missing content produces COPY_UNMEASURED, never guessed geometry. */
   copyText?: Record<number, string>;
   /** Use the same explicit font directory as the renderer, when supplied. */
@@ -110,6 +116,7 @@ export function evaluateHardQa(
       logoAspect: ctx.logoAspect || 1.0,
       logoMinimumWidthPx: ctx.logoMinimumWidthPx,
       logoClearSpacePx: ctx.logoClearSpacePx,
+      logoClearSpaceShareOfHeight: ctx.logoClearSpaceShareOfHeight,
     },
     draftFont: ctx.latinFont || 'Verdana',
     photoCount: ctx.photoCount ?? 0,
@@ -353,10 +360,18 @@ export function evaluateHardQa(
 
   // ADR-180 (owner, 2026-09-30: "current design has logo background"): nothing behind the logo may
   // reach past its clear space, and a solid tab stays thin; the navy square filled the whole box.
-  const backingExcess = logoBackingExcess(checked, ctx.logoClearSpacePx ?? 0);
+  const clientClearPx = checked.logo ? clientLogoClearSpacePx(checked.logo, { logoClearSpacePx: ctx.logoClearSpacePx, logoClearSpaceShareOfHeight: ctx.logoClearSpaceShareOfHeight }) : 0;
+  const backingExcess = logoBackingExcess(checked, clientClearPx);
   if (backingExcess > 1) {
     defectCodes.push('LOGO_BACKING');
     messages.push(`LOGO_BACKING: what is drawn behind the logo reaches ${backingExcess}px past the thin tab or clear-space box it may cover`);
+  }
+  // ADR-238 (KAAE 2025 guideline, pp.3-6): the logo's own rules, beyond its size and aspect (the
+  // validator's LOGO check): nothing enters its clear space, it carries no effect or shadow, and it
+  // never sits on a busy ground.
+  for (const finding of logoRuleDefects(checked, clientClearPx, ctx.renderedComposite)) {
+    if (!defectCodes.includes(finding.code)) defectCodes.push(finding.code);
+    messages.push(`${finding.code}: ${finding.message}`);
   }
 
   const findings = [...reviewFindings(layout, ctx), ...unmeasured];
@@ -372,6 +387,79 @@ export function evaluateHardQa(
     passed: defectCodes.length === 0, defectCodes, messages, metrics, layout, textMeasurements, findings, omittedPhotos,
     ...(measuredContrast ? { measuredContrast } : {}),
   };
+}
+
+/**
+ * ADR-238: the logo rules of a client guideline that a layout and its render can break (KAAE 2025,
+ * pp.3-6). Its size, its aspect (never stretched) and text or rules in its clear space are the
+ * validator's LOGO check; it cannot be rotated or recoloured, because a layout's logo is a box the
+ * renderer and the deck fill with the official file unchanged. What is left:
+ * - LOGO_CLEAR_SPACE: an accent, a card's edge or a card reaching into the clear space without
+ *   holding the whole of it (a card or plate the logo sits on is its ground, not an intrusion);
+ * - LOGO_EFFECT: a shadow under the logo (a tab or plate holding it with a drop shadow);
+ * - LOGO_BUSY_GROUND: the ground round the logo, measured on the render without copy, busier than
+ *   the logo may stand on bare (a logo the studio lifted with a scrim or a tab, ADR-180, is not bare).
+ */
+export function logoRuleDefects(
+  layout: StudioLayoutV2,
+  clientClearPx: number,
+  renderedComposite?: Buffer
+): Array<{ code: 'LOGO_CLEAR_SPACE' | 'LOGO_EFFECT' | 'LOGO_BUSY_GROUND'; message: string }> {
+  const out: Array<{ code: 'LOGO_CLEAR_SPACE' | 'LOGO_EFFECT' | 'LOGO_BUSY_GROUND'; message: string }> = [];
+  const logo = layout.logo;
+  if (!logo || logo.width <= 0 || logo.height <= 0) return out;
+  const clear = logoClearZone(logo, clientClearPx, { clientOnly: usesGuidelineClearSpace(layout) });
+  const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  const holds = (outer: Box, inner: Box) =>
+    inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
+  for (const [i, s] of (layout.shapes || []).entries()) {
+    const intruder = s.role === 'accent' || s.primitive === 'card' || s.primitive === 'card_edge';
+    if (intruder && hit(s, clear) && !holds(s, clear)) {
+      out.push({ code: 'LOGO_CLEAR_SPACE', message: `shape ${i} (${s.primitive ?? s.role}) reaches into the logo's clear space` });
+    }
+    if (s.shadow && s.fill !== 'none' && holds(s, logo) && !holds(s, clear)) {
+      out.push({ code: 'LOGO_EFFECT', message: `shape ${i} (${s.surface ?? s.role}) holds the logo with a drop shadow; the logo takes no effects or shadows` });
+    }
+  }
+  const ground = layout.artDirection?.logoGround;
+  if (ground?.treatment === 'none' && ground.busyness > LOGO_MAX_BUSYNESS) {
+    out.push({ code: 'LOGO_BUSY_GROUND', message: `the logo stands bare on a ground of busyness ${ground.busyness} (at most ${LOGO_MAX_BUSYNESS})` });
+  } else if (!ground && renderedComposite) {
+    const busyness = clearSpaceBusyness(renderedComposite, logo, clear);
+    if (busyness !== undefined && busyness > LOGO_MAX_BUSYNESS) {
+      out.push({ code: 'LOGO_BUSY_GROUND', message: `the ground round the logo has busyness ${busyness.toFixed(3)} (at most ${LOGO_MAX_BUSYNESS})` });
+    }
+  }
+  return out;
+}
+
+/**
+ * How busy the ground round the logo is: the standard deviation of luma (0..1) over its clear-space
+ * ring (the clear-space box less the logo's own box), on the render without copy. Undefined when the
+ * ring is off the render.
+ */
+export function clearSpaceBusyness(composite: Buffer, logo: Box, clear: Box): number | undefined {
+  let png: PNG;
+  try {
+    png = PNG.sync.read(composite);
+  } catch {
+    // An unreadable render measures nothing; the declared checks still apply (as for contrast).
+    return undefined;
+  }
+  const x0 = Math.max(0, Math.floor(clear.x)), y0 = Math.max(0, Math.floor(clear.y));
+  const x1 = Math.min(png.width, Math.ceil(clear.x + clear.width)), y1 = Math.min(png.height, Math.ceil(clear.y + clear.height));
+  let n = 0, sum = 0, sq = 0;
+  for (let y = y0; y < y1; y += 2) {
+    for (let x = x0; x < x1; x += 2) {
+      if (x >= logo.x && x < logo.x + logo.width && y >= logo.y && y < logo.y + logo.height) continue;
+      const i = (y * png.width + x) * 4;
+      const l = (0.2126 * png.data[i] + 0.7152 * png.data[i + 1] + 0.0722 * png.data[i + 2]) / 255;
+      n++; sum += l; sq += l * l;
+    }
+  }
+  if (n < 16) return undefined;
+  const mean = sum / n;
+  return Math.sqrt(Math.max(0, sq / n - mean * mean));
 }
 
 /**

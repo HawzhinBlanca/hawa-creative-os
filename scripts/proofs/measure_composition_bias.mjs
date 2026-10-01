@@ -43,20 +43,20 @@ const base = (over) => ({
 });
 const T = (o) => ({
   copyIndex: o.i, role: o.role, x: o.x, y: o.y, width: o.w, height: o.h,
-  fontSize: o.size, lineHeight: 1.35, fontFamily: o.font || 'Verdana',
+  fontSize: o.size, lineHeight: 1.35, fontFamily: o.font || 'Inter',
   color: '#FDF8F3', align: o.align, bold: !!o.bold, italic: false, rtl: false,
 });
 
 const centred = base({
   text: [
-    T({ i: 0, role: 'eyebrow', x: MARGIN, y: 260, w: span(6), h: 40, size: 18, align: 'center', font: 'Cinzel' }),
-    T({ i: 1, role: 'title', x: MARGIN, y: 360, w: span(6), h: 180, size: 54, align: 'center', font: 'Playfair Display', bold: true }),
-    T({ i: 2, role: 'subtitle', x: MARGIN, y: 580, w: span(6), h: 70, size: 26, align: 'center', font: 'Playfair Display' }),
+    T({ i: 0, role: 'eyebrow', x: MARGIN, y: 260, w: span(6), h: 40, size: 18, align: 'center', font: 'Inter' }),
+    T({ i: 1, role: 'title', x: MARGIN, y: 360, w: span(6), h: 180, size: 54, align: 'center', font: 'Crimson Pro', bold: true }),
+    T({ i: 2, role: 'subtitle', x: MARGIN, y: 580, w: span(6), h: 70, size: 26, align: 'center', font: 'Inter' }),
     T({ i: 3, role: 'body', x: MARGIN, y: 760, w: span(6), h: 200, size: 22, align: 'center' }),
     T({ i: 4, role: 'footer', x: MARGIN, y: 1180, w: span(6), h: 44, size: 16, align: 'center' }),
   ],
   shapes: [
-    { x: Math.round(W / 2 - 80), y: 320, width: 160, height: 2, kind: 'line', color: '#C5A059', role: 'rule' },
+    { x: Math.round(W / 2 - 80), y: 320, width: 160, height: 2, kind: 'line', color: '#F7B500', role: 'rule' },
     { x: MARGIN, y: 730, width: span(6), height: 260, kind: 'rect', color: '#162B48', role: 'panel' },
   ],
 });
@@ -64,14 +64,14 @@ const centred = base({
 const asymmetric = base({
   logo: { x: MARGIN, y: 90, width: 200, height: 120 },
   text: [
-    T({ i: 0, role: 'eyebrow', x: MARGIN, y: 260, w: span(4), h: 40, size: 18, align: 'left', font: 'Cinzel' }),
-    T({ i: 1, role: 'title', x: MARGIN, y: 360, w: span(5), h: 180, size: 54, align: 'left', font: 'Playfair Display', bold: true }),
-    T({ i: 2, role: 'subtitle', x: MARGIN, y: 580, w: span(4), h: 70, size: 26, align: 'left', font: 'Playfair Display' }),
+    T({ i: 0, role: 'eyebrow', x: MARGIN, y: 260, w: span(4), h: 40, size: 18, align: 'left', font: 'Inter' }),
+    T({ i: 1, role: 'title', x: MARGIN, y: 360, w: span(5), h: 180, size: 54, align: 'left', font: 'Crimson Pro', bold: true }),
+    T({ i: 2, role: 'subtitle', x: MARGIN, y: 580, w: span(4), h: 70, size: 26, align: 'left', font: 'Inter' }),
     T({ i: 3, role: 'body', x: MARGIN, y: 760, w: span(4), h: 200, size: 22, align: 'left' }),
     T({ i: 4, role: 'footer', x: MARGIN, y: 1180, w: span(4), h: 44, size: 16, align: 'left' }),
   ],
   shapes: [
-    { x: MARGIN, y: 320, width: span(1), height: 2, kind: 'line', color: '#C5A059', role: 'rule' },
+    { x: MARGIN, y: 320, width: span(1), height: 2, kind: 'line', color: '#F7B500', role: 'rule' },
     { x: MARGIN, y: 730, width: span(4), height: 260, kind: 'rect', color: '#162B48', role: 'panel' },
   ],
 });

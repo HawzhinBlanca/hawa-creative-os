@@ -162,7 +162,7 @@ export class CanvaNativeAdapter {
               zIndex: 1,
               locked: true,
               fillColor: '#0A1628',
-              borderColor: '#D4A94C',
+              borderColor: '#F7B500',
               borderWidth: 8,
             },
             {
@@ -188,7 +188,7 @@ export class CanvaNativeAdapter {
               text: 'کۆنفرانسی نیشتمانی دڵنیایی جۆری لە پەروەردە',
               textStyle: {
                 fontSize: 48,
-                fontFamily: 'Cairo',
+                fontFamily: 'IBM Plex Sans Arabic',
                 fontWeight: 'bold',
                 color: '#FFFFFF',
                 textAlign: 'center',
@@ -207,7 +207,7 @@ export class CanvaNativeAdapter {
                 fontSize: 28,
                 fontFamily: 'Inter',
                 fontWeight: 'bold',
-                color: '#D4A94C',
+                color: '#F7B500',
                 textAlign: 'center',
                 lineHeight: 1.35,
               },
@@ -222,7 +222,7 @@ export class CanvaNativeAdapter {
               text: 'بانگهێشتنامەی فەرمی بۆ ئامادەبوون لە کۆنفرانسی ساڵانەی پێوەرەکانی متمانەبەخشین.',
               textStyle: {
                 fontSize: 24,
-                fontFamily: 'Noto Naskh Arabic',
+                fontFamily: 'Noto Sans Arabic',
                 fontWeight: 'normal',
                 color: '#E2E8F0',
                 textAlign: 'center',
@@ -239,7 +239,7 @@ export class CanvaNativeAdapter {
               text: 'ڕێکەوت: 2026-09-15 | شوێن: هۆڵی پێشەوا، هەولێر',
               textStyle: {
                 fontSize: 22,
-                fontFamily: 'Cairo',
+                fontFamily: 'IBM Plex Sans Arabic',
                 fontWeight: 'bold',
                 color: '#CBD5E1',
                 textAlign: 'center',
@@ -258,7 +258,7 @@ export class CanvaNativeAdapter {
                 fontSize: 20,
                 fontFamily: 'Inter',
                 fontWeight: 'bold',
-                color: '#D4A94C',
+                color: '#F7B500',
                 textAlign: 'center',
                 lineHeight: 1.3,
               },
@@ -273,7 +273,7 @@ export class CanvaNativeAdapter {
               text: 'دەستەی متمانەبەخشی بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان',
               textStyle: {
                 fontSize: 16,
-                fontFamily: 'Noto Naskh Arabic',
+                fontFamily: 'Noto Sans Arabic',
                 fontWeight: 'normal',
                 color: '#94A3B8',
                 textAlign: 'center',
@@ -444,9 +444,15 @@ export class CanvaNativeAdapter {
 
     // 3. Addressable Live Text Elements for every exactCopy block (FR-015, FR-028)
     let currentY = 220;
-    const primaryFont = params.clientDna.fonts.find((f) => f.role === 'display')?.family || (isRtl ? 'Cairo' : 'Inter');
-    const bodyFont = params.clientDna.fonts.find((f) => f.role === 'body')?.family || (isRtl ? 'Noto Naskh Arabic' : 'Inter');
-    const accentColor = params.clientDna.colors.find((c) => c.role === 'accent')?.hex || '#D4A94C';
+    // A client's fonts are per script (KAAE: Crimson Pro and Inter for English, IBM Plex Sans Arabic and
+    // Noto Sans Arabic for Sorani): take the one that covers the brief's language before any other.
+    const fontLocale = isRtl ? (params.brief.primaryLanguage === 'ar' ? 'ar' : 'ckb') : 'en';
+    const clientFont = (role: 'display' | 'body') =>
+      params.clientDna.fonts.find((f) => f.role === role && f.supportedLocales?.includes(fontLocale))?.family ??
+      params.clientDna.fonts.find((f) => f.role === role)?.family;
+    const primaryFont = clientFont('display') || (isRtl ? 'Noto Sans Arabic' : 'Inter');
+    const bodyFont = clientFont('body') || (isRtl ? 'Noto Sans Arabic' : 'Inter');
+    const accentColor = params.clientDna.colors.find((c) => c.role === 'accent')?.hex || '#F7B500';
 
     for (let i = 0; i < params.brief.exactCopy.length; i++) {
       const block = params.brief.exactCopy[i];
@@ -1226,7 +1232,7 @@ export class CanvaNativeAdapter {
     locale: 'ckb' | 'ar' | 'en' | string = 'ckb'
   ): Result<{ valid: boolean; supportedGlyphs: number; missingGlyphs: string[] }, AppError> {
     const soraniSpecialGlyphs = ['پ', 'چ', 'گ', 'ڤ', 'ۆ', 'ێ', 'ڵ', 'ڕ', 'ە'];
-    const supportedKurdishFonts = ['cairo', 'vazirmatn', 'noto naskh arabic', 'noto sans arabic', 'rabar'];
+    const supportedKurdishFonts = ['cairo', 'vazirmatn', 'noto naskh arabic', 'noto sans arabic', 'ibm plex sans arabic', 'rabar'];
     const normalizedFont = fontFamily.toLowerCase().trim();
 
     if (locale === 'ckb') {
@@ -1245,7 +1251,7 @@ export class CanvaNativeAdapter {
             code: 'FONT_GLYPH_COVERAGE_ERROR',
             message: `Font '${fontFamily}' does not provide complete glyph coverage for Central Kurdish (Sorani). Missing glyphs: ${missing.join(', ')} (FR-034, FR-037).`,
             retryable: false,
-            safeAction: 'Switch font to an authorized Kurdish-capable font (Cairo, Vazirmatn, Noto Naskh Arabic)',
+            safeAction: 'Switch font to an authorized Kurdish-capable font (Noto Sans Arabic, IBM Plex Sans Arabic, Vazirmatn)',
             detail: { fontFamily, locale, missingGlyphs: missing },
           },
         };

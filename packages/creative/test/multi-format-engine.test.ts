@@ -142,9 +142,9 @@ describe('Milestone 4: Multi-Format Composition & Layout Engine', () => {
         const style = (textOp as any).style;
         // Kurdish Sorani must be right-aligned
         expect(style.textAlign).toBe('right');
-        // Headline font must be Cairo
+        // KAAE's Sorani headline: the 2025 guideline's bold sans (p.10), IBM Plex Sans Arabic
         if ((textOp as any).role === 'headline') {
-          expect(style.fontFamily).toBe('Cairo');
+          expect(style.fontFamily).toBe('IBM Plex Sans Arabic');
           expect(style.fontSize).toBe(CANONICAL_FORMATS[fmt].typographyScale.headlineSize);
         }
         // Diacritic headroom: line-height must be >= 1.38

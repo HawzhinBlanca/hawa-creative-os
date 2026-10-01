@@ -13,6 +13,8 @@ export const DEFAULT_ADMITTED_FONTS = [
   'Inter',
   'Verdana',
   'Noto Sans Arabic',
+  'Crimson Pro',
+  'IBM Plex Sans Arabic',
 ];
 
 export interface OffendingFontObject {
@@ -333,7 +335,8 @@ export function checkCanvaPptx(
               role,
               observedFont: observedFace,
               expectedFont: isArabic ? (options.formalBodyFonts?.arabic || 'Noto Sans Arabic') : (options.formalBodyFonts?.latin || 'Verdana'),
-              reason: `Formal document body must use ${isArabic ? 'Noto Sans Arabic' : 'Verdana'}; observed '${observedFace}'`,
+              // Name the face this client's policy asks for (KAAE's formal body is Inter since its 2025 guideline).
+              reason: `Formal document body must use ${isArabic ? (options.formalBodyFonts?.arabic || 'Noto Sans Arabic') : (options.formalBodyFonts?.latin || 'Verdana')}; observed '${observedFace}'`,
             });
           }
         } else if (options.documentKind === 'formal_document' || options.documentKind === 'design_piece') {

@@ -176,7 +176,7 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     // The model was shown the photos at high detail and the house rules as data.
     const user = requests[0].messages[1].content;
     expect(user.filter((p: any) => p.type === 'image_url').every((p: any) => p.image_url.detail === 'high')).toBe(true);
-    expect(user[0].text).toContain('R1. Pick ONE hero photo');
+    expect(user[0].text).toContain('R1. With photos: pick ONE hero photo');
     expect(requests[0].messages[0].content).not.toMatch(/KAAE/);
     expect(photosBrief(ctx.photos, 1080, 1350, undefined, ctx.photoSelection)).toContain('choose');
 
@@ -209,7 +209,7 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     const layout: StudioLayoutV2 = winner.currentLayout;
     // One hero and one blended texture; the title and gold line on the fade; the inset gold line.
     expect(layout.photos!.map((p) => [p.photoIndex, p.role])).toEqual([[0, 'hero'], [4, 'texture']]);
-    expect(layout.text.find((t) => t.copyIndex === 1)!.color.toUpperCase()).toBe('#E8B85C');
+    expect(layout.text.find((t) => t.copyIndex === 1)!.color.toUpperCase()).toBe('#F7B500');
     for (const t of layout.text) expect(qa.measuredContrast![t.copyIndex]).toBeGreaterThanOrEqual(t.fontSize >= 24 && t.bold ? 3 : 4.5);
 
     // The Canva deck: the hero native, the fade its own PNG, the text native.

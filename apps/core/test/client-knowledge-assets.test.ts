@@ -229,7 +229,7 @@ describe('CV-09: Preserve Original Client Knowledge, Assets & Retrieval Boundari
       expect(conflict.sourceIds).toEqual([]);
       expect(conflict.message).toBe(conflict.description);
       expect(conflict.severity).toBe('BLOCKING');
-      expect(conflict.description).toContain('Cannot invent placeholder branding');
+      expect(conflict.description).toContain('Cannot invent substitute branding');
       expect(conflict.safeAction).toContain('Upload official vector logo/assets');
     }
   });

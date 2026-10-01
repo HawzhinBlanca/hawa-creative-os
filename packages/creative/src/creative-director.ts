@@ -450,6 +450,10 @@ export class CreativeDirectorRunner {
         brief.clientId?.includes('fastpay')
       ) {
         fontFamily = isEnglish ? 'Inter' : 'Vazirmatn';
+      } else if (brief.clientId === 'c1000000-0000-4000-8000-000000000002') {
+        // ADR-238: KAAE's 2025 guideline sets Sorani in a sans (p.10): IBM Plex Sans Arabic for
+        // headlines, Noto Sans Arabic for body; its Latin headlines are Crimson Pro.
+        fontFamily = isEnglish ? (block.role === 'headline' ? 'Crimson Pro' : 'Inter') : block.role === 'headline' ? 'IBM Plex Sans Arabic' : 'Noto Sans Arabic';
       } else if (!isEnglish && block.role === 'headline') {
         fontFamily = 'Cairo';
       }

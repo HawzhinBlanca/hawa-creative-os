@@ -1,84 +1,124 @@
 {
   "clientId": "c1000000-0000-4000-8000-000000000002",
   "clientName": "KAAE",
-  "sourceUrl": "https://drive.google.com/file/d/1ZmSOzRhHFKWWvMG6hNhcMtjWPrASRuyF/view",
-  "sourceTitle": "BRAND GUIDLINES.pdf",
-  "sourceModifiedAt": "2025-05-26T17:30:04Z",
+  "sourceUrl": null,
+  "sourceTitle": "Brand Guidelines — Excellence Edition (2025)",
+  "sourceFile": "KAAE_Guidelines4.pdf",
+  "sourceEdition": "Excellence Edition, 2025, 17 pages; handed over by the owner on 2026-10-01. The file stays out of git (a client document); its rules are encoded here, with the guideline's printed page numbers.",
+  "sourceModifiedAt": "2025-09-16",
   "retrievedAt": "2026-10-01",
   "status": "reference_for_draft_not_release_approval",
   "rules": {
-    "fontFamily": "Verdana",
+    "fontFamily": "Inter",
     "typography": {
       "formalBody": {
-        "latin": "Verdana",
+        "latin": "Inter",
         "arabic": "Noto Sans Arabic"
       },
       "display": {
-        "policy": "free",
+        "policy": "guideline",
         "admitted": [
-          "Cinzel",
-          "Playfair Display",
-          "Montserrat",
-          "Lora",
-          "Bodoni Moda",
-          "Cairo",
-          "Plus Jakarta Sans",
-          "Vazirmatn",
+          "Crimson Pro",
           "Inter",
-          "Verdana",
-          "Noto Sans Arabic"
+          "Noto Sans Arabic",
+          "IBM Plex Sans Arabic"
         ]
-      }
+      },
+      "source": "The guideline's pages as designed (pp. 1-15): titles in a bold old-style serif, leads in italic Inter, body in Inter. Owner's decision of 2026-10-01: follow the look, not the Typography pages' 'Verdana' text (pp. 9-10). Crimson Pro is the admitted face closest to the guideline's headings (ADR-238)."
     },
     "palette": [
       "#FFFFFF",
-      "#FFF2DB",
-      "#17087A",
-      "#3833A3",
+      "#FDF8F3",
       "#4770A3",
-      "#0F73DE",
-      "#E8B85C",
-      "#000000"
+      "#F7B500",
+      "#0A1628",
+      "#1E3A5F",
+      "#2C5282",
+      "#4A90E2",
+      "#FFD700"
     ],
     "paletteFallbacks": {
       "background": "#FFFFFF",
-      "text": "#17087A",
-      "accent": "#3833A3"
+      "text": "#0A1628",
+      "accent": "#4770A3"
     },
     "brandColors": {
       "white": "#FFFFFF",
-      "cream": "#FFF2DB",
-      "indigo": "#17087A",
-      "royalIndigo": "#3833A3",
-      "blue": "#4770A3",
-      "brightBlue": "#0F73DE",
-      "gold": "#E8B85C",
-      "ink": "#000000"
+      "cream": "#FDF8F3",
+      "kaaeBlue": "#4770A3",
+      "kaaeGold": "#F7B500",
+      "midnight": "#0A1628",
+      "royal": "#1E3A5F",
+      "ocean": "#2C5282",
+      "sky": "#4A90E2",
+      "sun": "#FFD700"
     },
-    "colorUsage": "KAAE brand guideline palette, light first. The default page is White (#FFFFFF) or Cream (#FFF2DB), as on the guideline's own pages. Indigo (#17087A) and Royal Indigo (#3833A3) are for header bands, plates, panels, tabs and scrims, and for titles and headings on a light page. Gold (#E8B85C) only for thin rules, frames, borders and small accents, or a title's accent line on indigo; never gold text on white or cream. Blue (#4770A3) for secondary lines, rules and icons; Bright Blue (#0F73DE) sparingly, one highlight at most. Body copy on a light page is Ink (#000000) or Indigo (#17087A); on indigo it is White (#FFFFFF) or Cream (#FFF2DB). Use an Indigo page only when the brief or the photo calls for it: an evening or dark invitation, a keynote or stage screen, a dark photo hero, or the requester asks for dark or navy. Never use colours outside this palette.",
-    "logo": "Use the supplied official logo unchanged, with its original aspect ratio. Minimum digital width 100px. Keep clear space around it equal to the height of its K.",
-    "body": "Left align digital body text. Use 1.4 line spacing, readable text and academic formality.",
-    "restriction": "Do not add reference-document factual copy, contact details, slogans, signatures or a seal to the invitation. Only the saved request supplies design copy.",
+    "colorUsage": "KAAE Brand Guidelines, Excellence Edition (2025), light first. The page is White (#FFFFFF), as on the guideline's own pages, with generous margins. Primary colours: KAAE Blue (#4770A3, Pantone 5415 C) for titles, the italic lead line, the small-caps section label and brand cards; KAAE Gold (#F7B500, Pantone 7549 C) for the short gold bar under a title, the gold part of the header rule, a card's gold left edge, and numbers or card titles on navy. Body text is Midnight (#0A1628) on light; White on KAAE Blue or navy. Extended colours: Midnight (#0A1628), Royal (#1E3A5F), Ocean (#2C5282), Sky (#4A90E2), Cream (#FDF8F3), Sun (#FFD700). Gold is never text on white or cream (under 2:1); on a KAAE Blue card a card title is Sun (#FFD700). Gradients: KAAE Blue to Gold (p.7) for the rule at the foot of a page; Gold to Sun for the title bar; KAAE Blue to Midnight for a cover. Composition, as the guideline's pages are built (pp.1-15): a white page with generous margins; a header with the logo at the top left, an optional letter-spaced KAAE Blue section label at the top right and a thin grey rule with a gold gradient segment under the logo; a bold serif title in KAAE Blue with a short gold bar under it; an italic KAAE Blue lead; Midnight body text; details on rounded cards with soft shadows (a KAAE Blue card with white text and a Sun card title, white cards with KAAE Blue serif lines, or a cream card with a gold left edge for a call to action); and the KAAE Blue to Gold rule at the foot of a page. A cover (p.0) is the navy gradient (KAAE Blue at the top left to Midnight) with the logo centred (or at the top left), a white serif title, a short gold bar and an upright, letter-spaced gold subtitle, and no foot rule. A navy-gradient design only when the brief or the photo calls for it: a cover or announcement, an evening invitation, a keynote or stage screen, a dark photo hero, or the requester asks for dark or navy. Never use colours outside this palette.",
+    "logo": "Use the supplied official logo unchanged (pp.3-6): never stretched or distorted, rotated or tilted, recoloured, given effects or shadows, or set on a busy background. Minimum digital width 80px (print 20mm, favicon 16px simplified mark). Keep clear space around it equal to the height of its K.",
+    "logoConstraints": {
+      "minimumWidthPx": 80,
+      "clearSpaceShareOfHeight": 0.15,
+      "clearSpaceNote": "X is the height of the logo's K (p.4): 404 of the official PNG's 2687 pixels, 0.15 of its box. The house rule's half of the logo's height is larger, so it decides; this share is kept as the client's own floor."
+    },
+    "body": "Left align digital body text in Inter, Midnight on white, with 1.5 line spacing and academic formality.",
+    "restriction": "Do not add reference-document factual copy, contact details, slogans, signatures or a seal to a design. Only the saved request supplies design copy.",
     "scriptFonts": {
       "arabic": "Noto Sans Arabic"
     },
-    "scriptFontNote": "Provisional Sorani Kurdish typeface for drafts only: the brand guideline copy in this pack records no Kurdish typeface. The art director confirms the brand font before any release.",
-    "rtl": "Sorani Kurdish blocks are right-to-left: right-align them, keep them separate from Latin blocks, and give them about 20% more width and height than Latin text of the same size.",
+    "scriptFontNote": "Sorani Kurdish (p.10): the guideline sets Kurdish titles in a bold sans in KAAE Blue, right-aligned, with the gold bar under the title's right end; leads in KAAE Blue; body in Midnight. Noto Sans Arabic for body and IBM Plex Sans Arabic or Noto Sans Arabic for display are the admitted Sorani sans faces closest to it.",
+    "rtl": "Sorani Kurdish blocks are right-to-left: right-align them, keep them separate from Latin blocks, and give them about 20% more width and height than Latin text of the same size. The page header keeps the logo at the top left (p.10).",
+    "pageGrammar": {
+      "source": "KAAE_Guidelines4.pdf, Excellence Edition (2025): pages 1-15 (header, title, bar, lead, cards, foot rule), page 0 (cover), page 13 (elements).",
+      "page": { "background": "#FFFFFF", "marginShare": 0.07 },
+      "header": {
+        "logoWidthShare": 0.12,
+        "rule": { "color": "#0A1628", "opacity": 0.08, "thicknessShare": 0.003 },
+        "accent": { "widthShare": 0.11, "thicknessShare": 0.004, "stops": [{ "at": 0, "color": "#F7B500" }, { "at": 0.5, "color": "#FFD700" }, { "at": 1, "color": "#F7B500" }] },
+        "label": { "fontFamily": "Inter", "bold": true, "color": "#4770A3", "letterSpacing": 0.06, "sizeShare": 0.02 }
+      },
+      "title": { "fontFamily": "Crimson Pro", "bold": true, "color": "#4770A3", "colorOnDark": "#FFFFFF", "sizeShare": 0.08, "lineHeight": 1.2, "letterSpacing": -0.01 },
+      "titleBar": { "widthShare": 0.085, "heightShare": 0.0065, "gapShare": 0.018, "stops": [{ "at": 0, "color": "#F7B500" }, { "at": 0.5, "color": "#FFD700" }, { "at": 1, "color": "#F7B500" }] },
+      "lead": { "fontFamily": "Inter", "italic": true, "color": "#4770A3", "colorOnDark": "#F7B500", "sizeShare": 0.036, "lineHeight": 1.45 },
+      "body": { "fontFamily": "Inter", "color": "#0A1628", "colorOnDark": "#FFFFFF", "sizeShare": 0.03, "lineHeight": 1.5 },
+      "cards": {
+        "radiusShare": 0.012,
+        "shadow": { "color": "#0A1628", "opacity": 0.1, "blurShare": 0.02, "offsetShare": 0.005 },
+        "plain": { "fill": "#FFFFFF", "title": "#4770A3", "text": "#0A1628" },
+        "brand": { "fill": "#4770A3", "title": "#FFD700", "text": "#FFFFFF" },
+        "tint": { "fill": "#FDF8F3", "edge": "#F7B500", "edgeShare": 0.005, "title": "#0A1628", "text": "#0A1628" },
+        "dark": { "fill": "#1E3A5F", "title": "#F7B500", "text": "#FFFFFF" }
+      },
+      "stat": { "fontFamily": "Crimson Pro", "bold": true, "colorOnDark": "#F7B500", "colorOnLight": "#4770A3", "labelColor": "#4770A3", "labelColorOnDark": "#FFFFFF" },
+      "footRule": { "heightShare": 0.005, "stops": [{ "at": 0, "color": "#4770A3" }, { "at": 0.45, "color": "#1E3A5F" }, { "at": 0.8, "color": "#F7B500" }, { "at": 1, "color": "#FFD700" }] },
+      "cover": {
+        "angle": 45,
+        "stops": [{ "at": 0, "color": "#4770A3" }, { "at": 1, "color": "#0A1628" }],
+        "logoWidthShare": 0.3,
+        "title": "#FFFFFF",
+        "subtitle": { "fontFamily": "Inter", "color": "#F7B500", "letterSpacing": 0.1, "sizeShare": 0.03 },
+        "body": "#FFFFFF"
+      },
+      "elements": {
+        "sunburst": { "color": "#0A1628", "opacityOnLight": 0.06, "colorOnDark": "#4A90E2", "opacityOnDark": 0.14, "rays": 5 },
+        "trianglePattern": { "color": "#2C5282", "opacityOnLight": 0.1, "colorOnDark": "#4A90E2", "opacityOnDark": 0.16 },
+        "rule": "Optional and subtle (p.13): a quarter-disc sunburst in a corner or a triangle mosaic band fading upward, never over copy or the logo's clear space."
+      }
+    },
     "artDirection": [
-      "Pick ONE hero photo that literally shows the subject. A second photo only as a texture blended into the text zone, never a grid cell. No multi-photo grids in social posts.",
-      "The hero fills 60-100% of the canvas and runs off at least two edges, or fills the top of a white or cream page. Keep a quiet region (sky, wall, blur) for the title.",
-      "Text always sits on something: the white or cream page, a cream card (22-25% of the height), an indigo plate, band or tab, or a fade to paper or to indigo over 35-50% of the height. Never bare text on a busy photo.",
-      "Elements bridge edges: a wordmark tab straddling the card's top edge, a call-to-action tab straddling a card, a portrait breaking over a panel.",
-      "People: cut out, placed bottom-left or left, bleeding off the edge, with the sunburst or grid motif behind. No circle masks.",
-      "A gold border frames series and carousels; a thin gold inset line frames single report posts. Never tilt or rotate photos.",
-      "Colour, as the brand guideline sets it: light first. A white or cream page; indigo for header bands, plates, tabs and scrims; gold only for thin rules, frames, the accent line on indigo and pills. Keep the photo's natural grade.",
-      "Type: bold geometric sans. On a light page an indigo main line, a royal-indigo accent line and dark small body text; on indigo a white main line and a gold line. Logo in a corner; the URL in a pill or the footer.",
-      "Bilingual: the same geometry in both languages. Sorani is right-aligned or centred in the same boxes; never mirror the photo.",
-      "With several photos, rank them by subject fit, sharpness and quiet space. Use the best as the hero, optionally one more as a faded texture, and drop the rest.",
-      "An indigo ground only when the brief or photo calls for it: an evening or dark invitation, a keynote or stage screen, a dark photo hero, or the requester asks for dark or navy. Otherwise white or cream."
+      "With photos: pick ONE hero photo that literally shows the subject. A second photo only as a texture blended into the text zone, never a grid cell. No multi-photo grids in social posts.",
+      "With photos: on a white page the hero sits in a rounded card with a soft shadow under the header, title, gold bar and lead; full-bleed, it fills 60-100% of the canvas off two edges, with a quiet region for any title over it.",
+      "Text always sits on something: the white page, a rounded white, KAAE Blue or cream card, or a fade to white or to navy over 35-50% of the height. Never bare text on a busy photo.",
+      "Elements bridge edges: a call-to-action tab straddling a card, a portrait breaking over a panel.",
+      "With a photo of a person: cut out, placed bottom-left or left, bleeding off the edge, with the sunburst or triangle pattern behind. No circle masks.",
+      "A thin gold line or the KAAE Blue to Gold rule at the foot frames a page. Never tilt or rotate photos.",
+      "Colour, as the 2025 guideline sets it: light first. A white page; KAAE Blue titles and leads; Midnight body text; KAAE Gold only for the title bar, the header accent, a card's left edge and numbers on navy. Keep the photo's natural grade.",
+      "Type: a bold serif title in KAAE Blue (white on navy), a short gold bar under it, an italic KAAE Blue lead, Inter body. Logo top-left over the header rule; a URL in the footer. With no photo, type, cards and rules are the design.",
+      "Bilingual: the same geometry in both languages. Sorani is right-aligned in the same boxes, the gold bar under the title's right end; never mirror the photo.",
+      "With several photos: rank them by subject fit, sharpness and quiet space. Use the best as the hero, optionally one more as a faded texture, and drop the rest.",
+      "A navy-gradient ground (KAAE Blue to Midnight) only for a cover or announcement, an evening invitation, a keynote or stage screen, a dark photo hero, or when the requester asks for dark or navy. Otherwise the white page."
     ],
-    "artDirectionSource": "Office art-direction rulebook, from ~20 of KAAE's published photo designs (ADR-170, 2026-09-30).",
-    "colorSource": "Colour palette page of BRAND GUIDLINES.pdf (white pages under an indigo band; body ink black), owner's decision of 2026-10-01 (ADR-236)."
+    "artDirectionSource": "Office art-direction rulebook, from ~20 of KAAE's published photo designs (ADR-170, 2026-09-30), re-pointed at the 2025 guideline (ADR-238).",
+    "colorSource": "Colour pages of KAAE_Guidelines4.pdf, Brand Guidelines — Excellence Edition (2025): primary palette p.7 (KAAE Blue #4770A3 Pantone 5415 C, KAAE Gold #F7B500 Pantone 7549 C, gradient applications), extended palette p.8. Body ink #0A1628 and lead #4770A3 measured on the rendered pages (ADR-238)."
   },
   "logoSha256": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc"
 }

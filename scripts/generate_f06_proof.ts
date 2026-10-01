@@ -47,7 +47,7 @@ async function main() {
       typography: {
         score: 8.5,
         formalRoleCompliance: true,
-        notes: "Primary headline set in high-contrast Cinzel serif display; bilingual body blocks strictly adhere to Noto Sans Arabic and Verdana."
+        notes: "Primary headline set in high-contrast Crimson Pro serif display; bilingual body blocks strictly adhere to Noto Sans Arabic and Inter."
       },
       composition: {
         score: 8.0,

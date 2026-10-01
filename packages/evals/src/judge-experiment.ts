@@ -256,7 +256,7 @@ function corpusHardQa(layout: StudioLayoutV2, copy: Record<number, string>, scri
   const palette = [...new Set([layout.background?.color, ...layout.text.map((t) => t.color),
     ...(layout.shapes ?? []).map((s) => s.color)].filter((c): c is string => typeof c === 'string'))];
   return evaluateHardQa(layout, {
-    width: layout.width, height: layout.height, copyScripts: scripts, latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic',
+    width: layout.width, height: layout.height, copyScripts: scripts, latinFont: 'Inter', arabicFont: 'Noto Sans Arabic',
     palette, logoAspect: layout.logo ? layout.logo.width / layout.logo.height : 1, copyText: copy,
   }).defectCodes;
 }

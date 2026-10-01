@@ -56,15 +56,15 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
 
   <style>
     .serif-bold {
-      font-family: "Cinzel", "Playfair Display", Georgia, serif;
+      font-family: "Crimson Pro", Georgia, serif;
       font-weight: 700;
     }
     .serif-regular {
-      font-family: "Cinzel", "Playfair Display", Georgia, serif;
+      font-family: "Crimson Pro", Georgia, serif;
       font-weight: 400;
     }
     .serif-italic {
-      font-family: "Cinzel", "Playfair Display", Georgia, serif;
+      font-family: "Crimson Pro", Georgia, serif;
       font-style: italic;
     }
     .sans-bold {

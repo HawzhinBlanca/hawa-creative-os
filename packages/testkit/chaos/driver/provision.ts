@@ -53,8 +53,11 @@ export async function kaaeClientDna(): Promise<void> {
     status: 'active',
     defaultLocale: 'ckb',
     defaultDirection: 'rtl',
-    colors: [{ name: 'Midnight Navy', hex: '#0A1628', role: 'background' }, { name: 'Kurdistan Sun Gold', hex: '#F7B500', role: 'accent' }],
-    fonts: [{ family: 'Verdana', style: 'Regular', weight: 400, role: 'body', license: 'redistributable', supportedLocales: ['en'] }],
+    // KAAE Brand Guidelines, Excellence Edition (KAAE_Guidelines4.pdf, 2025), as packages/domain's KAAE fixture.
+    colors: [{ name: 'White', hex: '#FFFFFF', role: 'background' }, { name: 'KAAE Blue', hex: '#4770A3', role: 'primary' },
+      { name: 'KAAE Gold', hex: '#F7B500', role: 'accent' }, { name: 'Midnight', hex: '#0A1628', role: 'text' }],
+    fonts: [{ family: 'Inter', style: 'Regular', weight: 400, role: 'body', license: 'OFL-1.1', supportedLocales: ['en'] },
+      { family: 'Noto Sans Arabic', style: 'Regular', weight: 400, role: 'body', license: 'OFL-1.1', supportedLocales: ['ckb', 'ar'] }],
     destinations: { productionFolderId: 'chaos-kaae-production', spreadsheetId: 'chaos-kaae-tracker', sheetId: 0 },
     approvalPolicy: { requiredRoles: ['art_director'], allowAutoApproval: false, autoApprovalEligibleTemplates: [] },
   };

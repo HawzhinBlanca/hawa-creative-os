@@ -18,6 +18,7 @@ import {
 import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
 import { RecipeInfeasibleError, TEXT_SLOTS, solveRecipe, type ArtDirectionChoice, type SolverPhoto, type TextSlot } from './solver.js';
 import { resolveSurfaceTone, type TonePreference } from './tone.js';
+import type { PageGrammar } from '../page-grammar.js';
 
 /**
  * ADR-170: the art-director layout call for a brief with photos. The model reads the brief, the
@@ -196,6 +197,13 @@ export interface GenerateArtDirectedOptions {
    * recorded in the brief. It decides every concept's ground over the model's own choice.
    */
   tonePreference?: Pick<TonePreference, 'tone' | 'ground'>;
+  /**
+   * ADR-238: the client's page grammar. Light concepts take its faces, colours and marks, and one
+   * concept on a light ground is the guideline's own page (fade_to_paper on white).
+   */
+  grammar?: PageGrammar;
+  /** ADR-238: the client's logo clear space as a share of the logo's height. */
+  logoClearSpaceShare?: number;
 }
 
 export interface GenerateArtDirectedResult {
@@ -410,6 +418,7 @@ export function solveConcepts(
       logoMinimumWidthPx: options.logoMinimumWidthPx,
       logoClearSpacePx: options.logoClearSpacePx,
       fontsDir: options.fontsDir,
+      ...(options.grammar ? { grammar: options.grammar, logoClearSpaceShare: options.logoClearSpaceShare } : {}),
     });
   const eligible = eligibleRecipes(options.photos, requiredPhotoCount(options.photoSelection, options.photos.length));
   const layouts: StudioLayoutV2[] = [];
@@ -449,6 +458,26 @@ export function solveConcepts(
       kept.push(soft.attempt);
     }
   });
+  // ADR-238: with a page grammar, one light concept is the guideline's own page. When the model
+  // chose none, the last concept on a light ground becomes it (the same photo, the same slots).
+  if (options.grammar && kept.length && !kept.some((c) => c.recipe === 'fade_to_paper') && eligible.includes('fade_to_paper')) {
+    for (let k = kept.length - 1; k >= 0; k--) {
+      const was = kept[k];
+      const page = toned({ ...defaultChoice('fade_to_paper', options.photos, options.copyBlocks), slots: was.slots, heroPhotoIndex: was.heroPhotoIndex ?? defaultChoice('fade_to_paper', options.photos, options.copyBlocks).heroPhotoIndex });
+      if (page.params.surfaceTone !== 'cream' || page.params.paper === 'cream') break;
+      try {
+        const layout = solve(page);
+        if (!studioLayoutV2Schema.safeParse(layout).success) break;
+        layouts[k] = layout;
+        kept[k] = page;
+        replaced.push({ index: k, recipe: was.recipe, reason: 'GUIDELINE_PAGE: replaced by the guideline page (fade_to_paper on white)' });
+      } catch (err) {
+        if (!(err instanceof RecipeInfeasibleError)) throw err;
+        replaced.push({ index: k, recipe: 'fade_to_paper', reason: err.message });
+      }
+      break;
+    }
+  }
   return { layouts, choices: kept, replaced };
 }
 

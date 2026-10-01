@@ -33,13 +33,13 @@ import { resolveClientDesignReference } from '../src/services/client-design-refe
 const W = 1080;
 const H = 1350;
 const MARGIN = 76;
-const PALETTE = ['#FFFFFF', '#FFF2DB', '#17087A', '#3833A3', '#E8B85C', '#000000'];
+const PALETTE = ['#FFFFFF', '#FDF8F3', '#4770A3', '#1E3A5F', '#F7B500', '#0A1628'];
 const COPY = ['Quality Assurance Workshop', 'For school principals', '22 October 2026 · 10:00 AM', 'Divan Hotel, Erbil', 'Seats are limited, please register early'];
 const copyMap = Object.fromEntries(COPY.map((t, i) => [i, t]));
 
 const T = (i: number, role: string, y: number, h: number, size: number) => ({
   copyIndex: i, role, x: MARGIN, y, width: W - 2 * MARGIN, height: h, fontSize: size, lineHeight: 1.3,
-  fontFamily: role === 'title' ? 'Playfair Display' : 'Verdana', color: i === 4 ? '#000000' : '#17087A', align: 'center',
+  fontFamily: role === 'title' ? 'Playfair Display' : 'Verdana', color: i === 4 ? '#0A1628' : '#1E3A5F', align: 'center',
   bold: role === 'title', italic: false, rtl: false,
 });
 
@@ -49,7 +49,7 @@ function poster(titleY = 340): StudioLayoutV2 {
     grid: { margin: MARGIN, columns: 6, gutter: 26, baseline: 14 },
     background: { color: '#FFFFFF' },
     logo: { x: W / 2 - 80, y: 90, width: 160, height: 160 },
-    shapes: [{ x: W / 2 - 80, y: 640, width: 160, height: 3, kind: 'line', color: '#E8B85C', role: 'rule' }],
+    shapes: [{ x: W / 2 - 80, y: 640, width: 160, height: 3, kind: 'line', color: '#F7B500', role: 'rule' }],
     text: [T(0, 'title', titleY, 220, 76), T(1, 'subtitle', 580, 50, 30), T(2, 'date', 700, 50, 30), T(3, 'venue', 770, 50, 30), T(4, 'footer', 1180, 44, 24)],
   } as unknown as StudioLayoutV2;
   return prepareGeneratedLayoutV3(raw, { text: copyMap }, { width: W, height: H, logoAspect: 1, palette: PALETTE });
@@ -62,7 +62,7 @@ function context(client: Pick<OpenAiStudioClient, 'createStructuredCompletion'>)
     instructions: 'Hi, we need a poster for our Quality Assurance Workshop for school principals.',
     copyBlocks: COPY.map((text) => ({ text, script: 'latin' as const })),
     referencePack: { palette: PALETTE, referenceFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' } },
-    promotedRules: 'White or cream page; indigo bands; gold only for rules and frames.',
+    promotedRules: 'White page; KAAE Blue titles and cards; gold for the title bar and rules.',
     latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 1, logo: KAAE_TEST_CLIENT_LOGO,
     client: client as OpenAiStudioClient,
   } as unknown as StageContext;

@@ -982,6 +982,6 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(dnaRes.status).toBe(200);
     const dna = await dnaRes.json();
     expect(dna.name).toContain('Kurdistan Accrediting Association');
-    expect(dna.fonts[0].family).toContain('Cinzel');
+    expect(dna.fonts[0].family).toContain('Crimson Pro'); // ADR-238: the 2025 guideline's title face
   });
 });

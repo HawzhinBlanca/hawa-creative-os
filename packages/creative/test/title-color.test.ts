@@ -33,10 +33,10 @@ const fixture = JSON.parse(readFileSync(new URL('./fixtures/reference-k12-89c242
 };
 const rawReference = JSON.parse(readFileSync(new URL('../assets/kaae-reference.json', import.meta.url), 'utf8'));
 const reference = studioReferenceFromRaw(rawReference);
-// ADR-236: the brand guideline's palette. The fixture's midnight-navy ground snaps to its indigo.
-const GOLD = '#E8B85C';
-const NAVY = '#17087A';
-const LIGHT = ['#FFFFFF', '#FFF2DB'];
+// ADR-238: the 2025 guideline's palette. The fixture's midnight-navy ground is its Midnight.
+const GOLD = '#F7B500';
+const NAVY = '#0A1628';
+const LIGHT = ['#FFFFFF', '#FDF8F3'];
 
 const copyOf = (lang: 'ckb' | 'en') => ({
   text: Object.fromEntries(fixture.copy[lang].map((b, i) => [i, b])),
@@ -84,12 +84,12 @@ describe("the title takes the design's colour, not a standing gold rule", () => 
     titleOf(raw).color = GOLD;
     const layout = prepare(raw, 'en', { ...fixture.spec, titleColor: 'light' });
     const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: copyOf('en').text });
-    expect(svg).toMatch(/<tspan[^>]*fill="#E8B85C"[^>]*>EDITION 2\.0<\/tspan>/);
+    expect(svg).toMatch(/<tspan[^>]*fill="#F7B500"[^>]*>EDITION 2\.0<\/tspan>/);
     // The title wraps to "K-12 STANDARDS" / "FRAMEWORK" / "EDITION 2.0" at this size. Only the
     // accent line carries a fill of its own; the rest take the title's light colour.
     expect(svg).toMatch(/<tspan(?![^>]*fill=)[^>]*>K-12 STANDARDS<\/tspan>/);
     expect(svg).toMatch(/<tspan(?![^>]*fill=)[^>]*>FRAMEWORK<\/tspan>/);
-    expect(svg).toMatch(/<text id="text-copy-0" fill="#(FFFFFF|FFF2DB)"/);
+    expect(svg).toMatch(/<text id="text-copy-0" fill="#(FFFFFF|FDF8F3)"/);
   });
 
   it('still sets the whole title gold when the reference shows a gold title', () => {
@@ -123,7 +123,7 @@ describe('a title colour never breaks the contrast the house rules require', () 
 
   it('applies a dark title over a light ground', () => {
     const raw = candidate('en', 0);
-    raw.background = { ...raw.background, color: '#FFF2DB' };
+    raw.background = { ...raw.background, color: '#FDF8F3' };
     raw.shapes = (raw.shapes || []).filter((s) => s.role !== 'panel');
     const layout = prepare(raw, 'en', { ...fixture.spec, titleColor: 'dark', cta: 'as_generated' });
     const title = titleOf(layout);
@@ -176,17 +176,18 @@ describe("the client's brand rules make gold an accent, not a mandate on titles"
 
   it('no longer requires every title to be Sun Gold', () => {
     expect(colorUsage).not.toMatch(/titles?[^.]*must be[^.]*gold/i);
-    expect(colorUsage).toMatch(/accent/i);
+    expect(colorUsage).toMatch(/KAAE Blue \(#4770A3, Pantone 5415 C\) for titles/);
   });
 
-  it('states the brand guideline\'s light-first rules (ADR-236)', () => {
-    expect(colorUsage).toContain('The default page is White (#FFFFFF) or Cream (#FFF2DB)');
-    expect(colorUsage).toContain('Indigo (#17087A) and Royal Indigo (#3833A3) are for header bands, plates, panels, tabs and scrims');
-    expect(colorUsage).toContain('Gold (#E8B85C) only for thin rules, frames, borders and small accents');
-    expect(colorUsage).toContain('Use an Indigo page only when the brief or the photo calls for it');
+  it('states the 2025 guideline\'s light-first rules (ADR-238)', () => {
+    expect(colorUsage).toContain('The page is White (#FFFFFF), as on the guideline\'s own pages, with generous margins.');
+    expect(colorUsage).toContain('KAAE Gold (#F7B500, Pantone 7549 C) for the short gold bar under a title');
+    expect(colorUsage).toContain('Gold is never text on white or cream');
+    expect(colorUsage).toContain('A cover (p.0) is the navy gradient (KAAE Blue at the top left to Midnight)');
+    expect(colorUsage).toContain('A navy-gradient design only when the brief or the photo calls for it');
     expect(colorUsage).toContain('Never use colours outside this palette.');
-    // The navy-only rule of one dark invitation, and its ban on the guideline's own indigo, are gone.
-    expect(colorUsage).not.toMatch(/Midnight Navy|#0A1628|Never use purple, violet, indigo/);
+    // Nothing of the withdrawn brand book, and no ban on the guideline's own navy.
+    expect(colorUsage).not.toMatch(/indigo|#17087A|#E8B85C|#FFF2DB|Never use purple, violet/i);
   });
 
   it('reaches the brief as the promoted rules, unchanged', () => {

@@ -43,7 +43,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
   <title>KAAE Institutional Accreditation Charter — University of Kurdistan Hewlêr</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -89,7 +89,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
       left: 60px;
       right: 60px;
       bottom: 60px;
-      border: 1px solid #D4A94C;
+      border: 1px solid #F7B500;
       pointer-events: none;
     }
     .corner-notch {
@@ -97,7 +97,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
       width: 24px;
       height: 24px;
       background: #FAF9F6;
-      border: 2px solid #D4A94C;
+      border: 2px solid #F7B500;
     }
     .cn-tl { top: 46px; left: 46px; }
     .cn-tr { top: 46px; right: 46px; }
@@ -132,7 +132,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
       font-weight: 600;
       letter-spacing: 0.22em;
       text-transform: uppercase;
-      color: #D4A94C;
+      color: #F7B500;
       margin-bottom: 14px;
     }
     .statute-cite {
@@ -155,11 +155,11 @@ const design1_CharterA4 = `<!DOCTYPE html>
       font-size: 16px;
       letter-spacing: 0.25em;
       text-transform: uppercase;
-      color: #D4A94C;
+      color: #F7B500;
       margin-bottom: 16px;
     }
     .diploma-main-title {
-      font-family: 'Cinzel', serif;
+      font-family: 'Crimson Pro', serif;
       font-size: 88px;
       font-weight: 700;
       letter-spacing: -0.01em;
@@ -177,14 +177,14 @@ const design1_CharterA4 = `<!DOCTYPE html>
       margin: 0 auto;
     }
     .conferral-formula {
-      font-family: 'Playfair Display', serif;
+      font-family: 'Crimson Pro', serif;
       font-style: italic;
       font-size: 32px;
       color: #475569;
       margin-bottom: 24px;
     }
     .institution-name {
-      font-family: 'Cinzel', serif;
+      font-family: 'Crimson Pro', serif;
       font-size: 96px;
       font-weight: 700;
       color: #0F172A;
@@ -199,7 +199,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
       align-items: center;
       gap: 16px;
       background: rgba(212, 169, 76, 0.08);
-      border: 1.5px solid #D4A94C;
+      border: 1.5px solid #F7B500;
       padding: 16px 40px;
       border-radius: 100px;
       font-family: 'Plus Jakarta Sans', sans-serif;
@@ -273,7 +273,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
       width: 220px;
       height: 220px;
       border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%, #FFF6DB 0%, #F5C755 35%, #D4A94C 70%, #946C15 100%);
+      background: radial-gradient(circle at 35% 35%, #FFF6DB 0%, #F5C755 35%, #F7B500 70%, #946C15 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -302,7 +302,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
       margin-bottom: 4px;
     }
     .seal-text-center {
-      font-family: 'Cinzel', serif;
+      font-family: 'Crimson Pro', serif;
       font-size: 32px;
       font-weight: 700;
       color: #1E3A5F;
@@ -729,7 +729,7 @@ const design3_PresidentialStatement = `<!DOCTYPE html>
   <title>KAAE Presidential Directive — Dr. Boushra Rahal Alameh</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -801,7 +801,7 @@ const design3_PresidentialStatement = `<!DOCTYPE html>
       font-size: 11px;
       letter-spacing: 0.15em;
       text-transform: uppercase;
-      color: #D4A94C;
+      color: #F7B500;
     }
 
     /* Quote Core */
@@ -812,16 +812,16 @@ const design3_PresidentialStatement = `<!DOCTYPE html>
       max-width: 900px;
     }
     .open-quote {
-      font-family: 'Playfair Display', serif;
+      font-family: 'Crimson Pro', serif;
       font-size: 110px;
       line-height: 0.5;
-      color: #D4A94C;
+      color: #F7B500;
       margin-bottom: 28px;
       display: block;
       opacity: 0.9;
     }
     .quote-text {
-      font-family: 'Playfair Display', serif;
+      font-family: 'Crimson Pro', serif;
       font-style: italic;
       font-size: 50px;
       font-weight: 600;
@@ -863,7 +863,7 @@ const design3_PresidentialStatement = `<!DOCTYPE html>
     .leader-role {
       font-family: 'JetBrains Mono', monospace;
       font-size: 11.5px;
-      color: #D4A94C;
+      color: #F7B500;
       letter-spacing: 0.1em;
       text-transform: uppercase;
     }

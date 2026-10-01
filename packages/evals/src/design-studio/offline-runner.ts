@@ -27,14 +27,17 @@ export interface OfflineRunnerOptions {
   forceCanaryFailure?: boolean; // Injected canary perturbation
 }
 
+// KAAE Brand Guidelines, Excellence Edition (KAAE_Guidelines4.pdf, 2025): primary p.7, extended p.8.
 const KAAE_PALETTE = [
-  '#0A1628', // Midnight Navy
-  '#1E3A5F', // Royal Navy
-  '#4770A3', // KAAE Primary Blue
-  '#D4E2F0', // Sky Ice Blue
-  '#F7B500', // Kurdistan Sun Gold
-  '#FDF8F3', // Academic Cream
-  '#FFFFFF', // Pure White
+  '#FFFFFF', // White
+  '#FDF8F3', // Cream
+  '#4770A3', // KAAE Blue (Pantone 5415 C)
+  '#F7B500', // KAAE Gold (Pantone 7549 C)
+  '#0A1628', // Midnight
+  '#1E3A5F', // Royal
+  '#2C5282', // Ocean
+  '#4A90E2', // Sky
+  '#FFD700', // Sun
 ];
 
 export class OfflineRunner {
@@ -112,8 +115,8 @@ export class OfflineRunner {
         height: boxHeight,
         fontSize,
         lineHeight,
-        fontFamily: isArabic ? 'Noto Sans Arabic' : 'Verdana',
-        color: role === 'title' ? '#F7B500' : role === 'eyebrow' ? '#D4E2F0' : '#FFFFFF',
+        fontFamily: isArabic ? 'Noto Sans Arabic' : 'Inter',
+        color: role === 'title' ? '#F7B500' : role === 'eyebrow' ? '#FDF8F3' : '#FFFFFF',
         align: isArabic ? 'right' : 'left',
         bold: role === 'title',
         rtl: isArabic,
@@ -251,7 +254,7 @@ export class OfflineRunner {
           colourRoles: {
             background: '#0A1628',
             title: '#FFFFFF',
-            body: '#D4E2F0',
+            body: '#FDF8F3',
             accent: '#F7B500',
             rule: '#F7B500',
           },
@@ -293,7 +296,7 @@ export class OfflineRunner {
         copyScripts: brief.copyBlocks.map((b) => b.script),
         reference: {
           rules: {
-            fontFamily: 'Verdana',
+            fontFamily: 'Inter',
             palette: KAAE_PALETTE,
             scriptFonts: {
               arabic: 'Noto Sans Arabic',
@@ -301,7 +304,7 @@ export class OfflineRunner {
           },
           logoAspect: 1.0,
         },
-        draftFont: 'Verdana',
+        draftFont: 'Inter',
       };
 
       let hardQaEscapes = 0;
@@ -372,7 +375,7 @@ export class OfflineRunner {
       const pptxBuffer = transferRes.bytes;
 
       // Verify PPTX copy & font
-      const pptxCheck = await checkCanvaPptx(pptxBuffer, copyStrings, 'Verdana');
+      const pptxCheck = await checkCanvaPptx(pptxBuffer, copyStrings, 'Inter');
       if (!pptxCheck.copyPass) {
         hardQaEscapes += 1;
       }

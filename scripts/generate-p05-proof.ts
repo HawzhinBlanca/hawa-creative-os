@@ -25,7 +25,7 @@ async function main() {
 
   // Ensure font resolves under fontconfig
   if (baseLayout.text[1]) {
-    baseLayout.text[1].fontFamily = 'Playfair Display';
+    baseLayout.text[1].fontFamily = 'Crimson Pro';
   }
 
   // 2. Create deliberately misaligned layout:

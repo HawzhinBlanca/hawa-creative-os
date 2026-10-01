@@ -55,7 +55,7 @@ async function main() {
     },
   ];
 
-  const palette = ['#0A1628', '#C5A059', '#1E3A5F', '#FDF8F3'];
+  const palette = ['#0A1628', '#F7B500', '#1E3A5F', '#FDF8F3'];
 
   // 1. Retrieve top-3 exemplars from confirmed pool
   const retrievalIndex = new ExemplarRetrievalIndex();
@@ -72,14 +72,14 @@ async function main() {
   const runReceipts: any[] = [];
 
   const admittedDisplay = new Set([
-    'Cinzel',
+    'Crimson Pro',
     'Lora',
-    'Cairo',
-    'Playfair Display',
+    'IBM Plex Sans Arabic',
+    'Inter',
     'Cormorant Garamond',
     'Amiri',
   ]);
-  const admittedBody = new Set(['Verdana', 'Noto Sans Arabic']);
+  const admittedBody = new Set(['Inter', 'Noto Sans Arabic']);
 
   for (let round = 1; round <= 3; round++) {
     console.log(`\n--- Calling gpt-6-astra round ${round}/3 ---`);
@@ -275,7 +275,7 @@ async function main() {
 - **Dispatches:** 3 identical brief requests yielding **9 distinct layouts** (3 candidates per call).
 - **Schema Compliance:** 9 / 9 layouts (100%) valid \`StudioLayoutV2\` JSON via strict server-side scaling.
 - **Anti-Twin-Card Compliance:** 0 twin-card blocks detected across all 9 layouts.
-- **F12 Typography Compliance:** 100% adherence (all body/footer roles use \`Verdana\`; display roles use \`Cinzel\` / \`Lora\`).
+- **F12 Typography Compliance:** 100% adherence (all body/footer roles use \`Inter\`; display roles use \`Crimson Pro\` / \`Lora\`).
 - **Pairwise Distinctness:** Minimum geometric distance across all 36 pairs is **${minPairwiseDistance.toFixed(2)}px** (hard gate requires > 15px; no structural duplicates).
 
 ---
@@ -314,7 +314,7 @@ ${layoutReports
 1. **Schema Compliance:** \`studioLayoutV2Schema.safeParse\` passed on all 9 layouts without errors.
 2. **Strict Mode Schema:** Validated that the JSON schema passed to OpenAI contains zero \`$defs\` and zero \`$ref\`, inlining all properties with \`additionalProperties: false\`.
 3. **Capacity-Aware Sizing (PosterMELD):** Copy blocks pre-computed character capacity requirements; 0 slot overflows detected.
-4. **F12 Typography Policy:** Body text strictly uses \`Verdana\`; titles use \`Cinzel\` and \`Lora\`. Zero unadmitted fonts.
+4. **F12 Typography Policy:** Body text strictly uses \`Inter\`; titles use \`Crimson Pro\` and \`Lora\`. Zero unadmitted fonts.
 5. **No Twin-Card Blocks:** No candidate generated side-by-side bilateral symmetric cards.
 6. **Diversity Invariant:** Minimum pairwise geometric distance is ${minPairwiseDistance.toFixed(2)}px (> 15px threshold).
 `;
