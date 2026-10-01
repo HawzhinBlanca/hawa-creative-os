@@ -48,29 +48,36 @@ export const OFFICE_AND_GROUP_SCRIPTS: Script[] = [
   },
   {
     id: 'S123', title: 'the office member replies "approved" to the draft', kinds: ['approval', 'office'],
-    natural: 'Approved; delivery starts; the member is told.',
+    natural: 'Asked once, naming the draft and its requester (ADR-200); "yes" approves; delivery starts; the member is told.',
     async play(p) {
       await inReview(p);
       const ok = await p.officeReplies('approved');
-      expect(p.h.saidFor(ok).map((s) => s.text).join()).toMatch(/Approved/);
+      expect(p.h.saidFor(ok).map((s) => s.text).join()).toMatch(/^Send <b>.+<\/b> to <b>Sewa<\/b> now\?$/);
+      expect(p.h.t.deliveries).toHaveLength(0);
+      const yes = await p.h.officeSays(p.office[0], 'yes');
+      expect(p.h.saidFor(yes).map((s) => s.text).join()).toMatch(/Approved/);
       expect(p.h.t.deliveries).toHaveLength(1);
     },
   },
   {
     id: 'S124', title: 'the office member writes "ok send it" without replying, one draft waiting', kinds: ['approval', 'office'],
-    natural: 'The one waiting draft is approved.',
+    natural: 'The one waiting draft is asked about by name (ADR-200), then approved on "yes".',
     async play(p) {
       await inReview(p);
       await p.h.officeSays(p.office[0], 'ok send it');
+      expect(p.h.t.deliveries).toHaveLength(0);
+      await p.h.officeSays(p.office[0], 'yes');
       expect(p.h.t.deliveries).toHaveLength(1);
     },
   },
   {
     id: 'S125', title: 'the office member replies "👍 send" in Sorani-English mix', kinds: ['approval', 'office', 'emoji'],
-    natural: 'Approved.',
+    natural: 'Asked once in Sorani (ADR-200); approved on a Sorani "yes".',
     async play(p) {
       await inReview(p);
       await p.officeReplies('👍 باشە بینێرە');
+      expect(p.h.t.deliveries).toHaveLength(0);
+      await p.h.officeSays(p.office[0], 'بەڵێ');
       expect(p.h.t.deliveries).toHaveLength(1);
     },
   },

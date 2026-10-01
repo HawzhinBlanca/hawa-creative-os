@@ -5,6 +5,7 @@ import { runCanvaDraft, type LifecycleOutcomeReporter } from '../canva-draft-wor
 import type { WorkflowInput, WorkflowOutput } from '../workflow.js';
 import { withInvocationLogContext } from '../logging.js';
 import { RequestLifecycleApi, type DesignFinishedEvent } from './request-lifecycle.js';
+import { TelegramSenderApi } from './telegram-sender.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
@@ -15,6 +16,24 @@ export interface DesignRunInput extends WorkflowInput {
   v: 1;
   /** round: 0 for the original design; ≥ 1 for requester revision rounds. */
   lifecycle: { requestId: string; round: number; runId: string };
+  /**
+   * ADR-233: what the requester hears once this round's design has really started ("I'll redo …",
+   * "I'm now adding what you asked …"): sent when Core admits the run, never before. A round refused at
+   * admission says only its outcome; the requester heard "I'll redo" and, a second later, "a designer
+   * will make this change by hand" (live test L13).
+   */
+  startNotice?: DesignStartNotice;
+}
+
+export interface DesignStartNotice { key: string; chatId: string; text: string; parseMode?: 'HTML' }
+
+/** A start notice as RequestLifecycle may pass it on: its own key, chat and words, nothing else. */
+export function validStartNotice(value: unknown, chatId: string): value is DesignStartNotice {
+  const n = value as Partial<DesignStartNotice> | null | undefined;
+  return Boolean(n) && typeof n === 'object' && !Array.isArray(n) && typeof n!.key === 'string' && /^[\w:.-]{8,200}$/.test(n!.key) &&
+    n!.chatId === chatId && typeof n!.text === 'string' && n!.text.trim().length > 0 && n!.text.length <= 4000 &&
+    (n!.parseMode === undefined || n!.parseMode === 'HTML') &&
+    Object.keys(n!).every((k) => ['key', 'chatId', 'text', 'parseMode'].includes(k));
 }
 
 /**
@@ -39,12 +58,13 @@ export function validDesignRun(input: DesignRunInput, key: string): boolean {
 export async function runOwnedDesign(
   input: DesignRunInput, key: string, ctx: WorkflowDurableContext,
   report: LifecycleOutcomeReporter['report'], fetcher: typeof fetch = fetch,
+  started?: LifecycleOutcomeReporter['started'],
 ): Promise<WorkflowOutput> {
   if (!validDesignRun(input, key)) {
     throw new restate.TerminalError('DESIGN_RUN_REFUSED: invalid request, task or workflow identity', { errorCode: 409 });
   }
   return runCanvaDraft(input, ctx, fetcher, undefined, {
-    requestId: input.lifecycle.requestId, runId: input.lifecycle.runId, report,
+    requestId: input.lifecycle.requestId, runId: input.lifecycle.runId, report, ...(started ? { started } : {}),
   });
 }
 
@@ -84,6 +104,14 @@ export const DesignRunApi = restate.workflow({
             event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }),
           );
         }, fetch,
+        // ADR-233: Core admitted the run; the requester now hears that it started, once (its key).
+        () => {
+          const notice = input.startNotice;
+          if (!notice) return;
+          ctx.objectSendClient(TelegramSenderApi, notice.chatId).send({ v: 1, key: notice.key, chatId: notice.chatId, kind: 'text',
+            text: notice.text, ...(notice.parseMode ? { parseMode: notice.parseMode } : {}), class: 'critical',
+            tenantId: input.tenantId, taskId: input.taskId }, restate.rpc.sendOpts({ idempotencyKey: notice.key }));
+        },
       )),
   },
   options: { ingressPrivate: true, inactivityTimeout: { minutes: 1 }, abortTimeout: { minutes: 5 },

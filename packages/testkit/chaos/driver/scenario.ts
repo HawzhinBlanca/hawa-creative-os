@@ -284,7 +284,8 @@ export async function checkRequest(chat: string, options: {
   delivered: boolean; classifierAllowance?: number; uncertainSends?: number; ledgerSince?: number;
   /**
    * Design outcomes the scenario makes end without a draft (ADR-142): each tells the office once that
-   * an operator is needed ("Automatic design needs an operator in Hawa Desk."). Default 0.
+   * an operator is needed (ADR-233: "The automatic design of … stopped without a draft …", ending with
+   * the task's "Desk search: <id8>" line). Default 0.
    */
   operatorAlerts?: number;
   /** The approved files the delivery sends (and archives): 1 unless the scenario pinned more. */
@@ -321,8 +322,9 @@ export async function checkRequest(chat: string, options: {
   const uncertain = options.uncertainSends ?? shown.filter((s) => s.fault === 'drop-after-processing').length;
   // RequestLifecycle tells the office a draft is ready for its Desk review (ADR-065, 8682bd97): a
   // notice of the review, not an alert about a send.
-  const operatorAlert = (text: string) => text.startsWith('Automatic design needs an operator in Hawa Desk.');
-  const officeNotes = (await sentTo(OFFICE_CHAT)).filter((s) => s.text && s.text.includes(task.id));
+  const operatorAlert = (text: string) => /^(?:The automatic design of |The change )/.test(text) &&
+    text.endsWith(`\nDesk search: ${task.id.slice(0, 8)}`);
+  const officeNotes = (await sentTo(OFFICE_CHAT)).filter((s) => s.text && (s.text.includes(task.id) || operatorAlert(s.text)));
   const alerts = officeNotes.filter((s) => !s.text.startsWith('A design is ready for office review in Hawa Desk.') &&
     !(options.operatorAlerts !== undefined && operatorAlert(s.text)));
   add(uncertain ? 'an uncertain send has exactly one office alert' : 'no office alert without an uncertain send', alerts.length === uncertain, `uncertain sends expected=${uncertain} office alerts naming the task=${alerts.length}`);

@@ -21,7 +21,7 @@ import { MEDIA_MESSAGES, bold, requesterLang, say, escapeTelegramHtml } from '@h
 import { createHash } from 'node:crypto';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { replyLanguage } from './lifecycle-album.js';
-import { shortTitle } from './requester-turn.js';
+import { requesterName, shortTitle, whoWrote } from './requester-turn.js';
 import { claimPhoto, originalMessage, readEditDecision, readMediaAnswer, recordEditDecision, recordMediaAnswer,
   recordPendingEdit } from './lifecycle-media-intake.js';
 import { readNewBriefDecision, recordRoutingRefusal, type LateRequesterChange } from './lifecycle-chat-target.js';
@@ -81,7 +81,8 @@ export function createEditIntake(ctx: Pick<CoreContext, 'db'>) {
       const office = deps.officeChatId && deps.officeChatId !== chatId ? deps.officeChatId : null;
       const quoted = words.length > 1500 ? `${words.slice(0, 1500)}…` : words;
       return answerOnce(say(MEDIA_MESSAGES.editForwarded, lang), office ? { officeAlert: { chatId: office, text: [
-        `The requester in chat ${chatId} edited an earlier message (${messageId}) that the bot has no current record of. Nothing was changed.`,
+        // ADR-231: the requester by name, in a plain sentence; no ids in the body.
+        `${whoWrote(requesterName(edited?.from))} edited an earlier message that the bot no longer has a record of. Nothing was changed; please read their new words and answer them in the chat.`,
         '', 'Their new words:', escapeTelegramHtml(quoted) || '(no words)'].join('\n') } } : {});
     };
 
@@ -115,7 +116,7 @@ export function createEditIntake(ctx: Pick<CoreContext, 'db'>) {
               AND source_event_id = ${String(original.updateId)}`.execute(trx)).rows[0]);
           return opened?.ambiguous ? noteBundle(original.updateId) : opened ? note(opened.request_id) : forward();
         }
-        if (typeof plan.requestId === 'string' && ['revise', 'note', 'tell'].includes(plan.kind)) return note(plan.requestId);
+        if (typeof plan.requestId === 'string' && ['revise', 'redo', 'note', 'tell'].includes(plan.kind)) return note(plan.requestId);
         // It opened nothing and changed nothing: read it again as it now reads.
         return words ? reread() : forward();
       }

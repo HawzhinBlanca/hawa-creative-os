@@ -12,10 +12,10 @@ import { log, withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, outcomeReportCore, type CoreInternal } from './delivery.js';
 import { officeAlertKey, officeChatIdsFromEnv } from './office-chats.js';
 import { TelegramSenderApi } from './telegram-sender.js';
-import { DesignRunApi, type DesignRunInput } from './design-run.js';
+import { DesignRunApi, validStartNotice, type DesignRunInput, type DesignStartNotice } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
-import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
+import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, requesterTitleName, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -62,8 +62,9 @@ export interface ManualLifecycleState {
   tenantId: string;
   chatId: string;
   owner: 'restate';
-  stage: 'manual';
-  rev: 1;
+  /** `cancelled`: withdrawn (ADR-230). */
+  stage: 'manual' | 'cancelled';
+  rev: number;
   taskId: string;
   openEventId: string;
   openSha256: string;
@@ -74,6 +75,16 @@ export interface ManualLifecycleState {
    */
   lang?: RequesterLang;
   title?: string;
+  /** ADR-230: how the request was withdrawn (its stage is then `cancelled`). */
+  withdrawal?: Withdrawal;
+}
+
+/** ADR-230: a withdraw, as this object recorded it; replays send its notices again under the same keys. */
+export interface Withdrawal {
+  eventId: string; sha256: string; actor: 'requester' | 'office'; rev: number; fromStage: string;
+  requesterNotice?: { chatId: string; text: string }; officeAlerts: Array<{ chatId: string; text: string }>;
+  /** The finished run of a design already being made when the request was withdrawn, once recorded. */
+  finishedRunEventId?: string;
 }
 
 export interface OpenManualResult { accepted: true; taskId: string; stage: 'manual'; rev: 1 }
@@ -89,7 +100,7 @@ export interface OpenAutomaticEvent extends Omit<OpenManualEvent, 'draft'> {
 
 export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'stage' | 'rev'> {
   nativeReview?: { eventId: string; sha256: string; reply: Extract<NativeReviewReply,{accepted:true}> };
-  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'rejected' | 'delivering' | 'delivered';
+  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'rejected' | 'delivering' | 'delivered' | 'cancelled';
   rev: number;
   runId: string;
   /** Current design round (0 = original, 1+ = revision rounds). */
@@ -108,10 +119,16 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
     kind?: 'revise' | 'approve' | 'reject' };
   /** Filled when the requester submits a revision directive after the office marks "revise". */
   revisionRound?: { eventId: string; sha256: string; round: number; newTaskId: string; runId: string };
+  /** ADR-230 addendum: the design-finished event whose outcome started a round for pending changes. */
+  pendingRoundFrom?: string;
   /** The office's latest retry of a design that ended without a draft (ADR-142). */
-  officeRetry?: { eventId: string; sha256: string; actionId: string; attempt: number; runId: string; rev: number };
+  officeRetry?: { eventId: string; sha256: string; actionId: string; attempt: number; runId: string; rev: number;
+    /** ADR-233: the retry designed a fresh successor of a refused redo or pending-changes round. */
+    freshTaskId?: string };
   delivery?: { startEventId: string; startSha256: string; actionId: string; input: DeliveryInput;
-    finishEventId?: string; finishSha256?: string; finishResult?: DeliveryFinishedReply };
+    finishEventId?: string; finishSha256?: string; finishResult?: DeliveryFinishedReply;
+    /** ADR-230: a chat-only delivery finished before it closed its request, closed by the repair. */
+    reconciledEventId?: string };
 }
 
 /**
@@ -121,7 +138,7 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
 export interface ManualOriginLifecycleState extends Omit<AutomaticLifecycleState,
   'stage' | 'runId' | 'round' | 'designInput' | 'question' | 'revisionRound'> {
   origin: 'manual';
-  stage: 'in_review' | 'approved' | 'rejected' | 'delivering' | 'delivered';
+  stage: 'in_review' | 'approved' | 'rejected' | 'delivering' | 'delivered' | 'cancelled';
 }
 
 export type LifecycleState = ManualLifecycleState | AutomaticLifecycleState | ManualOriginLifecycleState;
@@ -158,7 +175,7 @@ export interface OfficeRetryEvent {
 
 export type OfficeRetryReply =
   | { accepted: true; requestId: string; taskId: string; actionId: string; runId: string; attempt: number;
-      stage: 'designing'; rev: number }
+      stage: 'designing'; rev: number; freshTaskId?: string }
   | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
 
 /** The roles Core's projection admits for a retry (lifecycle-office-retry.ts OFFICE_RETRY_ROLES). */
@@ -190,6 +207,12 @@ export interface RequesterDecisionEvent {
   rawText?: string;
   /** Present only when answering the current verified Studio clarification question. */
   questionId?: string;
+  /**
+   * ADR-233: what the requester hears once the round's design has started (Core's "I'll redo …", or
+   * "I'm making those changes now"). ChatInbox no longer sends it at once: the DesignRun sends it when
+   * Core admits the run, so a round refused at admission is answered once, by its outcome.
+   */
+  startNotice?: DesignStartNotice;
 }
 
 export type RequesterDecisionReply =
@@ -283,8 +306,9 @@ const invalid = (reason: string) => new restate.TerminalError(`LIFECYCLE_OPEN_RE
 function requesterOf(state: Pick<ManualLifecycleState, 'lang' | 'title'> & { designInput?: { rawText?: string } }):
   { lang: RequesterLang; title: string } {
   const lang = state.lang ?? requesterLang(state.designInput?.rawText, 'en');
-  const name = String(state.title || '').replace(/^[^:]{1,40}:\s*/, '').replace(/\s+/g, ' ').trim();
-  const short = Array.from(name).length > 60 ? `${Array.from(name).slice(0, 59).join('')}…` : name;
+  // ADR-200 addendum: a request named neutrally ("New design request from Sewa") is "your design" to them.
+  // ADR-231: no direction mark at the name's edges.
+  const short = requesterTitleName(state.title);
   return { lang, title: short ? bold(short) : say(LIFECYCLE_MESSAGES.yourDesign, lang) };
 }
 
@@ -540,8 +564,12 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
       typeof event.round !== 'number' || !Number.isInteger(event.round) || event.round < 0 ||
       !event.report || typeof event.report.status !== 'string') throw invalid('invalid design finish identity');
   const prior = await ctx.get('lc');
+  // ADR-230 addendum: after a pending-change round started, the run that finished is no longer the
+  // object's, but a replay of its finish still gets the same outcome (resent under the same keys).
+  const pendingReplay = Boolean(prior && 'runId' in prior && prior.pendingRoundFrom === event.eventId &&
+    prior.outcome?.eventId === event.eventId);
   if (!prior || !('runId' in prior) || prior.requestId !== event.requestId ||
-      prior.taskId !== event.taskId || prior.runId !== event.runId) return { ignored: true as const };
+      ((prior.taskId !== event.taskId || prior.runId !== event.runId) && !pendingReplay)) return { ignored: true as const };
   const fingerprint = hashOf(event);
   const nextRev = prior.rev + 1;
   // Replay detection: if the outcome for this event was already stored (crash after set, before send),
@@ -551,13 +579,27 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
       throw invalid('the design outcome was already recorded with different content');
     }
     sendDesignOutcome(ctx, prior);
+    // ADR-230 addendum: the round for the requester's pending changes; its workflow key makes it once.
+    if (prior.pendingRoundFrom === event.eventId && prior.stage === 'designing') ctx.startDesign(prior.designInput);
     return { ignored: false as const, stage: prior.stage, rev: prior.rev };
   }
 
+  // ADR-230: the request was withdrawn while this run was being made. Its report is kept against the
+  // closed task, once; nothing goes to review, and neither the office nor the requester hears of a draft.
+  if (prior.stage === 'cancelled' && prior.withdrawal) {
+    if (prior.withdrawal.finishedRunEventId !== event.eventId) {
+      await ctx.run(`withdrawn-outcome:${event.runId}`, () => core.post(
+        `/internal/lifecycle/${encodeURIComponent(event.requestId)}/withdrawn-outcome`,
+        { v: 1, eventId: event.eventId, runId: event.runId, taskId: event.taskId, report: event.report }));
+      ctx.set('lc', { ...prior, withdrawal: { ...prior.withdrawal, finishedRunEventId: event.eventId } });
+    }
+    return { ignored: false as const, stage: prior.stage, rev: prior.rev };
+  }
   if (prior.stage !== 'designing') throw invalid('request is not designing');
   const project = () => core.post<{
-    v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer';
+    v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer' | 'designing';
     status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
+    pendingRound?: { newTaskId: string; runId: string; round: number; directive: string; updateIds: string[] };
     question?: { id: string; text: string; options: string[] };
     officeAlert?: { chatId: string; text: string };
     officeAlerts?: Array<{ chatId: string; text: string }>;
@@ -590,13 +632,18 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
   }
   if (projected?.v !== 1 || projected.requestId !== event.requestId ||
       projected.taskId !== event.taskId || projected.rev !== nextRev ||
-      !['in_review', 'manual', 'awaiting_answer'].includes(projected.stage) ||
+      !['in_review', 'manual', 'awaiting_answer', 'designing'].includes(projected.stage) ||
+      // ADR-230 addendum: `designing` only with the round Core started for the requester's pending changes.
+      ((projected.stage === 'designing') !== Boolean(projected.pendingRound)) ||
+      (projected.pendingRound && (!UUID.test(projected.pendingRound.newTaskId) || projected.pendingRound.newTaskId === event.taskId ||
+        projected.pendingRound.runId !== `dr-${projected.pendingRound.newTaskId}` || !Number.isInteger(projected.pendingRound.round) ||
+        projected.pendingRound.round < 1 || typeof projected.pendingRound.directive !== 'string' || !projected.pendingRound.directive.trim())) ||
       (projected.stage === 'awaiting_answer' &&
         (!projected.question || !UUID.test(projected.question.id) ||
          typeof projected.question.text !== 'string' || !Array.isArray(projected.question.options)))) {
     throw new Error('Core did not return a valid design outcome projection');
   }
-  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: nextRev,
+  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: nextRev, pendingRoundFrom: undefined,
     question: projected.question ? { ...projected.question, taskId: event.taskId, rev: nextRev } : undefined,
     outcome: { eventId: event.eventId, sha256: fingerprint, status: projected.status,
       ...(projected.revisionId ? { revisionId: projected.revisionId } : {}),
@@ -606,6 +653,29 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
       ...photoAlertsOf(projected.officePhotoAlerts),
     },
   };
+  if (projected.pendingRound) {
+    // ADR-230 addendum (L8): the draft finished before the requester's changes; Core started the next
+    // round with them. The outcome's message tells the requester; the new run starts here.
+    const round = projected.pendingRound;
+    const designInput: DesignRunInput = { ...prior.designInput, rawText: round.directive,
+      lifecycle: { requestId: prior.requestId, round: round.round, runId: round.runId },
+      taskId: round.newTaskId, idempotencyKey: `lifecycle:${prior.requestId}:${round.newTaskId}` };
+    delete designInput.redriveAttempt;
+    delete designInput.startNotice;
+    // ADR-233: "I'm now adding what you asked …" is said once the new round's design has started (its
+    // DesignRun sends it when Core admits the run), under the key the outcome message would have used.
+    const startMessage = next.outcome?.message;
+    if (startMessage) designInput.startNotice = { key: `${prior.requestId}:${nextRev}:design-outcome`, chatId: prior.chatId,
+      text: startMessage.text, parseMode: startMessage.parseMode };
+    const outcome = next.outcome ? { ...next.outcome } : undefined;
+    if (outcome) delete outcome.message;
+    const folded: AutomaticLifecycleState = { ...next, outcome, taskId: round.newTaskId, runId: round.runId, round: round.round,
+      designInput, pendingRoundFrom: event.eventId, officeRetry: undefined, revisionRound: undefined };
+    ctx.set('lc', folded);
+    sendDesignOutcome(ctx, folded);
+    ctx.startDesign(designInput);
+    return { ignored: false as const, stage: folded.stage, rev: folded.rev };
+  }
   ctx.set('lc', next);
   sendDesignOutcome(ctx, next);
   return { ignored: false as const, stage: next.stage, rev: next.rev };
@@ -967,8 +1037,9 @@ export async function recordOfficeRetry(ctx: AutomaticOpenContext, core: CoreInt
     if (prior.officeRetry.sha256 !== sha256) throw invalid('this office retry was recorded with different content');
     // A worker can stop after saving state and before the run started; the workflow key makes it once.
     if (prior.stage === 'designing' && prior.runId === prior.officeRetry.runId) ctx.startDesign(prior.designInput);
-    return { accepted: true, requestId: prior.requestId, taskId: prior.taskId, actionId: event.actionId,
-      runId: prior.officeRetry.runId, attempt: prior.officeRetry.attempt, stage: 'designing', rev: prior.officeRetry.rev };
+    return { accepted: true, requestId: prior.requestId, taskId: event.taskId, actionId: event.actionId,
+      runId: prior.officeRetry.runId, attempt: prior.officeRetry.attempt, stage: 'designing', rev: prior.officeRetry.rev,
+      ...(prior.officeRetry.freshTaskId ? { freshTaskId: prior.officeRetry.freshTaskId } : {}) };
   }
   if (prior.stage !== 'manual' || prior.rev !== event.expectedRev || prior.officeRevision || prior.question ||
       !prior.outcome || prior.outcome.revisionId) return { accepted: false, code: 'WRONG_STAGE' };
@@ -976,7 +1047,7 @@ export async function recordOfficeRetry(ctx: AutomaticOpenContext, core: CoreInt
   const nextRev = prior.rev + 1;
   const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
     v: 1; requestId: string; taskId: string; actionId: string; rev: number; stage: 'designing';
-    runId: string; attempt: number; taskState: string;
+    runId: string; attempt: number; taskState: string; freshTaskId?: string;
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/office-retry`, {
     v: 1, expectedRev: prior.rev, rev: nextRev,
     key: `${event.requestId}:${nextRev}:officeRetry:${event.eventId}`,
@@ -986,19 +1057,30 @@ export async function recordOfficeRetry(ctx: AutomaticOpenContext, core: CoreInt
   if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
       projected.actionId !== event.actionId || projected.rev !== nextRev || projected.stage !== 'designing' ||
       !Number.isInteger(projected.attempt) || projected.attempt < 1 ||
-      projected.runId !== `dr-${event.taskId}-a${projected.attempt}`) {
+      (projected.freshTaskId === undefined
+        ? projected.runId !== `dr-${event.taskId}-a${projected.attempt}`
+        : !UUID.test(projected.freshTaskId) || projected.freshTaskId === event.taskId || projected.runId !== `dr-${projected.freshTaskId}`)) {
     throw new Error('Core did not return a valid office retry projection');
   }
-  const designInput: DesignRunInput = { ...prior.designInput,
-    lifecycle: { ...prior.designInput.lifecycle, runId: projected.runId }, redriveAttempt: projected.attempt };
+  // ADR-233: a redo or pending-changes round refused as a native revision is retried as a fresh successor
+  // task, designed under its own first run (`dr-<task>`); any other task is designed again as it is.
+  const fresh = projected.freshTaskId;
+  const designInput: DesignRunInput = fresh
+    ? { ...prior.designInput, taskId: fresh, idempotencyKey: `lifecycle:${prior.requestId}:${fresh}`,
+      lifecycle: { ...prior.designInput.lifecycle, runId: projected.runId } }
+    : { ...prior.designInput, lifecycle: { ...prior.designInput.lifecycle, runId: projected.runId }, redriveAttempt: projected.attempt };
+  if (fresh) delete designInput.redriveAttempt;
+  // ADR-142: the retry tells the requester nothing; a round's start notice is not said again.
+  delete designInput.startNotice;
   const next: AutomaticLifecycleState = { ...prior, stage: 'designing', rev: nextRev, runId: projected.runId, designInput,
+    ...(fresh ? { taskId: fresh } : {}),
     outcome: undefined, question: undefined,
     officeRetry: { eventId: event.eventId, sha256, actionId: event.actionId, attempt: projected.attempt,
-      runId: projected.runId, rev: nextRev } };
+      runId: projected.runId, rev: nextRev, ...(fresh ? { freshTaskId: fresh } : {}) } };
   ctx.set('lc', next);
   ctx.startDesign(designInput);
   return { accepted: true, requestId: event.requestId, taskId: event.taskId, actionId: event.actionId,
-    runId: projected.runId, attempt: projected.attempt, stage: 'designing', rev: nextRev };
+    runId: projected.runId, attempt: projected.attempt, stage: 'designing', rev: nextRev, ...(fresh ? { freshTaskId: fresh } : {}) };
 }
 
 function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
@@ -1064,6 +1146,9 @@ export async function recordRequesterDecision(
   const fingerprint = hashOf(event);
   const prior = await ctx.get('lc');
   if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (event.startNotice !== undefined && !validStartNotice(event.startNotice, prior.chatId)) {
+    throw invalid('the requester decision carries an invalid start notice');
+  }
   // Idempotent replay: already in designing for this round.
   if (prior.revisionRound?.eventId === event.eventId) {
     if (prior.revisionRound.sha256 !== fingerprint) throw invalid('requester decision replayed with different content');
@@ -1075,7 +1160,11 @@ export async function recordRequesterDecision(
     return { accepted: true, requestId: prior.requestId, newTaskId: prior.revisionRound.newTaskId,
       runId: prior.revisionRound.runId, round: prior.revisionRound.round, rev: prior.rev, stage: 'designing' };
   }
-  if (prior.stage !== (event.questionId ? 'awaiting_answer' : 'manual')) {
+  // ADR-200 addendum: redo words about a design delivered recently ("do a better design") reopen it
+  // for a new round. Core admitted that round from the requester's own Telegram update (its receipt is
+  // checked below), only for a request with a design run, so a delivered request takes it the same way.
+  const reopening = prior.stage === 'delivered' && !event.questionId && /^chatinbox:revision:[1-9][0-9]*$/.test(event.eventId);
+  if (prior.stage !== (event.questionId ? 'awaiting_answer' : 'manual') && !reopening) {
     return { accepted: false, code: 'WRONG_STAGE' };
   }
   if (event.questionId && (!UUID.test(event.questionId) ||
@@ -1136,17 +1225,183 @@ export async function recordRequesterDecision(
     taskId: newTaskId,
     idempotencyKey: `lifecycle:${prior.requestId}:${newTaskId}`,
   };
+  // ADR-233: the round's own start notice, sent by its DesignRun once Core admits it; never an earlier round's.
+  delete newDesignInput.startNotice;
+  delete newDesignInput.redriveAttempt;
+  if (event.startNotice) newDesignInput.startNotice = event.startNotice;
   const next: AutomaticLifecycleState = { ...prior, stage: 'designing', rev: nextRev,
     taskId: newTaskId, runId: newRunId, round: event.round, designInput: newDesignInput,
     revisionRound: { eventId: event.eventId, sha256: fingerprint, round: event.round,
       newTaskId, runId: newRunId },
-    // Clear prior-round transient fields so the next design-outcome projects cleanly.
-    outcome: undefined, officeRevision: undefined, question: undefined,
+    // Clear prior-round transient fields so the next design-outcome projects cleanly; a reopened
+    // design's finished delivery belongs to the round before (its next approval delivers anew).
+    outcome: undefined, officeRevision: undefined, question: undefined, delivery: undefined,
   };
   ctx.set('lc', next);
   ctx.startDesign(newDesignInput);
   return { accepted: true, requestId: prior.requestId, newTaskId, runId: newRunId,
     round: event.round, rev: nextRev, stage: 'designing' };
+}
+
+/**
+ * ADR-230: the request is withdrawn, by its requester (a cancel Core's intake recorded for that Telegram
+ * update: `chatinbox:withdraw:<update>`) or by the office (the Desk's Cancel, signed through the office
+ * gateway: `desk:<action>`). Core closes the request and its task under one receipt; this object then
+ * says so to the requester and, for a requester's cancel, to the office. A cancel that came too late (the
+ * design was approved or sent) changes nothing: Core keeps it for the office and words the truthful
+ * answer, which is sent here. A design run still being made is not stopped; its finish is recorded and
+ * goes nowhere (applyDesignFinished).
+ */
+export interface WithdrawEvent {
+  v: 1; kind: 'withdraw'; eventId: string; requestId: string;
+  /** The requester's Telegram update (requester's cancel only). */
+  updateId?: number;
+  /** The office's Cancel only: the request revision and task it saw, who pressed it, and why. */
+  taskId?: string; actionId?: string; expectedRev?: number; actor?: { userId: string; role: string }; reason?: string;
+}
+
+export type WithdrawReply =
+  | { accepted: true; requestId: string; taskId: string; stage: 'cancelled'; rev: number; fromStage: string }
+  | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' | 'TOO_LATE' | 'STALE_REVISION'; stage?: string };
+
+/** Office roles that may cancel a request (Core's OFFICE_WITHDRAW_ROLES; the gateway admits the same). */
+export const OFFICE_WITHDRAW_ROLES = new Set(['operator', 'administrator', 'art_director', 'creative_director', 'designer', 'office_admin']);
+
+type WithdrawProjected = { v: 1; withdrawn: boolean; requestId: string; taskId: string; rev: number; stage: string;
+  fromStage?: string; requesterNotice?: { chatId: string; text: string }; officeAlerts?: Array<{ chatId: string; text: string }> };
+
+function sendWithdrawNotices(ctx: Pick<AutomaticOpenContext, 'send'>, state: Pick<ManualLifecycleState, 'requestId' | 'tenantId' | 'taskId'>,
+  base: string, notices: Pick<Withdrawal, 'requesterNotice' | 'officeAlerts'>): void {
+  const about = { tenantId: state.tenantId, taskId: state.taskId };
+  if (notices.requesterNotice) {
+    ctx.send({ v: 1, key: `${base}:requester`, chatId: notices.requesterNotice.chatId, kind: 'text',
+      text: notices.requesterNotice.text, parseMode: 'HTML', class: 'critical', ...about });
+  }
+  for (const [index, alert] of notices.officeAlerts.entries()) {
+    ctx.send({ v: 1, key: officeAlertKey(`${base}:office`, index, alert.chatId), chatId: alert.chatId,
+      kind: 'text', text: alert.text, class: 'critical', ...about });
+  }
+}
+
+export async function recordWithdraw(ctx: AutomaticOpenContext, core: CoreInternal, event: WithdrawEvent): Promise<WithdrawReply> {
+  const requesterUpdate = /^chatinbox:withdraw:([1-9][0-9]{0,17})$/.exec(String(event?.eventId));
+  const office = /^desk:([0-9a-f-]{36})$/i.exec(String(event?.eventId));
+  if (event?.v !== 1 || event.kind !== 'withdraw' || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      (!requesterUpdate && !office) ||
+      (requesterUpdate && (event.updateId !== Number(requesterUpdate[1]) || event.actor !== undefined || event.expectedRev !== undefined)) ||
+      (office && (event.actionId !== office[1] || !UUID.test(event.taskId || '') || !Number.isInteger(event.expectedRev) ||
+        Number(event.expectedRev) < 1 || !UUID.test(event.actor?.userId || '') || !OFFICE_WITHDRAW_ROLES.has(event.actor?.role || '') ||
+        typeof event.reason !== 'string' || !event.reason.trim() || event.reason.length > 2000))) {
+    throw invalid('invalid withdraw identity, actor or reason');
+  }
+  const sha256 = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || prior.requestId !== event.requestId) return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.withdrawal?.eventId === event.eventId) {
+    if (prior.withdrawal.sha256 !== sha256) throw invalid('this withdraw was recorded with different content');
+    // A worker can stop after saving state and before the notices; the same keys send them once.
+    sendWithdrawNotices(ctx, prior, `${prior.requestId}:${prior.withdrawal.rev}:withdrawn`, prior.withdrawal);
+    return { accepted: true, requestId: prior.requestId, taskId: prior.taskId, stage: 'cancelled', rev: prior.withdrawal.rev,
+      fromStage: prior.withdrawal.fromStage };
+  }
+  if (prior.stage === 'cancelled' && office) return { accepted: false, code: 'WRONG_STAGE', stage: prior.stage };
+  if (office && prior.rev !== event.expectedRev) return { accepted: false, code: 'STALE_REVISION', stage: prior.stage };
+  if (office && prior.taskId !== event.taskId) return { accepted: false, code: 'NOT_CURRENT_DRAFT', stage: prior.stage };
+  const nextRev = prior.rev + 1;
+  const key = `${event.requestId}:${nextRev}:withdraw:${event.eventId}`;
+  // Core's refusal of a stale or moved request is an answer, not a failure: it is journaled as one.
+  const projected = await ctx.run(`withdraw:${nextRev}`, async () => {
+    try {
+      return await core.post<WithdrawProjected>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/withdraw`, {
+        v: 1, expectedRev: prior.rev, rev: nextRev, key,
+        ops: [{ kind: 'withdraw', taskId: prior.taskId, eventId: event.eventId,
+          actor: requesterUpdate ? { kind: 'requester', updateId: Number(requesterUpdate[1]) }
+            : { kind: 'office', userId: event.actor!.userId, role: event.actor!.role },
+          reason: requesterUpdate ? '' : event.reason!.trim() }],
+      });
+    } catch (error) {
+      const refused = /\bHTTP 409 (STALE_REVISION|WRONG_STAGE|NOT_CURRENT_DRAFT|NOT_WITHDRAWABLE)\b/.exec(String((error as Error)?.message));
+      if (error instanceof restate.TerminalError && refused) return { __hawaRefused: refused[1] };
+      throw error;
+    }
+  });
+  if (projected && '__hawaRefused' in projected) {
+    const code = projected.__hawaRefused === 'NOT_WITHDRAWABLE' ? 'TOO_LATE' : projected.__hawaRefused === 'NOT_CURRENT_DRAFT'
+      ? 'NOT_CURRENT_DRAFT' : projected.__hawaRefused === 'STALE_REVISION' ? 'STALE_REVISION' : 'WRONG_STAGE';
+    if (requesterUpdate) log.warn(`[RequestLifecycle] the requester's cancel ${event.eventId} of ${event.requestId} was refused: ${projected.__hawaRefused}`);
+    return { accepted: false, code, stage: prior.stage };
+  }
+  if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== prior.taskId ||
+      (projected.withdrawn && (projected.stage !== 'cancelled' || projected.rev !== nextRev)) ||
+      (!projected.withdrawn && (projected.rev !== prior.rev || !requesterUpdate))) {
+    throw new Error('Core did not return a valid withdraw projection');
+  }
+  const notices = { ...(projected.requesterNotice ? { requesterNotice: projected.requesterNotice } : {}),
+    officeAlerts: Array.isArray(projected.officeAlerts) ? projected.officeAlerts : [] };
+  if (!projected.withdrawn) {
+    // Too late (approved, being sent, sent) or already closed: the request is unchanged. Core kept the
+    // cancel for the office and gave the words; they are sent under this update's keys.
+    sendWithdrawNotices(ctx, prior, `${prior.requestId}:withdraw-refused:${event.eventId}`, notices);
+    return { accepted: false, code: projected.stage === 'cancelled' ? 'WRONG_STAGE' : 'TOO_LATE', stage: projected.stage };
+  }
+  const withdrawal: Withdrawal = { eventId: event.eventId, sha256, actor: requesterUpdate ? 'requester' : 'office', rev: nextRev,
+    fromStage: projected.fromStage ?? prior.stage, ...notices };
+  // The design run's identity stays, so its finish is recognised and recorded (applyDesignFinished).
+  ctx.set('lc', { ...prior, stage: 'cancelled', rev: nextRev, withdrawal,
+    ...('runId' in prior ? { question: undefined } : {}) } as LifecycleState);
+  sendWithdrawNotices(ctx, prior, `${prior.requestId}:${nextRev}:withdrawn`, withdrawal);
+  return { accepted: true, requestId: prior.requestId, taskId: prior.taskId, stage: 'cancelled', rev: nextRev, fromStage: withdrawal.fromStage };
+}
+
+/**
+ * ADR-230 repair: a request whose delivery finished chat-only before such a delivery closed its request
+ * (production request 95eeb08d, 2026-10-01) is in `delivering` with its finish recorded. Core reads the
+ * report it stored and its own Telegram send marks again, and delivers it when they show every file and
+ * the notice sent; otherwise nothing changes. Reached only through the signed office gateway.
+ */
+export interface DeliveryReconcileEvent { v: 1; kind: 'reconcile-delivery'; requestId: string }
+
+export type DeliveryReconcileReply =
+  | { accepted: true; requestId: string; taskId: string; deliveryId: string; stage: 'delivered'; rev: number; replayed: boolean }
+  | { accepted: false; code: string; stage?: string };
+
+export async function reconcileDelivery(ctx: AutomaticOpenContext, core: CoreInternal, event: DeliveryReconcileEvent): Promise<DeliveryReconcileReply> {
+  if (event?.v !== 1 || event.kind !== 'reconcile-delivery' || !UUID.test(event.requestId) || ctx.key !== event.requestId) {
+    throw invalid('invalid delivery repair');
+  }
+  const prior = await ctx.get('lc');
+  if (!prior || !reviewOwned(prior) || !prior.delivery?.finishResult) return { accepted: false, code: 'NO_FINISHED_DELIVERY', stage: prior?.stage };
+  const delivery = prior.delivery;
+  const eventId = `reconcile:${delivery.input.deliveryId}`;
+  if (delivery.reconciledEventId === eventId && prior.stage === 'delivered') {
+    return { accepted: true, requestId: prior.requestId, taskId: prior.taskId, deliveryId: delivery.input.deliveryId,
+      stage: 'delivered', rev: delivery.finishResult!.rev, replayed: true };
+  }
+  if (prior.stage !== 'delivering' || delivery.finishResult!.stage !== 'delivering') return { accepted: false, code: 'WRONG_STAGE', stage: prior.stage };
+  const nextRev = prior.rev + 1;
+  const projected = await ctx.run(`reconcile:${nextRev}`, async () => {
+    try {
+      return await core.post<{ v: 1; requestId: string; taskId: string; approvalId: string; deliveryId: string;
+        stage: 'delivered'; taskState: string; rev: number }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/delivery-reconcile`, {
+        v: 1, expectedRev: prior.rev, rev: nextRev, key: `${event.requestId}:${nextRev}:deliveryReconciled:${delivery.input.deliveryId}`,
+        ops: [{ kind: 'reconcileDelivery', taskId: prior.taskId, approvalId: delivery.input.approvalId,
+          deliveryId: delivery.input.deliveryId, run: Number(delivery.input.run || 1) }],
+      });
+    } catch (error) {
+      const refused = /\bHTTP 409 ([A-Z_]+)\b/.exec(String((error as Error)?.message));
+      if (error instanceof restate.TerminalError && refused && refused[1] !== 'IDEMPOTENCY_CONFLICT') return { __hawaRefused: refused[1] };
+      throw error;
+    }
+  });
+  if (projected && '__hawaRefused' in projected) return { accepted: false, code: projected.__hawaRefused, stage: prior.stage };
+  if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== prior.taskId ||
+      projected.deliveryId !== delivery.input.deliveryId || projected.stage !== 'delivered' || projected.rev !== nextRev) {
+    throw new Error('Core did not return a valid delivery repair');
+  }
+  const finishResult: DeliveryFinishedReply = { ...delivery.finishResult!, stage: 'delivered', taskState: projected.taskState, rev: nextRev };
+  ctx.set('lc', { ...prior, stage: 'delivered', rev: nextRev, delivery: { ...delivery, finishResult, reconciledEventId: eventId } });
+  return { accepted: true, requestId: prior.requestId, taskId: prior.taskId, deliveryId: delivery.input.deliveryId,
+    stage: 'delivered', rev: nextRev, replayed: false };
 }
 
 export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv()) {
@@ -1189,7 +1444,8 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             set: (name, value) => ctx.set(name, value),
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
               .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
-            startDesign: () => { throw new Error('designFinished cannot start a new run'); },
+            // ADR-230 addendum: only the round Core started for the requester's pending changes.
+            startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
           }, core, event)),
       ),
       questionSent: restate.handlers.object.exclusive(
@@ -1283,6 +1539,33 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
               .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
             startDesign: () => { throw new Error('deliveryFinished cannot start a design run'); },
+          }, core, event)),
+      ),
+      /** ADR-230: from ChatInbox (a requester's cancel) or OfficeDecisionGateway.withdraw (the Desk's Cancel). */
+      withdraw: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: WithdrawEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordWithdraw({
+            key: ctx.key,
+            get: (name) => ctx.get<LifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+              .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+            startDesign: () => { throw new Error('withdraw cannot start a design run'); },
+          }, core, event)),
+      ),
+      /** ADR-230 repair: reached only through OfficeDecisionGateway.reconcileDelivery (scripts/repair_chat_only_delivery.ts). */
+      reconcileDelivery: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: DeliveryReconcileEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => reconcileDelivery({
+            key: ctx.key,
+            get: (name) => ctx.get<LifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: () => { throw new Error('reconcileDelivery does not message anyone'); },
+            startDesign: () => { throw new Error('reconcileDelivery cannot start a design run'); },
           }, core, event)),
       ),
       get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<LifecycleState | null> =>

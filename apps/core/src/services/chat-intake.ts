@@ -33,6 +33,11 @@ export interface ChatIntake {
   lifecycleSource?: LifecycleSourceRef;
   /** Server-authored only after verification of the immutable source confirmation. */
   reviewedSource?: ReviewedSourceEvidence;
+  /**
+   * ADR-232: how the copy was taken from a request written as a sentence, and why (the office reads it
+   * on the task's creation event). Server-authored at intake; absent when the copy was used as given.
+   */
+  copyExtraction?: import('./request-copy-extraction.js').CopyExtractionReceipt;
   /** Optional studio generation parameters */
   studioOptions?: {
     /** The Studio's names, or the older intake names the Studio maps (parseStudioTier, ADR-159). */
@@ -49,6 +54,11 @@ export interface ChatIntake {
     mediaGroupId?: string;
     /** For a revision: the change asked for, which the studio makes to the parent's design. */
     revisionDirective?: string;
+    /**
+     * ADR-233: a new design of the same request (a redo, or changes sent while the first draft was made),
+     * never an edit of the parent's design. Exclusive with `parentTaskId`; the words are art direction.
+     */
+    freshFrom?: { parentTaskId: string; kind: 'redo' | 'pending_changes'; directive: string };
     /** The directive carries the requester's answer to a question about it: none is asked again. */
     clarified?: boolean;
     /** The same design as the parent's, in another size (the variant): a format, not a change. */
@@ -223,6 +233,7 @@ export async function persistChatIntake(
       designInstructions: input.designInstructions, exactCopy: input.exactCopy,
       ...(input.lifecycleAlbum ? { lifecycleAlbum: input.lifecycleAlbum } : {}),
       ...(input.reviewedSource ? { reviewedSource: input.reviewedSource } : {}),
+      ...(input.copyExtraction ? { copyExtraction: input.copyExtraction } : {}),
       clientId: input.clientId, workflow: 'canva',
       designStudio,
       ...(input.isInstructionOnly ? { isInstructionOnly: true } : {}),
@@ -248,6 +259,7 @@ export async function persistChatIntake(
     // the chat flag changes between rounds. Resolve the predecessor in the same scoped transaction.
     const predecessorIds = [...new Set([
       input.studioOptions?.parentTaskId, input.studioOptions?.answers, input.studioOptions?.referenceFor,
+      input.studioOptions?.freshFrom?.parentTaskId,
     ].filter((id): id is string => Boolean(id)))];
     // ADR-135 stage 2: the only production callers are RequestLifecycle's projection (outboxState
     // 'recorded') and WhatsApp intake; no path creates a Telegram task outside the lifecycle any more.

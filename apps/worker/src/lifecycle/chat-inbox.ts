@@ -26,7 +26,7 @@ import * as restate from '@restatedev/restate-sdk';
 import type { OutboundMessage } from '@hawa/contracts';
 import { withInvocationLogContext, log } from '../logging.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
-import type { OpenAutomaticEvent, OpenManualEvent, RequesterDecisionEvent } from './request-lifecycle.js';
+import type { OpenAutomaticEvent, OpenManualEvent, RequesterDecisionEvent, WithdrawEvent } from './request-lifecycle.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { officeAlertKey } from './office-chats.js';
 import { ACCESS_MESSAGES, INBOX_MESSAGES, requesterLang, say, type RequesterLang } from '@hawa/integrations';
@@ -54,7 +54,9 @@ export type IntakeAnswer =
       /** When mode=lifecycle and Core routed the update as a requester revision. */
       lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
         'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message' |
-        'late-change' | 'chat-answer' | 'settle-later';
+        'late-change' | 'chat-answer' | 'settle-later' |
+        /** ADR-230: the requester's cancel withdraws `requestId`; RequestLifecycle answers once it is closed. */
+        'withdraw';
       albumMessage?: string; albumNoticeKey?: string;
       /**
        * settle-later (ADR-143): settle this update after `delayMs` (a saved album photo, or a held brief;
@@ -63,6 +65,10 @@ export type IntakeAnswer =
       settle?: { kind: 'album' | 'brief' | 'photo'; delayMs: number };
       /** ADR-145: words Core says beside its answer, sent once per update. */
       notice?: { text: string; parseMode?: 'HTML' };
+      /** ADR-235: the key the notice is sent under instead of the update's (a kept brief's timeout). */
+      noticeKey?: string;
+      /** ADR-235: "who is this design for?" was asked; settle the brief's update after `delayMs` (its timeout). */
+      clientQuestionSettle?: { delayMs: number };
       /** ADR-145 (N5): a sender outside the intake list was already answered in this chat today. */
       quiet?: boolean;
       /**
@@ -116,6 +122,8 @@ export interface InboxContext {
    */
   sendLifecycleDecision(requestId: string, event: RequesterDecisionEvent & { newTaskId: string }): Promise<void> | void;
   sendLifecycleOpen(requestId: string, event: OpenManualEvent | OpenAutomaticEvent): Promise<void> | void;
+  /** ADR-230: fire-and-forget a requester's withdraw to RequestLifecycle; absent in older test harnesses. */
+  sendLifecycleWithdraw?(requestId: string, event: WithdrawEvent): Promise<void> | void;
   sendNotice(message: OutboundMessage): void;
   /** A durable delayed call of this chat's `settle` handler (ADR-143), under a stable idempotency key. */
   scheduleSettle(input: SettleInput, delayMs: number, key: string): void;
@@ -287,6 +295,10 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
         ...(done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) });
       // ADR-144: approval or timing words passed to the office (never an approval by themselves).
       alertOffice(`notify.office:requester-note:${update.update_id}`);
+      // ADR-235: the question's timeout, a durable delayed settle of the brief's update under its own key
+      // (a replay schedules nothing twice; an answer before it makes the settle open nothing).
+      if (done.clientQuestionSettle) ctx.scheduleSettle({ v: 1, update, attempt: 0 }, done.clientQuestionSettle.delayMs,
+        `settle:${update.update_id}:client-question`);
     }
     if (done.lifecycleAction === 'album-message') {
       if (!done.chatId || !done.albumMessage || !done.albumNoticeKey) throw new Error('Core returned an incomplete album notice');
@@ -329,6 +341,15 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
         newTaskId: done.newTaskId,
         ...(done.questionId ? { questionId: done.questionId } : {}),
         ...(done.rawText !== undefined ? { rawText: done.rawText as string } : {}),
+        // ADR-182: the requester's change started the next draft; they are told so, once. ADR-200
+        // addendum: redo words are answered by Core's own line, naming the design ("I'll redo …").
+        // ADR-233: said by the round's DesignRun once Core admits the design, not here: a round refused at
+        // admission ("a designer will make this change by hand") was announced a second before (L13).
+        ...(done.lifecycleAction === 'requester-revision' && done.chatId ? { startNotice: {
+          key: `chatinbox:change-taken:${update.update_id}`, chatId: done.chatId,
+          text: done.chatAnswer?.text || say(INBOX_MESSAGES.changeTaken, languageOf(update)),
+          ...(done.chatAnswer?.text && done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}),
+        } } : {}),
       };
       // Keep the Restate context alive until the send is durably recorded. A failed import or send
       // retries this handler from its journaled Core answer under the same event key.
@@ -340,14 +361,15 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
           text: say(INBOX_MESSAGES.answerTaken, languageOf(update)),
         });
       }
-      // ADR-182: the requester's change started the next draft; they are told so, once, instead of
-      // hearing nothing until the draft reaches the office.
-      if (done.lifecycleAction === 'requester-revision' && done.chatId) {
-        ctx.sendNotice({ v: 1, key: `chatinbox:change-taken:${update.update_id}`,
-          chatId: done.chatId, kind: 'text', class: 'critical',
-          text: say(INBOX_MESSAGES.changeTaken, languageOf(update)),
-        });
-      }
+    }
+    if (done.lifecycleAction === 'withdraw') {
+      // ADR-230: Core decided the cancel withdraws this request. RequestLifecycle closes it (Core checks
+      // this update's decision) and tells the requester and the office, so nothing is said here. The
+      // event key is the update: a replay of this handler sends it once.
+      if (!done.requestId || !done.chatId) throw new Error('Core returned an incomplete withdraw');
+      if (!ctx.sendLifecycleWithdraw) throw new Error('This ChatInbox cannot reach RequestLifecycle.withdraw');
+      await ctx.sendLifecycleWithdraw(done.requestId, { v: 1, kind: 'withdraw', eventId: `chatinbox:withdraw:${update.update_id}`,
+        requestId: done.requestId, updateId: update.update_id });
     }
     if (done.lifecycleAction === 'request-choice-required' && done.chatId &&
         (done.code === 'AMBIGUOUS_REQUEST' || done.code === 'STALE_REQUEST_REPLY')) {
@@ -412,7 +434,7 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
     // ADR-145: words Core said beside its answer (the photo sent before was used; a video's words were).
     if (done.notice) {
       const chat = done.chatId ?? chatOfUpdate(update);
-      if (chat) ctx.sendNotice({ v: 1, key: `chatinbox:notice:${update.update_id}`, chatId: chat, kind: 'text',
+      if (chat) ctx.sendNotice({ v: 1, key: done.noticeKey ? `chatinbox:${done.noticeKey}` : `chatinbox:notice:${update.update_id}`, chatId: chat, kind: 'text',
         class: 'critical', text: done.notice.text, ...(done.notice.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) });
     }
     if (!settling) {
@@ -455,6 +477,11 @@ function inboxContext(ctx: restate.ObjectContext): InboxContext {
       const { RequestLifecycleApi } = await import('./request-lifecycle.js');
       ctx.objectSendClient(RequestLifecycleApi, requestId)
         .open(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
+    },
+    sendLifecycleWithdraw: async (requestId, event) => {
+      const { RequestLifecycleApi } = await import('./request-lifecycle.js');
+      ctx.objectSendClient(RequestLifecycleApi, requestId)
+        .withdraw(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
     },
     sendNotice: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
       .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),

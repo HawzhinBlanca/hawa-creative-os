@@ -336,7 +336,9 @@ export function scaleNormalizedLayoutToV2(
     baseline: Math.max(4, Math.round(norm.grid.baseline * canvasHeight || 8)),
   };
 
-  const canvasBgLum = hexToLuminance(norm.background?.color || repair.darkest);
+  // ADR-236: a candidate that names no ground is on the palette's lightest colour (light first), not
+  // its darkest; the contrast repair below then sets dark text on it.
+  const canvasBgLum = hexToLuminance(norm.background?.color || repair.lightest);
   const shapes: ShapeElement[] = norm.shapes.map((s) => {
     let resolvedColor = s.color;
     let strokeColor = s.strokeColor || undefined;
@@ -403,7 +405,7 @@ export function scaleNormalizedLayoutToV2(
 
     // WCAG 2.1 AA Contrast Enforcement:
     // Determine underlying surface color (panel behind text or canvas background)
-    let effectiveBg = norm.background?.color || repair.darkest;
+    let effectiveBg = norm.background?.color || repair.lightest;
     for (let i = norm.shapes.length - 1; i >= 0; i--) {
       const s = norm.shapes[i];
       if (s.role === 'panel' || s.kind === 'rect' || s.kind === 'roundRect') {
@@ -526,7 +528,7 @@ export function scaleNormalizedLayoutToV2(
     height: canvasHeight,
     genre: canvasWidth / canvasHeight >= 1.6 ? ('banner' as const) : ('poster' as const),
     grid: scaledGrid,
-    background: { color: norm.background.color },
+    background: { color: norm.background?.color || repair.lightest },
     art,
     shapes,
     text,
@@ -780,7 +782,10 @@ export function balanceCanvasMargins(
   if (top + shift < layout.grid.margin) shift = layout.grid.margin - top;
   if (shift === 0) return 0;
 
-  for (const b of boxes) b.y += shift;
+  // ADR-236: a band bled off the top or bottom edge stays on that edge. Shifted with the rest it left
+  // a sliver of ground along it (5px of white under the indigo footer band of a light poster).
+  const bleedsOffTopOrBottom = (b: { y: number; height: number }) => b.y <= 1 || b.y + b.height >= layout.height - 1;
+  for (const b of boxes) if (!(composed.includes(b as ShapeElement) && bleedsOffTopOrBottom(b))) b.y += shift;
   return 1;
 }
 
@@ -1355,8 +1360,9 @@ why the list is short; a family that is absent is one the renderer cannot set th
 - Logo Placement: Place the logo in a prominent header or anchor position (e.g., top-center or top-left for Latin, top-center or top-right for RTL).
   Ensure the logo box has dignified proportions and does not collide with title text.
 - Text Legibility & Contrast:
-  * Light text on dark background (e.g., the palette's lightest colour or its warm accent on its darkest colour): contrast ratio MUST exceed 4.5:1.
-  * Dark text on light background (e.g., the palette's darkest colour on a light panel): contrast ratio MUST exceed 4.5:1.
+  * Dark text on a light background (e.g., the palette's darkest or deepest brand colour on its white or cream): contrast ratio MUST exceed 4.5:1.
+  * Light text on a dark background (e.g., the palette's lightest colour or its warm accent on its darkest colour): contrast ratio MUST exceed 4.5:1.
+  * The canvas may be light or dark: follow the client's colour rules and the brief for which. A light canvas is as finished as a dark one; carry it with generous white space, deep-toned bands or plates and thin accent rules, never by darkening it.
   * NEVER place low-contrast text (e.g., dark blue on dark blue, or pale gray on cream).
 - Eyebrows & Tracking:
   * Eyebrows (role: "eyebrow") must fit cleanly on a SINGLE line. NEVER allow an eyebrow to wrap onto multiple lines.
@@ -1364,6 +1370,7 @@ why the list is short; a family that is absent is one the renderer cannot set th
 - Footer and Venue Bands:
   * If the canvas background is dark, NEVER place a solid light (cream or white) rectangle across the footer or venue area.
   * Footer and venue bands on dark canvases MUST harmonize with the palette: use a deep tone from the palette, a subtle border or rule in its accent colour, or a translucent container. An unstyled stark cream block on a dark poster is strictly rejected.
+  * On a light canvas a footer, venue or header band may be a deep tone from the palette carrying light text, or the light canvas itself set off by a thin rule in the accent colour.
 - Vertical Rhythm & Negative Space:
 ${negativeSpacePromptGuidance()}
 
@@ -1383,7 +1390,7 @@ When generating layouts for Kurdish or Arabic copy:
 If a layout candidate requests an art layer (art.source = "generated" or "procedural"):
 - You MUST declare a calmRegion box in normalized coordinates.
 - The calmRegion defines the canvas area occupied by headline and body text.
-- The calmRegion MUST stay dark, low-frequency, and low-contrast so that foreground text renders with pristine legibility.
+- The calmRegion MUST stay low-frequency and low-contrast relative to the text over it, so that foreground text renders with pristine legibility: quiet and light under dark text on a light canvas, quiet and dark under light text on a dark canvas.
 - Background art opacity must be moderate (0.15 to 0.40) to prevent text occlusion.
 - art.prompt describes the imagery alone, in a few words. It must not contain the words ${FORBIDDEN_ART_WORDS.map((w) => `"${w}"`).join(', ')} — not even to say where the copy sits ("behind the hero text") or what to leave out ("no text"): image models draw what a prompt names, and a prompt with one of these words is rejected.
 

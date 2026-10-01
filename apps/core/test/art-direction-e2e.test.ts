@@ -13,6 +13,7 @@ import {
   imagePixelSize,
   photoSelectionFromInstructions,
   renderLayoutV2,
+  tonePreferenceFromWords,
   PNG,
   type StudioLayoutV2,
 } from '@hawa/creative';
@@ -176,7 +177,10 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
       toneWords: ['formal', 'institutional', 'modern'], readingOrder: [0, 1, 2],
       roles: [{ copyIndex: 0, role: 'title', importance: 5 }, { copyIndex: 1, role: 'subtitle', importance: 4 }, { copyIndex: 2, role: 'body', importance: 3 }],
       must: [], mustNot: [], imageryStrategy: 'photographic', imageryRationale: '', kurdishLeads: false, riskFlags: [],
+      // ADR-236: the brief records the ground the owner's words ask for ("a dark navy overlay").
+      tonePreference: tonePreferenceFromWords(INSTRUCTIONS),
     } as unknown as CreativeBrief;
+    expect(brief.tonePreference).toMatchObject({ tone: 'dark' });
 
     // ADR-180 (owner, 2026-09-30: "office house style"): with no stated count the recorded half-the-photos
     // guess does not bind a recipe. Under ADR-171 it did, and this brief became a three-photo collage.
@@ -229,7 +233,7 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     const layout: StudioLayoutV2 = winner.currentLayout;
     // One hero and one blended texture; the title and gold line on the fade; the inset gold line.
     expect(layout.photos!.map((p) => [p.photoIndex, p.role])).toEqual([[0, 'hero'], [4, 'texture']]);
-    expect(layout.text.find((t) => t.copyIndex === 1)!.color.toUpperCase()).toBe('#F7B500');
+    expect(layout.text.find((t) => t.copyIndex === 1)!.color.toUpperCase()).toBe('#E8B85C');
     for (const t of layout.text) expect(qa.measuredContrast![t.copyIndex]).toBeGreaterThanOrEqual(t.fontSize >= 24 && t.bold ? 3 : 4.5);
 
     // The Canva deck: the hero native, the fade its own PNG, the text native.

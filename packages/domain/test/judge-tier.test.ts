@@ -7,26 +7,26 @@ import {
 } from '../src/provider-policy.js';
 
 /**
- * The judging stage was 27% of a production run — $0.171 of $0.629 per design, measured over 16
- * runs in hawa.design_studio_calls — for four calls that pick between candidates already made.
+ * The judge's tier is an owner decision with a recorded reason, so it cannot change by accident.
  *
- * It moved to a cheap model on evidence: scripts/experiments/judge-model-agreement.ts replayed 24
- * stored production judgments (the candidates still carry the preview PNGs their judge saw, and
- * design_studio_judgments stores its per-dimension votes) and found gpt-4.1-mini agreeing with the
- * expensive judge's own past verdicts 75% of the time, where the expensive judge replayed against
- * itself agreed only 67%. Both caught the degraded-copy canary 12 times out of 12 in both orders.
+ * 2026-09-20: the judge moved to gpt-4.1-mini on an agreement replay against the old gpt-6-astra
+ * judge (scripts/experiments/judge-model-agreement.ts: 75% agreement with the stored verdicts, 67%
+ * for the expensive judge against itself, the canary caught 12 of 12 by both).
  *
- * These tests exist so that decision cannot be undone by accident — reverting the model, or
- * dropping it from the allowlist, has to be deliberate and has to come with new evidence.
+ * 2026-10-01, ADR-237: the owner decided that top-quality designs use the top model everywhere a
+ * model judges or looks at a design. The replay measured agreement with an older judge, not which
+ * poster is better, so it does not stand against that decision. The judge is gpt-6.1-sol again on
+ * the production tier; gpt-4.1-mini stays the dev tier's judge and an explicit rollback.
  */
-describe('the judge runs on the cheap tier in production, by measurement', () => {
+describe('the production judge is the owner-selected top model (ADR-237)', () => {
   const saved = { ...process.env };
   afterEach(() => {
     process.env = { ...saved };
   });
 
-  it('resolves the judge to gpt-4.1-mini while the owner-selected design roles use Sol 6.1', () => {
-    expect(resolveModel('judge', 'production')).toBe('gpt-4.1-mini');
+  it('resolves the judge to gpt-6.1-sol, like every other production role that reads a design', () => {
+    delete process.env.HAWA_MODEL_JUDGE;
+    expect(resolveModel('judge', 'production')).toBe('gpt-6.1-sol');
     expect(resolveModel('layout', 'production')).toBe('gpt-6.1-sol');
     expect(resolveModel('critique', 'production')).toBe('gpt-6.1-sol');
     expect(resolveModel('text', 'production')).toBe('gpt-6.1-sol');
@@ -37,8 +37,10 @@ describe('the judge runs on the cheap tier in production, by measurement', () =>
     // assertModelAllowed then rejects, and every production run dies at the judge.
     delete process.env.HAWA_MODEL_TIER;
     process.env.NODE_ENV = 'production';
-    expect(ALLOWED_MODELS).toContain('gpt-4.1-mini');
     expect(() => assertModelAllowed(PRODUCTION_MODELS.judge)).not.toThrow();
+    // The previous judge stays admitted for the dev tier, a rollback and historical receipts.
+    expect(ALLOWED_MODELS).toContain('gpt-4.1-mini');
+    expect(() => assertModelAllowed('gpt-4.1-mini')).not.toThrow();
     expect(() => assertModelAllowed('gpt-6-astra')).not.toThrow();
   });
 
@@ -51,6 +53,8 @@ describe('the judge runs on the cheap tier in production, by measurement', () =>
   });
 
   it('lets one deployment or one run override the judge without touching the allowlist rules', () => {
+    process.env.HAWA_MODEL_JUDGE = 'gpt-4.1-mini';
+    expect(resolveModel('judge', 'production')).toBe('gpt-4.1-mini');
     process.env.HAWA_MODEL_JUDGE = 'gpt-6-astra';
     expect(resolveModel('judge', 'production')).toBe('gpt-6-astra');
   });

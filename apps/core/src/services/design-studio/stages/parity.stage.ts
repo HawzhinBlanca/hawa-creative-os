@@ -88,9 +88,10 @@ export async function runParityStage(
     schemaName: 'CanvaParityVerdict',
     images: [previewPng, canvaPng],
     // Parity reads two finished renders and reports what differs; it invents nothing, which is the
-    // same shape of work as the judge, and it rides the judge's measured tier decision (see
-    // PRODUCTION_MODELS.judge). Its verdict is advisory in any case: delivery is already gated on
-    // the deterministic copy and font checks above, and nothing branches on this result.
+    // same shape of work as the judge, and it rides the judge role: gpt-6.1-sol in production since
+    // ADR-237 (every model that looks at a design is the top model). Its verdict is advisory in any
+    // case: delivery is already gated on the deterministic copy and font checks above, and nothing
+    // branches on this result.
     model: resolveModel('judge'),
   });
 

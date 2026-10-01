@@ -1,0 +1,1000 @@
+{
+  "version": 1,
+  "date": "2026-10-01",
+  "adr": "ADR-237",
+  "script": "scripts/visual_review_live_trial.ts",
+  "environment": "local; DesignStudioService pipeline v3, production tier, real gpt-6.1-sol and gpt-4.1-mini; throwaway clone of the test template DB on 127.0.0.1:55432; no Canva, no Telegram, no production DB",
+  "key": "the production OpenAI key, read in-process by the trial (as the ADR-170 trial); never printed or written",
+  "images": "before/after PNGs kept outside the repository (the photo brief shows client photos): scratchpad sol-review-proofs/",
+  "before": {
+    "note": "production before ADR-237: HAWA_MODEL_JUDGE=gpt-4.1-mini, HAWA_STUDIO_VISUAL_REVIEW_ROUNDS=0",
+    "runs": [
+      {
+        "variant": "text",
+        "status": "transferring",
+        "winner": "cand0_none",
+        "judgeStatus": "RELIABLE",
+        "calls": 6,
+        "costUsd": 0.07549,
+        "ledgerUsd": 0.07549,
+        "wallSeconds": 127,
+        "copy": [
+          "Quality Assurance Workshop",
+          "For school principals",
+          "22 October 2026 · 10:00 AM",
+          "Divan Hotel, Erbil",
+          "Seats are limited, please register early"
+        ],
+        "ledger": [
+          {
+            "stage": "briefing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 2535,
+            "cached_input_tokens": 0,
+            "output_tokens": 636,
+            "usd": "0.01143",
+            "status": "ok"
+          },
+          {
+            "stage": "laying_out",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 6664,
+            "cached_input_tokens": 0,
+            "output_tokens": 3790,
+            "usd": "0.051228",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-4.1-mini",
+            "input_tokens": 6187,
+            "cached_input_tokens": 0,
+            "output_tokens": 545,
+            "usd": "0.003347",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-4.1-mini",
+            "input_tokens": 6187,
+            "cached_input_tokens": 0,
+            "output_tokens": 468,
+            "usd": "0.003224",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-4.1-mini",
+            "input_tokens": 6190,
+            "cached_input_tokens": 0,
+            "output_tokens": 408,
+            "usd": "0.003129",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-4.1-mini",
+            "input_tokens": 6190,
+            "cached_input_tokens": 0,
+            "output_tokens": 410,
+            "usd": "0.003132",
+            "status": "ok"
+          }
+        ],
+        "reviews": [],
+        "refinement": [],
+        "reviewSpentUsd": null,
+        "beforeAfterRenders": []
+      },
+      {
+        "variant": "photo",
+        "status": "transferring",
+        "winner": "cand1_hero_fade_report",
+        "judgeStatus": "RELIABLE",
+        "calls": 6,
+        "costUsd": 0.07651,
+        "ledgerUsd": 0.07651,
+        "wallSeconds": 116.8,
+        "copy": "(caption of task ba4469f2)",
+        "ledger": [
+          {
+            "stage": "briefing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 10576,
+            "cached_input_tokens": 0,
+            "output_tokens": 1199,
+            "usd": "0.033142",
+            "status": "ok"
+          },
+          {
+            "stage": "laying_out",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 12483,
+            "cached_input_tokens": 0,
+            "output_tokens": 395,
+            "usd": "0.028916",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-4.1-mini",
+            "input_tokens": 7159,
+            "cached_input_tokens": 0,
+            "output_tokens": 556,
+            "usd": "0.003753",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-4.1-mini",
+            "input_tokens": 7159,
+            "cached_input_tokens": 0,
+            "output_tokens": 484,
+            "usd": "0.003638",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-4.1-mini",
+            "input_tokens": 7154,
+            "cached_input_tokens": 1792,
+            "output_tokens": 638,
+            "usd": "0.003345",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-4.1-mini",
+            "input_tokens": 7154,
+            "cached_input_tokens": 0,
+            "output_tokens": 536,
+            "usd": "0.003719",
+            "status": "ok"
+          }
+        ],
+        "reviews": [],
+        "refinement": [],
+        "reviewSpentUsd": null,
+        "beforeAfterRenders": []
+      }
+    ]
+  },
+  "after": {
+    "runs": [
+      {
+        "variant": "text",
+        "status": "transferring",
+        "winner": "cand0_none",
+        "judgeStatus": "RELIABLE",
+        "calls": 10,
+        "costUsd": 0.17736,
+        "ledgerUsd": 0.17736,
+        "wallSeconds": 318.3,
+        "copy": [
+          "Quality Assurance Workshop",
+          "For school principals",
+          "22 October 2026 · 10:00 AM",
+          "Divan Hotel, Erbil",
+          "Seats are limited, please register early"
+        ],
+        "ledger": [
+          {
+            "stage": "briefing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 2535,
+            "cached_input_tokens": 2532,
+            "output_tokens": 587,
+            "usd": "0.006129",
+            "status": "ok"
+          },
+          {
+            "stage": "laying_out",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 6622,
+            "cached_input_tokens": 0,
+            "output_tokens": 3659,
+            "usd": "0.049834",
+            "status": "ok"
+          },
+          {
+            "stage": "critiquing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 5993,
+            "cached_input_tokens": 0,
+            "output_tokens": 395,
+            "usd": "0.015936",
+            "status": "ok"
+          },
+          {
+            "stage": "critiquing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 5992,
+            "cached_input_tokens": 0,
+            "output_tokens": 521,
+            "usd": "0.017194",
+            "status": "ok"
+          },
+          {
+            "stage": "revising",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 441,
+            "usd": "0.014318",
+            "status": "ok"
+          },
+          {
+            "stage": "revising",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 484,
+            "usd": "0.014748",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 520,
+            "usd": "0.015108",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 535,
+            "usd": "0.015258",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 462,
+            "usd": "0.014528",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 440,
+            "usd": "0.014308",
+            "status": "ok"
+          }
+        ],
+        "reviews": [
+          {
+            "candidate": "cand0_none",
+            "model": "gpt-6.1-sol",
+            "costUsd": 0.015936,
+            "assessment": "The centered hierarchy, restrained accents and generous spacing already work well. The registration prompt is underscaled relative to the other practical details, making it read like fine print rather than an actionable part of the announcement.",
+            "fixes": [
+              {
+                "y": 1110,
+                "boxId": "B5",
+                "height": 40,
+                "problem": "The registration prompt needs the same comfortable reading size as the venue; preserve its current vertical center within the panel.",
+                "category": "type_size",
+                "fontSize": 24
+              }
+            ],
+            "discarded": []
+          },
+          {
+            "candidate": "cand2_none",
+            "model": "gpt-6.1-sol",
+            "costUsd": 0.017194,
+            "assessment": "The title hierarchy, restrained palette and generous whitespace already work well. The registration prompt is noticeably undersized, and the rule inside the panel misses the right-hand alignment shared by the event details.",
+            "fixes": [
+              {
+                "y": 1148,
+                "boxId": "B5",
+                "height": 41,
+                "problem": "The registration prompt feels like fine print rather than an actionable part of the announcement. Increase its size while preserving its vertical centre and panel padding.",
+                "category": "type_size",
+                "fontSize": 24
+              },
+              {
+                "x": 809,
+                "boxId": "B8",
+                "problem": "The panel rule floats independently of the right-aligned text. Align its right edge with the date, venue and registration prompt.",
+                "category": "alignment"
+              }
+            ],
+            "discarded": []
+          }
+        ],
+        "refinement": [
+          {
+            "candidate": "fc95755f-2bef-4fa4-8388-2ba83f8279db",
+            "ordinal": 0,
+            "adopted": true,
+            "reason": "metrics_hold",
+            "rounds": [
+              {
+                "fixes": [
+                  {
+                    "boxId": "B5",
+                    "detail": "y 1114→1110; height 31→40; fontSize 18→24",
+                    "status": "applied",
+                    "problem": "The registration prompt needs the same comfortable reading size as the venue; preserve its current vertical center within the panel.",
+                    "category": "type_size"
+                  }
+                ],
+                "decision": {
+                  "adopt": true,
+                  "reason": "metrics_hold",
+                  "regressions": []
+                },
+                "scoreBefore": 0.976,
+                "scoreAfter": 0.976,
+                "hardQaAfter": {
+                  "passed": true,
+                  "defectCodes": []
+                }
+              }
+            ]
+          },
+          {
+            "candidate": "250acaef-e9b3-406f-ba6d-11a84135a5bd",
+            "ordinal": 2,
+            "adopted": false,
+            "reason": "judge_prefers_original",
+            "rounds": [
+              {
+                "fixes": [
+                  {
+                    "boxId": "B5",
+                    "detail": "y 1153→1148; height 31→41; fontSize 18→24",
+                    "status": "applied",
+                    "problem": "The registration prompt feels like fine print rather than an actionable part of the announcement. Increase its size while preserving its vertical centre and panel padding.",
+                    "category": "type_size"
+                  },
+                  {
+                    "boxId": "B8",
+                    "detail": "x 691→809",
+                    "status": "applied",
+                    "problem": "The panel rule floats independently of the right-aligned text. Align its right edge with the date, venue and registration prompt.",
+                    "category": "alignment"
+                  }
+                ],
+                "decision": {
+                  "adopt": false,
+                  "judge": {
+                    "reason": "Order-consistent majority verdict: candidate original won in both presentation orders (3-2 in AB, 2-3 in BA).",
+                    "winner": "original",
+                    "costUsd": 0.029066
+                  },
+                  "reason": "judge_prefers_original",
+                  "regressions": [
+                    "composite 0.960→0.957"
+                  ]
+                },
+                "scoreBefore": 0.96,
+                "scoreAfter": 0.957,
+                "hardQaAfter": {
+                  "passed": true,
+                  "defectCodes": []
+                }
+              }
+            ]
+          }
+        ],
+        "reviewSpentUsd": 0.062196,
+        "beforeAfterRenders": [
+          {
+            "candidate": "cand0_none",
+            "before": "cand0_none_before.png",
+            "after": "cand0_none_after.png"
+          }
+        ]
+      },
+      {
+        "variant": "photo",
+        "status": "transferring",
+        "winner": "cand1_hero_fade_report",
+        "judgeStatus": "RELIABLE",
+        "calls": 8,
+        "costUsd": 0.16469,
+        "ledgerUsd": 0.16469,
+        "wallSeconds": 241.6,
+        "copy": "(caption of task ba4469f2)",
+        "ledger": [
+          {
+            "stage": "briefing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 10576,
+            "cached_input_tokens": 10240,
+            "output_tokens": 1195,
+            "usd": "0.013646",
+            "status": "ok"
+          },
+          {
+            "stage": "laying_out",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 12490,
+            "cached_input_tokens": 0,
+            "output_tokens": 659,
+            "usd": "0.03157",
+            "status": "ok"
+          },
+          {
+            "stage": "critiquing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 6218,
+            "cached_input_tokens": 0,
+            "output_tokens": 689,
+            "usd": "0.019326",
+            "status": "ok"
+          },
+          {
+            "stage": "critiquing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 6218,
+            "cached_input_tokens": 0,
+            "output_tokens": 897,
+            "usd": "0.021406",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 5934,
+            "cached_input_tokens": 0,
+            "output_tokens": 770,
+            "usd": "0.019568",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 5934,
+            "cached_input_tokens": 0,
+            "output_tokens": 771,
+            "usd": "0.019578",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 5940,
+            "cached_input_tokens": 0,
+            "output_tokens": 797,
+            "usd": "0.01985",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 5940,
+            "cached_input_tokens": 0,
+            "output_tokens": 787,
+            "usd": "0.01975",
+            "status": "ok"
+          }
+        ],
+        "reviews": [
+          {
+            "candidate": "cand0_hero_fade_report",
+            "model": "gpt-6.1-sol",
+            "costUsd": 0.019326,
+            "assessment": "The photography, inset frame and left-aligned text already form a strong report cover. The subtitle is almost as large as the title, weakening the reading order; reducing its scale while preserving the lower text grouping would make the hierarchy more authoritative.",
+            "fixes": [
+              {
+                "y": 1040,
+                "boxId": "B2",
+                "height": 67,
+                "problem": "The 67px subtitle competes with the 73px title. Reduce its size and retain its lower edge so the supporting-copy spacing stays balanced; raise its contrast for a cleaner secondary heading.",
+                "category": "hierarchy",
+                "fontSize": 52,
+                "raiseContrast": true
+              }
+            ],
+            "discarded": []
+          },
+          {
+            "candidate": "cand1_hero_fade_report",
+            "model": "gpt-6.1-sol",
+            "costUsd": 0.021406,
+            "assessment": "The subtitle is almost as large as the title, so the two compete rather than establish a clear reading order. The photography, frame and margins work well; reduce the subtitle and rebalance the text group while preserving its internal spacing.",
+            "fixes": [
+              {
+                "y": 1037,
+                "boxId": "B2",
+                "height": 60,
+                "problem": "The subtitle competes with the title. A smaller size establishes a distinct secondary level.",
+                "category": "hierarchy",
+                "fontSize": 48
+              },
+              {
+                "y": 936,
+                "boxId": "B1",
+                "problem": "Move the title slightly down with the resized subtitle to keep their grouping tight and balance the whitespace around the shorter text group.",
+                "category": "spacing"
+              },
+              {
+                "y": 1134,
+                "boxId": "B3",
+                "problem": "Leaving the body in place after reducing the subtitle would create an oversized gap. Bring it up to preserve the existing separation and balance the group's lower margin.",
+                "category": "grouping"
+              }
+            ],
+            "discarded": []
+          }
+        ],
+        "refinement": [
+          {
+            "candidate": "ee9fddbf-180e-405f-8d41-83b6537064bb",
+            "ordinal": 0,
+            "adopted": true,
+            "reason": "metrics_hold",
+            "rounds": [
+              {
+                "fixes": [
+                  {
+                    "boxId": "B2",
+                    "detail": "y 1025→1040; height 82→67; fontSize 67→52; ink #E8B85C→#FFFFFF (8.5:1→15.5:1, needs 3:1)",
+                    "status": "applied",
+                    "problem": "The 67px subtitle competes with the 73px title. Reduce its size and retain its lower edge so the supporting-copy spacing stays balanced; raise its contrast for a cleaner secondary heading.",
+                    "category": "hierarchy"
+                  }
+                ],
+                "decision": {
+                  "adopt": true,
+                  "reason": "metrics_hold",
+                  "regressions": []
+                },
+                "scoreBefore": 0.965,
+                "scoreAfter": 0.976,
+                "hardQaAfter": {
+                  "passed": true,
+                  "defectCodes": []
+                }
+              }
+            ]
+          },
+          {
+            "candidate": "04e5b128-f431-498b-8f25-e83918782405",
+            "ordinal": 1,
+            "adopted": true,
+            "reason": "metrics_hold",
+            "rounds": [
+              {
+                "fixes": [
+                  {
+                    "boxId": "B2",
+                    "detail": "y 1025→1037; height 82→60; fontSize 67→48",
+                    "status": "applied",
+                    "problem": "The subtitle competes with the title. A smaller size establishes a distinct secondary level.",
+                    "category": "hierarchy"
+                  },
+                  {
+                    "boxId": "B1",
+                    "detail": "y 924→936",
+                    "status": "applied",
+                    "problem": "Move the title slightly down with the resized subtitle to keep their grouping tight and balance the whitespace around the shorter text group.",
+                    "category": "spacing"
+                  },
+                  {
+                    "boxId": "B3",
+                    "detail": "y 1144→1134",
+                    "status": "applied",
+                    "problem": "Leaving the body in place after reducing the subtitle would create an oversized gap. Bring it up to preserve the existing separation and balance the group's lower margin.",
+                    "category": "grouping"
+                  }
+                ],
+                "decision": {
+                  "adopt": true,
+                  "reason": "metrics_hold",
+                  "regressions": []
+                },
+                "scoreBefore": 0.965,
+                "scoreAfter": 0.971,
+                "hardQaAfter": {
+                  "passed": true,
+                  "defectCodes": []
+                }
+              }
+            ]
+          }
+        ],
+        "reviewSpentUsd": 0.040732000000000004,
+        "beforeAfterRenders": [
+          {
+            "candidate": "cand0_hero_fade_report",
+            "before": "cand0_hero_fade_report_before.png",
+            "after": "cand0_hero_fade_report_after.png"
+          },
+          {
+            "candidate": "cand1_hero_fade_report",
+            "before": "cand1_hero_fade_report_before.png",
+            "after": "cand1_hero_fade_report_after.png"
+          }
+        ]
+      }
+    ]
+  },
+  "afterFirstAttempt": {
+    "note": "text brief before the balance sentence was added to the review prompt; the photo attempt stopped before dispatch at the layout stage (Sol image count unavailable)",
+    "runs": [
+      {
+        "variant": "text",
+        "status": "transferring",
+        "winner": "cand0_none",
+        "judgeStatus": "RELIABLE",
+        "calls": 12,
+        "costUsd": 0.21408,
+        "ledgerUsd": 0.21407,
+        "wallSeconds": 289.9,
+        "copy": [
+          "Quality Assurance Workshop",
+          "For school principals",
+          "22 October 2026 · 10:00 AM",
+          "Divan Hotel, Erbil",
+          "Seats are limited, please register early"
+        ],
+        "ledger": [
+          {
+            "stage": "briefing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 2535,
+            "cached_input_tokens": 2532,
+            "output_tokens": 451,
+            "usd": "0.004769",
+            "status": "ok"
+          },
+          {
+            "stage": "laying_out",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 6638,
+            "cached_input_tokens": 0,
+            "output_tokens": 3715,
+            "usd": "0.050426",
+            "status": "ok"
+          },
+          {
+            "stage": "critiquing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 5964,
+            "cached_input_tokens": 0,
+            "output_tokens": 886,
+            "usd": "0.020788",
+            "status": "ok"
+          },
+          {
+            "stage": "critiquing",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 5958,
+            "cached_input_tokens": 0,
+            "output_tokens": 683,
+            "usd": "0.018746",
+            "status": "ok"
+          },
+          {
+            "stage": "revising",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 550,
+            "usd": "0.015408",
+            "status": "ok"
+          },
+          {
+            "stage": "revising",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 531,
+            "usd": "0.015218",
+            "status": "ok"
+          },
+          {
+            "stage": "revising",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4957,
+            "cached_input_tokens": 0,
+            "output_tokens": 563,
+            "usd": "0.015544",
+            "status": "ok"
+          },
+          {
+            "stage": "revising",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4957,
+            "cached_input_tokens": 0,
+            "output_tokens": 505,
+            "usd": "0.014964",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 460,
+            "usd": "0.014508",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 460,
+            "usd": "0.014508",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 480,
+            "usd": "0.014708",
+            "status": "ok"
+          },
+          {
+            "stage": "judging",
+            "model": "gpt-6.1-sol",
+            "input_tokens": 4954,
+            "cached_input_tokens": 0,
+            "output_tokens": 458,
+            "usd": "0.014488",
+            "status": "ok"
+          }
+        ],
+        "reviews": [
+          {
+            "candidate": "cand0_none",
+            "model": "gpt-6.1-sol",
+            "costUsd": 0.020788,
+            "assessment": "The title hierarchy, restrained accents and centred alignment already work. The subtitle feels detached from the title, while the event card spreads a small amount of information too widely; tighter grouping would preserve the ceremonial whitespace without making the information feel disconnected.",
+            "fixes": [
+              {
+                "y": 565,
+                "boxId": "B2",
+                "problem": "The audience line sits too far below the title’s accent rule to read as part of the heading group.",
+                "category": "grouping"
+              },
+              {
+                "y": 914,
+                "boxId": "B4",
+                "problem": "The venue is too distant from the date, weakening their relationship as the event details.",
+                "category": "grouping"
+              },
+              {
+                "y": 890,
+                "boxId": "B8",
+                "problem": "The divider needs to sit between the date and the more closely grouped venue.",
+                "category": "spacing"
+              },
+              {
+                "y": 1018,
+                "boxId": "B5",
+                "problem": "The registration prompt is excessively separated from the event details; retain a distinct gap without leaving it stranded at the card’s bottom.",
+                "category": "spacing"
+              },
+              {
+                "boxId": "B6",
+                "height": 348,
+                "problem": "The card is taller than its content requires. Shorten it to maintain balanced top and bottom padding around the tightened information group.",
+                "category": "whitespace"
+              }
+            ],
+            "discarded": []
+          },
+          {
+            "candidate": "cand2_none",
+            "model": "gpt-6.1-sol",
+            "costUsd": 0.018746,
+            "assessment": "The title hierarchy, restrained palette and generous margins already work. The subtitle and venue sit too far from the information they qualify, while the centred rules feel disconnected from the text grid.",
+            "fixes": [
+              {
+                "y": 462,
+                "boxId": "B2",
+                "problem": "The large title-to-subtitle gap makes the audience line read as a separate section rather than part of the heading.",
+                "category": "grouping"
+              },
+              {
+                "y": 851,
+                "boxId": "B4",
+                "problem": "The venue is detached from the date; these two lines should form one event-details group.",
+                "category": "grouping"
+              },
+              {
+                "x": 86,
+                "y": 536,
+                "boxId": "B7",
+                "problem": "The floating centred rule interrupts the heading group instead of supporting its left-hand axis.",
+                "category": "alignment"
+              },
+              {
+                "x": 821,
+                "y": 1058,
+                "boxId": "B8",
+                "problem": "The rule separates the date from its venue and has no relationship to the right-aligned text. Place it above the registration prompt, ending on the shared right edge.",
+                "category": "grouping"
+              }
+            ],
+            "discarded": []
+          }
+        ],
+        "refinement": [
+          {
+            "candidate": "af969d78-3fdf-4085-a2a0-a998b00c70c1",
+            "ordinal": 0,
+            "adopted": true,
+            "reason": "judge_prefers_refined",
+            "rounds": [
+              {
+                "fixes": [
+                  {
+                    "boxId": "B2",
+                    "detail": "y 607→565",
+                    "status": "applied",
+                    "problem": "The audience line sits too far below the title’s accent rule to read as part of the heading group.",
+                    "category": "grouping"
+                  },
+                  {
+                    "boxId": "B4",
+                    "detail": "y 958→914",
+                    "status": "applied",
+                    "problem": "The venue is too distant from the date, weakening their relationship as the event details.",
+                    "category": "grouping"
+                  },
+                  {
+                    "boxId": "B8",
+                    "detail": "y 913→890",
+                    "status": "applied",
+                    "problem": "The divider needs to sit between the date and the more closely grouped venue.",
+                    "category": "spacing"
+                  },
+                  {
+                    "boxId": "B5",
+                    "detail": "y 1102→1018",
+                    "status": "applied",
+                    "problem": "The registration prompt is excessively separated from the event details; retain a distinct gap without leaving it stranded at the card’s bottom.",
+                    "category": "spacing"
+                  },
+                  {
+                    "boxId": "B6",
+                    "detail": "height 432→348",
+                    "status": "applied",
+                    "problem": "The card is taller than its content requires. Shorten it to maintain balanced top and bottom padding around the tightened information group.",
+                    "category": "whitespace"
+                  }
+                ],
+                "decision": {
+                  "adopt": true,
+                  "judge": {
+                    "reason": "Order-consistent majority verdict: candidate refined won in both presentation orders (2-3 in AB, 3-2 in BA).",
+                    "winner": "refined",
+                    "costUsd": 0.030626
+                  },
+                  "reason": "judge_prefers_refined",
+                  "regressions": [
+                    "composite 0.980→0.967"
+                  ]
+                },
+                "scoreBefore": 0.98,
+                "scoreAfter": 0.967,
+                "hardQaAfter": {
+                  "passed": true,
+                  "defectCodes": []
+                }
+              }
+            ]
+          },
+          {
+            "candidate": "aab92993-12a8-4f68-ab39-afdcdebb1db0",
+            "ordinal": 2,
+            "adopted": false,
+            "reason": "judge_undecided",
+            "rounds": [
+              {
+                "fixes": [
+                  {
+                    "boxId": "B2",
+                    "detail": "y 557→462",
+                    "status": "applied",
+                    "problem": "The large title-to-subtitle gap makes the audience line read as a separate section rather than part of the heading.",
+                    "category": "grouping"
+                  },
+                  {
+                    "boxId": "B4",
+                    "detail": "y 939→851",
+                    "status": "applied",
+                    "problem": "The venue is detached from the date; these two lines should form one event-details group.",
+                    "category": "grouping"
+                  },
+                  {
+                    "boxId": "B7",
+                    "detail": "x 475→86; y 501→536",
+                    "status": "applied",
+                    "problem": "The floating centred rule interrupts the heading group instead of supporting its left-hand axis.",
+                    "category": "alignment"
+                  },
+                  {
+                    "boxId": "B8",
+                    "detail": "x 475→821; y 886→1058",
+                    "status": "applied",
+                    "problem": "The rule separates the date from its venue and has no relationship to the right-aligned text. Place it above the registration prompt, ending on the shared right edge.",
+                    "category": "grouping"
+                  }
+                ],
+                "decision": {
+                  "adopt": false,
+                  "judge": {
+                    "reason": "Order-swap flip detected: candidate original won in order AB, but candidate refined won in order BA. Disagreement recorded; pair discarded per arXiv:2604.22891.",
+                    "winner": null,
+                    "costUsd": 0.030508
+                  },
+                  "reason": "judge_undecided",
+                  "regressions": [
+                    "design gate now fails",
+                    "regularity now fails",
+                    "composite 0.968→0.929"
+                  ]
+                },
+                "scoreBefore": 0.968,
+                "scoreAfter": 0.929,
+                "hardQaAfter": {
+                  "passed": true,
+                  "defectCodes": []
+                }
+              }
+            ]
+          }
+        ],
+        "reviewSpentUsd": 0.10066800000000001,
+        "beforeAfterRenders": [
+          {
+            "candidate": "cand0_none",
+            "before": "cand0_none_before.png",
+            "after": "cand0_none_after.png"
+          }
+        ]
+      }
+    ]
+  },
+  "stoppedBeforeDispatch": [
+    {
+      "stage": "laying_out",
+      "call": "art_direction_concepts image count",
+      "error": "Sol image count unavailable; no completion dispatched.",
+      "charged": 0,
+      "occurrences": 2
+    }
+  ],
+  "sessionTotalUsd": 0.74452,
+  "perDesignUsd": {
+    "before": {
+      "text": 0.07549,
+      "photo": 0.07651,
+      "parityEstimate": 0.003
+    },
+    "after": {
+      "text": 0.17736,
+      "textFirstAttempt": 0.21408,
+      "photo": 0.16469,
+      "parityMeasured": 0.00883
+    }
+  },
+  "notClaimed": "two briefs show the stage works and what it changes; not a quality study (FR-057 corpus, blinded human review and canary not run)",
+  "parityProbe": {
+    "call": "runParityStage with the real gpt-6.1-sol, two renders of the text design (no Canva export locally)",
+    "verdict": "match",
+    "inputTokens": 4203,
+    "nativeImageTokens": 3516,
+    "outputTokens": 42,
+    "reasoningTokens": 0,
+    "usd": 0.00883
+  }
+}

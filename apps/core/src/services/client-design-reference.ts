@@ -12,6 +12,28 @@ type Scope = { tenantId: string; actorId: string };
 type Resolved = { reference: Record<string, any>; logo: Buffer };
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 const hexColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+/** WCAG relative luminance of a #rrggbb colour. */
+function relativeLuminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * The colours a planner falls back to, from a DNA's colour roles: the first text and accent colours,
+ * and the LIGHTEST background colour (ADR-236, light first). It took the first background listed, and
+ * KAAE's DNA listed its midnight navy first, so every repaired ground was navy while the brand
+ * guideline's own pages are white and cream.
+ */
+export function paletteFallbacksOf(colors: unknown[]): { background?: string; text?: string; accent?: string } {
+  const valid = colors.filter((color: any) => hexColor(color?.hex)) as Array<{ hex: string; role?: unknown }>;
+  const colorFor = (role: string) => valid.find((color) => color.role === role)?.hex;
+  const background = valid.filter((color) => color.role === 'background').map((color) => color.hex)
+    .sort((a, b) => relativeLuminance(b) - relativeLuminance(a))[0];
+  return { background, text: colorFor('text'), accent: colorFor('accent') };
+}
 
 /** The package reference is a transitional, KAAE-only draft input. It never serves another client. */
 async function packagedKaaeReference(clientId: string): Promise<Resolved | null> {
@@ -64,8 +86,7 @@ export async function resolveClientDesignReference(
 
   const colors = Array.isArray(d.colors) ? d.colors : [];
   const palette = [...new Set(colors.map((color: any) => color?.hex).filter(hexColor))];
-  const colorFor = (role: string) => colors.find((color: any) => color?.role === role && hexColor(color?.hex))?.hex as string | undefined;
-  const paletteFallbacks = { background: colorFor('background'), text: colorFor('text'), accent: colorFor('accent') };
+  const paletteFallbacks = paletteFallbacksOf(colors);
   if (palette.length < 2 || !paletteFallbacks.background || !paletteFallbacks.text || !paletteFallbacks.accent) {
     throw new CanvaFlowError(422, 'BRAND_PALETTE_REQUIRED', 'The active client reference needs background, text and accent colors.');
   }

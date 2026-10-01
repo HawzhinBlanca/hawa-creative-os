@@ -1588,7 +1588,9 @@ async function uncertainPlannerCall(chat: string, ledgerSince: number): Promise<
   const rows = task ? await query<{ plan: string; call: string | null }>(sql`SELECT p.status AS plan, c.status AS call FROM hawa.canva_design_plans p
     LEFT JOIN hawa.canva_planner_calls c ON c.id = p.id WHERE p.task_id = ${task.id}::uuid`) : [];
   const planner = ((await fakes.modelLedger()).ledger as any[]).filter((l) => l.seq > ledgerSince && l.route === 'canva_design_plan');
-  const alerts = task ? (await sentTo(OFFICE_CHAT)).filter((s) => s.text?.includes(task.id) && /needs an operator/.test(s.text)) : [];
+  // ADR-233: the office's plain alert for a design that ended without a draft, named by its Desk search line.
+  const alerts = task ? (await sentTo(OFFICE_CHAT)).filter((s) => /^The automatic design of /.test(s.text ?? '') &&
+    (s.text ?? '').endsWith(`\nDesk search: ${task.id.slice(0, 8)}`)) : [];
   const shown = await sentTo(chat);
   const dupes = shown.length - new Set(shown.map((s) => `${s.method}:${s.documentSha256 ?? s.textHash}`)).size;
   return [

@@ -68,7 +68,9 @@ describe('versioned lifecycle design outcome', () => {
     expect(first.body.message.text).not.toContain(taskId);
     expect(first.body.message.text).toContain('What text should go on');
     expect(first.body.officeAlert).toMatchObject({ chatId: '88880001' });
-    expect(first.body.officeAlert.text).toContain(taskId);
+    // ADR-233: by its short id on the Desk search line, in plain words, with no code.
+    expect(first.body.officeAlert.text.endsWith(`\nDesk search: ${taskId.slice(0, 8)}`)).toBe(true);
+    expect(first.body.officeAlert.text).not.toContain('COPY_REQUIRED');
     const replay = await post(requestId, 'design-outcome', body);
     expect(replay).toEqual(first);
     const changed = structuredClone(body);

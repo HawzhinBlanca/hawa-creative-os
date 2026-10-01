@@ -148,8 +148,9 @@ describe('a requester change after the design reached the office (finding 13 of 
     expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE',
       lifecycleAction: 'late-change', chatId: String(chat), requestId, requestStage: 'approved',
       officeAlert: { chatId: String(OFFICE), text: expect.stringContaining(words) } });
-    expect(answer.body.officeAlert.text).toContain(taskId);
-    expect(answer.body.officeAlert.text).toMatch(/acknowledge/i);
+    // ADR-231: the task's short id on the alert's last line, for the Desk's search; plain words for the gate.
+    expect(answer.body.officeAlert.text.split('\n').at(-1)).toBe(`Desk search: ${taskId.slice(0, 8)}`);
+    expect(answer.body.officeAlert.text).toMatch(/until someone in the office has read these words in the Desk/);
     expect(await tasksInChat(chat)).toHaveLength(1);
     expect(await lateReceipt(reply.update_id)).toEqual([{ event_kind: 'lifecycle_late_requester_change',
       payload: expect.objectContaining({ code: 'LATE_REQUESTER_CHANGE', chatId: String(chat), requestId,
@@ -223,7 +224,7 @@ describe('a requester change after the design reached the office (finding 13 of 
     (reply.message as Record<string, unknown>).reply_to_message = { message_id: 813 };
     const answer = await intake(app, reply, 'lifecycle', requestId);
     expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change',
-      requestId, requestStage: 'designing', chatAnswer: { text: expect.stringContaining("I've added that to") } });
+      requestId, requestStage: 'designing', chatAnswer: { text: expect.stringContaining("as soon as the current draft is done") } });
     expect(answer.body.officeAlert.text).toContain(words);
     expect(await tasksInChat(chat)).toHaveLength(1);
     expect(await lateReceipt(reply.update_id)).toEqual([expect.objectContaining({

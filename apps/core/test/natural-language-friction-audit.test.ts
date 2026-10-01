@@ -139,7 +139,9 @@ describe('F2: a new, unrelated brief while one design waits for changes is swall
     const answer = await intake(app(), message(chat, {
       text: 'New poster please for the graduation ceremony\n\nDate: 12 October 2026\nVenue: Erbil International Hotel' }));
     // Today: lifecycleAction 'requester-revision' against the waiting design.
-    expect(answer.body.lifecycleAction).toBe('open-request');
+    // ADR-235: it names no organisation and the chat is bound to none, so the bot asks who it is for.
+    expect(answer.body.lifecycleAction === 'open-request' || answer.body.clientQuestion === true).toBe(true);
+    expect(answer.body.lifecycleAction).not.toBe('requester-revision');
   });
 });
 
@@ -294,9 +296,10 @@ describe('F10: status questions and cancellations while a design is being made',
     const chat = chatId();
     await seedRequest(chat, 'designing', 2);
     const answer = await intake(app(), message(chat, { text: 'cancel that' }));
-    const texts = saidTo(chat, sent, answer.body);
-    // Today: nothing about cancelling; the design keeps running (legacy answers a greeting or nothing).
-    expect(texts).toMatch(/cancel|stop/i);
+    // ADR-230 (changed deliberately): the cancel withdraws the request. Intake decides it; RequestLifecycle
+    // closes the request and says "Cancelled …" (request-withdraw.test.ts), so Core itself says nothing here.
+    expect(answer.body).toMatchObject({ lifecycleAction: 'withdraw', intent: 'cancel' });
+    expect(saidTo(chat, sent, answer.body)).not.toMatch(/hello|what would you like/i);
   });
 });
 

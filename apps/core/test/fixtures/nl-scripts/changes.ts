@@ -94,13 +94,13 @@ export const CHANGE_SCRIPTS: Script[] = [
   },
   {
     id: 'S037', title: 'changing one\'s mind while it is being made ("actually, make it green instead of blue")', kinds: ['change', 'mind'],
-    natural: 'Kept on the design for the office; one request.',
+    natural: 'Kept on the design and added when the current draft is done (ADR-230 section 6); one request.',
     async play(p) {
       await p.say(`${KAAE_EVENING}\nUse blue colours.`);
       const change = await p.say('actually, make it green instead of blue', { after: 90_000 });
       expect(p.opened).toHaveLength(1);
       expect(p.kept).toHaveLength(1);
-      expect(p.answer(change)).toMatch(/added|office/i);
+      expect(p.answer(change)).toMatch(/add that to|added|office/i);
     },
   },
   {
@@ -172,24 +172,28 @@ export const CHANGE_SCRIPTS: Script[] = [
   },
   {
     id: 'S043', title: 'the office sends it back; the requester changes it twice in a row', kinds: ['change', 'mind'],
-    natural: 'The first message starts the round; the second, a minute later, is kept for that round (never a second request).',
+    // ADR-233: a change after review is a native revision, which ADR-113's guard refuses at admission, so
+    // the request is back with the office before the second message arrives (the harness now reports the
+    // refusal as the DesignRun does). Each message is answered once, truthfully; never a second request.
+    natural: 'Each change is answered once: a designer makes it by hand (ADR-113); no second request opens.',
     async play(p) {
       await sentBack(p);
-      await p.say('make the logo bigger', { after: 120_000 });
+      const first = await p.say('make the logo bigger', { after: 120_000 });
       const second = await p.say('and the date is 5 December, not 4', { after: 60_000 });
-      expect(p.revisions).toHaveLength(1);
       expect(p.opened).toHaveLength(1);
-      expect(p.answer(second)).toMatch(/added|office/i);
+      for (const words of [first, second]) expect(p.h.saidFor(words).filter((s) => s.chatId === p.chatId).map((s) => s.text))
+        .toEqual([expect.stringMatching(/by hand/)]);
     },
   },
   {
     id: 'S044', title: 'the office sends it back; the requester changes their mind: "never mind, cancel it"', kinds: ['cancel', 'mind'],
-    natural: 'No round starts; the cancellation is passed to the office.',
+    natural: 'No round starts; the request (sent back for changes, nothing approved) is withdrawn (ADR-230).',
     async play(p) {
       await sentBack(p);
       const cancel = await p.say('never mind, cancel it', { after: 120_000 });
       expect(p.revisions).toHaveLength(0);
-      expect(p.answer(cancel)).toMatch(/cancel|stop/i);
+      expect(p.answer(cancel)).toMatch(/^Cancelled <b>.+<\/b>\. Nothing more will be made for it\.$/);
+      expect(await p.h.taskState(p.request())).toMatchObject({ state: 'cancelled' });
     },
   },
   {

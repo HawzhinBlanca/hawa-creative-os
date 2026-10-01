@@ -203,7 +203,7 @@ describe('#9: "send it again", "as a PDF", "to my email" reach the office with a
 });
 
 describe('#10: a long message Telegram split, or forwards sent together, are one brief', () => {
-  const BRIEF = ['Annual Engineering Conference 2026', '', 'Date: 12 November 2026, 9:00 am', 'Venue: Erbil International Hotel', '',
+  const BRIEF = ['KAAE Annual Engineering Conference 2026', '', 'Date: 12 November 2026, 9:00 am', 'Venue: Erbil International Hotel', '',
     'Programme:', ...Array.from({ length: 60 }, (_, i) => `Session ${i + 1}: a talk on renewable energy policy and water resources in the region`)].join('\n');
   const TAIL = 'Speakers:\nDr. A — keynote on renewable energy policy\nDr. B — panel on water resources\n\nContact: info@example.org';
 
@@ -248,7 +248,7 @@ describe('#11: captioned photos are read as text is', () => {
     const { app: a, bridge } = app();
     const chat = chatId();
     const waiting = await seed(chat, 'manual', 3, { title: 'KAAE members evening' });
-    const brief = photo(chat, { caption: 'New poster for the book fair\n\n3 November 2026, 10am\nErbil International Fair Grounds' });
+    const brief = photo(chat, { caption: 'New KAAE poster for the book fair\n\n3 November 2026, 10am\nErbil International Fair Grounds' });
     const opened = await intake(a, brief);
     expect(opened).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request',
       draft: { lifecycleImage: { sha256: sha(PNG), updateId: brief.update_id } } });
@@ -264,7 +264,7 @@ describe('#11: captioned photos are read as text is', () => {
     const answer = await intake(a, photo(chat, { caption: 'use this logo' }));
     expect(answer).toMatchObject({ intakeStatus: 409, lifecycleAction: 'late-change', requestId: designing.requestId,
       requestStage: 'designing',
-      chatAnswer: { text: "Got it. I've added that to <b>KAAE members evening</b>; the office will see it before the design is sent to you." },
+      chatAnswer: { text: "Got it. I'll add that to <b>KAAE members evening</b> as soon as the current draft is done." },
       officeAlert: { chatId: String(OFFICE), text: expect.stringContaining('use this logo') } });
     expect(answer.officeAlert.text).toContain("It was added to the design's files.");
     expect(answer.chatAnswer.text).not.toMatch(/send me the text/i);

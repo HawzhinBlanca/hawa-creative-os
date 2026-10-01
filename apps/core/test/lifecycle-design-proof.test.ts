@@ -147,11 +147,14 @@ describe('one write owner for lifecycle-owned designs', () => {
     const { taskId } = await ownedTask();
     const before = await withRlsContext(db, scope, (trx) => trx.selectFrom('tasks')
       .select(['state', 'version']).where('id', '=', taskId).executeTakeFirstOrThrow());
-    for (const action of ['pause', 'cancel', 'retry']) {
+    for (const action of ['pause', 'retry']) {
       expect(await post(`/v1/tasks/${taskId}/${action}`)).toMatchObject({
         status: 409, body: { title: 'LIFECYCLE_OWNED' },
       });
     }
+    // ADR-230 (changed deliberately): Cancel withdraws the request through its own object
+    // (request-withdraw.test.ts); without its key, version and reason it changes nothing.
+    expect(await post(`/v1/tasks/${taskId}/cancel`)).toMatchObject({ status: 422, body: { title: 'TASK_CONTROL_INPUT_REQUIRED' } });
     // ADR184 permits only a genuine requester-hold checkpoint, not generic lifecycle resume.
     const resume = await app.request(`/v1/tasks/${taskId}/resume`, {method:'POST',
       headers:{'Content-Type':'application/json','Idempotency-Key':randomUUID()},

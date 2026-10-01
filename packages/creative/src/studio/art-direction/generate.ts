@@ -20,6 +20,7 @@ import {
 } from './recipes.js';
 import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
 import { RecipeInfeasibleError, TEXT_SLOTS, solveRecipe, type ArtDirectionChoice, type SolverPhoto, type TextSlot } from './solver.js';
+import { resolveSurfaceTone, type TonePreference } from './tone.js';
 
 /**
  * ADR-170: the art-director layout call for a brief with photos. The model reads the brief, the
@@ -208,6 +209,11 @@ export interface GenerateArtDirectedOptions {
   briefRoles?: Record<number, string>;
   fontsDir?: string;
   backgroundPlanning?: BackgroundPlanningInput;
+  /**
+   * ADR-236: the ground the requester asked for in words ("on white", "dark", "an evening gala"),
+   * recorded in the brief. It decides every concept's ground over the model's own choice.
+   */
+  tonePreference?: Pick<TonePreference, 'tone' | 'ground'>;
 }
 
 export interface GenerateArtDirectedResult {
@@ -285,7 +291,7 @@ ELIGIBLE RECIPES for these photos: ${eligible.join(', ')}.
 OFFICE EXEMPLARS (published designs of this client; the attached example images are these):
 ${exemplarLines}
 
-TASK: Return exactly three concepts. Use only eligible recipes. ${eligible.length > 1 ? "Use three different recipes when at least three are eligible, otherwise use every feasible recipe before repeating." : "Vary the hero and surface treatment within the eligible recipe."} Give every copy block exactly one slot.`;
+${options.tonePreference ? `GROUND: the requester asked for a ${options.tonePreference.tone === 'dark' ? 'dark (navy) ground' : `light ground${options.tonePreference.ground ? ` (${options.tonePreference.ground})` : ''}`}; every concept uses it.\n\n` : ''}TASK: Return exactly three concepts. Use only eligible recipes. ${eligible.length > 1 ? "Use three different recipes when at least three are eligible, otherwise use every feasible recipe before repeating." : "Vary the hero and surface treatment within the eligible recipe."} Give every copy block exactly one slot.`;
 }
 
 /** The concept a request falls back to for a recipe: best hero, texture where allowed, slots from the brief. */
@@ -417,6 +423,16 @@ export function solveConcepts(
     text[b.index] = b.text;
     scripts[b.index] = b.script;
   }
+  // ADR-236: every concept's ground, decided by the requester's words, then the hero's darkness;
+  // otherwise the light page. A recipe that falls back to another keeps the same decision.
+  const toned = (choice: ArtDirectionChoice): ArtDirectionChoice => {
+    // Unspecified tone is governed by the content/background planner, not a global light-page prior.
+    if (!choice.params?.surfaceTone && !options.tonePreference) return choice;
+    const heroIndex = choice.recipe === 'cutout_speaker' ? choice.cutoutPhotoIndex : choice.heroPhotoIndex;
+    const hero = options.photos.find((p) => p.photoIndex === heroIndex) ?? options.photos[0];
+    const tone = resolveSurfaceTone({ requested: choice.params?.surfaceTone, preference: options.tonePreference, heroLuminance: hero?.quietLuminance });
+    return { ...choice, params: { ...choice.params, ...tone } };
+  };
   const solve = (choice: ArtDirectionChoice) =>
     solveRecipe({
       width: options.canvasWidth,
@@ -464,11 +480,11 @@ export function solveConcepts(
       return attempt;
     });
     const tries = [choice, ...own,
-      ...eligible.filter((r) => r !== choice.recipe).map((r) => defaultChoice(r, options.photos, options.copyBlocks))];
+      ...eligible.filter((r) => r !== choice.recipe).map((r) => defaultChoice(r, options.photos, options.copyBlocks))].map(toned);
     // A concept whose hero would be enlarged past 1.5x is kept only when no sharp one can replace it.
     let soft: { layout: StudioLayoutV2; attempt: ArtDirectionChoice } | undefined;
-    for (const attempt of tries) {
-      if (attempt !== choice && kept.some((k) => k.recipe === attempt.recipe)) continue;
+    for (const [k, attempt] of tries.entries()) {
+      if (k > 0 && kept.some((taken) => taken.recipe === attempt.recipe)) continue;
       try {
         const layout = solve(attempt);
         if ((layout.photos?.length ?? 0) < requiredPhotoCount(options.photoSelection, options.photos.length))

@@ -29,7 +29,7 @@ const fixture = JSON.parse(readFileSync(new URL('./fixtures/reference-k12-89c242
 const reference = studioReferenceFromRaw(
   JSON.parse(readFileSync(new URL('../assets/kaae-reference.json', import.meta.url), 'utf8'))
 );
-const GOLD = '#F7B500';
+const GOLD = '#E8B85C'; // ADR-236: the brand guideline's gold
 
 const prepared = (lang: 'ckb' | 'en', k: number) => {
   const blocks = fixture.copy[lang];
@@ -95,7 +95,7 @@ describe('a style spec read from the reference is enforced on every candidate', 
         expect(buttons[0].color).toBe(GOLD);
         expect(cta.x).toBeGreaterThan(buttons[0].x);
         expect(cta.x + cta.width).toBeLessThan(buttons[0].x + buttons[0].width);
-        expect(cta.color).toBe('#0A1628');
+        expect(cta.color).toBe('#000000'); // ADR-236: the palette's darkest is the guideline's black ink
         expect(layout.shapes.some((s) => s.role === 'rule' || s.role === 'accent')).toBe(false);
         // Logo bottom-right; the button on the bottom margin or just above the logo's clear space.
         expect(layout.logo.x + layout.logo.width).toBe(W - m);
@@ -112,13 +112,13 @@ describe('a style spec read from the reference is enforced on every candidate', 
   it('draws the edition line in gold in the preview and in the Canva deck', async () => {
     const { layout, copy, blocks } = prepared('en', 0);
     const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: copy.text });
-    expect(svg).toMatch(/<tspan[^>]*fill="#F7B500"[^>]*>EDITION 2\.0<\/tspan>/);
+    expect(svg).toMatch(/<tspan[^>]*fill="#E8B85C"[^>]*>EDITION 2\.0<\/tspan>/);
     const deck = await encodeStudioTransferV2(layout, blocks, undefined);
     const xml = strFromU8(unzipSync(deck.bytes, { filter: (f) => f.name === 'ppt/slides/slide1.xml' })['ppt/slides/slide1.xml']);
     const edition = xml.slice(xml.indexOf('EDITION') - 400, xml.indexOf('EDITION'));
-    expect(edition).toContain('F7B500');
+    expect(edition).toContain('E8B85C');
     const framework = xml.slice(xml.indexOf('FRAMEWORK') - 400, xml.indexOf('FRAMEWORK'));
-    expect(framework).not.toContain('F7B500');
+    expect(framework).not.toContain('E8B85C');
   });
 
   it('keeps every paragraph of an accented Kurdish title right-to-left in the Canva deck', async () => {
@@ -129,7 +129,7 @@ describe('a style spec read from the reference is enforced on every candidate', 
     const paragraphs = title.match(/<a:pPr[^>]*>/g) || [];
     expect(paragraphs).toHaveLength(2);
     for (const p of paragraphs) expect(p).toContain('rtl="1"');
-    expect(title).toContain('F7B500');
+    expect(title).toContain('E8B85C');
   });
 
   it('renders the diagonal-lines texture in brand colours', () => {

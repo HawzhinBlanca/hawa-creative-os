@@ -108,6 +108,15 @@ export const ROUTING_MESSAGES = {
     en: 'Which design is this for?\n{list}\n\nAnswer with the number or the name.',
     ckb: 'ئەمە بۆ کام دیزاینە؟\n{list}\n\nبە ژمارە یان ناو وەڵام بدەرەوە.',
   },
+  // ADR-200 addendum: redo words ("do a better design", "try again") about the requester's latest designs.
+  askRedoOrNew: {
+    en: 'Do you mean redo {title}, or a new design?',
+    ckb: 'مەبەستت ئەوەیە {title} دووبارە بکەمەوە، یان دیزاینێکی نوێ؟',
+  },
+  askWhichRedo: {
+    en: 'Which one should I redo?\n{list}',
+    ckb: 'کامیان دووبارە بکەمەوە؟\n{list}',
+  },
   /** The last line of the "which design?" list when the message may be a new brief. */
   aNewDesign: {
     en: 'A new design',
@@ -127,9 +136,18 @@ export const ROUTING_MESSAGES = {
     en: "I've asked the office to hold {title}. I'll keep your message with the design.",
     ckb: 'داوام لە ئۆفیس کرد {title} ڕابگرێت. نامەکەت لەگەڵ دیزاینەکە دەپارێزم.',
   },
+  // ADR-231: the words are kept with the design for the office, not applied to the draft being made
+  // (the office's alert says so); "I've added that to …" promised more than happens.
+  // Since ADR-230 section 6 this is said only while a designer has it (`manual`) or it waits for an answer.
   changeAddedWhileDesigning: {
-    en: "Got it. I've added that to {title}; the office will see it before the design is sent to you.",
-    ckb: 'تێگەیشتم. ئەوەم بۆ {title} زیاد کرد؛ ئۆفیسەکە پێش ناردنی دیزاینەکە دەیبینێت.',
+    en: "Got it. I've kept that with {title} for the office; they'll see it before the design is sent to you.",
+    ckb: 'تێگەیشتم. ئەوەم لەگەڵ {title} بۆ ئۆفیسەکە هەڵگرت؛ پێش ناردنی دیزاینەکە دەیبینن.',
+  },
+  // ADR-230 section 6: a change sent while a draft is being made (`designing`) starts a new round with it
+  // when that draft finishes; if no round can start, the draft alert lists it and the requester is told.
+  changeAddedNextRound: {
+    en: "Got it. I'll add that to {title} as soon as the current draft is done.",
+    ckb: 'تێگەیشتم. هەر کە ڕەشنووسەکەی ئێستا تەواو بوو، ئەوە بۆ {title} زیاد دەکەم.',
   },
   changePassedInReview: {
     en: "Got it. The office is checking {title} now, and I've passed your change to them.",
@@ -157,6 +175,63 @@ export const ROUTING_MESSAGES = {
    * ADR-156: "send it again", "it didn't arrive", "as a PDF", "to my email", "higher resolution": the
    * office has the request about the files (nothing is sent or approved by itself).
    */
+  // ADR-200 addendum: what the requester hears when redo words reach a design.
+  redoStarted: {
+    en: "I'll redo {title} — the new version follows what you said, and the office checks it before it comes to you.",
+    ckb: '{title} دووبارە دەکەمەوە — وەشانە نوێیەکە بەپێی قسەکانت دەبێت، و ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات.',
+  },
+  /**
+   * ADR-231 (live 2026-10-01): "I'll redo …" only when a new round starts (`redoStarted`). Where the words
+   * are only kept for the office, the requester hears that, and why nothing started.
+   */
+  redoWhileDesigning: {
+    en: "{title} is still being made, so I can't start it again yet. I've kept what you said with it for the office; they'll see it before the design comes to you.",
+    ckb: '{title} هێشتا دروست دەکرێت، بۆیە ناتوانم ئێستا دووبارەی بکەمەوە. قسەکانتم لەگەڵیدا بۆ ئۆفیسەکە هەڵگرت؛ پێش ئەوەی دیزاینەکە بۆت بێت دەیبینن.',
+  },
+  redoWithOffice: {
+    en: "{title} is with the office for a final check, so I haven't started a new version. I've passed what you said to them; they'll follow up here.",
+    ckb: '{title} لای ئۆفیسەکەیە بۆ دوایین پشکنین، بۆیە وەشانێکی نوێم دەست پێ نەکردووە. قسەکانتم گەیاندە ئەوان؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  redoPassedApproved: {
+    en: "{title} is already approved, so I haven't started a new version. I've passed what you said to the office; they'll follow up here.",
+    ckb: '{title} پێشتر پەسەند کراوە، بۆیە وەشانێکی نوێم دەست پێ نەکردووە. قسەکانتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  redoPassedDelivered: {
+    en: "I can't start a new version of {title} by myself, so I've passed what you said to the office; they'll follow up here.",
+    ckb: 'ناتوانم خۆم وەشانێکی نوێی {title} دەست پێ بکەم، بۆیە قسەکانتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  redoPassedDesigner: {
+    en: "A designer at the office is working on {title}, so I've passed what you said to them; they'll follow up here.",
+    ckb: 'دیزاینەرێک لە ئۆفیسەکە کار لەسەر {title} دەکات، بۆیە قسەکانتم گەیاندە ئەوان؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  /**
+   * ADR-231: what tells two designs with the same name apart, in a status answer or a "which design?"
+   * list: when each was asked for, else its place ("version 2"). `{time}` is a 24-hour time in Iraq.
+   */
+  askedJustNow: {
+    en: 'asked for just now',
+    ckb: 'ئێستا داواکرا',
+  },
+  askedMinutesAgo: {
+    en: 'asked for {n} minutes ago',
+    ckb: 'پێش {n} خولەک داواکرا',
+  },
+  askedToday: {
+    en: 'asked for today at {time}',
+    ckb: 'ئەمڕۆ کاتژمێر {time} داواکرا',
+  },
+  askedYesterday: {
+    en: 'asked for yesterday at {time}',
+    ckb: 'دوێنێ کاتژمێر {time} داواکرا',
+  },
+  askedDaysAgo: {
+    en: 'asked for {n} days ago',
+    ckb: 'پێش {n} ڕۆژ داواکرا',
+  },
+  versionN: {
+    en: 'version {n}',
+    ckb: 'وەشانی {n}',
+  },
   deliveryRequestPassed: {
     en: "Got it. I've passed your request about {title} to the office; they'll follow up here.",
     ckb: 'تێگەیشتم. داواکارییەکەتم سەبارەت بە {title} گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',

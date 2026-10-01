@@ -1,50 +1,74 @@
 {
   "date": "2026-10-01",
-  "status": "BUILD_AND_CONNECTED_INTEGRATION_PASS_FULL_QUALIFICATION_PENDING",
-  "currentQualifiedSource": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
-  "preservedW3Checkpoint": "79d335eb8979e8e406ee6357fd340da2111c8e8a",
-  "mergeBase": "36369a12afb82589131452c858ccaecb122a3002",
+  "status": "INTEGRATED_CONNECTED_CHECKS_PASS_FULL_RELEASE_QUALIFICATION_PENDING",
+  "researchParent": "dce6004c514ed35f003e7db35966b267b0c49ca4",
+  "liveParent": "baffce10408707f74f1265206366c0af0d482096",
   "requirements": [
-    "FR-026",
+    "FR-011",
     "FR-038",
-    "FR-041",
-    "FR-057"
+    "FR-040",
+    "FR-056",
+    "FR-057",
+    "FR-060",
+    "FR-079",
+    "NFR-006",
+    "NFR-012"
   ],
-  "checks": {
-    "build": "PASS",
-    "connectedTests": {
-      "files": 14,
-      "passed": 192,
-      "failed": 0,
-      "skipped": 0
-    },
-    "blueprint": {
-      "passed": 1572,
-      "warned": 0,
-      "failed": 0
-    }
+  "decisions": [
+    "adrs/172_content_aware_editable_art_direction.md",
+    "adrs/225_task_write_scope_authority.md",
+    "adrs/236_kaae_brand_guideline_light_first.md",
+    "adrs/237_sol_judge_and_visual_review.md"
+  ],
+  "connected": {
+    "filesPassed": 16,
+    "passed": 179,
+    "failed": 0,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/VERIFIED_CONNECTED_INTEGRATION.log"
   },
-  "preserved": [
-    "ADR183 independent worker/current scoped drain credentials and restricted database login",
-    "ADR158 stable in-place runtime/nginx proof plus live verification and unsafe-release retirement",
-    "ADR184-186 requester holds/explicit deliverables and shared-source per-child acknowledgement",
-    "ADR187 final QA uses original shipping geometry/current exact copy instead of cached scores",
-    "ADR181 explicit-only photo coverage, content-aware single or multi-photo composition and client-scoped style priors",
-    "W3 original failure, font/pair-source diagnostics and their admission limits"
+  "typecheck": {
+    "roots": 722,
+    "status": "PASS",
+    "receipt": "output/qualification/2026-10-01/task-write-authority/FINAL_INTEGRATION_TYPECHECK.log"
+  },
+  "lint": {
+    "status": "PASS",
+    "any": 940,
+    "ceiling": 1053,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/INTEGRATION_LINT.log"
+  },
+  "resolutions": [
+    "Both retained-asset and client-model-consent API schemas kept.",
+    "Retained client-question photo wins; already bound photo remains next fallback.",
+    "Neutral chat title and weak-copy screening retained without unused global feedback miner.",
+    "Finite valid cutout evidence remains required; client light/dark ground uses live palette.",
+    "All narrative support/source selection and alternate sharp hero guards preserved.",
+    "Three distinct feasible recipes kept; no fixed subject-to-recipe mapping restored.",
+    "An unspecified tone does not acquire a global light-page treatment.",
+    "Explicit white paper reaches all four editorial compositions; actual four-failure regression repaired.",
+    "Scoped recipe priors and live tone exports kept; missing composite luminance import restored.",
+    "Both branches requirement evidence merged per cell; generated manifests regenerated."
   ],
+  "sourceSha256": {
+    "api/openapi.yaml": "9781746dcba7b5222bbf228577e3c4fcb0054c322bfa0afd626aacc8c532e7fe",
+    "apps/core/src/routes/lifecycle-internal.routes.ts": "033b360a47f8ad9f8d584ad13023f458d2bbb7f649493de132a65f0b87f82827",
+    "apps/core/src/services/chat-campaign-intake.ts": "dc5bb946ecdf5ab48edad663349a7f74d28e05e19eb43a556408060c16b71c79",
+    "packages/creative/src/studio/art-direction/generate.ts": "955153fd36b12ba266556be9f22617dbc00d590ac469e29a2905029db52192d5",
+    "packages/creative/src/studio/art-direction/index.ts": "6aa01981cae84ee89d0926435d9cd5a6ad151c2a85d3843738ee1d3054eb1e25",
+    "packages/creative/src/studio/art-direction/recipes.ts": "fa21864e0fe253d504f6524621599364f02ed8eef3c7f8b53e73c844fe7b9472",
+    "packages/creative/src/studio/art-direction/solver.ts": "b87e1e15cf47eb496b65ff8b7495e0fe3260498679e6bb7466d704f214492005",
+    "packages/creative/src/studio/pipeline-v3.ts": "fd625e46ca29bfbf3e27efbbd0c7555008f1a23444b5ae10cc02d9a1c20d785a",
+    "packages/creative/test/kaae-light-guideline.test.ts": "67ecb48ca46512c0998c6d128f9013f39602c2121c2ed6c991dc0fa8887280fb"
+  },
   "failureHistory": [
-    "First trace merge refused non-append evidence for FR038. Recoverable commit sources were used for a three-way insertion merge; no historical evidence or normative field was discarded.",
-    "Requested background-decision.test.ts does not exist. Actual content-background.test.ts then executed separately:15 passed. The first13 files177 passed plus this distinct suite are192 tests."
+    "Initial conflict resolver rejected prompt separator lines and subsequent typechecks caught incomplete file tails; all affected files restored from actual Git merge inputs and re-resolved with exact hunk counts. No integration commit/deployment preceded correction.",
+    "Missing merged palette luminance import initially caused43 failures/132 positives.",
+    "Corrected16-file run exposed9 actual tone/transfer incompatibilities with166 positives; original exact-source and narrative assertions preserved.",
+    "Four strict new white-paper editorial controls failed before the solver repair.",
+    "Final unchanged strict connected suite plus four new controls:179/0."
   ],
-  "limits": [
-    "No full combined sealed release/Canva/human/native-quality admission",
-    "W3 native paired controls remain diagnostic; original cross-renderer failures preserved",
-    "No deployment of this content-aware source or paid calls; current QA release2c4d61ec is independently deploying"
-  ],
-  "logs": {
-    "/tmp/hawa-content-current-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
-    "/tmp/hawa-content-current-connected-20261001.log": "629c854263fe745cacf44716996daf0c829baacaaa16ee1816d4d8ba46b409d7",
-    "/tmp/hawa-content-current-background-20261001.log": "01ec5cdf61dc16f04e9a64a76af868cda1849682b423cab0d1b8ffa57709b1b0",
-    "/tmp/hawa-content-current-merge-blueprint-20261001.log": "f8492ce19048b408a3d59567af3c251f6445aaee0551e7614b80f959302447af"
-  }
+  "fullEngineering": "PENDING",
+  "candidateRecovery": "PENDING",
+  "productionDeployment": "NOT_PERFORMED",
+  "wholeProductAdmission": false
 }

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T20:18:25Z",
+  "generatedAt": "2026-10-01T20:31:50Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 832,
+  "fileCount": 848,
   "files": [
     {
       "path": ".dockerignore",
@@ -988,6 +988,11 @@
       "bytes": 3401
     },
     {
+      "path": "adrs/200_office_chat_understanding.md",
+      "sha256": "84d5c4da1b921b869eadf36add629a3951d50b0b5c538f1e03083ef0eb8b1a92",
+      "bytes": 21992
+    },
+    {
       "path": "adrs/201_current_raster_probe_cache_basis.md",
       "sha256": "f4ce51200b820cc2553b06ab362c160079d3001df204b2fedba380490d2bdebb",
       "bytes": 3796
@@ -1113,6 +1118,46 @@
       "bytes": 5458
     },
     {
+      "path": "adrs/230_request_withdraw_and_chat_only_delivery.md",
+      "sha256": "cb281ef7f2d14ad062e8a4167135c15ba492051d12e7283deb79e7b0e48ff93e",
+      "bytes": 27018
+    },
+    {
+      "path": "adrs/231_truthful_chat_replies.md",
+      "sha256": "f527e420d7e808580d01a4a757ce202dabd7150f53b720d1d0f7f75435115c90",
+      "bytes": 13435
+    },
+    {
+      "path": "adrs/232_grounded_copy_from_request_sentences.md",
+      "sha256": "1c8f19926d30a5c4c14e78172f470bc9daeef56964ff305e105ef90c8a021a12",
+      "bytes": 11692
+    },
+    {
+      "path": "adrs/233_fresh_design_rounds.md",
+      "sha256": "d45e6233b7c659b867f9cda1d20701aed879d41051c50ee175689017cbebb0f3",
+      "bytes": 13544
+    },
+    {
+      "path": "adrs/234_client_model_consent.md",
+      "sha256": "652f6351b97a7eee8c432c57490eaeb3bcdb81fb1174152746014b398eeded2e",
+      "bytes": 11098
+    },
+    {
+      "path": "adrs/235_ask_who_a_design_is_for_and_line_capitals.md",
+      "sha256": "f111e4dac4d5660e0cb06eb807f30952dafa10dab8105612faa49af94efb3c11",
+      "bytes": 7859
+    },
+    {
+      "path": "adrs/236_kaae_brand_guideline_light_first.md",
+      "sha256": "0037ba27f1a5ffdd5cd4302a45eebd48211c8a505902a7fe2f539d2231f18129",
+      "bytes": 13129
+    },
+    {
+      "path": "adrs/237_sol_judge_and_visual_review.md",
+      "sha256": "0473c3be176a693e6e397bcd9f2a2895ea80a13d13c46342fb212b6c391dfd90",
+      "bytes": 17811
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1124,8 +1169,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "baf1d74242799625891ed7eb70311b2a90c8e436edc3d22f4723d56e5ab80aa2",
-      "bytes": 106968
+      "sha256": "9781746dcba7b5222bbf228577e3c4fcb0054c322bfa0afd626aacc8c532e7fe",
+      "bytes": 111201
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -1574,8 +1619,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/CURRENT_RELEASE_INTEGRATION_PROOF.json",
-      "sha256": "00448349ea9ee35906bb26d7e4eb33300aa78e4958d63d5e30136cea9bbe7221",
-      "bytes": 2485
+      "sha256": "a86605f3674823a004f75e85b3dcd52643b5faebb7a4bf7480ef21e244719ee1",
+      "bytes": 4027
     },
     {
       "path": "plans/content-aware-design-2026-09-30/FINAL_COMBINED_GATE_EVIDENCE.json",
@@ -1604,8 +1649,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "2b4621b8e081a3c83566bee767e87c6f86d32a69114d4a4275eec1d85ecd5688",
-      "bytes": 85008
+      "sha256": "426b1bd72bddef33991c58269827b19ceae5536178a2c900cb98c25b28e7c196",
+      "bytes": 85676
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -2068,6 +2113,21 @@
       "bytes": 47459
     },
     {
+      "path": "plans/kaae-light-guideline-2026-10-01/CODEX_MERGE_NOTE.md",
+      "sha256": "fa4a4cdceea479fb0e5756b774b6a3435cbf1d08c41949d276c1949ac3331208",
+      "bytes": 6921
+    },
+    {
+      "path": "plans/kaae-light-guideline-2026-10-01/apply-kaae-dna-colors.sh",
+      "sha256": "eb01b991dbac5c98c06f02be945be836aa5cc7aef581195d75af2615067b4a11",
+      "bytes": 3127
+    },
+    {
+      "path": "plans/kaae-light-guideline-2026-10-01/kaae-dna-colors.json",
+      "sha256": "23ff60aa31eb2b1d4a5cc8e30c13b442050cbae5a7faae86b03de1d89bc90c57",
+      "bytes": 2064
+    },
+    {
       "path": "plans/lean-design-implementation-2026-09-28/ADR140_R10_H1_RUN.json",
       "sha256": "a5c169fa65169df06eaa9ae65f31f9b8ed9f52177f517f619373bc0a9c18cdca",
       "bytes": 22005
@@ -2274,8 +2334,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "be6c5ae20a4246c187e81b74231cc9c059a9598cfadab231ae02e49701e20a83",
-      "bytes": 60826
+      "sha256": "6ab6bc12f3b07612c25e5fd0181c2c07cad2fef19c0b44117e54901e6ed7903e",
+      "bytes": 74268
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -3223,9 +3283,19 @@
       "bytes": 3877
     },
     {
+      "path": "plans/sol-visual-review-2026-10-01/CODEX_MERGE_NOTE.md",
+      "sha256": "4220bf0bb950bec7808375091c62b6aa0157c494e9cd9acb48039de0b95efbcb",
+      "bytes": 6566
+    },
+    {
+      "path": "plans/sol-visual-review-2026-10-01/LIVE_PROOF.json",
+      "sha256": "876ebff54f54a94b44d83b67ca2703a306db80383f8e548051901ef4a176ea08",
+      "bytes": 35489
+    },
+    {
       "path": "plans/traceability.csv",
-      "sha256": "2e6a4438fba111624c9aaf6dcae262146cdb3176050e2a2c14964f751a24131b",
-      "bytes": 769449
+      "sha256": "34b9c2273665216409a22e160cef14e45a7f5dd46fdf716c07b993f1dfd03217",
+      "bytes": 796481
     },
     {
       "path": "plans/user-stories.csv",
@@ -3968,6 +4038,11 @@
       "bytes": 13218
     },
     {
+      "path": "scripts/repair_chat_only_delivery.ts",
+      "sha256": "a9cb647ea02f48e97da2d4545cc8fe895f68a1b3634b28d1e015af352220e38b",
+      "bytes": 3475
+    },
+    {
       "path": "scripts/request_logs.ts",
       "sha256": "767a6f1d83f608eee26b8e8c8aaccd589a7cc63ebbf25eff50b351b31182c2b3",
       "bytes": 9620
@@ -4029,8 +4104,8 @@
     },
     {
       "path": "scripts/sorani_review_list.ts",
-      "sha256": "d81a01baf77386612accac5fcc45cb4f2123048c9457214838dcb34137a242a3",
-      "bytes": 3038
+      "sha256": "0d6944508b2832b729aa32d600b0d136c8d2f0717561ab913f6d02d18ae3a477",
+      "bytes": 3229
     },
     {
       "path": "scripts/studio_fault_injection.ts",
@@ -4146,6 +4221,11 @@
       "path": "scripts/verify_t8_ratings.ts",
       "sha256": "19e90f897111dad88a02556972cf4ddf440cd45b5582fd896b103bac5803d9a7",
       "bytes": 4287
+    },
+    {
+      "path": "scripts/visual_review_live_trial.ts",
+      "sha256": "8461cde1f2725ed71da9ce1a4929321d76b2b2759118185ebefedb874eac796b",
+      "bytes": 30790
     },
     {
       "path": "tsconfig.scripts.json",

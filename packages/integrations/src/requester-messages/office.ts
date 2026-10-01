@@ -184,6 +184,34 @@ export const OFFICE_MESSAGES = {
     en: 'Reply to this picture with “approved” to send it to {requester}, or say what to change. You can also decide in Hawa Desk.',
     ckb: 'بە «پەسەندە» وەڵامی ئەم وێنەیە بدەرەوە بۆ ئەوەی بۆ {requester} بنێردرێت، یان بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت.',
   },
+  /**
+   * ADR-200: before an approval sends a draft to someone other than the approving member, the bot asks
+   * once, naming the draft and who gets it. A plain yes sends it; anything else is read as a new message.
+   */
+  confirmSend: {
+    en: 'Send {title} to {requester} now?',
+    ckb: 'ئایا ئێستا {title} بۆ {requester} بنێرم؟',
+  },
+  /** ADR-200: the same, for an approval of the member's own design whose words or draft were not certain. */
+  confirmSendOwn: {
+    en: 'Approve {title} and send it to you now?',
+    ckb: '{title} پەسەند بکەم و ئێستا بۆت بنێرم؟',
+  },
+  /** ADR-200: a yes to a "Send … now?" asked too long ago: nothing was sent, and it is asked again. */
+  askedAgain: {
+    en: 'I asked about {title} a while ago, so I haven\'t sent anything yet.',
+    ckb: 'ماوەیەک لەمەوبەر دەربارەی {title} پرسیم، بۆیە هێشتا هیچم نەناردووە.',
+  },
+  /** ADR-200: a no to "Send … now?": nothing is sent, and the draft keeps waiting. */
+  notSent: {
+    en: 'OK, I haven\'t sent {title}. It is still waiting; tell me what to change, or say send it when it\'s ready.',
+    ckb: 'باشە، {title}م نەنارد. هێشتا چاوەڕێیە؛ پێم بڵێ چی بگۆڕم، یان هەر کاتێک ئامادە بوو بڵێ بینێرە.',
+  },
+  /** ADR-200: a question about a draft: what the office knows of it, then what to do. `{photos}` is a photo count line. */
+  draftFacts: {
+    en: '{title} is from {requester}, sent to you {when}, with {photos}. What would you like me to do with it?',
+    ckb: '{title}: داواکار {requester}، {when} بۆت نێردرا، {photos}. دەتەوێت چی لێ بکەم؟',
+  },
   /** Who asked for the design, when it is the office member themselves. */
   you: {
     en: 'you',

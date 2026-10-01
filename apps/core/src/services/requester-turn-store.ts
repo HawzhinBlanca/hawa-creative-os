@@ -9,18 +9,30 @@ import type { ChatRequestView, IntentReading, PendingAsk, TurnPlan } from './req
 
 const INTENT_ACCOUNT = 'lifecycle_chat_intent';
 
-/** A request of the chat that a message can still concern. */
+/**
+ * A request of the chat that a message can still concern. Delivered ones count for `deliveredDays`;
+ * the intake route reads seven days, because redo words still mean a design delivered that long ago
+ * and `planTurn` keeps the three days for everything else (ADR-200 addendum).
+ */
 export async function activeChatRequests(trx: Kysely<Database>, tenantId: string,
-  chatId: string): Promise<ChatRequestView[]> {
+  chatId: string, deliveredDays = 3): Promise<ChatRequestView[]> {
+  const days = Number.isInteger(deliveredDays) && deliveredDays >= 0 && deliveredDays <= 30 ? deliveredDays : 3;
   const rows = (await sql<{ request_id: string; rev: string | number; stage: string; current_task_id: string;
     client_id: string | null; title: string | null; created_at: Date | string; updated_at: Date | string;
-    question: ChatRequestView['question']; requester_id: string | null; requester_hold:boolean }>`
+    question: ChatRequestView['question']; requester_id: string | null; requester_hold:boolean; sent_to_chat: boolean;
+    words: string | null }>`
     SELECT r.request_id::text, r.rev, r.stage, r.current_task_id::text, t.client_id::text,
       coalesce(root.title, t.title) AS title, r.created_at, r.updated_at,
+      -- ADR-230 addendum (L16): the requester's own words, to name a request whose title names nothing.
+      left(coalesce(root.description, t.description), 300) AS words,
       p.result->'question' AS question,
       coalesce(src.payload->'message'->'from'->>'id', opener.sender_id) AS requester_id,
       (t.state='paused' AND hold.data->>'requesterHoldRequestId'=r.request_id::text
-        AND hold.data->>'requesterHoldRequestRev'=r.rev::text) AS requester_hold
+        AND hold.data->>'requesterHoldRequestRev'=r.rev::text) AS requester_hold,
+      -- ADR-231: the current task's final notice reached the requester (Delivery keys it lc:dl-<task>-<approval>:notice).
+      (r.stage = 'delivering' AND EXISTS (SELECT 1 FROM hawa.inbox_events d WHERE d.tenant_id = r.tenant_id
+        AND d.source_account_id = 'telegram_delivery' AND d.event_kind = 'telegram_message_sent'
+        AND d.source_event_id LIKE ('lc:dl-' || r.current_task_id::text || '-%:notice:send'))) AS sent_to_chat
     FROM hawa.requests r
     JOIN hawa.tasks t ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id
     LEFT JOIN LATERAL (SELECT e.data FROM hawa.task_events e
@@ -44,9 +56,10 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
       LIMIT 1) opener ON true
     WHERE r.tenant_id = ${tenantId}::uuid AND r.chat_id = ${chatId} AND r.owner = 'restate'
       AND (r.stage IN ('designing', 'awaiting_answer', 'in_review', 'manual', 'approved', 'delivering')
-        OR (r.stage = 'delivered' AND r.updated_at > now() - interval '3 days'))
-    ORDER BY r.created_at, r.request_id
-    LIMIT 20`.execute(trx)).rows;
+        OR (r.stage = 'delivered' AND r.updated_at > now() - make_interval(days => ${days}::int)))
+    ORDER BY r.created_at DESC, r.request_id DESC
+    LIMIT 20`.execute(trx)).rows.reverse();
+  // The newest twenty, oldest first: a longer window must not push the latest design out.
   const iso = (v: Date | string) => new Date(v).toISOString();
   return rows.map((row) => ({
     requestId: row.request_id, stage: row.stage as ChatRequestView['stage'], rev: Number(row.rev),
@@ -55,6 +68,8 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
     question: row.question && typeof row.question === 'object' && typeof row.question.text === 'string' ? row.question : null,
     requesterId: row.requester_id,
     ...(row.requester_hold ? {requesterHold:true} : {}),
+    ...(row.sent_to_chat ? { sentToChat: true } : {}),
+    ...(row.words?.trim() ? { words: row.words.trim() } : {}),
   }));
 }
 
@@ -134,6 +149,8 @@ export interface IntentReceipt {
   updateId: number;
   chatId: string;
   senderId: string;
+  /** ADR-200: the sender's first name, as Telegram gave it (the office names drafts by it). */
+  senderName?: string;
   messageId: string | null;
   payloadHash: string;
   reading: IntentReading;
@@ -166,7 +183,8 @@ export async function readIntentReceipt(trx: Kysely<Database>, tenantId: string,
 /** Records the decision once; the first record wins, and a replay reads it back. */
 export async function recordIntentReceipt(trx: Kysely<Database>, tenantId: string,
   receipt: IntentReceipt): Promise<IntentReceipt> {
-  const payload = { chatId: receipt.chatId, senderId: receipt.senderId, messageId: receipt.messageId,
+  const payload = { chatId: receipt.chatId, senderId: receipt.senderId, ...(receipt.senderName ? { senderName: receipt.senderName } : {}),
+    messageId: receipt.messageId,
     reading: receipt.reading, plan: receipt.plan, ...(receipt.answer ? { answer: receipt.answer } : {}) };
   await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id,
       event_kind, payload, payload_hash, verified)

@@ -1,6 +1,6 @@
 import { LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 import { requesterButtons, questionButtons, type InlineButton } from './requester-actions.js';
-import { designName } from './requester-turn.js';
+import { designName, shortTitle } from './requester-turn.js';
 import { nextOfficeDayStart } from '@hawa/domain';
 
 /**
@@ -11,6 +11,33 @@ export function officeDayExhaustedNote(now: number = Date.now()): string {
   const reset = nextOfficeDayStart(now).toISOString().slice(0, 16).replace('T', ' ');
   return ` The office's daily model allowance is used up and nothing was sent for this design. It resets at midnight ` +
     `Baghdad time (${reset} UTC); retry the design then, or raise the daily limit in the spending policy.`;
+}
+
+/**
+ * ADR-233: the office's alert for a request-owned design that ended without a draft. It read
+ * "Automatic design needs an operator in Hawa Desk. Task cdfadbf0-…: DESIGN_REJECTED
+ * (NATIVE_REVISION_HANDOFF_REQUIRED)." (live test L13), and reached the requester's chat as well when
+ * the requester is an office member. In ADR-231's style: who and which design, what happened and what
+ * to do in plain sentences, and the task's short id on one last line for the Desk's search. The code
+ * stays in the task's history in the Desk. Plain text (no parse mode).
+ */
+export function composeNoDraftOfficeAlert(input: { taskId: string; title: string; requester?: string | null; status: string; code?: string;
+  now?: number }): string {
+  const who = input.requester?.trim() ? Array.from(input.requester.trim()).slice(0, 60).join('') : 'the requester';
+  const design = `"${shortTitle(input.title)}"`;
+  const code = (input.code || '').toUpperCase();
+  const body = code === 'NATIVE_REVISION_HANDOFF_REQUIRED'
+    ? `The change ${who} asked for on ${design} has to be made by hand: the automatic studio does not edit a design that someone may have changed in Canva. ` +
+      'Open it in Hawa Desk, make the change on a copy of the Canva design, confirm its words and send it for review.'
+    : code === 'OFFICE_DAY_EXHAUSTED'
+      ? `The automatic design of ${design} for ${who} did not start.${officeDayExhaustedNote(input.now)}`
+      : code === 'STUDIO_RUN_LIMIT_TOO_SMALL'
+        ? `The automatic design of ${design} for ${who} stopped before it made a draft: its next step needs more than one design may spend. ` +
+          'Raise the per-design limit and retry it from Hawa Desk, or make it by hand.'
+        : input.status === 'DESIGN_UNCERTAIN'
+          ? `The automatic design of ${design} for ${who} may or may not have made a draft. Check it in Hawa Desk before retrying, so it is not made twice.`
+          : `The automatic design of ${design} for ${who} stopped without a draft. Open it in Hawa Desk to see why, then retry it or make it by hand.`;
+  return [body, '', `Desk search: ${input.taskId.slice(0, 8)}`].join('\n');
 }
 
 export interface CanvaStatusMessageInput {

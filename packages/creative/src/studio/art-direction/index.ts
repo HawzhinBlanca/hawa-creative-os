@@ -56,3 +56,4 @@ export {
   type GenerateArtDirectedResult,
 } from './generate.js';
 export { artDirectionPrior, houseRecipesFor, sharpnessClass, SUBJECT_RECIPES, type ArtDirectionPriorDecision, type RecipePreferenceContext, scopedReferenceRecipes } from './prior.js';
+export { tonePreferenceFromWords, toneGroundHex, resolveSurfaceTone, DARK_HERO_LUMINANCE, type TonePreference } from './tone.js';

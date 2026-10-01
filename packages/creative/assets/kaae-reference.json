@@ -4,7 +4,7 @@
   "sourceUrl": "https://drive.google.com/file/d/1ZmSOzRhHFKWWvMG6hNhcMtjWPrASRuyF/view",
   "sourceTitle": "BRAND GUIDLINES.pdf",
   "sourceModifiedAt": "2025-05-26T17:30:04Z",
-  "retrievedAt": "2026-09-13",
+  "retrievedAt": "2026-10-01",
   "status": "reference_for_draft_not_release_approval",
   "rules": {
     "fontFamily": "Verdana",
@@ -31,29 +31,31 @@
       }
     },
     "palette": [
-      "#0A1628",
-      "#1E3A5F",
-      "#4770A3",
-      "#F7B500",
-      "#FDF8F3",
       "#FFFFFF",
-      "#1A1A1A"
+      "#FFF2DB",
+      "#17087A",
+      "#3833A3",
+      "#4770A3",
+      "#0F73DE",
+      "#E8B85C",
+      "#000000"
     ],
     "paletteFallbacks": {
-      "background": "#0A1628",
-      "text": "#FDF8F3",
-      "accent": "#F7B500"
+      "background": "#FFFFFF",
+      "text": "#17087A",
+      "accent": "#3833A3"
     },
     "brandColors": {
-      "midnightNavy": "#0A1628",
-      "royalNavy": "#1E3A5F",
-      "primaryBlue": "#4770A3",
-      "sunGold": "#F7B500",
-      "creamPaper": "#FDF8F3",
       "white": "#FFFFFF",
-      "charcoal": "#1A1A1A"
+      "cream": "#FFF2DB",
+      "indigo": "#17087A",
+      "royalIndigo": "#3833A3",
+      "blue": "#4770A3",
+      "brightBlue": "#0F73DE",
+      "gold": "#E8B85C",
+      "ink": "#000000"
     },
-    "colorUsage": "For dark institutional invitations: background must be KAAE Midnight Navy (#0A1628) or Royal Navy (#1E3A5F). Dates must be Kurdistan Sun Gold (#F7B500). The title takes the color the design calls for, from this palette: Sun Gold is an accent, for an accent line of the title, not a rule on the whole title. Body copy must be Academic Cream (#FDF8F3) or White (#FFFFFF). Dividers and borders must be Sun Gold (#F7B500) or Primary Blue (#4770A3). Never use purple, violet, indigo, or unlisted colors.",
+    "colorUsage": "KAAE brand guideline palette, light first. The default page is White (#FFFFFF) or Cream (#FFF2DB), as on the guideline's own pages. Indigo (#17087A) and Royal Indigo (#3833A3) are for header bands, plates, panels, tabs and scrims, and for titles and headings on a light page. Gold (#E8B85C) only for thin rules, frames, borders and small accents, or a title's accent line on indigo; never gold text on white or cream. Blue (#4770A3) for secondary lines, rules and icons; Bright Blue (#0F73DE) sparingly, one highlight at most. Body copy on a light page is Ink (#000000) or Indigo (#17087A); on indigo it is White (#FFFFFF) or Cream (#FFF2DB). Use an Indigo page only when the brief or the photo calls for it: an evening or dark invitation, a keynote or stage screen, a dark photo hero, or the requester asks for dark or navy. Never use colours outside this palette.",
     "logo": "Use the supplied official logo unchanged, with its original aspect ratio. Minimum digital width 100px. Keep clear space around it equal to the height of its K.",
     "body": "Left align digital body text. Use 1.4 line spacing, readable text and academic formality.",
     "restriction": "Do not add reference-document factual copy, contact details, slogans, signatures or a seal to the invitation. Only the saved request supplies design copy.",
@@ -64,17 +66,19 @@
     "rtl": "Sorani Kurdish blocks are right-to-left: right-align them, keep them separate from Latin blocks, and give them about 20% more width and height than Latin text of the same size.",
     "artDirection": [
       "Pick ONE hero photo that literally shows the subject. A second photo only as a texture blended into the text zone, never a grid cell. No multi-photo grids in social posts.",
-      "The hero fills 60-100% of the canvas and runs off at least two edges. Keep a quiet region (sky, wall, blur) for the title.",
-      "Text always sits on something: a cream card (22-25% of the height), a navy plate or panel, or a navy gradient fade over 35-50% of the height. Never bare text on a busy photo.",
+      "The hero fills 60-100% of the canvas and runs off at least two edges, or fills the top of a white or cream page. Keep a quiet region (sky, wall, blur) for the title.",
+      "Text always sits on something: the white or cream page, a cream card (22-25% of the height), an indigo plate, band or tab, or a fade to paper or to indigo over 35-50% of the height. Never bare text on a busy photo.",
       "Elements bridge edges: a wordmark tab straddling the card's top edge, a call-to-action tab straddling a card, a portrait breaking over a panel.",
       "People: cut out, placed bottom-left or left, bleeding off the edge, with the sunburst or grid motif behind. No circle masks.",
       "A gold border frames series and carousels; a thin gold inset line frames single report posts. Never tilt or rotate photos.",
-      "Colour: navy for fades, plates and scrims; gold only for the first title line, rules, call-to-action pills and frames; cream for card fills. Keep the photo's natural grade (no duotone).",
-      "Type: bold geometric sans. A gold line and a bold white or navy main line for the title, then small light body text. Logo in a corner; the URL in a pill or the footer.",
+      "Colour, as the brand guideline sets it: light first. A white or cream page; indigo for header bands, plates, tabs and scrims; gold only for thin rules, frames, the accent line on indigo and pills. Keep the photo's natural grade.",
+      "Type: bold geometric sans. On a light page an indigo main line, a royal-indigo accent line and dark small body text; on indigo a white main line and a gold line. Logo in a corner; the URL in a pill or the footer.",
       "Bilingual: the same geometry in both languages. Sorani is right-aligned or centred in the same boxes; never mirror the photo.",
-      "With several photos, rank them by subject fit, sharpness and quiet space. Use the best as the hero, optionally one more as a faded texture, and drop the rest."
+      "With several photos, rank them by subject fit, sharpness and quiet space. Use the best as the hero, optionally one more as a faded texture, and drop the rest.",
+      "An indigo ground only when the brief or photo calls for it: an evening or dark invitation, a keynote or stage screen, a dark photo hero, or the requester asks for dark or navy. Otherwise white or cream."
     ],
-    "artDirectionSource": "Office art-direction rulebook, from ~20 of KAAE's published photo designs (ADR-170, 2026-09-30)."
+    "artDirectionSource": "Office art-direction rulebook, from ~20 of KAAE's published photo designs (ADR-170, 2026-09-30).",
+    "colorSource": "Colour palette page of BRAND GUIDLINES.pdf (white pages under an indigo band; body ink black), owner's decision of 2026-10-01 (ADR-236)."
   },
   "logoSha256": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc"
 }

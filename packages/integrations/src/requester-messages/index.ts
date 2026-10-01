@@ -24,10 +24,18 @@ import { LIFECYCLE_MESSAGES } from './lifecycle.js';
 import { OUTCOME_MESSAGES } from './outcomes.js';
 import { ALBUM_MESSAGES } from './albums.js';
 import { OFFICE_MESSAGES } from './office.js';
+// ADR-230: withdrawing a request.
+import { WITHDRAW_MESSAGES } from './withdraw.js';
+import { PENDING_ROUND_MESSAGES } from './pending-round.js';
+import { NAMING_MESSAGES } from './naming.js';
+// ADR-235: who a design is for.
+import { CLIENT_QUESTION_MESSAGES } from './client-question.js';
 
 import type { Phrase, PhraseBook, RequesterLang } from './types.js';
 
 export type { Phrase, PhraseBook, RequesterLang } from './types.js';
+/** ADR-231: a design's name as a requester reads it. */
+export { requesterTitleName, trimTitleMarks } from './titles.js';
 
 const letters = (text: string, script: RegExp) => Array.from(text).filter((ch) => script.test(ch) && /\p{L}/u.test(ch)).length;
 const ARABIC_SCRIPT = /\p{Script=Arabic}/u;
@@ -66,6 +74,17 @@ export function bold(value: string): string {
   return `<b>${escapeHtml(value)}</b>`;
 }
 
+/**
+ * ADR-200 addendum: the name of a request opened from words that name no design ("do a better
+ * design", "make me a nice poster"), for the office: "New design request from Sewa". The requester
+ * hears "your design" in its place (`isNeutralRequestTitle`), never the sentence they sent.
+ */
+export function neutralRequestTitle(senderName: string | null | undefined): string {
+  const name = Array.from(String(senderName ?? '').replace(/\s+/g, ' ').trim()).slice(0, 60).join('');
+  return `New design request from ${name || 'a requester'}`;
+}
+export const isNeutralRequestTitle = (name: string | null | undefined) => /^New design request from\s/.test(String(name ?? '').trim());
+
 /** The whole catalogue, by section: the review list and the wording tests read it. */
 export const REQUESTER_CATALOGUE = {
   sources: SOURCE_MESSAGES,
@@ -79,7 +98,16 @@ export const REQUESTER_CATALOGUE = {
   albums: ALBUM_MESSAGES,
   /** ADR-040 addendum: to an office member deciding on a draft in Telegram (office terms allowed). */
   office: OFFICE_MESSAGES,
+  /** ADR-230: a request withdrawn by its requester or the office, or a cancel that came too late. */
+  withdraw: WITHDRAW_MESSAGES,
+  /** ADR-230 addendum: changes sent while a design was being made. */
+  pendingRound: PENDING_ROUND_MESSAGES,
+  /** ADR-230 addendum (L16): a request whose title names nothing, by when it was sent and its words. */
+  naming: NAMING_MESSAGES,
+  /** ADR-235: who a design is for, asked when nothing names the organisation. */
+  clientQuestion: CLIENT_QUESTION_MESSAGES,
 } as const satisfies Record<string, PhraseBook>;
 
 export { SOURCE_MESSAGES, MEDIA_MESSAGES, INBOX_MESSAGES, ACCESS_MESSAGES, ROUTING_MESSAGES, CONVERSATION_MESSAGES,
   LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ALBUM_MESSAGES, OFFICE_MESSAGES };
+export { WITHDRAW_MESSAGES, PENDING_ROUND_MESSAGES, NAMING_MESSAGES, CLIENT_QUESTION_MESSAGES };

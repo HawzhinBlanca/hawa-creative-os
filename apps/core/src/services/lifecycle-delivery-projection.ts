@@ -6,6 +6,7 @@ import { PublicationRepository, TaskRepository, sql, withRlsContext, type Databa
 import { LifecycleProjectionConflict } from './lifecycle-projection.js';
 import { loadPinnedDeliverables, type DeliverableStore } from './pinned-deliverables.js';
 import { workerSigningSecretOf } from './worker-credential.js';
+import { requesterSendsConfirmed } from './requester-send-evidence.js';
 
 const OFFICE_DELIVERY_ROLES = new Set(['art_director', 'creative_director', 'office_admin', 'administrator']);
 
@@ -239,6 +240,14 @@ export async function projectLifecycleDeliveryFinish(db: Kysely<Database>, input
       await new PublicationRepository(trx).markComplete({ tenantId: input.tenantId,
         publicationId: pub.id, taskId: input.taskId }, trx);
       stage = 'delivered'; taskState = 'complete';
+    } else if (await chatOnlyDelivered(trx, input, pub, expectedFiles)) {
+      // ADR-230: the requester has every file and the notice (Telegram's send marks say so), and only the
+      // Drive archive is missing (the office Google account was not connected). The request is delivered;
+      // the archive is recorded as pending, not as an unconfirmed send, and the publication stays open
+      // for an archive later.
+      await closeChatOnlyDelivery(trx, input.tenantId, input.taskId, pub.id, { requestId: input.requestId,
+        deliveryId: input.deliveryId, reason: input.outcome.reason ?? null });
+      stage = 'delivered'; taskState = 'complete'; errorClass = ARCHIVE_PENDING;
     } else if (pub.error_class === 'ARCHIVE_UNCONFIRMED' && !input.outcome.archived) {
       errorClass = 'ARCHIVE_UNCONFIRMED';
     } else if ((input.outcome.filesSent > 0 && (!input.outcome.archived || !requesterConfirmed)) ||
@@ -266,6 +275,119 @@ export async function projectLifecycleDeliveryFinish(db: Kysely<Database>, input
     if (!advanced) throw new LifecycleProjectionConflict('STALE_REVISION', 'The request changed during delivery completion');
     const result: LifecycleDeliveryFinishResult = { requestId: input.requestId, taskId: input.taskId,
       approvalId: input.approvalId, deliveryId: input.deliveryId, stage, taskState, rev: input.rev };
+    await trx.insertInto('lifecycle_projections').values({ tenant_id: input.tenantId,
+      request_id: input.requestId, rev: input.rev, idempotency_key: input.key, payload_sha256: hash,
+      result: result as unknown as Record<string, unknown> }).execute();
+    return result;
+  });
+}
+
+/**
+ * ADR-230: a delivery that reached the requester in the chat but was not archived (outcome `chat_only`:
+ * Delivery prepared it without Drive, because nothing could be uploaded). Core reads the publication's
+ * error class as the archive's state from here: ARCHIVE_PENDING until an archive is written.
+ */
+export const ARCHIVE_PENDING = 'ARCHIVE_PENDING';
+
+/**
+ * Whether a `chat_only` report may close the request: the report says every approved file and the notice
+ * were sent and nothing is uncertain, and Core's own stored Telegram send marks agree, file by file. The
+ * worker's numbers alone never close it.
+ */
+async function chatOnlyDelivered(trx: Kysely<Database>, input: Pick<LifecycleDeliveryFinish, 'tenantId' | 'taskId' | 'approvalId' | 'outcome'>,
+  pub: { package_manifest: Record<string, unknown> }, expectedFiles: number): Promise<boolean> {
+  const outcome = input.outcome;
+  if (outcome.outcome !== 'chat_only' || outcome.archived || outcome.uncertain.length > 0 ||
+      expectedFiles === 0 || outcome.filesSent !== expectedFiles) return false;
+  return requesterSendsConfirmed(trx, input.tenantId, input.taskId, input.approvalId, pub.package_manifest);
+}
+
+async function closeChatOnlyDelivery(trx: Kysely<Database>, tenantId: string, taskId: string, publicationId: string,
+  data: { requestId: string; deliveryId: string; reason: string | null; repaired?: true }): Promise<void> {
+  await new TaskRepository(trx).transitionState({ taskId, tenantId,
+    fromState: 'publishing', toState: 'complete', actorType: 'workflow', actorId: 'delivery-workflow',
+    reason: 'Delivered to the requester in the chat; the Drive archive is pending',
+    data: { ...data, archive: 'pending' } }, trx);
+  // The publication is not marked complete: its archive is still to be written. Its error_detail keeps
+  // the delivery's report as Core stored it.
+  await sql`UPDATE hawa.publications SET error_class = ${ARCHIVE_PENDING}, updated_at = now()
+    WHERE tenant_id = ${tenantId}::uuid AND id = ${publicationId}::uuid`.execute(trx);
+}
+
+export interface LifecycleDeliveryReconcile {
+  requestId: string; tenantId: string; taskId: string; approvalId: string; deliveryId: string; run: number;
+  expectedRev: number; rev: number; key: string;
+}
+
+export type LifecycleDeliveryReconcileResult = LifecycleDeliveryFinishResult & { reconciled: true };
+
+/**
+ * ADR-230 repair: a request whose delivery finished `chat_only` before this change sits in `delivering`
+ * (task publishing, error REQUESTER_SEND_UNCONFIRMED). Core reads the report it stored on the
+ * publication and its own send marks again; when both say the requester has everything and only the
+ * archive is missing, the request is delivered exactly as a new chat-only delivery is. Anything else is
+ * refused (NOT_CHAT_ONLY, SENDS_UNCONFIRMED) and left for a person. One revision, one receipt: a second
+ * call answers with the first.
+ */
+export async function reconcileLifecycleChatOnlyDelivery(db: Kysely<Database>,
+  input: LifecycleDeliveryReconcile): Promise<LifecycleDeliveryReconcileResult> {
+  if (input.rev !== input.expectedRev + 1 || input.expectedRev < 5 || !Number.isInteger(input.run) || input.run < 1 ||
+      input.key !== `${input.requestId}:${input.rev}:deliveryReconciled:${input.deliveryId}`) {
+    throw new LifecycleProjectionConflict('WRONG_STAGE', 'A versioned delivery repair is required');
+  }
+  const hash = fingerprint(input);
+  return withRlsContext(db, { tenantId: input.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${input.requestId}`}, 0))`.execute(trx);
+    const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
+      .where('tenant_id', '=', input.tenantId).where('request_id', '=', input.requestId).where('rev', '=', input.rev).executeTakeFirst();
+    if (receipt) {
+      if (receipt.idempotency_key !== input.key || receipt.payload_sha256 !== hash) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'This request revision already records a different action');
+      }
+      return receipt.result as unknown as LifecycleDeliveryReconcileResult;
+    }
+    const request = await trx.selectFrom('requests').selectAll()
+      .where('tenant_id', '=', input.tenantId).where('request_id', '=', input.requestId).executeTakeFirst();
+    if (!request || Number(request.rev) !== input.expectedRev) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', 'The request is not at the expected revision');
+    }
+    if (request.owner !== 'restate' || request.stage !== 'delivering' || request.current_task_id !== input.taskId) {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'This request is not delivering the named task');
+    }
+    const publicationKey = `pub_key_${input.taskId}_${input.approvalId}`;
+    const pub = (await sql<{ id: string; executor: string; executor_run: number; executor_finished_run: number;
+      package_manifest: Record<string, unknown>; error_class: string | null; error_detail: string | null; state: string }>`
+      SELECT id, executor, executor_run, executor_finished_run, package_manifest, error_class, error_detail, state
+      FROM hawa.publications WHERE tenant_id = ${input.tenantId}::uuid AND publication_key = ${publicationKey} FOR UPDATE`.execute(trx)).rows[0];
+    if (!pub || pub.executor !== 'restate' || Number(pub.executor_run) !== input.run ||
+        Number(pub.executor_finished_run) !== input.run || pub.state === 'complete' ||
+        deliveryWorkflowId(input.taskId, input.approvalId, input.run) !== input.deliveryId) {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'The delivery run has not finished, or is not this one');
+    }
+    // The report as Core stored it when the delivery finished (error_detail holds the outcome's JSON).
+    let reported: DeliveryOutcome | null = null;
+    try { reported = JSON.parse(String(pub.error_detail || 'null')) as DeliveryOutcome; } catch { reported = null; }
+    if (pub.error_class !== 'REQUESTER_SEND_UNCONFIRMED' || reported?.outcome !== 'chat_only' || !Array.isArray(reported.uncertain)) {
+      throw new LifecycleProjectionConflict('NOT_CHAT_ONLY', 'The recorded delivery did not end chat-only; a person must reconcile it');
+    }
+    const task = await new TaskRepository(trx).findById(input.taskId, input.tenantId, trx);
+    if (task?.request_id !== input.requestId || task.state !== 'publishing') {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'The owned task is no longer publishing');
+    }
+    const expectedFiles = Array.isArray(pub.package_manifest?.files) ? pub.package_manifest.files.length : 0;
+    if (!(await chatOnlyDelivered(trx, { tenantId: input.tenantId, taskId: input.taskId, approvalId: input.approvalId,
+      outcome: reported }, pub, expectedFiles))) {
+      throw new LifecycleProjectionConflict('SENDS_UNCONFIRMED', 'Telegram\'s send marks do not show every file and the notice sent');
+    }
+    await closeChatOnlyDelivery(trx, input.tenantId, input.taskId, pub.id, { requestId: input.requestId,
+      deliveryId: input.deliveryId, reason: reported.reason ?? null, repaired: true });
+    const advanced = await trx.updateTable('requests').set({ stage: 'delivered', rev: input.rev, updated_at: new Date() })
+      .where('tenant_id', '=', input.tenantId).where('request_id', '=', input.requestId)
+      .where('rev', '=', input.expectedRev).returning('request_id').executeTakeFirst();
+    if (!advanced) throw new LifecycleProjectionConflict('STALE_REVISION', 'The request changed during the repair');
+    const result: LifecycleDeliveryReconcileResult = { requestId: input.requestId, taskId: input.taskId,
+      approvalId: input.approvalId, deliveryId: input.deliveryId, stage: 'delivered', taskState: 'complete',
+      rev: input.rev, reconciled: true };
     await trx.insertInto('lifecycle_projections').values({ tenant_id: input.tenantId,
       request_id: input.requestId, rev: input.rev, idempotency_key: input.key, payload_sha256: hash,
       result: result as unknown as Record<string, unknown> }).execute();

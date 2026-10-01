@@ -78,7 +78,7 @@ describe('a round that could not start still gets an answer (audit P2)', () => {
       WHERE request_id = ${waiting.requestId}::uuid`.execute(trx)); };
     const answer = await intake(app(), text(chat, 'make the title bigger'));
     expect(answer).toMatchObject({ intakeStatus: 409, lifecycleAction: 'late-change', requestId: waiting.requestId, requestStage: 'designing',
-      chatAnswer: { text: ROUTING_MESSAGES.changeAddedWhileDesigning.en.replace('{title}', '<b>Nawroz poster</b>') } });
+      chatAnswer: { text: ROUTING_MESSAGES.changeAddedNextRound.en.replace('{title}', '<b>Nawroz poster</b>') } });
   });
 
   it('when the second reading misses too, the words go to the office and the requester hears that', async () => {
@@ -89,6 +89,7 @@ describe('a round that could not start still gets an answer (audit P2)', () => {
     expect(answer).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer',
       chatAnswer: { text: ROUTING_MESSAGES.forwardedToOffice.en },
       officeAlert: { chatId: String(OFFICE), text: expect.stringContaining('make the title bigger') } });
-    expect(answer.officeAlert.text).toMatch(/changed while they were read/);
+    // ADR-231: the requester by name, in plainer words.
+    expect(answer.officeAlert.text).toMatch(/changed while the words were being read/);
   });
 });

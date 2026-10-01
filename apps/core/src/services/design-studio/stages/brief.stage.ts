@@ -1,5 +1,5 @@
 import type { StageContext, CreativeBrief } from '../types.js';
-import { nearestPaletteColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC, layoutConditioningImage, imagePixelSize, PHOTO_SHOTS, QUIET_AREAS } from '@hawa/creative';
+import { nearestGroundColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC, layoutConditioningImage, imagePixelSize, PHOTO_SHOTS, QUIET_AREAS, hexToLuminance, toneGroundHex, tonePreferenceFromWords } from '@hawa/creative';
 
 /**
  * ADR-170: subject tags the brief may give, the ones the office's photo exemplars are tagged with,
@@ -226,6 +226,11 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
   brief.subjectTags = (Array.isArray(brief.subjectTags) ? brief.subjectTags : []).filter((t) => (BRIEF_SUBJECT_TAGS as readonly string[]).includes(t));
   brief.referenceSeen = images.length > 0;
   brief.styleSpec = { ...NEUTRAL_STYLE_SPEC, ...(brief.styleSpec || {}) };
+  // ADR-236: the ground the requester asked for in words ("on white", "like the brand book", "dark",
+  // "an evening gala"), read with no call and kept with the brief, so a resume or a change keeps it.
+  const tonePreference = tonePreferenceFromWords(ctx.instructions);
+  if (tonePreference) brief.tonePreference = tonePreference;
+  else delete brief.tonePreference;
   if (dropped.length > 0) {
     log.warn(`[studio] creative brief listed ${dropped.length} surplus role(s) (${dropped.join('; ')}); kept one role per copy block`);
   }
@@ -269,11 +274,22 @@ export function normalizeBriefRoles(brief: CreativeBrief, copyCount: number): { 
 /**
  * The background colour the client asked for, as a colour of the brand palette, or undefined.
  * A hex outside the palette resolves to the nearest brand colour; anything else is ignored.
+ *
+ * ADR-236: the tone the requester's words asked for (brief.tonePreference) is honoured too: with no
+ * colour from the model it sets the brand's paper or its navy; a model colour of the other tone (a
+ * navy hex for "on a white background") gives way to it.
  */
 export function requestedBackgroundFor(brief: Partial<CreativeBrief> | undefined, palette: string[]): string | undefined {
+  if (!palette.length) return undefined;
   const hex = String(brief?.requestedBackground || '').trim();
-  if (!/^#[0-9a-f]{6}$/i.test(hex) || !palette.length) return undefined;
-  return palette.find((p) => p.toLowerCase() === hex.toLowerCase()) || nearestPaletteColour(hex, palette);
+  // A ground snaps to a brand ground colour, never to the palette's body ink (nearestGroundColour).
+  const snapped = /^#[0-9a-f]{6}$/i.test(hex) ? nearestGroundColour(hex, palette) : undefined;
+  const asked = snapped ? palette.find((p) => p.toLowerCase() === snapped.toLowerCase()) ?? snapped : undefined;
+  const tone = brief?.tonePreference;
+  if (!tone || (tone.tone !== 'light' && tone.tone !== 'dark')) return asked;
+  const askedTone = asked ? (hexToLuminance(asked) >= 0.4 ? 'light' : 'dark') : undefined;
+  if (asked && askedTone === tone.tone) return asked;
+  return toneGroundHex(tone, palette) ?? asked;
 }
 
 

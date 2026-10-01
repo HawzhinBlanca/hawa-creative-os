@@ -5,13 +5,15 @@ import { log } from '../logging.js';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { type RequestContext, type StudioOperation, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { requestOperatingSubject, type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
+import { type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
-import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml } from '@hawa/integrations';
+import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml, neutralRequestTitle } from '@hawa/integrations';
+import { isWeakBriefLine } from './requester-turn.js';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
 import { autoDraftAllowedFor, clientPackOf, matchRequestClient, positiveClientWords } from './client-packs.js';
 import { defaultCanvasFor } from '@hawa/creative';
-import { isValidUuid, inlineTemplateCopyMissing, cutText, startsWithName, stripLeadingMarks } from '../core-helpers.js';
+import { isValidUuid, inlineTemplateCopyMissing } from '../core-helpers.js';
+import { requestTitle } from './request-title.js';
 import { DEFAULT_TENANT_ID, DEFAULT_CLIENT_ID } from '../core-context.js';
 import type { CoreContext } from '../core-context.js';
 
@@ -45,28 +47,6 @@ function splitAtCopyIntroducer(text: string): { instructions: string; introducer
 }
 
 type ChatCampaignIntake = ReturnType<typeof buildChatCampaignIntake>;
-/**
- * ADR-182: a design's name as people say it: its first line without the greeting and the request
- * around it ("Hi, we need a poster for the graduation ceremony" → "Poster for the graduation
- * ceremony", "Another poster please: KAAE staff football tournament" → "KAAE staff football
- * tournament"). The requester hears the name in every answer ("I'm making a first draft of …"), which
- * read "a first draft of Hi, we need a poster for …". A line that is nothing but a request keeps its words.
- */
-const TITLE_NOUNS = 'poster|postr|flyer|banner|design|invitation|invite|card|post|story|brochure|certificate|announcement|graphic|cover|leaflet|infographic|thumbnail|ad|advert';
-const TITLE_GREETING = /^(?:(?:hi|hello|hey|dear\s+(?:team|all|colleagues|friends|sir|madam)|good\s+(?:morning|afternoon|evening)|salam|slaw|silav|سڵاو|بەڕێزان)(?=[\s,،!.:-]|$)[\s,،!.:-]*)+/iu;
-const TITLE_REQUEST = new RegExp('^(?:(?:and|also|so|ok(?:ay)?|please|pls|plz|kindly)\\s+)*' +
-  '(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+)?(?:make|mak|create|design|prepare|produce|do)\\s+(?:us\\s+|me\\s+)?|' +
-  "(?:we|i)\\s+(?:need|want|would\\s+like|'d\\s+like)\\s+|(?:please\\s+)?(?:make|mak|create|design|prepare|produce)\\s+(?:us\\s+|me\\s+)?)?" +
-  "(?:(?:a|an|another|one\\s+more|new|the)\\s+)?" +
-  `(?=(?:[\\p{L}'-]+\\s+){0,2}(?:${TITLE_NOUNS})s?\\b)`, 'iu');
-const TITLE_NOUN_PLEASE = new RegExp(`^(?:${TITLE_NOUNS})s?\\s+(?:please|pls|plz)\\s*[:,-]\\s*`, 'iu');
-function spokenTitle(line: string): string {
-  const lead = line.replace(TITLE_GREETING, '').replace(TITLE_REQUEST, '').replace(TITLE_NOUN_PLEASE, '');
-  if (lead === line) return line;
-  const said = lead.replace(/[\s?؟.!,:]+$/u, '').trim();
-  return said.split(/\s+/).filter(Boolean).length < 2 ? line : said.replace(/^[a-z]/, (c) => c.toUpperCase());
-}
-
 const intakes = new WeakMap<CoreContext, ChatCampaignIntake>();
 
 function buildChatCampaignIntake(ctx: CoreContext) {
@@ -288,12 +268,9 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     // With no headline the title says so, rather than ending in an empty ellipsis. A headline that
     // already starts with the client's name ("KAAE K-12 Pilot Study") is not prefixed with it again,
     // and the direction marks a Sorani keyboard puts before Latin copy are not part of the name (ADR-180).
-    const titleFor = (headline: string) => {
-      const label = isKaae ? 'KAAE' : senderName;
-      const line = spokenTitle(stripLeadingMarks(requestOperatingSubject(rawText, headline) ?? headline));
-      if (!line) return `${label}: no copy sent`;
-      return startsWithName(line, label) ? `${cutText(line, 45)}…` : `${label}: ${cutText(line, 45)}…`;
-    };
+    // ADR-231: request-title.ts, also without the format and verb before the subject ("an Instagram post
+    // announcing our …") and with no direction mark at either edge.
+    const titleFor = (headline: string) => requestTitle({ headline, label: isKaae ? 'KAAE' : senderName, rawText });
 
     if (input.isInstructionOnly) {
       headlineEn = undefined;
@@ -302,7 +279,13 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       copyCkb = undefined;
       // ADR-182: named by its own first line, as any brief is. "Directive (…)" reached the requester
       // ("A designer will make Directive (make me a nice poster…)").
-      title = titleFor(rawText.split('\n').map((line) => line.trim()).find(Boolean) ?? '');
+      // ADR-200 addendum (incident 2026-10-01): the first line that names a design; with none (redo or
+      // quality words, chat, a question: "do a better design thats similar to earlier ones"), a neutral
+      // name. The words stay the request's instructions either way.
+      const lines = rawText.split('\n').map((line) => line.trim()).filter(Boolean);
+      const named = lines.find((line) => !isWeakBriefLine(line));
+      const neutral = neutralRequestTitle(senderName);
+      title = named !== undefined || !lines.length ? titleFor(named ?? '') : isKaae ? `KAAE: ${neutral}` : neutral;
       // A directive stays RECEIVED, as the database records it; isInstructionOnly marks it. It was
       // CLARIFICATION_REQUIRED here, a word no other layer had, until the database row overwrote it.
     } else if (primaryLanguage === 'en') {

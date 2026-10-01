@@ -955,3 +955,15 @@ encrypted105-table/177-policy/16-blob restores, zero missing references. Histori
 red receipts retained and owned stack removed. Production-data Stage3 NOT_RUN;
 real native/human/publication/offsite/pilot admission open. Livebaffce10 integration
 is the next connected milestone; no production changes in this slice.
+
+
+## Current live release integration checkpoint
+
+Researchdce6004c merges livebaffce10, including owner-directed KAAE guideline and
+Sol visual review plus current office conversation fixes. Both API contracts,
+scoped learning, bounded geometry/photo choices and role authority are preserved.
+No global default light treatment is added to an unspecified content choice;
+explicit white paper now reaches all four editorial compositions. Original
+failed receipts retained; corrected16files179/0,722 roots and lint pass. Full
+source/candidate/deployment qualification pending. No real native or human-quality
+admission claimed. See CURRENT_RELEASE_INTEGRATION_PROOF.json.

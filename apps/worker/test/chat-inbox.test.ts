@@ -89,6 +89,34 @@ function core(answers: Array<() => Promise<any>>) {
   return { intake, park };
 }
 
+describe('ChatInbox and a requester\'s cancel (ADR-230)', () => {
+  it('hands a withdraw to RequestLifecycle under the update\'s key, once, and says nothing itself', async () => {
+    const ctx = new FakeContext() as FakeContext & { withdraws: Array<{ requestId: string; event: unknown }>; sendLifecycleWithdraw(r: string, e: unknown): Promise<void> };
+    ctx.withdraws = [];
+    let failOnce = true;
+    ctx.sendLifecycleWithdraw = async (requestId, event) => {
+      if (failOnce) { failOnce = false; throw new Error('withdraw dispatch interrupted'); }
+      ctx.withdraws.push({ requestId, event });
+    };
+    const requestId = '3a4c6ac4-1111-4222-8333-944455556666';
+    const c = core([async () => ({ kind: 'done', intakeStatus: 200, lifecycleAction: 'withdraw', requestId, chatId: '555' })]);
+    expect(await untilSettled(ctx, () => handleUpdate(ctx, input, c))).toMatchObject({ outcome: 'handled' });
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(ctx.withdraws).toEqual([{ requestId, event: { v: 1, kind: 'withdraw', eventId: 'chatinbox:withdraw:4242', requestId, updateId: 4242 } }]);
+    expect(ctx.notices).toEqual([]);
+  });
+
+  it('Core\'s withdraw answer is read by the worker\'s client, and a malformed one waits', async () => {
+    const requestId = '3a4c6ac4-1111-4222-8333-944455556666';
+    const answer = (body: unknown) => createCoreClient({ baseUrl: 'http://core', token: 't',
+      fetch: (async () => new Response(JSON.stringify({ intakeStatus: 200, ...body as object }), { status: 200 })) as unknown as typeof fetch });
+    expect(await answer({ lifecycleAction: 'withdraw', requestId, chatId: '555' }).intake(update, 'lifecycle'))
+      .toMatchObject({ kind: 'done', lifecycleAction: 'withdraw', requestId, chatId: '555' });
+    await expect(answer({ lifecycleAction: 'withdraw', requestId: 'not-a-uuid', chatId: '555' }).intake(update, 'lifecycle'))
+      .rejects.toThrow(/invalid withdraw/);
+  });
+});
+
 describe('ChatInbox.handleUpdate', () => {
   it('dispatches a prepared first brief under a stable open key and recovers after send interruption', async () => {
     const ctx = new FakeContext();
@@ -341,18 +369,22 @@ describe('the Core client ChatInbox uses', () => {
     const c = client(async () => Response.json(answer));
     const ctx = new FakeContext();
     await handleUpdate(ctx, input, c);
-    expect(ctx.lifecycleDecisions).toMatchObject([{ requestId: 'req-x', event: { round: 1, newTaskId: 'task-new' } }]);
-    expect(ctx.notices).toMatchObject([{ key: `chatinbox:change-taken:${update.update_id}`, chatId: '555', class: 'critical',
-      text: expect.stringContaining("I'm making those changes") }]);
-    // A replay of the same update sends the same key: TelegramSender sends it once.
+    // ADR-233: ChatInbox no longer says it at once. The words go with the round to RequestLifecycle, and
+    // its DesignRun sends them once Core admits the design: a round refused at admission is answered
+    // only by its outcome (L13: "I'll redo" and "a designer will make this change by hand" a second apart).
+    expect(ctx.notices).toEqual([]);
+    expect(ctx.lifecycleDecisions).toMatchObject([{ requestId: 'req-x', event: { round: 1, newTaskId: 'task-new',
+      startNotice: { key: `chatinbox:change-taken:${update.update_id}`, chatId: '555', text: expect.stringContaining("I'm making those changes") } } }]);
+    // A replay of the same update gives the same notice key: TelegramSender sends it once.
     await handleUpdate(ctx, input, c);
-    expect(new Set((ctx.notices as Array<{ key: string }>).map((n) => n.key))).toEqual(new Set([`chatinbox:change-taken:${update.update_id}`]));
+    expect(new Set((ctx.lifecycleDecisions as Array<{ event: { startNotice: { key: string } } }>).map((d) => d.event.startNotice.key)))
+      .toEqual(new Set([`chatinbox:change-taken:${update.update_id}`]));
     // In Sorani, in Sorani ("make the logo bigger").
     const sorani = { v: 1 as const, update: { ...update, update_id: update.update_id + 7,
       message: { ...(update as any).message, text: 'لۆگۆکە گەورەتر بکە' } } };
     const ckb = new FakeContext();
     await handleUpdate(ckb, sorani, c);
-    expect(ckb.notices).toMatchObject([{ text: expect.stringContaining('گۆڕانکارییانە') }]);
+    expect(ckb.lifecycleDecisions).toMatchObject([{ event: { startNotice: { text: expect.stringContaining('گۆڕانکارییانە') } } }]);
   });
 
   it('a Core that does not answer at all waits; one that answers too slowly is a retryable answer', async () => {
@@ -771,6 +803,30 @@ describe('album and brief settles (ADR-143)', () => {
     expect(bodies[0]).toMatchObject({ settle: true, briefHold: true, languageSiblings: true });
     answer = { v: 1, kind: 'handled', intakeStatus: 202, lifecycleAction: 'settle-later', chatId: '555', settle: { kind: 'x', delayMs: -1 } };
     await expect(c.intake(photo, 'lifecycle')).rejects.toThrow('invalid settle');
+  });
+
+  it('ADR-235: "who is this design for?" schedules its timeout settle once; the timeout\'s notice goes under its own key', async () => {
+    const asked = { v: 1, kind: 'handled', intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: '555', clientQuestion: true,
+      clientQuestionSettle: { delayMs: 1_800_000 }, chatAnswer: { text: 'Who is this design for?', parseMode: 'HTML' } };
+    const client = (body: unknown) => createCoreClient({ baseUrl: 'http://core', token: 'fixture-token',
+      fetch: (async () => Response.json(body)) as any });
+    const read = await client(asked).intake(update, 'lifecycle');
+    expect(read).toMatchObject({ lifecycleAction: 'chat-answer', clientQuestionSettle: { delayMs: 1_800_000 } });
+    await expect(client({ ...asked, clientQuestionSettle: { delayMs: 99 * 60 * 60_000 } }).intake(update, 'lifecycle')).rejects.toThrow('client question settle');
+    const ctx = new FakeContext();
+    ctx.crashOnSet = 1;
+    await untilSettled(ctx, () => handleUpdate(ctx, input, core([async () => read])));
+    // The crash replays the schedule under the same key, which Restate deduplicates.
+    expect(ctx.settles.map((s) => s.key)).toEqual(['settle:4242:client-question', 'settle:4242:client-question']);
+    expect(ctx.settles[0]).toMatchObject({ delayMs: 1_800_000, input: { v: 1, update, attempt: 0 } });
+    // The timeout's settle opens the kept brief and says so under the question's own key, not the update's.
+    const timedOut = await client({ v: 1, kind: 'handled', intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: '555',
+      chatAnswer: { text: 'x' }, notice: { text: "I haven't heard who this design is for…", parseMode: 'HTML' }, noticeKey: 'client-question:4242' })
+      .intake(update, 'lifecycle', undefined, { settle: true });
+    expect(timedOut).toMatchObject({ noticeKey: 'client-question:4242' });
+    const settleCtx = new FakeContext();
+    await settleUpdate(settleCtx, { v: 1, update, attempt: 0 }, core([async () => timedOut]));
+    expect(settleCtx.notices).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'chatinbox:client-question:4242' })]));
   });
 
   it('ChatInbox binds a settle handler next to handleUpdate', () => {

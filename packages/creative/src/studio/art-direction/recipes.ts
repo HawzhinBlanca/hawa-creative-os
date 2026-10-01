@@ -102,7 +102,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_fade_report: {
     id: 'hero_fade_report',
     reference: 'example 3 (KAAE K-12 Pilot Study / Field Visit Report)',
-    summary: 'Full-bleed hero photo; an approved dark gradient fade over the bottom 40-50%; optionally a second photo blended into the fade; a two-colour title on the fade (readable ink + approved accent), body text, a call-to-action pill.',
+    summary: 'Full-bleed hero photo; an approved light or dark gradient fade over the bottom 40-50%; optionally a second photo blended into the fade; a two-colour title in readable approved inks, body text and a call-to-action pill.',
     bestFor: 'report releases, studies, field visits, news with a strong scene photo',
     minPhotos: 1,
     texture: true,
@@ -135,7 +135,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   scrim_caption: {
     id: 'scrim_caption',
     reference: 'example 7 (event photo with bottom caption)',
-    summary: 'An untouched group or event photo; a bottom approved dark scrim; the caption on it and a short approved accent rule.',
+    summary: 'An untouched group or event photo; a bottom approved light or dark scrim; the caption on it and a short approved accent rule.',
     bestFor: 'meetings, visits, delegations, events where the people are the news',
     minPhotos: 1,
     texture: false,
@@ -157,7 +157,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   cutout_speaker: {
     id: 'cutout_speaker',
     reference: 'examples 4-5 (speaker cut-out on an approved brand surface with rays)',
-    summary: 'A person cut out of their photo at the bottom corner, bleeding off the edge, on an approved brand surface with a sunburst motif behind; the text block beside them.',
+    summary: 'A person cut out of their photo at the bottom corner, bleeding off the edge, on an approved light or dark brand surface with a sunburst motif behind; the text block beside them.',
     bestFor: 'speakers, forums, webinars, interviews: one person is the news',
     minPhotos: 1,
     texture: false,

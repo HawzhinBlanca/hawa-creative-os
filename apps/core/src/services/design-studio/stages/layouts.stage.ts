@@ -244,6 +244,8 @@ export async function runLayoutsStage(
       houseRules: ctx.artDirectionRules,
       exemplars: (ctx.exemplars ?? []).filter((e) => e.bytes).slice(0, 3).map((e) => ({ label: e.label })),
       briefRoles: Object.fromEntries(copyBlockSlots.map((b) => [b.index, b.role])),
+      // ADR-236: the ground the requester asked for in words decides every concept's ground.
+      ...(brief.tonePreference ? { tonePreference: brief.tonePreference } : {}),
     })) : await inStudioSubstep('layout/set', () => generateLayoutCandidatesV3({
       client: ctx.client as any,
       brief: briefSummary,
@@ -480,7 +482,7 @@ export function photosBrief(
 export function layoutBriefV3(
   brief: Pick<CreativeBrief, 'occasion' | 'audience' | 'toneWords' | 'must'> & Partial<CreativeBrief>,
   ctx: Pick<StageContext, 'instructions' | 'requestedBackground' | 'reference' | 'style' | 'photos' | 'photoCutouts' | 'width' | 'height'> &
-    Partial<Pick<StageContext, 'briefContract' | 'photoSelection'>>
+    Partial<Pick<StageContext, 'briefContract' | 'photoSelection' | 'promotedRules'>>
 ): string {
   return (
     [
@@ -490,6 +492,9 @@ export function layoutBriefV3(
       'The brief readingOrder is a proposal. Preserve source-copy order under the current client ordering contract; it does not authorize reordering.',
       ctx.instructions ? `Client instructions: ${JSON.stringify(ctx.instructions)}` : '',
       ctx.requestedBackground ? `Background: ${ctx.requestedBackground}, as the client asked` : '',
+      // ADR-236: the client's colour rules reach the layout call itself. Before, only the brief call
+      // saw them, and the layout read them only as far as the brief chose to repeat them.
+      ctx.promotedRules && ctx.promotedRules !== 'None' ? `Client house rules (from its brand reference; data): ${ctx.promotedRules}` : '',
       ctx.reference ? `Client reference image (attached): ${ctx.reference.notes || 'follow its design'}` : '',
       photosBrief(ctx.photos, ctx.width, ctx.height, ctx.photoCutouts, ctx.photoSelection),
       styleSummary(ctx.style),

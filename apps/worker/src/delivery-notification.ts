@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { DraftImageRef } from '@hawa/contracts';
 import { OUTBOX_SEND_MARK_SOURCE, sql, type BlobStore, type Database, type Kysely } from '@hawa/db';
-import { LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type RequesterLang } from '@hawa/integrations';
+import { LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, bold, escapeTelegramHtml, requesterLang, requesterTitleName, say, type RequesterLang } from '@hawa/integrations';
 
 /**
  * What the worker sends a requester when their approved design is delivered, when their request
@@ -188,10 +188,13 @@ export async function writeSendMark(
       ${`${key}:${outcome}`}, true, clock_timestamp())`.execute(db);
 }
 
-/** A design's name as a requester reads it: the office's "Client: " prefix dropped, at most 60 characters. */
+/**
+ * A design's name as a requester reads it: the office's "Client: " prefix dropped, at most 60 characters.
+ * ADR-231: no direction mark at its edges (the caption read "\u200FKAAE K-12 Pilot Study…, final"), and
+ * a neutral name ("New design request from Sewa") is no name.
+ */
 export function requesterDesignTitle(value: unknown): string {
-  const name = String(value ?? '').replace(/^[^:]{1,40}:\s*/, '').replace(/\s+/g, ' ').trim();
-  return Array.from(name).length > 60 ? `${Array.from(name).slice(0, 59).join('')}…` : name;
+  return requesterTitleName(value);
 }
 
 /** The language a delivery speaks to the requester in: given, or the design's name's own script. */

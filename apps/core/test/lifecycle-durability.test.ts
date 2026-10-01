@@ -41,18 +41,22 @@ describe('D5: a design\'s office alert reaches every office member', () => {
     vi.stubEnv('TELEGRAM_ALLOWED_USERS', `${chat},91000077`);
     const { taskId, result } = await failedDesign(chat);
     expect(result.stage).toBe('manual');
-    expect(result.officeAlerts?.map((a) => a.chatId)).toEqual([chat, '91000077']);
-    expect(result.officeAlert?.chatId).toBe(chat);
-    expect(result.officeAlerts?.[1].text).toContain(taskId);
+    // ADR-233: the requester who is a member hears one message about it (their line, then the office's
+    // sentence) instead of two a second apart; the other members get the alert.
+    expect(result.officeAlerts?.map((a) => a.chatId)).toEqual(['91000077']);
+    expect(result.officeAlerts?.[0].text.endsWith(`\nDesk search: ${taskId.slice(0, 8)}`)).toBe(true);
     // Told what was sent: the office will finish it (someone was alerted).
     expect(result.message?.text).toContain('The office will finish');
+    expect(result.message?.text).toContain('stopped without a draft');
   });
 
   it('with the requester the only member, the alert is still sent to them rather than to nobody', async () => {
     const chat = String(64_000_000 + Math.floor(Math.random() * 8_000_000));
     vi.stubEnv('TELEGRAM_ALLOWED_USERS', chat);
     const { result } = await failedDesign(chat);
-    expect(result.officeAlerts).toEqual([expect.objectContaining({ chatId: chat })]);
+    // ADR-233: within their one message, after their own line.
+    expect(result.officeAlerts).toBeUndefined();
+    expect(result.message?.text).toContain('stopped without a draft. Open it in Hawa Desk');
   });
 
   it('with no office at all, nobody is alerted and the requester is told so', async () => {

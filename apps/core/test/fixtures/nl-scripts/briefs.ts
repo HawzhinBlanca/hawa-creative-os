@@ -59,7 +59,7 @@ export const BRIEF_SCRIPTS: Script[] = [
       await p.wait(60_000);
       expect(p.opened).toHaveLength(1);
       expect(p.kept).toHaveLength(1);
-      expect(p.answer(fix)).toMatch(/added that|passed/i);
+      expect(p.answer(fix)).toMatch(/add that to|kept that|passed/i);
     },
   },
   {
@@ -261,7 +261,7 @@ export const BRIEF_SCRIPTS: Script[] = [
     natural: 'The request opens for that organisation, not for the chat\'s usual one.',
     async play(p) {
       await p.say(KAAE_EVENING);
-      await p.say('This one is for Nova, not KAAE: poster for the Nova product launch, 3 November 2026 at 6 pm, Divan Hotel.', { after: 120_000 });
+      await p.say('This one is for ZAR Podcast, not KAAE: poster for the ZAR Podcast season launch, 3 November 2026 at 6 pm, Divan Hotel.', { after: 120_000 });
       await p.wait(60_000);
       expect(p.opened).toHaveLength(2);
       expect(p.opened[1].draft.clientId).not.toBe(p.opened[0].draft.clientId);
@@ -269,12 +269,17 @@ export const BRIEF_SCRIPTS: Script[] = [
   },
   {
     id: 'S025', title: 'a brief for an organisation the office does not know', kinds: ['brief', 'client'],
-    natural: 'It opens for a designer (no automatic draft), and the requester is told plainly.',
+    natural: 'ADR-235: nothing names an organisation the office works with, so the brief is kept and the requester is asked who it is for; "not sure" opens it for a designer, and the requester is told plainly.',
     async play(p) {
       const brief = await p.say('Poster for the Erbil Chess Club tournament, 8 November 2026 at 3 pm, Family Mall.');
       await p.wait(60_000);
+      expect(p.opened).toHaveLength(0);
+      expect(p.answer(brief)).toMatch(/Who is this design for\?/);
+      expect(p.answer(brief)).not.toMatch(/KAAE/);
+      await p.say('not sure');
+      await p.wait(60_000);
       expect(p.opened).toHaveLength(1);
-      expect(p.answer(brief)).toMatch(/designer|draft/i);
+      expect(p.words).toMatch(/passed it to the office/);
     },
   },
   {
