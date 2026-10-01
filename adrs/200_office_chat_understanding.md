@@ -3,7 +3,7 @@
 **Date:** 2026-10-01
 **Status:** Implemented and tested on branch `claude/office-chat-understanding` (from production `1ba5bda9`); not deployed.
 **Requirements:** FR-043 (only the office approves or rejects a design), FR-062 (paid model calls are limited by office and client scope), NFR-016 (an office operator does routine work without a command line).
-**Changes a foundation:** no. It extends ADR-144's intake-router ledger with a second reader (migration 074) and adds no dependency.
+**Changes a foundation:** no. It reuses ADR-144's intake-router ledger with no schema change and adds no dependency.
 **Builds on:** ADR-040 addenda (office decisions in Telegram, draft choice, pending-choice re-read), ADR-144 (intake router), ADR-182 (natural-language stress suite).
 **Number:** 200, reserved for this stream by the lead.
 
@@ -58,12 +58,14 @@ When an approval would deliver to a requester who is not the approving member, t
 
 Groups and forwards never reach the office turn, so they never answer a confirmation.
 
-### 2.5 One call per update, in the shared allowance (migration 074)
+### 2.5 One call per update, in the shared allowance (no schema change)
 
 The office reading uses ADR-144's ledger and allowance through one shared function (`readOnce` in `requester-intent-model.ts`; the provider call stays in the one file the egress lint allows).
 
-- `hawa.requester_intent_calls` gains `reader` (`requester` | `office`). `client_id` may be null for an office reading only, because it concerns drafts of several clients. Uniqueness moves to (tenant, reader, update).
-- An office reading is charged to the office and the `intake_router` role, never to one client's allowance. A replay uses the stored decision and never calls again.
+- An office reading is a row of `hawa.requester_intent_calls` as it is. Its `update_id` is the Telegram update id plus 2^52 (`ledgerUpdateId`; Telegram's ids are far below that, and both stay safe integers), so it never collides with a requester reading of the same update. Its reservation JSON is marked `reader: 'office'` with the real `updateId`.
+- The insert trigger admits it like any intake-router row: the office, the `intake_router` role and one client scope. The client charged is that of the draft this member saw last, else the newest listed draft. Every listed client must consent, and the office and role totals count the call whichever client carries it. Attribution among clients is therefore approximate when several clients' drafts wait.
+- A replay finds the row and uses its stored decision; an outcome never recorded is charged its whole reservation and calls nothing again.
+- A migration (a `reader` column, nullable `client_id`) was written first and dropped: Codex's 074–077 are pushed and the runner refuses gaps.
 - An office member's update that the office turn leaves to intake can still be read once by the requester router.
 
 ### 2.6 What the office hears (new lines)
@@ -109,18 +111,18 @@ These are estimates from the policy's rates. No live call was made. Certain word
   - a member with a design of their own on the way (fails with the guard removed);
   - the flag off;
   - 15 reference readings and an ordinal against the shown list, 20 plain-yes readings, request and answer parsing;
-  - the real reader against migration 074: one call per update, charged to no client and counted under `intake_router`, a requester row beside it, a provider 500 → rules end to end, a refused allowance → no call and rules end to end, no consent or a mock key → no call;
+  - the real reader against the unchanged ledger: one call per update, its offset key and office mark, counted under `intake_router` and the charged client, a requester row beside it, a provider 500 → rules end to end, a refused allowance → no call and rules end to end, no consent or a mock key → no call;
   - a cost bound.
 - Red first: with `office-telegram-turn.ts` and the office catalogue reverted to `1ba5bda9` (stubs for the three new helpers so the file loads), 42 of 126 fail. The own-design guard test was added after this run; it passes on the base, which asks no model, and fails here with the guard removed:
   - 13 of the 15 conversation tests. The owner's own "send it" and the brief/chat case pass on the base, as they should;
   - the end-to-end real-reader test;
   - 28 units: 13 references, the ordinal, the 13 plain yeses and the flag.
 - `apps/core/test/natural-language-stress.test.ts`: 14 new office scripts (S137–S150, `fixtures/nl-scripts/office-chat.ts`), with a fixture office reading in the harness. S123–S125 now expect the confirmation. In the harness a private chat's id is now its person's id, as in Telegram.
-- `apps/core`, `apps/worker`, `packages/integrations` and `packages/db/test/schema-upgrade.test.ts` together: 332 files and 3,878 tests passed, with 3 files and 4 tests skipped. That run had a Desk `vite build` in place, which CV-17's bundle-size test reads. `pnpm typecheck` (653 test roots) and `pnpm lint` pass.
+- `apps/core`, `apps/worker` and `packages/integrations` together: 331 files and 3,875 tests passed, with 3 files and 4 tests skipped. That run had a Desk `vite build` in place, which CV-17's bundle-size test reads. `pnpm typecheck` (653 test roots) and `pnpm lint` pass.
 
 ## 5. Limits and open points
 
-- **Migration number.** Codex's branch `codex/research-grade-design-system` uses 074–077 and the runner refuses gaps, so 074 here must be renumbered after them at integration. `startup-schema-check` and `schema-upgrade` tests name it.
+- **Ledger key.** Office rows are recognised by the 2^52 offset and the reservation mark, not by a column. A later migration may add a proper reader column and move them.
 - **Owner wording left as it was.** Two office lines still name a reply target: the draft alert's last line (`office.draftAlertDecide`, ADR-180) and `office.lostTrack` (ADR-040 addendum). Both were the owner's own wording, and the turn no longer needs a reply. Changing them is for the owner.
 - **Not tested.** No live Telegram, no real model call, no native Sorani review.
 - **Requester names.** Not known for group requests, or for requesters who have not written since this is deployed. Those drafts are "the requester", as before.
