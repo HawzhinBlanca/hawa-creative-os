@@ -17,6 +17,7 @@ import { calculateLuminanceContrastRatio, hexToLuminance } from '../composite-co
 import { hexToRgb } from '../color-science.js';
 import { maxStrokeWidth } from '../studio-normalize.js';
 import { coverCrop } from '../photo-crop.js';
+import { photoUpscale } from '../photo-cutout.js';
 import { packPhotoSequence } from './photo-packing.js';
 import { rankPhotosForHero, type QuietArea } from './recipes.js';
 import { candidateRecipeTypeScales, type RecipeTypeScale as TypeScale } from './type-scale-search.js';
@@ -97,6 +98,8 @@ export interface SolverPhoto {
   quietLuminance?: number;
   /** The cut-out's size when a person cut out of this photo passed its checks. */
   cutoutSize?: { width: number; height: number };
+  /** Actual retained PNG pixels; null records that an existing cutout could not be measured. */
+  cutoutPixelSize?: { width: number; height: number } | null;
 }
 
 export interface SolveRecipeInput {
@@ -497,13 +500,14 @@ class SolveContext {
     overlay.stops = stops;
   }
 
-  /** How much the hero's own pixels are enlarged in its box, as the renderer crops it. */
+  /** Main source pixels, including contained cutout portraits, as the renderer places them. */
   heroUpscale(): number | undefined {
-    const el = this.photos.find((p) => p.role === 'hero');
+    const el = this.photos.find((p) => p.role === 'hero') ?? this.photos.find(p => p.treatment === 'cutout');
     const p = el ? this.photo(el.photoIndex) : undefined;
     if (!el || !p) return undefined;
-    const crop = coverCrop(el, p, el.focus);
-    return Math.round((el.width / crop.sw) * 100) / 100;
+    const cutout = p.cutoutPixelSize === null ? null : p.cutoutPixelSize
+      ? { ...p.cutoutPixelSize, placement: p.cutoutSize } : p.cutoutSize;
+    return Math.round(photoUpscale(el, { width: p.width, height: p.height, cutout }) * 100) / 100;
   }
 
   /**
@@ -1312,7 +1316,11 @@ class SolveContext {
    */
   cutoutSpeaker(): StudioLayoutV2 {
     const person = this.photo(this.input.choice.cutoutPhotoIndex) ?? this.input.photos.find((p) => p.cutoutSize);
-    if (!person?.cutoutSize) throw new RecipeInfeasibleError(this.recipe, 'no person cut out of a photo');
+    if (!person?.cutoutSize || person.cutoutPixelSize === null ||
+        ![person.cutoutSize.width, person.cutoutSize.height,
+          ...(person.cutoutPixelSize ? [person.cutoutPixelSize.width, person.cutoutPixelSize.height] : [])]
+          .every(n => Number.isFinite(n) && n > 0))
+      throw new RecipeInfeasibleError(this.recipe, 'no usable person cut out of a photo');
     const colours = surfacePalette(this.tones, 'navy');
     const colX = this.wide ? Math.round(0.46 * this.W) : Math.round(0.4 * this.W);
     // The person's box ends where the text column starts: the person stands beside the copy, never under it.

@@ -147,11 +147,20 @@ export function conceptFromV3Candidate(
 /** The hard-QA context of this run: the gate its winner must pass. */
 export function hardQaContextFor(
   ctx: Pick<StageContext, 'width' | 'height' | 'copyBlocks' | 'latinFont' | 'arabicFont' | 'referencePack' | 'logoAspect' | 'photos' | 'playbook'> &
-    Partial<Pick<StageContext, 'instructions' | 'photoSelection' | 'photoFaces'>>
+    Partial<Pick<StageContext, 'instructions' | 'photoSelection' | 'photoFaces' | 'photoCutouts'>>
 ): HardQaContext {
   const photoCount = ctx.photos?.length ?? 0;
   return {
     photoCount,
+    photoSources: (ctx.photos ?? []).map((p, i) => {
+      const size = imagePixelSize(p.bytes);
+      const cutout = ctx.photoCutouts?.[i];
+      const cutoutPixels = cutout ? imagePixelSize(cutout.png) : undefined;
+      if (!size && !cutout) return undefined;
+      return { width: size?.width ?? 0, height: size?.height ?? 0,
+        ...(cutout ? { cutout: cutoutPixels ? { ...cutoutPixels,
+          placement: { width: cutout.width, height: cutout.height } } : null } : {}) };
+    }),
     ...(ctx.photoFaces ? { photoRegions: (ctx.photos ?? []).map((p, i) => {
       const faces = ctx.photoFaces?.[i];
       if (!faces) return undefined;

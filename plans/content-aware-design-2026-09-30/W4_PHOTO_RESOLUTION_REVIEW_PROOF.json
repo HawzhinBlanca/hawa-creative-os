@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-01T13:04:17.174492+00:00",
+  "adr": "ADR215",
+  "requirements": [
+    "FR-028",
+    "FR-031",
+    "FR-038",
+    "FR-040",
+    "FR-041",
+    "NFR-012"
+  ],
+  "status": "CONNECTED_ENGINEERING_VERIFIED_EXACT_GATE_AND_PRODUCT_ADMISSION_PENDING",
+  "sourceSha256": {
+    "apps/core/src/services/design-studio/art-direction.ts": "852b407df1fcc53bd2ebefe23ccac546aa3381cb32aa1027aa07051caa54de9d",
+    "apps/core/src/services/design-studio/stages/v3.stage.ts": "46819805dccf9dee52250a12346dd081e5a92294eb6acb0ee960f1e414bc93a9",
+    "packages/creative/src/studio/art-direction/solver.ts": "a45168ad123218452148b64065151456dcb832f3a545f09d96c248d8bd60ae7b",
+    "packages/creative/src/studio/copy-completeness.ts": "d918538c84c4a14b255240f3275990dea5a10568b8524fb1ad9f97ba7f2f6aba",
+    "packages/creative/src/studio/hard-qa.ts": "52c6d40ade7cc71d64d8850b8f3e45080c51516b119a562d2d928c49a687e978",
+    "packages/creative/src/studio/photo-cutout.ts": "dc67120cb455effc6a884ed3e48ee98dd7459098d6cd1f77c544b669488be99c",
+    "packages/creative/src/studio/pipeline-v3.ts": "57cef73c335643d3f02406bac86f0d6ce788ab491c6a39bfa9df84a9ab6d2c4e",
+    "packages/creative/test/photo-resolution-review.test.ts": "528d5f663f6118d7ce1db74dd777e3751f989362906c958c23b0e0e3f17b6054",
+    "apps/core/test/photo-resolution-review.test.ts": "31df2dbd225e7fd9d7113c524f0a8d0b8acac504e16e647b33b3910f2c693c76"
+  },
+  "diagnosis": {
+    "originalCutoutEnlargement": 3.04,
+    "originalSavedScale": "absent",
+    "originalReviewWarning": "absent",
+    "directSharpAlternate": 0.25333333333333335,
+    "scope": "actual synthetic solver and Core; no production incident or professional taste claim"
+  },
+  "failureHistory": {
+    "originalRed": {
+      "failed": 17,
+      "passed": 0,
+      "qualification": "soft fallback fixture was subsequently corrected to make original framed source soft too"
+    },
+    "rankingInitial": "one failure/17 skipped: test passed QA context under wrong nested property; copyScripts access failed",
+    "rankingCorrected": "one failure/17 skipped: genuine stale comparator chose soft source first",
+    "strictInitial": "missing photo dataUrl and two rather than three tone words; fixtures corrected",
+    "strictShot": "invalid single_person enum; corrected to portrait",
+    "strictSandbox": "tsx IPC listen EPERM; no compilation occurred; rerun with permission passes"
+  },
+  "acceptance": {
+    "focused": {
+      "files": 2,
+      "passed": 20,
+      "failed": 0
+    },
+    "connected": {
+      "files": 26,
+      "passed": 510,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictRoots": 695,
+    "build": "PASS",
+    "lint": "PASS",
+    "solver": "actual contained cutout enlargement drives bounded sharp alternate selection; original warned soft fallback retained when all sources soft; invalid size ordinary recipe infeasibility",
+    "currentReview": "current crop, zoom and actual photo/cutout byte dimensions override stale saved scale; actual placement metadata is separate; supporting soft photos and missing current evidence visibly warn",
+    "ranking": "actual current QA findings override contrary saved hero scales; legacy callers retain fallback",
+    "actualCore": "one billed synthetic call selects sharp cutout1; source edit to cutout0 despite saved0.25 produces3.0x warning; isolated PostgreSQL/HTTP/office review retain it; layout unchanged",
+    "localRasterTransfer": "actual contain rect304x608 and P05 contrast pass; original cutout and official logo bytes unchanged; factual title/body remain live editable",
+    "policy": "unchanged1.5x advisory boundary; no hard threshold change; no provider/repair round/dependency; final QA never replaces assets",
+    "immutabilityReplay": "original choice/evidence immutable and deterministic JSON replay"
+  },
+  "productionChanged": false,
+  "externalProviders": "synthetic only; no paid calls",
+  "limits": [
+    "prior production-dump transfer approval pending after automatic approval review rejection",
+    "real Canva/native/human/taste/product admission remains open"
+  ],
+  "artifacts": {
+    "output/qualification/2026-10-01/photo-resolution-review/BUILD.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/photo-resolution-review/BUILD_CONNECTED.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/photo-resolution-review/BUILD_FINAL.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/photo-resolution-review/CONNECTED.log": "c6a0e05d3deaf2ea9f75a89cc7b53682321665ef481ccc6d0aad9ff2458df723",
+    "output/qualification/2026-10-01/photo-resolution-review/DIAGNOSTIC.log": "575ada82348b0f4aed757fab6e589a12e588ac5e55e70f445b066b7d8b402610",
+    "output/qualification/2026-10-01/photo-resolution-review/GREEN_CORE.log": "874bc72fa7537ae2e4957cb447f4769b1f32eec3238d56ef61807722732e96bc",
+    "output/qualification/2026-10-01/photo-resolution-review/GREEN_LOCAL.log": "22734f4e77d542e41adae68466321dde925c9918483828afc5b2238d8e8202b7",
+    "output/qualification/2026-10-01/photo-resolution-review/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/photo-resolution-review/RED.log": "9dfa5e9365fcd490ae25767923e079e0fd6d341ef01b78f454952613ed7ca3f0",
+    "output/qualification/2026-10-01/photo-resolution-review/RED_RANKING.log": "be9338f69dba5bfe74d86d611e777ea61a9a66407dde9c3bab01fff0ea45edf8",
+    "output/qualification/2026-10-01/photo-resolution-review/RED_RANKING_CORRECTED.log": "48f39fcced5419223470672d192316fc04563b6890b0b22915588a3349cc840e",
+    "output/qualification/2026-10-01/photo-resolution-review/STRICT_INITIAL.log": "e6b07e02aaf67edebb212db509ff6282da9d96c29be16d766b448e2e00676a33",
+    "output/qualification/2026-10-01/photo-resolution-review/STRICT_SANDBOX_FAILURE.log": "8093d89c72daa0f394115b6a3ce39595433ae71f938ecaf8c94b680cb8039b6b",
+    "output/qualification/2026-10-01/photo-resolution-review/STRICT_SHOT_FAILURE.log": "612d213f9e4605a911d178e427c00cf5f67abc0a7affec78043eef037b6f03cf",
+    "output/qualification/2026-10-01/photo-resolution-review/STRICT_TYPES.log": "1ec2449e87a3813447d747d9568c84e7c6a31d751e75e537acc8313110f7f925"
+  }
+}

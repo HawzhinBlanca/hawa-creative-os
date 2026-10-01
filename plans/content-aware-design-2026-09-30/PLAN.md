@@ -782,3 +782,8 @@ negative-flag refusal passes. Raw production-dump Stage3 skipped; previous
 automatic approval review requires explicit transfer authorization, still pending.
 No all-eight, production deployment, native/human or product admission claim.
 W4_ALTERNATE_HERO_SEARCH_GATE_EVIDENCE.json retains actual receipts.
+
+
+### ADR215 — current photo/cutout resolution, 1 October2026
+
+Actual cutout pixels enlarged3.04x were unmeasured while a sharp alternate fit0.253x. Shared render/transfer geometry now guides selection and fresh review/ranking; supporting photos and unmeasured sources are visible. Actual Core persists current warnings through database/HTTP/office review with one synthetic call. Connected26files510pass/0fail/0skip;695 strict roots/build/lint. Original and introduced failures preserved. W4_PHOTO_RESOLUTION_REVIEW_PROOF.json; exact clean gate and genuine native/human/product admission pending. No deploy or paid provider calls.

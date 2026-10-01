@@ -1539,8 +1539,9 @@ export function measureDesignV3(layout: StudioLayoutV2, copy: PipelineV3Copy): D
  * Orders two candidates: one that passes production's hard QA beats one that does not, then one
  * that passes the design metrics, then the higher composite. Negative when `a` ranks first.
  */
-const isSoftHero = (layout?: Pick<StudioLayoutV2, 'artDirection'>) =>
-  (layout?.artDirection?.heroUpscale ?? 0) > HERO_SOFT_UPSCALE;
+const isSoftHero = (candidate: { hardQa?: HardQaOutcome; layout?: Pick<StudioLayoutV2, 'artDirection'> }) =>
+  candidate.hardQa?.findings ? candidate.hardQa.findings.some(f => f.code === 'HERO_UPSCALED')
+    : (candidate.layout?.artDirection?.heroUpscale ?? 0) > HERO_SOFT_UPSCALE;
 
 function compareCandidatesV3(
   a: { metrics: DesignMetricsReport; hardQa?: HardQaOutcome; layout?: StudioLayoutV2 },
@@ -1551,8 +1552,8 @@ function compareCandidatesV3(
   if (qaA !== qaB) return qaA ? -1 : 1;
   // ADR-170: an art-directed candidate whose hero is enlarged past 1.5x looks soft; a sharp one
   // ranks before it, whatever the typographic metrics say.
-  const softA = isSoftHero(a.layout);
-  const softB = isSoftHero(b.layout);
+  const softA = isSoftHero(a);
+  const softB = isSoftHero(b);
   if (softA !== softB) return softA ? 1 : -1;
   if (a.metrics.passed !== b.metrics.passed) return a.metrics.passed ? -1 : 1;
   const byComposite = b.metrics.compositeScore - a.metrics.compositeScore;
