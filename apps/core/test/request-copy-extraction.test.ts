@@ -120,8 +120,13 @@ describe('the copy of a request written as a sentence (ADR-232)', () => {
     const model = fixed(LIVE_COPY);
     const laidOut = prepared('Assessment Literacy Workshop', { exactCopy: [{ text: 'Assessment Literacy Workshop' }, { text: '15 October 2026\nKAAE hall, Erbil' }] });
     expect(await extractRequestCopy(laidOut, ctx(model))).toBe(laidOut);
-    const plain = prepared('Design for Change conference');
-    expect(await extractRequestCopy(plain, ctx(model))).toBe(plain);
+    // ADR-232 addendum: the broader request words still leave ordinary copy alone.
+    for (const words of ['Design for Change conference', 'Please join us for the gala', 'We need volunteers for the cleanup on Saturday.',
+      'Create your own greeting card at our workshop', 'We want to post updates every week', 'Poster exhibition opening',
+      'KAAE Card Design Competition: design a card for Nawroz!', 'پۆستەری نەورۆز', 'تکایە ئامادەبن لە کاتی خۆیدا']) {
+      const plain = prepared(words);
+      expect(await extractRequestCopy(plain, ctx(model)), words).toBe(plain);
+    }
     const directive = prepared(LIVE, { isInstructionOnly: true, exactCopy: [] });
     expect(await extractRequestCopy(directive, ctx(model))).toBe(directive);
     const source = prepared(LIVE, { lifecycleSource: { kind: 'voice' } as unknown as ChatIntake['lifecycleSource'] });

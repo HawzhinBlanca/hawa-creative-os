@@ -9,9 +9,11 @@
  *
  * Intake (chat-campaign-intake.ts) already separates instructions written on a line or paragraph of
  * their own, quoted envelopes, dividers and "Here is the text:" blocks. What reaches this module is a
- * prepared draft whose first copy block still opens with the request ("Can you make …", "Please
- * design …", "I need a poster for …", "تکایە پۆستێک … دروست بکە"). Any other draft is returned as it
- * came: copy the requester laid out is used exactly as given, with no model call.
+ * prepared draft whose copy still asks the bot for a design ("Can you make …", "Could you design a KAAE
+ * poster for …", "We'd like …", "تکایە پۆستێک … دروست بکە"), wherever that ask stands in a sentence
+ * (ADR-232 addendum, live L15: a client name between "a" and "poster" defeated the first rules). Any
+ * other draft is returned as it came: copy the requester laid out is used exactly as given, with no
+ * model call. Whatever is chosen, a line that still asks the bot for something is never printed.
  *
  * For a request sentence, in order:
  *  1. words in quotation marks are the copy (no model call);
@@ -67,41 +69,55 @@ const MAX_HEADLINE = 110;
 
 // --- the request words -------------------------------------------------------------------------------
 
-const DESIGN_NOUNS = 'poster|postr|flyer|banner|design|invitation|invite|card|post|story|stories|brochure|certificate|announcement|graphic|cover|leaflet|infographic|thumbnail|advert|ad|reel|carousel|image|picture|visual';
-const PLATFORMS = 'instagram|insta|ig|facebook|fb|social(?:\\s+media)?|twitter|x|linkedin|tiktok|whatsapp|telegram|website|web';
-const GREETING = /^(?:(?:hi|hello|hey|dear\s+(?:team|all|colleagues|friends|sir|madam)|good\s+(?:morning|afternoon|evening)|salam|slaw|silav|سڵاو|بەڕێزان)(?=[\s,،!.:-]|$)[\s,،!.:-]*)+/iu;
+const DESIGN_NOUNS = 'poster|postr|flyer|banner|design|invitation|invite|card|post|story|stories|brochure|certificate|announcement|graphic|cover|leaflet|infographic|thumbnail|advert|ad|reel|carousel|image|picture|visual|social\\s+media\\s+post';
+const NOUN = `(?:${DESIGN_NOUNS})s?(?![\\p{L}])`;
 /**
- * "Can you make an Instagram post announcing our", "Please design a poster for the", "We need a flyer
- * about". The ask is required ("Design for Change conference" and "Poster exhibition opening" are copy),
- * unless a platform names the job ("Instagram post announcing …", EN_PLATFORM_START).
+ * ADR-232 addendum (L15): up to `n` words of any kind between the article and the design noun ("a KAAE
+ * poster", "a big colourful poster", "an Instagram story"); never "to" ("we want to post"), never a
+ * sentence break.
  */
-const EN_REQUEST = new RegExp(
-  '^(?:(?:and|also|so|ok(?:ay)?|please|pls|plz|kindly)[\\s,]+)*' +
-  '(?<ask>(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+)?(?:make|create|design|prepare|produce|do|draw|put\\s+together)' +
-  "|(?:we|i)\\s*(?:need|want|would\\s+like|'d\\s+like|’d\\s+like)" +
-  '|(?:make|create|design|prepare|produce|draw))(?:\\s+(?:us|me))?\\s+)?' +
-  '(?:(?:a|an|another|one\\s+more|new|the|some)\\s+)?' +
-  `(?:(?:${PLATFORMS}|social|media|nice|new|simple|beautiful|square|vertical|short|quick|event|promo(?:tional)?)\\s+){0,3}` +
-  `(?:${DESIGN_NOUNS})s?\\b` +
+const words = (n: number) => `(?:(?!to\\s)[\\p{L}\\p{N}'’&-]+\\s+){0,${n}}?`;
+const GREETING = /^(?:(?:hi|hello|hey|dear\s+(?:team|all|colleagues|friends|sir|madam)|good\s+(?:morning|afternoon|evening)|salam|slaw|silav|سڵاو|بەڕێزان)(?=[\s,،!.:-]|$)[\s,،!.:-]*)+/iu;
+/** A sentence that is only a greeting ("Hi team!", "Good morning everyone,"). */
+const GREETING_ONLY = /^(?:hi|hello|hey|dear|good\s+(?:morning|afternoon|evening)|salam|slaw|silav|سڵاو|بەڕێزان)(?:[\s,]+(?:team|all|everyone|guys|friends|there|colleagues|sir|madam|هاوڕێیان|برادەران))*[\s,!.،:]*$/iu;
+/** Words that may stand before an opener and belong to it ("so", "also", "hi team,"). */
+const LEAD_IN = /^(?:(?:hi|hello|hey|dear|team|all|everyone|guys|so|also|and|ok(?:ay)?|well|good\s+(?:morning|afternoon|evening)|سڵاو|بەڕێزان)[\s,،!.:-]*)*$/iu;
+
+/**
+ * The asks a requester opens with, anywhere in a sentence: "could/can/would you (please) design|make|
+ * create|prepare|do|help us with", "please design", "we'd like", "I need", "we want", "we're looking
+ * for"; an ask counts only when a design noun (or "something") follows within four words.
+ */
+const EN_ASK = '(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+|kindly\\s+|also\\s+)?(?:make|create|design|prepare|produce|do|draw|put\\s+together|whip\\s+up|get\\s+(?:us|me)|help\\s+(?:us\\s+|me\\s+)?with)' +
+  '|(?:please|pls|plz|kindly)\\s+(?:make|create|design|prepare|produce|do|draw)' +
+  "|(?:we|i)\\s*(?:'d|’d|\\s+would)\\s+(?:like|love)|(?:we|i)\\s+(?:need|want)|(?:we|i)\\s*(?:'re|’re|'m|’m|\\s+are|\\s+am)\\s+looking\\s+for)";
+const EN_OPENER = new RegExp(`(?<![\\p{L}\\p{N}'’])${EN_ASK}(?:\\s+(?:us|me))?\\s+(?=${words(4)}(?:${NOUN}|something|anything))`, 'giu');
+/** An order at the start of a sentence: "Design a simple KAAE banner", "Make us two posters". */
+const EN_IMPERATIVE = new RegExp(`^(?:please\\s+)?(?:make|create|design|prepare|produce|draw)\\s+(?:us\\s+|me\\s+)?(?=(?:a|an|the|another|one|two|three|some|\\d+)\\s+${words(4)}${NOUN})`, 'iu');
+/** The design named after an ask, and what it is for: "a KAAE poster for our", "an Instagram story and a poster announcing the". */
+const EN_DESIGN = new RegExp(`${words(4)}(?:${NOUN}|something|anything)` +
+  `(?:\\s+${NOUN})*(?:\\s+(?:and|or|&)\\s+${words(3)}${NOUN}(?:\\s+${NOUN})*)*` +
   '(?:\\s+(?:please|pls|plz))?' +
-  '(?:\\s+(?:to\\s+(?:announce|promote|advertise|celebrate|invite\\s+(?:people\\s+)?to)|announcing|promoting|advertising|celebrating|inviting\\s+(?:people\\s+)?to|for|about|on|of|that\\s+(?:says|reads|announces)))?' +
-  '(?:\\s+(?:our|my|the|a|an|this|their))?' +
-  '[\\s:,-]*', 'iu');
-const EN_PLATFORM_START = new RegExp(`^(?:(?:a|an)\\s+)?(?:${PLATFORMS})\\s+(?:${DESIGN_NOUNS})s?\\s+(?:announcing|promoting|for|about|to\\s+announce)\\b`, 'iu');
+  '(?:\\s*:|\\s+(?:to\\s+(?:announce|promote|advertise|celebrate|invite\\s+(?:people\\s+)?to)|announcing|promoting|advertising|celebrating|inviting\\s+(?:people\\s+)?to|for|about|on|of|regarding|that\\s+(?:says|reads|announces)))?' +
+  '(?:\\s+(?:our|my|the|this|their|your))?(?![\\p{L}])\\s*', 'iuy');
+/** A question to the bot: "Could you help with our …?", "Can you …". Its ask, verb and preposition are not copy. */
+const EN_QUESTION = /^(?:(?:and|also|so|ok(?:ay)?|please)[\s,]+)*(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+|kindly\s+|also\s+)?[\p{L}'’]+(?:\s+(?:us|me))?(?:\s+(?:with|for|on|about))?(?:\s+(?:our|my|the|this|their|your))?(?![\p{L}])\s*/iu;
+const PLATFORMS = 'instagram|insta|ig|facebook|fb|social(?:\\s+media)?|twitter|x|linkedin|tiktok|whatsapp|telegram|website|web';
+/** "Instagram post announcing …" at the start: the job named without an ask. */
+const EN_PLATFORM_START = new RegExp(`^(?:(?:a|an)\\s+)?(?:${PLATFORMS})\\s+(?:${DESIGN_NOUNS})s?\\s+(?:announcing|promoting|for|about|to\\s+announce)\\s+(?:(?:our|my|the|this|their)\\s+)?`, 'iu');
 
 const CKB_NOUN = '(?:پۆستەر|پۆست|دیزاین|بانگهێشت(?:نامە)?|ڕیکلام|فلایەر|بانەر|ستۆری|کارت|ڕاگەیاندن)';
 const CKB_VERB = '(?:دروست|ئامادە|دیزاین)\\s*(?:بکەیتن|بکەیت|بکرێت|بکەن|بکەی|بکە)(?![\\p{L}\\p{M}])';
-/** "تکایە پۆستێکی ئینستاگرام دروست بکە بۆ" (please make an Instagram post for), "دەمانەوێت پۆستەرێک بۆ". */
-const CKB_REQUEST = new RegExp(
-  '^(?:(?:تکایە|تکایه|بێزەحمەت)[\\s،,]+)?' +
-  '(?:(?:دەتوانیت|دەتوانن|دەکرێت|ئەتوانی|ئەتوانیت)\\s+)?' +
-  '(?:(?:دەمانەوێت|دەمەوێت|ئەمانەوێ|ئەمەوێ|پێویستمان\\s+بە|پێویستم\\s+بە)\\s+)?' +
-  `${CKB_NOUN}[\\p{L}\\p{M}]*` +
-  '(?:\\s+(?:ئینستاگرام|ئینستا|فەیسبووک|سۆشیاڵ\\s*میدیا)[\\p{L}\\p{M}]*)?' +
-  `(?:\\s+(?:بۆمان|بۆم)?\\s*${CKB_VERB})?` +
-  '(?:\\s+(?:بۆ|دەربارەی|لەسەر|سەبارەت\\s+بە))?' +
-  '[\\s:،,-]*', 'u');
-const CKB_ASK = /(?:تکایە|تکایه|بێزەحمەت|دەتوانیت|دەتوانن|دەمانەوێت|دەمەوێت|پێویستمان|پێویستم|دروست|ئامادە)/u;
+const CKB_ASK_WORD = '(?:تکایە|تکایه|بێزەحمەت|دەتوانیت|دەتوانن|دەکرێت|ئەتوانی|ئەتوانیت|دەمانەوێت|دەمەوێت|ئەمانەوێ|ئەمەوێ|پێویستمان\\s+بە|پێویستم\\s+بە)';
+const CKB_FOR = '(?:بۆ|دەربارەی|لەسەر|سەبارەت\\s+بە)';
+/** A Sorani ask: "please / can you / we want …" with a design noun or "make" within five words, or "<a design> … make". */
+const CKB_OPENER = new RegExp(`(?<![\\p{L}\\p{M}])(?:${CKB_ASK_WORD}(?=(?:[\\s،,]+\\S+){0,5}?[\\s،,]+(?:${CKB_NOUN}|دروست|ئامادە))` +
+  `|${CKB_NOUN}(?=[\\p{L}\\p{M}]*(?:\\s+\\S+){0,10}?\\s+(?:بۆمان\\s+|بۆم\\s+)?${CKB_VERB}))`, 'gu');
+/** From the ask to what the design is for: "تکایە پۆستەرێکی جوانی KAAE بۆ" (please a nice KAAE poster for). */
+const CKB_DESIGN = new RegExp(`(?:${CKB_ASK_WORD}[\\s،,]+)?(?:\\S+\\s+){0,3}?${CKB_NOUN}[\\p{L}\\p{M}]*(?:\\s+\\S+){0,3}?` +
+  `(?:\\s+(?:بۆمان|بۆم)?\\s*${CKB_VERB})?\\s+${CKB_FOR}(?:\\s+(?:بۆمان|بۆم)?\\s*${CKB_VERB}\\s+${CKB_FOR})?(?![\\p{L}\\p{M}])\\s*`, 'uy');
+/** The same without "for": up to the closing verb, or the noun. */
+const CKB_DESIGN_BARE = new RegExp(`(?:${CKB_ASK_WORD}[\\s،,]+)?(?:\\S+\\s+){0,3}?${CKB_NOUN}[\\p{L}\\p{M}]*(?:(?:\\s+\\S+){0,3}?\\s+(?:بۆمان|بۆم)?\\s*${CKB_VERB})?\\s*`, 'uy');
 /** A Sorani request ends its clause with the verb: "… دروست بکە." (make it). */
 const CKB_TRAILING_VERB = new RegExp(`\\s*(?:بۆمان|بۆم)?\\s*${CKB_VERB}\\s*$`, 'u');
 
@@ -120,33 +136,8 @@ const CKB_INSTRUCTION = /^(?:تکایە|سوپاس|ئەم\s+وێنانە|وێن�
 
 const ws = (text: string) => text.replace(/\s+/g, ' ').trim();
 
-/**
- * Where the request words end in a request written as a sentence (0 when they are a greeting alone),
- * or null when the text does not open as a request for a design: its copy is then left as it is.
- */
-export function requestLead(text: string): { end: number; words: string } | null {
-  const norm = ws(text);
-  const greeting = norm.match(GREETING)?.[0].length ?? 0;
-  const body = norm.slice(greeting);
-  const en = EN_REQUEST.exec(body);
-  if (en && en[0].trim() && (en.groups?.ask || EN_PLATFORM_START.test(body))) {
-    return { end: greeting + en[0].length, words: norm.slice(0, greeting + en[0].length).trim() };
-  }
-  const ckb = CKB_REQUEST.exec(body);
-  if (ckb && ckb[0].trim() && CKB_ASK.test(ckb[0])) {
-    return { end: greeting + ckb[0].length, words: norm.slice(0, greeting + ckb[0].length).trim() };
-  }
-  return null;
-}
-
-/** A sentence to the designer, not copy. */
-export function readsAsInstruction(sentence: string): boolean {
-  const s = sentence.trim();
-  return EN_INSTRUCTION.test(s) || CKB_INSTRUCTION.test(s) || isDesignerRemark(s);
-}
-
 /** Sentences with their offsets: split after . ! ? ؟ (not "Dr." or "a.m.") and at line breaks. */
-function sentences(text: string, from: number): Array<{ start: number; end: number }> {
+function sentences(text: string, from = 0): Array<{ start: number; end: number }> {
   const out: Array<{ start: number; end: number }> = [];
   const re = /(?<!\b(?:Dr|Mr|Mrs|Ms|Prof|St|No|vs|a\.m|p\.m|e\.g|i\.e))[.!?؟](?=\s|$)|\n/giu;
   let start = from, m: RegExpExecArray | null;
@@ -165,6 +156,74 @@ function sentences(text: string, from: number): Array<{ start: number; end: numb
   });
 }
 
+type Span = [number, number];
+
+/** Where one sentence asks for a design: [start, end) within the sentence, or null. */
+function askIn(sentence: string): Span | null {
+  const greeting = sentence.match(GREETING)?.[0].length ?? 0;
+  const at = (start: number, end: number): Span => [LEAD_IN.test(sentence.slice(0, start)) ? 0 : start, end];
+  const platform = EN_PLATFORM_START.exec(sentence.slice(greeting));
+  if (platform) return at(greeting, greeting + platform[0].length);
+  const order = EN_IMPERATIVE.exec(sentence.slice(greeting));
+  EN_OPENER.lastIndex = 0;
+  const opener = order ? { index: greeting, length: order[0].length } : (() => {
+    const m = EN_OPENER.exec(sentence);
+    return m ? { index: m.index, length: m[0].length } : null;
+  })();
+  if (opener) {
+    EN_DESIGN.lastIndex = opener.index + opener.length;
+    const design = EN_DESIGN.exec(sentence);
+    return at(opener.index, design ? design.index + design[0].length : opener.index + opener.length);
+  }
+  const question = /[?؟]\s*$/u.test(sentence) ? EN_QUESTION.exec(sentence.slice(greeting)) : null;
+  if (question) return at(greeting, greeting + question[0].length);
+  CKB_OPENER.lastIndex = 0;
+  const ckb = CKB_OPENER.exec(sentence);
+  if (ckb) {
+    for (const re of [CKB_DESIGN, CKB_DESIGN_BARE]) {
+      re.lastIndex = ckb.index;
+      const m = re.exec(sentence);
+      if (m) return at(ckb.index, m.index + m[0].length);
+    }
+  }
+  return null;
+}
+
+/**
+ * ADR-232 addendum: every part of the text that asks the bot for a design, in any sentence, with any
+ * words between the article and the design noun. Empty when the text asks for nothing: its copy is
+ * then left as it is.
+ */
+export function requestSpans(text: string): Span[] {
+  const spans: Span[] = [];
+  for (const { start, end } of sentences(text)) {
+    const ask = askIn(text.slice(start, end));
+    if (ask) spans.push([start + ask[0], start + ask[1]]);
+  }
+  return spans;
+}
+
+/** Whether text still asks the bot for something: never printed (the final check, ADR-232 addendum). */
+export function asksTheBot(text: string): boolean {
+  return requestSpans(text).length > 0;
+}
+
+/**
+ * The first request words in a request (from the start of their sentence), or null when the text asks
+ * for no design.
+ */
+export function requestLead(text: string): { end: number; words: string } | null {
+  const norm = ws(text);
+  const first = requestSpans(norm)[0];
+  return first ? { end: first[1], words: norm.slice(first[0], first[1]).trim() } : null;
+}
+
+/** A sentence to the designer, not copy. */
+export function readsAsInstruction(sentence: string): boolean {
+  const s = sentence.trim();
+  return EN_INSTRUCTION.test(s) || CKB_INSTRUCTION.test(s) || isDesignerRemark(s);
+}
+
 // --- the grounding guard -------------------------------------------------------------------------------
 
 const GLUE = new Set(['a', 'an', 'the', 'our', 'my', 'your', 'its', 'their', 'it', "it's", 'is', 'are', 'will', 'be', 'held',
@@ -176,7 +235,6 @@ const glueOnly = (gap: string) => tokens(gap).every((t) => GLUE.has(t));
 const contentWords = (text: string) => tokens(text).filter((t) => !GLUE.has(t)).length;
 const WORD = /[\p{L}\p{N}\p{M}]/u;
 
-type Span = [number, number];
 const overlaps = (a: Span, spans: Span[]) => spans.some(([s, e]) => a[0] < e && s < a[1]);
 
 /** Every place a part occurs in the source at word boundaries, ignoring case. */
@@ -236,32 +294,47 @@ export function groundLine(source: string, proposed: string, forbidden: Span[] =
 
 // --- extraction ----------------------------------------------------------------------------------------
 
-/** Words in quotation marks inside a request sentence: the requester marked them as the text. */
-function quotedCopy(source: string, lead: number): ProposedCopy | null {
-  const found = [...source.slice(lead).matchAll(/["“„«]([^"“”„«»\n]{2,200})["”»]/gu)].map((m) => m[1].trim()).filter((t) => contentWords(t) > 0);
+/** Words in quotation marks inside a request: the requester marked them as the text. */
+function quotedCopy(source: string): ProposedCopy | null {
+  const found = [...source.matchAll(/["“„«]([^"“”„«»\n]{2,200})["”»]/gu)].map((m) => m[1].trim()).filter((t) => contentWords(t) > 0);
   return found.length ? { headline: found[0], lines: found.slice(1) } : null;
 }
 
-/** The request words removed, then sentence by sentence, instructions left out, leading glue dropped. */
-function ruleCopy(source: string, lead: number): ProposedCopy | null {
+const GLUE_START = /^(?:(?:it|this|that)(?:'s|’s|\s+is|\s+will\s+be)|it'll\s+be)\s+(?:(?:on|at|in|held\s+(?:on|at|in)|taking\s+place\s+(?:on|at|in))\s+)?(?:the\s+)?/iu;
+
+/**
+ * The request words removed, then sentence by sentence: greetings and instructions left out, the words
+ * before and after a request in its sentence kept ("For our Teacher Appreciation Day, could you design
+ * a poster?" keeps "Teacher Appreciation Day"), leading glue dropped.
+ */
+function ruleCopy(source: string, asks: Span[]): ProposedCopy | null {
   const kept: string[] = [];
-  for (const { start, end } of sentences(source, lead)) {
-    let s = source.slice(start, end);
-    if (readsAsInstruction(s)) continue;
-    s = s.replace(/[\s.?؟]+$/u, '').replace(CKB_TRAILING_VERB, '')
-      .replace(/^(?:(?:it|this|that)(?:'s|’s|\s+is|\s+will\s+be)|it'll\s+be)\s+(?:(?:on|at|in|held\s+(?:on|at|in)|taking\s+place\s+(?:on|at|in))\s+)?(?:the\s+)?/iu, '')
-      .replace(/^(?:(?:ئەوە|ئەمە)\s+)?(?:لە)\s+/u, '').trim();
-    if (s && contentWords(s)) kept.push(s);
+  const clean = (piece: string, beforeAsk: boolean) => {
+    let t = piece.replace(/^[\s,،:;!.-]+|[\s,،:;.?؟!-]+$/gu, '').replace(CKB_TRAILING_VERB, '').replace(/[\s,،]+$/u, '');
+    if (beforeAsk) t = t.replace(/^(?:(?:for|about)\s+(?:our|the|this|my|their)|بۆ)\s+/iu, '');
+    t = t.replace(GLUE_START, '').replace(/^(?:(?:ئەوە|ئەمە)\s+)?(?:لە)\s+/u, '').trim();
+    if (t && contentWords(t)) kept.push(t);
+  };
+  for (const { start, end } of sentences(source)) {
+    const s = source.slice(start, end);
+    const inside = asks.filter(([a, b]) => a >= start && b <= end);
+    // A sentence with a request in it is taken apart around the request ("Could you design … for our X?").
+    if (!inside.length && (readsAsInstruction(s) || GREETING_ONLY.test(s))) continue;
+    if (!inside.length) { clean(s, false); continue; }
+    let from = start;
+    for (const [a, b] of inside) { clean(source.slice(from, a), true); from = b; }
+    clean(source.slice(from, end), false);
   }
   return kept.length ? { headline: kept[0], lines: kept.slice(1) } : null;
 }
 
-/** The parts of the source that are never copy: the request words and sentences to the designer. */
-function forbiddenSpans(source: string, lead: number): Span[] {
-  const spans: Span[] = lead > 0 ? [[0, lead]] : [];
-  for (const { start, end } of sentences(source, lead)) {
+/** The parts of the source that are never copy: the requests, greetings and sentences to the designer. */
+function forbiddenSpans(source: string, asks: Span[]): Span[] {
+  const spans: Span[] = [...asks];
+  for (const { start, end } of sentences(source)) {
     const s = source.slice(start, end);
-    if (readsAsInstruction(s)) spans.push([start, end]);
+    const asking = asks.some(([a, b]) => a >= start && b <= end);
+    if (!asking && (readsAsInstruction(s) || GREETING_ONLY.test(s))) spans.push([start, end]);
     else {
       const verb = CKB_TRAILING_VERB.exec(s.replace(/[\s.?؟]+$/u, ''));
       if (verb && verb[0].trim()) spans.push([start + verb.index, end]);
@@ -275,12 +348,14 @@ function grounded(source: string, proposal: ProposedCopy, forbidden: Span[]):
   { headline: string; lines: string[]; refused: Array<{ text: string; why: string }> } | null {
   const refused: Array<{ text: string; why: string }> = [];
   const head = groundLine(source, proposal.headline, forbidden);
-  if (!head.ok || head.text.length > MAX_HEADLINE) return null;
+  // The final check (ADR-232 addendum): words that still ask the bot for something are never printed.
+  if (!head.ok || head.text.length > MAX_HEADLINE || asksTheBot(head.text)) return null;
   const used: Span[] = [...head.spans];
   const lines: string[] = [];
   for (const proposed of (Array.isArray(proposal.lines) ? proposal.lines : []).slice(0, 12)) {
     const line = groundLine(source, proposed, forbidden);
     if (!line.ok) { refused.push({ text: String(proposed).slice(0, 200), why: line.why }); continue; }
+    if (asksTheBot(line.text)) { refused.push({ text: line.text, why: 'asks the bot for something' }); continue; }
     if (line.spans.some((span) => overlaps(span, used))) { refused.push({ text: line.text, why: 'repeats words already used' }); continue; }
     if (lines.length >= MAX_LINES) { refused.push({ text: line.text, why: 'more lines than a design carries' }); continue; }
     used.push(...line.spans);
@@ -316,23 +391,28 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   if (draft.isInstructionOnly || draft.lifecycleSource || !Array.isArray(draft.exactCopy) || !draft.exactCopy.length) return draft;
   const texts = draft.exactCopy.map((block) => (block && typeof (block as { text?: unknown }).text === 'string' ? (block as { text: string }).text : null));
   if (texts.some((t) => t === null)) return draft;
-  const source = ws(texts.join('\n'));
-  const lead = requestLead(source);
-  if (!lead) return draft;
-  const forbidden = forbiddenSpans(source, lead.end);
-  const base: Omit<CopyExtractionReceipt, 'method' | 'why'> = { v: 1, request: lead.words };
+  // Blocks keep their line breaks for telling sentences apart; the guard compares the same text with
+  // each break read as a space (same offsets).
+  const source = texts.join('\n').replace(/[^\S\n]+/g, ' ').replace(/ ?\n[\s]*/g, '\n').trim();
+  const flat = source.replace(/\n/g, ' ');
+  // ADR-232 addendum: any block that asks the bot for a design, anywhere in it, is taken apart.
+  const asks = requestSpans(source);
+  if (!asks.length) return draft;
+  const forbidden = forbiddenSpans(source, asks);
+  const base: Omit<CopyExtractionReceipt, 'method' | 'why'> = { v: 1,
+    request: asks.map(([a, b]) => source.slice(a, b).trim()).join(' … ') };
 
   let chosen: { method: CopyExtractionReceipt['method']; why: string; copy: NonNullable<ReturnType<typeof grounded>> } | null = null;
   let refused: CopyExtractionReceipt['refused'];
   let ledger: number | undefined;
-  const quoted = quotedCopy(source, lead.end);
-  const fromQuotes = quoted && grounded(source, quoted, forbidden);
+  const quoted = quotedCopy(source);
+  const fromQuotes = quoted && grounded(flat, quoted, forbidden);
   if (fromQuotes) {
     chosen = { method: 'quoted', why: 'The request quoted its text; the quoted words are the copy, exactly as typed.', copy: fromQuotes };
   } else if (ctx.model && ctx.updateId !== null && draft.clientId && source.length <= MAX_MODEL_TEXT) {
     const proposal = await ctx.model.read({ tenantId: ctx.tenantId, updateId: ctx.updateId, chatId: draft.sourceChannelId,
       clientId: draft.clientId, text: source });
-    const checked = proposal && grounded(source, proposal, forbidden);
+    const checked = proposal && grounded(flat, proposal, forbidden);
     if (checked) {
       chosen = { method: 'model', why: 'The request was one sentence. A model chose the headline and lines from its words, and each line was checked against the requester\'s own words, in their order, before use.', copy: checked };
       ledger = ledgerUpdateId('copy', ctx.updateId);
@@ -341,8 +421,8 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
     }
   }
   if (!chosen) {
-    const rules = ruleCopy(source, lead.end);
-    const checked = rules && grounded(source, rules, forbidden);
+    const rules = ruleCopy(source, asks);
+    const checked = rules && grounded(flat, rules, forbidden);
     if (checked) chosen = { method: 'rules', why: 'The request was one sentence. The request words at its start were removed and the rest kept sentence by sentence (no model reading was available, allowed or usable).', copy: checked };
   }
   const kept = Object.fromEntries(Object.entries(draft).filter(([key]) => !(COPY_FIELDS as readonly string[]).includes(key))) as unknown as ChatIntake;

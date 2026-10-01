@@ -60,7 +60,9 @@ describe('a change sent while the design is being made (ADR-230 addendum, L8)', 
     // The stale draft went to nobody in the office; the change is no longer waiting to be read.
     for (const member of office) expect(h.alertFor(member, requestId)).toBeUndefined();
     expect(await pending(requestId)).toHaveLength(0);
-    expect(p.said.at(-1)?.text).toBe("Your first draft of <b>KAAE members evening…</b> is done. I'm now adding what you asked while it was being made: " +
+    // ADR-232 addendum: the brief's closing "Please make a poster." is a request, not copy, so its copy is
+    // taken apart and the title is the headline, uncut.
+    expect(p.said.at(-1)?.text).toBe("Your first draft of <b>KAAE members evening</b> is done. I'm now adding what you asked while it was being made: " +
       '“also please add that seats are limited”. The office checks the new version before it comes to you.');
     // The new round's draft goes to review as any revised draft does, and starts nothing more.
     await p.draftReady();
@@ -105,7 +107,7 @@ describe('a change sent while the design is being made (ADR-230 addendum, L8)', 
     expect(toOffice[0].text).toContain('NOT IN THIS DRAFT');
     expect(toOffice[0].text).toContain(`“${LIVE_WORDS}”`);
     expect(toOffice[0].text).toContain('the automatic design allowance for today is used up');
-    expect(p.said.at(-1)?.text).toBe('Your draft of <b>KAAE members evening…</b> was finished before your changes could be added: ' +
+    expect(p.said.at(-1)?.text).toBe('Your draft of <b>KAAE members evening</b> was finished before your changes could be added: ' +
       '“also please add that seats are limited”. The office has them and will see to them before the design comes to you.');
     // Still unread: Deliver waits until an office member has read it.
     expect(await pending(requestId)).toHaveLength(1);
