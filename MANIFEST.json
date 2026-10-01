@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T19:38:46Z",
+  "generatedAt": "2026-10-01T20:58:14Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 700,
+  "fileCount": 701,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "ef0c32c6cffd09f29b2120b6cd2e8cd695a4a0c637cfd8f409a3b7c0a80749e1",
-      "bytes": 3984
+      "sha256": "59713a9f3cde6423211c7e41c1eabf142a75b26eadcfb278d82ca127301541e2",
+      "bytes": 3980
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -958,6 +958,11 @@
       "bytes": 17811
     },
     {
+      "path": "adrs/239_consent_preserving_dna_saves_and_double_role_replies.md",
+      "sha256": "844aa1566c0c735f0604a1a7c3c05becaa2a577c941e58a55a3ebddbc90c0f28",
+      "bytes": 13875
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1654,8 +1659,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "6ab6bc12f3b07612c25e5fd0181c2c07cad2fef19c0b44117e54901e6ed7903e",
-      "bytes": 74268
+      "sha256": "3a9f00ea4b10d9dde106aa1777a8caea9ceef84321b72e1ed8b1cdccc027b860",
+      "bytes": 74364
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2614,8 +2619,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "3c7350a6c2e8d1ba49b7897eb56fb8891393d27a655f1b4f120bf12ff26cd6d8",
-      "bytes": 602329
+      "sha256": "7d33bff54abd94c84e7ba619903d9f67dd4780ac1a13cb647c8397047f467cb1",
+      "bytes": 605254
     },
     {
       "path": "plans/user-stories.csv",

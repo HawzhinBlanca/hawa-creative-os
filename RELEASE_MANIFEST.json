@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-01T22:38:42+03:00",
+  "generatedAt": "2026-10-01T23:58:09+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,10 +20,10 @@
     ]
   },
   "build": {
-    "commit": "57eb3c9eacecbb07f0940a675650381dedc00700",
+    "commit": "8420bf6d246f0d0a357517a38d3390b74c328114",
     "treeClean": true,
-    "commitTimestamp": "2026-10-01T22:38:42+03:00",
-    "branch": "claude/sol-judge-and-visual-review"
+    "commitTimestamp": "2026-10-01T23:58:09+03:00",
+    "branch": "claude/consent-and-double-role"
   },
   "migrations": {
     "targetVersion": "073_restricted_worker_database",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "579be6b20e331eb9dc462f8cb866705beeaa0081da5d116239914d7f57e42d1b"
+  "sha256": "2eb7340ba80edbbe0e99f38a106b8470bf0ceb1b5686995ca17c32e407e193f8"
 }
