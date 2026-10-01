@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T11:20:21Z",
+  "generatedAt": "2026-10-01T13:09:42Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "134db6d40e40f865e852e185faecf9dec80ea5a6422eee65110291005d27125f",
-      "bytes": 3983
+      "sha256": "80ebeafc7b5363645fd2e046b2f72d287c5fd31f7636c6bdba430a99b268e05e",
+      "bytes": 3976
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -914,8 +914,8 @@
     },
     {
       "path": "adrs/200_office_chat_understanding.md",
-      "sha256": "a0346bedbb0b962a977f5a39b9137b1b9011a6fd7f9a2554d4a1531b2ba82c39",
-      "bytes": 12994
+      "sha256": "84d5c4da1b921b869eadf36add629a3951d50b0b5c538f1e03083ef0eb8b1a92",
+      "bytes": 21992
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1599,8 +1599,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "ec550242e91b576266caad0fb1a58c1ab6d033ef4fc4afa106e2a19b5e69a89e",
-      "bytes": 62252
+      "sha256": "7d702a0ea8a24f37e15d16a7f1a5d439e970e51dddbc8a82d8c8b40aef15216a",
+      "bytes": 63869
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2549,8 +2549,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "82deb21afa4d0702a627e2deb39f319b1e764f135106af21605bd907c557c14c",
-      "bytes": 582728
+      "sha256": "39f020a7a29562f209147ba9e8ae01800db50cbe7f3dd9562e25aa7057c101fa",
+      "bytes": 586478
     },
     {
       "path": "plans/user-stories.csv",
