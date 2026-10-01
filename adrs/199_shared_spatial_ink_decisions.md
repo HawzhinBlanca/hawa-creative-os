@@ -1,6 +1,6 @@
 # ADR199 — Shared spatial ink decisions through preparation and ranking
 
-Date: 2026-10-01. Status: accepted for implementation; qualification pending.
+Date: 2026-10-01. Status: source engineering qualified; product admission open.
 Requirements: FR-028, FR-031, FR-038, FR-040, FR-041, NFR-012.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/07_MODEL_REGISTRY_AND_EVALUATION.md,
 docs/11_QA_RTL_MULTILINGUAL.md; ADR198; W5_COLOR_PREPARATION_FINDING.json.
@@ -46,3 +46,8 @@ pipeline latency, actual Canva/native round-trip and human design quality.
 The normalized initial generator only constructs solid surfaces; its early color
 proposal is not shipping contrast authority. Keep that proposal path separate from
 these post-layout decisions. Broader W5/W6/native/human/product gates remain open.
+
+
+Exact sealed baf680aab2fff29c290c46634321312311ea1782 passes all8 engineering stages:6567pass/0fail/67skip across664 passed files/6 skipped;671 strict roots,1670 blueprint checks,newest production dump restored in isolation and mandatory negative-flag refusal. Runtime source9c8a871c; no deployment or native Canva/human/product admission. W5_SPATIAL_INK_PROOF.json retains original failures and measured local resource scope.
+
+Next W5 cache diagnostic: a warmed exported font-admission function retains one face after a temporary same-path registry revokes every Latin family. Core also has broader input-basis invalidation, so live impact is not established. No production policy was changed. W5_FONT_ADMISSION_CACHE_FINDING.json retains actual counters and source identity; its acceptance regression and repair remain pending.

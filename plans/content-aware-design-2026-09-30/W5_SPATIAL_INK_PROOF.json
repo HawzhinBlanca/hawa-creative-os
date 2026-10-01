@@ -1,7 +1,7 @@
 {
   "adr": "ADR199",
   "date": "2026-10-01",
-  "status": "CONNECTED_LOCAL_QUALIFIED_EXACT_RELEASE_PENDING",
+  "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-028",
     "FR-031",
@@ -79,9 +79,26 @@
   },
   "deployment": "NOT_DEPLOYED; live remains 2c4d61ec",
   "limits": [
-    "Exact sealed engineering gate pending.",
+    "Exact sealed engineering qualified; broader product admission remains open.",
     "No genuine held-out taste/native Canva/human/recovery/product admission.",
     "Local warm helper timing is not pipeline latency or a speed claim against old incorrect flat-color repair.",
     "Broader W5 perceptual surface choices/local optimizer/cache/replay and full-pipeline resource evidence remain open."
-  ]
+  ],
+  "exactQualification": {
+    "testedSeal": "baf680aab2fff29c290c46634321312311ea1782",
+    "runtimeCommit": "9c8a871c3e6eb1e6fbc62a3c11968b9f10a1de43",
+    "allStages": 8,
+    "testsPassed": 6567,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 664,
+    "filesSkipped": 6,
+    "strictRoots": 671,
+    "blueprintChecksAtSeal": 1670,
+    "gateEvidence": "W5_SPATIAL_INK_GATE_EVIDENCE.json",
+    "fullTestLog": "output/qualification/2026-10-01/baf680aa/FULL_TEST_SUITE_RUN.log",
+    "fullTestLogSha256": "e323f642fb009485da54cc844766982b77be37d8b5edda97564ff6e555b04324",
+    "deployed": false,
+    "productAdmission": false
+  }
 }

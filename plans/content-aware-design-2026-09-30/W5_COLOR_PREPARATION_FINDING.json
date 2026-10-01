@@ -20,5 +20,13 @@
   "sourceFile": "packages/creative/src/studio/pipeline-v3.ts",
   "sourceSeal": "07ebe842a6ba4c903c5c314fe39ccb27403ddf29",
   "cause": "conformToHouseRules final palette repair uses declaredBackgroundColour + flat contrast rather than the regional field envelope.",
-  "nextAction": "Add a failing preparation regression; use shared spatial contrast for ink repair; qualify transfer/replay and source engineering gates."
+  "nextAction": "Add a failing preparation regression; use shared spatial contrast for ink repair; qualify transfer/replay and source engineering gates.",
+  "resolution": {
+    "date": "2026-10-01",
+    "adr": "ADR199",
+    "proof": "W5_SPATIAL_INK_PROOF.json",
+    "testedSeal": "baf680aab2fff29c290c46634321312311ea1782",
+    "engineeringQualified": true,
+    "deployed": false
+  }
 }
