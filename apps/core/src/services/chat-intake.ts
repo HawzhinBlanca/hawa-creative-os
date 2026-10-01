@@ -33,6 +33,11 @@ export interface ChatIntake {
   lifecycleSource?: LifecycleSourceRef;
   /** Server-authored only after verification of the immutable source confirmation. */
   reviewedSource?: ReviewedSourceEvidence;
+  /**
+   * ADR-232: how the copy was taken from a request written as a sentence, and why (the office reads it
+   * on the task's creation event). Server-authored at intake; absent when the copy was used as given.
+   */
+  copyExtraction?: import('./request-copy-extraction.js').CopyExtractionReceipt;
   /** Optional studio generation parameters */
   studioOptions?: {
     /** The Studio's names, or the older intake names the Studio maps (parseStudioTier, ADR-159). */
@@ -223,6 +228,7 @@ export async function persistChatIntake(
       designInstructions: input.designInstructions, exactCopy: input.exactCopy,
       ...(input.lifecycleAlbum ? { lifecycleAlbum: input.lifecycleAlbum } : {}),
       ...(input.reviewedSource ? { reviewedSource: input.reviewedSource } : {}),
+      ...(input.copyExtraction ? { copyExtraction: input.copyExtraction } : {}),
       clientId: input.clientId, workflow: 'canva',
       designStudio,
       ...(input.isInstructionOnly ? { isInstructionOnly: true } : {}),

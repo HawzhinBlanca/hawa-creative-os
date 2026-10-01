@@ -31,6 +31,8 @@ const lines: string[] = [
   'approve and reject words in `apps/core/src/services/office-telegram-turn.ts`, ADR-040 addendum),',
   'and the Sorani the design studio reads (ADR-157): the photo-choice phrases in `packages/creative/src/studio/photo-selection.ts`',
   'and the phrase-ending words and language names in `packages/creative/src/studio/copy-completeness.ts`.',
+  'ADR-232: the request words, closing verbs, instruction openings and glue words read in',
+  '`apps/core/src/services/request-copy-extraction.ts` to tell a request sentence from its copy.',
   '',
 ];
 let count = 0;
