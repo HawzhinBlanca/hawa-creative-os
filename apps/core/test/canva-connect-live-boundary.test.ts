@@ -118,10 +118,15 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
     const source=await encodeEditableTransfer({width:640,height:640,background:'#FFFFFF',shapes:[],text:[{copyIndex:0,x:20,y:20,width:600,height:100,fontSize:24,fontFamily:'Arial',color:'#000000',align:'left'}]},['Exact copy']);
     const manifest={...source.manifest,reference:{rules:{fontFamily:'Verdana'}}};
     jobStatus='success';await service.importEditableDesign(scope,taskId,'check-source-01',{...source,manifest});
-    bytes=source.bytes;transportMode='pptx';const exported=await service.startExport(scope,taskId,'pptx-check-01','pptx',1);
+    // ADR220 checks preservation of the imported Arial block. Model a genuine provider substitution;
+    // the original negative fixture returned unchanged source bytes and only differed from its reference.
+    bytes=(await encodeEditableTransfer({width:640,height:640,background:'#FFFFFF',shapes:[],text:[{copyIndex:0,x:20,y:20,width:600,height:100,fontSize:24,fontFamily:'Verdana',color:'#000000',align:'left'}]},['Exact copy'])).bytes;
+    transportMode='pptx';const exported=await service.startExport(scope,taskId,'pptx-check-01','pptx',1);
     const checked=await service.exportStatus(scope,taskId,exported.operationId);
     expect(checked.artifact.format).toBe('pptx');expect(checked.artifact.content_check).toMatchObject({copyPass:true,fontPass:false,fullReleasePass:false});
     expect(checked.qaStatus).toBe('not_run');
+    expect((await tx(async d => (await sql<{n:string}>`SELECT count(*) AS n FROM hawa.approvals
+      WHERE tenant_id=${tenant}::uuid AND task_id=${taskId}::uuid`.execute(d)).rows[0])).n).toBe('0');
     const restored=await new CanvaConnectService(db,options).taskState(scope,taskId);
     expect(restored.artifacts[0].content_check.fontPass).toBe(false);
   });

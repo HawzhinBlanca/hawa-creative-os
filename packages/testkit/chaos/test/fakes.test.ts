@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { startFakes, type Fakes } from '../fakes/server.ts';
 import { plannerLayout } from '../fakes/models.ts';
+import { isDesignGenerationResponse } from '../driver/model-ledger.js';
 import { chaosPoint } from '../../../observability/src/chaos-point.js';
 
 /**
@@ -142,6 +143,7 @@ describe('fake models and the paid-call ledger', () => {
         crypto.createHash('sha256').update(Buffer.from([4, 5, 6])).digest('hex')] });
     expect(ledger[0].fingerprint).not.toBe(ledger[1].fingerprint);
     expect(JSON.stringify(ledger)).not.toContain(images[0].image_url);
+    expect((await admin('/models/ledger')).paid).toEqual({});
   });
 
   it.each([
@@ -178,6 +180,22 @@ describe('fake models and the paid-call ledger', () => {
     await chat('telegram_classifier', 'please make the logo bigger');
     const { paid } = await admin('/models/ledger');
     expect(Object.values(paid).map((p: any) => p.n).sort()).toEqual([1, 2]);
+  });
+
+  it('excluding count preflights still catches two identical successful design generations', async () => {
+    await admin('/reset', {});
+    expect((await imageCount({ model: 'gpt-6.1-sol', input: [{ role: 'user', content: [inlineImage([1, 2, 3])] }] })).status).toBe(200);
+    const brief = JSON.stringify({ width: 1080, height: 1350, copy: ['SYNTHETIC EXACT COPY'] });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect((await chat('canva_design_plan', brief, { model: 'gpt-6.1-sol' })).status).toBe(200);
+    }
+    const { ledger, paid } = await admin('/models/ledger');
+    expect(ledger).toHaveLength(3);
+    const generations = ledger.filter(isDesignGenerationResponse);
+    expect(generations).toHaveLength(2);
+    expect(generations[0].fingerprint).toBe(generations[1].fingerprint);
+    expect(Object.values(paid)).toEqual([{ route: 'canva_design_plan', n: 2 }]);
+    expect(ledger.filter((entry: any) => entry.route === 'input-token-count')).toHaveLength(1);
   });
 
   it('refuses, and records as unmatched, a call no fixture covers', async () => {

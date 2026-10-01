@@ -17,6 +17,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { parseJson, readBody, sendJson, sha256 } from './http-util.ts';
+import { isDesignGenerationResponse } from '../driver/model-ledger.ts';
 
 export interface ModelFixture {
   /** The caller's `response_format.json_schema.name`. */
@@ -177,10 +178,10 @@ export class FakeModels {
     this.fixtures = fixtures;
   }
 
-  /** How many times each fingerprint was paid for (answered with 200). */
+  /** Legacy `paid` field: successful design-generation responses, never actual billing evidence. */
   paidCounts(): Record<string, { route: string; n: number }> {
     const out: Record<string, { route: string; n: number }> = {};
-    for (const e of this.ledger.filter((l) => l.status === 200)) {
+    for (const e of this.ledger.filter(isDesignGenerationResponse)) {
       out[e.fingerprint] = { route: e.route, n: (out[e.fingerprint]?.n || 0) + 1 };
     }
     return out;

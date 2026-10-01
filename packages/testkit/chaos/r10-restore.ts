@@ -40,6 +40,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { promisify } from 'node:util';
+import { isDesignGenerationResponse } from './driver/model-ledger.js';
 import {
   CHAOS_DIR, PORTS, REPO_ROOT, closeDb, compose, configureStack, envFile, fakes, query, restateQuery, secrets, sql, up,
   type StackPorts,
@@ -283,7 +284,8 @@ async function effects() {
   return {
     telegramDelivered: delivered.length, telegramRefused: sent.length - delivered.length, telegramDeliveredByChat: byChat,
     canvaOperations: canva.length, driveFiles: drive.length,
-    paidModelCalls: models.filter((l) => l.status === 200 && l.route !== 'billing-probe').length,
+    paidModelCalls: models.filter(isDesignGenerationResponse).length,
+    nativeInputCountCalls: models.filter((l) => l.status === 200 && l.route === 'input-token-count').length,
     unmatchedModelCalls: models.filter((l) => String(l.route).startsWith('unmatched')).length,
   };
 }
@@ -300,7 +302,7 @@ async function duplicateSends(): Promise<string[]> {
 
 async function paidCallsTwice(): Promise<string[]> {
   const paid = new Map<string, number>();
-  for (const l of ((await fakes.modelLedger()).ledger as any[]).filter((x) => x.status === 200 && x.route !== 'billing-probe')) {
+  for (const l of ((await fakes.modelLedger()).ledger as any[]).filter(isDesignGenerationResponse)) {
     paid.set(`${l.route}:${l.fingerprint}`, (paid.get(`${l.route}:${l.fingerprint}`) || 0) + 1);
   }
   return [...paid].filter(([, n]) => n > 1).map(([k, n]) => `${k.slice(0, 40)}x${n}`);
@@ -782,4 +784,3 @@ async function main(): Promise<void> {
 }
 
 void main().catch((err) => { console.error(err); process.exit(1); });
-

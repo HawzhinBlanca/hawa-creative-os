@@ -850,3 +850,15 @@ b845eb2c before correcting source; preserved their logs as not-pass evidence.
 The route now records the same immutable receipt and exposes the original crash
 boundary whether bytes were downloaded or retained. Connected238 tests/14 files
 and699 strict roots pass. Fresh full engineering and durable qualification pending.
+
+### Current harness and genuine-font negative evidence
+
+On clean3f8dea9b the eight originally failing Docker journeys produced7 passes,
+110/112 controls, zero uncovered calls. The remaining cover assertions contradicted
+ADR149 non-generative preflight semantics and the ADR180 owner title contract.
+ADR222 preserves all count transport evidence and duplicate-generation controls,
+requires the owner title without its repeated prefix and keeps exact-copy checks.
+The source suite6947 pass/1 fail exposed a font-negative fixture returning unchanged
+Arial bytes; its provider fixture now genuinely substitutes Verdana while all
+negative assertions remain. Connected295 tests/16 files,699 roots and27 loopback
+ledger boundary tests pass. Full current gates and candidate recovery remain pending.

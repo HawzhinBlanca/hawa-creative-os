@@ -14,7 +14,8 @@
   ],
   "decisions": [
     "adrs/220_per_block_imported_font_authority.md",
-    "adrs/221_lone_photo_retained_source_handoff.md"
+    "adrs/221_lone_photo_retained_source_handoff.md",
+    "adrs/222_durable_harness_generation_and_owner_contract.md"
   ],
   "originalRun": {
     "commit": "90c87686ec636bed2948f6dc032a5f62cfdbe5e4",
@@ -26,8 +27,8 @@
     "rollbackScenariosUnselected": 2
   },
   "connected": {
-    "files": 14,
-    "passed": 238,
+    "files": 16,
+    "passed": 295,
     "failed": 0,
     "strictRoots": 699,
     "runtimeScriptAndStrictTypes": "PASS",
@@ -44,7 +45,11 @@
     "Sandbox refused local test DB and tsx IPC; rerun with authorized isolated test scope, originals retained.",
     "Lone-captioned photo originally downloaded twice; first handoff repair still failed because brief branch prioritized photoInput; retained reference now precedes transport.",
     "Count fixture originally refused the real client endpoint; regression failed before fixture added.",
-    "Code review found retained captioned revision skipped required source/request receipt; a cold-instance DB projection regression returned409 before repair. Both in-progress broad runs on b845eb2c were cancelled before changing source; no pass claim. Record immutable revision-photo decision and existing crash boundary before projection even when no download is needed."
+    "Code review found retained captioned revision skipped required source/request receipt; a cold-instance DB projection regression returned409 before repair. Both in-progress broad runs on b845eb2c were cancelled before changing source; no pass claim. Record immutable revision-photo decision and existing crash boundary before projection even when no download is needed.",
+    "Focused Docker rerun7/8 and110/112 controls passes; all eight reached their expected outcomes, with zero uncovered model calls. Remaining cover controls contradicted ADR149 count-vs-generation semantics and ADR180 owner title behavior; originals retained.",
+    "Full source suite6947 pass/1 fail/67 skip; negative font fixture now returns genuinely substituted bytes, preserving false font and zero-approval assertions.",
+    "Ledger helper imported native TypeScript fake-server dependencies into script/runtime build; TS5097 errors retained. Provider-independent helper moved into its own module;699 strict roots and standalone chaos types now pass.",
+    "The first focused result-recorder invocation read an unfinished asynchronous readback file and refused JSON parsing; recorder rerun only after readback completed, verified source/image/internal-network binding."
   ],
   "scope": {
     "productionChanged": false,
@@ -147,6 +152,66 @@
     {
       "path": "output/qualification/2026-10-01/current-durable-suite/TYPECHECK_RECEIPT_REPAIR.log",
       "sha256": "ac837ff2ccd0d14796a669f18b381e55adad0500ab121e5ce81e02bff58eabe5"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FOCUSED_RESULT.json",
+      "sha256": "b86d0c88a365a1a29a28e1d5451d33ea6e3748c92b2c741c591137e1ec48a2ae"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FOCUSED_RAW_SCENARIO_RECEIPT.json",
+      "sha256": "7cb1e8dbd71b174368622ba7d183e21626f4b553d748411425c2f32115a00567"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FOCUSED_START_READBACK.json",
+      "sha256": "f781b739b3e50e7fb90691d201b9ff94f11cc2c54fb945f8cc1a601ba00915ef"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FOCUSED_END_READBACK.json",
+      "sha256": "37bb2f222062bc51732746225a178aec9f11dbeba0fad8aa1daaa2a70c004273"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/REPAIR_FOCUSED_DURABLE_RUN.log",
+      "sha256": "bb15d56d8ff08be6f6ddf87de8dfb1306c7de2f86d909e1177a95890623b0a61"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FIRST_RECEIPT_FULL_TEST_SUITE_RUN.log",
+      "sha256": "b66c4daec9732c2088ec6c72b9a861c3a3fb3751e526e6f37f64492ab08dcaaf"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FIRST_RECEIPT_ENGINEERING_FAILURE.json",
+      "sha256": "d222a98d36096b10afe5b14411f97313b3483c8814083cac2e07dbbbc393210e"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/RECEIPT_ENGINEERING_GATE.log",
+      "sha256": "bfabd96c1a350b9b95c1dff664af645b564935e6ad123698babebc3dc1993698"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/HARNESS_CLASSIFICATION_RED.log",
+      "sha256": "1a59db20a0d817d9fd5bcd2858b3b9e6264dcac8f8e38e143ed171a19e19bfb4"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_REPAIR_CONNECTED.log",
+      "sha256": "b07e96e6807316ae6c95373718b632e261f067b5e1703ced3c5692a69bfefb8b"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_TYPECHECK_BEFORE_LEDGER_BOUNDARY.log",
+      "sha256": "0529a202ddf3ad91613489491a9217f4573b2cb275664b4e2e6ec031134ca48c"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_TYPECHECK.log",
+      "sha256": "ac837ff2ccd0d14796a669f18b381e55adad0500ab121e5ce81e02bff58eabe5"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_CHAOS_TYPECHECK_BOUNDARY.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/LEDGER_BOUNDARY_GREEN.log",
+      "sha256": "c6c723c9b45b63016328e11a49570ffdda47c46653eb1db2a225146728899864"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_LINT.log",
+      "sha256": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad"
     }
   ],
   "firstConnected": {
@@ -157,5 +222,43 @@
     "runtimeScriptAndStrictTypes": "PASS",
     "chaosStrictTypes": "PASS",
     "lint": "PASS"
+  },
+  "receiptConnected": {
+    "files": 14,
+    "passed": 238,
+    "failed": 0,
+    "strictRoots": 699,
+    "runtimeScriptAndStrictTypes": "PASS",
+    "chaosStrictTypes": "PASS",
+    "lint": "PASS"
+  },
+  "ledgerBoundary": {
+    "fakeServerTestsPassed": 27,
+    "runtimeScriptStrictTypes": "PASS",
+    "chaosStrictTypes": "PASS",
+    "negativeDuplicateGeneration": "PASS"
+  },
+  "focusedBeforeHarnessCorrection": {
+    "commit": "3f8dea9bac36e8cb5f3afce0bb6d0be95f55fcc2",
+    "scenarios": 8,
+    "passed": 7,
+    "controlsPassed": 110,
+    "controlsTotal": 112,
+    "uncoveredModelCalls": 0,
+    "remainingControls": [
+      "Native counts incorrectly included in generation duplicate accounting",
+      "Expected title repeats client name contrary to owner ADR180 section4"
+    ]
+  },
+  "firstReceiptEngineering": {
+    "commit": "3f8dea9bac36e8cb5f3afce0bb6d0be95f55fcc2",
+    "passed": 6947,
+    "failed": 1,
+    "skipped": 67,
+    "filesPassed": 691,
+    "filesFailed": 1,
+    "filesSkipped": 6,
+    "status": "FAILED_TEST_SUITE",
+    "reason": "Negative font fixture returned unchanged Arial source bytes; preserve false assertions and genuinely substitute exported Verdana."
   }
 }

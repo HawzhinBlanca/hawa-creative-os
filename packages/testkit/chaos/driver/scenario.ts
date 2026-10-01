@@ -8,6 +8,7 @@
  * another's, and nothing is reset between scenarios.
  */
 import { randomUUID } from 'node:crypto';
+import { isDesignGenerationResponse } from './model-ledger.js';
 import { RESTATE_INGRESS_URL, fakes, kill, query, restateQuery, secrets, sql, start, waitHealthy, type Service } from './stack.js';
 
 export const OFFICE_CHAT = '9000001';
@@ -334,7 +335,7 @@ export async function checkRequest(chat: string, options: {
   // Paid calls: every fingerprint once (the classifier may run again when intake died before saving).
   // Only this scenario's calls: each scenario's brief carries its own tag, so its fingerprints are its own.
   const ledger = await fakes.modelLedger();
-  const mine = (ledger.ledger as any[]).filter((l) => l.seq > (options.ledgerSince ?? 0) && l.status === 200 && l.route !== 'billing-probe');
+  const mine = (ledger.ledger as any[]).filter((l) => l.seq > (options.ledgerSince ?? 0) && isDesignGenerationResponse(l));
   const paid = new Map<string, { route: string; n: number }>();
   for (const l of mine) paid.set(l.fingerprint, { route: l.route, n: (paid.get(l.fingerprint)?.n || 0) + 1 });
   const over = [...paid].filter(([, p]) => p.n > (p.route === 'telegram_classifier' ? options.classifierAllowance ?? 1 : 1));
