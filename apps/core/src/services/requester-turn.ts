@@ -20,8 +20,8 @@
  *    about the files: they are passed on, and are never approval (ADR-156);
  *  - only a new brief opens a request; a message that could be either asks one short question.
  */
-import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, say as sayPhrase, type Phrase,
-  type RequesterLang } from '@hawa/integrations';
+import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
+  type Phrase, type RequesterLang } from '@hawa/integrations';
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
 import { isIntroducerTitle, withoutMarks } from './draft-title.js';
@@ -49,6 +49,13 @@ export interface IntentReading {
    * office hears that the requester is not happy; with nothing said to change, no round starts.
    */
   refusalOnly?: boolean;
+  /**
+   * ADR-200 addendum (incident 2026-10-01 12:33Z): the words ask to redo a design ("do a better design
+   * that's similar to the earlier ones", "try again", Sorani "make it again"), with no new copy and no
+   * subject of their own. `redo`: they mean the requester's most recent design. `or-new`: they may also
+   * mean a new design ("a better poster for the conference"), so the requester is asked.
+   */
+  redo?: 'redo' | 'or-new';
 }
 
 export type Lang = RequesterLang;
@@ -99,8 +106,11 @@ export type TellNote = 'approval' | 'deadline' | 'delivery';
 
 export type TurnPlan =
   | { kind: 'open'; text: string; instructionOnly: boolean; resolves?: number }
-  | { kind: 'revise'; requestId: string; directive: string; resolves?: number }
-  | { kind: 'note'; note: 'change' | 'cancel' | 'hold'; requestId: string; words: string; resolves?: number }
+  /** `redo`: redo words (ADR-200 addendum); the requester hears "I'll redo …". */
+  | { kind: 'revise'; requestId: string; directive: string; resolves?: number; redo?: true }
+  | { kind: 'note'; note: 'change' | 'cancel' | 'hold'; requestId: string; words: string; resolves?: number; redo?: true }
+  /** ADR-200 addendum: redo words about a design delivered within `REDO_WINDOW_MS`: a new round of it. */
+  | { kind: 'redo'; requestId: string; directive: string; resolves?: number }
   | { kind: 'tell'; note: TellNote; requestId: string; words: string; resolves?: number }
   | { kind: 'reply'; what: 'thanks' | 'status' | 'nothing-to-change'; requestIds: string[] }
   /**
@@ -108,7 +118,8 @@ export type TurnPlan =
    * answer (`question`, ADR-182): passed to the office.
    */
   | { kind: 'forward'; words: string; question?: true }
-  | ({ kind: 'ask' } & Omit<PendingAsk, 'updateId'>)
+  /** `redo`: a question about redo words, worded so ("Which one should I redo: …?"). */
+  | ({ kind: 'ask'; redo?: 'redo' | 'or-new' } & Omit<PendingAsk, 'updateId'>)
   | { kind: 'passive'; reason: string }
   | { kind: 'conversation' };
 
@@ -432,21 +443,118 @@ function readsAsDeadline(text: string, core: string): boolean {
   return any(core, DEADLINE_CKB) || DEADLINE_BY_CKB.test(core) || (DEADLINE_DAY_CKB.test(core) && DEADLINE_NEED_CKB.test(core));
 }
 
+/**
+ * ADR-200 addendum: a line that names no design: redo words, words about quality ("make me a nice
+ * poster"), chat, or a question. A request opened from such words is never named with them (the
+ * incident's request was "do a better design thats similar to earlier o…"): it is named neutrally
+ * (`neutralRequestTitle`), and the words stay its instructions. A line with copy, a date, an event, a
+ * subject ("for the graduation") or a name ("KAAE", "Nawroz") names its design.
+ */
+const QUALITY_EN = /\b(?:better|nicer|nice|beautiful|good|great|professional|modern|attractive|elegant|improve\w*|again|similar)\b/i;
+const QUALITY_CKB = /(?:باشتر|جوانتر|جوان|باش|دووبارە|هاوشێوە)/u;
+const A_NAME = /(?<!^)\b[A-Z]\p{L}+|\b[A-Z]{2,}\b|\d/u;
+export function isWeakBriefLine(line: string): boolean {
+  const t = corePhrase(String(line ?? ''));
+  if (!t) return true;
+  if (readsAsRedo(t, t)) return true;
+  if (carriesBriefCopy(t) || DATE_OR_TIME.test(t) || (t.match(EVENT_WORDS)?.length ?? 0) > 0 ||
+      OWN_SUBJECT_EN.test(t) || OWN_SUBJECT_CKB.test(t) || A_NAME.test(t)) return false;
+  if (/[?؟]\s*$/u.test(t)) return true;
+  const quality = QUALITY_EN.test(t) || QUALITY_CKB.test(t);
+  if (new RegExp(`\\b(?:${DESIGN_NOUNS})s?\\b`, 'i').test(t) || NEW_DESIGN_CKB.test(t)) return quality;
+  const reading = readIntentByRules(t).intent;
+  return quality || ['acknowledgement', 'conversation', 'status', 'approval', 'cancel', 'hold'].includes(reading);
+}
+
 const FULL_BRIEF_REASON = 'Complete design brief with structured copy and event details detected';
 const EXPLICIT_NEW = /\b(?:new\s+(?:poster|design|flyer|banner|brief|invitation|one|request)|another\s+(?:poster|design|event|flyer|banner|one|invitation))\b|(?:دیزاینێکی\s+نوێ|پۆستەری\s+نوێ|داواکارییەکی\s+نوێ)/iu;
+
+/**
+ * ADR-200 addendum (incident 2026-10-01 12:33Z): words that ask for a design again, better, or another
+ * version of it. The owner had been sent the final K-12 Pilot Study design four hours before and wrote
+ * "do a better design thats similar to earlier ones"; "a … design" read as a new brief, and a designer
+ * was given a request named with that sentence.
+ */
+const REDO_EN: RegExp[] = [
+  // redo it, re-do, redesign it, remake it, rework it, start over, start again
+  /\b(?:re-?do|re-?design|re-?make|re-?work)\b|\bstart\s+(?:it\s+)?(?:over|again|from\s+scratch)\b/i,
+  // do it again, make it again, try again, design it once more
+  /\b(?:do|make|try|design|create|prepare)\s+(?:(?:it|this|that|them|one|the\s+(?:design|poster|flyer|banner))\s+)?(?:again|once\s+more|one\s+more\s+time)\b/i,
+  // another try, one more attempt, give it another go
+  /\b(?:another|one\s+more|a\s+second|a\s+new)\s+(?:try|attempt|go|shot)\b/i,
+  // make it better, make it look nicer, do (it) better, improve it
+  /\b(?:make|do|get)\s+(?:it|this|that|them)\s+(?:look\s+)?(?:better|nicer|more\s+(?:beautiful|professional|attractive|appealing|elegant|modern))\b|\bdo\s+(?:it\s+)?better\b|\bimprove\s+(?:it|this|that|on\s+it|the\s+(?:design|poster))\b/i,
+  // a better design, a nicer one, an improved version
+  new RegExp(`\\b(?:a|an|another|one\\s+more|some)\\s+(?:better|nicer|improved|more\\s+(?:beautiful|professional|attractive|modern))\\s+(?:version|take|option|variation|one|${DESIGN_NOUNS})s?\\b`, 'i'),
+  // another version, a different version, a new take
+  /\b(?:another|new|different|second|better|improved|alternative)\s+(?:version|variation|take)s?\b/i,
+];
+/**
+ * Sorani: make it again / redo it (several spellings), make it better / nicer, a better design / poster
+ * / version, another or a new version, try once more, make it once more, start again from the beginning.
+ */
+const REDO_CKB: RegExp[] = [
+  /دووبارە\s*(?:ی\s*)?(?:بیکەرەوە|بکەرەوە|بیکەنەوە|بکەنەوە|(?:دروست|دیزاین|ئامادە)\s*(?:ی\s*)?(?:بکەرەوە|بکەنەوە))/u,
+  /(?:باشتر|جوانتر)(?:ی)?\s*(?:بکە|بکەن|بیکە|بیکەن|دروست\s*بکە)(?![\p{L}\p{M}])/u,
+  /(?:دیزاینێکی|پۆستەرێکی|وەشانێکی|دانەیەکی)\s+(?:باشتر|جوانتر)/u,
+  /وەشانێکی\s+(?:تر|دیکە|نوێ)/u,
+  /(?:هەوڵێکی|جارێکی)\s+(?:تر|دیکە)\s+(?:بدە|بدەرەوە|هەوڵ\s*بدە|دروستی?\s*بکە|بیکە|بکەرەوە)/u,
+  /لە\s*سەرەتاوە\s+(?:دەست\s*پێ\s*بکەرەوە|دروستی\s*بکەرەوە)/u,
+];
+/** "similar to the earlier ones", "like the previous designs", "like before"; Sorani "like the previous ones". */
+const SIMILAR_EN = /\b(?:similar\s+to|(?<!\b(?:i|we|you|they|really|do|don'?t|did|didn'?t)\s)like|same\s+(?:style|look|feel)\s+as|in\s+the\s+(?:same\s+)?style\s+of|matching)\s+(?:the\s+|my\s+|our\s+|your\s+)?(?:earlier|previous|past|older|old|last|other|before)(?:\s+(?:ones?|designs?|posters?|works?|times?))?\b|(?<!\b(?:i|we|you|they|really|do|don'?t|did|didn'?t)\s)\blike\s+(?:before|last\s+time|you\s+did\s+before)\b/i;
+const SIMILAR_CKB = /(?:وەک|هاوشێوەی|لە\s+شێوەی|بە\s+شێوەی)\s+(?:ئەوانەی\s+|ئەوەی\s+|دیزاینەکانی\s+)?(?:پێشوو|پێشتر|جاران|کۆن)/u;
+/** "don't redo it", "no need to try again"; Sorani "don't redo it", "no need". */
+const NOT_REDO = /\b(?:don'?t|do\s+not|no\s+need\s+to|never|stop)\s+(?:re-?do|re-?design|re-?make|try(?:ing)?\s+again|do(?:ing)?\s+it\s+again|mak(?:e|ing)\s+(?:it|another)|chang)/i;
+const NOT_REDO_CKB = /مەیکەرەوە|دووبارەی\s+مەکەرەوە|پێویست\s+ناکات/u;
+/**
+ * A subject of the words' own: "for the conference", "about Nawroz", Sorani "for the conference". It may
+ * be a new design, so the requester is asked. "for me", "for printing", "for now" name none.
+ */
+const OWN_SUBJECT_EN = /\b(?:for|about|announcing|to\s+announce|celebrating)\s+(?:the\s+|our\s+|my\s+|a\s+|an\s+)?(?!(?:me|us|it|this|that|them|now|today|tomorrow|tonight|once|real|sure|free|print(?:ing)?|instagram|facebook|social\s+media|the\s+same)\b)\p{L}/iu;
+const OWN_SUBJECT_CKB = /(?:^|\s)بۆ\s+(?!(?:من|ئێمە|ئەمە|ئەوە|ئێستا|چاپ)(?:\s|$))\S/u;
+
+/**
+ * Whether the words ask to redo a design: 'redo' (the most recent), 'or-new' (or a new design), or
+ * null. Words with copy, a date or a time, or that ask about status, cancel, hold, or the files, are
+ * not; neither is a redo said no to ("don't redo it").
+ */
+export function readsAsRedo(text: string, core = corePhrase(text)): 'redo' | 'or-new' | null {
+  if (!core || core.length > 300 || core.split(/\s+/).length > 40) return null;
+  if (NOT_REDO.test(core) || NOT_REDO_CKB.test(core)) return null;
+  if (carriesBriefCopy(core) || DATE_OR_TIME.test(core)) return null;
+  if (readsAsStatus(core) || readsAsCancel(core) || readsAsHold(core) || readsAsDeliveryRequest(text, core)) return null;
+  const redo = REDO_EN.some((p) => p.test(core)) || REDO_CKB.some((p) => p.test(core));
+  const similar = SIMILAR_EN.test(core) || SIMILAR_CKB.test(core);
+  if (!redo && !similar) return null;
+  const ownSubject = OWN_SUBJECT_EN.test(core) || OWN_SUBJECT_CKB.test(core) || EXPLICIT_NEW.test(core) ||
+    (core.match(EVENT_WORDS)?.length ?? 0) > 0;
+  if (redo) return ownSubject ? 'or-new' : 'redo';
+  // "Similar to the earlier ones" alone is the latest design again, in that style; a design asked for
+  // with it ("a poster like the previous ones") may be a new one in that style; one with a subject of
+  // its own ("a poster for Nawroz like the previous ones") is a new brief with a note on style.
+  if (ownSubject) return null;
+  return NEW_DESIGN_EN.test(core) || NEW_DESIGN_CKB.test(core) ? 'or-new' : 'redo';
+}
 
 /**
  * The rules' reading of a message, without context. Order matters: approval and thanks before
  * anything that could start work; cancel, status and deadline before a change; a request for a new
  * design before a change ("can you make a poster" is new, "can you make the poster brighter" is not).
  */
-export function readIntentByRules(text: string): IntentReading {
+export function readIntentByRules(text: string, options: { redo?: boolean } = {}): IntentReading {
   const t = clean(text);
   const core = corePhrase(t);
   const rules = (intent: TurnIntent, reason: string, extra: Partial<IntentReading> = {}): IntentReading =>
     ({ intent, reason, source: 'rules', ...extra });
   if (!t) return rules('conversation', 'No words');
   if (t.startsWith('/')) return rules('conversation', 'A chat command');
+  // ADR-200 addendum: "do a better design", "not good, do it again", "try again" ask for the latest
+  // design again. Read before a refusal ("not good") or a new brief ("a … design"); words sent with a
+  // photo or an album are material, and are read as before (`redo: false`).
+  const redo = options.redo === false ? null : readsAsRedo(t, core);
+  if (redo === 'redo') return rules('change', 'Asks to redo the most recent design', { redo });
+  if (redo === 'or-new') return rules('unclear', 'Asks to redo a design, or for a new one', { redo, instructionOnly: true });
   // ADR-040 addendum (2026-10-01): "not approved", "don't send it" are never happiness, nor a request
   // for the files ("don't send it again"): the requester is not happy, and what else they say is the change.
   if (refusesApproval(core) && !asksForNewDesign(t)) {
@@ -560,7 +668,7 @@ const bareAnswer = (t: string) => t.replace(/^(?:the|number|no\.?|option|#|ئە�
 /** "new", "a new one", "separate", "نوێ" (new), "تازە" (new). */
 const SAYS_NEW = /^(?:(?:a|it'?s\s+a|its\s+a|this\s+is\s+a)\s+)?(?:new|separate|different|another)(?:\s+(?:one|design|request|poster|flyer|brief))?\b|^(?:نوێ|تازە|دیزاینی\s+نوێ|دیزاینێکی\s+نوێ)/iu;
 /** "change", "the same", "yes", "that one"; Sorani "yes", "edit", "the same". */
-const SAYS_CHANGE = /^(?:(?:a\s+)?change|(?:the\s+)?same(?:\s+one)?|yes|yeah|yep|that\s+one|this\s+one|edit|revise|revision|correction)\b|^(?:بەڵێ|بەلێ|دەستکاری|هەمان|گۆڕانکاری)/iu;
+const SAYS_CHANGE = /^(?:(?:a\s+)?change|(?:the\s+)?same(?:\s+one)?|yes|yeah|yep|that\s+one|this\s+one|edit|revise|revision|correction|re-?do)\b|^(?:بەڵێ|بەلێ|دەستکاری|هەمان|گۆڕانکاری|دووبارە)/iu;
 const SAYS_LAST = /^(?:(?:the\s+)?(?:last|latest|newest|most\s+recent)(?:\s+one)?|کۆتایی|دوایین|دواییان)$/iu;
 
 const tokens = (text: string) => new Set(clean(text).toLowerCase().normalize('NFKC')
@@ -716,6 +824,8 @@ function changeOrRefusal(reading: Pick<IntentReading, 'refusalOnly'>, request: C
  * ("the design is not approved, ...") are the requester not being happy, never happiness.
  */
 function answerPlan(ask: PendingAsk, chosen: ChatRequestView): TurnPlan | null {
+  // ADR-200 addendum: "which one should I redo?" or "redo it, or a new design?" answered with a design.
+  if (!ask.photo && readIntentByRules(ask.words).redo) return redoFor(chosen, ask.words, ask.updateId);
   if (ask.intent === 'approval' || ask.intent === 'change') {
     const again = readIntentByRules(ask.words);
     if (ask.intent === 'approval' && again.intent !== 'approval') {
@@ -757,8 +867,68 @@ function applyTo(intent: PendingAsk['intent'], request: ChatRequestView, words: 
   }
 }
 
+/**
+ * ADR-200 addendum: how long after delivery redo words ("do a better one", "try again") still mean a
+ * delivered design. Other words mean a delivered design for `DELIVERED_LIVE_MS`, as before; the chat's
+ * requests are read with this longer window (`activeChatRequests`).
+ */
+export const REDO_WINDOW_DAYS = 7;
+export const REDO_WINDOW_MS = REDO_WINDOW_DAYS * 24 * 60 * 60_000;
+export const DELIVERED_LIVE_MS = 3 * 24 * 60 * 60_000;
+/** Designs that moved closer together than this are not told apart by which came last. */
+export const REDO_APART_MS = 10 * 60_000;
+const deliveredWithin = (r: ChatRequestView, now: number, ms: number) =>
+  r.stage !== 'delivered' || now - Date.parse(r.activeAt) <= ms;
+
+/**
+ * Redo words applied to one design (ADR-200 addendum): a delivered design starts a new round of its
+ * own request, with the words as the change; one that waits for the requester's changes starts its
+ * round as any change does; anywhere else (being made, with the office, with a designer) the words
+ * are kept on it for the office. The words are named as the design's ("I'll redo …").
+ */
+function redoFor(request: ChatRequestView, words: string, resolves?: number): TurnPlan {
+  const r = resolves ? { resolves } : {};
+  if (request.stage === 'delivered') return { kind: 'redo', requestId: request.requestId, directive: words, ...r };
+  if (waitsForRequester(request)) return { kind: 'revise', requestId: request.requestId, directive: words, redo: true, ...r };
+  return { kind: 'note', note: 'change', requestId: request.requestId, words, redo: true, ...r };
+}
+
+/**
+ * Redo words are about the requester's most recent design: the one the message replies to, the one
+ * the words or a sure model reading name, else the one that moved last, when no other moved within
+ * `REDO_APART_MS` of it. Two close together: "Which one should I redo: A or B?". Words that may also
+ * be a new design: "Do you mean redo A, or a new design?". Null: no recent design to redo, or a reply
+ * to something else; the words are then read as before.
+ */
+function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) => boolean): TurnPlan | null {
+  const { reading, now } = input;
+  const recent = input.requests.filter((r) => CHANGEABLE.includes(r.stage) && mayAct(r) && deliveredWithin(r, now, REDO_WINDOW_MS));
+  const bound = recent.filter((r) => input.bound.includes(r.requestId));
+  if (input.bound.length && !bound.length) return null;
+  const orNew = reading.redo === 'or-new';
+  const askRedo = (among: ChatRequestView[], allowNew: boolean): TurnPlan => ({ kind: 'ask', intent: allowNew ? 'unclear' : 'change',
+    words, options: options(among), allowNew, redo: allowNew ? 'or-new' : 'redo' });
+  if (bound.length === 1) return orNew ? askRedo(bound, true) : redoFor(bound[0], words);
+  const pool = bound.length > 1 ? bound : recent;
+  if (!pool.length) return null;
+  // The intake router's pick (asked when the rules could not tell), when it is sure enough to start a round.
+  if (reading.source === 'model' && reading.requestId && (reading.confidence ?? 0) >= 0.85) {
+    const named = pool.find((r) => r.requestId === reading.requestId);
+    if (named) return redoFor(named, words);
+  }
+  const named = pool.length > 1 ? titleMatch(words, pool) : null;
+  if (named !== null) return orNew ? askRedo([pool[named]], true) : redoFor(pool[named], words);
+  const [latest, next] = [...pool].sort(byActivity);
+  const clear = !next || Date.parse(latest.activeAt) - Date.parse(next.activeAt) >= REDO_APART_MS;
+  const oldestFirst = [...pool].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (orNew) return askRedo(clear ? [latest] : oldestFirst, true);
+  return clear ? redoFor(latest, words) : askRedo(oldestFirst, false);
+}
+
 /** What to do with this message. Pure: the route records the plan once per update and carries it out. */
-export function planTurn(input: TurnInput): TurnPlan {
+export function planTurn(full: TurnInput): TurnPlan {
+  // Delivered designs older than DELIVERED_LIVE_MS concern redo words only (ADR-200 addendum).
+  const input: TurnInput = { ...full, requests: full.requests.filter((r) => deliveredWithin(r, full.now, DELIVERED_LIVE_MS)) };
   const { reading, requests } = input;
   // The words as sent (line breaks included): they become a brief, a directive or a note.
   const words = input.text.trim();
@@ -773,7 +943,8 @@ export function planTurn(input: TurnInput): TurnPlan {
     if (choice) {
       const ask = input.pendingAsk;
       if ('new' in choice) return { kind: 'open', text: ask.words, instructionOnly: opensForAPerson(ask.words), resolves: ask.updateId };
-      const chosen = requests.find((r) => r.requestId === ask.options[choice.option]?.requestId);
+      const among = !ask.photo && readIntentByRules(ask.words).redo ? full.requests : requests;
+      const chosen = among.find((r) => r.requestId === ask.options[choice.option]?.requestId);
       if (chosen && mayAct(chosen)) {
         const plan = answerPlan(ask, chosen);
         if (plan) return plan;
@@ -793,6 +964,13 @@ export function planTurn(input: TurnInput): TurnPlan {
   // office change it.
   if (input.group && input.bound.length && !ownBound && reading.intent !== 'new_brief') {
     return { kind: 'passive', reason: 'Words about another member\'s request' };
+  }
+
+  // ADR-200 addendum: redo words are about the requester's most recent design, delivered ones included
+  // (within REDO_WINDOW_MS). A reply to a bot message no request knows is read as before.
+  if (reading.redo && !input.foreignReply) {
+    const redo = planRedo(full, words, mayAct);
+    if (redo) return redo;
   }
 
   const changeable = requests.filter((r) => CHANGEABLE.includes(r.stage) && mayAct(r));
@@ -871,6 +1049,9 @@ export function planTurn(input: TurnInput): TurnPlan {
         if (input.bound.length || input.unboundReply) return { kind: 'reply', what: 'nothing-to-change', requestIds: [] };
         // "Not approved", "don't send it" with no design to place them on: the office hears them.
         if (reading.refusalOnly) return { kind: 'forward', words };
+        // ADR-200 addendum: "do a better design" with no recent design to redo asks for one: a designer
+        // takes it (named neutrally, intake's title rule), as it did before redo words were read.
+        if (reading.redo && asksForNewDesign(words)) return { kind: 'open', text: words, instructionOnly: true };
         const h = classifyWithHeuristics(words, false, false);
         if (h.kind === 'new_brief') return { kind: 'open', text: words, instructionOnly: true };
         // ADR-182: "can you make videos?" reads like a change but asks the office a question.
@@ -906,7 +1087,7 @@ export function shortTitle(value: string): string {
   // ADR-040 addendum (2026-10-01): a title stored before ADR-180 or ADR-142 is shown as a new one would
   // be: no direction mark ("KAAE: \u200FKAAE K-12…"), and no introducer line as the design's name.
   const name = withoutMarks(String(value || '').replace(/^[^:]{1,40}:\s*/, ''));
-  const t = name && !isIntroducerTitle(name) ? name : 'your design';
+  const t = name && !isIntroducerTitle(name) && !isNeutralRequestTitle(name) ? name : 'your design';
   return Array.from(t).length > 60 ? `${Array.from(t).slice(0, 59).join('')}…` : t;
 }
 
@@ -1003,6 +1184,11 @@ export function nothingToChangeText(lang: Lang): string {
 }
 
 export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang): string {
+  // ADR-200 addendum: a question about redo words names the designs and what would happen to them.
+  if (plan.redo === 'or-new' && plan.options.length === 1) return say(ROUTING_MESSAGES.askRedoOrNew, lang, { title: title(plan.options[0]) });
+  if (plan.redo === 'redo' && plan.options.length > 1) {
+    return say(ROUTING_MESSAGES.askWhichRedo, lang, { list: plan.options.map((o, i) => `${i + 1}. ${title(o)}`).join('\n') });
+  }
   if (plan.options.length === 1 && plan.allowNew) return say(ROUTING_MESSAGES.askChangeOrNew, lang, { title: title(plan.options[0]) });
   if (plan.options.length === 1) {
     return say(plan.intent === 'cancel' ? ROUTING_MESSAGES.askCancel : ROUTING_MESSAGES.askIsThisOne, lang, { title: title(plan.options[0]) });
@@ -1012,8 +1198,19 @@ export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang): s
   return say(ROUTING_MESSAGES.askWhichDesign, lang, { list: list.join('\n') });
 }
 
+/**
+ * ADR-200 addendum: the requester's answer to redo words, naming the design: a new round started
+ * (`started`), words added to a design still being made, or passed to the office.
+ */
+export function redoText(stage: string, requestTitle: string, lang: Lang, started = false): string {
+  const t = { title: title({ title: requestTitle }) };
+  if (started) return say(ROUTING_MESSAGES.redoStarted, lang, t);
+  return say(stage === 'designing' || stage === 'awaiting_answer' ? ROUTING_MESSAGES.redoWhileDesigning : ROUTING_MESSAGES.redoWithOffice, lang, t);
+}
+
 /** The requester's answer to a note kept on a request (a change or a cancel). */
-export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requestTitle: string, lang: Lang, held = false): string {
+export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requestTitle: string, lang: Lang, held = false, redo = false): string {
+  if (redo && note === 'change') return redoText(stage, requestTitle, lang);
   const t = { title: title({ title: requestTitle }) };
   if (note === 'cancel') return say(ROUTING_MESSAGES.cancelAsked, lang, t);
   if (note === 'hold') return say(held ? ROUTING_MESSAGES.holdConfirmed : ROUTING_MESSAGES.holdAsked, lang, t);

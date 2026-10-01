@@ -342,10 +342,12 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
       }
       // ADR-182: the requester's change started the next draft; they are told so, once, instead of
       // hearing nothing until the draft reaches the office.
+      // ADR-200 addendum: redo words are answered by Core's own line, naming the design ("I'll redo …").
       if (done.lifecycleAction === 'requester-revision' && done.chatId) {
         ctx.sendNotice({ v: 1, key: `chatinbox:change-taken:${update.update_id}`,
           chatId: done.chatId, kind: 'text', class: 'critical',
-          text: say(INBOX_MESSAGES.changeTaken, languageOf(update)),
+          text: done.chatAnswer?.text || say(INBOX_MESSAGES.changeTaken, languageOf(update)),
+          ...(done.chatAnswer?.text && done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}),
         });
       }
     }

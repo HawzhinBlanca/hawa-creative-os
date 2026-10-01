@@ -8,7 +8,8 @@ import { type RequestContext, type StudioOperation, SYSTEM_AUTOMATION_USER_ID } 
 import { requestOperatingSubject, type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
 import { globalFeedbackMiner } from '@hawa/creative';
-import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml } from '@hawa/integrations';
+import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml, neutralRequestTitle } from '@hawa/integrations';
+import { isWeakBriefLine } from './requester-turn.js';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
 import { autoDraftAllowedFor, clientPackOf, matchRequestClient, positiveClientWords } from './client-packs.js';
 import { defaultCanvasFor } from '@hawa/creative';
@@ -302,7 +303,13 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       copyCkb = undefined;
       // ADR-182: named by its own first line, as any brief is. "Directive (…)" reached the requester
       // ("A designer will make Directive (make me a nice poster…)").
-      title = titleFor(rawText.split('\n').map((line) => line.trim()).find(Boolean) ?? '');
+      // ADR-200 addendum (incident 2026-10-01): the first line that names a design; with none (redo or
+      // quality words, chat, a question: "do a better design thats similar to earlier ones"), a neutral
+      // name. The words stay the request's instructions either way.
+      const lines = rawText.split('\n').map((line) => line.trim()).filter(Boolean);
+      const named = lines.find((line) => !isWeakBriefLine(line));
+      const neutral = neutralRequestTitle(senderName);
+      title = named !== undefined || !lines.length ? titleFor(named ?? '') : isKaae ? `KAAE: ${neutral}` : neutral;
       // A directive stays RECEIVED, as the database records it; isInstructionOnly marks it. It was
       // CLARIFICATION_REQUIRED here, a word no other layer had, until the database row overwrote it.
     } else if (primaryLanguage === 'en') {

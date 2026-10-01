@@ -17,7 +17,7 @@ import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage, officeDayExhaustedNote } from './canva-status-message.js';
 import { canvaEditUrl, composeOfficeDraftAlert, findDraftImage } from './office-draft-alert.js';
 import { isIntroducerTitle, storedCopy, withoutMarks } from './draft-title.js';
-import { designName } from './requester-turn.js';
+import { REDO_WINDOW_DAYS, designName } from './requester-turn.js';
 import { namedOfficeReviewMode } from './google-oidc.js';
 import { lockNamedReviewAuthority } from './named-review-authority.js';
 import { initialManualOrigin } from './lifecycle-native-scope.js';
@@ -745,6 +745,13 @@ export interface RequesterRevisionWithIntakeProjection {
   expectedRev: number;
   rev: number;
   key: string;
+  /**
+   * ADR-200 addendum: the request was delivered within `REDO_WINDOW_DAYS` and the requester asked to
+   * redo it ("do a better design", "try again"): a new round of it, from its delivered task, with the
+   * words as the change. Only a request opened for an automatic design has a round to start; one a
+   * designer made by hand is refused (WRONG_STAGE) and the office redoes it.
+   */
+  reopenDelivered?: true;
 }
 
 export interface RequesterRevisionWithIntakeResult extends RequesterRevisionResult {
@@ -770,6 +777,11 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       !Number.isInteger(rev) || rev !== expectedRev + 1 ||
       !Number.isInteger(round) || round < 1 || typeof directive !== 'string' || !directive.trim()) {
     throw new LifecycleProjectionConflict('STALE_REVISION', 'Invalid revision pair or round for lifecycle requester revision with intake');
+  }
+  // A redo is words alone: no answer to a question, no photo, album or reviewed source.
+  if (input.reopenDelivered !== undefined && (input.reopenDelivered !== true || input.questionId !== undefined ||
+      input.lifecycleImage || input.lifecycleAlbum || input.lifecycleSource)) {
+    throw new LifecycleProjectionConflict('WRONG_STAGE', 'A delivered design is reopened by redo words alone');
   }
   if (!/^[a-f0-9]{64}$/.test(input.sourceUpdateHash)) {
     throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The Telegram source update hash is invalid');
@@ -830,8 +842,21 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision ${expectedRev}`);
     }
     const answering = input.questionId !== undefined;
-    if (request.owner !== 'restate' || request.stage !== (answering ? 'awaiting_answer' : 'manual')) {
+    const reopening = input.reopenDelivered === true;
+    if (request.owner !== 'restate' || request.stage !== (reopening ? 'delivered' : answering ? 'awaiting_answer' : 'manual')) {
       throw new LifecycleProjectionConflict('WRONG_STAGE', 'The request is not waiting for this kind of requester reply');
+    }
+    if (reopening) {
+      // RequestLifecycle starts a round only for a request opened for an automatic design (it has a
+      // design run); a recently delivered one. The rest are the office's to redo, by hand.
+      const opened = (await sql<{ automatic: boolean; recent: boolean }>`SELECT
+          coalesce((p.result->>'autoGenerate')::boolean, false) AS automatic,
+          r.updated_at > now() - make_interval(days => ${REDO_WINDOW_DAYS}::int) AS recent
+        FROM hawa.requests r LEFT JOIN hawa.lifecycle_projections p ON p.tenant_id = r.tenant_id
+          AND p.request_id = r.request_id AND p.rev = 1
+        WHERE r.tenant_id = ${tenantId}::uuid AND r.request_id = ${requestId}::uuid`.execute(trx)).rows[0];
+      if (!opened?.automatic) throw new LifecycleProjectionConflict('WRONG_STAGE', 'A design made by hand is redone by the office');
+      if (!opened.recent) throw new LifecycleProjectionConflict('WRONG_STAGE', 'The design was delivered too long ago to reopen');
     }
     if (request.current_task_id !== priorTaskId) {
       throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The directive names an older request task');

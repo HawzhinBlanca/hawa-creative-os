@@ -15,7 +15,7 @@ import { TelegramSenderApi } from './telegram-sender.js';
 import { DesignRunApi, type DesignRunInput } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
-import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
+import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -283,7 +283,9 @@ const invalid = (reason: string) => new restate.TerminalError(`LIFECYCLE_OPEN_RE
 function requesterOf(state: Pick<ManualLifecycleState, 'lang' | 'title'> & { designInput?: { rawText?: string } }):
   { lang: RequesterLang; title: string } {
   const lang = state.lang ?? requesterLang(state.designInput?.rawText, 'en');
-  const name = String(state.title || '').replace(/^[^:]{1,40}:\s*/, '').replace(/\s+/g, ' ').trim();
+  const named = String(state.title || '').replace(/^[^:]{1,40}:\s*/, '').replace(/\s+/g, ' ').trim();
+  // ADR-200 addendum: a request named neutrally ("New design request from Sewa") is "your design" to them.
+  const name = isNeutralRequestTitle(named) ? '' : named;
   const short = Array.from(name).length > 60 ? `${Array.from(name).slice(0, 59).join('')}…` : name;
   return { lang, title: short ? bold(short) : say(LIFECYCLE_MESSAGES.yourDesign, lang) };
 }
@@ -1075,7 +1077,11 @@ export async function recordRequesterDecision(
     return { accepted: true, requestId: prior.requestId, newTaskId: prior.revisionRound.newTaskId,
       runId: prior.revisionRound.runId, round: prior.revisionRound.round, rev: prior.rev, stage: 'designing' };
   }
-  if (prior.stage !== (event.questionId ? 'awaiting_answer' : 'manual')) {
+  // ADR-200 addendum: redo words about a design delivered recently ("do a better design") reopen it
+  // for a new round. Core admitted that round from the requester's own Telegram update (its receipt is
+  // checked below), only for a request with a design run, so a delivered request takes it the same way.
+  const reopening = prior.stage === 'delivered' && !event.questionId && /^chatinbox:revision:[1-9][0-9]*$/.test(event.eventId);
+  if (prior.stage !== (event.questionId ? 'awaiting_answer' : 'manual') && !reopening) {
     return { accepted: false, code: 'WRONG_STAGE' };
   }
   if (event.questionId && (!UUID.test(event.questionId) ||
@@ -1140,8 +1146,9 @@ export async function recordRequesterDecision(
     taskId: newTaskId, runId: newRunId, round: event.round, designInput: newDesignInput,
     revisionRound: { eventId: event.eventId, sha256: fingerprint, round: event.round,
       newTaskId, runId: newRunId },
-    // Clear prior-round transient fields so the next design-outcome projects cleanly.
-    outcome: undefined, officeRevision: undefined, question: undefined,
+    // Clear prior-round transient fields so the next design-outcome projects cleanly; a reopened
+    // design's finished delivery belongs to the round before (its next approval delivers anew).
+    outcome: undefined, officeRevision: undefined, question: undefined, delivery: undefined,
   };
   ctx.set('lc', next);
   ctx.startDesign(newDesignInput);

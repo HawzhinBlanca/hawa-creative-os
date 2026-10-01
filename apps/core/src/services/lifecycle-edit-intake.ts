@@ -115,7 +115,7 @@ export function createEditIntake(ctx: Pick<CoreContext, 'db'>) {
               AND source_event_id = ${String(original.updateId)}`.execute(trx)).rows[0]);
           return opened?.ambiguous ? noteBundle(original.updateId) : opened ? note(opened.request_id) : forward();
         }
-        if (typeof plan.requestId === 'string' && ['revise', 'note', 'tell'].includes(plan.kind)) return note(plan.requestId);
+        if (typeof plan.requestId === 'string' && ['revise', 'redo', 'note', 'tell'].includes(plan.kind)) return note(plan.requestId);
         // It opened nothing and changed nothing: read it again as it now reads.
         return words ? reread() : forward();
       }

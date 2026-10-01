@@ -66,6 +66,17 @@ export function bold(value: string): string {
   return `<b>${escapeHtml(value)}</b>`;
 }
 
+/**
+ * ADR-200 addendum: the name of a request opened from words that name no design ("do a better
+ * design", "make me a nice poster"), for the office: "New design request from Sewa". The requester
+ * hears "your design" in its place (`isNeutralRequestTitle`), never the sentence they sent.
+ */
+export function neutralRequestTitle(senderName: string | null | undefined): string {
+  const name = Array.from(String(senderName ?? '').replace(/\s+/g, ' ').trim()).slice(0, 60).join('');
+  return `New design request from ${name || 'a requester'}`;
+}
+export const isNeutralRequestTitle = (name: string | null | undefined) => /^New design request from\s/.test(String(name ?? '').trim());
+
 /** The whole catalogue, by section: the review list and the wording tests read it. */
 export const REQUESTER_CATALOGUE = {
   sources: SOURCE_MESSAGES,

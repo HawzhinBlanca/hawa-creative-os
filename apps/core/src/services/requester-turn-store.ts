@@ -9,9 +9,14 @@ import type { ChatRequestView, IntentReading, PendingAsk, TurnPlan } from './req
 
 const INTENT_ACCOUNT = 'lifecycle_chat_intent';
 
-/** A request of the chat that a message can still concern. */
+/**
+ * A request of the chat that a message can still concern. Delivered ones count for `deliveredDays`;
+ * the intake route reads seven days, because redo words still mean a design delivered that long ago
+ * and `planTurn` keeps the three days for everything else (ADR-200 addendum).
+ */
 export async function activeChatRequests(trx: Kysely<Database>, tenantId: string,
-  chatId: string): Promise<ChatRequestView[]> {
+  chatId: string, deliveredDays = 3): Promise<ChatRequestView[]> {
+  const days = Number.isInteger(deliveredDays) && deliveredDays >= 0 && deliveredDays <= 30 ? deliveredDays : 3;
   const rows = (await sql<{ request_id: string; rev: string | number; stage: string; current_task_id: string;
     client_id: string | null; title: string | null; created_at: Date | string; updated_at: Date | string;
     question: ChatRequestView['question']; requester_id: string | null; requester_hold:boolean }>`
@@ -44,9 +49,10 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
       LIMIT 1) opener ON true
     WHERE r.tenant_id = ${tenantId}::uuid AND r.chat_id = ${chatId} AND r.owner = 'restate'
       AND (r.stage IN ('designing', 'awaiting_answer', 'in_review', 'manual', 'approved', 'delivering')
-        OR (r.stage = 'delivered' AND r.updated_at > now() - interval '3 days'))
-    ORDER BY r.created_at, r.request_id
-    LIMIT 20`.execute(trx)).rows;
+        OR (r.stage = 'delivered' AND r.updated_at > now() - make_interval(days => ${days}::int)))
+    ORDER BY r.created_at DESC, r.request_id DESC
+    LIMIT 20`.execute(trx)).rows.reverse();
+  // The newest twenty, oldest first: a longer window must not push the latest design out.
   const iso = (v: Date | string) => new Date(v).toISOString();
   return rows.map((row) => ({
     requestId: row.request_id, stage: row.stage as ChatRequestView['stage'], rev: Number(row.rev),

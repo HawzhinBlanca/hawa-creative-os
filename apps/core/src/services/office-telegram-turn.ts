@@ -53,7 +53,7 @@ import { decideRequestOwned, startRequestOwnedDelivery, type OfficeActionAnswer 
 import type { DeliverableStore } from './pinned-deliverables.js';
 import { cleanDraftTitle } from './draft-title.js';
 import type { OfficeIntentModel, OfficeModelDecision, OfficeModelLine } from './office-intent-model.js';
-import { asksForNewDesign, corePhrase, parseChoice, readIntentByRules, readsAsChange, refusesApproval,
+import { REDO_WINDOW_DAYS, asksForNewDesign, corePhrase, parseChoice, readIntentByRules, readsAsChange, readsAsRedo, refusesApproval,
   saysMoreThanRefusal, titleMatch } from './requester-turn.js';
 
 const TURN_ACCOUNT = 'office_telegram_turn';
@@ -362,6 +362,13 @@ async function ownOpenRequests(trx: Kysely<Database>, tenantId: string, chatId: 
     AND stage IN ('designing', 'awaiting_answer', 'manual', 'approved', 'delivering') LIMIT 1`.execute(trx)).rows.length > 0;
 }
 
+/** ADR-200 addendum: whether this chat has a design of its own on the way or delivered in the last week. */
+async function ownRecentDesign(trx: Kysely<Database>, tenantId: string, chatId: string): Promise<boolean> {
+  return (await sql<{ one: number }>`SELECT 1 AS one FROM hawa.requests WHERE tenant_id = ${tenantId}::uuid
+    AND chat_id = ${chatId} AND owner = 'restate' AND (stage IN ('designing', 'awaiting_answer', 'manual', 'approved', 'delivering')
+      OR (stage = 'delivered' AND updated_at > now() - make_interval(days => ${REDO_WINDOW_DAYS}::int))) LIMIT 1`.execute(trx)).rows.length > 0;
+}
+
 /** A draft's name for the office, cleaned as it is read (draft-title.ts): old titles show as new ones. */
 const displayTitle = (value: string | null | undefined, copy?: unknown) => {
   const t = cleanDraftTitle(value, copy) || 'Untitled design';
@@ -667,6 +674,11 @@ async function planOf(trx: Kysely<Database>, tenantId: string, m: OfficeMessage,
   // a waiting draft with them (ADR-200).
   const own = await ownOpenRequests(trx, tenantId, m.chatId);
   if (!discussion && own && (reading.intent === 'change' || (reading.intent === 'reject' && reading.rejectionCategory === 'task'))) return null;
+  // ADR-200 addendum (incident 2026-10-01 12:33Z): redo words ("try again", "make another version")
+  // from a member who is also a requester, with a design of their own delivered in the last week, are
+  // about that design: intake redoes it. Words about a waiting draft reply to it or follow the bot's
+  // question about it.
+  if (!discussion && readsAsRedo(m.text) && await ownRecentDesign(trx, tenantId, m.chatId)) return null;
   const anchor = discussion ?? lastSentDraft(queue, now)?.requestId ?? null;
   const reference = referencedDraft(m.text, queue, anchor, lastList(turns, now));
   const fallback = rulesPlan(reading, m.text, queue, own, discussion, reference, now);

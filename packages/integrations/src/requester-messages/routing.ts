@@ -108,6 +108,15 @@ export const ROUTING_MESSAGES = {
     en: 'Which design is this for?\n{list}\n\nAnswer with the number or the name.',
     ckb: 'ئەمە بۆ کام دیزاینە؟\n{list}\n\nبە ژمارە یان ناو وەڵام بدەرەوە.',
   },
+  // ADR-200 addendum: redo words ("do a better design", "try again") about the requester's latest designs.
+  askRedoOrNew: {
+    en: 'Do you mean redo {title}, or a new design?',
+    ckb: 'مەبەستت ئەوەیە {title} دووبارە بکەمەوە، یان دیزاینێکی نوێ؟',
+  },
+  askWhichRedo: {
+    en: 'Which one should I redo?\n{list}',
+    ckb: 'کامیان دووبارە بکەمەوە؟\n{list}',
+  },
   /** The last line of the "which design?" list when the message may be a new brief. */
   aNewDesign: {
     en: 'A new design',
@@ -157,6 +166,19 @@ export const ROUTING_MESSAGES = {
    * ADR-156: "send it again", "it didn't arrive", "as a PDF", "to my email", "higher resolution": the
    * office has the request about the files (nothing is sent or approved by itself).
    */
+  // ADR-200 addendum: what the requester hears when redo words reach a design.
+  redoStarted: {
+    en: "I'll redo {title} — the new version follows what you said, and the office checks it before it comes to you.",
+    ckb: '{title} دووبارە دەکەمەوە — وەشانە نوێیەکە بەپێی قسەکانت دەبێت، و ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات.',
+  },
+  redoWhileDesigning: {
+    en: "I'll redo {title} — it is still being made, so I've added what you said; the office sees it before the design comes to you.",
+    ckb: '{title} دووبارە دەکەمەوە — هێشتا دروست دەکرێت، بۆیە قسەکانتم بۆ زیاد کرد؛ ئۆفیسەکە پێش ئەوەی دیزاینەکە بۆت بێت دەیبینێت.',
+  },
+  redoWithOffice: {
+    en: "I'll redo {title} — I've passed what you said to the office, so the new version follows it.",
+    ckb: '{title} دووبارە دەکەمەوە — قسەکانتم گەیاندە ئۆفیسەکە، بۆیە وەشانە نوێیەکە بەپێی ئەوە دەبێت.',
+  },
   deliveryRequestPassed: {
     en: "Got it. I've passed your request about {title} to the office; they'll follow up here.",
     ckb: 'تێگەیشتم. داواکارییەکەتم سەبارەت بە {title} گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',

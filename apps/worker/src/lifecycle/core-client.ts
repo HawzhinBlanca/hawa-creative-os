@@ -200,7 +200,11 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
               ...(body.chatId ? { chatId: body.chatId } : {}),
               ...(body.lifecycleAction === 'requester-answer' && body.questionId
                 ? { questionId: body.questionId } : {}),
-              ...(body.rawText !== undefined ? { rawText: body.rawText } : {}) };
+              ...(body.rawText !== undefined ? { rawText: body.rawText } : {}),
+              // ADR-200 addendum: Core's own answer to redo words ("I'll redo …").
+              ...(body.chatAnswer && typeof body.chatAnswer.text === 'string' && body.chatAnswer.text &&
+                body.chatAnswer.text.length <= 4000 ? { chatAnswer: { text: body.chatAnswer.text,
+                  ...(body.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) } } : {}) };
           }
           if (body.lifecycleAction === 'late-change') {
             const alert = body.officeAlert;

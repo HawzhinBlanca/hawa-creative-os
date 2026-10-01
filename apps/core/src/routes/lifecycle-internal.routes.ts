@@ -60,7 +60,7 @@ import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.j
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
   type IntentReceipt } from '../services/requester-turn-store.js';
 import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
-  opensForAPerson, readIntentByRules, readsAsBriefContinuation, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
+  opensForAPerson, readIntentByRules, readsAsBriefContinuation, redoText, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
   tellText, thanksText, waitsForRequester,
   withoutBotMentions, type ChatRequestView, type IntentReading, type TurnPlan } from '../services/requester-turn.js';
 import { briefPartSeconds, briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
@@ -1001,9 +1001,16 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 ...(stored.deliverableCount ? {deliverableCount:stored.deliverableCount} : {}) });
             };
 
-            /** A round on a request that waits for the requester: their change, or their answer. */
-            const reviseRequest = async (openRequest: Pick<WaitingLifecycleRequest, 'request_id' | 'rev' | 'stage' |
-              'current_task_id' | 'client_id' | 'question'>, words: string): Promise<Response> => {
+            /**
+             * A round on a request that waits for the requester: their change, or their answer. ADR-200
+             * addendum: `reopen`, a new round of a design delivered recently, asked for with redo words
+             * (text only: a photo kept from before stays for words that name it); `answer`, what the
+             * requester hears when the round starts ("I'll redo …"), in place of the usual line.
+             */
+            const reviseRequest = async (openRequest: Omit<Pick<WaitingLifecycleRequest, 'request_id' | 'rev' | 'stage' |
+              'current_task_id' | 'client_id' | 'question'>, 'stage'> & { stage: WaitingLifecycleRequest['stage'] | 'delivered' },
+            words: string, opts: { reopen?: true; answer?: string } = {}): Promise<Response> => {
+              if (Boolean(opts.reopen) !== (openRequest.stage === 'delivered')) throw new LifecycleProjectionConflict('WRONG_STAGE', 'Only redo words reopen a delivered design');
               if (openRequest.stage === 'awaiting_answer' &&
                   (!openRequest.question || !UUID.test(openRequest.question.id))) {
                 return await refuseWithReceipt('QUESTION_MISSING');
@@ -1019,7 +1026,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               let lifecycleImage = priorRevisionPhoto?.image ?? boundPhoto;
               // ADR-145: a photo its sender sent with no words just before this change goes with it.
               const scope = senderScopeOf(update);
-              const heldPhoto = !photoInput && !lifecycleImage && !admittedAlbum && scope && !openRequest.question
+              const heldPhoto = !photoInput && !lifecycleImage && !admittedAlbum && scope && !openRequest.question && !opts.reopen
                 ? (await withRlsContext(db, system, async (trx) => outsideBursts(trx, TENANT, await waitingPhotos(trx, TENANT, scope)))).at(-1) ?? null : null;
               if (heldPhoto) {
                 const stored = await withRlsContext(db, system, async (trx) => {
@@ -1062,6 +1069,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 ...(admittedAlbum ? { lifecycleAlbum: admittedAlbum.ref } : {}),
                 clientId: openRequest.client_id,
                 ...(questionId ? { questionId } : {}),
+                ...(opts.reopen ? { reopenDelivered: true as const } : {}),
                 expectedRev, rev: nextRev, key,
               });
               await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
@@ -1071,6 +1079,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 round: projected.round, directive: projected.directive,
                 priorTaskId: openRequest.current_task_id, rawText: words, chatId,
                 ...(questionId ? { questionId } : {}),
+                ...(opts.answer ? { chatAnswer: { text: opts.answer, parseMode: 'HTML' } } : {}),
               });
             };
 
@@ -1113,7 +1122,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               const addressed = !group || mediaKind === 'album' || Boolean(boundPhoto) || message.reply_to_message?.from?.is_bot === true ||
                 mentionsBot || text.startsWith('/');
               const { requests, bindings, opening } = await withRlsContext(db, system, async (trx) => ({
-                requests: await activeChatRequests(trx, TENANT, chatId),
+                // Seven days of delivered designs: redo words may mean one (ADR-200 addendum); planTurn
+                // keeps three days for everything else.
+                requests: await activeChatRequests(trx, TENANT, chatId, 7),
                 bindings: replyMessageId ? await replyBindings(trx, TENANT, chatId, replyMessageId)
                   : { requestIds: [] as string[], askUpdateId: null as number | null },
                 opening: priorIntent ? [] : await openingChatRequests(trx, TENANT, chatId),
@@ -1136,9 +1147,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               } else {
                 // A photo with no words, sent as a reply, is material for a design (ADR-156): it is read as
                 // a change to the design the reply points at (or the only one), never as a new request.
+                // Words sent with a photo or an album carry new material: they are never redo words
+                // (ADR-200 addendum), and are read as before.
                 reading = photoWithoutWords
                   ? { intent: 'change', reason: 'A photo sent as a reply, with no words', source: 'rules' }
-                  : readIntentByRules(text);
+                  : readIntentByRules(text, { redo: !mediaKind });
                 // A follow-up that could concern a request whose open is still in flight waits for it
                 // (ChatInbox tries again in 2 s): read now, it would miss that request (F4).
                 if (opening.length && !['acknowledgement', 'conversation'].includes(reading.intent) &&
@@ -1161,7 +1174,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   const modelReading = await intentModel.read({ tenantId: TENANT, updateId: update.update_id, chatId,
                     text, requests: candidates, lang });
                   if (modelReading) {
-                    reading = { ...modelReading, instructionOnly: reading.instructionOnly, substantial: reading.substantial };
+                    // ADR-200 addendum: redo words the router reads as a change redo the design it names.
+                    reading = { ...modelReading, instructionOnly: reading.instructionOnly, substantial: reading.substantial,
+                      ...(reading.redo && modelReading.intent === 'change' ? { redo: reading.redo } : {}) };
                     plan = planTurn({ ...input, reading, pendingAsk: null });
                   }
                 }
@@ -1211,7 +1226,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               };
               const chatAnswer = (words: string, extra: Record<string, unknown> = {}) =>
                 ({ lifecycleAction: 'chat-answer', chatId, chatAnswer: { text: words, parseMode: 'HTML' }, intent: reading.intent, ...extra });
-              if (!priorIntent && (plan.kind === 'open' || plan.kind === 'revise' || plan.kind === 'conversation')) {
+              if (!priorIntent && (plan.kind === 'open' || plan.kind === 'revise' || plan.kind === 'redo' || plan.kind === 'conversation')) {
                 // The side effect has its own receipt; this one keeps the reading for the next replay.
                 const stored = await withRlsContext(db, system, (trx) => recordIntentReceipt(trx, TENANT, receipt()));
                 if (stored.payloadHash !== payloadHash || stored.chatId !== chatId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
@@ -1223,13 +1238,14 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                */
               const replan = async (why: string): Promise<Response> => {
                 log.warn(`[core:internal] update ${update.update_id}: the planned round could not start (${why}); reading the chat again`);
-                const fresh = await withRlsContext(db, system, (trx) => activeChatRequests(trx, TENANT, chatId));
-                const again = planTurn({ text: plan.kind === 'revise' ? plan.directive : text, reading, requests: fresh,
+                const fresh = await withRlsContext(db, system, (trx) => activeChatRequests(trx, TENANT, chatId, 7));
+                const words = plan.kind === 'revise' || plan.kind === 'redo' ? plan.directive : text;
+                const again = planTurn({ text: words, reading, requests: fresh,
                   bound: bindings.requestIds, unboundReply: false, senderId, officeIds: ctx.telegramAllowedUsers, group,
                   addressed: true, pendingAsk: null, now: Date.now() });
                 // Only a plan about the same words on a current design: never a new request, never chat.
-                const safe = again.kind === 'note' || again.kind === 'ask' || again.kind === 'tell' || again.kind === 'revise';
-                return carryOut(safe ? again : { kind: 'forward', words: plan.kind === 'revise' ? plan.directive : text }, fresh, true);
+                const safe = again.kind === 'note' || again.kind === 'ask' || again.kind === 'tell' || again.kind === 'revise' || again.kind === 'redo';
+                return carryOut(safe ? again : { kind: 'forward', words }, fresh, true);
               };
               const carryOut = async (plan: TurnPlan, requests: ChatRequestView[], retried = false): Promise<Response> => {
               const byId = (id: string) => byRequest(requests, id);
@@ -1251,10 +1267,34 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   try {
                     return await reviseRequest({ request_id: target.requestId, rev: target.rev,
                       stage: target.stage as WaitingLifecycleRequest['stage'], current_task_id: target.currentTaskId,
-                      client_id: target.clientId, question: target.question }, plan.directive);
+                      client_id: target.clientId, question: target.question }, plan.directive,
+                    plan.redo ? { answer: redoText(target.stage, target.title, lang, true) } : {});
                   } catch (err) {
                     if (!(err instanceof LifecycleProjectionConflict) || !['STALE_REVISION', 'WRONG_STAGE', 'NOT_CURRENT_DRAFT'].includes(err.code)) throw err;
                     return retried ? carryOut({ kind: 'forward', words: plan.directive }, requests, true) : replan(err.code);
+                  }
+                }
+                case 'redo': {
+                  // ADR-200 addendum: redo words about a design delivered recently start a new round of its
+                  // request, with the words as the change ("I'll redo …").
+                  const target = byId(plan.requestId);
+                  const asNote: TurnPlan = { kind: 'note', note: 'change', requestId: plan.requestId, words: plan.directive, redo: true,
+                    ...(plan.resolves ? { resolves: plan.resolves } : {}) };
+                  if (!target || target.stage !== 'delivered') {
+                    return retried || !target ? carryOut(target ? asNote : { kind: 'forward', words: plan.directive }, requests, true)
+                      : replan('STALE_REVISION');
+                  }
+                  try {
+                    return await reviseRequest({ request_id: target.requestId, rev: target.rev, stage: 'delivered',
+                      current_task_id: target.currentTaskId, client_id: target.clientId, question: null }, plan.directive,
+                    { reopen: true, answer: redoText('delivered', target.title, lang, true) });
+                  } catch (err) {
+                    if (!(err instanceof LifecycleProjectionConflict)) throw err;
+                    // A design a designer made by hand, or one whose brief cannot be found: the office redoes
+                    // it, with the words kept on it. The day's allowance used up is told as any change's is.
+                    if (['WRONG_STAGE', 'PARENT_BRIEF_MISSING'].includes(err.code)) return carryOut(asNote, requests, retried);
+                    if (!['STALE_REVISION', 'NOT_CURRENT_DRAFT'].includes(err.code)) throw err;
+                    return retried ? carryOut(asNote, requests, true) : replan(err.code);
                   }
                 }
                 case 'conversation':
@@ -1359,7 +1399,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     const held = plan.note === 'hold' && await pauseRequesterDesign(trx,TENANT,
                       {requestId:target.requestId,taskId:target.currentTaskId,requestRev:target.rev,requestStage:target.stage,text:words},update.update_id);
                     const said = photoWithoutWords && material ? say(MEDIA_MESSAGES.photoPassed, lang, { title })
-                      : noteText(plan.note, target.stage, target.title, lang, held);
+                      : noteText(plan.note, target.stage, target.title, lang, held, plan.redo === true);
                     const late: LateRequesterChange = { requestId: target.requestId, taskId: target.currentTaskId,
                       requestRev: target.rev, requestStage: target.stage as LateChangeStage, text: words,
                       kind: plan.note, ...(plan.note === 'hold' ? {held} : {}), title: shortTitle(target.title), answer: said };
