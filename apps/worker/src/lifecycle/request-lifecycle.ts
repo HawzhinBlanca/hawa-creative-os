@@ -119,6 +119,8 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
     kind?: 'revise' | 'approve' | 'reject' };
   /** Filled when the requester submits a revision directive after the office marks "revise". */
   revisionRound?: { eventId: string; sha256: string; round: number; newTaskId: string; runId: string };
+  /** ADR-230 addendum: the design-finished event whose outcome started a round for pending changes. */
+  pendingRoundFrom?: string;
   /** The office's latest retry of a design that ended without a draft (ADR-142). */
   officeRetry?: { eventId: string; sha256: string; actionId: string; attempt: number; runId: string; rev: number };
   delivery?: { startEventId: string; startSha256: string; actionId: string; input: DeliveryInput;
@@ -555,8 +557,12 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
       typeof event.round !== 'number' || !Number.isInteger(event.round) || event.round < 0 ||
       !event.report || typeof event.report.status !== 'string') throw invalid('invalid design finish identity');
   const prior = await ctx.get('lc');
+  // ADR-230 addendum: after a pending-change round started, the run that finished is no longer the
+  // object's, but a replay of its finish still gets the same outcome (resent under the same keys).
+  const pendingReplay = Boolean(prior && 'runId' in prior && prior.pendingRoundFrom === event.eventId &&
+    prior.outcome?.eventId === event.eventId);
   if (!prior || !('runId' in prior) || prior.requestId !== event.requestId ||
-      prior.taskId !== event.taskId || prior.runId !== event.runId) return { ignored: true as const };
+      ((prior.taskId !== event.taskId || prior.runId !== event.runId) && !pendingReplay)) return { ignored: true as const };
   const fingerprint = hashOf(event);
   const nextRev = prior.rev + 1;
   // Replay detection: if the outcome for this event was already stored (crash after set, before send),
@@ -566,6 +572,8 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
       throw invalid('the design outcome was already recorded with different content');
     }
     sendDesignOutcome(ctx, prior);
+    // ADR-230 addendum: the round for the requester's pending changes; its workflow key makes it once.
+    if (prior.pendingRoundFrom === event.eventId && prior.stage === 'designing') ctx.startDesign(prior.designInput);
     return { ignored: false as const, stage: prior.stage, rev: prior.rev };
   }
 
@@ -582,8 +590,9 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
   }
   if (prior.stage !== 'designing') throw invalid('request is not designing');
   const project = () => core.post<{
-    v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer';
+    v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer' | 'designing';
     status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
+    pendingRound?: { newTaskId: string; runId: string; round: number; directive: string; updateIds: string[] };
     question?: { id: string; text: string; options: string[] };
     officeAlert?: { chatId: string; text: string };
     officeAlerts?: Array<{ chatId: string; text: string }>;
@@ -616,13 +625,18 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
   }
   if (projected?.v !== 1 || projected.requestId !== event.requestId ||
       projected.taskId !== event.taskId || projected.rev !== nextRev ||
-      !['in_review', 'manual', 'awaiting_answer'].includes(projected.stage) ||
+      !['in_review', 'manual', 'awaiting_answer', 'designing'].includes(projected.stage) ||
+      // ADR-230 addendum: `designing` only with the round Core started for the requester's pending changes.
+      ((projected.stage === 'designing') !== Boolean(projected.pendingRound)) ||
+      (projected.pendingRound && (!UUID.test(projected.pendingRound.newTaskId) || projected.pendingRound.newTaskId === event.taskId ||
+        projected.pendingRound.runId !== `dr-${projected.pendingRound.newTaskId}` || !Number.isInteger(projected.pendingRound.round) ||
+        projected.pendingRound.round < 1 || typeof projected.pendingRound.directive !== 'string' || !projected.pendingRound.directive.trim())) ||
       (projected.stage === 'awaiting_answer' &&
         (!projected.question || !UUID.test(projected.question.id) ||
          typeof projected.question.text !== 'string' || !Array.isArray(projected.question.options)))) {
     throw new Error('Core did not return a valid design outcome projection');
   }
-  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: nextRev,
+  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: nextRev, pendingRoundFrom: undefined,
     question: projected.question ? { ...projected.question, taskId: event.taskId, rev: nextRev } : undefined,
     outcome: { eventId: event.eventId, sha256: fingerprint, status: projected.status,
       ...(projected.revisionId ? { revisionId: projected.revisionId } : {}),
@@ -632,6 +646,21 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
       ...photoAlertsOf(projected.officePhotoAlerts),
     },
   };
+  if (projected.pendingRound) {
+    // ADR-230 addendum (L8): the draft finished before the requester's changes; Core started the next
+    // round with them. The outcome's message tells the requester; the new run starts here.
+    const round = projected.pendingRound;
+    const designInput: DesignRunInput = { ...prior.designInput, rawText: round.directive,
+      lifecycle: { requestId: prior.requestId, round: round.round, runId: round.runId },
+      taskId: round.newTaskId, idempotencyKey: `lifecycle:${prior.requestId}:${round.newTaskId}` };
+    delete designInput.redriveAttempt;
+    const folded: AutomaticLifecycleState = { ...next, taskId: round.newTaskId, runId: round.runId, round: round.round,
+      designInput, pendingRoundFrom: event.eventId, officeRetry: undefined, revisionRound: undefined };
+    ctx.set('lc', folded);
+    sendDesignOutcome(ctx, folded);
+    ctx.startDesign(designInput);
+    return { ignored: false as const, stage: folded.stage, rev: folded.rev };
+  }
   ctx.set('lc', next);
   sendDesignOutcome(ctx, next);
   return { ignored: false as const, stage: next.stage, rev: next.rev };
@@ -1381,7 +1410,8 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             set: (name, value) => ctx.set(name, value),
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
               .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
-            startDesign: () => { throw new Error('designFinished cannot start a new run'); },
+            // ADR-230 addendum: only the round Core started for the requester's pending changes.
+            startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
           }, core, event)),
       ),
       questionSent: restate.handlers.object.exclusive(

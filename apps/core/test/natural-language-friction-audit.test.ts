@@ -294,9 +294,10 @@ describe('F10: status questions and cancellations while a design is being made',
     const chat = chatId();
     await seedRequest(chat, 'designing', 2);
     const answer = await intake(app(), message(chat, { text: 'cancel that' }));
-    const texts = saidTo(chat, sent, answer.body);
-    // Today: nothing about cancelling; the design keeps running (legacy answers a greeting or nothing).
-    expect(texts).toMatch(/cancel|stop/i);
+    // ADR-230 (changed deliberately): the cancel withdraws the request. Intake decides it; RequestLifecycle
+    // closes the request and says "Cancelled …" (request-withdraw.test.ts), so Core itself says nothing here.
+    expect(answer.body).toMatchObject({ lifecycleAction: 'withdraw', intent: 'cancel' });
+    expect(saidTo(chat, sent, answer.body)).not.toMatch(/hello|what would you like/i);
   });
 });
 

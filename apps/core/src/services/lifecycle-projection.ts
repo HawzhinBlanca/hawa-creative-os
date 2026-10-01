@@ -25,6 +25,7 @@ import { anchoredDecisionFor, lockBriefAnchor } from './lifecycle-brief-anchor.j
 import { earlyHoldsFor } from './early-requester-hold.js';
 import { pauseRequesterDesign } from './requester-hold.js';
 import { officeChatsFor } from './office-chats.js';
+import { startPendingChangeRound, type PendingRound } from './lifecycle-pending-round.js';
 
 /** First projection of a request; later transitions must advance the same revision ledger. */
 export interface OpenLifecycleProjection {
@@ -388,7 +389,7 @@ export interface DesignOutcomeProjection {
 }
 
 export interface DesignOutcomeResult {
-  requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer';
+  requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer' | 'designing';
   status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
   question?: { id: string; text: string; options: string[] };
   officeAlert?: { chatId: string; text: string };
@@ -403,6 +404,11 @@ export interface DesignOutcomeResult {
    * picture; a worker from before this field sends `officeAlerts`.
    */
   officePhotoAlerts?: Array<{ chatId: string; text: string; image: DraftImageRef }>;
+  /**
+   * ADR-230 addendum: the requester's changes kept while this draft was being made started the next round
+   * (stage `designing` on `pendingRound.newTaskId`); the draft is not reviewed and the office is not told.
+   */
+  pendingRound?: PendingRound;
 }
 
 /**
@@ -548,8 +554,18 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
         (report.code === 'OFFICE_DAY_EXHAUSTED' ? officeDayExhaustedNote() : '') +
         (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '');
     }
-    const officeAlerts = officeChats.map((chatId) => ({ chatId, text: officeText }));
-    const officePhotoAlerts = draftImage ? officeChats.map((chatId) => ({ chatId, text: photoCaption ?? officeText, image: draftImage! })) : [];
+    // ADR-230 addendum (L8): changes the requester sent while this draft was being made start the next
+    // round now, with the draft superseded; if no round can start, the office hears them with the draft.
+    const pending = hasDraft ? await startPendingChangeRound(trx, { tenantId, requestId, taskId, chatId: request.chat_id,
+      clientId: task.client_id, expectedRev, rev, title: requestTitle, lang, officeTold: officeChats.length > 0, actionKey: key }) : null;
+    if (pending && !pending.started) {
+      officeText = `${officeText}\n\n${pending.officeNote}`;
+      // A caption is at most 1024 characters: past that, the alert goes as text, with every word.
+      photoCaption = `${photoCaption ?? officeText}\n\n${pending.officeNote}`;
+      if (photoCaption.length > 1000) draftImage = undefined;
+    }
+    const officeAlerts = pending?.started ? [] : officeChats.map((chatId) => ({ chatId, text: officeText }));
+    const officePhotoAlerts = draftImage && !pending?.started ? officeChats.map((chatId) => ({ chatId, text: photoCaption ?? officeText, image: draftImage! })) : [];
     // #14 (ADR-145): the question in plain words, answered with a number or in the requester's own words.
     const questionText = question
       ? say(LIFECYCLE_MESSAGES.oneQuestion, lang, {
@@ -558,8 +574,9 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
         options: question.options.map((option, index) => `${index + 1}. ${escapeTelegramHtml(option)}`).join('\n'),
       })
       : undefined;
-    const messageText = questionText || composed?.text;
-    const result: DesignOutcomeResult = { requestId, taskId, rev, stage, status,
+    const messageText = pending ? pending.requesterText : questionText || composed?.text;
+    const result: DesignOutcomeResult = { requestId, taskId, rev, stage: pending?.started ? 'designing' : stage, status,
+      ...(pending?.started ? { pendingRound: pending.round } : {}),
       ...(revisionId ? { revisionId } : {}),
       ...(question ? { question } : {}),
       ...(messageText ? { message: { text: messageText, parseMode: 'HTML' as const } } : {}),
