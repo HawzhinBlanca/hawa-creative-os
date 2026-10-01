@@ -333,6 +333,15 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
         newTaskId: done.newTaskId,
         ...(done.questionId ? { questionId: done.questionId } : {}),
         ...(done.rawText !== undefined ? { rawText: done.rawText as string } : {}),
+        // ADR-182: the requester's change started the next draft; they are told so, once. ADR-200
+        // addendum: redo words are answered by Core's own line, naming the design ("I'll redo …").
+        // ADR-233: said by the round's DesignRun once Core admits the design, not here: a round refused at
+        // admission ("a designer will make this change by hand") was announced a second before (L13).
+        ...(done.lifecycleAction === 'requester-revision' && done.chatId ? { startNotice: {
+          key: `chatinbox:change-taken:${update.update_id}`, chatId: done.chatId,
+          text: done.chatAnswer?.text || say(INBOX_MESSAGES.changeTaken, languageOf(update)),
+          ...(done.chatAnswer?.text && done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}),
+        } } : {}),
       };
       // Keep the Restate context alive until the send is durably recorded. A failed import or send
       // retries this handler from its journaled Core answer under the same event key.
@@ -342,16 +351,6 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
           chatId: done.chatId, kind: 'text', class: 'critical',
           // Sorani (native review pending, ADR-144): "Thanks, I'll use that and carry on with the same design."
           text: say(INBOX_MESSAGES.answerTaken, languageOf(update)),
-        });
-      }
-      // ADR-182: the requester's change started the next draft; they are told so, once, instead of
-      // hearing nothing until the draft reaches the office.
-      // ADR-200 addendum: redo words are answered by Core's own line, naming the design ("I'll redo …").
-      if (done.lifecycleAction === 'requester-revision' && done.chatId) {
-        ctx.sendNotice({ v: 1, key: `chatinbox:change-taken:${update.update_id}`,
-          chatId: done.chatId, kind: 'text', class: 'critical',
-          text: done.chatAnswer?.text || say(INBOX_MESSAGES.changeTaken, languageOf(update)),
-          ...(done.chatAnswer?.text && done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}),
         });
       }
     }

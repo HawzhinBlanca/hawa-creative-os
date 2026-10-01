@@ -56,7 +56,10 @@ describe('a change sent while the design is being made (ADR-230 addendum, L8)', 
     expect(designs[1].taskId).not.toBe(firstTask);
     expect(await requestRow(requestId)).toMatchObject({ stage: 'designing', rev: '2', current_task_id: designs[1].taskId });
     expect(await taskOf(firstTask)).toMatchObject({ state: 'revision_requested' });
-    expect((await taskOf(designs[1].taskId)).options).toMatchObject({ parentTaskId: firstTask, revisionRound: 1, revisionDirective: LIVE_WORDS });
+    // ADR-233: a fresh round (a new design of the request), never a native edit of the unreviewed draft.
+    expect((await taskOf(designs[1].taskId)).options).toMatchObject({ revisionRound: 1,
+      freshFrom: { parentTaskId: firstTask, kind: 'pending_changes', directive: LIVE_WORDS } });
+    expect((await taskOf(designs[1].taskId)).options).not.toHaveProperty('parentTaskId');
     // The stale draft went to nobody in the office; the change is no longer waiting to be read.
     for (const member of office) expect(h.alertFor(member, requestId)).toBeUndefined();
     expect(await pending(requestId)).toHaveLength(0);

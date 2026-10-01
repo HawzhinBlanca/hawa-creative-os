@@ -91,7 +91,8 @@ export function savedDesignCopy(payload:any,description:string):{copy:string[];i
 function savedDesignCopyAsSent(payload:any,description:string):{copy:string[];instructions:string} {
   const p=payload?.payload||payload||{},body=p.body||p;
   const raw:string=typeof p.rawRequestText==='string'?p.rawRequestText:description;
-  const divider=raw?.match(/\n\s*[_\-=*]{3,}\s*\n/);
+  // ADR-233: a fresh round's words are art direction; its copy is the request's, never read from them.
+  const divider=p.studioOptions?.freshFrom?null:raw?.match(/\n\s*[_\-=*]{3,}\s*\n/);
   if(divider?.index!==undefined){
     let instructions=raw.slice(0,divider.index).trim();
     const explicit=String(p.designInstructions||body.designInstructions||'').trim();

@@ -12,7 +12,7 @@ import { log, withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, outcomeReportCore, type CoreInternal } from './delivery.js';
 import { officeAlertKey, officeChatIdsFromEnv } from './office-chats.js';
 import { TelegramSenderApi } from './telegram-sender.js';
-import { DesignRunApi, type DesignRunInput } from './design-run.js';
+import { DesignRunApi, validStartNotice, type DesignRunInput, type DesignStartNotice } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
 import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, requesterTitleName, say, type Phrase, type RequesterLang } from '@hawa/integrations';
@@ -122,7 +122,9 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
   /** ADR-230 addendum: the design-finished event whose outcome started a round for pending changes. */
   pendingRoundFrom?: string;
   /** The office's latest retry of a design that ended without a draft (ADR-142). */
-  officeRetry?: { eventId: string; sha256: string; actionId: string; attempt: number; runId: string; rev: number };
+  officeRetry?: { eventId: string; sha256: string; actionId: string; attempt: number; runId: string; rev: number;
+    /** ADR-233: the retry designed a fresh successor of a refused redo or pending-changes round. */
+    freshTaskId?: string };
   delivery?: { startEventId: string; startSha256: string; actionId: string; input: DeliveryInput;
     finishEventId?: string; finishSha256?: string; finishResult?: DeliveryFinishedReply;
     /** ADR-230: a chat-only delivery finished before it closed its request, closed by the repair. */
@@ -173,7 +175,7 @@ export interface OfficeRetryEvent {
 
 export type OfficeRetryReply =
   | { accepted: true; requestId: string; taskId: string; actionId: string; runId: string; attempt: number;
-      stage: 'designing'; rev: number }
+      stage: 'designing'; rev: number; freshTaskId?: string }
   | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
 
 /** The roles Core's projection admits for a retry (lifecycle-office-retry.ts OFFICE_RETRY_ROLES). */
@@ -205,6 +207,12 @@ export interface RequesterDecisionEvent {
   rawText?: string;
   /** Present only when answering the current verified Studio clarification question. */
   questionId?: string;
+  /**
+   * ADR-233: what the requester hears once the round's design has started (Core's "I'll redo …", or
+   * "I'm making those changes now"). ChatInbox no longer sends it at once: the DesignRun sends it when
+   * Core admits the run, so a round refused at admission is answered once, by its outcome.
+   */
+  startNotice?: DesignStartNotice;
 }
 
 export type RequesterDecisionReply =
@@ -653,7 +661,15 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
       lifecycle: { requestId: prior.requestId, round: round.round, runId: round.runId },
       taskId: round.newTaskId, idempotencyKey: `lifecycle:${prior.requestId}:${round.newTaskId}` };
     delete designInput.redriveAttempt;
-    const folded: AutomaticLifecycleState = { ...next, taskId: round.newTaskId, runId: round.runId, round: round.round,
+    delete designInput.startNotice;
+    // ADR-233: "I'm now adding what you asked …" is said once the new round's design has started (its
+    // DesignRun sends it when Core admits the run), under the key the outcome message would have used.
+    const startMessage = next.outcome?.message;
+    if (startMessage) designInput.startNotice = { key: `${prior.requestId}:${nextRev}:design-outcome`, chatId: prior.chatId,
+      text: startMessage.text, parseMode: startMessage.parseMode };
+    const outcome = next.outcome ? { ...next.outcome } : undefined;
+    if (outcome) delete outcome.message;
+    const folded: AutomaticLifecycleState = { ...next, outcome, taskId: round.newTaskId, runId: round.runId, round: round.round,
       designInput, pendingRoundFrom: event.eventId, officeRetry: undefined, revisionRound: undefined };
     ctx.set('lc', folded);
     sendDesignOutcome(ctx, folded);
@@ -1021,8 +1037,9 @@ export async function recordOfficeRetry(ctx: AutomaticOpenContext, core: CoreInt
     if (prior.officeRetry.sha256 !== sha256) throw invalid('this office retry was recorded with different content');
     // A worker can stop after saving state and before the run started; the workflow key makes it once.
     if (prior.stage === 'designing' && prior.runId === prior.officeRetry.runId) ctx.startDesign(prior.designInput);
-    return { accepted: true, requestId: prior.requestId, taskId: prior.taskId, actionId: event.actionId,
-      runId: prior.officeRetry.runId, attempt: prior.officeRetry.attempt, stage: 'designing', rev: prior.officeRetry.rev };
+    return { accepted: true, requestId: prior.requestId, taskId: event.taskId, actionId: event.actionId,
+      runId: prior.officeRetry.runId, attempt: prior.officeRetry.attempt, stage: 'designing', rev: prior.officeRetry.rev,
+      ...(prior.officeRetry.freshTaskId ? { freshTaskId: prior.officeRetry.freshTaskId } : {}) };
   }
   if (prior.stage !== 'manual' || prior.rev !== event.expectedRev || prior.officeRevision || prior.question ||
       !prior.outcome || prior.outcome.revisionId) return { accepted: false, code: 'WRONG_STAGE' };
@@ -1030,7 +1047,7 @@ export async function recordOfficeRetry(ctx: AutomaticOpenContext, core: CoreInt
   const nextRev = prior.rev + 1;
   const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
     v: 1; requestId: string; taskId: string; actionId: string; rev: number; stage: 'designing';
-    runId: string; attempt: number; taskState: string;
+    runId: string; attempt: number; taskState: string; freshTaskId?: string;
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/office-retry`, {
     v: 1, expectedRev: prior.rev, rev: nextRev,
     key: `${event.requestId}:${nextRev}:officeRetry:${event.eventId}`,
@@ -1040,19 +1057,30 @@ export async function recordOfficeRetry(ctx: AutomaticOpenContext, core: CoreInt
   if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
       projected.actionId !== event.actionId || projected.rev !== nextRev || projected.stage !== 'designing' ||
       !Number.isInteger(projected.attempt) || projected.attempt < 1 ||
-      projected.runId !== `dr-${event.taskId}-a${projected.attempt}`) {
+      (projected.freshTaskId === undefined
+        ? projected.runId !== `dr-${event.taskId}-a${projected.attempt}`
+        : !UUID.test(projected.freshTaskId) || projected.freshTaskId === event.taskId || projected.runId !== `dr-${projected.freshTaskId}`)) {
     throw new Error('Core did not return a valid office retry projection');
   }
-  const designInput: DesignRunInput = { ...prior.designInput,
-    lifecycle: { ...prior.designInput.lifecycle, runId: projected.runId }, redriveAttempt: projected.attempt };
+  // ADR-233: a redo or pending-changes round refused as a native revision is retried as a fresh successor
+  // task, designed under its own first run (`dr-<task>`); any other task is designed again as it is.
+  const fresh = projected.freshTaskId;
+  const designInput: DesignRunInput = fresh
+    ? { ...prior.designInput, taskId: fresh, idempotencyKey: `lifecycle:${prior.requestId}:${fresh}`,
+      lifecycle: { ...prior.designInput.lifecycle, runId: projected.runId } }
+    : { ...prior.designInput, lifecycle: { ...prior.designInput.lifecycle, runId: projected.runId }, redriveAttempt: projected.attempt };
+  if (fresh) delete designInput.redriveAttempt;
+  // ADR-142: the retry tells the requester nothing; a round's start notice is not said again.
+  delete designInput.startNotice;
   const next: AutomaticLifecycleState = { ...prior, stage: 'designing', rev: nextRev, runId: projected.runId, designInput,
+    ...(fresh ? { taskId: fresh } : {}),
     outcome: undefined, question: undefined,
     officeRetry: { eventId: event.eventId, sha256, actionId: event.actionId, attempt: projected.attempt,
-      runId: projected.runId, rev: nextRev } };
+      runId: projected.runId, rev: nextRev, ...(fresh ? { freshTaskId: fresh } : {}) } };
   ctx.set('lc', next);
   ctx.startDesign(designInput);
   return { accepted: true, requestId: event.requestId, taskId: event.taskId, actionId: event.actionId,
-    runId: projected.runId, attempt: projected.attempt, stage: 'designing', rev: nextRev };
+    runId: projected.runId, attempt: projected.attempt, stage: 'designing', rev: nextRev, ...(fresh ? { freshTaskId: fresh } : {}) };
 }
 
 function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
@@ -1118,6 +1146,9 @@ export async function recordRequesterDecision(
   const fingerprint = hashOf(event);
   const prior = await ctx.get('lc');
   if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (event.startNotice !== undefined && !validStartNotice(event.startNotice, prior.chatId)) {
+    throw invalid('the requester decision carries an invalid start notice');
+  }
   // Idempotent replay: already in designing for this round.
   if (prior.revisionRound?.eventId === event.eventId) {
     if (prior.revisionRound.sha256 !== fingerprint) throw invalid('requester decision replayed with different content');
@@ -1194,6 +1225,10 @@ export async function recordRequesterDecision(
     taskId: newTaskId,
     idempotencyKey: `lifecycle:${prior.requestId}:${newTaskId}`,
   };
+  // ADR-233: the round's own start notice, sent by its DesignRun once Core admits it; never an earlier round's.
+  delete newDesignInput.startNotice;
+  delete newDesignInput.redriveAttempt;
+  if (event.startNotice) newDesignInput.startNotice = event.startNotice;
   const next: AutomaticLifecycleState = { ...prior, stage: 'designing', rev: nextRev,
     taskId: newTaskId, runId: newRunId, round: event.round, designInput: newDesignInput,
     revisionRound: { eventId: event.eventId, sha256: fingerprint, round: event.round,

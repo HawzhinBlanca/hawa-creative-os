@@ -369,18 +369,22 @@ describe('the Core client ChatInbox uses', () => {
     const c = client(async () => Response.json(answer));
     const ctx = new FakeContext();
     await handleUpdate(ctx, input, c);
-    expect(ctx.lifecycleDecisions).toMatchObject([{ requestId: 'req-x', event: { round: 1, newTaskId: 'task-new' } }]);
-    expect(ctx.notices).toMatchObject([{ key: `chatinbox:change-taken:${update.update_id}`, chatId: '555', class: 'critical',
-      text: expect.stringContaining("I'm making those changes") }]);
-    // A replay of the same update sends the same key: TelegramSender sends it once.
+    // ADR-233: ChatInbox no longer says it at once. The words go with the round to RequestLifecycle, and
+    // its DesignRun sends them once Core admits the design: a round refused at admission is answered
+    // only by its outcome (L13: "I'll redo" and "a designer will make this change by hand" a second apart).
+    expect(ctx.notices).toEqual([]);
+    expect(ctx.lifecycleDecisions).toMatchObject([{ requestId: 'req-x', event: { round: 1, newTaskId: 'task-new',
+      startNotice: { key: `chatinbox:change-taken:${update.update_id}`, chatId: '555', text: expect.stringContaining("I'm making those changes") } } }]);
+    // A replay of the same update gives the same notice key: TelegramSender sends it once.
     await handleUpdate(ctx, input, c);
-    expect(new Set((ctx.notices as Array<{ key: string }>).map((n) => n.key))).toEqual(new Set([`chatinbox:change-taken:${update.update_id}`]));
+    expect(new Set((ctx.lifecycleDecisions as Array<{ event: { startNotice: { key: string } } }>).map((d) => d.event.startNotice.key)))
+      .toEqual(new Set([`chatinbox:change-taken:${update.update_id}`]));
     // In Sorani, in Sorani ("make the logo bigger").
     const sorani = { v: 1 as const, update: { ...update, update_id: update.update_id + 7,
       message: { ...(update as any).message, text: 'لۆگۆکە گەورەتر بکە' } } };
     const ckb = new FakeContext();
     await handleUpdate(ckb, sorani, c);
-    expect(ckb.notices).toMatchObject([{ text: expect.stringContaining('گۆڕانکارییانە') }]);
+    expect(ckb.lifecycleDecisions).toMatchObject([{ event: { startNotice: { text: expect.stringContaining('گۆڕانکارییانە') } } }]);
   });
 
   it('a Core that does not answer at all waits; one that answers too slowly is a retryable answer', async () => {

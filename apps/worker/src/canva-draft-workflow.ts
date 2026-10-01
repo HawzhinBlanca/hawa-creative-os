@@ -10,6 +10,8 @@ export interface LifecycleOutcomeReporter {
   runId: string;
   report(outcome: { status: string; designId?: string; code?: string; runId?: string;
     parity?: string; parityError?: string; detail?: string; notifyRequester?: boolean }): void;
+  /** ADR-233: Core admitted the design (its Studio run or plan exists); called once, before any outcome. */
+  started?(): void;
 }
 
 /**
@@ -524,6 +526,7 @@ export async function runCanvaDraft(
       return await handleBoundaryError(error, 'DESIGN_REJECTED');
     }
     if (isCoreBusy(result)) return endBusy(result, 'studio');
+    lifecycle?.started?.();
     let idlePolls = 0;
     let waitedMs = 0;
     let stuckStage: string | undefined;
@@ -581,6 +584,7 @@ export async function runCanvaDraft(
       return await handleBoundaryError(error, 'DESIGN_REJECTED');
     }
     if (isCoreBusy(result)) return endBusy(result, 'planning');
+    lifecycle?.started?.();
     for (let n = 0; n < 30 && ['planning', 'submitted', 'creating'].includes(result.status); n++) {
       if (ctx.sleep) await ctx.sleep(2000);
       const planId: string = result.planId;

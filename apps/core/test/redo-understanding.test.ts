@@ -227,8 +227,10 @@ describe('a delivered design reopened by redo words (Core projection)', () => {
     expect(row).toEqual({ stage: 'designing', rev: '7', current_task_id: result.newTaskId });
     const created = (await sql<{ payload: Record<string, any> }>`SELECT payload FROM hawa.outbox_commands
       WHERE aggregate_id = ${result.newTaskId}::uuid AND command_type = 'task.created'`.execute(owner)).rows[0];
-    // "Similar to the earlier ones" goes to the design engine as the words were sent.
-    expect(created.payload.studioOptions).toMatchObject({ parentTaskId: r.taskId, revisionDirective: INCIDENT });
+    // "Similar to the earlier ones" goes to the design engine as the words were sent. ADR-233: as a fresh
+    // round's art direction (a new design of the request), not as a native edit of the delivered design.
+    expect(created.payload.studioOptions).toMatchObject({ freshFrom: { parentTaskId: r.taskId, kind: 'redo', directive: INCIDENT } });
+    expect(created.payload.studioOptions).not.toHaveProperty('parentTaskId');
   });
 
   it('never reopens a design made by hand, one delivered too long ago, or a delivered one without redo words', async () => {
