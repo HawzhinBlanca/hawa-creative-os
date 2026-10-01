@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { createDb, withRlsContext } from '@hawa/db';
+import { randomUUID } from 'node:crypto';
+import { approvedRefinementPair } from './fixtures/approved-refinement-pair.js';
+import { memoryExportStore } from './pinned-exports-fixture.js';
 
 describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollback Lifecycle', () => {
   const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
-  const app = createAppWithClientFixtures({ db });
+  const exports=memoryExportStore();
+  const app = createAppWithClientFixtures({ db, deliverableStore:exports.store });
 
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
   const drusteeClientId = 'c1000000-0000-4000-8000-000000000003';
@@ -39,31 +43,9 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
   });
 
   it('1. Ingests designer artboard refinements and synthesizes candidate rules with SHA-256 evidence', async () => {
-    const taskId = `t-learn-${Date.now()}`;
-    const initialArtboard = {
-      taskId,
-      clientId: drusteeClientId,
-      layers: [
-        { id: 'l1', type: 'text', text: 'Drustee Product', color: '#000000', fontSize: 24, lineHeight: 1.2, x: 50, y: 50, width: 300, height: 50 },
-      ],
-    };
-    const finalArtboard = {
-      taskId,
-      clientId: drusteeClientId,
-      layers: [
-        { id: 'l1', type: 'text', text: 'دروستی - ڤیتامین کواڵێتی باڵا', color: '#01585F', fontSize: 32, lineHeight: 1.48, x: 50, y: 120, width: 400, height: 60 },
-      ],
-    };
-
+    const pair=await approvedRefinementPair(app,authHeaders,drusteeClientId,exports);
     const mineRes = await app.request('/v1/feedback/mine', {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({
-        clientId: drusteeClientId,
-        taskId,
-        initialArtboard,
-        finalArtboard,
-      }),
+      method:'POST',headers:{...authHeaders,'Idempotency-Key':randomUUID()},body:JSON.stringify(pair),
     });
 
     expect(mineRes.status).toBe(201);

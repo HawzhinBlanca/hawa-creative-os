@@ -6,6 +6,7 @@ export * from './comfy-sandbox.js';
 export * from './brand-kits.js';
 export * from './vector-compositor.js';
 export * from './feedback-miner.js';
+export * from './refinement-evidence.js';
 export * from './kaae-graphics-learning.js';
 export * from './templates/index.js';
 export * from './holdout-copy-auditor.js';

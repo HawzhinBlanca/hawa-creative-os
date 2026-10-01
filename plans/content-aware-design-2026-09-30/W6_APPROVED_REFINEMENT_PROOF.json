@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-01",
+  "status": "CONNECTED_ENGINEERING_QUALIFIED_EXACT_FULL_GATE_PENDING",
+  "decision": "ADR192",
+  "requirements": [
+    "FR-022",
+    "FR-052",
+    "FR-053",
+    "FR-054",
+    "NFR-006",
+    "NFR-012"
+  ],
+  "initialDomainRegression": {
+    "passed": 1,
+    "failed": 7
+  },
+  "qualificationHistory": [
+    "Stale compiled DB repository ignored new action ID; rebuilt @hawa/db before source qualification. Initial connected53pass/8fail retained.",
+    "Rebuilt60pass/1fail exposed fake task ID fixture; removed invented task for explicit instruction.",
+    "Authority62pass/2fail exposed hidden taskless audits and test DDL on restricted role; added scoped migration074 and test-owner DDL only.",
+    "Scoped66pass/1fail exposed prior no-DNA promotion falsely returning success; require DNA and use explicit test fixture.",
+    "Strict source/type runs retained optional role and Hono return type errors, then explicit new test types; no exclusions or weakened acceptance."
+  ],
+  "connected": {
+    "files": 7,
+    "passed": 69,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typecheck": {
+    "status": "PASS",
+    "roots": 662
+  },
+  "lint": "PASS;939 any;10 existing egress exceptions",
+  "behavior": [
+    "HTTP derives edit evidence from actual authorized stored ordered revisions, current approved source, matching latest decision and current passed QA; supplied artboards refuse.",
+    "Immutable action-key feedback persists before projection; exact retry reconciles, changed identity refuses.",
+    "Distinct tasks count once regardless of layers or new events; full-content copy keys avoid prefix collisions; text-only source invents no geometry.",
+    "Only verified approved source supplies positive design examples. Explicit owner instructions do not impersonate design approval.",
+    "Observed changes remain scoped review candidates without invented script/platform/40px claims.",
+    "Full candidate/source lineage saved in append-only promotion audit atomically with DNA; process state activates after commit.",
+    "Scoped client-wide audit reads and writer/actor checks; client lock plus authoritative DNA read and expected revision preserve different concurrent promotions and reconcile prior promotion after subsequent versions.",
+    "Actual injected audit failure rolls back DNA and local activation; foreign tenant/non-member and forged actor refuse."
+  ],
+  "limits": [
+    "Candidate queue/event projection remains process-local; durable rebuild and revision-level polarity are not complete.",
+    "Confidence is a heuristic, not calibrated probability or proof of design taste.",
+    "Known manifest properties only; text-only captures cannot establish native style fidelity.",
+    "Explicit instructions remain manually governed; historical promotions are not retroactively attributed or automatically trained.",
+    "Synthetic export store and office fixtures; actual HTTP, approval, QA and PostgreSQL boundaries, not real native/Canva or human quality admission.",
+    "Broader W5 optimizer/tints/cache identity, W6 held-out taste, real native/human/Canva/recovery/whole-product gates remain open."
+  ],
+  "deployed": false,
+  "providerCalls": 0,
+  "sources": {
+    "adrs/192_approved_revision_learning_and_independent_task_evidence.md": "bb31e7fd17e1be5d1b241099e1ee51b9ea9ca2d5688d9341b5411675f3b71289",
+    "apps/core/src/services/approved-refinement-learning.ts": "6f1d6474d42364fa1a5ef0e80eb76119294a36da63a267d05de382d3a72ba6b0",
+    "apps/core/src/routes/client-learning.routes.ts": "14d512edfc6d0df23bc8cdbdeae2a9b795bf6ffb876f1b7ed764aa0e70764014",
+    "packages/creative/src/refinement-evidence.ts": "81d0745749182fb77a93c4f66fb6ca923d569d344dbb498e129151c68d36af63",
+    "packages/creative/src/feedback-miner.ts": "7d210e238ff99f821c821870be3de9fb8192b230f2410e19289b8760384a2a72",
+    "packages/db/src/repositories/feedback.repository.ts": "dd9e4c9c322653eb65a1cb1a5920374f751ee7bca536d5bcab2d50a660f0a334",
+    "packages/db/migrations/074_client_rule_promotion_audits.sql": "321a067f9fb20e5492fc1e46a73235bc71ddfcb2d40f55b1385080c9745366bd",
+    "packages/creative/test/refinement-learning.test.ts": "32c233957530266f309afb40d818116d58c24ca5e3526d216ca819421e5420c0",
+    "apps/core/test/approved-refinement-learning.test.ts": "b3b6cb5237ad72e0de6ac9336fd51741e77be838c77e1a7660e0eef48f49e1f9",
+    "apps/core/test/fixtures/approved-refinement-pair.ts": "464c828b8631a273fe709ce28b20349610531700b546ab449bb4737246c10ac4",
+    "apps/core/test/governed-learning-dna-lifecycle.test.ts": "22ee540633c620cb552825519206f830982161d65d64e304560658e4d226ed25",
+    "apps/core/test/governed-learning-cv18.test.ts": "0c9e8698989bd6e73390b7c57cbb2040ffcc444bedfc5cda1727764e692d6f28",
+    "apps/core/test/core.test.ts": "d3975c6301feefeda65cebc66789624b3fdaf129e683825340f252b26bddb836",
+    "packages/db/test/schema-upgrade.test.ts": "fcda06aa8a0fa8349f031f8cadcac9ecb171171a9cc535fd178d4f31b6c00f1c"
+  },
+  "logs": {
+    "/tmp/hawa-approved-learning-authority-build-20261001.log": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586",
+    "/tmp/hawa-approved-learning-build-20261001.log": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586",
+    "/tmp/hawa-approved-learning-connected-authority-20261001.log": "dc3bb2154a12314aa5445f2bb296971cf2bb70248aeb27863146e7188934d06b",
+    "/tmp/hawa-approved-learning-connected-final-20261001.log": "1f39abf0a7def5f4c416fe54d6ca3d29a56f6cfa1d0237e12e2ca1745e5efd6f",
+    "/tmp/hawa-approved-learning-connected-first-20261001.log": "d2a83ab6b0e30306716cff6347b6ef6cd0663c5951799a99b7a9477db8613df8",
+    "/tmp/hawa-approved-learning-connected-qualified-20261001.log": "0d84053c71cc5f2574677c1c856cb841accb912ea347005eef2dd8f26a742a13",
+    "/tmp/hawa-approved-learning-connected-rebuilt-20261001.log": "da60576f5b28c67c4a5ba0eed2fd47884f690a4f7bf971d247743fe82178e418",
+    "/tmp/hawa-approved-learning-connected-scoped-20261001.log": "cf008e75718dcd6f5c80fb9de3b7ae81488c65e0694f13cf75686e827fbd8406",
+    "/tmp/hawa-approved-learning-current-build-20261001.log": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586",
+    "/tmp/hawa-approved-learning-db-build-20261001.log": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454",
+    "/tmp/hawa-approved-learning-final-build-20261001.log": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586",
+    "/tmp/hawa-approved-learning-first-20261001.log": "e508a8a07779d885c6743401a57bc9c129e334f633f399b872ac480efd5df5ba",
+    "/tmp/hawa-approved-learning-lint-20261001.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
+    "/tmp/hawa-approved-learning-types-final-20261001.log": "2bd27ebc9d578073a5c838d8b0c0c2be8e3cc5c366f66a85c80df74a62b964e7",
+    "/tmp/hawa-approved-learning-types-first-20261001.log": "e92e45abaf70880127344611ff75ea2e5fbace31d63c0246dec113794378f655",
+    "/tmp/hawa-approved-learning-types-qualified-20261001.log": "932cb07afd52a07d2e4e2383c6a964b3548ee80df76d68ef3660338cf4c4cf72",
+    "/tmp/hawa-approved-learning-types-scoped-20261001.log": "90629de885ce3797a8533fc577e8009c03789bdf8e387b9271b0b38be1e6fe45",
+    "/tmp/hawa-refinement-learning-red-20261001.log": "90a01bafd358b4b4f17ed87e78156876ce818abcf02cf9b5d6ce6f47749ac034"
+  },
+  "liveInfrastructure": {
+    "observedAt": "2026-10-01T03:01:09.138Z",
+    "liveRelease": "2c4d61ec",
+    "threeRequestedRepairs": "PASS",
+    "source": "service-boundary-repair/output/repairs/2026-10-01-service-boundary-confirmation/LIVE_READBACK_030109Z.json"
+  }
+}

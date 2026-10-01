@@ -1,14 +1,16 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { withRlsContext } from '@hawa/db';
-import { globalFeedbackMiner } from '@hawa/creative';
+import { withRlsContext, sql } from '@hawa/db';
+import { globalFeedbackMiner, type CandidateRuleProposal } from '@hawa/creative';
 import { KAAE_CLIENT_ID } from '@hawa/integrations';
 import type { ClientDnaSnapshot, RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { computeDnaHash } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { findClientRowId } from '../services/client-row.js';
+import { approvedRefinementRequest, recordApprovedRefinement } from '../services/approved-refinement-learning.js';
+import { CanvaFlowError } from '../services/canva-connect-service.js';
 
 /**
  * What the office learns about a client: generation budgets, candidate rules mined from feedback and
@@ -44,14 +46,27 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
 
   // --- Governed Learning & Studio Feedback Loop Miner (B-055, B-056, B-057) ---
   registerRoute('post', '/feedback/mine', async (c: any) => {
-    const body = await c.req.json().catch(() => ({}));
-    const { clientId, taskId, initialArtboard, finalArtboard } = body;
-    if (!clientId || !taskId || !initialArtboard || !finalArtboard) {
-      return c.json({ error: 'Missing required parameters (clientId, taskId, initialArtboard, finalArtboard)' }, 400);
+    const auth=verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.tenantId || !auth.userId) return problem(c,401,'Unauthorized','An office reviewer is required.');
+    if (!['administrator','art_director','creative_director','operator','designer'].includes(auth.role || '')) {
+      return problem(c,403,'Forbidden','This role cannot record design learning.');
     }
-    const proposed = globalFeedbackMiner.ingestTaskRefinements(clientId, taskId, initialArtboard, finalArtboard);
-    broadcast('feedback:rules_mined', { clientId, taskId, count: proposed.length });
-    return c.json({ proposedRules: proposed, count: proposed.length }, 201);
+    if (!db) return problem(c,503,'Database Unavailable','Learning evidence is only held in PostgreSQL.');
+    const body = await c.req.json().catch(() => ({}));
+    const parsed=approvedRefinementRequest.safeParse(body),actionId=c.req.header('Idempotency-Key');
+    if (!parsed.success || !actionId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actionId)) {
+      return problem(c,422,'Approved Revision Pair Required','Provide task/client/before/after revision UUIDs and a UUID action key. Supplied artboards are not learning evidence.');
+    }
+    try {
+      const saved=await recordApprovedRefinement(db,{tenantId:auth.tenantId,actorId:auth.userId,role:auth.role!},actionId,parsed.data);
+      const proposed=globalFeedbackMiner.ingestTaskRefinements(saved.evidence.clientId,saved.evidence.taskId,saved.initial,saved.final,saved.evidence);
+      broadcast('feedback:rules_mined',{clientId:saved.evidence.clientId,taskId:saved.evidence.taskId,count:proposed.length});
+      return c.json({proposedRules:proposed,count:proposed.length,feedbackId:actionId,replayed:saved.replayed},saved.replayed ? 200 : 201);
+    } catch (error) {
+      if (error instanceof CanvaFlowError) return problem(c,error.status,error.code,error.message);
+      log.error('[learning:refinement] durable evidence/projection failed');
+      return problem(c,503,'Learning Evidence Unavailable','The edit evidence could not be admitted; retry the same action key.');
+    }
   });
 
   registerRoute('get', '/clients/:clientId/candidate-rules', (c: any) => {
@@ -111,7 +126,7 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
 
     const priorStatus = existingRule.status;
     const promoteRole = (effectiveRole === 'administrator' ? 'creative_director' : effectiveRole) as 'art_director' | 'creative_director';
-    const result = globalFeedbackMiner.promoteRule(ruleId, promoteRole);
+    const result = globalFeedbackMiner.prepareRulePromotion(ruleId, promoteRole);
     if (!result.promoted) {
       if (result.reason === 'CONFLICTING_RULES_PENDING') {
         return problem(c, 409, 'Conflict', 'Candidate rule has unresolved conflicts with existing guidelines and remains pending');
@@ -121,8 +136,9 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
 
     // Attach to active client DNA and commit immutable snapshot
     const currentDna = await resolveClientDna(clientId, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role });
+    if (db && !currentDna) return problem(c,409,'Client DNA Required','Save the client DNA before promoting a rule.');
     if (currentDna && result.rule) {
-      const candidateDna = structuredClone(currentDna);
+      let candidateDna = structuredClone(currentDna);
       if (!candidateDna.guidelines) {
         candidateDna.guidelines = { voiceAndTone: '', prohibitedPhrases: [], requiredDisclaimers: [], layoutRules: [] };
       }
@@ -149,8 +165,29 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
       };
 
       if (db && clientRepo && targetId) {
+        let replayedPromotion:{proposal:CandidateRuleProposal;auditHash:string}|undefined;
         try {
           await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
+            await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`client-rule-promotion:${tenantId}:${targetId}`},0))`.execute(trx);
+            // Another rule may have committed while this request waited for the lock.
+            // Read authoritative DNA on this connection before composing the new version.
+            const active=await clientRepo.findActiveDna(tenantId,targetId,trx);
+            const baseDna=active ? (typeof active.dna==='string' ? JSON.parse(active.dna) : active.dna) as typeof currentDna : currentDna;
+            candidateDna=structuredClone(baseDna);
+            const replay=(await sql<{data:{proposal:CandidateRuleProposal;activation:{auditHash:string}}}>`
+              SELECT a.data FROM hawa.audit_events a JOIN hawa.client_dna_versions d
+                ON d.id=(a.data->>'dnaVersionId')::uuid AND d.tenant_id=a.tenant_id AND d.client_id=a.client_id
+              WHERE a.tenant_id=${tenantId}::uuid AND a.client_id=${targetId}::uuid AND a.resource_id=${ruleId}
+                AND a.action='client_rule.promoted'
+              ORDER BY a.occurred_at DESC LIMIT 1`.execute(trx)).rows[0];
+            if (replay && candidateDna.guidelines?.layoutRules?.includes(replay.data.proposal.ruleText)) {
+              replayedPromotion={proposal:replay.data.proposal,auditHash:replay.data.activation.auditHash};return;
+            }
+            candidateDna.guidelines ||= {voiceAndTone:'',prohibitedPhrases:[],requiredDisclaimers:[],layoutRules:[]};
+            candidateDna.guidelines.layoutRules ||= [];
+            if (!candidateDna.guidelines.layoutRules.includes(result.rule!.ruleText)) candidateDna.guidelines.layoutRules.push(result.rule!.ruleText);
+            candidateDna.version=(active?.version ?? candidateDna.version ?? 1)+1;
+            candidateDna.updatedAt=new Date().toISOString();
             let maxDbVer = 0;
             const existingSnaps = await clientRepo.listDnaSnapshots(tenantId, targetId, trx);
             if (existingSnaps && existingSnaps.length > 0) {
@@ -158,20 +195,33 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
             }
             if (maxDbVer >= candidateDna.version) {
               candidateDna.version = maxDbVer + 1;
-              hash = computeDnaHash(candidateDna);
-              snap.version = candidateDna.version;
-              snap.sha256 = hash;
-              snap.dna = structuredClone(candidateDna);
             }
-            await clientRepo.saveDnaVersion({
+            hash=computeDnaHash(candidateDna);
+            snap.version=candidateDna.version;snap.sha256=hash;snap.dna=structuredClone(candidateDna);
+            const dnaVersion=await clientRepo.saveDnaVersion({
               tenantId,
               clientId: targetId,
               version: candidateDna.version,
               dna: { ...candidateDna, __commitMessage: snap.commitMessage, __createdBy: snap.createdBy },
               contentHash: hash,
               createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
+              approvedBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
+              expectedVersion: active?.version ?? 0,
             }, trx);
+            // This immutable audit is part of the same commit as the active DNA version.
+            const rule=result.rule!;
+            const evidence={schemaVersion:1,dnaVersionId:dnaVersion.id,dnaVersion:dnaVersion.version,
+              proposal:structuredClone(rule),activation:{actorId:auth.userId,role:auth.role,auditHash:result.auditHash}};
+            await sql`INSERT INTO hawa.audit_events(tenant_id,actor_type,actor_id,action,resource_type,resource_id,client_id,
+              before_hash,after_hash,data) VALUES(${tenantId}::uuid,'user',${auth.userId || null},'client_rule.promoted',
+              'candidate_rule',${rule.id},${targetId}::uuid,${computeDnaHash(baseDna)},${hash},${JSON.stringify(evidence)}::jsonb)`.execute(trx);
+
           });
+          if (replayedPromotion) {
+            const replay={promoted:true,rule:replayedPromotion.proposal,auditHash:replayedPromotion.auditHash,replayed:true};
+            globalFeedbackMiner.commitRulePromotion(replay);
+            return c.json(replay,200);
+          }
         } catch (err: any) {
           globalFeedbackMiner.restoreRuleStatus(ruleId, priorStatus);
           return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist candidate rule promotion to database');
@@ -215,6 +265,7 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
       }
     }
 
+    globalFeedbackMiner.commitRulePromotion(result);
     broadcast('dna:rule_promoted', { clientId, ruleId, auditHash: result.auditHash });
     return c.json(result, 200);
   });
@@ -344,13 +395,26 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to propose candidate rules');
     }
-    const clientId = c.req.param('clientId');
+    let clientId = c.req.param('clientId');
     const body = await c.req.json().catch(() => ({}));
     const { taskId, title, category, ruleText, rationale, existingRules, prohibitedPhrases } = body;
-    if (!taskId || !title || !category || !ruleText) {
-      return c.json({ error: 'Missing required parameters (taskId, title, category, ruleText)' }, 400);
+    if (!title || !category || !ruleText) {
+      return c.json({ error: 'Missing required parameters (title, category, ruleText)' }, 400);
     }
-    const actor = { id: auth.userId || 'operator_1', role: auth.role || 'operator', name: 'Desk Operator' };
+    if (db && clientRepo) {
+      const tenantId=auth.tenantId;
+      if (!tenantId || !auth.userId) return problem(c,401,'Unauthorized','An office actor is required.');
+      const targetId=await findClientRowId(db,clientRepo,{tenantId,userId:auth.userId,role:auth.role || 'operator'},clientId);
+      if (!targetId) return problem(c,404,'Client Not Found','No authorized client is available.');
+      if (taskId) {
+        if (typeof taskId!=='string' || !/^[0-9a-f-]{36}$/i.test(taskId)) return problem(c,422,'Invalid Task','Use a stored task UUID or omit taskId for an owner instruction.');
+        const task=await withRlsContext(db,{tenantId,userId:auth.userId,role:auth.role},trx=>trx.selectFrom('tasks')
+          .select('client_id').where('id','=',taskId).where('tenant_id','=',tenantId).executeTakeFirst());
+        if (!task || task.client_id!==targetId) return problem(c,409,'Instruction Task Conflict','This task does not belong to the instruction client.');
+      }
+      clientId=targetId;
+    }
+    const actor = { id: auth.userId || auth.actorId || '', role: auth.role };
     const proposal = globalFeedbackMiner.proposeExplicitRule({
       clientId,
       taskId,

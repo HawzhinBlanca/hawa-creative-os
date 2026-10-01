@@ -613,7 +613,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(cmpData.invariantCompliance.invariant4_reference_pixels_never_ship).toBe('VERIFIED_VECTOR_SANDBOX');
   });
 
-  it('inspects Kurdish WebFont coverage, tracks AI budgets, mines feedback deltas, and provides client-scoped omnisearch', async () => {
+  it('inspects WebFont coverage, retires fixture budgets, reviews owner instructions, and provides client-scoped omnisearch', async () => {
     // 1. Font Inspection Endpoint
     const fontRes = await app.request('/v1/fonts/inspect', {
       method: 'POST',
@@ -636,28 +636,18 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     });
     expect(allocRes.status).toBe(410);
 
-    // 3. Governed Learning & Feedback Mining
-    const mineRes = await app.request('/v1/feedback/mine', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientId: 'client-drustee',
-        taskId: 'task-test-learn-1',
-        initialArtboard: {
-          taskId: 'task-test-learn-1',
-          clientId: 'client-drustee',
-          layers: [{ id: 'title', type: 'text', color: '#111827', lineHeight: 1.2, x: 50, y: 50, width: 200, height: 50 }],
-        },
-        finalArtboard: {
-          taskId: 'task-test-learn-1',
-          clientId: 'client-drustee',
-          layers: [{ id: 'title', type: 'text', color: '#01585F', lineHeight: 1.52, x: 50, y: 90, width: 200, height: 50 }],
-        },
+    // 3. An explicit owner instruction needs no invented approved task. The stored
+    // revision edit flow is exercised by approved-refinement-learning.test.ts.
+    const mineRes=await app.request('/v1/clients/client-drustee/candidate-rules/propose',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        title:'Owner typography instruction',category:'typography',ruleText:'Use the declared Drustee palette for this campaign',
+        rationale:'Explicit owner instruction for human review',
       }),
     });
     expect(mineRes.status).toBe(201);
-    const mineData = await mineRes.json();
-    expect(mineData.count).toBeGreaterThan(0);
+    const mineData=await mineRes.json();
+    expect(mineData.proposal.provenance.taskId).toBeUndefined();
+    expect(mineData.proposal.examples.positiveExampleTaskIds).toEqual([]);
 
     const candRes = await app.request('/v1/clients/client-drustee/candidate-rules');
     expect(candRes.status).toBe(200);

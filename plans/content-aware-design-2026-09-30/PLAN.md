@@ -249,3 +249,25 @@ W6_LEGACY_LEARNING_BOUNDARY_FINDING.json is source inspection, not an executed
 regression. Explicit owner brand instructions and observed approved edit evidence
 need distinct authority; do not reject legitimate owner instructions as if every
 rule required an already-approved design. Broader W5/W6/product gates stay open.
+
+
+## W6 approved revision evidence — 1 October 2026, ADR192
+
+The edit learner now consumes real stored revisions and a current source-bound
+approval/QA receipt; it persists immutable action evidence before mining. Count
+distinct tasks and retain each source receipt. Text-only captures supply text
+evidence without invented geometry. No fabricated platform/spacing/script reason
+or unverified positive example. Owner brand instructions need no invented task.
+Promotion persists full lineage in an append-only audit in the same DNA transaction,
+activating the local proposal only after commit. Migration074 fixes the previously
+hidden taskless audit scope; restricted writer/actor checks retain client isolation.
+Concurrent promotions reload authoritative DNA under the client lock and use the
+expected version; retries after later DNA versions preserve the prior receipt.
+
+Initial red/fault/type runs are retained. Final connected7files/69pass and662 strict
+roots plus lint pass. W6_APPROVED_REFINEMENT_PROOF.json records controls and limits.
+Exact sealed full gate is pending. This is source-only engineering; no deployment
+or provider call, native/human/taste superiority claim or automatic training.
+Queue rebuilding, revision polarity, real calibrated taste and broader W5/product
+admission remain open. Fresh03:01 UTC live readback reconfirms all three owner
+infrastructure repairs on2c4d61ec without redeploying creative work.

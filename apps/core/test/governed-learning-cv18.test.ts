@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { createDb } from '@hawa/db';
 import {
   FeedbackMiner,
@@ -9,7 +9,7 @@ import {
 describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
   const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
-  const app = createApp({ db });
+  const app = createAppWithClientFixtures({ db });
 
   const testBearer = process.env.HAWA_ART_DIRECTOR_KEY!;
   const authHeaders = {
@@ -52,7 +52,7 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
       expect(r.dataLineage).toBe('client_owned');
       expect(r.provenance.taskId).toBe('task_101');
       expect(r.provenance.clientId).toBe('client_drustee');
-      expect(r.examples.positiveExampleTaskIds).toContain('task_101');
+      expect(r.examples.positiveExampleTaskIds).toEqual([]); // No verified approval supplied.
       expect(r.examples.negativeExampleTaskIds).toHaveLength(0);
     }
   });
@@ -98,7 +98,7 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
       actor: { id: 'designer_4', role: 'designer', name: 'Zana' },
     });
 
-    expect(proposal.examples.positiveExampleTaskIds).toContain('task_rejected_55');
+    expect(proposal.examples.positiveExampleTaskIds).toEqual([]); // An instruction is not a design approval.
 
     // Operator records negative feedback on the task
     const negRes = miner.recordNegativeFeedback(
@@ -214,7 +214,6 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({
-        taskId: 'task_api_1',
         title: 'Logo Safety Margin',
         category: 'layout',
         ruleText: 'Maintain minimum 48px safety margin around brand mark',

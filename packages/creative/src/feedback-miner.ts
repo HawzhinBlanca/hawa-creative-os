@@ -8,6 +8,8 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { canonicalJson } from '@hawa/domain';
+import { refinementSnapshotFromManifest, refinementSnapshotHash, type ApprovedRefinementEvidence } from './refinement-evidence.js';
 
 export interface CanvasLayerSnapshot {
   id: string;
@@ -17,10 +19,10 @@ export interface CanvasLayerSnapshot {
   fontFamily?: string;
   fontSize?: number;
   lineHeight?: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface ArtboardSnapshot {
@@ -39,7 +41,7 @@ export interface FeedbackDelta {
 }
 
 export interface RuleProvenance {
-  taskId: string;
+  taskId?: string;
   clientId: string;
   sourcePlatform?: string;
   feedbackId?: string;
@@ -69,6 +71,7 @@ export interface DesignFeedbackRecord {
 }
 
 export interface CandidateRuleProposal {
+  refinementEvidence?: ApprovedRefinementEvidence[];
   id: string;
   clientId: string;
   title: string;
@@ -95,7 +98,7 @@ let warnedNoDnaFile = false;
 
 export class FeedbackMiner {
   private candidateRules = new Map<string, CandidateRuleProposal>();
-  private observedDeltas: Array<{ clientId: string; taskId: string; delta: FeedbackDelta }> = [];
+  private refinementEvents = new Map<string, string>();
   private rejectedTaskIds = new Set<string>();
   private feedbackEvents = new Map<string, string>();
   private negativeFeedbackStore: Array<{
@@ -350,15 +353,15 @@ export class FeedbackMiner {
       }
 
       // 4. Layout shifts (significant vertical/horizontal repositioning)
-      const dy = Math.abs(initLayer.y - finalLayer.y);
+      const dy = initLayer.y === undefined || finalLayer.y === undefined ? 0 : Math.abs(initLayer.y - finalLayer.y);
       if (dy >= 20) {
         deltas.push({
           layerId: finalLayer.id,
           category: 'layout',
           property: 'y',
-          beforeValue: initLayer.y,
-          afterValue: finalLayer.y,
-          description: `Layer shifted vertically by ${finalLayer.y - initLayer.y}px (safe zone adjustment)`
+          beforeValue: initLayer.y!,
+          afterValue: finalLayer.y!,
+          description: `Layer shifted vertically by ${finalLayer.y! - initLayer.y!}px`
         });
       }
     }
@@ -373,14 +376,33 @@ export class FeedbackMiner {
     clientId: string,
     taskId: string,
     initial: ArtboardSnapshot,
-    final: ArtboardSnapshot
+    final: ArtboardSnapshot,
+    evidence?: ApprovedRefinementEvidence
   ): CandidateRuleProposal[] {
+    if (!clientId.trim() || !taskId.trim() || [initial, final].some(s=>s.clientId!==clientId || s.taskId!==taskId)) {
+      throw new Error('Refinement task/client scope conflict');
+    }
+    // Validate both snapshots before creating any proposal, even for direct library calls.
+    for (const snapshot of [initial,final]) refinementSnapshotFromManifest(clientId,taskId,{nodes:snapshot.layers});
+    let eventKey: string | undefined;
+    let fingerprint: string | undefined;
+    if (evidence) {
+      if (evidence.clientId!==clientId || evidence.taskId!==taskId ||
+          evidence.beforeSnapshotSha256!==refinementSnapshotHash(initial) ||
+          evidence.afterSnapshotSha256!==refinementSnapshotHash(final) ||
+          !evidence.feedbackId || !evidence.approvalId || !evidence.actor.id || !evidence.approvedBy) {
+        throw new Error('Refinement authority or snapshot hash conflict');
+      }
+      eventKey=JSON.stringify([clientId,evidence.feedbackId]);
+      fingerprint=crypto.createHash('sha256').update(canonicalJson(evidence)).digest('hex');
+      const previous=this.refinementEvents.get(eventKey);
+      if (previous && previous!==fingerprint) throw new Error('Refinement event reuse conflict');
+      if (previous) return [];
+    }
     const deltas = this.diffArtboards(initial, final);
     const newlyProposed: CandidateRuleProposal[] = [];
 
     for (const delta of deltas) {
-      this.observedDeltas.push({ clientId, taskId, delta });
-
       // Identify key cluster patterns
       let ruleKey = '';
       let title = '';
@@ -390,32 +412,39 @@ export class FeedbackMiner {
       if (delta.category === 'palette') {
         ruleKey = `${clientId}:palette:${delta.afterValue}`;
         title = `Default text color override to ${delta.afterValue}`;
-        ruleText = `Use color ${delta.afterValue} for prominent text layers in ${clientId}`;
-        rationale = `Human designers repeatedly replace default colors with client brand token ${delta.afterValue}.`;
+        ruleText = `Observed color adjustment to ${delta.afterValue}; review its layer role and task applicability.`;
+        rationale = `Recorded color difference; repetition is counted across distinct tasks.`;
       } else if (delta.category === 'typography' && delta.property === 'lineHeight') {
         ruleKey = `${clientId}:typography:lineHeight:${delta.afterValue}`;
-        title = `Enforce Kurdish diacritic clearance line-height: ${delta.afterValue}`;
-        ruleText = `Ensure line-height is set to minimum ${delta.afterValue} for Kurdish typography`;
-        rationale = `Required to prevent ascender/descender diacritic clipping on characters like ڵ and ڕ.`;
+        title = `Observed line-height: ${delta.afterValue}`;
+        ruleText = `Observed line-height adjustment to ${delta.afterValue}; review font, script and task applicability.`;
+        rationale = `Recorded typography difference, without inferred glyph or clipping evidence.`;
       } else if (delta.category === 'layout' && delta.property === 'y' && Number(delta.afterValue) > Number(delta.beforeValue)) {
-        ruleKey = `${clientId}:layout:top_padding`;
-        title = `Maintain increased top safe-zone margin`;
-        ruleText = `Offset header layers downward by at least 40px`;
-        rationale = `Prevents social story UI obstruction by native Instagram/TikTok header chrome.`;
+        const distance=Number(delta.afterValue)-Number(delta.beforeValue);
+        ruleKey = `${clientId}:layout:y:${distance}`;
+        title = `Observed vertical adjustment`;
+        ruleText = `Observed vertical adjustment of ${distance}px; review layer role and task applicability.`;
+        rationale = `Recorded geometry difference, without inferred platform or safe-zone requirements.`;
       } else if (delta.category === 'copy_token') {
-        ruleKey = `${clientId}:copy:${delta.afterValue.toString().substring(0, 20)}`;
-        title = `Standardize approved copy phrase`;
-        ruleText = `Prefer approved phrasing: "${delta.afterValue}"`;
-        rationale = `Preserves exact client tone and standardized Kurdish orthography.`;
+        ruleKey = `${clientId}:copy:${crypto.createHash('sha256').update(String(delta.afterValue)).digest('hex')}`;
+        title = `Observed text replacement`;
+        ruleText = `Observed replacement phrasing: "${delta.afterValue}"; review context and task applicability.`;
+        rationale = `Recorded text difference; no inferred language, tone or client-wide preference.`;
       }
 
       if (!ruleKey) continue;
 
       let proposal = this.candidateRules.get(ruleKey);
       if (proposal) {
-        proposal.frequency += 1;
         if (!proposal.evidenceTaskIds.includes(taskId)) {
           proposal.evidenceTaskIds.push(taskId);
+          proposal.frequency = proposal.evidenceTaskIds.length;
+        }
+        if (evidence && !proposal.refinementEvidence?.some(e=>e.feedbackId===evidence.feedbackId)) {
+          (proposal.refinementEvidence ??= []).push(structuredClone(evidence));
+        }
+        if (evidence && !this.isTaskRejected(taskId,clientId) && !proposal.examples.positiveExampleTaskIds.includes(taskId)) {
+          proposal.examples.positiveExampleTaskIds.push(taskId);
         }
         proposal.confidence = Math.min(0.99, 0.5 + proposal.frequency * 0.15);
       } else {
@@ -438,13 +467,15 @@ export class FeedbackMiner {
           status: 'PROPOSED',
           scope: 'client_scoped',
           explicitness: 'inferred_ast_delta',
+          ...(evidence ? { refinementEvidence: [structuredClone(evidence)] } : {}),
           provenance: {
             taskId,
             clientId,
+            ...(evidence ? {feedbackId:evidence.feedbackId,actor:structuredClone(evidence.actor),sourcePlatform:'approved_revision_pair'} : {sourcePlatform:'unverified_snapshot'}),
             recordedAt: new Date().toISOString(),
           },
           examples: {
-            positiveExampleTaskIds: this.isTaskRejected(taskId, clientId) ? [] : [taskId],
+            positiveExampleTaskIds: evidence && !this.isTaskRejected(taskId, clientId) ? [taskId] : [],
             negativeExampleTaskIds: this.isTaskRejected(taskId, clientId) ? [taskId] : [],
           },
           conflicts: [],
@@ -455,6 +486,8 @@ export class FeedbackMiner {
         newlyProposed.push(proposal);
       }
     }
+
+    if (eventKey && fingerprint) this.refinementEvents.set(eventKey,fingerprint);
 
     return newlyProposed;
   }
@@ -627,7 +660,7 @@ export class FeedbackMiner {
 
     // If any candidate rule previously used this task as positive evidence, remove it
     for (const rule of this.candidateRules.values()) {
-      if (rule.clientId === clientId && rule.examples.positiveExampleTaskIds.includes(taskId)) {
+      if (rule.clientId === clientId && (rule.examples.positiveExampleTaskIds.includes(taskId) || rule.evidenceTaskIds.includes(taskId))) {
         rule.examples.positiveExampleTaskIds = rule.examples.positiveExampleTaskIds.filter((id) => id !== taskId);
         if (!rule.examples.negativeExampleTaskIds.includes(taskId)) {
           rule.examples.negativeExampleTaskIds.push(taskId);
@@ -643,7 +676,7 @@ export class FeedbackMiner {
    */
   public proposeExplicitRule(input: {
     clientId: string;
-    taskId: string;
+    taskId?: string;
     title: string;
     category: 'typography' | 'palette' | 'copy_token' | 'layout';
     ruleText: string;
@@ -669,20 +702,21 @@ export class FeedbackMiner {
       ruleText,
       rationale,
       frequency: 1,
-      evidenceTaskIds: [taskId],
+      evidenceTaskIds: taskId ? [taskId] : [],
       confidence: 0.85,
       status: 'PROPOSED',
       scope: 'client_scoped',
       explicitness: 'explicit_operator_instruction',
       provenance: {
-        taskId,
+        ...(taskId ? {taskId} : {}),
         clientId,
+        sourcePlatform: 'owner_instruction',
         actor,
         recordedAt: new Date().toISOString(),
       },
       examples: {
-        positiveExampleTaskIds: this.isTaskRejected(taskId, clientId) ? [] : [taskId],
-        negativeExampleTaskIds: this.isTaskRejected(taskId, clientId) ? [taskId] : [],
+        positiveExampleTaskIds: [],
+        negativeExampleTaskIds: taskId && this.isTaskRejected(taskId, clientId) ? [taskId] : [],
       },
       conflicts,
       sha256Digest,
@@ -702,14 +736,25 @@ export class FeedbackMiner {
     ruleId: string,
     role: 'art_director' | 'creative_director'
   ): { promoted: boolean; rule?: CandidateRuleProposal; auditHash: string; reason?: string } {
+    const prepared=this.prepareRulePromotion(ruleId,role);
+    this.commitRulePromotion(prepared);
+    return prepared;
+  }
+
+  /** Prepare a reviewed receipt without making it active before a database commit. */
+  public prepareRulePromotion(
+    ruleId: string,
+    role: 'art_director' | 'creative_director'
+  ): { promoted: boolean; rule?: CandidateRuleProposal; auditHash: string; reason?: string } {
     if (role !== 'art_director' && role !== 'creative_director') {
       return { promoted: false, auditHash: '', reason: 'UNAUTHORIZED_ROLE' };
     }
 
-    const rule = Array.from(this.candidateRules.values()).find((r) => r.id === ruleId);
-    if (!rule) {
+    const stored = Array.from(this.candidateRules.values()).find((r) => r.id === ruleId);
+    if (!stored) {
       return { promoted: false, auditHash: '', reason: 'RULE_NOT_FOUND' };
     }
+    const rule=structuredClone(stored);
 
     // Conflicting rules stay pending and cannot be promoted (H11)
     if (rule.conflicts && rule.conflicts.length > 0) {
@@ -726,6 +771,15 @@ export class FeedbackMiner {
       .digest('hex');
 
     return { promoted: true, rule, auditHash };
+  }
+
+  public commitRulePromotion(prepared:{promoted:boolean;rule?:CandidateRuleProposal}): void {
+    if (!prepared.promoted || !prepared.rule) return;
+    const rule=Array.from(this.candidateRules.values()).find(r=>r.id===prepared.rule!.id);
+    if (!rule || rule.clientId!==prepared.rule.clientId || rule.sha256Digest!==prepared.rule.sha256Digest) {
+      throw new Error('Prepared rule promotion identity conflict');
+    }
+    Object.assign(rule,structuredClone(prepared.rule));
   }
 
   /**
