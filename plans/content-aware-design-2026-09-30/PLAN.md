@@ -513,3 +513,8 @@ ADR201 binds ink and sentinel cache reuse to current renderer executable/OS, fon
 ### Current raster-probe exact qualification
 
 Exact sealedf767ddfae2ecd3bcd024d659d8c2d6a9ed4c63a1: all8,6580pass/0fail/67skip across666 passed files/6 skipped;673 strict roots,1686 blueprint checks,newest production dump restored in isolation and mandatory negative-flag refusal pass. Raster/font/config cache and transient sentinel recovery qualified in source; no deploy or native Canva/human/product admission. W5_RASTER_PROBE_CACHE_GATE_EVIDENCE.json retains exact gate. Next actual temporary-renderer diagnostic: probeFontScripts Amiri Arabic is unmeasured, getFontFidelityManifest reports exact and reviewFindings emits no font warning. W5_FONT_FIDELITY_REPORT_FINDING.json is an exported probe/manifest/review-chain diagnostic, not whole shipping admission or a live outage; acceptance regression NOT_RUN/repair pending.
+
+
+## W5 truthful font fidelity review — 1 October 2026
+
+ADR202 preserves exact/stand-in/uncovered/unmeasured across actual render and QA; missing supplied family evidence warns, preliminary absent manifests stay absent. Render reports probe distinct used families, including outside the default full-report list; explicit font directories and prototype-like report keys remain truthful. Saved Core QA/HTTP/office and Desk preserve the warning; actual connected proof found requester notes omitted it, now disclosed plainly with bounded messages. Hard QA thresholds, exact live copy and provider/repair budgets stay unchanged. Retained red/fixture/stale-dist/requester failures; final13files93/0/0,676 strict roots/lint PASS. W5_FONT_FIDELITY_REVIEW_PROOF.json. Exact sealed gate pending; no deploy/provider call or native/Canva/human/product admission.

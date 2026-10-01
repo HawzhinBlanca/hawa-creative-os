@@ -1,0 +1,83 @@
+{
+  "adr": "ADR202",
+  "date": "2026-10-01",
+  "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING",
+  "requirements": [
+    "FR-038",
+    "FR-041",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "retainedRegressions": {
+    "initial": {
+      "passed": 1,
+      "failed": 6,
+      "fixtureError": "Incomplete HardQaContext; corrected before confirming six actual red regressions."
+    },
+    "correctedRed": {
+      "passed": 1,
+      "failed": 6
+    },
+    "firstConnected": {
+      "passed": 23,
+      "failed": 1,
+      "reason": "Nonexistent requested font correctly refused by FONT_UNRESOLVED; use actual installed Hawa Symbols outside default report list."
+    },
+    "firstVertical": {
+      "passed": 1,
+      "failed": 1,
+      "reason": "Core loaded older creative dist; strict rebuild before rerun."
+    },
+    "savedPathBeforeRequesterRepair": {
+      "files": 8,
+      "passed": 58,
+      "failed": 1,
+      "reason": "Actual QA/DB/HTTP/office warning passed; requesterDraftNotes omitted it."
+    }
+  },
+  "acceptance": {
+    "connected": {
+      "files": 13,
+      "passed": 93,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictTestRoots": 676,
+    "lint": "PASS; 925 any occurrences; no new provider-egress exceptions",
+    "actualProbeManifestRender": "PASS; temporary real-raster wrapper without identity retains unmeasured; actual uncovered bytes; explicit fonts dir; outside-list family and prototype-like public key",
+    "savedCoreHttpOfficeRequesterDesk": "PASS; actual QA stage, isolated scoped database, actual HTTP readback, generic Desk component and plain bounded requester font notices",
+    "hardQaAndExactCopy": "PASS; advisory warnings retain baseline passed/defects and live exact wording",
+    "renderReportProbeCount": "PASS; one used family, two script raster probes and two sentinels (4 raster calls). Not whole pipeline latency."
+  },
+  "policy": "Preserve exact/stand-in/uncovered/unmeasured. Warn on missing supplied family evidence, leave absent preliminary manifest absent. Actual render report probes distinct used families; public default full report remains available. No new blocking gate or workflow.",
+  "providerCalls": 0,
+  "dependenciesAdded": 0,
+  "hardThresholdsChanged": false,
+  "sourceSha256": {
+    "packages/creative/src/studio/render-layout-v2.ts": "fc9b30c9a7f0700eef6f6b10e4d64720a596c2b34677456df0f601562210b246",
+    "packages/creative/src/studio/hard-qa.ts": "8e6e1c75982feb688bebf56e7fc3da258cb398f9693b3e186ffe8bfcc92233cf",
+    "packages/creative/src/studio/copy-completeness.ts": "555a9ee2eee7dc69d0ea95476a4c4aa91b550c2751a245cdc1d14c0979071f44",
+    "apps/core/src/services/design-studio/studio-status-note.ts": "bcac93c26229b1129360bcea5085d9a52c9c644aa755ef7749e00b656c9f7cc0",
+    "packages/creative/test/font-fidelity-review.test.ts": "96acd5248a5633551120062a0db3bb857cd15eac6eb0e169d69ff5d18b86ca26",
+    "apps/core/test/font-fidelity-review.test.ts": "7f45b026204ff065af144b9ebebea806e948b04f213bf9276c7c54c7d9cee3ea",
+    "apps/desk/test/font-fidelity-review.test.ts": "2f9523b217395a1d1cf01da0f453456fc6c7681a5424ac11bf92de4413cdccd0"
+  },
+  "logs": {
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-connected-final-20261001.log": "303450f75763fd86f29b345ea40451a65dd4c68de51b663ea58643e89f305f86",
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-connected-repaired-20261001.log": "535818200cb571cbf00f105177a2edf910109dbc72a1c06b2021398c747b8059",
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-corrected-red-20261001.log": "c3571ee04a5c9c419acde94e60aed684b7bc8d29bbdfcb61a531e3a66982cb7b",
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-final-connected-20261001.log": "d4268f6adf4cdfbc50fb43a0c1ea2e90267d519e6ae37406ef0fc1c085a60b85",
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-final-types-20261001.log": "8de031410e9ac3bced8395b992ae4e54a6dbeb842815985619264fc9afa82bb4",
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-first-connected-20261001.log": "2ec0176728a23c38e3fab8ab495bf94791826a1e18422aa68a8b2dfac7be4383",
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-lint-20261001.log": "81268e527353f47331d24d3376399d7ca56af0e0b9082620660ccb3328b23cb4",
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-red-20261001.log": "66d74b8e186498db8d891dac7d4ea81618994a65ac7e4a994af656783869e595",
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-types-20261001.log": "8de031410e9ac3bced8395b992ae4e54a6dbeb842815985619264fc9afa82bb4",
+    "output/qualification/2026-10-01/font-fidelity-review-development/hawa-font-fidelity-review-vertical-20261001.log": "4d0cf9dc0c4a4deedc48065a24905a53fabfbda0f9dbedff59ef8966523b320f"
+  },
+  "deployment": "NOT_DEPLOYED",
+  "limits": [
+    "Local sample fidelity does not establish all-copy shaping/weights or native Canva fidelity.",
+    "Original diagnostic is not a production outage.",
+    "Broader W5/W6/native Canva/human/recovery/product admission remains open."
+  ]
+}

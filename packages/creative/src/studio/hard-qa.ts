@@ -7,7 +7,7 @@ import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast, measuredInkContrast } from './composite-contrast.js';
 import { checkCopyCompleteness, instructionLanguageFindings, type CopyOrigin, type ReviewFinding } from './copy-completeness.js';
 import { omittedPhotoIndices, recipePhotoMinimum, type PhotoSelection } from './photo-selection.js';
-import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } from './render-layout-v2.js';
+import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions, type FontFidelityVerdict } from './render-layout-v2.js';
 import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
 import { photoRegionViolations, type PhotoRegionEvidence } from './protected-regions.js';
@@ -67,7 +67,7 @@ export interface HardQaContext {
   /** Final render/edit gates require source measurement; preliminary geometry gates may omit it. */
   logoVisibilityRequired?: boolean;
   /** The renderer's font fidelity for this host (`RenderLayoutV2Result.fontFidelity`). */
-  fontFidelity?: Record<string, 'exact' | 'stand-in'>;
+  fontFidelity?: Record<string, FontFidelityVerdict>;
 }
 
 export interface HardQaOutcome {
@@ -422,13 +422,30 @@ export function reviewFindings(
   // A face the renderer cannot draw is replaced by a declared stand-in, so the preview the judge
   // scored is not set in the face the design names, and the Canva deck (which names it) will differ.
   // It used to be only a console warning.
-  const substituted = [...new Set(layout.text.map((t) => t.fontFamily))].filter((f) => ctx.fontFidelity?.[f] === 'stand-in');
-  for (const family of substituted) {
+  for (const family of new Set(layout.text.map((t) => t.fontFamily))) {
+    // Preliminary geometry checks may have no render manifest. Supplied evidence must name
+    // every used family; a missing or unknown entry is not proof of exact rendering (ADR202).
+    if (!ctx.fontFidelity) continue;
+    const verdict = ctx.fontFidelity[family];
+    if (verdict === 'exact') continue;
     const blocks = layout.text.filter((t) => t.fontFamily === family).map((t) => t.copyIndex);
+    const blockLabel = `block${blocks.length === 1 ? '' : 's'} ${blocks.join(', ')}`;
+    if (verdict !== 'stand-in') {
+      const uncovered = verdict === 'uncovered';
+      const code = uncovered ? 'FONT_FIDELITY_UNCOVERED' : 'FONT_FIDELITY_UNMEASURED';
+      findings.push({
+        code,
+        severity: 'warning',
+        message: uncovered
+          ? `${code}: the local face for ${family} (${blockLabel}) does not cover its verification sample; inspect the text in the final export. Exact copy and glyph checks still apply.`
+          : `${code}: the rendered font for ${family} (${blockLabel}) could not be verified; inspect its appearance in the final export before approval.`,
+      });
+      continue;
+    }
     findings.push({
       code: 'FONT_SUBSTITUTED',
       severity: 'warning',
-      message: `FONT_SUBSTITUTED: the renderer drew a stand-in for ${family} (block${blocks.length === 1 ? '' : 's'} ${blocks.join(', ')}); the preview does not show the face the design names.`,
+      message: `FONT_SUBSTITUTED: the renderer drew a stand-in for ${family} (${blockLabel}); the preview does not show the face the design names.`,
     });
   }
   // ADR-170: a hero shown much larger than its own pixels looks soft (the album's 1280x853 photos

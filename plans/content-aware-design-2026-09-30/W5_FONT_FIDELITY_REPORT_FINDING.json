@@ -18,5 +18,12 @@
   ],
   "sourceSeal": "f767ddfae2ecd3bcd024d659d8c2d6a9ed4c63a1",
   "cause": "probeFontFidelity returns exact for every verdict other than stand-in; the two-value manifest and reviewFindings lose unmeasured/uncovered states.",
-  "nextAction": "Add actual probe/manifest/render/review and Core evidence regressions, carry measured/unmeasured/uncovered truth to review, preserve exact copy and existing hard QA/provider bounds; do not fabricate native quality or make a warning a new gate without an explicit policy decision."
+  "nextAction": "Add actual probe/manifest/render/review and Core evidence regressions, carry measured/unmeasured/uncovered truth to review, preserve exact copy and existing hard QA/provider bounds; do not fabricate native quality or make a warning a new gate without an explicit policy decision.",
+  "resolution": {
+    "date": "2026-10-01",
+    "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING",
+    "proof": "W5_FONT_FIDELITY_REVIEW_PROOF.json",
+    "connected": "13 files/93 passed/0 failed/0 skipped",
+    "note": "Original observation retained. Four-state truth now reaches render, saved QA, Core HTTP, office/Desk and plain requester font notices; exact gate pending, not deployed."
+  }
 }

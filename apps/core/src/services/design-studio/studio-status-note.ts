@@ -203,6 +203,15 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
     if (photosCut && !toldAlready) notes.push('⚠️ Your reference shows the people cut out of their photos. This draft shows your photos as you sent them, because cut-outs cannot be made automatically yet; the art director can make them in Canva.');
     else if (!photosCut) notes.push('Styled after the reference design you sent.');
   }
+  // ADR202: the requester may inspect or edit the exported draft themselves. Preserve font
+  // uncertainty in plain words, without exposing QA codes or treating a warning as a refusal.
+  const fontCodes = new Set(['FONT_SUBSTITUTED', 'FONT_FIDELITY_UNMEASURED', 'FONT_FIDELITY_UNCOVERED']);
+  const fontFindings: Array<{ code?: unknown; message?: unknown } | null> = Array.isArray(stages.qa?.findings) ? stages.qa.findings : [];
+  for (const finding of fontFindings.slice(0, 50)) {
+    if (!finding || !fontCodes.has(String(finding.code))) continue;
+    const message = plain(String(finding.message ?? '').replace(/^[A-Z_]+:\s*/, ''), 500);
+    if (message) notes.push(`⚠️ Check before approving: ${message}`);
+  }
   return notes;
 }
 

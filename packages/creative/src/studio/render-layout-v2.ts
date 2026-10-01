@@ -81,6 +81,9 @@ export interface RenderLayoutOptions {
   rsvgConvertPath?: string;
 }
 
+/** A measured verdict; unavailable or uncovered evidence is never an exact match. */
+export type FontFidelityVerdict = 'exact' | 'stand-in' | 'uncovered' | 'unmeasured';
+
 export interface RenderLayoutV2Result {
   /** Reads `files` by name: to open it alone, inline them with `inlineSvgFiles` (svg-files.ts). */
   svg: string;
@@ -90,7 +93,7 @@ export interface RenderLayoutV2Result {
   /** The pictures both SVGs read, by file name, written beside them when they are rasterised. */
   files: Record<string, Buffer>;
   wrappedLines: Record<number, number>;
-  fontFidelity: Record<string, 'exact' | 'stand-in'>;
+  fontFidelity: Record<string, FontFidelityVerdict>;
   /** Where the art's calm region and each photo's crop land in the bytes drawn (ADR-123). */
   placements: LayoutPlacements;
 }
@@ -254,9 +257,8 @@ export const ADMITTED_FONT_FAMILIES = [
   'Plus Jakarta Sans',
   'Vazirmatn',
   'Inter',
-  // Admitted 2026-09-20. getFontFidelityManifest probes only what this list names, so a family
-  // missing from it is never measured for substitution — the exact blindness that let Vazirmatn
-  // sit in the registry for days while the renderer drew something else for it.
+  // Admitted 2026-09-20. This is the public default report list; actual renders probe every
+  // requested family independently of the list (ADR202).
   'IBM Plex Sans Arabic',
 ] as const;
 
@@ -540,7 +542,7 @@ export function assertFontInkWidth(
  * - unmeasured: no rasteriser, or it drew nothing.
  */
 export interface FontScriptFidelity {
-  verdict: 'exact' | 'stand-in' | 'uncovered' | 'unmeasured';
+  verdict: FontFidelityVerdict;
   substituted: boolean;
   ink: FontInkCheck;
 }
@@ -610,9 +612,9 @@ const inkMismatchWarned = new Set<string>();
 export function probeFontFidelity(
   family: string,
   options?: RenderLayoutOptions
-): 'exact' | 'stand-in' {
+): FontFidelityVerdict {
   const result = probeFontScripts(family, options ?? {})[fontFamilyScript(family)];
-  if (result.verdict !== 'stand-in') return 'exact';
+  if (result.verdict !== 'stand-in') return result.verdict;
   const key = `${result.ink.fontFile}|${family}|${resolveFontconfigFile(options)}`;
   if (!inkMismatchWarned.has(key)) {
     inkMismatchWarned.add(key);
@@ -627,14 +629,14 @@ export function probeFontFidelity(
  * typography on hosts where half the families were being silently substituted.
  */
 export function getFontFidelityManifest(
-  _fontsDir: string,
-  options?: RenderLayoutOptions
-): Record<string, 'exact' | 'stand-in'> {
-  const out: Record<string, 'exact' | 'stand-in'> = {};
-  for (const family of ADMITTED_FONT_FAMILIES) {
-    out[family] = probeFontFidelity(family, options);
-  }
-  return out;
+  fontsDir: string,
+  options?: RenderLayoutOptions,
+  families: readonly string[] = ADMITTED_FONT_FAMILIES
+): Record<string, FontFidelityVerdict> {
+  // Family names may come from untrusted layout data; define even prototype-like names as data.
+  return Object.fromEntries([...new Set(families)].map(family =>
+    [family, probeFontFidelity(family, { ...options, fontsDir })] as const
+  ));
 }
 
 /** Every admitted family's verdict per script, for reports that need to say which script moved. */
@@ -1910,13 +1912,13 @@ export function renderLayoutV2ToSvg(
   /** The pictures the SVGs read by name; see RenderLayoutV2Result.files. */
   files: Record<string, Buffer>;
   wrappedLines: Record<number, number>;
-  fontFidelity: Record<string, 'exact' | 'stand-in'>;
+  fontFidelity: Record<string, FontFidelityVerdict>;
 } {
   const fontsDir = resolveFontsDir(options);
   // Every picture is a file beside the SVG, never a data URI in it (ADR-035; svg-files.ts).
   const svgFiles = new SvgFiles();
   const fontconfigFile = resolveFontconfigFile(options);
-  const fontFidelity = getFontFidelityManifest(fontsDir, options);
+  const fontFidelity = getFontFidelityManifest(fontsDir, options, layout.text.map(t => t.fontFamily));
 
   // Assert font resolution for all text elements
   const seenFamilies = new Set<string>();
