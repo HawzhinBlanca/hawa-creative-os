@@ -31,7 +31,7 @@ export async function retainCandidateAssetSources(origin: string, token: string,
   ];
   const beforeModels = (await fakes.modelLedger()).ledger.length;
   const [before] = await query<{ dna: string; approvals: string }>(sql`SELECT
-    (SELECT dna_hash FROM hawa.client_dna_versions WHERE client_id=${KAAE_CLIENT_ID}::uuid AND status='active') AS dna,
+    (SELECT content_hash FROM hawa.client_dna_versions WHERE client_id=${KAAE_CLIENT_ID}::uuid AND status='active') AS dna,
     (SELECT count(*) FROM hawa.approvals) AS approvals`);
   const records: Array<{ asset: Asset; source: Source }> = [];
   const upload = async (source: Source) => {
@@ -57,7 +57,7 @@ export async function retainCandidateAssetSources(origin: string, token: string,
     repeated.assetId === records[0].asset.assetId && records[1].asset.assetId === records[0].asset.assetId,
     'same asset; separate originals');
   const [after] = await query<{ dna: string; approvals: string }>(sql`SELECT
-    (SELECT dna_hash FROM hawa.client_dna_versions WHERE client_id=${KAAE_CLIENT_ID}::uuid AND status='active') AS dna,
+    (SELECT content_hash FROM hawa.client_dna_versions WHERE client_id=${KAAE_CLIENT_ID}::uuid AND status='active') AS dna,
     (SELECT count(*) FROM hawa.approvals) AS approvals`);
   check('deployed upload neither activates DNA nor creates approval/model evidence',
     before.dna === after.dna && before.approvals === after.approvals &&
@@ -67,7 +67,10 @@ export async function retainCandidateAssetSources(origin: string, token: string,
     FROM hawa.uploaded_asset_sources WHERE client_id=${KAAE_CLIENT_ID}::uuid
       AND asset_id=ANY(${[...new Set(records.map(r => r.asset.assetId))]}::uuid[])
     ORDER BY asset_id,source_sha256`));
-  const originalIdentity = JSON.stringify(await identity());
+  const receipts = await identity();
+  check('deployed originals have six actual immutable source receipts', receipts.length === sources.length,
+    `${receipts.length} source receipts`);
+  const originalIdentity = JSON.stringify(receipts);
   const verify = async (phase: string) => {
     for (const { asset, source } of records) {
       for (const original of [false, true]) {

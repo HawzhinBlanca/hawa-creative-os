@@ -76,3 +76,9 @@ recovery and production-dump transfer remain independent and unadmitted.
 
 Permanent scenario helper typecheck, 698 strict roots and lint pass. Actual Docker
 qualification has not run yet. Evidence: output/qualification/2026-10-01/current-asset-recovery/.
+
+Initial clean Docker candidate afb3de31 retained: the new qualification helper queried
+nonexistent dna_hash instead of content_hash and stopped before upload/restore.
+Running nginx, persisted Desk session, image/source equality and restricted worker
+checks passed. Correct the test query and explicitly count six source receipts;
+production behavior unchanged. Actual corrected run pending.
