@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-01T23:58:09+03:00",
+  "generatedAt": "2026-10-02T00:35:54+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "8420bf6d246f0d0a357517a38d3390b74c328114",
+    "commit": "cabbdc25b5172922b130bae4bd1971703cc77e45",
     "treeClean": true,
-    "commitTimestamp": "2026-10-01T23:58:09+03:00",
+    "commitTimestamp": "2026-10-02T00:35:54+03:00",
     "branch": "claude/consent-and-double-role"
   },
   "migrations": {
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "2eb7340ba80edbbe0e99f38a106b8470bf0ceb1b5686995ca17c32e407e193f8"
+  "sha256": "886fd5750ca7f7718fbf57fbc9b8157b0687d7e9c5391c19fec5a21de4ab0e59"
 }
