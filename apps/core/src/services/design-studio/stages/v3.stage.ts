@@ -15,21 +15,25 @@ import {
   type BriefBoundJudgeBrief,
   type StudioJudgeProtocol,
   photoSelectionFromInstructions,
+} from '@hawa/creative';
+import type { StageContext, CandidateState, Concept, Archetype, MotifKind, CreativeBrief } from '../types.js';
+import { candidateRenderOptions } from './asset-inputs.js';
+// ADR-237: the visual review and its controlled refinement (kept as their own imports for merging).
+import {
   reviewCandidateVisuallyV3,
   applyVisualReviewV3,
   conformReviewedLayoutV3,
   decideVisualRefinementV3,
   judgeRefinementV3,
   layoutSha256,
+  StudioArtAccountingError,
   type VisualReviewResult,
   type VisualReviewSettings,
   type AppliedVisualFix,
   type VisualRefinementDecision,
-  StudioArtAccountingError,
 } from '@hawa/creative';
-import { isModelCallHoldError, StudioBudgetExhaustedError, type StageContext, type CandidateState, type Concept, type Archetype, type MotifKind, type CreativeBrief } from '../types.js';
+import { isModelCallHoldError, StudioBudgetExhaustedError } from '../types.js';
 import { CanvaFlowError } from '../../canva-flow-error.js';
-import { candidateRenderOptions } from './asset-inputs.js';
 import { runRenderStage } from './render.stage.js';
 import { inStudioSubstep } from '../substeps.js';
 import { StudioSpendCapError } from '../spend-cap.js';
