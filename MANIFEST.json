@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T16:55:13Z",
+  "generatedAt": "2026-10-01T18:14:37Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 692,
+  "fileCount": 696,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "549a4f056a9ed8994c9d9e7e2260ee92de7f55301add5b43dadbe57bfc718039",
-      "bytes": 3975
+      "sha256": "7b552f778ebd1716052438282135a0b5678a3f4e1d6b95f1eb06c07f94a9aa5c",
+      "bytes": 3978
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -948,6 +948,11 @@
       "bytes": 7859
     },
     {
+      "path": "adrs/236_kaae_brand_guideline_light_first.md",
+      "sha256": "0037ba27f1a5ffdd5cd4302a45eebd48211c8a505902a7fe2f539d2231f18129",
+      "bytes": 13129
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1421,6 +1426,21 @@
       "path": "plans/hosting/PRODUCTION_HOSTING_PLAN.md",
       "sha256": "3afb30ad563bb0beaad62886feb329565ab10967be45e1e7610e8a9757d1dcbb",
       "bytes": 47459
+    },
+    {
+      "path": "plans/kaae-light-guideline-2026-10-01/CODEX_MERGE_NOTE.md",
+      "sha256": "fa4a4cdceea479fb0e5756b774b6a3435cbf1d08c41949d276c1949ac3331208",
+      "bytes": 6921
+    },
+    {
+      "path": "plans/kaae-light-guideline-2026-10-01/apply-kaae-dna-colors.sh",
+      "sha256": "eb01b991dbac5c98c06f02be945be836aa5cc7aef581195d75af2615067b4a11",
+      "bytes": 3127
+    },
+    {
+      "path": "plans/kaae-light-guideline-2026-10-01/kaae-dna-colors.json",
+      "sha256": "23ff60aa31eb2b1d4a5cc8e30c13b442050cbae5a7faae86b03de1d89bc90c57",
+      "bytes": 2064
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/ADR140_R10_H1_RUN.json",
@@ -2579,8 +2599,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "e7fb86cc68fee97b5f1e2dcf6aea646654e0de23026cc2b217307e06bf3b6fc9",
-      "bytes": 598069
+      "sha256": "446c5ae4856863eb069787c8e956dcd0db9574d356381383ff61ab3149c6ac7f",
+      "bytes": 599621
     },
     {
       "path": "plans/user-stories.csv",
