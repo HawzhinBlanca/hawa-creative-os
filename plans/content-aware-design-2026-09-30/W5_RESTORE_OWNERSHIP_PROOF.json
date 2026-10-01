@@ -7,7 +7,7 @@
     "NFR-012",
     "NFR-024"
   ],
-  "status": "CONNECTED_TESTS_PASS_EXACT_GATE_AND_REAL_REHEARSAL_PENDING",
+  "status": "SOURCE_AND_REAL_SYNTHETIC_RECOVERY_VERIFIED_PRODUCTION_DUMP_APPROVAL_PENDING",
   "diagnosisCorrection": {
     "correctionId": "ADR210-recovery-scratch-ownership",
     "date": "2026-10-01",
@@ -89,10 +89,91 @@
     "output/qualification/2026-10-01/restore-owned-cleanup/DIAGNOSIS_CORRECTION.json": "95766c5feb3a7d646e61f0da7f5fcfd346069d709bcad1b23f1cd3251a548ede"
   },
   "limitations": [
-    "same-host candidate rehearsal pending",
+    "production-dump transfer rejected by automatic review; authorization pending",
     "separate-host restore unproved",
     "application replay not claimed by cleanup receipt",
     "native/human/product admission remains open",
     "no production deployment or paid call"
-  ]
+  ],
+  "exactEngineering": {
+    "candidateCommit": "6ae60a8d3bce0676d3877dd64795b4efa0572eb0",
+    "status": "SEVEN_ENGINEERING_STAGES_PASS_PRODUCTION_DUMP_APPROVAL_PENDING_PRODUCT_ADMISSION_OPEN",
+    "technicalStagesPassed": 7,
+    "suite": {
+      "passed": 6812,
+      "failed": 0,
+      "skipped": 67,
+      "filesPassed": 680,
+      "filesSkipped": 6
+    },
+    "strictTestRoots": 687,
+    "newestDump": {
+      "status": "NOT_RUN_AUTOMATIC_APPROVAL_REVIEW_REJECTED",
+      "request": "explicit user authorization pending",
+      "productionChanged": false
+    },
+    "negativeFlagRefusal": "PASS",
+    "sourceChangedDuringGate": false,
+    "admissionQualified": false,
+    "rawGateStatusPreserved": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+    "scope": "raw gate executed without production dump; not all-eight qualification",
+    "artifacts": {
+      "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_NEGATIVE_FLAG_REFUSAL.log": "3b1063568accad8285b0cc5a2fb39e3634541da1424e7babf96fa420923ed6b5",
+      "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_RELEASE_GATE_EVIDENCE.json": "34a4dac0b833e7221f1d4e899420dce6eb55ed0133f344c028cfb637207aee37",
+      "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_PREDEPLOY_DUMP_CHECK.json": "465c9374d0d07805ddcd2baa42a4562549f2a45f45be204c56dc195c0c2ea2a6",
+      "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_PREDEPLOY_DUMP_CHECK.log": "7c98e4a1baa5b5026530af0b4bc8b4f0dd4f3521519912dafc92dba40223a12f",
+      "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_FULL_TEST_SUITE_RUN.log": "1105f10f80081c0acda0dcbb6ca26eb81901fb7fce76d312922982f78cae0e2b",
+      "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_TEST_DB_PROVISION.log": "336ff22f53b4a3fea01bf514699007aa793865e351b45da27310dadad063c59d"
+    }
+  },
+  "candidateRecovery": {
+    "candidateCommit": "6ae60a8d3bce0676d3877dd64795b4efa0572eb0",
+    "finishedAt": "2026-10-01T11:21:29.781Z",
+    "namedChecksPassed": 98,
+    "failed": 0,
+    "sourceChanges": {},
+    "restores": {
+      "drive": {
+        "tables": 104,
+        "policies": 174,
+        "blobs": 3,
+        "missingReferences": 0,
+        "cleanup": {
+          "removed": true,
+          "scope": "this_recovery"
+        },
+        "recoveryId": "77a12fbc455f4d53",
+        "scriptApplicationReplayProved": false,
+        "separateHostProved": false
+      },
+      "telegram": {
+        "tables": 104,
+        "policies": 174,
+        "blobs": 3,
+        "missingReferences": 0,
+        "cleanup": {
+          "removed": true,
+          "scope": "this_recovery"
+        },
+        "recoveryId": "fef28eef755843c1",
+        "scriptApplicationReplayProved": false,
+        "separateHostProved": false
+      }
+    },
+    "scratchDirectoriesAfterSuccess": 0,
+    "externalProvidersAndStaff": "synthetic",
+    "productionChanged": false,
+    "unselectedScenariosSkipped": 56,
+    "uncoveredModelCalls": [
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent ",
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent "
+    ],
+    "containersAndVolumesRemoved": "verified by actual Docker readback",
+    "artifacts": {
+      "CANDIDATE_RECOVERY_RUN.json": "f802211e2357c8235cc1c3e0e2ad17bb32b439407dcac661c4e79c3251ca34ed",
+      "DRIVE_RESTORE.json": "36658270010083e24e5f97195afbcaddee3b67a579c423ffb941e9a8e2742164",
+      "TELEGRAM_RESTORE.json": "cb9ecab04ef9ef79bd6560ba789a3282f6a08a7b0d417c723bf763eb6c60de93",
+      "CANDIDATE_RECOVERY_RUN.log": "8d56ccea3d07449f1dda62260d9fcee8fbc6b55a74fc3c5a78ace619d3226d52"
+    }
+  }
 }

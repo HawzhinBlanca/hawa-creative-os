@@ -667,3 +667,20 @@ and crypto/simulated Docker-SQL plus10 Vitest checks pass;687 strict roots/lint
 pass. W5_RESTORE_OWNERSHIP_PROOF.json binds failures, source and correction.
 Exact clean gate and two actual candidate restores are pending. Whole-product
 and separate-host/native/human admission remain open.
+
+### ADR210 sealed engineering and deployed recovery
+
+Clean6ae60a8d passes6812/0/67 across680 passed files/6 skipped,687 strict
+roots,1740 package checks, mandatory flag refusal and seven engineering stages.
+Production-dump transfer was rejected by automatic approval review; explicit
+user authorization remains pending. The raw skip is preserved; all-eight
+qualification is not claimed. W5_RESTORE_OWNERSHIP_GATE_EVIDENCE.json binds
+actual receipts.
+
+Actual same-candidate Docker rehearsal passes98 named checks/sourceChanges{},
+two authenticated encrypted restores104tables/174policies/3blobs/zero missing
+references, both bound cleanup receipts and subsequent application replay
+without uncertain resend. Default teardown removes containers/volumes and no
+scratch directories remain. Providers/staff are synthetic,56 scenarios skipped,
+two unmatched synthetic Gemini requests retained. Production unchanged;
+separate-host/native/human/product admission remains open.

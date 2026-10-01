@@ -1,7 +1,7 @@
 # ADR210 — Restore-owned private artifact cleanup evidence
 
 Date: 2026-10-01
-Status: Accepted for implementation; qualification pending
+Status: Accepted; connected and deployed synthetic recovery verified; production-dump approval pending
 Requirements: FR-070, NFR-006, NFR-012, NFR-024
 
 ## Corrected diagnosis
@@ -42,3 +42,17 @@ unremoved-directory postcondition cannot emit success. Include these tests in th
 normal release suite. Verify both nonce-bound cleanup receipts in the actual
 isolated two-restore candidate rehearsal. Preserve the earlier failed-run/source
 hashes and the correction in traceability and shared memory.
+
+## Qualification — 1 October 2026
+
+Clean6ae60a8d passes6812 tests/0fail/67skip,687 strict roots and seven
+engineering stages. Automatic approval review rejected the production-dump
+transfer; explicit authorization is pending and that stage remains NOT_RUN.
+The preserved raw receipt records its skip; never describe it as all-eight.
+Actual disposable candidate recovery passes98 checks and both nonce/task/volume
+cleanup guards. Each authenticates/restores104 tables/174 policies/3 blobs with
+zero missing references. No scratch directories remain after success; Docker
+containers/volumes removed. Providers/staff are synthetic; two unmatched fake
+Gemini requests remain visible. Script receipts do not claim application replay;
+subsequent scenario verifies replay/reconciliation without repeating uncertain
+requests. Same-host proof does not qualify separate-host or human/native gates.
