@@ -9,7 +9,7 @@
     "FR-041",
     "NFR-012"
   ],
-  "status": "CONNECTED_ENGINEERING_VERIFIED_EXACT_GATE_PENDING_PRODUCT_ADMISSION_OPEN",
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "sourceSha256": {
     "packages/creative/src/studio/art-direction/generate.ts": "58e7ece7e2be5b1f31e0df68e238108d1abf6864d6093f4cb21d6bc770429e11",
     "packages/creative/test/art-direction-photo-intent.test.ts": "95646eb6c9f1da5ab7358277d37d585be14babfb7e2ea7d81448de2dea41e7a5",
@@ -73,7 +73,13 @@
     "explicit all/count coverage remains completed by existing solver",
     "other-recipe default fallback and hard geometry/crop/schema/copy/contrast checks remain unchanged"
   ],
-  "releaseGate": "NOT_RUN_YET",
+  "releaseGate": {
+    "candidateCommit": "c9a845a77aa28b63fd6e2285515fcac623a15487",
+    "proof": "plans/content-aware-design-2026-09-30/W4_PHOTO_INTENT_REPAIR_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior explicit transfer approval pending",
+    "allEightQualified": false
+  },
   "productionChanged": false,
   "externalProviders": "synthetic only; no paid call",
   "limits": [
@@ -94,5 +100,6 @@
     "output/qualification/2026-10-01/photo-intent-repair/STRICT_INITIAL_REFUSAL.log": "a2ce6236e56e864f73a0e5b8cd1740d160e3f36024ae591f1ac9453ed2848e75",
     "output/qualification/2026-10-01/photo-intent-repair/STRICT_TYPES.log": "9a5adf0e40e1c7fa24a3f8133fe8331b40dc38402f5fc05df9e6dd5869d1589f",
     "output/qualification/2026-10-01/photo-intent-repair/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad"
-  }
+  },
+  "sourceCommit": "9819a2ad848b5ff9979e495a84b90740ee572bdc"
 }

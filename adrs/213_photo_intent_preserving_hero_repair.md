@@ -1,6 +1,6 @@
 # ADR213 — Preserve valid photo intent during normalization and hero repair
 
-Date: 2026-10-01. Status: connected engineering verified; exact gate and product admission pending.
+Date: 2026-10-01. Status: connected and seven-stage engineering verified; production-dump/native/human/product admission pending.
 Requirements: FR-028, FR-031, FR-038, FR-040, FR-041, NFR-012.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/07_MODEL_REGISTRY_AND_EVALUATION.md,
 docs/11_QA_RTL_MULTILINGUAL.md, MASTER_SPEC; ADR170 and ADR181.
@@ -53,3 +53,10 @@ PASS. Actual Core retains three distinct four-photo plans through hero replaceme
 with no extra call. Real local raster and editable-source selected/omitted hashes,
 exact live factual copy and replay pass. Original/fixture/strict failures retained
 in W4_PHOTO_INTENT_REPAIR_PROOF.json. Not deployed; native/human admission open.
+
+Exact clean sealc9a845a7 passes seven engineering stages,6839pass/0fail/67skip
+across684 passed files/6 skipped,691 strict roots and1756 package checks. Mandatory
+negative-flag refusal passes. Raw production-dump Stage3 skipped; previous
+automatic approval review requires explicit transfer authorization, still pending.
+No all-eight, production deployment, native/human or product admission claim.
+W4_PHOTO_INTENT_REPAIR_GATE_EVIDENCE.json retains actual receipts.
