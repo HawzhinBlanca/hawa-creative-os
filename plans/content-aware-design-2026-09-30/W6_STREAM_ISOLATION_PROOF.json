@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "CONNECTED_CURRENT_RESOURCE_STREAM_AUTHORITY_VERIFIED_DEPLOYED_AND_FULL_ENGINEERING_PENDING",
+  "status": "CURRENT_DEPLOYED_STREAM_AND_RECOVERY_VERIFIED_FULL_ENGINEERING_REPAIR_PENDING",
   "requirements": [
     "FR-011",
     "FR-064",
@@ -44,11 +44,12 @@
     "Original real stream regression failed with visible unauthorized asset metadata; retained immutable RED_REAL_STREAM.log.",
     "Initial typecheck refused nullable database authority; corrected service accepts null and refuses unavailable storage.",
     "Subsequent typecheck/lint refused UUID guard narrowing of a string-only code branch to never; fixed the predicate overload without changing validation.",
-    "First documentation patch refused an incorrect runbook context; verified no files changed, then applied the correct existing context."
+    "First documentation patch refused an incorrect runbook context; verified no files changed, then applied the correct existing context.",
+    "Exact0816e8a6 source suite:6960 passed/1 failed/67 skipped. Existing positive SSE used database-free Core, which correctly cannot authorize a resource. Isolated regression repeats1 failure; corrected fixture creates an actual scoped persisted task, checks exact task ID/title/client from complete SSE frames and keeps a bounded deadline. Original negative disclosure assertions unchanged."
   ],
   "qualification": {
-    "fullEngineering": "PENDING",
-    "currentCandidateStreamAndRecovery": "PENDING",
+    "fullEngineering": "FAILED_6960_PASS_1_FAIL_67_SKIP_CORRECTED_FIXTURE_RERUN_PENDING",
+    "currentCandidateStreamAndRecovery": "PASS",
     "wholeProductionGateB": "OPEN",
     "productAdmission": false,
     "productionDump": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION"
@@ -68,9 +69,22 @@
     "apps/core/test/stream-resource-isolation.test.ts": "b67c5e6373e896d8573e6e16e96fb7848db619675780a63c31ac9a188f6471f5",
     "apps/core/test/scoped-event-subscriber.test.ts": "f474e80e4f345260fd927c64d950fab648744c48fac7a036c3207102496c86fe",
     "packages/testkit/chaos/driver/candidate-sources.ts": "7fc635882d2a34e90dc9743ca6301668b4cb12ef1e0c0bbf9db2d1398ef78b15",
-    "packages/testkit/chaos/driver/candidate-stream-isolation.ts": "c2dc6863e254abd3781e23797364086ab29774732f98c13a96246390c0f5416b"
+    "packages/testkit/chaos/driver/candidate-stream-isolation.ts": "c2dc6863e254abd3781e23797364086ab29774732f98c13a96246390c0f5416b",
+    "apps/core/test/core.test.ts": "8f241b60153ac19059193c22fe6e56b02a45cd290b149f2614ecfb6e3c09bb1d"
   },
   "artifacts": [
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CANDIDATE_MANIFEST_GENERATION.log",
+      "sha256": "c40a6881d0abcc33bcc4bf2e162b37dae73ab952fc780980c35f8399c4219b85"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CANDIDATE_SEAL_COMMIT.log",
+      "sha256": "1b39b065112d5c27dba6397ea7a762d1df164cc6b921f6a5a1ac30c398f4e68b"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CANDIDATE_STREAM_RECOVERY.log",
+      "sha256": "05fec58818b140e844a4a0174de7998524422559e5f3e9f5989f4f994cfcfa94"
+    },
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/CHAOS_TYPECHECK.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -78,6 +92,34 @@
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/CONNECTED_SCOPE.log",
       "sha256": "a7ff95c2b414afd999abe89cff68a32386a8bab9d5b9b06b707e7dbb84b77675"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CORRECTED_PERSISTED_STREAM.log",
+      "sha256": "901e0bd3c3da427a1c7c6da79ba5ef4f3c3c5729cd927a875451443bb4ef7c9a"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CURRENT_CANDIDATE_RAW_RECEIPT.json",
+      "sha256": "aff9d60efb83363022987591feccb416681061d38d1afdd4413b687362b99c19"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CURRENT_CANDIDATE_RESULT.json",
+      "sha256": "3c441ce62e9638250864d85053c772986fbbd78a4aa12003e4f852bb66478a07"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CURRENT_DRIVE_RECOVERY.json",
+      "sha256": "be6b8b27ada26cfa50d55ae4e8c03494384f05326bee60f7bba7e65412b8a86f"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CURRENT_TELEGRAM_RECOVERY.json",
+      "sha256": "c3b9e052202d7b844f25814103a7e035cbf8d542ee0dc060f244a0eb9bd20aba"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/EXACT_ENGINEERING_GATE.log",
+      "sha256": "429fa1c129f0025ecac7288d79d0192025272206add3590c9a66628efe0d45db"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FAILED_EXACT_FULL_SUITE.log",
+      "sha256": "aef790da16ebb718486583ee59c5b692f884c265d26748b268da7089431a3bd8"
     },
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/FINAL_CONNECTED.log",
@@ -96,8 +138,24 @@
       "sha256": "49a1ce6e4fca4ce8eff85180cc09b6d061d5cd141cc499914e87680b369e841e"
     },
     {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/OWNED_TEARDOWN.log",
+      "sha256": "74c7922e59b3a71f4bc8551127023b33b87cd2b213d2e7f07ec8b2d7c9a19739"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/OWNED_TEARDOWN_PROOF.json",
+      "sha256": "720eb618a1660fdbe4791bf632341cf55d6576a2b07ddf0b58ef32cee12e519e"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/RED_LEGACY_DATABASE_FREE_STREAM.log",
+      "sha256": "d5c56d65c73a85c5dfd4cbc862de090f8ebcfb6251775674c3253c3f0f69c5d8"
+    },
+    {
       "path": "output/qualification/2026-10-01/current-stream-isolation/RED_REAL_STREAM.log",
       "sha256": "785334d95747e7e51852d8ad7a72fe13e9b6f4853602821c7f8e505a7f1b7051"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/SOURCE_COMMIT.log",
+      "sha256": "40ecd47afdc2f5e80f709e75b167c684b0796300ed1e6c17dd5a358f47d523b7"
     },
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/TYPECHECK.log",
@@ -115,5 +173,107 @@
       "path": "output/qualification/2026-10-01/current-stream-isolation/VERIFIED_TYPECHECK.log",
       "sha256": "b5e8c4ff977a02eecb5dcfa58e809d7a11b51c935fc37711d0138b0d6fd38656"
     }
-  ]
+  ],
+  "candidate": {
+    "candidateCommit": "0816e8a6237e70ee7618f66e1ea0401efcb66812",
+    "finishedAt": "2026-10-01T18:24:46.841Z",
+    "invariantsPassed": 216,
+    "failed": 0,
+    "streamControls": [
+      {
+        "name": "scoped designer receives a one-use stream ticket from deployed Core",
+        "ok": true,
+        "detail": "HTTP 201"
+      },
+      {
+        "name": "scoped live stream crosses production nginx",
+        "ok": true,
+        "detail": "HTTP 200"
+      },
+      {
+        "name": "deployed stream rejects a spent ticket",
+        "ok": true,
+        "detail": "HTTP 401"
+      },
+      {
+        "name": "synthetic stream source upload is admitted by deployed Core",
+        "ok": true,
+        "detail": "HTTP 201"
+      },
+      {
+        "name": "synthetic stream source upload is admitted by deployed Core",
+        "ok": true,
+        "detail": "HTTP 201"
+      },
+      {
+        "name": "designer API read and stream both refuse the foreign client original",
+        "ok": true,
+        "detail": "API HTTP 404; scoped positive barrier received"
+      },
+      {
+        "name": "synthetic stream source upload is admitted by deployed Core",
+        "ok": true,
+        "detail": "HTTP 201"
+      },
+      {
+        "name": "open deployed stream honors a newly assigned second client",
+        "ok": true,
+        "detail": "no reconnect or principal client claim"
+      },
+      {
+        "name": "synthetic stream source upload is admitted by deployed Core",
+        "ok": true,
+        "detail": "HTTP 201"
+      },
+      {
+        "name": "synthetic stream source upload is admitted by deployed Core",
+        "ok": true,
+        "detail": "HTTP 201"
+      },
+      {
+        "name": "open deployed stream refuses a removed client while retaining the other assignment",
+        "ok": true,
+        "detail": "current RLS checked before ordered positive barrier"
+      },
+      {
+        "name": "deployed designer session can revoke its own stream credential",
+        "ok": true,
+        "detail": "HTTP 200"
+      },
+      {
+        "name": "synthetic stream source upload is admitted by deployed Core",
+        "ok": true,
+        "detail": "HTTP 201"
+      },
+      {
+        "name": "revoked session closes before the next authorized resource could be disclosed",
+        "ok": true,
+        "detail": "same Core session revocation; no private event after logout"
+      }
+    ],
+    "streamControlsPassed": 14,
+    "uncoveredModelCalls": 0,
+    "parser": "real pinned offline Docling",
+    "externalAdapters": "synthetic fakes",
+    "restores": {
+      "drive": {
+        "tableCount": 105,
+        "policyCount": 176,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "restoreValidationSeconds": 16.194,
+        "separateHostProved": false
+      },
+      "telegram": {
+        "tableCount": 105,
+        "policyCount": 176,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "restoreValidationSeconds": 11.696,
+        "separateHostProved": false
+      }
+    },
+    "productionChanged": false,
+    "scope": "Clean0816e8a6 runtime and harness; subsequent changes only test/qualification metadata. External adapters and staff remain synthetic."
+  }
 }

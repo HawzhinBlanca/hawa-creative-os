@@ -885,3 +885,12 @@ controls; eight connected files/72 tests and701 strict roots/types/lint pass. Ex
 current deployed nginx and full engineering qualification remain pending; whole
 production Gate B/native/human/model/pilot admission remain open. Original red and
 type failures are retained in W6_STREAM_ISOLATION_PROOF.json.
+
+
+ADR223 qualification checkpoint: clean0816e8a6 passes216 deployed controls,
+including14 named-session stream checks and both encrypted fresh-volume restores
+(105 tables/176 policies/16 blobs/zero missing). The exact source suite records
+6960pass/1fail/67skips; the old positive SSE fixture used database-free Core and
+now checks a real persisted task with exact ID/title/client and bounded frame
+parsing. Corrected connected suite40pass/3files; full rerun pending. Production
+unchanged, all whole-product/native/human/model/pilot gates remain open.

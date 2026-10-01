@@ -50,3 +50,15 @@ membership removal and role/session changes, read failure, explicit office event
 queue ordering and bounded overload. Preserve the red receipt and verify the
 current deployed candidate boundary. Engineering and synthetic isolation evidence
 do not admit genuine native/human/model/pilot or the whole production Gate B.
+
+
+Candidate qualification,1 October2026: clean0816e8a6 passes216 deployed controls,
+including14 current named-session stream controls through production nginx, plus
+both encrypted fresh-volume PostgreSQL/Restate/blob restores. Each retains105
+tables,176 policies and16 blobs without missing references. External adapters and
+staff actions are synthetic; production unchanged. The full source suite records
+6960 pass/1 fail/67 skips: its existing positive event test used database-free Core.
+The fixture now creates a persisted scoped task and asserts its exact ID/title/client
+from complete SSE frames under a bounded deadline. This preserves the deliberate
+no-database authority refusal and all cross-client negative assertions. Full rerun
+pending; candidate runtime and harness remain identical.
