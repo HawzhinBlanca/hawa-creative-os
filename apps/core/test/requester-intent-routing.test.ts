@@ -6,7 +6,7 @@ import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { pendingLateChanges } from '../src/services/lifecycle-chat-target.js';
 import { createRequesterIntentModel, intentRequestBody, type RequesterIntentModel } from '../src/services/requester-intent-model.js';
-import { parseChoice, readIntentByRules, type ChatRequestView } from '../src/services/requester-turn.js';
+import { parseChoice, planTurn, readIntentByRules, type ChatRequestView, type TurnInput } from '../src/services/requester-turn.js';
 
 /**
  * ADR-144: what a requester's message means in the context of the chat's requests, decided once per
@@ -497,5 +497,72 @@ describe('the intake router\'s paid call (migration 068)', () => {
     expect(await read(stopped, key, refused)).toBeNull();
     expect(await calls(refused)).toHaveLength(0);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ADR-040 addendum (incident 2026-10-01): "the design is not approved, …" read as approval because
+ * "approved" is an approval phrase. A requester's refusal ("not approved", "don't send it") is never
+ * happiness: with feedback it is the change, kept for the office; alone, the office hears the requester
+ * is not happy, and no paid round starts. Kept words of a question are read again when it is answered.
+ */
+describe('a requester who refuses is never read as happy (ADR-040 addendum, 2026-10-01)', () => {
+  const INCIDENT_WORDS = 'the design is not approved, the images cut with no content awareness, should have more images organized creatively, not just straight image on same old bg';
+
+  it.each([
+    [INCIDENT_WORDS, 'change', undefined], ['not approved, the photos are cropped badly', 'change', undefined],
+    ['the design is not approved', 'change', true], ["don't send it", 'change', true], ['please do not send it yet', 'change', true],
+    ["don't send it again", 'change', true], ["we can't approve this", 'change', true], ['not ready to print', 'change', true],
+    // "Not approved", "don't send it"
+    ['پەسەند نییە', 'change', true], ['مەینێرە', 'change', true],
+  ] as const)('"%s" reads as %s (refusal only: %s)', (words, intent, refusalOnly) => {
+    const reading = readIntentByRules(words);
+    expect(reading.intent).toBe(intent);
+    expect(reading.refusalOnly).toBe(refusalOnly);
+  });
+
+  it.each(['looks good, send it', 'send it', 'approved', 'no changes', 'باشە بینێرە'])('"%s" still reads as approval', (words) => {
+    expect(readIntentByRules(words).intent).toBe('approval');
+  });
+
+  const view = (requestId: string, stage: ChatRequestView['stage'], rev: number, title: string): ChatRequestView => ({
+    requestId, stage, rev, currentTaskId: `t-${requestId}`, clientId: null, title, activeAt: '2026-10-01T07:00:00Z',
+    createdAt: '2026-10-01T06:00:00Z', question: null, requesterId: null });
+  const input = (text: string, requests: ChatRequestView[], extra: Partial<TurnInput> = {}): TurnInput => ({
+    text, reading: readIntentByRules(text), requests, bound: [], unboundReply: false, senderId: String(REQUESTER),
+    officeIds: [String(OFFICE)], group: false, addressed: true, pendingAsk: null, now: Date.parse('2026-10-01T08:44:00Z'), ...extra });
+
+  it('a question that kept refusing words as approval is answered with them read again: a change for the office, never happiness', () => {
+    const requests = [view('a', 'in_review', 2, 'Field visit report'), view('b', 'in_review', 2, 'Pilot study')];
+    const plan = planTurn(input('2', requests, { pendingAsk: { updateId: 41, intent: 'approval', words: INCIDENT_WORDS,
+      options: requests.map((r) => ({ requestId: r.requestId, title: r.title })), allowNew: false } }));
+    expect(plan).toEqual({ kind: 'note', note: 'change', requestId: 'b', words: INCIDENT_WORDS, resolves: 41 });
+    // Genuine approval words kept with the question still tell the office the requester is happy.
+    expect(planTurn(input('2', requests, { pendingAsk: { updateId: 42, intent: 'approval', words: 'looks good, send it',
+      options: requests.map((r) => ({ requestId: r.requestId, title: r.title })), allowNew: false } })))
+      .toEqual({ kind: 'tell', note: 'approval', requestId: 'b', words: 'looks good, send it', resolves: 42 });
+  });
+
+  it('a refusal alone never starts a paid round: with a design waiting for changes, the office hears it', () => {
+    expect(planTurn(input("don't send it", [view('w', 'manual', 3, 'Nawroz poster')]))).toEqual({ kind: 'forward', words: "don't send it" });
+    expect(planTurn(input('not approved', [view('r', 'in_review', 2, 'Nawroz poster')])))
+      .toEqual({ kind: 'note', note: 'change', requestId: 'r', words: 'not approved' });
+    expect(planTurn(input("don't send it", []))).toEqual({ kind: 'forward', words: "don't send it" });
+  });
+
+  it('the incident sentence on a design in review is kept for the office as a change; nothing is told as happiness', async () => {
+    const chat = chatId();
+    const request = await seed(chat, 'in_review', 2, { title: 'Pilot study poster', sent: { key: '2:design-outcome', messageId: '9301' } });
+    const update = message(chat, INCIDENT_WORDS, { reply_to_message: { message_id: 9301 } });
+    const answer = await intake(app(), update);
+    expect(answer).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE', requestId: request.requestId,
+      requestStage: 'in_review', intent: 'change' });
+    expect(answer.note).toBeUndefined();
+    expect(answer.officeAlert.text).not.toContain('happy');
+    const pending = await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, request.requestId));
+    expect(pending).toEqual([expect.objectContaining({ text: INCIDENT_WORDS })]);
+    const refusal = await intake(app(), message(chat, "don't send it"));
+    expect(refusal).toMatchObject({ code: 'LATE_REQUESTER_CHANGE', requestId: request.requestId, intent: 'change' });
+    expect(await requestRow(request.requestId)).toMatchObject({ stage: 'in_review' });
   });
 });

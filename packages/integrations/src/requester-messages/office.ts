@@ -38,6 +38,14 @@ export const OFFICE_MESSAGES = {
     ckb: 'مەبەستت کام ڕەشنووسە؟\n{list}\n\nبە ژمارە یان ناو وەڵام بدەرەوە.',
   },
   /**
+   * ADR-040 addendum (incident 2026-10-01): an answer to a question the bot asked too long ago, or under
+   * reading rules that have since changed. Nothing is done with it.
+   */
+  lostTrack: {
+    en: 'I\'ve lost track of that question — please reply to the draft picture with what you want.',
+    ckb: 'ئەو پرسیارەم لێ ون بوو — تکایە وەڵامی وێنەی ڕەشنووسەکە بدەرەوە و بڵێ چیت دەوێت.',
+  },
+  /**
    * ADR-040 addendum (2026-10-01): each draft in the "which draft?" list says what tells it apart from
    * the others: when it was sent to this member, how many photos its request has, which is the newest,
    * and who asked for it when they are not all the same person. `{n}` is a count, `{time}` a 24-hour

@@ -34,8 +34,9 @@ describe('requester message catalogue', () => {
       expect(text).not.toMatch(/(?:^|[\s(“"«])\/[a-z_]{2,}/i);
       // "Reply to this message", "reply to its image", "reply directly to the revision notice". The office's
       // draft photo alert alone names its picture as what to answer (owner, ADR-180): office members are
-      // not requesters, and Telegram approval works by replying to that picture.
-      if (name !== 'office.draftAlertDecide') expect(text).not.toMatch(/\breply\s+(?:directly\s+)?to\b/i);
+      // not requesters, and Telegram approval works by replying to that picture. So does the answer to a
+      // question that expired or was asked under older rules (ADR-040 addendum, 2026-10-01, owner's words).
+      if (!['office.draftAlertDecide', 'office.lostTrack'].includes(name)) expect(text).not.toMatch(/\breply\s+(?:directly\s+)?to\b/i);
       // Exact formats: "Client: <code>", "Size: WxH", a divider line.
       expect(text).not.toMatch(/\bClient:|\bSize:|---/);
       // The office's own words.

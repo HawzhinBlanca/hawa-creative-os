@@ -141,3 +141,60 @@ Tests:
 - `apps/core`, `apps/worker` and `packages/integrations` together: 331 files and 3750 tests passed, with 3 files and 4 tests skipped. That run had a Desk `vite build` in place, which the bundle-size test reads. `pnpm typecheck` and `pnpm lint` pass.
 
 Limits: live Telegram is not exercised. The requester rules (`readIntentByRules`) still read some refusals as approval words: the incident's sentence, and "don't send it". From a requester, that tells the office the requester is happy. It approves nothing, and approval stays with the office. It is left for a separate change, because the requester side was to stay as it is.
+
+## Addendum (2026-10-01, second): a pending choice is read again when it is answered
+
+Branch `claude/pending-choice-reread` from production 8d3f24a7; not deployed. No foundation decision changes.
+
+**Incident, 2026-10-01.** At 07:35Z the owner, an office member, wrote without replying: "the design is not approved, the images cut with no content awareness, should have more images organized creatively, not just straight image on same old bg". The code of the time read it as approval because it contains "approved". Three drafts were waiting, so the bot asked "which draft?" and stored the question with the approval reading in it (`ask-which` with `intent: 'approve'`). 8d3f24a7 was deployed at about 08:05Z, and it reads "not approved" as a change. At 08:44Z the owner answered "3" to the old question. The answer applied the stored approval, and the draft was approved and delivered (task 5edca743, request 95eeb08d). The fix in the first addendum changed how words are read, but not a reading already stored.
+
+Decisions:
+
+1. **A pending choice keeps the words, never their reading.** `ask-which` stores the member's words and the options only. When a number, ordinal, name or "the newest" answers it, the kept words are read again by `readOfficeIntent` as it is at answer time, and that reading is acted on. A stored `intent` from an older question is never read.
+2. **Approval through a choice needs words that only approve.** `unambiguousApproval` requires the words to read as approval and also to have none of these: a refusal, a negation ("not", "no", "never", "n't", "but", "wrong", Sorani "no", "is not", "don't send"), a question mark, or a change. Otherwise:
+   - a refusal with feedback is the change, with the kept words;
+   - anything else ("no problem, send it", "approved?") asks what to do with the chosen draft.
+
+   Approval by a reply to the draft's photo, or with one draft waiting, is unchanged.
+3. **Questions carry a rules stamp.** Every question the bot asks an office member (`ask-which`, `ask-what`, `ask-late`) is stored with `askRules` (`OFFICE_TURN_RULES`, now 2) and `askedAt`. An answer to a question that has no stamp or an older one does nothing. Every question stored before this change has no stamp. The member is told: "I've lost track of that question — please reply to the draft picture with what you want." (Sorani in the catalogue, marked for review.) `OFFICE_TURN_RULES` must be raised whenever the office reading changes.
+4. **Questions expire after 30 minutes** (`PENDING_ASK_MS`), with the same answer, and nothing is done. "Answering" here means:
+   - a reply to the bot's question message;
+   - words with no reply that would answer it (a choice, or decisive words for `ask-what`).
+
+   Other words with no reply are read as if no question had been asked. The "lost track" turn closes the question, so the next message is read normally.
+5. **The office reading itself.** Feedback after "not approved" is now a change, not a rejection: "not approved, the photos are cropped badly". Before, `OFFICE_REJECT` matched first. "Not approved" alone still rejects. "I can't approve this", "we don't approve it" and "won't send" are refusals. Approval words that end in a question mark ("approved?", "is it approved?") approve nothing. The refusal pattern now lives in `requester-turn.ts` (`REFUSAL`, `refusesApproval`, `saysMoreThanRefusal`) and is shared by both readings.
+6. **Requesters.** A requester's "not approved", "don't send it", "we can't approve this" or the incident's sentence is no longer read as approval ("the requester is happy"), nor as a request for the files ("don't send it again" was read as "send it again", ADR-156).
+   - With feedback, it is a change. A design in review keeps it for the office as a late change, so Deliver waits for the office to read it.
+   - Refusal alone is a change marked `refusalOnly`. It is kept for the office as the requester not being happy. It never starts a paid round: with a design waiting for the requester's changes it goes to the office, and with no design it goes to the office.
+   - Answering the requester's own "which design?" reads kept approval words again (`answerPlan`). Kept refusal words become a change for the office, never a `tell` of happiness. Genuine approval words still tell the office.
+   - "Send it", "approved", "looks good, send it" and "no changes" are unchanged.
+
+**Worker.** ChatInbox (`apps/worker/src/lifecycle/chat-inbox.ts`) journals only Core's answer per Telegram update, under that update's key. A question and its answer are separate updates, and each one is decided by Core when it arrives. So no choice or decision kind is journaled in Restate, and nothing on the worker side needed to change.
+
+No model is called, and no paid call is added.
+
+Tests:
+
+- `apps/core/test/office-telegram-approval.test.ts`, 69 tests, all pass. With the sources reverted to 8d3f24a7, 21 fail, including all of these:
+  - the incident replayed: a stamped, current question that stores `intent: 'approve'` with the incident's words, then "3". The draft is sent back with the words; nothing is approved or delivered. On the base it answers "Approved. Sending …";
+  - "no problem, send it" kept, then "1": asked what to do;
+  - an unstamped question and an older stamp (by a reply to the question): "lost track", and no gateway call;
+  - a question 31 minutes old: "lost track", and no gateway call;
+  - a question asked now stores the words without `intent`, carries the stamp, and its answer reads the words again;
+  - 12 `unambiguousApproval` readings and 5 new office readings.
+- Genuine kept "approved" plus "2" approves and delivers. It passes on the base and after the fix.
+- `apps/core/test/requester-intent-routing.test.ts`, 80 tests, all pass; 13 of the new ones fail on the base:
+  - 10 refusal readings, with `refusalOnly`;
+  - a requester's kept approval question answered "2": a change note with the incident's words, while genuine "looks good, send it" still tells happiness;
+  - a refusal alone never revises a design waiting for changes;
+  - the incident's sentence on a design in review becomes a late change, with no happiness note, and so does "don't send it".
+- The earlier requester-side office case still passes. A requester's change while two drafts are in review gets no office turn and no decision.
+- The catalogue test that bars "reply to …" from every line now allows `office.lostTrack`, beside `office.draftAlertDecide`. Both speak to office members, who decide by replying to the draft's picture. The wording is the owner's.
+- `apps/core`, `apps/worker` and `packages/integrations` together: 331 files and 3793 tests passed, with 3 files and 4 tests skipped. That run had a Desk `vite build` in place, which the bundle-size test reads. `pnpm typecheck` and `pnpm lint` pass.
+
+Limits:
+
+- Live Telegram is not exercised.
+- Production data is not touched. The stored questions there have no stamp, so they are discarded on their first answer once this is deployed.
+- A turn that was recorded but never answered keeps the plan it recorded (a replay of the same update). A choice answered after this deploy is planned under the new rules.
+- An office member's "no changes" is still read as a change, which is the safe direction. It is left as it is.

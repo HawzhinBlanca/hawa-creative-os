@@ -267,6 +267,7 @@ and the phrase-ending words and language names in `packages/creative/src/studio/
 | `office.newest` | newest | نوێترین | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
 | `office.fromRequester` | from {requester} | داواکراوە لەلایەن {requester} | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
 | `office.aboutDraft` | About the {title} draft I sent you {when}: | دەربارەی ڕەشنووسی {title} کە {when} بۆم ناردیت: | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.lostTrack` | I've lost track of that question — please reply to the draft picture with what you want. | ئەو پرسیارەم لێ ون بوو — تکایە وەڵامی وێنەی ڕەشنووسەکە بدەرەوە و بڵێ چیت دەوێت. | needs native review (ADR-040 addendum, pending choice re-read, 2026-10-01) |
 
 | `routing.statusHeld` | {title} is paused at your request. New design work is waiting for the office to resume it; work already admitted may still finish. | {title} بە داواکاریی تۆ ڕاگیراوە. کاری نوێی دیزاین چاوەڕێیە ئۆفیسەکە دووبارە دەستی پێ بکاتەوە؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |
 | `routing.holdConfirmed` | I've paused {title}. New design work will wait until the office resumes it; work already in progress may still finish. | {title} ڕاگیرا. کاری نوێی دیزاین چاوەڕێ دەکات تا ئۆفیس دووبارە دەستی پێبکات؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |
