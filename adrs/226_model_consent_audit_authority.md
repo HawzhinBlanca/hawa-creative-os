@@ -1,6 +1,6 @@
 # ADR226 — Scoped administrator model-consent audit insertion
 
-Date: 2026-10-01. Status: forward repair implemented;38 connected checks pass; full qualification pending.
+Date: 2026-10-01. Status: exact integrated source and synthetic deployment/recovery qualified; whole product admission open.
 Requirements: NFR-006, FR-056, NFR-011, NFR-012.
 Sources: MASTER_SPEC.md invariants5/8/10; docs/14_SECURITY_THREAT_MODEL.md;
 ADR225/234; current release integration proof.
@@ -39,3 +39,15 @@ and migration identity controls, real administrator API/replay/withdrawal,
 startup/upgrade inventory and actual requested-background/render QA. No permission
 or QA assertions were relaxed. Five isolated candidate controls exercise the
 current source-bound permission, refusal and081 checksum; execution is pending.
+
+
+## Exact qualification — 2 October 2026 (Asia/Baghdad)
+
+Clean1cf34fdb:7535/0/67 source tests,716 passing files,723 strict roots; seven
+technical stages and negative flag refusal pass. Production-data Stage3 remains
+NOT_RUN pending explicit transfer approval. Exact6647a4cb candidate237/0, including
+five consent controls; two encrypted105-table/179-policy/16-blob restores with
+zero missing references. Source/candidate runtime, migration and harness match;
+only a test catalog result-type annotation and seal differ. Every failure retained.
+Owned synthetic stack removed; production remainsbaffce10 and was not deployed
+by this work. Real native/human/offsite/pilot admission remains open.

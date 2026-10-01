@@ -978,3 +978,15 @@ administrator consent audit insertion with a restrictive task-bypass guard;
 existing reads/grants unchanged. Six files/38 connected checks pass. Current full
 source and candidate recovery reruns pending; earlier232 candidate controls do
 not qualify this newly repaired schema. No production or product admission.
+
+
+### Qualified current release integration — 2 October 2026
+
+Exactclean1cf34fdb:7535/0/67 source tests across716 passing files,723 strict roots,
+7 technical stages and negative refusal pass. Current6647a4cb synthetic candidate
+237/0, including16 task/consent authority controls; both encrypted105-table/179-
+policy/16-blob restores have0 missing references. Runtime/migrations/harness equal
+qualified source; only test catalog typing and generated seals differ. First full
+7515/4/67 and repaired typing failure preserved. Production-data Stage3 NOT_RUN;
+real native/human/publication/offsite/pilot admission open. No production change.
+See CURRENT_RELEASE_INTEGRATION_PROOF.json for exact provenance.

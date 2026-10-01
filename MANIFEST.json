@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T20:54:19Z",
+  "generatedAt": "2026-10-01T21:08:21Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1119,8 +1119,8 @@
     },
     {
       "path": "adrs/226_model_consent_audit_authority.md",
-      "sha256": "04d1c1f2c5bb262a4063795fe314c3e1117650d442b3ef0398d0ac46e32f48fd",
-      "bytes": 2465
+      "sha256": "f5c1f9ccd579a2cbeceb73604d78758427c878ad940bc73a42139fbadb24e389",
+      "bytes": 3178
     },
     {
       "path": "adrs/230_request_withdraw_and_chat_only_delivery.md",
@@ -1624,8 +1624,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/CURRENT_RELEASE_INTEGRATION_PROOF.json",
-      "sha256": "93981a6b8a5c3851ed2d22e1d0585ec8a72e37e7e8d9cf0c5efd09ca4e4229b3",
-      "bytes": 6380
+      "sha256": "2cc0d6d90685dc8c0786719584e4f98d7e004212e998f8351c56167e720d7794",
+      "bytes": 11588
     },
     {
       "path": "plans/content-aware-design-2026-09-30/FINAL_COMBINED_GATE_EVIDENCE.json",
@@ -1654,8 +1654,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "6e73bbd9469d948b073e30ac73282e9a02aa1b2955f3f665c675233d0fa5c019",
-      "bytes": 86272
+      "sha256": "96fce62b185b485c0e48292642e5d5cef09b862d10413212765032303f26e672",
+      "bytes": 86976
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -3299,8 +3299,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "14337b0e4c7927a7769f9d2cd9865c2d493a0a62fb459a5be966ef7abed2d386",
-      "bytes": 798696
+      "sha256": "79a5daf6250ca309592a64da230191822f2d14ddebb4088cd3f3036a61cac42d",
+      "bytes": 804036
     },
     {
       "path": "plans/user-stories.csv",
