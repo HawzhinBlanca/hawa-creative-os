@@ -945,3 +945,13 @@ strict roots pass. Full release/candidate qualification pending; uncommitted sou
 is not deployed. Fresh read-only live build baffce10 is healthy, Canva unverified.
 No actual creative/native/human/offsite/pilot admission follows from these checks.
 See W6_TASK_WRITE_AUTHORITY_PROOF.json and retained original failure receipts.
+
+
+### ADR225 exact source and synthetic recovery qualification
+
+Clean70dc7d62:7031/0/67 source tests,699 passing files,706 strict roots and seven
+technical stages plus negative refusal pass. Exact deployed232/0 controls; two
+encrypted105-table/177-policy/16-blob restores, zero missing references. Historical
+red receipts retained and owned stack removed. Production-data Stage3 NOT_RUN;
+real native/human/publication/offsite/pilot admission open. Livebaffce10 integration
+is the next connected milestone; no production changes in this slice.

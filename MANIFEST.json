@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T20:10:26Z",
+  "generatedAt": "2026-10-01T20:17:58Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1109,8 +1109,8 @@
     },
     {
       "path": "adrs/225_task_write_scope_authority.md",
-      "sha256": "5d55447f6b0dc8666081558a5a578b468ec3a11fe48870c462eb0247626e9a09",
-      "bytes": 4691
+      "sha256": "780b570ed631e50dd3559c9bcfe2182d9c63e22927bbeb5e14a7d738548fb11b",
+      "bytes": 5458
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1604,8 +1604,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "36dee3d769696ea889d19b956548fdc33d43d52862f591def4f20be4d93f3785",
-      "bytes": 84465
+      "sha256": "2b4621b8e081a3c83566bee767e87c6f86d32a69114d4a4275eec1d85ecd5688",
+      "bytes": 85008
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -2004,8 +2004,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_TASK_WRITE_AUTHORITY_PROOF.json",
-      "sha256": "d2f83729e1d3e403a411d226fa36d8b573af5ed0948d8b1be9e8d54228cc39e7",
-      "bytes": 2207
+      "sha256": "4f58ca295bc12d9d629217ef3fe151d3c2ea5431aed048a2fd46652fe27faae0",
+      "bytes": 6349
     },
     {
       "path": "plans/early-requester-hold-2026-10-01/LIVE_INFRA_READBACK.json",
@@ -3224,8 +3224,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "af50a2e183cef8f3451bfb2e52d9b6d0741dedcdd161de5488eeca8dd4ae2e52",
-      "bytes": 767541
+      "sha256": "2e6a4438fba111624c9aaf6dcae262146cdb3176050e2a2c14964f751a24131b",
+      "bytes": 769449
     },
     {
       "path": "plans/user-stories.csv",

@@ -1,6 +1,6 @@
 # ADR225 — New-row task authority and immutable selected client scope
 
-Date: 2026-10-01. Status: implemented; focused checks pass; full release qualification pending.
+Date: 2026-10-01. Status: implemented; exact source and synthetic deployment/recovery qualified; product admission open.
 Requirements: NFR-006, FR-011, NFR-011, NFR-012.
 Sources: MASTER_SPEC.md invariants5/10; docs/09_MESSAGING_AND_OFFICE_INBOX.md;
 docs/14_SECURITY_THREAT_MODEL.md sections1/3/5; ADR033/064/224.
@@ -75,3 +75,16 @@ learning and native handoff. This is focused source evidence only. Full source,
 candidate recovery and deployment qualification remain pending. See
 output/qualification/2026-10-01/task-write-authority/VERIFIED_QA_SCOPE_AND_RERUN.log;
 the original strict failures and concurrent collision are retained alongside it.
+
+
+## Exact qualification
+
+Clean70dc7d62 passes7031 tests/0 failures/67 skipped across699 files,706 strict
+roots and seven technical stages; negative manifest-flag refusal verified.
+Production-dump Stage3 remains NOT_RUN pending transfer approval. The same exact
+commit passes232 synthetic deployed controls; both encrypted recoveries preserve
+105 tables/177 policies/16 blobs with zero missing references. Owned rehearsal
+containers, volumes and private files are removed. No production deployment or
+real studio, professional quality, offsite recovery or pilot admission follows.
+Livebaffce10 integration remains pending; all original failing receipts retained.
+See W6_TASK_WRITE_AUTHORITY_PROOF.json for exact hashes and archived evidence.
