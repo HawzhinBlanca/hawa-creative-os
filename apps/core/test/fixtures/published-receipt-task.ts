@@ -1,3 +1,4 @@
+import {persistClientDnaFixture} from './persisted-client-dna.js';
 import {randomUUID} from 'node:crypto';
 import {createAppWithClientFixtures} from './app-with-client-fixtures.js';
 import {memoryExportStore} from '../pinned-exports-fixture.js';
@@ -7,6 +8,7 @@ export async function publishedReceiptTask(db:ReturnType<typeof createDb>){
  const exports=memoryExportStore(),clientId='c1000000-0000-4000-8000-000000000002';
  const app=createAppWithClientFixtures({db,testAuth:{principal:{role:'art_director'}},deliverableStore:exports.store,
   qaEngine:{run:async(_ctx:unknown,input:{designRevisionId:string})=>({ok:true,value:{qcRunId:randomUUID(),revisionId:input.designRevisionId,status:'passed',criticalPass:true,findings:[],profile:'strict'}})} as never});
+ await persistClientDnaFixture(app,clientId,{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});
  const request=async(path:string,body?:unknown)=>{
   const r=await app.request(path,{method:'POST',headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
   if(r.status>=300)throw new Error(`Publication fixture ${path}: ${r.status} ${await r.text()}`);return r.json();

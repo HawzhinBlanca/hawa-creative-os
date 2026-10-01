@@ -1,3 +1,6 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
@@ -147,3 +150,5 @@ describe('Approved revision learning authority',()=>{
     expect((await response.json()).title).toBe('REFINEMENT_SOURCE_EVIDENCE_CHANGED');
   });
 });
+
+prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:db}), 'c1000000-0000-4000-8000-000000000003',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});

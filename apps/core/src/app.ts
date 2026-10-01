@@ -111,7 +111,7 @@ import type { ClientDnaSnapshot, RouteContext } from './routes/types.js';
 import type { QAEngine } from '@hawa/contracts';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID, ADMIN_USER_ID } from './core-context.js';
 import { createTaskReader } from './services/task-reader.js';
-import { createClientDnaResolver } from './services/client-dna-resolver.js';
+import { createClientDnaResolver, ClientDnaUnavailableError } from './services/client-dna-resolver.js';
 import { noDatabaseStore } from './services/no-database-store.js';
 import { createOmnichannelDelivery } from './services/omnichannel-delivery.js';
 import { PostgresDriveUploadIdentityStore } from './services/drive-upload-reservation.js';
@@ -194,6 +194,7 @@ export function createApp(options?: CreateAppOptions) {
   });
 
   app.onError((err, c) => {
+    if (err instanceof ClientDnaUnavailableError) return problem(c, 503, 'Client DNA Unavailable', err.message);
     if (err instanceof TaskStoreUnavailableError) {
       log.warn('[core:task_read]', err.message, (err as { cause?: unknown }).cause);
       return problem(c, 503, 'Database Unavailable', err.message);

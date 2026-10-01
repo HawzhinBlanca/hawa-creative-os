@@ -438,3 +438,23 @@ refusal pass. Connected10files/100pass and all retained failures are recorded in
 W6_LEARNING_CONSUMERS_PROOF.json; exact gate in W6_LEARNING_CONSUMERS_GATE_EVIDENCE.json.
 Evidence-only publication must preserve every runtime/test/migration/infra/gate byte.
 Source not deployed; broader FR077/DNA fallback/native/human/taste/product remains open.
+
+
+## Authoritative DNA consumer boundary — 1 October 2026, ADR197
+
+Actual warmed-cache denial, default-operator impersonation, SQL read failure and
+JSON scope/version overrides reproduced four failures. Scoped PostgreSQL is now
+the only configured-database DNA authority. Caller identities reach rubric,
+review and publication task reads; writes never retry outside RLS. Frozen
+publication replay preserves original inputs, including the permitted first
+reporting-Sheet binding; completed links use actual stored receipts.
+
+Retained all intermediate failures and the unsealed development full precheck.
+Its84 failures exposed old cache-only setups and one first-Sheet replay control;
+it is not an exact-source qualification because development continued during it.
+Explicit durable fixtures preserve original approval/QC/recovery assertions and
+the deliberately DNA-less search control. Connected62pass; crash/replay20pass;
+affected consumers206pass/3fail/1skip, corrected remaining26pass. Counts overlap.
+Actual deferred DNA commit refusal preserves the active version. Exact full gate
+pending. W6_DNA_AUTHORITY_PROOF.json. No deployment or aesthetic admission;
+broader search/direct-map/W5/W6/native/Canva/human/product gates remain open.

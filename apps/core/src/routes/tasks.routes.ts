@@ -301,7 +301,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           { tenantId, userId, role: auth.role || 'operator' },
           async (trx) => {
             if (documentIntake) await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`document-request:${tenantId}:${idempotencyKey}`},0))`.execute(trx);
-            if (!manualIntake) clientDnaVersion ||= (await resolveClientDna(body.clientId, undefined, trx))?.version || 1;
+            if (!manualIntake) clientDnaVersion ||= (await resolveClientDna(body.clientId, {tenantId,userId,role:auth.role || 'operator'}, trx))?.version || 1;
             return await taskRepo.createTaskAggregate(
               {
                 tenantId,
@@ -677,7 +677,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             clientDnaVersion:
               payload.clientDnaVersion ||
               payload.body?.clientDnaVersion ||
-              (dbTask.client_id ? (await resolveClientDna(dbTask.client_id))?.version : undefined) ||
+              (dbTask.client_id ? (await resolveClientDna(dbTask.client_id, {tenantId,userId:auth.userId,role:auth.role}))?.version : undefined) ||
               1,
             version: Number(dbTask.version),
             latestRevisionId,

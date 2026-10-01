@@ -1,3 +1,6 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { CanvaBindingRepository, createDb, withRlsContext } from '@hawa/db';
 import crypto from 'node:crypto';
@@ -877,3 +880,5 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect(checkTask.status).toBe('APPROVED');
   });
 });
+
+prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:testDb}), 'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});

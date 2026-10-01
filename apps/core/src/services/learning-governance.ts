@@ -114,7 +114,7 @@ type ModerationData = {
 export async function moderateLearningRule(ctx: RouteContext, auth: AuthContext, clientId: string, ruleId: string, action: RuleModerationAction, reason: string) {
     const tenantId = auth.tenantId!, actor = { id: auth.userId!, role: auth.role! };
     return serializeModeration(JSON.stringify([tenantId, clientId]), async () => {
-        const fallback = await ctx.resolveClientDna(clientId, { tenantId, userId: actor.id, role: actor.role });
+        const fallback = ctx.db ? undefined : await ctx.resolveClientDna(clientId, { tenantId, userId: actor.id, role: actor.role });
         let snapshot: ClientDnaSnapshot | undefined;
         let finalDna: ClientDNA | undefined;
         let recovered:FeedbackMiner|undefined;

@@ -8,6 +8,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { GooglePublisher } from '@hawa/integrations';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
 
@@ -15,6 +16,10 @@ import type { PublishRequest, RequestContext } from '@hawa/contracts';
 // 1.3, groups G3 and G5), so these apps run on this file's own test database.
 const testDb = createDb(process.env.TEST_DATABASE_URL!);
 afterAll(() => testDb.destroy());
+beforeAll(async()=>{await persistClientDnaFixture(createAppWithClientFixtures({db:testDb}),
+  'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});
+ await persistClientDnaFixture(createAppWithClientFixtures({db:testDb}),
+  'c1000000-0000-4000-8000-000000000003',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});
 
 /**
  * A QA engine whose every run passes. Postgres approves only a revision with a passing QA run, and
@@ -249,7 +254,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      expect(pubRes.status).toBe(200);
+      expect(pubRes.status,JSON.stringify(await pubRes.clone().json())).toBe(200);
       const pubData = await pubRes.json();
       expect(pubData.ok).toBe(true);
       // Confirms Drustee uses its own verified production folder, not KAAE or foreign client
@@ -593,7 +598,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      expect(pubRes.status).toBe(200);
+      expect(pubRes.status,JSON.stringify(await pubRes.clone().json())).toBe(200);
       const pubData = await pubRes.json();
 
       // Task status is COMPLETE and receipt exists

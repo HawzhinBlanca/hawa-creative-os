@@ -1,3 +1,4 @@
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
@@ -20,6 +21,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
 
   beforeAll(async () => {
     db = createDb(process.env.TEST_DATABASE_URL!);
+    await persistClientDnaFixture(createAppWithClientFixtures({db}),kaaeClientId,headers);
     await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'administrator' }, async (trx) => {
       await sql`DELETE FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid`.execute(trx);
     });

@@ -37,6 +37,7 @@ import { loadPinnedDeliverables, type DeliverableStore } from './pinned-delivera
 import { validatePublicationReceipt } from './publication-receipt-validation.js';
 import { PublicationExpectations, PublicationExpectationConflict } from './publication-expectations.js';
 import { pendingChangeOf, pendingChangeWords } from './pending-change.js';
+import { readPublicationReceipt } from './publication-receipt.js';
 import type { ClientDnaResolver } from './client-dna-resolver.js';
 import type { TaskReader } from './task-reader.js';
 
@@ -392,10 +393,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       }
     }
 
-    // Only the task's own client DNA names a destination; another client's folder is never a fallback.
     const deliveryTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
-    let client: any = await resolveClientDna(task.clientId, { tenantId: deliveryTenantId });
-    const clientSlug = client?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'client';
     const approval = await findApprovalForDelivery(deliveryTenantId, taskId, task, deliveryOptions?.designRevisionId || task.latestRevisionId, {
       approvalId: deliveryOptions?.approvalId,
       allowInvalidated: deliveryOptions?.policy === 'deliver_approved_stored',
@@ -403,6 +401,68 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     if (!approval) {
       return { ok: false, status: 422, title: 'Nothing Approved To Deliver', code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
     }
+    const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
+    const alreadyDeliveredAnswer = async (pub?: {id:unknown}) => {
+      if (!db || !publicationRepo) return null;
+      try {
+        const receipt = await readPublicationReceipt(db, publicationRepo,
+          {tenantId:deliveryTenantId,userId:SYSTEM_AUTOMATION_USER_ID,role:'operator'}, taskId);
+        if (receipt?.state === 'complete' && receipt.publicationKey === publicationKey && (!pub || receipt.publicationId === String(pub.id))) {
+          const folderId = receipt.files[0]?.folderId;
+          const sheet = receipt.sheetRow;
+          return {ok:true,taskId,status:'COMPLETE',complete:true,alreadyCompleted:true,
+            publicationReceipt:{...receipt,detail:{verified:true,filesUploaded:receipt.files.length,alreadyCompleted:true}},
+            driveFolderUrl:folderId ? `https://drive.google.com/drive/folders/${folderId}` : null,
+            sheetRowUrl:sheet ? `https://docs.google.com/spreadsheets/d/${sheet.spreadsheetId}#gid=${sheet.sheetId}&range=A${sheet.rowNumber}` : null,
+            filesCount:receipt.files.length,publishedAt:receipt.completedAt || sheet?.syncedAt || null};
+        }
+      } catch {
+        return {ok:false,status:503,code:'PUBLICATION_RECEIPT_UNAVAILABLE',message:'The stored delivery could not be verified; try again'};
+      }
+      return null;
+    };
+    if (!workflowMode && task.status === 'COMPLETE' && db && publicationRepo) {
+      const completed = await alreadyDeliveredAnswer();
+      if (completed) return completed;
+    }
+    const expectationStore = db && isValidUuid(taskId) ? new PublicationExpectations(db) : null;
+    let stored: Awaited<ReturnType<PublicationExpectations['read']>> = null;
+    try {
+      stored = await expectationStore?.read(deliveryTenantId, publicationKey) ?? null;
+      if (stored && (stored.original.tenantId !== deliveryTenantId || stored.original.taskId !== taskId ||
+        stored.original.clientId !== task.clientId || stored.original.approvalId !== approval.approvalId ||
+        stored.original.designRevisionId !== approval.designRevisionId || stored.original.publicationKey !== publicationKey ||
+        stored.original.projectId !== (task.projectId ?? null))) throw new PublicationExpectationConflict('PUBLICATION_EXPECTATION_SCOPE_CHANGED');
+    } catch {
+      return {ok:false,status:503,code:'PUBLICATION_EXPECTATION_UNAVAILABLE',message:'The original publication inputs could not be verified; delivery remains held'};
+    }
+    // Frozen inputs authorize replay. Only a first attempt acquires current scoped DNA.
+    let client: any;
+    if (stored) {
+      let sheetBinding = stored.sheet ?? stored.original.destination;
+      // An initially absent reporting Sheet can acquire its first binding. Drive and files stay frozen.
+      if (!stored.sheet && !stored.original.destination.spreadsheetId) {
+        try {
+          const current = await resolveClientDna(task.clientId, {tenantId:deliveryTenantId,userId:SYSTEM_AUTOMATION_USER_ID,role:'operator'});
+          const legacy = current as {productionDestinations?: {googleSheetId?: string}} | undefined;
+          sheetBinding = { ...stored.original.destination,
+            spreadsheetId: current?.destinations?.spreadsheetId || legacy?.productionDestinations?.googleSheetId || '',
+            sheetId: current?.destinations?.sheetId ?? stored.original.destination.sheetId };
+        } catch {
+          return {ok:false,status:503,code:'CLIENT_DNA_UNAVAILABLE',message:'The first reporting Sheet binding could not be verified; delivery remains held'};
+        }
+      }
+      client = {name:stored.original.destination.relativeFolderParts[1],destinations:{
+      googleSharedDriveId:stored.original.destination.sharedDriveId,
+      productionFolderId:stored.original.destination.productionRootFolderId,
+      spreadsheetId:sheetBinding.spreadsheetId,
+      sheetId:sheetBinding.sheetId}};
+    }
+    else {
+      try {client = await resolveClientDna(task.clientId, {tenantId:deliveryTenantId,userId:SYSTEM_AUTOMATION_USER_ID,role:'operator'});}
+      catch {return {ok:false,status:503,code:'CLIENT_DNA_UNAVAILABLE',message:'Current client DNA could not be verified; delivery remains held'};}
+    }
+    const clientSlug = client?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'client';
     const deliverables = await loadPinnedDeliverables(
       deliverableStore,
       { tenantId: deliveryTenantId, userId: SYSTEM_AUTOMATION_USER_ID, taskId, filePrefix: clientSlug },
@@ -423,54 +483,6 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     const isDeliverApprovedStored = deliveryOptions?.policy === 'deliver_approved_stored';
     const sm = new TaskStateMachine(taskId, isDeliverApprovedStored &&
       !['PUBLISH_RECONCILIATION', 'ARCHIVE_RECONCILIATION'].includes(task.status) ? 'APPROVED' : task.status);
-
-    const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
-
-    /** The answer for a delivery Postgres already records as complete: nothing is sent again. */
-    const alreadyDeliveredAnswer = (pub: { id: unknown; completed_at?: unknown }) => {
-      const folderId = client?.destinations?.productionFolderId || client?.productionDestinations?.googleDriveFolderId;
-      const sheetId = client?.destinations?.spreadsheetId || client?.productionDestinations?.googleSheetId || '';
-      const completedAt = pub.completed_at ? new Date(pub.completed_at as string).toISOString() : new Date().toISOString();
-      const receipt = {
-        publicationId: pub.id,
-        publicationKey,
-        state: 'complete' as const,
-        driveFiles: [] as any[],
-        sheet: { spreadsheetId: sheetId, sheetId: 0, rowKey: taskId, expectedHash: deliverables.packageHash, synced: true },
-        completedAt,
-        detail: { verified: true, filesUploaded: deliverables.files.length, alreadyCompleted: true },
-      };
-      return {
-        ok: true,
-        taskId,
-        status: 'COMPLETE',
-        complete: true,
-        alreadyCompleted: true,
-        publicationReceipt: receipt,
-        driveFolderUrl: `https://drive.google.com/drive/folders/${folderId}`,
-        sheetRowUrl: null,
-        filesCount: deliverables.files.length,
-        publishedAt: completedAt,
-      };
-    };
-
-    // A task already delivered is answered from its publication row, whichever process delivered it
-    // (it used to be answered from the receipt this process kept, which a restart lost). COMPLETE has
-    // no transitions, so this is read before the move to PUBLISHING, which would refuse it with 409;
-    // a chat approve on a delivered task then got an error instead of the stored delivery.
-    if (!workflowMode && task.status === 'COMPLETE' && publicationRepo && db && isValidUuid(taskId)) {
-      const doneTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
-      const done = await withRlsContext(db, { tenantId: doneTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
-        publicationRepo.findByKey(publicationKey, doneTenantId, trx)
-      ).catch((err: unknown) => {
-        log.warn('[core:omnichannel] Could not read the stored publication:', err);
-        return null;
-      });
-      if (done && done.state === 'complete') {
-        task.status = 'COMPLETE';
-        return alreadyDeliveredAnswer(done);
-      }
-    }
 
     /**
      * The workflow's answer: what the requester is sent, and what became of the archive. Built from
@@ -720,9 +732,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       },
       sheetRow: { taskId, client: task.clientId || DEFAULT_CLIENT_ID, status: 'COMPLETE', publishedAt: new Date().toISOString() },
     };
-    const expectationStore = db && isValidUuid(taskId) ? new PublicationExpectations(db) : null;
     try {
-      const stored = await expectationStore?.read(ctx.tenantId, publicationKey);
       if (stored) publicationRequest = publicationRequestFromExpectation(stored.original, publicationRequest, stored.sheet);
     } catch {
       return { ok: false, status: 503, code: 'PUBLICATION_EXPECTATION_UNAVAILABLE',
@@ -783,7 +793,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       // a publisher-shaped { ok, value } that the routes do not read, so an adopted delivery was
       // reported as PUBLISH_RECONCILIATION with no receipt.
       task.status = 'COMPLETE';
-      return alreadyDeliveredAnswer(dbPub);
+      return await alreadyDeliveredAnswer(dbPub) ?? {ok:false,status:503,code:'PUBLICATION_RECEIPT_UNAVAILABLE',message:'The stored delivery could not be verified; try again'};
     }
 
     if (expectationStore && dbPub) {

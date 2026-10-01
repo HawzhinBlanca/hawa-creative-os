@@ -1,3 +1,6 @@
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
+import {beforeAll as prepareDna} from 'vitest';
 import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
@@ -18,6 +21,8 @@ const url = process.env.HAWA_ISOLATED_TEST_DB;
  */
 describe.skipIf(!url)('an approved design when Drive cannot be written', () => {
   const db = createDb(url || 'postgres://localhost/hawa_repair');
+  prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:db}), 'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});
+
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
   const kaae = 'c1000000-0000-4000-8000-000000000002';

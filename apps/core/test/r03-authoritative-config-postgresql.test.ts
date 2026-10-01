@@ -1,3 +1,5 @@
+import {createApp as boundaryCore} from '../src/app.js';
+import {persistClientDnaFixture,clientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { CostGovernor } from '@hawa/integrations';
@@ -27,6 +29,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
   describe('1. Process/Instance Recreation Preserves Authoritative State', () => {
     it('preserves client DNA mutations and version increment across new createAppWithClientFixtures() instances', async () => {
       const app1 = createAppWithClientFixtures();
+      await persistClientDnaFixture(app1,'c1000000-0000-4000-8000-000000000003',headers);
       const getOriginal = await app1.request('/v1/clients/client-drustee/dna', { headers });
       expect(getOriginal.status).toBe(200);
       const originalDna = await getOriginal.json();
@@ -124,7 +127,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
   });
 
   describe('4. Failed Database Transaction Leaves No Success Response / Mutation', () => {
-    it('returns error and does not mutate in-memory state if DB transaction fails', async () => {
+    it('holds an unreadable database without mutating the process cache', async () => {
       // Mock repository that rejects all writes
       const failingDb = {
         transaction: () => ({
@@ -134,9 +137,12 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
         }),
       } as any;
 
-      const app = createAppWithClientFixtures({ db: failingDb });
-      const getOriginal = await app.request('/v1/clients/client-drustee/dna', { headers });
-      const originalDna = await getOriginal.json();
+      const originalDna = clientDnaFixture('client-drustee');
+      let cache:ReadonlyMap<string,unknown>|undefined;
+      const app = boundaryCore({db:failingDb,seedClientDna:map=>{
+        map.set('client-drustee',structuredClone(originalDna));cache=map;
+      }});
+      expect((await app.request('/v1/clients/client-drustee/dna',{headers})).status).toBe(503);
 
       const postRes = await app.request('/v1/clients/client-drustee/dna', {
         method: 'POST',
@@ -148,12 +154,12 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
       });
 
       // Must NOT be 201
-      expect(postRes.status).toBe(500);
+      expect(postRes.status).toBe(503);
 
       // In-memory state must NOT have updated
       const getAfter = await app.request('/v1/clients/client-drustee/dna', { headers });
-      const afterDna = await getAfter.json();
-      expect(afterDna.name).not.toBe('This Mutation Must Fail');
+      expect(getAfter.status).toBe(503);
+      expect(cache?.get('client-drustee')).toEqual(originalDna);
     });
   });
 

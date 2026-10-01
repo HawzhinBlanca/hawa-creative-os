@@ -1,3 +1,6 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
 import crypto from 'node:crypto';
 import { describe, expect, it, afterAll } from 'vitest';
 import { createDb } from '@hawa/db';
@@ -158,3 +161,5 @@ describe('the requester chat', () => {
     expect(await resolveRequesterChat({ sourcePlatform: 'hawa_desk' }, async () => { throw new Error('db down'); })).toBeNull();
   });
 });
+
+prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:testDb}), 'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});

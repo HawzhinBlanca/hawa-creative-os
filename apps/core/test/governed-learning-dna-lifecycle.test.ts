@@ -1,3 +1,4 @@
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { createDb, withRlsContext } from '@hawa/db';
@@ -28,6 +29,8 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
       await withRlsContext(db, { tenantId: defaultTenantId, userId: adminUserId, role: 'administrator' }, async (trx) => {
         await (trx as any).deleteFrom('hawa.client_dna_versions').where('client_id', 'in', [drusteeClientId, kaaeClientId]).execute();
       });
+      await persistClientDnaFixture(app,drusteeClientId,authHeaders);
+      await persistClientDnaFixture(app,kaaeClientId,authHeaders);
       // Also reset in-memory DNA version to 1 if it was previously incremented
       const drusteeDnaRes = await app.request(`/v1/clients/${drusteeClientId}/dna`, { headers: authHeaders });
       if (drusteeDnaRes.status === 200) {

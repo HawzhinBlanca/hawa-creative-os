@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
@@ -7,6 +7,7 @@ import { randomUUID,createHash } from 'node:crypto';
 import {createDb,sql,withRlsContext} from '@hawa/db';
 import {FeedbackMiner,planRuleModeration} from '@hawa/creative';
 import {createAppWithClientFixtures} from './fixtures/app-with-client-fixtures.js';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import {approvedRefinementPair} from './fixtures/approved-refinement-pair.js';
 import {memoryExportStore} from './pinned-exports-fixture.js';
 import { mkdtemp, rm,writeFile } from 'node:fs/promises';
@@ -17,6 +18,7 @@ const clientId='c1000000-0000-4000-8000-000000000003';
 const headers={'Content-Type':'application/json',Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`};
 const owner=createDb(process.env.TEST_DATABASE_OWNER_URL!),db=createDb(process.env.TEST_DATABASE_URL!);
 const tenantId='00000000-0000-4000-a000-000000000001',actorId='00000000-0000-4000-b000-000000000002';
+beforeAll(async()=>{await persistClientDnaFixture(createAppWithClientFixtures({db}),clientId,headers);});
 const children=new Set<ChildProcess>();
 let child:ChildProcess|undefined;
 async function stop(signal:'SIGKILL'|'SIGTERM'='SIGTERM',target=child) {

@@ -1,3 +1,6 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
 import { describe, it, expect, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import { createDb } from '@hawa/db';
@@ -299,3 +302,5 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
     expect(diffJson.diff.textChanges.some((c: any) => c.nodeId === 'headline')).toBe(true);
   });
 });
+
+prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:testDb}), 'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});

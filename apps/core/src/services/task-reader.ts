@@ -87,12 +87,13 @@ export function createTaskReader({ db, taskRepo, tasks }: Pick<CoreContext, 'db'
   // `strict` is for a handler about to act on the task's status (deliver, publish, approve, route,
   // control, a revision): when the database is connected and cannot be read, it throws
   // TaskStoreUnavailableError (answered 503) instead of acting on a status nobody read.
-  async function resolveTaskWithFallback(taskId: string, opts: { strict?: boolean } = {}): Promise<any | undefined> {
+  async function resolveTaskWithFallback(taskId: string, opts: { strict?: boolean; identity?: {tenantId:string;userId:string;role:string} } = {}): Promise<any | undefined> {
     if (!db || !taskRepo) return tasks.get(taskId);
     if (!isValidUuid(taskId)) return undefined;
     try {
-      const found = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-        const row = await taskRepo.findById(taskId, DEFAULT_TENANT_ID, trx);
+      const identity = opts.identity ?? { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' };
+      const found = await withRlsContext(db, identity, async (trx) => {
+        const row = await taskRepo.findById(taskId, identity.tenantId, trx);
         if (!row) return undefined;
         // hawa.approvals is append-only: a later revision records the approval's invalidation as an
         // approval.invalidated event (revision.repository.ts).
@@ -100,7 +101,7 @@ export function createTaskReader({ db, taskRepo, tasks }: Pick<CoreContext, 'db'
           revision_requests: number; delivery_error_class: string | null }>`
           SELECT
             (SELECT e.data FROM hawa.task_events e
-              WHERE e.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND e.task_id = ${taskId}::uuid AND e.event_type = 'task.created'
+              WHERE e.tenant_id = ${identity.tenantId}::uuid AND e.task_id = ${taskId}::uuid AND e.event_type = 'task.created'
               ORDER BY e.aggregate_version LIMIT 1) AS created,
             (SELECT json_build_object('id', a.id, 'design_revision_id', a.design_revision_id, 'decision_payload', a.decision_payload,
                 'created_at', a.created_at,
@@ -108,12 +109,12 @@ export function createTaskReader({ db, taskRepo, tasks }: Pick<CoreContext, 'db'
                   WHERE i.tenant_id = a.tenant_id AND i.task_id = a.task_id AND i.event_type = 'approval.invalidated'
                     AND i.data->>'invalidatedApprovalId' = a.id::text))
               FROM hawa.approvals a
-              WHERE a.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND a.task_id = ${taskId}::uuid AND a.decision = 'approved'
+              WHERE a.tenant_id = ${identity.tenantId}::uuid AND a.task_id = ${taskId}::uuid AND a.decision = 'approved'
               ORDER BY a.created_at DESC LIMIT 1) AS approval,
             (SELECT count(*)::int FROM hawa.approvals r
-              WHERE r.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND r.task_id = ${taskId}::uuid AND r.decision = 'revision_requested') AS revision_requests,
+              WHERE r.tenant_id = ${identity.tenantId}::uuid AND r.task_id = ${taskId}::uuid AND r.decision = 'revision_requested') AS revision_requests,
             (SELECT p.error_class FROM hawa.publications p
-              WHERE p.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND p.task_id = ${taskId}::uuid
+              WHERE p.tenant_id = ${identity.tenantId}::uuid AND p.task_id = ${taskId}::uuid
               ORDER BY p.created_at DESC LIMIT 1) AS delivery_error_class
         `.execute(trx)).rows[0];
         return { row, record: { created: more?.created, approval: more?.approval,
@@ -128,7 +129,7 @@ export function createTaskReader({ db, taskRepo, tasks }: Pick<CoreContext, 'db'
   }
 
   /** The task as Postgres has it now, for a handler about to act on its status. See resolveTaskWithFallback. */
-  const readCurrentTask = (taskId: string) => resolveTaskWithFallback(taskId, { strict: true });
+  const readCurrentTask = (taskId: string, identity?: {tenantId:string;userId:string;role:string}) => resolveTaskWithFallback(taskId, { strict: true, identity });
 
   return { resolveTaskWithFallback, readCurrentTask };
 }

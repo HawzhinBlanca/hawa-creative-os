@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { createApp } from '../src/app.js';
+import {createApp} from '../src/app.js';
+import {clientDnaFixture} from './fixtures/persisted-client-dna.js';
 
 describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & Asset Sandbox', () => {
-  const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
+  const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },
+    seedClientDna: map=>map.set('client-rabar',{...clientDnaFixture('client-office-1'),clientId:'client-rabar',name:'Rabar Fashion',code:'RABAR'}) });
 
   // A task that names its client: the rubric scores against the client's brand colours and refuses
   // a task without one (SPLIT_PLAN G1). A Telegram message in a test without a database names none.

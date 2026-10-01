@@ -1,3 +1,4 @@
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
@@ -22,7 +23,11 @@ const propose = async (text: string) => {
         ruleText: string;
     };
 };
-const mutate = (ruleId: string, action: string, body: unknown = {}) => app.request(`/v1/clients/${mine}/candidate-rules/${ruleId}/${action}`, { method: 'POST', headers, body: JSON.stringify(body) });
+let dnaPrepared=false;
+const mutate = async (ruleId: string, action: string, body: unknown = {}) => {
+ if(!dnaPrepared){await persistClientDnaFixture(app,mine,headers);dnaPrepared=true;}
+ return app.request(`/v1/clients/${mine}/candidate-rules/${ruleId}/${action}`, { method: 'POST', headers, body: JSON.stringify(body) });
+};
 afterAll(async () => { await db.destroy(); await owner.destroy(); });
 beforeAll(async () => {
     await sql `INSERT INTO hawa.users(id,email,display_name) VALUES(${viewer}::uuid,${`${viewer}@test.invalid`},'Isolated viewer')`.execute(owner);

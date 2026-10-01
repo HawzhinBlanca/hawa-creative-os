@@ -1,0 +1,181 @@
+{
+  "date": "2026-10-01",
+  "adr": "ADR197",
+  "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING",
+  "requirements": [
+    "FR-021",
+    "FR-046",
+    "FR-047",
+    "FR-049",
+    "NFR-006",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "findings": [
+    "Actual scoped SQL denial recovered privileged cached DNA",
+    "Absent identity impersonated default operator",
+    "Actual SQL SELECT revocation recovered stale DNA",
+    "Stored JSON overrode authoritative scope/version fields"
+  ],
+  "repair": [
+    "SQL-only resolver with explicit caller identity; no database read uses memory",
+    "Scoped row identity/version canonicalization",
+    "Client reads/writes do not retry outside RLS",
+    "Caller-scoped task reads for rubric/review/publication",
+    "Server delivery uses explicit automation identity",
+    "Frozen replay preserves original approved bytes, names, destinations and publication time",
+    "Originally absent reporting Sheet alone can acquire first authoritative binding",
+    "Completed answers use verified stored Drive/Sheet identifiers"
+  ],
+  "checks": [
+    {
+      "name": "initial authority reproduction",
+      "passed": 1,
+      "failed": 4,
+      "skipped": 0
+    },
+    {
+      "name": "first connected",
+      "passed": 34,
+      "failed": 14,
+      "skipped": 0
+    },
+    {
+      "name": "second connected",
+      "passed": 43,
+      "failed": 5,
+      "skipped": 0
+    },
+    {
+      "name": "third connected",
+      "passed": 49,
+      "failed": 2,
+      "skipped": 0
+    },
+    {
+      "name": "fourth connected",
+      "passed": 55,
+      "failed": 6,
+      "skipped": 0
+    },
+    {
+      "name": "connected green",
+      "files": 9,
+      "passed": 62,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "recovery/first Sheet binding",
+      "files": 2,
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "working-tree full precheck",
+      "passed": 6449,
+      "failed": 84,
+      "skipped": 67,
+      "qualification": false,
+      "note": "Unsealed development run; source/fixtures continued changing during execution. Retained for diagnosis, not an exact-source qualification."
+    },
+    {
+      "name": "affected consumers first",
+      "files": 28,
+      "passed": 206,
+      "failed": 3,
+      "skipped": 1
+    },
+    {
+      "name": "corrected remaining consumers and actual deferred DNA commit refusal",
+      "files": 3,
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "evidenceNotes": [
+    "Counts overlap and must not be added",
+    "Legacy cache-only setups now explicitly save their required DNA through Core; no production fixture seeding",
+    "DNA-less scope-search case stays DNA-less until later moderation setup",
+    "Old fake transaction failure now truthfully returns503 and makes no unscoped lookup; real deferred SQL commit failure retains active DNA",
+    "Frozen retry fake refuses provider calls; archive uncertainty still remains503, not weakened to success",
+    "Publication expectation scope and immutability are enforced by existing migration059; no migration was changed",
+    "Initial commit security scan refused a literal synthetic test token; changed it to an ephemeral per-run random UUID. No secret-scanner bypass or exception."
+  ],
+  "logs": {
+    "/tmp/hawa-dna-authority-build-20261001.log": "d9d6d16b7c5b29838237d2f24c6d157bdf8d6066691ba4aac7ee774b2da4757e",
+    "/tmp/hawa-dna-authority-build-corrected-20261001.log": "cabb379bbf86e0b8c0780d43d666749901789330c78bd2a3afc4916c4f7e59f6",
+    "/tmp/hawa-dna-authority-build-final-20261001.log": "30f98e0f5490012a7e65cd577a6f3fa1c09117b8b572c61dab11f05891f85f64",
+    "/tmp/hawa-dna-authority-build-third-20261001.log": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454",
+    "/tmp/hawa-dna-authority-connected-final-20261001.log": "c4c81ec4206163201c93d021067a14e0371738297cf4c9a2a1342c85169cfed2",
+    "/tmp/hawa-dna-authority-connected-first-20261001.log": "dc16a9329282661beac91a6a95b69b862317348a3b739200ba3a227837ecfb49",
+    "/tmp/hawa-dna-authority-connected-fourth-20261001.log": "b79d9774c7f19b70d39ff35c978d320d8b8e563f1f1c723e7738d994080e7220",
+    "/tmp/hawa-dna-authority-connected-second-20261001.log": "06c49b2d8109ad6d6866173533dcb825c4fda39267d186107deac92d41da28cf",
+    "/tmp/hawa-dna-authority-connected-third-20261001.log": "3097ab0e08fc04bbb9c1efe448c5b1e7a37d3020cfdd5cc4f79e0efd8c9ba1ba",
+    "/tmp/hawa-dna-authority-consumers-corrected-20261001.log": "700b2a65b3af953b9225cdf91c6faf6e18f9d47d8532e6f07882f9cfd23d65a2",
+    "/tmp/hawa-dna-authority-consumers-first-20261001.log": "4f01076003ad4ccb99918156acbbce4feac3a47b0a4decb5a15777c718fc79d8",
+    "/tmp/hawa-dna-authority-full-precheck-20261001.log": "d535ace28cd4e846defe9f5566b6749bd56aa024857db479baa0c0db79a65996",
+    "/tmp/hawa-dna-authority-lint-20261001.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "/tmp/hawa-dna-authority-lint-seal-20261001.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "/tmp/hawa-dna-authority-recovery-final-20261001.log": "df1083bb56d27bb1602b6d79f4c823074bd967ec5a065778f40d115cf99a2f4d",
+    "/tmp/hawa-dna-authority-red-20261001.log": "11974a62cd8c214703f6d789f6a3a0f1c9755e198c5e9e14a188bb690c9bca1b",
+    "/tmp/hawa-dna-authority-replay-diagnosis-20261001.log": "1b63421e4a6f6b50be214d5f6f2598469a3da7064fd7f0c131ecb621d1ef412e",
+    "/tmp/hawa-dna-authority-types-20261001.log": "3fb969739e70bf903ee9e60a71758b9ff3ad1c745322de1321df022a037cc5be",
+    "/tmp/hawa-dna-authority-types-final-20261001.log": "3fb969739e70bf903ee9e60a71758b9ff3ad1c745322de1321df022a037cc5be",
+    "/tmp/hawa-dna-authority-types-seal-20261001.log": "3fb969739e70bf903ee9e60a71758b9ff3ad1c745322de1321df022a037cc5be"
+  },
+  "sourceSha256": {
+    "adrs/197_authoritative_client_dna_reads.md": "520691a23e145f47f54804b286da68d24698cf5e7e64b87d0f7d050044f69d90",
+    "apps/core/src/app.ts": "8e85e9b7fc48456372c206bbdc17eaa019e013b5198f58c4b160c9d47e7fe6af",
+    "apps/core/src/routes/clients.routes.ts": "0eebc61aa840196900cdaaa8e9d5c27818d35bb9c8f926eb1d996eb28014bd2e",
+    "apps/core/src/routes/delivery.routes.ts": "647ea72b84c0cb3596be6932840aa01e058dfd978cd624d99801e54ccfeba3f4",
+    "apps/core/src/routes/rubric.routes.ts": "da75c9cd80bfdb960fb501942a41b462b93885b3000143624aae7f98fc28d039",
+    "apps/core/src/routes/tasks.routes.ts": "6e0808721e98ac85d7667d74e620dfae4685e536f90f8a6857a3d6e4eea39ea9",
+    "apps/core/src/services/client-dna-hydration.ts": "76ceffda0e7c9269d1ae1c9b26d262e462dd38db109cf094055108b0b89e1a72",
+    "apps/core/src/services/client-dna-resolver.ts": "42803eb58307826638c40baa7761b68f0d7bff09e73984e82012f31c9827a02b",
+    "apps/core/src/services/learning-governance.ts": "ab39786de85e92cf4d3fbce3bcfe125f3d5fdb158eb031d50127e63489857458",
+    "apps/core/src/services/omnichannel-delivery.ts": "5098b209299fe05dae8b4f3526dd15c3aabbb6283c08c8b34ea5c5ff7870087c",
+    "apps/core/src/services/publication-receipt.ts": "cf48ecd843a88951031264ab72989a4847d2036ecafaa0ba5141abc7ac51e78f",
+    "apps/core/src/services/task-reader.ts": "07f2fc50c3e9c44c6e8a8a66c46b5cb7d0e78a5f7b65cba787f872d3d4f0223f",
+    "apps/core/test/approved-refinement-learning.test.ts": "766228b31739dbd5b47a95e5fe7ee88365421eeb65cedb3f902c0c6803f5e081",
+    "apps/core/test/authoritative-client-dna.test.ts": "2f7a2d976631a746a7bdbcfd0cbe9cdcd51690da858192c2db0e731bc44c6fb2",
+    "apps/core/test/client-dna-hydration.test.ts": "963ccf8b61dd0f26655a4055410a67d24a1bdd852b3341d219efe1d23b49d9f4",
+    "apps/core/test/delivery-notification.test.ts": "fb57f0282b439e736027a6f70fb548e3eab6bb65e8348b627a094e9f3feb163d",
+    "apps/core/test/delivery-without-drive.test.ts": "1e9f17a9d958c4e7e0effd48a84c189fe3cc4c11be750507dafce2b3281e041d",
+    "apps/core/test/delivery-workflow.test.ts": "a9a98a5812566799e7b71791b23173384b888f7a5ff8f695acbc5603d13a765d",
+    "apps/core/test/e2e-canva-to-delivery-chain.test.ts": "7f72b5c1f2908e3061b794dd85dbaf14998af29fa43eb992f15e915a13fad236",
+    "apps/core/test/fixtures/persisted-client-dna.ts": "bcb86f5337994ba5cc674dfb18d1c73503bc3d35249d5af6eba39487b67dae78",
+    "apps/core/test/fixtures/published-receipt-task.ts": "0830c235bcf84ab9e3e4608d91767fb295114993d705bad2ad6e6193e4bfdbb0",
+    "apps/core/test/g3-g5-state-in-postgres.test.ts": "91a9d9c1b2b4337b653f8d4f93362806f669c6e51a72fc477414b954a7076f98",
+    "apps/core/test/gate-f-review-invalidation.test.ts": "b2de6892e991f5a1b77875a2a1cb59def6f8991b0c1e0cbff6540493132da4ea",
+    "apps/core/test/gate-g-reconciliation.test.ts": "36d333477edf0f13c94ba1d7b93a1b5578cefc87700122c278f4b842dea72fc0",
+    "apps/core/test/governed-learning-cv18.test.ts": "f6cd7f2138d58e973063534850d3ccaa7d1bb9e67c5a62590eaa9d49c44c4c4e",
+    "apps/core/test/governed-learning-dna-lifecycle.test.ts": "85e7fb56bb6b6ec09c46125e371627cfd72890a7f18e3a1b9315af6838a803dd",
+    "apps/core/test/human-approval-binding.test.ts": "90a7ee21c209aa4d18e21dae91699da84feba72ba4ba6f0fc5ec36fd5aeaa504",
+    "apps/core/test/learning-governance-boundaries.test.ts": "4cddb68108240a9b035950aa64d106eae982b101bf4bb13bc1ba9d916cd71c9c",
+    "apps/core/test/learning-recovery.test.ts": "d06758683342e58bcf043ed4cf43aaa87a3976ee1c5452a2d377469af5af1167",
+    "apps/core/test/lifecycle-office-desk-bridge.test.ts": "f8532fdd6d0b4acc6535ace30f9dda2b05b02f36a1ca28d77ec668660c897209",
+    "apps/core/test/milestone1-vertical-slice.test.ts": "fdb9577938b90ce294e1325e9cc5cb5a2603c9531e830ca0f4205a74e3b72a43",
+    "apps/core/test/no-invented-copy-routes.test.ts": "15d4bb3fb0c46144d46258c42891d03492b32c02b13d2dda98602dfaf54868c8",
+    "apps/core/test/pinned-delivery.test.ts": "72c89c8c562a0e4c942bb231bf8c5b3277e7313217b217cbb1d4b27ed438cfb8",
+    "apps/core/test/publish-lock-wiring.test.ts": "1bed73655fe963b7a3c67eeece71e3847ed857a8a15987d1238a7960fb259f79",
+    "apps/core/test/publish-sheets-unconfirmed.test.ts": "391e14c70384e91ba852393d0b75ca6eef5ecf4f3db491929dd764a88ae95ffb",
+    "apps/core/test/r03-authoritative-config-postgresql.test.ts": "cc8149bd4d6a7ebff6cb663875588740d59fcf096178c5f62bda68e774f64c96",
+    "apps/core/test/r04-scope-enforcement.test.ts": "81d6aa3d08691dc36f177abe5b8bd232df043ce90cd85888c477be48aa3978a5",
+    "apps/core/test/r06-publication-safety.test.ts": "a81e61fb70036ac39385c24278d0be9fddd0073c79a26cad2c3a7c2d048a7c09",
+    "apps/core/test/r07-outbox-terminal-state.test.ts": "3077c3664e766cea6442ed98d439e22dbba750542158b75b826cc9985a394449",
+    "apps/core/test/track-b-gates.test.ts": "dde2b8b95fcb0ee758fb2503769440d40616041dba1e26550dd4d86cc7f4d000",
+    "apps/core/test/verified-delivery-drive-sheets.test.ts": "57e1a9b5bf5086df7ae0271cc3039ad0ea436a8e908ee0dea22f33acf72780be",
+    "packages/testkit/test/no-duplicate-paths.test.ts": "f827974ae458ae231d54fba71b22dee365612b7a4df2132e63cf10b899319ae3",
+    "packages/testkit/test/r14-controlled-office-pilot.test.ts": "d301e5845083e723e8d33bf704e1982b77664e3c771e050fa07a8998852eeeff",
+    "packages/testkit/test/three-client-production-pilot.test.ts": "f1a7831182692e0b0e6f69065f4652e19d92d00fca359eb0bf78895da23ffbfb"
+  },
+  "limits": [
+    "Exact sealed engineering gate pending",
+    "No paid calls, deployment, independent provider pixels or aesthetic qualification",
+    "Other direct process-map consumers, broader search, W5/W6 taste/native/Canva/human/product admission remain open"
+  ],
+  "deployed": false
+}

@@ -1,3 +1,6 @@
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
+import {beforeAll as prepareDna} from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -11,6 +14,8 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
   const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const app = createAppWithClientFixtures({ db });
+  prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:db}), 'c1000000-0000-4000-8000-000000000003',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});
+
 
   const testBearer = process.env.HAWA_ART_DIRECTOR_KEY!;
   const authHeaders = {

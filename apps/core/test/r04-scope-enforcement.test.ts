@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import type { Database, Kysely } from '@hawa/db';
+import {clientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { createQueryOnlyDb } from '../../../packages/db/test-support/query-only-db.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { DesignStudioService, type Scope } from '../src/services/design-studio/design-studio-service.js';
@@ -235,7 +236,7 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
       expect(asterDna.guidelines?.layoutRules).not.toContain('DRUSTEE_EXCLUSIVE_RULE_SCOPE_TEST');
     });
 
-    it('SA-03: rejects client DNA write when database is configured but client is not found', async () => {
+    it('SA-03: refuses an unavailable scoped database without retrying DNA writes outside RLS', async () => {
       const lookupCodes: string[] = [];
       const builder: any = new Proxy({}, {
         get(_o, key) {
@@ -257,15 +258,15 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
         'Content-Type': 'application/json',
         'x-enforce-auth': '1',
       };
-      const original: any = await (await app.request('/v1/clients/client-drustee/dna', { headers })).json();
+      expect((await app.request('/v1/clients/client-drustee/dna', {headers})).status).toBe(503);
+      const original = clientDnaFixture('client-drustee');
       const res = await app.request('/v1/clients/client-drustee/dna', {
         method: 'POST',
         headers,
         body: JSON.stringify({ ...original, name: 'Unsaved Test' }),
       });
-      expect(res.status).toBe(404);
-      expect(lookupCodes).toContain('client-drustee');
-      expect(lookupCodes).toContain('drustee');
+      expect(res.status).toBe(503);
+      expect(lookupCodes).toEqual([]);
     });
   });
 });

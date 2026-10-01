@@ -1,3 +1,4 @@
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
@@ -94,6 +95,7 @@ describe('delivery through Core holds the per-task publish lock', () => {
     // Two Core processes over one database: the advisory lock is what stands between them (Core no
     // longer keeps an in-flight map; the same lock serialises presses within one process too).
     const appA = process_();
+    await persistClientDnaFixture(appA,kaaeClientId,headers);
     const appB = process_();
     const taskId = await approvedTask(db, appA, headers);
 

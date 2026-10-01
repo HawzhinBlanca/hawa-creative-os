@@ -1,3 +1,6 @@
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
+import {beforeAll as prepareDna} from 'vitest';
 import { assert, describe, it, expect, beforeAll, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -29,6 +32,8 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
   const originalEnv = { ...process.env };
   const testTmpDir = path.join(process.cwd(), '.tmp_milestone1_test');
 
+
+  prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:db}), 'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});
   beforeAll(async () => {
     fakeServer = await startFakeDriveServer();
     process.env.GOOGLE_DRIVE_API_BASE_URL = fakeServer.url;

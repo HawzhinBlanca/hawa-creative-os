@@ -1,12 +1,17 @@
 import {createHash} from 'node:crypto';
 import {expect} from 'vitest';
-import {createAppWithClientFixtures} from './app-with-client-fixtures.js';
+import {seedClientDnaFixtures} from './client-dna-fixtures.js';
+import {computeDnaHash} from '../../src/app.js';
+export function clientDnaFixture(clientId:string) {
+ const fixtures:Parameters<typeof seedClientDnaFixtures>[0]=new Map();
+ seedClientDnaFixtures(fixtures,new Map(),computeDnaHash);
+ const source=fixtures.get(clientId);expect(source).toBeDefined();
+ return structuredClone(source!);
+}
 /** Explicitly save test DNA through Core; process fixtures alone are not database authority. */
 export async function persistClientDnaFixture(app:{request:(path:string,init?:RequestInit)=>Response|Promise<Response>},
  clientId:string,headers:Record<string,string>,layoutRules?:string[],fixtureClientId=clientId) {
- const source=createAppWithClientFixtures({testAuth:{principal:{role:'operator'}},skipPaidModelProbe:true,skipTelegramProbe:true,enableBillingProbeSchedule:false,enableCanvaSweeper:false});
- const read=await source.request(`/v1/clients/${fixtureClientId}/dna`,{headers});expect(read.status).toBe(200);
- const dna=await read.json();
+ const dna=clientDnaFixture(fixtureClientId);
  // A real hash must not equal the legacy generator's hard-coded placeholder.
  if(fixtureClientId==='client-office-1') for(const asset of dna.assets) {
   if(asset.role==='logo_primary') asset.sha256=createHash('sha256').update('Official Hawa fixture logo bytes').digest('hex');

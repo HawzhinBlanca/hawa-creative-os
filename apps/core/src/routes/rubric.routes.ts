@@ -7,19 +7,22 @@ import type { Context } from 'hono';
  * (architecture programme 1.3, SPLIT_PLAN.md section 2).
  */
 export function registerRubricRoutes(ctx: RouteContext): void {
-  const { registerRoute, problem, resolveTaskWithFallback, resolveClientDna, broadcastEvent: broadcast } = ctx;
+  const { registerRoute, problem, resolveTaskWithFallback, resolveClientDna, verifyRequestAuth, broadcastEvent: broadcast } = ctx;
 
   // Multilingual Visual QA Vision Rubric Scorer (FR-039, FR-041, Invariant #9, Gate E)
   registerRoute('post', '/tasks/:taskId/revisions/:revisionId/evaluate-rubric', async (c: any) => {
     const taskId = c.req.param('taskId');
     const revisionId = c.req.param('revisionId');
-    const task = await resolveTaskWithFallback(taskId);
+    const auth = verifyRequestAuth(c);
+    const identity = {tenantId:auth.tenantId!,userId:auth.userId!,role:auth.role!};
+    const task = await resolveTaskWithFallback(taskId, {strict:true,identity});
     if (!task) return problem(c, 404, 'Task Not Found');
     // The client's brand colours are part of the score. A task that names no client used to be
     // scored as the fixture office client-office-1 (SPLIT_PLAN.md section 6).
     const clientId: string | undefined = task.clientId || undefined;
     if (!clientId) return problem(c, 422, 'CLIENT_REQUIRED', 'The task names no client, so there are no brand colours to score against. Assign the client first.');
-    const client = await resolveClientDna(clientId);
+    const client = await resolveClientDna(clientId, identity);
+    if (!client) return problem(c, 409, 'Client DNA Required', 'Save active client DNA before scoring this design.');
 
     const body = await c.req.json().catch(() => ({}));
 

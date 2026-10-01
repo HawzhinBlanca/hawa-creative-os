@@ -1,3 +1,5 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from '../../../apps/core/test/fixtures/persisted-client-dna.js';
 import type { StudioOperation } from '@hawa/contracts';
 import { assert, describe, it, expect } from 'vitest';
 import fs from 'node:fs';
@@ -19,6 +21,8 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
   const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const app = createAppWithClientFixtures({ db });
+  prepareDna(async()=>{for(const clientId of ['c1000000-0000-4000-8000-000000000002','c1000000-0000-4000-8000-000000000003','c1000000-0000-4000-8000-000000000004']) await persistClientDnaFixture(app,clientId,{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});
+
 
   const briefBuilder = new BriefBuilder();
   const director = new CreativeDirectorRunner();

@@ -80,36 +80,6 @@ export function registerClientsRoutes(ctx: RouteContext) {
   // Client DNA Detail
   registerRoute('get', '/clients/:clientId/dna', async (c: any) => {
     const clientId = c.req.param('clientId');
-    if (db && clientRepo) {
-      try {
-        const auth = verifyRequestAuth(c);
-        const tenantId = auth.tenantId || defaultTenantId;
-        const rlsContext = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
-        let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-          ? clientId
-          : await withRlsContext(db, rlsContext, async (trx) => {
-              const res = await clientRepo.findByCode(tenantId, clientId, trx);
-              if (res) return res.id;
-              if (clientId.startsWith('client-')) {
-                return (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, ''), trx))?.id;
-              }
-              return undefined;
-            });
-        if (targetId) {
-          const row = await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-            return await clientRepo.findActiveDna(tenantId, targetId, trx);
-          });
-          if (row && row.dna) {
-            const parsed = typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna;
-            return c.json({ ...parsed, clientId: targetId, tenantId, version: row.version });
-          }
-        }
-      } catch {
-        // Answered below by the resolver, which reads Postgres again before the map.
-      }
-    }
-    // The shared resolver, as the deleted app.ts copy of this route used (SPLIT_PLAN G2); it was
-    // clientDnas.get here, which a database read failure turned into the fixture's DNA.
     const auth = verifyRequestAuth(c);
     const dna = await resolveClientDna(clientId, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role });
     if (!dna) return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
@@ -141,54 +111,23 @@ export function registerClientsRoutes(ctx: RouteContext) {
     if (db && clientRepo) {
       try {
         const rlsContext = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
-        try {
-          targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-            ? clientId
-            : await withRlsContext(db, rlsContext, async (trx) => {
-                const res = await clientRepo.findByCode(tenantId, clientId, trx);
-                if (res) return res.id;
-                if (clientId.startsWith('client-')) {
-                  return (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, ''), trx))?.id;
-                }
-                return undefined;
-              });
-        } catch (rlsErr: any) {
-          if (typeof (db as any).selectFrom === 'function') {
-            const res = await clientRepo.findByCode(tenantId, clientId);
-            if (res) targetId = res.id;
-            else if (clientId.startsWith('client-')) {
-              targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')))?.id;
-            }
-          } else {
-            throw rlsErr;
-          }
-        }
+        targetId = await findClientRowId(db, clientRepo, rlsContext, clientId);
 
         if (!targetId) {
           return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
         }
 
         const resolvedTargetId = targetId;
-        try {
-          const activeRow = await withRlsContext(db, { tenantId, clientId: resolvedTargetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-            return await clientRepo.findActiveDna(tenantId, resolvedTargetId, trx);
-          });
-          if (activeRow) {
-            currentVersion = activeRow.version;
-          }
-        } catch {
-          const activeRow = await clientRepo.findActiveDna(tenantId, resolvedTargetId).catch(() => null);
-          if (activeRow) {
-            currentVersion = activeRow.version;
-          }
-        }
+        const activeRow = await withRlsContext(db, { ...rlsContext, clientId: resolvedTargetId },
+          trx => clientRepo.findActiveDna(tenantId, resolvedTargetId, trx));
+        if (activeRow) currentVersion = activeRow.version;
       } catch (err: any) {
         if (err.message && err.message.includes('Client Not Found')) throw err;
-        return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to query database');
+        return problem(c, 503, 'Client DNA Unavailable', 'The current client and DNA version could not be verified; try again');
       }
     }
 
-    if (!currentVersion && prevDna) {
+    if (!db && !currentVersion && prevDna) {
       currentVersion = prevDna.version || 0;
     }
 

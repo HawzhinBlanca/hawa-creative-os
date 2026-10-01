@@ -1,3 +1,6 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { deliveryBaseId } from '@hawa/contracts';
 import { assert, afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -1149,3 +1152,5 @@ describe('a requester change after approval holds request-owned delivery (findin
     }
   });
 });
+
+prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:db}), 'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});
