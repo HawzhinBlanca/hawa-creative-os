@@ -236,3 +236,16 @@ durability, task-versus-revision polarity, genuine learned taste and product/nat
 human qualification remain open. Exact clean source gate is pending.
 Evidence: W6_FEEDBACK_ATTRIBUTION_PROOF.json; original W6_CLIENT_ATTRIBUTION_FINDING.json
 is retained as the dated pre-repair source inspection.
+
+
+W6 exact engineering follow-up: clean tested01676ef4 passes all8 stages,6464
+pass/0fail/67skip,653 passed files/6 skipped,660 strict roots, newest production
+dump and actual negative manifest refusal. W6_FEEDBACK_ATTRIBUTION_GATE_EVIDENCE.json
+retains the exact gate identity. Runtime/tests/gate code remain unchanged during
+metadata sealing. No deployment, paid call, invented label or automatic promotion.
+Next: legacy artboard mining accepts supplied task identity and counts repeated
+layer deltas/replay, while promotion persistence drops detailed event provenance.
+W6_LEGACY_LEARNING_BOUNDARY_FINDING.json is source inspection, not an executed
+regression. Explicit owner brand instructions and observed approved edit evidence
+need distinct authority; do not reject legitimate owner instructions as if every
+rule required an already-approved design. Broader W5/W6/product gates stay open.

@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "CONNECTED_SLICE_QUALIFIED_EXACT_FULL_GATE_PENDING",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_TASTE_AND_PRODUCT_OPEN",
   "requirements": [
     "FR-022",
     "FR-052",
@@ -85,8 +85,26 @@
     "/tmp/hawa-feedback-build-20261001.log": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586",
     "/tmp/hawa-feedback-types-20261001.log": "93994010cf09635f9fdbeef6f8b0101ebd31428acf6aa83d142f6d8723a6b83a",
     "/tmp/hawa-feedback-types-final-20261001.log": "f771f91ece799e65338a8f4cec0c2936bd96b1ea3a0391ed5210b519df84232c",
-    "/tmp/hawa-feedback-lint-20261001.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5"
+    "/tmp/hawa-feedback-lint-20261001.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
+    "/tmp/hawa-feedback-full-gate-20261001.log": "3fe845a104205ffbb1a668cc4cfa82f067fc4bdfed9f00eee79c303e8776157c",
+    "output/release-gate/FULL_TEST_SUITE_RUN.log": "09588262b66b7edfc6165c357004494c69c93652de733e291fa0002888093039"
   },
   "deployed": false,
-  "providerCalls": 0
+  "providerCalls": 0,
+  "sourceCommit": "605a3fe2",
+  "testedSeal": "01676ef4b3e26409eb7a944b0d49e881ac297dca",
+  "fullGate": {
+    "stagesPassed": 8,
+    "passed": 6464,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 653,
+    "filesSkipped": 6,
+    "durationSeconds": 214.88,
+    "typedRoots": 660,
+    "newestProductionDump": "PASS",
+    "negativeRefusal": "PASS",
+    "evidence": "W6_FEEDBACK_ATTRIBUTION_GATE_EVIDENCE.json"
+  },
+  "nextBoundary": "W6_LEGACY_LEARNING_BOUNDARY_FINDING.json; source inspection only, next regression not run"
 }

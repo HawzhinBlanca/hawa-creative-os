@@ -30,3 +30,10 @@ scope and changed replay refuse without partial batch effects. Exact replay leav
 frequency and negative counts unchanged. Unrelated approvals do not manufacture
 support, and another client's rejection cannot change a rule. Retain initial failures,
 connected tests, types and exact engineering gate evidence; no human-quality claim.
+
+
+Qualification, 1 October 2026: clean seal01676ef4 passes all eight engineering
+stages,6464 tests/0 failures/67 skips,660 typed roots and newest-dump invariants.
+The initial failures and corrected required-fixture-field type failure remain in
+W6_FEEDBACK_ATTRIBUTION_PROOF.json. This is source qualification, not deployment,
+durable taste learning, historical promotion provenance or native/human admission.
