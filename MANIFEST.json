@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T10:27:33Z",
+  "generatedAt": "2026-10-01T10:42:09Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 789,
+  "fileCount": 791,
   "files": [
     {
       "path": ".dockerignore",
@@ -1028,6 +1028,11 @@
       "bytes": 3322
     },
     {
+      "path": "adrs/209_captured_font_family_identity.md",
+      "sha256": "588e35ef18599359176e5a94b5679f604dbd585fba5f8c92da7b9d547d0d5930",
+      "bytes": 2939
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1299,8 +1304,8 @@
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
-      "sha256": "652df124878af037e75e32662aaf5fe67e4f617d8b5aa7cb639c0412c44f46ac",
-      "bytes": 8466
+      "sha256": "862cebd9c5869aa30fba61fd8e5ce29246cf8300663edf48d46e48b3187399b4",
+      "bytes": 8869
     },
     {
       "path": "docs/12_HUMAN_REVIEW.md",
@@ -1514,8 +1519,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "ba0ac74c67147f32fd14becdd234397afa1f0199f506cf188bee5882e36b1d18",
-      "bytes": 58237
+      "sha256": "958b5a905bf802d50569593a90749f66993a0cef089e1daa9b6293429585148b",
+      "bytes": 59088
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1601,6 +1606,11 @@
       "path": "plans/content-aware-design-2026-09-30/W5_FONT_ADMISSION_CACHE_PROOF.json",
       "sha256": "360ca8539a4b500f924b4a46cf3733a8c2518f666f3829be286557a233d07d6c",
       "bytes": 3749
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W5_FONT_FAMILY_IDENTITY_PROOF.json",
+      "sha256": "8fc32102525abbe3d5a64c2a5f3f8898946a9f5345c371ca6f52b123c3c9b72c",
+      "bytes": 4727
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W5_FONT_FIDELITY_REPORT_FINDING.json",
@@ -3009,8 +3019,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "61ecab73f91f4ccea418555a08636b5aa7784be550f25a924bcfcd854720cd9e",
-      "bytes": 685873
+      "sha256": "8424a45826409dbd7a8a8481cf425e700faa004b8dde3bc22eb96f5688357e5b",
+      "bytes": 688459
     },
     {
       "path": "plans/user-stories.csv",

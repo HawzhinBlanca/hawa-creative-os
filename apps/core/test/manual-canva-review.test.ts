@@ -87,6 +87,21 @@ describe.skipIf(!url)('manual Canva first review from retained evidence',()=>{
     expect(source.source_sha256).toBe(hash(bytes)); expect(source.content).toEqual(bytes);
     expect(source.neutral_manifest.nativeVerification).toBe('unverified');
   });
+  it('refuses prefixed wrong family at review and approval while preserving source and replay',async()=>{
+    const bytes=Buffer.from(scriptFontDeck(scriptFontRun('Exact copy 123.45','Verdana Fake')));
+    const f=await fixture({pptxBytes:bytes}); const first=await record(f);
+    expect(first).toMatchObject({status:'recorded',qaPassed:false,checkedArtifactId:f.files.pptx});
+    expect(await record(f)).toEqual(first); expect(await counts(f.taskId)).toEqual({revisions:1,checks:1});
+    const response=await createApp({db,testAuth:{roleHeader:true}}).request(`/tasks/${f.taskId}/revisions/${(first as {revisionId:string}).revisionId}/decisions`,{
+      method:'POST',headers:{'content-type':'application/json',Authorization:'Bearer test_art_director_bearer'},
+      body:JSON.stringify({decision:'approved',pinnedExportIds:[f.files.png,f.files.pptx]})});
+    expect(response.status).toBe(412);
+    const source=await withRlsContext(db,scope,async trx=>(await sql<{source_sha256:string;neutral_manifest:{nativeVerification:string};content:Buffer}>`
+      SELECT r.source_sha256,r.neutral_manifest,b.content FROM hawa.design_revisions r
+      JOIN hawa.canva_export_bytes b ON b.id=${f.files.pptx}::uuid WHERE r.task_id=${f.taskId}::uuid`.execute(trx)).rows[0]);
+    expect(source.source_sha256).toBe(hash(bytes)); expect(source.content).toEqual(bytes);
+    expect(source.neutral_manifest.nativeVerification).toBe('unverified');
+  });
   it('records correctly declared field copy once without claiming native or field-update fidelity',async()=>{
     const bytes=Buffer.from(scriptFontDeck(scriptFontRun('Exact copy ', 'Verdana') + scriptFontRun('123.45', 'Verdana', undefined, 'fld')));
     const f=await fixture({pptxBytes:bytes}); const first=await record(f);

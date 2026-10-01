@@ -610,3 +610,17 @@ unchanged between executions. W5_PPTX_SCRIPT_FONT_GATE_EVIDENCE.json binds both
 receipts without changing the original skipped verdict. Required engineering
 checks verified; native/new-export/human/product admission remains open. No
 production deployment or paid call.
+
+
+## ADR209 captured family identity — 1 October 2026
+
+Arbitrary family prefixes accepted wrong names through retained Core review.
+Fifteen original regressions are retained. Exact families or names measured from
+the pinned font inventory now qualify; unknown variants and width extensions
+refuse. Manual Client DNA stays exact; generated/formal/display and legacy case
+behavior remain scoped. Own-property lookup refuses untrusted inherited names.
+Connected6files135/0/0,685 strict roots/lint;19 files/35 names and5 historical
+Canva exports/43 objects pass. Core rechecks version8 receipts, records one failed
+review across replay and refuses approvalHTTP412 while preserving bytes/hash.
+W5_FONT_FAMILY_IDENTITY_PROOF.json retains evidence. Exact sealed gate pending;
+no production/paid call/native glyph/weight/render/human/product qualification.

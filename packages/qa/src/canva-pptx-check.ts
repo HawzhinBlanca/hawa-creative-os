@@ -57,6 +57,27 @@ export interface PptxCheckOptions {
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
+// ADR209: full/legacy family names measured from the pinned office font inventory.
+// This establishes declared-name equivalence only, not admission, glyphs or native font files.
+const VERIFIED_FONT_NAMES: Readonly<Record<string, readonly string[]>> = {
+  'verdana': ['verdana bold', 'verdana italic', 'verdana bold italic'],
+  'noto sans arabic': ['noto sans arabic regular', 'noto sans arabic bold'],
+  'cinzel': ['cinzel semibold', 'cinzel bold'],
+  'playfair display': ['playfair display bold', 'playfair display semibold', 'playfair display semibold italic'],
+  'amiri': ['amiri regular', 'amiri bold'],
+  'ibm plex sans arabic': ['ibm plex sans arabic regular', 'ibm plex sans arabic bold'],
+  'cairo': ['cairo regular'],
+  'plus jakarta sans': ['plus jakarta sans medium', 'plus jakarta sans bold'],
+  'vazirmatn': ['vazirmatn regular', 'vazirmatn bold'],
+};
+
+function fontFamilyMatches(observed: string, expected: string, caseSensitive = false): boolean {
+  const observedLower = observed.toLowerCase(), expectedLower = expected.toLowerCase();
+  if (caseSensitive ? observed === expected : observedLower === expectedLower) return true;
+  if (caseSensitive && !observed.startsWith(expected + ' ')) return false;
+  return Object.hasOwn(VERIFIED_FONT_NAMES, expectedLower) && VERIFIED_FONT_NAMES[expectedLower].includes(observedLower);
+}
+
 /** ADR207: validate before the decoder can erase controls or accept a numeric prefix. */
 function canonicalXmlCharacterReferences(xml: string): string {
   const chunks: string[] = [];
@@ -321,8 +342,7 @@ export function checkCanvaPptx(
         }
         const face = declared[0];
         fonts.push(face);
-        const familyMatches = (expected: string) => face.toLowerCase() === expected.toLowerCase() ||
-          face.toLowerCase().startsWith(expected.toLowerCase() + ' ');
+        const familyMatches = (expected: string) => fontFamilyMatches(face, expected);
         let expectedFont: string | undefined;
         let matches: boolean;
         let reason: string;
@@ -350,8 +370,7 @@ export function checkCanvaPptx(
         } else {
           expectedFont = script === 'arabic' && options.scriptFonts?.arabic ? options.scriptFonts.arabic : requiredFont;
           fontExpectations.push(expectedFont);
-          // Retain legacy case-sensitive family/style matching, but only in the used slot.
-          matches = face === expectedFont || face.startsWith(expectedFont + ' ');
+          matches = fontFamilyMatches(face, expectedFont, true);
           reason = `Expected font '${expectedFont}', observed '${face}' (Canva substitution or unlisted font)`;
         }
         if (!matches) offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), role,
@@ -380,7 +399,7 @@ export function checkCanvaPptx(
     : null;
 
   return {
-    checkVersion: 8,
+    checkVersion: 9,
     sourceTextObjects: unaddressableText ? null : sourceTextObjects,
     source: detectedSource,
     canvaDesignId,
