@@ -5,7 +5,8 @@ import { validateClientDna, type ClientDNA } from '@hawa/domain';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { computeDnaHash } from '../core-helpers.js';
 import { findClientRowId, snapshotFromRow } from '../services/client-row.js';
-import { ModelConsentError, readClientModelConsent, recordClientModelConsent } from '../services/client-model-consent.js';
+import { ModelConsentError, modelReadingAfterSave, readClientModelConsent, recordClientModelConsent,
+  saveDnaVersionKeepingConsent, type DnaSaveConsent } from '../services/client-model-consent.js';
 
 export function registerClientsRoutes(ctx: RouteContext) {
   const {
@@ -22,6 +23,21 @@ export function registerClientsRoutes(ctx: RouteContext) {
 
   const defaultTenantId = DEFAULT_TENANT_ID;
   const operatorUserId = OPERATOR_USER_ID;
+
+  /**
+   * ADR-239: after a DNA save, whether model reading is on for the client, read through the real
+   * egressAllowed(); off, with the reason, so the Desk can say so. Null without a database or when the
+   * read fails (the save itself is committed).
+   */
+  const modelReadingOf = async (auth: any, clientRowId: string, consent: DnaSaveConsent) => {
+    if (!db) return null;
+    try {
+      return await modelReadingAfterSave(db, { tenantId: auth.tenantId || defaultTenantId, userId: auth.userId || operatorUserId,
+        role: auth.role || 'administrator' }, clientRowId, consent);
+    } catch {
+      return { openai: false, reason: 'Core could not read whether model reading is on for this client after the save.' };
+    }
+  };
 
   /** A client as the list shows it, from its DNA and the number of versions kept of it. */
   const listed = (d: ClientDNA, snapshotsCount: number) => ({
@@ -209,13 +225,19 @@ export function registerClientsRoutes(ctx: RouteContext) {
     };
     delete (dna as any).createdBy;
     delete (dna as any).expectedVersion;
+    // ADR-239: what the Desk sends back is what GET /dna and this answer gave it: the previous version's
+    // commit metadata (outside the content hash) and the model-reading answer are not DNA.
+    delete (dna as any).__commitMessage;
+    delete (dna as any).__createdBy;
+    delete (dna as any).modelReading;
 
     const hash = computeDnaHash(dna);
 
+    let consent: DnaSaveConsent | null = null;
     if (db && clientRepo && targetId) {
       try {
-        await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-          await clientRepo.saveDnaVersion({
+        consent = await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
+          return (await saveDnaVersionKeepingConsent(trx, clientRepo, auth, {
             tenantId,
             clientId: targetId,
             version: dna.version,
@@ -223,7 +245,8 @@ export function registerClientsRoutes(ctx: RouteContext) {
             contentHash: hash,
             createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
             expectedVersion: body.expectedVersion,
-          }, trx);
+            via: 'dna',
+          })).consent;
         });
       } catch (err: any) {
         if (err.message && (err.message.includes('OptimisticConcurrencyConflict') || err.message.includes('unique') || err.code === '23505')) {
@@ -253,7 +276,8 @@ export function registerClientsRoutes(ctx: RouteContext) {
 
     broadcast('dna:updated', { clientId, version: dna.version, sha256: hash });
 
-    return c.json(dna, 201);
+    const modelReading = consent && targetId ? await modelReadingOf(auth, targetId, consent) : null;
+    return c.json(modelReading ? { ...dna, modelReading } : dna, 201);
   });
 
   registerRoute('get', '/clients/:clientId/snapshots', async (c: any) => {
@@ -326,11 +350,12 @@ export function registerClientsRoutes(ctx: RouteContext) {
     const hash = computeDnaHash(updatedDna);
 
     const commitMessage = body.commitMessage || `Manual governance snapshot (v${newVersion})`;
+    let consent: DnaSaveConsent | null = null;
     if (db && clientRepo && targetId) {
       const rowId = targetId;
       try {
-        await withRlsContext(db, { ...scope, clientId: rowId }, async (trx) => {
-          await clientRepo.saveDnaVersion({
+        consent = await withRlsContext(db, { ...scope, clientId: rowId }, async (trx) => {
+          return (await saveDnaVersionKeepingConsent(trx, clientRepo, auth, {
             tenantId,
             clientId: rowId,
             version: newVersion,
@@ -338,7 +363,8 @@ export function registerClientsRoutes(ctx: RouteContext) {
             contentHash: hash,
             createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
             expectedVersion: body.expectedVersion !== undefined ? body.expectedVersion : undefined,
-          }, trx);
+            via: 'snapshot',
+          })).consent;
         });
       } catch (err: any) {
         if (err.message && err.message.includes('OptimisticConcurrencyConflict')) {
@@ -369,7 +395,8 @@ export function registerClientsRoutes(ctx: RouteContext) {
 
     broadcast('dna:snapshot_created', { clientId, version: newVersion, sha256: hash, snapshotId: snap.snapshotId });
 
-    return c.json(snap, 201);
+    const modelReading = consent && targetId ? await modelReadingOf(auth, targetId, consent) : null;
+    return c.json(modelReading ? { ...snap, modelReading } : snap, 201);
   });
 
   registerRoute('post', '/clients/:clientId/dna/rollback', async (c: any) => {
@@ -448,18 +475,20 @@ export function registerClientsRoutes(ctx: RouteContext) {
       dna: restoredDna,
     };
 
+    let consent: DnaSaveConsent | null = null;
     if (db && clientRepo && targetId) {
       const rowId = targetId;
       try {
-        await withRlsContext(db, { ...scope, clientId: rowId }, async (trx) => {
-          await clientRepo.saveDnaVersion({
+        consent = await withRlsContext(db, { ...scope, clientId: rowId }, async (trx) => {
+          return (await saveDnaVersionKeepingConsent(trx, clientRepo, auth, {
             tenantId,
             clientId: rowId,
             version: newVersion,
             dna: { ...restoredDna, __commitMessage: rollbackSnap.commitMessage, __createdBy: rollbackSnap.createdBy },
             contentHash: hash,
             createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
-          }, trx);
+            via: 'rollback',
+          })).consent;
         });
       } catch (err: any) {
         return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist rollback to database');
@@ -487,12 +516,14 @@ export function registerClientsRoutes(ctx: RouteContext) {
       snapshotId: rollbackSnap.snapshotId,
     });
 
+    const modelReading = consent && targetId ? await modelReadingOf(auth, targetId, consent) : null;
     return c.json({
       rolledBack: true,
       activeVersion: newVersion,
       revertedToVersion: targetSnap.version,
       activeDna: restoredDna,
       snapshot: rollbackSnap,
+      ...(modelReading ? { modelReading } : {}),
     }, 200);
   });
 
