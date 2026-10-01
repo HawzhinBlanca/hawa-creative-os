@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-02T00:45:58+03:00",
+  "generatedAt": "2026-10-02T01:19:44+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "4eeb48e0ca7f9055c44a22c41ddb9753d4bf207a",
+    "commit": "f449bf37103b49b87fe5d7746a915f50244e9178",
     "treeClean": true,
-    "commitTimestamp": "2026-10-02T00:45:58+03:00",
+    "commitTimestamp": "2026-10-02T01:19:44+03:00",
     "branch": "claude/kaae-2025-guideline"
   },
   "migrations": {
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "984104a11845af84fcf7b9da1268921f634914bcb6467c5b244409786dc0c19b"
+  "sha256": "6f9ff36febe94a4e29c568504832ac2dcfd12b183d6c871cd97f04d2f65196ca"
 }

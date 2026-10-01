@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T21:46:08Z",
+  "generatedAt": "2026-10-01T22:19:48Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "a6b77d2380efcfefc52606da9dbd114463d6607a10a5f9f057f0809e314d4da9",
+      "sha256": "f662e9e0605a333adf755684c3a1bf698ea0824e5b7c96149d13fc9e264b6d04",
       "bytes": 3976
     },
     {
@@ -959,8 +959,8 @@
     },
     {
       "path": "adrs/238_kaae_2025_guideline.md",
-      "sha256": "a8ae8bb795836066e9d8d387446b8e6904555dbb5db2adf6c6c97c10b6d29df5",
-      "bytes": 17441
+      "sha256": "afdf7f2bdaa82914713837231e15daf4f4b749a3d9a3a0d1b36429f5bdc16c59",
+      "bytes": 22105
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1439,8 +1439,8 @@
     },
     {
       "path": "plans/kaae-2025-guideline/CODEX_MERGE_NOTE.md",
-      "sha256": "7d4e305924e9abc846589bec64e066b4fff5efb11b4e1047f7f4cad44c363929",
-      "bytes": 9237
+      "sha256": "40264220e43863e5ef1614eb12aaf26be9d6f2cdcdf619f3aea8275ffc76682b",
+      "bytes": 11459
     },
     {
       "path": "plans/kaae-2025-guideline/INVENTORY.md",
@@ -1449,8 +1449,8 @@
     },
     {
       "path": "plans/kaae-2025-guideline/LIVE_PROOF.json",
-      "sha256": "f8903e68bcdfd1a7936b185e81041c77ca23ec97840cbd2326935b3a63e090c7",
-      "bytes": 13769
+      "sha256": "ca734a3f90a7249a30288e32b280e0aff39e07534a502523e4a64f1b28aaf5f9",
+      "bytes": 16295
     },
     {
       "path": "plans/kaae-2025-guideline/apply-kaae-dna-2025.sh",
@@ -2634,8 +2634,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "15f710097276862f1f5800170e603f4a59cb2cb2d92c624a5ee8826d84c56e54",
-      "bytes": 604693
+      "sha256": "9350e305ea39dbaa809a1360d93cf619258c142605cd8855bbe5152d969ee562",
+      "bytes": 605463
     },
     {
       "path": "plans/user-stories.csv",
