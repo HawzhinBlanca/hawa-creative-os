@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-01T18:48:22+03:00",
+  "generatedAt": "2026-10-01T19:34:41+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,10 +20,10 @@
     ]
   },
   "build": {
-    "commit": "72bc63987a101a370fab97e5ec77ec9dd0120215",
+    "commit": "0e925dc258400dc368e2bea5d5fec8392d0b85ca",
     "treeClean": true,
-    "commitTimestamp": "2026-10-01T18:48:22+03:00",
-    "branch": "claude/live-test-fixes-2"
+    "commitTimestamp": "2026-10-01T19:34:41+03:00",
+    "branch": "claude/kaae-model-consent"
   },
   "migrations": {
     "targetVersion": "073_restricted_worker_database",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "5c3065f9abd0cea9d52f58fb15956f5a60352f8b6e1b38e7c217f7d920ca4283"
+  "sha256": "102da56699b76237ec0496ee6cdfb661fc43aa68bff98f110e524e18a7b7ccc9"
 }
