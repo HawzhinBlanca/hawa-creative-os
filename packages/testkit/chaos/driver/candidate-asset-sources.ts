@@ -16,7 +16,8 @@ export async function retainCandidateAssetSources(origin: string, token: string,
     if (!ok) throw new Error(`${name}: ${detail}`);
   };
   const get = (path: string, credential = token) => fetch(`${origin}/v1${path}`, {
-    headers: { Authorization: `Bearer ${credential}` }, signal: AbortSignal.timeout(15_000),
+    // A restore deliberately replaces nginx; do not carry a proof connection across that boundary.
+    headers: { Authorization: `Bearer ${credential}`, Connection: 'close' }, signal: AbortSignal.timeout(15_000),
   });
   const clean = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="19" height="17"><rect width="19" height="17" fill="#34ef59"/></svg>');
   const original = (n: number) => Buffer.from(clean.toString().replace('</svg>', `<script>alert(${n})</script></svg>`));

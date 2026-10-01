@@ -42,6 +42,7 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
     compose(['up', '-d', '--no-deps', '--no-build', '--pull', 'never', '--force-recreate', '--wait', 'worker-blue']);
     // nginx retains upstream addresses across container replacement.
     compose(['restart', 'nginx']);
+    compose(['up', '-d', '--no-deps', '--no-build', '--pull', 'never', '--wait', 'nginx']);
     if (afterRestore) await afterRestore(phase);
     events.push(`${phase}: restored PostgreSQL, Restate and blobs from authenticated encrypted archives to new volumes; resumed exact images`);
     return receipt;

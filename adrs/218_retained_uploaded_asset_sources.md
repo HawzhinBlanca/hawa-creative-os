@@ -82,3 +82,11 @@ nonexistent dna_hash instead of content_hash and stopped before upload/restore.
 Running nginx, persisted Desk session, image/source equality and restricted worker
 checks passed. Correct the test query and explicitly count six source receipts;
 production behavior unchanged. Actual corrected run pending.
+
+Corrected clean f72d8222 retained:110 named controls passed, both encrypted stores
+restored105 tables/176 policies/10 blobs/zero missing references with exact private
+cleanup. The first download after the second nginx restart failed with a closed
+socket before any byte/header result. The driver had restarted nginx without
+waiting for health and retained proof HTTP keepalive connections across restarts.
+Wait for nginx health and close readonly verification connections; no retry or
+weaker assertions, no production behavior change. Whole corrected scenario pending.
