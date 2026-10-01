@@ -934,3 +934,14 @@ NOT_RUN pending authorization, all product gates remain open. Deployed221/0
 on86c598ba and both encrypted restores retained; runtime/schema/harness/infra/
 API/scripts/operational docs identical, four source fixtures separately qualified.
 No production deployment/native save/provider/human/pilot claim. Evidence: W6_CURRENT_MEMBERSHIP_PROOF.json.
+
+
+## ADR225 focused task write and QA authority checkpoint
+
+Forward080 closes actual new-row task/derived-row authority and selected-client
+assignment races. QA records use the actual caller, refuse evidence storage failure
+and serialize numbered concurrent attempts. Six connected files/102 checks and706
+strict roots pass. Full release/candidate qualification pending; uncommitted source
+is not deployed. Fresh read-only live build baffce10 is healthy, Canva unverified.
+No actual creative/native/human/offsite/pilot admission follows from these checks.
+See W6_TASK_WRITE_AUTHORITY_PROOF.json and retained original failure receipts.

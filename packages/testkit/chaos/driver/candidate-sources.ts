@@ -13,6 +13,7 @@ import { candidateStudioSettlement } from './studio-settlement.js';
 import { appendFixtureCopy } from './fixture-native-edit.js';
 import { retainCandidateAssetSources } from './candidate-asset-sources.js';
 import { verifyCandidateStreamIsolation } from './candidate-stream-isolation.js';
+import { verifyCandidateWriteAuthority } from './candidate-write-authority.js';
 import { chatInboxInvocations, designOutcome, RequestEndedError, imageDocumentUpdate, sendToChatInbox, tasksOfChat, textUpdate, waitUntil,
   type InvariantResult } from './scenario.js';
 
@@ -88,6 +89,7 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   // Temporary synthetic session for optional browser inspection, never release evidence or logs.
   writeFileSync(join(CHAOS_DIR, '.run', 'candidate-session.json'), JSON.stringify({ origin, token: session.token }), { mode: 0o600 });
   await verifyCandidateStreamIsolation(origin, checks);
+  await verifyCandidateWriteAuthority(checks);
   const verifyRetainedAssets = await retainCandidateAssetSources(origin, session.token!, checks);
   const get = (path: string) => fetch(`${origin}/v1${path}`, { headers: { Authorization: `Bearer ${session.token}` } });
   const action = async (path: string, body: unknown, key: string = randomUUID(), token = secrets().CHAOS_REVIEWER_KEY,

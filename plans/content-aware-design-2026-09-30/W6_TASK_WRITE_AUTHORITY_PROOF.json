@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-01",
+  "status": "FOCUSED_CHECKS_PASSED_FULL_RELEASE_QUALIFICATION_PENDING",
+  "requirements": [
+    "NFR-006",
+    "FR-011",
+    "NFR-011",
+    "NFR-012"
+  ],
+  "decision": "adrs/225_task_write_scope_authority.md",
+  "baseCommit": "704074c1c708c0b95e4648b7779adc6935eb5391",
+  "reproduced": {
+    "strictTaskScopeFailures": 33,
+    "strictInitialQaFailures": 3,
+    "concurrentQaCollision": true
+  },
+  "focusedVerification": {
+    "filesPassed": 6,
+    "passed": 102,
+    "failed": 0,
+    "skipped": 0,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/VERIFIED_QA_SCOPE_AND_RERUN.log"
+  },
+  "fullSource": "PENDING",
+  "candidateRecovery": "PENDING",
+  "productionDeployment": "NOT_PERFORMED_BY_THIS_PATCH",
+  "productAdmission": "OPEN",
+  "sourceSha256": {
+    "apps/core/src/routes/revisions.routes.ts": "d72ec4fc17dd54120e83536174c2ec0f8126606771f0910c3fd8e5ab1cb91bb7",
+    "packages/db/migrations/080_task_write_scope_authority.sql": "edbec71fe1bc00dd9f1a331b0fdb44a0511a3791ed4a9ec9ee4b440f2c7ef374",
+    "packages/db/test/task-write-authority.test.ts": "70b23bd3c0df46eb8ec6fa9a5ea83af5343c840e3c0b096ec1fe72f3f62cd924",
+    "packages/db/test/task-write-migration.test.ts": "edb0794bad85fcb7238178d4c20a6cec22a0a0a4e3f6d49687556a2deb1ed450",
+    "apps/core/test/revision-qa-write-authority.test.ts": "0d440731240e6a9bcc7452a748775750c36067a89f20ca7a79c985c9d16c26e4",
+    "packages/testkit/chaos/driver/candidate-write-authority.ts": "d10ca28a99efded2c909c5ba0c62785b1622db67b79faa69336614ff3dcddd42"
+  },
+  "liveStatusReadback": "output/qualification/2026-10-01/task-write-authority/STATUS_READBACK.json",
+  "failureHistory": [
+    "Actual original SQL failures retained in COMPLETE_RED_WRITE_AUTHORITY.log.",
+    "Actual substituted QA identity and hidden persistence failure in RED_QA_WRITE_AUTHORITY.log.",
+    "Actual concurrent QA collision retained in QA_SCOPE_AND_RERUN.log.",
+    "Unprivileged typecheck refused local tsx IPC; scoped unchanged rerun passed all706 roots."
+  ],
+  "typecheck": {
+    "status": "PASS",
+    "activeRoots": 706,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/VERIFIED_QA_FINAL_TYPECHECK.log"
+  }
+}
