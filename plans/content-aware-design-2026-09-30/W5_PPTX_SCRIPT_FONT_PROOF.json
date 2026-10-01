@@ -1,0 +1,107 @@
+{
+  "date": "2026-10-01",
+  "adr": 208,
+  "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING_NATIVE_HUMAN_PRODUCT_OPEN",
+  "requirements": [
+    "FR-028",
+    "FR-034",
+    "FR-038",
+    "FR-041",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "beforeRepair": {
+    "failed": 12,
+    "passed": 0,
+    "log": "output/qualification/2026-10-01/pptx-script-fonts/RED.log"
+  },
+  "connected": {
+    "files": 10,
+    "passed": 143,
+    "failed": 0,
+    "skipped": 0,
+    "earlierRunsNotAdded": true
+  },
+  "strictTypes": {
+    "testRoots": 684,
+    "passed": true,
+    "note": "Final two additional tests are compiled again by the required exact gate."
+  },
+  "lint": {
+    "passed": true
+  },
+  "historicalCanvaReinspection": {
+    "exports": 5,
+    "liveTextObjects": 43,
+    "allSourceHashesMatchOriginalReceipts": true,
+    "copyAndFontPass": true,
+    "wrongFontAndCopyRefused": true,
+    "source": "output/qualification/2026-10-01/pptx-script-fonts/HISTORICAL_NATIVE_REINSPECTION.json"
+  },
+  "preserved": [
+    "source bytes/hashes",
+    "exact copy comparison",
+    "direction policy",
+    "manual exact Client DNA family membership",
+    "existing generated/legacy family style matching",
+    "independent native/human approval",
+    "zero new providers/dependencies"
+  ],
+  "coreEvidence": [
+    "field source rechecked despite an older stored pass",
+    "one failed revision/QC across replay",
+    "wrong field font approval HTTP412",
+    "correct field source one review/QC across replay",
+    "nativeVerification remains unverified",
+    "generated used slots rechecked despite stored version7 pass"
+  ],
+  "limitations": [
+    "Retained declaration inspection does not establish actual glyph shaping, native render or editability",
+    "Existing Latin/Arabic font policy only; other scripts not qualified by this repair",
+    "Dynamic field update behavior not qualified",
+    "Five historical exports are not current-candidate native qualification",
+    "No production rollout or paid call"
+  ],
+  "sourceSha256": {
+    "packages/qa/src/canva-pptx-check.ts": "f1ad8d51071e14ac7e1ea1578176473365bd6edfc48a3a030293a9964d381c76",
+    "packages/qa/test/pptx-script-fonts.test.ts": "de1aeaf2f81aac96a700d9b3f2153c746597398422bedabcad04735874b49e76",
+    "packages/qa/test/fixtures/script-font-deck.ts": "44b6747e99cf423004cd9094f753a40bdff49a99f5fabf3049a82aaa0412e0c6",
+    "apps/core/test/manual-canva-review.test.ts": "fa7252a307ba0349890aab87f37e264b020609786b2ffc033ebe2b74b0862bd1",
+    "apps/core/test/canva-export-qc.test.ts": "e2ef59c331dee31d312cc98bb81f34cbb6eb50cebc1ae06b81bac87257d872a4"
+  },
+  "logs": {
+    "output/qualification/2026-10-01/pptx-script-fonts/RED.log": "697d232a6fb138534908a79f334c6efa78090ef019d7da76adb20b19fda24270",
+    "output/qualification/2026-10-01/pptx-script-fonts/FIRST_GREEN.log": "b3a475046c674861eb4c2d0b4e4672e9e0fc0338ae1ec7618c9804df63caac9e",
+    "output/qualification/2026-10-01/pptx-script-fonts/BUILD.log": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454",
+    "output/qualification/2026-10-01/pptx-script-fonts/FIRST_CONNECTED.log": "2bd6d6a690aef27ce4d4e817c2932c3d7be81dd1687f259d602455e5d7849e72",
+    "output/qualification/2026-10-01/pptx-script-fonts/STRICT_TYPES.log": "98f158dd21125ef420bfd1a3a9007de5cad11f5e25b8a68c9c1f88c74b60f0a8",
+    "output/qualification/2026-10-01/pptx-script-fonts/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/pptx-script-fonts/CONNECTED.log": "029598ad8214e4385e6bfb9c1dc8d2f8c894067015ce1172d26a640bcb34f8e0",
+    "output/qualification/2026-10-01/pptx-script-fonts/FIRST_PACK_ENV_REFUSAL.log": "054bd466d83a22cc0d7f0f641764702d29453a0ce4b405c3bdbc6a9d85bf4f78",
+    "output/qualification/2026-10-01/pptx-script-fonts/PACK.log": "fea8bbd0f2845f6df3fb190c68156bbb80875f77ad213cdd7141745f18fcf44e"
+  },
+  "formatSources": [
+    "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.complexscriptfont?view=openxml-3.0.1",
+    "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.latinfont?view=openxml-3.0.1",
+    "https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.field?view=openxml-3.0.1"
+  ],
+  "developmentFailures": [
+    {
+      "phase": "before repair regression",
+      "result": "12 failures retained as intended red evidence"
+    },
+    {
+      "phase": "first pack refresh",
+      "result": "system Python lacked PyYAML; used existing Homebrew Python with installed dependency; no installation or bypass"
+    },
+    {
+      "phase": "test fixture editing",
+      "result": "SQL template quotation typo corrected before execution; no failed test or runtime attributed to this edit"
+    }
+  ],
+  "blueprint": {
+    "passed": 1728,
+    "warnings": 0,
+    "failed": 0
+  }
+}

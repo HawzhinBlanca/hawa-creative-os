@@ -85,6 +85,15 @@ For every text run:
 - preserve joining behavior and diacritics;
 - compare browser and server-renderer font versions.
 
+### Captured font declarations (ADR208)
+
+Inspect the explicit Latin/Arabic font slot used by each regular run and text
+field. An expected family in an unused slot does not qualify the actual text;
+mixed runs must satisfy each used script. Formal mixed-body runs retain their
+individual script families. Missing or conflicting used-slot declarations refuse.
+Retained field text is inspected at capture time; future field updates, native
+glyph shaping and editability remain separate unqualified capabilities.
+
 ### Bidirectional behavior
 
 Studio must respect explicit `rtl:false` even with an Arabic-script font. Legacy

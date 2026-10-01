@@ -6,6 +6,7 @@ import { recordManualCanvaReview } from '../src/services/manual-canva-review.js'
 import { evaluateCanvaExportQc } from '../src/core-helpers.js';
 import { createApp } from '../src/app.js';
 import { characterReferenceDeck } from '../../../packages/qa/test/fixtures/character-reference-deck.js';
+import { scriptFontDeck, scriptFontRun } from '../../../packages/qa/test/fixtures/script-font-deck.js';
 
 const url=process.env.HAWA_ISOLATED_TEST_DB;
 describe.skipIf(!url)('manual Canva first review from retained evidence',()=>{
@@ -69,6 +70,32 @@ describe.skipIf(!url)('manual Canva first review from retained evidence',()=>{
     const f=await fixture({pptxBytes:Buffer.from(characterReferenceDeck('Ex&#0;act copy 123.45'))});
     expect(await record(f)).toMatchObject({status:'blocked'});
     expect(await counts(f.taskId)).toEqual({revisions:0,checks:0});
+  });
+  it('rechecks field fonts from retained bytes and refuses approval despite an older passing receipt',async()=>{
+    const bytes=Buffer.from(scriptFontDeck(scriptFontRun('Exact copy ', 'Verdana') + scriptFontRun('123.45', 'Arial', undefined, 'fld')));
+    const f=await fixture({pptxBytes:bytes});
+    const first=await record(f);
+    expect(first).toMatchObject({status:'recorded',qaPassed:false,checkedArtifactId:f.files.pptx});
+    expect(await record(f)).toEqual(first); expect(await counts(f.taskId)).toEqual({revisions:1,checks:1});
+    const response=await createApp({db,testAuth:{roleHeader:true}}).request(`/tasks/${f.taskId}/revisions/${(first as {revisionId:string}).revisionId}/decisions`,{
+      method:'POST',headers:{'content-type':'application/json',Authorization:'Bearer test_art_director_bearer'},
+      body:JSON.stringify({decision:'approved',pinnedExportIds:[f.files.png,f.files.pptx]})});
+    expect(response.status).toBe(412);
+    const source=await withRlsContext(db,scope,async trx=>(await sql<{source_sha256:string;neutral_manifest:{nativeVerification:string};content:Buffer}>`
+      SELECT r.source_sha256,r.neutral_manifest,b.content FROM hawa.design_revisions r
+      JOIN hawa.canva_export_bytes b ON b.id=${f.files.pptx}::uuid WHERE r.task_id=${f.taskId}::uuid`.execute(trx)).rows[0]);
+    expect(source.source_sha256).toBe(hash(bytes)); expect(source.content).toEqual(bytes);
+    expect(source.neutral_manifest.nativeVerification).toBe('unverified');
+  });
+  it('records correctly declared field copy once without claiming native or field-update fidelity',async()=>{
+    const bytes=Buffer.from(scriptFontDeck(scriptFontRun('Exact copy ', 'Verdana') + scriptFontRun('123.45', 'Verdana', undefined, 'fld')));
+    const f=await fixture({pptxBytes:bytes}); const first=await record(f);
+    expect(first).toMatchObject({status:'recorded',qaPassed:true,checkedArtifactId:f.files.pptx});
+    expect(await record(f)).toEqual(first); expect(await counts(f.taskId)).toEqual({revisions:1,checks:1});
+    const row=await withRlsContext(db,scope,async trx=>(await sql<{source_sha256:string;neutral_manifest:{nativeVerification:string;nodes:Array<{text:string}>}}>`
+      SELECT source_sha256,neutral_manifest FROM hawa.design_revisions WHERE task_id=${f.taskId}::uuid`.execute(trx)).rows[0]);
+    expect(row.source_sha256).toBe(hash(bytes)); expect(row.neutral_manifest.nodes.map(n=>n.text)).toEqual(['Exact copy 123.45']);
+    expect(row.neutral_manifest.nativeVerification).toBe('unverified');
   });
   it('creates one attributable first revision and QA run under concurrent/replayed capture, then permits ordinary review approval',async()=>{
     const f=await fixture();

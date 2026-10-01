@@ -165,12 +165,12 @@ export function checkCanvaPptx(
 
   const doc = parse(files[names[0]]);
   const shapes: any[] = [];
-  const find = (node: any, tag: string, found: any[]) => {
+  const find = (node: any, tag: string | string[], found: any[]) => {
     if (Array.isArray(node)) {
       for (const item of node) find(item, tag, found);
     } else if (node && typeof node === 'object') {
       for (const [key, value] of Object.entries(node)) {
-        if (key === tag) found.push(value);
+        if (typeof tag === 'string' ? key === tag : tag.includes(key)) found.push(value);
         else if (key !== ':@') find(value, tag, found);
       }
     }
@@ -271,7 +271,7 @@ export function checkCanvaPptx(
     }
 
     const runs: any[] = [];
-    find(shape, 'a:r', runs);
+    find(shape, ['a:r', 'a:fld'], runs);
     if (!runs.length) {
       unresolvedFont = true;
       offendingObjects.push({
@@ -283,128 +283,79 @@ export function checkCanvaPptx(
     }
 
     for (const run of runs) {
+      const runTextNodes: any[] = [];
+      find(run, 'a:t', runTextNodes);
+      const runText = runTextNodes.flatMap(node => Array.isArray(node) ? node : [node])
+        .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join('');
+      if (!runText.trim()) continue;
+      const scripts: Array<'latin' | 'arabic'> = [];
+      if (ARABIC_SCRIPT.test(runText)) scripts.push('arabic');
+      if (/\p{Script=Latin}/u.test(runText) || !scripts.length) scripts.push('latin');
+
       const properties: any[] = [];
       find(run, 'a:rPr', properties);
-      const runFaces: string[] = [];
       const facesByTag: Record<string, string[]> = {};
       const inspectChild = (child: any) => {
         if (!child || typeof child !== 'object') return;
-        for (const tag of ['a:latin', 'a:cs', 'a:ea']) {
+        for (const tag of ['a:latin', 'a:cs']) {
           if (child[tag]) {
             const tf = child[':@']?.['@_typeface'] || (child[tag] as any)?.['@_typeface'];
-            if (tf && typeof tf === 'string' && tf.trim()) {
-              runFaces.push(tf.trim());
-              (facesByTag[tag] ||= []).push(tf.trim());
-            }
+            if (tf && typeof tf === 'string' && tf.trim()) (facesByTag[tag] ||= []).push(tf.trim());
           }
         }
       };
-
       for (const props of properties) {
-        if (Array.isArray(props)) {
-          for (const child of props) inspectChild(child);
-        } else if (props && typeof props === 'object') {
-          inspectChild(props);
-        }
+        if (Array.isArray(props)) for (const child of props) inspectChild(child);
+        else inspectChild(props);
       }
 
-      if (!runFaces.length) {
-        unresolvedFont = true;
-        offendingObjects.push({
-          index: textIdx,
-          text: text.trim().slice(0, 50),
-          observedFont: 'unresolved',
-          reason: 'No typeface attribute in run properties',
-        });
-      } else {
-        const observedFace = runFaces[0];
-        fonts.push(observedFace);
-
-        // Determine expected font & validate role-based typography
-        const role = options.roles?.[textIdx] || 'body';
-        const isFormal = options.documentKind === 'formal_document';
-
-        if (options.allowedFontsByScript) {
-          const runTextNodes: any[] = [];
-          find(run, 'a:t', runTextNodes);
-          const runText = runTextNodes.flatMap(node => Array.isArray(node) ? node : [node])
-            .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join('');
-          const scripts: Array<'latin' | 'arabic'> = [];
-          if (ARABIC_SCRIPT.test(runText)) scripts.push('arabic');
-          if (/[A-Za-z\u00C0-\u024F]/u.test(runText) || !scripts.length) scripts.push('latin');
-          for (const script of scripts) {
-            const allowed = options.allowedFontsByScript[script] || [];
-            const declared = facesByTag[script === 'arabic' ? 'a:cs' : 'a:latin'] || [];
-            fontExpectations.push(...allowed);
-            if (!declared.length || !declared.every(face => allowed.some(font => face.toLowerCase() === font.toLowerCase()))) {
-              offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), observedFont: declared.join(', ') || 'unresolved',
-                reason: `The ${script} run must explicitly use an approved client font family` });
-            }
-          }
-        } else if (options.fontsByIndex) {
-          const expectedFont = options.fontsByIndex[textIdx];
-          fontExpectations.push(expectedFont || 'none sent');
-          const sent = (expectedFont || '').toLowerCase();
-          const kept = Boolean(sent) && runFaces.some((f) => f.toLowerCase() === sent || f.toLowerCase().startsWith(sent + ' '));
-          if (!kept) {
-            offendingObjects.push({
-              index: textIdx,
-              text: text.trim().slice(0, 50),
-              role,
-              observedFont: observedFace,
-              expectedFont,
-              reason: expectedFont
-                ? `Sent in '${expectedFont}', returned by Canva in '${observedFace}'`
-                : 'Canva returned a text object that was not sent',
-            });
-          }
-        } else if (isFormal && role === 'body') {
-          const expected = isArabic ? formalBodyArabic : formalBodyLatin;
-          fontExpectations.push(expected);
-          const matches = observedFace.toLowerCase() === expected || observedFace.toLowerCase().startsWith(expected + ' ');
-          if (!matches) {
-            offendingObjects.push({
-              index: textIdx,
-              text: text.trim().slice(0, 50),
-              role,
-              observedFont: observedFace,
-              expectedFont: isArabic ? (options.formalBodyFonts?.arabic || 'Noto Sans Arabic') : (options.formalBodyFonts?.latin || 'Verdana'),
-              reason: `Formal document body must use ${isArabic ? 'Noto Sans Arabic' : 'Verdana'}; observed '${observedFace}'`,
-            });
-          }
-        } else if (options.documentKind === 'formal_document' || options.documentKind === 'design_piece') {
-          // Free choice of Canva-native display fonts from admitted list
-          const matchesAdmitted = admitted.some(
-            (a) => observedFace.toLowerCase() === a || observedFace.toLowerCase().startsWith(a + ' ')
-          );
-          fontExpectations.push(observedFace);
-          if (!matchesAdmitted) {
-            offendingObjects.push({
-              index: textIdx,
-              text: text.trim().slice(0, 50),
-              role,
-              observedFont: observedFace,
-              reason: `Typeface '${observedFace}' is not in the admitted Canva-native font list`,
-            });
-          }
-        } else {
-          // Standard / legacy single-font mode (for tests passing requiredFont)
-          const expectedFont = isArabic && options.scriptFonts?.arabic
-            ? options.scriptFonts.arabic
-            : requiredFont;
-          fontExpectations.push(expectedFont);
-          const matched = runFaces.find((f) => f === expectedFont || f.startsWith(expectedFont + ' '));
-          if (!matched) {
-            offendingObjects.push({
-              index: textIdx,
-              text: text.trim().slice(0, 50),
-              role,
-              observedFont: observedFace,
-              expectedFont,
-              reason: `Expected font '${expectedFont}', observed '${observedFace}' (Canva substitution or unlisted font)`,
-            });
-          }
+      const role = options.roles?.[textIdx] || 'body';
+      for (const script of scripts) {
+        const declared = facesByTag[script === 'arabic' ? 'a:cs' : 'a:latin'] || [];
+        const observedFont = declared.join(', ') || 'unresolved';
+        if (declared.length !== 1) {
+          unresolvedFont = true;
+          offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), role, observedFont,
+            reason: `The ${script} run must have one explicit font family declaration` });
+          continue;
         }
+        const face = declared[0];
+        fonts.push(face);
+        const familyMatches = (expected: string) => face.toLowerCase() === expected.toLowerCase() ||
+          face.toLowerCase().startsWith(expected.toLowerCase() + ' ');
+        let expectedFont: string | undefined;
+        let matches: boolean;
+        let reason: string;
+        if (options.allowedFontsByScript) {
+          const allowed = options.allowedFontsByScript[script] || [];
+          fontExpectations.push(...allowed);
+          matches = allowed.some(font => face.toLowerCase() === font.toLowerCase());
+          reason = `The ${script} run must explicitly use an approved client font family`;
+        } else if (options.fontsByIndex) {
+          expectedFont = options.fontsByIndex[textIdx];
+          fontExpectations.push(expectedFont || 'none sent');
+          matches = expectedFont !== undefined && expectedFont !== '' && familyMatches(expectedFont);
+          reason = expectedFont ? `Sent in '${expectedFont}', returned by Canva in '${face}' for ${script} text`
+            : 'Canva returned a text object that was not sent';
+        } else if (options.documentKind === 'formal_document' && role === 'body') {
+          expectedFont = script === 'arabic' ? (options.formalBodyFonts?.arabic || options.scriptFonts?.arabic || 'Noto Sans Arabic')
+            : (options.formalBodyFonts?.latin || 'Verdana');
+          fontExpectations.push(expectedFont);
+          matches = familyMatches(script === 'arabic' ? formalBodyArabic : formalBodyLatin);
+          reason = `Formal document body must use ${expectedFont}; observed '${face}' for ${script} text`;
+        } else if (options.documentKind === 'formal_document' || options.documentKind === 'design_piece') {
+          fontExpectations.push(face);
+          matches = admitted.some(familyMatches);
+          reason = `Typeface '${face}' is not in the admitted Canva-native font list`;
+        } else {
+          expectedFont = script === 'arabic' && options.scriptFonts?.arabic ? options.scriptFonts.arabic : requiredFont;
+          fontExpectations.push(expectedFont);
+          // Retain legacy case-sensitive family/style matching, but only in the used slot.
+          matches = face === expectedFont || face.startsWith(expectedFont + ' ');
+          reason = `Expected font '${expectedFont}', observed '${face}' (Canva substitution or unlisted font)`;
+        }
+        if (!matches) offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), role,
+          observedFont, ...(expectedFont ? {expectedFont} : {}), reason });
       }
     }
   }
@@ -429,7 +380,7 @@ export function checkCanvaPptx(
     : null;
 
   return {
-    checkVersion: 7,
+    checkVersion: 8,
     sourceTextObjects: unaddressableText ? null : sourceTextObjects,
     source: detectedSource,
     canvaDesignId,

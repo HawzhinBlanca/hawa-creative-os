@@ -2,7 +2,7 @@
 
 ## Release verdicts
 
-`scripts/enforce_release_gate.sh` is a **source and engineering preflight**. A passing run means its seven technical stages passed for a clean, tracked checkout; it does not admit the deployed product or establish design quality. `--require-admission` fails while current-candidate product evidence is open. `--skip-tests` cannot pass engineering preflight.
+`scripts/enforce_release_gate.sh` is a **source and engineering preflight**. A passing run means its eight technical stages passed for a clean, tracked checkout; it does not admit the deployed product or establish design quality. `--require-admission` fails while current-candidate product evidence is open. `--skip-tests` cannot pass engineering preflight.
 
 The previous 2026-09-21 `RELEASE_GATE_EVIDENCE.json` said `QUALIFIED` with `cleanTree: false` and Gate F unrun. That verdict is historical and invalid for the current candidate. The old script also assigned unconditional passes to Gates B and G and read other gates from older drill files. No historical drill can be silently promoted to current-candidate proof. R27 must verify the deployed image receipt, exact candidate commit and manifest hash, task/export hashes, dated gate evidence, and the independent human study before a product-admission verdict is possible.
 

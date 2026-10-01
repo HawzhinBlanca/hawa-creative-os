@@ -575,3 +575,27 @@ Connected9files137/0/0; final combined683 strict roots and lint pass. Original22
 Clean seale879ce292ad1cd0067369056bdb945fb95ff567d passes all8 engineering stages:6750pass/0fail/67skip,676 passed files/6 skipped,683 strict roots,1722 pack checks. Latest production dump restores and verifies in isolation; negative flag refusal passes. Exact copy/palette/geometry/source-byte/native-authority thresholds remain unchanged; original red/fixture/type failures retained. Both measured pending defects are source-repaired and engineering-qualified. See W2_BACKGROUND_FEASIBILITY_PROOF.json, W5_PPTX_CHARACTER_REFERENCE_PROOF.json and BACKGROUND_PPTX_GATE_EVIDENCE.json.
 
 The previous96-check deployed recovery qualifies historical d85fc087 only; current runtime changed and no new deployed/native/real-provider/human/product admission is inferred from that receipt. Creative production deployment has not occurred. Remaining actual external/native/human gates in the workstream table stay open.
+
+## Current published candidate recovery — 1 October 2026
+
+Clean573265b2 deployed rehearsal passes96 named checks and both authenticated
+new-volume restores (104tables/174policies/3blobs/zero missing references).
+External providers/staff are synthetic,56 unselected scenarios skipped,2 unmatched
+synthetic Gemini requests retained. Restore-script receipts stop before worker
+admission; subsequent application replay is proved in scenario checks. Original
+receipts are archived under output/qualification/2026-10-01/573265b2. Production
+unchanged; separate-host/native/human admission remains open. This qualifies
+573265b2 only, not subsequent runtime changes.
+
+## ADR208 captured script-specific font evidence — 1 October 2026
+
+Actual source checker admitted a wrong Latin/Arabic font when an unused slot
+named the expected family, skipped field fonts and misapplied formal mixed-body
+expectations to a whole shape. Twelve original regressions failed. Repair now
+checks each used slot/run/field and reports the used declared family; missing or
+conflicting evidence refuses. Existing family-style policy stays unchanged.
+Connected10files143/0/0,684 strict roots and lint pass;5 hash-verified historical
+real Canva exports/43 live objects retain copy/font/addressability compatibility
+and negative controls. Core retained-byte rechecks/replay/approval refusal pass.
+W5_PPTX_SCRIPT_FONT_PROOF.json retains scope/log/source hashes. Exact sealed gate
+pending; no production deployment, paid call, native-render or human admission.
