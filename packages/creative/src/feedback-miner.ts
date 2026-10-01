@@ -496,9 +496,6 @@ export class FeedbackMiner {
     return newlyProposed;
   }
 
-  /**
-   * Hydrates rules from canonical Client DNA specification file if present.
-   */
   /** Candidates are observed/proposed data; filesystem files never establish human approval. */
   public getCandidateRules(clientId?: string): CandidateRuleProposal[] {
     const rules = Array.from(this.candidateRules.values());

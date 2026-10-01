@@ -211,7 +211,6 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
         method: 'POST',
         headers: operatorHeaders,
         body: JSON.stringify({
-          taskId: 'task-scope-test-1',
           title: 'Drustee Specific Guideline',
           category: 'layout',
           ruleText: 'DRUSTEE_EXCLUSIVE_RULE_SCOPE_TEST',
@@ -227,7 +226,8 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
         headers: adminHeaders,
         body: '{}',
       });
-      expect(promoteRes.status).toBe(403);
+      // A foreign candidate is absent from this scope; do not disclose its existence.
+      expect(promoteRes.status).toBe(404);
 
       // 3. Verify client-aster did NOT receive the rule
       const asterDnaRes = await app.request('/v1/clients/client-aster/dna', { headers: adminHeaders });

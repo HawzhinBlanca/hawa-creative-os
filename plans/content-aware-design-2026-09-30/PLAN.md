@@ -312,3 +312,8 @@ Corrected
 W6_LEARNING_GOVERNANCE_PROOF.json. Source only; no paid call or deployment.
 Queue rebuilding, full action-key governance/revision polarity/taste/native/Canva/
 human/recovery/whole-product admission remain open.
+
+First exact gate d765b706:6491pass/1fail/67skip retained. R04 fake task and
+foreign-candidate refusal fixture corrected;14files/101pass. No access check
+was weakened; non-disclosure404 replaces candidate-existence disclosure403.
+Repeated exact engineering gate remains pending.

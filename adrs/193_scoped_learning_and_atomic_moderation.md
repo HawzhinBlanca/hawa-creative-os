@@ -55,7 +55,13 @@ revision-level polarity, real native/Canva/human taste calibration and full prod
 admission remain obligations. This slice must not be presented as completion of
 those broader requirements or as calibrated confidence.
 
-Connected qualification:13files/88pass/0fail/0skip,663 strict test roots and lint pass.
+Connected qualification:14files/101pass/0fail/0skip,663 strict test roots and lint pass.
 Original five failures, compatibility failures and IPC refusal are retained.
 W6_LEARNING_GOVERNANCE_PROOF.json records source hashes, controls and limits.
 No provider call or deployment; exact full gate remains pending.
+
+First exact full gate d765b706 retained6491pass/1fail/67skip; R04 used a fake
+non-UUID task and expected foreign-candidate disclosure. Explicit instructions
+need no invented task; a foreign candidate now returns404 without disclosing
+existence. Corrected14files/101pass; malformed/actual scoped controls remain.
+The repeated exact full gate remains pending.

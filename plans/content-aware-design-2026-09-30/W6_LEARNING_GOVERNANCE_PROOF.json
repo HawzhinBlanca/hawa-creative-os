@@ -20,14 +20,15 @@
     "First connected 13 passed. Extended 22 pass / 7 fail exposed no-DNA fixtures, invented asset lists and old fake task inputs; retained and repaired with explicit DNA, actual stored tasks and supplied inventory.",
     "Migration/RLS expansion 44 passed. Broader 86 pass / 1 fail exposed a role-body test pretending to be an unauthorized actor. Replaced it with a verified operator requesting director authority; strict malformed-role refusal remains.",
     "Initial type command refused local tsx IPC under sandbox; rerun with approved local IPC, no compiler or coverage bypass.",
-    "Receipt expansion87pass/1fail exposed a barrier test assuming HTTP start order equaled transaction order. Corrected control proves promotion has reached its database lock before dispatching dismissal; no runtime FIFO guarantee is invented."
+    "Receipt expansion87pass/1fail exposed a barrier test assuming HTTP start order equaled transaction order. Corrected control proves promotion has reached its database lock before dispatching dismissal; no runtime FIFO guarantee is invented.",
+    "First exact full gate on d765b706 retained6491pass/1fail/67skip. R04 supplied a fabricated non-UUID task to an explicit instruction and expected disclosure of a foreign candidate. Removed invented task; 404 keeps the candidate absent from foreign scope. Existing malformed-task422 and actual cross-client403/404 controls remain."
   ],
   "connected": {
-    "files": 13,
-    "passed": 88,
+    "files": 14,
+    "passed": 101,
     "failed": 0,
     "skipped": 0,
-    "log": "/tmp/hawa-learning-governance-connected-seal-20261001.log"
+    "log": "/tmp/hawa-learning-governance-connected-corrected-20261001.log"
   },
   "typecheck": {
     "status": "PASS",
@@ -110,10 +111,22 @@
     "hawa-learning-governance-connected-seal-20261001.log": {
       "path": "/tmp/hawa-learning-governance-connected-seal-20261001.log",
       "sha256": "d385098a8f6af649f6ff072edb1c8865c8e87fa8387cdd9efbe0733c1e6c07a7"
+    },
+    "hawa-learning-governance-connected-corrected-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-connected-corrected-20261001.log",
+      "sha256": "43679c97af89bfaf57430fad663367a2d7067d9c5a63408732ae65578544f2fd"
+    },
+    "hawa-learning-governance-full-gate-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-full-gate-20261001.log",
+      "sha256": "d0eaed833203cc57feec4f5143625210eb6acd1dd527b688bd3416d42bb1b51e"
+    },
+    "hawa-learning-governance-full-suite-first-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-full-suite-first-20261001.log",
+      "sha256": "27fb778b535d415065fdee19c52c716be6a565a8f064491e9d46e6afd1a6e3f8"
     }
   },
   "sources": {
-    "adrs/193_scoped_learning_and_atomic_moderation.md": "3ff1d8ad524a1e788e328da1b8cafd047f2aa48d63cb5d02147a16533710b5fc",
+    "adrs/193_scoped_learning_and_atomic_moderation.md": "c088413cae6617e2c41206bceccbe52ce5367f5e95e5087d22623558ac237c0f",
     "apps/core/src/routes/client-learning.routes.ts": "b03236e96a373e1cd9201b0f4c07bcc7cf868a48d57d312e616bae5a6a575aca",
     "apps/core/src/services/learning-governance.ts": "22050b17171e6c3ac96154d941040d89414abb4ed6fe7b53787479056c9f6a04",
     "apps/core/test/learning-governance-boundaries.test.ts": "72a8c8de020b997dcd812e9ff456c0364e1bccbacabcc8195ab3dedc4c941660",
@@ -121,9 +134,18 @@
     "apps/core/test/h11-governed-learning-scope.test.ts": "04fb1e8867b478b233029d30b1ec92526202a74a5e2bf19c3cd1e24eef566b26",
     "apps/core/test/governed-learning-dna-lifecycle.test.ts": "1a615e90c5385bb1ac56387e18605f60e5ab0c2d01f05c64e367230a6fcd1fcb",
     "apps/core/test/startup-schema-check.test.ts": "bbebf5b5fae1fc7dc7efc4bcbbb7bc8ff5a4bcfd34f064296397ae4e995d292d",
-    "packages/creative/src/feedback-miner.ts": "bbfa594ec5cf5d9e9cc5582dbaa4523c0f96cfd91b774d1fab70f34fa052a88e",
+    "packages/creative/src/feedback-miner.ts": "599c5cb6236bbb95e707db94f2741d1559aface4063df4c823daae235cd49db0",
     "packages/creative/src/rule-moderation.ts": "f3ebf9e427f822ee7f64c851906c2daac3088f741c4db48ff11c7802b55dfe7e",
     "packages/db/migrations/075_client_rule_moderation_audits.sql": "601ddcaf2ed880641c102ee899c5535c039a19f325f1cb8301d9eb254abbc694",
-    "packages/db/test/schema-upgrade.test.ts": "85c28b92f540afa9b97ac3197912ffc861929e91dbfe1c80df9378b10d6eed3e"
+    "packages/db/test/schema-upgrade.test.ts": "85c28b92f540afa9b97ac3197912ffc861929e91dbfe1c80df9378b10d6eed3e",
+    "apps/core/test/r04-scope-enforcement.test.ts": "fda27022ca607bffd214527cbe32c825af3457c887c45b3412df2ba822555c2d"
+  },
+  "firstFullGate": {
+    "commit": "d765b7065eb56e465115d4e15d26eefc13986a04",
+    "passed": 6491,
+    "failed": 1,
+    "skipped": 67,
+    "suiteLog": "/tmp/hawa-learning-governance-full-suite-first-20261001.log",
+    "gateLog": "/tmp/hawa-learning-governance-full-gate-20261001.log"
   }
 }
