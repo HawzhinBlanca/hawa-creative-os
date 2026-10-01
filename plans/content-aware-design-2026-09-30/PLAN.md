@@ -999,3 +999,13 @@ Actual current health resolves text/layout/critique/judge to gpt-6.1-sol; observ
 Current checker validates all40 original strings/addressable text and declared families in four hash-verified retained actual Canva exports; altered-copy and wrong-font controls refused. The first probe mistakenly read projected fontFamilyPass from lower-level checker; corrected to its actual fontPass field without changing source/assertions. No native operation, saved edit, glyph or human review inferred. Five current white-paper topology transfers retain source hashes/live copy and pass hard QA; independent pinned-font export geometry agrees over6475710 pixels,4228430 within source images, with text/logo/boundary masks. Synthetic diagnostics are not client quality examples.
 
 Read-only UI: Canva account authorized, historical smoke task has no native preview and QA unmeasured; approval/delivery disabled. The newer KAAE2025 Claude worktree is dirty onbaffce10, not a committed mergeable change. Preserve it; finalize/review before integration. Native save approval, production-data transfer, human language/quality, publication, offsite recovery and real pilot stay open. CURRENT_NATIVE_ACCEPTANCE_READBACK.json records current evidence/provenance.
+
+
+### Optional page grammar admission — ADR239, 2 October 2026
+
+Three actual Core loader refusal failures repaired using a pure shared typed boundary.
+Final8files126/0/0,725 strict roots, production build/lint pass; original red/stale-build
+receipts retained. Current Claude reference snapshot admitted without rewriting it.
+Absent grammar remains optional, colors stay within each client's palette and no
+client style/photo-count default is installed. Unfinished ADR238 parser/renderer merge
+and native/human/production admission remain open. See W5_PAGE_GRAMMAR_ADMISSION_PROOF.json.

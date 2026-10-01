@@ -54,6 +54,7 @@ export * from './studio/art-direction/index.js';
 export * from './studio/style-spec.js';
 export * from './studio/studio-normalize.js';
 export * from './studio/hard-qa.js';
+export * from './studio/page-grammar-admission.js';
 export * from './studio/client-reference.js';
 export * from './studio/house-rules.js';
 export * from './studio/cost-architecture-v3.js';

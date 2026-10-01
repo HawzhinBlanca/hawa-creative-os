@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { creativeAssetPath } from '@hawa/creative';
+import { admitPageGrammarFromReference, creativeAssetPath, PageGrammarInvalidError } from '@hawa/creative';
 import { sniffBlobMediaType } from '@hawa/contracts';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { computeDnaHash, isValidUuid } from '../core-helpers.js';
@@ -39,6 +39,12 @@ export function paletteFallbacksOf(colors: unknown[]): { background?: string; te
 async function packagedKaaeReference(clientId: string): Promise<Resolved | null> {
   const reference = JSON.parse(await readFile(creativeAssetPath('kaae-reference.json'), 'utf8'));
   if (clientId !== reference.clientId) return null;
+  try {
+    admitPageGrammarFromReference(reference);
+  } catch (error) {
+    if (error instanceof PageGrammarInvalidError) throw new CanvaFlowError(422, error.code, error.message);
+    throw error;
+  }
   const logo = await readFile(creativeAssetPath('logos/kaae-official-logo.png'));
   if (sha256(logo) !== reference.logoSha256 || sniffBlobMediaType(logo) !== 'image/png') {
     throw new CanvaFlowError(409, 'LOGO_CHANGED', 'The packaged client logo no longer matches its reference hash.');

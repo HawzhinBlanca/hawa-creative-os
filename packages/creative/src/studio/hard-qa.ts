@@ -1,4 +1,5 @@
 import { evaluateThumbnailLayout } from './thumbnail-rules.js';
+import { admitPageGrammarFromReference } from './page-grammar-admission.js';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { HERO_SOFT_UPSCALE, photoRecipeOf } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
@@ -525,6 +526,7 @@ export function artDirectionRulesFromRaw(rawRef: any): string[] {
  * not in KAAE's, so its designs could not be checked against the palette production enforces.
  */
 export function studioReferenceFromRaw(rawRef: any): StudioReferenceRules {
+  admitPageGrammarFromReference(rawRef);
   // A reference pack names its client's palette. One that does not is refused: this used to fill in
   // KAAE's palette, so any other client's design would have been made in KAAE's colours (ADR-127).
   if (!Array.isArray(rawRef?.rules?.palette) || rawRef.rules.palette.length === 0) {

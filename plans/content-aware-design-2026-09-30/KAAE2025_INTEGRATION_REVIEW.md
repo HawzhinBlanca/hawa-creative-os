@@ -23,3 +23,23 @@ Add direct refusal controls for the three reproduced inputs, plus a valid gramma
 ## Release work still required
 
 The branch reference remainsbaffce10; its new guideline source is uncommitted. Re-read the completed commit and ADR238 evidence before integrating. Desk brand-face/showcase handoffs and the active DNA row/Canva brand kit remain separate items in Claude's `plans/kaae-2025-guideline/INVENTORY.md`. Do not assert the kit or source fonts are admitted from the palette update. Actual current Canva edit/save/reopen, native-language/human quality and production admission remain open.
+
+## Connected admission repair — ADR239, 2 October 2026
+
+The research branch now validates optional grammar at the actual packaged-client
+resolver and shared studio reference reader. Three original loader failures and two
+compatibility passes are retained. Final eight connected files:126 passed/0 failed/0
+skipped;725 strict test roots, production build and lint pass. A stale compiled-export
+intermediate failure was repaired by rebuilding, not by relaxing assertions. Gradient
+and palette table arguments were corrected to exercise complete input arrays.
+
+The pure fixed-depth schema validates nested structure, actual finite numeric types,
+palette membership, bounded native gradients, ornaments and explicit metadata. Invalid
+supplied grammar has a structured field refusal before logo/model/composition work;
+absent grammar keeps existing behavior. Reference identity and casing are preserved.
+A stable read-only snapshot of Claude's actual newer reference passes this admission.
+
+The unfinished Claude parser itself has not been changed or merged: replace its parser
+with the admitted typed result when integrating the completed ADR238 source. This is
+focused source qualification; no full release, paid model, font/glyph/native/human or
+production admission. Evidence: W5_PAGE_GRAMMAR_ADMISSION_PROOF.json.

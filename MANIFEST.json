@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T21:28:56Z",
+  "generatedAt": "2026-10-01T21:47:56Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 851,
+  "fileCount": 853,
   "files": [
     {
       "path": ".dockerignore",
@@ -1163,6 +1163,11 @@
       "bytes": 17811
     },
     {
+      "path": "adrs/239_page_grammar_admission.md",
+      "sha256": "af036d51b81178e9f6c05d4bac008a0a421239941777e0dbf7c9b0d9dd2ec508",
+      "bytes": 2683
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1654,8 +1659,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/KAAE2025_INTEGRATION_REVIEW.md",
-      "sha256": "858186477d8d03e29ceb186e9d801e74168fa898558e981597c48b9dcdae8480",
-      "bytes": 2735
+      "sha256": "3ad0c005a821edeab15505643cecf83d75af03facbc1c62562b33707611f62bc",
+      "bytes": 4052
     },
     {
       "path": "plans/content-aware-design-2026-09-30/LIVE_LANE_INVENTORY.json",
@@ -1664,8 +1669,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "5c9fa4eafcbe3e476dfc6c01785109ebdf5cfe638d875ff8783e2e887118c692",
-      "bytes": 88564
+      "sha256": "fb6c8c856663bbe593303b853a90730e3f8cecf77f224f2a64b8571b667d6231",
+      "bytes": 89152
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1836,6 +1841,11 @@
       "path": "plans/content-aware-design-2026-09-30/W5_NATIVE_MATTE_PROOF.json",
       "sha256": "85df79e78688b8ad431ad5482ccf6b54fbc49c533bacb33776fb0518387124e3",
       "bytes": 2645
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W5_PAGE_GRAMMAR_ADMISSION_PROOF.json",
+      "sha256": "096f4c3743600e42c063a7f0338028b84e4cdfd6f16f878d1413a711e36e75ab",
+      "bytes": 3993
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W5_PPTX_CHARACTER_REFERENCE_FINDING.json",
@@ -3309,8 +3319,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "565f214e2a6950643386ac73f761581d7c986c6d81475312c2604f7510d86dce",
-      "bytes": 806591
+      "sha256": "89a9bbebddd92f1439c3b771461047a87620891d8de91510f78455edc7f903fc",
+      "bytes": 808010
     },
     {
       "path": "plans/user-stories.csv",

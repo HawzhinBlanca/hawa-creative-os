@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-02",
+  "status": "FOCUSED_CONNECTED_REPAIR_PASSED",
+  "adr": 239,
+  "requirements": [
+    "FR-017",
+    "FR-023",
+    "FR-038"
+  ],
+  "baseCommit": "015dcc0dede31eed4f02fc85dd3761368942e864",
+  "sourceSha256": {
+    "apps/core/src/services/client-design-reference.ts": "0853990c2da00f178e40b40818178806d38fd6da8932688896cfbc1444aff877",
+    "packages/creative/src/index.ts": "b2446e8ac920aa68fb9ea52fa107fa668fddee8ca51db43ec666e9d08fdcbc79",
+    "packages/creative/src/studio/hard-qa.ts": "38b0db92295db565134d06de191d9d2d5af2834c033c3793d4aeca2532115eb8",
+    "packages/creative/src/studio/page-grammar-admission.ts": "69f252bfd0b683caacd623b1f69b1b42a127ad092eb54f90127a1ce5c6800cbe",
+    "apps/core/test/page-grammar-admission.test.ts": "022aeba794817d75c527cc30c482f43f61e5547a816ce0ff951636ebda18b99f",
+    "packages/creative/test/page-grammar-admission.test.ts": "1a0cc5c1f9523751caadce021bd49ae57931646c263d8c22e5110c9692d71b8e",
+    "packages/creative/test/fixtures/page-grammar.ts": "3649f0c5d8bfc84f06d58c6e4f794ce587ace79abcfcde1b021f2054b886df7d"
+  },
+  "boundary": "Actual Core packaged-client resolver and shared studio reference reader; no absent-grammar default and no source rewrite",
+  "originalReproduction": {
+    "passed": 2,
+    "failed": 3,
+    "receipt": "RED_LOADER.log"
+  },
+  "intermediateFailure": {
+    "passed": 47,
+    "failed": 5,
+    "reason": "Core imported stale compiled package exports before rebuild; preserved, rebuilt before connected run",
+    "receipt": "STALE_BUILD_REFUSAL.log"
+  },
+  "testHarnessCorrection": "Vitest array cases now wrap each gradient/palette as one argument, exercising intended values rather than variadic row expansion.",
+  "connectedTests": {
+    "files": 8,
+    "passed": 126,
+    "failed": 0,
+    "skipped": 0,
+    "receipt": "CONNECTED.log"
+  },
+  "build": "PASS: pnpm exec tsc -b",
+  "strictTests": "PASS: 725/725 active roots",
+  "lint": "PASS: 940 any occurrences; ceiling 1053; provider egress unchanged",
+  "actualReferenceReadback": {
+    "observedAt": "2026-10-01T21:46:16.646Z",
+    "source": "/Users/hawzhin/Hawdesign/.claude/worktrees/kaae-2025/packages/creative/assets/kaae-reference.json",
+    "sourceSha256": "29d876623606abddafdb94307863227295f61c81d65eb856f62520475c703b45",
+    "stable": true,
+    "accepted": true,
+    "grammarSourcePreserved": true,
+    "scope": "Read-only admission of unfinished reference snapshot; not renderer/native/font/human admission"
+  },
+  "receipts": {
+    "output/qualification/2026-10-02/page-grammar-admission/BUILD.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/qualification/2026-10-02/page-grammar-admission/CLAUDE_REFERENCE_READBACK.json": "19db76f9dfd3ab035eedc9a122400c9f5214e9184999de2e1926504768ee2728",
+    "output/qualification/2026-10-02/page-grammar-admission/CONNECTED.log": "7a69ddf05bec7c9a110a7e06011388adea2ac7d8a64412d8f2538f336d111403",
+    "output/qualification/2026-10-02/page-grammar-admission/LINT.log": "3a0fb2622451a0b1531fdd1334d10bb6e19ead54dd7e23af049b3a64756e42a2",
+    "output/qualification/2026-10-02/page-grammar-admission/RED_LOADER.log": "e239d1d7cce660d6d42c144f41f9f7c7a357b96693d689aed343848bc464ce9b",
+    "output/qualification/2026-10-02/page-grammar-admission/STALE_BUILD_REFUSAL.log": "b94fbf916500028e4a7ff72790f614d499ed14fd1125362515d1527d8eeae045",
+    "output/qualification/2026-10-02/page-grammar-admission/TYPES.log": "2a46bdcfd9ea68e710f599c09b74ed00ada5fab06ced5a9fd0256661463c8e4e"
+  },
+  "limits": {
+    "productionDeployed": false,
+    "fullReleaseRequalified": false,
+    "claudeUncommittedBranchMerged": false,
+    "claudeRendererParserReplaced": false,
+    "nativeEditabilityProved": false,
+    "humanQualityApproved": false,
+    "paidCalls": 0
+  },
+  "next": "Consume the admitted grammar in ADR238 parser during completed-branch integration; preserve content-aware photo intent and run connected renderer/native design acceptance."
+}
