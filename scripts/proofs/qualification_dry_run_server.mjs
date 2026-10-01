@@ -54,7 +54,7 @@ function candidatesFor(prompt) {
   const fontFor = (role, script) =>
     script === 'arabic'
       ? role === 'body' || role === 'footer' ? 'Noto Sans Arabic' : 'Amiri'
-      : role === 'body' || role === 'footer' ? 'Verdana' : role === 'title' ? 'Cinzel' : 'Playfair Display';
+      : role === 'body' || role === 'footer' ? 'Inter' : role === 'title' ? 'Crimson Pro' : 'Inter';
 
   const build = (id, archetype, align, logoX, withPanel) => {
     const usableTop = my + px(logoPx) + 0.06;

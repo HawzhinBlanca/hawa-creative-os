@@ -15,7 +15,7 @@ if (!fs.readFileSync('packages/creative/src/studio/pricing.json').equals(fs.read
 process.env.HAWA_MODEL_TIER = 'dev';
 process.env.HAWA_LAYOUT_REASONING_EFFORT = 'low';
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
-const palette = ['#0A1628', '#C5A059', '#1E3A5F', '#FDF8F3'];
+const palette = ['#0A1628', '#F7B500', '#1E3A5F', '#FDF8F3'];
 class SavedCompletion extends Error {
   constructor(readonly response: OpenAiStructuredResponse<unknown>, readonly accountedUsd: number) { super('Retained synthetic completion'); }
 }
@@ -101,12 +101,12 @@ async function main(): Promise<void> {
           scripts: Object.fromEntries(brief.blocks.map(block => [block.index, block.script])) },
         { width: 1080, height: 1350, logoAspect: 1, palette, allowArt: false });
         const hardQa = evaluateHardQa(layout, { width: 1080, height: 1350, copyText,
-          copyScripts: brief.blocks.map(block => block.script), latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic',
+          copyScripts: brief.blocks.map(block => block.script), latinFont: 'Inter', arabicFont: 'Noto Sans Arabic',
           admittedDisplayFonts: { latin: admittedFontFaces({ script: 'latin', role: 'display' }).map(face => face.name),
             arabic: admittedFontFaces({ script: 'arabic', role: 'display' }).map(face => face.name) }, palette, logoAspect: 1 });
         const checked = hardQa.layout;
         fs.writeFileSync(path.join(dir, `candidate-${index + 1}.json`), JSON.stringify(checked, null, 2));
-        const logo = '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><circle cx="64" cy="64" r="55" fill="#C5A059"/><path d="M40 84V44h20v40zm28 0V44h20v40z" fill="#0A1628"/></svg>';
+        const logo = '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><circle cx="64" cy="64" r="55" fill="#F7B500"/><path d="M40 84V44h20v40zm28 0V44h20v40z" fill="#0A1628"/></svg>';
         const rendered = renderLayoutV2(checked, { copyText, logoDataUri: `data:image/svg+xml;base64,${Buffer.from(logo).toString('base64')}` });
         fs.writeFileSync(path.join(dir, `candidate-${index + 1}.png`), rendered.png);
         return { index: index + 1, hardQaPassed: hardQa.passed, defectCodes: hardQa.defectCodes,

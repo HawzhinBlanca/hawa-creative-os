@@ -43,7 +43,7 @@ async function main() {
   const layout2Base: StudioLayoutV2 = JSON.parse(fs.readFileSync(layout4Path, 'utf8'));
   // Ensure font family resolves under fontconfig
   if (layout2Base.text[1]) {
-    layout2Base.text[1].fontFamily = 'Playfair Display';
+    layout2Base.text[1].fontFamily = 'Crimson Pro';
   }
   const layout2: StudioLayoutV2 = {
     ...layout2Base,

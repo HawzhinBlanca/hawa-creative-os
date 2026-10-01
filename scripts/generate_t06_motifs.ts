@@ -10,7 +10,7 @@ const KAAE_PALETTE = [
   '#0A1628', // Midnight Navy
   '#1E3A5F', // Royal Navy
   '#4770A3', // KAAE Primary Blue
-  '#D4E2F0', // Sky Ice Blue
+  '#FDF8F3', // Cream
   '#F7B500', // Kurdistan Sun Gold
   '#FDF8F3', // Academic Cream
   '#FFFFFF', // Pure White

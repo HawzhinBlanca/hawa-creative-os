@@ -18,7 +18,7 @@ async function main() {
   const layout4Path = path.join(outputDir, 'P03_LAYOUTS/layout_04.json');
   const baseLayout: StudioLayoutV2 = JSON.parse(fs.readFileSync(layout4Path, 'utf8'));
   if (baseLayout.text[1]) {
-    baseLayout.text[1].fontFamily = 'Playfair Display';
+    baseLayout.text[1].fontFamily = 'Crimson Pro';
   }
 
   // --- CANDIDATE 1: Passing Candidate (Must be skipped, 0 calls) ---
@@ -42,7 +42,7 @@ async function main() {
   const misalignedPath = path.join(outputDir, 'P05_CRITIQUE/misaligned_layout.json');
   const cand2Input: StudioLayoutV2 = JSON.parse(fs.readFileSync(misalignedPath, 'utf8'));
   if (cand2Input.text[1]) {
-    cand2Input.text[1].fontFamily = 'Playfair Display';
+    cand2Input.text[1].fontFamily = 'Crimson Pro';
   }
 
   const cand2 = await refineCandidate('candidate-2-repaired', cand2Input, {

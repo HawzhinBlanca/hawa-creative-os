@@ -40,57 +40,54 @@ brand:
   colors:
   - token: kaae-white
     srgb: '#FFFFFF'
-    usage: "Default page: the brand guideline's white pages; card ground on a cream page"
+    usage: 'Page: the 2025 guideline''s white pages with generous margins; plain card fill (KAAE_Guidelines4.pdf
+      pp.1-15)'
   - token: kaae-cream
-    srgb: '#FFF2DB'
-    usage: "Light page and card fill: the guideline's cream; office cards and grid paper"
-  - token: kaae-indigo
-    srgb: '#17087A'
-    usage: "Primary dark: header bands, plates, tabs, scrims and titles on a light page; the ground of evening or dark invitations and keynote screens"
-  - token: kaae-royal-indigo
-    srgb: '#3833A3'
-    usage: "Royal indigo: band gradients, plates, and accent lines on a light page"
+    srgb: '#FDF8F3'
+    usage: 'Cream (extended, p.8): card tint with a gold left edge; never the default page'
   - token: kaae-blue
     srgb: '#4770A3'
-    usage: "Blue: secondary lines, rules and icons"
-  - token: kaae-bright-blue
-    srgb: '#0F73DE'
-    usage: "Bright blue: one highlight at most, sparingly"
+    usage: 'KAAE Blue (primary, Pantone 5415 C, p.7): titles, the italic lead, the letter-spaced
+      section label and brand cards; cover gradient start'
   - token: kaae-gold
-    srgb: '#E8B85C'
-    usage: "Gold: thin rules, frames, borders and the title's accent line on indigo; never text on white or cream"
-  - token: kaae-ink
-    srgb: '#000000'
-    usage: "Body ink on a light page, as the guideline sets its body text"
+    srgb: '#F7B500'
+    usage: 'KAAE Gold (primary, Pantone 7549 C, p.7): the short title bar, the gold part of
+      the header rule, a card''s gold left edge, numbers on navy; never text on white or cream'
+  - token: kaae-midnight
+    srgb: '#0A1628'
+    usage: 'Midnight (extended, p.8): body text on a light page; the end of the cover gradient'
+  - token: kaae-royal
+    srgb: '#1E3A5F'
+    usage: 'Royal (extended, p.8): dark cards and the middle of the foot rule'
+  - token: kaae-ocean
+    srgb: '#2C5282'
+    usage: 'Ocean (extended, p.8): secondary lines and the triangle pattern on light'
+  - token: kaae-sky
+    srgb: '#4A90E2'
+    usage: 'Sky (extended, p.8): one highlight at most; elements on navy'
+  - token: kaae-sun
+    srgb: '#FFD700'
+    usage: 'Sun (extended, p.8): card titles on KAAE Blue; the light end of the Gold to Sun
+      title bar'
   fonts:
   - id: font-en-display
-    family: Minion Variable Concept
+    family: Crimson Pro
     styles:
     - Bold
-    - Semibold
     languages:
     - en
     fileHashes:
     - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - id: font-en-subheadings
-    family: Minion Variable Concept
+  - id: font-en-lead
+    family: Inter
     styles:
-    - Medium
     - Italic
     languages:
     - en
     fileHashes:
     - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   - id: font-en-body
-    family: Minion Variable Concept
-    styles:
-    - Regular
-    languages:
-    - en
-    fileHashes:
-    - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  - id: font-en-web
-    family: Verdana
+    family: Inter
     styles:
     - Regular
     - Bold
@@ -99,7 +96,7 @@ brand:
     fileHashes:
     - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   - id: font-ckb-display
-    family: Cairo
+    family: IBM Plex Sans Arabic
     styles:
     - Bold
     - SemiBold
@@ -109,33 +106,48 @@ brand:
     fileHashes:
     - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   - id: font-ckb-body
-    family: Noto Naskh Arabic
+    family: Noto Sans Arabic
     styles:
     - Regular
     - Medium
+    - Bold
     languages:
     - ckb
     - ar
     fileHashes:
     - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   layoutRules:
-  - Maintain official logo clear space invariant equal to or greater than the cap-height
-    of letter K (28px minimum).
-  - Enforce strict RTL (Right-to-Left) directional orientation for Kurdish Sorani
-    and Arabic publications.
-  - Preserve bidirectional text flow; verify zero character reversal on Western Arabic
-    / Indic numerals in legal citations.
-  - Do not stretch, distort, or change the aspect ratio or proportions of the emblem.
-  - Do not rotate, angle, or place the emblem diagonally.
-  - Do not alter the colors of the emblem rays, central K, or circular banner.
-  - Prohibit placing official lockup logos directly on noisy or low-contrast backgrounds
-    without a minimum 4.5:1 contrast container.
-  - Headings in Minion Variable Bold (20-30pt Title Case or Small Caps), Subheadings
-    in Medium or Italic (16-20pt), Body in Regular (11-12pt, 1.4x line spacing).
-  - 'Stationery: Business cards require logo, name, title, contact info. Letterheads
-    require top logo and footer contact. Certificates require logo, recipient name,
-    seal, date. Email signatures include name, title, KAAE affiliation, phone, email,
-    website, and social links.'
+  - Logo clear space on every side equals the height of the "K" in the logo (KAAE_Guidelines4.pdf
+    p.4).
+  - 'Logo minimum width: 80px digital, 20mm print; favicon 16px with the simplified mark only
+    (p.4).'
+  - Enforce strict RTL (Right-to-Left) directional orientation for Kurdish Sorani and Arabic
+    publications.
+  - Preserve bidirectional text flow; verify zero character reversal on Western Arabic / Indic
+    numerals in legal citations.
+  - Never stretch or distort the logo, rotate or tilt it, or add effects or shadows (p.5).
+  - Never change the approved logo colours or its typeface, and never place it on a busy background
+    (p.6).
+  - Always use the original logo files from the brand team (p.6).
+  - 'Light first: white pages with generous margins; KAAE Blue (#4770A3) titles, leads, labels
+    and brand cards; KAAE Gold (#F7B500) title bar and accents; Midnight (#0A1628) body text
+    (pp.7-8).'
+  - 'Typography: titles in Crimson Pro Bold in KAAE Blue; leads in Inter Italic in KAAE Blue;
+    body in Inter in Midnight; Sorani and Arabic in sans, right-aligned: IBM Plex Sans Arabic
+    or Noto Sans Arabic titles, Noto Sans Arabic body (p.10).'
+  - 'Page grammar: logo top-left; letter-spaced KAAE Blue section label top-right over a thin
+    grey rule with a gold gradient segment at its left; serif KAAE Blue title with a short Gold
+    to Sun bar; italic KAAE Blue lead; Inter body; rounded cards (white with a soft shadow,
+    KAAE Blue with white text and a Sun card title, or cream with a gold left edge); stat cards
+    with big serif numbers; KAAE Blue to Gold gradient rule at the foot.'
+  - 'Covers: navy gradient from KAAE Blue at the top left to Midnight, centred logo, white serif
+    title, short gold bar, gold letter-spaced subtitle (p.7).'
+  - 'Elements (p.13): quarter-disc sunburst with five rays and a triangle mosaic pattern fading
+    upward, subtle, never over copy or the logo''s clear space.'
+  - 'Stationery (p.11): business cards carry the logo, name, title and contact details in the
+    guideline''s palette and type. Letterheads require top logo and footer contact. Certificates
+    require logo, recipient name, seal, date. Email signatures include name, title, KAAE affiliation,
+    phone, email, website, and social links.'
   imageryRules:
   - Feature authentic photography of students, classrooms, laboratories, and peer
     review committees across Kurdistan.
@@ -273,4 +285,4 @@ rules:
   effectiveFrom: '2022-08-04T00:00:00Z'
   effectiveUntil: null
   status: active
-contentHash: 7df970563a178c8a4fa12b7013737d489b44825f67e3b9060bb96e5aa7f327cf
+contentHash: e2ecfb81e8e4bde3b77470cca28b643a184ba0924f30758c00add5ae25055070

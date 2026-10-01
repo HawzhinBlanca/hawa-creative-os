@@ -34,12 +34,13 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
       expect(kit.name).toBe('Kurdistan Accrediting Association for Education');
       expect(kit.nameKurdish).toBe('دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا');
       expect(kit.palette.primary).toBe('#4770A3');   // KAAE Blue (Pantone 5415 C)
-      expect(kit.palette.secondary).toBe('#0A1628'); // Midnight Navy
-      expect(kit.palette.accent).toBe('#F7B500');    // Sunburst Gold (Pantone 7549 C)
-      expect(kit.palette.background).toContain('#0A1628'); // Deep Midnight Gradient
+      expect(kit.palette.secondary).toBe('#0A1628'); // Midnight
+      expect(kit.palette.accent).toBe('#F7B500');    // KAAE Gold (Pantone 7549 C)
+      expect(kit.palette.background).toBe('linear-gradient(135deg, #4770A3 0%, #0A1628 100%)'); // cover gradient, KAAE_Guidelines4.pdf p.7
       expect(kit.verifiedSha256).toBe(KAAE_PRIMARY_LOGO_SHA256);
-      expect(kit.typography.latinFont).toBe('Verdana');
-      expect(kit.typography.kurdishFont).toBe('Cairo');
+      expect(kit.typography.latinFont).toBe('Inter');
+      expect(kit.typography.latinDisplayFont).toBe('Crimson Pro');
+      expect(kit.typography.kurdishFont).toBe('Noto Sans Arabic');
       expect(kit.contactTokens).toContain('60m Street, Erbil');
       expect(kit.contactTokens).toContain('info@kaae.krd');
       expect(kit.contactTokens).toContain('www.kaae.org');

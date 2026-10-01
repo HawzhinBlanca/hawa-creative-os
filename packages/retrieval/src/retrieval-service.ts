@@ -212,9 +212,9 @@ export class RetrievalService implements RetrievalProvider {
             conflictType: 'MISSING_BRAND_ASSET',
             type: 'MISSING_BRAND_ASSET',
             sourceIds: [],
-            message: `No approved official assets exist for client ${ctx.clientId}. Cannot invent placeholder branding.`,
+            message: `No approved official assets exist for client ${ctx.clientId}. Cannot invent substitute branding.`,
             severity: 'BLOCKING',
-            description: `No approved official assets exist for client ${ctx.clientId}. Cannot invent placeholder branding.`,
+            description: `No approved official assets exist for client ${ctx.clientId}. Cannot invent substitute branding.`,
             safeAction: 'Upload official vector logo/assets before generation',
           });
         }

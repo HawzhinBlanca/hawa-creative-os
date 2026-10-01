@@ -30,7 +30,7 @@ import { QUALIFICATION_BRIEFS } from '../run_p10_qualification.js';
 const CANDIDATE_MODELS = ['o4-mini', 'gpt-4.1-mini', 'gpt-4o-mini'];
 const BASELINE_DIR =
   'output/proofs/2026-09-17-research-grade-pipeline/T5_FULL_QUALIFICATION/briefs';
-const PALETTE = ['#0A1628', '#C5A059', '#1E3A5F', '#FDF8F3'];
+const PALETTE = ['#0A1628', '#F7B500', '#1E3A5F', '#FDF8F3'];
 
 const outDir = process.argv[2];
 if (!outDir) {

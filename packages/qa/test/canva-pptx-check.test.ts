@@ -162,6 +162,29 @@ describe('Role-based typography validation (F12)', () => {
     expect(r.offendingObjects[0].reason).toContain('Verdana');
   });
 
+  it('checks a formal document against the client body face it was given (KAAE 2025: Inter, Crimson Pro titles)', () => {
+    const deck = (bodyFont: string) => zipSync({
+      'ppt/presentation.xml': strToU8('<p:presentation/>'),
+      'ppt/slides/slide1.xml': strToU8(
+        `<p:sld>
+          <p:sp><p:txBody><a:p><a:r><a:rPr><a:latin typeface="Crimson Pro"/></a:rPr><a:t>Accreditation Standards</a:t></a:r></a:p></p:txBody></p:sp>
+          <p:sp><p:txBody><a:p><a:r><a:rPr><a:latin typeface="${bodyFont}"/></a:rPr><a:t>The institution meets the statutory standards.</a:t></a:r></a:p></p:txBody></p:sp>
+          <p:sp><p:txBody><a:p><a:r><a:rPr><a:cs typeface="IBM Plex Sans Arabic"/></a:rPr><a:t>ستانداردەکانی متمانەبەخشین</a:t></a:r></a:p></p:txBody></p:sp>
+        </p:sld>`
+      ),
+    });
+    const copy = ['Accreditation Standards', 'The institution meets the statutory standards.', 'ستانداردەکانی متمانەبەخشین'];
+    const options = { documentKind: 'formal_document' as const, roles: ['title', 'body', 'title'],
+      formalBodyFonts: { latin: 'Inter', arabic: 'Noto Sans Arabic' } };
+    const ok = checkCanvaPptx(deck('Inter'), copy, options);
+    expect(ok.fontPass).toBe(true);
+    expect(ok.offendingObjects).toHaveLength(0);
+    const bad = checkCanvaPptx(deck('Verdana'), copy, options);
+    expect(bad.fontPass).toBe(false);
+    expect(bad.offendingObjects[0].expectedFont).toBe('Inter');
+    expect(bad.offendingObjects[0].reason).toBe("Formal document body must use Inter; observed 'Verdana'");
+  });
+
   it('passes general design piece with admitted Canva-native display fonts (Cinzel, Playfair Display)', () => {
     const invitationPptx = zipSync({
       'ppt/presentation.xml': strToU8('<p:presentation/>'),
