@@ -174,11 +174,12 @@ export async function nativeLogoContrast(layout: StudioLayoutV2, options: Render
   const { x, y, width, height } = layout.logo;
   const open = `<svg width="${width}" height="${height}" viewBox="${x} ${y} ${width} ${height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`;
   const white = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#FFFFFF"/>`;
-  const [a, b] = await Promise.all([
-    svgToPngAsync(`${open}${white}${logo}</svg>`, width, height, options, files),
-    svgToPngAsync(`${open}${white}</svg>`, width, height, options, files),
-  ]);
-  return readLogoGround(PNG.sync.read(a), PNG.sync.read(b), { x, y, width, height }, layout.logo).contrast;
+  const artwork = PNG.sync.read(await svgToPngAsync(`${open}${white}${logo}</svg>`, width, height, options, files));
+  // ADR-188: the reference is an opaque white viewport, independent of artwork and fonts.
+  // Match the actual native output dimensions; only the official artwork needs a native job.
+  const matte = new PNG({ width: artwork.width, height: artwork.height });
+  matte.data.fill(255);
+  return readLogoGround(artwork, matte, { x, y, width, height }, layout.logo).contrast;
 }
 
 /** Renders the design's no-text composite over `region` only, with and without the logo. */

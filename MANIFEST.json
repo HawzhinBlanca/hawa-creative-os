@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T01:15:56Z",
+  "generatedAt": "2026-10-01T01:24:25Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 710,
+  "fileCount": 714,
   "files": [
     {
       "path": ".dockerignore",
@@ -923,6 +923,11 @@
       "bytes": 2258
     },
     {
+      "path": "adrs/188_constant_logo_reference_matte.md",
+      "sha256": "0f8e5fe924d5a384b085a8f95affd1e2ca1004ebfd4b2d04282323a6ab93be46",
+      "bytes": 1718
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1374,8 +1379,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "3894bb56070f347227899d2da01b5a767dc08ad565a69df21793b8d6c074d0e4",
-      "bytes": 15690
+      "sha256": "71929d8aa3e15227a940cf0d069066b4a848b74915f29ebbc425117119785f84",
+      "bytes": 16413
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1431,6 +1436,16 @@
       "path": "plans/content-aware-design-2026-09-30/W4_PACKING_BENCHMARK.json",
       "sha256": "3ccb83aea7fb2d275de29548cef0d0e4bcc66147235b8ba69b33616a6ab5f6f7",
       "bytes": 2194
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W5_NATIVE_MATTE_BENCHMARK.json",
+      "sha256": "48ccfe7573c8b414d14de40009b69445fca9a53d8068ee0f171462941408560e",
+      "bytes": 3340
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W5_NATIVE_MATTE_PROOF.json",
+      "sha256": "85df79e78688b8ad431ad5482ccf6b54fbc49c533bacb33776fb0518387124e3",
+      "bytes": 2645
     },
     {
       "path": "plans/early-requester-hold-2026-10-01/LIVE_INFRA_READBACK.json",
@@ -2629,8 +2644,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "510ca1c361d1c713dc166f9300deb466d7dce0cb05009ed64bc4f67db7777045",
-      "bytes": 591963
+      "sha256": "cfbff67c6b2e6ab6e64a1ba831b843d9f823aa499c71e4f20eb168a0906c74e5",
+      "bytes": 592935
     },
     {
       "path": "plans/user-stories.csv",
@@ -3226,6 +3241,11 @@
       "path": "scripts/proofs/linux_systemd_install.sh",
       "sha256": "5863a4a8b5600ca13afdff6d719c45614124958e6d5a65454bc331a2af391fde",
       "bytes": 6155
+    },
+    {
+      "path": "scripts/proofs/logo_reference_matte_benchmark.mjs",
+      "sha256": "9c9cb9ce8d5f83f0df55147fa6adda40d48e253e5617b668c08c7482a3a20285",
+      "bytes": 4306
     },
     {
       "path": "scripts/proofs/logo_visibility_export_native.mjs",

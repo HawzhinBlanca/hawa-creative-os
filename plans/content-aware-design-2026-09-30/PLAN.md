@@ -183,3 +183,8 @@ Under that same-native reference, six intact exports pass at1.0 coverage and27 d
 ## Current reliability source integration — 1 October 2026
 
 Preserved W3 source/diagnostics in79d335eb, then merged qualified2c4d61ec (ADR183/184/185/186/187) before W5. Original shipping metrics, independent worker credential/role, stable nginx/runtime proof, requester holds and explicit deliverables are retained alongside ADR181 flexible client-scoped composition. Build,192 connected tests across14 files and1572 blueprint checks pass. Traceability conflicts retain both branches through strict three-way insertions; original failed path/merge attempts retained in CURRENT_RELEASE_INTEGRATION_PROOF.json. Combined full sealed/native/Canva/human admission is pending; this design source is not deployed.
+
+
+## W5 first local resource optimization — 1 October 2026
+
+ADR188 removes the native job used solely to generate a white reference matte. Official artwork remains actually rasterized; exact white-pixel/contrast equivalence and one-job work count pass with real native output, transparency and fractional position controls. Red3/7 skipped; full focused6 files50 pass/0 fail/0 skip and658 test roots/build pass. Nine paired native helper measurements preserve contrast/source bytes; medians78.1ms/74.7ms are not pipeline p95. No cache/providers/dependencies added; perceptual color, bounded refinement, cache/replay identity and overall W5 qualification remain pending. W5_NATIVE_MATTE_PROOF.json records the exact scope.

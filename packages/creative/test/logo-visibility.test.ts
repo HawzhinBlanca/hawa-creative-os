@@ -1,10 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { execFile } from 'node:child_process';
 import { PNG } from 'pngjs';
 import { compileLogoVisibility, readLogoVisibility } from '../src/studio/art-direction/logo-visibility.js';
-import { logoGroundQuiet, readLogoGround, renderLogoTemplate, readRenderedLogoVisibility, settleLogoGround } from '../src/studio/art-direction/logo-ground.js';
+import { logoGroundQuiet, readLogoGround, renderLogoTemplate, readRenderedLogoVisibility, settleLogoGround, nativeLogoContrast } from '../src/studio/art-direction/logo-ground.js';
 import { solveRecipe } from '../src/studio/art-direction/solver.js';
-import { renderLayoutV2Async } from '../src/studio/render-layout-v2.js';
+import { renderLayoutV2Async, renderLayoutV2ToSvg, svgToPngAsync } from '../src/studio/render-layout-v2.js';
 import { evaluateHardQa } from '../src/studio/hard-qa.js';
+
+// Count actual native executions while preserving their real output and failure behavior.
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, execFile: vi.fn(actual.execFile) };
+});
 
 const BLUE = [15, 35, 65] as const, WHITE = [255, 255, 255] as const;
 function image(w = 104, h = 64): PNG { return new PNG({ width: w, height: h }); }
@@ -69,6 +76,35 @@ function layout() { return solveRecipe({ width: 1080, height: 1350, photos: [{ p
   palette: PALETTE, logoAspect: 104 / 64, copy: { text: COPY },
   choice: { recipe: 'hero_fade_report', heroPhotoIndex: 0, texturePhotoIndex: null, cutoutPhotoIndex: null,
     slots: [{ copyIndex: 0, slot: 'title' }], params: { frame: 'inset' } } }); }
+
+describe('constant reference matte with real native pixels', () => {
+  it.each([
+    { x: 88, y: 88, width: 104, height: 64, alpha: 255 },
+    { x: 72.25, y: 79.5, width: 156, height: 96, alpha: 128 },
+    { x: 85, y: 72.75, width: 65, height: 40, alpha: 255 },
+  ])('preserves the original contrast at $width x $height with alpha $alpha, using one native job', async (box) => {
+    const l = layout();
+    l.logo = { x: box.x, y: box.y, width: box.width, height: box.height };
+    const source = logoSource();
+    for (let i = 3; i < source.data.length; i += 4) if (source.data[i]) source.data[i] = box.alpha;
+    const bytes = PNG.sync.write(source);
+    const options = { logoDataUri: `data:image/png;base64,${bytes.toString('base64')}` };
+    const { noTextSvg, files } = renderLayoutV2ToSvg(l, options);
+    const official = noTextSvg.match(/<image id="logo"[^>]*\/>/)?.[0];
+    expect(official).toBeDefined();
+    const { x, y, width, height } = l.logo;
+    const open = `<svg width="${width}" height="${height}" viewBox="${x} ${y} ${width} ${height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`;
+    const white = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#FFFFFF"/>`;
+    const originalLogo = PNG.sync.read(await svgToPngAsync(`${open}${white}${official}</svg>`, width, height, options, files));
+    const originalMatte = PNG.sync.read(await svgToPngAsync(`${open}${white}</svg>`, width, height, options, files));
+    expect(originalMatte.data.every(value => value === 255)).toBe(true);
+    const expected = readLogoGround(originalLogo, originalMatte, l.logo, l.logo).contrast;
+    vi.mocked(execFile).mockClear();
+    expect(await nativeLogoContrast(l, options)).toBe(expected);
+    expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
+    expect(PNG.sync.write(source)).toEqual(bytes);
+  });
+});
 
 describe('rendered source binding and final gate', () => {
   it('rejects edited pixels and stale geometry even when saved metadata claims success', async () => {
