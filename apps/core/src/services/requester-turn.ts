@@ -21,7 +21,7 @@
  *  - only a new brief opens a request; a message that could be either asks one short question.
  */
 import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
-  type Phrase, type RequesterLang } from '@hawa/integrations';
+  trimTitleMarks, type Phrase, type RequesterLang } from '@hawa/integrations';
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
 import { isIntroducerTitle, withoutMarks } from './draft-title.js';
@@ -85,6 +85,11 @@ export interface ChatRequestView {
   requesterId: string | null;
   /** Current task is at its requester hold checkpoint, rather than making a draft. */
   requesterHold?: boolean;
+  /**
+   * ADR-231: the current task's files and final notice reached the requester (Telegram confirmed the
+   * notice). A request still `delivering` with this set was sent; only the office's side is unfinished.
+   */
+  sentToChat?: boolean;
 }
 
 /** A question this bot asked the sender, still open: its own update, the words it holds, the options. */
@@ -92,7 +97,8 @@ export interface PendingAsk {
   updateId: number;
   intent: Exclude<TurnIntent, 'acknowledgement' | 'status' | 'new_brief' | 'conversation'>;
   words: string;
-  options: Array<{ requestId: string; title: string }>;
+  /** `askedAt`: when the request was opened (ADR-231), to tell two designs with the same name apart. */
+  options: Array<{ requestId: string; title: string; askedAt?: string }>;
   allowNew: boolean;
   /**
    * ADR-156: the question was asked about a photo with these words. The photo is kept under the
@@ -589,6 +595,9 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
       instructionOnly: heuristics.kind !== 'new_brief' || heuristics.isInstructionOnly === true || (!complete && !fullBrief),
     });
   }
+  // ADR-231 (live 2026-10-01 14:03Z): "can you also make videos?" asks what the office makes. It is the
+  // office's question to answer, never a change kept on a design (that one held Deliver until read).
+  if (!fullBrief && asksWhatTheOfficeMakes(core)) return rules('conversation', 'Asks what the office makes', { question: true });
   if (!fullBrief && readsAsChange(t)) return rules('change', 'Asks for a change or a correction');
   // ADR-182: "how much is a poster?" names a design but asks a question the office answers.
   if (!fullBrief && !substantial && isPlainQuestion(core)) return rules('conversation', 'A question', { question: true });
@@ -640,6 +649,25 @@ export function readsAsBriefContinuation(text: string, soFar = ''): boolean {
  * Sorani "how much is a poster?"), not a request for a design, a change or a status. Its answer is the
  * office's.
  */
+/**
+ * ADR-231: a question about what the office makes or does ("can you also make videos?", "do you design
+ * logos?", "could you print banners too?"; Sorani "do you make videos too?"), not about a design of
+ * this chat: its object names no design of theirs ("the title", "it", "our poster") and asks for no
+ * change ("bigger", "again"). A request for a design ("can you make a poster for Nawroz?") is read as
+ * a new brief before this.
+ */
+const CAPABILITY_EN = /^(?:(?:hi|hello|hey|and|also|so|ok(?:ay)?|please|btw)[\s,!]+)*(?:can|could|do|does|will|would)\s+(?:you|u|you\s+guys|the\s+office|your\s+(?:team|office))\s+(?:also\s+|even\s+|still\s+)?(?:make|do|design|create|produce|edit|print|draw|film|shoot|animate|offer|handle)\s+(?:also\s+)?(?!(?:the|this|that|these|those|it|its|them|my|our|your|his|her|their|one|some|any)\b)([\p{L}\d'’ &/-]{2,40}?)(?:\s+(?:too|as\s+well|also|for\s+(?:us|me)))?\s*[?؟]$/iu;
+const CHANGE_WORDS_EN = /\b(?:bigger|smaller|larger|brighter|darker|bolder|lighter|thinner|thicker|wider|narrower|longer|shorter|higher|lower|more|less|again|better|different|changes?|edits?|corrections?)\b/i;
+/** Sorani: "do you (also) make / design / prepare …?" in the present tense, about no design of theirs ("…ەکە"). */
+const CAPABILITY_CKB = /(?:دروست|دیزاین|ئامادە|چاپ)\s*(?:ی?ش\s*)?دەکەن\s*[؟?]$/u;
+export function asksWhatTheOfficeMakes(core: string): boolean {
+  const t = clean(core);
+  if (!t || t.length > 120 || !/[?؟]\s*$/u.test(t)) return false;
+  const m = CAPABILITY_EN.exec(t);
+  if (m) return !CHANGE_WORDS_EN.test(m[1]);
+  return isSoraniText(t) && CAPABILITY_CKB.test(t) && !/\S+ەکە(?:ی|ت|م|مان|یان)?(?=[\s?؟]|$)/u.test(t) && !/(?:ئەمە|ئەوە|ئەم|ئەو)\s/u.test(t);
+}
+
 const QUESTION_START_EN = /^(?:how|what|which|who|whom|whose|where|when|why|do|does|did|is|are|was|were|can|could|would|will|should|may|have|has)\b/i;
 const QUESTION_WORD_CKB = /(?:ئایا|چۆن|چییە|چی|کێ|کوێ|کەی|بۆچی|چەند|نرخ)/u;
 export function isPlainQuestion(core: string): boolean {
@@ -794,7 +822,7 @@ function pickRequest(input: TurnInput, candidates: ChatRequestView[], recency: b
   return { ambiguous: [...pool].sort((a, b) => a.createdAt.localeCompare(b.createdAt)) };
 }
 
-const options = (requests: ChatRequestView[]) => requests.map((r) => ({ requestId: r.requestId, title: r.title }));
+const options = (requests: ChatRequestView[]) => requests.map((r) => ({ requestId: r.requestId, title: r.title, askedAt: r.createdAt }));
 
 /** A change bound to one request: a paid round when it waits for changes, else kept for the office. */
 function changeFor(request: ChatRequestView, words: string, how: string, confidence: number | undefined,
@@ -879,6 +907,13 @@ export const DELIVERED_LIVE_MS = 3 * 24 * 60 * 60_000;
 export const REDO_APART_MS = 10 * 60_000;
 const deliveredWithin = (r: ChatRequestView, now: number, ms: number) =>
   r.stage !== 'delivered' || now - Date.parse(r.activeAt) <= ms;
+/**
+ * ADR-231: a design the requester has seen a draft of: with the office, approved, being sent or sent,
+ * or sent back to them for changes (rev 3 or more in `manual`). A request opened for a designer, or one
+ * still being made for the first time, has none: redo words are not about it while another has one.
+ */
+export const hasDraft = (r: ChatRequestView) =>
+  ['in_review', 'approved', 'delivering', 'delivered'].includes(r.stage) || (r.stage === 'manual' && r.rev >= 3);
 
 /**
  * Redo words applied to one design (ADR-200 addendum): a delivered design starts a new round of its
@@ -899,6 +934,10 @@ function redoFor(request: ChatRequestView, words: string, resolves?: number): Tu
  * `REDO_APART_MS` of it. Two close together: "Which one should I redo: A or B?". Words that may also
  * be a new design: "Do you mean redo A, or a new design?". Null: no recent design to redo, or a reply
  * to something else; the words are then read as before.
+ *
+ * ADR-231 (live 2026-10-01): with no reply, only designs the requester has seen a draft of are
+ * candidates while there is one (`hasDraft`). "Do a better design that's similar to the earlier ones"
+ * was bound to a request opened by mistake for a designer an hour later, which had nothing to redo.
  */
 function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) => boolean): TurnPlan | null {
   const { reading, now } = input;
@@ -909,7 +948,8 @@ function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) 
   const askRedo = (among: ChatRequestView[], allowNew: boolean): TurnPlan => ({ kind: 'ask', intent: allowNew ? 'unclear' : 'change',
     words, options: options(among), allowNew, redo: allowNew ? 'or-new' : 'redo' });
   if (bound.length === 1) return orNew ? askRedo(bound, true) : redoFor(bound[0], words);
-  const pool = bound.length > 1 ? bound : recent;
+  const drafted = recent.filter(hasDraft);
+  const pool = bound.length > 1 ? bound : drafted.length ? drafted : recent;
   if (!pool.length) return null;
   // The intake router's pick (asked when the rules could not tell), when it is sure enough to start a round.
   if (reading.source === 'model' && reading.requestId && (reading.confidence ?? 0) >= 0.85) {
@@ -1083,11 +1123,21 @@ export function planTurn(full: TurnInput): TurnPlan {
 
 const say = (phrase: Phrase, lang: Lang, params: Record<string, string | number> = {}) => sayPhrase(phrase, lang, params);
 const title = (r: { title: string }) => bold(shortTitle(r.title));
+/**
+ * ADR-231: a stored title that is a sentence naming no design (four words or more, read as redo, quality
+ * words or chat). A short name ("Report", "Nawroz") is a name.
+ */
+const sentenceTitle = (name: string) => {
+  const line = name.replace(/…$/u, '');
+  return line.split(/\s+/).filter(Boolean).length >= 4 && isWeakBriefLine(line);
+};
 export function shortTitle(value: string): string {
   // ADR-040 addendum (2026-10-01): a title stored before ADR-180 or ADR-142 is shown as a new one would
   // be: no direction mark ("KAAE: \u200FKAAE K-12…"), and no introducer line as the design's name.
   const name = withoutMarks(String(value || '').replace(/^[^:]{1,40}:\s*/, ''));
-  const t = name && !isIntroducerTitle(name) && !isNeutralRequestTitle(name) ? name : 'your design';
+  // ADR-231: a title stored before ADR-200's title rule from words that name no design ("do a better
+  // design thats similar to earlier o…") is "your design", as a new one would be.
+  const t = name && !isIntroducerTitle(name) && !isNeutralRequestTitle(name) && !sentenceTitle(name) ? name : 'your design';
   return Array.from(t).length > 60 ? `${Array.from(t).slice(0, 59).join('')}…` : t;
 }
 
@@ -1115,17 +1165,71 @@ const STATUS_LINE: Record<RequestStage | 'manual-waiting', Phrase> = {
 };
 
 /**
+ * ADR-231: the stage a requester is told about. A request still `delivering` whose files and final
+ * notice reached them (`sentToChat`) was delivered, as far as they can tell: "being sent to you now"
+ * five hours after it arrived was untrue (live 2026-10-01).
+ */
+export const spokenStage = (r: Pick<ChatRequestView, 'stage' | 'sentToChat'>): RequestStage =>
+  r.stage === 'delivering' && r.sentToChat ? 'delivered' : r.stage;
+
+const IRAQ_OFFSET_MS = 3 * 60 * 60_000;
+const iraqDay = (at: number) => Math.floor((at + IRAQ_OFFSET_MS) / 86_400_000);
+/** When a design was asked for, in the requester's words ("asked for today at 08:44"). */
+function askedWhen(at: number, now: number, lang: Lang): string {
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 2) return say(ROUTING_MESSAGES.askedJustNow, lang);
+  if (minutes < 60) return say(ROUTING_MESSAGES.askedMinutesAgo, lang, { n: minutes });
+  const local = new Date(at + IRAQ_OFFSET_MS);
+  const time = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
+  const days = iraqDay(now) - iraqDay(at);
+  if (days <= 0) return say(ROUTING_MESSAGES.askedToday, lang, { time });
+  if (days === 1) return say(ROUTING_MESSAGES.askedYesterday, lang, { time });
+  return say(ROUTING_MESSAGES.askedDaysAgo, lang, { n: days });
+}
+
+/**
+ * ADR-231: each design's name as the requester reads it (bold HTML). Designs that share a name are told
+ * apart by when each was asked for ("KAAE K-12 Pilot Study… (asked for today at 08:44)"), or, asked for
+ * within the same minute or with no time known, by their order ("version 2"). The live status of
+ * 2026-10-01 named "KAAE K-12 Pilot Study…" twice with nothing between them.
+ */
+export function distinctNames(items: ReadonlyArray<{ requestId: string; title: string; askedAt?: string }>, lang: Lang,
+  now: number): Map<string, string> {
+  const names = new Map<string, string>();
+  const groups = new Map<string, typeof items[number][]>();
+  for (const item of items) {
+    const key = shortTitle(item.title).toLowerCase();
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  for (const group of groups.values()) {
+    if (group.length === 1) { names.set(group[0].requestId, title(group[0])); continue; }
+    const when = group.map((g) => (g.askedAt && Number.isFinite(Date.parse(g.askedAt)) ? askedWhen(Date.parse(g.askedAt), now, lang) : ''));
+    const byTime = when.every((w) => w) && new Set(when).size === when.length;
+    const order = [...group].sort((a, b) => String(a.askedAt ?? '').localeCompare(String(b.askedAt ?? '')));
+    group.forEach((g, i) => names.set(g.requestId, `${title(g)} (${byTime ? when[i]
+      : say(ROUTING_MESSAGES.versionN, lang, { n: order.indexOf(g) + 1 })})`));
+  }
+  return names;
+}
+
+/**
  * `slow`: designs taking longer than usual that the office was just told about (ADR-182): their line
  * says so, instead of "the draft usually takes a few minutes" to someone who has waited an hour.
+ * ADR-231: each line is true for its stage (`spokenStage`); a stage this answer has no words for (a
+ * closed request) is not listed; designs with the same name are told apart (`distinctNames`).
  */
-export function statusText(requests: ChatRequestView[], lang: Lang, slow: ReadonlySet<string> = new Set()): string {
-  if (!requests.length) return say(ROUTING_MESSAGES.statusNothingOpen, lang);
-  return requests.map((r) => {
-    const key = r.stage === 'manual' && r.rev >= 3 ? 'manual-waiting' : r.stage;
+export function statusText(requests: ChatRequestView[], lang: Lang, slow: ReadonlySet<string> = new Set(), now = Date.now()): string {
+  const shown = requests.filter((r) => r.stage in STATUS_LINE);
+  if (!shown.length) return say(ROUTING_MESSAGES.statusNothingOpen, lang);
+  const names = distinctNames(shown.map((r) => ({ requestId: r.requestId, title: r.title, askedAt: r.createdAt })), lang, now);
+  return shown.map((r) => {
+    const stage = spokenStage(r);
+    const key = stage === 'manual' && r.rev >= 3 ? 'manual-waiting' : stage;
     const q = r.question?.text ? escapeTelegramHtml(r.question.text) : '';
-    if (r.stage === 'designing' && r.requesterHold) return say(ROUTING_MESSAGES.statusHeld, lang, {title:title(r)});
-    if (r.stage === 'designing' && slow.has(r.requestId)) return say(ROUTING_MESSAGES.statusDesigningSlow, lang, { title: title(r) });
-    return say(STATUS_LINE[key], lang, { title: title(r), question: q });
+    const name = names.get(r.requestId) ?? title(r);
+    if (stage === 'designing' && r.requesterHold) return say(ROUTING_MESSAGES.statusHeld, lang, { title: name });
+    if (stage === 'designing' && slow.has(r.requestId)) return say(ROUTING_MESSAGES.statusDesigningSlow, lang, { title: name });
+    return say(STATUS_LINE[key], lang, { title: name, question: q });
   }).join('\n\n');
 }
 
@@ -1137,10 +1241,41 @@ export function slowDesigns(requests: ChatRequestView[], now: number): ChatReque
   return requests.filter((r) => r.stage === 'designing' && !r.requesterHold && now - Date.parse(r.activeAt) > SLOW_DESIGN_MS);
 }
 
+// ---------------------------------------------------------------------------------------------
+// What the office hears. ADR-231 (live 2026-10-01): the office read "The requester in chat 7191500129
+// …", "Task 030996c1-…, request 3a4c6ac4-…" and "Deliver will ask someone in the Desk to read and
+// acknowledge these words first". An alert now names the requester and the design in plain sentences,
+// quotes the requester's words exactly as sent, and keeps one short last line for finding the task in
+// the Desk's search.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Who wrote, as an office member knows them: the first and last name Telegram sends with the message
+ * (`from`), else their @username; null when it carries neither.
+ */
+export function requesterName(from: unknown): string | null {
+  const f = from && typeof from === 'object' ? from as { first_name?: unknown; last_name?: unknown; username?: unknown } : {};
+  const part = (v: unknown) => (typeof v === 'string' ? trimTitleMarks(v).replace(/\s+/g, ' ') : '');
+  const name = [part(f.first_name), part(f.last_name)].filter(Boolean).join(' ');
+  const username = part(f.username);
+  const said = name || (username ? `@${username.replace(/^@/, '')}` : '');
+  return said ? Array.from(said).slice(0, 80).join('') : null;
+}
+
+/** The subject of an office alert: the requester's name, else "A requester". */
+export const whoWrote = (name: string | null | undefined): string => name?.trim() || 'A requester';
+
+/** The last line of an office alert: the short task ids the Desk's search finds. */
+export const deskSearchLine = (taskIds: readonly string[]): string =>
+  `Desk search: ${[...new Set(taskIds.map((id) => id.slice(0, 8)))].join(', ')}`;
+
+const quotedWords = (words: string) => (words.length > 1500 ? `${words.slice(0, 1500)}…` : words);
+
 /** The office's alert when a requester asks about a design that is taking longer than usual. */
-export function slowDesignOfficeAlert(chatId: string, slow: ChatRequestView[], now: number): string {
-  return [`The requester in chat ${chatId} asked how their design is going, and it is taking longer than usual. Please check on it and answer them in the chat.`,
-    ...slow.map((r) => `"${shortTitle(r.title)}": still being designed after ${Math.round((now - Date.parse(r.activeAt)) / 60_000)} minutes (task ${r.currentTaskId}).`),
+export function slowDesignOfficeAlert(who: string, slow: ChatRequestView[], now: number): string {
+  return [`${who} asked how their design is going, and it is taking longer than usual. Please check on it and answer them in the chat.`,
+    ...slow.map((r) => `"${shortTitle(r.title)}" has been in design for ${Math.round((now - Date.parse(r.activeAt)) / 60_000)} minutes.`),
+    '', deskSearchLine(slow.map((r) => r.currentTaskId)),
   ].join('\n');
 }
 
@@ -1155,45 +1290,48 @@ export function forwardText(lang: Lang, alerted: boolean, question = false): str
   return say(alerted ? ROUTING_MESSAGES.forwardedToOffice : ROUTING_MESSAGES.keptForOffice, lang);
 }
 
-/** ADR-182: the office's alert for a question the bot cannot answer (plain text, the words as sent). */
-export function questionOfficeAlert(chatId: string, words: string): string {
-  const quoted = words.length > 1500 ? `${words.slice(0, 1500)}…` : words;
-  return [`The requester in chat ${chatId} asked a question the bot cannot answer. Nothing was changed; please answer them in the chat.`,
-    '', 'Their question:', quoted].join('\n');
+/**
+ * ADR-182: the office's alert for a question the bot cannot answer (plain text, the words as sent).
+ * ADR-231: it holds no design back; the requester was told the office will reply.
+ */
+export function questionOfficeAlert(who: string, words: string): string {
+  return [`${who} asked a question the bot cannot answer. Nothing was changed and no design is held back; please answer them in the chat.`,
+    '', 'Their question:', quotedWords(words)].join('\n');
 }
 
 /** The office's alert for words about a design this bot cannot link to a current request. */
-export function forwardOfficeAlert(chatId: string, words: string): string {
-  const quoted = words.length > 1500 ? `${words.slice(0, 1500)}…` : words;
-  return [`The requester in chat ${chatId} replied to an older bot message that no current design is linked to. Nothing was changed.`,
-    '', 'Their words:', quoted].join('\n');
+export function forwardOfficeAlert(who: string, words: string): string {
+  return [`${who} replied to an older message from the bot, about a design that is no longer open in their chat. Nothing was changed; please answer them in the chat.`,
+    '', 'Their words:', quotedWords(words)].join('\n');
 }
 
 /**
  * The office's alert for words the bot could not apply because their design moved on while they were
  * read (a round planned on it could not start, ADR-156). The requester was told the office has them.
  */
-export function conflictOfficeAlert(chatId: string, words: string): string {
-  const quoted = words.length > 1500 ? `${words.slice(0, 1500)}…` : words;
-  return [`The requester in chat ${chatId} sent words the bot could not apply: the design they are about changed while they were read, so nothing was started. Please read them and answer in the chat.`,
-    '', 'Their words:', quoted].join('\n');
+export function conflictOfficeAlert(who: string, words: string): string {
+  return [`${who} sent words the bot could not apply: their design changed while the words were being read, so nothing was started. Please read them and answer in the chat.`,
+    '', 'Their words:', quotedWords(words)].join('\n');
 }
 
 export function nothingToChangeText(lang: Lang): string {
   return say(ROUTING_MESSAGES.nothingToChange, lang);
 }
 
-export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang): string {
+/** ADR-231: `now` dates the names of designs that share one ("asked for today at 08:44"). */
+export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang, now = Date.now()): string {
+  const names = distinctNames(plan.options, lang, now);
+  const named = (o: { requestId: string; title: string }) => names.get(o.requestId) ?? title(o);
   // ADR-200 addendum: a question about redo words names the designs and what would happen to them.
   if (plan.redo === 'or-new' && plan.options.length === 1) return say(ROUTING_MESSAGES.askRedoOrNew, lang, { title: title(plan.options[0]) });
   if (plan.redo === 'redo' && plan.options.length > 1) {
-    return say(ROUTING_MESSAGES.askWhichRedo, lang, { list: plan.options.map((o, i) => `${i + 1}. ${title(o)}`).join('\n') });
+    return say(ROUTING_MESSAGES.askWhichRedo, lang, { list: plan.options.map((o, i) => `${i + 1}. ${named(o)}`).join('\n') });
   }
   if (plan.options.length === 1 && plan.allowNew) return say(ROUTING_MESSAGES.askChangeOrNew, lang, { title: title(plan.options[0]) });
   if (plan.options.length === 1) {
     return say(plan.intent === 'cancel' ? ROUTING_MESSAGES.askCancel : ROUTING_MESSAGES.askIsThisOne, lang, { title: title(plan.options[0]) });
   }
-  const list = plan.options.map((o, i) => `${i + 1}. ${title(o)}`);
+  const list = plan.options.map((o, i) => `${i + 1}. ${named(o)}`);
   if (plan.allowNew) list.push(`${plan.options.length + 1}. ${say(ROUTING_MESSAGES.aNewDesign, lang)}`);
   return say(ROUTING_MESSAGES.askWhichDesign, lang, { list: list.join('\n') });
 }
@@ -1201,11 +1339,18 @@ export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang): s
 /**
  * ADR-200 addendum: the requester's answer to redo words, naming the design: a new round started
  * (`started`), words added to a design still being made, or passed to the office.
+ * ADR-231 (live 2026-10-01): "I'll redo …" only when the round started. Otherwise the words were kept
+ * for the office, and the requester hears that, with the reason nothing started: the design is still
+ * being made, with the office, already approved or sent, delivered, or with a designer.
  */
 export function redoText(stage: string, requestTitle: string, lang: Lang, started = false): string {
   const t = { title: title({ title: requestTitle }) };
   if (started) return say(ROUTING_MESSAGES.redoStarted, lang, t);
-  return say(stage === 'designing' || stage === 'awaiting_answer' ? ROUTING_MESSAGES.redoWhileDesigning : ROUTING_MESSAGES.redoWithOffice, lang, t);
+  const phrase = stage === 'designing' || stage === 'awaiting_answer' ? ROUTING_MESSAGES.redoWhileDesigning
+    : stage === 'manual' ? ROUTING_MESSAGES.redoPassedDesigner
+      : stage === 'approved' || stage === 'delivering' ? ROUTING_MESSAGES.redoPassedApproved
+        : stage === 'delivered' ? ROUTING_MESSAGES.redoPassedDelivered : ROUTING_MESSAGES.redoWithOffice;
+  return say(phrase, lang, t);
 }
 
 /** The requester's answer to a note kept on a request (a change or a cancel). */
@@ -1239,18 +1384,19 @@ const TELL_STAGE: Record<RequestStage, string> = {
 };
 
 /** The office's alert for approval, timing or file words (plain text: the words are quoted as sent). */
-export function tellOfficeAlert(note: TellNote, input: { chatId: string; requestId: string;
-  taskId: string; title: string; words: string; stage?: RequestStage }): string {
-  const words = input.words.length > 1500 ? `${input.words.slice(0, 1500)}…` : input.words;
+export function tellOfficeAlert(note: TellNote, input: { who: string; taskId: string; title: string; words: string;
+  stage?: RequestStage }): string {
+  const name = `"${shortTitle(input.title)}"`;
   return [
     note === 'approval'
-      ? `The requester in chat ${input.chatId} says they are happy with "${shortTitle(input.title)}". Nothing was approved: approval stays in the Desk.`
+      ? `${input.who} says they are happy with ${name}. Nothing was approved by this: an office member still approves it in the Desk.`
       : note === 'delivery'
-        ? `The requester in chat ${input.chatId} asks about the files of "${shortTitle(input.title)}"${input.stage ? ` (${TELL_STAGE[input.stage]})` : ''}: to send them again, in another format, to an address or at a higher resolution. Nothing was sent automatically; please answer them in the chat.`
-        : `The requester in chat ${input.chatId} gave a deadline or asked for speed on "${shortTitle(input.title)}".`,
-    `Task ${input.taskId}, request ${input.requestId}.`,
+        ? `${input.who} asks about the files of ${name}${input.stage ? ` (${TELL_STAGE[input.stage]})` : ''}: to send them again, in another format, to an address or at a higher resolution. Nothing was sent automatically; please answer them in the chat.`
+        : `${input.who} gave a deadline or asked for speed on ${name}.`,
     '',
     'Their words:',
-    words,
+    quotedWords(input.words),
+    '',
+    deskSearchLine([input.taskId]),
   ].join('\n');
 }

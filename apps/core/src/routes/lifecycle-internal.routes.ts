@@ -61,6 +61,7 @@ import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentRecei
   type IntentReceipt } from '../services/requester-turn-store.js';
 import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
   opensForAPerson, readIntentByRules, readsAsBriefContinuation, redoText, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
+  requesterName, spokenStage, whoWrote,
   tellText, thanksText, waitsForRequester,
   withoutBotMentions, type ChatRequestView, type IntentReading, type TurnPlan } from '../services/requester-turn.js';
 import { briefPartSeconds, briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
@@ -108,13 +109,20 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * The answer for a requester's words that reached a request after its design went to the office
  * (finding 13 of the Phase 4 review). The same stored change always gives the same answer.
  */
-function lateChangeAnswer(chatId: string, late: LateRequesterChange): Record<string, unknown> {
-  const officeAlert = lateChangeOfficeAlert(late, chatId, officeChatFor(chatId));
+function lateChangeAnswer(chatId: string, late: LateRequesterChange, update: UpdateLike): Record<string, unknown> {
+  // ADR-231: the office's alert names the requester; the update is the same on a replay, so is the alert.
+  const officeAlert = lateChangeOfficeAlert(late, chatId, officeChatFor(chatId), requesterName(fromOf(update)));
   return { code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change', chatId,
     requestId: late.requestId, requestStage: late.requestStage, ...(officeAlert ? { officeAlert } : {}),
     // ADR-144: what the requester is told comes from Core, in their language, and replays as it was.
     ...(late.answer ? { chatAnswer: { text: late.answer, parseMode: 'HTML' } } : {}) };
 }
+
+/** ADR-231: the Telegram sender of an update (its `from`), for naming the requester to the office. */
+const fromOf = (u: UpdateLike): unknown =>
+  ((u.message ?? u.edited_message ?? u.channel_post) as Record<string, unknown> | undefined)?.from;
+/** ADR-231: the subject of an office alert about this update: the requester's name, else "A requester". */
+const whoSent = (u: UpdateLike): string => whoWrote(requesterName(fromOf(u)));
 
 /** Who sent a message, in which chat and topic: the scope a kept photo or a deferred message belongs to. */
 function senderScopeOf(update: UpdateLike): { chatId: string; senderId: string; topic: string } | null {
@@ -139,7 +147,7 @@ function revisionBlockedAlert(chatId: string, code: string, update: UpdateLike):
   const words = String(message?.text ?? message?.caption ?? '').trim();
   const why = code === 'DAILY_CAP_REACHED' ? 'the automatic design allowance for today is used up'
     : code === 'QUESTION_MISSING' ? 'the question it answers could not be found' : 'the original brief could not be found';
-  return { chatId: office, text: [`The requester in chat ${chatId} sent a change or answer that was not applied, because ${why} (${code}).`,
+  return { chatId: office, text: [`${whoSent(update)} sent a change or answer that was not applied, because ${why}.`,
     'Nothing was started. Please make the change and send the design to them; they were told the office has it.',
     '', 'Their words:', (words.length > 1500 ? `${words.slice(0, 1500)}…` : words) || '(a photo or file, in the chat)'].join('\n') };
 }
@@ -285,7 +293,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       if (stored.payloadHash !== payloadHash || stored.chatId !== chatId || stored.code !== 'LATE_REQUESTER_CHANGE' || !stored.late) {
         return { status: 409, extra: { code: 'IDEMPOTENCY_CONFLICT' } };
       }
-      return { status: 409, extra: lateChangeAnswer(chatId, stored.late) };
+      return { status: 409, extra: lateChangeAnswer(chatId, stored.late, u) };
     };
 
     /**
@@ -314,7 +322,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       const alerted = Boolean(office && office !== chatId);
       const answer = { status: 200, extra: { lifecycleAction: 'chat-answer', chatId, media: 'svg',
         chatAnswer: { text: say(alerted ? MEDIA_MESSAGES.svgPassed : MEDIA_MESSAGES.svgKept, lang), parseMode: 'HTML' },
-        ...(alerted ? { officeAlert: { chatId: office!, text: [`The requester in chat ${chatId} sent a logo or graphic as an SVG file ("${name}"), which the bot cannot place, and no single open design of theirs to add it to. It is in the Telegram chat.`,
+        ...(alerted ? { officeAlert: { chatId: office!, text: [`${whoSent(u)} sent a logo or graphic as an SVG file ("${name}"), which the bot cannot place, and has no single open design to add it to. It is in the Telegram chat.`,
           '', 'Their words:', caption || '(no words)'].join('\n') } } : {}) } };
       const stored = await withRlsContext(db!, SYSTEM_SCOPE, (trx) => recordMediaAnswer(trx, DEFAULT_TENANT_ID, u.update_id, updateHash(u), answer));
       return handled(stored.status, stored.extra);
@@ -703,7 +711,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           chatId: sourceChat, reason: 'A lifecycle chat media update needs operator review; no task was started' });
       }
       if (priorRefusal.code === 'LATE_REQUESTER_CHANGE' && priorRefusal.late) {
-        return handled(409, lateChangeAnswer(sourceChat, priorRefusal.late));
+        return handled(409, lateChangeAnswer(sourceChat, priorRefusal.late, update));
       }
       const blocked = priorRefusal.code !== 'AMBIGUOUS_REQUEST' && priorRefusal.code !== 'STALE_REQUEST_REPLY';
       const alert = blocked ? revisionBlockedAlert(sourceChat, priorRefusal.code, update) : null;
@@ -1292,7 +1300,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     if (!(err instanceof LifecycleProjectionConflict)) throw err;
                     // A design a designer made by hand, or one whose brief cannot be found: the office redoes
                     // it, with the words kept on it. The day's allowance used up is told as any change's is.
-                    if (['WRONG_STAGE', 'PARENT_BRIEF_MISSING'].includes(err.code)) return carryOut(asNote, requests, retried);
+                    // ADR-231: this update's receipt already holds the redo plan, so the note's answer is the one
+                    // given now (as after a replan); without it the requester got IDEMPOTENCY_CONFLICT and no answer.
+                    if (['WRONG_STAGE', 'PARENT_BRIEF_MISSING'].includes(err.code)) return carryOut(asNote, requests, true);
                     if (!['STALE_REVISION', 'NOT_CURRENT_DRAFT'].includes(err.code)) throw err;
                     return retried ? carryOut(asNote, requests, true) : replan(err.code);
                   }
@@ -1319,7 +1329,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     : plan.what === 'status' ? statusText(shown, lang, new Set(alerted ? slow.map((r) => r.requestId) : []))
                       : nothingToChangeText(lang);
                   return await decided(200, chatAnswer(words, alerted
-                    ? { officeAlert: { chatId: office!, text: slowDesignOfficeAlert(chatId, slow, now) } } : {}));
+                    ? { officeAlert: { chatId: office!, text: slowDesignOfficeAlert(whoSent(update), slow, now) } } : {}));
                 }
                 case 'ask': {
                   // ADR-156: the photo asked about is kept under this update, and the answer carries it.
@@ -1333,15 +1343,15 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   const office = officeChatFor(chatId);
                   const alerted = Boolean(office && office !== chatId);
                   return await decided(200, chatAnswer(forwardText(lang, alerted, plan.question === true),
-                    alerted ? { officeAlert: { chatId: office!, text: retried ? conflictOfficeAlert(chatId, plan.words)
-                      : plan.question ? questionOfficeAlert(chatId, plan.words) : forwardOfficeAlert(chatId, plan.words) } } : {}));
+                    alerted ? { officeAlert: { chatId: office!, text: retried ? conflictOfficeAlert(whoSent(update), plan.words)
+                      : plan.question ? questionOfficeAlert(whoSent(update), plan.words) : forwardOfficeAlert(whoSent(update), plan.words) } } : {}));
                 }
                 case 'tell': {
                   const target = byId(plan.requestId);
                   if (!target) return await decided(200, chatAnswer(statusText([], lang)));
                   const office = officeChatFor(chatId);
                   const alert = office && office !== chatId ? { chatId: office, text: tellOfficeAlert(plan.note, {
-                    chatId, requestId: target.requestId, taskId: target.currentTaskId, title: target.title, words: plan.words,
+                    who: whoSent(update), taskId: target.currentTaskId, title: target.title, words: plan.words,
                     stage: target.stage }) } : null;
                   return await decided(200, chatAnswer(tellText(plan.note, target.title, lang, Boolean(alert)),
                     { requestId: target.requestId, note: plan.note, ...(alert ? { officeAlert: alert } : {}) }));
@@ -1399,7 +1409,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     const held = plan.note === 'hold' && await pauseRequesterDesign(trx,TENANT,
                       {requestId:target.requestId,taskId:target.currentTaskId,requestRev:target.rev,requestStage:target.stage,text:words},update.update_id);
                     const said = photoWithoutWords && material ? say(MEDIA_MESSAGES.photoPassed, lang, { title })
-                      : noteText(plan.note, target.stage, target.title, lang, held, plan.redo === true);
+                      : noteText(plan.note, spokenStage(target), target.title, lang, held, plan.redo === true);
                     const late: LateRequesterChange = { requestId: target.requestId, taskId: target.currentTaskId,
                       requestRev: target.rev, requestStage: target.stage as LateChangeStage, text: words,
                       kind: plan.note, ...(plan.note === 'hold' ? {held} : {}), title: shortTitle(target.title), answer: said };
@@ -1407,7 +1417,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                       { code: 'LATE_REQUESTER_CHANGE', chatId, payloadHash, late });
                     if (refusal.payloadHash !== payloadHash || refusal.chatId !== chatId ||
                         refusal.code !== 'LATE_REQUESTER_CHANGE' || !refusal.late) return null;
-                    const answer = { status: 409, extra: { ...lateChangeAnswer(chatId, refusal.late), intent: reading.intent } };
+                    const answer = { status: 409, extra: { ...lateChangeAnswer(chatId, refusal.late, update), intent: reading.intent } };
                     return { stored: await recordIntentReceipt(trx, TENANT, receipt(answer)), answer };
                   });
                   if (!stored || stored.stored.payloadHash !== payloadHash) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
@@ -1468,7 +1478,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     stored.code !== 'LATE_REQUESTER_CHANGE' || !stored.late) {
                   return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
                 }
-                return handled(409, lateChangeAnswer(chatId, stored.late));
+                return handled(409, lateChangeAnswer(chatId, stored.late, update));
               }
             }
             if (replyMessageId && (links.length === 0 || newCommand)) return await refuseWithReceipt('STALE_REQUEST_REPLY');
@@ -1518,7 +1528,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               const alerted = Boolean(office && office !== chatId);
               return handled(409, { code: err.code, detail: err.message, lifecycleAction: 'chat-answer', chatId,
                 chatAnswer: { text: forwardText(photoInput?.captionless ? 'en' : langOf(rawText), alerted), parseMode: 'HTML' },
-                ...(alerted ? { officeAlert: { chatId: office!, text: conflictOfficeAlert(chatId,
+                ...(alerted ? { officeAlert: { chatId: office!, text: conflictOfficeAlert(whoSent(update),
                   photoInput?.captionless ? '(a photo with no words, in the chat)' : rawText.trim()) } } : {}) });
             }
             if ((err as { status?: number })?.status === 503) return handled(503, { code: 'DATABASE_UNAVAILABLE' });

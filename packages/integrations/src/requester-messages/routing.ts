@@ -136,9 +136,11 @@ export const ROUTING_MESSAGES = {
     en: "I've asked the office to hold {title}. I'll keep your message with the design.",
     ckb: 'داوام لە ئۆفیس کرد {title} ڕابگرێت. نامەکەت لەگەڵ دیزاینەکە دەپارێزم.',
   },
+  // ADR-231: the words are kept with the design for the office, not applied to the draft being made
+  // (the office's alert says so); "I've added that to …" promised more than happens.
   changeAddedWhileDesigning: {
-    en: "Got it. I've added that to {title}; the office will see it before the design is sent to you.",
-    ckb: 'تێگەیشتم. ئەوەم بۆ {title} زیاد کرد؛ ئۆفیسەکە پێش ناردنی دیزاینەکە دەیبینێت.',
+    en: "Got it. I've kept that with {title} for the office; they'll see it before the design is sent to you.",
+    ckb: 'تێگەیشتم. ئەوەم لەگەڵ {title} بۆ ئۆفیسەکە هەڵگرت؛ پێش ناردنی دیزاینەکە دەیبینن.',
   },
   changePassedInReview: {
     en: "Got it. The office is checking {title} now, and I've passed your change to them.",
@@ -171,13 +173,57 @@ export const ROUTING_MESSAGES = {
     en: "I'll redo {title} — the new version follows what you said, and the office checks it before it comes to you.",
     ckb: '{title} دووبارە دەکەمەوە — وەشانە نوێیەکە بەپێی قسەکانت دەبێت، و ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات.',
   },
+  /**
+   * ADR-231 (live 2026-10-01): "I'll redo …" only when a new round starts (`redoStarted`). Where the words
+   * are only kept for the office, the requester hears that, and why nothing started.
+   */
   redoWhileDesigning: {
-    en: "I'll redo {title} — it is still being made, so I've added what you said; the office sees it before the design comes to you.",
-    ckb: '{title} دووبارە دەکەمەوە — هێشتا دروست دەکرێت، بۆیە قسەکانتم بۆ زیاد کرد؛ ئۆفیسەکە پێش ئەوەی دیزاینەکە بۆت بێت دەیبینێت.',
+    en: "{title} is still being made, so I can't start it again yet. I've kept what you said with it for the office; they'll see it before the design comes to you.",
+    ckb: '{title} هێشتا دروست دەکرێت، بۆیە ناتوانم ئێستا دووبارەی بکەمەوە. قسەکانتم لەگەڵیدا بۆ ئۆفیسەکە هەڵگرت؛ پێش ئەوەی دیزاینەکە بۆت بێت دەیبینن.',
   },
   redoWithOffice: {
-    en: "I'll redo {title} — I've passed what you said to the office, so the new version follows it.",
-    ckb: '{title} دووبارە دەکەمەوە — قسەکانتم گەیاندە ئۆفیسەکە، بۆیە وەشانە نوێیەکە بەپێی ئەوە دەبێت.',
+    en: "{title} is with the office for a final check, so I haven't started a new version. I've passed what you said to them; they'll follow up here.",
+    ckb: '{title} لای ئۆفیسەکەیە بۆ دوایین پشکنین، بۆیە وەشانێکی نوێم دەست پێ نەکردووە. قسەکانتم گەیاندە ئەوان؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  redoPassedApproved: {
+    en: "{title} is already approved, so I haven't started a new version. I've passed what you said to the office; they'll follow up here.",
+    ckb: '{title} پێشتر پەسەند کراوە، بۆیە وەشانێکی نوێم دەست پێ نەکردووە. قسەکانتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  redoPassedDelivered: {
+    en: "I can't start a new version of {title} by myself, so I've passed what you said to the office; they'll follow up here.",
+    ckb: 'ناتوانم خۆم وەشانێکی نوێی {title} دەست پێ بکەم، بۆیە قسەکانتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  redoPassedDesigner: {
+    en: "A designer at the office is working on {title}, so I've passed what you said to them; they'll follow up here.",
+    ckb: 'دیزاینەرێک لە ئۆفیسەکە کار لەسەر {title} دەکات، بۆیە قسەکانتم گەیاندە ئەوان؛ لێرە وەڵامت دەدەنەوە.',
+  },
+  /**
+   * ADR-231: what tells two designs with the same name apart, in a status answer or a "which design?"
+   * list: when each was asked for, else its place ("version 2"). `{time}` is a 24-hour time in Iraq.
+   */
+  askedJustNow: {
+    en: 'asked for just now',
+    ckb: 'ئێستا داواکرا',
+  },
+  askedMinutesAgo: {
+    en: 'asked for {n} minutes ago',
+    ckb: 'پێش {n} خولەک داواکرا',
+  },
+  askedToday: {
+    en: 'asked for today at {time}',
+    ckb: 'ئەمڕۆ کاتژمێر {time} داواکرا',
+  },
+  askedYesterday: {
+    en: 'asked for yesterday at {time}',
+    ckb: 'دوێنێ کاتژمێر {time} داواکرا',
+  },
+  askedDaysAgo: {
+    en: 'asked for {n} days ago',
+    ckb: 'پێش {n} ڕۆژ داواکرا',
+  },
+  versionN: {
+    en: 'version {n}',
+    ckb: 'وەشانی {n}',
   },
   deliveryRequestPassed: {
     en: "Got it. I've passed your request about {title} to the office; they'll follow up here.",

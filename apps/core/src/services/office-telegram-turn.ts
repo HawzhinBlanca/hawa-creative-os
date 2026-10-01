@@ -304,6 +304,9 @@ const QUEUE_LIST = 5;
 /**
  * The drafts waiting in the office queue (request-owned, in review, the task awaiting its decision),
  * newest first by when this member was sent each one's alert, with the facts that tell them apart.
+ * ADR-231 (live 2026-10-01 14:03Z): only drafts that can still be decided: the task has a current
+ * revision, and that revision has no approval standing (one not invalidated). "Which draft do you
+ * mean?" listed two designs already approved beside the one waiting.
  */
 async function officeQueue(trx: Kysely<Database>, tenantId: string, chatId: string): Promise<QueuedDraft[]> {
   const first = officeChatIds()[0] ?? '';
@@ -328,7 +331,12 @@ async function officeQueue(trx: Kysely<Database>, tenantId: string, chatId: stri
     LEFT JOIN hawa.tasks root ON root.tenant_id = r.tenant_id AND root.id = r.root_task_id
     LEFT JOIN hawa.inbox_events src ON src.tenant_id = r.tenant_id AND src.source_account_id = 'telegram'
       AND src.source_event_id = r.chat_id || ':lc-' || r.request_id::text || '-r0'
-    WHERE r.tenant_id = ${tenantId}::uuid AND r.owner = 'restate' AND r.stage = 'in_review' AND t.state = 'human_review'`.execute(trx)).rows
+    WHERE r.tenant_id = ${tenantId}::uuid AND r.owner = 'restate' AND r.stage = 'in_review' AND t.state = 'human_review'
+      AND t.current_design_revision_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM hawa.approvals a WHERE a.tenant_id = t.tenant_id AND a.task_id = t.id
+        AND a.design_revision_id = t.current_design_revision_id AND a.decision = 'approved'
+        AND NOT EXISTS (SELECT 1 FROM hawa.task_events i WHERE i.tenant_id = a.tenant_id AND i.task_id = a.task_id
+          AND i.event_type = 'approval.invalidated' AND i.data->>'invalidatedApprovalId' = a.id::text))`.execute(trx)).rows
     .map((row) => ({ requestId: row.request_id, title: displayTitle(row.title, row.copy),
       sentAt: new Date(row.alerted_at ?? row.updated_at).toISOString(), alerted: row.alerted_at !== null,
       photos: Number(row.photos) || 0, requester: row.first_name?.trim() ? row.first_name.trim().slice(0, 60) : null,
@@ -707,6 +715,12 @@ function rulesPlan(reading: Consult['reading'], words: string, queue: QueuedDraf
   if (reference) return { kind: 'ask-which', words, options: queue };
   if (discussion) return { kind: 'decide', ...decision, requestId: discussion, alertRev: null, basis: 'discussion' };
   if (queue.length === 1 && !own) return { kind: 'decide', ...decision, requestId: queue[0].requestId, alertRev: null, basis: 'only' };
+  // ADR-231 (live 2026-10-01 14:03Z): approval words with one draft that can be approved are about it,
+  // even from a member with designs of their own on the way: it is confirmed by name ("Send … to … now?"),
+  // never asked about as a list of one, and never sent unconfirmed.
+  if (queue.length === 1 && reading.intent === 'approve') {
+    return { kind: 'decide', ...decision, requestId: queue[0].requestId, alertRev: null, basis: 'words', lastSent: queue[0].sentAt, needsConfirm: true };
+  }
   // ADR-040 addendum (2026-10-01): with several waiting, words with no reply are about the draft this
   // member was sent last, when it came within two hours and no other came close to it. The answer
   // names that draft first, so a wrong guess shows. A member with designs of their own on the way is
@@ -759,6 +773,9 @@ function combine(words: string, c: Consult, d: OfficeModelDecision | null, now: 
     target = { requestId: pick.requestId, alertRev: null, basis: 'model', sentAt: pick.sentAt };
   } else if (queue.length === 1 && !c.own) {
     target = { requestId: queue[0].requestId, alertRev: null, basis: 'only' };
+  } else if (queue.length === 1 && c.reading.intent === 'approve') {
+    // ADR-231: approval words with one draft that can be approved: confirmed by name (never certain here).
+    target = { requestId: queue[0].requestId, alertRev: null, basis: 'words', sentAt: queue[0].sentAt };
   } else if (!c.own) {
     const last = lastSentDraft(queue, now);
     if (last) target = { requestId: last.requestId, alertRev: null, basis: 'last-shown', sentAt: last.sentAt };

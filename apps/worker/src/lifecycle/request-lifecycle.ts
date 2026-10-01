@@ -15,7 +15,7 @@ import { TelegramSenderApi } from './telegram-sender.js';
 import { DesignRunApi, type DesignRunInput } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
-import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
+import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, requesterTitleName, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -283,10 +283,9 @@ const invalid = (reason: string) => new restate.TerminalError(`LIFECYCLE_OPEN_RE
 function requesterOf(state: Pick<ManualLifecycleState, 'lang' | 'title'> & { designInput?: { rawText?: string } }):
   { lang: RequesterLang; title: string } {
   const lang = state.lang ?? requesterLang(state.designInput?.rawText, 'en');
-  const named = String(state.title || '').replace(/^[^:]{1,40}:\s*/, '').replace(/\s+/g, ' ').trim();
   // ADR-200 addendum: a request named neutrally ("New design request from Sewa") is "your design" to them.
-  const name = isNeutralRequestTitle(named) ? '' : named;
-  const short = Array.from(name).length > 60 ? `${Array.from(name).slice(0, 59).join('')}…` : name;
+  // ADR-231: no direction mark at the name's edges.
+  const short = requesterTitleName(state.title);
   return { lang, title: short ? bold(short) : say(LIFECYCLE_MESSAGES.yourDesign, lang) };
 }
 

@@ -28,6 +28,8 @@ import { OFFICE_MESSAGES } from './office.js';
 import type { Phrase, PhraseBook, RequesterLang } from './types.js';
 
 export type { Phrase, PhraseBook, RequesterLang } from './types.js';
+/** ADR-231: a design's name as a requester reads it. */
+export { requesterTitleName, trimTitleMarks } from './titles.js';
 
 const letters = (text: string, script: RegExp) => Array.from(text).filter((ch) => script.test(ch) && /\p{L}/u.test(ch)).length;
 const ARABIC_SCRIPT = /\p{Script=Arabic}/u;

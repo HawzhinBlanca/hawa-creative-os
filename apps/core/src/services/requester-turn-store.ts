@@ -19,13 +19,17 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
   const days = Number.isInteger(deliveredDays) && deliveredDays >= 0 && deliveredDays <= 30 ? deliveredDays : 3;
   const rows = (await sql<{ request_id: string; rev: string | number; stage: string; current_task_id: string;
     client_id: string | null; title: string | null; created_at: Date | string; updated_at: Date | string;
-    question: ChatRequestView['question']; requester_id: string | null; requester_hold:boolean }>`
+    question: ChatRequestView['question']; requester_id: string | null; requester_hold:boolean; sent_to_chat: boolean }>`
     SELECT r.request_id::text, r.rev, r.stage, r.current_task_id::text, t.client_id::text,
       coalesce(root.title, t.title) AS title, r.created_at, r.updated_at,
       p.result->'question' AS question,
       coalesce(src.payload->'message'->'from'->>'id', opener.sender_id) AS requester_id,
       (t.state='paused' AND hold.data->>'requesterHoldRequestId'=r.request_id::text
-        AND hold.data->>'requesterHoldRequestRev'=r.rev::text) AS requester_hold
+        AND hold.data->>'requesterHoldRequestRev'=r.rev::text) AS requester_hold,
+      -- ADR-231: the current task's final notice reached the requester (Delivery keys it lc:dl-<task>-<approval>:notice).
+      (r.stage = 'delivering' AND EXISTS (SELECT 1 FROM hawa.inbox_events d WHERE d.tenant_id = r.tenant_id
+        AND d.source_account_id = 'telegram_delivery' AND d.event_kind = 'telegram_message_sent'
+        AND d.source_event_id LIKE ('lc:dl-' || r.current_task_id::text || '-%:notice:send'))) AS sent_to_chat
     FROM hawa.requests r
     JOIN hawa.tasks t ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id
     LEFT JOIN LATERAL (SELECT e.data FROM hawa.task_events e
@@ -61,6 +65,7 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
     question: row.question && typeof row.question === 'object' && typeof row.question.text === 'string' ? row.question : null,
     requesterId: row.requester_id,
     ...(row.requester_hold ? {requesterHold:true} : {}),
+    ...(row.sent_to_chat ? { sentToChat: true } : {}),
   }));
 }
 

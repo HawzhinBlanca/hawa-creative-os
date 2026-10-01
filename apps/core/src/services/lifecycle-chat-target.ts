@@ -347,32 +347,39 @@ const STAGE_WORDS: Record<LateChangeStage, string> = {
  * they were sent. Null when there is no office chat, or the office chat is the requester's own. Intake
  * names the first office member other than the requester (`officeChatFor`) and sends the same alert to
  * every other member (`withOfficeAlerts`, ADR-155 section 6).
+ *
+ * ADR-231 (live 2026-10-01): it names the requester (`requester`, the name Telegram sent with their
+ * message) and the design in plain sentences, says what happened and what the office should do, and
+ * keeps the task's short id on one last line for the Desk's search. It read "The requester in chat
+ * 7191500129 …", "Task 030996c1-…, request 3a4c6ac4-…" and "Deliver will ask someone in the Desk to
+ * read and acknowledge these words first".
  */
 export function lateChangeOfficeAlert(late: LateRequesterChange, requesterChatId: string,
-  officeChatId: string | null | undefined): { chatId: string; text: string } | null {
+  officeChatId: string | null | undefined, requester?: string | null): { chatId: string; text: string } | null {
   if (!officeChatId || officeChatId === requesterChatId) return null;
   const words = late.text.length > 1500 ? `${late.text.slice(0, 1500)}…` : late.text;
+  const who = requester?.trim() || 'A requester';
   const consequence = late.requestStage === 'delivering'
-    ? 'A delivery had already started; it was not stopped.'
+    ? 'It was already approved and being sent to them; the sending was not stopped.'
     : late.requestStage === 'delivered'
-      ? 'The design had already been delivered.'
-      : 'Deliver will ask someone in the Desk to read and acknowledge these words first.';
+      ? 'It had already been delivered to them.'
+      : 'The design will not be sent to them until someone in the office has read these words in the Desk.';
   const named = late.title ? ` "${late.title}"` : '';
   const opening = late.kind === 'hold'
-    ? `The requester in chat ${requesterChatId} asked to hold the design${named}. ${late.held ? 'New automatic design work is paused. Read their words before resuming the saved task checkpoint in the Desk; an admitted call may still finish.' : 'The request had moved beyond the automatic pause boundary; please handle the hold and tell the requester what can be stopped.'}`
+    ? `${who} asked to pause the design${named}. ${late.held ? 'New automatic work on it is paused; anything already running may still finish. Read their words, then resume it in the Desk when it should go on.' : 'It was already past the point where it can be paused automatically; please tell them what can still be stopped.'}`
     : late.kind === 'cancel'
-    ? `The requester in chat ${requesterChatId} asked to cancel the design${named} while it was ${STAGE_WORDS[late.requestStage]}. Nothing was stopped automatically.`
+    ? `${who} asked to cancel the design${named} while it was ${STAGE_WORDS[late.requestStage]}. Nothing was stopped automatically.`
     : late.requestStage === 'designing' || late.requestStage === 'manual' || late.requestStage === 'awaiting_answer'
-      ? `The requester in chat ${requesterChatId} sent a change for the design${named} while it was ${STAGE_WORDS[late.requestStage]}. It was not applied to any design; fold it into the next round or the review.`
-      : `The requester in chat ${requesterChatId} replied after the design${named} was ${STAGE_WORDS[late.requestStage]}. Their words were not applied to any design.`;
+      ? `${who} sent a change for the design${named} while it was ${STAGE_WORDS[late.requestStage]}. It is not in the draft being made; add it in the next round or at review.`
+      : `${who} wrote about the design${named} ${late.requestStage === 'in_review' ? 'while' : 'after'} it was ${STAGE_WORDS[late.requestStage]}. Nothing was changed; please read their words and answer them in the chat.`;
   return { chatId: officeChatId, text: [
     opening,
-    `Task ${late.taskId}, request ${late.requestId}.`,
+    consequence,
     '',
     'Their words:',
     words,
     '',
-    consequence,
+    `Desk search: ${late.taskId.slice(0, 8)}`,
   ].join('\n') };
 }
 
