@@ -3,26 +3,14 @@ import { PNG } from 'pngjs';
 import type { StudioLayoutV2, Box, TextElement } from './layout-v2.js';
 import { hexToRgb } from './color-science.js';
 import { carrierOf } from './art-direction/surfaces.js';
-
-export function channelToLinear(c: number): number {
-  const s = c / 255;
-  return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-}
-
-export function rgbToLuminance(r: number, g: number, b: number): number {
-  return 0.2126 * channelToLinear(r) + 0.7152 * channelToLinear(g) + 0.0722 * channelToLinear(b);
-}
+import { rgbToLuminance, calculateLuminanceContrastRatio } from './luminance.js';
+export { channelToLinear, rgbToLuminance, calculateLuminanceContrastRatio } from './luminance.js';
 
 export function hexToLuminance(hex: string): number {
   const [r, g, b] = hexToRgb(hex);
   return rgbToLuminance(r, g, b);
 }
 
-export function calculateLuminanceContrastRatio(lum1: number, lum2: number): number {
-  const lighter = Math.max(lum1, lum2);
-  const darker = Math.min(lum1, lum2);
-  return (lighter + 0.05) / (darker + 0.05);
-}
 
 /**
  * The colour behind a text box as the layout declares it: the topmost panel or rectangle that

@@ -7,7 +7,7 @@ six research recommendations. ADR-172 records the amended foundation and boundar
 |---|---|---|---|
 | W1 Subject protection | Individual face/subject regions from service through crop/solver/QA; visible unknown/invalid evidence | Malformed-input, group/edge/support crop and occlusion regressions plus saved evidence | Local engineering implemented; qualification pending |
 | W2 Background planning | Typed content-aware background decision; explicit requester/brand/reference precedence; regional legibility | Different content/allowed backgrounds, refusal and rendered/native/replay checks | Local engineering implemented; Canva/human qualification pending |
-| W3 Logo treatment | Conditional carriers; approved byte-preserving variant/placement and clear space | Transparent official asset on varied grounds; local/native identity and pixel checks | ADR-180 foundation integrated; visibility/qualification work pending |
+| W3 Logo treatment | Conditional carriers; approved byte-preserving variant/placement and clear space | Transparent official asset on varied grounds; local/native identity and pixel checks | Local source-component visibility/fallback/final QA implemented; independent native visibility fails; archive/Canva/human qualification pending |
 | W4 Composition | Several coverage-safe native topologies, narrative support order and aspect-aware geometry; meaningful3-concept diversity | One/six/ten photos, LTR/RTL/formats, exact live copy, schema/render/PPTX/native checks | Local geometry/selection implemented; independent native geometry passes; Canva/human/archive qualification pending |
 | W5 Local optimization | Brand-constrained perceptual color decisions and bounded local geometry/type refinement; cache/replay identity | Color/contrast, grid/containment/asymmetry, determinism, cost/call/latency evidence | Pending |
 | W6 Preference calibration | Hard obligations separated from style priors; genuine labels, held-out ranking/calibration, uncertainty/operator selection | Label validity, leakage/bias/abstention regressions, actual comparative qualification | Pending |
@@ -134,3 +134,47 @@ measured p95=2.821459ms under Node22.23.1. This is pure local packing, not a who
 pipeline SLA. No provider call or deployment. Additional explicit-count cardinality
 and mixed all/count wording adversarial qualification remains before final admission.
 See W4_COMPOSITION_PROOF.json, W4_NATIVE_CONTROLS.json and W4_PACKING_BENCHMARK.json.
+
+## W3 source-feature visibility checkpoint
+
+The official transparent source raster supplies meaningful connected artwork components.
+Opaque approved plates use their intrinsic color edges; flat wordmarks use alpha boundaries.
+The initial90% overall/80% per-component screen prevents a visible minority from certifying
+missing lettering. Original bytes remain unchanged. Existing panels and both approved-tone
+thin fallbacks are measured; no passing treatment raises LOGO_UNREADABLE. Final Core QA and
+edit QA recompute from actual pixels and a source signature, ignoring saved passed metadata.
+Absent/stale sources raise LOGO_UNMEASURED. The pure feature algorithm shares isolated
+luminance math with contrast QA; no provider, dependency or public-SaaS change.
+
+136 distinct tests across10 files pass (133/9 plus actual contrast3/1);647 test roots,
+build and lint pass. The initially named composite-contrast.test.ts does not exist; it
+was not executed, and actual studio-contrast.test.ts was subsequently run. Initial15/2
+and109/7 are overlapping subsets, not added to136. Core regression proves missing or
+invisible current sources fail despite an old successful record.
+
+Six synthetic local rendered/native-byte controls pass source identity and local QA.
+**Independent native logo visibility FAILS6/6** at unchanged fixed source coordinates
+(coverage0.453..0.567). A whole-logo±1px displacement diagnostic does not repair it.
+Root cause is not proven; do not claim resampling alone, or loosen thresholds to call
+this passed. Native PDFs also substitute Verdana, retaining the existing typography
+failure. Real Canva and human/archive calibration remain NOT_RUN. Evidence:
+W3_LOGO_VISIBILITY_PROOF.json and W3_NATIVE_CONTROLS.json; reproducible proof scripts.
+
+Initial two-copy control fails grid alignment0.667; the subsequent three-copy controls
+are explicitly a narrower diagnostic, not a repair of that geometry. Carry this real
+geometry/craft risk into W5 along with cache/latency: six single-control logo settlements
+measure~317–1112ms, including one cold startup, not a pipeline SLA. Exact/qualified
+photo counts, W5/W6 and full final sealed/recovery/native/human gates remain. No paid
+provider call or deployment; W3 is local engineering progress, not native admission.
+
+## W3 controlled native export diagnosis — 1 October 2026
+
+Reproducible offline export now pins the same actual font inventory, explicitly disables PDF image reduction and selects lossless compression. A fresh directory is mandatory; original controls and byte-bound source PPTX are preserved. Six controls retain source hashes and all contain Verdana/Verdana-Bold. The actual substituted original remains rejected; empty/traversal/duplicate/over-bound inventories and existing outputs are refused. Family presence is partial evidence, not glyph/ink/wrap/bidi/Canva fidelity.
+
+Logo visibility still FAILS6/6 at fixed source coordinates with unchanged90%/80% thresholds (coverage0.396951..0.541828). Lossless alone also fails; native image resampling/compression is observed but is insufficient as a root-cause explanation. Keep W3 native admission failed and calibrate acceptable versus damaged controls before changing the screen. Evidence: W3_NATIVE_DIAGNOSIS_2026-10-01.json and W3_NATIVE_PINNED_CONTROLS.json. Zero provider calls; no deployment or production code change.
+
+## W3 renderer-basis controlled study — 1 October 2026
+
+The same official logo picture, relationships, source bytes and exact DrawingML transform are isolated from each original immutable PPTX on white/black mattes. Pinned native exports capture both PDF/PNG hashes. Dual-matte alpha recovery is consistent on every source pixel (zero channel-disagreement pixels), and the actual full source-aligned logo region is read without a mask or coordinate search. Renderer/export/font/source/input/output bindings are required; missing or changed evidence refuses. Old diagnosis files are never overwritten.
+
+Under that same-native reference, six intact exports pass at1.0 coverage and27 damage controls are refused: missing, centre erased, reflected, unrelated checkerboard, and small-component removal. The latter still has99.6566% total feature coverage but fails its component at0. Five source/capture/renderer/immutable-output refusal controls pass. Thresholds remain90%/80%; production local template/algorithm is unchanged. The native reference selects2696/5533 features versus3280/5666 in the local renderer, so this is not a claim of equal preserved detail. Original cross-renderer failures remain evidence; the paired study demonstrates the basis mismatch in these controls, not universal readability. Canva/varied-logo/archive/human qualification and W5/W6 remain open. Evidence: W3_NATIVE_RENDERER_BASIS_PROOF.json, W3_NATIVE_FEATURE_ANALYSIS.json. Zero provider calls or production code changes.

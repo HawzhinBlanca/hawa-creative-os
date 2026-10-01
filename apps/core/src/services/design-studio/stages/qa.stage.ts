@@ -1,5 +1,5 @@
 import type { StageContext, CandidateState, HardQAResult } from '../types.js';
-import { evaluateHardQa, layoutPlacements, renderLayoutV2Async, type ArtRegionPlan } from '@hawa/creative';
+import { evaluateHardQa, layoutPlacements, renderLayoutV2Async, renderLogoTemplate, photoRecipeOf, type ArtRegionPlan } from '@hawa/creative';
 import { hardQaContextFor, copyForStageV3 } from './v3.stage.js';
 import { candidateRenderOptions } from './asset-inputs.js';
 import { log } from '../../../logging.js';
@@ -23,12 +23,19 @@ export async function runQAStage(
       return undefined;
     });
   const composite = render?.noTextPng ?? winner.compositePng ?? undefined;
+  const logoRequired = Boolean(photoRecipeOf(winner.currentLayout));
+  const logoTemplate = logoRequired ? await renderLogoTemplate(winner.currentLayout, candidateRenderOptions(ctx, winner)).catch((err: unknown) => {
+    log.warn(`[qa.stage] Logo source could not be measured (${err instanceof Error ? err.message : String(err)}).`);
+    return undefined;
+  }) : undefined;
   const outcome = evaluateHardQa(
     winner.currentLayout,
     {
       ...hardQaContextFor(ctx),
       ...(composite ? { renderedComposite: composite } : {}),
       ...(render ? { fontFidelity: render.fontFidelity } : {}),
+      logoVisibilityRequired: logoRequired,
+      ...(logoTemplate ? { logoVisibilityTemplate: logoTemplate } : {}),
     },
     winner.metrics
   );

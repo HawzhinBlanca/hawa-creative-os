@@ -11,7 +11,7 @@ import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } f
 import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
 import { photoRegionViolations, type PhotoRegionEvidence } from './protected-regions.js';
-import { logoBackingExcess } from './art-direction/logo-ground.js';
+import { logoBackingExcess, readRenderedLogoVisibility, type RenderedLogoTemplate } from './art-direction/logo-ground.js';
 
 /**
  * The studio's hard QA gate, shared so the qualification applies exactly the gate a production
@@ -62,6 +62,10 @@ export interface HardQaContext {
    * not only against the colour the layout declares behind it.
    */
   renderedComposite?: Buffer;
+  /** Source raster at this geometry; final QA measures actual pixels, never saved metadata. */
+  logoVisibilityTemplate?: RenderedLogoTemplate;
+  /** Final render/edit gates require source measurement; preliminary geometry gates may omit it. */
+  logoVisibilityRequired?: boolean;
   /** The renderer's font fidelity for this host (`RenderLayoutV2Result.fontFidelity`). */
   fontFidelity?: Record<string, 'exact' | 'stand-in'>;
 }
@@ -351,6 +355,19 @@ export function evaluateHardQa(
   if (backingExcess > 1) {
     defectCodes.push('LOGO_BACKING');
     messages.push(`LOGO_BACKING: what is drawn behind the logo reaches ${backingExcess}px past the thin tab or clear-space box it may cover`);
+  }
+  if (ctx.logoVisibilityRequired || ctx.logoVisibilityTemplate) {
+    try {
+      if (!ctx.renderedComposite || !ctx.logoVisibilityTemplate) throw new Error('source or final composite absent');
+      const reading = readRenderedLogoVisibility(ctx.renderedComposite, checked.logo, ctx.logoVisibilityTemplate);
+      if (!reading.passed) {
+        defectCodes.push('LOGO_UNREADABLE');
+        messages.push(`LOGO_UNREADABLE: visible source features ${reading.coverage.toFixed(3)}, worst component ${reading.worstComponent.toFixed(3)}`);
+      }
+    } catch (err) {
+      defectCodes.push('LOGO_UNMEASURED');
+      messages.push(`LOGO_UNMEASURED: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   const findings = [...reviewFindings(layout, ctx), ...unmeasured];

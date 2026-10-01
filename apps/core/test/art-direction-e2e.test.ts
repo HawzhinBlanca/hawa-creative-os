@@ -216,6 +216,16 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     expect(qa.messages).toEqual([]);
     expect(qa.passed).toBe(true);
     expect(qa.omittedPhotos).toEqual([1, 2, 3, 5]);
+    // W3: the final gate measures the current source and composite, even with an old passed record.
+    const missingLogo = await runQAStage({ ...ctx, logo: undefined }, { ...winner });
+    expect(missingLogo.passed).toBe(false);
+    expect(missingLogo.defectCodes).toContain('LOGO_UNMEASURED');
+    const whiteLogo = new PNG({ width: 128, height: 128 }); whiteLogo.data.fill(255);
+    const whiteBytes = PNG.sync.write(whiteLogo);
+    const invisibleLogo = await runQAStage({ ...ctx, logo: { bytes: whiteBytes,
+      sha256: createHash('sha256').update(whiteBytes).digest('hex'), mimeType: 'image/png' } }, { ...winner });
+    expect(invisibleLogo.passed).toBe(false);
+    expect(invisibleLogo.defectCodes).toContain('LOGO_UNREADABLE');
     const layout: StudioLayoutV2 = winner.currentLayout;
     // One hero and one blended texture; the title and gold line on the fade; the inset gold line.
     expect(layout.photos!.map((p) => [p.photoIndex, p.role])).toEqual([[0, 'hero'], [4, 'texture']]);

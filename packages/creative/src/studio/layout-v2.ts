@@ -143,12 +143,17 @@ export interface ArtDirectionRecord {
 /** ADR-180: the logo's measured ground and its treatment. */
 export interface LogoGroundRecord {
   treatment: 'none' | 'scrim' | 'tab';
-  /** The logo's contrast on its ground as drawn (95th percentile of its ink pixels: its lettering and outline). */
+  /** Legacy p95 changed-pixel contrast statistic; source-feature visibility independently certifies artwork. */
   contrast: number;
   /** The ground's busyness under the logo box (standard deviation of its luma, 0..1). */
   busyness: number;
   /** The logo moved to the calmer top corner of the design. */
   moved?: boolean;
+  /** ADR172 W3: measured source edges; absent on historical records. */
+  visibility?: {
+    method: 'source-edges-v1'; coverage: number; worstComponent: number;
+    componentCount: number; featureCount: number; passed: boolean;
+  };
 }
 
 export interface TextElement extends Box {
@@ -408,6 +413,11 @@ export const artDirectionRecordSchema = z.object({
     contrast: z.number().min(1).max(21),
     busyness: z.number().min(0).max(1),
     moved: z.boolean().optional(),
+    visibility: z.object({
+      method: z.literal('source-edges-v1'), coverage: z.number().min(0).max(1),
+      worstComponent: z.number().min(0).max(1), componentCount: z.number().int().positive(),
+      featureCount: z.number().int().positive(), passed: z.boolean(),
+    }).strict().optional(),
   }).strict().optional(),
 }).strict();
 

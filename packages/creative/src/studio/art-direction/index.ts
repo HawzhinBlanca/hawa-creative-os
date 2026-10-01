@@ -27,6 +27,9 @@ export {
 export {
   settleLogoGround,
   measureLogoGround,
+  renderLogoTemplate,
+  readRenderedLogoVisibility,
+  type RenderedLogoTemplate,
   readLogoGround,
   logoGroundQuiet,
   nativeLogoContrast,
@@ -37,6 +40,7 @@ export {
   type LogoGroundReading,
   type SettleLogoOptions,
 } from './logo-ground.js';
+export { compileLogoVisibility, readLogoVisibility, type LogoVisibilityTemplate, type LogoVisibilityReading } from './logo-visibility.js';
 export { analysePhotoAsync, analysePixels, ANALYSIS_EDGE, type PhotoAnalysis } from './photo-analysis.js';
 export { carrierOf, isSurfaceShape, overlayOpacityOver, shapePaintsOver, OVERLAY_CARRY_MIN_OPACITY } from './surfaces.js';
 export {

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-30T19:56:22Z",
+  "generatedAt": "2026-10-01T00:53:40Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 671,
+  "fileCount": 681,
   "files": [
     {
       "path": ".dockerignore",
@@ -879,8 +879,8 @@
     },
     {
       "path": "adrs/172_content_aware_editable_art_direction.md",
-      "sha256": "258688efbf8d27ebd64d8972512fd2a922cbb7a353ba7d888e2f1dfe5ff4dbd1",
-      "bytes": 7305
+      "sha256": "6ace5b6227d5300f50ee1d593c26965e82e7349c9b025b9853e034df12963b1a",
+      "bytes": 10389
     },
     {
       "path": "adrs/180_owner_house_style_and_office_caption.md",
@@ -1344,8 +1344,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "7136b5b4d4b49cf847714940f944820732f98650340f66303a8fc843003bb3ec",
-      "bytes": 10034
+      "sha256": "8f4f96651de5a24d017b8526563655cdf4fb118d65cc2d129d488101207c77bb",
+      "bytes": 14978
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1356,6 +1356,36 @@
       "path": "plans/content-aware-design-2026-09-30/W2_BACKGROUND_PROOF.json",
       "sha256": "4091e3acf7b4410d9e0e431664406cdb76ac63ab7848edc8460481c79c1a45b1",
       "bytes": 6832
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W3_LOGO_VISIBILITY_PROOF.json",
+      "sha256": "4dd8c28752f7d07b30e2fe1ce088553d55a3ef6cc50222d432dc84fc688c6a92",
+      "bytes": 7014
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W3_NATIVE_CONTROLS.json",
+      "sha256": "6dbfd020247e7246b273a130fbed1a6a0932e0c3d70ab512977f71dda1de5710",
+      "bytes": 11458
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W3_NATIVE_DIAGNOSIS_2026-10-01.json",
+      "sha256": "5892a5364a6c1fe37503f618d63a315f9ef4767137492b0d92945385d62c1f96",
+      "bytes": 4715
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W3_NATIVE_FEATURE_ANALYSIS.json",
+      "sha256": "b8e0ef7e8c281b32abd22163489f2ea18e13fe33b2be38168bec8433029a5abf",
+      "bytes": 3128
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W3_NATIVE_PINNED_CONTROLS.json",
+      "sha256": "574220f385fe3ff44bfb0c797ff6e97c677444e06d85635c4ffad81c0b7c76d9",
+      "bytes": 17842
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W3_NATIVE_RENDERER_BASIS_PROOF.json",
+      "sha256": "c25e89d87dd05cc89ca680797d894381ec2f3e5a07dc840c86a999447abb3a20",
+      "bytes": 23240
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W4_COMPOSITION_PROOF.json",
@@ -2474,8 +2504,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "a11bdbe344ad3535f72b7afaef84840d77a8c7d9160e26d2a478e30432ab0ace",
-      "bytes": 561173
+      "sha256": "7474e47af70508a2885cc4d9eb7391b1e7c2bf8919f96a08491c7472e41a3398",
+      "bytes": 566989
     },
     {
       "path": "plans/user-stories.csv",
@@ -3066,6 +3096,26 @@
       "path": "scripts/proofs/linux_systemd_install.sh",
       "sha256": "5863a4a8b5600ca13afdff6d719c45614124958e6d5a65454bc331a2af391fde",
       "bytes": 6155
+    },
+    {
+      "path": "scripts/proofs/logo_visibility_export_native.mjs",
+      "sha256": "4ff3900cade7e31beb337703e9beb564a5f8d297567e386e0e4b144b7d021fbf",
+      "bytes": 3620
+    },
+    {
+      "path": "scripts/proofs/logo_visibility_native_basis_probe.mjs",
+      "sha256": "d4da71af4c3e7d488f04e4c6665db0e6b5aa5f60058f152629039ebac6969151",
+      "bytes": 11844
+    },
+    {
+      "path": "scripts/proofs/logo_visibility_probe.mjs",
+      "sha256": "496bcb9f430190149100030ca3e077410b838b80d15de2ba3785c7dc183fb6fc",
+      "bytes": 4657
+    },
+    {
+      "path": "scripts/proofs/logo_visibility_verify_native.mjs",
+      "sha256": "cc2381f10170cd49d00f8de38fb16871e218db2ea99fe41f0fe95ff2ad2ab1ca",
+      "bytes": 2498
     },
     {
       "path": "scripts/proofs/measure_candidate_diversity.ts",

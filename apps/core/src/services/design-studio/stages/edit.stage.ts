@@ -13,6 +13,8 @@ import {
   conformToHouseRules,
   settlePhotos,
   evaluateHardQa,
+  renderLogoTemplate,
+  photoRecipeOf,
   OpenAiModelHttpError,
   OpenAiModelTimeoutError,
   isStoryFormat,
@@ -226,7 +228,8 @@ export async function runDirectedEditStage(
     // Contrast measured on this render's pixels, and its font fidelity, as the 'qa' stage does (ADR-157).
     const qa = evaluateHardQa(
       JSON.parse(JSON.stringify(layout)),
-      { ...qaContext, ...(render.noTextPng ? { renderedComposite: render.noTextPng } : {}), fontFidelity: render.fontFidelity },
+      { ...qaContext, ...(render.noTextPng ? { renderedComposite: render.noTextPng } : {}), fontFidelity: render.fontFidelity,
+        ...(photoRecipeOf(layout) ? { logoVisibilityRequired: true, logoVisibilityTemplate: await renderLogoTemplate(layout, renderOptions) } : {}) },
       JSON.parse(JSON.stringify(metrics))
     );
     return { layout, droppedAccents, render, metrics, qa };

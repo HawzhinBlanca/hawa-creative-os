@@ -89,6 +89,25 @@ separate people to the incoming aggregate helper. Further visibility calibration
 and actual native admission remain necessary; a p95 changed-pixel statistic alone
 cannot establish readability of most logo details.
 
+## W3 source feature visibility
+
+Compile a bounded local edge signature from the official transparent logo raster at
+its actual placed size. Check every meaningful connected artwork component against
+the actual final composite. Components with internal color edges use those edges
+(an approved opaque plate may legitimately disappear into the paper); flat components
+use their alpha boundary. A high-contrast minority cannot certify absent lettering.
+Compare feature contrast and direction with the source, not only pixels changed by
+the current ground. Empty, oversized or unmeasured signatures refuse certification.
+The initial 90% overall / 80% per-component bounds are an engineering screen requiring
+archive/human calibration; they are not a universal accessibility or taste standard.
+
+Measure existing panels and each thin fallback on their pixels. Try both approved
+light/dark tones; if none passes, raise LOGO_UNREADABLE rather than mark a failed
+fallback successful. Keep original bytes and clear-space/backing limits. Final QA
+and edit QA recompute from the render and source signature, independent of the saved
+logoGround record. Historical records remain readable but grant no new certification.
+No model, provider call, asset alteration or new dependency is introduced.
+
 
 ## Owner clarification — ADR181
 
@@ -116,3 +135,11 @@ recipes with actual loaded-source evidence; absent/mismatched evidence abstains 
 style preference. Sharpness evidence remains separate. This is the initial hard/soft
 preference boundary, not learned taste or comparative admission. No new model call,
 provider, generated image or dependency is needed for this extension.
+
+## W3 native diagnostic environment — 1 October 2026
+
+The original independent export used substituted fonts and PDF JPEG/reduction settings. Preserve that failed evidence. A separate reproducible diagnostic pins the existing font inventory, disables reduction, selects lossless export and binds original PPTX hashes; it refuses malformed inventories or existing output directories. Report actual requested/native font-family presence without promoting it to glyph/ink/bidi/Canva fidelity. Six corrected offline controls contain the declared font families but all still fail the unchanged source-edge logo screen. Compression alone is therefore not a sufficient explanation or an admitted repair. No production gate, threshold or original asset changes. Evidence: plans/content-aware-design-2026-09-30/W3_NATIVE_DIAGNOSIS_2026-10-01.json.
+
+## Renderer-bound source visibility — 1 October 2026
+
+Native source evidence demonstrates that pixel-edge signatures depend on the renderer basis. The same immutable official picture/transform on native white/black matte references gives six intact passes and27 prescribed-damage refusals under unchanged thresholds; local-raster signatures on those native composites fail. Bind diagnostic references to renderer/export/font identity, original source/input/geometry and freshly captured PDF/PNG hashes. Missing/mismatched basis is unmeasured, not a readability verdict. Per-component minima still reject a missing small detail when total coverage is99.6566%. Source reference selection can differ between engines; retain actual feature populations and require archive/human detail-preservation calibration. This is scoped engineering evidence, not universal/Canva/human admission. Original failures are preserved. See W3_NATIVE_RENDERER_BASIS_PROOF.json.
