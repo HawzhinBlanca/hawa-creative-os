@@ -310,3 +310,10 @@ answer nor a storage failure certifies absent history. Stored read failure retur
 503 and cannot reuse a warmed process result. Normalized Sorani matching preserves
 original returned text. Only named copy/text/instruction fields are indexed;
 arbitrary source manifests and provider/transport metadata are excluded.
+
+Asset search matches authorized active names, media types, kinds, content hashes
+and asset IDs before its database bound (ADR217). Default 5,000 matches; a finite
+positive `HAWA_SEARCH_ASSET_CEILING` is clamped to 1–20,000. One extra matching row
+sets `truncated`, and creation time plus ID defines deterministic ordering. Asset
+metadata/storage locations are not searchable text. Unknown byte size is shown
+as unavailable. The separate `/v1/assets` inventory retains its newest-500 limit.

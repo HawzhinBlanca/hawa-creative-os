@@ -6,7 +6,7 @@ import { globalFeedbackMiner, type CandidateRuleProposal } from '@hawa/creative'
 import { VaultSearchEngine, extractSearchTokens, type SearchableItem, type SearchCategory } from '@hawa/retrieval';
 import { sql, toApiTaskStatus, withRlsContext } from '@hawa/db';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
-import { listUploadedAssets } from '../services/uploaded-assets.js';
+import { searchUploadedAssets } from '../services/uploaded-assets.js';
 import { log } from '../logging.js';
 import { searchHistory, searchWords } from '../services/search-history.js';
 import { reconstructClientLearning } from '../services/learning-recovery.js';
@@ -122,8 +122,8 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     // is indexed under the default client, so a search scoped to it reads those.
     const resolved = requestedClientId && requestedClientId !== 'all'
       ? aliases.get(requestedClientId) || requestedClientId : undefined;
-    const assets = resolved === undefined ? await listUploadedAssets(db, scope)
-      : UUID.test(resolved) ? await listUploadedAssets(db, scope, resolved) : [];
+    const assetSearch = (category === 'all' || category === 'assets') && (resolved === undefined || UUID.test(resolved))
+      ? await searchUploadedAssets(db, scope, query, resolved) : { items: [], truncated: false };
     const clientFilter = resolved === undefined ? sql``
       : resolved === defaultClientId ? sql`AND t.client_id IS NULL`
         : UUID.test(resolved) ? sql`AND t.client_id = ${resolved}::uuid`
@@ -174,10 +174,10 @@ export function registerSearchRoutes(ctx: RouteContext): void {
         objective: t.objective || undefined, requestText: t.request_text || undefined, latestRevisionId: t.current_design_revision_id || undefined, updatedAt: iso(t.updated_at),
       })),
       clients,
-      assets,
+      assets: assetSearch.items,
       aliases,
       rules,
-      truncated: truncated || history.truncated,
+      truncated: truncated || history.truncated || assetSearch.truncated,
     };
   }
 
@@ -248,8 +248,8 @@ export function registerSearchRoutes(ctx: RouteContext): void {
         category: 'assets',
         clientId: cId,
         title: asset.filename || assetId,
-        subtitle: `${asset.mimeType} · ${asset.sizeBytes || 1024} B`,
-        bodyText: `${asset.filename} ${asset.mimeType} ${asset.category || ''} ${asset.sha256 || ''}`,
+        subtitle: `${asset.mimeType} · ${typeof asset.sizeBytes === 'number' && Number.isFinite(asset.sizeBytes) && asset.sizeBytes >= 0 ? `${asset.sizeBytes} B` : 'Size unavailable'}`,
+        bodyText: `${assetId} ${asset.filename} ${asset.mimeType} ${asset.category || ''} ${asset.sha256 || ''}`,
         tags: [asset.mimeType || 'unknown', asset.category || 'asset'],
         metadata: { sha256: asset.sha256, storageKey: asset.storageKey },
         updatedAt: asset.createdAt || new Date().toISOString(),

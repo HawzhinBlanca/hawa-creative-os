@@ -798,3 +798,8 @@ Actual cold Core missed registered clients without active DNA, feedback/revision
 First exact seal14cf1d53 is retained:6890pass/1fail/67skip. The sole failure was an existing Desk test still asserting “matching tasks” after the supported history notice broadened to all matches. Updated its assertion/description; no runtime behavior changed. Expanded6files47pass/0fail/0skip and696 strict roots pass. Corrected exact gate remains pending.
 
 Exact clean seal a3e38867 passes seven engineering stages: 6891 passed / 0 failed / 67 skipped across 689 passed files / 6 skipped; 696 strict roots and 1774 package checks. Mandatory negative-flag refusal passes. Raw production-dump Stage 3 remains skipped: previous automatic approval review requires explicit transfer authorization, still pending. No all-eight qualification, deployment or native/human/product admission claim. W6_SCOPED_SEARCH_HISTORY_GATE_EVIDENCE.json retains actual receipts.
+
+
+## W6 matched scoped asset search — 1 October 2026, ADR217
+
+ADR217 CONNECTED: actual newest-500 asset-search omission and invented1024B closed with query-before-bound active SQL/RLS, typed fields/ID/Sorani matching, stable timestamp/ID order and explicit missing size. Cold/broad/alias/assigned-designer/foreign-tenant/inactive/read-failure controls plus actual20005 matching-row hard20000/truncation pass; separate inventory500 preserved. Original7fail/1pass retained;9 new tests,6files55pass/0fail/0skip,697 roots/build/lint. FR011 read boundary only. Exact gate/native/human/product pending; no deploy/model/embedding/schema/dependency. W6_SCOPED_ASSET_SEARCH_PROOF.json.

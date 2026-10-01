@@ -6,6 +6,7 @@
  * the upload is checked, and an SVG sanitised, and the row records what was admitted.
  */
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
+import { searchWords } from './search-history.js';
 
 type Scope = { tenantId: string; userId?: string; role?: string };
 
@@ -77,4 +78,18 @@ export async function listUploadedAssets(db: Kysely<Database>, scope: Scope, cli
         ${clientId ? sql`AND client_id = ${clientId}::uuid` : sql``}
       ORDER BY created_at DESC LIMIT 500`.execute(trx)).rows);
   return rows.map(assetFromRow);
+}
+
+/** Match authorized active assets before the search bound; inventory listing remains separate. */
+export async function searchUploadedAssets(db: Kysely<Database>, scope: Scope, query: string, clientId?: string) {
+  const configured = Number(process.env.HAWA_SEARCH_ASSET_CEILING);
+  const ceiling = Number.isFinite(configured) && configured > 0
+    ? Math.max(1, Math.min(20_000, Math.floor(configured))) : 5_000;
+  const rows = await withRlsContext(db, { ...scope, ...(clientId ? { clientId } : {}) }, async trx =>
+    (await sql<AssetRow>`SELECT ${COLUMNS} FROM hawa.brand_assets
+      WHERE tenant_id=${scope.tenantId}::uuid AND status='active'
+        ${clientId ? sql`AND client_id=${clientId}::uuid` : sql``}
+        AND ${searchWords(sql`concat_ws(' ',id::text,name,mime_type,kind,sha256)`, query)}
+      ORDER BY created_at DESC,id DESC LIMIT ${ceiling + 1}`.execute(trx)).rows);
+  return { items: rows.slice(0, ceiling).map(assetFromRow), truncated: rows.length > ceiling };
 }
