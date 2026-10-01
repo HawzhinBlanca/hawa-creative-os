@@ -6,7 +6,7 @@
     "FR-011",
     "NFR-012"
   ],
-  "status": "CONNECTED_ENGINEERING_VERIFIED_EXACT_GATE_AND_PRODUCT_ADMISSION_PENDING",
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "sourceSha256": {
     "apps/core/src/routes/search.routes.ts": "318532f510ac5faf61d5d3d0b58545761b39f680cca778d7f924159367a961b1",
     "apps/core/src/services/search-history.ts": "7c1986d067e0261b722409d00f037d872bb8c8fa34e419c610f5b704d9eb1889",
@@ -93,5 +93,13 @@
     "output/qualification/2026-10-01/search-history/EXACT_GATE_INITIAL_FAILURE.log": "ada3cd45b94564f0b86d8771d321da908d629e43a5bf5298ab63535d02cac5b4",
     "output/qualification/2026-10-01/search-history/FULL_SUITE_INITIAL_FAILURE.log": "3ea97dcf028ea0a1472624b57d422ac83de5b97c762de6ed04f160a5c3ea9f75"
   },
-  "initialSourceCommit": "74c1d247"
+  "initialSourceCommit": "74c1d247",
+  "sourceCommit": "7c324cfa91cc7c2fa3565e8d68d26701fea451fb",
+  "releaseGate": {
+    "candidateCommit": "a3e38867d7779e417d4ccd8902b3e8fce06c6259",
+    "proof": "plans/content-aware-design-2026-09-30/W6_SCOPED_SEARCH_HISTORY_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior explicit transfer approval pending",
+    "allEightQualified": false
+  }
 }

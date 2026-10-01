@@ -1,6 +1,6 @@
 # ADR216 — Complete scoped search over stored office history
 
-Date: 2026-10-01. Status: connected engineering verified; exact gate and product admission pending.
+Date: 2026-10-01. Status: connected and seven-stage engineering verified; production-dump/native/human/product admission pending.
 Requirements: FR-077, FR-011, NFR-012.
 Sources: docs/17_UI_UX.md, docs/08_MEMORY_RAG_CLIENT_DNA.md, docs/09_MESSAGING_AND_OFFICE_INBOX.md, MASTER_SPEC.
 
@@ -46,3 +46,5 @@ taste calibration, native Canva, deployment or whole-product admission follows.
 16 actual Core/PostgreSQL history checks and connected five-file42pass/0fail/0skip qualify this slice. Strict696 roots, build/lint and diff checks pass. Original8 failures plus additional instruction/empty-copy reds and introduced build/type failures remain retained. An operator sees peer history while a scoped designer cannot retrieve it via an all-client query. W6_SCOPED_SEARCH_HISTORY_PROOF.json binds source and evidence. Exact clean gate pending; production/native/human/product admission open.
 
 First exact seal14cf1d53 is retained:6890pass/1fail/67skip. The sole failure was an existing Desk test still asserting “matching tasks” after the supported history notice broadened to all matches. Updated its assertion/description; no runtime behavior changed. Expanded6files47pass/0fail/0skip and696 strict roots pass. Corrected exact gate remains pending.
+
+Exact clean seal a3e38867 passes seven engineering stages: 6891 passed / 0 failed / 67 skipped across 689 passed files / 6 skipped; 696 strict roots and 1774 package checks. Mandatory negative-flag refusal passes. Raw production-dump Stage 3 remains skipped: previous automatic approval review requires explicit transfer authorization, still pending. No all-eight qualification, deployment or native/human/product admission claim. W6_SCOPED_SEARCH_HISTORY_GATE_EVIDENCE.json retains actual receipts.
