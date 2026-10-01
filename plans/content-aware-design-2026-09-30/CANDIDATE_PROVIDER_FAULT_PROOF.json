@@ -6,7 +6,7 @@
     "NFR-024",
     "NFR-025"
   ],
-  "status": "CONNECTED_CONTROLS_PASS_CLEAN_DEPLOYED_REHEARSAL_PENDING",
+  "status": "CONNECTED_AND_DEPLOYED_SYNTHETIC_CONTROLS_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "diagnosis": {
     "intentionalPreviousCalls": "two evaluation-settlement HTTP500 controls; not unexpected design requests",
     "actualFakeLedgerDefect": "Gemini body has no model field; different URL models were blank and collided",
@@ -55,8 +55,28 @@
   "qualificationLimits": [
     "current full monorepo gate not repeated for testkit-only changes",
     "production-dump transfer from ADR210 still awaiting explicit authorization",
-    "actual deployed fault/replay rehearsal pending",
     "native/Canva/human/separate-host/product admission open",
     "no production deployment or paid provider work"
-  ]
+  ],
+  "candidate": {
+    "candidateCommit": "132e500cde6937915c33bd14e97f7f51cafc3010",
+    "finishedAt": "2026-10-01T11:35:17.024Z",
+    "sourceChanges": {},
+    "scenario": "R1.S3.SOURCES",
+    "namedChecksPassed": 78,
+    "failed": 0,
+    "unconfiguredModelCalls": [],
+    "explicitFailureControls": "two armed Gemini503 on exact model; identity/status verified in executed scenario assertion",
+    "replay": "settlement/restart/old-action replay consume no additional model call",
+    "originalCost": "unknown preserved",
+    "externalProvidersAndStaff": "synthetic",
+    "productionChanged": false,
+    "backupRecovery": "not repeated; unchanged ADR21098-check/two-restore proof remains historical",
+    "unselectedScenariosSkipped": 56,
+    "defaultContainerVolumeTeardown": "verified by actual Docker readback",
+    "artifacts": {
+      "output/qualification/2026-10-01/explicit-provider-faults/CANDIDATE_RUN.json": "cf90e80f53273e82c7bfc974fc32d2bdd3bd8deda5625010a9444bc280a1b0d8",
+      "output/qualification/2026-10-01/explicit-provider-faults/CANDIDATE_RUN.log": "fc0b9a012a1369dec4a90edd6a1859f196df4cae4e3991224b8d672e0f483069"
+    }
+  }
 }

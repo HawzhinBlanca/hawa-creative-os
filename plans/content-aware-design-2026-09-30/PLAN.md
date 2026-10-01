@@ -702,3 +702,15 @@ full suite is not repeated for testkit-only changes; previous6812 result stays
 historical. CANDIDATE_PROVIDER_FAULT_PROOF.json binds scope and original logs.
 Clean actual candidate rehearsal is pending; no deployment/paid/native/human
 qualification. Production-dump authorization remains independently pending.
+
+### ADR211 clean deployed fixture qualification
+
+Clean132e500c passes78 named checks/sourceChanges{}, with zero unconfigured
+model calls and exactly2 deliberately armed Gemini503 requests. Original
+unknown cost and stopped reports survive named settlement, Core restart and
+replay; no call is repeated by settlement. Default teardown removes disposable
+containers/volumes.56 unselected scenarios skipped; providers/staff synthetic.
+This closes the fixture identity/intent gap. No production-code change or rollout.
+Earlier6812 full-suite and98 backup-recovery checks remain historical; not
+repeated or promoted as a new all-eight gate. Broader product admission and
+production-dump authorization remain open. CANDIDATE_PROVIDER_FAULT_PROOF.json.
