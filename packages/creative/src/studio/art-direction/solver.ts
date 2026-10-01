@@ -1,4 +1,4 @@
-import { applyContentBackground, type BackgroundPlanningInput } from '../background-planning.js';
+import { applyContentBackground, BackgroundInfeasibleError, type BackgroundPlanningInput } from '../background-planning.js';
 import { declaredTextContrast, declaredColorContrast } from '../composite-contrast.js';
 import { HERO_SHARP_UPSCALE } from '../layout-v2.js';
 import type {
@@ -787,7 +787,16 @@ class SolveContext {
         ...(upscale ? { heroUpscale: upscale } : {}),
       },
     };
-    if (this.input.backgroundPlanning) applyContentBackground(layout, this.input.palette, { ...this.input.backgroundPlanning, photos: this.input.photos });
+    if (this.input.backgroundPlanning) {
+      try {
+        applyContentBackground(layout, this.input.palette, { ...this.input.backgroundPlanning, photos: this.input.photos });
+      } catch (error) {
+        // Reject only this valid-but-unreadable composition. Invalid policy and unexpected errors
+        // still stop the call; solveConcepts records and replaces only recipe infeasibility.
+        if (!(error instanceof BackgroundInfeasibleError)) throw error;
+        throw new RecipeInfeasibleError(this.recipe, error.message);
+      }
+    }
     this.applyTitleAccent(layout);
     this.balanceWidows(layout);
     this.checkLayout(layout);

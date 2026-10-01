@@ -714,3 +714,17 @@ This closes the fixture identity/intent gap. No production-code change or rollou
 Earlier6812 full-suite and98 backup-recovery checks remain historical; not
 repeated or promoted as a new all-eight gate. Broader product admission and
 production-dump authorization remain open. CANDIDATE_PROVIDER_FAULT_PROOF.json.
+
+
+## W2 candidate-local refusal — 1 October 2026
+
+ADR212 closes an actual mixed-proposal failure: an unreadable approved gradient
+mosaic formerly stopped generation before viable compositions. Only exhausted
+valid background/ink search is classified as recipe infeasibility; the existing
+bounded search records its reason and keeps viable alternatives. Invalid policy
+still fails the call. No changed contrast floor, flattened rejected field, extra
+model call or repair round. Four original failing controls retained; final14
+files274pass/0fail/0skip,689 strict roots/build/lint pass. Actual Core preparation,
+local raster contrast, editable factual text/photo bytes and replay verified.
+Exact gate pending; real Canva/human/product admission open, no deploy.
+W2_CANDIDATE_BACKGROUND_REFUSAL_PROOF.json retains scope and evidence.

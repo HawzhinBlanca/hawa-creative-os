@@ -14,6 +14,15 @@ export interface BackgroundPlanningInput {
   colorIndex?: number | null;
   photos?: Array<{ photoIndex: number; shot?: string; quietLuminance?: number }>;
 }
+
+/** Valid policy, but this solved composition has no readable approved background/ink pair. */
+export class BackgroundInfeasibleError extends Error {
+  readonly code = 'BACKGROUND_INFEASIBLE';
+  constructor(readonly copyIndex: number | undefined) {
+    super(`BACKGROUND: no approved readable ink for block ${copyIndex}`);
+    this.name = 'BackgroundInfeasibleError';
+  }
+}
 const canon = (c: string) => {
   const s = c.toUpperCase();
   if (/^#[0-9A-F]{3}$/.test(s)) return '#' + [...s.slice(1)].map(v => v + v).join('');
@@ -100,5 +109,5 @@ export function applyContentBackground(layout: StudioLayoutV2, palette: string[]
     return layout;
   }
   // Do not flatten an infeasible field, invent a color or add another plaque to mask the failure.
-  throw new Error(`BACKGROUND: no approved readable ink for block ${failedBlock}`);
+  throw new BackgroundInfeasibleError(failedBlock);
 }

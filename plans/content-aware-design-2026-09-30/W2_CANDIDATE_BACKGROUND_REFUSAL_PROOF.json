@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-01T11:50:46.108338+00:00",
+  "adr": "ADR212",
+  "requirements": [
+    "FR-028",
+    "FR-031",
+    "FR-038",
+    "FR-040",
+    "FR-041",
+    "NFR-012"
+  ],
+  "status": "CONNECTED_ENGINEERING_VERIFIED_EXACT_GATE_PENDING_PRODUCT_ADMISSION_OPEN",
+  "sourceSha256": {
+    "packages/creative/src/studio/background-planning.ts": "e5afb295c83ef3cf890a5b5dd7bef88da40262c13612b61199bedbcd3cce0f79",
+    "packages/creative/src/studio/art-direction/solver.ts": "fbda9d4d761a26165819fa5ab8b1e4785a16ada0850ef33a99ede74be72a23ad",
+    "packages/creative/test/art-direction-background-recovery.test.ts": "d801a080746c2dcfa08ac91cb44e31c2cac2f79c034af1c8a04091872b9380a3",
+    "apps/core/test/art-direction-background-recovery.test.ts": "650a371d072dc000e737c6c9d1545d7c41c2a6236b9a4725e6d20299f15be4f6"
+  },
+  "diagnosis": "One valid but unreadable gradient mosaic aborts solveConcepts/generateArtDirectedCandidatesV3 before viable alternatives; synthetic actual function reproduction, no claimed live incident",
+  "regressions": {
+    "original": {
+      "failed": 4,
+      "passed": 2
+    },
+    "firstGreen": {
+      "failed": 1,
+      "passed": 5,
+      "reason": "raster fixture passed Buffer instead of decoded PNG; incorrect logo export also corrected before transfer execution"
+    },
+    "finalLocal": {
+      "passed": 6,
+      "failed": 0
+    },
+    "coreConnected": {
+      "passed": 7,
+      "files": 2,
+      "failed": 0
+    }
+  },
+  "connected": {
+    "files": 14,
+    "passed": 274,
+    "failed": 0,
+    "skipped": 0,
+    "strictRoots": 689,
+    "build": "PASS",
+    "lint": "PASS"
+  },
+  "acceptance": [
+    "actual Core prepares at least two viable distinct concepts and records exact background rejection",
+    "one synthetic art-director call; original billing receipt retained",
+    "invalid requester color remains a call-stopping policy failure",
+    "standalone background refusal remains atomic",
+    "existing bounded search and hard contrast floors unchanged",
+    "JSON replay deterministic; source choices unchanged",
+    "retained layout passes actual local raster contrast and native live factual text/photo bytes"
+  ],
+  "releaseGate": "NOT_RUN_YET",
+  "productionChanged": false,
+  "providers": "synthetic only; no paid calls",
+  "limits": [
+    "real Canva native edit/export/human quality unproved",
+    "production-dump transfer approval remains pending; do not deploy"
+  ],
+  "artifacts": {
+    "output/qualification/2026-10-01/candidate-background-refusal/RED.log": "a6468eb1a80a01affcfdec18612f547598c1342ac955a4058c177d8c37700f17",
+    "output/qualification/2026-10-01/candidate-background-refusal/GREEN_FIXTURE_FAILURE.log": "3bb3ff9de3e151109df2b0e9fb8618cadf945b4792ec46ff55d843f4ad1bc372",
+    "output/qualification/2026-10-01/candidate-background-refusal/GREEN_FINAL.log": "b40ae7195ce7f8b5ba5831c2c8fc00ad1e2912898ee7d2866e1cca7ed7993734",
+    "output/qualification/2026-10-01/candidate-background-refusal/CORE_CONNECTED.log": "5aadd44b0d9682d08a025f4b2f6493b1523d2e88e26562118370c084a666a3a7",
+    "output/qualification/2026-10-01/candidate-background-refusal/CONNECTED.log": "5826c034b47637b6286669806ffbc3018cb490963684ecaa13f032b3527a5f5c",
+    "output/qualification/2026-10-01/candidate-background-refusal/BUILD.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/candidate-background-refusal/STRICT_TYPES.log": "290b89c2e40548742ce310a901c5135d9de16b0f7b67c2d81efb570ae9ea2df1",
+    "output/qualification/2026-10-01/candidate-background-refusal/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad"
+  }
+}
