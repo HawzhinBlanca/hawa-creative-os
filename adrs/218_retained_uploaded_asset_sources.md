@@ -90,3 +90,10 @@ socket before any byte/header result. The driver had restarted nginx without
 waiting for health and retained proof HTTP keepalive connections across restarts.
 Wait for nginx health and close readonly verification connections; no retry or
 weaker assertions, no production behavior change. Whole corrected scenario pending.
+
+Clean6fc1e437 retained: all original/admitted bytes and private headers survive
+both restores; no unknown-hash/worker access or repeated external send. The full
+parent scenario later fails its named Studio settlement assertion (192 earlier
+controls passed). Add bounded response status/problem/actor-match/cost diagnostics
+to that existing synthetic check; preserve failed receipts. Full scenario remains
+unqualified until the late settlement failure is explained and corrected.

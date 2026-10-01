@@ -45,7 +45,9 @@ export async function candidateStudioSettlement(events:string[],checks:Invariant
     check('Studio refuses unknown attested cost',(await call(`${path}/settlement`,{...body,calls:[{...body.calls[0],reportedCostUsd:null}]},randomUUID(),token)).status===400);
     check('Studio refuses changed evidence snapshots',(await call(`${path}/settlement`,{...body,expectedSnapshot:'0'.repeat(64)},randomUUID(),token)).status===409);
     const action=randomUUID(),settled=await call(`${path}/settlement`,body,action,token);
-    check('Studio stores named settlement with separate cost',settled.status===200&&settled.body.settlement.actorUserId===userId&&settled.body.settlement.calls[0].reportedCostUsd===0.125);
+    check('Studio stores named settlement with separate cost',settled.status===200&&settled.body.settlement.actorUserId===userId&&settled.body.settlement.calls[0].reportedCostUsd===0.125,
+      JSON.stringify({status:settled.status,title:settled.body.title,detail:settled.body.detail,
+        actorMatches:settled.body.settlement?.actorUserId===userId,cost:settled.body.settlement?.calls?.[0]?.reportedCostUsd}));
     compose(['restart','core']);
     await waitUntil('Core restarts after Studio settlement',async()=>{try{return(await call(path)).status===200;}catch{return false;}});
     const replay=await call(`${path}/settlement`,body,action,token);
