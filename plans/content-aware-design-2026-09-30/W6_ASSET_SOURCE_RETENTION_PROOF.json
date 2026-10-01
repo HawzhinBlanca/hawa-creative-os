@@ -27,13 +27,14 @@
     "Loader run55pass/1fail and5 suite import failures: Vitest does not support import.meta.resolve; use standard createRequire/pathToFileURL. Migration expected list also missed078.",
     "Encoder run failed because local ffmpeg lacks optional libwebp encoder; use actual synthetic WebP generated once with bundled Pillow. Core uses its existing decoder.",
     "Existing upload callers23pass/7fail: fake strings/metadata-only/in-memory admission and missing-client error regressed. Migrate acceptance fixtures to real bytes and PostgreSQL; preserve CLIENT_REQUIRED input refusal before requiring source storage.",
-    "Source commit hook refused the stale generated blueprint manifest before committing; refresh and validate the generated files, without bypassing the hook."
+    "Source commit hook refused the stale generated blueprint manifest before committing; refresh and validate the generated files, without bypassing the hook.",
+    "First exact clean82c5f157 failed:6915pass/4fail/67skip. Three stale route/startup/media-type inventories corrected; actual new RLS per-row membership regression repaired using ADR033 scalar membership subqueries and row client comparisons.078 has never been deployed/published; only isolated synthetic databases on55432 rebuilt for its changed checksum. Original receipt retained."
   ],
   "acceptance": {
     "newCoreTests": 19,
     "connected": {
-      "files": 14,
-      "passed": 154,
+      "files": 18,
+      "passed": 195,
       "failed": 0,
       "skipped": 0
     },
@@ -53,7 +54,8 @@
     "otf": "actual read-only local STIX OTF decoder PASS recorded separately; not a portable full-suite OTF upload fixture or native-editor glyph admission",
     "retentionRoots": "actual GC preserves original and derivative hashes; actual FK/view inventories and new restore extension archive coverage pass; actual migration apply/concurrent retry/checksum refusal pass",
     "resources": "existing storage/decoder/font libraries; no provider call, model/embedding dependency, font installation, Client DNA activation or learned label",
-    "decoderBounds": "actual PNG/JPEG/WebP/TTF/WOFF2 decoding; large pixel/WOFF2 header rejection; disposable font parser bounds transformed-table expansion and outline decoding; processes omit office environment and have5s timeout/64KiB output limits; no every-glyph quality claim"
+    "decoderBounds": "actual PNG/JPEG/WebP/TTF/WOFF2 decoding; large pixel/WOFF2 header rejection; disposable font parser bounds transformed-table expansion and outline decoding; processes omit office environment and have5s timeout/64KiB output limits; no every-glyph quality claim",
+    "policyPerformance": "Actual stored RLS policies preserve ADR033 once-per-statement membership subqueries; assigned designer/auditor/peer/foreign/source-scope behavior still passes."
   },
   "sourceSha256": {
     "api/openapi.yaml": "baf1d74242799625891ed7eb70311b2a90c8e436edc3d22f4723d56e5ab80aa2",
@@ -71,11 +73,14 @@
     "packages/contracts/src/blobs.ts": "7730fb14bb3b7f7989173f4f01f441cec81dccdbe4984f994a331c90e589669e",
     "packages/creative/src/index.ts": "6cf9c999f835e567f88a868126679ecad051efea4b1ac2c0af762769683634ca",
     "packages/creative/src/uploaded-asset-inspection.ts": "8968f20d2d87dfc830cec0fa60bcc502ac68bce6dd67652a415fd48abe2587c8",
-    "packages/db/migrations/078_uploaded_asset_sources.sql": "205b6dcbfe84cda29909745ab25bf086ca0341224020c41e01984d58f7fed6e8",
+    "packages/db/migrations/078_uploaded_asset_sources.sql": "ce33debf3e8f594a749088883ccfa4b42c2633cc182b711ed661f354218fbf7e",
     "packages/db/test/blob-gc.test.ts": "be501cc5b550f52070e9d5b43b960b97feaeaa223c41a05e457e026747aa1f01",
     "packages/db/test/schema-upgrade.test.ts": "49a0c8026e1fe176ba11cb6d7afc7b9ca0c6a99f08c29e272ad3207260a8c8fd",
     "packages/domain/src/sanitizer.ts": "b70e7b80562d8fa4f67a023e9d54902b566d529b75c817b7d9c1ea31d2a25c90",
-    "packages/domain/test/sanitizer.test.ts": "c051fc63f0a9ee01487e9afe1021e432b7c7fc1849d0e988aea99670d5a12b81"
+    "packages/domain/test/sanitizer.test.ts": "c051fc63f0a9ee01487e9afe1021e432b7c7fc1849d0e988aea99670d5a12b81",
+    "apps/core/test/fixtures/route-inventory.txt": "45e957ee48496780ff80f106e853cf6ad1d2f2d614f47ae0a38c3df595c5ad2e",
+    "apps/core/test/startup-schema-check.test.ts": "bb9772b3511f79f4d19e538c823637c7d797233e1101167d832198cd9e1a9f73",
+    "packages/db/test/blob-migration.test.ts": "7057160dda179038d90d10e74daf3665ffdb0f796299b12aa0598a91b30c101c"
   },
   "artifacts": {
     "output/qualification/2026-10-01/asset-source-retention/BACKUP.log": "bddcd3ebb9df742842b4092e4c23d47873f9389306dffeb25cdcff79fe9febcf",
@@ -86,12 +91,28 @@
     "output/qualification/2026-10-01/asset-source-retention/CONNECTED_ENCODER_FAILURE.log": "2e31cbc58ec020deaad7064890b43004760a72fc0093f31e75941894b5c03412",
     "output/qualification/2026-10-01/asset-source-retention/CONNECTED_EXPANDED.log": "546789f4fd297131ff2a17e90de9b05cdfd3cde2ecb6743fab2d47bd90853ff0",
     "output/qualification/2026-10-01/asset-source-retention/CONNECTED_FINAL.log": "963635a35c1ec9137787f1f1e96519352e05455a11f7c315f2d91318dc0186f8",
+    "output/qualification/2026-10-01/asset-source-retention/CONNECTED_GATE_REPAIR.log": "498ef2730b913f30cd4de1f7d1d79f9e37e97a0fb6c912b508de642b86b6b6b4",
     "output/qualification/2026-10-01/asset-source-retention/CONNECTED_INITIAL.log": "e4f76129b6a4f399ffcf418eddab52ae2d46d6e5a8ff03e60c2e0c6e3f792d60",
     "output/qualification/2026-10-01/asset-source-retention/CONNECTED_LOADER_FAILURE.log": "e584305f0034d9182333886b5238ecf24a2bf226a4c9443b27ebcd3b4ecf1525",
+    "output/qualification/2026-10-01/asset-source-retention/EXACT_GATE.log": "6c1c4271e571833c6f7a8aabc34227ce5dc3752d6e0b75e9b559e3ad21c46722",
+    "output/qualification/2026-10-01/asset-source-retention/EXACT_GATE_FIRST_FAILED.log": "6c1c4271e571833c6f7a8aabc34227ce5dc3752d6e0b75e9b559e3ad21c46722",
+    "output/qualification/2026-10-01/asset-source-retention/FIRST_FAILED_FULL_TEST_SUITE_RUN.log": "5b608e6c42cac5e9d710b5357538d9b10f794f068e2aaf0335a2aa85a031a80d",
+    "output/qualification/2026-10-01/asset-source-retention/FIRST_FAILED_NEGATIVE_FLAG_REFUSAL.log": "cef41279c3698dbdf914f084e32e11f145061593ada1dbd595f6692d544e14a4",
+    "output/qualification/2026-10-01/asset-source-retention/FIRST_FAILED_PREDEPLOY_DUMP_CHECK.json": "465c9374d0d07805ddcd2baa42a4562549f2a45f45be204c56dc195c0c2ea2a6",
+    "output/qualification/2026-10-01/asset-source-retention/FIRST_FAILED_PREDEPLOY_DUMP_CHECK.log": "7c98e4a1baa5b5026530af0b4bc8b4f0dd4f3521519912dafc92dba40223a12f",
+    "output/qualification/2026-10-01/asset-source-retention/FIRST_FAILED_TEST_DB_PROVISION.log": "baa20299210c6de4ff54dd4e2a336249713d24fb0ff7bd5fb752ef6a2bb41080",
+    "output/qualification/2026-10-01/asset-source-retention/FIRST_GATE_FAILURE.json": "f64ce96f5c31a7f9436f07afae58835a09ac4089132940bb0cc1ce1191600ece",
+    "output/qualification/2026-10-01/asset-source-retention/ISOLATED_REBUILD.log": "ebd40f7b712bacfa3881625329e71a7e9eb01f7030a331e54efb27a28fa3b7f9",
     "output/qualification/2026-10-01/asset-source-retention/LEGACY_UPLOAD_COMPATIBILITY.log": "1a43e2ea91c1de069b4949abd93592605dfc63d1fe56659b2fd502553998fc0e",
     "output/qualification/2026-10-01/asset-source-retention/LINT.log": "81268e527353f47331d24d3376399d7ca56af0e0b9082620660ccb3328b23cb4",
     "output/qualification/2026-10-01/asset-source-retention/OTF_LOCAL_CHECK.log": "1c1d0055a24745f96d1b46332b4c2b3f01d3ef307f6b1515c118fc2f355f69a9",
     "output/qualification/2026-10-01/asset-source-retention/RED.log": "fcf812768fce21897b941095d529f87f543094252d959820fc477911a01cd387",
+    "output/qualification/2026-10-01/asset-source-retention/ROUTE_INVENTORY_UPDATE.log": "f552317c10a79c20c40b38a5e2568975742700c2ef60498c6096d16ff9ddb6b7",
+    "output/qualification/2026-10-01/asset-source-retention/SEAL_COMMIT.log": "ce860f276479c780cf1c3e1e2ebdab1c1d2e73b4097b57bbd6b65af8c18cb208",
+    "output/qualification/2026-10-01/asset-source-retention/SEAL_MANIFEST_GENERATE.log": "871c4b34ccc68c86e055a6c9a9b998ead64f508cb6b6a264de9089bd711446bc",
+    "output/qualification/2026-10-01/asset-source-retention/SOURCE_COMMIT.log": "c46b9a78397f935422b4a27b4c1db0c20a01daf720503869c1b1cb457ae8411b",
+    "output/qualification/2026-10-01/asset-source-retention/SOURCE_MANIFEST.log": "1a742da3b0bcc1004fe7068745e91e8d65de5fdf6c6149472dd34fe5ee38a1ad",
+    "output/qualification/2026-10-01/asset-source-retention/SOURCE_PACK.log": "211bb766d138bf95968b1affe26196d7e7a1bc3deece56faf224ea7763810eb3",
     "output/qualification/2026-10-01/asset-source-retention/STRICT_TYPES.log": "0031a004f728e76517d5ff1e692abac40006c9b65ad82d82e0592c7777a293b8"
   },
   "productionChanged": false,

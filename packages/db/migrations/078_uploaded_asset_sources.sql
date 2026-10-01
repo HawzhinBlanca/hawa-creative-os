@@ -24,11 +24,15 @@ CREATE INDEX uploaded_asset_source_sha_idx ON hawa.uploaded_asset_sources(source
 ALTER TABLE hawa.uploaded_asset_sources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hawa.uploaded_asset_sources FORCE ROW LEVEL SECURITY;
 CREATE POLICY uploaded_asset_sources_read ON hawa.uploaded_asset_sources FOR SELECT USING (
- tenant_id=hawa.current_tenant_id() AND hawa.can_access_client(tenant_id,client_id)
+ tenant_id=hawa.current_tenant_id() AND (
+   (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator','operator','auditor']::hawa.membership_role[]))
+   OR client_id=ANY((SELECT hawa.member_client_ids(false))::uuid[]))
  AND EXISTS(SELECT 1 FROM hawa.brand_assets a WHERE a.tenant_id=uploaded_asset_sources.tenant_id
    AND a.id=asset_id AND a.client_id=uploaded_asset_sources.client_id));
 CREATE POLICY uploaded_asset_sources_write ON hawa.uploaded_asset_sources FOR INSERT WITH CHECK (
- tenant_id=hawa.current_tenant_id() AND hawa.can_write_client(tenant_id,client_id)
+ tenant_id=hawa.current_tenant_id() AND (
+   (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator','operator']::hawa.membership_role[]))
+   OR client_id=ANY((SELECT hawa.member_client_ids(true))::uuid[]))
  AND EXISTS(SELECT 1 FROM hawa.brand_assets a WHERE a.tenant_id=uploaded_asset_sources.tenant_id
    AND a.id=asset_id AND a.client_id=uploaded_asset_sources.client_id));
 REVOKE ALL ON hawa.uploaded_asset_sources FROM PUBLIC,hawa_app;
