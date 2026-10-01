@@ -16,6 +16,61 @@ tags:
   - name: Evaluations
   - name: Integrations
 paths:
+  /v1/search:
+    get:
+      tags: [Operations]
+      operationId: searchOfficeHistory
+      summary: Search authorized stored office work and history
+      description: Read-only lexical search with current tenant/client membership enforced in PostgreSQL. Registered identity does not require active DNA. Exact request/Studio/revision copy, ledger/Studio feedback and revisions use allowlisted fields. Client/task/revision disagreements are excluded. Matching precedes bounded history reads; truncated results do not prove absent history. No model call, label or approval is created.
+      parameters:
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 512}
+        - name: clientId
+          in: query
+          description: Authorized client UUID/code/alias, or all for the caller's authorized scope.
+          schema: {type: string}
+        - name: category
+          in: query
+          schema:
+            type: string
+            default: all
+            enum: [all, tasks, clients, assets, rules, copy, feedback, revisions]
+        - name: limit
+          in: query
+          description: Requested page size; valid positive sizes are capped at 200.
+          schema: {type: integer, minimum: 1, default: 25}
+        - name: offset
+          in: query
+          schema: {type: integer, minimum: 0, default: 0}
+      responses:
+        '200':
+          description: Scoped search results, with strict task/revision navigation and explicit truncation.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, resultsCount, scopeEnforced, truncated]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, category, title, url]
+                      properties:
+                        id: {type: string}
+                        category: {type: string, enum: [TASKS, CLIENTS, ASSETS, RULES, COPY, FEEDBACK, REVISIONS]}
+                        title: {type: string}
+                        subtitle: {type: string}
+                        url: {type: [string, 'null']}
+                        badge: {type: string}
+                  resultsCount: {type: integer, minimum: 0}
+                  scopeEnforced: {type: boolean}
+                  truncated: {type: boolean}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /v1/operations/publication-inspections:
     get:
       tags: [Operations]

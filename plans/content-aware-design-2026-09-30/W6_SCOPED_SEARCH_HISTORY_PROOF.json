@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-01T13:28:03.406721+00:00",
+  "adr": "ADR216",
+  "requirements": [
+    "FR-077",
+    "FR-011",
+    "NFR-012"
+  ],
+  "status": "CONNECTED_ENGINEERING_VERIFIED_EXACT_GATE_AND_PRODUCT_ADMISSION_PENDING",
+  "sourceSha256": {
+    "apps/core/src/routes/search.routes.ts": "318532f510ac5faf61d5d3d0b58545761b39f680cca778d7f924159367a961b1",
+    "apps/core/src/services/search-history.ts": "7c1986d067e0261b722409d00f037d872bb8c8fa34e419c610f5b704d9eb1889",
+    "packages/retrieval/src/search-engine.ts": "85a829fb91519d3896c83e0dd1c748c4605c02798eeb31f46476b78d126627e3",
+    "apps/desk/src/components/CommandPalette.tsx": "66e678ab55a994240ad6b355ddb8267630192e94f29236669758bc109d10844d",
+    "apps/core/test/search-history.test.ts": "b3ae46b7858dbba4d57c3de270222223e7ef2d275ceefa96a7f69ff3e1899bc3",
+    "docs/17_UI_UX.md": "9dae75e90fa4122eece61f339093a11fa71963df260074aa1871bc5bbff9d90d",
+    "api/openapi.yaml": "e90f368cd2ef1792e0ceaef0c68c5cf2e873d88da6175931972ae6271c832525"
+  },
+  "diagnosis": {
+    "originalRed": {
+      "files": 1,
+      "failed": 8,
+      "passed": 0
+    },
+    "scope": "actual cold Core and isolated PostgreSQL; no claimed production incident or taste improvement",
+    "missing": [
+      "registered client identity without active DNA",
+      "ledger and Studio feedback",
+      "historical revisions",
+      "stored exact copy in its own category",
+      "category validation"
+    ]
+  },
+  "failureHistory": {
+    "initialBuild": "required extractSearchTokens import removed too early; restored",
+    "strictFixtures": "clientId default inferred UUID template type instead of string; ChatIntake fixture omitted designInstructions; corrected",
+    "instructionRed": "one failure / 14 skipped: retained explicit instruction wording absent from feedback category",
+    "emptyCopyRed": "one failure / 15 skipped: textless revision incorrectly presented as copy"
+  },
+  "acceptance": {
+    "newHistoryTests": 16,
+    "connected": {
+      "files": 5,
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictRoots": 696,
+    "build": "PASS",
+    "lint": "PASS",
+    "diffCheck": "PASS",
+    "source": "registered identity/aliases independent of DNA; actual cold persisted ledger/Studio notes, revisions, original request/Studio/revision copy and explicit brand instruction searched",
+    "isolation": "operator can see actual peer history; assigned designer cannot retrieve it even with all-client query; explicit peer/unknown aliases/foreign tenant/contradictory source-task binding excluded",
+    "navigation": "actual task/revision via existing strict contract; taskless note opens owning client; identifiers grant no approval",
+    "matching": "unchanged NFC/Sorani/OR-token lexical matching in SQL before bounded reads; original copy unchanged",
+    "bounds": "5000 matched history rows per category default; finite positive override clamped1\u201320000; explicit truncation and general Desk notice; no whole-pipeline performance claim",
+    "integrity": "only typed named text/copy/instruction fields; arbitrary transport/source JSON/nested non-text/empty copy excluded",
+    "unavailable": "actual revoked SELECT after warmed request returns503 with no previous results; unsupported category refused before storage",
+    "resources": "no model/provider call, embedding, label creation, rule activation, migration or dependency"
+  },
+  "productionChanged": false,
+  "externalProviders": "no paid call; no provider needed for search",
+  "limits": [
+    "production-dump transfer explicitly pending after prior automatic approval review rejection",
+    "real Canva/native/human/taste/product admission remains open",
+    "FR011 proof is scoped read-boundary preservation, not new generation-attempt admission"
+  ],
+  "artifacts": {
+    "output/qualification/2026-10-01/search-history/BUILD.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/search-history/BUILD_FINAL.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/search-history/BUILD_INITIAL_FAILURE.log": "3fbbb36034c672ae3cfceb0a1282613f65cae1fb08a4da193295d3e037f6ace1",
+    "output/qualification/2026-10-01/search-history/CONNECTED.log": "e4176f78ccb1b2a1f7e0b31d40f6f0905fccd3a082f2ef0747d2e84a57a237b6",
+    "output/qualification/2026-10-01/search-history/CONNECTED_COMPLETE.log": "0cd1000de1d8bf8a8b75d4c8c22ad0cb943c33ba921758d6817d96280c732a37",
+    "output/qualification/2026-10-01/search-history/CONNECTED_FINAL.log": "41972801ec6c326fbd8c261a7266ce4fbd009281b49f30a67a5ca85ffa33a844",
+    "output/qualification/2026-10-01/search-history/CONNECTED_QUALIFIED.log": "8031d9bf662f6f1fe39000afa7fd2a3b83817438302a5954f3332e4fc61fa3a3",
+    "output/qualification/2026-10-01/search-history/GREEN_INITIAL.log": "04dc2eaecd3097aa77719e27fe26f2871d916901722c5b4abf5038704ce77fe2",
+    "output/qualification/2026-10-01/search-history/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/search-history/RED.log": "36ef3eded5b53635825e154844091676a99d6d00d50a3347d16599f668508ccf",
+    "output/qualification/2026-10-01/search-history/RED_EMPTY_COPY.log": "5953734294e41f85785b92966764fe554022807f4751cb306e76dc3c01ba7667",
+    "output/qualification/2026-10-01/search-history/RED_INSTRUCTION.log": "3dc91cbb35a5efd160b4a4be7caa4d7d34123952464b6cbcaece58454808ed99",
+    "output/qualification/2026-10-01/search-history/STRICT_FIXTURE_FAILURE.log": "c06f644b990de9fc542e7110171896de93b9ec7d81f8b6212c6c68b8adea0bf0",
+    "output/qualification/2026-10-01/search-history/STRICT_TYPES.log": "6b6c555ee85c36b65f96c4b631d2dd763b76b749877ddfe8b2f69c5b9f80b6ce"
+  }
+}

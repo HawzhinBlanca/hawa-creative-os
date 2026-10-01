@@ -5,11 +5,11 @@
  * with strict pre-retrieval client isolation (Invariant #6).
  */
 
-export type SearchCategory = 'all' | 'tasks' | 'clients' | 'assets' | 'rules' | 'copy';
+export type SearchCategory = 'all' | 'tasks' | 'clients' | 'assets' | 'rules' | 'copy' | 'feedback' | 'revisions';
 
 export interface SearchableItem {
   id: string;
-  category: 'tasks' | 'clients' | 'assets' | 'rules' | 'copy';
+  category: 'tasks' | 'clients' | 'assets' | 'rules' | 'copy' | 'feedback' | 'revisions';
   clientId: string;
   clientName?: string;
   title: string;

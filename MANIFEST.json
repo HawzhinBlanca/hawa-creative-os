@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T13:10:08Z",
+  "generatedAt": "2026-10-01T13:28:03Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 809,
+  "fileCount": 811,
   "files": [
     {
       "path": ".dockerignore",
@@ -1063,6 +1063,11 @@
       "bytes": 4509
     },
     {
+      "path": "adrs/216_scoped_search_history.md",
+      "sha256": "0fdab3d51d2249bb5596dfbe9392f761ccccaaa29bfc039e665f596c74198085",
+      "bytes": 2995
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1074,8 +1079,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "4ec9a7f5c36bc42b55b949d22b1b5fc7099b48a0b1576315e556e886777c1827",
-      "bytes": 97587
+      "sha256": "e90f368cd2ef1792e0ceaef0c68c5cf2e873d88da6175931972ae6271c832525",
+      "bytes": 100225
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -1364,8 +1369,8 @@
     },
     {
       "path": "docs/17_UI_UX.md",
-      "sha256": "2731aa66ba0253792cb03d7376025bf70b7ca69dbb97cfac8d17985a3a2f03e0",
-      "bytes": 13134
+      "sha256": "9dae75e90fa4122eece61f339093a11fa71963df260074aa1871bc5bbff9d90d",
+      "bytes": 14514
     },
     {
       "path": "docs/18_FEEDBACK_LEARNING.md",
@@ -1554,8 +1559,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "5fcac6223c7531dc7823532b7eeb7b2a129c5c2a560ad2b4cb3a946a40f520b1",
-      "bytes": 69855
+      "sha256": "a0826f3a9c59f92992ac692ef7e9a054646641e667753c2cfc2192e6f2b165eb",
+      "bytes": 70838
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1881,6 +1886,11 @@
       "path": "plans/content-aware-design-2026-09-30/W6_LEGACY_LEARNING_BOUNDARY_FINDING.json",
       "sha256": "9c7ada3bdc187f91989e23b7e940381d62caed25230fe1cb74bfd8da2e7f747a",
       "bytes": 1844
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W6_SCOPED_SEARCH_HISTORY_PROOF.json",
+      "sha256": "d26deb4201145e63cc3bc3c8d14f356af8e0c9bcfedeac5d73ec60a82c7193d8",
+      "bytes": 5764
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_TARGET_BOUND_LEARNING_GATE_EVIDENCE.json",
@@ -3109,8 +3119,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "4bcb899c6c1bddc335ee91cc71432033468ae60fb5ea0a2221ca33960a64e840",
-      "bytes": 716123
+      "sha256": "c08c7d3ae261c6d9565b6ceab4e929e182d1edcb0f66944333589f892e0fdac1",
+      "bytes": 718094
     },
     {
       "path": "plans/user-stories.csv",
