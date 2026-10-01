@@ -649,3 +649,21 @@ claimed repaired. Evidence under output/qualification/2026-10-01/f1eb2098.
 Inventory tally clarified:35 per-font declarations checked,28 globally distinct
 names across19 files. No runtime/test change in this evidence correction.
 Production unchanged; separate-host/native/Canva/human/product admission open.
+
+
+## ADR210 recovery ownership correction and guard — 1 October 2026
+
+The ADR209 next-gap diagnosis above is superseded. The exact14-file retained
+directory is named in the failed97e9b3bf09:11 restore log; f1eb2098 already
+removed each successful restore directory. Preserve the original finding and
+failed receipts. ADR080 failed-run retention remains intentional.
+
+The actual new defect is reserved recovery ID reuse: the corrected regression
+fails before the volume refusal guard and passes afterward. Caller-generated
+16hex nonce/task/three-volume identities now bind cleanup admission before
+writers resume. Actual removal plus absence postcondition is required. Failed
+and foreign artifacts remain untouched.13 Python controls with real archives
+and crypto/simulated Docker-SQL plus10 Vitest checks pass;687 strict roots/lint
+pass. W5_RESTORE_OWNERSHIP_PROOF.json binds failures, source and correction.
+Exact clean gate and two actual candidate restores are pending. Whole-product
+and separate-host/native/human admission remain open.

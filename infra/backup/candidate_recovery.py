@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -87,10 +88,12 @@ def verify_manifest(manifest: dict, key: Path, directory: Path) -> None:
 
 
 class CandidateRecovery:
-    def __init__(self, task: str, started_after: str):
+    def __init__(self, task: str, started_after: str, recovery_id: str | None = None):
         self.task = str(uuid.UUID(task))
         self.started_after = datetime.fromisoformat(started_after.replace('Z', '+00:00'))
-        self.nonce = uuid.uuid4().hex[:16]
+        if recovery_id is not None and not re.fullmatch(r'[0-9a-f]{16}', recovery_id):
+            raise DrillError('invalid caller recovery identity')
+        self.nonce = recovery_id if recovery_id is not None else uuid.uuid4().hex[:16]
         self.label = 'hawa.recovery-drill=' + self.nonce
         self.work: Path | None = None
         self.identity = {}
@@ -123,6 +126,8 @@ class CandidateRecovery:
             volume = json.loads(docker('volume', 'inspect', mounts[0]['Name']))[0]
             if (volume.get('Labels') or {}).get('com.docker.compose.project') != 'hawa-chaos':
                 raise DrillError('store is outside the candidate project')
+        if docker('volume', 'ls', '-q', '--filter', f'name=^hawa-recovery-{self.nonce}-'):
+            raise DrillError('recovery identity already has volumes')
         if self.sql("SELECT current_setting('fsync') || '/' || current_setting('full_page_writes')") != 'on/on':
             raise DrillError('recovery candidate requires fsync and full_page_writes')
 
@@ -246,6 +251,10 @@ class CandidateRecovery:
           'applicationReplayProved': False, 'separateHostProved': False, 'productionChanged': False,
           'scriptSha256': sha256(Path(__file__))}
         shutil.rmtree(self.work)
+        if self.work.exists():
+            raise DrillError('private recovery artifacts remain after cleanup')
+        receipt['recoveryId'] = self.nonce
+        receipt['privateArtifactsCleanup'] = {'removed': True, 'scope': 'this_recovery'}
         return receipt
 
 
@@ -253,11 +262,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--task-id', required=True)
     parser.add_argument('--started-after', required=True)
+    parser.add_argument('--recovery-id', help='caller nonce: exactly 16 lowercase hex characters')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if args.output.resolve().parent != RUN.resolve():
         raise DrillError('write the receipt only inside the candidate run directory')
-    drill = CandidateRecovery(args.task_id, args.started_after)
+    drill = CandidateRecovery(args.task_id, args.started_after, recovery_id=args.recovery_id)
     try:
         receipt = drill.execute()
     except BaseException:

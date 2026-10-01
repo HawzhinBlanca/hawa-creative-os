@@ -151,6 +151,8 @@
       }
     },
     "evidence": "output/qualification/2026-10-01/f1eb2098/CANDIDATE_RECOVERY_SUMMARY.json",
-    "automaticTempCleanup": "OPEN; observed leftover private synthetic restore files manually removed"
+    "automaticTempCleanup": "CORRECTED: success cleanup already existed; retained directory belonged to failed97e9b3bf restore",
+    "supersededCleanupDiagnosis": "OPEN; observed leftover private synthetic restore files manually removed",
+    "cleanupDiagnosisCorrection": "output/qualification/2026-10-01/restore-owned-cleanup/DIAGNOSIS_CORRECTION.json"
   }
 }

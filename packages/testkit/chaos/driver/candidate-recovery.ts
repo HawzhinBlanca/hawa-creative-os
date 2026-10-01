@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { CHAOS_DIR, FAKES_URL, REPO_ROOT, closeDb, compose, composeEnvironment, fakes, query, restateQuery, secrets, sql } from './stack.js';
 import { sentTo, waitUntil, type InvariantResult } from './scenario.js';
+import { hasOwnedRecoveryCleanup } from './recovery-cleanup-evidence.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -17,17 +18,20 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
   };
   const restore = async (phase: string) => {
     await closeDb();
+    const recoveryId=randomUUID().replaceAll('-','').slice(0,16);
     const output = join(CHAOS_DIR, '.run', `recovery-${phase}.json`);
     try {
       // Keep the event loop processing HTTP socket closures during the lengthy restore.
       await execFileAsync('python3', [join(REPO_ROOT, 'infra/backup/candidate_recovery.py'),
-        '--task-id', taskId, '--started-after', new Date(started).toISOString(), '--output', output],
+        '--task-id', taskId, '--started-after', new Date(started).toISOString(), '--recovery-id', recoveryId, '--output', output],
       {cwd: REPO_ROOT, env: composeEnvironment(), encoding: 'utf8', timeout: 300_000, maxBuffer: 1024 * 1024});
     } catch (error) {
       const failure = error as Error & {stdout?:string;stderr?:string};
       throw new Error(`Coordinated ${phase} restore failed: ${failure.stdout?.slice(-1000)} ${failure.stderr?.slice(-1500)}`);
     }
     const receipt = JSON.parse(readFileSync(output, 'utf8'));
+    check(`${phase}: private artifacts removed for this exact recovery`,
+      hasOwnedRecoveryCleanup(receipt,{recoveryId,taskId}), 'caller nonce, task and all restored store identities match');
     check(`${phase}: fresh stores match before any writer resumes`, receipt.allRowsAndPoliciesMatch &&
       receipt.allStoreFilesMatch && receipt.externalServiceSurvived && receipt.writersStoppedBeforeCaptureAndDuringValidation,
     `${receipt.tableCount} tables / ${receipt.policyCount} policies; ${receipt.restoreValidationSeconds}s startup verification`);

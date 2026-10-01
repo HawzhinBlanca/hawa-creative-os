@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T10:57:01Z",
+  "generatedAt": "2026-10-01T11:15:19Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 792,
+  "fileCount": 794,
   "files": [
     {
       "path": ".dockerignore",
@@ -1033,6 +1033,11 @@
       "bytes": 2968
     },
     {
+      "path": "adrs/210_restore_owned_cleanup_evidence.md",
+      "sha256": "76cb61198587b03cc87522112d5f216a722dfec82dcdc42b4054a23e87402933",
+      "bytes": 2480
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1519,8 +1524,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "1c8eba2ed7601d5a951de48e69cb500b18e3a755d2e9493efd09109c461f453f",
-      "bytes": 60674
+      "sha256": "a1bf6d067004f039c0d1a3a7179bc25ecfefda2fe5819ae99fed116215efebf1",
+      "bytes": 61717
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1614,8 +1619,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W5_FONT_FAMILY_IDENTITY_PROOF.json",
-      "sha256": "e1968c90f35fd0bd8f50ebde697776f22cecd97a466f84b611ecbe40c6df9360",
-      "bytes": 7430
+      "sha256": "e39984b31a4e1e3b7e8027663058293a9125f8e7f3ab6bdf58fd256cbdc1c440",
+      "bytes": 7682
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W5_FONT_FIDELITY_REPORT_FINDING.json",
@@ -1696,6 +1701,11 @@
       "path": "plans/content-aware-design-2026-09-30/W5_REFINEMENT_BOUNDARY_PROOF.json",
       "sha256": "8e4d96ff7a6511be5ad0c1fc5ca1d63201f30ef6d1bab6b496032b6885a94ff4",
       "bytes": 5027
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W5_RESTORE_OWNERSHIP_PROOF.json",
+      "sha256": "2ca714131d0a8000962a9de0b2098ab871c8c24346325b2146535f0c59d42360",
+      "bytes": 5858
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W5_SPATIAL_BACKGROUND_BENCHMARK.json",
@@ -3024,8 +3034,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "a40d199a272fb7ba584a6c3289a9bb07bd47e0004321e5354432983d278ff675",
-      "bytes": 690229
+      "sha256": "2da3880b532d578c7877e7c6876adb0545a6f1a9dda0f38792698877da6a3259",
+      "bytes": 691449
     },
     {
       "path": "plans/user-stories.csv",

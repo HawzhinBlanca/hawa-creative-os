@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-01",
+  "adr": "ADR210",
+  "requirements": [
+    "FR-070",
+    "NFR-006",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "status": "CONNECTED_TESTS_PASS_EXACT_GATE_AND_REAL_REHEARSAL_PENDING",
+  "diagnosisCorrection": {
+    "correctionId": "ADR210-recovery-scratch-ownership",
+    "date": "2026-10-01",
+    "originalFinding": "output/qualification/2026-10-01/f1eb2098/RESTORE_TEMP_CLEANUP_FINDING.json",
+    "originalClaim": "retained scratch was owned by successful f1eb2098 restore; automatic success cleanup gap",
+    "correctedClaim": "the exact retained directory was reported by failed 97e9b3bf restore at 09:11 UTC; successful execute already removed its own scratch",
+    "observationPreserved": {
+      "files": 14,
+      "bytes": 337635365,
+      "manualRemoval": "performed in prior turn; not evidence of successful run ownership"
+    },
+    "failedRestore": {
+      "commit": "97e9b3bf5a8ee86060f10eb453daf1a9aed47a81",
+      "finishedAt": "2026-10-01T09:11:13.238Z",
+      "reason": "missing CHAOS_OFFICE_PROOF_FILE during Compose restore; admission refused"
+    },
+    "existingSuccessfulCleanupSource": {
+      "locator": "git:f1eb209853001168de9e3f12e5d642c476b1b438:infra/backup/candidate_recovery.py",
+      "sha256": "029f27e51f6f043e21bcd60467b78c86a9e91dee67a860e627285e294940e069"
+    },
+    "immutableSourcePreSha256": {
+      "output/qualification/2026-10-01/f1eb2098/RESTORE_TEMP_CLEANUP_FINDING.json": "fa56bf9aee685a56eb53725b3c37d937b87f8d978d8135b5512856965764e007",
+      "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_PROOF_ENV_REFUSED.json": "129ee99257677e38e17b4fcbe16ab25f78c6242509c0ac02ecb91fce84846b62",
+      "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_PROOF_ENV_REFUSED.log": "d944406f81608e828035f59577b68c2e8469455a5145c5a49f1639c9f33646f7"
+    },
+    "immutableSourcePostSha256": {
+      "output/qualification/2026-10-01/f1eb2098/RESTORE_TEMP_CLEANUP_FINDING.json": "fa56bf9aee685a56eb53725b3c37d937b87f8d978d8135b5512856965764e007",
+      "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_PROOF_ENV_REFUSED.json": "129ee99257677e38e17b4fcbe16ab25f78c6242509c0ac02ecb91fce84846b62",
+      "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_PROOF_ENV_REFUSED.log": "d944406f81608e828035f59577b68c2e8469455a5145c5a49f1639c9f33646f7"
+    },
+    "retentionPolicy": "failed artifacts remain intentional under ADR080; no directory sweep",
+    "credentialMaterial": "not recorded"
+  },
+  "behavior": [
+    "existing success cleanup retained",
+    "caller supplies fresh16hex recovery identity",
+    "existing identity volumes refused before capture",
+    "cleanup receipt matches caller/task/three store volume names before writers resume",
+    "absence postcondition required",
+    "failed and foreign artifacts preserved"
+  ],
+  "connected": {
+    "python": {
+      "passed": 13,
+      "failed": 0,
+      "archivesAndCrypto": "real",
+      "DockerAndSQL": "simulated"
+    },
+    "vitest": {
+      "files": 2,
+      "passed": 10,
+      "failed": 0,
+      "includesPythonControls": true
+    },
+    "strictTestRoots": 687,
+    "lint": "PASS"
+  },
+  "developmentFailures": {
+    "RESERVED_VOLUME_RED.log": "fixture missing mount Type, corrected before genuine red",
+    "RESERVED_VOLUME_ACTUAL_RED.log": "13 tests,1 genuine failure: reserved volume ID did not refuse"
+  },
+  "sourceSha256": {
+    "infra/backup/candidate_recovery.py": "9453fd6c218c283edc688e250cd4f81d5c19aa36896dca95d27159fbd8d2ea75",
+    "infra/backup/test_candidate_recovery.py": "588ece0750a38fdb7e34de501432ac7f4d5bab1d24a548157672f39d0f52f89c",
+    "packages/testkit/chaos/driver/candidate-recovery.ts": "5e41dea2e3fd546ac6d54daecfecc32651045102e74497053e96c2667e78c581",
+    "packages/testkit/chaos/driver/recovery-cleanup-evidence.ts": "5777fa9dd88bec15dd1233dd77964a2b141d2c38c0f675b66f51763c6dbf60ec",
+    "packages/testkit/test/candidate-recovery-tools.test.ts": "87f188fa7cb09502be78b2dd944af747c6641b73227e677a921eb15c70127c99",
+    "packages/testkit/test/recovery-cleanup-evidence.test.ts": "e6769b31bc70d8fcc154848c7462388375ea98abfb2b336030e2784279784a55"
+  },
+  "artifacts": {
+    "output/qualification/2026-10-01/restore-owned-cleanup/RECEIPT_RED.log": "2ec7086be3eb3277d74d82fd198473cf6ccc36a732208e88d8fd9e149717f292",
+    "output/qualification/2026-10-01/restore-owned-cleanup/IDENTITY_RECEIPT_RED.log": "4180d348e52cafb4bd15c75cde84f2c93dfe8c94e05a3b56cb4abd359fda8420",
+    "output/qualification/2026-10-01/restore-owned-cleanup/RESERVED_VOLUME_RED.log": "480f369a28ab19181c103d55b463f30eb4d17333a2ea023317617efb5232bd36",
+    "output/qualification/2026-10-01/restore-owned-cleanup/RESERVED_VOLUME_ACTUAL_RED.log": "08ccbee0a1d32bc0e3f3c6eba322b322b2f86b01a572a513bf356bab767a228b",
+    "output/qualification/2026-10-01/restore-owned-cleanup/PYTHON_FINAL_GREEN.log": "8d8de36a82d124ab2cd20de6e4a3a216eca26bc10a7039dcd098d66be8f74149",
+    "output/qualification/2026-10-01/restore-owned-cleanup/CONNECTED_FINAL_GREEN.log": "b5113ee93d9f6f7708c3789a4e096bc70cd72c52be1e44d7f59d66dd670e6dbd",
+    "output/qualification/2026-10-01/restore-owned-cleanup/STRICT_TYPES.log": "42e988d9c6d3676266bcf2228d35bd4bde7f06841153291ed1ccbcf83ca100de",
+    "output/qualification/2026-10-01/restore-owned-cleanup/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/restore-owned-cleanup/DIAGNOSIS_CORRECTION.json": "95766c5feb3a7d646e61f0da7f5fcfd346069d709bcad1b23f1cd3251a548ede"
+  },
+  "limitations": [
+    "same-host candidate rehearsal pending",
+    "separate-host restore unproved",
+    "application replay not claimed by cleanup receipt",
+    "native/human/product admission remains open",
+    "no production deployment or paid call"
+  ]
+}
