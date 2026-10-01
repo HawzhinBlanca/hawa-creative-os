@@ -353,3 +353,12 @@ First exact5e5d89c6 gate6499pass/1fail/67skip retained. New trigger's default
 PUBLIC EXECUTE exposed it to the otherwise restricted worker function list.
 Revoke the default function grant; actual runtime source edits must still refuse
 through the trigger. Corrected focused and exact gate pending, no deployment.
+
+Exact seal71afd2c5 passes all8 engineering stages,6500pass/0fail/67skip,
+657passed files/6skipped,664 strict roots,newest production dump in
+isolation and mandatory negative-flag refusal. W6_LEARNING_RECOVERY_GATE_EVIDENCE.json
+records the candidate; initial failures retained. Runtime/test/gate code stays
+unchanged through subsequent evidence-only sealing. Source not deployed, no paid
+provider calls. Fresh04:22 UTC readback confirms all three owner infrastructure
+repairs remain live on2c4d61ec. Revision polarity/calibrated taste/native/Canva/human/
+whole-product admission remains open.

@@ -1,7 +1,7 @@
 {
   "date": "2026-10-01",
   "decision": "ADR194",
-  "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_PRODUCT_OPEN",
   "requirements": [
     "FR-022",
     "FR-052",
@@ -22,7 +22,9 @@
     "First focused 3 files/43 pass. Expanded33pass/2fail caught Studio trigger referencing nonexistent OLD.category and a historical tenant-only reader fixture with no client membership. Separate trigger branches and an actual member repair these without loosening the policy.",
     "Corrected expanded5files/35pass; connected15files/131pass; runtime-role HTTP2files/37pass; legacy/cold/domain4files/34pass. Strict664 roots and lint932 any/10existing egress exceptions pass. Full gate pending.",
     "First exact seal5e5d89c6 retained6499pass/1fail/67skip: new trigger function default PUBLIC EXECUTE violated worker function whitelist. Revoke default grant; actual runtime-role source UPDATE still must hit append-only guard. Corrected exact gate pending.",
-    "Corrected worker permission/source immutability/recovery/RLS3files/18pass: worker function list remains unchanged and actual runtime-role source UPDATE still raises55000. Corrected exact gate pending."
+    "Corrected worker permission/source immutability/recovery/RLS3files/18pass: worker function list remains unchanged and actual runtime-role source UPDATE still raises55000. Corrected exact gate pending.",
+    "Corrected71afd2c5 refused before test execution because shared disposable hawa_test/hawa_repair retained the earlier unpublished076 checksum. Refusal retained; guarded port55432 databases rebuilt, unchanged source retested without checksum or isolation bypass.",
+    "Exact clean seal 71afd2c5 passes all8 stages, 6500pass/0fail/67skip,664 strict roots/newest production dump/negative refusal. No deployment/provider call or product admission."
   ],
   "connected": {
     "files": 15,
@@ -74,7 +76,7 @@
   "providerCalls": 0,
   "deployed": false,
   "sources": {
-    "adrs/194_durable_source_learning_recovery.md": "b7e0224416c1bbae9470b02778335b9151793954f10229fb24df9bb33bee6a3a",
+    "adrs/194_durable_source_learning_recovery.md": "ec88daae1371d52740e1ccd0c090148b0168650a9e1700aa71c933ec7a8e4cd1",
     "apps/core/src/services/learning-inputs.ts": "3a71437f67295f45a75b86ad4640540e743439013d38ad5d6570d42d75907a9f",
     "apps/core/src/services/learning-recovery.ts": "14e531c72a4d78920e97104434e38a4d96f7386e855b4b029f409bf760ea49d8",
     "apps/core/src/services/learning-governance.ts": "ffd5fa387fa19ec9120bc02e9f0cf35289bd463d2cfa9203ce004fa4987788c9",
@@ -150,6 +152,38 @@
     "hawa-learning-recovery-worker-corrected-20261001.log": {
       "path": "/tmp/hawa-learning-recovery-worker-corrected-20261001.log",
       "sha256": "ad27ae60fa7fa24eb8ffdc0b159ea581a0f2dd803c1b0b0da86387aa5c476439"
+    },
+    "FULL_TEST_SUITE_RUN.log": {
+      "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/FULL_TEST_SUITE_RUN.log",
+      "sha256": "411ed3d31804667ca08d94c133f216bc8bbc54460dc311509190331abf83b2cd"
+    },
+    "NEGATIVE_FLAG_REFUSAL.log": {
+      "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/NEGATIVE_FLAG_REFUSAL.log",
+      "sha256": "6a6edbbb3fc68643bee6e8812e239e124aad8edf6c0cbe0fba643f4381d2bd18"
+    },
+    "TEST_DB_PROVISION.log": {
+      "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/TEST_DB_PROVISION.log",
+      "sha256": "95e1ec0a04eef3905d6c6cbb794930107563530aadeea6db353a9a25d87dd5d9"
+    },
+    "hawa-learning-recovery-full-gate-rebuilt-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-full-gate-rebuilt-20261001.log",
+      "sha256": "d0cf80ce60a7975dad0f54d2172bcb7a5dbee0e48d20286d32aff52995e15e65"
+    },
+    "hawa-learning-recovery-live-readback-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-live-readback-20261001.log",
+      "sha256": "fb436418650046b41d9baccdfdf8e5c011aab609a483f4c973a3d47427410c48"
+    },
+    "hawa-learning-recovery-full-gate-corrected-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-full-gate-corrected-20261001.log",
+      "sha256": "c8a75983ade2b886366395bf2aabf9a9aa55deb7ce9363277983ef6c4cbb9a70"
+    },
+    "hawa-learning-recovery-checksum-refusal-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-checksum-refusal-20261001.log",
+      "sha256": "d844309d702c851dec9959700a9f8668826efc3e8df44ca40fd51313957c8137"
+    },
+    "hawa-learning-recovery-test-db-rebuild-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-test-db-rebuild-20261001.log",
+      "sha256": "55bc9c3b24512479e86f6da256b3ae8c6532263ce65784f646062b8830b3535c"
     }
   },
   "firstFullGate": {
@@ -163,5 +197,70 @@
     "files": 3,
     "passed": 18,
     "failed": 0
+  },
+  "testedSeal": "71afd2c5216c35737e05ffec626844a074adc8f8",
+  "sourceCommit": "4fbd2758",
+  "fullGate": {
+    "passed": 6500,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 657,
+    "filesSkipped": 6,
+    "suiteSeconds": 218.17,
+    "stagesPassed": 8,
+    "newestProductionDump": "PASS in isolated test database",
+    "negativeFlagRefusal": "PASS",
+    "admissionQualified": false,
+    "log": "/tmp/hawa-learning-recovery-full-gate-rebuilt-20261001.log"
+  },
+  "liveReadback": {
+    "observedAt": "2026-10-01T04:22:29.243Z",
+    "release": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
+    "qualified": true,
+    "nginxTest": true,
+    "stableReadOnlyMounts": true,
+    "proofMatchesHost": true,
+    "independentDesignToken": true,
+    "previousNotOperator": true,
+    "database": {
+      "identity": "hawa_worker_login",
+      "app_member": false,
+      "approval_write": false,
+      "task_write": false,
+      "schema_create": false,
+      "temp_create": false
+    },
+    "workers": [
+      {
+        "color": "green",
+        "username": "hawa_worker_login",
+        "databaseMatches": true,
+        "currentDesign": true,
+        "drainDesign": false,
+        "operatorPresent": false,
+        "build": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
+        "revisionMatches": true,
+        "blobReadOnly": true
+      }
+    ],
+    "unsafeReleasesAbsent": true,
+    "health": "healthy",
+    "officeStatus": 200,
+    "auth": {
+      "current": {
+        "task": 404,
+        "list": 401,
+        "providers": 401,
+        "session": 401,
+        "internal": 401
+      },
+      "previous": {
+        "task": 404,
+        "list": 401,
+        "providers": 401,
+        "session": 401,
+        "internal": 401
+      }
+    }
   }
 }

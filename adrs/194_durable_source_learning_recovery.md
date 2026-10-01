@@ -1,6 +1,6 @@
 # ADR194 — Recover governed learning from durable sources
 
-Date: 2026-10-01. Status: implemented; exact sealed engineering qualification pending.
+Date: 2026-10-01. Status: exact engineering qualification passed; product admission open.
 Requirements: FR-022, FR-052, FR-053, FR-054, NFR-006, NFR-012, NFR-024.
 Sources: MASTER_SPEC.md; docs/08_MEMORY_RAG_CLIENT_DNA.md;
 docs/18_FEEDBACK_LEARNING.md; docs/14_SECURITY_THREAT_MODEL.md; ADR191–193.
@@ -63,3 +63,10 @@ inherited PostgreSQL PUBLIC EXECUTE, violating worker function admission. Revoke
 that default grant; an actual runtime-role source UPDATE must still hit the
 append-only trigger. Worker qualification must retain the original narrow list.
 Corrected exact gate is pending; no deployment.
+
+Exact seal71afd2c5 passes all8 mandatory engineering stages:
+6500pass/0fail/67skip across657passed files/6skipped,664 strict
+roots, newest production dump in isolation and negative-flag refusal.
+W6_LEARNING_RECOVERY_GATE_EVIDENCE.json records the exact candidate.
+This supersedes pending qualification status above; prior failures remain.
+No deployment or provider call; revision polarity/taste/native/product open.
