@@ -61,3 +61,8 @@ control verifies the gradient contrast enclosure. Local measured logo scrims mus
 remain inside clear space; blanket light-overlay assertion replaced with that bound.
 Full source gate pending; no production/DNA/Canva-kit/native-save/human admission.
 See KAAE2025_INTEGRATED_PROOF.json for exact sources and receipts.
+
+
+### Initial full gate and current-guideline fixture repair — 2 October 2026
+
+Clean264a7af5 full suite:7610 passed/1 failed/67 skipped,717 passing files/1 failed/6 skipped. H11 expected a right-aligned seal rule to activate in KAAE, but current compound page grammar causes the real moderation route to return409 CONFLICTING_RULES_PENDING. Original full and direct diagnostic failures retained. Production conflict logic is unchanged. The corrected matrix preserves that current-client pending refusal and unchanged activated rules; its other-client control still activates the compatible initial rule through the real200 route and refuses the subsequent contradictory rule through direct miner and409 API. Three connected files/21 tests pass. This repairs a stale fixture, not a comprehensive semantic conflict engine. Full source retry pending; production/native/human/DNA/Canva-kit admission remain open. See KAAE2025_INTEGRATED_PROOF.json.

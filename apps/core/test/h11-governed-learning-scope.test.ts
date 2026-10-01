@@ -137,12 +137,17 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     expect(activeAfterActivation.includes(proposed!.ruleText)).toBe(true);
   });
 
-  it('4. Conflicting rules stay pending and are rejected from promotion', async () => {
+  it.each([
+    { clientId: OTHER_CLIENT_ID, initialConflict: false },
+    { clientId: KAAE_CLIENT_ID, initialConflict: true },
+  ])('4. Conflicting rules stay pending in $clientId (initial DNA conflict: $initialConflict)', async ({ clientId, initialConflict }) => {
     const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
-    // Propose an explicit rule with orientation right
+    // KAAE's current compound page grammar already has spatial constraints. A
+    // generic right/left promotion control must also exercise a compatible client.
+    const activeBefore = globalFeedbackMiner.getPromotedRules(clientId);
     const ruleRight = globalFeedbackMiner.proposeExplicitRule({
-      clientId: KAAE_CLIENT_ID,
+      clientId,
       taskId: 'task_spatial_01',
       title: 'Right aligned emblem',
       category: 'layout',
@@ -150,21 +155,31 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
       rationale: 'Right layout mandate',
       actor: { id: 'op1', role: 'operator' },
     });
-    const promoteRight = await app.request(`/clients/${KAAE_CLIENT_ID}/candidate-rules/${ruleRight.id}/promote`, {
+    const promoteRight = await app.request(`/clients/${clientId}/candidate-rules/${ruleRight.id}/promote`, {
       method: 'POST', headers: { Authorization: `Bearer ${artDirectorToken}` },
     });
-    expect(promoteRight.status).toBe(200);
+    const initialBody = await promoteRight.json();
+    if (initialConflict) {
+      expect(promoteRight.status).toBe(409);
+      expect(initialBody.title).toBe('CONFLICTING_RULES_PENDING');
+      const pending = globalFeedbackMiner.getCandidateRules(clientId).find(rule => rule.id === ruleRight.id);
+      expect(pending?.status).toBe('PROPOSED');
+      expect(globalFeedbackMiner.getPromotedRules(clientId)).toEqual(activeBefore);
+      return;
+    }
+    expect(promoteRight.status, JSON.stringify(initialBody)).toBe(200);
+    expect(globalFeedbackMiner.getPromotedRules(clientId)).toContain(ruleRight.ruleText);
 
     // Propose a contradictory rule: left aligned emblem
     const ruleLeft = globalFeedbackMiner.proposeExplicitRule({
-      clientId: KAAE_CLIENT_ID,
+      clientId,
       taskId: 'task_spatial_02',
       title: 'Left aligned emblem',
       category: 'layout',
       ruleText: 'Always align official seal to the left edge',
       rationale: 'Left layout mandate',
       actor: { id: 'op1', role: 'operator' },
-      existingRules: globalFeedbackMiner.getPromotedRules(KAAE_CLIENT_ID),
+      existingRules: globalFeedbackMiner.getPromotedRules(clientId),
     });
 
     // Conflict detection must flag the spatial contradiction
@@ -177,7 +192,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     expect(promoteLeft.reason).toBe('CONFLICTING_RULES_PENDING');
 
     // API endpoint also returns 409 Conflict
-    const apiPromoteRes = await app.request(`/clients/${KAAE_CLIENT_ID}/candidate-rules/${ruleLeft.id}/promote`, {
+    const apiPromoteRes = await app.request(`/clients/${clientId}/candidate-rules/${ruleLeft.id}/promote`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

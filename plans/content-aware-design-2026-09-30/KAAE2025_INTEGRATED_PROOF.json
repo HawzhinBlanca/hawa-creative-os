@@ -1,6 +1,6 @@
 {
   "date": "2026-10-02",
-  "status": "CONNECTED_INTEGRATION_PASSED_FULL_SOURCE_GATE_PENDING",
+  "status": "CONNECTED_INTEGRATION_PASSED_SOURCE_GATE_RETRY_PENDING",
   "researchParent": "8ca1fa4ace6cb0f6a3a0daaddda8b979dab15680",
   "guidelineParent": "4c95154ac42f094845afb6e7415394d9b7f5fb43",
   "requirements": [
@@ -70,7 +70,12 @@
     "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-repair.log": "7fcd5a056b3498b05f7b7b44fab7c5ff1e9b2df874dcdb14f701ec2cc1a0e66e",
     "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-repair2.log": "fef7a2a75264333fd9a0991694c0995105f4bc2fd3ae5aea0a3bad501a83add1",
     "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-repair3.log": "1e518c6530cc1b76143748e7e799af422a47bdc04b3952622d9d715d396848cc",
-    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-types.log": "2a46bdcfd9ea68e710f599c09b74ed00ada5fab06ced5a9fd0256661463c8e4e"
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-types.log": "2a46bdcfd9ea68e710f599c09b74ed00ada5fab06ced5a9fd0256661463c8e4e",
+    "output/qualification/2026-10-02/kaae2025-integration/full-initial/NEGATIVE_FLAG_REFUSAL.log": "8dc254b6468de6de7f11830a8fee62e7b3d7c0669387481a90ee015532e32bb8",
+    "output/qualification/2026-10-02/kaae2025-integration/full-initial/ENGINEERING_PREFLIGHT.log": "ca35a7a7a1d36f0a9aca47fc88f5aa7a386dc02340ff96d3afff680b358b45f4",
+    "output/qualification/2026-10-02/kaae2025-integration/full-initial/FULL_TEST_SUITE_RUN.log": "8f9a5342dde06dcb1b24e2516865490d505bdc7bb5daee427ae7c1a4b3773ca3",
+    "output/qualification/2026-10-02/kaae2025-integration/LEARNING-DIAGNOSTIC.log": "0b7e8cb8b5114d1068bd10f7028012710304f18af251892e1cd557a9dae2a1e4",
+    "output/qualification/2026-10-02/kaae2025-integration/LEARNING-REPAIR.log": "4719e2672cd73af361d65fa212d7ae797a77888a0fb588fa8f9507ff7b38d4b7"
   },
   "limits": {
     "productionDeployed": false,
@@ -81,5 +86,30 @@
     "humanDesignQualityApproved": false,
     "paidCallsThisIntegration": 0
   },
-  "next": "Commit integration, generate exact source-candidate metadata and run one full engineering preflight; genuine native/human/publication/recovery/pilot admission stays open."
+  "next": "Commit current-guideline compatible/conflicting fixture controls, generate clean source metadata and rerun the failed full gate; preserve every native/human/production admission limit.",
+  "initialFullGate": {
+    "sourceSeal": "264a7af57f18fc01096de5768aaed38af75da896",
+    "status": "FAILED",
+    "passed": 7610,
+    "failed": 1,
+    "skipped": 67,
+    "passingFiles": 717,
+    "failedFiles": 1,
+    "skippedFiles": 6,
+    "durationSeconds": 398,
+    "failure": "H11 initial right-aligned seal proposal refused CONFLICTING_RULES_PENDING by current KAAE DNA; original expected200 fixture invalid after current compound page grammar."
+  },
+  "governanceFixtureRepair": {
+    "requirements": [
+      "FR-053",
+      "FR-054"
+    ],
+    "productionCodeChanged": false,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0,
+    "files": 3,
+    "decision": "Keep current KAAE409 pending refusal and unchanged activation scope; generic compatible-client200 then conflicting409 promotion tests use existing other-client fixture. Same real route/miner/authorization and rollback checks retained. This is a fixture repair, not proof of comprehensive natural-language contradiction detection.",
+    "sourceSha256": "f769402c0ffa993d1e6a2f1b49c0efb2fae48ffdc84a32f90d3313099d68309a"
+  }
 }
