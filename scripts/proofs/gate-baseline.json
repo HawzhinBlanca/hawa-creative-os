@@ -1,6 +1,6 @@
 {
   "recordedAt": "2026-09-20",
-  "note": "Hard QA and design metrics after preparation, per mode, over the gitignored corpus under output/proofs/. Recorded from a real run of this gate on the committed tree, not a target: on 2026-09-20 at 81bb4f5 the style mode passes hard QA on 194 of 200 designs against 195 for plain, and 20 of 200 pass QA and the design metrics together against 48. Those failures are written down so the gate can see the next change, not because they are acceptable. Re-record only for a deliberate improvement, and say in the commit which numbers moved and why.",
+  "note": "Hard QA and design metrics after preparation, per mode, over the gitignored corpus under output/proofs/. Recorded from a real run of this gate on the committed tree, not a target: on 2026-09-20 at 81bb4f5 the style mode passes hard QA on 194 of 200 designs against 195 for plain, and 20 of 200 pass QA and the design metrics together against 48. Those failures are written down so the gate can see the next change, not because they are acceptable. Re-record only for a deliberate improvement, and say in the commit which numbers moved and why. The grammar mode (ADR-238, KAAE 2025 page grammar) was recorded on 2026-10-02 from a real run of this gate; the other modes keep their 2026-09-20 numbers.",
   "modes": {
     "plain": {
       "totals": {
@@ -358,6 +358,145 @@
             "brief_14": "metric:typeScale",
             "brief_15": "metric:typeScale",
             "brief_16": "metric:typeScale"
+          }
+        }
+      }
+    },
+    "grammar": {
+      "totals": {
+        "designs": 200,
+        "qaPass": 159,
+        "qaAndMetrics": 35
+      },
+      "runs": {
+        "2026-09-17-research-grade-pipeline": {
+          "designs": 0,
+          "qaPass": 0,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-aborted-pricing": {
+          "designs": 0,
+          "qaPass": 0,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run3": {
+          "designs": 20,
+          "qaPass": 15,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_02": "metric:negativeSpace",
+            "brief_09": "BOUNDS metric:gridAppropriateness",
+            "brief_10": "BOUNDS",
+            "brief_11": "BOUNDS",
+            "brief_12": "BOUNDS",
+            "brief_18": "POOR_GRID_ALIGNMENT"
+          }
+        },
+        "2026-09-18-cheap-tier-run4": {
+          "designs": 20,
+          "qaPass": 16,
+          "qaAndMetrics": 0,
+          "notClean": {
+            "brief_01": "metric:negativeSpace",
+            "brief_02": "metric:negativeSpace",
+            "brief_09": "BOUNDS",
+            "brief_10": "BOUNDS",
+            "brief_11": "BOUNDS",
+            "brief_12": "BOUNDS"
+          }
+        },
+        "2026-09-18-cheap-tier-run5": {
+          "designs": 20,
+          "qaPass": 18,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_09": "BOUNDS",
+            "brief_12": "BOUNDS"
+          }
+        },
+        "2026-09-18-cheap-tier-run6": {
+          "designs": 20,
+          "qaPass": 17,
+          "qaAndMetrics": 0,
+          "notClean": {
+            "brief_04": "metric:negativeSpace",
+            "brief_09": "BOUNDS",
+            "brief_10": "BOUNDS POOR_GRID_ALIGNMENT",
+            "brief_11": "BOUNDS",
+            "brief_13": "metric:negativeSpace"
+          }
+        },
+        "2026-09-18-cheap-tier-run7": {
+          "designs": 20,
+          "qaPass": 17,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_10": "BOUNDS",
+            "brief_11": "BOUNDS",
+            "brief_12": "BOUNDS"
+          }
+        },
+        "2026-09-18-cheap-tier-run8": {
+          "designs": 20,
+          "qaPass": 16,
+          "qaAndMetrics": 3,
+          "notClean": {
+            "brief_10": "BOUNDS",
+            "brief_11": "BOUNDS",
+            "brief_12": "BOUNDS",
+            "brief_17": "COPY_ORDER"
+          }
+        },
+        "2026-09-18-cheap-tier-shared-pipeline": {
+          "designs": 20,
+          "qaPass": 13,
+          "qaAndMetrics": 0,
+          "notClean": {
+            "brief_03": "OVERLAP",
+            "brief_06": "metric:negativeSpace",
+            "brief_08": "OVERLAP",
+            "brief_09": "BOUNDS",
+            "brief_10": "BOUNDS",
+            "brief_11": "BOUNDS",
+            "brief_12": "BOUNDS",
+            "brief_19": "COPY_OVERFLOW"
+          }
+        },
+        "2026-09-18-dev-tier-pipeline-run": {
+          "designs": 20,
+          "qaPass": 17,
+          "qaAndMetrics": 0,
+          "notClean": {
+            "brief_02": "metric:negativeSpace",
+            "brief_05": "COPY_PLACEMENT metric:gridAppropriateness",
+            "brief_07": "COPY_PLACEMENT",
+            "brief_11": "BOUNDS"
+          }
+        },
+        "2026-09-18-production-qualification": {
+          "designs": 20,
+          "qaPass": 15,
+          "qaAndMetrics": 15,
+          "notClean": {
+            "brief_09": "BOUNDS",
+            "brief_10": "BOUNDS",
+            "brief_11": "BOUNDS",
+            "brief_12": "BOUNDS",
+            "brief_20": "LOGO_CLEAR_SPACE"
+          }
+        },
+        "2026-09-18-production-qualification-2": {
+          "designs": 20,
+          "qaPass": 15,
+          "qaAndMetrics": 14,
+          "notClean": {
+            "brief_09": "BOUNDS",
+            "brief_10": "BOUNDS",
+            "brief_11": "BOUNDS",
+            "brief_12": "BOUNDS",
+            "brief_13": "ASYMMETRIC_SEPARATOR metric:gridAppropriateness worse"
           }
         }
       }

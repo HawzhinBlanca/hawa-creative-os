@@ -35,7 +35,7 @@ import {
 const W = 1080;
 const H = 1350;
 const MARGIN = 76;
-const PALETTE = ['#FFFFFF', '#FFF2DB', '#17087A', '#3833A3', '#E8B85C', '#000000'];
+const PALETTE = ['#FFFFFF', '#FDF8F3', '#4770A3', '#1E3A5F', '#F7B500', '#0A1628'];
 const COPY: PipelineV3Copy = {
   text: {
     0: 'Quality Assurance Workshop',
@@ -53,7 +53,7 @@ const CANVAS = { width: W, height: H, logoAspect: 1, palette: PALETTE };
 
 const T = (i: number, role: string, y: number, h: number, size: number, extra: Record<string, unknown> = {}) => ({
   copyIndex: i, role, x: MARGIN, y, width: W - 2 * MARGIN, height: h, fontSize: size, lineHeight: 1.3,
-  fontFamily: role === 'title' ? 'Playfair Display' : 'Verdana', color: '#17087A', align: 'center',
+  fontFamily: role === 'title' ? 'Playfair Display' : 'Verdana', color: '#1E3A5F', align: 'center',
   bold: role === 'title', italic: false, rtl: false, ...extra,
 });
 
@@ -64,13 +64,13 @@ function poster(): StudioLayoutV2 {
     grid: { margin: MARGIN, columns: 6, gutter: 26, baseline: 14 },
     background: { color: '#FFFFFF' },
     logo: { x: W / 2 - 80, y: 90, width: 160, height: 160 },
-    shapes: [{ x: W / 2 - 80, y: 640, width: 160, height: 3, kind: 'line', color: '#E8B85C', role: 'rule' }],
+    shapes: [{ x: W / 2 - 80, y: 640, width: 160, height: 3, kind: 'line', color: '#F7B500', role: 'rule' }],
     text: [
       T(0, 'title', 340, 220, 76),
       T(1, 'subtitle', 580, 50, 30),
       T(2, 'date', 700, 50, 30),
       T(3, 'venue', 770, 50, 30),
-      T(4, 'footer', 1180, 44, 24, { color: '#000000', bold: false }),
+      T(4, 'footer', 1180, 44, 24, { color: '#0A1628', bold: false }),
     ],
   } as unknown as StudioLayoutV2;
   return prepareGeneratedLayoutV3(raw, COPY, CANVAS);
@@ -144,7 +144,7 @@ describe('ADR-237 review: the model sees the real render and returns structured 
     const result = await reviewCandidateVisuallyV3(candidate, COPY, {
       client, renderOptions: { logoDataUri: KAAE_TEST_LOGO },
       context: { brief: { instructions: 'A poster for our workshop', copy: [{ copyIndex: 0, text: COPY.text[0], role: 'title' }] },
-        clientRules: 'White or cream page; indigo bands; gold only for rules and frames.' },
+        clientRules: 'White page; KAAE Blue titles and cards; gold for the title bar and rules.' },
     });
     vi.unstubAllEnvs();
     expect(calls).toHaveLength(1);
@@ -158,7 +158,7 @@ describe('ADR-237 review: the model sees the real render and returns structured 
     expect(images.map((p: any) => p.image_url.detail)).toEqual(['high', 'high']);
     const text = parts[0].text as string;
     expect(text).toContain('A poster for our workshop');
-    expect(text).toContain('gold only for rules and frames');
+    expect(text).toContain('gold for the title bar and rules');
     expect(text).toContain('Hard QA: passed');
     expect(text).toContain(JSON.stringify(COPY.text[4]));
     expect(result.reviewedLayoutSha256).toBe(layoutSha256(layout));
@@ -234,27 +234,27 @@ describe('ADR-237 applying fixes: geometry and type size only, through the ADR-1
   it('never takes a colour from the model: contrast picks the most readable brand ink', () => {
     const layout = poster();
     const footer = layout.text.find((t) => t.copyIndex === 4)!;
-    footer.color = '#E8B85C'; // gold on white: the guideline never sets it as text
+    footer.color = '#F7B500'; // gold on white: the guideline never sets it as text
     const mark = markOf(layout, (a) => a.copyIndex === 4);
     const applied = applyVisualReviewV3(layout, { assessment: 'a', fixes: [fix({ boxId: mark, category: 'contrast', raiseContrast: true })] }, { palette: PALETTE });
     expect(applied.ok).toBe(true);
     if (!applied.ok) return;
-    expect(applied.layout.text.find((t) => t.copyIndex === 4)!.color).toBe('#000000');
+    expect(applied.layout.text.find((t) => t.copyIndex === 4)!.color).toBe('#0A1628');
     expect(applied.fixes[0].status).toBe('applied');
   });
 
   it('keeps an accent colour that already reads: contrast is raised only where it is short', () => {
-    // Live photo trial, 2026-10-01: a gold subtitle on an indigo panel (8.5:1 against 3:1 needed)
+    // Live photo trial, 2026-10-01: a gold subtitle on a navy panel (8.5:1 against 3:1 needed)
     // was turned white on a "raise contrast" ask, and the guideline's gold accent line was lost.
     const layout = poster();
-    layout.shapes.push({ x: 0, y: 1100, width: W, height: 250, kind: 'rect', color: '#17087A', role: 'panel' } as any);
+    layout.shapes.push({ x: 0, y: 1100, width: W, height: 250, kind: 'rect', color: '#0A1628', role: 'panel' } as any);
     const footer = layout.text.find((t) => t.copyIndex === 4)!;
-    footer.color = '#E8B85C';
+    footer.color = '#F7B500';
     const mark = markOf(layout, (a) => a.copyIndex === 4);
     const applied = applyVisualReviewV3(layout, { assessment: 'a', fixes: [fix({ boxId: mark, category: 'contrast', raiseContrast: true })] }, { palette: PALETTE });
     expect(applied.ok).toBe(true);
     if (!applied.ok) return;
-    expect(applied.layout.text.find((t) => t.copyIndex === 4)!.color).toBe('#E8B85C');
+    expect(applied.layout.text.find((t) => t.copyIndex === 4)!.color).toBe('#F7B500');
     expect(applied.fixes[0].status).toBe('refused');
     expect(applied.fixes[0].detail).toMatch(/already reads at/);
   });

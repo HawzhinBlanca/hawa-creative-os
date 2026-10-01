@@ -524,10 +524,16 @@ export function applyVisualReviewV3(
     const best = palette.reduce<string | undefined>((a, c) => (!a || on(c) > on(a) ? c : a), undefined);
     const note = (s: string) => { record.detail = record.detail ? `${record.detail}; ${s}` : s; };
     const required = requiredContrast(t.fontSize, Boolean(t.bold));
-    // A colour that already reads comfortably is the design's choice (a gold accent line on indigo,
+    // A colour that already reads comfortably is the design's choice (a gold accent line on navy,
     // live photo trial 2026-10-01): only ink that is short of, or close to, the house minimum changes.
     if (on(t.color) >= required * 1.5) {
       note(`refused: ${t.color} already reads at ${on(t.color).toFixed(1)}:1 on ${surface} (needs ${required}:1); its colour stays the design's`);
+      continue;
+    }
+    // ADR-238: a design composed from the client's page grammar sets each colour from its guideline
+    // (KAAE: a Sun card title on KAAE Blue); a colour that meets the house minimum stays.
+    if (result.composition && on(t.color) >= required) {
+      note(`refused: ${t.color} reads at ${on(t.color).toFixed(1)}:1 on ${surface} (needs ${required}:1) and is the client guideline's colour`);
       continue;
     }
     if (!best || on(best) <= on(t.color) + 0.05) { note(`refused: ${t.color} is already the most readable brand ink on ${surface}`); continue; }

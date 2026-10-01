@@ -1,5 +1,6 @@
 import { PNG } from 'pngjs';
-import type { StudioLayoutV2, Box, TextElement } from './layout-v2.js';
+import type { StudioLayoutV2, Box, ShapeElement, TextElement } from './layout-v2.js';
+import { fillColoursUnder } from './shape-gradient.js';
 import { hexToRgb } from './color-science.js';
 import { carrierOf } from './art-direction/surfaces.js';
 
@@ -29,10 +30,15 @@ export function calculateLuminanceContrastRatio(lum1: number, lum2: number): num
  * metric uses, so the gate and the metric agree.
  */
 export function declaredBackgroundColour(layout: StudioLayoutV2, box: Box): string {
+  return declaredSurface(layout, box).color;
+}
+
+/** The surface the layout declares behind a box: its colour, and the shape it is when it is one. */
+function declaredSurface(layout: StudioLayoutV2, box: Box): { color: string; shape?: ShapeElement } {
   // ADR-170: a plate, card or pill over the photos is on top of everything; then a fade or scrim
   // opaque enough to carry the text; then the shapes under the photos, as before.
   const carrier = carrierOf(layout, box);
-  if (carrier) return carrier.kind === 'shape' ? carrier.shape.color : carrier.overlay.color;
+  if (carrier) return carrier.kind === 'shape' ? { color: carrier.shape.color, shape: carrier.shape } : { color: carrier.overlay.color };
   const shapes = layout.shapes || [];
   for (let i = shapes.length - 1; i >= 0; i--) {
     const s = shapes[i];
@@ -40,14 +46,20 @@ export function declaredBackgroundColour(layout: StudioLayoutV2, box: Box): stri
     if (s.role !== 'panel' && s.kind !== 'rect' && s.kind !== 'roundRect') continue;
     const containsX = box.x >= s.x - 20 && box.x + box.width <= s.x + s.width + 20;
     const containsY = box.y >= s.y - 20 && box.y + box.height <= s.y + s.height + 20;
-    if (containsX && containsY && s.color && s.color.startsWith('#')) return s.color;
+    if (containsX && containsY && s.color && s.color.startsWith('#')) return { color: s.color, shape: s };
   }
-  return layout.background.color;
+  return { color: layout.background.color };
 }
 
-/** A block's contrast against the surface the layout declares behind it. */
+/**
+ * A block's contrast against the surface the layout declares behind it. On a gradient (ADR-238: a
+ * cover's ground) it is the worst contrast over the colours under the block's corners and centre.
+ */
 export function declaredTextContrast(layout: StudioLayoutV2, text: TextElement): number {
-  return calculateLuminanceContrastRatio(hexToLuminance(text.color), hexToLuminance(declaredBackgroundColour(layout, text)));
+  const surface = declaredSurface(layout, text);
+  const colours = surface.shape?.gradient ? fillColoursUnder(surface.shape, text) : [surface.color];
+  const ink = hexToLuminance(text.color);
+  return Math.min(...colours.map((c) => calculateLuminanceContrastRatio(ink, hexToLuminance(c))));
 }
 
 export interface BoxContrastEvaluation {

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import {
   prepareGeneratedLayoutV3,
   resolveOrnamentSettings,
+  pageGrammarFromRaw,
   evaluateHardQa,
   measureDesignV3,
   studioReferenceFromRaw,
@@ -96,7 +97,7 @@ describe('the regression gate runs the option sets production runs', () => {
     const passed = [...call![1].matchAll(/^\s*(\w+):/gm)].map((m) => m[1]);
     expect(passed).toContain('style');
 
-    const modes = productionModes({ resolveOrnamentSettings }) as { name: string; options: Record<string, unknown> }[];
+    const modes = productionModes({ resolveOrnamentSettings, pageGrammarFromRaw }) as { name: string; options: Record<string, unknown> }[];
     // Always supplied by the gate for every mode, so no mode needs to name them.
     const base = ['width', 'height', 'logoAspect', 'palette'];
     const covered = new Set(modes.flatMap((m) => Object.keys(m.options)));
@@ -111,8 +112,8 @@ describe('the regression gate runs the option sets production runs', () => {
     const fixtures = readStyleFixtures() as { name: string; spec: Record<string, unknown> }[];
     expect(fixtures.length, 'no reference-*.json fixture left to gate the style path').toBeGreaterThan(0);
 
-    const modes = productionModes({ resolveOrnamentSettings }) as { name: string; options: Record<string, unknown> }[];
-    expect(modes.map((m) => m.name)).toEqual(['plain', 'ornament', ...fixtures.map((f) => `style:${f.name}`)]);
+    const modes = productionModes({ resolveOrnamentSettings, pageGrammarFromRaw }) as { name: string; options: Record<string, unknown> }[];
+    expect(modes.map((m) => m.name)).toEqual(['plain', 'ornament', ...fixtures.map((f) => `style:${f.name}`), 'grammar']);
     for (const mode of modes.filter((m) => m.name.startsWith('style:'))) {
       // Production never passes a style without ornament, and `ornamentForStyle` lets the spec
       // override the texture and dividers. A style mode without ornament would run neither path.
@@ -123,7 +124,7 @@ describe('the regression gate runs the option sets production runs', () => {
 
   it('has a recorded baseline for every mode, so a new reference cannot enter ungated', () => {
     const baseline = JSON.parse(readFileSync(BASELINE_PATH as string, 'utf8')) as { modes: Record<string, unknown> };
-    const modes = productionModes({ resolveOrnamentSettings }) as { name: string }[];
+    const modes = productionModes({ resolveOrnamentSettings, pageGrammarFromRaw }) as { name: string }[];
     const missing = modes.map((m) => m.name).filter((n) => !baseline.modes[n]);
     expect(missing, `run the gate with --update-baseline: no numbers recorded for ${missing.join(', ')}`).toEqual([]);
   });
@@ -131,13 +132,13 @@ describe('the regression gate runs the option sets production runs', () => {
   it('measures every committed design in every mode without throwing', () => {
     const designs = committedDesigns();
     expect(designs.length).toBe(9);
-    const modes = productionModes({ resolveOrnamentSettings }) as { name: string; options: Record<string, unknown> }[];
+    const modes = productionModes({ resolveOrnamentSettings, pageGrammarFromRaw }) as { name: string; options: Record<string, unknown> }[];
     for (const mode of modes) for (const d of designs) expect(() => gradeDesign(d, mode.options)).not.toThrow();
   });
 
   it('sees on the fixtures what a plain-only gate could not: the spec changes the verdict', () => {
     const designs = committedDesigns();
-    const modes = productionModes({ resolveOrnamentSettings }) as { name: string; options: Record<string, unknown> }[];
+    const modes = productionModes({ resolveOrnamentSettings, pageGrammarFromRaw }) as { name: string; options: Record<string, unknown> }[];
     const plain = modes.find((m) => m.name === 'plain')!;
     const styles = modes.filter((m) => m.name.startsWith('style:'));
 

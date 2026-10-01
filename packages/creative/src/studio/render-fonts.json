@@ -55,6 +55,37 @@
         "bold": "assets/fonts/NotoSansArabic-Bold.ttf"
       }
     },
+    "Crimson Pro": {
+      "name": "Crimson Pro",
+      "script": "latin",
+      "roles": { "display": 1 },
+      "admitted": true,
+      "fidelity": "exact",
+      "license": "OFL-1.1",
+      "licensePath": "assets/fonts/OFL-CrimsonPro.txt",
+      "licenseNote": "Added 2026-10-01 (ADR-238) for KAAE's 2025 guideline, whose titles are a bold old-style serif. Static Crimson Pro 1.003 (Google Fonts build: family 'Crimson Pro', Regular 400 / Bold 700 / Italic, fontkit and fc-scan), the closest admitted face to the guideline's headings. Ranked with Cinzel; the client's page grammar, not the rank, puts it on KAAE titles.",
+      "files": {
+        "regular": "assets/fonts/CrimsonPro-Regular.ttf",
+        "bold": "assets/fonts/CrimsonPro-Bold.ttf",
+        "italic": "assets/fonts/CrimsonPro-Italic.ttf"
+      }
+    },
+    "Inter": {
+      "name": "Inter",
+      "script": "latin",
+      "roles": { "body": 2, "display": 5 },
+      "admitted": true,
+      "fidelity": "exact",
+      "license": "OFL-1.1",
+      "licensePath": "assets/fonts/OFL-Inter.txt",
+      "licenseNote": "Declared 2026-10-01 (ADR-238). Inter was drawn before without an entry (operation templates), so the renderer resolved it through the name chain to Inter-Regular.ttf for every weight and style. KAAE's 2025 guideline sets body in Inter and leads in Inter Italic, so the faces are declared: Regular, SemiBold and Bold (Inter 4.0 static TTFs already here) and Italic (Inter 4.0 Italic.otf, family 'Inter', from the Inter 4.0 release as packaged by TeX Live). Body rank 2, behind Verdana, so no other client's default changes.",
+      "files": {
+        "regular": "assets/fonts/Inter-Regular.ttf",
+        "semiBold": "assets/fonts/Inter-SemiBold.ttf",
+        "bold": "assets/fonts/Inter-Bold.ttf",
+        "italic": "assets/fonts/Inter-Italic.otf"
+      }
+    },
     "Cinzel": {
       "name": "Cinzel",
       "script": "latin",

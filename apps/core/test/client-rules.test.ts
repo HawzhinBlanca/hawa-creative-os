@@ -65,7 +65,7 @@ describe.skipIf(!url)('standing client rules', () => {
       const base = await (service as any).createStageContext(s, run, 'brief', { maxUsd: 1, maxCalls: 4, spentUsd: 0, calls: 0 }, async () => {});
       const ctx = await (service as any).withClientRules(s, base);
       expect(ctx.promotedRules).toContain(words);
-      expect(ctx.promotedRules.startsWith('KAAE brand guideline palette, light first.')).toBe(true);
+      expect(ctx.promotedRules.startsWith('KAAE Brand Guidelines, Excellence Edition (2025), light first.')).toBe(true);
       expect(ctx.clientRules).toContain(words);
 
       // Another client's designs do not get it.

@@ -3,6 +3,7 @@ import type { StudioLayoutV2 } from './layout-v2.js';
 import { photoRecipeOf, HERO_SOFT_UPSCALE } from './layout-v2.js';
 import { artDirectionPrior } from './art-direction/prior.js';
 import { brandTones } from './art-direction/solver.js';
+import { conformMarksToPageGrammar, conformTypeToPageGrammar, type PageGrammar } from './page-grammar.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
 import { renderLayoutV2, measureWrappedLines, measureTextGeometry, balancedBoxWidths, admittedFontFace, findAdmittedFontFace, type RenderLayoutOptions } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
@@ -276,9 +277,9 @@ export function nearestPaletteColour(colour: string, palette: string[]): string 
 
 /**
  * ADR-236: the palette colour a ground (a background, a panel, an overlay) snaps to. A palette may
- * carry a neutral near-black ink for body text (KAAE's guideline sets its body text in black); a dark
- * ground snaps to the brand's own darkest blue instead, never to the ink. Without a dark brand blue
- * this is nearestPaletteColour.
+ * carry a neutral near-black ink for body text; a dark ground snaps to the brand's own darkest blue
+ * instead, never to the ink. Without a dark brand blue this is nearestPaletteColour. (KAAE's 2025
+ * palette has no neutral ink: its body text is Midnight, ADR-238.)
  */
 export function nearestGroundColour(colour: string, palette: string[]): string {
   const near = nearestPaletteColour(colour, palette);
@@ -821,7 +822,39 @@ export function prepareGeneratedLayoutV3(
     allowArt?: boolean;
     /** What the client's reference and instructions decide; enforced over the generator's choices. */
     style?: StyleSpec;
+    /**
+     * ADR-238: the client's page grammar. A model-drawn layout is restyled to it (faces, colours,
+     * tagged primitives, the title bar and the foot rule), and the brand ornament, which the
+     * grammar's own elements replace, is not added.
+     */
+    grammar?: PageGrammar;
+    /** ADR-238: the client's logo clear space in pixels or as a share of its height, for the grammar's marks. */
+    logoClearSpacePx?: number;
+    logoClearSpaceShare?: number;
+    /** ADR-238: the client's admitted Sorani display faces and body face, for the grammar's restyle. */
+    arabicDisplayFonts?: string[];
+    arabicBody?: string;
   }
+): StudioLayoutV2 {
+  // ADR-238: a design composed whole from the client's page grammar is measured and set like a
+  // solved recipe; only the fonts and the palette are re-applied.
+  if (layout.composition) {
+    const fonted = sanitizeFontsV3(layout, copy);
+    return canvas.palette?.length ? conformColoursOnly(fonted, canvas.palette) : fonted;
+  }
+  if (canvas.grammar && canvas.ornament) canvas = { ...canvas, ornament: { ...canvas.ornament, texture: 'none', dividers: false } };
+  const grammarOptions = { logoClearSpacePx: canvas.logoClearSpacePx, logoClearSpaceShare: canvas.logoClearSpaceShare, arabicDisplayFonts: canvas.arabicDisplayFonts, arabicBody: canvas.arabicBody };
+  // The grammar's faces first, so the passes below fit every box to the copy as it will be set; its
+  // marks last, where they fit clear of the copy as finally placed.
+  const typed = canvas.grammar && !photoRecipeOf(layout) ? conformTypeToPageGrammar(layout, canvas.grammar, grammarOptions) : layout;
+  const prepared = prepareGeneratedLayoutBody(typed, copy, canvas);
+  return canvas.grammar && !photoRecipeOf(prepared) ? conformMarksToPageGrammar(prepared, canvas.grammar, grammarOptions) : prepared;
+}
+
+function prepareGeneratedLayoutBody(
+  layout: StudioLayoutV2,
+  copy: PipelineV3Copy,
+  canvas: Parameters<typeof prepareGeneratedLayoutV3>[2]
 ): StudioLayoutV2 {
   // ADR-170: a recipe layout is solved whole, with measured type, the logo at its real aspect and
   // every house rule the validator checks already met. The passes below move boxes the model drew;
@@ -884,6 +917,8 @@ function conformColoursOnly(layout: StudioLayoutV2, palette: string[]): StudioLa
     if (s.shadow) s.shadow.color = nearestPaletteColour(s.shadow.color, palette);
   }
   for (const o of layout.overlays || []) o.color = nearestGroundColour(o.color, palette);
+  for (const s of layout.shapes || []) for (const st of s.gradient?.stops ?? []) st.color = nearestPaletteColour(st.color, palette);
+  for (const o of layout.ornaments || []) o.color = nearestPaletteColour(o.color, palette);
   for (const t of layout.text) {
     t.color = nearestPaletteColour(t.color, palette);
     if (t.accentColor) t.accentColor = nearestPaletteColour(t.accentColor, palette);

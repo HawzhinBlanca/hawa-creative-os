@@ -292,7 +292,8 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
       expect(result).toMatchObject({ status: 'failed', stage: 'laying_out', code: 'STUDIO_RUN_LIMIT_TOO_SMALL' });
       // ADR-170: the art-direction call reserves 6,000 output tokens where three full layouts reserved
       // 16,000, so the same request now needs about $1.03 rather than $1.61, still over what is left.
-      expect(result.diagnostic).toMatch(/^STUDIO_RUN_LIMIT_TOO_SMALL at stage laying_out: the next model request needs a \$1\.0\d advance reservation and the run has \$0\.8\d of its \$1 limit left \(\$0\.15 spent\)\. Nothing was sent for it and no layout was made\./);
+      // ADR-238: the client's 2025 guideline rules the call carries put it at about $1.11.
+      expect(result.diagnostic).toMatch(/^STUDIO_RUN_LIMIT_TOO_SMALL at stage laying_out: the next model request needs a \$1\.[01]\d advance reservation and the run has \$0\.8\d of its \$1 limit left \(\$0\.15 spent\)\. Nothing was sent for it and no layout was made\./);
       expect(result.diagnostic).not.toMatch(/hard QA/);
       expect(calls.map((c) => c.schema)).toEqual(['CreativeBrief']);
       const stored = (await sql<any>`SELECT status, diagnostic FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(owner)).rows[0];

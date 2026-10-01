@@ -184,6 +184,8 @@ export function hardQaContextFor(
     logoAspect: ctx.logoAspect || 1.0,
     logoMinimumWidthPx: (ctx.referencePack.logoConstraints as { minimumWidthPx?: number } | undefined)?.minimumWidthPx,
     logoClearSpacePx: (ctx.referencePack.logoConstraints as { clearSpacePx?: number } | undefined)?.clearSpacePx,
+    // ADR-238: a client clear space set as a share of the logo's height (KAAE: the height of its K).
+    logoClearSpaceShareOfHeight: (ctx.referencePack.logoConstraints as { clearSpaceShareOfHeight?: number } | undefined)?.clearSpaceShareOfHeight,
     copyText: copyForStageV3(ctx).text,
   };
 }

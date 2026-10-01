@@ -62,7 +62,17 @@ const ADMITTED_DISPLAY_FONTS = new Set([
   'PT Serif',
   'Oswald',
   'Raleway',
+  // ADR-238: the faces of KAAE's 2025 guideline and the admitted Sorani display sans.
+  'Crimson Pro',
+  'IBM Plex Sans Arabic',
 ]);
+
+/**
+ * The faces the body role may use: the registry's body faces (render-fonts.json). Inter joined
+ * Verdana and Noto Sans Arabic on 2026-10-01 (ADR-238: KAAE's 2025 guideline sets body in Inter), so
+ * an Inter body is no longer scored as a role violation.
+ */
+const ADMITTED_BODY_FONTS = new Set(['Verdana', 'Noto Sans Arabic', 'Inter']);
 
 export const ADMITTED_TYPE_SCALE_RATIOS = [1.125, 1.200, 1.250, 1.333, 1.414, 1.500, 1.618];
 
@@ -500,7 +510,7 @@ export function computeTypefacePairing(layout: StudioLayoutV2): MetricResult {
   // F12 Role-based Typography Enforcement
   for (const t of textElements) {
     if (t.role === 'body') {
-      const isAdmittedBody = t.fontFamily === 'Verdana' || t.fontFamily === 'Noto Sans Arabic';
+      const isAdmittedBody = ADMITTED_BODY_FONTS.has(t.fontFamily);
       if (!isAdmittedBody) {
         score -= 0.4;
         failures.push(`F12 Violation: body role using non-body font "${t.fontFamily}"`);

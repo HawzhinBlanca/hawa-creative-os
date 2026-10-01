@@ -2,14 +2,15 @@ import { hexToLuminance } from '../composite-contrast.js';
 import { brandTones } from './solver.js';
 
 /**
- * ADR-236: the tone of a design's ground. The client's brand guideline is light first: its pages are
- * white or cream, with indigo for header bands, plates, tabs and scrims. A dark (indigo) ground is
- * for what calls for one: an evening or dark invitation, a keynote or stage screen, a dark photo, or
- * a requester who asks for dark or navy in so many words.
+ * ADR-236, re-pointed by ADR-238: the tone of a design's ground. The client's guideline is light
+ * first: KAAE's 2025 Excellence Edition sets its pages on white. A dark ground (KAAE: the navy
+ * gradient of its cover, KAAE Blue to Midnight) is for what calls for one: a cover or announcement,
+ * an evening or dark invitation, a keynote or stage screen, a dark photo, or a requester who asks for
+ * dark or navy in so many words.
  *
  * The requester's own words are read here, with no model call: "white background", "on cream",
- * "like the brand book", "dark", "navy", "an evening reception". The brief records what was read and
- * the studio honours it over the layout model's own choice.
+ * "as per the brand guideline", "dark", "navy", "an evening reception". The brief records what was
+ * read and the studio honours it over the layout model's own choice.
  */
 
 export interface TonePreference {
@@ -32,8 +33,9 @@ const ar = (stem: string, suffixes = '[یێەکانوت]{0,5}') => new RegExp(`(
 const en = (words: string) => new RegExp(`\\b(${words})\\b`, 'i');
 
 const TERMS: Term[] = [
-  // The brand book itself: its pages are white under an indigo band.
-  { re: en("(?:like|as in|as per|follow(?:ing)?|per) (?:the |our |its |kaae'?s? )?brand ?(?:book|guide(?:line)?s?)|brand ?(?:book|guide(?:line)?s?) (?:style|look|colou?rs?)"), tone: 'light', ground: 'white', basis: 'colour' },
+  // The client's brand guideline itself ("as per the brand guidelines"; requesters also call it the
+  // brand's book): its pages are white.
+  { re: en("(?:like|as in|as per|follow(?:ing)?|per) (?:the |our |its |kaae'?s? )?brand ?(?:guide(?:line)?s?|bo{2}k)|brand ?(?:guide(?:line)?s?|bo{2}k) (?:style|look|colou?rs?)"), tone: 'light', ground: 'white', basis: 'colour' },
   { re: ar('(?:ڕێنمایی|ڕێنماییەکانی) ?براند', ''), tone: 'light', ground: 'white', basis: 'colour' },
   { re: ar('براند ?بووک', ''), tone: 'light', ground: 'white', basis: 'colour' },
   { re: en('white|off-white'), tone: 'light', ground: 'white', basis: 'colour' },
@@ -45,14 +47,14 @@ const TERMS: Term[] = [
   { re: ar('ڕووناک'), tone: 'light', basis: 'colour', weak: true },
   { re: ar('کاڵ', '[یە]{0,2}'), tone: 'light', basis: 'colour', weak: true },
   { re: ar('(?:أبيض|بيضاء)', ''), tone: 'light', ground: 'white', basis: 'colour' },
-  { re: en('dark|navy|midnight|indigo|deep blue|dark blue'), tone: 'dark', basis: 'colour' },
+  { re: en('dark|navy|midnight|deep blue|dark blue'), tone: 'dark', basis: 'colour' },
   { re: en('black'), tone: 'dark', basis: 'colour', weak: true },
   { re: ar('(?:تاریک|تۆخ|سورمەیی|نێڤی)'), tone: 'dark', basis: 'colour' },
   { re: ar('ڕەش'), tone: 'dark', basis: 'colour', weak: true },
   { re: ar('(?:داكن|داكنة|كحلي)', ''), tone: 'dark', basis: 'colour' },
   { re: ar('أسود', ''), tone: 'dark', basis: 'colour', weak: true },
-  // Occasions the guideline sets on indigo.
-  { re: en('evening|night|gala|dinner|banquet|keynote|on stage|stage screen|led screen'), tone: 'dark', basis: 'occasion' },
+  // Occasions the guideline sets on its navy gradient: its cover (p.0), and the evening and the stage.
+  { re: en('evening|night|gala|dinner|banquet|keynote|on stage|stage screen|led screen|cover page|cover design|as a cover|announcement cover'), tone: 'dark', basis: 'occasion' },
   { re: ar('(?:ئێوارە|شەو|شەوێک|ئاهەنگی ?شەو)', '[یێەکان]{0,4}'), tone: 'dark', basis: 'occasion' },
   { re: ar('(?:مسائي|مسائية|عشاء|حفل ?عشاء)', ''), tone: 'dark', basis: 'occasion' },
 ];
@@ -120,14 +122,15 @@ export function toneGroundHex(preference: Pick<TonePreference, 'tone' | 'ground'
   return hexToLuminance(paper) > 0.7 ? paper : undefined;
 }
 
-/** A photo's mean luminance (0..1) under which it is a dark hero: its ground may be indigo. */
+/** A photo's mean luminance (0..1) under which it is a dark hero: its ground may be navy. */
 export const DARK_HERO_LUMINANCE = 0.28;
 
 /**
  * The ground a photo recipe sits on (ADR-236). The requester's words decide first; then a dark
- * concept is kept only where the photo is dark; everything else is the light page. The layout
- * model's own choice of navy for a bright photo with nothing asking for it is the habit the brand
- * guideline corrects (46 of 46 drafts before 2026-10-01 were navy).
+ * concept is kept only where the photo is dark; everything else is the light page, white unless the
+ * requester named cream (ADR-238: the 2025 guideline's pages are white). The layout model's own
+ * choice of navy for a bright photo with nothing asking for it is the habit the guideline corrects
+ * (46 of 46 drafts before 2026-10-01 were navy).
  */
 export function resolveSurfaceTone(input: {
   /** The concept's own choice, when the model made one. */
@@ -136,7 +139,7 @@ export function resolveSurfaceTone(input: {
   /** The hero's mean luminance, when measured. */
   heroLuminance?: number;
 }): { surfaceTone: 'navy' | 'cream'; paper: 'white' | 'cream' } {
-  const paper = input.preference?.tone === 'light' && input.preference.ground === 'white' ? 'white' : 'cream';
+  const paper = input.preference?.tone === 'light' && input.preference.ground === 'cream' ? 'cream' : 'white';
   if (input.preference) return { surfaceTone: input.preference.tone === 'dark' ? 'navy' : 'cream', paper };
   const darkHero = typeof input.heroLuminance === 'number' && input.heroLuminance < DARK_HERO_LUMINANCE;
   return { surfaceTone: darkHero && input.requested !== 'cream' ? 'navy' : 'cream', paper };

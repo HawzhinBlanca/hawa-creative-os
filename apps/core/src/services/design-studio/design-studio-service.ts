@@ -44,7 +44,21 @@ import {
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError, OfficeDayExhaustedError, parseStudioImagery, parseStudioTier, type StudioImagery, type StudioTier } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, thumbnailPlaybookPrompt, type OrnamentSettings } from '@hawa/creative';
-import { fitPhotoBoxesToImages, photoSelectionFromInstructions, photoRecipeOf, eligibleRecipes, artDirectionRulesFromRaw } from '@hawa/creative';
+import { fitPhotoBoxesToImages, photoSelectionFromInstructions, photoRecipeOf, eligibleRecipes, artDirectionRulesFromRaw, pageGrammarFromRaw } from '@hawa/creative';
+
+/**
+ * ADR-238: a packaged reference's admitted display faces by script (`rules.typography.display.admitted`
+ * when its policy is the guideline's), so hard QA holds the client to them. A free policy admits the
+ * studio's whole set, as before.
+ */
+export function packagedAdmittedDisplayFonts(reference: Record<string, any>): { latin: string[]; arabic: string[] } | undefined {
+  const display = reference?.rules?.typography?.display;
+  if (display?.policy !== 'guideline' || !Array.isArray(display.admitted)) return undefined;
+  const names = display.admitted.filter((f: unknown): f is string => typeof f === 'string' && f.trim().length > 0);
+  const latin = names.filter((f: string) => fontFamilyScript(f) === 'latin');
+  const arabic = names.filter((f: string) => fontFamilyScript(f) === 'arabic');
+  return latin.length && arabic.length ? { latin, arabic } : undefined;
+}
 import { briefPhotoFacts } from './art-direction.js';
 import { recordedPhotoSelection, studioCopyBlocks } from './design-quality.js';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
@@ -1226,8 +1240,14 @@ export class DesignStudioService {
     if (packagedKaae) {
       // Read the way the qualification reads it (shared), so both design with the same rules.
       const rules = studioReferenceFromRaw(reference);
+      // ADR-238: the packaged reference's own logo rules (KAAE: 80px, clear space the height of its K)
+      // and its admitted display faces, which hard QA then enforces as it does for a DNA client.
+      const logoRules = reference.rules?.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number; clearSpaceShareOfHeight?: number } | undefined;
+      const admitted = packagedAdmittedDisplayFonts(reference);
       referencePack = { palette: rules.palette, referenceFonts: { latin: rules.latinFont, arabic: rules.arabicFont },
-        clientId: reference.clientId, referenceHash: request.referenceHash };
+        clientId: reference.clientId, referenceHash: request.referenceHash,
+        ...(admitted ? { admittedDisplayFonts: admitted } : {}),
+        ...(logoRules ? { logoConstraints: logoRules } : {}) };
       latinFont = rules.latinFont;
       arabicFont = rules.arabicFont;
       promotedRules = rules.promotedRules;
@@ -1357,6 +1377,8 @@ export class DesignStudioService {
       imageryStrategy: (runStages(run).brief as CreativeBrief | undefined)?.imageryStrategy,
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
       ornament: packagedKaae ? ornamentSettings() : undefined,
+      // ADR-238: the client's page grammar, when its reference names one (KAAE's 2025 guideline).
+      ...(packagedKaae && pageGrammarFromRaw(reference) ? { pageGrammar: pageGrammarFromRaw(reference) } : {}),
       style: (runStages(run).brief as CreativeBrief | undefined)?.styleSpec,
       // ADR-170: the client's house art-direction rules and the brief's subject, for the art director.
       artDirectionRules: artDirectionRulesFromRaw(reference),

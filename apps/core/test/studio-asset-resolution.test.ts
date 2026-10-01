@@ -78,11 +78,11 @@ describe('design studio asset resolution', () => {
   it("briefs with the client's own colour rules when cwd is not the repository root", async () => {
     awayFromRepoRoot();
     const ctx = await stageContext();
-    expect(ctx.promotedRules.startsWith('KAAE brand guideline palette, light first.')).toBe(true);
+    expect(ctx.promotedRules.startsWith('KAAE Brand Guidelines, Excellence Edition (2025), light first.')).toBe(true);
     expect(ctx.promotedRules).not.toContain('Keep title clear and centered');
-    expect(ctx.latinFont).toBe('Verdana');
+    expect(ctx.latinFont).toBe('Inter');
     expect(ctx.arabicFont).toBe('Noto Sans Arabic');
-    expect(ctx.referencePack.palette).toContain('#E8B85C');
+    expect(ctx.referencePack.palette).toContain('#F7B500');
   });
 
   it('conditions the layout model on exemplar images when cwd is not the repository root', async () => {
