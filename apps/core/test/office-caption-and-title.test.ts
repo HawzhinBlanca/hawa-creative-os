@@ -4,6 +4,7 @@ import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.j
 import { composeOfficeDraftAlert } from '../src/services/office-draft-alert.js';
 import { startsWithName, withoutRepeatedClient } from '../src/core-helpers.js';
 import { shortTitle } from '../src/services/requester-turn.js';
+import { cleanDraftTitle } from '../src/services/draft-title.js';
 
 /**
  * ADR-180 (owner report, 2026-09-30). The office's photo alert for the KAAE K-12 draft read
@@ -74,5 +75,35 @@ describe('the office draft photo alert (ADR-180)', () => {
     const text = composeOfficeDraftAlert(base);
     expect(text).toContain('Approve or send it back in Hawa Desk on the office computer.');
     expect(text).not.toContain('Reply to this picture');
+  });
+});
+
+/**
+ * ADR-040 addendum (2026-10-01): titles stored before ADR-180 and ADR-142 are cleaned when they are
+ * read, wherever the bot names a draft, so the office's "which draft?" list, its confirmations and
+ * alerts, and the requester's own lists show them as a new title would be shown.
+ */
+describe('stored titles are shown cleaned (ADR-040 addendum, 2026-10-01)', () => {
+  const INTRO = 'KAAE: Here is the text and the photos:…';
+  const COPY = [{ text: 'Here is the text and the photos:' }, { text: `${RLM}KAAE K-12 Pilot Study\nField Visit Report` }];
+
+  it('names a draft titled from its introducer by its first line of copy, and drops direction marks', () => {
+    expect(cleanDraftTitle(INTRO, COPY)).toBe('KAAE K-12 Pilot Study');
+    expect(cleanDraftTitle(INTRO)).toBe('KAAE');
+    expect(cleanDraftTitle(`KAAE: ${RLM}KAAE K-12 Pilot Study…`)).toBe('KAAE K-12 Pilot Study…');
+    expect(cleanDraftTitle(`KAAE: ${RLM}National Forum`)).toBe('KAAE: National Forum');
+    expect(cleanDraftTitle('Autumn workshop poster')).toBe('Autumn workshop poster');
+    expect(cleanDraftTitle('   ')).toBeNull();
+  });
+
+  it('the office alert names it by its copy', () => {
+    const caption = composeOfficeDraftAlert({ title: INTRO, copy: COPY, clientName: 'KAAE', telegramDecision: true });
+    expect(caption.split('\n')[0]).toBe('A new draft is ready for office review: "KAAE K-12 Pilot Study"');
+  });
+
+  it('the requester hears no introducer and no direction mark', () => {
+    expect(shortTitle(`KAAE: ${RLM}KAAE K-12 Pilot Study…`)).toBe('KAAE K-12 Pilot Study…');
+    expect(shortTitle(INTRO)).toBe('your design');
+    expect(shortTitle('KAAE: Standards launch')).toBe('Standards launch');
   });
 });

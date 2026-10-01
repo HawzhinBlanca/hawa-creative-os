@@ -24,6 +24,7 @@ import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, request
   type RequesterLang } from '@hawa/integrations';
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
+import { isIntroducerTitle, withoutMarks } from './draft-title.js';
 
 export type TurnIntent = 'acknowledgement' | 'status' | 'approval' | 'delivery_request' | 'cancel' | 'hold' | 'deadline' |
   'change' | 'new_brief' | 'conversation' | 'unclear';
@@ -840,7 +841,10 @@ export function planTurn(input: TurnInput): TurnPlan {
 const say = (phrase: Phrase, lang: Lang, params: Record<string, string | number> = {}) => sayPhrase(phrase, lang, params);
 const title = (r: { title: string }) => bold(shortTitle(r.title));
 export function shortTitle(value: string): string {
-  const t = String(value || '').replace(/^[^:]{1,40}:\s*/, '').replace(/\s+/g, ' ').trim() || 'your design';
+  // ADR-040 addendum (2026-10-01): a title stored before ADR-180 or ADR-142 is shown as a new one would
+  // be: no direction mark ("KAAE: \u200FKAAE K-12…"), and no introducer line as the design's name.
+  const name = withoutMarks(String(value || '').replace(/^[^:]{1,40}:\s*/, ''));
+  const t = name && !isIntroducerTitle(name) ? name : 'your design';
   return Array.from(t).length > 60 ? `${Array.from(t).slice(0, 59).join('')}…` : t;
 }
 

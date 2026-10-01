@@ -254,6 +254,19 @@ and the phrase-ending words and language names in `packages/creative/src/studio/
 | `office.you` | you | تۆ | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
 | `office.theRequester` | the requester | داواکارەکە | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
 | `office.draftAlertDecide` | Reply to this picture with “approved” to send it to {requester}, or say what to change. You can also decide in Hawa Desk. | بە «پەسەندە» وەڵامی ئەم وێنەیە بدەرەوە بۆ ئەوەی بۆ {requester} بنێردرێت، یان بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت. | needs native review (ADR-180, the office draft photo alert, 2026-09-30) |
+| `office.sentWhen` | sent {when} | {when} نێردرا | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.justNow` | just now | ئێستا | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.aMinuteAgo` | a minute ago | پێش خولەکێک | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.minutesAgo` | {n} minutes ago | پێش {n} خولەک | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.todayAt` | today {time} | ئەمڕۆ {time} | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.yesterdayAt` | yesterday {time} | دوێنێ {time} | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.daysAgo` | {n} days ago | پێش {n} ڕۆژ | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.noPhotos` | no photos | بێ وێنە | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.onePhoto` | 1 photo | 1 وێنە | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.photos` | {n} photos | {n} وێنە | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.newest` | newest | نوێترین | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.fromRequester` | from {requester} | داواکراوە لەلایەن {requester} | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
+| `office.aboutDraft` | About the {title} draft I sent you {when}: | دەربارەی ڕەشنووسی {title} کە {when} بۆم ناردیت: | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
 
 | `routing.statusHeld` | {title} is paused at your request. New design work is waiting for the office to resume it; work already admitted may still finish. | {title} بە داواکاریی تۆ ڕاگیراوە. کاری نوێی دیزاین چاوەڕێیە ئۆفیسەکە دووبارە دەستی پێ بکاتەوە؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |
 | `routing.holdConfirmed` | I've paused {title}. New design work will wait until the office resumes it; work already in progress may still finish. | {title} ڕاگیرا. کاری نوێی دیزاین چاوەڕێ دەکات تا ئۆفیس دووبارە دەستی پێبکات؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |

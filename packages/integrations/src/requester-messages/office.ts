@@ -37,6 +37,68 @@ export const OFFICE_MESSAGES = {
     en: 'Which draft do you mean?\n{list}\n\nAnswer with the number or the name.',
     ckb: 'مەبەستت کام ڕەشنووسە؟\n{list}\n\nبە ژمارە یان ناو وەڵام بدەرەوە.',
   },
+  /**
+   * ADR-040 addendum (2026-10-01): each draft in the "which draft?" list says what tells it apart from
+   * the others: when it was sent to this member, how many photos its request has, which is the newest,
+   * and who asked for it when they are not all the same person. `{n}` is a count, `{time}` a 24-hour
+   * clock time in Iraq, `{when}` one of the times below.
+   */
+  sentWhen: {
+    en: 'sent {when}',
+    ckb: '{when} نێردرا',
+  },
+  justNow: {
+    en: 'just now',
+    ckb: 'ئێستا',
+  },
+  aMinuteAgo: {
+    en: 'a minute ago',
+    ckb: 'پێش خولەکێک',
+  },
+  minutesAgo: {
+    en: '{n} minutes ago',
+    ckb: 'پێش {n} خولەک',
+  },
+  todayAt: {
+    en: 'today {time}',
+    ckb: 'ئەمڕۆ {time}',
+  },
+  yesterdayAt: {
+    en: 'yesterday {time}',
+    ckb: 'دوێنێ {time}',
+  },
+  daysAgo: {
+    en: '{n} days ago',
+    ckb: 'پێش {n} ڕۆژ',
+  },
+  noPhotos: {
+    en: 'no photos',
+    ckb: 'بێ وێنە',
+  },
+  onePhoto: {
+    en: '1 photo',
+    ckb: '1 وێنە',
+  },
+  photos: {
+    en: '{n} photos',
+    ckb: '{n} وێنە',
+  },
+  newest: {
+    en: 'newest',
+    ckb: 'نوێترین',
+  },
+  fromRequester: {
+    en: 'from {requester}',
+    ckb: 'داواکراوە لەلایەن {requester}',
+  },
+  /**
+   * Words with no reply, applied to the draft whose picture this member was sent last (within two
+   * hours, with no other draft sent close to it): the answer names it first, so a wrong guess shows.
+   */
+  aboutDraft: {
+    en: 'About the {title} draft I sent you {when}:',
+    ckb: 'دەربارەی ڕەشنووسی {title} کە {when} بۆم ناردیت:',
+  },
   /** Words about a draft that say neither approve, change nor reject. */
   whatToDo: {
     en: 'What should I do with {title}: approve it and send it, send it back with changes, or reject it? Just tell me in your own words.',
