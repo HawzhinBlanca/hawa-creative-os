@@ -13,6 +13,9 @@
  *    row and uses its stored decision, or, when the first call's outcome is unknown, none.
  * The model is resolveModel('text'). Its answer is data: it can name one of the listed requests,
  * say "new design", or say it is unsure; it cannot start anything by itself.
+ *
+ * ADR-200: the office turn reads an office member's words through the same ledger and allowance
+ * (`readOnce`, reader `office`; office-intent-model.ts).
  */
 import { randomUUID } from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
@@ -89,87 +92,109 @@ const safeId = (v: unknown, max = 200) => typeof v === 'string' && v.length <= m
 export function createRequesterIntentModel(db: Kysely<Database>, options: { fetcher?: typeof fetch; apiKey?: () => string | undefined } = {}): RequesterIntentModel {
   return {
     async read(input) {
-      const key = (options.apiKey ?? (() => process.env.OPENAI_API_KEY))();
-      if (!key || key.startsWith('mock-') || !input.requests.length) return null;
+      if (!input.requests.length) return null;
       const clients = [...new Set(input.requests.map((r) => r.clientId).filter((c): c is string => Boolean(c)))];
       if (clients.length !== 1 || input.requests.some((r) => !r.clientId)) return null;
       const clientId = clients[0];
-      const model = resolveModel('text');
-      const body = intentRequestBody(model, input.text, input.requests);
-      const scope = { tenantId: input.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
-      let callId: string | null = null;
-      try {
-        const admitted = await withRlsContext(db, scope, async (trx) => {
-          await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`requester-intent:${input.tenantId}:${input.updateId}`}, 0))`.execute(trx);
-          const prior = (await sql<{ status: string; decision: unknown }>`SELECT status, decision FROM hawa.requester_intent_calls
-            WHERE tenant_id = ${input.tenantId}::uuid AND update_id = ${input.updateId}`.execute(trx)).rows[0];
-          if (prior) return { prior: prior.status === 'completed' ? parseDecision(prior.decision) : null };
-          if (!await egressAllowed(trx, input.tenantId, clientId)) return { prior: null, skip: true };
-          const reservation = reserveStudioText(body);
-          if (reservation.usd > 0.5) return { prior: null, skip: true };
-          const id = randomUUID();
-          await sql`INSERT INTO hawa.requester_intent_calls (id, tenant_id, update_id, chat_id, client_id, model, request_sha256, reservation)
-            VALUES (${id}::uuid, ${input.tenantId}::uuid, ${input.updateId}, ${input.chatId}, ${clientId}::uuid, ${model},
-              ${reservation.requestSha256}, ${JSON.stringify(reservation)}::jsonb)`.execute(trx);
-          return { id };
-        });
-        if ('prior' in admitted) return admitted.prior ? asReading(admitted.prior, input.requests) : null;
-        callId = admitted.id;
-      } catch (error) {
-        if (officeSpendingRefusal(error)) return null;
-        log.warn('[requester-intent] no reading admitted:', error instanceof Error ? error.message : error);
-        return null;
-      }
-
-      const started = performance.now();
-      const outcome = { acceptance: 'unknown', costBasis: 'unavailable', costUsd: null as number | null,
-        inputTokens: null as number | null, outputTokens: null as number | null, providerRequestId: null as string | null,
-        responseId: null as string | null, servedModel: null as string | null, diagnostic: 'MODEL_RESPONSE_UNCERTAIN',
-        decision: null as Decision | null };
-      try {
-        const response = await (options.fetcher ?? fetch)('https://api.openai.com/v1/chat/completions', {
-          method: 'POST', body, redirect: 'error', signal: AbortSignal.timeout(20_000),
-          headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        });
-        outcome.providerRequestId = safeId(response.headers.get('x-request-id'));
-        outcome.diagnostic = `MODEL_HTTP_${response.status}`;
-        if ([400, 401, 403, 422, 429].includes(response.status)) {
-          outcome.acceptance = 'not_accepted'; outcome.costBasis = 'not_accepted'; outcome.costUsd = 0;
-        } else if (response.ok) {
-          outcome.acceptance = 'response_received';
-          const data = await response.json() as Record<string, any>;
-          outcome.responseId = safeId(data.id);
-          outcome.servedModel = safeId(data.model, 160);
-          const usage = studioTextUsage(model, outcome.servedModel, data.usage);
-          if (usage) {
-            outcome.costBasis = 'usage'; outcome.costUsd = usage.estimatedCostUsd;
-            outcome.inputTokens = usage.inputTokens; outcome.outputTokens = usage.outputTokens;
-          }
-          const content = data.choices?.[0]?.message?.content;
-          outcome.decision = typeof content === 'string' ? parseDecision(JSON.parse(content)) : null;
-          outcome.diagnostic = outcome.decision ? 'INTENT_READ' : 'MODEL_RESPONSE_INVALID';
-        }
-      } catch (error) {
-        log.warn('[requester-intent] the reading did not complete:', error instanceof Error ? error.message : error);
-      }
-      try {
-        await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requester_intent_calls SET status = 'completed',
-            acceptance = ${outcome.acceptance}, cost_basis = ${outcome.costBasis}, cost_usd = ${outcome.costUsd},
-            input_tokens = ${outcome.inputTokens}, output_tokens = ${outcome.outputTokens},
-            provider_request_id = ${outcome.providerRequestId}, response_id = ${outcome.responseId},
-            served_model = ${outcome.servedModel}, diagnostic = ${outcome.diagnostic},
-            latency_ms = ${Math.max(0, Math.round(performance.now() - started))},
-            decision = ${outcome.decision ? JSON.stringify(outcome.decision) : null}::jsonb
-          WHERE tenant_id = ${input.tenantId}::uuid AND id = ${callId}::uuid AND status = 'started'`.execute(trx));
-      } catch (error) {
-        // The call stays 'started' and is charged its whole reservation; the decision is not used,
-        // so a replay (which finds no completed decision) asks the requester, as this one does.
-        log.warn('[requester-intent] the outcome could not be recorded:', error instanceof Error ? error.message : error);
-        return null;
-      }
-      return outcome.decision ? asReading(outcome.decision, input.requests) : null;
+      const decision = await readOnce(db, options, { reader: 'requester', tenantId: input.tenantId, updateId: input.updateId,
+        chatId: input.chatId, clientId, egressClients: [clientId],
+        body: (model) => intentRequestBody(model, input.text, input.requests), parse: parseDecision });
+      return decision ? asReading(decision, input.requests) : null;
     },
   };
+}
+
+/**
+ * One paid reading of one Telegram update by one reader (ADR-144; ADR-200 adds the office reader),
+ * admitted in the ledger and the office's shared allowance (role intake_router) before it is sent.
+ * A second attempt for the same update and reader finds the row and uses its stored decision, or none
+ * when the first call's outcome is unknown. Null: no key, a mock key, a client whose policy does not
+ * admit OpenAI, a refused allowance, a failed call or an answer that does not parse.
+ */
+export async function readOnce<D extends object>(db: Kysely<Database>, options: { fetcher?: typeof fetch; apiKey?: () => string | undefined },
+  input: { reader: 'requester' | 'office'; tenantId: string; updateId: number; chatId: string; clientId: string | null;
+    /** Every client whose words or titles the request carries: each must admit OpenAI. */
+    egressClients: string[]; body: (model: string) => string; parse: (value: unknown) => D | null }): Promise<D | null> {
+  const key = (options.apiKey ?? (() => process.env.OPENAI_API_KEY))();
+  if (!key || key.startsWith('mock-') || !input.egressClients.length) return null;
+  const model = resolveModel('text');
+  const body = input.body(model);
+  const scope = { tenantId: input.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
+  const lock = input.reader === 'requester' ? `requester-intent:${input.tenantId}:${input.updateId}`
+    : `${input.reader}-intent:${input.tenantId}:${input.updateId}`;
+  let callId: string | null = null;
+  try {
+    const admitted = await withRlsContext(db, scope, async (trx) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${lock}, 0))`.execute(trx);
+      const prior = (await sql<{ status: string; decision: unknown }>`SELECT status, decision FROM hawa.requester_intent_calls
+        WHERE tenant_id = ${input.tenantId}::uuid AND reader = ${input.reader} AND update_id = ${input.updateId}`.execute(trx)).rows[0];
+      if (prior) return { prior: prior.status === 'completed' ? input.parse(prior.decision) : null };
+      for (const client of new Set(input.egressClients)) {
+        if (!await egressAllowed(trx, input.tenantId, client)) return { prior: null, skip: true };
+      }
+      const reservation = reserveStudioText(body);
+      if (reservation.usd > 0.5) return { prior: null, skip: true };
+      const id = randomUUID();
+      await sql`INSERT INTO hawa.requester_intent_calls (id, tenant_id, update_id, chat_id, client_id, model, request_sha256, reservation, reader)
+        VALUES (${id}::uuid, ${input.tenantId}::uuid, ${input.updateId}, ${input.chatId}, ${input.clientId}::uuid, ${model},
+          ${reservation.requestSha256}, ${JSON.stringify(reservation)}::jsonb, ${input.reader})`.execute(trx);
+      return { id };
+    });
+    if ('prior' in admitted) return admitted.prior ?? null;
+    callId = admitted.id;
+  } catch (error) {
+    if (officeSpendingRefusal(error)) return null;
+    log.warn(`[${input.reader}-intent] no reading admitted:`, error instanceof Error ? error.message : error);
+    return null;
+  }
+
+  const started = performance.now();
+  const outcome = { acceptance: 'unknown', costBasis: 'unavailable', costUsd: null as number | null,
+    inputTokens: null as number | null, outputTokens: null as number | null, providerRequestId: null as string | null,
+    responseId: null as string | null, servedModel: null as string | null, diagnostic: 'MODEL_RESPONSE_UNCERTAIN',
+    decision: null as D | null };
+  try {
+    const response = await (options.fetcher ?? fetch)('https://api.openai.com/v1/chat/completions', {
+      method: 'POST', body, redirect: 'error', signal: AbortSignal.timeout(20_000),
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    });
+    outcome.providerRequestId = safeId(response.headers.get('x-request-id'));
+    outcome.diagnostic = `MODEL_HTTP_${response.status}`;
+    if ([400, 401, 403, 422, 429].includes(response.status)) {
+      outcome.acceptance = 'not_accepted'; outcome.costBasis = 'not_accepted'; outcome.costUsd = 0;
+    } else if (response.ok) {
+      outcome.acceptance = 'response_received';
+      const data = await response.json() as Record<string, any>;
+      outcome.responseId = safeId(data.id);
+      outcome.servedModel = safeId(data.model, 160);
+      const usage = studioTextUsage(model, outcome.servedModel, data.usage);
+      if (usage) {
+        outcome.costBasis = 'usage'; outcome.costUsd = usage.estimatedCostUsd;
+        outcome.inputTokens = usage.inputTokens; outcome.outputTokens = usage.outputTokens;
+      }
+      const content = data.choices?.[0]?.message?.content;
+      outcome.decision = typeof content === 'string' ? input.parse(JSON.parse(content)) : null;
+      outcome.diagnostic = outcome.decision ? 'INTENT_READ' : 'MODEL_RESPONSE_INVALID';
+    }
+  } catch (error) {
+    log.warn(`[${input.reader}-intent] the reading did not complete:`, error instanceof Error ? error.message : error);
+  }
+  try {
+    await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requester_intent_calls SET status = 'completed',
+        acceptance = ${outcome.acceptance}, cost_basis = ${outcome.costBasis}, cost_usd = ${outcome.costUsd},
+        input_tokens = ${outcome.inputTokens}, output_tokens = ${outcome.outputTokens},
+        provider_request_id = ${outcome.providerRequestId}, response_id = ${outcome.responseId},
+        served_model = ${outcome.servedModel}, diagnostic = ${outcome.diagnostic},
+        latency_ms = ${Math.max(0, Math.round(performance.now() - started))},
+        decision = ${outcome.decision ? JSON.stringify(outcome.decision) : null}::jsonb
+      WHERE tenant_id = ${input.tenantId}::uuid AND id = ${callId}::uuid AND status = 'started'`.execute(trx));
+  } catch (error) {
+    // The call stays 'started' and is charged its whole reservation; the decision is not used,
+    // so a replay (which finds no completed decision) falls back as this one does.
+    log.warn(`[${input.reader}-intent] the outcome could not be recorded:`, error instanceof Error ? error.message : error);
+    return null;
+  }
+  return outcome.decision;
 }
 
 /** The client's egress policy and its active DNA both admit OpenAI for client messages. */
