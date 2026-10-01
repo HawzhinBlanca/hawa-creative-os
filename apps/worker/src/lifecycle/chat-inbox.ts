@@ -26,7 +26,7 @@ import * as restate from '@restatedev/restate-sdk';
 import type { OutboundMessage } from '@hawa/contracts';
 import { withInvocationLogContext, log } from '../logging.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
-import type { OpenAutomaticEvent, OpenManualEvent, RequesterDecisionEvent } from './request-lifecycle.js';
+import type { OpenAutomaticEvent, OpenManualEvent, RequesterDecisionEvent, WithdrawEvent } from './request-lifecycle.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { officeAlertKey } from './office-chats.js';
 import { ACCESS_MESSAGES, INBOX_MESSAGES, requesterLang, say, type RequesterLang } from '@hawa/integrations';
@@ -54,7 +54,9 @@ export type IntakeAnswer =
       /** When mode=lifecycle and Core routed the update as a requester revision. */
       lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
         'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message' |
-        'late-change' | 'chat-answer' | 'settle-later';
+        'late-change' | 'chat-answer' | 'settle-later' |
+        /** ADR-230: the requester's cancel withdraws `requestId`; RequestLifecycle answers once it is closed. */
+        'withdraw';
       albumMessage?: string; albumNoticeKey?: string;
       /**
        * settle-later (ADR-143): settle this update after `delayMs` (a saved album photo, or a held brief;
@@ -116,6 +118,8 @@ export interface InboxContext {
    */
   sendLifecycleDecision(requestId: string, event: RequesterDecisionEvent & { newTaskId: string }): Promise<void> | void;
   sendLifecycleOpen(requestId: string, event: OpenManualEvent | OpenAutomaticEvent): Promise<void> | void;
+  /** ADR-230: fire-and-forget a requester's withdraw to RequestLifecycle; absent in older test harnesses. */
+  sendLifecycleWithdraw?(requestId: string, event: WithdrawEvent): Promise<void> | void;
   sendNotice(message: OutboundMessage): void;
   /** A durable delayed call of this chat's `settle` handler (ADR-143), under a stable idempotency key. */
   scheduleSettle(input: SettleInput, delayMs: number, key: string): void;
@@ -351,6 +355,15 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
         });
       }
     }
+    if (done.lifecycleAction === 'withdraw') {
+      // ADR-230: Core decided the cancel withdraws this request. RequestLifecycle closes it (Core checks
+      // this update's decision) and tells the requester and the office, so nothing is said here. The
+      // event key is the update: a replay of this handler sends it once.
+      if (!done.requestId || !done.chatId) throw new Error('Core returned an incomplete withdraw');
+      if (!ctx.sendLifecycleWithdraw) throw new Error('This ChatInbox cannot reach RequestLifecycle.withdraw');
+      await ctx.sendLifecycleWithdraw(done.requestId, { v: 1, kind: 'withdraw', eventId: `chatinbox:withdraw:${update.update_id}`,
+        requestId: done.requestId, updateId: update.update_id });
+    }
     if (done.lifecycleAction === 'request-choice-required' && done.chatId &&
         (done.code === 'AMBIGUOUS_REQUEST' || done.code === 'STALE_REQUEST_REPLY')) {
       ctx.sendNotice({ v: 1, key: `chatinbox:request-choice:${update.update_id}`,
@@ -457,6 +470,11 @@ function inboxContext(ctx: restate.ObjectContext): InboxContext {
       const { RequestLifecycleApi } = await import('./request-lifecycle.js');
       ctx.objectSendClient(RequestLifecycleApi, requestId)
         .open(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
+    },
+    sendLifecycleWithdraw: async (requestId, event) => {
+      const { RequestLifecycleApi } = await import('./request-lifecycle.js');
+      ctx.objectSendClient(RequestLifecycleApi, requestId)
+        .withdraw(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
     },
     sendNotice: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
       .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),

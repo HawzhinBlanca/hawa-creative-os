@@ -8,6 +8,7 @@ import { log } from '../logging.js';
 import { createRedrive } from '../services/redrive.js';
 import { rejectLegacyTaskDesignWrite } from './lifecycle-design-proof.js';
 import { requestLifecycleDesignRetry } from '../services/lifecycle-office-retry.js';
+import { requestLifecycleWithdraw } from '../services/lifecycle-withdraw.js';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { withRlsContext } from '@hawa/db';
 
@@ -34,7 +35,10 @@ export function registerControlsRoutes(ctx: RouteContext): void {
     if (!['operator', 'administrator', 'art_director', 'creative_director', 'designer'].includes(auth.role || '')) {
       return problem(c, 403, 'Task Control Forbidden', 'An office operator or designer is required.');
     }
-    const lifecycleRefusal = control === 'resume' ? null : await rejectLegacyTaskDesignWrite(ctx, c, auth);
+    // ADR-230: the Desk's Cancel of a request-owned task withdraws its request, through the request's own
+    // object (it used to answer LIFECYCLE_OWNED, and nothing could close the request).
+    const withdrawing = control === 'cancel' && db ? await lifecycleRequestOf(auth, taskId).catch(() => null) : null;
+    const lifecycleRefusal = control === 'resume' || withdrawing ? null : await rejectLegacyTaskDesignWrite(ctx, c, auth);
     if (lifecycleRefusal) return lifecycleRefusal;
     if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
     if (!db) return problem(c, 503, 'Database Required', 'Task controls require a durable checkpoint.');
@@ -45,6 +49,15 @@ export function registerControlsRoutes(ctx: RouteContext): void {
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(key) || !Number.isSafeInteger(body?.expectedVersion) || body.expectedVersion < 1 ||
         typeof body?.reason !== 'string' || !body.reason.trim() || body.reason.length > 2000) {
       return problem(c, 422, 'TASK_CONTROL_INPUT_REQUIRED', 'Provide a stable Idempotency-Key, current expectedVersion and a reason (1–2000 characters).');
+    }
+    if (withdrawing) {
+      const result = await requestLifecycleWithdraw(db, { tenantId: auth.tenantId, taskId,
+        actor: { userId: auth.userId, role: auth.role || '' }, reason: body.reason, key, expectedVersion: body.expectedVersion });
+      if (result) {
+        if (!result.ok) return problem(c, result.status, result.code, result.message);
+        if (!result.body.replayed) broadcastTransition(taskId, result.body.fromStatus, 'CANCELLED', result.body.version);
+        return c.json(result.body, result.status);
+      }
     }
     try {
       const result = await controlTask(db, { tenantId: auth.tenantId, actorId: auth.userId, role: auth.role || 'operator' },

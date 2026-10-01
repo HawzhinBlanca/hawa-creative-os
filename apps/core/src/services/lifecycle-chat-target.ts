@@ -363,13 +363,22 @@ export function lateChangeOfficeAlert(late: LateRequesterChange, requesterChatId
     ? 'It was already approved and being sent to them; the sending was not stopped.'
     : late.requestStage === 'delivered'
       ? 'It had already been delivered to them.'
-      : 'The design will not be sent to them until someone in the office has read these words in the Desk.';
+      // ADR-230 section 6: a change kept while designing is applied by a new round, which marks it read.
+      : late.requestStage === 'designing' && (late.kind ?? 'change') === 'change'
+        ? 'If it is not added, the design will not be sent to them until someone in the office has read these words in the Desk.'
+        : 'The design will not be sent to them until someone in the office has read these words in the Desk.';
   const named = late.title ? ` "${late.title}"` : '';
   const opening = late.kind === 'hold'
     ? `${who} asked to pause the design${named}. ${late.held ? 'New automatic work on it is paused; anything already running may still finish. Read their words, then resume it in the Desk when it should go on.' : 'It was already past the point where it can be paused automatically; please tell them what can still be stopped.'}`
+    // ADR-230: a cancel reaches the office as a note only when it came too late to withdraw the request.
+    : late.kind === 'cancel' && ['approved', 'delivering', 'delivered'].includes(late.requestStage)
+    ? `${who} asked to cancel the design${named}, but it was already ${STAGE_WORDS[late.requestStage]}, so it could not be cancelled and nothing was stopped. They were told so; please tell them what can still be done.`
     : late.kind === 'cancel'
     ? `${who} asked to cancel the design${named} while it was ${STAGE_WORDS[late.requestStage]}. Nothing was stopped automatically.`
-    : late.requestStage === 'designing' || late.requestStage === 'manual' || late.requestStage === 'awaiting_answer'
+    // ADR-230 section 6: a change sent while a draft is being made starts a new round when that draft finishes.
+    : late.requestStage === 'designing'
+      ? `${who} sent a change for the design${named} while it was ${STAGE_WORDS[late.requestStage]}. It will be added automatically in a new round when the current draft finishes; if a round can't start, the draft alert will list it.`
+    : late.requestStage === 'manual' || late.requestStage === 'awaiting_answer'
       ? `${who} sent a change for the design${named} while it was ${STAGE_WORDS[late.requestStage]}. It is not in the draft being made; add it in the next round or at review.`
       : `${who} wrote about the design${named} ${late.requestStage === 'in_review' ? 'while' : 'after'} it was ${STAGE_WORDS[late.requestStage]}. Nothing was changed; please read their words and answer them in the chat.`;
   return { chatId: officeChatId, text: [

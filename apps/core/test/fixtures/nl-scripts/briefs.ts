@@ -59,7 +59,7 @@ export const BRIEF_SCRIPTS: Script[] = [
       await p.wait(60_000);
       expect(p.opened).toHaveLength(1);
       expect(p.kept).toHaveLength(1);
-      expect(p.answer(fix)).toMatch(/kept that|passed/i);
+      expect(p.answer(fix)).toMatch(/add that to|kept that|passed/i);
     },
   },
   {

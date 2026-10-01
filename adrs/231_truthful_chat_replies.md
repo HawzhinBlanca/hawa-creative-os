@@ -44,7 +44,7 @@ A live Telegram test against production on 2026-10-01 (owner chat, synthetic upd
 
 Other changes:
 
-- **Change kept while the design is being made.** The requester heard "I've added that to *T*", but the office heard the words were not applied. The requester now hears "I've kept that with *T* for the office". The office hears "It is not in the draft being made; add it in the next round or at review."
+- **Change kept while the design is being made.** The requester heard "I've added that to *T*", but the office heard the words were not applied. The requester now hears "I've kept that with *T* for the office". The office hears "It is not in the draft being made; add it in the next round or at review." *Superseded for `designing` when ADR-230 section 6 was merged (2026-10-01):* such a change starts a new round when the draft finishes, so the requester hears "Got it. I'll add that to *T* as soon as the current draft is done." (`changeAddedNextRound`), and the office hears "It will be added automatically in a new round when the current draft finishes; if a round can't start, the draft alert will list it." The "kept … for the office" lines stay for `manual` and `awaiting_answer`.
 - **A delivered design that cannot be reopened.** This is a design made by hand, or one whose brief is missing. Its redo plan already held this update's receipt, so the kept note found no answer and returned `IDEMPOTENCY_CONFLICT`: the requester heard nothing. The note now gives its own answer, as it does after a replan, and a replay repeats it.
 
 ### 2.3 Status lines are true for their stage (L5)
@@ -119,6 +119,6 @@ No new call. Redo targets, status lines, names, titles and question readings are
 ## 5. Limits
 
 - **L10 in production is not verified.** No SQL is allowed against production, so the state of the two K-12 requests in the live list was not seen. The filter covers an approval standing on the current revision and a task with no revision. If those requests were in review with no approval, they are still listed, now with what tells them apart (ADR-040).
-- **Kept changes are still not applied (L8).** A change kept while a design is being made is still not folded into the next round. The wording no longer says it was added.
+- **Kept changes are still not applied (L8).** A change kept while a design is being made is still not folded into the next round. The wording no longer says it was added. *Resolved by ADR-230 section 6 for `designing`; see section 2.2 above for the merged wording.*
 - **Not tested live.** No live Telegram, no real model call, no native Sorani review. There are 12 new or changed Sorani lines in `SORANI_REVIEW.md`, marked ADR-231.
 - **The owner's own wording.** `office.draftAlertDecide` and `office.lostTrack` still name a reply target (ADR-200 section 5).

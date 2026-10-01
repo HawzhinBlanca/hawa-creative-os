@@ -138,9 +138,16 @@ export const ROUTING_MESSAGES = {
   },
   // ADR-231: the words are kept with the design for the office, not applied to the draft being made
   // (the office's alert says so); "I've added that to …" promised more than happens.
+  // Since ADR-230 section 6 this is said only while a designer has it (`manual`) or it waits for an answer.
   changeAddedWhileDesigning: {
     en: "Got it. I've kept that with {title} for the office; they'll see it before the design is sent to you.",
     ckb: 'تێگەیشتم. ئەوەم لەگەڵ {title} بۆ ئۆفیسەکە هەڵگرت؛ پێش ناردنی دیزاینەکە دەیبینن.',
+  },
+  // ADR-230 section 6: a change sent while a draft is being made (`designing`) starts a new round with it
+  // when that draft finishes; if no round can start, the draft alert lists it and the requester is told.
+  changeAddedNextRound: {
+    en: "Got it. I'll add that to {title} as soon as the current draft is done.",
+    ckb: 'تێگەیشتم. هەر کە ڕەشنووسەکەی ئێستا تەواو بوو، ئەوە بۆ {title} زیاد دەکەم.',
   },
   changePassedInReview: {
     en: "Got it. The office is checking {title} now, and I've passed your change to them.",

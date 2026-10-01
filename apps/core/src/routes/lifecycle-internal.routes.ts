@@ -66,10 +66,11 @@ import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, 
   withoutBotMentions, type ChatRequestView, type IntentReading, type TurnPlan } from '../services/requester-turn.js';
 import { briefPartSeconds, briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
 import { officeChatFor, officeChatsFor, withOfficeAlerts } from '../services/office-chats.js';
+import { WITHDRAWABLE_STAGES, projectLifecycleWithdraw, recordWithdrawnOutcome, withdrawTooLateText, type WithdrawActor } from '../services/lifecycle-withdraw.js';
 import { addPhotoMaterial, MATERIAL_STAGES, photoMaterialLine } from '../services/lifecycle-photo-material.js';
 import { createRequesterIntentModel, type RequesterIntentModel } from '../services/requester-intent-model.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
-import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
+import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart, reconcileLifecycleChatOnlyDelivery } from '../services/lifecycle-delivery-projection.js';
 import { projectLifecycleOfficeRetry } from '../services/lifecycle-office-retry.js';
 import { chatAutoDraftsEnabled, type ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
@@ -1377,6 +1378,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 case 'note': {
                   const target = byId(plan.requestId);
                   if (!target) return await decided(200, chatAnswer(statusText([], lang)));
+                  // ADR-230: a cancel the plan is sure of withdraws a request nothing has been approved for.
+                  // The decision is recorded here; RequestLifecycle closes the request (Core checks this
+                  // decision) and tells the requester and the office once it is closed.
+                  if (plan.note === 'cancel' && (WITHDRAWABLE_STAGES as readonly string[]).includes(target.stage)) {
+                    return await decided(200, { lifecycleAction: 'withdraw', chatId, requestId: target.requestId,
+                      requestStage: target.stage, intent: reading.intent });
+                  }
                   // ADR-156 (audit #11, #12): a photo sent with the words, or kept with a question these
                   // words answer, is material for a design still being made; after that it stays in the chat.
                   const material = plan.note === 'change' && (MATERIAL_STAGES as readonly string[]).includes(target.stage);
@@ -1427,6 +1435,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     const held = plan.note === 'hold' && await pauseRequesterDesign(trx,TENANT,
                       {requestId:target.requestId,taskId:target.currentTaskId,requestRev:target.rev,requestStage:target.stage,text:words},update.update_id);
                     const said = photoWithoutWords && material ? say(MEDIA_MESSAGES.photoPassed, lang, { title })
+                      // ADR-230: a cancel kept as a note came too late; the requester hears that, truthfully.
+                      : plan.note === 'cancel' ? withdrawTooLateText(target.stage, target.title, lang, Boolean(officeChatFor(chatId)))
                       : noteText(plan.note, spokenStage(target), target.title, lang, held, plan.redo === true);
                     const late: LateRequesterChange = { requestId: target.requestId, taskId: target.currentTaskId,
                       requestRev: target.rev, requestStage: target.stage as LateChangeStage, text: words,
@@ -1958,6 +1968,90 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         detail: error.message }, 409);
       log.error(`[core:internal] lifecycle delivery result ${requestId} failed:`, error);
       return problem(c, 503, 'Lifecycle Projection Unavailable', 'The delivery result did not commit; retry with the same key');
+    }
+  });
+  // ADR-230: RequestLifecycle withdraws a request (its requester's cancel, or the office's Cancel in the
+  // Desk): the request is closed (`cancelled`) with its current task, under one receipt. A requester's
+  // cancel that came too late is kept for the office and answered truthfully; the request is unchanged.
+  internal('/lifecycle/:requestId/withdraw', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const actor = op?.actor && typeof op.actor === 'object' && !Array.isArray(op.actor) ? op.actor as Record<string, unknown> : null;
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    const eventId = typeof op?.eventId === 'string' ? op.eventId : '';
+    const parsedActor: WithdrawActor | null = actor?.kind === 'requester' && Number.isSafeInteger(actor.updateId) && Number(actor.updateId) > 0
+      ? { kind: 'requester', updateId: Number(actor.updateId) }
+      : actor?.kind === 'office' && UUID.test(String(actor.userId || '')) && typeof actor.role === 'string' && actor.role.length <= 60
+        ? { kind: 'office', userId: String(actor.userId), role: actor.role } : null;
+    if (!UUID.test(requestId) || body?.v !== 1 || !Number.isInteger(expectedRev) || expectedRev < 1 || rev !== expectedRev + 1 ||
+        op?.kind !== 'withdraw' || !UUID.test(String(op.taskId || '')) || !parsedActor ||
+        body.key !== `${requestId}:${rev}:withdraw:${eventId}` ||
+        typeof op.reason !== 'string' || op.reason.length > 2000 || (parsedActor.kind === 'office' && !op.reason.trim())) {
+      return problem(c, 400, 'Invalid withdraw', 'Expected one versioned withdraw of the current request by its requester or the office');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleWithdraw(db, { requestId, tenantId: DEFAULT_TENANT_ID, taskId: op.taskId as string,
+        eventId, actor: parsedActor, reason: (op.reason as string).trim(), expectedRev, rev, key: body.key as string });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle withdraw ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The withdraw did not commit; retry with the same key');
+    }
+  });
+
+  // ADR-230: a design run that finished after its request was withdrawn is recorded, and goes nowhere.
+  internal('/lifecycle/:requestId/withdrawn-outcome', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const taskId = String(body?.taskId || '');
+    const runId = String(body?.runId || '');
+    const report = body?.report && typeof body.report === 'object' && !Array.isArray(body.report) ? body.report as Record<string, unknown> : null;
+    if (!UUID.test(requestId) || body?.v !== 1 || !UUID.test(taskId) ||
+        (runId !== `dr-${taskId}` && !new RegExp(`^dr-${taskId}-a[1-9][0-9]*$`).test(runId)) ||
+        body.eventId !== `dr-finished:${runId}` || !report || JSON.stringify(report).length > 4000) {
+      return problem(c, 400, 'Invalid withdrawn outcome', 'Expected the finished run of a withdrawn request');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle record requires a database');
+    try {
+      return c.json({ v: 1, ...await recordWithdrawnOutcome(db, { requestId, tenantId: DEFAULT_TENANT_ID, taskId, runId,
+        eventId: body.eventId as string, report }) }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) return c.json({ status: 409, code: error.code, detail: error.message }, 409);
+      log.error(`[core:internal] withdrawn outcome ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Record Unavailable', 'The record did not commit; retry the same report');
+    }
+  });
+
+  // ADR-230 repair: a delivery that finished chat-only before chat-only deliveries closed their request.
+  internal('/lifecycle/:requestId/delivery-reconcile', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 || !Number.isInteger(expectedRev) || expectedRev < 5 || rev !== expectedRev + 1 ||
+        op?.kind !== 'reconcileDelivery' || !UUID.test(String(op.taskId || '')) || !UUID.test(String(op.approvalId || '')) ||
+        typeof op.deliveryId !== 'string' || !Number.isInteger(op.run) || Number(op.run) < 1 ||
+        body.key !== `${requestId}:${rev}:deliveryReconciled:${op.deliveryId}`) {
+      return problem(c, 400, 'Invalid delivery repair', 'Expected one versioned repair of the current delivery');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await reconcileLifecycleChatOnlyDelivery(db, { requestId, tenantId: DEFAULT_TENANT_ID,
+        taskId: op.taskId as string, approvalId: op.approvalId as string, deliveryId: op.deliveryId as string,
+        run: op.run as number, expectedRev, rev, key: body.key as string });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) return c.json({ status: 409, code: error.code, detail: error.message }, 409);
+      log.error(`[core:internal] lifecycle delivery repair ${requestId} failed:`, error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The repair did not commit; retry with the same key');
     }
   });
 }

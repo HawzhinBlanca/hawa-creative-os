@@ -95,13 +95,25 @@ describe('L4: the requester hears what really happens', () => {
     }
   });
 
-  it('a change kept while the design is being made is "kept for the office", as the office is told', () => {
+  // ADR-230 section 6 (merged after ADR-231): a change kept while a draft is being made starts a new round
+  // when that draft finishes, so the requester hears it will be added then, and the office is told the same.
+  it('a change kept while the draft is being made is added when that draft is done, as the office is told', () => {
     expect(noteText('change', 'designing', K12, 'en')).toBe(
-      "Got it. I've kept that with <b>KAAE K-12 Pilot Study…</b> for the office; they'll see it before the design is sent to you.");
+      "Got it. I'll add that to <b>KAAE K-12 Pilot Study…</b> as soon as the current draft is done.");
     const alert = lateChangeOfficeAlert({ requestId: randomUUID(), taskId: randomUUID(), requestRev: 1, requestStage: 'designing',
       text: 'also please add that seats are limited', title: 'KAAE K-12 Pilot Study…' }, ME, '93000001', 'Hawzhin Blanca')!.text;
-    expect(alert).toMatch(/It is not in the draft being made; add it in the next round or at review/);
-    expect(alert).not.toMatch(/applied to any design/);
+    expect(alert).toMatch(/It will be added automatically in a new round when the current draft finishes; if a round can't start, the draft alert will list it\./);
+    expect(alert).not.toMatch(/It is not in the draft being made|applied to any design/);
+  });
+
+  it('a change kept while a designer has it, or while it waits for an answer, is still "kept for the office"', () => {
+    for (const stage of ['manual', 'awaiting_answer'] as const) {
+      expect(noteText('change', stage, K12, 'en')).toBe(
+        "Got it. I've kept that with <b>KAAE K-12 Pilot Study…</b> for the office; they'll see it before the design is sent to you.");
+      const alert = lateChangeOfficeAlert({ requestId: randomUUID(), taskId: randomUUID(), requestRev: 1, requestStage: stage,
+        text: 'also please add that seats are limited', title: 'KAAE K-12 Pilot Study…' }, ME, '93000001', 'Hawzhin Blanca')!.text;
+      expect(alert).toMatch(/It is not in the draft being made; add it in the next round or at review/);
+    }
   });
 });
 

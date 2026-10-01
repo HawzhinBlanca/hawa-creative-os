@@ -78,7 +78,7 @@ describe('a round that could not start still gets an answer (audit P2)', () => {
       WHERE request_id = ${waiting.requestId}::uuid`.execute(trx)); };
     const answer = await intake(app(), text(chat, 'make the title bigger'));
     expect(answer).toMatchObject({ intakeStatus: 409, lifecycleAction: 'late-change', requestId: waiting.requestId, requestStage: 'designing',
-      chatAnswer: { text: ROUTING_MESSAGES.changeAddedWhileDesigning.en.replace('{title}', '<b>Nawroz poster</b>') } });
+      chatAnswer: { text: ROUTING_MESSAGES.changeAddedNextRound.en.replace('{title}', '<b>Nawroz poster</b>') } });
   });
 
   it('when the second reading misses too, the words go to the office and the requester hears that', async () => {

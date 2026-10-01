@@ -41,7 +41,7 @@ import { readStoredExportBytes } from '../../../worker/src/delivery-notification
 import { checkSignedOfficeDecision, type SignedOfficeDecision } from '../../../worker/src/lifecycle/office-decision-gateway.js';
 import {
   openAutomaticRequest, openManualRequest, recordDesignFinished, recordOfficeDeliveryStart, recordOfficeRevision,
-  recordRequesterDecision, type AutomaticOpenContext, type LifecycleState, type OfficeDeliveryStartEvent,
+  recordRequesterDecision, recordWithdraw, type AutomaticOpenContext, type LifecycleState, type OfficeDeliveryStartEvent,
   type OfficeRevisionEvent, type OpenAutomaticEvent, type OpenManualEvent, type RequesterDecisionEvent,
 } from '../../../worker/src/lifecycle/request-lifecycle.js';
 
@@ -292,6 +292,12 @@ export class ConversationHarness {
         await self.open(requestId, event as OpenAutomaticEvent | OpenManualEvent);
       },
       sendLifecycleDecision: async (requestId, event) => { await self.requesterDecision(requestId, event); },
+      // ADR-230: a requester's cancel withdraws the request through its own object.
+      sendLifecycleWithdraw: async (requestId, event) => {
+        await Promise.all(sends.splice(0));
+        await recordWithdraw(self.objectFor(requestId), self.internal, event);
+        await self.drain();
+      },
       scheduleSettle: (input, delayMs, key) => {
         if (self.settleKeys.has(key)) return;
         self.settleKeys.add(key);
@@ -582,9 +588,11 @@ export class ConversationHarness {
           VALUES (${id}::uuid, ${TENANT}::uuid, ${taskId}::uuid, ${clientId}::uuid, ${operationId}::uuid, ${format}, ${sha(bytes)}, ${bytes})`.execute(trx);
       }
     });
-    await recordDesignFinished(this.objectFor(requestId), this.internal, { v: 1, eventId: `dr-finished:${state.runId}`,
+    const finished = { v: 1 as const, eventId: `dr-finished:${state.runId}`,
       requestId, runId: state.runId, round: state.round ?? 0, taskId,
-      report: { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId } });
+      report: { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId } };
+    this.finished.push(finished);
+    await recordDesignFinished(this.objectFor(requestId), this.internal, finished);
     const after2 = this.objects.get(requestId) as any;
     const revisionId = after2?.outcome?.revisionId;
     if (revisionId) {
@@ -599,6 +607,15 @@ export class ConversationHarness {
             'passed', true, ${JSON.stringify(report)}::jsonb, ${sha(JSON.stringify(report))}, clock_timestamp() + interval '1 minute')`.execute(trx);
       });
     }
+    await this.drain();
+  }
+
+  /** ADR-230 addendum: every design finish reported, in order, so a test can report one again (a replay). */
+  private readonly finished: Array<Parameters<typeof recordDesignFinished>[2]> = [];
+  async replayDesignFinished(requestId: string, i = 0): Promise<void> {
+    const event = this.finished.filter((f) => f.requestId === requestId)[i];
+    if (!event) throw new Error(`request ${requestId} reported no finish ${i}`);
+    await recordDesignFinished(this.objectFor(requestId), this.internal, event);
     await this.drain();
   }
 

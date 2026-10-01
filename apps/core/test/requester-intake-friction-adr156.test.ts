@@ -264,7 +264,7 @@ describe('#11: captioned photos are read as text is', () => {
     const answer = await intake(a, photo(chat, { caption: 'use this logo' }));
     expect(answer).toMatchObject({ intakeStatus: 409, lifecycleAction: 'late-change', requestId: designing.requestId,
       requestStage: 'designing',
-      chatAnswer: { text: "Got it. I've kept that with <b>KAAE members evening</b> for the office; they'll see it before the design is sent to you." },
+      chatAnswer: { text: "Got it. I'll add that to <b>KAAE members evening</b> as soon as the current draft is done." },
       officeAlert: { chatId: String(OFFICE), text: expect.stringContaining('use this logo') } });
     expect(answer.officeAlert.text).toContain("It was added to the design's files.");
     expect(answer.chatAnswer.text).not.toMatch(/send me the text/i);

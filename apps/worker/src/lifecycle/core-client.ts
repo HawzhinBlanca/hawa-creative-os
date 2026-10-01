@@ -222,6 +222,14 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
               ...officeAlertsOf(alert, body.officeAlerts),
               ...(answer ? { chatAnswer: { text: String(answer.text), ...(answer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) } } : {}) };
           }
+          // ADR-230: the requester's cancel withdraws this request; RequestLifecycle answers once it is closed.
+          if (body.lifecycleAction === 'withdraw') {
+            if (!body.chatId || typeof body.requestId !== 'string' ||
+                !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId)) {
+              throw new Error(`Core returned an invalid withdraw for update ${update.update_id}`);
+            }
+            return { ...base, lifecycleAction: 'withdraw', chatId: body.chatId, requestId: body.requestId };
+          }
           if (body.lifecycleAction === 'request-choice-required' && body.chatId &&
               (body.code === 'AMBIGUOUS_REQUEST' || body.code === 'STALE_REQUEST_REPLY')) {
             return { ...base, lifecycleAction: 'request-choice-required',

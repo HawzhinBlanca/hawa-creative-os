@@ -61,6 +61,50 @@ function packageFiles(manifest: Record<string, unknown>): PackageFile[] {
   return files;
 }
 
+/**
+ * The send marks TelegramSender recorded for one approval's delivery: each approved file, then the
+ * notice, under the exact keys Delivery sends them with. Core reads these, never the worker's report,
+ * when it decides the requester has the files (ADR-230: a chat-only delivery closes on them).
+ */
+export async function readDeliverySendSteps(trx: Kysely<Database>, tenantId: string, taskId: string,
+  approvalId: string, manifest: Record<string, unknown>,
+): Promise<{ files: PackageFile[]; steps: { files: RecordedSendStep[]; notice: RecordedSendStep } }> {
+  const files = packageFiles(manifest);
+  const base = deliveryBaseId(taskId, approvalId);
+  const sendKeys = files.map((file) => `${base}:file:${file.artifactId}`);
+  const noticeKey = `${base}:notice`;
+  const markKeys = [...sendKeys, noticeKey].map((key) => `lc:${key}:send`);
+  const rows = (await sql<{ source_event_id: string; event_kind: string; payload: Record<string, unknown>;
+    received_at: Date; attempt_count: string }>`
+    SELECT DISTINCT ON (source_event_id) source_event_id, event_kind, payload, received_at,
+      count(*) FILTER (WHERE event_kind ~ '_attempted$') OVER (PARTITION BY source_event_id) AS attempt_count
+    FROM hawa.inbox_events
+    WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'telegram_delivery'
+      AND source_event_id = ANY(${markKeys}::text[])
+    ORDER BY source_event_id, received_at DESC, id DESC`.execute(trx)).rows;
+  const marks = new Map(rows.map((row) => [row.source_event_id, row]));
+  const step = (key: string, expectedKind: 'document' | 'notice'): RecordedSendStep => {
+    const row = marks.get(`lc:${key}:send`);
+    if (!row) return { sendKey: key, outcome: 'not_attempted', attemptCount: 0, lastMarkAt: null, messageId: null };
+    const parsed = MARK_KIND.exec(row.event_kind);
+    if (!parsed || (expectedKind === 'document' && parsed[1] !== 'document') ||
+        (expectedKind === 'notice' && parsed[1] !== 'message' && parsed[1] !== 'notice')) {
+      throw new Error('The recorded Telegram send mark is malformed');
+    }
+    return { sendKey: key, outcome: parsed[2] as RecordedSendOutcome,
+      attemptCount: Number(row.attempt_count), lastMarkAt: row.received_at.toISOString(),
+      messageId: parsed[2] === 'sent' && validMessageId(row.payload?.messageId) ? row.payload.messageId : null };
+  };
+  return { files, steps: { files: sendKeys.map((key) => step(key, 'document')), notice: step(noticeKey, 'notice') } };
+}
+
+/** Every approved file and the notice reached Telegram: each send mark is `sent`, with its message id. */
+export async function requesterSendsConfirmed(trx: Kysely<Database>, tenantId: string, taskId: string,
+  approvalId: string, manifest: Record<string, unknown>): Promise<boolean> {
+  const { steps } = await readDeliverySendSteps(trx, tenantId, taskId, approvalId, manifest);
+  return [...steps.files, steps.notice].every((step) => step.outcome === 'sent' && step.messageId !== null);
+}
+
 /** A tenant-scoped read of the exact keys that Delivery and TelegramSender use for this approval. */
 export interface RequesterSendEvidenceScope { tenantId: string; userId: string; role: string; taskId: string }
 
@@ -77,39 +121,15 @@ export async function readRequesterSendEvidenceInTransaction(
     if (!request || request.owner !== 'restate' || request.stage !== 'delivering' ||
         request.current_task_id !== input.taskId || publication?.error_class !== 'REQUESTER_SEND_UNCONFIRMED' ||
         publication.executor !== 'restate') return { kind: 'wrong_state' };
-    const files = packageFiles(publication.package_manifest);
-    const base = deliveryBaseId(input.taskId, publication.approval_id);
-    const sendKeys = files.map((file) => `${base}:file:${file.artifactId}`);
-    const noticeKey = `${base}:notice`;
-    const markKeys = [...sendKeys, noticeKey].map((key) => `lc:${key}:send`);
-    const rows = (await sql<{ source_event_id: string; event_kind: string; payload: Record<string, unknown>;
-      received_at: Date; attempt_count: string }>`
-      SELECT DISTINCT ON (source_event_id) source_event_id, event_kind, payload, received_at,
-        count(*) FILTER (WHERE event_kind ~ '_attempted$') OVER (PARTITION BY source_event_id) AS attempt_count
-      FROM hawa.inbox_events
-      WHERE tenant_id = ${input.tenantId}::uuid AND source_account_id = 'telegram_delivery'
-        AND source_event_id = ANY(${markKeys}::text[])
-      ORDER BY source_event_id, received_at DESC, id DESC`.execute(trx)).rows;
-    const marks = new Map(rows.map((row) => [row.source_event_id, row]));
-    const step = (key: string, expectedKind: 'document' | 'notice'): RecordedSendStep => {
-      const row = marks.get(`lc:${key}:send`);
-      if (!row) return { sendKey: key, outcome: 'not_attempted', attemptCount: 0, lastMarkAt: null, messageId: null };
-      const parsed = MARK_KIND.exec(row.event_kind);
-      if (!parsed || (expectedKind === 'document' && parsed[1] !== 'document') ||
-          (expectedKind === 'notice' && parsed[1] !== 'message' && parsed[1] !== 'notice')) {
-        throw new Error('The recorded Telegram send mark is malformed');
-      }
-      return { sendKey: key, outcome: parsed[2] as RecordedSendOutcome,
-        attemptCount: Number(row.attempt_count), lastMarkAt: row.received_at.toISOString(),
-        messageId: parsed[2] === 'sent' && validMessageId(row.payload?.messageId) ? row.payload.messageId : null };
-    };
+    const { files, steps } = await readDeliverySendSteps(trx, input.tenantId, input.taskId,
+      publication.approval_id, publication.package_manifest);
     return { kind: 'found', evidence: {
       taskId: input.taskId, requestId: task.request_id, requestRev: Number(request.rev),
       publicationId: publication.id, approvalId: publication.approval_id,
       requesterChatId: request.chat_id, providerReceipt: 'not_available',
       files: files.map((file, index) => ({ artifactId: file.artifactId,
-        filename: file.name, sha256: file.sha256, ...step(sendKeys[index], 'document') })),
-      notice: step(noticeKey, 'notice'),
+        filename: file.name, sha256: file.sha256, ...steps.files[index] })),
+      notice: steps.notice,
     } };
 }
 
