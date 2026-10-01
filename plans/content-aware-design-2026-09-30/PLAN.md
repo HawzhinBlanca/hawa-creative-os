@@ -920,3 +920,10 @@ checks and91 affected boundary checks pass;703 roots/types/lint/chaos types pass
 All historical foundation files untouched. Clean full source and deployed candidate
 qualification pending; no production or whole native/human/model/pilot admission.
 W6_CURRENT_MEMBERSHIP_PROOF.json.
+
+ADR224 checkpoint: clean86c598ba deployed221/0,5 actual warmed-session account/
+membership controls; both encrypted105-table/176-policy/16-blob restores with zero
+missing references. The first exact full suite6966/4/67 is retained; corrected
+active narrow reader fixtures and explicit079 inventories pass7files47/0/0. Full
+corrected source qualification pending. Owned rehearsal removed; no production
+deployment/native/human/product admission. W6_CURRENT_MEMBERSHIP_PROOF.json.

@@ -46,6 +46,8 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
   it('enforces RLS isolation across all 5 design studio tables for tenant_id', async () => {
     const reader=randomUUID();
     await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${reader}::uuid,${reader+'@test.invalid'},'Scoped Studio reader')`.execute(db);
+    await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role,active)
+      VALUES(${tenantA}::uuid,${reader}::uuid,'designer',true)`.execute(db);
     await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
       VALUES(${tenantA}::uuid,${clientA}::uuid,${reader}::uuid,'designer',true)`.execute(db);
     const taskA = await createTask(tenantA, clientA);

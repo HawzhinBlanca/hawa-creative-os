@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "CONNECTED_CURRENT_MEMBERSHIP_REPAIR_VERIFIED_FULL_SOURCE_AND_DEPLOYED_PENDING",
+  "status": "CURRENT_MEMBERSHIP_CANDIDATE_221_PASS_CORRECTED_FULL_SOURCE_PENDING",
   "requirements": [
     "NFR-006",
     "FR-011",
@@ -34,7 +34,13 @@
     "strictRoots": 703,
     "types": "PASS",
     "lint": "PASS",
-    "chaosTypes": "PASS"
+    "chaosTypes": "PASS",
+    "correctedFullSuiteBoundaries": {
+      "files": 7,
+      "passed": 47,
+      "failed": 0,
+      "skipped": 0
+    }
   },
   "controls": [
     "Actual warm/cold named sessions and original-byte refusal",
@@ -52,13 +58,84 @@
     "First connected21pass/1fail exposed old client-only designer fixture; active tenant designer membership added with positive/negative assertions unchanged.",
     "Second connected48pass/2fail exposed active-DNA fixture missing office membership and non-verbose EXPLAIN omitting function output; active fixture and verbose output preserve exact assertions.",
     "Affected boundaries59pass/4fail exposed missing office admission in synthetic learning reader fixtures; active designer/requester admission added, foreign recovery viewer now has an explicit positive assigned-client control.",
-    "An initial affected command included a nonexistent asset test filter; actual7-file executed result retained and final9 existing boundary files verified."
+    "An initial affected command included a nonexistent asset test filter; actual7-file executed result retained and final9 existing boundary files verified.",
+    "First exact clean86c598ba full source6966pass/4fail/67skip: two client-only positive fixtures lacked active narrow office membership, two migration inventories stopped at078. Actual positive/foreign/operator-confirmation/receipt assertions retained; corrected7files47pass/0fail/0skip."
   ],
   "qualification": {
     "fullEngineering": "PENDING",
-    "currentDeployedCandidate": "PENDING",
+    "currentDeployedCandidate": {
+      "candidateCommit": "86c598ba7fc932c97a7202fee7061fa76a0b90c4",
+      "finishedAt": "2026-10-01T18:55:49.636Z",
+      "invariantsPassed": 221,
+      "failed": 0,
+      "newMembershipControls": [
+        {
+          "name": "current named session reads its assigned original before membership revocation",
+          "ok": true,
+          "detail": "HTTP 200; retained original bytes"
+        },
+        {
+          "name": "warmed deployed session cannot read retained bytes after tenant membership revocation",
+          "ok": true,
+          "detail": "HTTP 404"
+        },
+        {
+          "name": "warmed deployed session cannot read retained bytes after tenant membership revocation",
+          "ok": true,
+          "detail": "HTTP 404"
+        },
+        {
+          "name": "warmed deployed session cannot read its client original after account disabling",
+          "ok": true,
+          "detail": "HTTP 404"
+        },
+        {
+          "name": "explicit account and membership restoration reopens the same byte-identical client original",
+          "ok": true,
+          "detail": "HTTP 200"
+        }
+      ],
+      "newMembershipControlsPassed": 5,
+      "uncoveredModelCalls": 0,
+      "parser": "real pinned offline Docling",
+      "externalAdapters": "synthetic fakes",
+      "restores": {
+        "drive": {
+          "tableCount": 105,
+          "policyCount": 176,
+          "verifiedBlobCount": 16,
+          "missingBlobReferences": 0,
+          "restoreValidationSeconds": 8.877,
+          "separateHostProved": false
+        },
+        "telegram": {
+          "tableCount": 105,
+          "policyCount": 176,
+          "verifiedBlobCount": 16,
+          "missingBlobReferences": 0,
+          "restoreValidationSeconds": 9.244,
+          "separateHostProved": false
+        }
+      },
+      "productionChanged": false
+    },
     "productionDump": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
-    "wholeProductAdmission": false
+    "wholeProductAdmission": false,
+    "firstFullEngineering": {
+      "commit": "86c598ba7fc932c97a7202fee7061fa76a0b90c4",
+      "passed": 6966,
+      "failed": 4,
+      "skipped": 67
+    },
+    "migrationReadback": {
+      "name": "079_current_membership_authority.sql",
+      "sha256": "0374092175a888c62e13e6123eb6492a3219f4fc38e37c4a46248b4b4710e51a",
+      "candidateCommit": "86c598ba7fc932c97a7202fee7061fa76a0b90c4",
+      "restoredRunningDatabase": true,
+      "sourceHashMatches": true,
+      "productionChanged": false
+    },
+    "ownedRehearsalCleanup": "PASS; no owned project containers or volumes remain"
   },
   "limits": [
     "No production deployment or business row/key/service change.",
@@ -77,9 +154,29 @@
     "apps/core/test/authoritative-client-dna.test.ts": "6c1fca2d4ddab3461d7c82b0e74c2411a9761159acae2883cc2d1827445b64d6",
     "apps/core/test/learning-governance-boundaries.test.ts": "f9066284ab5b0ee0d5b715a59988ca93426ec0546ce0b5553bf1a2a430e74e68",
     "apps/core/test/learning-recovery.test.ts": "b363afa3be7cc360b830ef83baa9753fb0c42865d79a0453597752718042d32f",
-    "packages/testkit/chaos/driver/candidate-stream-isolation.ts": "fb90065fd61101a8e975f8ca3fd3fe27479b3c3a64dbc1ce31ba454c3f6fda9c"
+    "packages/testkit/chaos/driver/candidate-stream-isolation.ts": "fb90065fd61101a8e975f8ca3fd3fe27479b3c3a64dbc1ce31ba454c3f6fda9c",
+    "apps/core/test/document-intake.test.ts": "709adb33a1bfa3ee018486cd26bbecfb1001dd7b221e898ac6c9ba3b03a1223f",
+    "apps/core/test/startup-schema-check.test.ts": "19df2ff90be4eeea21c4cbbdfc88f0d68b142c0fa154ca7f1d15593bb1d6ae18",
+    "packages/db/test/design-studio.test.ts": "b6d9d0caab0dd266228320812177d6eaa4a7938da734efff6d15f2bb09a978ac",
+    "packages/db/test/schema-upgrade.test.ts": "a8be39b9dd4bae5fe191b93036104bc6c9aa158291a63a8df729b0d5ee905b8d"
   },
   "artifacts": [
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CANDIDATE_MANIFEST_GENERATION.log",
+      "sha256": "e243e2228c1738702266ff619fa16f3495300b98990d129a7045bc9430b96e73"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CANDIDATE_RECOVERY.log",
+      "sha256": "43c87bf90ea5d44aa793f3c8a3fe18aa69c6d082e89e7768cc6bcd5504457a62"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CANDIDATE_SEAL_COMMIT.log",
+      "sha256": "2a3f754b8c70a71313d298b8ab273c678444153dd3a181f98353d99c1e302215"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CANDIDATE_TEARDOWN.log",
+      "sha256": "74c7922e59b3a71f4bc8551127023b33b87cd2b213d2e7f07ec8b2d7c9a19739"
+    },
     {
       "path": "output/qualification/2026-10-01/current-membership-revocation/CHAOS_TYPES.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -97,6 +194,38 @@
       "sha256": "5823bd11761f68432c7f0fd2859551841452e9a77bdfbd58515fc3b77151736c"
     },
     {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CORRECTED_FULL_SUITE_BOUNDARIES.log",
+      "sha256": "6eba4b5d277bd41e2931f6dcff361d061d2dd1d9fd32c30cc2dc24e3e54d8475"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CURRENT_CANDIDATE_RAW_RECEIPT.json",
+      "sha256": "8dc6be60211c8352b29ff7a30de3a4f76c2ffc5edeae13d8386a72cde388781e"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CURRENT_CANDIDATE_RESULT.json",
+      "sha256": "bf20d880ac7d7fda2ac33bee2bfe07b012d83c518dd6f07cbc6d03e5b765a829"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CURRENT_DRIVE_RECOVERY.json",
+      "sha256": "769d02cd4321b72a9856f6fb8fe69e5b14a2eedd0f4b6bf767a1c90307e451ee"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CURRENT_MIGRATION_READBACK.json",
+      "sha256": "c10d0c916be2ac53f90913dd2d58927eecda9322c732fdb24060b5a4289b1f33"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CURRENT_TELEGRAM_RECOVERY.json",
+      "sha256": "23ba57c220e19001cd5739a2a40458617c7e5525f76a4fbf3b94522868a5e3b0"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/EXACT_ENGINEERING_GATE.log",
+      "sha256": "6bbc57b6813e71fabd63b331119ac8bcca9210d67ded8d890b5ab80c6bdfb2a8"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/FAILED_FULL_SUITE.log",
+      "sha256": "b9751d0a977513b133b142bd3342ff34404201568e69f490e529c012e346b088"
+    },
+    {
       "path": "output/qualification/2026-10-01/current-membership-revocation/FIRST_CONNECTED.log",
       "sha256": "e1a82d74a3a52c89fe62a8799e0c7946c6952b5fba0b0e5ebcc714da391b8cab"
     },
@@ -105,12 +234,20 @@
       "sha256": "1c4abf3b0668a83c4af64174db556d54be92ec898cfc8e017fa50c188e66b7d3"
     },
     {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/PACK_CHECK.log",
+      "sha256": "c457830298cf1d2ac642cc4a8030a50a40b4c525dfdbc7a493c8e23970bd92c7"
+    },
+    {
       "path": "output/qualification/2026-10-01/current-membership-revocation/RED_CURRENT_MEMBERSHIP.log",
       "sha256": "d4faa143e4f07430213785fe4dd8752b5d22f59107183137bd0c2936460e7618"
     },
     {
       "path": "output/qualification/2026-10-01/current-membership-revocation/RED_READ_AND_WRITE.log",
       "sha256": "06e89792c96a1d4fc4d7bcd72cad2fa87c8ff567ae53a4c7fbb68145f176e1f3"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/SOURCE_COMMIT.log",
+      "sha256": "30306b5fcbb595e0584b7ac660897750d168d663a7201e8a0dc15a9d8f8998ae"
     },
     {
       "path": "output/qualification/2026-10-01/current-membership-revocation/TYPECHECK.log",

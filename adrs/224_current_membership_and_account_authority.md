@@ -1,6 +1,6 @@
 # ADR224 — Current account and tenant membership for stored resource authority
 
-Date: 2026-10-01. Status: reproduced; implementation and qualification pending.
+Date: 2026-10-01. Status: implemented; deployed synthetic qualification passed; corrected full source pending.
 Requirements: NFR-006, FR-011, FR-018, FR-064, NFR-012.
 Sources: MASTER_SPEC.md invariants5/10; docs/14_SECURITY_THREAT_MODEL.md sections4/5;
 docs/17_UI_UX.md stored search; docs/29_ACCEPTANCE_GATES.md GateB; ADR033/064/223.
@@ -47,3 +47,15 @@ plan/ACL/worker grant checks. Verify all affected and complete source suites and
 fresh candidate nginx/worker boundaries with the new migration and source hashes.
 Retain failures. Production-data migration check, production deployment and whole
 native/human/model/pilot admission remain separate and unproven.
+
+## Qualification checkpoint — 1 October 2026
+
+Clean candidate86c598ba passed221 deployed controls, including5 current account/
+membership original-byte checks, with actual nginx and pinned offline Docling.
+Both encrypted restores matched105 tables/176 policies/16 blobs with zero missing
+references; migration079 readback matches its source hash. External adapters are
+synthetic and neither restore proves a separate host. The first full suite failed
+4 checks (6966 passed/67 skipped); two synthetic client-only reader fixtures now
+have active narrow designer office admission, and two explicit upgrade inventories
+include079. All original assertions remain; corrected7 files/47 tests pass. The
+complete corrected gate is pending. Production deployment remains unperformed.
