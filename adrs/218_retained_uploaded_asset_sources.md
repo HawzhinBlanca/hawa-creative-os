@@ -63,7 +63,7 @@ Exact clean seal 92a0703f passes seven engineering stages: 6919 passed / 0 faile
 
 ## Current deployed encrypted recovery qualification — pending
 
-Requirements: FR-018, FR-070, NFR-003, NFR-024, NFR-025. Sources: docs/14_SECURITY_THREAT_MODEL.md, MASTER_SPEC.md, docs/20_DEPLOYMENT_BACKUP_DR.md, runbooks/10_BACKUP_RESTORE.md.
+Requirements: FR-018, FR-070, NFR-003, NFR-024, NFR-025. Sources: docs/14_SECURITY_THREAT_MODEL.md, MASTER_SPEC.md, docs/20_DEPLOYMENT_BACKUP_DR.md, runbooks/10_backup_restore.md.
 
 Extend the existing isolated candidate source/delivery scenario with actual deployed
 SVG original/derivative, PNG, WebP, TTF and WOFF2 upload/download verification. Two
