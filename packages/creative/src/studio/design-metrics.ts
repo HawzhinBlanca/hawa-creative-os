@@ -1,5 +1,6 @@
 import type { StudioLayoutV2, Box, TextElement, ShapeElement } from './layout-v2.js';
-import { hexToLuminance, calculateLuminanceContrastRatio, declaredBackgroundColour } from './composite-contrast.js';
+import { declaredTextContrast } from './composite-contrast.js';
+import { requiredContrast } from './house-rules.js';
 import { photoRecipeOf } from './layout-v2.js';
 import { carrierOf } from './art-direction/surfaces.js';
 import { NEGATIVE_SPACE_POLICY, negativeSpacePolicyIdentity, scoreNegativeSpace, type NegativeSpaceMeasure } from './negative-space-policy.js';
@@ -95,8 +96,6 @@ export function computeTextLegibility(layout: StudioLayoutV2): MetricResult {
 
   let totalPenalty = 0;
   const failingIssues: string[] = [];
-  const bgColor = layout.background?.color || '#FFFFFF';
-  const bgLum = hexToLuminance(bgColor);
 
   for (let i = 0; i < layout.text.length; i++) {
     const el = layout.text[i];
@@ -120,18 +119,13 @@ export function computeTextLegibility(layout: StudioLayoutV2): MetricResult {
       failingIssues.push(`Text ${i} lineHeight ${el.lineHeight} out of range [1.1, 1.9]`);
     }
 
-    // Contrast check against the surface the layout declares behind the block: the same model the
-    // hard gate uses (declaredBackgroundColour), which also reads a recipe's plates, cards and fades.
-    const effectiveBg = declaredBackgroundColour(layout, el) || bgColor;
-
-    const effectiveBgLum = hexToLuminance(effectiveBg);
-    const textLum = hexToLuminance(el.color);
-    const contrast = calculateLuminanceContrastRatio(textLum, effectiveBgLum);
-    const requiredContrast = el.fontSize >= 20 || (el.fontSize >= 16 && el.bold) ? 3.0 : 4.5;
-    if (contrast < requiredContrast) {
-      const deficit = (requiredContrast - contrast) / requiredContrast;
+    // Ranking and refinement use the same spatial surface and size policy as hard QA.
+    const contrast = declaredTextContrast(layout, el);
+    const required = requiredContrast(el.fontSize, Boolean(el.bold));
+    if (contrast < required) {
+      const deficit = (required - contrast) / required;
       totalPenalty += Math.min(0.8, deficit * 1.0);
-      failingIssues.push(`Text ${i} (${el.role}) contrast ${contrast.toFixed(2)}:1 < ${requiredContrast}:1`);
+      failingIssues.push(`Text ${i} (${el.role}) contrast ${contrast.toFixed(2)}:1 < ${required}:1`);
     }
   }
 

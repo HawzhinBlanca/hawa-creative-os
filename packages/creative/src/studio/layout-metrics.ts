@@ -1,5 +1,5 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
-import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
+import { declaredTextContrast } from './composite-contrast.js';
 import { shapePaintsOver } from './art-direction/surfaces.js';
 
 export interface LayoutMetrics {
@@ -229,11 +229,8 @@ export function computeLayoutMetrics(
   // 8. Contrast P05
   const contrastP05: Record<number, number> = options.contrastValues || {};
   if (!options.contrastValues) {
-    const bgColor = typeof layout.background === 'object' && layout.background ? layout.background.color : String(layout.background);
-    const bgLum = hexToLuminance(bgColor);
     for (const t of layout.text) {
-      const textLum = hexToLuminance(t.color);
-      contrastP05[t.copyIndex] = parseFloat(calculateLuminanceContrastRatio(textLum, bgLum).toFixed(2));
+      contrastP05[t.copyIndex] = parseFloat(declaredTextContrast(layout, t).toFixed(2));
     }
   }
 

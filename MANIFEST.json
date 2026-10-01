@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T06:46:44Z",
+  "generatedAt": "2026-10-01T06:58:00Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 755,
+  "fileCount": 759,
   "files": [
     {
       "path": ".dockerignore",
@@ -978,6 +978,11 @@
       "bytes": 4053
     },
     {
+      "path": "adrs/199_shared_spatial_ink_decisions.md",
+      "sha256": "be89867756e7c4cd54f7b5bdc4943503e7b9b801b56ca058652580d7fb3ee298",
+      "bytes": 2800
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1449,8 +1454,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "d49e6e50576bbea09b4110723b4e913747ee48f23786e2f0e466888dd581f150",
-      "bytes": 38746
+      "sha256": "9ecf5b8ff3c5f6c2c9320939e726681344a8f456ea6f09372d082bdfa476150d",
+      "bytes": 40034
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1546,6 +1551,16 @@
       "path": "plans/content-aware-design-2026-09-30/W5_SPATIAL_BACKGROUND_PROOF.json",
       "sha256": "92c972a3a427a284163c55932344a609e4fd49583d5f3842a5b9dbfbf45aee46",
       "bytes": 6411
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W5_SPATIAL_INK_BENCHMARK.json",
+      "sha256": "18a81f12f860664386438e584794f8a091bea7df564ec7913550912d57f6e930",
+      "bytes": 3373
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W5_SPATIAL_INK_PROOF.json",
+      "sha256": "4f32b89b0b2e900588f032364085681571874c8554d4c05ac0db9d8a1285db55",
+      "bytes": 4681
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_APPROVED_REFINEMENT_GATE_EVIDENCE.json",
@@ -2844,8 +2859,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2c6f7ccad37fa52d4fbd4490d54f16f72a2a57ec79c4fcff8a2c1ac1282452b5",
-      "bytes": 643488
+      "sha256": "5c9666b20c5d09c10c068ea00ec1fdcca924aa8efb33c96ae20a97a8555ee36a",
+      "bytes": 645780
     },
     {
       "path": "plans/user-stories.csv",
@@ -3511,6 +3526,11 @@
       "path": "scripts/proofs/spatial_background_benchmark.mjs",
       "sha256": "83298b7f499a78926b08e3399465013376b5d620ebbbad138d271f95d662f54c",
       "bytes": 2576
+    },
+    {
+      "path": "scripts/proofs/spatial_ink_decision_benchmark.mjs",
+      "sha256": "248c5319ad6aa129f15f6ff5bdc3c7113dc0d97457561ac460d974ef4c51a1a9",
+      "bytes": 2452
     },
     {
       "path": "scripts/proofs/verify_spacing_fixes.mjs",

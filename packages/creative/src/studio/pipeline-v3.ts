@@ -28,7 +28,7 @@ import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-q
 import { computeLayoutMetrics } from './layout-metrics.js';
 import type { ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
-import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance, inkBoxOf } from './composite-contrast.js';
+import { declaredColorContrastEvaluator, inkBoxOf } from './composite-contrast.js';
 import { coverCrop } from './photo-crop.js';
 import { normalizeHex } from './validate-layout-v2.js';
 import { applyStyleSpec, colourDecisionsOnly, composeStyleSpec, layoutDefectCount, MOVEMENT_DECISIONS, ornamentForStyle, withoutDecision, type StyleSpec } from './style-spec.js';
@@ -773,8 +773,7 @@ export function conformToHouseRules(
   // QA never checked. Last, because settling can move a block onto or off a panel.
   if (palette && palette.length) {
     for (const t of layout.text) {
-      const surface = declaredBackgroundColour(layout, t);
-      const on = (colour: string) => calculateLuminanceContrastRatio(hexToLuminance(colour), hexToLuminance(surface));
+      const on = declaredColorContrastEvaluator(layout, t);
       const required = requiredContrast(t.fontSize, Boolean(t.bold));
       if (on(t.color) >= required) continue;
       const readable = palette.filter((p) => on(p) >= required);

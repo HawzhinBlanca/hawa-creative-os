@@ -34,18 +34,27 @@ export function declaredBackgroundColour(layout: StudioLayoutV2, box: Box): stri
   return layout.background.color;
 }
 
-/** A block's contrast against the surface the layout declares behind it. */
-export function declaredColorContrast(layout: StudioLayoutV2, box: Box, color: string): number {
+/** A local decision snapshot. Recreate after changing geometry, field or carriers; never persist. */
+export function declaredColorContrastEvaluator(layout: StudioLayoutV2, box: Box): (color: string) => number {
   const surface = declaredBackgroundColour(layout, box);
   // A real carrier wins. Otherwise enclose every field color under this footprint, including
   // interior stops and luminance crossings; remote parts of the canvas do not carry this ink.
   if (layout.background.field && !carrierOf(layout, box) && surface === layout.background.color) {
     const bounds = backgroundFieldLuminanceBounds(layout.background.field, layout.width, layout.height, box);
-    const low = bounds.min, high = bounds.max, ink = hexToLuminance(color);
-    if (ink >= low && ink <= high) return 1;
-    return Math.min(calculateLuminanceContrastRatio(ink, low), calculateLuminanceContrastRatio(ink, high));
+    const low = bounds.min, high = bounds.max;
+    return color => {
+      const ink = hexToLuminance(color);
+      if (ink >= low && ink <= high) return 1;
+      return Math.min(calculateLuminanceContrastRatio(ink, low), calculateLuminanceContrastRatio(ink, high));
+    };
   }
-  return calculateLuminanceContrastRatio(hexToLuminance(color), hexToLuminance(surface));
+  const ground = hexToLuminance(surface);
+  return color => calculateLuminanceContrastRatio(hexToLuminance(color), ground);
+}
+
+/** A block's contrast against the surface the layout declares behind it. */
+export function declaredColorContrast(layout: StudioLayoutV2, box: Box, color: string): number {
+  return declaredColorContrastEvaluator(layout, box)(color);
 }
 
 export function declaredTextContrast(layout: StudioLayoutV2, text: TextElement): number {

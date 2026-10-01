@@ -1,0 +1,87 @@
+{
+  "adr": "ADR199",
+  "date": "2026-10-01",
+  "status": "CONNECTED_LOCAL_QUALIFIED_EXACT_RELEASE_PENDING",
+  "requirements": [
+    "FR-028",
+    "FR-031",
+    "FR-038",
+    "FR-040",
+    "FR-041",
+    "NFR-012"
+  ],
+  "retainedRegressions": {
+    "initial": {
+      "failed": 8,
+      "passed": 1
+    },
+    "firstConnected": {
+      "files": 5,
+      "passed": 67,
+      "failed": 0
+    },
+    "expandedConnected": {
+      "files": 9,
+      "passed": 279,
+      "failed": 1,
+      "reason": "Alleged unsatisfiable whole-height footprint was legitimately repaired by existing geometry; fixture corrected to a local interior luminance crossing."
+    },
+    "firstTypes": "FAIL: incomplete ornament settings in new test fixture; corrected to full typed settings."
+  },
+  "acceptance": {
+    "finalConnected": {
+      "files": 10,
+      "passed": 285,
+      "failed": 0,
+      "skipped": 0
+    },
+    "correctedFocusedBeforeBudgetAssertion": {
+      "passed": 11,
+      "failed": 0,
+      "overlapsConnected": true
+    },
+    "strictRootsBeforeLastBudgetAssertion": 671,
+    "lint": "PASS; 926 any occurrences, no new egress exceptions",
+    "core": "Actual Core HTTP/isolated PostgreSQL with mocked model calls and local renderer",
+    "directions": 4,
+    "actualRaster": "PASS",
+    "nativeEditableTransfer": "PASS; structural OOXML and live copy, not Canva/native visual admission",
+    "JSONPreparationReplay": "PASS",
+    "perDecisionSnapshotRefresh": "PASS",
+    "unsatisfiablePaletteHeld": "PASS",
+    "refinementZeroProviderBudget": "PASS"
+  },
+  "benchmark": "W5_SPATIAL_INK_BENCHMARK.json",
+  "providerCalls": 0,
+  "dependenciesAdded": 0,
+  "persistentCachesAdded": 0,
+  "hardThresholdsChanged": false,
+  "advisoryThresholds": "Now share existing hard-QA 32px regular/24px bold large-text policy instead of older 20px/16px shortcut.",
+  "sourceSha256": {
+    "packages/creative/src/studio/composite-contrast.ts": "f545b0b1b229ea4d67bacc2e789ec2e704e16a914e15a11a344ad0679437adb2",
+    "packages/creative/src/studio/background-planning.ts": "2035ff3911af1f65794ceca74ef43afd0f7aad3ca10d8e1edbfa735d228411a8",
+    "packages/creative/src/studio/pipeline-v3.ts": "dc3f7f71aa2c7addc2f383fba7dd35638bfa7862e105c4671a6b4919097eff22",
+    "packages/creative/src/studio/style-spec.ts": "802c927c3b6f315b89721bf56163c406a236647bc9a46aeb9c24194664b28a3a",
+    "packages/creative/src/studio/design-metrics.ts": "fd2935b46fb21c9d0bba0702971b690d95c4ccf1c72badf83631979a82e010a2",
+    "packages/creative/src/studio/layout-metrics.ts": "cfc851a865252e30b580c33eebd0354344f3910d355e7c968688807c837b7979",
+    "packages/creative/test/spatial-ink-preparation.test.ts": "ae31015a6ed5acc6f9169a41a0b527e71c266eea5a7b8043bd069aa1f7c5d43d",
+    "scripts/proofs/spatial_ink_decision_benchmark.mjs": "248c5319ad6aa129f15f6ff5bdc3c7113dc0d97457561ac460d974ef4c51a1a9"
+  },
+  "logs": {
+    "output/qualification/2026-10-01/spatial-ink-development/hawa-spatial-ink-red-20261001.log": "4f87a47644ad58e706bd5b412ffd2a4768d90a56db5f099426fc897a8b6e00fb",
+    "output/qualification/2026-10-01/spatial-ink-development/hawa-spatial-ink-first-connected-20261001.log": "5900908c05cd0d1c1b9b322a92ae54307da6465998eeaead28bdb8e1dd03e9aa",
+    "output/qualification/2026-10-01/spatial-ink-development/hawa-spatial-ink-connected-20261001.log": "75183ba39e808bd45496fb8e52bea19dacbcfcd44e89b8d8938a425038d51f32",
+    "output/qualification/2026-10-01/spatial-ink-development/hawa-spatial-ink-corrected-20261001.log": "aa7953ea8c6dcbc5646066ac4ca16cfaa9c2dd800f57191c6c055336a9fb7bde",
+    "output/qualification/2026-10-01/spatial-ink-development/hawa-spatial-ink-types-20261001.log": "8ccbf7359e6b3f42066dc5914c477b7818ece2b5593e5def1cc66fe6c8fa6795",
+    "output/qualification/2026-10-01/spatial-ink-development/hawa-spatial-ink-corrected-types-20261001.log": "f691c8b0cf05183b7f76e5ec7ae6fa5955ba97da7521a501478482207098b252",
+    "output/qualification/2026-10-01/spatial-ink-development/hawa-spatial-ink-lint-20261001.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/spatial-ink-development/hawa-spatial-ink-final-connected-20261001.log": "1e23353acd1b9e02853d18e08a0d02301f915ce7725d4584412dc121e93a4cc6"
+  },
+  "deployment": "NOT_DEPLOYED; live remains 2c4d61ec",
+  "limits": [
+    "Exact sealed engineering gate pending.",
+    "No genuine held-out taste/native Canva/human/recovery/product admission.",
+    "Local warm helper timing is not pipeline latency or a speed claim against old incorrect flat-color repair.",
+    "Broader W5 perceptual surface choices/local optimizer/cache/replay and full-pipeline resource evidence remain open."
+  ]
+}

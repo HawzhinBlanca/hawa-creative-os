@@ -1,6 +1,6 @@
 import type { BackgroundDecision, StudioLayoutV2 } from './layout-v2.js';
 import { backgroundFieldSchema } from './background-field.js';
-import { declaredColorContrast, hexToLuminance } from './composite-contrast.js';
+import { declaredColorContrastEvaluator, hexToLuminance } from './composite-contrast.js';
 import { hexToRgb, rgbToLab, ciede2000 } from './color-science.js';
 import { requiredContrast } from './house-rules.js';
 import type { StyleSpec } from './style-spec.js';
@@ -68,12 +68,13 @@ export function applyContentBackground(layout: StudioLayoutV2, palette: string[]
   // Preserve role colors where readable; repair against the actual chosen surface/envelope.
   for (const text of layout.text) {
     const threshold = requiredContrast(text.fontSize, !!text.bold);
-    if (declaredColorContrast(layout, text, text.color) < threshold) {
-      const candidate = [...allowed].sort((a, b) => declaredColorContrast(layout, text, b) - declaredColorContrast(layout, text, a))[0];
-      if (declaredColorContrast(layout, text, candidate) < threshold) throw new Error(`BACKGROUND: no approved readable ink for block ${text.copyIndex}`);
+    const on = declaredColorContrastEvaluator(layout, text);
+    if (on(text.color) < threshold) {
+      const candidate = [...allowed].sort((a, b) => on(b) - on(a))[0];
+      if (on(candidate) < threshold) throw new Error(`BACKGROUND: no approved readable ink for block ${text.copyIndex}`);
       text.color = candidate;
     }
-    if (text.accentColor && declaredColorContrast(layout, text, text.accentColor) < threshold) {
+    if (text.accentColor && on(text.accentColor) < threshold) {
       delete text.accentColor; delete text.accentText; delete text.accentParagraph;
     }
   }
