@@ -1,6 +1,6 @@
 # ADR204 — Measure declared text alignment axes
 
-Date: 2026-10-01. Status: accepted; connected source qualified, exact gate pending.
+Date: 2026-10-01. Status: accepted; exact engineering qualified, deployment/product admission open.
 Requirements: FR-038, FR-041, NFR-012, NFR-024.
 Sources: docs/05_CREATIVE_ENGINE.md; docs/11_QA_RTL_MULTILINGUAL.md;
 ADR172/203; actual Core type-scale QA diagnostic.

@@ -528,3 +528,8 @@ Exact sealedef76a307584e08502e0ae1af590b346f5d9afe8f: all8,6592pass/0fail/67skip
 ## W5 bounded joint typography and declared alignment — 1 October 2026
 
 ADR203 replaces coarse four-percent sizing with bounded distinct integer states under the existing policy, retaining one-line preference, exact copy, fonts, palette, photos and joint geometry constraints. Actual missed-size reproduction now fits56/25px instead of53/24px. ADR204 fixes actual Core rejection of an intentional narrower flush body column; declared left/right/centre axes count, false-centre ragged text still refuses. Threshold0.70 and tolerance0.5% unchanged. Final connected19files379/0/0;679 strict roots/lint pass. Actual Core pixels, QA and editable copy/assets/font transfer pass with zero providers. Retained all red/fixture/strict failures. Eight-case paired local benchmark under10ms, but infeasible mosaic adds about2.7ms median; no pipeline speed or human beauty claim. W5_JOINT_TYPOGRAPHY_PROOF.json retains source/log/benchmark hashes. Exact gate pending; not deployed; broader W5/W6/native/Canva/human/recovery/product admission remains open.
+
+
+### Joint typography exact qualification
+
+Exact sealeddb24c6179f7184b6f2545e750cdce10469b73543: all8,6616pass/0fail/67skip across672passed files/6skipped;679 strict roots,1702 blueprint checks,newest production dump restored in isolation and mandatory negative-flag refusal pass. Actual measured type-fit/Core alignment defect resolved in source; no deploy/native Canva/human/product admission. W5_JOINT_TYPOGRAPHY_GATE_EVIDENCE.json retains exact gate; local benchmark retains additional infeasible-search cost.

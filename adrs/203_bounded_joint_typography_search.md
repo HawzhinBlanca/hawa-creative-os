@@ -1,6 +1,6 @@
 # ADR203 — Bounded joint typography search
 
-Date: 2026-10-01. Status: accepted; connected source qualified, exact gate pending.
+Date: 2026-10-01. Status: accepted; exact engineering qualified, deployment/product admission open.
 Requirements: FR-038, FR-041, NFR-012, NFR-024.
 Sources: docs/05_CREATIVE_ENGINE.md sections 1/9;
 docs/11_QA_RTL_MULTILINGUAL.md sections 2/3;

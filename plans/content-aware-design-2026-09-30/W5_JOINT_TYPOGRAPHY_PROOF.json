@@ -4,7 +4,7 @@
     "ADR204"
   ],
   "date": "2026-10-01",
-  "status": "CONNECTED_SOURCE_QUALIFIED_EXACT_GATE_PENDING",
+  "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-038",
     "FR-041",
@@ -105,5 +105,22 @@
     "Synthetic local fixtures do not establish human aesthetic superiority or native Canva quality.",
     "Benchmark is local recipe solving, not end-to-end latency.",
     "Broader W5/W6/native Canva/human/recovery/product admission remains open."
-  ]
+  ],
+  "exactQualification": {
+    "testedSeal": "db24c6179f7184b6f2545e750cdce10469b73543",
+    "runtimeCommit": "3d44e3353fbbeb710f4c909f566e9e6e4cf9e2ea",
+    "allStages": 8,
+    "testsPassed": 6616,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 672,
+    "filesSkipped": 6,
+    "strictRoots": 679,
+    "blueprintChecksAtSeal": 1702,
+    "gateEvidence": "W5_JOINT_TYPOGRAPHY_GATE_EVIDENCE.json",
+    "fullTestLog": "output/qualification/2026-10-01/db24c617/FULL_TEST_SUITE_RUN.log",
+    "fullTestLogSha256": "9d6e55ea3acd1bb006b9292575ed67f39a58b526873be0a79095ea21f6dc891d",
+    "deployed": false,
+    "productAdmission": false
+  }
 }
