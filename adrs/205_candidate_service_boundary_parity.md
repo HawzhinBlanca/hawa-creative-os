@@ -60,3 +60,9 @@ uses an unsupported legacy A:Z read and mistakes its HTTP 500 for no rows. An
 independent current tab-aware read returns the header and actual task row. Use the
 existing Sheets data-filter API and require exactly one matching task row. Do not
 relax publication or mirror checks, synthesize a row, or accept transport failure.
+
+Clean d85fc087 passes all 96 deployed/recovery checks. Its full engineering gate
+passes stages 1–7, but one of 6,709 executed tests fails: the VM-resource test's
+separate Compose fixture omits all three new interpolation variables. Supply only
+those synthetic fixture values. Preserve every CPU, memory and swap assertion.
+Retain the original failing gate; qualify the corrected exact source.

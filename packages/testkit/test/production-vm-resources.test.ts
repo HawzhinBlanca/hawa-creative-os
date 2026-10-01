@@ -49,9 +49,12 @@ describe.skipIf(compose.status !== 0)('the Docker VM production shares', () => {
   });
 
   it('every chaos service, in every profile, has a memory ceiling without swap and a CPU share', () => {
-    const secrets = ['CHAOS_APP_PASSWORD', 'CHAOS_WORKER_TOKEN', 'CHAOS_DESIGN_WORKER_TOKEN', 'CHAOS_BEARER_TOKEN', 'CHAOS_REVIEWER_KEY', 'CHAOS_ADMIN_KEY', 'CHAOS_HMAC_SECRET',
+    const secrets = ['CHAOS_APP_PASSWORD', 'CHAOS_WORKER_PASSWORD', 'CHAOS_WORKER_TOKEN', 'CHAOS_DESIGN_WORKER_TOKEN', 'CHAOS_BEARER_TOKEN', 'CHAOS_REVIEWER_KEY', 'CHAOS_ADMIN_KEY', 'CHAOS_HMAC_SECRET', 'CHAOS_OFFICE_PROXY_PROOF',
       'CHAOS_BOT_TOKEN', 'CHAOS_WEBHOOK_SECRET', 'CHAOS_CANVA_SECRET', 'CHAOS_CANVA_KEY', 'CHAOS_OWNER_PASSWORD', 'CHAOS_AVAILABILITY_SECRET'];
-    const services = config([path.join(repo, 'packages/testkit/chaos/docker-compose.chaos.yml')], Object.fromEntries(secrets.map((k) => [k, 'x'])), ['green', 'candidate']);
+    const services = config([path.join(repo, 'packages/testkit/chaos/docker-compose.chaos.yml')], {
+      ...Object.fromEntries(secrets.map((k) => [k, 'x'])),
+      CHAOS_OFFICE_PROOF_FILE:path.join(os.tmpdir(),'hawa-synthetic-resource-proof.conf'),
+    }, ['green', 'candidate']);
     expect(Object.keys(services).length).toBeGreaterThanOrEqual(10);
     for (const [name, s] of Object.entries(services)) {
       expect(Number(s.mem_limit), name).toBeGreaterThan(0);

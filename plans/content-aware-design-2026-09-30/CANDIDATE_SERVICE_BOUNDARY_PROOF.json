@@ -1,7 +1,7 @@
 {
   "adr": "ADR205",
   "date": "2026-10-01",
-  "status": "CONNECTED_NATIVE_HANDOFF_PASS_EXACT_REHEARSAL_PENDING",
+  "status": "CLEAN_DEPLOYED_RECOVERY_PASS_EXACT_GATE_FIXTURE_REPAIR_PENDING",
   "requirements": [
     "FR-069",
     "FR-070",
@@ -47,7 +47,8 @@
     "packages/testkit/chaos/fakes/canva.ts": "136317c7162ab4f943241be5d4ea5b8843490daf52f89cd93f5968df4f4be2a1",
     "packages/testkit/chaos/fakes/server.ts": "dc5463c6cb3164445931e64cd02a7bc3c38ad83d1149bcc1069348ec46ad19e9",
     "packages/testkit/chaos/test/fakes.test.ts": "01400b8414802676b7a0397e8a97b40794446ee113fc22bad9b0cc5e5bdeb01a",
-    "packages/testkit/chaos/test/fixture-native-edit.test.ts": "519ce96d4bb2358f42e1f58bfe713ade505c9721e71e27c7b260219efe334219"
+    "packages/testkit/chaos/test/fixture-native-edit.test.ts": "519ce96d4bb2358f42e1f58bfe713ade505c9721e71e27c7b260219efe334219",
+    "packages/testkit/test/production-vm-resources.test.ts": "2575dacc00231f3c6d3691147d953944ed05a56b3c7d17a66eeb0be70905d4b3"
   },
   "logs": {
     "output/qualification/2026-10-01/candidate-service-boundary-development/INITIAL_REHEARSAL_FAILED.log": "b2e72c654f7a96a62e7eb718af9b904565bbec0fbfe1ee325eff830d959e0f78",
@@ -78,8 +79,27 @@
   "deployment": "NO_PRODUCTION_CHANGE",
   "realProviders": "NOT_RUN",
   "nativeCanvaHuman": "NOT_RUN",
-  "exactGate": "PENDING",
-  "deployedCandidateRecovery": "PENDING",
+  "exactGate": {
+    "status": "FAILED_REPAIRED_TEST_FIXTURE_PENDING_RERUN",
+    "commit": "d85fc087fdd1d9da0b745017b492686f7de74e3c",
+    "passed": 6708,
+    "failed": 1,
+    "skipped": 67,
+    "stages1Through7": "PASS",
+    "reason": "independent VM resource fixture misses three new Compose inputs; limits/assertions retained",
+    "receipt": "output/qualification/2026-10-01/d85fc087/EXACT_GATE_FAILED.json"
+  },
+  "deployedCandidateRecovery": {
+    "status": "PASS",
+    "commit": "d85fc087fdd1d9da0b745017b492686f7de74e3c",
+    "sourceChanges": 0,
+    "checksPassed": 96,
+    "checksFailed": 0,
+    "scenarioMs": 107639,
+    "totalMs": 168495,
+    "receipt": "output/qualification/2026-10-01/d85fc087/CANDIDATE_RECOVERY.json",
+    "scope": "clean-source actual deployed Core/worker/Desk/nginx/Docling; external providers and staff synthetic; both authenticated encrypted restores, journal replay and explicit staff reconciliation; not native/real-provider/human admission"
+  },
   "latestConnected": {
     "files": 4,
     "passed": 44,
@@ -168,5 +188,16 @@
     "applicationReplay": "uncertain Telegram send not repeated; synthetic staff settlement replay and one completed publication passed",
     "finalFailure": "obsolete A:Z fake read returned HTTP500; current data-filter read independently returned header and one task row; corrected full rehearsal pending"
   },
-  "retainedFixtureFailure": "numeric newline entity remains literal in current PPTX check; fixture now uses an XML literal newline. No QA threshold or parser was changed. Separate actual-parser compatibility finding remains to qualify."
+  "retainedFixtureFailure": "numeric newline entity remains literal in current PPTX check; fixture now uses an XML literal newline. No QA threshold or parser was changed. Separate actual-parser compatibility finding remains to qualify.",
+  "resourceConnected": {
+    "files": 2,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "countsOverlap": true
+  },
+  "integratedOfficeSources": [
+    "8d3f24a76a019fb0514707133345df7911eba547",
+    "1ba5bda9dbbfd8cbc294ea4cd8b0f4d2fb229926"
+  ]
 }
