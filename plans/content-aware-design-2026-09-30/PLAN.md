@@ -469,3 +469,8 @@ recorded, alongside all unsealed development failures. Detailed full-suite log
 retained per seal. W6_DNA_AUTHORITY_GATE_EVIDENCE.json. Publication must preserve
 tested runtime/test/migration/infra/gate bytes; source not deployed. Broader
 direct-map/search/W5/W6/native/Canva/human/product admission remains open.
+
+
+## W5 spatial background and carrier contrast — 1 October 2026
+
+ADR198 replaces whole-canvas gradient contrast with a conservative per-text footprint enclosure (all stop intervals, four directions, quantization/edge guards; <=96 bounded subintervals). This admits genuinely readable regional composition without changing palette, ink, geometry, transfer or contrast thresholds. Exact stop minima replace nine-point opacity sampling; radial carriers include interior rings. Six initial spatial regressions and five corrected carrier regressions are retained. First historical crossing/radial fixture mismatches are recorded and corrected, not hidden. Final connected257/0/0 across6 files; overlapping21 real-raster/final-QA/carrier checks pass. Core4 checks before the carrier follow-up and670 strict roots/lint pass; exact sealed gate pending. Local helper medians about0.011ms for a regional footprint and0.028ms for maximum stop extent, zero provider calls; this is not pipeline latency or a speed improvement claim. W5_SPATIAL_BACKGROUND_PROOF.json and benchmark retain evidence. Source not deployed; broader W5/W6/native/Canva/human/recovery/product admission remains open.

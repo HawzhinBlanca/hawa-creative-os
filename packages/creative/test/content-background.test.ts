@@ -101,6 +101,8 @@ describe('typed background field and content decisions', () => {
   });
   it('catches intermediate low contrast rather than treating endpoints as a flat ground', () => {
     const layout = stage(); layout.background.field = { ...gradient, stops: [{ at: 0, color: '#000000' }, { at: 1, color: '#FFFFFF' }] };
+    // The text footprint must actually span the ink's luminance, not a remote canvas region.
+    layout.text[0].height = 250;
     layout.text[0].color = '#777777';
     expect(declaredTextContrast(layout, layout.text[0])).toBe(1);
   });

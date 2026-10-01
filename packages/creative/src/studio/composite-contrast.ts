@@ -1,4 +1,4 @@
-import { backgroundFieldRgbBounds } from './background-field.js';
+import { backgroundFieldLuminanceBounds } from './background-field.js';
 import { PNG } from 'pngjs';
 import type { StudioLayoutV2, Box, TextElement } from './layout-v2.js';
 import { hexToRgb } from './color-science.js';
@@ -37,11 +37,11 @@ export function declaredBackgroundColour(layout: StudioLayoutV2, box: Box): stri
 /** A block's contrast against the surface the layout declares behind it. */
 export function declaredColorContrast(layout: StudioLayoutV2, box: Box, color: string): number {
   const surface = declaredBackgroundColour(layout, box);
-  // A real carrier wins. Without one, include every gradient channel, even an interior color
-  // whose luminance crosses the ink's luminance although both endpoints looked readable.
+  // A real carrier wins. Otherwise enclose every field color under this footprint, including
+  // interior stops and luminance crossings; remote parts of the canvas do not carry this ink.
   if (layout.background.field && !carrierOf(layout, box) && surface === layout.background.color) {
-    const bounds = backgroundFieldRgbBounds(layout.background.field);
-    const low = rgbToLuminance(...bounds.min), high = rgbToLuminance(...bounds.max), ink = hexToLuminance(color);
+    const bounds = backgroundFieldLuminanceBounds(layout.background.field, layout.width, layout.height, box);
+    const low = bounds.min, high = bounds.max, ink = hexToLuminance(color);
     if (ink >= low && ink <= high) return 1;
     return Math.min(calculateLuminanceContrastRatio(ink, low), calculateLuminanceContrastRatio(ink, high));
   }

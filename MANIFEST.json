@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T06:21:16Z",
+  "generatedAt": "2026-10-01T06:38:58Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 749,
+  "fileCount": 753,
   "files": [
     {
       "path": ".dockerignore",
@@ -973,6 +973,11 @@
       "bytes": 4055
     },
     {
+      "path": "adrs/198_spatial_background_contrast.md",
+      "sha256": "5373e7d0febf9ac14641bf3a8de8628d8e2395832b1014937a71b23cf8a46917",
+      "bytes": 3277
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1444,8 +1449,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "274ad747f6aaf571b3ddd9867dbe23928845892b6e39173aa3f28a343aba4212",
-      "bytes": 36748
+      "sha256": "73a072ef1604bf162b2e26ed8ea5a46d031f829c3ed5443f8986d94c109120af",
+      "bytes": 37930
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1521,6 +1526,16 @@
       "path": "plans/content-aware-design-2026-09-30/W5_REFINEMENT_BOUNDARY_PROOF.json",
       "sha256": "8e4d96ff7a6511be5ad0c1fc5ca1d63201f30ef6d1bab6b496032b6885a94ff4",
       "bytes": 5027
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W5_SPATIAL_BACKGROUND_BENCHMARK.json",
+      "sha256": "39d0cc692f79acc6a25a4256773fe54f414f3ce6d2cfa47e22b8348ac5e107ba",
+      "bytes": 2377
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W5_SPATIAL_BACKGROUND_PROOF.json",
+      "sha256": "4c68aec9167b3a0c2f75d8e3f293aded514b78d689b3ddf8e321ed0523f1895b",
+      "bytes": 5589
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_APPROVED_REFINEMENT_GATE_EVIDENCE.json",
@@ -2819,8 +2834,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "59dcc3d96e6f89bfdc775841bc8c8cea89424c0b17e36e45d1de18c272546d86",
-      "bytes": 639588
+      "sha256": "15a3af0d661f7495e9ad5285c8867631c953cb4839f77ab403ed24be9e2f77ec",
+      "bytes": 641838
     },
     {
       "path": "plans/user-stories.csv",
@@ -3481,6 +3496,11 @@
       "path": "scripts/proofs/run_qualification_in_image.sh",
       "sha256": "c878332ecd8cdb3e0aa5fed338612ae26db278abfc0bf601deec666d5d217c8e",
       "bytes": 4340
+    },
+    {
+      "path": "scripts/proofs/spatial_background_benchmark.mjs",
+      "sha256": "83298b7f499a78926b08e3399465013376b5d620ebbbad138d271f95d662f54c",
+      "bytes": 2576
     },
     {
       "path": "scripts/proofs/verify_spacing_fixes.mjs",

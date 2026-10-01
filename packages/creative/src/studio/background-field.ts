@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { hexToRgb } from './color-science.js';
+import { rgbToLuminance } from './luminance.js';
+import type { Box } from './layout-v2.js';
 
 export const FIELD_DIRECTIONS = ['to-right', 'to-bottom', 'to-left', 'to-top'] as const;
 export const backgroundFieldSchema = z.object({
@@ -38,4 +40,38 @@ export function backgroundFieldRgbBounds(field: BackgroundField): { min: [number
   const colors = backgroundFieldSchema.parse(field).stops.map(s => hexToRgb(s.color));
   return { min: [0, 1, 2].map(i => Math.min(...colors.map(c => c[i]))) as [number, number, number],
     max: [0, 1, 2].map(i => Math.max(...colors.map(c => c[i]))) as [number, number, number] };
+}
+
+/** ADR198: conservative enclosure of the actual field under a box, never endpoint sampling. */
+export function backgroundFieldLuminanceBounds(field: BackgroundField, width: number, height: number, box: Box): { min: number; max: number } {
+  const f = backgroundFieldSchema.parse(field);
+  const unknown = { min: 0, max: 1 };
+  if (![width, height, box.x, box.y, box.width, box.height].every(Number.isFinite) ||
+      width <= 0 || height <= 0 || box.width <= 0 || box.height <= 0 ||
+      box.x < 0 || box.y < 0 || box.x + box.width > width || box.y + box.height > height) return unknown;
+  const vertical = f.direction === 'to-bottom' || f.direction === 'to-top';
+  const length = vertical ? height : width;
+  const origin = vertical ? box.y : box.x;
+  const extent = vertical ? box.height : box.width;
+  let start = Math.max(0, (origin - 1) / length);
+  let end = Math.min(1, (origin + extent + 1) / length);
+  if (f.direction === 'to-top' || f.direction === 'to-left') [start, end] = [1 - end, 1 - start];
+  let min = 1, max = 0;
+  for (let i = 1; i < f.stops.length; i++) {
+    const a = f.stops[i - 1], b = f.stops[i];
+    const lo = Math.max(start, a.at), hi = Math.min(end, b.at);
+    if (lo > hi) continue;
+    const from = hexToRgb(a.color), to = hexToRgb(b.color);
+    const rgb = (at: number) => from.map((v, c) => v + (to[c] - v) * (at - a.at) / (b.at - a.at));
+    // Linear sRGB channels stay within these endpoint envelopes even if luminance turns inside.
+    // The +/-1 guard encloses 8-bit rounding; it is not an inferred native renderer tolerance.
+    for (let step = 0; step < 32; step++) {
+      const left = rgb(lo + (hi - lo) * step / 32), right = rgb(lo + (hi - lo) * (step + 1) / 32);
+      const low = left.map((v, c) => Math.max(0, Math.min(v, right[c]) - 1));
+      const high = left.map((v, c) => Math.min(255, Math.max(v, right[c]) + 1));
+      min = Math.min(min, rgbToLuminance(low[0], low[1], low[2]));
+      max = Math.max(max, rgbToLuminance(high[0], high[1], high[2]));
+    }
+  }
+  return { min: Math.max(0, min - 1e-12), max: Math.min(1, max + 1e-12) };
 }
