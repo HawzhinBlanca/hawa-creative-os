@@ -40,7 +40,8 @@ export class Play {
 
   constructor(readonly h: ConversationHarness, office: Person[], type: 'private' | 'group' = 'private', chatId?: string) {
     this.office = office;
-    this.chatId = h.chat(type, chatId ? Number(chatId) : undefined);
+    // A private chat's id is its person's id, as in Telegram (ADR-200 reads the requester's name by it).
+    this.chatId = h.chat(type, chatId ? Number(chatId) : type === 'private' ? this.me.id : undefined);
   }
 
   /** The requester (or `from`) writes words, `after` ms after the previous step. */

@@ -9,6 +9,7 @@ import { CHANGE_SCRIPTS } from './fixtures/nl-scripts/changes.js';
 import { CONVERSATION_SCRIPTS } from './fixtures/nl-scripts/conversation.js';
 import { MEDIA_SCRIPTS } from './fixtures/nl-scripts/media.js';
 import { OFFICE_AND_GROUP_SCRIPTS } from './fixtures/nl-scripts/office-and-groups.js';
+import { OFFICE_CHAT_SCRIPTS } from './fixtures/nl-scripts/office-chat.js';
 
 /**
  * NATURAL-LANGUAGE STRESS SUITE (ADR-182). Owner rule: requesters use natural language only, and
@@ -28,7 +29,8 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 afterAll(async () => { await db.destroy(); await owner.destroy(); });
 
 let officeSeed = 93_400_000 + Math.floor(Math.random() * 100_000) * 10;
-const SCRIPTS: Script[] = [...BRIEF_SCRIPTS, ...CHANGE_SCRIPTS, ...CONVERSATION_SCRIPTS, ...MEDIA_SCRIPTS, ...OFFICE_AND_GROUP_SCRIPTS];
+const SCRIPTS: Script[] = [...BRIEF_SCRIPTS, ...CHANGE_SCRIPTS, ...CONVERSATION_SCRIPTS, ...MEDIA_SCRIPTS, ...OFFICE_AND_GROUP_SCRIPTS,
+  ...OFFICE_CHAT_SCRIPTS];
 
 function transcript(script: Script, p: Play): string {
   const h = p.h;

@@ -23,6 +23,8 @@
  * No model is called: the intent router is off (the rules only), a voice note's transcription is the
  * script's own words behind a fake provider, and a PDF's reading is the script's words behind a fake
  * Docling. Any other call to a model provider is recorded as a paid call and fails the script.
+ * ADR-200: the office reading of an office member's words is a fixture the script sets
+ * (`officeReads`); words it has no reading for get none, as when the model is off.
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -31,6 +33,7 @@ import type { OutboundMessage, SendResult } from '@hawa/contracts';
 import { CanvaBindingRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { DoclingParser, PDF_EXTRACTOR_VERSION } from '@hawa/retrieval';
 import { createApp } from '../../src/app.js';
+import type { OfficeIntentModel, OfficeModelDecision, OfficeModelInput } from '../../src/services/office-intent-model.js';
 import { handleUpdate, settleUpdate, type ChatInboxView, type InboxContext, type SettleInput } from '../../../worker/src/lifecycle/chat-inbox.js';
 import { createCoreClient } from '../../../worker/src/lifecycle/core-client.js';
 import { handleSend, type TelegramSenderDeps } from '../../../worker/src/lifecycle/telegram-sender.js';
@@ -124,6 +127,9 @@ export class ConversationHarness {
   private cause: number | null = null;
   private step = -1;
   readonly app: ReturnType<typeof createApp>;
+  /** ADR-200: what the office reading says, by an office member's words (no paid call); and what it was asked. */
+  readonly officeReads = new Map<string, (input: OfficeModelInput) => OfficeModelDecision | null>();
+  readonly officeAsked: OfficeModelInput[] = [];
   /** Inspect authoritative task state; a polite answer alone is not a durable hold. */
   async taskState(requestId: string) {
     return withRlsContext(this.o.db, SCOPE, async trx => (await sql<{state:string;version:number}>`
@@ -151,7 +157,12 @@ export class ConversationHarness {
       dispatchOutboundMessage: async () => ({ success: true }),
       answerCallbackQuery: async () => true,
     };
-    this.app = createApp({ db: o.db, requesterIntentModel: null, telegramBridge: bridge, deliverableStore: this.store } as any);
+    const officeModel: OfficeIntentModel = { read: async (input) => {
+      this.officeAsked.push(input);
+      return this.officeReads.get(input.text)?.(input) ?? null;
+    } };
+    this.app = createApp({ db: o.db, requesterIntentModel: null, officeIntentModel: officeModel, telegramBridge: bridge,
+      deliverableStore: this.store } as any);
     const appFetch = ((url: string, init?: RequestInit) => this.app.request(url, init)) as typeof fetch;
     this.core = createCoreClient({ baseUrl: CORE, token: o.workerToken, fetch: appFetch });
     this.internal = { post: async <T>(path: string, body: unknown): Promise<T> => {
