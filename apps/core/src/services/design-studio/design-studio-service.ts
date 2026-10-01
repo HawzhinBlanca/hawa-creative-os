@@ -1993,6 +1993,8 @@ export class DesignStudioService {
                   preScore: r.preScore,
                   postScore: r.postScore,
                   stopReason: r.stopReason,
+                  ...(r.repairPolicy ? { repairPolicy: r.repairPolicy } : {}),
+                  ...(r.rejection ? { rejection: r.rejection } : {}),
                   calls: r.calls.map((c) => ({ stage: c.stage, model: c.model, responseId: c.responseId, costUsd: c.costUsd })),
                 })),
               };

@@ -1684,6 +1684,8 @@ export async function refineCandidateV3(
     minDelta: 0.01,
     copyText: copy.text,
     renderOptions: options.renderOptions,
+    repairContext: { palette: options.canvas?.palette ?? options.qa?.palette,
+      ...(options.qa ? { allowedFonts: [options.qa.latinFont, options.qa.arabicFont] } : {}) },
     force: failsQa,
     // What production's QA would say once the layout is prepared the way it will be stored.
     ...(options.qa

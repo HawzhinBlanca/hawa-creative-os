@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-01",
+  "status": "FOCUSED_ENGINEERING_PASS_EXACT_SEALED_GATE_PENDING",
+  "decision": "ADR190; geometry-only-v1; scoped live-copy identities outrank an incomplete generated layout",
+  "requirements": [
+    "FR-034",
+    "FR-038",
+    "FR-041",
+    "NFR-014"
+  ],
+  "red": {
+    "failed": 17,
+    "files": 1
+  },
+  "firstGreen": {
+    "passed": 20,
+    "failed": 0,
+    "files": 2
+  },
+  "firstConnected": {
+    "passed": 122,
+    "failed": 2,
+    "files": 6,
+    "cause": "Missing-copy restoration was correctly required; original redesign mock changed style/additional shapes outside the geometry contract. Both corrected without dropping acceptance obligations.",
+    "scope": "Core build preceded the later bounds change; not claimed as final current-source qualification."
+  },
+  "connectedAfterRebuild": {
+    "passed": 130,
+    "failed": 0,
+    "skipped": 0,
+    "files": 6
+  },
+  "nativeStructuredTransferFollowUp": {
+    "passed": 25,
+    "failed": 0,
+    "files": 1,
+    "overlapWithConnected": true,
+    "scope": "Actual native editable PPTX gradient, exact live copy/accent and original source image bytes retained; not a real Canva capture/export or human/native-render admission."
+  },
+  "typecheck": {
+    "roots": 659,
+    "result": "PASS",
+    "scope": "Before native-transfer assertion addition; final mandatory gate must recompile current tests."
+  },
+  "build": "PASS",
+  "lint": "PASS;939 any;10 existing provider-egress exceptions",
+  "providerCalls": 0,
+  "deployed": false,
+  "boundary": [
+    "Finite within-canvas proposed geometry and existing40-node bounds",
+    "Preserve rich optional layers; reject protected styles, source identities and duplicate/invented copy slots",
+    "Restore genuinely missing requested live-copy slots under scoped font/color policy",
+    "Keep actual completed attempt receipts for invalid payloads and refused photo coverage",
+    "Zero-to-two rounds; invalid options refuse before calls; Core records policy/rejection metadata"
+  ],
+  "limits": [
+    "No actual paid model answer or real Canva native capture tested",
+    "Core persistence additions exercised by connected orchestration generally; no independently captured live rejection record",
+    "W5 local optimizer/perceptual approved tints/cache/replay, W6 taste calibration, human/native/recovery/product admission remain open"
+  ],
+  "sources": {
+    "packages/creative/src/studio/refinement-patch.ts": "fe374e88cf4707ef38461b7f9c99415a040570f1862102f63228581b0d2875dc",
+    "packages/creative/src/studio/refinement-engine-v3.ts": "c6f4acb924402b6c1aeb56b72a0e548d5b799fe8c771399396f78d7050a56212",
+    "packages/creative/src/studio/pipeline-v3.ts": "5a83347e73b1494f2291fc54cff208abcbb6d4ef39cf124a324572eb6a92095d",
+    "apps/core/src/services/design-studio/design-studio-service.ts": "cf3c700068ffd2da6414393963665bd438022f133dd51b082507a3216fb64de0",
+    "packages/creative/test/refinement-boundary.test.ts": "7767fd8b181681e67105e97a8e5e7648db83c891fe6374e984e8bad0fa717f1e",
+    "packages/creative/test/pipeline-v3.test.ts": "08231305acd6cfae7bcddf007f39d12bd583b565cbe7c02fb4165493e9cd4e8f"
+  },
+  "logs": {
+    "/tmp/hawa-refinement-boundary-red-20261001.log": "8c8588a7a362fab8b8fd01335a9d86baf70061ece9de29e878b0ea42926462a1",
+    "/tmp/hawa-refinement-boundary-green-20261001.log": "846a2d1ec679a5cc68033db681a1c451bdbf03eb8ee285889972dbf2f99cb180",
+    "/tmp/hawa-refinement-boundary-connected-20261001.log": "3dfe4acf266a8405da054861eb342881d4168cf3e7f2a9af45118b1217a15acc",
+    "/tmp/hawa-refinement-boundary-authority-connected-20261001.log": "89e92daff6e03c6c0872900494268f7e1b7e297893c1b200a46da1e106367336",
+    "/tmp/hawa-refinement-boundary-authority-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "/tmp/hawa-refinement-boundary-transfer-20261001.log": "1ff014ae276d394ceaf033b71ddca7ab120dd45c48faa57e43549d2dc64aeaad",
+    "/tmp/hawa-refinement-boundary-types-20261001.log": "95813fb7b5df141bc0da9e6b9d26f75ac892c563461549a680522ecb4ab1f928",
+    "/tmp/hawa-refinement-boundary-lint-20261001.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5"
+  }
+}

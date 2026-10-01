@@ -203,3 +203,8 @@ Seal c952e1a5 passes all8 stages,6427 tests/0 failed/67 skipped,651 passed files
 ## Final combined source qualification
 
 Seal 8222c9806949344b5490230c682c6c24484944a6 passes all8 engineering stages,6427 tests/0 failures/67 skips,658 typed roots,1594 blueprint checks and newest production-dump invariants. Final negative control is logged once before the full suite; lint/egress pass. Original failed and first passing runs are retained. Metadata-only proof follow-up does not alter runtime/tests/gate code. Content-aware source is not deployed; five missing recipe references and W3 native/Canva/human, broader W5/W6 and recovery/product admission stay open.
+
+
+## W5 controlled refinement foundation — 1 October 2026
+
+ADR190 replaces reduced-schema whole-layout replacement with validated geometry patches. Rich background/overlay/photo/shape/accents remain source-owned; malformed or protected-input changes retain rejected-attempt receipts. The authoritative copy map can restore omitted requested blocks; fonts/colors use current/scoped policy. Explicit0–2 rounds and finite plateau bounds prevent accidental extra work. Red17/17; firstgreen20/0; firstconnected122/2 retains genuine restoration gap and old redesign-mock contract violation; rebuilt current connected6 files130/0/0. Actual native PPTX follow-up25/0 overlaps those controls and preserves gradient/live accent/source bytes.659 typed roots and lint pass before that assertion addition; final exact gate pending. No paid call or deployment. Full local optimization, approved perceptual tint policy/cache/replay and W6/native/human/recovery qualification remain open. See W5_REFINEMENT_BOUNDARY_PROOF.json.
