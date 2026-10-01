@@ -60,7 +60,7 @@ export interface DesignFeedbackRecord {
   runId?: string | null;
   candidateId?: string | null;
   actorId: string;
-  actorRole?: 'art_director' | 'creative_director' | 'operator';
+  actorRole?: string;
   source?: 'desk' | 'telegram' | 'import';
   verdict: 'approve' | 'reject' | 'revise' | 'rating';
   rating?: number | null;
@@ -97,6 +97,7 @@ export class FeedbackMiner {
   private candidateRules = new Map<string, CandidateRuleProposal>();
   private observedDeltas: Array<{ clientId: string; taskId: string; delta: FeedbackDelta }> = [];
   private rejectedTaskIds = new Set<string>();
+  private feedbackEvents = new Map<string, string>();
   private negativeFeedbackStore: Array<{
     feedbackId: string;
     taskId: string;
@@ -119,15 +120,36 @@ export class FeedbackMiner {
     const records = Array.isArray(feedback) ? feedback : [feedback];
     const newlyProposed: CandidateRuleProposal[] = [];
 
-    for (const record of records) {
-      const clientId =
-        record.clientId ||
-        context?.clientId ||
-        'c1000000-0000-4000-8000-000000000002';
+    // Validate the whole batch before changing evidence, including duplicate identities
+    // inside the batch. PostgreSQL remains authoritative; this guards its local projection.
+    const pendingEvents = new Map<string, string>();
+    const admitted = records.map(record => {
+      const clientId = record.clientId ?? context?.clientId;
+      if (typeof clientId !== 'string' || !clientId.trim() || clientId !== clientId.trim() ||
+          (context?.clientId !== undefined && context.clientId !== clientId)) {
+        throw new Error('Feedback client scope is missing or conflicting');
+      }
+      for (const value of [record.id, record.taskId, record.actorId]) {
+        if (typeof value !== 'string' || !value.trim()) throw new Error('Feedback identity is required');
+      }
+      const key = JSON.stringify([record.tenantId ?? null, record.id]);
+      const fingerprint = crypto.createHash('sha256').update(JSON.stringify([
+        clientId, record.taskId, record.runId ?? null, record.candidateId ?? null,
+        record.actorId, record.actorRole ?? null, record.source ?? 'desk', record.verdict,
+        record.rating ?? null, record.notes ?? null, record.createdAt ?? null,
+      ])).digest('hex');
+      const previous = pendingEvents.get(key) ?? this.feedbackEvents.get(key);
+      if (previous !== undefined && previous !== fingerprint) throw new Error('Feedback event reuse conflict');
+      pendingEvents.set(key, fingerprint);
+      return { record, clientId, key, fingerprint, replayed: previous !== undefined };
+    });
+
+    for (const { record, clientId, key, fingerprint, replayed } of admitted) {
+      if (replayed) continue;
 
       const actor = {
         id: record.actorId,
-        role: record.actorRole || 'art_director',
+        ...(record.actorRole ? { role: record.actorRole } : {}),
       };
 
       const notes = (record.notes || '').trim();
@@ -146,9 +168,10 @@ export class FeedbackMiner {
 
       // 2. Positive feedback handling (approve verdict or high rating >= 8)
       if (verdict === 'approve' || (verdict === 'rating' && rating !== null && rating >= 8)) {
-        if (!this.rejectedTaskIds.has(record.taskId)) {
+        if (!this.isTaskRejected(record.taskId, clientId)) {
           for (const rule of this.candidateRules.values()) {
-            if (rule.clientId === clientId && !rule.examples.positiveExampleTaskIds.includes(record.taskId)) {
+            if (rule.clientId === clientId && rule.evidenceTaskIds.includes(record.taskId) &&
+                !rule.examples.positiveExampleTaskIds.includes(record.taskId)) {
               rule.examples.positiveExampleTaskIds.push(record.taskId);
             }
           }
@@ -234,7 +257,7 @@ export class FeedbackMiner {
           },
           examples: {
             positiveExampleTaskIds:
-              verdict === 'approve' && !this.rejectedTaskIds.has(record.taskId) ? [record.taskId] : [],
+              verdict === 'approve' && !this.isTaskRejected(record.taskId, clientId) ? [record.taskId] : [],
             negativeExampleTaskIds:
               verdict === 'reject' || (rating !== null && rating <= 4) ? [record.taskId] : [],
           },
@@ -255,13 +278,15 @@ export class FeedbackMiner {
           }
         }
       }
+      this.feedbackEvents.set(key, fingerprint);
     }
 
     return newlyProposed;
   }
 
-  public isTaskRejected(taskId: string): boolean {
-    return this.rejectedTaskIds.has(taskId);
+  public isTaskRejected(taskId: string, clientId?: string): boolean {
+    if (clientId !== undefined) return this.rejectedTaskIds.has(JSON.stringify([clientId, taskId]));
+    return Array.from(this.rejectedTaskIds).some(key => JSON.parse(key)[1] === taskId);
   }
 
   /**
@@ -419,8 +444,8 @@ export class FeedbackMiner {
             recordedAt: new Date().toISOString(),
           },
           examples: {
-            positiveExampleTaskIds: this.rejectedTaskIds.has(taskId) ? [] : [taskId],
-            negativeExampleTaskIds: this.rejectedTaskIds.has(taskId) ? [taskId] : [],
+            positiveExampleTaskIds: this.isTaskRejected(taskId, clientId) ? [] : [taskId],
+            negativeExampleTaskIds: this.isTaskRejected(taskId, clientId) ? [taskId] : [],
           },
           conflicts: [],
           sha256Digest,
@@ -598,11 +623,11 @@ export class FeedbackMiner {
     });
 
     // Mark task as rejected so it can never become a positive example
-    this.rejectedTaskIds.add(taskId);
+    this.rejectedTaskIds.add(JSON.stringify([clientId, taskId]));
 
     // If any candidate rule previously used this task as positive evidence, remove it
     for (const rule of this.candidateRules.values()) {
-      if (rule.examples.positiveExampleTaskIds.includes(taskId)) {
+      if (rule.clientId === clientId && rule.examples.positiveExampleTaskIds.includes(taskId)) {
         rule.examples.positiveExampleTaskIds = rule.examples.positiveExampleTaskIds.filter((id) => id !== taskId);
         if (!rule.examples.negativeExampleTaskIds.includes(taskId)) {
           rule.examples.negativeExampleTaskIds.push(taskId);
@@ -656,8 +681,8 @@ export class FeedbackMiner {
         recordedAt: new Date().toISOString(),
       },
       examples: {
-        positiveExampleTaskIds: this.rejectedTaskIds.has(taskId) ? [] : [taskId],
-        negativeExampleTaskIds: this.rejectedTaskIds.has(taskId) ? [taskId] : [],
+        positiveExampleTaskIds: this.isTaskRejected(taskId, clientId) ? [] : [taskId],
+        negativeExampleTaskIds: this.isTaskRejected(taskId, clientId) ? [taskId] : [],
       },
       conflicts,
       sha256Digest,

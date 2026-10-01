@@ -5,6 +5,7 @@ import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { CanvaFlowError } from '../src/services/canva-connect-service.js';
 import type { DesignStudioService } from '../src/services/design-studio/index.js';
+import { globalFeedbackMiner } from '@hawa/creative';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
@@ -468,6 +469,51 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       expect(data.verdict).toBe('approve');
       expect(data.rating).toBe(9);
       expect(data.rulesProposed).toBeGreaterThanOrEqual(1);
+    });
+
+    it('mines feedback only for the authorized task client, ignoring a spoofed body client', async () => {
+      const otherClient = randomUUID(), otherRun = randomUUID(), otherCandidate = randomUUID();
+      await sql`INSERT INTO hawa.clients(id,tenant_id,code,name)
+        VALUES(${otherClient}::uuid,${tenantId}::uuid,${'isolated-'+otherClient},'Other Test Client')`.execute(db);
+      const intake = await persistChatIntake(db, { platform:'telegram', sourceEventId:randomUUID(),
+        sourceChannelId:`isolated-test-${randomUUID()}`, clientId:otherClient,
+        title:'[TEST] Other Client',rawText:'Authorized other client copy',designInstructions:'',exactCopy:['Authorized other client copy'] });
+      const otherTask = intake.task.id;
+      await sql`INSERT INTO hawa.design_studio_runs(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,tier,status,budget,stages)
+        VALUES(${otherRun}::uuid,${tenantId}::uuid,${otherTask}::uuid,${otherClient}::uuid,${actorId}::uuid,
+        ${randomUUID()},'hash','{}','standard','briefing','{"maxUsd":6,"maxCalls":40,"spentUsd":0,"calls":0}','{}')`.execute(db);
+      await sql`INSERT INTO hawa.design_studio_candidates(id,run_id,tenant_id,ordinal,concept,status,preview_png,preview_sha256)
+        VALUES(${otherCandidate}::uuid,${otherRun}::uuid,${tenantId}::uuid,0,'{}','draft',${fakePng},${fakeSha})`.execute(db);
+      const key = randomUUID();
+      const payload = {runId:otherRun,candidateId:otherCandidate,clientId,verdict:'revise',notes:'Increase heading spacing for this client'};
+      const response = await app.request(`/v1/tasks/${otherTask}/design-feedback`, {method:'POST',
+        headers:{...headers,'Idempotency-Key':key,'x-user-role':'designer'},body:JSON.stringify(payload)});
+      expect(response.status).toBe(201);
+      const rules = globalFeedbackMiner.getCandidateRules(otherClient).filter(rule=>rule.provenance.feedbackId===key);
+      expect(rules).toHaveLength(1);
+      expect(rules[0].provenance).toMatchObject({clientId:otherClient,taskId:otherTask,actor:{role:'designer'}});
+      expect(globalFeedbackMiner.getCandidateRules(clientId).some(rule=>rule.provenance.feedbackId===key)).toBe(false);
+      const replay = await app.request(`/v1/tasks/${otherTask}/design-feedback`, {method:'POST',
+        headers:{...headers,'Idempotency-Key':key,'x-user-role':'designer'},body:JSON.stringify(payload)});
+      expect(replay.status).toBe(200);
+      expect(rules[0].frequency).toBe(1);
+    });
+
+    it('does not mine feedback whose database commit fails', async () => {
+      const key = randomUUID();
+      await sql.raw(`CREATE FUNCTION hawa.test_feedback_commit_failure() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'injected feedback commit failure'; END $$`).execute(db);
+      await sql.raw(`CREATE CONSTRAINT TRIGGER test_feedback_commit_failure AFTER INSERT ON hawa.design_feedback
+        DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION hawa.test_feedback_commit_failure()`).execute(db);
+      try {
+        const response = await app.request(`/v1/tasks/${taskId}/design-feedback`, {method:'POST',
+          headers:{...headers,'Idempotency-Key':key},body:JSON.stringify({runId,candidateId,verdict:'revise',notes:'Spacing adjustment after review'})});
+        expect(response.status).toBe(500);
+        expect((await sql`SELECT id FROM hawa.design_feedback WHERE id=${key}::uuid`.execute(db)).rows).toHaveLength(0);
+        expect(globalFeedbackMiner.getCandidateRules(clientId).some(rule=>rule.provenance.feedbackId===key)).toBe(false);
+      } finally {
+        await sql.raw('DROP FUNCTION hawa.test_feedback_commit_failure() CASCADE').execute(db);
+      }
     });
 
     it('replays feedback once and refuses action reuse or a changed reviewed preview', async () => {

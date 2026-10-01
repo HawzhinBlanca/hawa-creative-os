@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-01",
+  "status": "CONNECTED_SLICE_QUALIFIED_EXACT_FULL_GATE_PENDING",
+  "requirements": [
+    "FR-022",
+    "FR-052",
+    "FR-053",
+    "FR-054",
+    "NFR-006",
+    "NFR-012"
+  ],
+  "decision": "ADR191",
+  "initialDomainRegression": {
+    "failed": 9,
+    "passed": 0
+  },
+  "initialHttpRegression": {
+    "failed": 1,
+    "passed": 28,
+    "scope": "Actual other-client submission on isolated PostgreSQL; old compiled miner, original HTTP route"
+  },
+  "connectedInitialGreen": {
+    "files": 8,
+    "passed": 75,
+    "failed": 0
+  },
+  "connectedCommitFailureFollowUp": {
+    "files": 8,
+    "passed": 76,
+    "failed": 0,
+    "skipped": 0,
+    "overlapWithInitialGreen": true
+  },
+  "firstTypecheck": {
+    "status": "FAIL",
+    "errors": 1,
+    "cause": "New ChatIntake test fixture omitted required designInstructions; corrected without changing acceptance"
+  },
+  "correctedTypecheck": {
+    "status": "PASS",
+    "roots": 660
+  },
+  "build": "PASS",
+  "lint": "PASS;939 any;10 existing egress exceptions",
+  "liveHistoricalInspection": {
+    "date": "2026-10-01T02:35:29.822Z",
+    "mode": "READ_ONLY_TENANT_SCOPED_AGGREGATE",
+    "aggregate": {
+      "feedback_rows": 0,
+      "distinct_task_clients": 0,
+      "missing_task_client": 0,
+      "run_client_mismatches": 0
+    },
+    "limits": [
+      "No raw feedback, identities or credential material retained",
+      "Does not establish correct prior in-memory proposal attribution or historical promotion provenance",
+      "No historical rows modified or used for automatic taste training"
+    ]
+  },
+  "behavior": [
+    "Authoritative RLS task client binding; request client ignored; run/task client equality and row locks",
+    "Explicit scope, batch prevalidation, identity replay/conflict refusal",
+    "Preserve verified role or unknown; no invented art-director authority",
+    "Unrelated approvals do not manufacture rule support; negatives stay client-scoped",
+    "Only committed feedback enters process-local projection"
+  ],
+  "limits": [
+    "Process-local event dedup is not durable replay/rebuild across restart",
+    "Historical promoted Client DNA stores rule text rather than complete feedback provenance; no automated migration/training authorized by this proof",
+    "Task-level negative eligibility remains conservative; revision-level evidence and corrected-approved candidate learning require additional work",
+    "Note scope/explicitness, independent-task pattern clustering, human calibration and native/product/recovery qualification remain open",
+    "No deployment or paid provider call"
+  ],
+  "sources": {
+    "packages/creative/src/feedback-miner.ts": "783b090a9c3e9b49560e5238b0b922985cc46248c7a10371d9905f00b31fb1b2",
+    "apps/core/src/routes/design-studio.routes.ts": "f5a135bd89e941771a63034cc7daa856d7e3de0d1a15cdbf05b04a66f0e6e1af",
+    "packages/creative/test/feedback-attribution.test.ts": "220cbbf8920e679f6b7e97ab583280d91c5b34c21fb6eef590f99d3d36b16f69",
+    "apps/core/test/design-studio-routes.test.ts": "d965b07d6fd4def26cffdbca761fe9baf975508dd3c183220abec248ccd52d29"
+  },
+  "logs": {
+    "/tmp/hawa-feedback-attribution-red-20261001.log": "f8880058c406b2c11fcadeaa63ec7921fed1830491a7a311c5afe79f50ec083a",
+    "/tmp/hawa-feedback-http-red-20261001.log": "7991d30d625c17c1b488b1c4916f1d872392077fa3b919719c1db48a5c5ab884",
+    "/tmp/hawa-feedback-connected-20261001.log": "50bd2914dd961b168c9cfa88c2fabc75540393bc4d795ffdec058b6098dea2ba",
+    "/tmp/hawa-feedback-connected-final-20261001.log": "c85aad1ab7b922093ed1c4f3500660ceade5da4cb4991f0d83296c0da8faa6a5",
+    "/tmp/hawa-feedback-build-20261001.log": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586",
+    "/tmp/hawa-feedback-types-20261001.log": "93994010cf09635f9fdbeef6f8b0101ebd31428acf6aa83d142f6d8723a6b83a",
+    "/tmp/hawa-feedback-types-final-20261001.log": "f771f91ece799e65338a8f4cec0c2936bd96b1ea3a0391ed5210b519df84232c",
+    "/tmp/hawa-feedback-lint-20261001.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5"
+  },
+  "deployed": false,
+  "providerCalls": 0
+}

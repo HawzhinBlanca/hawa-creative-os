@@ -218,3 +218,21 @@ Sealb3241f78:8 stages,6453/0/67,659 typed roots,1602 blueprint checks,newest dum
 ## Next W6 blocker to trustworthy attribution — source inspection
 
 The Core design-feedback route calls the miner without task clientId/context; the miner falls back to a fixed KAAE client. Bind the authorized task client through the existing RLS join, remove this default, refuse missing/contradictory evidence and exercise independent clients/replay before taste learning. This is source inspection, not an executed new runtime regression or repaired live behavior. W6_CLIENT_ATTRIBUTION_FINDING.json binds inspected source hashes. Continue implementation; no user input is needed for this repair.
+
+
+## W6 authoritative feedback checkpoint — 1 October 2026
+
+ADR191 repairs the confirmed fixed-client fallback at the real Studio HTTP boundary.
+Initial domain9fail and HTTP28pass/1fail are retained. Rebuilt eight-file76pass
+connected qualification includes an actual deferred PostgreSQL commit failure; no
+rolled-back row creates a proposal. Client/body-spoof/replay, absent/conflicting
+scope and atomic batch controls pass. Unrelated approvals no longer support every
+client rule; negatives are client-scoped; no role authority is fabricated.
+First strict type run refused a missing required test-fixture field; corrected660
+roots compile, lint passes. One tenant-scoped read-only production aggregate reports
+zero Studio feedback rows; it does not certify older proposals or promotion lineage.
+No labels are invented, migrated or used for training. Process-local projection
+durability, task-versus-revision polarity, genuine learned taste and product/native/
+human qualification remain open. Exact clean source gate is pending.
+Evidence: W6_FEEDBACK_ATTRIBUTION_PROOF.json; original W6_CLIENT_ATTRIBUTION_FINDING.json
+is retained as the dated pre-repair source inspection.
