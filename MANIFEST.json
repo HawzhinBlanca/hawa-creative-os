@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T01:09:16Z",
+  "generatedAt": "2026-10-01T07:55:21Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "05770b22284879b72ec35c527cf23164ab6b6973a1e57cf330b8fe4d3443d72c",
-      "bytes": 3983
+      "sha256": "4afeaaea40d66e11fd676bbb0da2d3ab3036f1c544f18bba9d0fefc5e6a3f74f",
+      "bytes": 3980
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -269,8 +269,8 @@
     },
     {
       "path": "adrs/040_authenticated_office_decision_gateway.md",
-      "sha256": "a8abdf894c1136e9cb8b5ed9ac3246e3ada2c78db381e0765661a2a7fc59dfe7",
-      "bytes": 12940
+      "sha256": "890d08d0fea6df37df1cafab82d3d4210cffcb27ac8bf20f05203da3d63676fc",
+      "bytes": 19260
     },
     {
       "path": "adrs/041_nullable_qa_for_nonapproval_decisions.md",
@@ -1594,8 +1594,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "eebf98bb622068ab982cfcfe0b7c6d50bc0fa3a8d93c6349a0b936d89ea85fb3",
-      "bytes": 58687
+      "sha256": "94e6b4b647a427c49690f3ea868adbccac162bc14a11244ef203c01d39921792",
+      "bytes": 60486
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2544,8 +2544,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "d388f1851a7f73ec08df8a0668c035b67b479172d5a5518ee8de3a8eb2d21275",
-      "bytes": 576987
+      "sha256": "d9aeeae3d11ec3dee2c4a9c87021a2f36cd13d2086758d9315601bf3784f91c5",
+      "bytes": 578077
     },
     {
       "path": "plans/user-stories.csv",
