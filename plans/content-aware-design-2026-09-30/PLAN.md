@@ -277,3 +277,12 @@ migration expectation now includes074, and new audit RLS policies retain
 ADR033 once-per-statement checks. Actual requester membership can read its
 audit while writes still refuse. Expanded9files/81pass verifies learning,
 startup and policy controls; repaired exact full gate pending.
+
+W6 exact repaired engineering seal87d3a66d passes all8 stages,
+6480tests/0failed/67skipped,655passed files/6skipped,662 strict
+roots/newest dump/negative flag refusal. First6478pass/2fail and intermediate
+shared-test provisioning refusal are retained. No source changes between the
+repaired/refused and passing gate; only guarded disposable databases rebuilt.
+W6_APPROVED_REFINEMENT_GATE_EVIDENCE.json preserves the exact gate identity.
+Metadata sealing preserves tested runtime/tests/infra/database/gate code.
+No deployment or paid/native/human claim; broad W5/W6/product gates stay open.

@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "CONNECTED_ENGINEERING_QUALIFIED_EXACT_FULL_GATE_PENDING",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_TASTE_AND_PRODUCT_OPEN",
   "decision": "ADR192",
   "requirements": [
     "FR-022",
@@ -21,7 +21,8 @@
     "Scoped66pass/1fail exposed prior no-DNA promotion falsely returning success; require DNA and use explicit test fixture.",
     "Strict source/type runs retained optional role and Hono return type errors, then explicit new test types; no exclusions or weakened acceptance.",
     "First clean exact full gate6478pass/2fail/67skip retained; migration startup and RLS performance failures repaired, expanded9files/81pass controls.",
-    "Initial default Python lacked PyYAML in the validation hook; reran with established /opt/homebrew/bin runtime, no dependency installation or validation bypass."
+    "Initial default Python lacked PyYAML in the validation hook; reran with established /opt/homebrew/bin runtime, no dependency installation or validation bypass.",
+    "Corrected unpublished074 checksum was already in the shared disposable bootstrap databases from first gate. Subsequent gate refused before suite; retained full logs, rebuilt only guarded hawa_test/hawa_repair on55432, then repeated the unchanged seal through all8 stages."
   ],
   "connected": {
     "files": 9,
@@ -57,7 +58,7 @@
   "deployed": false,
   "providerCalls": 0,
   "sources": {
-    "adrs/192_approved_revision_learning_and_independent_task_evidence.md": "8599aa68c08409a29e34ade69171ea3c287cefb0b59daf079e9ff329c0d1dfa0",
+    "adrs/192_approved_revision_learning_and_independent_task_evidence.md": "9060a66a5b24277f9c0a005e617533b0ce18d0c8faaf34b3118970c19d8b6aa5",
     "apps/core/src/services/approved-refinement-learning.ts": "6f1d6474d42364fa1a5ef0e80eb76119294a36da63a267d05de382d3a72ba6b0",
     "apps/core/src/routes/client-learning.routes.ts": "14d512edfc6d0df23bc8cdbdeae2a9b795bf6ffb876f1b7ed764aa0e70764014",
     "packages/creative/src/refinement-evidence.ts": "81d0745749182fb77a93c4f66fb6ca923d569d344dbb498e129151c68d36af63",
@@ -94,13 +95,19 @@
     "/tmp/hawa-refinement-learning-red-20261001.log": "90a01bafd358b4b4f17ed87e78156876ce818abcf02cf9b5d6ce6f47749ac034",
     "/tmp/hawa-approved-learning-first-full-gate-20261001.log": "8e7fa3da880cc6d74b52165706326adf33cffbecafdc5a520986e9517e878fbc",
     "/tmp/hawa-approved-learning-first-full-suite-20261001.log": "759be090fe429692778a2a8fb505902c4404e66246fec7735002b3eb4ac7167a",
-    "/tmp/hawa-approved-learning-connected-complete-20261001.log": "7b79ce6bc0383ff4a00afa96b3e92d89fe0449a970bc59be637df6ef994276de"
+    "/tmp/hawa-approved-learning-connected-complete-20261001.log": "7b79ce6bc0383ff4a00afa96b3e92d89fe0449a970bc59be637df6ef994276de",
+    "/tmp/hawa-approved-learning-provision-failed-gate-20261001.log": "2dd23725fb37fdcf4ac7ea30d25ff308dc9aef722320a22a09832d3e10fd7779",
+    "/tmp/hawa-approved-learning-provision-failure-20261001.log": "22e5f625d0573371da326c1ebdc8892d07a04a9830eb04d7ddd31a495f44c136",
+    "/tmp/hawa-approved-learning-test-db-recreate-20261001.log": "06a8c90a7d4eaf600d059017cca643bad05d43443ff7da3b4267690bbec28f34",
+    "/tmp/hawa-approved-learning-final-full-gate-20261001.log": "77e4389eab10a04779144e111edf3a09c4369429121979fd8e42047796270015",
+    "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/FULL_TEST_SUITE_RUN.log": "8e53cedd9d13d6c9a4ddb165c03732e671ac9fcd590cf8b15e3145a5194a6b47"
   },
   "liveInfrastructure": {
     "observedAt": "2026-10-01T03:01:09.138Z",
     "liveRelease": "2c4d61ec",
     "threeRequestedRepairs": "PASS",
-    "source": "service-boundary-repair/output/repairs/2026-10-01-service-boundary-confirmation/LIVE_READBACK_030109Z.json"
+    "source": "service-boundary-repair/output/repairs/2026-10-01-service-boundary-confirmation/LIVE_READBACK_030109Z.json",
+    "proofSha256": "b606265950900e7ed25ae86d300437bf1071988729fdf67a902dff59b44b8443"
   },
   "firstFullGate": {
     "testedSeal": "7481c2261ef05ae267fe80ed22e174c652c16e66",
@@ -122,5 +129,27 @@
     "passed": 69,
     "failed": 0,
     "skipped": 0
+  },
+  "sourceCommit": "b4c7099e9fa00dc2e73f590b8d086e7289c351b4",
+  "initialSourceCommit": "2fba5b56a3c72bc569f89cd99abd370e93306783",
+  "testedSeal": "87d3a66ddd9fb143dd87f9c8961a42df52a09de9",
+  "fullGate": {
+    "stagesPassed": 8,
+    "passed": 6480,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 655,
+    "filesSkipped": 6,
+    "durationSeconds": 214.58,
+    "typedRoots": 662,
+    "newestProductionDump": "PASS",
+    "negativeRefusal": "PASS",
+    "evidence": "W6_APPROVED_REFINEMENT_GATE_EVIDENCE.json"
+  },
+  "intermediateProvisionRefusal": {
+    "testedSeal": "87d3a66ddd9fb143dd87f9c8961a42df52a09de9",
+    "stagesPassed": 7,
+    "fullSuite": "NOT_RUN",
+    "reason": "Shared disposable bootstrap test database contained earlier unpublished074 checksum; guard refused. Only hawa_test/hawa_repair on55432 recreated using guarded script; no checksum edits, production unchanged."
   }
 }

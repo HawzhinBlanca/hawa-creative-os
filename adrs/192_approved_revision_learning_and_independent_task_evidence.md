@@ -56,3 +56,9 @@ last-migration expectation is updated to074; the new policies now preserve
 ADR033 once-per-statement membership checks with existing hoisted helpers.
 Expanded9files/81pass includes real requester read-only scope and both guards.
 Repaired exact gate remains pending; no production change.
+
+Exact repaired seal87d3a66d passes all8 engineering stages:
+6480pass/0fail/67skip,662 typed roots,newest production dump and actual
+negative flag refusal. An intermediate shared-test checksum refusal is retained;
+only disposable bootstrap databases were recreated, with no checksum bypass.
+Source-only; native/Canva/human/taste/recovery/whole-product admission remains open.
