@@ -50,7 +50,8 @@ it('forward policy reapplication preserves policy identities, existing reads and
   const migration=readFileSync(new URL('../migrations/081_model_consent_audit_authority.sql',import.meta.url),'utf8')
     .replace(/^BEGIN;\s*$/m,'').replace(/^COMMIT;\s*$/m,'');
   await owner.transaction().execute(async trx=>{
-    const policies=async()=>(await sql`SELECT oid::text,polname,polcmd,polpermissive,polroles::text,
+    const policies=async()=>(await sql<{oid:string;polname:string;polcmd:string;polpermissive:boolean;
+      polroles:string;read:string|null;write:string|null}>`SELECT oid::text,polname,polcmd,polpermissive,polroles::text,
       pg_get_expr(polqual,polrelid) AS read,pg_get_expr(polwithcheck,polrelid) AS write
       FROM pg_policy WHERE polrelid='hawa.audit_events'::regclass ORDER BY oid`.execute(trx)).rows;
     const grants=async()=>(await sql`SELECT oid::text,relacl::text FROM pg_class
