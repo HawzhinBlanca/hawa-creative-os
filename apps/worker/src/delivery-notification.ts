@@ -189,6 +189,47 @@ export async function writeSendMark(
 }
 
 /**
+ * ADR-240: the record of a message the nightly canary's sink kept instead of sending: one for the
+ * canary chat, or an office alert about a canary request. Appended under the message's own key with
+ * the outcome `canary_sink`, which no reader of send marks takes for a sent message (MARK_KIND has no
+ * such outcome), so it is never evidence that a requester received anything. The words are kept with
+ * it (at most 4,000 characters each) for the audit; the canary itself reads Restate's journal.
+ */
+export async function writeCanarySinkMark(
+  db: Kysely<Database>,
+  tenantId: string,
+  commandId: string,
+  step: string,
+  kind: SendStepKind,
+  record: { messageId: string; chatId: string; reason: 'canary_chat' | 'canary_request'; kind: string;
+    text?: string; caption?: string; filename?: string; canaryFor?: string },
+): Promise<void> {
+  if (!validTelegramMessageId(record.messageId)) throw new Error('A canary sink record needs a positive message ID');
+  const key = `${commandId}:${step}`;
+  const words = Object.fromEntries((['text', 'caption', 'filename'] as const)
+    .filter((field) => typeof record[field] === 'string').map((field) => [field, Array.from(record[field]!).slice(0, 4000).join('')]));
+  const payload = { commandId, step, outcome: 'canary_sink', messageId: record.messageId, chatId: record.chatId, reason: record.reason,
+    kind: record.kind, ...words, ...(record.canaryFor ? { canaryFor: record.canaryFor } : {}) };
+  await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
+    VALUES (${tenantId}::uuid, ${TELEGRAM_DELIVERY_SOURCE}, ${key}, ${`telegram_${kind}_canary_sink`},
+      ${JSON.stringify(payload)}::jsonb, ${`${key}:canary_sink`}, true, clock_timestamp())`.execute(db);
+}
+
+/** ADR-240: a recorded message's stand-in Telegram id: from its key, far above any real chat's message ids. */
+export function canarySinkMessageId(key: string): string {
+  return String(2 ** 50 + parseInt(createHash('sha256').update(key).digest('hex').slice(0, 8), 16));
+}
+
+/** ADR-240: whether a task is one of the canary chat's requests (its intake names that chat). */
+export async function isCanaryTask(db: Kysely<Database>, tenantId: string, taskId: string, canaryChatId: string): Promise<boolean> {
+  if (!UUID.test(tenantId) || !UUID.test(taskId)) return false;
+  const row = (await sql<{ one: number }>`SELECT 1 AS one FROM hawa.outbox_commands
+    WHERE tenant_id = ${tenantId}::uuid AND aggregate_id = ${taskId}::uuid AND command_type = 'task.created'
+      AND payload->>'sourceChannelId' = ${canaryChatId} LIMIT 1`.execute(db)).rows[0];
+  return Boolean(row);
+}
+
+/**
  * A design's name as a requester reads it: the office's "Client: " prefix dropped, at most 60 characters.
  * ADR-231: no direction mark at its edges (the caption read "\u200FKAAE K-12 Pilot Study…, final"), and
  * a neutral name ("New design request from Sewa") is no name.

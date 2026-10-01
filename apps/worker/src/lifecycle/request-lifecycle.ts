@@ -10,7 +10,7 @@ import type { BlobRef, DeliveryInput, DeliveryOutcome, DraftImageRef, OutboundMe
 import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
 import { log, withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, outcomeReportCore, type CoreInternal } from './delivery.js';
-import { officeAlertKey, officeChatIdsFromEnv } from './office-chats.js';
+import { officeAlertKey, officeAlertRoute, officeChatIdsFromEnv } from './office-chats.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { DesignRunApi, validStartNotice, type DesignRunInput, type DesignStartNotice } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
@@ -334,15 +334,15 @@ function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
   sendInitialHoldAlerts(ctx,state);
 }
 
-function sendInitialHoldAlerts(ctx: Pick<OpenContext,'send'>,state:Pick<ManualLifecycleState,'requestId'|'tenantId'|'taskId'|'initialRequesterHold'|'initialOfficeAlerts'>): void {
+function sendInitialHoldAlerts(ctx: Pick<OpenContext,'send'>,state:Pick<ManualLifecycleState,'requestId'|'chatId'|'tenantId'|'taskId'|'initialRequesterHold'|'initialOfficeAlerts'>): void {
   const perChat=new Map<string,number>();
   for (const alert of state.initialRequesterHold?.officeAlerts ?? []) {
     const index=perChat.get(alert.chatId) ?? 0;perChat.set(alert.chatId,index+1);
     ctx.send({v:1,key:`${state.requestId}:1:early-hold-office:${alert.chatId}${index ? `:${index}` : ''}`,
-      chatId:alert.chatId,kind:'text',text:alert.text,parseMode:'HTML',class:'critical',tenantId:state.tenantId,taskId:state.taskId});
+      ...officeAlertRoute(alert.chatId,state.chatId),kind:'text',text:alert.text,parseMode:'HTML',class:'critical',tenantId:state.tenantId,taskId:state.taskId});
   }
   for (const [index,alert] of (state.initialOfficeAlerts ?? []).entries()) ctx.send({v:1,
-    key:`${state.requestId}:1:initial-office:${index}:${alert.chatId}`,chatId:alert.chatId,kind:'text',text:alert.text,
+    key:`${state.requestId}:1:initial-office:${index}:${alert.chatId}`,...officeAlertRoute(alert.chatId,state.chatId),kind:'text',text:alert.text,
     parseMode:'HTML',class:'critical',tenantId:state.tenantId,taskId:state.taskId});
 }
 
@@ -378,8 +378,9 @@ async function reportTerminalFailure(ctx: Pick<AutomaticOpenContext, 'run' | 'se
     `${refusal}\nA person needs to follow it up in Hawa Desk.${words}`;
   const about = { tenantId: failure.tenantId, ...(failure.taskId ? { taskId: failure.taskId } : {}) };
   for (const [index, chatId] of members.entries()) {
-    ctx.send({ v: 1, key: officeAlertKey(`${failure.requestId}:${failure.step}:failed-alert`, index, chatId), chatId,
-      kind: 'text', text, class: 'critical', ...about });
+    // ADR-240: a canary brief's failure is recorded in the canary chat (TelegramSender), never the office's.
+    ctx.send({ v: 1, key: officeAlertKey(`${failure.requestId}:${failure.step}:failed-alert`, index, chatId),
+      ...officeAlertRoute(chatId, failure.requester?.chatId), kind: 'text', text, class: 'critical', ...about });
   }
   const phrase = members.length ? failure.requester?.officeTold : failure.requester?.alone;
   if (failure.requester && phrase) {
@@ -1103,10 +1104,12 @@ function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleS
   for (const [index, alert] of alerts.entries()) {
     const photo = photos.get(alert.chatId);
     const key = officeAlertKey(`${state.requestId}:${state.rev}:office-alert`, index, alert.chatId);
+    // ADR-240: a canary request's draft alert is recorded in the canary chat, never shown to the office.
+    const to = officeAlertRoute(alert.chatId, state.chatId);
     ctx.send(photo
-      ? { v: 1, key, chatId: alert.chatId, kind: 'photo', imageRef: photo.image, caption: photo.text, text: alert.text,
+      ? { v: 1, key, ...to, kind: 'photo', imageRef: photo.image, caption: photo.text, text: alert.text,
         class: 'critical', tenantId: state.tenantId, taskId: state.taskId }
-      : { v: 1, key, chatId: alert.chatId, kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+      : { v: 1, key, ...to, kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
   }
 }
 
@@ -1270,7 +1273,7 @@ export const OFFICE_WITHDRAW_ROLES = new Set(['operator', 'administrator', 'art_
 type WithdrawProjected = { v: 1; withdrawn: boolean; requestId: string; taskId: string; rev: number; stage: string;
   fromStage?: string; requesterNotice?: { chatId: string; text: string }; officeAlerts?: Array<{ chatId: string; text: string }> };
 
-function sendWithdrawNotices(ctx: Pick<AutomaticOpenContext, 'send'>, state: Pick<ManualLifecycleState, 'requestId' | 'tenantId' | 'taskId'>,
+function sendWithdrawNotices(ctx: Pick<AutomaticOpenContext, 'send'>, state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId'>,
   base: string, notices: Pick<Withdrawal, 'requesterNotice' | 'officeAlerts'>): void {
   const about = { tenantId: state.tenantId, taskId: state.taskId };
   if (notices.requesterNotice) {
@@ -1278,7 +1281,7 @@ function sendWithdrawNotices(ctx: Pick<AutomaticOpenContext, 'send'>, state: Pic
       text: notices.requesterNotice.text, parseMode: 'HTML', class: 'critical', ...about });
   }
   for (const [index, alert] of notices.officeAlerts.entries()) {
-    ctx.send({ v: 1, key: officeAlertKey(`${base}:office`, index, alert.chatId), chatId: alert.chatId,
+    ctx.send({ v: 1, key: officeAlertKey(`${base}:office`, index, alert.chatId), ...officeAlertRoute(alert.chatId, state.chatId),
       kind: 'text', text: alert.text, class: 'critical', ...about });
   }
 }

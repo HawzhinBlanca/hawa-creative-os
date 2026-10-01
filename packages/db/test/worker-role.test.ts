@@ -8,7 +8,7 @@ import { TaskRepository } from '../src/repositories/task.repository.js';
 import { PostgresTelegramPollState, readTelegramKillSwitch } from '../src/telegram-poll-state.js';
 import { provisionWorkerDatabase } from '../src/provision-worker-role.js';
 import { outcomeRecorder } from '../../../apps/worker/src/outcome-without-core.js';
-import { readSendMarks, writeSendMark } from '../../../apps/worker/src/delivery-notification.js';
+import { isCanaryTask, readSendMarks, writeCanarySinkMark, writeSendMark } from '../../../apps/worker/src/delivery-notification.js';
 
 const ownerUrl=process.env.TEST_DATABASE_OWNER_URL!;
 const app=createDb(process.env.TEST_DATABASE_URL!);
@@ -85,6 +85,14 @@ it('records fallback outcomes idempotently using real task/event reads and outbo
   const first=await record(request), second=await record(request);
   expect(first).toMatchObject({report:'written',officeAlert:'written'});
   expect(second).toMatchObject({report:'already_written',officeAlert:'already_written'});
+});
+it('ADR-240: can record a canary sink mark and read whether a task is the canary chat\'s',async()=>{
+  const canary=String(2**52+11), key=`lc:canary-role-${randomUUID()}`;
+  await withRlsContext(worker,scope,tx=>writeCanarySinkMark(tx,tenantId,key,'send','message',
+    {messageId:String(2**50+1),chatId:canary,reason:'canary_chat',kind:'text',text:'Got it.'}));
+  const row=(await owner.query(`SELECT event_kind FROM hawa.inbox_events WHERE source_event_id=$1`,[`${key}:send`])).rows[0];
+  expect(row).toEqual({event_kind:'telegram_message_canary_sink'});
+  expect(await withRlsContext(worker,scope,tx=>isCanaryTask(tx,tenantId,taskId,canary))).toBe(false);
 });
 it('retains tenant RLS and permits delivery-source reads without mutation grants',async()=>{
   const invisible=await withRlsContext(worker,{...scope,tenantId:'00000000-0000-4000-a000-000000000005'},tx=>sql`SELECT id FROM hawa.tasks WHERE id=${taskId}::uuid`.execute(tx));

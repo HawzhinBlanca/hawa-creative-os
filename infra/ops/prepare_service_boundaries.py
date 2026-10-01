@@ -18,6 +18,8 @@ WORKER_KEYS = frozenset({
     'HAWA_WORKER_TAKEOVER_MS', 'HAWA_WORKER_LIVE_REFRESH_MS',
     'OUTBOX_BATCH_SIZE', 'OUTBOX_POLL_INTERVAL_MS', 'LOG_LEVEL',
     'DESIGN_PIPELINE_V3', 'DESIGN_PIPELINE_V3_CHATS', 'DESIGN_STUDIO_V2',
+    # ADR-240: the nightly canary's chat, whose messages TelegramSender records instead of sending.
+    'HAWA_CANARY_CHAT_ID',
 })
 
 

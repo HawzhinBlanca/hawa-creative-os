@@ -34,14 +34,16 @@
  */
 import * as restate from '@restatedev/restate-sdk';
 import type { OutboundMessage, SendResult } from '@hawa/contracts';
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, canaryChatIdFromEnv, canaryChatProblem } from '@hawa/contracts';
 import { blobStoreFromEnv, withRlsContext, type BlobStore, type Database, type Kysely } from '@hawa/db';
 import { TelegramBridge } from '@hawa/integrations';
 import { chaosPoint } from '@hawa/observability';
 import {
   composeDeliveryUncertainAlert,
   composeMessageUncertainAlert,
+  canarySinkMessageId,
   draftImageReader,
+  isCanaryTask,
   readSendMark,
   readStoredExportBytes,
   sha256Hex,
@@ -53,6 +55,7 @@ import {
   type TelegramSender as TelegramBridgeLike,
   type TelegramSendResult,
   validTelegramMessageId,
+  writeCanarySinkMark,
 } from '../delivery-notification.js';
 import { log, withInvocationLogContext } from '../logging.js';
 import { officeAlertKey, officeChatIdsFromEnv } from './office-chats.js';
@@ -75,9 +78,18 @@ export interface TelegramSenderDeps {
   officeChatIds(): string[];
   /** The waits between attempts at the mark written after Telegram answered (tests shorten them). */
   markRetryDelaysMs?: number[];
+  /**
+   * ADR-240: the nightly canary's chat, only ever an id no Telegram chat can have
+   * (canaryChatIdFromEnv); null or absent records nothing instead of sending.
+   */
+  canaryChatId?(): string | null;
+  /** ADR-240: whether a task is one of the canary chat's requests; isCanaryTask when absent. */
+  isCanaryTask?(db: Kysely<Database>, tenantId: string, taskId: string, canaryChatId: string): Promise<boolean>;
 }
 
 export function telegramSenderDepsFromEnv(db: Kysely<Database> | undefined): TelegramSenderDeps {
+  const canaryProblem = canaryChatProblem(process.env);
+  if (canaryProblem) log.error(`[TelegramSender] ${canaryProblem}.`);
   // The file store both colours mount (ADR-035), for a Studio preview kept only there.
   let store: BlobStore | null | undefined;
   const blobStore = () => {
@@ -93,6 +105,7 @@ export function telegramSenderDepsFromEnv(db: Kysely<Database> | undefined): Tel
     readExportBytes: readStoredExportBytes,
     readDraftImage: draftImageReader(readStoredExportBytes, blobStore),
     officeChatIds: () => officeChatIdsFromEnv(),
+    canaryChatId: () => canaryChatIdFromEnv(process.env),
   };
 }
 
@@ -155,10 +168,51 @@ export const STUCK_ATTEMPTS = 8;
 const STUCK_MAX_WAIT_MS = 5 * 60_000;
 
 /**
+ * ADR-240: whether a message goes to the canary's sink instead of Telegram: one for the canary chat,
+ * or one about a task of the canary chat's requests (an office alert, whoever it is for). Nothing is
+ * ever sunk without a configured canary chat, and that chat can only be an id no person's chat can have
+ * (packages/contracts/src/canary.ts), so no message to a real chat about a real request is held back.
+ */
+export async function canarySinkFor(deps: TelegramSenderDeps, m: OutboundMessage): Promise<'canary_chat' | 'canary_request' | null> {
+  const canary = deps.canaryChatId?.() ?? null;
+  if (!canary) return null;
+  if (String(m.chatId) === canary) return 'canary_chat';
+  const tenantId = tenantOf(m);
+  if (!m.taskId || !UUID.test(m.taskId) || !deps.db) return null;
+  const check = deps.isCanaryTask ?? isCanaryTask;
+  // Read before anything is sent; a database that cannot answer fails the attempt, and Restate asks again.
+  const canaryTask = await withRlsContext(deps.db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+    (trx) => check(trx, tenantId, m.taskId!, canary));
+  return canaryTask ? 'canary_request' : null;
+}
+
+/**
+ * ADR-240: records the message instead of sending it. Telegram is never called, and the answer
+ * `canary_sink` is journaled by the handler's step, where the canary reads it with the message itself.
+ */
+async function sinkAttempt(deps: TelegramSenderDeps, m: OutboundMessage, reason: 'canary_chat' | 'canary_request'): Promise<AttemptAnswer> {
+  const messageId = canarySinkMessageId(m.key);
+  const tenantId = tenantOf(m);
+  if (deps.db) {
+    await withRlsContext(deps.db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+      writeCanarySinkMark(trx, tenantId, markIdOf(m.key), SEND_STEP, stepKind(m), { messageId, chatId: String(m.chatId), reason,
+        kind: m.kind, ...(m.text !== undefined ? { text: m.text } : {}), ...(m.caption !== undefined ? { caption: m.caption } : {}),
+        ...(m.filename !== undefined ? { filename: m.filename } : {}), ...(m.canaryFor ? { canaryFor: m.canaryFor } : {}) }));
+  }
+  log.info(`[TelegramSender] ${m.key} recorded for the canary (${reason}), not sent.`);
+  return { outcome: 'canary_sink', messageId };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
  * One attempt at one message: the body of the handler's `ctx.run('send')`. It answers, or throws an
  * error Restate retries (a RetryableError carrying Telegram's retry_after on a 429).
  */
 export async function sendAttempt(deps: TelegramSenderDeps, message: OutboundMessage): Promise<AttemptAnswer> {
+  // ADR-240: the canary's messages are recorded, never sent, before any mark or Telegram call.
+  const sink = await canarySinkFor(deps, message);
+  if (sink) return sinkAttempt(deps, message, sink);
   let m = message;
   const critical = m.class === 'critical';
   const tenantId = tenantOf(m);
@@ -404,6 +458,9 @@ export async function handleSend(ctx: SenderContext, deps: TelegramSenderDeps, m
     }
     await ctx.sleep?.(answer.retryAfterMs);
   }
+  // ADR-240: a question recorded for the canary was never sent, so it is not confirmed (Core would
+  // refuse a confirmation without a sent mark); the canary withdraws its requests itself.
+  if (onSent && result.outcome === 'canary_sink') log.info(`[TelegramSender] ${m.key} was recorded for the canary; its question is not confirmed.`);
   if (onSent && result.outcome === 'sent') {
     if (!result.messageId) throw new Error('QUESTION_SEND_RECEIPT_MISSING: a confirmed question needs a Telegram message ID');
     await ctx.notifySent!(m, result.messageId);
@@ -412,7 +469,7 @@ export async function handleSend(ctx: SenderContext, deps: TelegramSenderDeps, m
     // Every office member but the chat the message was for (ADR-155), read in a journaled step so a
     // replay alerts the same people; keyed by the message, so each hears of it once however often it
     // is asked for. An office alert that went wrong is logged, never alerted in turn.
-    const error = result.outcome === 'sent' ? '' : result.error;
+    const error = 'error' in result ? result.error : '';
     const members = OFFICE_ALERT_KEY.test(m.key) ? [] : await ctx.run('office-chats', async () => deps.officeChatIds());
     const office = members.filter((chatId) => chatId !== String(m.chatId));
     for (const [index, chatId] of office.entries()) {

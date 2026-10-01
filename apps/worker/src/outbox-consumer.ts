@@ -9,7 +9,7 @@ import {
   OUTBOX_MAX_ATTEMPTS,
   OUTBOX_BACKOFF_BASE_SECONDS,
 } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, canaryChatIdFromEnv } from '@hawa/contracts';
 import { OfficeTracer, chaosPoint } from '@hawa/observability';
 import { TelegramBridge } from '@hawa/integrations';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
@@ -19,6 +19,7 @@ import {
   composeIntakeFailedMessage,
   composeMessageUncertainAlert,
   intakeChatOf,
+  isCanaryTask,
   priorSendOf,
   readSendMarks,
   writeSendMark,
@@ -28,6 +29,8 @@ import {
   type TelegramSender,
   type TelegramSendResult,
   validTelegramMessageId,
+  writeCanarySinkMark,
+  canarySinkMessageId,
 } from './delivery-notification.js';
 
 export interface OutboxCommandRecord {
@@ -422,6 +425,18 @@ export class OutboxConsumer {
         const message = payload?.message;
         if (!chatId || !message) {
           throw new Error(`Invalid payload for notify.telegram on task ${cmd.aggregate_id}`);
+        }
+        // ADR-240: Core's own office alerts (a stale request, an outcome Core could not record) about the
+        // nightly canary's requests, and anything for its chat, are recorded and never sent.
+        const canary = canaryChatIdFromEnv(process.env);
+        const taskId = cmd.aggregate_type === 'task' ? cmd.aggregate_id : typeof payload.taskId === 'string' ? payload.taskId : '';
+        if (canary && (String(chatId) === canary || (taskId && await scope.inTenant((trx) => isCanaryTask(trx, cmd.tenant_id, taskId, canary))))) {
+          const text = typeof message === 'string' ? message : String(message?.text ?? '');
+          await scope.inTenant((trx) => writeCanarySinkMark(trx, cmd.tenant_id, cmd.id, 'message', 'message', {
+            messageId: canarySinkMessageId(cmd.id), chatId: String(chatId), reason: String(chatId) === canary ? 'canary_chat' : 'canary_request',
+            kind: 'text', text }));
+          log.info(`[OutboxConsumer] notify.telegram ${cmd.id} recorded for the canary, not sent.`);
+          return;
         }
         const sender = this.telegramSender(botToken);
         const prior = await this.priorSends(cmd, scope);
