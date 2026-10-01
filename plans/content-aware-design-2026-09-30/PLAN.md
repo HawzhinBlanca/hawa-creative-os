@@ -402,3 +402,13 @@ An unchanged-source approved copy does not invent a negative correction. Desk co
 distinct content and refuses malformed receipt metadata. Final21files/193pass/0fail,
 current source build passes; a new exact sealed gate is pending. Earlier full green
 result is retained as historical, not qualification of these latest edits. No deploy.
+
+
+Exact final seal71331b1d passes all8 engineering stages: 6517pass/0fail/67skip,
+667 strict test roots, latest production dump restored in isolation, security and
+mandatory flag-refusal checks pass. Connected21files/193pass includes real Core
+SIGKILL/replay of identical-byte aliases and unchanged-source approval controls.
+Earlier failures/green source remain historical. W6_TARGET_BOUND_LEARNING_GATE_EVIDENCE.json
+records the exact candidate. Evidence-only publication preserves runtime/test bytes.
+Not deployed; no paid provider call, taste calibration or native/human admission.
+Search/retired inline cache consumers and broader W5/W6/product goal remain open.

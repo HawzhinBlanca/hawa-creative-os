@@ -1,7 +1,7 @@
 {
   "date": "2026-10-01",
   "adr": 195,
-  "status": "CONNECTED_ACCEPTANCE_PASSED_EXACT_GATE_PENDING",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_PRODUCT_OPEN",
   "requirements": [
     "FR-022",
     "FR-052",
@@ -42,7 +42,8 @@
   "lint": {
     "status": "PASS",
     "anyCount": 932,
-    "existingEgressExceptions": 10
+    "existingEgressExceptions": 10,
+    "log": "/tmp/hawa-target-learning-content-final-lint-20261001.log"
   },
   "crashEvidence": "Actual independent Core processes and SIGKILL with exact replay, target polarity and original actor recovery; disposable PostgreSQL on55432, providers blocked",
   "profile": {
@@ -77,14 +78,14 @@
   },
   "limits": [
     "Not deployed; live2c4d61ec unchanged",
-    "New content-alias and unchanged-source source still requires a new exact sealed full release gate; prior1df green result is historical only",
+    "Exact sealed engineering gate passed; current-candidate deployment, native/Canva and human design admission remain NOT_RUN",
     "Synthetic Studio pictures/Canva export bytes; no real native/human design admission",
     "No paid call, dependency, training run, automatic rule activation or taste calibration",
     "Search and retired inline preview projection consumers remain separate inspected boundaries",
     "Broader W5/W6/native/Canva/human/product goal remains active"
   ],
   "sourceSha256": {
-    "adrs/195_target_bound_learning_examples.md": "c284064db43126988a7e31bd9978a651a1f9a96b9d6129b07a3ac982ec75f82c",
+    "adrs/195_target_bound_learning_examples.md": "fe90e92f6733e672d9f7eba9ac308e1c35fa2295ce17e448beb418fcc1b1497f",
     "apps/core/src/routes/design-studio.routes.ts": "3bf8b157272b253d752bddb979b55be5a042e766d3cee959d1ddbc9fb0b9096f",
     "apps/core/src/services/learning-governance.ts": "c41ef7da3985118c3dc09e3ff45beb9763279af84d68b0d3b059a107462654ff",
     "apps/core/src/services/learning-inputs.ts": "a3d25d21f59eefca6c9fee7d690475137da656cba1b577cb6e7f6372ee1b0ce1",
@@ -104,8 +105,8 @@
     "packages/db/src/repositories/revision.repository.ts": "6ccd3f8d2dda22dbba0ebd7ea516221d0df4ce310c68e4fc770effe48650028c",
     "packages/db/test/schema-upgrade.test.ts": "d093d21bb84a480996e03be7fad0e715c42844a04f7b45d56963999c4ca62098",
     "packages/domain/src/feedback.ts": "182e992f7b76572f67b3b7aedab494f540d65a2a0785e576e127e22d8cfa944f",
-    "plans/content-aware-design-2026-09-30/PLAN.md": "54a5e5d80ed1326b97dad024a2b0cbc544eec0a38fd68eeb261677e6b7112a76",
-    "plans/traceability.csv": "4dade1bbb86a67865322e75558616b9779520eef027424ab4046683a89be4101",
+    "plans/content-aware-design-2026-09-30/PLAN.md": "cd5665e189c3a45a20afc078838609b89f1b90d3b37a0457042543d37ac03025",
+    "plans/traceability.csv": "9e0358bf04fe1bd7f9c079f65977c9bb0e821bac3e18c76b00acbafd879f476c",
     "apps/core/test/lifecycle-design-outcome.test.ts": "a03a29d7047de8bc7f5b50764b055fa06c83530ffb6ee94dfee85c1b6671ddf0",
     "apps/core/test/lifecycle-office-desk-bridge.test.ts": "95b7bf260cc4ec94aec7dfb6171ae031fb7514e42531cb700f285ecfda0b3a71"
   },
@@ -131,7 +132,9 @@
     "/tmp/hawa-target-learning-content-alias-red-20261001.log": "3533e57c57728fb0000b393bb6758a1908f6c816dd7a404fd277b5247078ae17",
     "/tmp/hawa-target-learning-alias-connected-20261001.log": "c3c5065c4e58d7db1046319a3cb8bb6d6164b8741870b6f20272978b0368afd6",
     "/tmp/hawa-target-learning-content-final-20261001.log": "476e79dbf5ba9f505a8317bd7aade5dd81f2db878ad5b499d99363df37285c5a",
-    "/tmp/hawa-target-learning-receipt-final-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1"
+    "/tmp/hawa-target-learning-receipt-final-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "/tmp/hawa-target-learning-content-final-lint-20261001.log": "7297b01a112008246738c27616aa050f787074b116f423108fb17d2471376cb5",
+    "/tmp/hawa-target-learning-content-exact-gate-20261001.log": "91bd32cf6727c952057965b05990e52bf4b4334b7b23a8e5a93b29d6078373ad"
   },
   "deskBuildLog": "/tmp/hawa-target-learning-desk-final-20261001.log",
   "failedFullGate": {
@@ -160,5 +163,19 @@
     "currentSourceQualified": false,
     "evidence": "/tmp/hawa-target-learning-first-green-gate-20261001.json",
     "log": "/tmp/hawa-target-learning-first-green-full-20261001.log"
+  },
+  "exactQualification": {
+    "seal": "71331b1d466f01d78aad2447b26f51f687be611a",
+    "passed": 6517,
+    "failed": 0,
+    "skipped": 67,
+    "stages": 8,
+    "typeRoots": 667,
+    "evidence": "plans/content-aware-design-2026-09-30/W6_TARGET_BOUND_LEARNING_GATE_EVIDENCE.json",
+    "fullLog": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/FULL_TEST_SUITE_RUN.log",
+    "fullLogSha256": "88f09a65b6810dcef1b6e0bfd7cbd3a031e1d61f012bf3c8edbfdfd849ccd82a",
+    "gateLog": "/tmp/hawa-target-learning-content-exact-gate-20261001.log",
+    "engineeringOnly": true,
+    "deployed": false
   }
 }

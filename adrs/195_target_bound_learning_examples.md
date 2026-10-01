@@ -1,6 +1,6 @@
 # ADR195 — Attribute learning examples to the reviewed design
 
-Date: 2026-10-01. Status: connected acceptance passed; exact engineering gate pending.
+Date: 2026-10-01. Status: exact sealed engineering gate passed; product admission open.
 Requirements: FR-022, FR-052, FR-053, FR-054, NFR-006, NFR-012, NFR-024.
 Sources: MASTER_SPEC.md; docs/08_MEMORY_RAG_CLIENT_DNA.md;
 docs/18_FEEDBACK_LEARNING.md; docs/14_SECURITY_THREAT_MODEL.md; ADR191–194.
@@ -76,3 +76,13 @@ An unchanged-source revision copy is not an observed correction. The approved-pa
 projection records the actual after-approval without inventing a negative before
 receipt when both source hashes match. Test a previously approved original, a genuine
 unchanged-source copy and a later rejected same-source alias.
+
+
+Exact final seal71331b1d passes all8 engineering stages: 6517pass/0fail/67skip,
+667 strict test roots, latest production dump restored in isolation, security and
+mandatory flag-refusal checks pass. Connected21files/193pass includes real Core
+SIGKILL/replay of identical-byte aliases and unchanged-source approval controls.
+Earlier failures/green source remain historical. W6_TARGET_BOUND_LEARNING_GATE_EVIDENCE.json
+records the exact candidate. Evidence-only publication preserves runtime/test bytes.
+Not deployed; no paid provider call, taste calibration or native/human admission.
+Search/retired inline cache consumers and broader W5/W6/product goal remain open.
