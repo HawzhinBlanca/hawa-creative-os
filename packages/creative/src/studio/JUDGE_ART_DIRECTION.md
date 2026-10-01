@@ -51,6 +51,10 @@ follows the weighted votes.
 
 ## Cost
 
+ADR-237 (2026-10-01): the production judge is gpt-6.1-sol, at `high` detail and with a 6,000-token
+output allowance for its reasoning. Its images are reserved on the provider's own count of the exact
+bytes (ADR-149). The paragraph below is the gpt-4.1-mini judge as it was, and is still the dev tier.
+
 The pipeline still makes 4 calls on gpt-4.1-mini (2 order-swapped plus 2 canary), with
 `maxTokens` 2000. The judge already sends images at `high` detail on gpt-4.1-mini. The reservation
 prices every patch-model image at its full patch count whatever the detail: 1080x1080 is 1,875

@@ -8,8 +8,8 @@ export const ALLOWED_MODELS = [
   // ADR-161: owner-directed private-office primary; broader research admission remains open.
   'gpt-6.1-sol',
   'gpt-image-2.5-sunburst',
-  // Admitted to production for the judge role alone, on measurement rather than on price.
-  // See PRODUCTION_MODELS.judge below for the experiment and its numbers.
+  // The production judge from 2026-09-20 until ADR-237 (2026-10-01). Kept admitted for the dev
+  // tier, for an explicit HAWA_MODEL_JUDGE rollback and to verify historical judge receipts.
   'gpt-4.1-mini',
 ] as const;
 
@@ -20,33 +20,21 @@ export const PRODUCTION_MODELS = {
   layout: 'gpt-6.1-sol',
   critique: 'gpt-6.1-sol',
   /**
-   * The judge is the one stage that invents nothing: it compares two already-rendered posters on
-   * five named dimensions and is handed the deterministic metric scores as stated facts. It was
-   * 27% of a run's cost — $0.171 of $0.629 per design, measured over 16 production runs in
-   * hawa.design_studio_calls — for four calls that only pick between candidates already made.
+   * ADR-237 (owner, 2026-10-01): top-quality designs use the top model everywhere a model judges or
+   * looks at a design. The judge — and parity, which resolves this role — is Sol.
    *
-   * Moved down on evidence, not on price. `scripts/experiments/judge-model-agreement.ts` replays
-   * the judgments of past production runs: the candidates still carry the exact preview PNGs their
-   * judge saw, and design_studio_judgments stores its per-dimension votes, so the expensive side of
-   * the comparison was already bought. Replaying 24 stored comparisons on 2026-09-20:
-   *
-   *   gpt-4.1-mini vs the stored gpt-6-astra verdicts  75% winner, 75% per-dimension  $0.068
-   *   gpt-6-astra  vs the stored gpt-6-astra verdicts  67% winner, 71% per-dimension  $0.847
-   *
-   * The cheap model agrees with the expensive judge's own past verdicts MORE than that judge agrees
-   * with itself. The quarter of comparisons that move are not a quality gap; they are the noise
-   * floor of asking any model to separate two candidates that both passed hard QA and are close.
-   * Legibility is the clearest case: the expensive model reproduces its own legibility vote only
-   * 38% of the time, i.e. worse than chance on a binary choice, which is why the deterministic
-   * textLegibility metric — not the judge — is what that dimension should rest on.
-   *
-   * Reliability was measured separately, on the pipeline's own canary, which has a known right
-   * answer: a layout against a deliberately degraded copy of itself. Both models caught it 12 times
-   * out of 12, in both presentation orders. A cheaper judge here is not a blinder one.
+   * It was gpt-4.1-mini from 2026-09-20. That move was measured on agreement, not on design
+   * quality: `scripts/experiments/judge-model-agreement.ts` replayed 24 stored comparisons and found
+   * the cheap model agreeing with the old gpt-6-astra judge's own past verdicts (75%) as often as
+   * that judge agreed with itself (67%), and both caught the degraded canary 12 of 12. Agreement
+   * with an older judge says nothing about whether either picks the better poster, and since
+   * ADR-161 the office designs on Sol, so the one model that ever looked at a rendered design in
+   * production was the cheapest one. Cost per judge call rises from about $0.004 to about $0.02
+   * (four calls a design); ADR-237 records the measured before and after.
    *
    * HAWA_MODEL_JUDGE still overrides this for one run or one deployment.
    */
-  judge: 'gpt-4.1-mini',
+  judge: 'gpt-6.1-sol',
   text: 'gpt-6.1-sol',
   image: 'gpt-image-2.5-sunburst',
 } as const;

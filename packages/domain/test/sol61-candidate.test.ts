@@ -5,7 +5,7 @@ import { StudioSubstepReplay } from '../src/studio-substeps.js';
 describe('ADR-161 Sol office primary preserves explicit identity and replay guards', () => {
   const saved = { ...process.env };
   afterEach(() => { process.env = { ...saved }; });
-  it('admits exact Sol for the owner-directed office switch and preserves the visual judge', () => {
+  it('admits exact Sol for the owner-directed office switch, judge included since ADR-237', () => {
     process.env.HAWA_MODEL_TIER = 'dev';
     expect(() => assertModelAllowed('gpt-6.1-sol')).not.toThrow();
     expect(modelSupportsReasoningEffort('gpt-6.1-sol')).toBe(true);
@@ -18,7 +18,8 @@ describe('ADR-161 Sol office primary preserves explicit identity and replay guar
       expect(resolveModel(role, 'production')).toBe('gpt-6.1-sol');
     }
     expect(() => assertModelAllowed('gpt-6-astra')).not.toThrow();
-    expect(resolveModel('judge', 'production')).toBe('gpt-4.1-mini');
+    // ADR-161 kept the Mini judge; ADR-237 (2026-10-01) moved it to Sol.
+    expect(resolveModel('judge', 'production')).toBe('gpt-6.1-sol');
     expect(() => assertModelAllowed('jev-1.13.0')).toThrow();
     expect(() => assertModelAllowed('gpt-6.1-sol-latest')).toThrow();
   });

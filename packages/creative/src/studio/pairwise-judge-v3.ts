@@ -1,5 +1,5 @@
 import { clientReferenceInstruction, clientReferencePart, type ClientReference } from './client-reference.js';
-import { assertModelAllowed, resolveModel } from '@hawa/domain';
+import { assertModelAllowed, modelSupportsReasoningEffort, resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import {
   evaluateDesignMetrics,
@@ -284,13 +284,24 @@ export function judgeBaselineSection(aIsBaseline: boolean, bIsBaseline: boolean)
 }
 
 /**
- * The detail the judge's images are sent at. Patch-priced models (gpt-4.1-mini, the production
- * judge on both tiers, and o4-mini) are reserved at their full patch count whatever the detail
+ * The detail the judge's images are sent at. Patch-priced models (gpt-4.1-mini, the dev tier's
+ * judge, and o4-mini) are reserved at their full patch count whatever the detail
  * (spending-reservation.ts `visionTokens`), so full detail costs no more than the reservation already
- * holds; tile-priced models stay at 'low', where high detail would multiply the image cost.
+ * holds. gpt-6.1-sol, the production judge since ADR-237, is reserved on the provider's own count
+ * of the exact images sent (ADR-149), so it reads the design at full detail at exactly what that
+ * detail costs. Other tile-priced models stay at 'low', where high detail would multiply the cost.
  */
 export function judgeImageDetail(model: string): 'low' | 'high' {
-  return /^(?:gpt-4\.1-mini|o4-mini)(?:-|$)/.test(model) ? 'high' : 'low';
+  return /^(?:gpt-4\.1-mini|o4-mini|gpt-6\.1-sol)(?:-|$)/.test(model) ? 'high' : 'low';
+}
+
+/**
+ * The judge's output allowance. A reasoning model (Sol, since ADR-237) spends part of
+ * max_completion_tokens on reasoning before it writes the verdict, and a verdict cut short is
+ * refused below as absent, so it gets room for both. A non-reasoning model keeps the 2,000 it had.
+ */
+export function judgeMaxTokens(model: string): number {
+  return modelSupportsReasoningEffort(model) ? 6000 : 2000;
 }
 
 /** The request as the judge reads it: the client's words as data, and the copy block by block. */
@@ -628,7 +639,7 @@ Examine Candidate A and Candidate B visually and evaluate them independently acr
       strict: true,
     },
     reasoningEffort: 'low',
-    maxTokens: 2000,
+    maxTokens: judgeMaxTokens(model),
   });
 
   const data = res.data;

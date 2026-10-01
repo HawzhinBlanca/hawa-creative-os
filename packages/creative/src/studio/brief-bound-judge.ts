@@ -13,7 +13,7 @@
  * it; the incumbent stays the default until the ADR-124 experiment and human labels say otherwise.
  */
 import { createHash } from 'node:crypto';
-import { assertModelAllowed, resolveModel } from '@hawa/domain';
+import { assertModelAllowed, modelSupportsReasoningEffort, resolveModel } from '@hawa/domain';
 import { clientReferencePart, type ClientReference } from './client-reference.js';
 import { OpenAiStudioClient, type OpenAiMessage } from './openai-studio-client.js';
 
@@ -424,7 +424,8 @@ export async function evaluateBriefBoundPairOrder(
     messages,
     jsonSchema: { name: 'BriefBoundDimensionVerdict', schema: BRIEF_BOUND_JUDGE_JSON_SCHEMA as unknown as Record<string, unknown>, strict: true },
     reasoningEffort: 'low',
-    maxTokens: 2000,
+    // A reasoning judge (Sol, ADR-237) spends part of the allowance before it writes the verdict.
+    maxTokens: modelSupportsReasoningEffort(model) ? 6000 : 2000,
   });
   let verdict: BriefBoundVerdict;
   try {
