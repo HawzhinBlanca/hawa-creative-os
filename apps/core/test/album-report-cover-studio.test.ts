@@ -218,6 +218,10 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
     process.env.HAWA_MODEL_TIER = 'production';
     // ADR-142 boundary uses its original Astra prices; ADR-149 separately checks Sol counted images.
     for (const role of ['TEXT', 'LAYOUT', 'CRITIQUE']) vi.stubEnv(`HAWA_MODEL_${role}`, 'gpt-6-astra');
+    // And the judge it was written against (ADR-237 moved production's to Sol, with a visual review that
+    // studio-visual-review.test.ts covers): this file is about the layout call's reservation.
+    vi.stubEnv('HAWA_MODEL_JUDGE', 'gpt-4.1-mini');
+    vi.stubEnv('HAWA_STUDIO_VISUAL_REVIEW_ROUNDS', '0');
     process.env.DESIGN_PIPELINE_V3 = 'on';
     try {
       const { taskId } = await openOwnersAlbum('sweep');
@@ -272,6 +276,8 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
     const env = { tier: process.env.HAWA_MODEL_TIER, v3: process.env.DESIGN_PIPELINE_V3 };
     process.env.HAWA_MODEL_TIER = 'production';
     for (const role of ['TEXT', 'LAYOUT', 'CRITIQUE']) vi.stubEnv(`HAWA_MODEL_${role}`, 'gpt-6-astra');
+    vi.stubEnv('HAWA_MODEL_JUDGE', 'gpt-4.1-mini');
+    vi.stubEnv('HAWA_STUDIO_VISUAL_REVIEW_ROUNDS', '0');
     process.env.DESIGN_PIPELINE_V3 = 'on';
     try {
       const { taskId, requestId } = await openOwnersAlbum('settle');

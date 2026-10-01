@@ -3,6 +3,7 @@ import { authorityPolicySha256, captureVisualInputs, restoreVisualInputs } from 
 import { captureRenderFontInputs, reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
 import { freshRoundIntent, StudioSubstepReplay, studioBindingText, studioSubstepKey, studioUsdMicros, type RecordedStudioAttempt, type StudioCallReservation } from '@hawa/domain';
 import { currentStudioSubstep, inStudioSubstep, substepBindsAuthority, substepBindsRenderer } from './substeps.js';
+import { assertWithinStudioSpendCap, chargeStudioSpendCap, inStudioSpendCap } from './spend-cap.js';
 import { TaskGenerationBlockedError } from '@hawa/db';
 import { assertTaskGenerationAllowed, assertStudioCallsResolved } from '../task-generation-guard.js';
 import { assertNativeRevisionAdmission } from '../native-revision-handoff.js';
@@ -118,6 +119,9 @@ import {
   runParityStage,
   runCritiqueStageV3,
   runReviseStageV3,
+  runVisualReviewStageV3,
+  runVisualRefinementStageV3,
+  type VisualReviewStageRecord,
   runJudgeStageV3,
   judgeBriefForStageV3,
   rankStudioCandidatesV3,
@@ -125,7 +129,7 @@ import {
   V3_CANDIDATE_SLOTS,
   pendingV3Concept,
 } from './stages/index.js';
-import { resolveStudioJudgeProtocol, type StudioJudgeProtocol } from '@hawa/creative';
+import { resolveStudioJudgeProtocol, resolveVisualReviewSettings, type StudioJudgeProtocol } from '@hawa/creative';
 
 export type Scope = { tenantId: string; actorId: string; role?: string; clientId?: string };
 
@@ -1097,13 +1101,19 @@ export class DesignStudioService {
           const parsed = JSON.parse(body) as { model: string; response_format?: { json_schema?: { name?: unknown } } };
           const schema = typeof parsed.response_format?.json_schema?.name === 'string' ? parsed.response_format.json_schema.name : undefined;
           const substep = await replay('structured', currentStageName, 'openai', parsed.model, quoted, schema);
+          // ADR-237: work declared under a spending cap (the visual review) is refused here, unsent.
+          assertWithinStudioSpendCap(quoted.usd);
           if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) throw new StudioBudgetExhaustedError();
           await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model: parsed.model,
             input: { requestSha256: quoted.requestSha256 }, reservation: quoted, substep });
           reservation = quoted;
         });
       } catch (err: any) {
-        if (err instanceof RetainedStudioReply) return err.value as OpenAiStructuredResponse<T>;
+        if (err instanceof RetainedStudioReply) {
+          // A retained answer was paid for once; it still counts against a declared spending cap.
+          chargeStudioSpendCap(Number((err.value as OpenAiStructuredResponse<T> | null)?.receipt?.costUsd) || 0);
+          return err.value as OpenAiStructuredResponse<T>;
+        }
         // A refused quote/admission has no ledger row and must never be finalized as a paid call.
         if (!reservation) throw err;
         const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
@@ -1115,6 +1125,7 @@ export class DesignStudioService {
           status: uncertain ? 'uncertain' : 'error',
           errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.code || 'CALL_FAILED') });
         if (billedUsd > 0) await recordSpend(billedUsd);
+        chargeStudioSpendCap(billedUsd);
         checkReservation(billedUsd, reservation);
         throw err;
       }
@@ -1127,6 +1138,7 @@ export class DesignStudioService {
         usdEstimate: cost, costBasis: result.receipt.costBasis ?? 'estimate', status: 'ok',
         retainedResult: { kind: 'structured', payload: result } });
       await recordSpend(cost);
+      chargeStudioSpendCap(cost);
       checkReservation(cost, reservation!);
       return result;
     };
@@ -1902,6 +1914,29 @@ export class DesignStudioService {
                 await this.repo.updateCandidate(cand.id, s.tenantId, { score: compositeScores.get(cand.id) ?? null });
               }
               stages.critique = { completed: true, pipeline: 'v3', candidateId: candidate.id };
+              // ADR-237: the top model looks at the renders the judge will choose between and says
+              // what to fix. The fixes are applied, re-rendered and checked in the revise stage.
+              const reviewSettings = resolveVisualReviewSettings();
+              if (reviewSettings.rounds > 0) {
+                const spend = { label: 'visual review', capUsd: reviewSettings.maxUsd, spentUsd: 0 };
+                const visual = await inStudioSpendCap(spend, () =>
+                  runVisualReviewStageV3(ctx, candidateStates, reviewSettings, (stages.brief || {}) as Partial<CreativeBrief>));
+                for (const review of visual.reviews) {
+                  await this.repo.insertJudgment({
+                    id: randomUUID(),
+                    runId: run.id,
+                    tenantId: s.tenantId,
+                    kind: 'critique',
+                    candidateA: review.candidateId,
+                    verdict: {
+                      pipeline: 'v3', kind: 'visual_review', promptVersion: review.promptVersion,
+                      reviewedLayoutSha256: review.reviewedLayoutSha256, overallAssessment: review.review.assessment,
+                      fixes: review.review.fixes, discarded: review.discarded, receipt: review.receipt,
+                    } as any,
+                  });
+                }
+                stages.critique.visualReview = { ...visual, spentUsd: spend.spentUsd };
+              }
             } catch (err) {
               if (isModelCallHoldError(err)) throw err;
               if (err instanceof StudioBudgetExhaustedError) throw err;
@@ -1984,6 +2019,41 @@ export class DesignStudioService {
               status: row.status as DesignStudioCandidateStatus,
             };
           });
+
+          const visualReview = ctx.pipelineV3 ? stages.critique?.visualReview as (VisualReviewStageRecord & { spentUsd?: number }) | undefined : undefined;
+          if (visualReview?.reviews?.length) {
+            // ADR-237: the reviewed candidates get their fixes in one controlled pass (by default),
+            // re-rendered and re-checked; a refinement is kept only if QA passes and the measures do
+            // not regress or the judge prefers it. This replaces the gated repair for these runs.
+            const spend = { label: 'visual review', capUsd: visualReview.settings.maxUsd, spentUsd: Number(visualReview.spentUsd) || 0 };
+            try {
+              const outcomes = await inStudioSpendCap(spend, () =>
+                runVisualRefinementStageV3(ctx, candidateStates, visualReview, (stages.brief || {}) as Partial<CreativeBrief>));
+              for (const o of outcomes) {
+                if (!o.adopted || !o.refined) continue;
+                await this.repo.updateCandidate(o.candidateId, s.tenantId, {
+                  layouts: o.refined.layouts as any,
+                  previewPng: o.refined.previewPng,
+                  previewSha256: o.refined.previewSha256,
+                  compositePng: o.refined.compositePng,
+                  metrics: o.refined.metrics as any,
+                  score: o.score ?? null,
+                });
+              }
+              stages.revise = {
+                completed: true,
+                pipeline: 'v3',
+                visual: { outcomes: outcomes.map(({ refined: _refined, ...rest }) => rest), spentUsd: spend.spentUsd },
+              };
+            } catch (err) {
+              if (isModelCallHoldError(err)) throw err;
+              if (err instanceof StudioBudgetExhaustedError) throw err;
+              // The reviewed designs still stand as they were; the run records why they were not refined.
+              stages.revise = { completed: false, pipeline: 'v3', visual: { spentUsd: spend.spentUsd }, error: err instanceof Error ? err.message : String(err) };
+            }
+            await this.repo.updateRunStatus(runId, s.tenantId, 'judging', { stages, budget });
+            return { runId, status: 'judging', stage: 'revise', spentUsd: budget.spentUsd };
+          }
 
           if (ctx.pipelineV3) {
             // P06, as the qualification runs it: the engine refines the top-ranked candidate only

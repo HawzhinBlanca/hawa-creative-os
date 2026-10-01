@@ -15,9 +15,24 @@ import {
   type BriefBoundJudgeBrief,
   type StudioJudgeProtocol,
   photoSelectionFromInstructions,
+  reviewCandidateVisuallyV3,
+  applyVisualReviewV3,
+  conformReviewedLayoutV3,
+  decideVisualRefinementV3,
+  judgeRefinementV3,
+  layoutSha256,
+  type VisualReviewResult,
+  type VisualReviewSettings,
+  type AppliedVisualFix,
+  type VisualRefinementDecision,
+  StudioArtAccountingError,
 } from '@hawa/creative';
-import type { StageContext, CandidateState, Concept, Archetype, MotifKind, CreativeBrief } from '../types.js';
+import { isModelCallHoldError, StudioBudgetExhaustedError, type StageContext, type CandidateState, type Concept, type Archetype, type MotifKind, type CreativeBrief } from '../types.js';
+import { CanvaFlowError } from '../../canva-flow-error.js';
 import { candidateRenderOptions } from './asset-inputs.js';
+import { runRenderStage } from './render.stage.js';
+import { inStudioSubstep } from '../substeps.js';
+import { StudioSpendCapError } from '../spend-cap.js';
 
 /**
  * The studio's v3 stages. Each is a thin adapter: the decisions are made by the shared functions
@@ -386,4 +401,195 @@ export async function runJudgeStageV3(
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;
   return { selection, winner: find(selection.winner)!, runnerUp: find(selection.runnerUp), ranked };
+}
+
+// ---------------------------------------------------------------------------------------------
+// ADR-237: the top model's visual review and one controlled refinement pass
+// ---------------------------------------------------------------------------------------------
+
+/** One review, as the critique stage stores it for the revise stage (stages.critique.visualReview). */
+export interface StoredVisualReview extends VisualReviewResult {
+  candidateId: string;
+  ordinal: number;
+}
+
+export interface VisualReviewStageRecord {
+  settings: VisualReviewSettings;
+  reviews: StoredVisualReview[];
+  /** Candidates not reviewed, and why: the cap, a model failure, no eligible candidate. */
+  skipped: Array<{ candidateId?: string; reason: string }>;
+}
+
+/** What the review is told about the request and the client. */
+function visualReviewContextFor(ctx: StageContext, brief: Partial<CreativeBrief>) {
+  return {
+    brief: judgeBriefForStageV3(ctx, brief),
+    clientRules: [ctx.promotedRules, ctx.clientRules].filter((r) => typeof r === 'string' && r.trim()).join('\n\n'),
+    ...(ctx.artDirectionRules?.length ? { houseRules: ctx.artDirectionRules } : {}),
+    ...(ctx.clientProfile ? { clientProfile: ctx.clientProfile } : {}),
+    ...(ctx.reference ? { reference: ctx.reference } : {}),
+  };
+}
+
+/**
+ * A model failure or the review's own cap ends the review of one candidate, which keeps its design.
+ * A hold, a budget stop, an accounting failure or a lost authority stops the run as everywhere else.
+ */
+const reviewMayContinue = (err: unknown) =>
+  !(isModelCallHoldError(err) || err instanceof StudioBudgetExhaustedError || err instanceof StudioArtAccountingError ||
+    err instanceof CanvaFlowError);
+
+/**
+ * P05, ADR-237: the critique role's model (Sol in production) looks at the actual render of each of
+ * the top `settings.candidates` candidates that pass hard QA — the ones the judge chooses between —
+ * and returns structured fixes. Nothing is applied here; the revise stage applies, re-renders and
+ * decides. Each review is its own substep, so a resumed stage reads its saved answer back.
+ */
+export async function runVisualReviewStageV3(
+  ctx: StageContext,
+  candidates: CandidateState[],
+  settings: VisualReviewSettings,
+  brief: Partial<CreativeBrief> = {}
+): Promise<VisualReviewStageRecord> {
+  const record: VisualReviewStageRecord = { settings, reviews: [], skipped: [] };
+  if (settings.rounds < 1) return record;
+  const ranked = rankStudioCandidatesV3(ctx, candidates).filter((r) => r.hardQa?.passed === true);
+  if (!ranked.length) {
+    record.skipped.push({ reason: 'no candidate passes hard QA; the gated repair runs instead' });
+    return record;
+  }
+  const copy = copyForStageV3(ctx);
+  const context = visualReviewContextFor(ctx, brief);
+  for (const r of ranked.slice(0, settings.candidates)) {
+    try {
+      const result = await inStudioSubstep(`review/candidate-${r.candidate.ordinal + 1}`, () =>
+        reviewCandidateVisuallyV3(r, copy, { client: ctx.client, context, renderOptions: candidateRenderOptions(ctx, r.candidate) }));
+      record.reviews.push({ ...result, candidateId: r.candidate.id, ordinal: r.candidate.ordinal });
+    } catch (err) {
+      if (!reviewMayContinue(err)) throw err;
+      record.skipped.push({ candidateId: r.candidate.id, reason: err instanceof Error ? err.message : String(err) });
+      // The cap is the run's: once it is reached, no later candidate is reviewed either.
+      if (err instanceof StudioSpendCapError) break;
+    }
+  }
+  return record;
+}
+
+export interface VisualRefinementRound {
+  round: number;
+  fixes: AppliedVisualFix[];
+  /** The geometry patch refused the review as a whole (ADR-190), with its findings. */
+  rejection?: { code: string; findings: string[] };
+  decision?: VisualRefinementDecision;
+  scoreBefore?: number;
+  scoreAfter?: number;
+  hardQaAfter?: { passed: boolean; defectCodes: string[] };
+  /** Rounds after the first are reviewed here; their receipts are recorded with them. */
+  reviewReceipt?: VisualReviewResult['receipt'];
+}
+
+export interface VisualRefinementOutcome {
+  candidateId: string;
+  ordinal: number;
+  adopted: boolean;
+  reason: string;
+  rounds: VisualRefinementRound[];
+  /** The adopted candidate, rendered: its new layout appended, preview, composite and metrics. */
+  refined?: CandidateState;
+  score?: number;
+}
+
+/**
+ * P06, ADR-237: applies each stored review to the layout it reviewed, conforms the result to the
+ * house rules, renders it as the client would see it, runs hard QA on that render and keeps it only
+ * if QA passes and the measures do not regress, or the judge prefers it. One round by default;
+ * a second round (settings.rounds = 2) reviews the adopted design again.
+ *
+ * Replay-safe: a candidate whose current layout is no longer the one reviewed (a resumed stage that
+ * already stored its refinement) is left alone, and every call is its own substep.
+ */
+export async function runVisualRefinementStageV3(
+  ctx: StageContext,
+  candidates: CandidateState[],
+  record: VisualReviewStageRecord,
+  brief: Partial<CreativeBrief> = {}
+): Promise<VisualRefinementOutcome[]> {
+  const copy = copyForStageV3(ctx);
+  const canvas = {
+    width: ctx.width, height: ctx.height, logoAspect: ctx.logoAspect, palette: ctx.referencePack.palette,
+    background: ctx.requestedBackground, ornament: ctx.ornament, style: ctx.style, allowArt: ctx.imageryStrategy !== 'none',
+  };
+  const fonts = [ctx.latinFont, ctx.arabicFont, ...(ctx.referencePack.admittedDisplayFonts?.latin ?? []), ...(ctx.referencePack.admittedDisplayFonts?.arabic ?? [])];
+  const judgeBrief = judgeBriefForStageV3(ctx, brief);
+  const context = visualReviewContextFor(ctx, brief);
+  const outcomes: VisualRefinementOutcome[] = [];
+  for (const stored of record.reviews) {
+    const original = candidates.find((c) => c.id === stored.candidateId);
+    const outcome: VisualRefinementOutcome = { candidateId: stored.candidateId, ordinal: stored.ordinal, adopted: false, reason: '', rounds: [] };
+    outcomes.push(outcome);
+    if (!original) { outcome.reason = 'candidate_not_active'; continue; }
+    if (layoutSha256(original.currentLayout) !== stored.reviewedLayoutSha256) {
+      outcome.reason = original.layouts.some((l) => layoutSha256(l) === stored.reviewedLayoutSha256)
+        ? 'already_refined' : 'layout_changed_since_review';
+      continue;
+    }
+    let current = original;
+    let review: VisualReviewResult = stored;
+    for (let round = 1; round <= record.settings.rounds; round++) {
+      const roundRecord: VisualRefinementRound = { round, fixes: [] };
+      const [before] = rankStudioCandidatesV3(ctx, [current]);
+      if (round > 1) {
+        try {
+          review = await inStudioSubstep(`review/candidate-${stored.ordinal + 1}-round-${round}`, () =>
+            reviewCandidateVisuallyV3(before, copy, { client: ctx.client, context, renderOptions: candidateRenderOptions(ctx, current) }));
+          roundRecord.reviewReceipt = review.receipt;
+        } catch (err) {
+          if (!reviewMayContinue(err)) throw err;
+          outcome.reason = `round ${round} review unavailable: ${err instanceof Error ? err.message : String(err)}`;
+          break;
+        }
+      }
+      outcome.rounds.push(roundRecord);
+      const applied = applyVisualReviewV3(current.currentLayout, review.review, { palette: ctx.referencePack.palette, allowedFonts: fonts });
+      roundRecord.fixes = applied.fixes;
+      if (!applied.ok) {
+        roundRecord.rejection = { code: applied.rejection.code, findings: applied.rejection.findings };
+        outcome.reason = outcome.adopted ? outcome.reason : applied.rejection.code;
+        break;
+      }
+      if (!applied.changed) {
+        outcome.reason = outcome.adopted ? outcome.reason : 'no_applicable_fix';
+        break;
+      }
+      const conformed = conformReviewedLayoutV3(applied.layout, copy, canvas);
+      const [rendered] = await runRenderStage(ctx, [{
+        ...current, layouts: [...current.layouts, conformed], currentLayout: conformed, critiques: [...current.critiques],
+      }]);
+      const [after] = rankStudioCandidatesV3(ctx, [rendered]);
+      roundRecord.scoreBefore = before.metrics.compositeScore;
+      roundRecord.scoreAfter = after.metrics.compositeScore;
+      roundRecord.hardQaAfter = { passed: after.hardQa?.passed === true, defectCodes: after.hardQa?.defectCodes ?? [] };
+      let decision: VisualRefinementDecision;
+      try {
+        decision = await decideVisualRefinementV3(before, after, () =>
+          inStudioSubstep(`review-judge/candidate-${stored.ordinal + 1}-round-${round}`, () => judgeRefinementV3(before, after, copy, {
+            client: ctx.client, reference: ctx.reference, clientProfile: ctx.clientProfile, judgeBrief,
+            renderOptions: candidateRenderOptions(ctx, current),
+            ...(ctx.artDirectionRules?.length ? { houseRules: ctx.artDirectionRules } : {}),
+          })));
+      } catch (err) {
+        if (!reviewMayContinue(err)) throw err;
+        // No judge, no tie-break: a refinement the measures do not support is not kept.
+        decision = { adopt: false, reason: 'metrics_regressed', regressions: [`judge unavailable: ${err instanceof Error ? err.message : String(err)}`] };
+      }
+      roundRecord.decision = decision;
+      outcome.reason = decision.reason;
+      if (!decision.adopt) break;
+      outcome.adopted = true;
+      outcome.refined = rendered;
+      outcome.score = after.metrics.compositeScore;
+      current = rendered;
+    }
+  }
+  return outcomes;
 }
