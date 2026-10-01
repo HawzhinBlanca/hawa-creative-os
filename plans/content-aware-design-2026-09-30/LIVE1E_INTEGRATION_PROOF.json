@@ -1,6 +1,6 @@
 {
   "date": "2026-10-02",
-  "status": "DESK_REVISION_GUARD_REPAIRED_FINAL_QUALIFICATION_PENDING",
+  "status": "ENGINEERING_SOURCE_AND_ISOLATED_CANDIDATE_PASSED_ADMISSION_OPEN",
   "researchParent": "8e813a0e33485c946b753142743e406adbfd28f1",
   "productionParent": "1e0616f083f20aafdd633b58d5dd6b7e577598b1",
   "requirements": [
@@ -17,7 +17,7 @@
   },
   "strictTestRoots": 733,
   "strictTypecheck": "PASS",
-  "fullSourceGatePassed": false,
+  "fullSourceGatePassed": true,
   "productionChanges": false,
   "admissionQualified": false,
   "migration": "082_kept_model_consent_audit_authority.sql",
@@ -117,9 +117,10 @@
     }
   },
   "open": [
-    "Clean combined full release qualification.",
+    "Publish qualified source by normal fast-forward to authorized research branch.",
     "Production-data migration validation has no transfer authorization.",
-    "Deployment of combined source and actual candidate receipt.",
+    "Deployment of combined source and actual live readback.",
+    "Production DNA/Canva kit update and missing saved master/invitation access.",
     "Native Canva save/edit/reopen/export and Sorani/Arabic reading.",
     "Independent human visual-quality review and real team pilot.",
     "Actual publication and separate-host recovery."
@@ -185,7 +186,111 @@
       "Real Core stale-save/snapshot control refuses409 without changing active DNA, consent or audit; UI stale edit preserves its view and displays the conflict.",
       "Snapshot response off-status verified in actual DOM."
     ],
-    "fullFinalGate": "NOT_RUN_YET",
+    "fullFinalGate": "PASS_ON_7f43b588",
     "productionChanges": false
+  },
+  "fullFinal": {
+    "commit": "7f43b588c94e45badabdef2483825bcba45a7a12",
+    "sourceCommit": "29bca5fd3784a316b01da39b47a606676e6877b2",
+    "passed": 7719,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 726,
+    "skippedFiles": 6,
+    "strictTestRoots": 733,
+    "technicalStagesPassed": 7,
+    "productionDumpStage": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
+    "negativeFlagRefusal": true,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/full-final/RELEASE_GATE_EVIDENCE.json",
+    "durationSeconds": 265.9
+  },
+  "candidateFinal": {
+    "commit": "7f43b588c94e45badabdef2483825bcba45a7a12",
+    "finishedAt": "2026-10-01T23:36:49.029Z",
+    "passed": 243,
+    "failed": 0,
+    "sourceChanges": {},
+    "scenarioTests": {
+      "passed": 1,
+      "skipped": 56,
+      "scope": "Only required R1.S3.SOURCES --candidate --recovery scenario selected; other chaos scenarios not run here."
+    },
+    "fakeExternalProviders": true,
+    "uncoveredModelCalls": [],
+    "productionChanged": false,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/candidate-final/last-run.json",
+    "preservedConsentControls": [
+      {
+        "name": "candidate administrator can preserve consent only against its exact approved version pair",
+        "ok": true,
+        "detail": "actual hawa_app write"
+      },
+      {
+        "name": "candidate operator cannot forge preserved consent",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate preserved consent refuses a mismatched preceding hash",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate task policy cannot bypass preserved consent authority",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate preserved consent refuses changed stored privacy",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate migration082 receipt matches the exact source checksum",
+        "ok": true,
+        "detail": "fcba4719056d7f68af3c27f4279919e7dc7f96ae7b2fb763bb353b1bb99ad501"
+      }
+    ],
+    "recoveries": {
+      "drive": {
+        "tableCount": 105,
+        "policyCount": 181,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.134,
+        "separateHostProved": false,
+        "productionChanged": false
+      },
+      "telegram": {
+        "tableCount": 105,
+        "policyCount": 181,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.145,
+        "separateHostProved": false,
+        "productionChanged": false
+      }
+    }
+  },
+  "liveServiceBoundaryReadback": {
+    "observedDate": "2026-10-02",
+    "release": "1e0616f083f20aafdd633b58d5dd6b7e577598b1",
+    "nginxConfigurationTest": "PASS; mounted proof readable",
+    "workerDatabaseIdentity": "hawa_worker_login",
+    "workerAppRoleMembership": false,
+    "workerApprovalInsert": false,
+    "workerTaskUpdate": false,
+    "workerSchemaCreate": false,
+    "workerTemporaryCreate": false,
+    "workerOperatorOrProviderEnvironmentPresent": false,
+    "designWorkerOperatorTaskListStatus": 401,
+    "designWorkerCredentialDistinctFromAllThreeOperatorFields": true,
+    "knownUnsafeRollbackPrefixesRemaining": [],
+    "productionChanged": false,
+    "newReleaseDeployed": false
   }
 }

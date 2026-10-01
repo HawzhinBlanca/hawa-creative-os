@@ -1,7 +1,7 @@
 # ADR-242 — Bind preserved model consent audits to the actual version pair
 
 Date: 2026-10-02
-Status: implementation and connected qualification in progress
+Status: engineering qualified on7f43b588; isolated candidate passed; production/native/human admission open
 Requirements: FR-054, FR-066, NFR-006, NFR-007
 Sources: MASTER_SPEC.md invariants7–9; docs/14_SECURITY_THREAT_MODEL.md;
 docs/18_FEEDBACK_LEARNING.md; ADR226/forward081; live ADR239.
@@ -58,3 +58,15 @@ refuses stale DNA/snapshot writes409 with unchanged versions/audits/consent.
 Seven connected files91/0/0 and733 strict roots pass; two missing test-call
 arguments were also corrected with explicit expected bodies. Final whole-source
 qualification remains pending; the earlier7716 result applies only to5dbad16e.
+
+## Exact final qualification — 2 October 2026
+
+Clean7f43b588 (source29bca5fd):7719 passed/0 failed/67 skipped,726 passing
+files/6 skipped,733 strict roots; seven technical stages and negative manifest
+refusal pass. Production-dump Stage3 NOT_RUN pending transfer authorization.
+Exact same sealed candidate passes243/0 actual container/role/source/recovery
+checks; all six082 controls pass. Both encrypted-archive recovery checkpoints
+restore105tables/181policies/16blobs with zero missing references before writers
+resume. Fake external providers; no paid calls, production deployment, real native
+edit, human visual-quality, separate-host recovery or team pilot admission.
+Evidence: LIVE1E_INTEGRATION_PROOF.json / LIVE1E_SOURCE_GATE_EVIDENCE.json.
