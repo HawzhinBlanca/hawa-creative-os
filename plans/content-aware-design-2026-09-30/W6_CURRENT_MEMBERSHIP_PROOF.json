@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "CURRENT_MEMBERSHIP_CANDIDATE_221_PASS_CORRECTED_FULL_SOURCE_PENDING",
+  "status": "CURRENT_MEMBERSHIP_SOURCE_6970_PASS_AND_SYNTHETIC_CANDIDATE_221_PASS_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "NFR-006",
     "FR-011",
@@ -59,10 +59,24 @@
     "Second connected48pass/2fail exposed active-DNA fixture missing office membership and non-verbose EXPLAIN omitting function output; active fixture and verbose output preserve exact assertions.",
     "Affected boundaries59pass/4fail exposed missing office admission in synthetic learning reader fixtures; active designer/requester admission added, foreign recovery viewer now has an explicit positive assigned-client control.",
     "An initial affected command included a nonexistent asset test filter; actual7-file executed result retained and final9 existing boundary files verified.",
-    "First exact clean86c598ba full source6966pass/4fail/67skip: two client-only positive fixtures lacked active narrow office membership, two migration inventories stopped at078. Actual positive/foreign/operator-confirmation/receipt assertions retained; corrected7files47pass/0fail/0skip."
+    "First exact clean86c598ba full source6966pass/4fail/67skip: two client-only positive fixtures lacked active narrow office membership, two migration inventories stopped at078. Actual positive/foreign/operator-confirmation/receipt assertions retained; corrected7files47pass/0fail/0skip.",
+    "Initial commit hook stopped because system Python lacked PyYAML; unchanged hook passed with the configured Homebrew Python runtime. No checks bypassed."
   ],
   "qualification": {
-    "fullEngineering": "PENDING",
+    "fullEngineering": {
+      "commit": "3cf57684b9c6eacf3e321706c666f390ee56d734",
+      "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+      "cleanTree": true,
+      "filesPassed": 696,
+      "passed": 6970,
+      "failed": 0,
+      "skipped": 67,
+      "strictRoots": 703,
+      "technicalStagesPassed": 7,
+      "productionDumpStage": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
+      "negativeFlagRefusal": true,
+      "wholeProductAdmission": false
+    },
     "currentDeployedCandidate": {
       "candidateCommit": "86c598ba7fc932c97a7202fee7061fa76a0b90c4",
       "finishedAt": "2026-10-01T18:55:49.636Z",
@@ -135,7 +149,33 @@
       "sourceHashMatches": true,
       "productionChanged": false
     },
-    "ownedRehearsalCleanup": "PASS; no owned project containers or volumes remain"
+    "ownedRehearsalCleanup": "PASS; no owned project containers or volumes remain",
+    "candidateToEngineeringIdentity": {
+      "candidateCommit": "86c598ba7fc932c97a7202fee7061fa76a0b90c4",
+      "engineeringCommit": "3cf57684b9c6eacf3e321706c666f390ee56d734",
+      "changedFiles": [
+        "MANIFEST.json",
+        "RELEASE_MANIFEST.json",
+        "SHA256SUMS.txt",
+        "adrs/224_current_membership_and_account_authority.md",
+        "apps/core/test/document-intake.test.ts",
+        "apps/core/test/startup-schema-check.test.ts",
+        "packages/db/test/design-studio.test.ts",
+        "packages/db/test/schema-upgrade.test.ts",
+        "plans/content-aware-design-2026-09-30/PLAN.md",
+        "plans/content-aware-design-2026-09-30/W6_CURRENT_MEMBERSHIP_PROOF.json",
+        "plans/traceability.csv"
+      ],
+      "testFixtureOnlyChanges": [
+        "apps/core/test/document-intake.test.ts",
+        "apps/core/test/startup-schema-check.test.ts",
+        "packages/db/test/design-studio.test.ts",
+        "packages/db/test/schema-upgrade.test.ts"
+      ],
+      "runtimeAndHarnessAndInfraAndSchemaAndScriptsAndApiAndDocsAndRunbooksUnchanged": true,
+      "newEngineeringCommitNotRehearsedAsDeployedImage": true,
+      "reason": "Only genuine active narrow office fixtures, explicit latest migration expectations and qualification metadata differ; runtime/harness/infra/schema/operational docs are identical."
+    }
   },
   "limits": [
     "No production deployment or business row/key/service change.",
@@ -178,6 +218,10 @@
       "sha256": "74c7922e59b3a71f4bc8551127023b33b87cd2b213d2e7f07ec8b2d7c9a19739"
     },
     {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CANDIDATE_TO_ENGINEERING_IDENTITY.json",
+      "sha256": "c759c4f8e9e15c5dc3e4bb39075ef730deaf44d2747cce50c845978cf20a3dd9"
+    },
+    {
       "path": "output/qualification/2026-10-01/current-membership-revocation/CHAOS_TYPES.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
@@ -194,8 +238,36 @@
       "sha256": "5823bd11761f68432c7f0fd2859551841452e9a77bdfbd58515fc3b77151736c"
     },
     {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CORRECTED_EXACT_ENGINEERING_GATE.log",
+      "sha256": "4df5718d32db95546da9186749a781f94dcd55daa4d01047a4c0c7272ad1c8df"
+    },
+    {
       "path": "output/qualification/2026-10-01/current-membership-revocation/CORRECTED_FULL_SUITE_BOUNDARIES.log",
       "sha256": "6eba4b5d277bd41e2931f6dcff361d061d2dd1d9fd32c30cc2dc24e3e54d8475"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CORRECTED_MANIFEST_GENERATION.log",
+      "sha256": "9cd199247b8d03b81488e5c736468604ee5acb6cc11da513302f6caad6ba6d29"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CORRECTED_PACK_CHECK.log",
+      "sha256": "c457830298cf1d2ac642cc4a8030a50a40b4c525dfdbc7a493c8e23970bd92c7"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CORRECTED_PACK_REFRESH.log",
+      "sha256": "3571a0bb79737f9bdae245f8f7f9c8847a20f4944ec2367dc84777a334457e50"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CORRECTED_SEAL_COMMIT.log",
+      "sha256": "8a801c86671017f6288d8b3da645e4763fb9ab17e13d0dd9c9464ee6fca265ae"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CORRECTED_SOURCE_COMMIT.log",
+      "sha256": "8ac305228079e900cdc3d3ac0d55855fd12b76830bfff04ba9317534626c0590"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/CORRECTED_SOURCE_COMMIT_RETRY.log",
+      "sha256": "da97d8a4298cedf7dbcde8396b19f3c683c62144be982ca9fa8bf78997cdd2c9"
     },
     {
       "path": "output/qualification/2026-10-01/current-membership-revocation/CURRENT_CANDIDATE_RAW_RECEIPT.json",
@@ -224,6 +296,22 @@
     {
       "path": "output/qualification/2026-10-01/current-membership-revocation/FAILED_FULL_SUITE.log",
       "sha256": "b9751d0a977513b133b142bd3342ff34404201568e69f490e529c012e346b088"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/FINAL_FULL_TEST_SUITE_RUN.log",
+      "sha256": "f29d5140133b2f6415532653ac25aa41fe3df8891a25fed15a4de4815aa58756"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/FINAL_NEGATIVE_FLAG_REFUSAL.log",
+      "sha256": "37a6ac7fa9e04a8728823238cb960cf7c188d320c5f1693ceec0f2ecf7892ae5"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/FINAL_RELEASE_GATE_EVIDENCE.json",
+      "sha256": "45dfa8d451e1b76e1eb89bbd964045b0de13649a7540b98071c50d66180d55fa"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-membership-revocation/FINAL_TEST_DB_PROVISION.log",
+      "sha256": "abbb01fa861dd0dd99c2852ad8c6c03cd483661bf777b0bfc80e7541936fa925"
     },
     {
       "path": "output/qualification/2026-10-01/current-membership-revocation/FIRST_CONNECTED.log",
