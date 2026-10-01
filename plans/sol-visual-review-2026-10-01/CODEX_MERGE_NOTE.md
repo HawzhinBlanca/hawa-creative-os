@@ -23,11 +23,19 @@ I read `origin/codex/research-grade-design-system` first and reused your refinem
 | `packages/creative/src/index.ts` | one line, `export * from './studio/visual-review-v3.js'`, right after the `refinement-engine-v3` export | you add lines at other places; no hunk overlap |
 | `packages/creative/src/studio/JUDGE_ART_DIRECTION.md` | a cost paragraph | none |
 | `apps/core/src/services/design-studio/spend-cap.ts` | new | none |
-| `apps/core/src/services/design-studio/design-studio-service.ts` | ledger `complete()`: three small hunks (`assertWithinStudioSpendCap`, `chargeStudioSpendCap`); v3 critique stage adds the review after the deterministic row; v3 revise stage gets a branch before the gated repair; imports | check yours with `git merge-tree` (below) |
-| `apps/core/src/services/design-studio/stages/v3.stage.ts` | imports; new functions appended at the end (`runVisualReviewStageV3`, `runVisualRefinementStageV3`) | appended only |
+| `apps/core/src/services/design-studio/design-studio-service.ts` | ledger `complete()`: three small hunks (`assertWithinStudioSpendCap`, `chargeStudioSpendCap`); v3 critique stage adds the review after the deterministic row; v3 revise stage gets a branch before the gated repair; imports | auto-merges (below) |
+| `apps/core/src/services/design-studio/stages/v3.stage.ts` | separate import statements; new functions appended at the end (`runVisualReviewStageV3`, `runVisualRefinementStageV3`) | auto-merges |
 | `apps/core/src/services/design-studio/stages/parity.stage.ts` | comment only | none |
 
-`git merge-tree --write-tree origin/codex/research-grade-design-system claude/sol-judge-and-visual-review` was run when this branch was sealed; the result is in the commit message of the seal.
+`git merge-tree --write-tree origin/codex/research-grade-design-system <this branch>` adds no conflicting file beyond the twelve that already conflict between production `e090f9ae` and your branch:
+
+- `MANIFEST.json`, `RELEASE_MANIFEST.json`, `SHA256SUMS.txt`, `plans/traceability.csv`;
+- `api/openapi.yaml`, `lifecycle-internal.routes.ts`, `chat-campaign-intake.ts`;
+- `pipeline-v3.ts` and `art-direction/{generate,index,recipes,solver}.ts`.
+
+The one import-list clash in `v3.stage.ts` was removed: the review's imports are their own statements. `design-studio-service.ts`, `index.ts` and `album-report-cover-studio.test.ts` auto-merge.
+
+In `traceability.csv`, this branch only appends evidence to FR-038, FR-040, FR-056, FR-057, FR-060 and FR-079.
 
 ## Behaviour you should know when you merge
 
