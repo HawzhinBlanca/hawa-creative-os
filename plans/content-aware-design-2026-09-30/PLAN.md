@@ -412,3 +412,21 @@ Earlier failures/green source remain historical. W6_TARGET_BOUND_LEARNING_GATE_E
 records the exact candidate. Evidence-only publication preserves runtime/test bytes.
 Not deployed; no paid provider call, taste calibration or native/human admission.
 Search/retired inline cache consumers and broader W5/W6/product goal remain open.
+
+
+## W6 durable learning consumers — 1 October 2026, ADR196
+
+Actual Core SIGKILL loses a saved instruction from cold search (red1/9focusedskip).
+Search now reconstructs rules directly under the caller's actual visible client
+scope, without relying on candidate GET or process promotions. Alias/current
+moderation/status evidence and rule-source failure refusal are checked; non-rule
+search avoids the reconstruction. Legacy generation and optional chat previews
+consume scoped active DNA, not process promotions, and refuse stale fallback.
+Generation binds one DNA snapshot to rules and QA. Preview failure occurs after
+commit and preserves intake. Existing QA fixtures persist real DNA and retain
+placeholder-logo failure/approval refusal rather than relying on missing DNA.
+Connected100tests/10files,668 strict roots and lint pass. Intermediate29/4,31/2,
+45/1,55/1 fixture failures are retained. Exact sealed full gate pending; no deploy.
+Evidence: W6_LEARNING_CONSUMERS_PROOF.json. Whole FR077 feedback/revision and
+DNA-less client-category coverage, other fallback callers, native/human/taste
+and broader W5/W6/product remain open.

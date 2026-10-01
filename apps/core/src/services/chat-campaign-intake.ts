@@ -7,7 +7,6 @@ import path from 'node:path';
 import { type RequestContext, type StudioOperation, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { requestOperatingSubject, type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
-import { globalFeedbackMiner } from '@hawa/creative';
 import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml } from '@hawa/integrations';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
 import { autoDraftAllowedFor, clientPackOf, matchRequestClient, positiveClientWords } from './client-packs.js';
@@ -78,6 +77,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     db,
     events,
     isProduction,
+    resolveClientDna,
     tasks,
     broadcastEvent: broadcast,
   } = ctx;
@@ -395,9 +395,8 @@ function buildChatCampaignIntake(ctx: CoreContext) {
      * same throw, so the request was lost with no row anywhere. The preview is a convenience;
      * nothing it does may decide the HTTP status or cost the office a request.
      */
-    const drawLegacyPreviewOperations = () => {
+    const drawLegacyPreviewOperations = async () => {
       if (!autoGenerate || !preFlight.allowed) return;
-      const effectiveRules = clientId ? globalFeedbackMiner.getPromotedRules(clientId) : [];
       const isKaaeClient = clientId === KAAE_CLIENT_ID || clientId === 'client-office-1' || clientId === 'client-kaae' || String(clientId).includes('kaae');
       const isBrandClient = clientId === 'client-fastpay' || clientId === 'client-aster' || clientId === 'client-drustee';
       // KAAE is still refused a request without copy, but gets no inline preview: its v1 templates are
@@ -407,12 +406,15 @@ function buildChatCampaignIntake(ctx: CoreContext) {
         if (template && inlineTemplateCopyMissing(template, { headlineEn, headlineCkb, copyEn, copyCkb })) {
           designRefusal = 'COPY_REQUIRED';
         } else if (isBrandClient) {
+          const dna=await resolveClientDna(task.clientId,{tenantId:db?task.tenantId:DEFAULT_TENANT_ID,
+            userId:SYSTEM_AUTOMATION_USER_ID,role:'operator',requireDatabase:true});
+          if(db && !dna) throw new Error('Active client DNA is unavailable; preview skipped');
           generatedOps = creativeDirector.generateCommercialBrandOperations(clientId!.replace('client-', ''), brief, {
             headlineEn,
             headlineCkb,
             copyEn,
             copyCkb,
-            learnedRules: effectiveRules,
+            learnedRules: dna?.guidelines?.layoutRules ?? [],
           });
         }
       } catch (err) {
@@ -504,7 +506,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       persistedVersion = Number(persisted.task.version) || null;
       brief.taskId = taskId;
       if (!persisted.created) {
-        drawLegacyPreviewOperations();
+        await drawLegacyPreviewOperations();
         task.generatedOps = generatedOps;
         if (designRefusal) task.designRefusal = designRefusal;
         return { task, brief, costReceipt, latestQAReport, duplicate: true };
@@ -514,7 +516,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     }
 
     // The request is committed. Everything after this point is presentation.
-    drawLegacyPreviewOperations();
+    await drawLegacyPreviewOperations();
     task.generatedOps = generatedOps;
     if (designRefusal) task.designRefusal = designRefusal;
 

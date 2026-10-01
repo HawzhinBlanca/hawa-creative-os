@@ -1,8 +1,9 @@
 import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
-import { describe, it, expect, afterAll, vi } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll, vi } from 'vitest';
 import { createDb } from '@hawa/db';
 import { computeActionSignature, signActionLink } from '@hawa/integrations';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createHash } from 'node:crypto';
@@ -20,6 +21,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   /** A seeded client the legacy generator still drafts (KAAE's designs are made in the studio). */
   const HAWA_STUDIO = 'c1000000-0000-4000-8000-000000000001';
   const DRUSTEE = 'c1000000-0000-4000-8000-000000000003';
+  beforeAll(async()=>{
+    await persistClientDnaFixture(dbApp,HAWA_STUDIO,{},undefined,'client-office-1');
+    await persistClientDnaFixture(dbApp,DRUSTEE,{});
+  });
 
   it('responds to health checks', async () => {
     const res = await app.request('/health');

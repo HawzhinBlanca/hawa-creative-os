@@ -30,6 +30,24 @@ beforeAll(async () => {
     VALUES(${tenantId}::uuid,${mine}::uuid,${viewer}::uuid,'designer',true)`.execute(owner);
 });
 describe('Learning governance boundaries', () => {
+    it('searches durable rules only for the actual viewer memberships, even without active DNA',async()=>{
+        const word=`Visibilitymarker${randomUUID().replaceAll('-','')}`;
+        const own=await propose(word);
+        const response=await app.request(`/v1/clients/${other}/candidate-rules/propose`,{method:'POST',
+            headers:{...headers,Authorization:`Bearer ${process.env.HAWA_ADMIN_KEY}`},
+            body:JSON.stringify({title:word,category:'layout',ruleText:`Private ${word}`})});
+        expect(response.status).toBe(201);const foreign=(await response.json()).proposal;
+        for(const client of ['',mine,'client-drustee']) {
+            const search=await app.request(`/v1/search?${new URLSearchParams({q:word,category:'rules',...(client?{clientId:client}:{})})}`,{headers:viewerHeaders});
+            expect(search.status).toBe(200);const hits=(await search.json()).results;
+            expect(hits.map((r:{id:string})=>r.id)).toContain(own.id);
+            expect(hits.map((r:{id:string})=>r.id)).not.toContain(foreign.id);
+        }
+        for(const client of [other,'client-kaae',randomUUID()]) {
+            const search=await app.request(`/v1/search?${new URLSearchParams({q:word,category:'rules',clientId:client})}`,{headers:viewerHeaders});
+            expect(search.status).toBe(200);expect((await search.json()).results).toEqual([]);
+        }
+    });
     it('authorizes actual client scope before exposing proposals or lineage', async () => {
         const own = await propose('Scoped own rule');
         const foreign = globalFeedbackMiner.proposeExplicitRule({

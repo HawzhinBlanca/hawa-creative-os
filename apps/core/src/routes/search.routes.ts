@@ -2,12 +2,13 @@ import type { RouteContext } from './types.js';
 import type { ClientDNA } from '@hawa/domain';
 import { API_STATUS_OF_DB_STATE } from '@hawa/contracts';
 import { deskReviewPath } from '@hawa/contracts/desk-navigation';
-import { globalFeedbackMiner } from '@hawa/creative';
+import { globalFeedbackMiner, type CandidateRuleProposal } from '@hawa/creative';
 import { VaultSearchEngine, extractSearchTokens, type SearchableItem, type SearchCategory } from '@hawa/retrieval';
 import { sql, toApiTaskStatus, withRlsContext } from '@hawa/db';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { listUploadedAssets } from '../services/uploaded-assets.js';
 import { log } from '../logging.js';
+import { reconstructClientLearning } from '../services/learning-recovery.js';
 
 /** What the search indexes: tasks, clients (keyed by the id a scoped search names) and assets. */
 interface Searchable {
@@ -16,6 +17,7 @@ interface Searchable {
   assets: Array<{ assetId: string; clientId?: string; filename?: string; mimeType?: string; category?: string; sha256?: string; storageKey?: string | null; sizeBytes?: number; createdAt?: string }>;
   /** A client's code and `client-<code>` spellings, to its Postgres id. */
   aliases: Map<string, string>;
+  rules: CandidateRuleProposal[];
   /** More tasks are in scope than one search reads (TASK_CEILING); the answer may miss some. */
   truncated: boolean;
 }
@@ -64,13 +66,14 @@ export function registerSearchRoutes(ctx: RouteContext): void {
    * process held in memory and the DNA it loaded at start-up, so the Desk's search found nothing
    * another Core, or this one before a restart, had created. Without a database, the no-database store.
    */
-  async function searchable(auth: { tenantId?: string; userId?: string; role?: string }, requestedClientId?: string, query = ''): Promise<Searchable> {
+  async function searchable(auth: { tenantId?: string; userId?: string; role?: string }, requestedClientId?: string, query = '', includeRules = true): Promise<Searchable> {
     if (!db) {
       return {
         tasks: Array.from(tasks.entries()).map(([id, t]) => ({ ...t, id, objective: briefs.get(id)?.objective, requestText: t.description })),
         clients: Array.from(clientDnas.entries()),
         assets: Array.from(uploadedAssets.values()),
         aliases: new Map(),
+        rules: includeRules ? Array.from(clientDnas.keys()).flatMap(id=>globalFeedbackMiner.getCandidateRules(id)) : [],
         truncated: false,
       };
     }
@@ -79,19 +82,26 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     const requestedScope = requestedClientId && requestedClientId !== 'all' ? requestedClientId : undefined;
     const clientRows = await withRlsContext(db, scope, async (trx) =>
         (await sql<{ client_id: string; code: string | null; dna: unknown }>`
-          SELECT v.client_id, c.code, v.dna FROM hawa.client_dna_versions v
-          JOIN hawa.clients c ON c.id = v.client_id AND c.tenant_id = v.tenant_id
-          WHERE v.tenant_id = ${scope.tenantId}::uuid AND v.status = 'active'
+          SELECT c.id AS client_id, c.code, v.dna FROM hawa.clients c
+          LEFT JOIN hawa.client_dna_versions v ON c.id = v.client_id AND c.tenant_id = v.tenant_id AND v.status='active'
+          WHERE c.tenant_id = ${scope.tenantId}::uuid
             ${requestedScope ? sql`AND (c.id::text=${requestedScope} OR c.code=${requestedScope} OR 'client-' || c.code=${requestedScope})` : sql``}`.execute(trx)).rows);
     const aliases = new Map<string, string>();
     const clients: Array<[string, ClientDNA]> = [];
+    const rules: CandidateRuleProposal[] = [];
     for (const row of clientRows) {
-      const dna = (typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna) as ClientDNA | null;
-      if (!dna || typeof dna !== 'object') continue;
-      clients.push([row.client_id, dna]);
       if (row.code) {
         aliases.set(row.code, row.client_id);
         aliases.set(`client-${row.code}`, row.client_id);
+      }
+      const dna = (typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna) as ClientDNA | null;
+      if (dna && typeof dna === 'object') clients.push([row.client_id, dna]);
+      // The source/moderation/DNA statement supplies this request's snapshot. Another
+      // endpoint or a warm process projection must not determine what search can find.
+      if(includeRules) {
+        const learning=await withRlsContext(db,{...scope,clientId:row.client_id},
+          trx=>reconstructClientLearning(trx,scope.tenantId,row.client_id));
+        rules.push(...learning.rules);
       }
     }
 
@@ -158,6 +168,7 @@ export function registerSearchRoutes(ctx: RouteContext): void {
       clients,
       assets,
       aliases,
+      rules,
       truncated,
     };
   }
@@ -233,23 +244,20 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     }
 
     // Index candidate and promoted rules
-    for (const [cId] of state.clients) {
-      const rules = globalFeedbackMiner.getCandidateRules(cId);
-      for (const rule of rules) {
-        engine.indexItem({
-          id: rule.id,
-          category: 'rules',
-          clientId: cId,
-          title: rule.title,
-          subtitle: `Confidence: ${Math.round(rule.confidence * 100)}% · Freq: ${rule.frequency}`,
-          bodyText: `${rule.title} ${rule.ruleText} ${rule.category} ${rule.rationale}`,
-          tags: [rule.category, rule.status],
-          metadata: { confidence: rule.confidence, frequency: rule.frequency },
-          updatedAt: rule.promotedAt || new Date().toISOString(),
-        });
-      }
+    for (const rule of state.rules) {
+      engine.indexItem({
+        id: rule.id,
+        category: 'rules',
+        clientId: rule.clientId,
+        title: rule.title,
+        subtitle: `Heuristic score: ${rule.confidence.toFixed(2)} · Freq: ${rule.frequency}`,
+        bodyText: `${rule.title} ${rule.ruleText} ${rule.category} ${rule.rationale}`,
+        tags: [rule.category, rule.status],
+        status: rule.status,
+        metadata: { confidence: rule.confidence, frequency: rule.frequency },
+        updatedAt: rule.promotedAt || rule.provenance.recordedAt,
+      });
     }
-
     return engine;
   }
 
@@ -260,17 +268,17 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     const q = (c.req.query('q') || c.req.query('query') || '').trim();
     if (q.length > 512 || extractSearchTokens(q).length > 64) return problem(c,422,'Search Too Long','Use up to 512 characters and 64 search words.');
     const requestedClientId = c.req.query('clientId');
+    const category = (c.req.query('category') || 'all') as SearchCategory;
     let state: Searchable;
     try {
-      state = await searchable(auth, requestedClientId, q);
+      state = await searchable(auth, requestedClientId, q, category==='all' || category==='rules');
     } catch (err) {
       log.error('[core:search] Could not read what to search:', err);
-      return problem(c, 503, 'Database Unavailable', 'The search could not read the tasks, clients and assets; try again');
+      return problem(c, 503, 'Database Unavailable', 'The search could not read the tasks, clients, assets and rules; try again');
     }
 
     // A client named by its code is searched by its Postgres id, which is what the items carry.
     const clientId = requestedClientId ? state.aliases.get(requestedClientId) || requestedClientId : requestedClientId;
-    const category = (c.req.query('category') || 'all') as SearchCategory;
     const limit = parseInt(c.req.query('limit') || '25', 10);
     const offset = parseInt(c.req.query('offset') || '0', 10);
 

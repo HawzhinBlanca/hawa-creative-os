@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createDb, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { manifestFromOperations } from '../src/services/generated-manifest.js';
 
 /**
@@ -70,6 +71,7 @@ describe('/generate runs real QA', () => {
     const db = createDb(process.env.TEST_DATABASE_URL!);
     try {
       const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, db });
+      await persistClientDnaFixture(app,'c1000000-0000-4000-8000-000000000003',json);
       const { taskId } = await generate(app, 'c1000000-0000-4000-8000-000000000003', { title: 'Vitamin D3', headlineEn: 'Pure Vitamin D3 + K2 Drops', copyEn: '5000 IU, lab tested' });
       const desk = await (await app.request(`/tasks/${taskId}/review-desk`, { headers: { Authorization: 'Bearer test_bearer' } })).json();
       // The desk lists the text nodes of the revision Postgres stored, as they are.
@@ -91,6 +93,7 @@ describe('/generate with a database', () => {
     const tenantId = '00000000-0000-4000-a000-000000000001';
     const auth = { ...json, Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };
     const app = createAppWithClientFixtures({ testAuth: { roleHeader: true },  db });
+    await persistClientDnaFixture(app,'c1000000-0000-4000-8000-000000000001',auth,undefined,'client-office-1');
     const { taskId } = await generate(
       app,
       'c1000000-0000-4000-8000-000000000001',

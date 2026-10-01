@@ -52,6 +52,34 @@ async function start() {
 }
 afterAll(async()=>{for(const process of children) await stop('SIGTERM',process);await rm(work,{recursive:true,force:true});await db.destroy();await owner.destroy();});
 describe('Learning recovery across independent Core processes',()=>{
+  it('finds durable rules through cold search before another endpoint hydrates learning',async()=>{
+    let send=await start();
+    const action=randomUUID(),word=`Coldsearch${randomUUID().replaceAll('-','')}`;
+    const proposal=await send(`/clients/${clientId}/candidate-rules/propose`,{method:'POST',headers:{'Idempotency-Key':action},
+      body:JSON.stringify({title:word,category:'layout',ruleText:`Preserve ${word} hierarchy`})});
+    expect(proposal.status).toBe(201);const rule=(await proposal.json()).proposal;
+    await stop('SIGKILL');send=await start();
+    const lookup=(client=clientId)=>send(`/search?${new URLSearchParams({q:word,clientId:client,category:'rules'})}`);
+    const cold=await lookup();expect(cold.status).toBe(200);
+    const found=(await cold.json()).results.find((r:{id:string})=>r.id===rule.id);
+    expect(found).toMatchObject({id:rule.id,url:`#/dna?client=${clientId}`,badge:'PROPOSED'});
+    expect(found.subtitle).toContain('Heuristic score');expect(found.subtitle).not.toContain('Confidence');
+    expect((await (await lookup('client-drustee')).json()).results.some((r:{id:string})=>r.id===rule.id)).toBe(true);
+    expect((await (await lookup('c1000000-0000-4000-8000-000000000002')).json()).results).toEqual([]);
+    const other=await start();
+    expect((await other(`/clients/${clientId}/candidate-rules/${rule.id}/promote`,{method:'POST',body:'{}'})).status).toBe(200);
+    expect((await (await lookup()).json()).results.find((r:{id:string})=>r.id===rule.id).badge).toBe('PROMOTED');
+    expect((await other(`/clients/${clientId}/candidate-rules/${rule.id}/rollback`,{method:'POST',body:'{}'})).status).toBe(200);
+    expect((await (await lookup()).json()).results.find((r:{id:string})=>r.id===rule.id).badge).toBe('DISMISSED');
+    await sql.raw('REVOKE SELECT ON hawa.audit_events FROM hawa_app').execute(owner);
+    try {
+      expect((await lookup()).status).toBe(503);
+      // A task-only search has no rule authority to acquire and does not depend on it.
+      expect((await send(`/search?${new URLSearchParams({q:word,clientId,category:'tasks'})}`)).status).toBe(200);
+    }
+    finally {await sql.raw('GRANT SELECT ON hawa.audit_events TO hawa_app').execute(owner);}
+    await stop('SIGKILL',other.process);await stop('SIGKILL',send.process);
+  },30000);
   it('retains pending instructions and cold moderation after an actual SIGKILL',async()=>{
     let send=await start();
     const action=randomUUID(),body={title:'Cold process instruction',category:'layout',ruleText:'Keep a deliberate hierarchy'};
