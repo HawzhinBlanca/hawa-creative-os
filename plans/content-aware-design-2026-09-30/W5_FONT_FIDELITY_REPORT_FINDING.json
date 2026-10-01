@@ -1,0 +1,22 @@
+{
+  "observedAt": "2026-10-01T07:31:04.727Z",
+  "temporaryRendererOnly": true,
+  "probeVerdict": "unmeasured",
+  "probeMeasured": false,
+  "probeReason": "no-rasteriser",
+  "reportedManifestVerdict": "exact",
+  "fontReviewFindingCodes": [],
+  "providerCalls": 0,
+  "sourceSha256": {
+    "packages/creative/src/studio/render-layout-v2.ts": "1c3691f8b61ae7000785bd313d1c5b7026689531c67ee890ddc6d55b22f42ce6",
+    "packages/creative/src/studio/hard-qa.ts": "68cbaa79923396bf4d471501ee4a6bacfc20107d283a118a25c1d8bb62086c54"
+  },
+  "limits": [
+    "Actual exported probe/manifest/review-finding chain with temporary failing executable, not a live outage or whole shipping-QA admission test.",
+    "No production executable, policy or fonts modified.",
+    "Acceptance regression NOT_RUN; repair pending."
+  ],
+  "sourceSeal": "f767ddfae2ecd3bcd024d659d8c2d6a9ed4c63a1",
+  "cause": "probeFontFidelity returns exact for every verdict other than stand-in; the two-value manifest and reviewFindings lose unmeasured/uncovered states.",
+  "nextAction": "Add actual probe/manifest/render/review and Core evidence regressions, carry measured/unmeasured/uncovered truth to review, preserve exact copy and existing hard QA/provider bounds; do not fabricate native quality or make a warning a new gate without an explicit policy decision."
+}

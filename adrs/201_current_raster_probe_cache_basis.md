@@ -1,6 +1,6 @@
 # ADR201 — Current raster inputs before ink and sentinel cache reuse
 
-Date: 2026-10-01. Status: connected source engineering qualified; exact qualification pending.
+Date: 2026-10-01. Status: source engineering qualified; product admission open.
 Requirements: FR-038, FR-041, NFR-012, NFR-024.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/11_QA_RTL_MULTILINGUAL.md;
 ADR116/118/123/200; W5_RASTER_PROBE_CACHE_FINDING.json.
@@ -48,3 +48,6 @@ external mutation during a render remains outside this cache repair's guarantee.
 
 
 Six original regressions fail/one unchanged-input control passes. Initial connected21pass/2 historical fake-contract failures retained; corrected fakes answer --version independently of raster logging without weakening count/environment assertions. Final connected12files93pass/0fail/0skip,673 strict test roots/lint pass. W5_RASTER_PROBE_CACHE_PROOF.json; exact seal and product admission pending.
+
+
+Exact sealedf767ddfae2ecd3bcd024d659d8c2d6a9ed4c63a1: all8,6580pass/0fail/67skip across666 passed files/6 skipped;673 strict roots,1686 blueprint checks,newest production dump restored in isolation and mandatory negative-flag refusal pass. Raster/font/config cache and transient sentinel recovery qualified in source; no deploy or native Canva/human/product admission. W5_RASTER_PROBE_CACHE_GATE_EVIDENCE.json retains exact gate. Next actual temporary-renderer diagnostic: probeFontScripts Amiri Arabic is unmeasured, getFontFidelityManifest reports exact and reviewFindings emits no font warning. W5_FONT_FIDELITY_REPORT_FINDING.json is an exported probe/manifest/review-chain diagnostic, not whole shipping admission or a live outage; acceptance regression NOT_RUN/repair pending.

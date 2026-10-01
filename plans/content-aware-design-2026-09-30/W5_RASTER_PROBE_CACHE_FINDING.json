@@ -19,7 +19,8 @@
   "nextAction": "Add actual same-process raster-probe regression for renderer/font/config identity; prevent stale measured or sentinel results, preserve unchanged-input hits and existing hard QA.",
   "resolution": {
     "adr": "ADR201",
-    "status": "CONNECTED_REGRESSION_QUALIFIED_EXACT_GATE_PENDING",
+    "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
+    "testedSeal": "f767ddfae2ecd3bcd024d659d8c2d6a9ed4c63a1",
     "proof": "W5_RASTER_PROBE_CACHE_PROOF.json",
     "deployed": false
   }

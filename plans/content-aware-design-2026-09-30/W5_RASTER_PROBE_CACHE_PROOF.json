@@ -1,7 +1,7 @@
 {
   "adr": "ADR201",
   "date": "2026-10-01",
-  "status": "CONNECTED_ENGINEERING_QUALIFIED_EXACT_GATE_PENDING",
+  "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-038",
     "FR-041",
@@ -57,7 +57,23 @@
     "Original diagnostic did not establish a live outage; Core also invalidates at input capture.",
     "Renderer identity is not attestation of every shared-library byte or arbitrary wrapper dependency; immutable deployment artifacts remain required.",
     "Custom configuration avoids result/sentinel reuse rather than claiming incomplete include attestation.",
-    "Exact sealed engineering gate pending.",
     "Broader W5/W6/native Canva/human/recovery/product admission remains open."
-  ]
+  ],
+  "exactQualification": {
+    "testedSeal": "f767ddfae2ecd3bcd024d659d8c2d6a9ed4c63a1",
+    "runtimeCommit": "1af65b2ac87a5cebb78f6b9b48fe1b391a3a1264",
+    "allStages": 8,
+    "testsPassed": 6580,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 666,
+    "filesSkipped": 6,
+    "strictRoots": 673,
+    "blueprintChecksAtSeal": 1686,
+    "gateEvidence": "W5_RASTER_PROBE_CACHE_GATE_EVIDENCE.json",
+    "fullTestLog": "output/qualification/2026-10-01/f767ddfa/FULL_TEST_SUITE_RUN.log",
+    "fullTestLogSha256": "3838b41fd0b8b7c15beedd1d574b29e6dd4a8d9e0ab814968f35dcd279491eb1",
+    "deployed": false,
+    "productAdmission": false
+  }
 }
