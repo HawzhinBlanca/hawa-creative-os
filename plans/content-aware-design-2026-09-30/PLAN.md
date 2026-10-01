@@ -317,3 +317,12 @@ First exact gate d765b706:6491pass/1fail/67skip retained. R04 fake task and
 foreign-candidate refusal fixture corrected;14files/101pass. No access check
 was weakened; non-disclosure404 replaces candidate-existence disclosure403.
 Repeated exact engineering gate remains pending.
+
+Corrected exact seal308873a6 passes all8 engineering stages,6492pass/0fail/
+67skip,656passed files/6skipped,663 strict roots, newest production
+dump in isolation and mandatory negative-flag refusal. Source/test/gate bytes
+remain unchanged through evidence-only sealing. Recorded in
+W6_LEARNING_GOVERNANCE_GATE_EVIDENCE.json; initial full failure retained.
+No deployment/paid provider calls. Recovery of pending queue and original
+Studio reviewer role is the next source-inspected boundary, reproduction pending;
+revision-level polarity/taste/native/human/whole-product admission remain open.

@@ -1,7 +1,7 @@
 {
   "date": "2026-10-01",
   "decision": "ADR193",
-  "status": "CONNECTED_QUALIFIED_FULL_GATE_PENDING",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_PRODUCT_OPEN",
   "requirements": [
     "FR-022",
     "FR-052",
@@ -21,7 +21,8 @@
     "Migration/RLS expansion 44 passed. Broader 86 pass / 1 fail exposed a role-body test pretending to be an unauthorized actor. Replaced it with a verified operator requesting director authority; strict malformed-role refusal remains.",
     "Initial type command refused local tsx IPC under sandbox; rerun with approved local IPC, no compiler or coverage bypass.",
     "Receipt expansion87pass/1fail exposed a barrier test assuming HTTP start order equaled transaction order. Corrected control proves promotion has reached its database lock before dispatching dismissal; no runtime FIFO guarantee is invented.",
-    "First exact full gate on d765b706 retained6491pass/1fail/67skip. R04 supplied a fabricated non-UUID task to an explicit instruction and expected disclosure of a foreign candidate. Removed invented task; 404 keeps the candidate absent from foreign scope. Existing malformed-task422 and actual cross-client403/404 controls remain."
+    "First exact full gate on d765b706 retained6491pass/1fail/67skip. R04 supplied a fabricated non-UUID task to an explicit instruction and expected disclosure of a foreign candidate. Removed invented task; 404 keeps the candidate absent from foreign scope. Existing malformed-task422 and actual cross-client403/404 controls remain.",
+    "Corrected exact clean seal 308873a6 passes all8 stages, 6492pass/0fail/67skip,663 typed roots/newest production dump/negative refusal. Runtime/tests/infra/gate remain unchanged through subsequent evidence-only sealing. No deployment/provider call or product admission."
   ],
   "connected": {
     "files": 14,
@@ -123,10 +124,26 @@
     "hawa-learning-governance-full-suite-first-20261001.log": {
       "path": "/tmp/hawa-learning-governance-full-suite-first-20261001.log",
       "sha256": "27fb778b535d415065fdee19c52c716be6a565a8f064491e9d46e6afd1a6e3f8"
+    },
+    "FULL_TEST_SUITE_RUN.log": {
+      "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/FULL_TEST_SUITE_RUN.log",
+      "sha256": "b60b4e770292130101a40a169d3c8ebd2a6b85397b22336c54af0cb7c3a51336"
+    },
+    "NEGATIVE_FLAG_REFUSAL.log": {
+      "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/NEGATIVE_FLAG_REFUSAL.log",
+      "sha256": "92a0b3651f5dafe02ac675a422aeaee90c7798c417eb543993b0772e7b26544a"
+    },
+    "TEST_DB_PROVISION.log": {
+      "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/TEST_DB_PROVISION.log",
+      "sha256": "82f52ba1d1e4c95f1f9dc102e0a15c98df719e8f0deba08107511c009734a92e"
+    },
+    "hawa-learning-governance-full-gate-corrected-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-full-gate-corrected-20261001.log",
+      "sha256": "b2ca621d99019b027cb402f110fb6c5ecec61a75e55b163a664ad87f64a44b75"
     }
   },
   "sources": {
-    "adrs/193_scoped_learning_and_atomic_moderation.md": "c088413cae6617e2c41206bceccbe52ce5367f5e95e5087d22623558ac237c0f",
+    "adrs/193_scoped_learning_and_atomic_moderation.md": "3a63636ed26c775ae81e3c0462488b42197381af89d68e6204cc55d3d8159527",
     "apps/core/src/routes/client-learning.routes.ts": "b03236e96a373e1cd9201b0f4c07bcc7cf868a48d57d312e616bae5a6a575aca",
     "apps/core/src/services/learning-governance.ts": "22050b17171e6c3ac96154d941040d89414abb4ed6fe7b53787479056c9f6a04",
     "apps/core/test/learning-governance-boundaries.test.ts": "72a8c8de020b997dcd812e9ff456c0364e1bccbacabcc8195ab3dedc4c941660",
@@ -147,5 +164,30 @@
     "skipped": 67,
     "suiteLog": "/tmp/hawa-learning-governance-full-suite-first-20261001.log",
     "gateLog": "/tmp/hawa-learning-governance-full-gate-20261001.log"
+  },
+  "testedSeal": "308873a614c9cceb03d0dd48b7ec421a6ab2e902",
+  "sourceCommit": "ed5e8b5d",
+  "fullGate": {
+    "passed": 6492,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 656,
+    "filesSkipped": 6,
+    "suiteSeconds": 214.93,
+    "stagesPassed": 8,
+    "newestProductionDump": "PASS in isolated test database",
+    "negativeFlagRefusal": "PASS",
+    "admissionQualified": false,
+    "log": "/tmp/hawa-learning-governance-full-gate-corrected-20261001.log"
+  },
+  "nextBoundary": {
+    "status": "SOURCE_INSPECTION_ONLY_REPRODUCTION_PENDING",
+    "finding": "Candidate queue is process-local and Studio feedback schema/repository stores actor ID without the original reviewer role. Restart projection and historical role reconstruction need an explicit reproducible repair, not invented attribution.",
+    "sources": {
+      "packages/creative/src/feedback-miner.ts": "599c5cb6236bbb95e707db94f2741d1559aface4063df4c823daae235cd49db0",
+      "apps/core/src/routes/design-studio.routes.ts": "f5a135bd89e941771a63034cc7daa856d7e3de0d1a15cdbf05b04a66f0e6e1af",
+      "packages/db/src/repositories/design-studio.repository.ts": "c42b9a4e5153ddb0795e672ddd289790562ab83aa7d9d5e151223fbe09fadace",
+      "packages/db/src/types.ts": "ce340f4e9597b536aab170c7a513c8793628550f625d5b1e866d5042bf658074"
+    }
   }
 }

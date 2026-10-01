@@ -1,6 +1,6 @@
 # ADR193 — Scoped learning reads and atomic human moderation
 
-Date: 2026-10-01. Status: connected qualification passed; exact engineering gate pending.
+Date: 2026-10-01. Status: exact engineering qualification passed; product admission open.
 Requirements: FR-022, FR-052, FR-053, FR-054, FR-055, NFR-006, NFR-012.
 Sources: MASTER_SPEC.md; docs/08_MEMORY_RAG_CLIENT_DNA.md;
 docs/18_FEEDBACK_LEARNING.md; docs/14_SECURITY_THREAT_MODEL.md; ADR191/192.
@@ -65,3 +65,10 @@ non-UUID task and expected foreign-candidate disclosure. Explicit instructions
 need no invented task; a foreign candidate now returns404 without disclosing
 existence. Corrected14files/101pass; malformed/actual scoped controls remain.
 The repeated exact full gate remains pending.
+
+Corrected exact seal308873a6 passes all8 mandatory engineering stages:
+6492pass/0fail/67skip across656passed files/6skipped,663 current
+strict roots, newest production dump in isolation and negative-flag refusal.
+W6_LEARNING_GOVERNANCE_GATE_EVIDENCE.json records the exact candidate.
+This supersedes pending qualification status above; prior failures remain.
+No deployment or provider call; candidate rebuild/taste/native/product open.
