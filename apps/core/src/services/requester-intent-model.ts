@@ -15,7 +15,7 @@
  * say "new design", or say it is unsure; it cannot start anything by itself.
  *
  * ADR-200: the office turn reads an office member's words through the same ledger and allowance
- * (`readOnce`, reader `office`; office-intent-model.ts).
+ * (`readOnce`, reader `office`; office-intent-model.ts), with no schema change: see `ledgerUpdateId`.
  */
 import { randomUUID } from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
@@ -105,6 +105,21 @@ export function createRequesterIntentModel(db: Kysely<Database>, options: { fetc
 }
 
 /**
+ * ADR-200: an office reading's row in hawa.requester_intent_calls. The table allows one row per
+ * Telegram update and no reader column, and an office member's update that the office turn leaves to
+ * intake may still be read by the requester router. So an office reading is keyed by the update id
+ * plus 2^52 (Telegram update ids are far below it; both stay safe JavaScript integers), and its
+ * reservation is marked `reader: 'office'` with the real `updateId`. The admission trigger, the
+ * allowance and the replay rule are those of every intake-router row.
+ */
+export const OFFICE_UPDATE_OFFSET = 2 ** 52;
+export function ledgerUpdateId(reader: 'requester' | 'office', updateId: number): number {
+  if (reader === 'requester') return updateId;
+  if (!Number.isSafeInteger(updateId) || updateId <= 0 || updateId >= OFFICE_UPDATE_OFFSET) throw new Error('Unkeyable office update');
+  return OFFICE_UPDATE_OFFSET + updateId;
+}
+
+/**
  * One paid reading of one Telegram update by one reader (ADR-144; ADR-200 adds the office reader),
  * admitted in the ledger and the office's shared allowance (role intake_router) before it is sent.
  * A second attempt for the same update and reader finds the row and uses its stored decision, or none
@@ -112,11 +127,15 @@ export function createRequesterIntentModel(db: Kysely<Database>, options: { fetc
  * admit OpenAI, a refused allowance, a failed call or an answer that does not parse.
  */
 export async function readOnce<D extends object>(db: Kysely<Database>, options: { fetcher?: typeof fetch; apiKey?: () => string | undefined },
-  input: { reader: 'requester' | 'office'; tenantId: string; updateId: number; chatId: string; clientId: string | null;
+  input: { reader: 'requester' | 'office'; tenantId: string; updateId: number; chatId: string;
+    /** The client the call is charged to (the allowance's client scope); it must be one of `egressClients`. */
+    clientId: string;
     /** Every client whose words or titles the request carries: each must admit OpenAI. */
     egressClients: string[]; body: (model: string) => string; parse: (value: unknown) => D | null }): Promise<D | null> {
   const key = (options.apiKey ?? (() => process.env.OPENAI_API_KEY))();
-  if (!key || key.startsWith('mock-') || !input.egressClients.length) return null;
+  if (!key || key.startsWith('mock-') || !input.egressClients.includes(input.clientId)) return null;
+  if (input.reader === 'office' && !(Number.isSafeInteger(input.updateId) && input.updateId > 0 && input.updateId < OFFICE_UPDATE_OFFSET)) return null;
+  const ledgerId = ledgerUpdateId(input.reader, input.updateId);
   const model = resolveModel('text');
   const body = input.body(model);
   const scope = { tenantId: input.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
@@ -127,17 +146,18 @@ export async function readOnce<D extends object>(db: Kysely<Database>, options: 
     const admitted = await withRlsContext(db, scope, async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${lock}, 0))`.execute(trx);
       const prior = (await sql<{ status: string; decision: unknown }>`SELECT status, decision FROM hawa.requester_intent_calls
-        WHERE tenant_id = ${input.tenantId}::uuid AND reader = ${input.reader} AND update_id = ${input.updateId}`.execute(trx)).rows[0];
+        WHERE tenant_id = ${input.tenantId}::uuid AND update_id = ${ledgerId}`.execute(trx)).rows[0];
       if (prior) return { prior: prior.status === 'completed' ? input.parse(prior.decision) : null };
       for (const client of new Set(input.egressClients)) {
         if (!await egressAllowed(trx, input.tenantId, client)) return { prior: null, skip: true };
       }
-      const reservation = reserveStudioText(body);
+      const quote = reserveStudioText(body);
+      const reservation = input.reader === 'office' ? { ...quote, reader: 'office', updateId: input.updateId } : quote;
       if (reservation.usd > 0.5) return { prior: null, skip: true };
       const id = randomUUID();
-      await sql`INSERT INTO hawa.requester_intent_calls (id, tenant_id, update_id, chat_id, client_id, model, request_sha256, reservation, reader)
-        VALUES (${id}::uuid, ${input.tenantId}::uuid, ${input.updateId}, ${input.chatId}, ${input.clientId}::uuid, ${model},
-          ${reservation.requestSha256}, ${JSON.stringify(reservation)}::jsonb, ${input.reader})`.execute(trx);
+      await sql`INSERT INTO hawa.requester_intent_calls (id, tenant_id, update_id, chat_id, client_id, model, request_sha256, reservation)
+        VALUES (${id}::uuid, ${input.tenantId}::uuid, ${ledgerId}, ${input.chatId}, ${input.clientId}::uuid, ${model},
+          ${reservation.requestSha256}, ${JSON.stringify(reservation)}::jsonb)`.execute(trx);
       return { id };
     });
     if ('prior' in admitted) return admitted.prior ?? null;

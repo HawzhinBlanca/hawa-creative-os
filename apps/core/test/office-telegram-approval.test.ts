@@ -5,6 +5,7 @@ import { createApp } from '../src/app.js';
 import { projectLifecycleDesignOutcome, projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
 import { OFFICE_TURN_RULES, openAskIsCurrent, plainYes, readOfficeIntent, referencedDraft, sendConfirmationOn,
   unambiguousApproval, type QueuedDraft } from '../src/services/office-telegram-turn.js';
+import { OFFICE_UPDATE_OFFSET, ledgerUpdateId } from '../src/services/requester-intent-model.js';
 import { createOfficeIntentModel, officeIntentRequestBody, parseOfficeDecision, type OfficeIntentModel,
   type OfficeModelDecision, type OfficeModelInput } from '../src/services/office-intent-model.js';
 import { reserveStudioText, studioTextUsage } from '@hawa/creative';
@@ -1079,18 +1080,22 @@ describe('the words that name a draft and say yes (ADR-200)', () => {
 });
 
 /**
- * ADR-200: the real office reader, against its ledger (migration 074: hawa.requester_intent_calls,
- * reader `office`, no client) and the office's shared allowance (role intake_router). No paid call:
+ * ADR-200: the real office reader, against its ledger (hawa.requester_intent_calls with no schema
+ * change: keyed by the update id plus 2^52 and marked `reader: 'office'` in its reservation) and the
+ * office's shared allowance (role intake_router). No paid call:
  * the provider is a fixture. KAAE's active DNA is given OpenAI consent here (this file's own database).
  */
-describe('the office reading\'s paid call (ADR-200, migration 074)', () => {
+describe('the office reading\'s paid call (ADR-200)', () => {
   const key = () => ['sk', 'office', 'fixture'].join('-');
   const completion = (decision: Record<string, unknown>) => new Response(JSON.stringify({ id: 'chatcmpl-office-1', model: resolveModel('text'),
     usage: { prompt_tokens: 900, completion_tokens: 40, total_tokens: 940 },
     choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(decision) } }] }), { headers: { 'x-request-id': 'req_office_1' } });
-  const ledger = async (update: number) => (await sql<{ reader: string; client_id: string | null; status: string; cost_usd: string | null;
-    decision: unknown; diagnostic: string | null }>`SELECT reader, client_id, status, cost_usd, decision, diagnostic FROM hawa.requester_intent_calls
-    WHERE tenant_id = ${tenantId}::uuid AND update_id = ${update} ORDER BY reader`.execute(owner)).rows;
+  /** The update's ledger rows, the office reading's first; `reader` is the reservation's mark ('requester' when unmarked). */
+  const ledger = async (update: number) => (await sql<{ reader: string; update_id: string; client_id: string | null; status: string;
+    cost_usd: string | null; decision: unknown; diagnostic: string | null; reservation: Record<string, unknown> }>`SELECT
+      coalesce(reservation->>'reader', 'requester') AS reader, update_id, client_id, status, cost_usd, decision, diagnostic, reservation
+    FROM hawa.requester_intent_calls WHERE tenant_id = ${tenantId}::uuid AND update_id IN (${update}, ${OFFICE_UPDATE_OFFSET + update})
+    ORDER BY update_id DESC`.execute(owner)).rows;
   const input = (updateId: number): OfficeModelInput => ({ tenantId, updateId, chatId: String(OFFICE_A), text: 'the Sewa one looks good', replyTo: null,
     history: [], drafts: [{ title: 'Spring concert poster', sent: '12 minutes ago', lastShown: false, photos: 0, requester: 'Sewa', clientId },
       { title: 'Teachers day card', sent: '10 minutes ago', lastShown: true, photos: 0, requester: 'Dara', clientId }] });
@@ -1110,7 +1115,7 @@ describe('the office reading\'s paid call (ADR-200, migration 074)', () => {
   afterAll(() => { process.env.HAWA_OFFICE_CONFIRM_SEND = 'off'; });
   beforeEach(() => forgetOfficeTurns());
 
-  it('admits one call per update in the shared allowance, charged to no client, and never calls again', async () => {
+  it('admits one call per update in the shared allowance, with no schema change, and never calls again', async () => {
     const fetcher = vi.fn(async () => completion({ kind: 'approve', draft: 1, change: '', confidence: 0.92 }));
     const reader = createOfficeIntentModel(db, { fetcher: fetcher as any, apiKey: key });
     const update = nextUpdate++;
@@ -1118,11 +1123,16 @@ describe('the office reading\'s paid call (ADR-200, migration 074)', () => {
     expect(await reader.read(input(update))).toEqual({ kind: 'approve', draft: 1, change: '', confidence: 0.92 });
     expect(fetcher).toHaveBeenCalledTimes(1);
     const [row] = await ledger(update);
-    expect(row).toMatchObject({ reader: 'office', client_id: null, status: 'completed', diagnostic: 'INTENT_READ' });
+    expect(row).toMatchObject({ reader: 'office', update_id: String(OFFICE_UPDATE_OFFSET + update), client_id: clientId, status: 'completed',
+      diagnostic: 'INTENT_READ', reservation: { reader: 'office', updateId: update } });
+    expect(ledgerUpdateId('office', update)).toBe(OFFICE_UPDATE_OFFSET + update);
+    expect(() => ledgerUpdateId('office', OFFICE_UPDATE_OFFSET)).toThrow();
     expect(Number(row.cost_usd)).toBeGreaterThan(0);
-    const budget = (await withRlsContext(owner, scope, (trx) => sql<{ b: any }>`SELECT hawa.studio_scope_budget_internal(${tenantId}::uuid, NULL) AS b`.execute(trx))).rows[0].b;
+    const budget = (await withRlsContext(owner, scope, (trx) => sql<{ b: any }>`SELECT hawa.studio_scope_budget_internal(${tenantId}::uuid, ${clientId}::uuid) AS b`.execute(trx))).rows[0].b;
     const role = budget.scopes.find((s: any) => s.scope === 'role' && s.subject === 'intake_router');
     expect(Number(role.spentUsd)).toBeGreaterThanOrEqual(Number(row.cost_usd));
+    const charged = budget.scopes.find((s: any) => s.scope === 'client');
+    expect(Number(charged.spentUsd)).toBeGreaterThanOrEqual(Number(row.cost_usd));
     // The same update may still be read once by the requester router: its own row, beside this one.
     await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.requester_intent_calls (tenant_id, update_id, chat_id, client_id, model, request_sha256, reservation)
       VALUES (${tenantId}::uuid, ${update}, ${String(OFFICE_A)}, ${clientId}::uuid, 'gpt-4.1-mini', ${'a'.repeat(64)},

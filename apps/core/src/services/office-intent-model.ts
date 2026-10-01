@@ -4,8 +4,9 @@
  * office member's words about the drafts waiting for review, in the context of their chat.
  *
  * It is the intake router of ADR-144 with another reader: the same model (resolveModel('text')), the
- * same ledger (hawa.requester_intent_calls, reader `office`), the same shared daily allowance (role
- * intake_router), at most one call per Telegram update, and no call at all unless:
+ * same ledger (hawa.requester_intent_calls; an office row is keyed and marked as `ledgerUpdateId` says,
+ * with no schema change), the same shared daily allowance (role intake_router), at most one call per
+ * Telegram update, and no call at all unless:
  *  - an OpenAI key is configured (not a mock);
  *  - drafts wait for review, and the client of every one of them admits OpenAI for client messages
  *    (their titles and requesters' names are in the request);
@@ -108,8 +109,11 @@ export function createOfficeIntentModel(db: Kysely<Database>, options: { fetcher
     async read(input) {
       // A draft whose client is unknown is not sent anywhere: no reading.
       if (!input.drafts.length || input.drafts.some((d) => !d.clientId)) return null;
+      // Charged to the client of the draft this member saw last (else the newest): every listed client
+      // consented, and the office and role scopes count the call whichever client it is charged to.
+      const charged = (input.drafts.find((d) => d.lastShown) ?? input.drafts[0]).clientId!;
       return readOnce(db, options, { reader: 'office', tenantId: input.tenantId, updateId: input.updateId, chatId: input.chatId,
-        clientId: null, egressClients: [...new Set(input.drafts.map((d) => d.clientId!))],
+        clientId: charged, egressClients: [...new Set(input.drafts.map((d) => d.clientId!))],
         body: (model) => officeIntentRequestBody(model, input), parse: parseOfficeDecision });
     },
   };
