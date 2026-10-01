@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T02:20:32Z",
+  "generatedAt": "2026-10-01T02:25:36Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 725,
+  "fileCount": 727,
   "files": [
     {
       "path": ".dockerignore",
@@ -934,8 +934,8 @@
     },
     {
       "path": "adrs/190_controlled_refinement_geometry_and_attempt_evidence.md",
-      "sha256": "718a0c8a28b6f9afb335eee6c9b628c99117f318c25177cca71707aa59fc46ae",
-      "bytes": 3056
+      "sha256": "add0d8e60bb92e1e49e1f516f954f4a231741c7169fecabfdf8afeee908b23f0",
+      "bytes": 3646
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1409,8 +1409,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "3a4e3c2041d9419e96912972d0ce0273f2bd85269b96a0a8cba5fc5433b6d40c",
-      "bytes": 19403
+      "sha256": "328d56f7f51ec4113fc1cc47d53e84f3c926d6065234537922dfb5d145f1e65f",
+      "bytes": 20477
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1478,9 +1478,19 @@
       "bytes": 2645
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/W5_REFINEMENT_BOUNDARY_GATE_EVIDENCE.json",
+      "sha256": "dcc0a00ea1ad18de283fe64e50d06e945106e92b294c187489a7524d729697a9",
+      "bytes": 2115
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/W5_REFINEMENT_BOUNDARY_PROOF.json",
-      "sha256": "01c0e1d30434c06755db981020466c2dc345762b643b57ac5d09cc723c48f3c3",
-      "bytes": 4179
+      "sha256": "8e4d96ff7a6511be5ad0c1fc5ca1d63201f30ef6d1bab6b496032b6885a94ff4",
+      "bytes": 5027
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W6_CLIENT_ATTRIBUTION_FINDING.json",
+      "sha256": "75d0725ef6d2306610ab8a5b94b6f992cebc2864acf95faac697575a0e663b3d",
+      "bytes": 957
     },
     {
       "path": "plans/early-requester-hold-2026-10-01/LIVE_INFRA_READBACK.json",
@@ -2699,8 +2709,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "ad54da3836c75e6f4fb462b685c7332f8942c456f1f42a1ea08f9ee1808d3ea5",
-      "bytes": 598680
+      "sha256": "939d05a7d0dbaa702096d935d0a3a7d02d3d47a33b13be0069ee27b8bcd33a2e",
+      "bytes": 600156
     },
     {
       "path": "plans/user-stories.csv",

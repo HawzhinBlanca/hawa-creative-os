@@ -1,7 +1,7 @@
 # ADR190 — Controlled refinement geometry and complete attempt evidence
 
 Date: 2026-10-01
-Status: accepted for implementation; qualification pending
+Status: exact source engineering qualified; native/human/product admission open
 Requirements: FR-034, FR-038, FR-041, NFR-014
 Sources: MASTER_SPEC.md sections2/6; docs/05_CREATIVE_ENGINE.md;
 docs/08_MEMORY_RAG_CLIENT_DNA.md; docs/11_QA_RTL_MULTILINGUAL.md; ADR172 W5.
@@ -50,3 +50,8 @@ Retained reduced-response regression; malicious/malformed geometry and identity
 controls; exact optional-layer/copy/style preservation; rejected-attempt receipt and
 round bounds; connected pipeline/Core evidence; build/types and sealed release gate.
 Native/human quality and broader local optimization remain open.
+
+
+## Exact engineering qualification
+
+Sealb3241f783b1736746db99a915e6d55fd19ddeaf0 passes all8 stages,6453 tests/0 failures/67 skips,659 typed roots and1602 blueprint checks; newest production dump invariants and actual refusal control pass. Original17-failure and122/2 connected runs retained.130 current connected tests and overlapping25 native structured-transfer controls pass; build/lint pass. Source is not deployed and real Canva/native/human/W5/W6/recovery admission remains open. Proof: plans/content-aware-design-2026-09-30/W5_REFINEMENT_BOUNDARY_PROOF.json.

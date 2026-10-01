@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "FOCUSED_ENGINEERING_PASS_EXACT_SEALED_GATE_PENDING",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_NATIVE_HUMAN_OPEN",
   "decision": "ADR190; geometry-only-v1; scoped live-copy identities outrank an incomplete generated layout",
   "requirements": [
     "FR-034",
@@ -74,6 +74,26 @@
     "/tmp/hawa-refinement-boundary-authority-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
     "/tmp/hawa-refinement-boundary-transfer-20261001.log": "1ff014ae276d394ceaf033b71ddca7ab120dd45c48faa57e43549d2dc64aeaad",
     "/tmp/hawa-refinement-boundary-types-20261001.log": "95813fb7b5df141bc0da9e6b9d26f75ac892c563461549a680522ecb4ab1f928",
-    "/tmp/hawa-refinement-boundary-lint-20261001.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5"
-  }
+    "/tmp/hawa-refinement-boundary-lint-20261001.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
+    "/tmp/hawa-refinement-boundary-full-gate-20261001.log": "5a4b38e8428966e11e8a712e22b51ca5190af3d0e2f8c7346231c7fb29a1537d",
+    "output/release-gate/FULL_TEST_SUITE_RUN.log": "e1a01e1e2d55e37f1fe88d053532ef27384e5a868531b44e2a2057579ff56bca"
+  },
+  "testedSeal": "b3241f783b1736746db99a915e6d55fd19ddeaf0",
+  "sourceCandidate": "7c2039557f4ca92ecff20616c3495d7eae535769",
+  "fullGate": {
+    "stagesPassed": 8,
+    "passed": 6453,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 652,
+    "filesSkipped": 6,
+    "durationSeconds": 214.81,
+    "strictTestRoots": 659,
+    "blueprintChecks": 1602,
+    "newestProductionDump": "PASS",
+    "negativeRefusal": "PASS",
+    "productAdmission": false,
+    "deployed": false
+  },
+  "typecheckFollowUp": "Final exact gate recompiles659 current roots, including the native-transfer assertions; PASS"
 }
