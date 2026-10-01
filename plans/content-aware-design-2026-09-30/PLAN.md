@@ -326,3 +326,25 @@ W6_LEARNING_GOVERNANCE_GATE_EVIDENCE.json; initial full failure retained.
 No deployment/paid provider calls. Recovery of pending queue and original
 Studio reviewer role is the next source-inspected boundary, reproduction pending;
 revision-level polarity/taste/native/human/whole-product admission remain open.
+
+## W6 durable learning recovery — 1 October 2026, ADR194
+
+Actual separate-process SIGKILL reproduction on28e4f0a8 loses a pending rule.
+Recover from existing scoped immutable source ledgers/latest moderation/current
+DNA in one MVCC SQL statement, with stable source/pattern IDs and recorded times.
+New Studio feedback captures original verified role/client; legacy unknown stays
+unknown. Immutable source triggers and client-level RLS preserve history and scope.
+Feedback history carries the authenticated database actor. Source commit precedes
+projection; failed recovery503 and exact retry reconcile without duplicating.
+Cold moderation reconstructs under the existing PG client lock; separate-process
+concurrent changes compose current DNA. Shared active text survives another
+candidate's retirement. Legacy moderation IDs/digests remain stored identities;
+rule approval alone does not invent design approval, current rejection remains.
+
+Initial crash failure and first expanded33pass/2fail retained. Trigger OLD.category
+access repaired using separate branches; historical reader fixture now has actual
+client membership. Connected15files/131pass, HTTP2/37, legacy/domain4/34 and664
+strict roots/lint pass. Synthetic500-source local recovery profile recorded;
+no cache/queue/model infrastructure is added. Exact engineering gate pending.
+W6_LEARNING_RECOVERY_PROOF.json. Source only; live infrastructure2c4d61ec remains
+independently qualified. Revision polarity/taste/native/Canva/human/product open.

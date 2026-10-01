@@ -78,6 +78,8 @@ export interface LearningInventoryItem {
 }
 
 export interface CandidateRuleProposal {
+  /** Monotone stored moderation revision, never supplied by a model or caller. */
+  moderationRevision?: number;
   refinementEvidence?: ApprovedRefinementEvidence[];
   id: string;
   clientId: string;
@@ -235,11 +237,11 @@ export class FeedbackMiner {
         const existingPromoted = this.getPromotedRules(clientId);
         const conflicts = this.detectConflicts(notes, existingPromoted);
 
-        const id = `crule_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
         const sha256Digest = crypto
           .createHash('sha256')
           .update(`${clientId}:${record.id || record.taskId}:${notes}`)
           .digest('hex');
+        const id = `crule_${sha256Digest}`;
 
         const proposal: CandidateRuleProposal = {
           id,
@@ -273,16 +275,16 @@ export class FeedbackMiner {
           dataLineage: 'client_owned',
         };
 
-        const ruleKey = `${clientId}:feedback:${proposal.sha256Digest.substring(0, 16)}`;
+        const ruleKey = `${clientId}:feedback:${proposal.sha256Digest}`;
         if (!this.candidateRules.has(ruleKey)) {
           this.candidateRules.set(ruleKey, proposal);
           newlyProposed.push(proposal);
         } else {
           const existing = this.candidateRules.get(ruleKey)!;
-          existing.frequency += 1;
           if (!existing.evidenceTaskIds.includes(record.taskId)) {
             existing.evidenceTaskIds.push(record.taskId);
           }
+          existing.frequency = existing.evidenceTaskIds.length;
         }
       }
       this.feedbackEvents.set(key, fingerprint);
@@ -381,7 +383,8 @@ export class FeedbackMiner {
     taskId: string,
     initial: ArtboardSnapshot,
     final: ArtboardSnapshot,
-    evidence?: ApprovedRefinementEvidence
+    evidence?: ApprovedRefinementEvidence,
+    recordedAt?: string
   ): CandidateRuleProposal[] {
     if (!clientId.trim() || !taskId.trim() || [initial, final].some(s=>s.clientId!==clientId || s.taskId!==taskId)) {
       throw new Error('Refinement task/client scope conflict');
@@ -452,7 +455,7 @@ export class FeedbackMiner {
         }
         proposal.confidence = Math.min(0.99, 0.5 + proposal.frequency * 0.15);
       } else {
-        const id = `crule_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const id = `crule_${crypto.createHash('sha256').update(ruleKey).digest('hex')}`;
         const sha256Digest = crypto
           .createHash('sha256')
           .update(`${clientId}:${title}:${ruleText}:${taskId}`)
@@ -476,7 +479,7 @@ export class FeedbackMiner {
             taskId,
             clientId,
             ...(evidence ? {feedbackId:evidence.feedbackId,actor:structuredClone(evidence.actor),sourcePlatform:'approved_revision_pair'} : {sourcePlatform:'unverified_snapshot'}),
-            recordedAt: new Date().toISOString(),
+            recordedAt: recordedAt ?? new Date().toISOString(),
           },
           examples: {
             positiveExampleTaskIds: evidence && !this.isTaskRejected(taskId, clientId) ? [taskId] : [],
@@ -512,6 +515,58 @@ export class FeedbackMiner {
     return this.getCandidateRules(clientId)
       .filter((r) => r.status === 'PROMOTED')
       .map((r) => r.ruleText);
+  }
+
+  /** Apply an already recorded moderation decision to rebuilt source evidence. */
+  public reconcileRecordedRule(clientId:string,recorded:CandidateRuleProposal,revision:number): void {
+    if(recorded.clientId!==clientId || recorded.provenance.clientId!==clientId || !Number.isSafeInteger(revision) || revision<0) {
+      throw new Error('Recorded learning moderation scope/version conflict');
+    }
+    const matches=[...this.candidateRules.entries()].filter(([,rule])=>rule.clientId===clientId &&
+      (rule.sha256Digest===recorded.sha256Digest || (rule.explicitness==='inferred_ast_delta' && recorded.explicitness===rule.explicitness &&
+        rule.category===recorded.category && rule.ruleText===recorded.ruleText)));
+    if(matches.length>1) throw new Error('Ambiguous recorded learning identity');
+    const [key,current]=matches[0] ?? [`${clientId}:recorded:${recorded.id}`,undefined];
+    const restored=structuredClone(current ?? recorded);
+    restored.id=recorded.id;restored.sha256Digest=recorded.sha256Digest;restored.status=recorded.status;
+    restored.provenance=structuredClone(recorded.provenance);
+    restored.promotedAt=recorded.promotedAt;restored.promotedByRole=recorded.promotedByRole;
+    restored.moderationRevision=revision;
+    // Rule approval alone is not proof that a referenced design was approved.
+    if(!current) restored.examples.positiveExampleTaskIds=[];
+    const rejected=[...restored.evidenceTaskIds,...(restored.provenance.taskId?[restored.provenance.taskId]:[])]
+      .filter(task=>this.isTaskRejected(task,clientId));
+    restored.examples.negativeExampleTaskIds=[...new Set([...restored.examples.negativeExampleTaskIds,...rejected])];
+    restored.examples.positiveExampleTaskIds=restored.examples.positiveExampleTaskIds
+      .filter(task=>!restored.examples.negativeExampleTaskIds.includes(task));
+    this.candidateRules.set(key,restored);
+  }
+
+  /** Publish a committed scoped projection without losing newer local feedback. */
+  public adoptClientProjection(clientId:string,projection:FeedbackMiner): void {
+    const entries=[...projection.candidateRules.entries()];
+    if(entries.some(([,rule])=>rule.clientId!==clientId)) throw new Error('Learning projection scope conflict');
+    for(const [key,incoming] of entries) {
+      const current=this.candidateRules.get(key);
+      if(!current) this.candidateRules.set(key,structuredClone(incoming));
+      else if(current.id!==incoming.id || current.sha256Digest!==incoming.sha256Digest) {
+        if(current.moderationRevision!==undefined && incoming.moderationRevision!==undefined) {
+          throw new Error('Recorded learning identity conflict');
+        }
+        this.candidateRules.set(key,structuredClone(incoming));
+      }
+      else {
+        const prepared=structuredClone(incoming);
+        if((current.moderationRevision ?? -1)>(incoming.moderationRevision ?? -1)) {
+          prepared.status=current.status;prepared.promotedByRole=current.promotedByRole;
+          prepared.promotedAt=current.promotedAt;prepared.moderationRevision=current.moderationRevision;
+        }
+        this.commitRuleSnapshot(prepared);
+      }
+    }
+    for(const rejected of projection.rejectedTaskIds) this.rejectedTaskIds.add(rejected);
+    for(const [key,value] of projection.feedbackEvents) this.feedbackEvents.set(key,value);
+    for(const [key,value] of projection.refinementEvents) this.refinementEvents.set(key,value);
   }
 
   /**
@@ -607,14 +662,16 @@ export class FeedbackMiner {
     actor: { id: string; role?: string; name?: string };
     existingRules?: string[];
     prohibitedPhrases?: string[];
+    sourceId?: string;
+    recordedAt?: string;
   }): CandidateRuleProposal {
     const { clientId, taskId, title, category, ruleText, rationale, actor, existingRules = [], prohibitedPhrases = [] } = input;
     const conflicts = this.detectConflicts(ruleText, existingRules, prohibitedPhrases);
 
-    const id = `crule_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const id = `crule_${input.sourceId ?? crypto.randomUUID()}`;
     const sha256Digest = crypto
       .createHash('sha256')
-      .update(`${clientId}:${title}:${ruleText}:${taskId}:${Date.now()}`)
+      .update(canonicalJson({clientId,title,category,ruleText,taskId:taskId ?? null,id}))
       .digest('hex');
 
     const proposal: CandidateRuleProposal = {
@@ -632,10 +689,11 @@ export class FeedbackMiner {
       explicitness: 'explicit_operator_instruction',
       provenance: {
         ...(taskId ? {taskId} : {}),
+        ...(input.sourceId ? {feedbackId:input.sourceId} : {}),
         clientId,
         sourcePlatform: 'owner_instruction',
         actor,
-        recordedAt: new Date().toISOString(),
+        recordedAt: input.recordedAt ?? new Date().toISOString(),
       },
       examples: {
         positiveExampleTaskIds: [],

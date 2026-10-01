@@ -1,0 +1,141 @@
+{
+  "date": "2026-10-01",
+  "decision": "ADR194",
+  "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING",
+  "requirements": [
+    "FR-022",
+    "FR-052",
+    "FR-053",
+    "FR-054",
+    "NFR-006",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "initialRegression": {
+    "baseline": "28e4f0a8",
+    "passed": 0,
+    "failed": 1,
+    "method": "Separate disposable actual HTTP Core, committed instruction, actual SIGKILL, fresh Core lists no pending candidate."
+  },
+  "qualificationHistory": [
+    "Initial actual crash reproduction failed; retained. Sandbox local DB connection refused; rerun with authorized isolated target, no isolation bypass.",
+    "First focused 3 files/43 pass. Expanded33pass/2fail caught Studio trigger referencing nonexistent OLD.category and a historical tenant-only reader fixture with no client membership. Separate trigger branches and an actual member repair these without loosening the policy.",
+    "Corrected expanded5files/35pass; connected15files/131pass; runtime-role HTTP2files/37pass; legacy/cold/domain4files/34pass. Strict664 roots and lint932 any/10existing egress exceptions pass. Full gate pending."
+  ],
+  "connected": {
+    "files": 15,
+    "passed": 131,
+    "failed": 0,
+    "skipped": 0,
+    "log": "/tmp/hawa-learning-recovery-connected-corrected-20261001.log"
+  },
+  "additionalControls": {
+    "runtimeRoleHttp": {
+      "files": 2,
+      "passed": 37
+    },
+    "legacyAndColdDomain": {
+      "files": 4,
+      "passed": 34
+    }
+  },
+  "behavior": [
+    "Explicit instructions commit to feedback_events with verified actor and stable action identity; exact reuse reconciles, changed reuse refuses; old no-header callers get content-derived deduplication.",
+    "Client-scoped reconstruction from stored feedback/approved edits/latest immutable moderation/DNA in one SQL MVCC statement under RLS; no model/provider calls or second workflow authority.",
+    "Stable full source/pattern identities and stored times; original reviewer roles and immutable client capture for new Studio feedback; legacy unknown roles remain unknown.",
+    "Supported learning/Studio source events append-only; client-based feedback read/insert policies use once-per-statement membership checks; HTTP feedback history carries the actual actor.",
+    "Cold moderation rebuilds under the existing shared PG client lock and expected DNA version; separate Core concurrent promotions/rollbacks preserve both changes.",
+    "Actual recovery SELECT failure after source commit returns503; identical action retry reconciles one saved candidate. Actual deferred commit failures from connected regressions retain authoritative DNA/evidence.",
+    "Actual SIGKILL/restart retains pending instructions, approved source/approval/reviewer receipts, rejection polarity, moderation identities and dismissed states.",
+    "Legacy stored moderation keeps actual ID/digest/decision; absent actual source cannot invent design approval; current recorded rejection retained. Old unsupported sources explicitly excluded with scoped IDs, unknown new source formats/hash conflict hold recovery.",
+    "Retiring one candidate does not remove shared text still owned by another active reviewed candidate."
+  ],
+  "limits": [
+    "Source only, no deployment or paid provider call. Independently qualified live infrastructure remains2c4d61ec.",
+    "Conservative task-level polarity, no retroactive historical reviewer/rights proof; revision-level verdicts, taste calibration and native/Canva/human product admission remain open.",
+    "All external/export/render fixtures synthetic; actual HTTP/process kills/RLS/PostgreSQL exercised. Engineering tests are not visual quality admission.",
+    "No-header content-derived legacy action cannot represent a deliberately repeated identical instruction; new clients should send distinct UUID action keys.",
+    "Measured local500-source replay is not a production SLO or proof of unbounded scale. No new cache/queue dependency."
+  ],
+  "profile": {
+    "syntheticSources": 500,
+    "requests": 5,
+    "milliseconds": [
+      41.45508299999892,
+      31.976417000001675,
+      33.137125000001106,
+      31.83116699999846,
+      30.625708999999915
+    ],
+    "providerCalls": 0
+  },
+  "providerCalls": 0,
+  "deployed": false,
+  "sources": {
+    "adrs/194_durable_source_learning_recovery.md": "a62cc560d9114c3157b2c9021ad1d91da42d35cae3ae75116aac379ba6c6ed69",
+    "apps/core/src/services/learning-inputs.ts": "3a71437f67295f45a75b86ad4640540e743439013d38ad5d6570d42d75907a9f",
+    "apps/core/src/services/learning-recovery.ts": "14e531c72a4d78920e97104434e38a4d96f7386e855b4b029f409bf760ea49d8",
+    "apps/core/src/services/learning-governance.ts": "ffd5fa387fa19ec9120bc02e9f0cf35289bd463d2cfa9203ce004fa4987788c9",
+    "apps/core/src/routes/client-learning.routes.ts": "8ce65e0768d5d91a18be9c4e17594629bee8c233deaa26317c0552b7135cb55f",
+    "apps/core/src/routes/design-studio.routes.ts": "05bf0793129ed29437a95aaf92f52b4409a2883f422630045a2c739efc471a11",
+    "apps/core/test/learning-recovery.test.ts": "eb5c2d2530f3cd5b458d303ba3df19b5c6900f9f95cd8e9c7cce0e159544618a",
+    "apps/core/test/fixtures/learning-recovery-process.ts": "486d3c393a0705479fa3fbc7c6027522e35fd261f0812b607c45ac4288a8f6e0",
+    "packages/creative/src/feedback-miner.ts": "0069a79af9c38b6d3a8fd40998639c8afe9604546d0891969f44344533a4164e",
+    "packages/db/migrations/076_feedback_reviewer_role.sql": "762b6c27717e44b6db0ace2c6d201eb2f2f17fcf2a43206ed3b4d1157dd74e87",
+    "packages/db/src/types.ts": "ca2bdcd45e84dd17ac9a4fcc84e2fcc7267e9eee51237837dc460f88ea7a48f2",
+    "packages/db/src/repositories/design-studio.repository.ts": "d839db45b2b98085ca8b9981bdae2e3c676b4a67435829f56821bee4e9fc21e4",
+    "packages/db/test/design-studio.test.ts": "237d10d3a282d7bb2109e41628d59a32b588b93b557a3df9ce27b419d39bcc79",
+    "packages/db/test/schema-upgrade.test.ts": "af7e120a21fabccb7d8d78eaff77207de25d8eca01d78fd047123a2d96021279",
+    "apps/core/test/startup-schema-check.test.ts": "40633f339168fa74987d705c139a7bcad7bedcb267f41fe896450b0213d639a1"
+  },
+  "logs": {
+    "hawa-learning-recovery-red-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-red-20261001.log",
+      "sha256": "bd8d67fa037c2215c42a53a708bbb37670b6f464598365eb469a5206fc34ba27"
+    },
+    "hawa-learning-recovery-focused-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-focused-20261001.log",
+      "sha256": "4cf33f8f1f32a557b8acf92466f492ce2841e356c3405c8c6383fca9ec913d2d"
+    },
+    "hawa-learning-recovery-focused-authorized-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-focused-authorized-20261001.log",
+      "sha256": "0072910d36d8292d579dc899f072c63186258efb3578ef7e23f9df61b2a95755"
+    },
+    "hawa-learning-recovery-expanded-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-expanded-20261001.log",
+      "sha256": "b373a3ad8cffd7c2d3abf734f20b220a5dd2eaea3a7d2c288493632d0721a2fe"
+    },
+    "hawa-learning-recovery-expanded-corrected-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-expanded-corrected-20261001.log",
+      "sha256": "f12b01f9b22c10e1d5d640e2938a59809e34445f1f829b6c82e3b447909bef3e"
+    },
+    "hawa-learning-recovery-connected-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-connected-20261001.log",
+      "sha256": "7a9d3d3ba0919ffe7aab47779e3eb77faca3bc78556b4b32d042e02722272506"
+    },
+    "hawa-learning-recovery-connected-corrected-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-connected-corrected-20261001.log",
+      "sha256": "634900a8925edd3b28c2de80ae7470c5b9f969508c4a7e9c4b3b6a8a32f37c4c"
+    },
+    "hawa-learning-recovery-build-final-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-build-final-20261001.log",
+      "sha256": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1"
+    },
+    "hawa-learning-recovery-types-final-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-types-final-20261001.log",
+      "sha256": "a9cd0be8db56640c2380d7ffcb8c42f111b90671176cc2cb3ef2f2c5c32a25dd"
+    },
+    "hawa-learning-recovery-lint-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-lint-20261001.log",
+      "sha256": "7297b01a112008246738c27616aa050f787074b116f423108fb17d2471376cb5"
+    },
+    "hawa-learning-recovery-http-final-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-http-final-20261001.log",
+      "sha256": "4ad7e452ff4a7376199000d3977cbea41c514a08a20471c445ad5b22e81e6398"
+    },
+    "hawa-learning-recovery-legacy-final-20261001.log": {
+      "path": "/tmp/hawa-learning-recovery-legacy-final-20261001.log",
+      "sha256": "8a4d0ec2c0d323c7875bc6b120662863e7de048e0d0db71b23ea7b7e32fd9c3a"
+    }
+  }
+}

@@ -44,6 +44,10 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
   });
 
   it('enforces RLS isolation across all 5 design studio tables for tenant_id', async () => {
+    const reader=randomUUID();
+    await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${reader}::uuid,${reader+'@test.invalid'},'Scoped Studio reader')`.execute(db);
+    await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
+      VALUES(${tenantA}::uuid,${clientA}::uuid,${reader}::uuid,'designer',true)`.execute(db);
     const taskA = await createTask(tenantA, clientA);
     const runIdA = randomUUID();
     const candIdA = randomUUID();
@@ -52,7 +56,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
     const fbIdA = randomUUID();
 
     // 1. Insert under Tenant A
-    await withRlsContext(db, { tenantId: tenantA }, async (trx) => {
+    await withRlsContext(db, { tenantId: tenantA,userId:reader }, async (trx) => {
       const repoTrx = new DesignStudioRepository(trx);
       await repoTrx.createRun({
         id: runIdA,
@@ -109,7 +113,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
     });
 
     // 2. Query as hawa_app under Tenant A scope -> should see all records
-    await withRlsContext(db, { tenantId: tenantA }, async (trx) => {
+    await withRlsContext(db, { tenantId: tenantA,userId:reader }, async (trx) => {
       await sql`SET LOCAL ROLE hawa_app`.execute(trx);
 
       const run = await trx.selectFrom('design_studio_runs').selectAll().where('id', '=', runIdA).executeTakeFirst();
@@ -130,7 +134,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
     });
 
     // 3. Query as hawa_app under Tenant B scope -> must see 0 records across all tables!
-    await withRlsContext(db, { tenantId: tenantB }, async (trx) => {
+    await withRlsContext(db, { tenantId: tenantB,userId:reader }, async (trx) => {
       await sql`SET LOCAL ROLE hawa_app`.execute(trx);
 
       const run = await trx.selectFrom('design_studio_runs').selectAll().where('id', '=', runIdA).executeTakeFirst();

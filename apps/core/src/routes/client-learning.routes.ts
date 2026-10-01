@@ -6,6 +6,7 @@ import { approvedRefinementRequest, recordApprovedRefinement } from '../services
 import { CanvaFlowError } from '../services/canva-connect-service.js';
 import { authorizedLearningClient, explicitLearningInstruction, moderateLearningRule, moderationInput,
   negativeLearningInput, recordLearningRejection } from '../services/learning-governance.js';
+import {instructionActionId,recordLearningInstruction,recoverClientLearning} from '../services/learning-recovery.js';
 
 /**
  * What the office learns about a client: generation budgets, candidate rules mined from feedback and
@@ -48,7 +49,8 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
     }
     try {
       const saved=await recordApprovedRefinement(db,{tenantId:auth.tenantId,actorId:auth.userId,role:auth.role!},actionId,parsed.data);
-      const proposed=globalFeedbackMiner.ingestTaskRefinements(saved.evidence.clientId,saved.evidence.taskId,saved.initial,saved.final,saved.evidence);
+      const recovered=await recoverClientLearning(ctx,auth,saved.evidence.clientId);
+      const proposed=saved.replayed ? [] : recovered.rules.filter(rule=>rule.provenance.feedbackId===actionId);
       broadcast('feedback:rules_mined',{clientId:saved.evidence.clientId,taskId:saved.evidence.taskId,count:proposed.length});
       return c.json({proposedRules:proposed,count:proposed.length,feedbackId:actionId,replayed:saved.replayed},saved.replayed ? 200 : 201);
     } catch (error) {
@@ -60,9 +62,10 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
 
   registerRoute('get', '/clients/:clientId/candidate-rules', async (c: any) => {
     try {
-      const clientId=await authorizedLearningClient(ctx,verifyRequestAuth(c),c.req.param('clientId'));
-      const rules=globalFeedbackMiner.getCandidateRules(clientId);
-      return c.json({candidateRules:rules,count:rules.length},200);
+      const auth=verifyRequestAuth(c);
+      const clientId=await authorizedLearningClient(ctx,auth,c.req.param('clientId'));
+      const state=await recoverClientLearning(ctx,auth,clientId);
+      return c.json({candidateRules:state.rules,count:state.rules.length,excludedLegacySourceIds:state.excludedLegacySourceIds},200);
     } catch(error) {return learningFailure(c,error);}
   });
 
@@ -102,10 +105,16 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
     const {taskId,title,category,ruleText,rationale}=parsed.data;
     try {clientId=await authorizedLearningClient(ctx,auth,c.req.param('clientId'),true);}
     catch(error) {return learningFailure(c,error);}
-    if(db && taskId) {
-      const task=await withRlsContext(db,{tenantId:auth.tenantId!,userId:auth.userId,role:auth.role},trx=>trx.selectFrom('tasks')
-        .select('client_id').where('id','=',taskId).where('tenant_id','=',auth.tenantId!).executeTakeFirst());
-      if(!task || task.client_id!==clientId) return problem(c,409,'Instruction Task Conflict','This task does not belong to the instruction client.');
+    if(db) {
+      try {
+        const actionId=instructionActionId(auth,clientId,parsed.data,c.req.header('Idempotency-Key'));
+        const saved=await recordLearningInstruction(db,auth,clientId,actionId,parsed.data);
+        const state=await recoverClientLearning(ctx,auth,clientId);
+        const proposal=state.rules.find(rule=>rule.provenance.feedbackId===saved.sourceId);
+        if(!proposal) throw new Error('Committed instruction was not reconstructed');
+        if(!saved.replayed) broadcast('dna:rule_proposed',{clientId,ruleId:proposal.id,title:proposal.title});
+        return c.json({proposal,replayed:saved.replayed},saved.replayed?200:201);
+      } catch(error) {return learningFailure(c,error);}
     }
     const dna=await resolveClientDna(clientId,{tenantId:auth.tenantId,userId:auth.userId,role:auth.role});
     const proposal=globalFeedbackMiner.proposeExplicitRule({clientId,taskId,title,category,ruleText,
@@ -129,8 +138,7 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
     try {
       const clientId=await authorizedLearningClient(ctx,auth,c.req.param('clientId'),true);
       const saved=await recordLearningRejection(db,auth,clientId,actionId,parsed.data);
-      globalFeedbackMiner.ingestDesignFeedback({id:saved.feedbackId,tenantId:auth.tenantId!,clientId,taskId:saved.taskId,
-        actorId:saved.actorId,actorRole:saved.actorRole,verdict:'reject',notes:saved.feedbackText,createdAt:saved.recordedAt});
+      await recoverClientLearning(ctx,auth,clientId);
       if(!saved.replayed) broadcast('feedback:negative_recorded',{clientId,taskId:saved.taskId,feedbackId:saved.feedbackId});
       return c.json({feedbackId:saved.feedbackId,taskId:saved.taskId,negativeExampleRecorded:true,replayed:saved.replayed},saved.replayed?200:201);
     } catch(error) {return learningFailure(c,error);}

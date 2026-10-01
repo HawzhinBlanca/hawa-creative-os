@@ -667,6 +667,8 @@ export interface DesignFeedbackTable {
   run_id: string | null;
   candidate_id: string | null;
   actor_id: string;
+  actor_role: string | null;
+  client_id: string | null;
   source: DesignFeedbackSource;
   verdict: DesignFeedbackVerdict;
   rating: number | null;

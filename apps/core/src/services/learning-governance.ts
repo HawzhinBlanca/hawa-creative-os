@@ -2,21 +2,13 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { canonicalJson, type ClientDNA } from '@hawa/domain';
 import { FeedbackRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { globalFeedbackMiner, planRuleModeration, RuleModerationConflict, type CandidateRuleProposal, type RuleModerationAction } from '@hawa/creative';
+import { globalFeedbackMiner, planRuleModeration, RuleModerationConflict, type FeedbackMiner, type CandidateRuleProposal, type RuleModerationAction } from '@hawa/creative';
 import type { AuthContext, ClientDnaSnapshot, RouteContext } from '../routes/types.js';
 import { computeDnaHash } from '../core-helpers.js';
 import { CanvaFlowError } from './canva-connect-service.js';
-const text = z.string().trim().min(1);
-export const explicitLearningInstruction = z.object({
-    taskId: z.string().uuid().optional(), title: text.max(200),
-    category: z.enum(['typography', 'palette', 'copy_token', 'layout']), ruleText: text.max(24000),
-    rationale: text.max(4000).optional(), existingRules: z.array(text.max(24000)).max(100).optional(),
-    prohibitedPhrases: z.array(text.max(1000)).max(100).optional(),
-}).strict();
-export const moderationInput = z.object({
-    reason: text.max(1000).optional(), role: z.enum(['art_director', 'creative_director', 'administrator']).optional(),
-}).strict();
-export const negativeLearningInput = z.object({ taskId: z.string().uuid(), feedbackText: text.max(4000) }).strict();
+import {explicitLearningInstruction,moderationInput,negativeLearningInput} from './learning-inputs.js';
+export {explicitLearningInstruction,moderationInput,negativeLearningInput};
+import {reconstructClientLearning} from './learning-recovery.js';
 /** A rejection is an immutable task event; project it only after the real commit. */
 export async function recordLearningRejection(db: Kysely<Database>, auth: AuthContext, clientId: string, actionId: string, input: z.infer<typeof negativeLearningInput>) {
     const requestHash = createHash('sha256').update(canonicalJson({ tenantId: auth.tenantId, actorId: auth.userId, clientId, input })).digest('hex');
@@ -114,17 +106,19 @@ type ModerationData = {
 export async function moderateLearningRule(ctx: RouteContext, auth: AuthContext, clientId: string, ruleId: string, action: RuleModerationAction, reason: string) {
     const tenantId = auth.tenantId!, actor = { id: auth.userId!, role: auth.role! };
     return serializeModeration(JSON.stringify([tenantId, clientId]), async () => {
-        const cached = globalFeedbackMiner.getCandidateRules(clientId).find(rule => rule.id === ruleId);
-        if (!cached)
-            throw new CanvaFlowError(404, 'Candidate Not Found', 'No candidate is available in this client scope.');
         const fallback = await ctx.resolveClientDna(clientId, { tenantId, userId: actor.id, role: actor.role });
         let snapshot: ClientDnaSnapshot | undefined;
         let finalDna: ClientDNA | undefined;
+        let recovered:FeedbackMiner|undefined;
         const apply = async (trx?: Kysely<Database>) => {
             if (ctx.db && trx)
                 await sql `SELECT pg_advisory_xact_lock(hashtextextended(${`client-rule-promotion:${tenantId}:${clientId}`},0))`.execute(trx);
             const active = ctx.clientRepo && trx ? await ctx.clientRepo.findActiveDna(tenantId, clientId, trx) : undefined;
             const dna = active ? (typeof active.dna === 'string' ? JSON.parse(active.dna) : active.dna) as ClientDNA : fallback;
+            recovered=trx ? (await reconstructClientLearning(trx,tenantId,clientId,dna)).miner : undefined;
+            const candidates=(recovered ?? globalFeedbackMiner).getCandidateRules(clientId);
+            const cached=candidates.find(rule=>rule.id===ruleId);
+            if(!cached) throw new CanvaFlowError(404,'Candidate Not Found','No candidate is available in this client scope.');
             const latest = trx ? (await sql<{
                 data: ModerationData;
                 action: string;
@@ -142,6 +136,7 @@ export async function moderateLearningRule(ctx: RouteContext, auth: AuthContext,
                 before.status = recorded.status;
                 before.promotedByRole = recorded.promotedByRole;
                 before.promotedAt = recorded.promotedAt;
+                before.moderationRevision=latest?.data.ruleRevision ?? 0;
             }
             if (action === 'promote' && dna)
                 before.conflicts = globalFeedbackMiner.detectConflicts(before.ruleText, (dna.guidelines?.layoutRules || []).filter(rule => rule !== before.ruleText), dna.guidelines?.prohibitedPhrases || []);
@@ -172,8 +167,9 @@ export async function moderateLearningRule(ctx: RouteContext, auth: AuthContext,
                 finalDna = structuredClone(dna);
                 finalDna.guidelines ||= { voiceAndTone: '', prohibitedPhrases: [], requiredDisclaimers: [], layoutRules: [] };
                 finalDna.guidelines.layoutRules ||= [];
+                const otherActive=candidates.some(rule=>rule.id!==ruleId && rule.status==='PROMOTED' && rule.ruleText===plan.proposal.ruleText);
                 finalDna.guidelines.layoutRules = action === 'promote' ? [...new Set([...finalDna.guidelines.layoutRules, plan.proposal.ruleText])]
-                    : finalDna.guidelines.layoutRules.filter(rule => rule !== plan.proposal.ruleText);
+                    : finalDna.guidelines.layoutRules.filter(rule => rule !== plan.proposal.ruleText || otherActive);
                 const versions = ctx.clientRepo && trx ? await ctx.clientRepo.listDnaSnapshots(tenantId, clientId, trx) : [];
                 finalDna.version = Math.max(dna.version || 1, ...versions.map(row => row.version)) + 1;
                 finalDna.updatedAt = new Date().toISOString();
@@ -193,6 +189,7 @@ export async function moderateLearningRule(ctx: RouteContext, auth: AuthContext,
                 }
             }
             if (trx) {
+                plan.proposal.moderationRevision=(latest?.data.ruleRevision ?? 0)+1;
                 const data: ModerationData = {
                     proposal: plan.proposal, ruleRevision: (latest?.data.ruleRevision || 0) + 1,
                     ...(dnaVersionId ? { dnaVersionId } : {}), moderation: { action, reason, actorId: actor.id, role: actor.role, auditHash: plan.auditHash }
@@ -207,7 +204,10 @@ export async function moderateLearningRule(ctx: RouteContext, auth: AuthContext,
             return { rule: plan.proposal, auditHash: plan.auditHash, replayed: false };
         };
         const result = ctx.db ? await withRlsContext(ctx.db, { tenantId, clientId, userId: actor.id, role: actor.role }, apply) : await apply();
-        globalFeedbackMiner.commitRuleSnapshot(result.rule);
+        if(recovered) {
+            recovered.commitRuleSnapshot(result.rule);
+            globalFeedbackMiner.adoptClientProjection(clientId,recovered);
+        } else globalFeedbackMiner.commitRuleSnapshot(result.rule);
         if (finalDna)
             ctx.clientDnas.set(clientId, finalDna);
         if (snapshot && !ctx.db) {
