@@ -69,7 +69,7 @@ export interface HardQaOutcome {
   /** One readable line per defect, for a repair model or a person. */
   messages: string[];
   metrics: LayoutMetrics;
-  /** The layout as validated — validation may normalise it, e.g. a script font. */
+  /** The original shipping layout; validation rewrites are reported, never applied after judging. */
   layout: StudioLayoutV2;
   textMeasurements: TextMeasurement[];
   /**
@@ -87,7 +87,7 @@ export interface HardQaOutcome {
 export function evaluateHardQa(
   layout: StudioLayoutV2,
   ctx: HardQaContext,
-  existingMetrics?: LayoutMetrics | null
+  _existingMetrics?: LayoutMetrics | null
 ): HardQaOutcome {
   const defectCodes: string[] = [];
   const messages: string[] = [];
@@ -137,13 +137,23 @@ export function evaluateHardQa(
     checked = validation.layout;
   }
 
-  // Compute metrics if not present or if layout was normalized, ensuring report describes what ships
-  const layoutNormalized = Boolean(checked !== layout && JSON.stringify(checked) !== JSON.stringify(layout));
-  const metrics = (!layoutNormalized && existingMetrics) ? existingMetrics : computeLayoutMetrics(checked);
+  // ADR-187: cached candidate metrics are advisory. Re-measure the layout that ships and its
+  // current exact copy; neither a stale passing score nor a validator rewrite authorizes it.
+  // The optional third argument remains for compatibility with ranking/refinement callers.
+  const textMeasurements = measureTextGeometry(layout, ctx.copyText, ctx.textMeasurementOptions);
+  const measuredLines: Record<number, number> = {};
+  for (const measurement of textMeasurements) {
+    if (measurement.status === 'measured') measuredLines[measurement.copyIndex] = measurement.lineCount;
+  }
+  const metrics = computeLayoutMetrics(layout, {
+    copyText: ctx.copyText,
+    measuredLines,
+    contrastValues: Object.fromEntries(layout.text.map(t => [t.copyIndex, declaredTextContrast(layout, t)])),
+  });
 
   if (metrics.overlapCount > 0) {
     defectCodes.push('OVERLAP');
-    const pairs = overlappingPairs(checked);
+    const pairs = overlappingPairs(layout);
     messages.push(
       pairs.length
         ? `OVERLAP: ${pairs.length} overlapping pair(s): ${pairs.join('; ')}`
@@ -222,7 +232,6 @@ export function evaluateHardQa(
   // A block's copy must fit its box at its own leading. The renderer centres the lines in the box,
   // so copy taller than its box spills onto the blocks above and below. Preparation grows boxes,
   // but not when no arrangement has room: T5 brief_17 kept a 210px title in a 130px box.
-  const textMeasurements = measureTextGeometry(layout, ctx.copyText, ctx.textMeasurementOptions);
   for (const [index, measurement] of textMeasurements.entries()) {
     const t = layout.text[index];
     if (measurement.status === 'unmeasured') {
@@ -356,6 +365,8 @@ export function evaluateHardQa(
   // every photo (ADR-180).
   const recipeChose = Boolean(photoRecipeOf(layout)) && recipePhotoMinimum(ctx.photoSelection, ctx.photoCount ?? 0) < (ctx.photoCount ?? 0);
   const omittedPhotos = ctx.photoSelection?.mode === 'choose' || recipeChose ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
+
+  if (measuredContrast) metrics.contrastP05 = measuredContrast;
 
   return {
     passed: defectCodes.length === 0, defectCodes, messages, metrics, layout, textMeasurements, findings, omittedPhotos,
