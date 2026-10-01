@@ -1,7 +1,7 @@
 {
   "adr": "ADR200",
   "date": "2026-10-01",
-  "status": "CONNECTED_ENGINEERING_QUALIFIED_EXACT_GATE_PENDING",
+  "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-028",
     "FR-038",
@@ -57,7 +57,23 @@
   "limits": [
     "Original diagnostic did not establish a live outage; Core also invalidates at input capture.",
     "Glyph-only admission does not establish raster fidelity; existing capture/renderer identity remains authoritative.",
-    "Exact sealed engineering gate pending.",
     "Broader W5/W6/native Canva/human/recovery/product admission remains open."
-  ]
+  ],
+  "exactQualification": {
+    "testedSeal": "e02f321e6f1cc023bed1e403c46c4710b0496fd7",
+    "runtimeCommit": "02f55d23b910e64363737dfedc5ab9c07a9e44e2",
+    "allStages": 8,
+    "testsPassed": 6573,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 665,
+    "filesSkipped": 6,
+    "strictRoots": 672,
+    "blueprintChecksAtSeal": 1678,
+    "gateEvidence": "W5_FONT_ADMISSION_CACHE_GATE_EVIDENCE.json",
+    "fullTestLog": "output/qualification/2026-10-01/e02f321e/FULL_TEST_SUITE_RUN.log",
+    "fullTestLogSha256": "5bef17ccedc7dcc1adc632d8c625465b363a0ee04373e471322cd567d6aae180",
+    "deployed": false,
+    "productAdmission": false
+  }
 }

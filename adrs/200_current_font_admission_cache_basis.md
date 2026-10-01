@@ -1,6 +1,6 @@
 # ADR200 — Current policy and measured font identity before admission cache reuse
 
-Date: 2026-10-01. Status: connected source engineering qualified; exact qualification pending.
+Date: 2026-10-01. Status: source engineering qualified; product admission open.
 Requirements: FR-028, FR-038, FR-041, NFR-012.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/07_MODEL_REGISTRY_AND_EVALUATION.md,
 docs/11_QA_RTL_MULTILINGUAL.md; ADR116/117/118/123;
@@ -43,3 +43,6 @@ native Canva, visual quality, human approval and deployment.
 
 
 Six original acceptance regressions fail on the prior source. Corrected connected11files86pass/0fail/0skip,672 strict test roots and lint pass. No new dependencies or provider calls. W5_FONT_ADMISSION_CACHE_PROOF.json retains red/green evidence; exact seal and product admission remain pending.
+
+
+Exact sealede02f321e6f1cc023bed1e403c46c4710b0496fd7: all8 engineering gates,6573pass/0fail/67skip across665 passed files/6 skipped;672 strict roots,1678 blueprint checks,newest production dump restored in isolation and mandatory negative-flag refusal pass. Actual warmed glyph-admission policy/file defect resolved in source; no deploy or native Canva/human/product admission. W5_FONT_ADMISSION_CACHE_GATE_EVIDENCE.json retains exact gate. Next actual temporary raster-probe diagnostic retains an old measured result after the same-path executable starts failing; fresh query is unmeasured. W5_RASTER_PROBE_CACHE_FINDING.json is a standalone diagnostic, acceptance regression NOT_RUN/repair pending; Core capture also invalidates caches, so live effect is unestablished.

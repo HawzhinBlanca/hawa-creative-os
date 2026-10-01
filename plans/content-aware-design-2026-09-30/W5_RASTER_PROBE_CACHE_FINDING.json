@@ -1,0 +1,20 @@
+{
+  "observedAt": "2026-10-01T07:15:53.455Z",
+  "temporaryRendererOnly": true,
+  "beforeMeasured": true,
+  "warmedAfterRendererFailureMeasured": true,
+  "sameObject": true,
+  "freshAfterRendererFailureMeasured": false,
+  "freshReason": "no-rasteriser",
+  "providerCalls": 0,
+  "sourceSha256": "2f42567e9bc3fc48610e104c4951c04229debbddbd4e1ff1d3dec04fda360001",
+  "limits": [
+    "Standalone exported raster-probe diagnostic; Core captureRenderFontInputs also invalidates caches, so live effect is not established.",
+    "No production executable, registry or font was modified.",
+    "Acceptance regression NOT_RUN; repair pending."
+  ],
+  "sourceSeal": "e02f321e6f1cc023bed1e403c46c4710b0496fd7",
+  "cause": "probeFontInkWidth returns the inkCheckCache hit keyed by executable/config/font paths before checking changed renderer bytes; sentinel cache also names paths.",
+  "reproduction": "Temporary shell wrapper delegates to the real local renderer; warm Amiri Arabic probe; replace wrapper at same path with exit 3 and restore mtime; warmed query remains measured, fresh size query is unmeasured.",
+  "nextAction": "Add actual same-process raster-probe regression for renderer/font/config identity; prevent stale measured or sentinel results, preserve unchanged-input hits and existing hard QA."
+}
