@@ -1,7 +1,7 @@
 # ADR-186 — Explicit request deliverables
 
 Date: 2026-10-01
-Status: accepted; local sealed qualification passed, live rollout pending
+Status: accepted; engineering rollout verified on0605a713; whole-product admission open
 Requirements: FR-001, FR-002, FR-004, FR-005, FR-033, FR-060, FR-063, NFR-001, NFR-006
 Sources: docs/09_MESSAGING_AND_OFFICE_INBOX.md; docs/05_CREATIVE_ENGINE.md;
 docs/10_WORKFLOW_RELIABILITY.md; MASTER_SPEC.md; ADR139/184/185.
@@ -67,3 +67,7 @@ The pure policy and Core application planner are separated from HTTP transport. 
 ## Sealed local qualification
 
 Source 9776c52d / tested seal 79975fc2: 646 files passed, 6 skipped; 6,303 tests passed, zero failures, 67 skipped, no expected failures. Strict types (653 active roots), egress lint and blueprint 1,504/0/0 passed. Evidence: plans/request-deliverables-2026-10-01/LOCAL_PROOF.json. External transports are synthetic; no paid design or live rollout is claimed. Production remains 4e500451. Native Sorani message review and creative/native/human admission remain open.
+
+## Engineering rollout
+
+0605a713 deployed1October2026; all eight engineering stages passed against the newest production dump. Actual image/runtime/migration receipt and live blue-worker leadership/eight services/office200/healthy Core verified. Service-boundary repairs remain intact;18 historical legacy-dead outbox rows are not replayed. Evidence: plans/request-deliverables-2026-10-01/LIVE_DEPLOYMENT_PROOF.json. This is not new paid/native/Canva/human or whole-product admission.

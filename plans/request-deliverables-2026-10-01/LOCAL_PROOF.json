@@ -108,5 +108,10 @@
     "failed": 0
   },
   "sourceCommit": "9776c52d",
-  "testedSeal": "79975fc2dfe25c1d39af642cbc41cbe7d0d09b74"
+  "testedSeal": "79975fc2dfe25c1d39af642cbc41cbe7d0d09b74",
+  "deployedFollowUp20261001": {
+    "deployedCommit": "0605a71393abd4b04978dc899a1da27065347d60",
+    "evidence": "LIVE_DEPLOYMENT_PROOF.json",
+    "note": "Original source-only limitations describe the earlier checkpoint; this dated follow-up verifies rollout and retains product-admission limits."
+  }
 }

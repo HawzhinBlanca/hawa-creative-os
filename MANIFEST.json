@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T00:23:28Z",
+  "generatedAt": "2026-10-01T00:52:35Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 676,
+  "fileCount": 680,
   "files": [
     {
       "path": ".dockerignore",
@@ -904,8 +904,8 @@
     },
     {
       "path": "adrs/186_explicit_request_deliverables.md",
-      "sha256": "6e7acdd18b7c8464e26c143e5ee7eee34a5b796d5c7693d45ab5514e28c0706e",
-      "bytes": 5246
+      "sha256": "2b6fa49450129cfb8b4ea275d830739a27b81e3f39c8218028d7ca58207aa8b8",
+      "bytes": 5746
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2033,14 +2033,34 @@
       "bytes": 3384
     },
     {
+      "path": "plans/request-deliverables-2026-10-01/DEPLOYED_RELEASE_GATE_EVIDENCE.json",
+      "sha256": "5dfc71a68a959f4820d26b90b4be6806e8cff15bd45dcf88ff2b544586349a0a",
+      "bytes": 2093
+    },
+    {
+      "path": "plans/request-deliverables-2026-10-01/LIVE_DEPLOYMENT_PROOF.json",
+      "sha256": "74c076ee5b3331ed0d6c2b36c71d924e8c2b0ad08110ceadd68f8b227bb40fe8",
+      "bytes": 1942
+    },
+    {
+      "path": "plans/request-deliverables-2026-10-01/LIVE_DEPLOYMENT_RECEIPT.json",
+      "sha256": "afa1961f480411116b9b4cc65f4dc3a396c87cd9879e8f1248c3d2b851674106",
+      "bytes": 2074
+    },
+    {
+      "path": "plans/request-deliverables-2026-10-01/LIVE_INFRA_READBACK.json",
+      "sha256": "39934affa5e9b46f7cec73fa1c83f5b94f883ae19b346a048108640ce5826316",
+      "bytes": 1491
+    },
+    {
       "path": "plans/request-deliverables-2026-10-01/LOCAL_PROOF.json",
-      "sha256": "b3ac38c472271717d903234369e461235c242d631290208d2e913a4322bc5b17",
-      "bytes": 5226
+      "sha256": "63368def978a420492041f36138727931be220179b4b16a16747c17fa7abda74",
+      "bytes": 5531
     },
     {
       "path": "plans/request-deliverables-2026-10-01/PLAN.md",
-      "sha256": "740b87b969813df7c597392a5bd0b8361fd0f193f84fb099a676cee60ff6e208",
-      "bytes": 3454
+      "sha256": "2b33bfe199b977207b77deed8ce6a16100fd52f9f3892e93d1c242436e8c7b21",
+      "bytes": 4409
     },
     {
       "path": "plans/requester-hold-reliability-2026-10-01/LIVE_INFRA_READBACK.json",
@@ -2504,8 +2524,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "623e0fe216524cf4b47c0bea3807c9d73f05d2b872a49a8020db71c7543b9a9d",
-      "bytes": 571403
+      "sha256": "890d1592308a9ab183f11d304e45445db3a05d5a20bc153c8ca84fe17d3d0cb7",
+      "bytes": 575705
     },
     {
       "path": "plans/user-stories.csv",
