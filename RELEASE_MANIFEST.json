@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-01T13:03:49+03:00",
+  "generatedAt": "2026-10-01T13:20:37+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "f3fcf8793e63b97205e824832c89c20fa577401f",
+    "commit": "21da2bc3236f83f38d19f8a1cc0f1ee6a94d7567",
     "treeClean": true,
-    "commitTimestamp": "2026-10-01T13:03:49+03:00",
+    "commitTimestamp": "2026-10-01T13:20:37+03:00",
     "branch": "codex/content-aware-design"
   },
   "migrations": {
@@ -84,11 +84,11 @@
     "sourceHashes": {
       "packages/qa/src/engine.ts": "e9cb28d14f14396b6696fc2862f3fb9d2607396e55d38479ae408d24c7eea7f7",
       "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
-      "packages/qa/src/canva-pptx-check.ts": "68c9889d5acaba05d86c60171ce8faf22f8c8288e3a54f1e68b88131b8bc30b6",
+      "packages/qa/src/canva-pptx-check.ts": "f1ad8d51071e14ac7e1ea1578176473365bd6edfc48a3a030293a9964d381c76",
       "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
       "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "20eca7841f4f07a7d7b61479b84b4e2682c70701e51b70d5e28049c5d2258e96"
+  "sha256": "368a834cb3608dd82cf055cfbd9d7136a81b2effbb83eccc76939e4520008a35"
 }
