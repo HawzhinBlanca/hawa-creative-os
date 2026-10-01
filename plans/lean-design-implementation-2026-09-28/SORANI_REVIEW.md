@@ -313,5 +313,16 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `naming.sentToday` | today at {time} | ئەمڕۆ کاتژمێر {time} | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
 | `naming.sentYesterday` | yesterday at {time} | دوێنێ کاتژمێر {time} | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
 | `naming.sentDaysAgo` | {n} days ago | پێش {n} ڕۆژ | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
+## clientQuestion (ADR-235)
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `clientQuestion.askClient` | Who is this design for? Tell me the organisation's name. | ئەم دیزاینە بۆ کێیە؟ ناوی دامەزراوەکەم پێ بڵێ. | needs native review |
+| `clientQuestion.askClientNamed` | Who is this design for? Tell me the organisation's name.⏎⏎The ones I know: {list}. | ئەم دیزاینە بۆ کێیە؟ ناوی دامەزراوەکەم پێ بڵێ.⏎⏎ئەوانەی دەیانناسم: {list}. | needs native review |
+| `clientQuestion.passedToOffice` | No problem. I've passed it to the office, and they'll choose the organisation. | کێشە نییە. ناردم بۆ ئۆفیسەکە، ئەوان دامەزراوەکە هەڵدەبژێرن. | needs native review |
+| `clientQuestion.notMatchedToOffice` | I couldn't match that to an organisation I know, so I've passed it to the office to choose. | نەمتوانی ئەوە بە دامەزراوەیەک کە دەیناسم ببەستمەوە، بۆیە ناردم بۆ ئۆفیسەکە بۆ ئەوەی هەڵیبژێرن. | needs native review |
+| `clientQuestion.expiredToOffice` | It's been a while since I asked, so I've passed your request to the office to choose the organisation. | ماوەیەکە پرسیارەکەم کردووە، بۆیە داواکارییەکەت ناردم بۆ ئۆفیسەکە بۆ ئەوەی دامەزراوەکە هەڵبژێرن. | needs native review |
+| `clientQuestion.timedOutToOffice` | I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. | نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن. | needs native review |
+| `clientQuestion.clientNoted` | Thanks. I've told the office that {title} is for {client}. | سوپاس. بە ئۆفیسەکەم ڕاگەیاند کە {title} بۆ {client}ە. | needs native review |
 
 187 lines.

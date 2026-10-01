@@ -21,6 +21,8 @@ import { COPY_UPDATE_OFFSET, OFFICE_UPDATE_OFFSET, ledgerUpdateId } from '../src
 const LIVE = "Can you make an Instagram post announcing our Assessment Literacy Workshop for school principals? It's on 15 October 2026 at 10:00 AM in the KAAE hall, Erbil. Registration is free.";
 const LIVE_COPY: ProposedCopy = { headline: 'Assessment Literacy Workshop',
   lines: ['for school principals', '15 October 2026 · 10:00 AM', 'KAAE hall, Erbil', 'Registration is free'] };
+/** As printed: ADR-235 capitalises a line's first lower-case Latin letter, and nothing else. */
+const LIVE_PRINTED = ['For school principals', '15 October 2026 · 10:00 AM', 'KAAE hall, Erbil', 'Registration is free'];
 /** "Please make an Instagram post for the assessment workshop for school principals. On 15 October 2026 at 10:00 in the KAAE hall, Erbil. Registration is free." */
 const SORANI = 'تکایە پۆستێکی ئینستاگرام دروست بکە بۆ وۆرکشۆپی هەڵسەنگاندن بۆ بەڕێوەبەرانی قوتابخانەکان. لە ١٥ی تشرینی یەکەمی ٢٠٢٦ کاتژمێر ١٠:٠٠ لە هۆڵی KAAE، هەولێر. تۆمارکردن بەخۆڕاییە.';
 const KAAE = 'c1000000-0000-4000-8000-000000000002';
@@ -81,10 +83,10 @@ describe('the copy of a request written as a sentence (ADR-232)', () => {
     const draft = await extractRequestCopy(before, ctx(model));
     expect(model.read).toHaveBeenCalledTimes(1);
     expect(model.read.mock.calls[0][0]).toMatchObject({ clientId: KAAE, updateId: 1_234_567, text: LIVE });
-    expect(texts(draft)).toEqual(['Assessment Literacy Workshop', 'for school principals', '15 October 2026 · 10:00 AM', 'KAAE hall, Erbil', 'Registration is free']);
+    expect(texts(draft)).toEqual(['Assessment Literacy Workshop', ...LIVE_PRINTED]);
     expect(draft.exactCopy[0]).toMatchObject({ role: 'headline', language: 'en', direction: 'ltr', approved: true });
     expect(draft).toMatchObject({ title: 'KAAE: Assessment Literacy Workshop', headlineEn: 'Assessment Literacy Workshop',
-      copyEn: 'for school principals\n15 October 2026 · 10:00 AM\nKAAE hall, Erbil\nRegistration is free', copyCkb: '', autoGenerate: true });
+      copyEn: 'For school principals\n15 October 2026 · 10:00 AM\nKAAE hall, Erbil\nRegistration is free', copyCkb: '', autoGenerate: true });
     expect(draft.headlineEn).not.toContain('…');
     // The request is kept as the designer's instructions, never as copy.
     expect(draft.designInstructions).toContain('Can you make an Instagram post');
@@ -232,7 +234,7 @@ describe('a request sentence through intake, the lifecycle open and a revision r
     expect(opened).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request', duplicate: false,
       draft: { title: 'KAAE: Assessment Literacy Workshop', headlineEn: 'Assessment Literacy Workshop', autoGenerate: true, clientId: KAAE,
         copyExtraction: { method: 'model', ledgerUpdateId: COPY_UPDATE_OFFSET + update.update_id } } });
-    expect(texts(opened.draft)).toEqual(['Assessment Literacy Workshop', ...LIVE_COPY.lines]);
+    expect(texts(opened.draft)).toEqual(['Assessment Literacy Workshop', ...LIVE_PRINTED]);
     expect(model.read).toHaveBeenCalledTimes(1);
     expect(model.read.mock.calls[0][0]).toMatchObject({ updateId: update.update_id, chatId: String(chat), clientId: KAAE });
 
@@ -245,8 +247,9 @@ describe('a request sentence through intake, the lifecycle open and a revision r
     const { taskId } = await projected.json() as { taskId: string };
     const payload = await createdPayload(taskId);
     expect(payload).toMatchObject({ rawRequestText: LIVE, headlineEn: 'Assessment Literacy Workshop',
-      copyEn: LIVE_COPY.lines.join('\n'), copyExtraction: { method: 'model', headline: 'Assessment Literacy Workshop', lines: LIVE_COPY.lines } });
-    expect(payload.exactCopy.map((b: { text: string }) => b.text)).toEqual(['Assessment Literacy Workshop', ...LIVE_COPY.lines]);
+      copyEn: LIVE_PRINTED.join('\n'), copyExtraction: { method: 'model', headline: 'Assessment Literacy Workshop', lines: LIVE_PRINTED,
+        capitalised: ['for school principals'] } });
+    expect(payload.exactCopy.map((b: { text: string }) => b.text)).toEqual(['Assessment Literacy Workshop', ...LIVE_PRINTED]);
 
     // A change while the design waits for changes: the round inherits the checked copy; nothing is read again.
     await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requests SET stage = 'manual', rev = 3
@@ -254,7 +257,7 @@ describe('a request sentence through intake, the lifecycle open and a revision r
     const revised = await intake(app({ copyExtractionModel: model }), message(chat, 'make the title bigger'));
     expect(revised).toMatchObject({ lifecycleAction: 'requester-revision', requestId: opened.requestId, priorTaskId: taskId });
     const round = await createdPayload(revised.newTaskId);
-    expect(round.exactCopy.map((b: { text: string }) => b.text)).toEqual(['Assessment Literacy Workshop', ...LIVE_COPY.lines]);
+    expect(round.exactCopy.map((b: { text: string }) => b.text)).toEqual(['Assessment Literacy Workshop', ...LIVE_PRINTED]);
     expect(round).toMatchObject({ headlineEn: 'Assessment Literacy Workshop', studioOptions: { revisionDirective: 'make the title bigger' } });
     expect(model.read).toHaveBeenCalledTimes(1);
   });
@@ -302,7 +305,7 @@ describe('the copy reading\'s paid call (ledger, consent, allowance, replay)', (
     const model = createCopyExtractionModel(db, { fetcher: fetcher as any, apiKey: key });
     const update = updateId();
     const draft = await extractRequestCopy(prepared(LIVE, { clientId: id }), { model, tenantId, updateId: update, senderName: 'Sewa' });
-    expect(texts(draft)).toEqual(['Assessment Literacy Workshop', ...LIVE_COPY.lines]);
+    expect(texts(draft)).toEqual(['Assessment Literacy Workshop', ...LIVE_PRINTED]);
     expect(draft.title).toBe('Sewa: Assessment Literacy Workshop');
     expect(fetcher).toHaveBeenCalledTimes(1);
     const sent = JSON.parse(String((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body));

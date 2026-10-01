@@ -37,7 +37,7 @@ describe('deliverables carried by the actual ChatInbox, lifecycle and TelegramSe
     for(const child of p.opened) expect(await h.photosOf(child.requestId)).toBe(0);
     expect(p.words).toContain('Which one is this for?');
     expect(p.words).toContain('graduation');
-    expect(p.words).toContain('open day');
+    expect(p.words).toMatch(/open day/i);
     expect(h.t.paidCalls).toEqual([]);
   });
   it('retains a shared source edit for every child and requires independent office acknowledgements',async()=>{

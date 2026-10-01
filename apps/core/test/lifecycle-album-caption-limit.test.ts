@@ -340,7 +340,7 @@ describe('the wait and what happens after it (F2, F5)', () => {
     expect(await f.settle(parts[5])).toMatchObject({ albumMessage: ALBUM_MESSAGES.captionCutLapsed.en });
     expect(await f.swept()).toEqual([]);
     await f.age('20 minutes');
-    const brief = f.text('Please design an Instagram post for our Friday open day at the Erbil office, 4pm, with our logo');
+    const brief = f.text('Please design a KAAE Instagram post for our Friday open day at the Erbil office, 4pm, with our logo');
     // The brief waits for photos sent right after it (ADR-143), then opens alone.
     let opened = await f.intake(brief, { briefHold: true });
     if (opened.lifecycleAction === 'settle-later') opened = await f.settle(brief);
@@ -403,7 +403,7 @@ describe('group chats (F6, audit item 14)', () => {
     const { parts } = await f.album(addressed);
     expect(await f.settle(parts[5])).toMatchObject({ lifecycleAction: 'settle-later', notice: { text: question(addressed) } });
     await f.age('11 minutes');
-    const otherBrief = f.text(`${BOT} Please design a poster for the science fair on 12 October 2026 at the Erbil hall`, f.member);
+    const otherBrief = f.text(`${BOT} Please design a KAAE poster for the science fair on 12 October 2026 at the Erbil hall`, f.member);
     let other = await f.intake(otherBrief, { briefHold: true });
     if (other.lifecycleAction === 'settle-later') other = await f.settle(otherBrief);
     expect(other).toMatchObject({ lifecycleAction: 'open-request' });
@@ -417,7 +417,7 @@ describe('group chats (F6, audit item 14)', () => {
     const second = await g.album(`${BOT} ${cut}`.slice(0, 1024));
     await g.settle(second.parts[5]);
     await g.age('11 minutes');
-    const brief = g.text(`${BOT} Please design a poster for the science fair on 12 October 2026 at the Erbil hall`);
+    const brief = g.text(`${BOT} Please design a KAAE poster for the science fair on 12 October 2026 at the Erbil hall`);
     let own = await g.intake(brief, { briefHold: true });
     if (own.lifecycleAction === 'settle-later') own = await g.settle(brief);
     expect(own).toMatchObject({ lifecycleAction: 'open-request' });

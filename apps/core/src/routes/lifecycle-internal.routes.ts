@@ -38,7 +38,7 @@ import { deferMessage, pendingHeldBrief, readDeferral, releaseDeferral, overdueD
   claimPhoto, holdPhoto, markPhotoAsked, pendingEditWords, readHeldPhoto, readMediaAnswer, recordMediaAnswer,
   waitingPhotos } from '../services/lifecycle-media-intake.js';
 import { createEditIntake } from '../services/lifecycle-edit-intake.js';
-import { INBOX_MESSAGES, MEDIA_MESSAGES, ROUTING_MESSAGES, LIFECYCLE_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
+import { CLIENT_QUESTION_MESSAGES, INBOX_MESSAGES, MEDIA_MESSAGES, ROUTING_MESSAGES, LIFECYCLE_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
   albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
@@ -80,6 +80,10 @@ import { CanvaFlowError } from '../services/canva-flow-error.js';
 import { officeTelegramTurn } from '../services/office-telegram-turn.js';
 import { createOfficeIntentModel, type OfficeIntentModel } from '../services/office-intent-model.js';
 import { createCopyExtractionModel, extractRequestCopy, type CopyExtractionModel } from '../services/request-copy-extraction.js';
+import { CLIENT_QUESTION_MS, CLIENT_QUESTION_RULES, answeredUpdateOf, clientName, clientQuestionTimeout, knownClientNames,
+  overdueClientQuestions, pendingClientQuestion, readClientAnswer, readClientResolution, recordClientQuestion, resolveClientQuestion,
+  saysDontKnow, timedOutClientQuestion, type ClientQuestion } from '../services/lifecycle-client-question.js';
+import { plainClientAnswer, resolveSourceClient } from '../services/lifecycle-source-natural.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
 export function isInternalPath(path: string): boolean {
@@ -283,13 +287,18 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     let releasedDeferral = false;
     // ADR-145: words said beside the answer (a video's words were used; a file could not be opened).
     let beside: { text: string; parseMode: 'HTML' } | null = null;
+    // ADR-235: the key ChatInbox sends `beside` under, when it must not be the update's usual notice key.
+    let besideKey: string | null = null;
+    // ADR-235: the settle of a kept brief whose question nobody answered: it opens for the office.
+    let clientTimeout: ClientQuestion | null = null;
     if (mode !== 'legacy' && mode !== 'lifecycle') {
       return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
     }
 
     const handled = (intakeStatus: number, extra: Record<string, unknown> = {}) =>
       // ADR-155 section 6: an office alert reaches every office member, not only the first (office-chats.ts).
-      c.json({ v: 1, kind: 'handled', intakeStatus, ...withOfficeAlerts(extra), ...(beside && !extra.notice ? { notice: beside } : {}) }, 200);
+      c.json({ v: 1, kind: 'handled', intakeStatus, ...withOfficeAlerts(extra),
+        ...(beside && !extra.notice ? { notice: beside, ...(besideKey ? { noticeKey: besideKey } : {}) } : {}) }, 200);
 
     const senderAllowedFor = (u: UpdateLike): boolean => {
       const carrier = (u.message ?? u.edited_message ?? u.channel_post) as Record<string, any> | undefined;
@@ -394,6 +403,20 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // A `/use_album` reply to a photo keeps its old meaning; a plain one binds like any text (ADR-143).
     const repliedConfirmation = isAlbumConfirmation(preparedUpdate) && Boolean(incomingMessage?.reply_to_message);
     const textMessage = !albumPart && !repliedConfirmation && typeof incomingMessage?.text === 'string';
+    // ADR-235: the settle ChatInbox scheduled for a kept brief's question (or the sweep sent again). Not yet
+    // due, or answered: nothing. Due: the brief is read again below and opens for the office to choose,
+    // as "not sure" does, and its sender hears it once. A replay of a timeout that won opens nothing new.
+    if (settle && textMessage && db) {
+      const due = await withRlsContext(db, SYSTEM_SCOPE, (trx) => clientQuestionTimeout(trx, DEFAULT_TENANT_ID, preparedUpdate.update_id));
+      if (due?.kind === 'skip') return handled(200, { settle: 'skipped' });
+      if (due?.kind === 'open') {
+        clientTimeout = due.question;
+        settle = false;
+        releasedDeferral = true;
+        beside = { text: say(CLIENT_QUESTION_MESSAGES.timedOutToOffice, requesterLang(due.question.words)), parseMode: 'HTML' };
+        besideKey = `client-question:${due.question.briefUpdateId}`;
+      }
+    }
     // ADR-145: the settle of a message set behind its sender's held brief. While that brief is still
     // held it waits again; once the brief has opened, the message is read as it arrived.
     if (settle && textMessage && db) {
@@ -487,8 +510,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             if (settled) return settled;
           }
         } else if (textMessage) {
-          const heldReplay = settle ? 'none' : await tx((trx) => heldBriefReplay(trx, DEFAULT_TENANT_ID, source));
-          if (settle) {
+          // ADR-235: a kept brief's timeout is read below as the brief; it is no held brief or album words.
+          const heldReplay = settle || clientTimeout ? 'none' : await tx((trx) => heldBriefReplay(trx, DEFAULT_TENANT_ID, source));
+          if (clientTimeout) {
+            // Nothing here.
+          } else if (settle) {
             const held = await tx((trx) => settleHeldBrief(trx, DEFAULT_TENANT_ID, source));
             if (held === 'skip') return handled(200, { settle: 'skipped' });
             if (held === 'wait') return settleLater('brief', albumSettleMs());
@@ -928,13 +954,49 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             const withBriefParts = async (words: string, heldUpdateId: number | null): Promise<string> => heldUpdateId === null ? words
               : joinedWords(words, await withRlsContext(db, system, (trx) => briefParts(trx, TENANT, heldUpdateId)));
 
+            /**
+             * ADR-235: a brief that names no organisation, from a chat bound to none, is kept and its sender is
+             * asked who it is for. The organisations are listed only in an office member's own chat.
+             */
+            const askWhoItsFor = async (briefText: string, instructionOnly: boolean, scope: NonNullable<ReturnType<typeof senderScopeOf>>,
+              image: ClientQuestion['image'] | undefined): Promise<Response> => {
+              const chat = (msg as Record<string, any>)?.chat;
+              const officeChat = chat?.type === 'private' && scope.senderId === chatId && ctx.telegramAllowedUsers.includes(scope.senderId);
+              const lang = requesterLang(briefText);
+              const { stored, answered } = await withRlsContext(db, system, async (trx) => {
+                const names = officeChat ? await knownClientNames(trx, TENANT) : [];
+                const text = names.length ? say(CLIENT_QUESTION_MESSAGES.askClientNamed, lang, { list: names.map(bold).join(', ') })
+                  : say(CLIENT_QUESTION_MESSAGES.askClient, lang);
+                const stored = await recordClientQuestion(trx, TENANT, { briefUpdateId: update.update_id, chatId, senderId: scope.senderId,
+                  topicId: scope.topic, words: briefText, instructionOnly, ...(image ? { image } : {}), text, listed: names,
+                  askedAt: new Date().toISOString(), askRules: CLIENT_QUESTION_RULES, payloadHash, sourceUpdate: update });
+                return { stored, answered: await readClientResolution(trx, TENANT, update.update_id) };
+              });
+              if (stored.payloadHash !== payloadHash || stored.chatId !== chatId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+              // ChatInbox settles the brief's update when the question times out (a durable delayed call).
+              return handled(200, { lifecycleAction: 'chat-answer', chatId, clientQuestion: true,
+                clientQuestionSettle: { delayMs: CLIENT_QUESTION_MS },
+                chatAnswer: { text: stored.text, parseMode: 'HTML' }, ...(answered ? { duplicate: true } : {}) });
+            };
+
             /** Opens a lifecycle request for a brief (ADR-135), one per language (ADR-139). */
-            const openBrief = async (briefText: string, instructionOnly: boolean, takeHeldPhoto = true): Promise<Response> => {
+            const openBrief = async (briefText: string, instructionOnly: boolean, takeHeldPhoto = true,
+              /** ADR-235: the organisation the sender named for a kept brief, or the office to choose it; and its photo. */
+              opts: { clientId?: string; forOffice?: boolean; keptImage?: ClientQuestion['image'] } = {}): Promise<Response> => {
+              // ADR-235: the kept brief whose question timed out opens, as it was kept, for the office to choose.
+              if (clientTimeout && clientTimeout.briefUpdateId === update.update_id) {
+                briefText = clientTimeout.words;
+                instructionOnly = clientTimeout.instructionOnly;
+                takeHeldPhoto = false;
+                opts = { forOffice: true, ...(clientTimeout.image ? { keptImage: clientTimeout.image } : {}) };
+              }
+              // What was to be said beside the answer before this brief was read (a video's words were used).
+              const besideOnEntry = beside;
               const sender = (msg as Record<string, { id?: unknown; first_name?: unknown }>).from;
               // ADR-145: the newest photo its sender sent with no words, kept for these words.
               const scope = senderScopeOf(update);
               // A photo of a burst still settling with others is not taken alone (ADR-160 addendum).
-              const heldPhoto = takeHeldPhoto && !photoInput && !admittedAlbum && !boundPhoto && scope && !mayHoldBrief
+              const heldPhoto = takeHeldPhoto && !opts.keptImage && !photoInput && !admittedAlbum && !boundPhoto && scope && !mayHoldBrief
                 ? (await withRlsContext(db, system, async (trx) => outsideBursts(trx, TENANT, await waitingPhotos(trx, TENANT, scope)))).at(-1) ?? null : null;
               if (!senderAllowed) {
                 return handled(403, { code: 'SENDER_NOT_ALLOWED' });
@@ -960,7 +1022,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   platform: 'telegram', sourceEventId: `lc-${part.requestId}-r0`, sourceChannelId: chatId,
                   senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester',
                   rawText: part.text, rawJson: part.lang ? { ...update, hawaLanguageGraphic: part.lang } : update,
-                  explicitClientId:part.clientId,variantOverride:part.variant,
+                  explicitClientId:opts.clientId ?? part.clientId,variantOverride:part.variant,
                   autoGenerate: !instructionOnly && !part.detailsRequired && chatAutoDraftsEnabled(),
                   isInstructionOnly: instructionOnly || part.detailsRequired,
                 });
@@ -974,7 +1036,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               };
               const prepared = await prepare(parts[0]);
               let lifecycleImage: ChatIntake['lifecycleImage'];
-              if (photoInput) {
+              if (opts.keptImage) {
+                // ADR-235: the photo the kept brief came with, retained when the question was asked.
+                lifecycleImage = { ...opts.keptImage, updateId: update.update_id };
+              } else if (photoInput) {
                 if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
                 const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
                   (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
@@ -990,6 +1055,15 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 // ADR-145: the photo its sender sent just before (or while the brief waited for photos).
                 lifecycleImage = { ...heldPhoto.image, updateId: update.update_id };
                 beside = { text: say(MEDIA_MESSAGES.photoUsedWithWords, requesterLang(briefText)), parseMode: 'HTML' };
+              }
+              // ADR-235: nothing names the organisation (the chat is bound to none, the words name none): the
+              // brief is kept and its sender asked. Never guessed; a split brief or an album opens as before.
+              if (!opts.clientId && !opts.forOffice && parts.length === 1 && !instructionOnly && !parts[0].detailsRequired &&
+                  prepared.clientId === null && !admittedAlbum && !boundPhoto && scope) {
+                // A held photo is not used yet (the answer's brief takes it): its notice is not said.
+                beside = besideOnEntry;
+                return await askWhoItsFor(briefText, instructionOnly, scope, photoInput && lifecycleImage
+                  ? { sha256: lifecycleImage.sha256, size: lifecycleImage.size, mediaType: lifecycleImage.mediaType } : undefined);
               }
               const media = { ...(lifecycleImage ? { lifecycleImage } : {}),
                 ...(admittedAlbum ? { lifecycleAlbum: admittedAlbum.ref } : {}) };
@@ -1018,7 +1092,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               });
               if (!stored) {
                 beside = null;
-                return openBrief(briefText, instructionOnly, false);
+                return openBrief(briefText, instructionOnly, false, opts);
               }
               if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
                   stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
@@ -1158,6 +1232,51 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   : { requestIds: [] as string[], askUpdateId: null as number | null },
                 opening: priorIntent ? [] : await openingChatRequests(trx, TENANT, chatId),
               }));
+              // ADR-235: the answer to "who is this design for?" opens the kept brief, for the organisation named or
+              // for the office to choose. Words that do not answer it are read as any message is.
+              if (!priorIntent && !newCommand && !groupCommand && !mediaKind) {
+                const scope = senderScopeOf(update);
+                const kept = scope && await withRlsContext(db, system, async (trx) => {
+                  const pending = await pendingClientQuestion(trx, TENANT, { chatId, senderId: scope.senderId, topicId: scope.topic }, update.update_id);
+                  if (!pending) return null;
+                  if (pending.resolution) return { question: pending.question, resolution: pending.resolution };
+                  const repliedToQuestion = (await answeredUpdateOf(trx, TENANT, replyMessageId)) === pending.question.briefUpdateId;
+                  const answer = await readClientAnswer(trx, TENANT, { question: pending.question, text, repliedToQuestion });
+                  if (!answer) return null;
+                  const resolution = await resolveClientQuestion(trx, TENANT, pending.question.briefUpdateId, { byUpdateId: update.update_id, ...answer });
+                  return resolution.byUpdateId === update.update_id ? { question: pending.question, resolution } : null;
+                });
+                // An organisation named after the question timed out: the office is told, nothing opens again.
+                const late = !kept && scope ? await withRlsContext(db, system, async (trx) => {
+                  const timedOut = await timedOutClientQuestion(trx, TENANT, { chatId, senderId: scope.senderId, topicId: scope.topic });
+                  if (!timedOut || saysDontKnow(text)) return null;
+                  const replied = (await answeredUpdateOf(trx, TENANT, replyMessageId)) === timedOut.question.briefUpdateId;
+                  const clientId = await resolveSourceClient(trx, TENANT, { chatId, words: text });
+                  if (!clientId || (!replied && !(plainClientAnswer(text) && !/\p{N}/u.test(text) &&
+                    !/\b(?:poster|flyer|banner|design|invitation|card|post|story)s?\b|پۆستەر|پۆست|دیزاین/iu.test(text)))) return null;
+                  return { ...timedOut, client: await clientName(trx, TENANT, clientId) ?? text.trim() };
+                }) : null;
+                if (late) {
+                  const lang = requesterLang(text, requesterLang(late.question.words));
+                  const title = late.title ?? say(LIFECYCLE_MESSAGES.yourDesign, lang);
+                  const office = officeChatFor(chatId);
+                  return handled(200, { lifecycleAction: 'chat-answer', chatId,
+                    chatAnswer: { text: say(CLIENT_QUESTION_MESSAGES.clientNoted, lang, { title: bold(title), client: bold(late.client) }), parseMode: 'HTML' },
+                    ...(office ? { officeAlert: { chatId: office, text: `The requester says "${title}" is for ${late.client}. ` +
+                      'It was passed to you because they had not said who it was for; please assign it in the Desk.' } } : {}) });
+                }
+                if (kept) {
+                  const { question, resolution } = kept;
+                  // Answered in the language of the answer (an English brief may be answered in Sorani).
+                  const lang = requesterLang(text, requesterLang(question.words));
+                  mayHoldBrief = false;
+                  beside = resolution.outcome === 'client' ? null : { text: say(resolution.outcome === 'office' ? CLIENT_QUESTION_MESSAGES.passedToOffice
+                    : resolution.outcome === 'unmatched' ? CLIENT_QUESTION_MESSAGES.notMatchedToOffice : CLIENT_QUESTION_MESSAGES.expiredToOffice, lang), parseMode: 'HTML' };
+                  return await openBrief(question.words, question.instructionOnly, true, {
+                    ...(resolution.outcome === 'client' && resolution.clientId ? { clientId: resolution.clientId } : { forOffice: true }),
+                    ...(question.image ? { keptImage: question.image } : {}) });
+                }
+              }
               let reading: IntentReading;
               let plan: TurnPlan;
               if (priorIntent) {
@@ -1596,6 +1715,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     if (!db) return problem(c, 503, 'Database Unavailable', 'The sweep reads the saved albums');
     const due = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
       async (trx) => [...await overdueSettles(trx, DEFAULT_TENANT_ID),
+        // ADR-235: kept briefs whose question nobody answered and whose own delayed settle was lost.
+        ...await overdueClientQuestions(trx, DEFAULT_TENANT_ID) as Array<{ chatId: string; update: any }>,
         // ADR-145: kept photos never settled, and messages set behind a held brief never read.
         ...await overduePhotos(trx, DEFAULT_TENANT_ID), ...await overdueDeferrals(trx, DEFAULT_TENANT_ID)]);
     return c.json({ v: 1, due }, 200);

@@ -209,8 +209,8 @@ export const OFFICE_CHAT_SCRIPTS: Script[] = [
     async play(p) {
       await inReview(p);
       await office(p, 'approved');
-      reads(p, 'Can you make a poster for our staff football tournament on 14 November at 4 pm?', 'new_request', null);
-      await office(p, 'Can you make a poster for our staff football tournament on 14 November at 4 pm?');
+      reads(p, 'Can you make a KAAE poster for our staff football tournament on 14 November at 4 pm?', 'new_request', null);
+      await office(p, 'Can you make a KAAE poster for our staff football tournament on 14 November at 4 pm?');
       await p.h.wait(60_000);
       expect(p.h.t.deliveries).toHaveLength(0);
       expect(await p.stages()).toEqual(['in_review']);

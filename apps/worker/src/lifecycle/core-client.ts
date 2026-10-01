@@ -37,6 +37,8 @@ export interface CoreClientOptions {
  * such settle; a Core test ties CUT_CAPTION_WAIT_MS to this, so neither changes alone.
  */
 export const MAX_SETTLE_DELAY_MS = 10 * 60_000;
+/** ADR-235: the longest wait for an answer to "who is this design for?" before its settle (Core asks 30 minutes). */
+export const MAX_CLIENT_QUESTION_DELAY_MS = 60 * 60_000;
 const WAIT_CODES = new Set(['DATABASE_UNAVAILABLE', 'INTAKE_PAUSED', 'NOT_CONFIGURED']);
 const retryable = (status: number) => status >= 500 || status === 429 || status === 408;
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -99,6 +101,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
         chatAnswer?: { text?: unknown; parseMode?: unknown } | null;
         requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null; officeAlerts?: unknown;
         notice?: { text?: unknown; parseMode?: unknown } | null; quiet?: unknown;
+        noticeKey?: unknown; clientQuestionSettle?: { delayMs?: unknown } | null;
       };
       // The fields declared as text are checked, not assumed: a number or object where Core's answer
       // should carry text is refused, and the update waits (audit 2026-09-30, ADR-159).
@@ -119,7 +122,9 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
           const base: Extract<IntakeAnswer, { kind: 'done' }> = { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true,
             ...(notice ? { notice: { text: String(notice.text), ...(notice.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) } } : {}),
             // N5: Core answered this chat's sender outside the intake list already today.
-            ...(status === 403 && body.quiet === true ? { quiet: true } : {}) };
+            ...(status === 403 && body.quiet === true ? { quiet: true } : {}),
+            // ADR-235: a notice Core keys itself (the timeout of a kept brief's question), sent once under it.
+            ...(notice && typeof body.noticeKey === 'string' && /^client-question:[0-9]+$/.test(body.noticeKey) ? { noticeKey: body.noticeKey } : {}) };
           if (body.lifecycleAction === 'source-message') {
             if (!body.chatId || typeof body.sourceMessage !== 'string' || !body.sourceMessage || body.sourceMessage.length > 3000 ||
                 typeof body.sourceNoticeKey !== 'string' || !/^source-review:[0-9]+$/.test(body.sourceNoticeKey))
@@ -133,7 +138,13 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
             if (!body.chatId || !answer || typeof answer.text !== 'string' || !answer.text || answer.text.length > 4000 ||
                 (answer.parseMode !== undefined && answer.parseMode !== 'HTML') || !validAlert(alert))
               throw new Error(`Core returned an invalid chat answer for update ${update.update_id}`);
+            // ADR-235: a question about a kept brief carries the settle of its timeout.
+            const wait = body.clientQuestionSettle;
+            if (wait !== undefined && (!wait || !Number.isSafeInteger(wait.delayMs) || Number(wait.delayMs) < 0 ||
+                Number(wait.delayMs) > MAX_CLIENT_QUESTION_DELAY_MS))
+              throw new Error(`Core returned an invalid client question settle for update ${update.update_id}`);
             return { ...base, lifecycleAction: 'chat-answer', chatId: body.chatId,
+              ...(wait ? { clientQuestionSettle: { delayMs: Number(wait.delayMs) } } : {}),
               chatAnswer: { text: answer.text, ...(answer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) },
               ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}),
               ...officeAlertsOf(alert, body.officeAlerts) };
