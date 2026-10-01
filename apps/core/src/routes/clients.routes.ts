@@ -5,6 +5,7 @@ import { validateClientDna, type ClientDNA } from '@hawa/domain';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { computeDnaHash } from '../core-helpers.js';
 import { findClientRowId, snapshotFromRow } from '../services/client-row.js';
+import { ModelConsentError, readClientModelConsent, recordClientModelConsent } from '../services/client-model-consent.js';
 
 export function registerClientsRoutes(ctx: RouteContext) {
   const {
@@ -493,5 +494,41 @@ export function registerClientsRoutes(ctx: RouteContext) {
       activeDna: restoredDna,
       snapshot: rollbackSnap,
     }, 200);
+  });
+
+  /**
+   * ADR-234: a client's consent to model readings of its messages. An administrator (a person, never
+   * a service) makes the next DNA version with only privacy's provider consent changed, approved by
+   * them, with an audit row; the GET says what the readers see now, without SQL.
+   */
+  const consentFailure = (c: any, err: unknown) => {
+    if (err instanceof ModelConsentError) return problem(c, err.status, err.code, err.message);
+    return problem(c, 503, 'Database Unavailable', (err as Error)?.message || 'Could not read or record the client\'s model consent');
+  };
+  registerRoute('get', '/clients/:clientId/dna/model-consent', async (c: any) => {
+    c.header('Cache-Control', 'no-store');
+    if (!db || !clientRepo) return problem(c, 503, 'Database Required', 'Model consent is held in PostgreSQL.');
+    try {
+      return c.json(await readClientModelConsent(db, clientRepo, verifyRequestAuth(c), c.req.param('clientId')), 200);
+    } catch (err) {
+      return consentFailure(c, err);
+    }
+  });
+  registerRoute('post', '/clients/:clientId/dna/model-consent', async (c: any) => {
+    c.header('Cache-Control', 'no-store');
+    if (!db || !clientRepo) return problem(c, 503, 'Database Required', 'Model consent is held in PostgreSQL.');
+    try {
+      const body = await c.req.json().catch(() => null);
+      const result = await recordClientModelConsent(db, clientRepo, verifyRequestAuth(c), c.req.param('clientId'), body);
+      const { dna, code, ...answer } = result;
+      if (result.changed && !result.replayed) {
+        // The map Core still reads (client-dna-hydration.ts), under the three keys it is hydrated with.
+        for (const key of [result.clientId, ...(code ? [code, `client-${code}`] : [])]) clientDnas.set(key, dna as unknown as ClientDNA);
+        broadcast('dna:updated', { clientId: result.clientId, version: result.version, sha256: result.contentHash });
+      }
+      return c.json(answer, result.changed && !result.replayed ? 201 : 200);
+    } catch (err) {
+      return consentFailure(c, err);
+    }
   });
 }

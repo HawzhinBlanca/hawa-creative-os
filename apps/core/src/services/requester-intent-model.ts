@@ -244,8 +244,11 @@ export async function readOnce<D extends object>(db: Kysely<Database>, options: 
   return outcome.decision;
 }
 
-/** The client's egress policy and its active DNA both admit OpenAI for client messages. */
-async function egressAllowed(trx: Kysely<Database>, tenantId: string, clientId: string): Promise<boolean> {
+/**
+ * The client's egress policy and its active, approved DNA both admit OpenAI for client messages. An
+ * administrator records that consent, or withdraws it, through ADR-234's action (client-model-consent.ts).
+ */
+export async function egressAllowed(trx: Kysely<Database>, tenantId: string, clientId: string): Promise<boolean> {
   const client = await trx.selectFrom('clients').select(['id', 'model_egress_policy'])
     .where('id', '=', clientId).where('tenant_id', '=', tenantId).where('status', '=', 'active').executeTakeFirst();
   const dna = (await sql<{ dna: { privacy?: { modelEgressMode?: unknown; allowedProviders?: unknown } } }>`SELECT dna
