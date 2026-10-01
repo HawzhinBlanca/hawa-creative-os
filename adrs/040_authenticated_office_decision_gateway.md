@@ -82,3 +82,62 @@ Tests:
 Results: the Core file has 35 tests and passes. With the intake hook and the worker changes reverted to 73076f80, 11 of its 13 route cases fail, and the unit readings still pass because that module stays. The two that pass on the base are the guards for a non-office requester and for a forward or group message. The worker file has 7 tests and passes; 3 of them fail on the base. `apps/core`, `apps/worker` and `packages/integrations` together: 322 files and 3455 tests passed, with 3 files and 4 tests skipped. `pnpm typecheck` and `pnpm lint` pass.
 
 Not exercised: live Telegram, a live Restate server and a live Canva capture.
+
+## Addendum (2026-10-01): telling drafts apart, and the draft a member just saw
+
+Branch `claude/office-choice-friction` from production 2c4d61ec; not deployed. No foundation decision changes.
+
+**Incident, 2026-10-01 07:35Z.** The owner is an office member. Three drafts were waiting for office review. The owner wrote feedback without replying to a draft photo: "the design is not approved, the images cut with no content awareness, should have more images organized creatively…". The bot asked "Which draft do you mean?" and listed three titles:
+
+- "KAAE: Here is the text and the photos:…";
+- "KAAE: KAAE K-12 Pilot Study…" (with a right-to-left mark);
+- the same title again.
+
+Options 2 and 3 could not be told apart. The owner's words also read as **approval**: "approved" is an approval phrase, and nothing after it read as a change. Answering "2" would have approved and sent a draft the owner had just refused.
+
+Decisions:
+
+1. **Refusing words are never approval.** `readOfficeIntent` reads approval words that refuse it ("not approved", "isn't ready", "not good", "don't send it", and the Sorani "not approved", "I don't approve it", "don't send it") before any approval rule.
+   - With two or more words about the draft besides the refusal, it is a change, and those words go back as the change.
+   - "not approved" alone still rejects, as before.
+   - "not good" or "don't send it" alone is unclear: asked about after a reply, left to intake without one.
+   - The requester rules (`readIntentByRules`) are unchanged. A requester who writes "not approved, …" is still read by them as before (see Limits).
+2. **Each option says what tells it apart.** The "which draft?" list is sorted newest first and holds at most 5 drafts. Each line gives:
+   - when the draft was sent to this member: their office alert's sent mark, or else when the draft entered review. It is in the member's language, on Iraq's clock: "just now", "12 minutes ago", "today 20:41", "yesterday 20:41", "3 days ago";
+   - the photo count of the request (its `reference_image` files);
+   - "newest" on the first line;
+   - who asked for it ("from Shno", "from you"), only when the drafts are not all from the same person.
+
+   The words come from the catalogue's `office` section in English and Sorani. The 13 new Sorani lines are marked for native review in SORANI_REVIEW.md.
+   - "the newest" or "the latest" answers with the first line. The requester's `parseChoice` reads "latest" as the last line, which suits its oldest-first lists.
+3. **Old titles are cleaned when they are read.** `services/draft-title.ts` (`cleanDraftTitle`) reuses ADR-180's `withoutRepeatedClient` and `stripLeadingMarks`, and ADR-142's `isCopyIntroducer`.
+   - Direction marks are dropped, and the client is named once.
+   - A title made from the copy's introducer is named by the request's first line of copy, from its `task.created` event. The incident's first option reads "KAAE K-12 Pilot Study". Without stored copy it is the client's name.
+   - The office list, the office confirmations and the draft photo alert (`composeOfficeDraftAlert`) read titles through it.
+   - The requester's `shortTitle`, used by their lists, confirmations and the office's text alerts about requesters, drops direction marks and says "your design" for an introducer title, as `designName` already did (ADR-142).
+   - Stored titles are not rewritten.
+4. **Words with no reply go to the draft the member just saw.** With several drafts waiting, a member's words with no reply apply to the newest draft whose office alert reached this member, without asking, when both of these hold:
+   - that alert came within the last 2 hours, for the revision still in review;
+   - no other waiting draft was sent within 5 minutes of it.
+
+   The answer then names the draft first: "About the <title> draft I sent you 10 minutes ago:", then the usual confirmation. A wrong guess shows at once.
+   - The bot still asks when there is no recent alert, when drafts came minutes apart, or when the member has designs of their own on the way. In that last case the words may be about their own design (ADR-182 guard, unchanged).
+   - With one draft waiting, nothing changes.
+5. **The words are kept across the question.** When the bot asks, the turn's plan already stores the words and their reading (`ask-which`), and a number, ordinal, name or "the newest" applies them to the chosen draft. The member is not asked for the words again. On the base this already worked for words read as a change. The incident failed because its words were read as approval; decision 1 fixes that.
+
+No model is called, and no paid call is added. Requester routing is unchanged except for the cleaned names.
+
+Tests:
+
+- `apps/core/test/office-telegram-approval.test.ts`, 46 tests, all pass. 11 fail on the base sources:
+  - the incident: three drafts, two with the same stored title, listed with different facts on every line; "2" sends the kept words back as the change to that draft, and the others are untouched;
+  - the recent-alert default, with the draft named in the answer;
+  - still asking when alerts came minutes apart or are older than two hours, and "the newest";
+  - cleaned names in the photo caption and the confirmations;
+  - six readings of refusing words;
+  - the existing two-draft case, now listed newest first.
+- The requester-side case (a requester with two drafts in review writing a change) passes its behaviour assertions on the base: no office turn, no decision, the requester's own question. It fails there only on the cleaned name.
+- `apps/core/test/office-caption-and-title.test.ts`, 9 tests, all pass. The two new cases that exist on the base fail there.
+- `apps/core`, `apps/worker` and `packages/integrations` together: 331 files and 3750 tests passed, with 3 files and 4 tests skipped. That run had a Desk `vite build` in place, which the bundle-size test reads. `pnpm typecheck` and `pnpm lint` pass.
+
+Limits: live Telegram is not exercised. The requester rules (`readIntentByRules`) still read some refusals as approval words: the incident's sentence, and "don't send it". From a requester, that tells the office the requester is happy. It approves nothing, and approval stays with the office. It is left for a separate change, because the requester side was to stay as it is.
