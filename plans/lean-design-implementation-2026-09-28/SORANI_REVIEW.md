@@ -256,7 +256,7 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `office.notRecorded` | I couldn't record that for {title}, so nothing was changed. Please use Hawa Desk. | نەمتوانی ئەوە بۆ {title} تۆمار بکەم، بۆیە هیچ شتێک نەگۆڕدرا. تکایە Hawa Desk بەکاربهێنە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
 | `office.you` | you | تۆ | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
 | `office.theRequester` | the requester | داواکارەکە | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.draftAlertDecide` | Reply to this picture with “approved” to send it to {requester}, or say what to change. You can also decide in Hawa Desk. | بە «پەسەندە» وەڵامی ئەم وێنەیە بدەرەوە بۆ ئەوەی بۆ {requester} بنێردرێت، یان بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت. | needs native review (ADR-180, the office draft photo alert, 2026-09-30) |
+| `office.draftAlertDecide` | Just say “approved” to send it to {requester}, or tell me what to change. You can also decide in Hawa Desk. | تەنها بڵێ «پەسەندە» بۆ ئەوەی بۆ {requester} بنێردرێت، یان پێم بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت. | needs native review (ADR-239, rewritten in plain chat words with no reply target, 2026-10-01; was ADR-180) |
 | `office.sentWhen` | sent {when} | {when} نێردرا | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
 | `office.justNow` | just now | ئێستا | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
 | `office.aMinuteAgo` | a minute ago | پێش خولەکێک | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
@@ -270,7 +270,7 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `office.newest` | newest | نوێترین | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
 | `office.fromRequester` | from {requester} | داواکراوە لەلایەن {requester} | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
 | `office.aboutDraft` | About the {title} draft I sent you {when}: | دەربارەی ڕەشنووسی {title} کە {when} بۆم ناردیت: | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.lostTrack` | I've lost track of that question — please reply to the draft picture with what you want. | ئەو پرسیارەم لێ ون بوو — تکایە وەڵامی وێنەی ڕەشنووسەکە بدەرەوە و بڵێ چیت دەوێت. | needs native review (ADR-040 addendum, pending choice re-read, 2026-10-01) |
+| `office.lostTrack` | I've lost track of that question, so I haven't done anything. Just tell me again what you'd like me to do with the draft. | ئەو پرسیارەم لێ ون بوو، بۆیە هیچم نەکرد. تەنها جارێکی تر پێم بڵێ دەتەوێت چی لە ڕەشنووسەکە بکەم. | needs native review (ADR-239, rewritten in plain chat words with no reply target, 2026-10-01; was the ADR-040 addendum) |
 
 | `routing.statusHeld` | {title} is paused at your request. New design work is waiting for the office to resume it; work already admitted may still finish. | {title} بە داواکاریی تۆ ڕاگیراوە. کاری نوێی دیزاین چاوەڕێیە ئۆفیسەکە دووبارە دەستی پێ بکاتەوە؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |
 | `routing.holdConfirmed` | I've paused {title}. New design work will wait until the office resumes it; work already in progress may still finish. | {title} ڕاگیرا. کاری نوێی دیزاین چاوەڕێ دەکات تا ئۆفیس دووبارە دەستی پێبکات؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |

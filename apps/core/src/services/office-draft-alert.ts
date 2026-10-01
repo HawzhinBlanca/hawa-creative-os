@@ -65,9 +65,9 @@ export interface OfficeDraftAlertInput {
   check?: string;
   /**
    * ADR-180: the words go with the draft's picture, and office members may decide on it in Telegram
-   * (ADR-040 addendum): the caption says to reply to the picture. The text alert, sent without the
-   * picture (or by a worker from before), keeps pointing to Hawa Desk: approving in Telegram needs the
-   * picture that member was sent.
+   * (ADR-040 addendum): the caption says how, in plain words (ADR-239: "just say “approved”", no reply
+   * target). The text alert, sent without the picture (or by a worker from before), keeps pointing to
+   * Hawa Desk: approving in Telegram needs the picture that member was sent.
    */
   telegramDecision?: boolean;
 }

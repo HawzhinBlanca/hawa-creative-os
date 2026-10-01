@@ -11,7 +11,7 @@ import { createOfficeIntentModel, officeIntentRequestBody, parseOfficeDecision, 
 import { reserveStudioText, studioTextUsage } from '@hawa/creative';
 import { resolveModel } from '@hawa/domain';
 import { checkSignedOfficeDecision, type SignedOfficeDecision } from '../../worker/src/lifecycle/office-decision-gateway.js';
-import { recordOfficeDeliveryStart, recordOfficeRevision,
+import { recordOfficeDeliveryStart, recordOfficeRevision, recordWithdraw,
   type AutomaticLifecycleState, type AutomaticOpenContext } from '../../worker/src/lifecycle/request-lifecycle.js';
 
 /**
@@ -577,7 +577,8 @@ describe('which draft, when several wait (ADR-040 addendum, 2026-10-01)', () => 
  */
 describe('a pending "which draft?" is read again when answered (ADR-040 addendum, incident 2026-10-01)', () => {
   const INCIDENT_WORDS = 'the design is not approved, the images cut with no content awareness, should have more images organized creatively, not just straight image on same old bg';
-  const LOST = 'I\'ve lost track of that question — please reply to the draft picture with what you want.';
+  // ADR-239 (changed deliberately): plain chat; it said "please reply to the draft picture with what you want".
+  const LOST = 'I\'ve lost track of that question, so I haven\'t done anything. Just tell me again what you\'d like me to do with the draft.';
 
   /**
    * The "which draft?" turn as a deploy before this fix stored it: the decision kind read at question
@@ -1250,5 +1251,64 @@ describe('the approval choice lists only drafts that can be approved (ADR-231, l
       await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requests SET stage = 'delivered'
         WHERE tenant_id = ${tenantId}::uuid AND request_id = ANY(${[accident.requestId, post.requestId]}::uuid[])`.execute(trx));
     }
+  });
+});
+
+describe('one person who is both the requester and an office member (ADR-239, live 2026-10-01)', () => {
+  beforeEach(() => forgetOfficeTurns());
+  /** RequestLifecycle's withdraw for the update intake decided, as ChatInbox hands it over. */
+  const withdraw = (requestId: string, update: { update_id: number }) => recordWithdraw(objectFor(requestId), core,
+    { v: 1, kind: 'withdraw', eventId: `chatinbox:withdraw:${update.update_id}`, requestId, updateId: update.update_id });
+
+  it('the owner\'s exact words cancel their own draft as its requester: withdrawn and told so, never "Rejected"', async () => {
+    await emptyQueue();
+    const draft = await draftInReview('KAAE: Quality Assurance Workshop', { requesterChat: String(OFFICE_A) });
+    const { calls } = gateway();
+    const words = say(OFFICE_A, 'please cancel the Quality Assurance Workshop poster, it was only a test');
+    const decided = await intake(words);
+    // Live, 2026-10-01: "About the <b>KAAE: Quality Assurance Workshop</b> draft I sent you just now:\nRejected: …
+    // Nothing was sent to you." Now intake decides the requester's withdraw and says nothing yet.
+    expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId: draft.requestId, requestStage: 'in_review' });
+    expect(decided.chatAnswer).toBeUndefined();
+    expect(calls).toHaveLength(0);
+    sent.length = 0;
+    expect(await withdraw(draft.requestId, words)).toMatchObject({ accepted: true, stage: 'cancelled', fromStage: 'in_review' });
+    expect(sent.filter((m) => m.chatId === String(OFFICE_A)).map((m) => m.text))
+      .toEqual(['Cancelled <b>Quality Assurance Workshop</b>. Nothing more will be made for it.']);
+    expect(sent.map((m) => m.text).join('\n')).not.toMatch(/Rejected/);
+    expect(await rows(draft.requestId, draft.taskId)).toMatchObject({ request: { stage: 'cancelled' }, approvals: [] });
+    // A replay of the same update is handed over again, whatever the queue holds now.
+    expect(await intake(words)).toMatchObject({ lifecycleAction: 'withdraw', requestId: draft.requestId });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('"cancel this" in reply to the picture of their own draft withdraws it the same way', async () => {
+    await emptyQueue();
+    const other = await draftInReview('Clinic leaflet', { alertedMinutesAgo: 5 });
+    const own = await draftInReview('KAAE: Nawroz greeting', { requesterChat: String(OFFICE_A) });
+    const { calls } = gateway();
+    const words = say(OFFICE_A, 'cancel this', replyTo(own.messageIds[OFFICE_A]));
+    expect(await intake(words)).toMatchObject({ lifecycleAction: 'withdraw', requestId: own.requestId });
+    expect(await withdraw(own.requestId, words)).toMatchObject({ accepted: true, stage: 'cancelled' });
+    expect(calls).toHaveLength(0);
+    // The other requester's draft is untouched.
+    expect(await rows(other.requestId, other.taskId)).toMatchObject({ request: { stage: 'in_review' }, approvals: [] });
+  });
+
+  it('approval from the same person stays the office\'s approval; cancelling someone else\'s draft stays the office\'s rejection', async () => {
+    await emptyQueue();
+    const own = await draftInReview('KAAE: Open day poster', { requesterChat: String(OFFICE_A) });
+    gateway();
+    expect((await intake(say(OFFICE_A, 'approved', replyTo(own.messageIds[OFFICE_A])))).chatAnswer.text)
+      .toBe('Approved. Sending <b>KAAE: Open day poster</b> to you now.');
+    expect((await rows(own.requestId, own.taskId)).request).toMatchObject({ stage: 'delivering' });
+
+    await emptyQueue();
+    const theirs = await draftInReview('Clinic leaflet');
+    gateway();
+    expect((await intake(say(OFFICE_A, 'cancel this', replyTo(theirs.messageIds[OFFICE_A])))).chatAnswer.text)
+      .toBe('Rejected: <b>Clinic leaflet</b>. Nothing was sent to the requester.');
+    expect(await rows(theirs.requestId, theirs.taskId)).toMatchObject({ request: { stage: 'rejected' },
+      approvals: [{ decision: 'rejected', decision_payload: { rejectionCategory: 'task' } }] });
   });
 });

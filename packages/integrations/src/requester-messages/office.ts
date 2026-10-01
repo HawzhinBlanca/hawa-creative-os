@@ -39,11 +39,12 @@ export const OFFICE_MESSAGES = {
   },
   /**
    * ADR-040 addendum (incident 2026-10-01): an answer to a question the bot asked too long ago, or under
-   * reading rules that have since changed. Nothing is done with it.
+   * reading rules that have since changed. Nothing is done with it. ADR-239: plain chat, no reply target
+   * (it said "please reply to the draft picture with what you want").
    */
   lostTrack: {
-    en: 'I\'ve lost track of that question — please reply to the draft picture with what you want.',
-    ckb: 'ئەو پرسیارەم لێ ون بوو — تکایە وەڵامی وێنەی ڕەشنووسەکە بدەرەوە و بڵێ چیت دەوێت.',
+    en: 'I\'ve lost track of that question, so I haven\'t done anything. Just tell me again what you\'d like me to do with the draft.',
+    ckb: 'ئەو پرسیارەم لێ ون بوو، بۆیە هیچم نەکرد. تەنها جارێکی تر پێم بڵێ دەتەوێت چی لە ڕەشنووسەکە بکەم.',
   },
   /**
    * ADR-040 addendum (2026-10-01): each draft in the "which draft?" list says what tells it apart from
@@ -178,11 +179,13 @@ export const OFFICE_MESSAGES = {
   /**
    * ADR-180: the last line of a draft's photo alert (ADR-155 addendum), now that office members decide
    * in Telegram (ADR-040 addendum). It said "Approve or send it back in Hawa Desk on the office
-   * computer". The office alert is the one place a reply target is named: the owner asked for it.
+   * computer". ADR-239: plain chat (natural language only): it said "Reply to this picture with
+   * “approved” …". The office chat reads words with no reply as about this draft (ADR-200), and a reply
+   * still works.
    */
   draftAlertDecide: {
-    en: 'Reply to this picture with “approved” to send it to {requester}, or say what to change. You can also decide in Hawa Desk.',
-    ckb: 'بە «پەسەندە» وەڵامی ئەم وێنەیە بدەرەوە بۆ ئەوەی بۆ {requester} بنێردرێت، یان بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت.',
+    en: 'Just say “approved” to send it to {requester}, or tell me what to change. You can also decide in Hawa Desk.',
+    ckb: 'تەنها بڵێ «پەسەندە» بۆ ئەوەی بۆ {requester} بنێردرێت، یان پێم بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت.',
   },
   /**
    * ADR-200: before an approval sends a draft to someone other than the approving member, the bot asks
