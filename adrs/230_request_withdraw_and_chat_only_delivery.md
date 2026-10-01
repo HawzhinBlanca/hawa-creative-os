@@ -114,3 +114,31 @@ A draft with no such change, and a run that ends without a draft, are unchanged.
 - a draft with no change.
 
 4 of 5 fail on the previous sources; the fifth is the unchanged path.
+
+## 7. Addendum (2026-10-01): a natural cancel is read as one (L12)
+
+**Incident.** Production `13adc35f`, 15:08:44Z: "also cancel the other one I opened by mistake this afternoon". At that moment the only open request was the accidental 3a4c6ac4 (`manual`); KAAE 95eeb08d had just been delivered by the repair. The answer was "KAAE K-12 Pilot Study… was already delivered; I've passed your change to the office", and the office got a note on KAAE. Core answered in 59 ms without asking the intake router.
+
+**Why no model reading.** The router is asked only when the rules leave a message `unclear` (ADR-144 §2.1, deliberate: rules first, one paid call per update only for what they cannot place). `corePhrase` already dropped the leading "also". But `CANCEL_EN` is anchored and has no room for a clause saying which request, so it did not match. `readsAsChange` then read the words as a *certain* change, and recency placed it on the design that moved last. The rule itself is kept. The gap was a confident wrong reading, and it is closed in the rules.
+
+**Decision.**
+1. **Reading.** `CANCEL_DESCRIBED` takes the same verbs and the same whole-request object as `CANCEL_EN` (a pronoun, or a noun for a job: request, order, design, poster, … one). The object may be followed by clauses that say which request:
+   - who made it and how: "I opened by mistake", "I sent this morning", "we made yesterday", "I asked for by mistake";
+   - when: "from earlier", "this afternoon", "just now".
+
+   Leading fillers ("also", "and", "ok", "please") were already dropped by `corePhrase`. The object stays required, so "cancel the gold border" or "remove the logo" is still a change. The 160-character bound stays. Words with a cancel verb and a whole-request noun that no pattern places are `unclear`, never a certain change, so the router reads them once, within ADR-144's allowance. No new call type is added.
+2. **Targeting** (`planCancel`, a cancel without a reply). A cancel looks only at withdrawable requests: designing, awaiting an answer, manual, in review.
+   - The words' description narrows them (`describedForCancel`): "the one I just sent" or "the last one" is the newest; "the first" the oldest; "this morning / afternoon / evening / today / yesterday" in office time (UTC+3); "the other one" is not the design the chat was last about. A description matching none leaves them all.
+   - A request the words name, or that the router is sure of (confidence ≥ 0.85), is withdrawn at once.
+   - Exactly one withdrawable request is withdrawn at once when it is the only design in the chat. Otherwise it is asked about by name ("Do you want me to cancel *title*?"), and "yes" withdraws it. Several are asked about as a list.
+   - Nothing withdrawable, but one approved or being sent: told too late, as before (ADR-230 §2.1).
+   - Nothing open at all: "There's nothing open for me to cancel right now.", followed by "*title* was already delivered, so there is nothing to cancel there." for each delivered design (`WITHDRAW_MESSAGES`). No note is kept.
+   - A reply to a design still binds to it, as before.
+
+**Verification.** `apps/core/test/request-withdraw.test.ts`, +15 tests:
+- six readings, including the exact live words, and four that are not cancels (parts of a design, too long);
+- the live situation: asked by name, never a note on KAAE, and "yes" withdraws;
+- named for certain, "the one I just sent", and nothing withdrawable;
+- unplaced cancel words go to the router once and withdraw what it names.
+
+10 of these fail on `13adc35f` sources. The other five are the not-a-cancel guards and "cancel that".

@@ -66,7 +66,7 @@ import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, 
   withoutBotMentions, type ChatRequestView, type IntentReading, type TurnPlan } from '../services/requester-turn.js';
 import { briefPartSeconds, briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
 import { officeChatFor, officeChatsFor, withOfficeAlerts } from '../services/office-chats.js';
-import { WITHDRAWABLE_STAGES, projectLifecycleWithdraw, recordWithdrawnOutcome, withdrawTooLateText, type WithdrawActor } from '../services/lifecycle-withdraw.js';
+import { WITHDRAWABLE_STAGES, nothingToCancelText, projectLifecycleWithdraw, recordWithdrawnOutcome, withdrawTooLateText, type WithdrawActor } from '../services/lifecycle-withdraw.js';
 import { addPhotoMaterial, MATERIAL_STAGES, photoMaterialLine } from '../services/lifecycle-photo-material.js';
 import { createRequesterIntentModel, type RequesterIntentModel } from '../services/requester-intent-model.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
@@ -1346,6 +1346,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   const alerted = Boolean(office && office !== chatId);
                   const words = plan.what === 'thanks' ? thanksText(shown, lang)
                     : plan.what === 'status' ? statusText(shown, lang, new Set(alerted ? slow.map((r) => r.requestId) : []))
+                      // ADR-230 addendum (L12): a cancel with nothing open to withdraw.
+                      : plan.what === 'nothing-to-cancel' ? nothingToCancelText(shown, lang)
                       : nothingToChangeText(lang);
                   return await decided(200, chatAnswer(words, alerted
                     ? { officeAlert: { chatId: office!, text: slowDesignOfficeAlert(whoSent(update), slow, now) } } : {}));

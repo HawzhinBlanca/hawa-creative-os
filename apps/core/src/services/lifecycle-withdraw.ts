@@ -335,3 +335,13 @@ export async function requestLifecycleWithdraw(db: Kysely<Database>, input: {
   return { ok: false, status: 503, code: 'WITHDRAW_UNCERTAIN',
     message: 'The cancel may have been recorded. Send the same action again; it will not be applied twice' };
 }
+
+/**
+ * ADR-230 addendum (L12): the answer to a cancel with nothing it could withdraw. It says so, and names the
+ * designs the chat has that were already delivered, so the requester knows why.
+ */
+export function nothingToCancelText(shown: Array<{ title: string; stage: string }>, lang: RequesterLang): string {
+  return [say(WITHDRAW_MESSAGES.nothingToCancel, lang),
+    ...shown.filter((r) => r.stage === 'delivered').map((r) => say(WITHDRAW_MESSAGES.deliveredNotCancellable, lang, { title: designName(r.title, lang) }))]
+    .join('\n');
+}

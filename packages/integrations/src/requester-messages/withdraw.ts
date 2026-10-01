@@ -42,4 +42,13 @@ export const WITHDRAW_MESSAGES = {
     en: "{title} can't be cancelled from here any more. I've kept your message for the office.",
     ckb: '{title} چیتر لێرەوە هەڵناوەشێنرێتەوە. نامەکەتم بۆ ئۆفیسەکە هەڵگرت.',
   },
+  // ADR-230 addendum (L12): a cancel with nothing it could withdraw.
+  nothingToCancel: {
+    en: "There's nothing open for me to cancel right now.",
+    ckb: 'ئێستا هیچ داواکارییەکی کراوە نییە کە هەڵیبوەشێنمەوە.',
+  },
+  deliveredNotCancellable: {
+    en: '{title} was already delivered, so there is nothing to cancel there.',
+    ckb: '{title} پێشتر گەیەندرابوو، بۆیە هیچ نییە لەوێ هەڵبوەشێنرێتەوە.',
+  },
 } as const satisfies PhraseBook;

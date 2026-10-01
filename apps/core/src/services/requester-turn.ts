@@ -118,7 +118,8 @@ export type TurnPlan =
   /** ADR-200 addendum: redo words about a design delivered within `REDO_WINDOW_MS`: a new round of it. */
   | { kind: 'redo'; requestId: string; directive: string; resolves?: number }
   | { kind: 'tell'; note: TellNote; requestId: string; words: string; resolves?: number }
-  | { kind: 'reply'; what: 'thanks' | 'status' | 'nothing-to-change'; requestIds: string[] }
+  /** `nothing-to-cancel` (ADR-230 addendum): a cancel with no request it could withdraw; `requestIds` are named. */
+  | { kind: 'reply'; what: 'thanks' | 'status' | 'nothing-to-change' | 'nothing-to-cancel'; requestIds: string[] }
   /**
    * Words about a design this bot cannot find (a reply to an old message), or a question it cannot
    * answer (`question`, ADR-182): passed to the office.
@@ -237,14 +238,28 @@ function readsAsDeliveryRequest(text: string, core: string): boolean {
   return DELIVERY_FORMAT_EN.some((p) => p.test(core)) || (isSoraniText(core) && /\b(?:pdf|png|jpe?g|svg)\b/i.test(core));
 }
 
-const CANCEL_EN = new RegExp(
-  '^(?:(?:just|kindly)\\s+)?(?:cancel|stop|scrap|drop|abort|withdraw|forget(?:\\s+about)?|never\\s?mind|nvm|' +
+const CANCEL_VERB = '(?:cancel|stop|scrap|drop|abort|withdraw|forget(?:\\s+about)?|never\\s?mind|nvm|' +
   "don'?t\\s+(?:do|make|bother\\s+with|continue(?:\\s+with)?|proceed(?:\\s+with)?)|no\\s+need\\s+(?:for|to\\s+(?:do|make))|no\\s+need|" +
   "(?:we|i)\\s+(?:don'?t|do\\s+not|no\\s+longer)\\s+need|(?:we|i)\\s+(?:want|would\\s+like)\\s+to\\s+cancel|" +
-  "(?:it'?s|it\\s+is)\\s+(?:cancel+ed|not\\s+needed)|not\\s+needed|no\\s+longer\\s+needed)" +
-  '(?:\\s+(?:it|that|this|them|these|everything|all(?:\\s+of\\s+(?:it|them))?|' +
-  '(?:the|my|our|this|that)\\s+(?:[\\p{L}\\d\'-]+\\s+){0,3}?(?:request|order|job|design|poster|flyer|banner|invitation|card|post|story|work|one|thing)s?))?' +
-  '(?:\\s+(?:any\\s?more|now|for\\s+now|then|please|thanks?|thank\\s+you))*[\\s!.]*$', 'iu');
+  "(?:it'?s|it\\s+is)\\s+(?:cancel+ed|not\\s+needed)|not\\s+needed|no\\s+longer\\s+needed)";
+/** What a cancel may name: the whole request (a pronoun, or a noun for a job), never a part of a design. */
+const CANCEL_OBJECT = '(?:it|that|this|them|these|everything|all(?:\\s+of\\s+(?:it|them))?|' +
+  '(?:the|my|our|this|that)\\s+(?:[\\p{L}\\d\'-]+\\s+){0,3}?(?:request|order|job|design|poster|flyer|banner|invitation|card|post|story|work|one|thing)s?)';
+const CANCEL_POLITE = '(?:\\s+(?:any\\s?more|now|for\\s+now|then|please|thanks?|thank\\s+you))*[\\s!.]*$';
+const CANCEL_EN = new RegExp(`^(?:(?:just|kindly)\\s+)?${CANCEL_VERB}(?:\\s+${CANCEL_OBJECT})?${CANCEL_POLITE}`, 'iu');
+/**
+ * ADR-230 addendum (live 2026-10-01 15:08Z, L12): "also cancel the other one I opened by mistake this
+ * afternoon". After the verb and a whole-request object, a clause may say which request it is: who made
+ * it and when ("I opened by mistake", "I sent this morning", "that we ordered"), or when ("from earlier",
+ * "this afternoon", "just now"). The object stays required, so "cancel the gold border" is a change.
+ */
+const CANCEL_WHEN = '(?:this\\s+(?:morning|afternoon|evening)|today|yesterday|earlier(?:\\s+today)?|before|just\\s+now|a\\s+(?:moment|minute|while|bit)\\s+ago|last\\s+night)';
+const CANCEL_WHICH = '(?:\\s+(?:(?:that|which)\\s+)?(?:i|we)\\s+(?:just\\s+)?(?:opened|sent|made|asked\\s+(?:for|you\\s+for)|ordered|requested|started|created|wrote|submitted)' +
+  `(?:\\s+(?:it|you|by\\s+(?:mistake|accident)|in\\s+error|${CANCEL_WHEN}|here|earlier))*` +
+  `|\\s+(?:from|of)\\s+${CANCEL_WHEN}|\\s+${CANCEL_WHEN}|\\s+(?:opened|sent|made)\\s+by\\s+(?:mistake|accident)|\\s+by\\s+(?:mistake|accident))`;
+const CANCEL_DESCRIBED = new RegExp(`^(?:(?:just|kindly)\\s+)?${CANCEL_VERB}\\s+${CANCEL_OBJECT}(?:${CANCEL_WHICH})+${CANCEL_POLITE}`, 'iu');
+/** A cancel verb and a whole-request noun in words the patterns above do not place (the router reads them). */
+const CANCEL_SOMEWHERE = new RegExp(`\\b(?:cancel|withdraw|scrap|abort)\\b.*\\b(?:request|order|job|design|poster|flyer|banner|invitation|card|one)s?\\b`, 'iu');
 /** Sorani: cancel it, stop it, not needed, we don't need it, don't make it, leave it, give it up. */
 const CANCEL_CKB = ['هەڵیوەشێنەوە', 'هەڵبوەشێنەوە', 'هەڵوەشێنەوە', 'هەڵیبوەشێنەوە', 'ڕایبگرە', 'بیوەستێنە',
   'ڕاوەستە', 'پێویست ناکات', 'پێویستمان نییە', 'پێویستم نییە', 'مەیکە', 'لێی گەڕێ', 'وازی لێ بێنە'];
@@ -391,7 +406,7 @@ const CANCEL_FILLER = /^(?:ok(?:ay)?|no|nope|sorry|thanks?|thank\s+you|please|ac
 
 function readsAsCancel(core: string): boolean {
   if (!core || core.length > 160) return false;
-  if (CANCEL_EN.test(core)) return true;
+  if (CANCEL_EN.test(core) || CANCEL_DESCRIBED.test(core)) return true;
   if (isSoraniText(core) && core.split(/\s+/).length <= 4 && any(core, CANCEL_CKB)) return true;
   // Several clauses: one of them cancels, and the rest only surround it.
   const clauses = core.split(/\s*[,،;.!]+\s*/).map((c) => c.trim()).filter(Boolean);
@@ -572,6 +587,10 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   if (isAcknowledgement(t) || (core && isAcknowledgement(core) && core.length <= 60)) return rules('acknowledgement', 'Thanks, an OK or a receipt');
   if (readsAsHold(core)) return rules('hold', 'Asks to pause the current design');
   if (readsAsCancel(core)) return rules('cancel', 'Asks to cancel or stop');
+  // ADR-230 addendum (L12): cancel words about a whole request that the patterns cannot place are never
+  // read as a certain change of the latest design; they are unclear, and the intake router reads them
+  // (ADR-144's one call per update, within the allowance) before anything is kept or asked.
+  if (core.length <= 160 && CANCEL_SOMEWHERE.test(core) && !readsAsHold(core)) return rules('unclear', 'Cancel words the rules cannot place', { instructionOnly: true });
   if (readsAsStatus(core)) return rules('status', 'Asks how a design is going');
   if (readsAsDeadline(t, core)) return rules('deadline', 'Gives a deadline or urgency');
 
@@ -822,6 +841,73 @@ function pickRequest(input: TurnInput, candidates: ChatRequestView[], recency: b
   return { ambiguous: [...pool].sort((a, b) => a.createdAt.localeCompare(b.createdAt)) };
 }
 
+/** Stages a request can be withdrawn from (ADR-230): nothing has been approved for it. */
+const WITHDRAWABLE: RequestStage[] = ['designing', 'awaiting_answer', 'manual', 'in_review'];
+const BAGHDAD_MS = 3 * 60 * 60_000;
+
+/**
+ * ADR-230 addendum (L12): which of the withdrawable requests the words describe. "the one I just sent",
+ * "the last one" is the newest; "the first one" the oldest; "this morning / this afternoon / this
+ * evening / today / yesterday" those opened then (office time, UTC+3); "the other one" not the design the
+ * chat was last about. A description that matches none leaves the list as it was.
+ */
+export function describedForCancel(words: string, candidates: ChatRequestView[], all: ChatRequestView[], now: number): ChatRequestView[] {
+  const t = words.toLowerCase();
+  let pool = candidates;
+  const keep = (next: ChatRequestView[]) => { if (next.length) pool = next; };
+  const byCreated = [...pool].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (/\b(?:just\s+(?:now|sent|opened|made|asked)|(?:the\s+)?(?:last|latest|newest|most\s+recent)|a\s+(?:moment|minute|bit)\s+ago)\b/.test(t)) keep(byCreated.slice(-1));
+  else if (/\b(?:the\s+)?(?:first|oldest|earliest)\b/.test(t)) keep(byCreated.slice(0, 1));
+  const local = (iso: string) => new Date(Date.parse(iso) + BAGHDAD_MS);
+  const today = new Date(now + BAGHDAD_MS).toISOString().slice(0, 10);
+  const yesterday = new Date(now + BAGHDAD_MS - 86_400_000).toISOString().slice(0, 10);
+  const period = /\bthis\s+morning\b/.test(t) ? [5, 12] : /\bthis\s+afternoon\b/.test(t) ? [12, 17]
+    : /\bthis\s+evening\b|\btonight\b/.test(t) ? [17, 24] : null;
+  if (period) keep(pool.filter((r) => local(r.createdAt).toISOString().slice(0, 10) === today &&
+    local(r.createdAt).getUTCHours() >= period[0] && local(r.createdAt).getUTCHours() < period[1]));
+  else if (/\btoday\b/.test(t)) keep(pool.filter((r) => local(r.createdAt).toISOString().slice(0, 10) === today));
+  else if (/\byesterday\b/.test(t)) keep(pool.filter((r) => local(r.createdAt).toISOString().slice(0, 10) === yesterday));
+  if (/\b(?:the\s+)?other\s+(?:one|request|design|poster|order)\b/.test(t)) {
+    const latest = [...all].sort(byActivity)[0];
+    if (latest) keep(pool.filter((r) => r.requestId !== latest.requestId));
+  }
+  return pool;
+}
+
+/**
+ * ADR-230 addendum (L12): a cancel without a reply. It withdraws only what can be withdrawn: the words'
+ * description narrows those; one named for certain (by its name, or the router sure of it) is withdrawn;
+ * one found any other way is asked about by name ("Do you want me to cancel …?"), unless it is the only
+ * design in the chat. With nothing withdrawable, a design approved or being sent is told too late (as
+ * ADR-230 did), and with nothing open at all the requester hears so, naming what was delivered.
+ */
+function planCancel(input: TurnInput, open: ChatRequestView[], changeable: ChatRequestView[], words: string,
+  reading: IntentReading, ask: (intent: PendingAsk['intent'], among: ChatRequestView[], allowNew: boolean) => TurnPlan): TurnPlan {
+  const withdrawable = open.filter((r) => WITHDRAWABLE.includes(r.stage));
+  if (!withdrawable.length) {
+    if (open.length) {
+      const picked = pickRequest(input, open, true);
+      if ('request' in picked) return applyTo('cancel', picked.request, words, picked.how, reading.confidence) ?? ask('cancel', [picked.request], false);
+      if ('ambiguous' in picked) return ask('cancel', picked.ambiguous, false);
+    }
+    return { kind: 'reply', what: 'nothing-to-cancel', requestIds: [...changeable].sort(byActivity).slice(0, 3).map((r) => r.requestId) };
+  }
+  const note = (r: ChatRequestView): TurnPlan => ({ kind: 'note', note: 'cancel', requestId: r.requestId, words });
+  if (reading.source === 'model' && reading.requestId && (reading.confidence ?? 0) >= 0.85) {
+    const sure = withdrawable.find((r) => r.requestId === reading.requestId);
+    if (sure) return note(sure);
+  }
+  const described = describedForCancel(words, withdrawable, changeable, input.now);
+  const named = titleMatch(input.text, described);
+  if (named !== null) return note(described[named]);
+  if (described.length === 1) {
+    // "cancel it" with one design in the chat is about that design; with others about (delivered ones,
+    // too late to cancel), the one it can be is asked about by name.
+    return changeable.length === 1 ? note(described[0]) : ask('cancel', described, false);
+  }
+  return ask('cancel', [...described].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), false);
+}
+
 const options = (requests: ChatRequestView[]) => requests.map((r) => ({ requestId: r.requestId, title: r.title, askedAt: r.createdAt }));
 
 /** A change bound to one request: a paid round when it waits for changes, else kept for the office. */
@@ -1052,10 +1138,13 @@ export function planTurn(full: TurnInput): TurnPlan {
     case 'conversation':
       // ADR-182: a question the bot cannot answer is the office's, not a prompt for a brief.
       return reading.question ? { kind: 'forward', words, question: true } : { kind: 'conversation' };
+    case 'cancel':
+      // ADR-230 addendum (L12): a cancel withdraws, so it looks only at requests that can be withdrawn.
+      if (!input.bound.length) return planCancel(input, open, changeable, words, reading, ask);
+      // falls through: a reply names its design, and a design too late to cancel is told so (ADR-230).
     case 'approval':
     case 'deadline':
-    case 'hold':
-    case 'cancel': {
+    case 'hold': {
       const picked = pickRequest(input, open, true);
       if ('request' in picked) return applyTo(reading.intent, picked.request, words, picked.how, reading.confidence) ?? ask(reading.intent, [picked.request], false);
       if ('ambiguous' in picked) return ask(reading.intent, picked.ambiguous, false);

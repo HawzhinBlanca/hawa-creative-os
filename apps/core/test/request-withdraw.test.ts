@@ -348,3 +348,83 @@ describe('the office\'s Cancel in the Desk withdraws a request-owned task (ADR-2
     expect((await rows(requestId, taskId)).request).toEqual({ rev: '2', stage: 'in_review' });
   });
 });
+
+describe('a natural cancel is read as one, and only withdrawable requests are its target (ADR-230 addendum, L12)', () => {
+  const LIVE = 'also cancel the other one I opened by mistake this afternoon';
+  const intakeWith = async (update: unknown, requesterIntentModel: unknown = null) => {
+    const res = await createApp({ db, requesterIntentModel } as any).request('/v1/internal/telegram/intake', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WORKER}` },
+      body: JSON.stringify({ v: 1, update, mode: 'lifecycle', languageSiblings: true }) });
+    return (await res.json()) as Record<string, any>;
+  };
+
+  it.each([
+    [LIVE, 'cancel'],
+    ['and please cancel the one I sent this morning', 'cancel'],
+    ['ok cancel the poster I asked for by mistake', 'cancel'],
+    ['please cancel the request from earlier, thanks', 'cancel'],
+    ['cancel the order we made yesterday', 'cancel'],
+    ['cancel that', 'cancel'],
+  ] as const)('"%s" reads as %s', async (words, intent) => {
+    const { readIntentByRules } = await import('../src/services/requester-turn.js');
+    expect(readIntentByRules(words).intent).toBe(intent);
+  });
+
+  it.each([
+    'cancel the gold border', 'remove the logo', 'also cancel the gold border on the poster I sent this morning',
+    `cancel the poster I opened by mistake ${'and then also make the title much bigger and move the logo to the left '.repeat(3)}`,
+  ])('"%s" is not a cancel (a part of a design, or too long)', async (words) => {
+    const { readIntentByRules } = await import('../src/services/requester-turn.js');
+    expect(readIntentByRules(words).intent).not.toBe('cancel');
+  });
+
+  it('the live words, with only the accidental request open and KAAE just delivered: it asks to cancel that one by name, never a note on KAAE', async () => {
+    const chat = chatId();
+    const accidental = await seed(chat, 'manual', 1, 'do a better design thats similar to earlier ones', false);
+    const kaae = await seed(chat, 'delivered', 7, 'KAAE K-12 Pilot Study');
+    const asked = await intake(message(chat, LIVE));
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true, intent: 'cancel' });
+    expect(asked.chatAnswer.text).toMatch(/^Do you want me to cancel <b>.+<\/b>\?$/);
+    expect(asked.chatAnswer.text).not.toContain('KAAE');
+    expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, kaae.requestId))).toHaveLength(0);
+    const yes = message(chat, 'yes');
+    expect(await intake(yes)).toMatchObject({ lifecycleAction: 'withdraw', requestId: accidental.requestId });
+  });
+
+  it('names a request for certain: withdrawn without a question, among two open ones', async () => {
+    const chat = chatId();
+    await seed(chat, 'in_review', 2, 'KAAE staff football tournament');
+    const nawroz = await seed(chat, 'designing', 1, 'Nawroz poster');
+    await seed(chat, 'delivered', 7, 'KAAE K-12 Pilot Study');
+    expect(await intake(message(chat, 'please cancel the Nawroz poster I sent this morning')))
+      .toMatchObject({ lifecycleAction: 'withdraw', requestId: nawroz.requestId });
+  });
+
+  it('"the one I just sent" is the newest withdrawable one, asked about by name', async () => {
+    const chat = chatId();
+    await seed(chat, 'in_review', 2, 'KAAE staff football tournament');
+    await seed(chat, 'designing', 1, 'Nawroz poster');
+    expect((await intake(message(chat, 'cancel the one I just sent'))).chatAnswer.text).toBe('Do you want me to cancel <b>Nawroz poster</b>?');
+  });
+
+  it('nothing withdrawable: says nothing open can be cancelled, naming what was delivered, and keeps no note', async () => {
+    const chat = chatId();
+    const kaae = await seed(chat, 'delivered', 7, 'KAAE K-12 Pilot Study');
+    const answer = await intake(message(chat, LIVE));
+    expect(answer).toMatchObject({ lifecycleAction: 'chat-answer', intent: 'cancel' });
+    expect(answer.chatAnswer.text).toBe("There's nothing open for me to cancel right now.\n<b>KAAE K-12 Pilot Study</b> was already delivered, so there is nothing to cancel there.");
+    expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, kaae.requestId))).toHaveLength(0);
+  });
+
+  it('cancel words the rules cannot place go to the intake router once (ADR-144), never to a note on the latest design', async () => {
+    const chat = chatId();
+    const accidental = await seed(chat, 'manual', 1, 'Graduation flyer', false);
+    const kaae = await seed(chat, 'delivered', 7, 'KAAE K-12 Pilot Study');
+    const read = vi.fn(async (input: { requests: Array<{ requestId: string }> }) => ({ intent: 'cancel' as const, reason: 'fixture',
+      source: 'model' as const, requestId: input.requests.find((r) => r.requestId === accidental.requestId)!.requestId, confidence: 0.9 }));
+    const answer = await intakeWith(message(chat, 'can you cancel my other request, it was a mistake'), { read });
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(answer).toMatchObject({ lifecycleAction: 'withdraw', requestId: accidental.requestId });
+    expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, kaae.requestId))).toHaveLength(0);
+  });
+});
