@@ -1,7 +1,7 @@
 # ADR-187: Final QA measures the shipping layout
 
 Date: 2026-10-01
-Status: accepted; focused regression pass, full sealed qualification pending
+Status: accepted; exact sealed engineering pass, deployment/product admission pending
 Requirements: FR-038, FR-041
 Sources: docs/05_CREATIVE_ENGINE.md; docs/11_QA_RTL_MULTILINGUAL.md; docs/30_CURRENT_STUDIO_CONTRACT.md
 
@@ -33,3 +33,5 @@ and contrast with stale reports. Focused/full sealed qualification is pending.
 This repair does not qualify subjective composition quality or native Canva.
 
 Focused proof: three red cases and one existing pass; rebuilt connected seven-file suite107 passed/0 failed/0 skipped. The first green attempt read stale dist and remains retained. See plans/final-qa-basis-2026-10-01/LOCAL_PROOF.json.
+
+Exact sealed qualification056f236e (source d300591e): eight mandatory stages passed, full6305/0failed/67skipped,653 typed roots,1518 blueprint checks, latest production dump and lint pass. This QA repair is not deployed; live0605a713 remains verified.

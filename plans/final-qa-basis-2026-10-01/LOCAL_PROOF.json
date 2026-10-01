@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "FOCUSED_PASS_FULL_SEALED_QUALIFICATION_PENDING",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_NOT_DEPLOYED",
   "requirements": [
     "FR-038",
     "FR-041"
@@ -24,13 +24,38 @@
   "productionChanges": 0,
   "limits": [
     "Connected cache controls use declared contrast with an explicit missing-logo render warning; other connected controls exercise actual rendering.",
-    "Full sealed suite, deployment, native Canva and human quality not yet qualified.",
+    "Not deployed. Native Canva, human quality and whole-product admission remain open.",
     "Caller-supplied composite provenance is a separate boundary; this slice removes trust in cached LayoutMetrics."
   ],
   "logs": {
     "/tmp/hawa-qa-cache-red-20261001.log": "bbfe007771969f3d718b74992f5c57cb46ad8d3a372b570af4ba6e5efd589e5d",
     "/tmp/hawa-qa-cache-green-20261001.log": "99dd768d0f6fbe02f8b8e9666349bf24a4969fdd75c949603fda185a0c95e30b",
     "/tmp/hawa-qa-cache-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
-    "/tmp/hawa-qa-cache-connected-20261001.log": "f6ccf3392b35e6770d51806a7a2fe0a8f09b866c3ce0e0be39939d6d471f7acd"
-  }
+    "/tmp/hawa-qa-cache-connected-20261001.log": "f6ccf3392b35e6770d51806a7a2fe0a8f09b866c3ce0e0be39939d6d471f7acd",
+    "/tmp/hawa-qa-cache-full-gate-20261001.log": "c99db7b2c43679e3edc5462535e93a7cffaaea12c0eff8ebade24a698fc8502d",
+    "/tmp/hawa-qa-cache-lint-20261001.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
+    "output/release-gate/FULL_TEST_SUITE_RUN.log": "0ed568682b689d98ff1b4bb81c9f5bb276b75eae6641849c2cda03eea49405e1"
+  },
+  "sourceCommit": "d300591e4a7a6c42756d3d9d12cbaf8127828521",
+  "testedSeal": "056f236e1b9518395daffda6861a79ba089167f8",
+  "fullGate": {
+    "stagesPassed": 8,
+    "passed": 6305,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 646,
+    "filesSkipped": 6,
+    "durationSeconds": 206.01,
+    "typedRoots": 653,
+    "blueprint": {
+      "passed": 1518,
+      "warned": 0,
+      "failed": 0
+    },
+    "newestProductionDump": "PASS",
+    "lint": "PASS",
+    "evidence": "RELEASE_GATE_EVIDENCE.json",
+    "qualification": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN"
+  },
+  "negativeRefusalDrill": "Gate reports verified historical drill; not independently repeated for this slice."
 }
