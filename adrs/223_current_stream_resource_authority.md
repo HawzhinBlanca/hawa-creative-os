@@ -1,6 +1,6 @@
 # ADR223 — Current resource authority for live events
 
-Date: 2026-10-01. Status: reproduced and locally implemented; qualification pending.
+Date: 2026-10-01. Status: locally and deployed synthetically qualified; production/product admission open.
 Requirements: NFR-006, FR-011, FR-064, NFR-011, NFR-014.
 Sources: MASTER_SPEC.md, docs/14_SECURITY_THREAT_MODEL.md,
 docs/09_MESSAGING_AND_OFFICE_INBOX.md, docs/10_WORKFLOW_RELIABILITY.md,
@@ -62,3 +62,14 @@ The fixture now creates a persisted scoped task and asserts its exact ID/title/c
 from complete SSE frames under a bounded deadline. This preserves the deliberate
 no-database authority refusal and all cross-client negative assertions. Full rerun
 pending; candidate runtime and harness remain identical.
+
+
+Final source qualification: exact clean656227a4 passes6961 source tests,0 failures,
+67 skips and701 strict roots, all seven available technical gate stages and mandatory
+negative refusal. Its runtime/harness equals deployed0816e8a6; only the positive
+fixture and qualification metadata differ. Both the full6960/1 failure and isolated
+fixture failure remain archived. Production dump transfer is NOT_RUN pending
+authorization; no actual native/human/model/pilot or whole-production admission.
+A separate read-only livee090f9ae check confirms the requested ADR183 nginx proof,
+independent credentials/unsafe-release retirement and narrow worker database role.
+This source change has not been deployed to production.

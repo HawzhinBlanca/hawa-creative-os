@@ -894,3 +894,16 @@ including14 named-session stream checks and both encrypted fresh-volume restores
 now checks a real persisted task with exact ID/title/client and bounded frame
 parsing. Corrected connected suite40pass/3files; full rerun pending. Production
 unchanged, all whole-product/native/human/model/pilot gates remain open.
+
+
+## ADR223 final qualification — 1 October2026
+
+Clean656227a4 full technical gate passes6961 source tests/0 failures/67 skips,
+701 strict roots and mandatory negative refusal. Runtime/harness equals deployed
+0816e8a6 (216 controls including14 stream checks/two coherent encrypted restores).
+Original6960/1 and isolated fixture failures remain immutable. Read-only live
+e090f9ae recheck confirms all three requested service-boundary repairs, including
+eight stable mounted files, independent worker credentials, unsafe release absence
+and effective restricted SQL role. No production deployment or provider/native
+save. Production dump transfer and all product/native/human/model/pilot/offsite
+gates remain open. W6_STREAM_ISOLATION_PROOF.json binds each artifact by hash.

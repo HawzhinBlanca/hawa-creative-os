@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "CURRENT_DEPLOYED_STREAM_AND_RECOVERY_VERIFIED_FULL_ENGINEERING_REPAIR_PENDING",
+  "status": "CURRENT_RESOURCE_STREAM_SOURCE_AND_DEPLOYED_SYNTHETIC_QUALIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-011",
     "FR-064",
@@ -45,10 +45,11 @@
     "Initial typecheck refused nullable database authority; corrected service accepts null and refuses unavailable storage.",
     "Subsequent typecheck/lint refused UUID guard narrowing of a string-only code branch to never; fixed the predicate overload without changing validation.",
     "First documentation patch refused an incorrect runbook context; verified no files changed, then applied the correct existing context.",
-    "Exact0816e8a6 source suite:6960 passed/1 failed/67 skipped. Existing positive SSE used database-free Core, which correctly cannot authorize a resource. Isolated regression repeats1 failure; corrected fixture creates an actual scoped persisted task, checks exact task ID/title/client from complete SSE frames and keeps a bounded deadline. Original negative disclosure assertions unchanged."
+    "Exact0816e8a6 source suite:6960 passed/1 failed/67 skipped. Existing positive SSE used database-free Core, which correctly cannot authorize a resource. Isolated regression repeats1 failure; corrected fixture creates an actual scoped persisted task, checks exact task ID/title/client from complete SSE frames and keeps a bounded deadline. Original negative disclosure assertions unchanged.",
+    "Initial read-only production diagnostic assumed /data/blob-store instead of the inspected actual /var/lib/hawa/blobs; retained initial raw result, corrected check confirms read-only mount. Initial remote fetch included a nonexistent bare branch name; exact authorized branch fetch succeeds, no remote or source change."
   ],
   "qualification": {
-    "fullEngineering": "FAILED_6960_PASS_1_FAIL_67_SKIP_CORRECTED_FIXTURE_RERUN_PENDING",
+    "fullEngineering": "PASS_SEVEN_TECHNICAL_STAGES_PRODUCTION_DUMP_NOT_RUN",
     "currentCandidateStreamAndRecovery": "PASS",
     "wholeProductionGateB": "OPEN",
     "productAdmission": false,
@@ -94,8 +95,20 @@
       "sha256": "a7ff95c2b414afd999abe89cff68a32386a8bab9d5b9b06b707e7dbb84b77675"
     },
     {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CORRECTED_CANDIDATE_GENERATION.log",
+      "sha256": "1a2005654a66424f8072af67dce7fb072b49ccb1283e61b8a976c6fe4e5ce615"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CORRECTED_EXACT_ENGINEERING_GATE.log",
+      "sha256": "95d75402532dae3e7cf7eaca366968411739fe82ac72aa5f852d728c8a6dfd0c"
+    },
+    {
       "path": "output/qualification/2026-10-01/current-stream-isolation/CORRECTED_PERSISTED_STREAM.log",
       "sha256": "901e0bd3c3da427a1c7c6da79ba5ef4f3c3c5729cd927a875451443bb4ef7c9a"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CORRECTED_SEAL_COMMIT.log",
+      "sha256": "145cb82e18295ed25ebb88c94686e654148a497d2b4811e3182abd74047ec976"
     },
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/CURRENT_CANDIDATE_RAW_RECEIPT.json",
@@ -108,6 +121,10 @@
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/CURRENT_DRIVE_RECOVERY.json",
       "sha256": "be6b8b27ada26cfa50d55ae4e8c03494384f05326bee60f7bba7e65412b8a86f"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/CURRENT_PRODUCTION_BOUNDARY_READBACK.json",
+      "sha256": "b9cd355d62a5db60439c37c424cfb8a3347bacd78d16930cbff9ab6da3eccd5c"
     },
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/CURRENT_TELEGRAM_RECOVERY.json",
@@ -126,12 +143,40 @@
       "sha256": "81a3e20c698731f5ea44df361e3700a906e94e8a8ae872dfd1c5f075c7709f2f"
     },
     {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FINAL_FULL_TEST_SUITE.log",
+      "sha256": "4010126dc00f1d8cf2d75fbfae120efbaa5a8897a100bafa3237b984c8be9d50"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FINAL_PREDEPLOY_DUMP_CHECK.json",
+      "sha256": "e18d3c5b356ca522563da745a55962f8dd2a3b83608e5fc6ac778abe461e0220"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FINAL_PREDEPLOY_DUMP_CHECK.log",
+      "sha256": "7c98e4a1baa5b5026530af0b4bc8b4f0dd4f3521519912dafc92dba40223a12f"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FINAL_RELEASE_GATE_EVIDENCE.json",
+      "sha256": "1325cc75e067feec9d1bcb297c658e44cd40136aacbcb5eb029561add573e8c7"
+    },
+    {
       "path": "output/qualification/2026-10-01/current-stream-isolation/FINAL_TYPECHECK.log",
       "sha256": "73db4498b765e0f74a664fa5610d4401905c23b9bbfc3af77958560786e0c5ea"
     },
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/FIRST_CONNECTED.log",
       "sha256": "dda9acb59e2ba105fe3f2a54463557e193f5824e4a0432acbd6e0c9b5882d17f"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FIXTURE_COMMIT.log",
+      "sha256": "bb66a2f12ffe53692196c74aa4e1e30095cb5ff32c68506bd61789e0e253309a"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/FIXTURE_PACK_CHECK.log",
+      "sha256": "d1b78087e4c46178630ad8d943b4cae4d94ac58c18ddea88e53544c5690b953e"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/INITIAL_PRODUCTION_READBACK_WITH_WRONG_BLOB_PATH.json",
+      "sha256": "246e50898b21914fe62ce2b3007117174c8b40424fdbd0223d5e34631f8046e8"
     },
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/LINT.log",
@@ -172,6 +217,10 @@
     {
       "path": "output/qualification/2026-10-01/current-stream-isolation/VERIFIED_TYPECHECK.log",
       "sha256": "b5e8c4ff977a02eecb5dcfa58e809d7a11b51c935fc37711d0138b0d6fd38656"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-stream-isolation/readonly-production-boundaries.py",
+      "sha256": "431ad0ba20128b5a34940bf7addbae823edac463b2f00440013f621936bcba42"
     }
   ],
   "candidate": {
@@ -274,6 +323,53 @@
       }
     },
     "productionChanged": false,
-    "scope": "Clean0816e8a6 runtime and harness; subsequent changes only test/qualification metadata. External adapters and staff remain synthetic."
+    "scope": "Clean0816e8a6 actual deployed runtime/harness; identical runtime/harness to clean656227a4 full engineering candidate. Only positive source fixture/qualification metadata changed.",
+    "runtimeAndHarnessIdenticalToEngineeringCandidate": true
+  },
+  "fullEngineering": {
+    "candidateCommit": "656227a460e206d782e7d4413b439e54974cc0d7",
+    "sourceTestsPassed": 6961,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 694,
+    "filesSkipped": 6,
+    "strictRoots": 701,
+    "negativeRefusalVerified": true,
+    "admissionQualified": false,
+    "productionDump": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION"
+  },
+  "productionBoundaryReadback": {
+    "observedAt": "2026-10-01T18:32:31.558402+00:00",
+    "liveCoreBuild": "e090f9ae4baabe26c0e755715e5862a5c02d83a9",
+    "nginxTest": true,
+    "proofBytesMatch": true,
+    "stableReadOnlyMounts": true,
+    "staticMountCount": 8,
+    "independentDesignToken": true,
+    "previousDesignTokenNotOperator": true,
+    "workers": [
+      {
+        "container": "hawa-production-worker-green-1",
+        "username": "hawa_worker_login",
+        "currentDesignMatches": true,
+        "operatorPresent": false,
+        "blobReadOnly": true
+      }
+    ],
+    "workerPrivileges": {
+      "app_member": false,
+      "approval_write": false,
+      "task_write": false,
+      "schema_create": false,
+      "temp_create": false
+    },
+    "unsafeReleaseDirectoriesAbsent": {
+      "051d5606": true,
+      "1737c8f2": true,
+      "353c9e0c": true
+    },
+    "productionChanged": false,
+    "credentialMaterial": "withheld",
+    "scope": "Read-only fresh verification of the three user-reported already deployed ADR183 repairs; not a deployment of ADR223."
   }
 }
