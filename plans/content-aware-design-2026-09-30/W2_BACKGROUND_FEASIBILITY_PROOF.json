@@ -1,7 +1,7 @@
 {
   "adr": "ADR206",
   "date": "2026-10-01T09:50:54.020149+00:00",
-  "status": "CONNECTED_ENGINEERING_PASS_EXACT_GATE_PENDING",
+  "status": "EXACT_ENGINEERING_QUALIFIED_NATIVE_HUMAN_PRODUCT_OPEN",
   "requirements": [
     "FR-028",
     "FR-031",
@@ -64,11 +64,36 @@
     "output/qualification/2026-10-01/background-feasibility/TYPES-GREEN.log": "2f32e1c2efc9664bc08261733a9c430f31bf62e67228bd28047063aafea36b84",
     "output/qualification/2026-10-01/background-feasibility/CONNECTED.log": "73fe060a1ee023de9a7ca99f72b7e2d1d9940a2e22ba28b91648e5c4ff8f5648"
   },
-  "exactGate": "NOT_RUN",
+  "exactGate": {
+    "status": "PASS",
+    "commit": "e879ce292ad1cd0067369056bdb945fb95ff567d",
+    "stagesPassed": 8,
+    "testsPassed": 6750,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 676,
+    "filesSkipped": 6,
+    "strictRoots": 683,
+    "packPassed": 1722,
+    "newestProductionDump": "isolated restore/invariants PASS",
+    "negativeFlagRefusal": "PASS",
+    "receipt": "output/qualification/2026-10-01/e879ce29/RELEASE_GATE_EVIDENCE.json",
+    "nativeHumanProductAdmission": "OPEN",
+    "productionDeployment": "NOT_PERFORMED"
+  },
   "nativeCanvaHuman": "NOT_RUN",
   "productionDeployment": "NOT_PERFORMED",
   "nextWork": [
     "valid XML character-reference copy compatibility",
     "native/real-provider/human/product admission"
-  ]
+  ],
+  "gateLogsSha256": {
+    "output/qualification/2026-10-01/e879ce29/NEGATIVE_FLAG_REFUSAL.log": "b41b2dcb6803be191b70f852a0c319ac27ac4b2275ddbbd58aa80fdbec94628c",
+    "output/qualification/2026-10-01/e879ce29/EXACT_GATE.log": "e07f6cba8a504c7fcb2ab5ec254455bc28304e1cf4736b45323ee96433997835",
+    "output/qualification/2026-10-01/e879ce29/TEST_DB_PROVISION.log": "336ff22f53b4a3fea01bf514699007aa793865e351b45da27310dadad063c59d",
+    "output/qualification/2026-10-01/e879ce29/PREDEPLOY_DUMP_CHECK.json": "d208030cad32f19d62c6575f5ae0fa1d7ff88abb744b27e1e3ce5c54b72a801a",
+    "output/qualification/2026-10-01/e879ce29/PREDEPLOY_DUMP_CHECK.log": "2e23c2a22207c658369b321f4ac30387c2285a441af8a73283239a842637d1ce",
+    "output/qualification/2026-10-01/e879ce29/RELEASE_GATE_EVIDENCE.json": "cb7638e495352f825b121fdb5d881908803e664dd4cbf17742e920f9c34dcc00",
+    "output/qualification/2026-10-01/e879ce29/FULL_TEST_SUITE_RUN.log": "c5f109a5523e7eac4fc2d1def81ce31a85f19ba24c729247bf367eaac7b3538d"
+  }
 }

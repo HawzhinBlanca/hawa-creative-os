@@ -1,6 +1,6 @@
 # ADR207 — Exact PPTX XML character references
 
-Date: 2026-10-01. Status: connected source qualified; exact engineering gate pending.
+Date: 2026-10-01. Status: exact source engineering qualified; native/human/product admission open.
 Requirements: FR-028, FR-034, FR-038, FR-041, NFR-012, NFR-024.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/11_QA_RTL_MULTILINGUAL.md,
 docs/30_CURRENT_STUDIO_CONTRACT.md; W5_PPTX_CHARACTER_REFERENCE_FINDING.json.
@@ -57,3 +57,6 @@ direction conflicts without granting visual/native approval. Run connected
 actual Core capture/manual review and strict source engineering gates.
 Real Canva export/native preservation, glyph/bidi visual evidence and human
 quality remain open; synthetic parser fixtures do not certify those gates.
+
+
+Exact seal e879ce292ad1cd0067369056bdb945fb95ff567d passes all8 stages:6750pass/0fail/67skip,676 passed files/6 skipped,683 strict roots,1722 package checks, isolated newest-production-dump restore/invariants and negative flag refusal. Current source not deployed; native Canva/human/product admission remains open. BACKGROUND_PPTX_GATE_EVIDENCE.json retains the actual verdict.
