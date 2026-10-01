@@ -57,6 +57,40 @@ export interface PptxCheckOptions {
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
+/** ADR207: validate before the decoder can erase controls or accept a numeric prefix. */
+function canonicalXmlCharacterReferences(xml: string): string {
+  const chunks: string[] = [];
+  let from = 0, references = 0;
+  for (let i = 0; i < xml.length; i++) {
+    // These XML regions contain literals, not character references. indexOf skips each once.
+    const literalEnd = xml.startsWith('<![CDATA[', i) ? ']]>'
+      : xml.startsWith('<!--', i) ? '-->' : xml.startsWith('<?', i) ? '?>' : undefined;
+    if (literalEnd) {
+      const end = xml.indexOf(literalEnd, i + (literalEnd === ']]>' ? 9 : literalEnd === '-->' ? 4 : 2));
+      if (end < 0) throw new Error('Unterminated PPTX XML literal');
+      i = end + literalEnd.length - 1;
+      continue;
+    }
+    if (xml[i] !== '&' || xml[i + 1] !== '#') continue;
+    if (++references > 100000) throw new Error('XML character reference inspection limit exceeded');
+    const end = xml.indexOf(';', i + 2);
+    const token = end < 0 ? '' : xml.slice(i + 2, end);
+    if (!/^(?:[0-9]+|x[0-9a-fA-F]+)$/.test(token)) throw new Error('Invalid XML character reference');
+    const code = token[0] === 'x' ? Number.parseInt(token.slice(1), 16) : Number(token);
+    const valid = code === 9 || code === 10 || code === 13 ||
+      code >= 0x20 && code <= 0xD7FF || code >= 0xE000 && code <= 0xFFFD || code >= 0x10000 && code <= 0x10FFFF;
+    if (!valid) throw new Error('Invalid XML character reference');
+    // Retain lexical equivalence while avoiding the pinned decoder's token-length window.
+    const canonical = `&#${code};`;
+    if (xml.slice(i, end + 1) !== canonical) {
+      chunks.push(xml.slice(from, i), canonical);
+      from = end + 1;
+    }
+    i = end;
+  }
+  return chunks.length ? chunks.join('') + xml.slice(from) : xml;
+}
+
 export function checkCanvaPptx(
   bytes: Uint8Array,
   expectedCopy: string[],
@@ -119,12 +153,14 @@ export function checkCanvaPptx(
     trimValues: false,
     parseTagValue: false,
     processEntities: true,
+    // @ts-expect-error 5.11.1 accepts an explicit entity map at runtime; its type declares only boolean.
+    htmlEntities: { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" },
   });
 
   const parse = (b: Uint8Array) => {
     const text = strFromU8(b);
     if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('XML entities are forbidden');
-    return parser.parse(text);
+    return parser.parse(canonicalXmlCharacterReferences(text));
   };
 
   const doc = parse(files[names[0]]);
@@ -393,7 +429,7 @@ export function checkCanvaPptx(
     : null;
 
   return {
-    checkVersion: 6,
+    checkVersion: 7,
     sourceTextObjects: unaddressableText ? null : sourceTextObjects,
     source: detectedSource,
     canvaDesignId,

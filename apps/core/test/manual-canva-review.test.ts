@@ -5,6 +5,7 @@ import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-e
 import { recordManualCanvaReview } from '../src/services/manual-canva-review.js';
 import { evaluateCanvaExportQc } from '../src/core-helpers.js';
 import { createApp } from '../src/app.js';
+import { characterReferenceDeck } from '../../../packages/qa/test/fixtures/character-reference-deck.js';
 
 const url=process.env.HAWA_ISOLATED_TEST_DB;
 describe.skipIf(!url)('manual Canva first review from retained evidence',()=>{
@@ -14,10 +15,12 @@ describe.skipIf(!url)('manual Canva first review from retained evidence',()=>{
   const scope={tenantId,userId:actorId,role:'operator'};
   afterAll(()=>db.destroy());
   const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
-  async function fixture(options:{workflow?:string;state?:string;pngVersion?:string;png?:boolean;copy?:string;corrupt?:boolean;
+  async function fixture(options:{workflow?:string;state?:string;pngVersion?:string;png?:boolean;copy?:string;corrupt?:boolean;pptxBytes?:Buffer;
     target?:{taskId:string;designId:string;bindingId:string}}={}){
     const {taskId,designId,bindingId}=options.target || {taskId:randomUUID(),designId:`manual_${randomUUID()}`,bindingId:randomUUID()};
     const checked=await checkedCanvaExportFixture('Exact copy 123.45');
+    // Retain an older passing receipt deliberately; actual review must re-read the new pinned bytes.
+    if(options.pptxBytes) checked.bytes=Buffer.from(options.pptxBytes);
     const files={png:randomUUID(),pptx:randomUUID()};
     const operations={png:randomUUID(),pptx:randomUUID()};
     await withRlsContext(db,scope,async trx=>{
@@ -49,6 +52,24 @@ describe.skipIf(!url)('manual Canva first review from retained evidence',()=>{
     revisions:Number((await sql<{n:string}>`SELECT count(*) n FROM hawa.design_revisions WHERE task_id=${taskId}::uuid`.execute(trx)).rows[0].n),
     checks:Number((await sql<{n:string}>`SELECT count(*) n FROM hawa.qc_runs WHERE task_id=${taskId}::uuid`.execute(trx)).rows[0].n),
   }));
+  it('rechecks numeric XML copy into one attributable review while preserving original bytes and source hash',async()=>{
+    const bytes=Buffer.from(characterReferenceDeck('&#69;xact copy 123.45'));
+    const f=await fixture({pptxBytes:bytes});
+    const first=await record(f);
+    expect(first).toMatchObject({status:'recorded',qaPassed:true,checkedArtifactId:f.files.pptx});
+    expect(await record(f)).toEqual(first); expect(await counts(f.taskId)).toEqual({revisions:1,checks:1});
+    const source=await withRlsContext(db,scope,async trx=>(await sql<{source_sha256:string;neutral_manifest:{nativeVerification:string;nodes:Array<{text:string}>};content:Buffer}>`
+      SELECT r.source_sha256,r.neutral_manifest,b.content FROM hawa.design_revisions r
+      JOIN hawa.canva_export_bytes b ON b.id=${f.files.pptx}::uuid WHERE r.task_id=${f.taskId}::uuid`.execute(trx)).rows[0]);
+    expect(source.source_sha256).toBe(hash(bytes)); expect(source.content).toEqual(bytes);
+    expect(source.neutral_manifest.nodes.map(n=>n.text)).toEqual(['Exact copy 123.45']);
+    expect(source.neutral_manifest.nativeVerification).toBe('unverified');
+  });
+  it('does not convert forbidden XML numeric controls into review authority despite a stored passing receipt',async()=>{
+    const f=await fixture({pptxBytes:Buffer.from(characterReferenceDeck('Ex&#0;act copy 123.45'))});
+    expect(await record(f)).toMatchObject({status:'blocked'});
+    expect(await counts(f.taskId)).toEqual({revisions:0,checks:0});
+  });
   it('creates one attributable first revision and QA run under concurrent/replayed capture, then permits ordinary review approval',async()=>{
     const f=await fixture();
     const outcomes=await Promise.all([record(f),record(f)]);
