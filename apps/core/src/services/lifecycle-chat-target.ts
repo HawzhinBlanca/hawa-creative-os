@@ -4,6 +4,8 @@ import { sql, type Database, type Kysely } from '@hawa/db';
 import { parseBlobRef, type BlobRef } from '@hawa/contracts';
 import type { ChatIntake } from './chat-intake.js';
 import type { RequesterRevisionWithIntakeResult } from './lifecycle-projection.js';
+import { parseBriefAnchor, type BriefAnchor } from './lifecycle-brief-anchor.js';
+import { parseDeliverableEvidence } from './request-deliverable-evidence.js';
 
 export interface WaitingLifecycleRequest {
   request_id: string;
@@ -26,6 +28,11 @@ export interface NewBriefDecision {
   draft: ChatIntake;
   /** Original image intake evidence stays in Core, outside the Restate draft contract. */
   sourceUpdate?: unknown;
+  /** Core-owned pre-projection hold identity (ADR-185), outside the worker draft. */
+  briefAnchor?: BriefAnchor;
+  /** Source-derived allocation evidence stays in Core, never accepted from worker drafts. */
+  deliverableCount?: number;
+  deliverableDetailsRequired?: string[];
   /**
    * The other requests the same update opens (ADR-139: an English-and-Kurdish brief opens one request
    * per language). Each is opened, projected and replayed exactly as the first.
@@ -38,6 +45,7 @@ export function decisionDraftFor(decision: NewBriefDecision, requestId: string):
   if (decision.requestId === requestId) return decision.draft;
   return decision.siblings?.find((s) => s.requestId === requestId)?.draft ?? null;
 }
+
 
 export interface RevisionPhotoDecision {
   requestId: string;
@@ -99,7 +107,13 @@ export async function readNewBriefDecision(trx: Kysely<Database>, tenantId: stri
   if (siblings !== undefined && (!Array.isArray(siblings) || siblings.some((s) => !s || typeof s !== 'object' ||
       typeof (s as { requestId?: unknown }).requestId !== 'string' || !(s as { draft?: unknown }).draft ||
       typeof (s as { draft?: unknown }).draft !== 'object'))) throw new Error('Invalid stored new-brief decision');
+  const briefAnchor = row.payload.briefAnchor === undefined ? undefined : parseBriefAnchor(row.payload.briefAnchor);
+  if (briefAnchor === null) throw new Error('Invalid stored new-brief anchor');
+  const deliverables=parseDeliverableEvidence({requestId,siblings:siblings as NewBriefDecision['siblings'],
+    deliverableCount:row.payload.deliverableCount,deliverableDetailsRequired:row.payload.deliverableDetailsRequired});
   return { requestId, chatId, payloadHash: row.payload_hash, draft: draft as ChatIntake,
+    ...deliverables,
+    ...(briefAnchor ? { briefAnchor } : {}),
     ...(row.payload.sourceUpdate !== undefined ? { sourceUpdate: row.payload.sourceUpdate } : {}),
     ...(Array.isArray(siblings) && siblings.length ? { siblings: siblings as NewBriefDecision['siblings'] } : {}) };
 }
@@ -112,7 +126,9 @@ export async function recordNewBriefDecision(trx: Kysely<Database>, tenantId: st
       'lifecycle_new_brief_decision',
       ${JSON.stringify({ requestId: decision.requestId, chatId: decision.chatId,
         draft: decision.draft,
+        ...(decision.briefAnchor ? { briefAnchor: decision.briefAnchor } : {}),
         ...(decision.sourceUpdate !== undefined ? { sourceUpdate: decision.sourceUpdate } : {}),
+        ...parseDeliverableEvidence(decision),
         ...(decision.siblings?.length ? { siblings: decision.siblings } : {}) })}::jsonb, ${decision.payloadHash}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
   const stored = await readNewBriefDecision(trx, tenantId, updateId);
@@ -200,7 +216,9 @@ const isLateStage = (value: unknown): value is LateChangeStage =>
 export interface LateRequesterChange {
   requestId: string; taskId: string; requestRev: number; requestStage: LateChangeStage; text: string;
   /** ADR-144: a change (the default) or a request to cancel. */
-  kind?: 'change' | 'cancel';
+  kind?: 'change' | 'cancel' | 'hold';
+  /** Only true after the task's durable pause and this note commit together. */
+  held?: boolean;
   /** ADR-144: what the requester was told, given again word for word on a replay. */
   answer?: string;
   /** ADR-144: the request's title, for the office's alert. */
@@ -212,19 +230,21 @@ const ROUTING_CODES = new Set(['AMBIGUOUS_REQUEST', 'STALE_REQUEST_REPLY', 'DAIL
 const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function parseLateChange(payload: Record<string, unknown>): LateRequesterChange | null {
-  const { requestId, taskId, requestRev, requestStage, text, kind, answer, title } = payload;
+  const { requestId, taskId, requestRev, requestStage, text, kind, answer, title, held } = payload;
   if (typeof requestId !== 'string' || !UUID_TEXT.test(requestId) || typeof taskId !== 'string' ||
       !UUID_TEXT.test(taskId) || !Number.isSafeInteger(requestRev) || !isLateStage(requestStage) ||
       typeof text !== 'string' || !text.trim() ||
-      (kind !== undefined && kind !== 'change' && kind !== 'cancel') ||
+      (kind !== undefined && kind !== 'change' && kind !== 'cancel' && kind !== 'hold') ||
+      (held !== undefined && (typeof held !== 'boolean' || kind !== 'hold')) ||
       (answer !== undefined && (typeof answer !== 'string' || !answer || answer.length > 4000)) ||
       (title !== undefined && (typeof title !== 'string' || title.length > 500))) return null;
   return { requestId, taskId, requestRev: requestRev as number, requestStage, text,
+    ...(held !== undefined ? { held } : {}),
     ...(kind ? { kind } : {}), ...(answer ? { answer } : {}), ...(title !== undefined ? { title } : {}) };
 }
 
 export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string,
-  updateId: number): Promise<RoutingRefusal | null> {
+  updateId: number | string): Promise<RoutingRefusal | null> {
   const row = (await sql<{ payload: Record<string, unknown>; payload_hash: string }>`SELECT payload, payload_hash
     FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
       AND source_account_id = 'lifecycle_chat_routing' AND source_event_id = ${String(updateId)}
@@ -242,7 +262,7 @@ export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string
 
 /** Save an actionable refusal before answering Core; a lost answer replays the same choice. */
 export async function recordRoutingRefusal(trx: Kysely<Database>, tenantId: string,
-  updateId: number, refusal: RoutingRefusal): Promise<RoutingRefusal> {
+  updateId: number | string, refusal: RoutingRefusal): Promise<RoutingRefusal> {
   if ((refusal.code === 'LATE_REQUESTER_CHANGE') !== Boolean(refusal.late) ||
       (refusal.late && !parseLateChange({ ...refusal.late }))) {
     throw new Error('A late requester change carries its request and words, and only it does');
@@ -299,7 +319,10 @@ export async function lateChangeTargets(trx: Kysely<Database>, tenantId: string,
     SELECT DISTINCT r.request_id::text, r.rev, r.stage, r.current_task_id::text
     FROM hawa.inbox_events e JOIN hawa.requests r
       ON r.tenant_id = e.tenant_id
-      AND e.source_event_id LIKE ('lc:' || r.request_id::text || ':%')
+      AND (e.source_event_id LIKE ('lc:' || r.request_id::text || ':%')
+        -- ADR-182: the delivered files and their notice are keyed by task and approval (lc:dl-<task>-…).
+        OR (e.source_event_id LIKE 'lc:dl-%' AND EXISTS (SELECT 1 FROM hawa.tasks t WHERE t.tenant_id = r.tenant_id
+          AND t.request_id = r.request_id AND t.id::text = substring(e.source_event_id from 7 for 36))))
     WHERE e.tenant_id = ${tenantId}::uuid AND r.chat_id = ${chatId}
       AND r.owner = 'restate' AND e.source_account_id = 'telegram_delivery'
       AND e.event_kind IN ('telegram_message_sent', 'telegram_document_sent')
@@ -335,7 +358,9 @@ export function lateChangeOfficeAlert(late: LateRequesterChange, requesterChatId
       ? 'The design had already been delivered.'
       : 'Deliver will ask someone in the Desk to read and acknowledge these words first.';
   const named = late.title ? ` "${late.title}"` : '';
-  const opening = late.kind === 'cancel'
+  const opening = late.kind === 'hold'
+    ? `The requester in chat ${requesterChatId} asked to hold the design${named}. ${late.held ? 'New automatic design work is paused. Read their words before resuming the saved task checkpoint in the Desk; an admitted call may still finish.' : 'The request had moved beyond the automatic pause boundary; please handle the hold and tell the requester what can be stopped.'}`
+    : late.kind === 'cancel'
     ? `The requester in chat ${requesterChatId} asked to cancel the design${named} while it was ${STAGE_WORDS[late.requestStage]}. Nothing was stopped automatically.`
     : late.requestStage === 'designing' || late.requestStage === 'manual' || late.requestStage === 'awaiting_answer'
       ? `The requester in chat ${requesterChatId} sent a change for the design${named} while it was ${STAGE_WORDS[late.requestStage]}. It was not applied to any design; fold it into the next round or the review.`
@@ -392,4 +417,3 @@ export async function acknowledgeLateChange(trx: Kysely<Database>, tenantId: str
       ${createHash('sha256').update(payload).digest('hex')}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
 }
-

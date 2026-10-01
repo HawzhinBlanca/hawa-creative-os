@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-01",
+  "status": "ENGINEERING_DEPLOYMENT_AND_SERVICE_BOUNDARIES_VERIFIED_PRODUCT_ADMISSION_OPEN",
+  "deployedCommit": "0605a71393abd4b04978dc899a1da27065347d60",
+  "sourceCommit": "9776c52d",
+  "sourceCandidateCommit": "339872fb",
+  "testedLocalSeal": "79975fc2",
+  "fullReleaseGate": {
+    "passed": 6303,
+    "failed": 0,
+    "skipped": 67,
+    "expectedFailures": 0,
+    "filesPassed": 646,
+    "filesSkipped": 6,
+    "durationSeconds": 210.73,
+    "latestProductionDumpInvariants": "PASS",
+    "typesRoots": 653,
+    "blueprintPassed": 1504,
+    "evidence": "DEPLOYED_RELEASE_GATE_EVIDENCE.json"
+  },
+  "imageReceipt": "LIVE_DEPLOYMENT_RECEIPT.json",
+  "worker": {
+    "colour": "blue",
+    "services": 8,
+    "outboxActive": true,
+    "background": "live",
+    "telegramPoller": "live",
+    "hasSuccessfulPoll": true,
+    "hasPollError": false,
+    "greenDrainedAndStopped": true
+  },
+  "serviceBoundaries": "LIVE_INFRA_READBACK.json",
+  "officeStatus": 200,
+  "nginxConfigTest": "PASS",
+  "historicalLegacyDeadOutboxRows": 18,
+  "legacyDeadCommandsRequeued": false,
+  "newPaidStudyCalls": 0,
+  "qualificationLimits": [
+    "Release gate is ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN, not whole-product admission",
+    "No new actual paid design, native Canva/reopen/edit/export, native reader or blinded taste proof",
+    "Conversation tests use real Core/PostgreSQL and worker handlers with fake external providers; current images/roles/polling are verified live",
+    "Content-aware W3 prototype remains separate uncommitted work; renderer-basis diagnosis is not universal logo readability admission",
+    "W5/W6/full human/native/recovery quality remain open"
+  ],
+  "logs": {
+    "/tmp/hawa-deliverables-deploy-0605a713.log": "032b1bc3322d32228edfaea36f0628fe3784baca9877dc38c91556886e707cc8"
+  },
+  "utcDeploymentObservedAt": "2026-10-01T00:45:30.171Z",
+  "utcServiceReadbackAt": "2026-10-01T00:47:08.781Z"
+}

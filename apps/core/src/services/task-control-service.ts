@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { taskControlTarget, TaskControlPolicyError, type TaskControl } from '@hawa/domain';
 import { TaskRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { isTaskApiStatus, isTaskDbState, toApiTaskStatus, toDbTaskState } from '@hawa/contracts';
+import { isTaskApiStatus, isTaskDbState, isServiceUserId, toApiTaskStatus, toDbTaskState } from '@hawa/contracts';
 import { CanvaFlowError } from './canva-flow-error.js';
 
 type Scope = { tenantId: string; actorId: string; role: string };
@@ -11,10 +11,15 @@ export interface TaskControlInput { reason: string; expectedVersion: number; key
 export async function controlTask(db: Kysely<Database>, scope: Scope, taskId: string, control: TaskControl, input: TaskControlInput) {
   const requestHash = createHash('sha256').update(JSON.stringify({ control, ...input, actorId: scope.actorId })).digest('hex');
   return withRlsContext(db, { tenantId: scope.tenantId, userId: scope.actorId, role: scope.role }, async trx => {
+    const owner = await trx.selectFrom('tasks').select('request_id')
+      .where('id','=',taskId).where('tenant_id','=',scope.tenantId).executeTakeFirst();
+    if (owner?.request_id) await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${owner.request_id}`},0))`.execute(trx);
     const task = await trx.selectFrom('tasks').select(['state', 'version', 'request_id'])
       .where('id', '=', taskId).where('tenant_id', '=', scope.tenantId).forUpdate().executeTakeFirst();
     if (!task) throw new CanvaFlowError(404, 'TASK_NOT_FOUND', 'Task not found in your scope.');
-    if (task.request_id) throw new CanvaFlowError(409, 'LIFECYCLE_OWNED', 'Use the current request and its office action.');
+    if (task.request_id && (control !== 'resume' || isServiceUserId(scope.actorId))) {
+      throw new CanvaFlowError(409, 'LIFECYCLE_OWNED', 'Only the office can resume a requester hold on the current task.');
+    }
     const prior = (await sql<{data: Record<string, unknown>}>`SELECT data FROM hawa.task_events
       WHERE tenant_id=${scope.tenantId}::uuid AND task_id=${taskId}::uuid AND event_type='task.state_changed'
       AND data->>'controlKey'=${input.key} ORDER BY aggregate_version DESC LIMIT 1`.execute(trx)).rows[0];
@@ -34,6 +39,16 @@ export async function controlTask(db: Kysely<Database>, scope: Scope, taskId: st
       .where('task_id', '=', taskId).where('tenant_id', '=', scope.tenantId).where('event_type', '=', 'task.state_changed')
       .orderBy('aggregate_version', 'desc').limit(1).executeTakeFirst() : undefined;
     const data = checkpoint?.data as Record<string, unknown> | undefined;
+    if (task.request_id) {
+      const request = await trx.selectFrom('requests').select(['owner','current_task_id','stage','rev'])
+        .where('tenant_id','=',scope.tenantId).where('request_id','=',task.request_id).executeTakeFirst();
+      if (data?.requesterHoldRequestId !== task.request_id || request?.owner !== 'restate' ||
+          request.current_task_id !== taskId || !(request.stage === 'designing' ||
+            (request.stage==='manual' && Number(request.rev)===1 && data.requesterHoldBeforeProjection===true)) ||
+          Number(request.rev) !== data.requesterHoldRequestRev) {
+        throw new CanvaFlowError(409,'LIFECYCLE_OWNED','This task has no current requester hold checkpoint to resume.');
+      }
+    }
     const pausedFrom = data?.operatorControl === 'pause' && data.toState === 'paused' && isTaskDbState(data.fromState)
       ? toApiTaskStatus(data.fromState) : undefined;
     let target;
@@ -42,7 +57,7 @@ export async function controlTask(db: Kysely<Database>, scope: Scope, taskId: st
       if (error instanceof TaskControlPolicyError) throw new CanvaFlowError(409, error.code, error.message);
       throw error;
     }
-    const receipt = { commandId: randomUUID(), taskId, workflowId: `wf_${taskId}`, acceptedAt: new Date().toISOString(),
+    const receipt = { commandId: randomUUID(), taskId, workflowId: task.request_id ?? `wf_${taskId}`, acceptedAt: new Date().toISOString(),
       fromStatus: toApiTaskStatus(task.state), status: target, version: Number(task.version) + 1 };
     await new TaskRepository(trx).transitionState({ taskId, tenantId: scope.tenantId,
       expectedVersion: input.expectedVersion, fromState: task.state, toState: toDbTaskState(target),

@@ -17,6 +17,7 @@
  */
 import { LATE_CHANGE_STAGES, type ChatInboxCore, type IntakeAnswer, type IntakeMode, type LateChangeStage } from './chat-inbox.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
+import { MAX_REQUEST_DELIVERABLES, planRequestDeliverables } from '@hawa/domain';
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -80,6 +81,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
           // briefHold: it schedules the settles a held brief or a saved album photo asks for (ADR-143);
           // settle: this call is such a settle, of an update Core has already saved.
           body: JSON.stringify({ v: 1, update, mode, ...(requestId ? { requestId } : {}), languageSiblings: true,
+            maxDeliverables:MAX_REQUEST_DELIVERABLES,
             briefHold: true, ...(call.settle ? { settle: true } : {}) }),
           signal: AbortSignal.timeout(options.timeoutMs ?? 8 * 60_000),
         });
@@ -91,7 +93,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
         intakeStatus?: number; code?: string; duplicate?: boolean; title?: string;
         lifecycleAction?: string; requestId?: string; newTaskId?: string;
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
-        chatId?: string; questionId?: string; draft?: unknown; reason?: string; siblings?: unknown;
+        chatId?: string; questionId?: string; draft?: unknown; reason?: string; siblings?: unknown;deliverableCount?:unknown;
         albumMessage?: string; albumNoticeKey?: string; settle?: unknown;
         sourceMessage?: string; sourceNoticeKey?: string;
         chatAnswer?: { text?: unknown; parseMode?: unknown } | null;
@@ -161,9 +163,15 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
                 typeof draft!.rawText === 'string' && typeof draft!.title === 'string';
             };
             const siblings = body.siblings === undefined ? [] : body.siblings;
-            if (!body.chatId || !validDraft(body.requestId, body.draft) || !Array.isArray(siblings) || siblings.length > 1 ||
+            const message=update.message as {text?:string;caption?:string}|undefined;
+            const requested=planRequestDeliverables(message?.text ?? message?.caption ?? '');
+            if (!body.chatId || !validDraft(body.requestId, body.draft) || !Array.isArray(siblings) || siblings.length >= MAX_REQUEST_DELIVERABLES ||
                 siblings.some((s) => !s || typeof s !== 'object' || s.requestId === body.requestId ||
-                  !validDraft((s as { requestId?: unknown }).requestId, (s as { draft?: unknown }).draft))) {
+                  !validDraft((s as { requestId?: unknown }).requestId, (s as { draft?: unknown }).draft)) ||
+                new Set([body.requestId,...siblings.map(s=>s.requestId)]).size!==siblings.length+1 ||
+                (body.deliverableCount!==undefined && body.deliverableCount!==siblings.length+1) ||
+                requested.kind==='limit' || (requested.kind==='multiple' &&
+                  (body.deliverableCount!==siblings.length+1 || siblings.length+1<requested.count))) {
               throw new Error(`Core returned an invalid lifecycle open for update ${update.update_id}`);
             }
             type Draft = Extract<IntakeAnswer, { kind: 'done' }>['draft'];

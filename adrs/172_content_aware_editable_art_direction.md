@@ -143,3 +143,8 @@ The original independent export used substituted fonts and PDF JPEG/reduction se
 ## Renderer-bound source visibility — 1 October 2026
 
 Native source evidence demonstrates that pixel-edge signatures depend on the renderer basis. The same immutable official picture/transform on native white/black matte references gives six intact passes and27 prescribed-damage refusals under unchanged thresholds; local-raster signatures on those native composites fail. Bind diagnostic references to renderer/export/font identity, original source/input/geometry and freshly captured PDF/PNG hashes. Missing/mismatched basis is unmeasured, not a readability verdict. Per-component minima still reject a missing small detail when total coverage is99.6566%. Source reference selection can differ between engines; retain actual feature populations and require archive/human detail-preservation calibration. This is scoped engineering evidence, not universal/Canva/human admission. Original failures are preserved. See W3_NATIVE_RENDERER_BASIS_PROOF.json.
+
+
+### 1 October 2026: current reliability source integration
+
+W3 source/diagnostics checkpoint79d335eb is preserved, including original native failures and the limited paired-source study. Qualified2c4d61ec is merged before W5: retain service-boundary ADR183, holds/explicit intake ADR184-186 and final shipping-evidence QA ADR187. Build/192 connected checks pass; full combined/Canva/human admission stays open. See CURRENT_RELEASE_INTEGRATION_PROOF.json.

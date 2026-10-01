@@ -27,7 +27,8 @@ import { sql, withRlsContext } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID, parseBlobRef, parseLifecycleAlbumRef, parseLifecycleSourceRef, type BlobRef, type DeliveryOutcome } from '@hawa/contracts';
 import { createLifecycleSourceIntake } from '../services/lifecycle-source-intake.js';
 import { assertSourceIdentity, SourceConflict } from '../services/lifecycle-source-store.js';
-import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, parseStudioImagery, parseStudioTier } from '@hawa/domain';
+import { MAX_REQUEST_DELIVERABLES, chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, parseStudioImagery, parseStudioTier } from '@hawa/domain';
+import { planLifecycleBriefDeliverables } from '../services/lifecycle-brief-deliverables.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
@@ -37,7 +38,7 @@ import { deferMessage, pendingHeldBrief, readDeferral, releaseDeferral, overdueD
   claimPhoto, holdPhoto, markPhotoAsked, pendingEditWords, readHeldPhoto, readMediaAnswer, recordMediaAnswer,
   waitingPhotos } from '../services/lifecycle-media-intake.js';
 import { createEditIntake } from '../services/lifecycle-edit-intake.js';
-import { INBOX_MESSAGES, MEDIA_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
+import { INBOX_MESSAGES, MEDIA_MESSAGES, ROUTING_MESSAGES, LIFECYCLE_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
   albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
@@ -46,6 +47,9 @@ import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
+import { pauseRequesterDesign } from '../services/requester-hold.js';
+import { acceptEarlyHold, EarlyHoldConflict } from '../services/early-requester-hold.js';
+import { briefAnchorFor } from '../services/lifecycle-brief-anchor.js';
 import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
   readRevisionPhotoDecision, recordRevisionPhotoDecision,
   readRoutingRefusal, recordRoutingRefusal,
@@ -55,17 +59,18 @@ import { parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-
 import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.js';
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
   type IntentReceipt } from '../services/requester-turn-store.js';
-import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, readIntentByRules,
-  shortTitle, statusText, tellOfficeAlert, tellText, thanksText, waitsForRequester, type ChatRequestView, type IntentReading,
-  type TurnPlan } from '../services/requester-turn.js';
-import { briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
+import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
+  opensForAPerson, readIntentByRules, readsAsBriefContinuation, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
+  tellText, thanksText, waitsForRequester,
+  withoutBotMentions, type ChatRequestView, type IntentReading, type TurnPlan } from '../services/requester-turn.js';
+import { briefPartSeconds, briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
 import { officeChatFor, officeChatsFor, withOfficeAlerts } from '../services/office-chats.js';
 import { addPhotoMaterial, MATERIAL_STAGES, photoMaterialLine } from '../services/lifecycle-photo-material.js';
 import { createRequesterIntentModel, type RequesterIntentModel } from '../services/requester-intent-model.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
 import { projectLifecycleOfficeRetry } from '../services/lifecycle-office-retry.js';
-import { chatAutoDraftsEnabled, splitBilingualRequest, type ChatIntake } from '../services/chat-intake.js';
+import { chatAutoDraftsEnabled, type ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
 import { parseNativeReviewSubmission } from '@hawa/domain';
 import { projectLifecycleNativeReview } from '../services/lifecycle-native-review.js';
@@ -138,23 +143,6 @@ function revisionBlockedAlert(chatId: string, code: string, update: UpdateLike):
     '', 'Their words:', (words.length > 1500 ? `${words.slice(0, 1500)}…` : words) || '(a photo or file, in the chat)'].join('\n') };
 }
 
-
-function requestIdForUpdate(chatId: string, updateId: number): string {
-  const bytes = Buffer.from(createHash('sha256').update(`telegram-new-brief:${chatId}:${updateId}`).digest().subarray(0, 16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x50;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-/** The request a bilingual brief opens for its second language (ADR-139), as stable as the first's. */
-function languageRequestIdFor(chatId: string, updateId: number, lang: 'ckb'): string {
-  const bytes = Buffer.from(createHash('sha256').update(`telegram-new-brief:${chatId}:${updateId}:${lang}`).digest().subarray(0, 16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x50;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
 
 function openDraft(value: unknown, requestId: string): ChatIntake | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -260,6 +248,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const mode = body?.mode ?? 'legacy';
     // The worker opens every request an answer names (ADR-139); an older worker opened only the first.
     const acceptsLanguageSiblings = body?.languageSiblings === true;
+    const deliverableCapacity = Number.isInteger(body?.maxDeliverables) && Number(body?.maxDeliverables) >= 1 &&
+      Number(body?.maxDeliverables) <= MAX_REQUEST_DELIVERABLES ? Number(body?.maxDeliverables) : acceptsLanguageSiblings ? 2 : 1;
     // ADR-143: `settle` is the worker's delayed settle of this (already saved) update; `briefHold`
     // says the worker schedules settles, so a text brief may wait for photos sent right after it.
     let settle = body?.settle === true;
@@ -552,6 +542,23 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
     }
 
+    // ADR-185: a clear hold must commit before brief settlement can admit the first paid call.
+    if (db && !settle && !admittedAlbum && !boundPhoto &&
+        typeof (preparedUpdate.message as Record<string, unknown> | undefined)?.text === 'string' && senderAllowedFor(preparedUpdate)) {
+      const words = withoutBotMentions(String((preparedUpdate.message as Record<string, unknown>).text));
+      try {
+        const early = await withRlsContext(db, SYSTEM_SCOPE, trx=>acceptEarlyHold(trx, DEFAULT_TENANT_ID, {
+          update:preparedUpdate,text:words,payloadHash:updateHash(preparedUpdate),isHold:readIntentByRules(words).intent==='hold',
+          answer:say(ROUTING_MESSAGES.holdConfirmed,requesterLang(words),{title:say(LIFECYCLE_MESSAGES.yourDesign,requesterLang(words))}),
+        }));
+        if (early) return handled(200, { chatAnswer:{text:early.answer,parseMode:'HTML'}, earlyHold:true, chatId:early.anchor.chatId,
+          ...(early.officeAlerts ? {officeAlerts:early.officeAlerts} : {}) });
+      } catch (error) {
+        if (error instanceof EarlyHoldConflict) return handled(409,{code:'IDEMPOTENCY_CONFLICT'});
+        throw error;
+      }
+    }
+
     // ADR-145: a message from a sender whose brief ADR-143 still holds for photos is read after that
     // brief opens, so a correction to it is a change to it and not a second request. ChatInbox runs one
     // update of a chat at a time, and the brief's own settle queues behind this update: the message is
@@ -578,7 +585,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           await releaseDeferral(trx, DEFAULT_TENANT_ID, source.update_id);
           return 'released' as const;
         }
-        if (!prior && await joinBriefPart(trx, DEFAULT_TENANT_ID, source, held.updateId, hash)) return 'joined' as const;
+        // ADR-182: a brief typed as several messages, a line of style or a forward sent right after it.
+        const typed = { windowSeconds: Math.max(briefPartSeconds(), Math.round(briefPhotoWaitMs() / 1000)),
+          continues: (words: string, soFar: string) => readsAsBriefContinuation(withoutBotMentions(words), withoutBotMentions(soFar)) };
+        if (!prior && await joinBriefPart(trx, DEFAULT_TENANT_ID, source, held.updateId, hash, typed)) return 'joined' as const;
         if (!prior) await deferMessage(trx, DEFAULT_TENANT_ID, source.update_id, scope!, held.updateId, hash, source);
         return 'deferred' as const;
       });
@@ -590,6 +600,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       if (outcome === 'released') releasedDeferral = true;
     }
 
+    // ADR-182: an edited message read again as a new one: thanks corrected into other thanks says nothing.
+    let rereadEdit = false;
     // ADR-145: an edited message or caption. Words still held (a kept photo, a voice note or PDF not yet
     // used) take the new words; words that opened or changed a design become a note to the office on it;
     // words that opened nothing are read again as a new message; an edit to anything else goes to the office.
@@ -600,7 +612,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         officeChatId: officeChatFor(chatOf(preparedUpdate)),
       });
       if (edited.kind === 'answer') return handled(edited.answer.status, edited.answer.extra);
-      if (edited.kind === 'reread') preparedUpdate = edited.update;
+      if (edited.kind === 'reread') {
+        preparedUpdate = edited.update;
+        rereadEdit = true;
+      }
     }
 
     let update = preparedUpdate;
@@ -643,12 +658,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           // A decision that opened one request per language cannot be replayed to a worker that
           // would open only the first: the update is retried and, if that worker stays, parked for
           // an operator rather than losing a language (ADR-139).
-          if (prior.open.siblings?.length && !acceptsLanguageSiblings) {
+          if (1 + (prior.open.siblings?.length ?? 0) > deliverableCapacity) {
             return handled(503, { code: 'LANGUAGE_SIBLINGS_UNSUPPORTED' });
           }
           return handled(200, { duplicate: true, lifecycleAction: 'open-request',
             requestId: prior.open.requestId, chatId: sourceChat, draft: prior.open.draft,
-            ...(prior.open.siblings?.length ? { siblings: prior.open.siblings } : {}) });
+            ...(prior.open.siblings?.length ? { siblings: prior.open.siblings } : {}),
+            ...(prior.open.deliverableCount ? {deliverableCount:prior.open.deliverableCount} : {}) });
         }
         // ADR-144: a message's intent is decided once. An answer recorded with the decision (thanks,
         // a status, a question, a note passed to the office) is given again word for word.
@@ -819,7 +835,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         // brief) is read with its new words; the update itself, and so every receipt, stays the same.
         const editedWords = msg && !photoInput && !admittedAlbum && !boundPhoto
           ? await withRlsContext(db, SYSTEM_SCOPE, (trx) => pendingEditWords(trx, DEFAULT_TENANT_ID, update.update_id)) : null;
-        const rawText: string = (() => {
+        // ADR-182: "@hawa_office_bot" addresses the bot in a group; it is not part of the words, which
+        // become a brief's copy or its title.
+        const rawText: string = withoutBotMentions((() => {
           if (photoInput) return photoInput.directive;
           if (editedWords !== null) return editedWords;
           if (msg && typeof msg === 'object') {
@@ -827,7 +845,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             return typeof t === 'string' ? t : '';
           }
           return '';
-        })();
+        })());
         if (rawText.trim() && chatId) {
           const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
           type RefusalCode = 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' |
@@ -902,23 +920,26 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 return handled(202, { lifecycleAction: 'settle-later', chatId,
                   settle: { kind: 'brief', delayMs: briefPhotoWaitMs() } });
               }
-              const requestId = requestIdForUpdate(chatId, update.update_id);
-              // English and Kurdish copy for one graphic per language opens one request per
-              // language, as legacy intake made one task per language (ADR-139). Only for a worker
-              // that opens every request of the answer: an older one would open the first alone.
-              const bilingual = acceptsLanguageSiblings && !instructionOnly
-                ? splitBilingualRequest(briefText) : null;
-              const parts: Array<{ requestId: string; text: string; lang?: 'en' | 'ckb' }> = bilingual
-                ? [{ requestId, text: bilingual.en, lang: 'en' },
-                  { requestId: languageRequestIdFor(chatId, update.update_id, 'ckb'), text: bilingual.ckb, lang: 'ckb' }]
-                : [{ requestId, text: briefText }];
-              const prepare = (part: (typeof parts)[number]) => createChatCampaignIntake(ctx).prepareChatCampaignDraft({
-                platform: 'telegram', sourceEventId: `lc-${part.requestId}-r0`, sourceChannelId: chatId,
-                senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester',
-                rawText: part.text, rawJson: part.lang ? { ...update, hawaLanguageGraphic: part.lang } : update,
-                autoGenerate: !instructionOnly && chatAutoDraftsEnabled(),
-                isInstructionOnly: instructionOnly,
-              });
+              const {requestId,allocation,parts}=planLifecycleBriefDeliverables(briefText,{chatId,updateId:update.update_id,instructionOnly,acceptsLanguageSiblings});
+              if (allocation.kind === 'limit') return handled(422,{code:'DELIVERABLE_LIMIT',chatAnswer:{
+                text:`This message asks for ${allocation.count} designs. Send groups of at most ${MAX_REQUEST_DELIVERABLES} designs; none were opened.`,parseMode:'HTML'}});
+              if (parts.length > MAX_REQUEST_DELIVERABLES) return handled(422,{code:'DELIVERABLE_LIMIT',chatAnswer:{
+                text:`These formats and languages need ${parts.length} designs. Send groups of at most ${MAX_REQUEST_DELIVERABLES}; none were opened.`,parseMode:'HTML'}});
+              if (parts.length > deliverableCapacity) return handled(503,{code:'LANGUAGE_SIBLINGS_UNSUPPORTED'});
+              const unsupported=parts.find(p=>p.variant && (p.variant.width<640 || p.variant.width>2400 || p.variant.height<640 || p.variant.height>2400));
+              if (unsupported) return handled(422,{code:'UNSUPPORTED_CANVAS',chatAnswer:{
+                text:`The requested ${unsupported.variant!.width} × ${unsupported.variant!.height} canvas is outside the supported 640–2400 pixel range. The office needs to choose a supported production format; none of these designs were opened.`,parseMode:'HTML'}});
+              const prepare = async (part: (typeof parts)[number]) => {
+                const draft=await createChatCampaignIntake(ctx).prepareChatCampaignDraft({
+                  platform: 'telegram', sourceEventId: `lc-${part.requestId}-r0`, sourceChannelId: chatId,
+                  senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester',
+                  rawText: part.text, rawJson: part.lang ? { ...update, hawaLanguageGraphic: part.lang } : update,
+                  explicitClientId:part.clientId,variantOverride:part.variant,
+                  autoGenerate: !instructionOnly && !part.detailsRequired && chatAutoDraftsEnabled(),
+                  isInstructionOnly: instructionOnly || part.detailsRequired,
+                });
+                return parts.length>1 && allocation.kind==='multiple' ? {...draft,title:`${draft.title} (${parts.indexOf(part)+1}/${parts.length})`} : draft;
+              };
               const prepared = await prepare(parts[0]);
               let lifecycleImage: ChatIntake['lifecycleImage'];
               if (photoInput) {
@@ -954,9 +975,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   const claim = await claimPhoto(trx, TENANT, heldPhoto.updateId, { byUpdateId: update.update_id, how: 'brief', requestId });
                   if (claim.byUpdateId !== update.update_id) return null;
                 }
+                const briefAnchor = await briefAnchorFor(trx,TENANT,update);
                 return recordNewBriefDecision(trx, TENANT, update.update_id,
                   { requestId, chatId, payloadHash, draft,
-                    ...((lifecycleImage || admittedAlbum) ? { sourceUpdate: update } : {}),
+                    ...(briefAnchor ? {briefAnchor} : {}),
+                    ...((lifecycleImage || admittedAlbum || allocation.kind==='multiple') ? { sourceUpdate: update } : {}),
+                    ...(allocation.kind==='multiple' ? {deliverableCount:parts.length,
+                      deliverableDetailsRequired:parts.filter(p=>p.detailsRequired).map(p=>p.requestId)} : {}),
                     ...(siblings.length ? { siblings } : {}) });
               });
               if (!stored) {
@@ -967,7 +992,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
               await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
               return handled(200, { duplicate: false, lifecycleAction: 'open-request',
-                requestId, chatId, draft: stored.draft, ...(stored.siblings?.length ? { siblings: stored.siblings } : {}) });
+                requestId, chatId, draft: stored.draft, ...(stored.siblings?.length ? { siblings: stored.siblings } : {}),
+                ...(stored.deliverableCount ? {deliverableCount:stored.deliverableCount} : {}) });
             };
 
             /** A round on a request that waits for the requester: their change, or their answer. */
@@ -1068,10 +1094,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               const group = ['group', 'supergroup'].includes(String(message.chat?.type || ''));
               const botName = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').toLowerCase();
               const entities = Array.isArray(message.entities) ? message.entities : Array.isArray(message.caption_entities) ? message.caption_entities : [];
+              // Entity offsets count in the message as sent, before the bot's name was taken out of its words.
+              const sent = typeof message.text === 'string' ? message.text : typeof message.caption === 'string' ? message.caption : text;
               const mentionsBot = entities.some((e: any) =>
                 (e?.type === 'mention' && Number.isInteger(e.offset) && Number.isInteger(e.length) &&
                   ((mention: string) => mention.endsWith('bot') || (botName && mention === `@${botName}`))(
-                    text.slice(e.offset, e.offset + e.length).toLowerCase())) ||
+                    sent.slice(e.offset, e.offset + e.length).toLowerCase())) ||
                 (e?.type === 'text_mention' && e.user?.is_bot === true));
               const groupCommand = /^\/(?:task|brief|design|campaign)(?:@\w+)?(?:\s+|$)/i.exec(text);
               // An album admitted in a group already passed ADR-160's gate (`actsInGroup`: addressed to the
@@ -1198,12 +1226,16 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               const carryOut = async (plan: TurnPlan, requests: ChatRequestView[], retried = false): Promise<Response> => {
               const byId = (id: string) => byRequest(requests, id);
               switch (plan.kind) {
-                case 'open':
+                case 'open': {
                   // A brief held for photos was read before it was held: an edit since then gives its words.
                   // ADR-156 (audit #10): the rest of a long message Telegram split, or forwards sent with it,
                   // were joined to the held brief while it waited.
-                  return await openBrief(await withBriefParts(editedWords !== null && !plan.resolves ? editedWords.trim() : plan.text,
-                    plan.resolves ? null : update.update_id), plan.instructionOnly);
+                  const first = editedWords !== null && !plan.resolves ? editedWords.trim() : plan.text;
+                  const words = await withBriefParts(first, plan.resolves ? null : update.update_id);
+                  // ADR-182: a brief typed as several messages is read whole: complete, it is drafted as any
+                  // complete brief is, not left to a designer because its first line alone said little.
+                  return await openBrief(words, words === first ? plan.instructionOnly : plan.instructionOnly && opensForAPerson(words));
+                }
                 case 'revise': {
                   const target = byId(plan.requestId);
                   if (!target || !waitsForRequester(target)) return retried ? carryOut({ kind: 'forward', words: plan.directive }, requests, true)
@@ -1227,10 +1259,19 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   }
                   return await answerChat(update);
                 case 'reply': {
+                  if (rereadEdit && plan.what === 'thanks') return await decided(200, { edit: 'unchanged', intent: reading.intent });
                   const shown = plan.requestIds.map(byId).filter((r): r is ChatRequestView => Boolean(r));
+                  // ADR-182: asked about a design taking longer than usual, the office is told and the
+                  // requester hears so, rather than "it usually takes a few minutes" an hour later.
+                  const now = Date.now();
+                  const slow = plan.what === 'status' ? slowDesigns(shown, now) : [];
+                  const office = slow.length ? officeChatFor(chatId) : undefined;
+                  const alerted = Boolean(office && office !== chatId);
                   const words = plan.what === 'thanks' ? thanksText(shown, lang)
-                    : plan.what === 'status' ? statusText(shown, lang) : nothingToChangeText(lang);
-                  return await decided(200, chatAnswer(words));
+                    : plan.what === 'status' ? statusText(shown, lang, new Set(alerted ? slow.map((r) => r.requestId) : []))
+                      : nothingToChangeText(lang);
+                  return await decided(200, chatAnswer(words, alerted
+                    ? { officeAlert: { chatId: office!, text: slowDesignOfficeAlert(chatId, slow, now) } } : {}));
                 }
                 case 'ask': {
                   // ADR-156: the photo asked about is kept under this update, and the answer carries it.
@@ -1243,9 +1284,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 case 'forward': {
                   const office = officeChatFor(chatId);
                   const alerted = Boolean(office && office !== chatId);
-                  return await decided(200, chatAnswer(forwardText(lang, alerted),
-                    alerted ? { officeAlert: { chatId: office!, text: retried
-                      ? conflictOfficeAlert(chatId, plan.words) : forwardOfficeAlert(chatId, plan.words) } } : {}));
+                  return await decided(200, chatAnswer(forwardText(lang, alerted, plan.question === true),
+                    alerted ? { officeAlert: { chatId: office!, text: retried ? conflictOfficeAlert(chatId, plan.words)
+                      : plan.question ? questionOfficeAlert(chatId, plan.words) : forwardOfficeAlert(chatId, plan.words) } } : {}));
                 }
                 case 'tell': {
                   const target = byId(plan.requestId);
@@ -1307,11 +1348,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                         : albumUsed === 'added' ? `[The requester sent ${admittedAlbum!.ref.images.length} photos with this. They were added to the design's files.]`
                           : admittedAlbum ? '[The requester also sent an album of photos with these words. They are in the Telegram chat.]' : '';
                     const words = photoLine ? `${photoWithoutWords ? '(no words)' : plan.words}\n${photoLine}` : plan.words;
+                    const held = plan.note === 'hold' && await pauseRequesterDesign(trx,TENANT,
+                      {requestId:target.requestId,taskId:target.currentTaskId,requestRev:target.rev,requestStage:target.stage,text:words},update.update_id);
                     const said = photoWithoutWords && material ? say(MEDIA_MESSAGES.photoPassed, lang, { title })
-                      : noteText(plan.note, target.stage, target.title, lang);
+                      : noteText(plan.note, target.stage, target.title, lang, held);
                     const late: LateRequesterChange = { requestId: target.requestId, taskId: target.currentTaskId,
                       requestRev: target.rev, requestStage: target.stage as LateChangeStage, text: words,
-                      kind: plan.note, title: shortTitle(target.title), answer: said };
+                      kind: plan.note, ...(plan.note === 'hold' ? {held} : {}), title: shortTitle(target.title), answer: said };
                     const refusal = await recordRoutingRefusal(trx, TENANT, update.update_id,
                       { code: 'LATE_REQUESTER_CHANGE', chatId, payloadHash, late });
                     if (refusal.payloadHash !== payloadHash || refusal.chatId !== chatId ||

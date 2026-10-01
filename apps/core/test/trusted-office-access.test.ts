@@ -141,16 +141,22 @@ it('restricts the design credential in both modes, including when office headers
   const token = ['dedicated','test','design','token'].join('_');
   vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN',token);
   vi.stubEnv('HAWA_BEARER_TOKEN',token);
-  for (const mode of ['trusted_office','required']) {
+  const previous = token + '_previous';
+  vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN_PREVIOUS', previous);
+  vi.stubEnv('HAWA_API_KEY', previous);
+  for (const credential of [token, previous]) for (const mode of ['trusted_office','required']) {
     vi.stubEnv('HAWA_DESK_AUTH_MODE',mode);
     const app = createApp({db});
-    const headers = {Authorization:'Bearer '+token, 'X-Hawa-Office-Request':'1'};
+    const headers = {Authorization:'Bearer '+credential, 'X-Hawa-Office-Request':'1'};
+    // A named task read must reach the handler from inside Docker without the office proof.
+    const allowed = await app.request('http://core:3001/v1/tasks/c1000000-0000-4000-8000-000000000001', {headers:{Authorization:'Bearer '+credential}});
+    expect(allowed.status).toBe(404);
     // Login takes a key in its body, outside the bearer guard. Retired operator aliases must
     // never exchange the service credential for an unrestricted office cookie/session.
     for (const path of ['/v1/auth/session', '/api/auth/session', '/api/v1/auth/session']) {
       for (const field of ['key', 'token', 'apiKey', 'password']) {
         const response = await proxiedRequest(app, origin+path, {method:'POST',
-          headers:{'Content-Type':'application/json','X-Hawa-Office-Request':'1'},body:JSON.stringify({[field]:token})});
+          headers:{'Content-Type':'application/json','X-Hawa-Office-Request':'1'},body:JSON.stringify({[field]:credential})});
         expect(response.status).toBe(401);
         expect(response.headers.get('set-cookie')).toBeNull();
       }

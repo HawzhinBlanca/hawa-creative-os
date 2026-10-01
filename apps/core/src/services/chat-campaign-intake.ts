@@ -5,12 +5,12 @@ import { log } from '../logging.js';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { type RequestContext, type StudioOperation, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
+import { requestOperatingSubject, type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml } from '@hawa/integrations';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
-import { autoDraftAllowedFor, clientPackOf, matchRequestClient } from './client-packs.js';
+import { autoDraftAllowedFor, clientPackOf, matchRequestClient, positiveClientWords } from './client-packs.js';
 import { defaultCanvasFor } from '@hawa/creative';
 import { isValidUuid, inlineTemplateCopyMissing, cutText, startsWithName, stripLeadingMarks } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, DEFAULT_CLIENT_ID } from '../core-context.js';
@@ -46,6 +46,28 @@ function splitAtCopyIntroducer(text: string): { instructions: string; introducer
 }
 
 type ChatCampaignIntake = ReturnType<typeof buildChatCampaignIntake>;
+/**
+ * ADR-182: a design's name as people say it: its first line without the greeting and the request
+ * around it ("Hi, we need a poster for the graduation ceremony" → "Poster for the graduation
+ * ceremony", "Another poster please: KAAE staff football tournament" → "KAAE staff football
+ * tournament"). The requester hears the name in every answer ("I'm making a first draft of …"), which
+ * read "a first draft of Hi, we need a poster for …". A line that is nothing but a request keeps its words.
+ */
+const TITLE_NOUNS = 'poster|postr|flyer|banner|design|invitation|invite|card|post|story|brochure|certificate|announcement|graphic|cover|leaflet|infographic|thumbnail|ad|advert';
+const TITLE_GREETING = /^(?:(?:hi|hello|hey|dear\s+(?:team|all|colleagues|friends|sir|madam)|good\s+(?:morning|afternoon|evening)|salam|slaw|silav|سڵاو|بەڕێزان)(?=[\s,،!.:-]|$)[\s,،!.:-]*)+/iu;
+const TITLE_REQUEST = new RegExp('^(?:(?:and|also|so|ok(?:ay)?|please|pls|plz|kindly)\\s+)*' +
+  '(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+)?(?:make|mak|create|design|prepare|produce|do)\\s+(?:us\\s+|me\\s+)?|' +
+  "(?:we|i)\\s+(?:need|want|would\\s+like|'d\\s+like)\\s+|(?:please\\s+)?(?:make|mak|create|design|prepare|produce)\\s+(?:us\\s+|me\\s+)?)?" +
+  "(?:(?:a|an|another|one\\s+more|new|the)\\s+)?" +
+  `(?=(?:[\\p{L}'-]+\\s+){0,2}(?:${TITLE_NOUNS})s?\\b)`, 'iu');
+const TITLE_NOUN_PLEASE = new RegExp(`^(?:${TITLE_NOUNS})s?\\s+(?:please|pls|plz)\\s*[:,-]\\s*`, 'iu');
+function spokenTitle(line: string): string {
+  const lead = line.replace(TITLE_GREETING, '').replace(TITLE_REQUEST, '').replace(TITLE_NOUN_PLEASE, '');
+  if (lead === line) return line;
+  const said = lead.replace(/[\s?؟.!,:]+$/u, '').trim();
+  return said.split(/\s+/).filter(Boolean).length < 2 ? line : said.replace(/^[a-z]/, (c) => c.toUpperCase());
+}
+
 const intakes = new WeakMap<CoreContext, ChatCampaignIntake>();
 
 function buildChatCampaignIntake(ctx: CoreContext) {
@@ -73,6 +95,8 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     voiceTranscript?: string;
     referenceImageBase64?: string;
     explicitClientId?: string | null;
+    /** Core's source-derived format, fixed before retrieval. Never read from rawJson. */
+    variantOverride?: { width: number; height: number };
     autoGenerate?: boolean;
     rawJson?: any;
     deskBaseUrl?: string;
@@ -86,8 +110,12 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     // Client packs first (ADR-127): the chat's bound client, else the one client its words name. A
     // message naming two pack clients is left for the office to assign, and never guessed.
     let clientAmbiguous = false;
+    // ADR-182: an organisation the words say it is NOT for ("This one is for Nova, not KAAE", "instead
+    // of KAAE", Sorani "not KAAE") names no client: it opened for KAAE and was drafted in KAAE's brand.
+    const namedText = positiveClientWords(rawText);
+    const namedNormalized = positiveClientWords(normalizedText);
     if (!clientId) {
-      const packMatch = matchRequestClient({ chatId: sourceChannelId, rawText, normalizedText });
+      const packMatch = matchRequestClient({ chatId: sourceChannelId, rawText: namedText, normalizedText: namedNormalized });
       if (packMatch.kind === 'chat' || packMatch.kind === 'named') clientId = packMatch.pack.id;
       else if (packMatch.kind === 'ambiguous') {
         clientAmbiguous = true;
@@ -95,7 +123,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       }
     }
     if (!clientId && !clientAmbiguous) {
-      const lower = rawText.toLowerCase();
+      const lower = namedText.toLowerCase();
       // Latin brand keywords match whole words only ('faster' is not FastPay, 'corona' is not Rona).
       // The left edge is a Unicode letter class rather than \b, which counts only ASCII word
       // characters and so reported a boundary wherever Kurdish script ran into Latin: a brand name
@@ -109,15 +137,15 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       // (review of 2026-09-24). "دروستی" is also the verb "make it" ("دروستی بکە") and the adverb
       // "correctly" ("بە دروستی"), which are not the brand either.
       const kword = (w: string, notAround = '') =>
-        new RegExp(`(?<![\\p{L}\\p{N}\\p{M}_])${w}(?:ی|یە|ە|یش|ەکان|کان)?(?![\\p{L}\\p{N}\\p{M}_])${notAround}`, 'u').test(normalizedText);
+        new RegExp(`(?<![\\p{L}\\p{N}\\p{M}_])${w}(?:ی|یە|ە|یش|ەکان|کان)?(?![\\p{L}\\p{N}\\p{M}_])${notAround}`, 'u').test(namedNormalized);
       const drusteeName = kword('(?<!بە\\s+)دروستی', '(?!\\s+(?:بکە|بکر|دەکە|دەکر|کرد))');
       if (
         word('kaae') ||
-        rawText.includes('باوەڕپێدان') ||
-        rawText.includes('کەی ئەی') ||
+        namedText.includes('باوەڕپێدان') ||
+        namedText.includes('کەی ئەی') ||
         word('accreditation') ||
         word('university') ||
-        rawText.includes('زانکۆ')
+        namedText.includes('زانکۆ')
       ) {
         clientId = KAAE_CLIENT_ID;
       } else if (word('fastpay') || kword('فاستپەی')) {
@@ -262,7 +290,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     // and the direction marks a Sorani keyboard puts before Latin copy are not part of the name (ADR-180).
     const titleFor = (headline: string) => {
       const label = isKaae ? 'KAAE' : senderName;
-      const line = stripLeadingMarks(headline);
+      const line = spokenTitle(stripLeadingMarks(requestOperatingSubject(rawText, headline) ?? headline));
       if (!line) return `${label}: no copy sent`;
       return startsWithName(line, label) ? `${cutText(line, 45)}…` : `${label}: ${cutText(line, 45)}…`;
     };
@@ -272,7 +300,9 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       headlineCkb = undefined;
       copyEn = undefined;
       copyCkb = undefined;
-      title = `${senderName}: Directive (${rawText.slice(0, 35).trim()}…)`;
+      // ADR-182: named by its own first line, as any brief is. "Directive (…)" reached the requester
+      // ("A designer will make Directive (make me a nice poster…)").
+      title = titleFor(rawText.split('\n').map((line) => line.trim()).find(Boolean) ?? '');
       // A directive stays RECEIVED, as the database records it; isInstructionOnly marks it. It was
       // CLARIFICATION_REQUIRED here, a word no other layer had, until the database row overwrote it.
     } else if (primaryLanguage === 'en') {
@@ -310,10 +340,15 @@ function buildChatCampaignIntake(ctx: CoreContext) {
 
     // A pack client other than KAAE gets its own default canvas (a thumbnail client: 1280x720).
     const packCanvas = (() => { const pack = isKaae ? undefined : clientPackOf(clientId); return pack ? defaultCanvasFor(pack) : undefined; })();
-    const variantWidth = packCanvas?.width ?? 1080;
-    const variantHeight = packCanvas?.height ?? (isInvitation || isKaae ? 1350 : 1080);
-    const variantAspect = packCanvas?.aspect ?? (isInvitation || isKaae ? '4:5' : '1:1');
-    const variantRole: 'instagram_post' | 'instagram_story' | 'billboard' | 'banner' | 'custom' = isInvitation ? 'custom' : 'instagram_post';
+    const override = input.variantOverride;
+    if (override && (!Number.isInteger(override.width) || !Number.isInteger(override.height) ||
+        override.width < 1 || override.height < 1 || override.width > 16384 || override.height > 16384))
+      throw new Error('Invalid source-derived canvas');
+    const variantWidth = override?.width ?? packCanvas?.width ?? 1080;
+    const variantHeight = override?.height ?? packCanvas?.height ?? (isInvitation || isKaae ? 1350 : 1080);
+    const variantAspect = override ? `${variantWidth}:${variantHeight}` : packCanvas?.aspect ?? (isInvitation || isKaae ? '4:5' : '1:1');
+    const variantRole: 'instagram_post' | 'instagram_story' | 'billboard' | 'banner' | 'custom' =
+      override?.width === 1080 && override.height === 1920 ? 'instagram_story' : isInvitation || override ? 'custom' : 'instagram_post';
 
     const brief: DesignBrief = {
       briefId: crypto.randomUUID(),

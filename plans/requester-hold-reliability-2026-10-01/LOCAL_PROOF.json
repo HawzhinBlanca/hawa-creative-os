@@ -1,0 +1,100 @@
+{
+  "date": "2026-10-01",
+  "adr": 184,
+  "scope": "current already-projected automatic task in designing",
+  "base": "a577df58",
+  "production": "4e500451 (this hold slice not deployed)",
+  "requirements": [
+    "FR-004",
+    "FR-005",
+    "FR-060",
+    "FR-063",
+    "NFR-001",
+    "NFR-006"
+  ],
+  "qualification": "SOURCE_DESIGNING_HOLD_SLICE_PASS_NOT_DEPLOYED",
+  "connected": {
+    "files": 16,
+    "passed": 779,
+    "failed": 0,
+    "expectedFail": 2,
+    "note": "778 cases in the connected run plus one new repeated-hold regression; the ten-case replay rerun is not added again."
+  },
+  "build": "PASS",
+  "typecheck": {
+    "status": "PASS",
+    "activeTestRoots": 649
+  },
+  "lint": {
+    "status": "PASS",
+    "anyCount": 939,
+    "ceiling": 1053,
+    "providerExceptions": 10
+  },
+  "deskBuild": {
+    "status": "PASS",
+    "entryKb": 492.16
+  },
+  "redBefore": {
+    "case": "ADR182 S086",
+    "failed": 1,
+    "assertion": "actual task state remains received rather than paused",
+    "filteredSkipped": 120
+  },
+  "retainedFailures": [
+    "Initial production build: four task-detail UI typing errors, repaired",
+    "Build after strict marker check: union narrowing error, repaired",
+    "First connected run:343 pass/1 stale paused-planner expectation fail/2 expected fail",
+    "New hold tests first run:122 pass/2 PostgreSQL bigint fixture assertion failures, repaired without relaxing behavior",
+    "Test typing: late requestStage inferred too narrowly; typed against the actual service input",
+    "Lint ran before updated integrations declarations were built; rebuilt package dependencies",
+    "Unsealed first full run:6242 pass/6 fail/2 expected fail/67 skip. Failures: stale Canva pause expectation; missing Desk dist; old generic-resume expectation; cached integration phrase export; three unlisted native-review phrases; dirty/stale release manifest. Corrected source/build prerequisites and expectations; manifest refusal retained until sealed",
+    "Second sealed full run intentionally stopped before completion after review found a delayed duplicate of a second hold could re-pause after office resume. Saved routing receipt now fences that replay; ten hold tests pass. No result is claimed for the stopped full run."
+  ],
+  "fullRegression": {
+    "status": "PASS",
+    "testedSeal": "6959e969",
+    "passed": 6249,
+    "failed": 0,
+    "expectedFail": 2,
+    "skipped": 67,
+    "filesPassed": 642,
+    "filesSkipped": 6,
+    "seconds": 201.38
+  },
+  "logSha256": {
+    "hawa-requester-hold-red.log": "6706d8a00af5780e6552c1b4f811c73a0c2a738cc6f4c68e8dd9c1e045660015",
+    "hawa-hold-connected-1.log": "17975afdc41cfccb1e05689adfc793ed38fedf61eed3d7e6a3f8f7dd4d125445",
+    "hawa-hold-new-1.log": "65605f8f3b750c94a90a2d72c5e597e21db5e6e2da9f0da16f1858071a45c733",
+    "hawa-hold-new-2.log": "c7d001b5fb8c8df3c1c69be798fb5f6decc28465ffbbd7ce3497f504ba219719",
+    "hawa-hold-full-1.log": "56c9a2ca40dccbc95ab0c257ee29dd87898a6c5dd727d9865c6e4808dd310773",
+    "hawa-hold-connected-2.log": "c24f322482b88955ad6b8fb12d201948fd4bd89b65121cebf0d0c40736f4e26d",
+    "hawa-hold-typecheck-2.log": "40e29137397070167e2f2969047228cf487ec2faee5ad2362568999d0edf5764",
+    "hawa-hold-lint-2.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
+    "hawa-hold-desk-build.log": "96e69e1b849885b294dff9db019b4402bf00c2f0d70fac65219580fe49a7e86a",
+    "hawa-hold-replay-3.log": "7437072b322f20dacd7dc69ea00d14fdf41422678454b6d4c16678f72a5129e0",
+    "hawa-hold-typecheck-3.log": "40e29137397070167e2f2969047228cf487ec2faee5ad2362568999d0edf5764",
+    "hawa-hold-full-3.log": "de93258e43d26f05083943ca0fcc0de3a6fdef7997abeff4b9a7f060324bdae0",
+    "hawa-hold-manifest-3.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
+    "hawa-hold-lint-3.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5"
+  },
+  "limitations": [
+    "Early brief settlement versus first paid admission remains unqualified",
+    "Later-stage holds are passed to office, without claiming automatic pause",
+    "Two ADR182 title/multi-design defects remain expected failures",
+    "New Sorani lines listed but awaiting native review",
+    "67 tests skipped in qualified sealed regression",
+    "Broader content-aware/native/Canva/human design qualification remains open"
+  ],
+  "replayFollowup": {
+    "passed": 10,
+    "failed": 0,
+    "newDistinctCases": 1,
+    "reason": "a second hold while already paused has no state-change event; its committed routing receipt must also fence duplicates after resume"
+  },
+  "blueprint": {
+    "passed": 1488,
+    "warnings": 0,
+    "failed": 0
+  }
+}

@@ -11,7 +11,8 @@ x-logging: &logging
 x-worker-environment: &worker-environment
   NODE_ENV: production
   PORT: 9080
-  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
+  # The restricted worker database URL comes only from generated .env.worker (ADR182).
+  # Interpolating Core's DATABASE_URL here would override that restricted credential.
   RESTATE_INGRESS_URL: http://restate:8080
   RESTATE_ADMIN_URL: http://restate:9070
   HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
@@ -38,10 +39,10 @@ x-worker: &worker
   networks:
     - core
     - egress
-  # Both colours write to the file store (ADR-035): Telegram intake, and with it the photo puts, moves
-  # into the worker in Phase 2.1. deploy.sh creates the directory and its marker before any container.
+  # Core owns source admission; both worker colors only read verified delivery/preview bytes.
+  # Read-only mount keeps a compromised worker from rewriting or deleting the asset store.
   volumes:
-    - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/var/lib/hawa/blobs
+    - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/var/lib/hawa/blobs:ro
   # The same Telegram address Core pins. The worker polls Telegram and sends every requester message
   # since ADR-129/135; on 2026-09-29 the office network could not reach the address DNS returned
   # (149.154.166.110), so the worker could neither receive nor send while Core, pinned, still could.
@@ -67,13 +68,13 @@ services:
     ports:
       - "${HAWA_BIND_IP:-127.0.0.1}:${HAWA_PORT:-8080}:80"
     volumes:
-      # Files from the repository are bound through ~/.hawa/current, the release production runs
-      # (ADR-158), never through the directory compose was started from: the path stays the same from
-      # one deploy to the next, so a deploy does not recreate a container only because its release
-      # directory changed, and no bind mount points into a checkout people work in. deploy.sh sets
-      # HAWA_RELEASE_ROOT to the new release for its one-off nginx -t and vector validate runs.
-      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/infra/docker/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/infra/docker/.office-proxy-header.conf:/etc/nginx/hawa-office-proof.conf:ro
+      # Files are bound from ~/.hawa/runtime (ADR-158, addendum 3): a real directory, never a link and
+      # never pruned, that deploy.sh rewrites in place from the release (and the office proof from
+      # ~/.hawa/shared) just before `up -d`. Not through the ~/.hawa/current link: Docker Desktop resolves
+      # it when it creates the container and keeps that release's path, which a later prune removed.
+      # deploy.sh points HAWA_RUNTIME_DIR at a candidate copy for its one-off nginx -t and vector validate.
+      - ${HAWA_RUNTIME_DIR:-${HOME}/.hawa/runtime}/infra/docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${HAWA_RUNTIME_DIR:-${HOME}/.hawa/runtime}/infra/docker/.office-proxy-header.conf:/etc/nginx/hawa-office-proof.conf:ro
       # The file store, read-only, for the internal /_blobs/ location that Core's X-Accel-Redirect
       # answers point at (ADR-035). Files are 0444 and directories 0755, so nginx's user can read them.
       - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/srv/hawa-blobs:ro
@@ -238,12 +239,12 @@ services:
     mem_reservation: 1g
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Through ~/.hawa/current, like nginx.conf (ADR-158); read only when the data directory is empty.
-      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/infra/docker/00-init-roles.sql:/docker-entrypoint-initdb.d/00-init-roles.sql:ro
-      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/db/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
-      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/db/03-grants.sql:/docker-entrypoint-initdb.d/03-grants.sql:ro
-      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/db/seed.sql:/docker-entrypoint-initdb.d/04-seed.sql:ro
+      # From ~/.hawa/runtime, like nginx.conf (ADR-158, addendum 3); read only when the data directory is empty.
+      - ${HAWA_RUNTIME_DIR:-${HOME}/.hawa/runtime}/infra/docker/00-init-roles.sql:/docker-entrypoint-initdb.d/00-init-roles.sql:ro
+      - ${HAWA_RUNTIME_DIR:-${HOME}/.hawa/runtime}/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ${HAWA_RUNTIME_DIR:-${HOME}/.hawa/runtime}/db/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
+      - ${HAWA_RUNTIME_DIR:-${HOME}/.hawa/runtime}/db/03-grants.sql:/docker-entrypoint-initdb.d/03-grants.sql:ro
+      - ${HAWA_RUNTIME_DIR:-${HOME}/.hawa/runtime}/db/seed.sql:/docker-entrypoint-initdb.d/04-seed.sql:ro
     networks:
       - core
       - edge
@@ -284,7 +285,7 @@ services:
     logging: *logging
     command: ["--config", "/etc/vector/vector.yaml"]
     volumes:
-      - ${HAWA_RELEASE_ROOT:-${HOME}/.hawa/current}/infra/docker/vector.yaml:/etc/vector/vector.yaml:ro
+      - ${HAWA_RUNTIME_DIR:-${HOME}/.hawa/runtime}/infra/docker/vector.yaml:/etc/vector/vector.yaml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${HAWA_CONTAINER_LOGS_DIR:-${HOME}/.hawa/logs/containers}:/logs
     network_mode: none

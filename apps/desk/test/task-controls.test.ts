@@ -16,6 +16,18 @@ const reason=async()=>act(async()=>{
   textarea.dispatchEvent(new Event('input',{bubbles:true}));
 });
 describe('Desk durable task controls',()=>{
+  it('shows the original requester hold and only its versioned office resume',async()=>{
+    const send=vi.spyOn(apiClient.tasks,'control').mockResolvedValue({commandId:'held',status:'COMPOSING',version:9,replayed:false});
+    const refresh=vi.fn(async()=>{});
+    await act(async()=>root.render(createElement(TaskControls,{taskId:'held-task',status:'PAUSED',version:8,
+      role:'operator',refresh,requesterHold:{reason:'Wait, we are confirming the new date'}})));
+    expect(host.textContent).toContain('confirming the new date');expect(host.querySelectorAll('button')).toHaveLength(1);
+    expect(button('Resume this design').disabled).toBe(true);await reason();
+    await act(async()=>button('Resume this design').click());
+    expect(send).toHaveBeenCalledWith('held-task','resume',{reason:'Stop this synthetic request',expectedVersion:8},expect.any(String));
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('requires a reason, keeps a lost-response retry key, and shows confirmed closure',async()=>{
     const send=vi.spyOn(apiClient.tasks,'control').mockRejectedValueOnce(new Error('Response lost; retry the same action'))
       .mockResolvedValueOnce({commandId:'synthetic',status:'CANCELLED',version:2,replayed:true});

@@ -5,7 +5,7 @@ import { CanvaFlowError } from './canva-flow-error.js';
 /** Call under the task lock before admitting a new operation, after historical replay. */
 export function assertTaskGenerationAllowed(state: unknown): void {
   const blocker = taskGenerationBlocker(state);
-  if (blocker) throw new CanvaFlowError(409, 'TASK_GENERATION_BLOCKED', blocker);
+  if (blocker) throw new CanvaFlowError(409, state === 'paused' || state === 'PAUSED' ? 'TASK_PAUSED' : 'TASK_GENERATION_BLOCKED', blocker);
 }
 
 /** Preserve the established HTTP conflict contract for both Studio and planner admission. */

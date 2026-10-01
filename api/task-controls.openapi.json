@@ -131,7 +131,7 @@
         ],
         "operationId": "resumeTask",
         "summary": "Resume a retained operator pause checkpoint",
-        "description": "Requires office authority, current expectedVersion, reason and a stable key. The task lock and append-only event commit atomically. Already admitted operations may finish. RequestLifecycle-owned tasks use their office action instead.",
+        "description": "Requires office authority, current expectedVersion, reason and a stable key. Restores the saved pause checkpoint atomically. A RequestLifecycle-owned task may resume only when its current designing request has a requester-hold checkpoint for the same request revision. Service identities and clarification-only pauses cannot use this action. Already admitted outcomes remain pending until resume; resume does not acknowledge pending delivery notes.",
         "parameters": [
           {
             "name": "taskId",

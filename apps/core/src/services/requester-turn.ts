@@ -25,7 +25,7 @@ import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, request
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
 
-export type TurnIntent = 'acknowledgement' | 'status' | 'approval' | 'delivery_request' | 'cancel' | 'deadline' |
+export type TurnIntent = 'acknowledgement' | 'status' | 'approval' | 'delivery_request' | 'cancel' | 'hold' | 'deadline' |
   'change' | 'new_brief' | 'conversation' | 'unclear';
 
 export interface IntentReading {
@@ -41,6 +41,8 @@ export interface IntentReading {
   /** Model readings only: the request the model named, and how sure it was. */
   requestId?: string;
   confidence?: number;
+  /** conversation: a question the bot cannot answer itself ("how much does a poster cost?"); the office answers it (ADR-182). */
+  question?: boolean;
 }
 
 export type Lang = RequesterLang;
@@ -68,6 +70,8 @@ export interface ChatRequestView {
   question: { id: string; text: string; options: string[] } | null;
   /** The Telegram user who sent its brief, when known. */
   requesterId: string | null;
+  /** Current task is at its requester hold checkpoint, rather than making a draft. */
+  requesterHold?: boolean;
 }
 
 /** A question this bot asked the sender, still open: its own update, the words it holds, the options. */
@@ -90,11 +94,14 @@ export type TellNote = 'approval' | 'deadline' | 'delivery';
 export type TurnPlan =
   | { kind: 'open'; text: string; instructionOnly: boolean; resolves?: number }
   | { kind: 'revise'; requestId: string; directive: string; resolves?: number }
-  | { kind: 'note'; note: 'change' | 'cancel'; requestId: string; words: string; resolves?: number }
+  | { kind: 'note'; note: 'change' | 'cancel' | 'hold'; requestId: string; words: string; resolves?: number }
   | { kind: 'tell'; note: TellNote; requestId: string; words: string; resolves?: number }
   | { kind: 'reply'; what: 'thanks' | 'status' | 'nothing-to-change'; requestIds: string[] }
-  /** Words about a design this bot cannot find (a reply to an old message): passed to the office. */
-  | { kind: 'forward'; words: string }
+  /**
+   * Words about a design this bot cannot find (a reply to an old message), or a question it cannot
+   * answer (`question`, ADR-182): passed to the office.
+   */
+  | { kind: 'forward'; words: string; question?: true }
   | ({ kind: 'ask' } & Omit<PendingAsk, 'updateId'>)
   | { kind: 'passive'; reason: string }
   | { kind: 'conversation' };
@@ -102,6 +109,17 @@ export type TurnPlan =
 // ---------------------------------------------------------------------------------------------
 // Reading the words
 // ---------------------------------------------------------------------------------------------
+
+/**
+ * ADR-182: the words without a mention of a bot ("@hawa_office_bot make a poster …"): in a group the
+ * mention says who is addressed, and is not part of a brief's copy or of what a message means. Every
+ * Telegram bot's username ends in "bot"; people's mentions stay.
+ */
+export function withoutBotMentions(text: string): string {
+  if (!text.includes('@')) return text;
+  const without = text.replace(/(^|[\s,،(])@[A-Za-z][A-Za-z0-9_]{2,}bot\b[,:،]?[^\S\n]*/gi, '$1');
+  return without === text ? text : without.replace(/^\s+/, '').replace(/[^\S\n]+$/, '');
+}
 
 /** Skin tones, variation selectors and direction marks carry no meaning here. */
 const clean = (text: string) => text.replace(/[\u{1F3FB}-\u{1F3FF}️‎‏]/gu, '').replace(/[^\S\n]+/g, ' ').replace(/ *\n */g, '\n').trim();
@@ -177,7 +195,7 @@ function readsAsDeliveryRequest(text: string, core: string): boolean {
 
 const CANCEL_EN = new RegExp(
   '^(?:(?:just|kindly)\\s+)?(?:cancel|stop|scrap|drop|abort|withdraw|forget(?:\\s+about)?|never\\s?mind|nvm|' +
-  "don'?t\\s+(?:do|make|bother\\s+with|continue(?:\\s+with)?|proceed(?:\\s+with)?)|no\\s+need\\s+(?:for|to\\s+(?:do|make))|" +
+  "don'?t\\s+(?:do|make|bother\\s+with|continue(?:\\s+with)?|proceed(?:\\s+with)?)|no\\s+need\\s+(?:for|to\\s+(?:do|make))|no\\s+need|" +
   "(?:we|i)\\s+(?:don'?t|do\\s+not|no\\s+longer)\\s+need|(?:we|i)\\s+(?:want|would\\s+like)\\s+to\\s+cancel|" +
   "(?:it'?s|it\\s+is)\\s+(?:cancel+ed|not\\s+needed)|not\\s+needed|no\\s+longer\\s+needed)" +
   '(?:\\s+(?:it|that|this|them|these|everything|all(?:\\s+of\\s+(?:it|them))?|' +
@@ -186,6 +204,19 @@ const CANCEL_EN = new RegExp(
 /** Sorani: cancel it, stop it, not needed, we don't need it, don't make it, leave it, give it up. */
 const CANCEL_CKB = ['هەڵیوەشێنەوە', 'هەڵبوەشێنەوە', 'هەڵوەشێنەوە', 'هەڵیبوەشێنەوە', 'ڕایبگرە', 'بیوەستێنە',
   'ڕاوەستە', 'پێویست ناکات', 'پێویستمان نییە', 'پێویستم نییە', 'مەیکە', 'لێی گەڕێ', 'وازی لێ بێنە'];
+
+/** A temporary stop of the design, never a quoted instruction or a pause of a design element. */
+export function readsAsHold(text: string): boolean {
+  const t = corePhrase(text);
+  if (!t || t.length > 500) return false;
+  // Pronouns must name the whole job, not a design element ("hold this button", "pause it animation").
+  const wholeJobTail = '(?=$|[\\s,.!:-]+(?:please\\b|for\\s+now\\b|until\\b|while\\b|because\\b|we\\b|i\\b)|[,.!:-])';
+  return /^(?:(?:wait|hold\s+on|hang\s+on)[\s,.!:-]+)?(?:don['’]?t|do\s+not)\s+(?:make|start|continue|proceed\s+with)\s+(?:it|them|this|that|(?:the|these|those)\s+(?:designs?|posters?|drafts?))\s+(?:yet|for\s+now)\b/i.test(t) ||
+    new RegExp('^(?:hold|pause)\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))' + wholeJobTail, 'i').test(t) ||
+    new RegExp('^put\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))\\s+on\\s+hold' + wholeJobTail, 'i').test(t) ||
+    /^(?:wait|hold\s+on|hang\s+on)[\s!.]*$/i.test(t) ||
+    /^(?:ڕایبگرە|ڕاوەستە)(?:[\s،,.!]|$)/u.test(t);
+}
 
 const STATUS_EN: RegExp[] = [
   /^(?:so\s+)?when\s+(?:will|would|can|could|is|are|do|does|should|shall)\b[^?]*\b(?:ready|done|finish(?:ed)?|complete(?:d)?|be\s+sent|be\s+delivered|arrive|get\s+(?:it|them|the\s+\p{L}+)|receive|see\s+(?:it|them|the\s+\p{L}+)|have\s+(?:it|them|the\s+\p{L}+))\b/iu,
@@ -200,6 +231,18 @@ const STATUS_EN: RegExp[] = [
   /^(?:where\s+is|where'?s)\s+(?:it|my|our|the)\b/i,
   /^(?:(?:i'?m|we'?re|we\s+are|i\s+am)\s+)?still\s+waiting\b/i,
   /^(?:did|have)\s+you\s+(?:start(?:ed)?|finish(?:ed)?|made|done)\b/i,
+  // ADR-182: "??" and "hello??" after a wait.
+  /^[?؟]+$/,
+  /^(?:hello|hi|hey|salam|slaw|سڵاو)\s*[?؟]{2,}$/iu,
+];
+/**
+ * ADR-182: "where is my poster" or "why is it taking so long" anywhere in a frustrated message ("this
+ * is useless, where is my poster???"), unless the message also asks for a change.
+ */
+const STATUS_ANYWHERE_EN: RegExp[] = [
+  /\bwhere\s+(?:is|are|'s)\s+(?:my|our|the)\s+\p{L}+/iu,
+  /\b(?:taking|takes|take|took)\s+(?:so|too|this|that)\s+long\b/i,
+  /\bstill\s+(?:not\s+(?:ready|done|here|finished)|nothing|no\s+(?:news|poster|design|reply))\b/i,
 ];
 /** Sorani: "when" with ready / done / arrives / you send; any news; what happened; is it ready / done. */
 const STATUS_CKB_WHEN = 'کەی';
@@ -211,6 +254,16 @@ const DEADLINE_NEED = /\b(?:need(?:ed|s)?|want(?:ed)?|must|has\s+to|have\s+to|sh
 const URGENT = /^(?:(?:it'?s|this\s+is|very|quite|really|super)\s+)*(?:urgent(?:ly)?|asap|as\s+soon\s+as\s+possible|high\s+priority|a\s+rush(?:\s+job)?|rush(?:\s+(?:it|job))?|we\s+are\s+in\s+a\s+hurry|hurry(?:\s+up)?)(?:\s+please)?[\s!.]*$/i;
 /** Sorani: by tomorrow, by today, before tomorrow, by the evening, urgent, it is urgent, we are in a hurry. */
 const DEADLINE_CKB = ['تا سبەی', 'تا ئەمڕۆ', 'پێش سبەی', 'تا ئێوارە', 'بەپەلە', 'پەلەیە', 'زۆر پەلەمانە'];
+/**
+ * ADR-182: a Sorani day in words: a weekday (Saturday … Friday, "-ی" joins it to what follows),
+ * tomorrow, today, next week, the end of the week.
+ */
+const DAY_CKB = '(?:ڕۆژی\\s+)?(?:(?:یەک|دوو|سێ|چوار|پێنج)?شەممە|هەینی|سبەی|ئەمڕۆ|هەفتەی\\s+داهاتوو|کۆتایی\\s+هەفتە)';
+/** "by / before / until" a day ("تا پێنجشەممەی داهاتوو", by next Thursday). */
+const DEADLINE_BY_CKB = new RegExp(`(?:^|\\s)(?:تا|هەتا|پێش)\\s+${DAY_CKB}`, 'u');
+/** A day with "we need it", "it is needed", "it must be ready" ("پێنجشەممە پێویستمانە", we need it Thursday). */
+const DEADLINE_DAY_CKB = new RegExp(DAY_CKB, 'u');
+const DEADLINE_NEED_CKB = /پێویست|دەمانەوێت|دەمەوێت|ئامادە\s*بێت|ئامادەی\s+بکە|تەواو\s*بێت/u;
 
 /** Corrections and additions to a design ("the date should be 5 October not 4", "also add our logo"). */
 const CORRECTION_EN: RegExp[] = [
@@ -243,9 +296,22 @@ const NEW_DESIGN_CKB = /(?:پۆستەر|دیزاین|بانەر|فلایەر|ب�
 const ASKS_TO_MAKE_CKB = ['دروست بکە', 'دروستبکە', 'دروست بکەن', 'ئامادە بکە', 'دیزاین بکە', 'دەمانەوێت',
   'دەمەوێت', 'پێویستمان', 'بۆمان بکە', 'بکەن', 'بکە'];
 
+/**
+ * ADR-182: a question about price or time that names a design ("how much does a poster cost?", Sorani
+ * "how much is a poster?") asks the office something; it is not a request to make one.
+ */
+const PRICE_EN = /\b(?:how\s+much|prices?|costs?|charges?|fees?)\b/i;
+const PRICE_CKB = /(?:نرخ|چەندە|بە\s*چەند|چەند\s+دەکات|چەندی\s+تێ)/u;
+const MAKE_EN = /\b(?:make|create|design|prepare|produce|draw)\s+(?:a|an|me|us|one|two|three|\d+)\b/i;
+const MAKE_CKB = ['دروست بکە', 'دروستبکە', 'دروست بکەن', 'ئامادە بکە', 'دیزاین بکە', 'بۆمان بکە'];
+function asksAboutPrice(t: string): boolean {
+  return /[?؟]\s*$/.test(t) && (PRICE_EN.test(t) || PRICE_CKB.test(t)) && !MAKE_EN.test(t) && !any(t, MAKE_CKB);
+}
+
 /** A request for a new design ("Can you make a poster for Nawroz?"), greeting or not. */
 export function asksForNewDesign(text: string): boolean {
   const t = clean(text);
+  if (asksAboutPrice(t)) return false;
   if (NEW_DESIGN_CKB.test(t) && (any(t, ASKS_TO_MAKE_CKB) || t.length <= 200)) return true;
   if (OPENS_WITH_DESIGN.test(corePhrase(t))) return true;
   return NEW_DESIGN_EN.test(t) && ASKS_TO_MAKE_EN.test(t);
@@ -273,23 +339,47 @@ function readsAsApproval(text: string, core: string): boolean {
   return !readsAsChange(rest) && !asksForNewDesign(text);
 }
 
+/**
+ * ADR-182: words said around a cancellation, each its own clause: "never mind, cancel it", "no, stop",
+ * "no need anymore, thanks", "ok forget it, sorry". Sorani: sorry, no, OK, thanks.
+ */
+const CANCEL_FILLER = /^(?:ok(?:ay)?|no|nope|sorry|thanks?|thank\s+you|please|actually|well|sadly|unfortunately|hm+|ببورە|نا|نەخێر|باشە|سوپاس|تکایە)$/iu;
+
 function readsAsCancel(core: string): boolean {
   if (!core || core.length > 160) return false;
   if (CANCEL_EN.test(core)) return true;
-  return isSoraniText(core) && core.split(/\s+/).length <= 4 && any(core, CANCEL_CKB);
+  if (isSoraniText(core) && core.split(/\s+/).length <= 4 && any(core, CANCEL_CKB)) return true;
+  // Several clauses: one of them cancels, and the rest only surround it.
+  const clauses = core.split(/\s*[,،;.!]+\s*/).map((c) => c.trim()).filter(Boolean);
+  if (clauses.length < 2) return false;
+  const cancels = (c: string) => CANCEL_EN.test(c) || (isSoraniText(c) && c.split(/\s+/).length <= 4 && any(c, CANCEL_CKB));
+  return clauses.some(cancels) && clauses.every((c) => cancels(c) || CANCEL_FILLER.test(c));
 }
 
 function readsAsStatus(core: string): boolean {
   if (!core || core.length > 140) return false;
   if (STATUS_EN.some((p) => p.test(core))) return !asksForNewDesign(core);
+  if (STATUS_ANYWHERE_EN.some((p) => p.test(core))) return !asksForNewDesign(core) && !readsAsChange(core);
   if (!isSoraniText(core) || core.length > 80) return false;
   return (containsKeyword(core, STATUS_CKB_WHEN) && any(core, STATUS_CKB_WITH)) || any(core, STATUS_CKB);
 }
 
 /** A date or a time of day ("5 October", "October 5", "7pm", "19:30"). */
-const DATE_OR_TIME = /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\p{L}*|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\p{L}*\s+\d{1,2}\b|\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b\d{1,2}:\d{2}\b/iu;
-/** Words that name an event or its details, in English and Sorani (day, time, place, hall, invitation, seminar, conference, celebration, festival). */
-const EVENT_WORDS = /\b(?:date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|ceremony|conference|seminar|workshop|party|dinner|meeting|graduation|wedding|festival|celebration|exhibition|fair|concert|launch)\b|(?:ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس|ئاهەنگ|فێستیڤاڵ)/giu;
+const DATE_OR_TIME_EN = /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\p{L}*|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\p{L}*\s+\d{1,2}\b|\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b\d{1,2}:\d{2}\b/iu;
+/**
+ * ADR-182: a date or a time in Sorani, in either kind of digit: a day of a month by its Iraqi or its
+ * Kurdish name ("١٢ی تشرینی یەکەم", 12 October; "٢٠ی ئازار", 20 March), a date written with slashes
+ * ("١٢/١٠/٢٠٢٦"), or an hour ("کاتژمێر ٥", five o'clock).
+ */
+const MONTHS_CKB = 'کانوونی\\s+(?:دووەم|یەکەم)|شوبات|ئازار|نیسان|ئایار|حوزەیران|تەمموز|ئاب|ئەیلوول|تشرینی\\s+(?:یەکەم|دووەم)|' +
+  'خاکەلێوە|گوڵان|جۆزەردان|پووشپەڕ|گەلاوێژ|خەرمانان|ڕەزبەر|گەڵاڕێزان|سەرماوەز|بەفرانبار|ڕێبەندان|ڕەشەمە';
+const DATE_OR_TIME_CKB = new RegExp(`[\\d٠-٩۰-۹]{1,2}\\s*ی?\\s*(?:${MONTHS_CKB})|[\\d٠-٩۰-۹]{1,2}\\s*/\\s*[\\d٠-٩۰-۹]{1,2}(?:\\s*/\\s*[\\d٠-٩۰-۹]{2,4})?|کاتژمێر\\s*[\\d٠-٩۰-۹]{1,2}`, 'u');
+const DATE_OR_TIME = { test: (text: string) => DATE_OR_TIME_EN.test(text) || DATE_OR_TIME_CKB.test(text) };
+/**
+ * Words that name an event or its details, in English and Sorani (day, time, place, hall, invitation,
+ * seminar, conference, celebration, festival; ADR-182: graduation, hotel, park, meeting, exhibition).
+ */
+const EVENT_WORDS = /\b(?:date|time|venue|location|hall|auditorium|hotel|stadium|campus|rsvp|cordially|invitation|ceremony|conference|seminar|workshop|party|dinner|meeting|graduation|wedding|festival|celebration|exhibition|fair|concert|launch|tournament|forum|summit|symposium|lecture|open\s+day)\b|(?:ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس|ئاهەنگ|فێستیڤاڵ|دەرچوون|هۆتێل|پارک|کۆبوونەوە|پێشانگا|نەورۆز)/giu;
 
 /**
  * ADR-156 (audit #15): a deadline said beside the event's own copy ("Invitation card for the graduation
@@ -311,7 +401,8 @@ function readsAsDeadline(text: string, core: string): boolean {
   if (URGENT.test(core)) return true;
   if (DEADLINE_WHEN.test(core) && DEADLINE_NEED.test(core)) return true;
   if (/^(?:by|before)\s+/i.test(core) && DEADLINE_WHEN.test(core)) return true;
-  return isSoraniText(core) && core.length <= 100 && any(core, DEADLINE_CKB);
+  if (!isSoraniText(core) || core.length > 100) return false;
+  return any(core, DEADLINE_CKB) || DEADLINE_BY_CKB.test(core) || (DEADLINE_DAY_CKB.test(core) && DEADLINE_NEED_CKB.test(core));
 }
 
 const FULL_BRIEF_REASON = 'Complete design brief with structured copy and event details detected';
@@ -332,6 +423,7 @@ export function readIntentByRules(text: string): IntentReading {
   if (readsAsDeliveryRequest(t, core)) return rules('delivery_request', 'Asks the office about the files (again, a format, an email, a resolution)');
   if (readsAsApproval(t, core)) return rules('approval', 'Approval words; the office decides');
   if (isAcknowledgement(t) || (core && isAcknowledgement(core) && core.length <= 60)) return rules('acknowledgement', 'Thanks, an OK or a receipt');
+  if (readsAsHold(core)) return rules('hold', 'Asks to pause the current design');
   if (readsAsCancel(core)) return rules('cancel', 'Asks to cancel or stop');
   if (readsAsStatus(core)) return rules('status', 'Asks how a design is going');
   if (readsAsDeadline(t, core)) return rules('deadline', 'Gives a deadline or urgency');
@@ -347,12 +439,18 @@ export function readIntentByRules(text: string): IntentReading {
   const designRequest = asksForNewDesign(t);
   const explicitNew = EXPLICIT_NEW.test(t) || designRequest;
   if (explicitNew) {
+    // ADR-182: a short request that names the event with its date or time ("Another poster please: KAAE
+    // staff football tournament, 14 November 2026 at 4 pm, Franso Hariri stadium") carries its copy,
+    // and is drafted as a longer one is, instead of going to a designer by hand.
+    const complete = substantial || (words >= 6 && carriesBriefCopy(core));
     return rules('new_brief', designRequest ? 'Asks for a new design' : 'Said to be a new design', {
-      explicitNew: true, substantial,
-      instructionOnly: heuristics.kind !== 'new_brief' || heuristics.isInstructionOnly === true || (!substantial && !fullBrief),
+      explicitNew: true, substantial: complete,
+      instructionOnly: heuristics.kind !== 'new_brief' || heuristics.isInstructionOnly === true || (!complete && !fullBrief),
     });
   }
   if (!fullBrief && readsAsChange(t)) return rules('change', 'Asks for a change or a correction');
+  // ADR-182: "how much is a poster?" names a design but asks a question the office answers.
+  if (!fullBrief && !substantial && isPlainQuestion(core)) return rules('conversation', 'A question', { question: true });
   if (heuristics.kind === 'new_brief') {
     return rules(substantial ? 'new_brief' : 'unclear', substantial ? 'Carries copy or event detail'
       : 'A short message that could be a new brief or a note about a current design',
@@ -364,7 +462,49 @@ export function readIntentByRules(text: string): IntentReading {
   if (substantial && carriesBriefCopy(core)) {
     return rules('new_brief', 'Carries event copy and a date', { substantial: true, instructionOnly: false });
   }
-  return rules('conversation', heuristics.reason);
+  return rules('conversation', heuristics.reason,
+    heuristics.kind === 'question' || isPlainQuestion(core) ? { question: true } : {});
+}
+
+/**
+ * ADR-182: a message that goes on with a brief its sender is still sending (the brief is held a few
+ * seconds for photos, ADR-143): people type a brief as several short messages ("Hi, we need a poster
+ * for the graduation" / "Date: 12 October at 5 pm" / "Venue: the main hall"), add a line of style
+ * ("and use our blue colours"), or send "please make a poster from this" after a forward. Such a
+ * message is part of the brief. A message that stands on its own is not: thanks, a question, a status
+ * question, a cancellation, another design asked for with its own copy, or a correction of what was
+ * just sent ("sorry, the date is the 5th"), which is kept for the office as before.
+ */
+const REFERS_BACK = /\b(?:from|with|using|of|for|about|on)\s+(?:this|that|these|those|it|the\s+(?:above|message|text|forward(?:ed)?(?:\s+message)?|invitation|details|info(?:rmation)?))\b|\b(?:above|below)\b|(?:لەمە|بەمە|بۆ\s+ئەمە|لەم\s+نامەیە|سەرەوە|خوارەوە)/iu;
+const CORRECTION_CUES = /\b(?:sorry|wrong|typo|mistake|incorrect|instead\s+of|not\s+(?:the\s+)?\d|should\s+(?:be|say|read)|actually)\b|(?:ببورە|هەڵە|نەک\b|لە\s+جیاتی)/iu;
+const LABELLED_LINE = /^[\p{L}\p{M} ]{2,30}\s*:\s*\S/u;
+export function readsAsBriefContinuation(text: string, soFar = ''): boolean {
+  const t = clean(text);
+  if (!t || t.startsWith('/') || t.length > 4000) return false;
+  const reading = readIntentByRules(t);
+  if (reading.intent === 'new_brief' && REFERS_BACK.test(t) && !reading.substantial) return true;
+  switch (reading.intent) {
+    case 'unclear': return true;
+    case 'change': case 'deadline': return !CORRECTION_CUES.test(t);
+    // Event details ("on 1 March at 10, in the university hall") complete a brief that did not yet
+    // give its date or time; after a brief that already did, they are a brief of their own.
+    case 'new_brief': return !reading.explicitNew && (!reading.substantial || !DATE_OR_TIME.test(clean(soFar)));
+    case 'conversation': return !reading.question && (DATE_OR_TIME.test(t) || LABELLED_LINE.test(t));
+    default: return false;
+  }
+}
+
+/**
+ * ADR-182: a question put to the bot ("how much does a poster cost?", "do you have our logo already?",
+ * Sorani "how much is a poster?"), not a request for a design, a change or a status. Its answer is the
+ * office's.
+ */
+const QUESTION_START_EN = /^(?:how|what|which|who|whom|whose|where|when|why|do|does|did|is|are|was|were|can|could|would|will|should|may|have|has)\b/i;
+const QUESTION_WORD_CKB = /(?:ئایا|چۆن|چییە|چی|کێ|کوێ|کەی|بۆچی|چەند|نرخ)/u;
+export function isPlainQuestion(core: string): boolean {
+  const t = clean(core);
+  if (!t || t.length > 300 || !/[?؟]\s*$/.test(t)) return false;
+  return QUESTION_START_EN.test(t) || (isSoraniText(t) && QUESTION_WORD_CKB.test(t));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -527,7 +667,7 @@ function changeFor(request: ChatRequestView, words: string, how: string, confide
 }
 
 /** A brief opened after "new" was chosen drafts automatically only when it carries its own copy. */
-function opensForAPerson(words: string): boolean {
+export function opensForAPerson(words: string): boolean {
   const reading = readIntentByRules(words);
   return reading.intent !== 'new_brief' || !reading.substantial || reading.instructionOnly === true;
 }
@@ -547,6 +687,7 @@ function applyTo(intent: PendingAsk['intent'], request: ChatRequestView, words: 
   confidence: number | undefined, resolves?: number): TurnPlan | null {
   const r = resolves ? { resolves } : {};
   switch (intent) {
+    case 'hold': return { kind: 'note', note: 'hold', requestId: request.requestId, words, ...r };
     case 'cancel': return { kind: 'note', note: 'cancel', requestId: request.requestId, words, ...r };
     case 'approval': return { kind: 'tell', note: 'approval', requestId: request.requestId, words, ...r };
     case 'deadline': return { kind: 'tell', note: 'deadline', requestId: request.requestId, words, ...r };
@@ -603,6 +744,13 @@ export function planTurn(input: TurnInput): TurnPlan {
   // asked which current design they mean, or, with none, the words go to the office.
   // Asked about the files of that other design (ADR-156): the office finds them.
   if (input.foreignReply && reading.intent === 'delivery_request') return { kind: 'forward', words };
+  // ADR-182: a reply to a message about a design this chat no longer has on the way (delivered days
+  // ago) is about that design: its words go to the office, never "I have nothing in progress".
+  const boundElsewhere = input.bound.length > 0 && !requests.some((r) => input.bound.includes(r.requestId));
+  if (boundElsewhere && !['acknowledgement', 'status', 'conversation'].includes(reading.intent) &&
+      !(reading.intent === 'new_brief' && (reading.explicitNew || reading.substantial))) {
+    return { kind: 'forward', words };
+  }
   if (input.foreignReply && !['acknowledgement', 'status', 'conversation'].includes(reading.intent) &&
       !(reading.intent === 'new_brief' && (reading.explicitNew || reading.substantial))) {
     const among = [...(reading.intent === 'change' || reading.intent === 'unclear' || reading.intent === 'new_brief' ? changeable : open)]
@@ -620,9 +768,11 @@ export function planTurn(input: TurnInput): TurnPlan {
       return { kind: 'reply', what: 'status', requestIds: shown.map((r) => r.requestId) };
     }
     case 'conversation':
-      return { kind: 'conversation' };
+      // ADR-182: a question the bot cannot answer is the office's, not a prompt for a brief.
+      return reading.question ? { kind: 'forward', words, question: true } : { kind: 'conversation' };
     case 'approval':
     case 'deadline':
+    case 'hold':
     case 'cancel': {
       const picked = pickRequest(input, open, true);
       if ('request' in picked) return applyTo(reading.intent, picked.request, words, picked.how, reading.confidence) ?? ask(reading.intent, [picked.request], false);
@@ -659,7 +809,9 @@ export function planTurn(input: TurnInput): TurnPlan {
         // always was: a styling message opens as a manual request, a question is answered.
         if (input.bound.length || input.unboundReply) return { kind: 'reply', what: 'nothing-to-change', requestIds: [] };
         const h = classifyWithHeuristics(words, false, false);
-        return h.kind === 'new_brief' ? { kind: 'open', text: words, instructionOnly: true } : { kind: 'conversation' };
+        if (h.kind === 'new_brief') return { kind: 'open', text: words, instructionOnly: true };
+        // ADR-182: "can you make videos?" reads like a change but asks the office a question.
+        return isPlainQuestion(words) ? { kind: 'forward', words, question: true } : { kind: 'conversation' };
       }
       const picked = pickRequest(input, changeable, true);
       if ('request' in picked) {
@@ -715,13 +867,34 @@ const STATUS_LINE: Record<RequestStage | 'manual-waiting', Phrase> = {
   delivered: ROUTING_MESSAGES.statusDelivered,
 };
 
-export function statusText(requests: ChatRequestView[], lang: Lang): string {
+/**
+ * `slow`: designs taking longer than usual that the office was just told about (ADR-182): their line
+ * says so, instead of "the draft usually takes a few minutes" to someone who has waited an hour.
+ */
+export function statusText(requests: ChatRequestView[], lang: Lang, slow: ReadonlySet<string> = new Set()): string {
   if (!requests.length) return say(ROUTING_MESSAGES.statusNothingOpen, lang);
   return requests.map((r) => {
     const key = r.stage === 'manual' && r.rev >= 3 ? 'manual-waiting' : r.stage;
     const q = r.question?.text ? escapeTelegramHtml(r.question.text) : '';
+    if (r.stage === 'designing' && r.requesterHold) return say(ROUTING_MESSAGES.statusHeld, lang, {title:title(r)});
+    if (r.stage === 'designing' && slow.has(r.requestId)) return say(ROUTING_MESSAGES.statusDesigningSlow, lang, { title: title(r) });
     return say(STATUS_LINE[key], lang, { title: title(r), question: q });
   }).join('\n\n');
+}
+
+/** ADR-182: how long a design may take before a requester asking about it is told it is slow. */
+export const SLOW_DESIGN_MS = 30 * 60_000;
+
+/** The designs among `requests` still being designed after `SLOW_DESIGN_MS`. */
+export function slowDesigns(requests: ChatRequestView[], now: number): ChatRequestView[] {
+  return requests.filter((r) => r.stage === 'designing' && !r.requesterHold && now - Date.parse(r.activeAt) > SLOW_DESIGN_MS);
+}
+
+/** The office's alert when a requester asks about a design that is taking longer than usual. */
+export function slowDesignOfficeAlert(chatId: string, slow: ChatRequestView[], now: number): string {
+  return [`The requester in chat ${chatId} asked how their design is going, and it is taking longer than usual. Please check on it and answer them in the chat.`,
+    ...slow.map((r) => `"${shortTitle(r.title)}": still being designed after ${Math.round((now - Date.parse(r.activeAt)) / 60_000)} minutes (task ${r.currentTaskId}).`),
+  ].join('\n');
 }
 
 export function thanksText(waiting: ChatRequestView[], lang: Lang): string {
@@ -730,8 +903,16 @@ export function thanksText(waiting: ChatRequestView[], lang: Lang): string {
 }
 
 /** `alerted`: the office chat was told; without one the words are only kept for the office. */
-export function forwardText(lang: Lang, alerted: boolean): string {
+export function forwardText(lang: Lang, alerted: boolean, question = false): string {
+  if (question) return say(alerted ? ROUTING_MESSAGES.questionPassed : ROUTING_MESSAGES.questionKept, lang);
   return say(alerted ? ROUTING_MESSAGES.forwardedToOffice : ROUTING_MESSAGES.keptForOffice, lang);
+}
+
+/** ADR-182: the office's alert for a question the bot cannot answer (plain text, the words as sent). */
+export function questionOfficeAlert(chatId: string, words: string): string {
+  const quoted = words.length > 1500 ? `${words.slice(0, 1500)}…` : words;
+  return [`The requester in chat ${chatId} asked a question the bot cannot answer. Nothing was changed; please answer them in the chat.`,
+    '', 'Their question:', quoted].join('\n');
 }
 
 /** The office's alert for words about a design this bot cannot link to a current request. */
@@ -766,9 +947,10 @@ export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang): s
 }
 
 /** The requester's answer to a note kept on a request (a change or a cancel). */
-export function noteText(note: 'change' | 'cancel', stage: string, requestTitle: string, lang: Lang): string {
+export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requestTitle: string, lang: Lang, held = false): string {
   const t = { title: title({ title: requestTitle }) };
   if (note === 'cancel') return say(ROUTING_MESSAGES.cancelAsked, lang, t);
+  if (note === 'hold') return say(held ? ROUTING_MESSAGES.holdConfirmed : ROUTING_MESSAGES.holdAsked, lang, t);
   if (stage === 'designing' || stage === 'manual' || stage === 'awaiting_answer') return say(ROUTING_MESSAGES.changeAddedWhileDesigning, lang, t);
   if (stage === 'delivering') return say(ROUTING_MESSAGES.changePassedDelivering, lang, t);
   if (stage === 'delivered') return say(ROUTING_MESSAGES.changePassedDelivered, lang, t);

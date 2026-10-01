@@ -136,3 +136,10 @@ Gaps create an operator incident, not silent loss.
 ## 11. Why Slack is not selected
 
 Slack remains supported through the same adapter interface, but it is not privileged in architecture. The office should not migrate communication merely to simplify an integration that can be built against its actual channels.
+
+
+## Explicit deliverables (ADR-186)
+
+One source update has one durable decision. A requester can explicitly ask for several designs or formats; each admitted deliverable has its own immutable request identity, client scope, copy and canvas, and each replays without creating another task. The existing explicit one-graphic-per-language behavior retains its identities. The combined limit is eight; unsupported formats, excessive counts or a worker unable to carry the complete decision are refused before task creation rather than silently reduced. Ordinary conversation and photo counts authorize no additional task.
+
+A clear count with ambiguous fact allocation preserves separate manual tasks with `DELIVERABLE_DETAILS_REQUIRED` evidence and office alerts; it does not authorize model guesses or paid calls. Daily admission serializes its count with task creation and reuses the recorded decision on retry. An original-brief hold covers every child, and resuming one child does not resume the others. A reply or photo must resolve one child or expose ambiguity. An edit to a shared source retains a separate note for each active child, without applying its words to any design; each child's future delivery requires its own office acknowledgement. These notes use source-update plus request identity, so reading one child's note cannot release another child's hold.

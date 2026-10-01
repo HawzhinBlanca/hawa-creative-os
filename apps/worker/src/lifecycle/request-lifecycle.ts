@@ -15,7 +15,7 @@ import { TelegramSenderApi } from './telegram-sender.js';
 import { DesignRunApi, type DesignRunInput } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
-import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
+import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -55,6 +55,8 @@ export interface OpenManualEvent {
 }
 
 export interface ManualLifecycleState {
+  initialRequesterHold?: {officeAlerts:Array<{chatId:string;text:string}>};
+  initialOfficeAlerts?:Array<{chatId:string;text:string}>;
   v: 1;
   requestId: string;
   tenantId: string;
@@ -227,6 +229,8 @@ export interface AutomaticOpenContext {
   key: string;
   get(name: string): Promise<LifecycleState | null>;
   run<T>(name: string, action: () => Promise<T>): Promise<T>;
+  /** Durable wait for an explicit task hold; absent only in plain test harnesses. */
+  sleep?(millis: number): Promise<void>;
   set(name: string, value: LifecycleState): void;
   send(message: OutboundMessage): void;
   startDesign(input: DesignRunInput): void;
@@ -297,12 +301,25 @@ const requesterFields = (draft: { rawText: string; title: string }): Pick<Manual
 });
 
 function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
-  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title'>): void {
+  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title' | 'initialRequesterHold' | 'initialOfficeAlerts'>): void {
   ctx.send({
     v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
-    text: requesterText(state, LIFECYCLE_MESSAGES.receivedForDesigner), parseMode: 'HTML', class: 'critical',
+    text: requesterText(state, state.initialRequesterHold ? ROUTING_MESSAGES.statusHeld : LIFECYCLE_MESSAGES.receivedForDesigner), parseMode: 'HTML', class: 'critical',
     tenantId: state.tenantId, taskId: state.taskId,
   });
+  sendInitialHoldAlerts(ctx,state);
+}
+
+function sendInitialHoldAlerts(ctx: Pick<OpenContext,'send'>,state:Pick<ManualLifecycleState,'requestId'|'tenantId'|'taskId'|'initialRequesterHold'|'initialOfficeAlerts'>): void {
+  const perChat=new Map<string,number>();
+  for (const alert of state.initialRequesterHold?.officeAlerts ?? []) {
+    const index=perChat.get(alert.chatId) ?? 0;perChat.set(alert.chatId,index+1);
+    ctx.send({v:1,key:`${state.requestId}:1:early-hold-office:${alert.chatId}${index ? `:${index}` : ''}`,
+      chatId:alert.chatId,kind:'text',text:alert.text,parseMode:'HTML',class:'critical',tenantId:state.tenantId,taskId:state.taskId});
+  }
+  for (const [index,alert] of (state.initialOfficeAlerts ?? []).entries()) ctx.send({v:1,
+    key:`${state.requestId}:1:initial-office:${index}:${alert.chatId}`,chatId:alert.chatId,kind:'text',text:alert.text,
+    parseMode:'HTML',class:'critical',tenantId:state.tenantId,taskId:state.taskId});
 }
 
 /** What a step Core refused for good was doing, and whose words it carried (ADR-155). */
@@ -386,7 +403,8 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
     sendAcknowledgement(ctx, prior);
     return { accepted: true, taskId: prior.taskId, stage: 'manual', rev: 1 };
   }
-  const projected = await reportedIfRefused(ctx, () => ctx.run('project:1', () => core.post<{ v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean }>(
+  const projected = await reportedIfRefused(ctx, () => ctx.run('project:1', () => core.post<{ v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean;
+    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}> }>(
     `/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
     { v: 1, expectedRev: 0, rev: 1, key: `${event.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: event.draft }] },
   )), openFailure(event));
@@ -397,6 +415,8 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
     v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
     owner: 'restate', stage: 'manual', rev: 1, taskId: projected.taskId,
     openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
+    ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
+    ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);
@@ -406,8 +426,9 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
 
 function sendAutomaticAcknowledgement(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
   ctx.send({ v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
-    text: requesterText(state, LIFECYCLE_MESSAGES.receivedDrafting), parseMode: 'HTML', class: 'critical',
+    text: requesterText(state, state.initialRequesterHold ? ROUTING_MESSAGES.statusHeld : LIFECYCLE_MESSAGES.receivedDrafting), parseMode: 'HTML', class: 'critical',
     tenantId: state.tenantId, taskId: state.taskId });
+  sendInitialHoldAlerts(ctx,state);
 }
 
 /** The persisted Core projection, not the untrusted open event, supplies the run's execution policy. */
@@ -437,6 +458,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
   }
   const projected = await reportedIfRefused(ctx, () => ctx.run('project:1', () => core.post<{
     v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean;
+    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}>;
     design?: { clientId: string; rawText: string; sourcePlatform: string;
       variant?: { width: number; height: number }; designStudio: boolean; studioOptions?: DesignRunInput['studioOptions'] };
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
@@ -450,6 +472,8 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
       v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
       owner: 'restate', stage: 'manual', rev: 1, taskId: projected.taskId,
       openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
+      ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
+    ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
     };
     ctx.set('lc', manual);
     ctx.setChatMode?.(event.chatId, event.requestId);
@@ -474,6 +498,8 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
     v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
     owner: 'restate', stage: 'designing', rev: 1, taskId: projected.taskId,
     openEventId: event.eventId, openSha256: fingerprint, runId, designInput, ...requesterFields(event.draft),
+    ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
+    ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);
@@ -529,7 +555,7 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
   }
 
   if (prior.stage !== 'designing') throw invalid('request is not designing');
-  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+  const project = () => core.post<{
     v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer';
     status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
     question?: { id: string; text: string; options: string[] };
@@ -540,7 +566,28 @@ async function applyDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal
     v: 1, expectedRev: prior.rev, rev: nextRev,
     key: `${event.requestId}:${nextRev}:designFinished:${event.runId}`,
     ops: [{ kind: 'recordOutcome', taskId: event.taskId, runId: event.runId, report: event.report }],
-  }));
+  });
+  let held = 0;
+  let projected: Awaited<ReturnType<typeof project>>;
+  for (;;) {
+    const attempt = await ctx.run(held ? `project:${nextRev}:after-task-pause:${held}` : `project:${nextRev}`, async () => {
+      try { return await project(); }
+      catch (error) {
+        if (/\bHTTP 409 TASK_PAUSED\b/.test(String((error as Error)?.message))) return { __hawaTaskPaused: true as const };
+        throw error;
+      }
+    });
+    if (!attempt || typeof attempt !== 'object') throw new Error('Core did not return a valid design outcome projection');
+    if ('__hawaTaskPaused' in attempt) {
+      if (attempt.__hawaTaskPaused !== true) throw new Error('Core did not return a valid design pause checkpoint');
+      if (!ctx.sleep) throw new Error('TASK_PAUSED: the design outcome remains pending until the office resumes it');
+      held++;
+      await ctx.sleep(Math.min(300_000,30_000 * 2 ** Math.min(held - 1,4)));
+      continue;
+    }
+    projected = attempt;
+    break;
+  }
   if (projected?.v !== 1 || projected.requestId !== event.requestId ||
       projected.taskId !== event.taskId || projected.rev !== nextRev ||
       !['in_review', 'manual', 'awaiting_answer'].includes(projected.stage) ||
@@ -1138,6 +1185,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             key: ctx.key,
             get: (name) => ctx.get<LifecycleState>(name),
             run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
+            sleep: millis => ctx.sleep(millis),
             set: (name, value) => ctx.set(name, value),
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
               .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),

@@ -422,9 +422,9 @@ export function createApp(options?: CreateAppOptions) {
     }
     // ADR-163: no ordinary operator key in the worker. Preserve Canva grant ownership,
     // but authorize only the worker's task-scoped design endpoints, never approvals or administration.
-    const designToken = process.env.HAWA_DESIGN_WORKER_TOKEN?.trim();
+    const designTokens = [process.env.HAWA_DESIGN_WORKER_TOKEN?.trim(), process.env.HAWA_DESIGN_WORKER_TOKEN_PREVIOUS?.trim()].filter((t): t is string => Boolean(t));
     const designPresented = ticketCredential || bearerTokenOf(c) || '';
-    if (designToken && designPresented && secretsEqual(designPresented, designToken)) {
+    if (designPresented && designTokens.some(token => secretsEqual(designPresented, token))) {
       if (!ticketCredential && permitsDesignWorkerRequest(c.req.path, c.req.method)) {
         return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId,
           actorId: 'hawa_design_worker', role: 'operator', displayName: 'Hawa design worker', authMethod: 'design_worker' };

@@ -32,8 +32,9 @@ describe('nginx.conf and the compose mounts agree on the file store', () => {
     const alias = /alias (\S+);/.exec(block)?.[1];
     expect(alias).toBe('/srv/hawa-blobs/'); assert(alias);
     expect(compose).toContain(`- \${HAWA_BLOBS_DIR:-\${HOME}/.hawa/blobs}:${alias.replace(/\/$/, '')}:ro`);
-    // Core and both worker colours mount the same host directory read-write at HAWA_BLOB_DIR.
-    expect(compose.match(/- \$\{HAWA_BLOBS_DIR:-\$\{HOME\}\/\.hawa\/blobs\}:\/var\/lib\/hawa\/blobs$/gm)?.length).toBe(2); // core + the x-worker anchor
+    // Core admits/writes bytes; both worker colours may only read delivery bytes (ADR183).
+    expect(compose.match(/- \$\{HAWA_BLOBS_DIR:-\$\{HOME\}\/\.hawa\/blobs\}:\/var\/lib\/hawa\/blobs$/gm)?.length).toBe(1); // Core alone
+    expect(compose.match(/- \$\{HAWA_BLOBS_DIR:-\$\{HOME\}\/\.hawa\/blobs\}:\/var\/lib\/hawa\/blobs:ro$/gm)?.length).toBe(1); // x-worker anchor
     expect(compose.match(/^\s+HAWA_BLOB_DIR: \/var\/lib\/hawa\/blobs$/gm)?.length).toBe(2); // core + x-worker-environment
     expect(compose).toMatch(/HAWA_BLOB_ACCEL_PREFIX: \/_blobs\//);
   });

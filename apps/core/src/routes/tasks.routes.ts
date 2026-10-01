@@ -535,7 +535,9 @@ export function registerTasksRoutes(ctx: RouteContext): void {
               WHERE f.tenant_id = ${tenantId}::uuid AND f.task_id = ${taskId}::uuid AND f.role = 'reference_image'
               ORDER BY f.created_at, f.sha256`.execute(trx)).rows;
 
-            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication, clientRow, referenceRows };
+            const holdCheckpoint = dbTask.state === 'paused' && dbTask.request_id
+              ? withEv.events.filter(event=>event.event_type==='task.state_changed').at(-1) : undefined;
+            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication, clientRow, referenceRows, holdCheckpoint };
           }
         );
 
@@ -639,12 +641,16 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             };
           }
 
+          const {holdCheckpoint} = queryRes;
+          const requesterHold = holdCheckpoint?.data?.requesterHoldRequestId === dbTask.request_id
+            ? {reason:String(holdCheckpoint?.data.reason ?? 'The requester asked to wait.')} : null;
           const normalizedTask = {
             id: dbTask.id,
             tenantId: dbTask.tenant_id,
             clientId: dbTask.client_id,
             clientName: clientRow?.name || null,
             requestId: dbTask.request_id || null,
+            requesterHold,
             projectId: dbTask.project_id,
             status: publicationAwareTaskStatus(dbTask.state, { errorClass: publication?.error_class }),
             state: dbTask.state,

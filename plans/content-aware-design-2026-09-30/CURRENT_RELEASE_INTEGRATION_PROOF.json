@@ -1,67 +1,50 @@
 {
-  "date": "2026-09-30",
-  "parents": [
-    "becef8d5",
-    "36369a12afb82589131452c858ccaecb122a3002"
+  "date": "2026-10-01",
+  "status": "BUILD_AND_CONNECTED_INTEGRATION_PASS_FULL_QUALIFICATION_PENDING",
+  "currentQualifiedSource": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
+  "preservedW3Checkpoint": "79d335eb8979e8e406ee6357fd340da2111c8e8a",
+  "mergeBase": "36369a12afb82589131452c858ccaecb122a3002",
+  "requirements": [
+    "FR-026",
+    "FR-038",
+    "FR-041",
+    "FR-057"
   ],
-  "scope": "Current deployed release foundation integration with W1/W2 retained; W3 not finally qualified",
-  "productionPointerObserved": "36369a12afb82589131452c858ccaecb122a3002",
-  "runtimeHealthRevalidated": false,
-  "productionChangedByThisWork": false,
-  "paidCalls": 0,
-  "tests": {
-    "files": 14,
-    "passed": 634,
-    "failed": 0,
-    "skipped": 0,
-    "log": "/tmp/hawa-house-style-tests.log",
-    "command": "pnpm --config.verifyDepsBeforeRun=false exec vitest run packages/creative/test/protected-regions.test.ts packages/creative/test/content-background.test.ts packages/creative/test/house-style-logo-ground.test.ts packages/creative/test/art-direction-solver.test.ts packages/creative/test/art-direction-round2.test.ts packages/creative/test/art-direction-render-qa.test.ts packages/creative/test/required-photo-composition.test.ts packages/creative/test/photo-selection.test.ts apps/core/test/photo-cutouts.test.ts apps/core/test/art-direction-e2e.test.ts apps/core/test/studio-visual-inputs.test.ts apps/core/test/office-caption-and-title.test.ts apps/core/test/lifecycle-office-draft-alert.test.ts packages/integrations/test/requester-messages.test.ts"
+  "checks": {
+    "build": "PASS",
+    "connectedTests": {
+      "files": 14,
+      "passed": 192,
+      "failed": 0,
+      "skipped": 0
+    },
+    "blueprint": {
+      "passed": 1572,
+      "warned": 0,
+      "failed": 0
+    }
   },
-  "build": {
-    "passed": true,
-    "log": "/tmp/hawa-house-style-build.log"
-  },
-  "conflictResolution": [
-    "hardQA retains both independent subject checks and logo-backing checks",
-    "Core e2e keeps requested-background controls and incoming logo/office behavior",
-    "traceability retains both additive evidence histories; generated manifests refreshed"
+  "preserved": [
+    "ADR183 independent worker/current scoped drain credentials and restricted database login",
+    "ADR158 stable in-place runtime/nginx proof plus live verification and unsafe-release retirement",
+    "ADR184-186 requester holds/explicit deliverables and shared-source per-child acknowledgement",
+    "ADR187 final QA uses original shipping geometry/current exact copy instead of cached scores",
+    "ADR181 explicit-only photo coverage, content-aware single or multi-photo composition and client-scoped style priors",
+    "W3 original failure, font/pair-source diagnostics and their admission limits"
   ],
-  "addedRegression": "logo relocation protects each measured person in supporting images; invalid/empty evidence differentiated",
-  "open": [
-    "W3 visibility statistic and actual archive/native/human qualification",
-    "W4 several explicitly coverage-safe topologies",
-    "W5 image color/local refinement/cache/cost",
-    "W6 genuine preference data/held-out calibration",
-    "full sealed release/recovery/deployment",
-    "Canva native field/typography and professional comparison"
+  "failureHistory": [
+    "First trace merge refused non-append evidence for FR038. Recoverable commit sources were used for a three-way insertion merge; no historical evidence or normative field was discarded.",
+    "Requested background-decision.test.ts does not exist. Actual content-background.test.ts then executed separately:15 passed. The first13 files177 passed plus this distinct suite are192 tests."
   ],
-  "sourceHashes": {
-    "packages/creative/src/studio/art-direction/logo-ground.ts": "16edebbc3d2747c0725821ba8b9098ab732f52cd03e51267adc03c3012c7ee48",
-    "packages/creative/src/studio/hard-qa.ts": "b90e04a4ea58856ee1c9d7427a594e59c1bb0fedd6d787846fc44a7782c20ce0",
-    "apps/core/src/services/design-studio/stages/layouts.stage.ts": "24e93d90edb5eece423da1ba88e8f336fc349eb90252ab7ca39abe24e04d863f",
-    "packages/creative/src/studio/art-direction/solver.ts": "e13a185bbf8c1cac91229094e277ef2672fa0c1541a234faf34bf80570afb11f",
-    "packages/creative/src/studio/art-direction/generate.ts": "b6b4e03b356292fda396377fa3500404392fcb6aea3ec245cd77c34cfa322069"
-  },
-  "lint": {
-    "passed": true,
-    "log": "/tmp/hawa-house-style-lint.log",
-    "anyCount": 937,
-    "ceiling": 1053,
-    "providerEgress": "passed with 10 existing exceptions"
-  },
-  "testTypes": {
-    "passed": true,
-    "roots": 644,
-    "log": "/tmp/hawa-house-style-types.log"
-  },
-  "ownerClarification": {
-    "date": "2026-09-30",
-    "pendingNextSlice": "Keep explicit-only coverage and conditional logo; remove global hero-only eligibility. KAAE hero/navy fade is client-specific, not global."
-  },
-  "blueprint": {
-    "passed": 1478,
-    "warned": 0,
-    "failed": 0,
-    "log": "/tmp/hawa-house-style-pack.log"
+  "limits": [
+    "No full combined sealed release/Canva/human/native-quality admission",
+    "W3 native paired controls remain diagnostic; original cross-renderer failures preserved",
+    "No deployment of this content-aware source or paid calls; current QA release2c4d61ec is independently deploying"
+  ],
+  "logs": {
+    "/tmp/hawa-content-current-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "/tmp/hawa-content-current-connected-20261001.log": "629c854263fe745cacf44716996daf0c829baacaaa16ee1816d4d8ba46b409d7",
+    "/tmp/hawa-content-current-background-20261001.log": "01ec5cdf61dc16f04e9a64a76af868cda1849682b423cab0d1b8ffa57709b1b0",
+    "/tmp/hawa-content-current-merge-blueprint-20261001.log": "f8492ce19048b408a3d59567af3c251f6445aaee0551e7614b80f959302447af"
   }
 }

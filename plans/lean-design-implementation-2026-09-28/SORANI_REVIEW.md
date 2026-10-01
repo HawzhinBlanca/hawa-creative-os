@@ -68,6 +68,7 @@ and the phrase-ending words and language names in `packages/creative/src/studio/
 | Id | English | Sorani | Review |
 |---|---|---|---|
 | `inbox.answerTaken` | Thanks, I'll use that and carry on with the same design. | سوپاس، ئەوە بەکاردەهێنم و هەمان دیزاین تەواو دەکەم. | needs native review |
+| `inbox.changeTaken` | Got it. I'm making those changes now; the office checks the new draft before it comes to you. | تێگەیشتم. ئێستا ئەو گۆڕانکارییانە دەکەم؛ ئۆفیسەکە پێش ئەوەی ڕەشنووسە نوێیەکە بۆت بێت سەیری دەکات. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
 | `inbox.whichWaitingDesign` | More than one of your designs is waiting for changes. Which one is this for? Just tell me its name. | زیاتر لە یەک دیزاین چاوەڕێی گۆڕانکارییەکانی تۆن. ئەمە بۆ کامیانە؟ ناوەکەی بنووسە. | needs native review |
 | `inbox.staleButton` | That design is now with the office. If anything should change, just tell me here. | ئەو دیزاینە ئێستا لای ئۆفیسەکەیە. ئەگەر شتێک پێویستی بە گۆڕین هەیە، لێرە پێم بڵێ. | needs native review |
 | `inbox.whatToDesign` | What would you like designed? Tell me in your own words, with the text that should go on it. | چیت دەوێت دیزاین بکرێت؟ بە وشەی خۆت پێم بڵێ، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت. | needs native review |
@@ -93,6 +94,7 @@ and the phrase-ending words and language names in `packages/creative/src/studio/
 | Id | English | Sorani | Review |
 |---|---|---|---|
 | `routing.statusDesigning` | {title} is being designed right now. The draft usually takes a few minutes; the office checks it before it comes to you. | {title} ئێستا دیزاین دەکرێت. ڕەشنووسەکە زۆرجار چەند خولەکێک دەخایەنێت؛ ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات. | needs native review |
+| `routing.statusDesigningSlow` | {title} is taking longer than usual. I've asked the office to look into it; they'll follow up here. | {title} لە ئاسایی زیاتر دەخایەنێت. داوام لە ئۆفیسەکە کرد سەیری بکەن؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
 | `routing.statusManual` | A designer at the office is working on {title}. It will be sent here when it is ready. | دیزاینەرێک لە ئۆفیسەکە کار لەسەر {title} دەکات. کە ئامادە بوو لێرە بۆت دەنێردرێت. | needs native review |
 | `routing.statusWaitingForChanges` | {title} is waiting for your changes. Just tell me what you would like changed. | {title} چاوەڕێی گۆڕانکارییەکانی تۆیە. تەنها پێم بڵێ چیت دەوێت بگۆڕدرێت. | needs native review |
 | `routing.statusAwaitingAnswer` | {title} is waiting for your answer to one question: {question} | {title} چاوەڕێی وەڵامی تۆیە بۆ یەک پرسیار: {question} | needs native review |
@@ -105,6 +107,8 @@ and the phrase-ending words and language names in `packages/creative/src/studio/
 | `routing.thanksOneWaiting` | 🙏 Thank you.⏎⏎Whenever you're ready, just tell me what to change on {title}. | 🙏 سوپاس.⏎⏎هەر کاتێک ئامادە بوویت، پێم بڵێ چی لە {title} بگۆڕم. | needs native review |
 | `routing.forwardedToOffice` | I've passed your message to the office; they'll follow up here. | پەیامەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 | `routing.keptForOffice` | I've kept your message for the office; they'll follow up here. | پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە. | needs native review |
+| `routing.questionPassed` | I can't answer that myself, so I've passed your question to the office; they'll reply here. | ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
+| `routing.questionKept` | I can't answer that myself, so I've kept your question for the office; they'll reply here. | ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
 | `routing.nothingToChange` | I don't have a design in progress here to change. Tell me what you'd like designed, with the text that should go on it. | ئێستا هیچ دیزاینێکم لە دەستدا نییە بۆ گۆڕین. پێم بڵێ چیت دەوێت دیزاین بکرێت، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت. | needs native review |
 | `routing.askChangeOrNew` | Is this a change to {title}, or a new design? Just say “change” or “new”. | ئەمە گۆڕانکارییە لە {title}، یان دیزاینێکی نوێیە؟ تەنها بنووسە «گۆڕانکاری» یان «نوێ». | needs native review |
 | `routing.askCancel` | Do you want me to ask the office to cancel {title}? Just say “yes”. | دەتەوێت داوا لە ئۆفیسەکە بکەم {title} هەڵبوەشێنێتەوە؟ تەنها بنووسە «بەڵێ». | needs native review |
@@ -229,7 +233,7 @@ and the phrase-ending words and language names in `packages/creative/src/studio/
 | Id | English | Sorani | Review |
 |---|---|---|---|
 | `office.approvedSending` | Approved. Sending {title} to {requester} now. | پەسەند کرا. ئێستا {title} بۆ {requester} دەنێرم. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.sentBack` | Sent back for changes with your words. {requester} has your note on {title}, and the next draft starts once they answer. | بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. {requester} تێبینییەکەتی لەسەر {title} پێگەیشت، و ڕەشنووسی داهاتوو دوای وەڵامی ئەو دەست پێدەکات. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
+| `office.sentBack` | Sent back for changes with your words. I have sent your note on {title} to {requester}; the next draft starts once they answer. | بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. تێبینییەکەتم لەسەر {title} بۆ {requester} نارد؛ ڕەشنووسی داهاتوو دوای وەڵامی ئەو دەست پێدەکات. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
 | `office.sentBackOwn` | Sent back for changes with your words. I have asked you, as the one who asked for {title}, what to change; the next draft starts once you answer. | بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. وەک داواکاری {title} لێت پرسیم چی بگۆڕدرێت؛ ڕەشنووسی داهاتوو دوای وەڵامەکەت دەست پێدەکات. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
 | `office.rejected` | Rejected: {title}. Nothing was sent to {requester}. | ڕەتکرایەوە: {title}. هیچ شتێک بۆ {requester} نەنێردرا. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
 | `office.whichDraft` | Which draft do you mean?⏎{list}⏎⏎Answer with the number or the name. | مەبەستت کام ڕەشنووسە؟⏎{list}⏎⏎بە ژمارە یان ناو وەڵام بدەرەوە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
@@ -251,4 +255,8 @@ and the phrase-ending words and language names in `packages/creative/src/studio/
 | `office.theRequester` | the requester | داواکارەکە | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
 | `office.draftAlertDecide` | Reply to this picture with “approved” to send it to {requester}, or say what to change. You can also decide in Hawa Desk. | بە «پەسەندە» وەڵامی ئەم وێنەیە بدەرەوە بۆ ئەوەی بۆ {requester} بنێردرێت، یان بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت. | needs native review (ADR-180, the office draft photo alert, 2026-09-30) |
 
-184 lines.
+| `routing.statusHeld` | {title} is paused at your request. New design work is waiting for the office to resume it; work already admitted may still finish. | {title} بە داواکاریی تۆ ڕاگیراوە. کاری نوێی دیزاین چاوەڕێیە ئۆفیسەکە دووبارە دەستی پێ بکاتەوە؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |
+| `routing.holdConfirmed` | I've paused {title}. New design work will wait until the office resumes it; work already in progress may still finish. | {title} ڕاگیرا. کاری نوێی دیزاین چاوەڕێ دەکات تا ئۆفیس دووبارە دەستی پێبکات؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |
+| `routing.holdAsked` | I've asked the office to hold {title}. I'll keep your message with the design. | داوام لە ئۆفیس کرد {title} ڕابگرێت. نامەکەت لەگەڵ دیزاینەکە دەپارێزم. | needs native review (ADR184, 2026-10-01) |
+
+187 lines.

@@ -51,7 +51,7 @@ export class CoreBoundaryError extends Error {
     this.retriedRefusal = httpStatus === 409 && Boolean(code && RETRIED_REFUSALS.has(code));
     this.deploymentFault = httpStatus === 401 || httpStatus === 403 || (httpStatus === 404 && !code);
     this.terminal = httpStatus >= 400 && httpStatus < 500 && httpStatus !== 408 && httpStatus !== 429 &&
-      !this.retriedRefusal && !this.deploymentFault;
+      !this.retriedRefusal && !this.deploymentFault && !(httpStatus === 409 && code === 'TASK_PAUSED');
   }
 }
 
@@ -97,15 +97,33 @@ function patientOfDeploymentFaults(ctx: WorkflowDurableContext, taskId: string):
   const patient: WorkflowDurableContext = {
     ...(ctx.key !== undefined ? { key: ctx.key } : {}),
     run: async <T>(name: string, action: () => Promise<T>, options?: Parameters<WorkflowDurableContext['run']>[2]): Promise<T> => {
-      for (let round = 0; ; round++) {
+      let holds = 0;
+      for (let round = 0; ; ) {
         try {
-          return await ctx.run(round === 0 ? name : `${name}-after-deployment-fault-${round}`, action, options);
+          const base = round === 0 ? name : `${name}-after-deployment-fault-${round}`;
+          const result = await ctx.run(holds ? `${base}-after-task-pause-${holds}` : base, async () => {
+            try { return await action(); }
+            catch (error) {
+              const boundary = boundaryOf(error);
+              // Journal the wait, never a rejected design or an uncertain paid call.
+              if (boundary?.httpStatus === 409 && boundary.code === 'TASK_PAUSED') return { __hawaTaskPaused: true as const };
+              throw error;
+            }
+          }, options);
+          if (result && typeof result === 'object' && '__hawaTaskPaused' in result && result.__hawaTaskPaused === true) {
+            if (!ctx.sleep) throw new CoreBoundaryError(409,'TASK_PAUSED');
+            holds++;
+            await ctx.sleep(Math.min(300_000,30_000 * 2 ** Math.min(holds - 1,4)));
+            continue;
+          }
+          return result as T;
         } catch (error) {
           const boundary = boundaryOf(error);
           if (!boundary?.deploymentFault || !stepGaveUp(error) || !ctx.sleep) throw error;
           log.error(`[worker] Task ${taskId}: Core still answers HTTP ${boundary.httpStatus}${boundary.code ? ` ${boundary.code}` : ''} to step ${name}; ` +
             `this is the deployment (the worker's credential or Core's routes), not the design. Waiting ${DEPLOYMENT_FAULT_WAIT_MS / 60000} minutes before asking again.`);
           await ctx.sleep(DEPLOYMENT_FAULT_WAIT_MS);
+          round++;
         }
       }
     },
@@ -680,6 +698,7 @@ export async function runCanvaDraft(
       }
     } catch (err: any) {
       const boundary = boundaryOf(err);
+      if (boundary?.code === 'TASK_PAUSED') throw err;
       parity = 'unavailable';
       // Restate's TerminalError carries a numeric `code` (its HTTP status); the workflow's own code is on its cause.
       const named = [err?.code, err?.cause?.code].find((v) => typeof v === 'string');

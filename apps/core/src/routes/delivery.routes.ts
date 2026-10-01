@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isLateChangeReceiptId } from '@hawa/domain';
 import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus, isTaskDbState } from '@hawa/contracts';
 import { withRlsContext, toApiTaskStatus } from '@hawa/db';
 import { buildOutboundReviewDispatch, signLifecycleOfficeEvent } from '@hawa/integrations';
@@ -101,7 +102,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
           (body.approvalId !== undefined && !isValidUuid(String(body.approvalId))) ||
           (body.acknowledgeLateChanges !== undefined && (!Array.isArray(body.acknowledgeLateChanges) ||
             body.acknowledgeLateChanges.length > 50 ||
-            (body.acknowledgeLateChanges as unknown[]).some((id: unknown) => typeof id !== 'string' || !/^[1-9][0-9]{0,18}$/.test(id))))) {
+            (body.acknowledgeLateChanges as unknown[]).some((id: unknown) => !isLateChangeReceiptId(id))))) {
         return problem(c, 422, 'Invalid Delivery Request', 'Deliver the current approval to Google Drive with one stable action key');
       }
       if (!db || !taskRepo || !publicationRepo) return problem(c, 503, 'Database Unavailable',

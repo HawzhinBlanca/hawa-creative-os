@@ -14,18 +14,34 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
   chatId: string): Promise<ChatRequestView[]> {
   const rows = (await sql<{ request_id: string; rev: string | number; stage: string; current_task_id: string;
     client_id: string | null; title: string | null; created_at: Date | string; updated_at: Date | string;
-    question: ChatRequestView['question']; requester_id: string | null }>`
+    question: ChatRequestView['question']; requester_id: string | null; requester_hold:boolean }>`
     SELECT r.request_id::text, r.rev, r.stage, r.current_task_id::text, t.client_id::text,
       coalesce(root.title, t.title) AS title, r.created_at, r.updated_at,
       p.result->'question' AS question,
-      src.payload->'message'->'from'->>'id' AS requester_id
+      coalesce(src.payload->'message'->'from'->>'id', opener.sender_id) AS requester_id,
+      (t.state='paused' AND hold.data->>'requesterHoldRequestId'=r.request_id::text
+        AND hold.data->>'requesterHoldRequestRev'=r.rev::text) AS requester_hold
     FROM hawa.requests r
     JOIN hawa.tasks t ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id
+    LEFT JOIN LATERAL (SELECT e.data FROM hawa.task_events e
+      WHERE e.tenant_id=t.tenant_id AND e.task_id=t.id AND e.event_type='task.state_changed'
+      ORDER BY e.aggregate_version DESC LIMIT 1) hold ON t.state='paused'
     LEFT JOIN hawa.tasks root ON root.tenant_id = r.tenant_id AND root.id = r.root_task_id
     LEFT JOIN hawa.lifecycle_projections p ON p.tenant_id = r.tenant_id
       AND p.request_id = r.request_id AND p.rev = r.rev
     LEFT JOIN hawa.inbox_events src ON src.tenant_id = r.tenant_id AND src.source_account_id = 'telegram'
       AND src.source_event_id = r.chat_id || ':lc-' || r.request_id::text || '-r0'
+    -- ADR-182: a brief sent as plain words keeps no Telegram update on its task, so its requester is
+    -- read from the decision that opened it: the sender its intent was recorded for. Without it every
+    -- member of a group could change or cancel anyone's request.
+    LEFT JOIN LATERAL (SELECT coalesce(o.payload->'briefAnchor'->>'senderId', o.payload->'sourceUpdate'->'message'->'from'->>'id', i.payload->>'senderId') AS sender_id
+      FROM hawa.inbox_events o
+      LEFT JOIN hawa.inbox_events i ON i.tenant_id = o.tenant_id AND i.source_account_id = 'lifecycle_chat_intent'
+        AND i.source_event_id = o.source_event_id
+      WHERE o.tenant_id = r.tenant_id AND o.source_account_id = 'lifecycle_chat_open'
+        AND o.payload->>'chatId' = r.chat_id AND (o.payload->>'requestId' = r.request_id::text OR
+          EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(o.payload->'siblings','[]'::jsonb)) s WHERE s->>'requestId'=r.request_id::text))
+      LIMIT 1) opener ON true
     WHERE r.tenant_id = ${tenantId}::uuid AND r.chat_id = ${chatId} AND r.owner = 'restate'
       AND (r.stage IN ('designing', 'awaiting_answer', 'in_review', 'manual', 'approved', 'delivering')
         OR (r.stage = 'delivered' AND r.updated_at > now() - interval '3 days'))
@@ -38,6 +54,7 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
     createdAt: iso(row.created_at), activeAt: iso(row.updated_at),
     question: row.question && typeof row.question === 'object' && typeof row.question.text === 'string' ? row.question : null,
     requesterId: row.requester_id,
+    ...(row.requester_hold ? {requesterHold:true} : {}),
   }));
 }
 
@@ -47,11 +64,13 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
  * projection lands would miss the request it is about.
  */
 export async function openingChatRequests(trx: Kysely<Database>, tenantId: string, chatId: string): Promise<string[]> {
-  return (await sql<{ request_id: string }>`SELECT e.payload->>'requestId' AS request_id FROM hawa.inbox_events e
+  return (await sql<{ request_id: string }>`SELECT child.request_id FROM hawa.inbox_events e
+    CROSS JOIN LATERAL (SELECT e.payload->>'requestId' AS request_id UNION ALL
+      SELECT s->>'requestId' FROM jsonb_array_elements(coalesce(e.payload->'siblings','[]'::jsonb)) s) child
     WHERE e.tenant_id = ${tenantId}::uuid AND e.source_account_id = 'lifecycle_chat_open'
       AND e.payload->>'chatId' = ${chatId} AND e.received_at > now() - interval '10 minutes'
       AND NOT EXISTS (SELECT 1 FROM hawa.requests r WHERE r.tenant_id = e.tenant_id
-        AND r.request_id::text = e.payload->>'requestId')`.execute(trx)).rows.map((row) => row.request_id);
+        AND r.request_id::text = child.request_id)`.execute(trx)).rows.map((row) => row.request_id);
 }
 
 /**
@@ -72,6 +91,17 @@ export async function replyBindings(trx: Kysely<Database>, tenantId: string, cha
       AND e.event_kind IN ('telegram_message_sent', 'telegram_document_sent')
       AND e.payload->>'messageId' = ${replyMessageId}`.execute(trx)).rows;
   for (const row of sent) found.add(row.request_id);
+  // ADR-182: the Delivery workflow's messages (the delivered files and their notice) are keyed by the
+  // task and the approval (`lc:dl-<task>-<approval>:…`), not by the request: a reply to one ("it didn't
+  // arrive", "change the date on this") is about that task's request.
+  const delivered = (await sql<{ request_id: string }>`SELECT DISTINCT r.request_id::text
+    FROM hawa.inbox_events e
+    JOIN hawa.tasks t ON t.tenant_id = e.tenant_id AND t.id::text = substring(e.source_event_id from 7 for 36)
+    JOIN hawa.requests r ON r.tenant_id = t.tenant_id AND r.request_id = t.request_id
+    WHERE e.tenant_id = ${tenantId}::uuid AND e.source_account_id = 'telegram_delivery'
+      AND e.event_kind IN ('telegram_message_sent', 'telegram_document_sent') AND e.source_event_id LIKE 'lc:dl-%'
+      AND e.payload->>'messageId' = ${replyMessageId} AND r.chat_id = ${chatId} AND r.owner = 'restate'`.execute(trx)).rows;
+  for (const row of delivered) found.add(row.request_id);
   // The bot's answer to a routed message: ChatInbox keys it by that message's update.
   const answers = (await sql<{ source_event_id: string }>`SELECT e.source_event_id FROM hawa.inbox_events e
     WHERE e.tenant_id = ${tenantId}::uuid AND e.source_account_id = 'telegram_delivery'

@@ -10,6 +10,14 @@ export const INBOX_MESSAGES = {
     en: "Thanks, I'll use that and carry on with the same design.",
     ckb: 'سوپاس، ئەوە بەکاردەهێنم و هەمان دیزاین تەواو دەکەم.',
   },
+  /**
+   * ADR-182: the requester's change started the next draft. They used to hear nothing until the draft
+   * reached the office, minutes later.
+   */
+  changeTaken: {
+    en: "Got it. I'm making those changes now; the office checks the new draft before it comes to you.",
+    ckb: 'تێگەیشتم. ئێستا ئەو گۆڕانکارییانە دەکەم؛ ئۆفیسەکە پێش ئەوەی ڕەشنووسە نوێیەکە بۆت بێت سەیری دەکات.',
+  },
   /** A photo with two designs waiting for changes (the text path asks in Core's own words). */
   whichWaitingDesign: {
     en: 'More than one of your designs is waiting for changes. Which one is this for? Just tell me its name.',

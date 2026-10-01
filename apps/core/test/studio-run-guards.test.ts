@@ -83,9 +83,9 @@ describe.skipIf(!url)('studio run guards', () => {
     await sql`UPDATE hawa.tasks SET state=${state}::hawa.task_state WHERE id=${taskId}::uuid`.execute(db);
     await expect(svc.createOrGetRun(scope, taskId, key, input)).resolves.toMatchObject({ created: false, run: { id: run.id } });
     await expect(svc.createOrGetRun(scope, taskId, `new-${randomUUID()}`, input))
-      .rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED', status: 409 });
+      .rejects.toMatchObject({ code: state === 'paused' ? 'TASK_PAUSED' : 'TASK_GENERATION_BLOCKED', status: 409 });
     await expect(svc.resume(scope, taskId, run.id))
-      .rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED', status: 409 });
+      .rejects.toMatchObject({ code: state === 'paused' ? 'TASK_PAUSED' : 'TASK_GENERATION_BLOCKED', status: 409 });
     const saved = (await sql<{status:string}>`SELECT status FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
     expect(saved.status).toBe('briefing');
     await svc.abandon(scope, taskId, run.id, 'test cleanup');

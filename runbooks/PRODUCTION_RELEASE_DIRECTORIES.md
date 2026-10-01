@@ -10,7 +10,7 @@ Nothing here was run against production when it was written.
 |---|---|
 | Production ran from `/Users/hawzhin/Hawdesign`, the checkout other tools work in | Each deploy runs from `~/.hawa/releases/<commit>`, a detached git worktree of that commit |
 | Launch agents ran `/Users/hawzhin/Hawdesign/infra/...` | They run `~/.hawa/current/infra/...`; a deploy switches `current`, no reinstall needed |
-| nginx, Vector and the Postgres init files were bound from the checkout (`./nginx.conf`) | They are bound through `~/.hawa/current/...`, the same path for every deploy |
+| nginx, Vector and the Postgres init files were bound from the checkout (`./nginx.conf`) | They are bound from `~/.hawa/runtime/...`, a real directory rewritten in place by each deploy (addendum 3; bound through `~/.hawa/current` until 2026-09-30, see below) |
 | Credentials, backups and receipts sat in the checkout | They live once in `~/.hawa/shared/` at the same relative paths; every release links to them |
 | The watchdog stamped a restart with the checkout's HEAD | It stamps it with the release `current` names |
 
@@ -26,14 +26,77 @@ Layout:
 ~/.hawa/shared/infra/backup/snapshots/                        pre-deploy and nightly dumps, backup.log
 ~/.hawa/shared/infra/backup/release-receipts/                 deployment receipts
 ~/.hawa/shared/.env.test, output/audits/2026-09-29-product-flow-fixes/   what the release gate's suite needs
+~/.hawa/shared/infra/docker/.office-proxy-header.conf         the office proof prepare_service_boundaries.py writes (0600)
+~/.hawa/runtime/                                              what containers bind: never a link, never pruned (0700)
+~/.hawa/runtime/infra/docker/nginx.conf, vector.yaml, 00-init-roles.sql   copied from the release, in place
+~/.hawa/runtime/infra/docker/.office-proxy-header.conf        copied from ~/.hawa/shared, in place (0600)
+~/.hawa/runtime/db/schema.sql, rls.sql, 03-grants.sql, seed.sql           copied from the release, in place
 ```
 
 `deploy.sh` makes the release, links the shared files, runs `pnpm install --offline --frozen-lockfile &&
 pnpm build && pnpm --filter @hawa/desk build` once per release (log in `~/.hawa/releases/.build-<commit>.log`),
-and continues from the release's own copy of itself. Pre-flight never touches `current`. `--apply` switches
-`current` (one rename) after the images are built and verified, the migrations applied and the new
-`nginx.conf` and `vector.yaml` validated, just before `compose up -d`. After a successful deploy it keeps
-`current`, `previous` and the newest five releases (`HAWA_RELEASES_KEEP`) and removes the rest.
+and continues from the release's own copy of itself. Pre-flight never touches `current` or `~/.hawa/runtime`.
+`--apply` stages the release's bound files and the office proof into `~/.hawa/runtime.candidate`, checks them
+there (`nginx -t` and `vector validate` in one-off containers with compose's own mounts), copies those bytes into
+`~/.hawa/runtime` in place, then switches `current` (one rename) and runs `compose up -d`; nginx is reloaded (or
+restarted, or recreated) and vector restarted when their files changed. After a successful deploy it keeps
+`current`, `previous`, the newest five releases (`HAWA_RELEASES_KEEP`) and any release a container may still
+bind, and removes the rest; when it cannot tell which releases containers bind, it removes none.
+
+## The runtime directory (ADR-158 addendum 3, 2026-09-30)
+
+Until 2026-09-30 compose bound these files through `~/.hawa/current/...`. Docker Desktop resolves that link when
+it creates a container and keeps the release path; `docker inspect` still shows `~/.hawa/current/...`. Nothing
+recreated vector, and the 20:58Z deploy's prune removed the release it was pinned to (1737c8f2), so its restart
+failed; Postgres was bound to placeholder directories that no longer exist. `~/.hawa/runtime` has one fixed
+path, holds real files, and each deploy rewrites them in place (same inode), so a running container sees the new
+content and a reload or restart reads it. A file replaced by a rename is invisible to a running container.
+
+**First deploy with this change** (any release containing addendum 3). Its `up -d` recreates, once:
+
+- **Postgres**: 10 to 30 s in which Core answers 503 and requests retry (its bind strings change).
+- **nginx**: a few seconds of refused connections on port 8080.
+- **vector**: no user effect; log lines from those seconds are read from the Docker log once it is back.
+
+Core and the Desk are recreated as on every deploy (new images); the worker goes blue/green as always; Restate
+and the cut-out service are untouched. Pick the same window as the switch-over (not 03:25 to 04:30, no chaos
+run or full suite). Later deploys recreate none of the three for a file.
+
+**Check after that deploy:**
+
+```bash
+ls -la ~/.hawa/runtime/infra/docker ~/.hawa/runtime/db        # real files; the proof -rw-------
+for c in nginx vector postgres; do
+  docker inspect hawa-production-$c-1 --format '{{.Name}} {{range .Mounts}}{{if eq .Type "bind"}}{{.Source}} {{end}}{{end}}'
+done                                                            # every file under ~/.hawa/runtime, none under .hawa/current
+docker exec hawa-production-nginx-1 nginx -t                     # syntax is ok / test is successful
+cmp <(docker exec hawa-production-nginx-1 cat /etc/nginx/hawa-office-proof.conf) ~/.hawa/shared/infra/docker/.office-proxy-header.conf && echo proof ok
+```
+
+**By hand** (a runtime file lost or edited): `bash ~/.hawa/current/infra/ops/release.sh runtime-sync` copies the
+current release's files (or `runtime-sync <commit>` another release's) in place and lists what changed. It does
+not reload: after a changed `nginx.conf` or proof run `docker exec hawa-production-nginx-1 nginx -t && docker exec
+hawa-production-nginx-1 nginx -s reload`; after a changed `vector.yaml`, `docker restart hawa-production-vector-1`.
+
+**Recovering a pinned container.** Symptoms: a restart fails with a missing `/host_mnt/.../.hawa/releases/<commit>/...`
+path, or `nginx -t` inside fails to open a file that exists on the host. A restart does not help (Docker reuses
+the path it resolved); recreate the container, which binds the files afresh:
+
+```bash
+R=~/.hawa/current/infra/docker
+docker compose -f $R/docker-compose.prod.yml -f $R/canva-release.override.yml --env-file $R/.env up -d --no-deps --force-recreate nginx   # or vector, or postgres
+```
+
+For Postgres this is the same 10 to 30 s as above; do it outside a design in progress if you can. Before the first
+deploy with this change, the compose file in `current` still binds through `~/.hawa/current`, so a recreate there
+pins the container to the release `current` names now (kept by the prune as current or previous).
+
+**Prune.** `release.sh prune` and the deploy keep any release that a container, running or stopped, binds
+directly (`.../.hawa/releases/<commit>/...`, with or without `/host_mnt`) or through `current`/`previous` resolved
+against `~/.hawa/releases/.history` at the container's creation and last start. It prints `kept release <commit>:
+a container's bind mount may still use it`, or `no release was removed` when Docker could not be asked, the
+history is missing or a time could not be read. Never delete a release directory by hand while a container binds
+it; recreate the container first.
 
 ## Before the switch-over
 
@@ -87,16 +150,16 @@ bash ~/.hawa/current/infra/ops/install_launch_agents.sh
 What the switch-over deploy restarts, once: Postgres (its command gains
 `recovery_init_sync_method=syncfs`, it gains `mem_reservation: 1g`, and its init-file bind paths
 change; expect 10 to 30 s in which Core answers 503 and requests retry), nginx and Vector (their bind
-paths change to `~/.hawa/current/...`; a few seconds of refused connections on port 8080). The worker
-is deployed blue/green as always. Later deploys do not restart any of them for a path: the bind path is
-the same string every time, and `deploy.sh` reloads or restarts nginx only when `nginx.conf` changed.
+paths change to `~/.hawa/runtime/...` since addendum 3; a few seconds of refused connections on port 8080).
+The worker is deployed blue/green as always. Later deploys do not restart any of them for a path: the bind
+path is the same string every time, and the files are rewritten in place (see The runtime directory).
 
 ## Verify
 
 ```bash
 bash ~/.hawa/current/infra/ops/release.sh status                 # current -> ~/.hawa/releases/$REL
-docker inspect hawa-production-nginx-1 --format '{{range .Mounts}}{{.Source}} {{end}}'     # .../.hawa/current/infra/docker/nginx.conf
-docker inspect hawa-production-vector-1 --format '{{range .Mounts}}{{.Source}} {{end}}'    # .../.hawa/current/infra/docker/vector.yaml
+docker inspect hawa-production-nginx-1 --format '{{range .Mounts}}{{.Source}} {{end}}'     # .../.hawa/runtime/infra/docker/nginx.conf
+docker inspect hawa-production-vector-1 --format '{{range .Mounts}}{{.Source}} {{end}}'    # .../.hawa/runtime/infra/docker/vector.yaml
 docker inspect hawa-production-postgres-1 --format '{{json .Config.Cmd}}'                  # contains recovery_init_sync_method=syncfs
 docker inspect hawa-production-postgres-1 --format '{{.HostConfig.MemoryReservation}}'     # 1073741824
 plutil -p ~/Library/LaunchAgents/design.hawa.watchdog.plist | grep -E 'hawa/current'      # program and working directory
@@ -137,7 +200,10 @@ bash "$(readlink ~/.hawa/previous)/infra/docker/deploy.sh" --apply
 ```
 
 It runs from that release directory (already installed and built), switches `current` back and deploys
-the worker blue/green. `bash ~/.hawa/current/infra/ops/release.sh status` shows both links.
+the worker blue/green. `bash ~/.hawa/current/infra/ops/release.sh status` shows both links. A previous release
+that predates addendum 3 (b7f32cbb and older) binds through `~/.hawa/current` again, recreates nginx, vector and
+Postgres, and prunes without the mount check: run it as `HAWA_RELEASES_KEEP=50 bash ... --apply` so it removes
+nothing, and go forward to a release with addendum 3 as soon as you can.
 
 **To a commit from before ADR-158** (for example `6bd479c1`). Its `deploy.sh` knows nothing of release
 directories, so it is run from a worktree of its own that links the shared files, and `current` is
@@ -253,3 +319,35 @@ presence in the actual running Core; it does not assert provider qualification.
 No browser-selected provider endpoint is contacted. Never copy these generated
 files or the canonical credentials into the repository, test fixtures, wiki,
 provider prompts or logs.
+
+## Independent worker identities (ADR183, 2026-09-30)
+
+Deploy now prepares an independent design token and worker database URL. Preflight retains an
+existing shared token until apply. After backup/migration and image/configuration qualification,
+apply retires matching ordinary operator aliases, retains the old design token only as a scoped
+drain identity, provisions `hawa_worker_login`, then replaces Core and deploys the idle worker color.
+The previous design value is never copied into the new worker environment. Credentials stay in
+owner-private shared files, not command arguments, logs, receipts or Git.
+
+Migration073 preserves existing Core function capabilities explicitly and removes PUBLIC execution
+on application-schema routines. The worker inherits only required RLS helpers and outbox/poll/send
+operations. Poll writes cannot change the office kill switch or create provider configuration.
+Its blob mount is read-only. Production verifies both nginx binds, live `nginx -t`, a checked reload
+and post-reload validation. Missing/stale binds require a checked restart, and a recreate when a restart
+keeps the stale mount; both binds are the `~/.hawa/runtime` copies (ADR-158 addendum 3).
+
+Pre-foundation release worktrees (before74618004) are retired only when inactive, clean and registered
+in this repository. Current/previous and shared files are preserved, and so is any release a container
+still binds (addendum 3: this step removed 1737c8f2 under vector and Postgres on 2026-09-30); it is removed by a
+later deploy once that container has been recreated. Git history remains available.
+Once `.worker-identity-v2` exists, the new release tooling refuses activation of releases missing
+migration073 and its provisioning implementation. The old predecessor is **not a qualified rollback**
+after this identity upgrade: its configuration preparer refuses the independent-token file. Recover
+by redeploying the qualified repair release, or ship a compatible forward fix. A backup does not
+justify reverting migrations or restoring an old full-operator worker credential.
+
+Retaining a previous design token permits a draining color to finish scoped design calls. Remove it
+only after Restate reports no invocations pinned to that deployment and its container is stopped;
+then requalify the Core reload. A finished source test does not prove a running color uses the new
+DB login: inspect only its username and effective privilege booleans, verify health/polling/outbox,
+and exercise current/previous scoped authorization plus negative operator/session controls.

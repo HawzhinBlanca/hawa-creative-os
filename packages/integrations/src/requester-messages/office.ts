@@ -18,8 +18,9 @@ export const OFFICE_MESSAGES = {
   },
   /** The office member's words went back as the Desk's "Request Revision": the requester is asked next. */
   sentBack: {
-    en: 'Sent back for changes with your words. {requester} has your note on {title}, and the next draft starts once they answer.',
-    ckb: 'بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. {requester} تێبینییەکەتی لەسەر {title} پێگەیشت، و ڕەشنووسی داهاتوو دوای وەڵامی ئەو دەست پێدەکات.',
+    // ADR-182: {requester} is "the requester" when their name is unknown, so it no longer starts a sentence.
+    en: 'Sent back for changes with your words. I have sent your note on {title} to {requester}; the next draft starts once they answer.',
+    ckb: 'بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. تێبینییەکەتم لەسەر {title} بۆ {requester} نارد؛ ڕەشنووسی داهاتوو دوای وەڵامی ئەو دەست پێدەکات.',
   },
   /** The same, for the office member's own request (the owner): they are asked as the requester next. */
   sentBackOwn: {

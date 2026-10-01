@@ -1,6 +1,12 @@
 import { clientExemplarManifestPath, findClientPack, loadClientPacks, matchClientPack, type ClientMatch, type ClientPack } from '@hawa/creative';
 import { log } from '../logging.js';
 
+/** Negative mentions identify neither a client nor a shared-client fallback (ADR-182). */
+export function positiveClientWords(value:string):string {
+  return value.replace(/\b(?:not|isn'?t|is\s+not|instead\s+of|rather\s+than)\s+(?:for\s+|of\s+)?(?:the\s+)?[\p{L}\p{N}_-]+/giu,' ')
+    .replace(/(?:نەک|لە\s+جیاتی)\s+(?:بۆ\s+)?[\p{L}\p{N}_-]+/gu,' ');
+}
+
 /**
  * Core's view of the client packs (ADR-127). A pack set that fails to load is logged once and read
  * as empty, so intake falls back to its legacy client detection instead of refusing every message;

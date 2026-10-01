@@ -637,6 +637,7 @@ export class CanvaDesignPlanner {
       // Another process admitted this plan's call first (a resume carrying on a claim this process
       // also serves, ADR-138): that admission is the only one, and this process sends nothing.
       if(error instanceof PlannerCallAlreadyAdmitted)return this.resume(s,taskId,planId);
+      if(error instanceof CanvaFlowError && error.code==='TASK_PAUSED')throw error;
       // A failed or ambiguous admission commit is never permission to send. If admission exists,
       // leave it available for evidence/recovery; no error handler may erase the paid attempt.
       const call=await this.tx(s,async db=>(await sql`SELECT id FROM hawa.canva_planner_calls

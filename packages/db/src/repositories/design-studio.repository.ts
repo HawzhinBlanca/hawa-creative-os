@@ -91,10 +91,11 @@ export class ModelCallAdmissionConflictError extends Error {
 }
 
 export class TaskGenerationBlockedError extends Error {
-  readonly code = 'TASK_GENERATION_BLOCKED';
-  constructor(message: string) {
+  readonly code: 'TASK_GENERATION_BLOCKED' | 'TASK_PAUSED';
+  constructor(message: string, code: 'TASK_GENERATION_BLOCKED' | 'TASK_PAUSED' = 'TASK_GENERATION_BLOCKED') {
     super(message);
     this.name = 'TaskGenerationBlockedError';
+    this.code = code;
   }
 }
 
@@ -614,7 +615,7 @@ export class DesignStudioRepository {
         .select(['t.id', 't.state']).where('r.id', '=', params.runId).where('t.tenant_id', '=', params.tenantId)
         .forUpdate('t').executeTakeFirst();
       const blocker = taskGenerationBlocker(task?.state);
-      if (blocker) throw new TaskGenerationBlockedError(blocker);
+      if (blocker) throw new TaskGenerationBlockedError(blocker, task?.state === 'paused' ? 'TASK_PAUSED' : 'TASK_GENERATION_BLOCKED');
       // Read after acquiring the task lock: abandonment may have committed while we waited.
       const run = await client.selectFrom('design_studio_runs').select(['status', 'budget'])
         .where('id', '=', params.runId).where('tenant_id', '=', params.tenantId).executeTakeFirst();

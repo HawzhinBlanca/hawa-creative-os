@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-01",
+  "adr": 185,
+  "base": "6723d208",
+  "qualification": "SOURCE_ORIGINAL_BRIEF_HOLD_ADMISSION_PASS_NOT_DEPLOYED",
+  "requirements": [
+    "FR-004",
+    "FR-005",
+    "FR-060",
+    "FR-063",
+    "NFR-001",
+    "NFR-006"
+  ],
+  "production": "4e500451",
+  "connected": {
+    "files": 13,
+    "passed": 299,
+    "failed": 0,
+    "expectedFail": 2
+  },
+  "redBefore": {
+    "failed": 1,
+    "assertion": "worker dispatch sees received instead of paused",
+    "log": "/tmp/hawa-early-hold-red-4.log"
+  },
+  "retainedFailures": [
+    "Two initial red fixture attempts used the conversation request-id API incorrectly; fixed before meaningful red proof",
+    "Initial production build had six errors from misplaced anchor check, out-of-scope chat answer and review-link argument; repaired",
+    "One connected control asserted an office alert without configuring office members; fixture corrected",
+    "Test typing rejected optional dispatch clientId; explicit automatic-dispatch client guard added",
+    "Precommit secret scan refused a static synthetic worker-token fixture; switched to generated per-harness IDs, without changing the scanner",
+    "Precommit refused stale blueprint manifests; regenerated manifests, leaving hooks enabled"
+  ],
+  "fullSuite": {
+    "passed": 6262,
+    "failed": 0,
+    "expectedFail": 2,
+    "skipped": 67,
+    "filesPassed": 643,
+    "filesSkipped": 6,
+    "durationSeconds": 203.43,
+    "expectedFailureIds": [
+      "S031a",
+      "S022"
+    ]
+  },
+  "typecheck": {
+    "status": "PASS",
+    "activeTestRoots": 650
+  },
+  "lint": "PASS (939 any <=1053; 10 existing egress exceptions)",
+  "paidProviderCalls": 0,
+  "deployment": "NOT_DEPLOYED",
+  "limits": [
+    "Voice/PDF processing before a brief exists is outside early-hold admission proof",
+    "Existing title/multiple-design expected failures remain",
+    "Native Sorani and broader design-quality proof remain open"
+  ],
+  "source": "fb5051c8",
+  "testedSeal": "cdc8e311",
+  "build": "PASS (production tsc build and native build during full suite)",
+  "manifest": "PASS (clean tested seal)",
+  "blueprint": {
+    "passed": 1498,
+    "warnings": 0,
+    "failed": 0
+  },
+  "logDigests": {
+    "/tmp/hawa-early-hold-red-4.log": "e1e2914a4960f95f5d755eae12e18321353f93b6ae0a40c86b61ce1842528616",
+    "/tmp/hawa-early-hold-connected.log": "c9a0f9990d6a39e9a56ea20040b3bb1565f97b6ad9d9d85e1cd0a4550369747e",
+    "/tmp/hawa-early-hold-full.log": "f1f64a25741912e79836a577a5134d356984ef137fc5ce8c20969b7266ceab44",
+    "/tmp/hawa-early-hold-types-3.log": "eceb739414b84700dff9892a7ee27098888ef5174854f8b5b7e8e5881cbdb4e9",
+    "/tmp/hawa-early-hold-lint.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
+    "/tmp/hawa-early-seal-verify.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6"
+  },
+  "sourceHashes": {
+    "apps/core/src/services/early-requester-hold.ts": "c5dea4d7af302c681dab5192e93b4937c8f82b8af12e7e71442826b579cbeace",
+    "apps/core/src/services/lifecycle-brief-anchor.ts": "510a3753e222d6648576a125e024e4019bf2b0af7ec393c8a0f24f18204cdc3e",
+    "apps/core/src/services/lifecycle-projection.ts": "e2db067c9695b6e3b6f79f0e27acaae30012c484796217282296af83e7908c71",
+    "apps/core/src/services/requester-hold.ts": "8d1737f397df1b02e96ccb7a62b81f7750a3a8b93be7230e46347cda9443792c",
+    "apps/core/src/services/task-control-service.ts": "d7482b088c18172b85a1e7cac1674647fa489209ca4423e856bc382ede75f41a",
+    "apps/core/src/services/lifecycle-chat-target.ts": "5909eff68337ff831db87ad12c0429e781a765fc669bc89361a87af1570de11f",
+    "apps/core/src/services/requester-turn-store.ts": "7c852fc22b02b9168d4630821cb0263d96ba4e7f5faf63118a3aa0d78668577c",
+    "apps/core/src/routes/lifecycle-internal.routes.ts": "2d5d0b661effb809f58e7861b8f4c1f0594ab6ca61ba779de5ee170d3682f168",
+    "apps/worker/src/lifecycle/request-lifecycle.ts": "396bfbe77140237d7e8d754c52c25e62e3723ad5740aa5f1da1efc1f085b1822",
+    "apps/core/test/early-requester-hold.test.ts": "56c0887328e82f22ec07f0c8b98194e6bd7e4f342fd7184e718f1d8c5c082cbb",
+    "apps/core/test/requester-hold-durability.test.ts": "7e358a714a871bfb02266f47db28ab4c99fe02d82dabda308989451c10d386d9",
+    "apps/core/test/fixtures/conversation-harness.ts": "781041c78bd70e2d8b1a91506576c6c6da44ae645f634916bd0465c653383083"
+  }
+}

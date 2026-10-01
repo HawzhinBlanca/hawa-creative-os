@@ -2,7 +2,7 @@ id,type,name,requirement
 FR-001,FR,Canonical task creation,The system shall create tasks through Hawa Desk and adapter events without making any chat platform authoritative.
 FR-002,FR,Raw event retention,"The system shall preserve the normalized source event, source identifier, edit history, attachments, and thread context according to retention policy."
 FR-003,FR,Webhook verification,Each adapter shall authenticate incoming events using the strongest source-supported mechanism before persistence.
-FR-004,FR,Event idempotency,A repeated source event shall produce exactly one logical message event and no more than one task.
+FR-004,FR,Event idempotency,A repeated source event shall produce exactly one logical message decision and no duplicate task for any explicitly requested deliverable or language; an ordinary single-design event produces no more than one task (ADRs 139 and 186).
 FR-005,FR,Task promotion,"Passive messages shall become production tasks only through an explicit command, mention, reaction, Hawa Desk action, or approved classifier policy."
 FR-006,FR,Manual intake,"Authorized users shall create tasks directly in Hawa Desk with files, exact copy, dimensions, due date, and client/project selection."
 FR-007,FR,Client channel mapping,"The system shall support versioned mappings from channel, group, topic, sender, alias, and campaign code to allowed clients/projects."

@@ -29,6 +29,7 @@ export interface LiveTask {
   sourceDocument?: { id: string; clientId: string; sourceSha256: string } | null;
   id: string;
   requestId?: string | null;
+  requesterHold?: {reason:string} | null;
   clientId?: string;
   clientName?: string;
   title: string;
@@ -1055,8 +1056,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   </>}
                 </details>}
                 <AskLedgerPanel key={`asks-${selectedTask.id}`} taskId={selectedTask.id} />
-                {!detail?.requestId && !selectedTask.requestId && <TaskControls key={`controls-${selectedTask.id}`}
-                  taskId={selectedTask.id} status={selectedTask.status} version={selectedTask.version} role={sessionUser?.role}
+                {((!detail?.requestId && !selectedTask.requestId) || detail?.requesterHold) && <TaskControls key={`controls-${selectedTask.id}`}
+                  taskId={selectedTask.id} status={detail?.status ?? selectedTask.status} version={detail?.version ?? selectedTask.version} role={sessionUser?.role}
+                  requesterHold={detail?.requesterHold ?? undefined}
                   refresh={() => readTaskAgain(selectedTask.id)} />}
 
                 <p className="capture-availability" role="status">Retrieved exports require QA and human approval before delivery.</p>

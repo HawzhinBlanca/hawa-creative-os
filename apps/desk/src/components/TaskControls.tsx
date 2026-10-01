@@ -2,8 +2,9 @@ import { useRef, useState } from 'react';
 import { isTerminalTaskStatus, taskGenerationBlocker } from '@hawa/contracts/task-status';
 import { apiClient } from '../api/client.js';
 
-export function TaskControls({ taskId, status, version, role, refresh }: {
+export function TaskControls({ taskId, status, version, role, refresh, requesterHold }: {
   taskId: string; status: string; version?: number; role?: string; refresh: () => Promise<unknown>;
+  requesterHold?: {reason:string};
 }) {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -27,18 +28,18 @@ export function TaskControls({ taskId, status, version, role, refresh }: {
     } finally { setBusy(false); }
   };
   return <details className="task-controls">
-    <summary>Pause, resume or cancel this task</summary>
+    <summary>{requesterHold ? 'Resume the requester’s hold' : 'Pause, resume or cancel this task'}</summary>
     {isTerminalTaskStatus(status) ? <p>This task is closed. Its recorded results remain available.</p> : <>
-      <p>Pausing stops new design work. Cancelling closes this request. Work already admitted may still finish; its results are retained.</p>
+      <p>{requesterHold ? `Read the requester’s message before resuming: ${requesterHold.reason}` : 'Pausing stops new design work. Cancelling closes this request. Work already admitted may still finish; its results are retained.'}</p>
       {!allowed && <p>An office operator or designer is required.</p>}
       <label htmlFor={`control-reason-${taskId}`}>Reason</label>
       <textarea id={`control-reason-${taskId}`} value={reason} maxLength={2000} disabled={busy || !allowed}
         onChange={event => setReason(event.target.value)} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {status === 'PAUSED'
-          ? <button className="btn" disabled={unavailable} onClick={() => void apply('resume')}>Resume operator pause</button>
+          ? <button className="btn" disabled={unavailable} onClick={() => void apply('resume')}>{requesterHold ? 'Resume this design' : 'Resume operator pause'}</button>
           : <button className="btn" disabled={unavailable || Boolean(taskGenerationBlocker(status))} onClick={() => void apply('pause')}>Pause task</button>}
-        <button className="btn" disabled={unavailable} onClick={() => void apply('cancel')}>Cancel task</button>
+        {!requesterHold && <button className="btn" disabled={unavailable} onClick={() => void apply('cancel')}>Cancel task</button>}
       </div>
     </>}
     {message && <p role="status">{message}</p>}
