@@ -1,6 +1,6 @@
 # ADR219 — Manual Desk task dispatch ownership
 
-Date: 2026-10-01. Status: proposed; qualification pending.
+Date: 2026-10-01. Status: accepted; connected/current deployed/seven-stage engineering verified; product admission open.
 Requirements: FR-006, FR-004, FR-060, FR-061, NFR-014.
 Sources: docs/09_MESSAGING_AND_OFFICE_INBOX.md, docs/10_WORKFLOW_RELIABILITY.md,
 docs/30_CURRENT_STUDIO_CONTRACT.md, MASTER_SPEC.md, ADR126.
@@ -64,3 +64,5 @@ notification, received/version1/one recorded receipt and zero TaskWorkflow runs.
 Correct only the harness credential/route to the actual worker implementation.
 Application/test/infra source is unchanged from55542978; full corrected rehearsal
 pending. Both credential boundaries remain strict.
+
+Current clean candidate cab4869d actual Docker recovery PASS: 202 named checks; six original receipts/five admitted assets; 12 exact-byte/header downloads at each of three phases. Both authenticated encrypted fresh-volume co-restores retain originals, fonts and immutable actors/timestamps; drive: 105 tables/176 policies/10 blobs/zero missing; telegram: 105 tables/176 policies/10 blobs/zero missing. Pending Delivery identity preserved, Drive effect adopted and uncertain Telegram not repeated. Owned private recovery artifacts removed for both exact nonces. Real nginx/Core/Desk/worker/PostgreSQL/Restate/Docling; all external and staff actions synthetic. 698 strict roots, standalone chaos types and lint PASS. Runtime-identical engineering candidate 55542978 seven-stage gate passes 6922/0/67,698 roots and mandatory negative refusal; production-dump transfer approval still pending. ADR219 manual receipt/worker callback/no automatic submission controls pass. No production deployment, native/human/product quality or separate-host/RPO/RTO admission. W6_DEPLOYED_ASSET_RECOVERY_PROOF.json. Initial wrong test-column failure retained.

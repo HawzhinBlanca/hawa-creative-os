@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T15:45:39Z",
+  "generatedAt": "2026-10-01T15:50:00Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 820,
+  "fileCount": 822,
   "files": [
     {
       "path": ".dockerignore",
@@ -1074,13 +1074,13 @@
     },
     {
       "path": "adrs/218_retained_uploaded_asset_sources.md",
-      "sha256": "0b8b5bcc6aadab3291cae03959bc3338ecfe68991531f6601d861428014ee79b",
-      "bytes": 7865
+      "sha256": "61ed6310ac862fcf0c3d6a6aeefe2fd4e6e2c241e974b73ef4fd24e8fd481b71",
+      "bytes": 9006
     },
     {
       "path": "adrs/219_manual_desk_dispatch_ownership.md",
-      "sha256": "e61f09fa19fa0dd0d2c9bc1c04697c95a73701503566765942221adf66f474ea",
-      "bytes": 4634
+      "sha256": "ecdb16379844c1a9ae069da56e7e22f8114d14bc8017f798706e9b07ecaf3e39",
+      "bytes": 5837
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1574,8 +1574,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "7a1ea9f98fb2e7dce4f7a81cf71ba8e93b2f9485110a5e7440d731b800a73590",
-      "bytes": 76117
+      "sha256": "4820c073589dca373b6f56be952186e99984271cec1bacb1fc1a50ab4bb8f0e8",
+      "bytes": 77258
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1858,6 +1858,16 @@
       "bytes": 957
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/W6_CURRENT_ASSET_RECOVERY_GATE_EVIDENCE.json",
+      "sha256": "17c066002106d1aaddda3171a06f302858b059068807c9696eb4618971d5e464",
+      "bytes": 821
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W6_DEPLOYED_ASSET_RECOVERY_PROOF.json",
+      "sha256": "c5f264e2d3c29da415ac952b6c2a6371c2ab30d1ff3f5c7388897458488c4f50",
+      "bytes": 13298
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/W6_DNA_AUTHORITY_GATE_EVIDENCE.json",
       "sha256": "181c8a4c2a1897f3253220ae67d65668ad23cdf12e4dbda8b027746ef5b90ffe",
       "bytes": 2115
@@ -1914,8 +1924,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_MANUAL_DESK_DISPATCH_PROOF.json",
-      "sha256": "19e7992db5e20f48c873f30fa88cec1454f104e4a299621d37c7f0c506714d31",
-      "bytes": 3865
+      "sha256": "856cdcf5f3bfd0d9a42510088d18971f4d822fb29c4530dfb02f9961e2793c6e",
+      "bytes": 6253
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_SCOPED_ASSET_SEARCH_GATE_EVIDENCE.json",
@@ -3164,8 +3174,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "67cd2e251147f131c974259e2377a62080e0cdbb3153466223d4286f098f15ab",
-      "bytes": 729442
+      "sha256": "88b32c5849548a76175bb6b6bd48b925b96acdf63f8d2c4beda6547ffc90406c",
+      "bytes": 740862
     },
     {
       "path": "plans/user-stories.csv",

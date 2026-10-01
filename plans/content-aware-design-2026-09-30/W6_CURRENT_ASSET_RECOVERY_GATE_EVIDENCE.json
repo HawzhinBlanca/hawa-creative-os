@@ -1,0 +1,22 @@
+{
+  "candidateCommit": "55542978d121bbabd257001bdd2689c22adf8d3a",
+  "deployedCandidateCommit": "cab4869d41c48ef7c40af64282192c1b6e6b69fa",
+  "runtimeAndApplicationTestsEqualEngineeringCandidate": true,
+  "harnessCorrection": "Only testkit route/credential correction; standalone chaos types and full deployed scenario rerun",
+  "technicalStagesPassed": 7,
+  "suite": {
+    "passed": 6922,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 691,
+    "filesSkipped": 6
+  },
+  "strictTestRoots": 698,
+  "packPassed": 1792,
+  "negativeFlagRefusal": "PASS",
+  "productionDump": "NOT_RUN: prior explicit sensitive transfer authorization remains pending",
+  "allEightQualified": false,
+  "admissionQualified": false,
+  "productionChanged": false,
+  "rawGateStatusPreserved": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN"
+}

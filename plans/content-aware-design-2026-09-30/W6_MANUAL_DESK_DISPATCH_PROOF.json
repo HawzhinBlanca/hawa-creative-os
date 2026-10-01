@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "CONNECTED_VERIFIED_CURRENT_DEPLOYED_AND_EXACT_ENGINEERING_GATE_PENDING",
+  "status": "CONNECTED_CURRENT_DEPLOYED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-006",
     "FR-004",
@@ -39,13 +39,14 @@
     "Atomic manual task/event/outbox recorded with MANUAL_DESK_OWNED; no legacy worker claim; exact original-body/client/DNA replay preserved.",
     "Only a source-bound manual Desk no-job callback with no design/run/code is ignored before task or notification effects; ordinary/draft/lifecycle outcomes retain existing admission.",
     "Existing lifecycle-owned receipt marker and pending default automatic intake unchanged; no worker grant/migration/queue/dependency.",
-    "Deployed scenario includes actual worker-key callback replay, manual state/version/receipt, and zero TaskWorkflow submission assertions; that updated scenario has not run yet."
+    "Deployed scenario includes actual worker-key callback replay, manual state/version/receipt, and zero TaskWorkflow submission assertions; the corrected current Docker scenario passes."
   ],
   "qualificationHistory": [
     "Deployed original wrong DNA test column and restart closed socket failures retained separately.",
     "Initial original Core tests5pass/2fail. Stale built DB package41pass/1fail/1skip; normal workspace rebuilt.",
     "New negative fixture expected failed_operator for an outcome presenting a draft ID; original human_review semantics correctly preserved. Expanded176pass/1fail retained, corrected14files177pass/0fail/0skip.",
-    "Earlier late Studio settlement failure had no bounded response diagnostics; the later proven revision race is a possible explanation, not an established historical cause. Instrumented no-restore candidate passes121 named checks."
+    "Earlier late Studio settlement failure had no bounded response diagnostics; the later proven revision race is a possible explanation, not an established historical cause. Instrumented no-restore candidate passes121 named checks.",
+    "Clean55542978 engineering gate passes6922/0/67. Its intermediate Docker fixture passed155 checks, then wrong generic worker token/internal route produced404 HTML. Dedicated design-worker token and actual /v1/tasks route corrected; original failure retained."
   ],
   "strictRoots": 698,
   "build": "PASS",
@@ -55,7 +56,6 @@
   "productionChanged": false,
   "productAdmission": false,
   "limits": [
-    "Current Docker qualification and exact engineering gate still pending.",
     "No production deployment or paid call; all external/staff fixtures synthetic.",
     "Production-dump transfer and native-save approvals remain pending; separate-host/RPO/native/human/visual/taste/pilot admission remains open."
   ],
@@ -64,7 +64,48 @@
     "apps/core/src/routes/canva-outcome.routes.ts": "afc84b7d8aae9cb1ab52d8ef64cca83335a62560d61911c2a2a43dd7b382cccf",
     "packages/db/src/repositories/task.repository.ts": "e23bdd49cacd18edd51c657aaabb81311f2575516670c9460f9a2d9f01d11942",
     "apps/core/test/registered-client-intake.test.ts": "b9fd3022f87b604527fff80ca24e5d09d7e9057f27f57d62a91a778116365cbc",
+    "packages/testkit/chaos/driver/candidate-sources.ts": "369d55f5ebf86086934f31eabfa6ef20d1e32dd6d3509b1b97778d242d2f6556",
+    "packages/testkit/chaos/driver/studio-settlement.ts": "0582191c30d68377d8a7a5bc2672f7e98b9f4852a226c356db572e366988241c"
+  },
+  "connectedSourceSha256": {
+    "apps/core/src/routes/tasks.routes.ts": "86b9138576de2651ac0847e05100e9a9019f241286c228e2cfb5f0ca45275220",
+    "apps/core/src/routes/canva-outcome.routes.ts": "afc84b7d8aae9cb1ab52d8ef64cca83335a62560d61911c2a2a43dd7b382cccf",
+    "packages/db/src/repositories/task.repository.ts": "e23bdd49cacd18edd51c657aaabb81311f2575516670c9460f9a2d9f01d11942",
+    "apps/core/test/registered-client-intake.test.ts": "b9fd3022f87b604527fff80ca24e5d09d7e9057f27f57d62a91a778116365cbc",
     "packages/testkit/chaos/driver/candidate-sources.ts": "4a556e64d497228049e4fa82b8d3d0ca39cd0bc3083545eed2ac65e633d4b198",
     "packages/testkit/chaos/driver/studio-settlement.ts": "0582191c30d68377d8a7a5bc2672f7e98b9f4852a226c356db572e366988241c"
+  },
+  "harnessCorrection": "Use actual dedicated design-worker token and exact /v1/tasks route; previous generic worker /v1/internal fixture failed with 404 HTML and remains archived.",
+  "deployedRehearsal": {
+    "candidateCommit": "cab4869d41c48ef7c40af64282192c1b6e6b69fa",
+    "namedChecksPassed": 202,
+    "manualVersion": 1,
+    "manualState": "received",
+    "creationReceipt": "MANUAL_DESK_OWNED",
+    "automaticTaskWorkflowSubmissions": 0,
+    "oldWorkerCallbackReplays": 2,
+    "allExternalAndStaffActionsSynthetic": true
+  },
+  "releaseGate": {
+    "candidateCommit": "55542978d121bbabd257001bdd2689c22adf8d3a",
+    "deployedCandidateCommit": "cab4869d41c48ef7c40af64282192c1b6e6b69fa",
+    "runtimeAndApplicationTestsEqualEngineeringCandidate": true,
+    "harnessCorrection": "Only testkit route/credential correction; standalone chaos types and full deployed scenario rerun",
+    "technicalStagesPassed": 7,
+    "suite": {
+      "passed": 6922,
+      "failed": 0,
+      "skipped": 67,
+      "filesPassed": 691,
+      "filesSkipped": 6
+    },
+    "strictTestRoots": 698,
+    "packPassed": 1792,
+    "negativeFlagRefusal": "PASS",
+    "productionDump": "NOT_RUN: prior explicit sensitive transfer authorization remains pending",
+    "allEightQualified": false,
+    "admissionQualified": false,
+    "productionChanged": false,
+    "rawGateStatusPreserved": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN"
   }
 }
