@@ -1,6 +1,6 @@
 {
   "date": "2026-10-02",
-  "status": "CONNECTED_INTEGRATION_PASSED_SOURCE_GATE_RETRY_PENDING",
+  "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
   "researchParent": "8ca1fa4ace6cb0f6a3a0daaddda8b979dab15680",
   "guidelineParent": "4c95154ac42f094845afb6e7415394d9b7f5fb43",
   "requirements": [
@@ -75,18 +75,24 @@
     "output/qualification/2026-10-02/kaae2025-integration/full-initial/ENGINEERING_PREFLIGHT.log": "ca35a7a7a1d36f0a9aca47fc88f5aa7a386dc02340ff96d3afff680b358b45f4",
     "output/qualification/2026-10-02/kaae2025-integration/full-initial/FULL_TEST_SUITE_RUN.log": "8f9a5342dde06dcb1b24e2516865490d505bdc7bb5daee427ae7c1a4b3773ca3",
     "output/qualification/2026-10-02/kaae2025-integration/LEARNING-DIAGNOSTIC.log": "0b7e8cb8b5114d1068bd10f7028012710304f18af251892e1cd557a9dae2a1e4",
-    "output/qualification/2026-10-02/kaae2025-integration/LEARNING-REPAIR.log": "4719e2672cd73af361d65fa212d7ae797a77888a0fb588fa8f9507ff7b38d4b7"
+    "output/qualification/2026-10-02/kaae2025-integration/LEARNING-REPAIR.log": "4719e2672cd73af361d65fa212d7ae797a77888a0fb588fa8f9507ff7b38d4b7",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/NEGATIVE_FLAG_REFUSAL.log": "d120c90a37d57f0f7c6f2b68a9313b8562d94c09ac7df26a110b040f2ebde74f",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/TEST_DB_PROVISION.log": "a629ae9c3ab4a811e9725955b53246ff24869c0f5accdb28fae1f937a57f4b70",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/RELEASE_GATE_EVIDENCE.json": "cd70d4a59a8fc4dab7a7a93cf00006b836698aff5c91853734d3eb65a55dd976",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/ENGINEERING_PREFLIGHT.log": "c72a9f20469f3a7bbb358e998a8a8ec441c25d1b15a56d995ca5250a1efbd9f2",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/FULL_TEST_SUITE_RUN.log": "f353d07f000d234d00ce1cc692f75abd27e5ed7950a6bd0a70581dd1d92853ad",
+    "output/qualification/2026-10-02/kaae2025-integration/CANVA_MAPPING_READBACK.json": "d2a7f99590fed416a987984c12f7cc5221ca2ddd52f55dd5d3b26f2293094a13"
   },
   "limits": {
     "productionDeployed": false,
     "productionDnaUpdated": false,
     "canvaBrandKitUpdated": false,
-    "fullSourceGatePassed": false,
+    "fullSourceGatePassed": true,
     "currentNativeSaveEditProved": false,
     "humanDesignQualityApproved": false,
     "paidCallsThisIntegration": 0
   },
-  "next": "Commit current-guideline compatible/conflicting fixture controls, generate clean source metadata and rerun the failed full gate; preserve every native/human/production admission limit.",
+  "next": "Publish tested-source-equivalent documentation/metadata checkpoint. Obtain genuine current native save/edit/export, human quality, production-data migration, deployed-candidate/publication/recovery/pilot evidence; production DNA and Canva-kit handoffs remain open.",
   "initialFullGate": {
     "sourceSeal": "264a7af57f18fc01096de5768aaed38af75da896",
     "status": "FAILED",
@@ -111,5 +117,55 @@
     "files": 3,
     "decision": "Keep current KAAE409 pending refusal and unchanged activation scope; generic compatible-client200 then conflicting409 promotion tests use existing other-client fixture. Same real route/miner/authorization and rollback checks retained. This is a fixture repair, not proof of comprehensive natural-language contradiction detection.",
     "sourceSha256": "f769402c0ffa993d1e6a2f1b49c0efb2fae48ffdc84a32f90d3313099d68309a"
+  },
+  "fullSourceGate": {
+    "sourceSeal": "dffe7a3a16903609bdfe9bf8c72d3560dff8f390",
+    "buildSource": "a2cd98e7acb03ac854a401c544bb041ac19a27bd",
+    "evaluatedAt": "2026-10-01T22:38:38Z",
+    "cleanTree": true,
+    "passed": 7612,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 718,
+    "skippedFiles": 6,
+    "strictTestRoots": 725,
+    "technicalStagesPassed": 7,
+    "negativeFlagRefusalPassed": true,
+    "productionDataMigrationCheck": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
+    "gateEvidence": "plans/content-aware-design-2026-09-30/KAAE2025_SOURCE_GATE_EVIDENCE.json"
+  },
+  "canvaMappingReadback": {
+    "observedAt": "2026-10-01T22:36:55.225082+00:00",
+    "scope": "Read-only Canva connector account; does not establish production OAuth-account equivalence or current-source native save/edit/export.",
+    "brandKit": {
+      "id": "kAHAK-4ShnQ",
+      "listed": true,
+      "name": "kaae",
+      "colorsVerified": false,
+      "fontsVerified": false
+    },
+    "masterAndInvitation": {
+      "id": "DAHU6ovIEc4",
+      "idLookup": "NOT_FOUND",
+      "completeSavedUrlLookup": "NOT_FOUND",
+      "source": "config/clients/kaae.dna.json",
+      "meaning": "Unavailable to this connector; deletion versus account/team access not determined."
+    },
+    "standards": {
+      "id": "DAHU6lCA2Ik",
+      "lookup": "ACCESSIBLE",
+      "pages": 1
+    },
+    "candidateSearch": {
+      "query": "KAAE",
+      "firstPageResults": 25,
+      "hasContinuation": true,
+      "replacementSelected": false,
+      "scope": "Accessible designs exist; none inferred to be the approved master."
+    },
+    "sourceUseSearch": "No masterDesignUrl/invitationDesignUrl/standardsDesignUrl consumer found under apps/packages source; this is a static saved-reference access gap, not evidence of a current design-worker outage.",
+    "nativeEditingPerformed": false,
+    "productionChanged": false,
+    "sensitiveUrlsOrAccountIdsStored": false
   }
 }

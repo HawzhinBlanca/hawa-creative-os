@@ -117,3 +117,8 @@ These name withdrawn values on purpose, to find them:
 - `packages/creative/test/kaae-2025-guideline.test.ts` and `apps/core/test/kaae-2025-guideline.test.ts` assert that the withdrawn values are absent;
 - `plans/kaae-2025-guideline/apply-kaae-dna-2025.sh` and `kaae-dna-2025.json` list the withdrawn values to remap them or refuse;
 - `packages/creative/test/kaae-graphics-learning.test.ts` fails if a withdrawn value returns.
+
+
+## Qualified integrated source — 2 October 2026
+
+Clean `dffe7a3a16903609bdfe9bf8c72d3560dff8f390`:7612/0/67 tests,725 roots,seven technical stages and negative refusal PASS. Desk handoffs complete in integrated source; production DNA and actual Canva-kit/fonts/native edits remain open. Saved master/invitation mapping unavailable to current connector, standards and named kit accessible; no replacement inferred. See `../content-aware-design-2026-09-30/KAAE2025_INTEGRATED_PROOF.json`.
