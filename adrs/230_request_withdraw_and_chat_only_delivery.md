@@ -176,4 +176,4 @@ The intake router does not run for KAAE in production (its active DNA carries no
 - the live L12 words name the accidental request by time and words, in the question, the confirmation and the office alert;
 - a neutral title named in English and Sorani.
 
-Three earlier assertions that expected "your design" were changed deliberately. 9 of the 14 fail on `53644d3b` sources. The other 5 are guards: "cancel that, we don't need it anymore", the three change guards, and the closed-stage planner guard.
+Five earlier assertions that expected "your design" were changed deliberately: three in this file and two of ADR-231's in `truthful-chat-replies.test.ts`. 9 of the 14 fail on `53644d3b` sources. The other 5 are guards: "cancel that, we don't need it anymore", the three change guards, and the closed-stage planner guard.

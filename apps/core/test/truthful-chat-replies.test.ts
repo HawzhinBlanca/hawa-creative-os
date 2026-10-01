@@ -147,11 +147,13 @@ describe('L5: every status line is true for its stage', () => {
       'Answer with the number or the name.');
   });
 
-  it('a closed request is not listed as being worked on; one named by its sentence is "your design"', () => {
+  // ADR-230 addendum (L16, changed deliberately): a request named by its sentence is no longer "your design"
+  // but the one sent then, with the start of its words.
+  it('a closed request is not listed as being worked on; one named by its sentence is named by when and its words', () => {
     const closed = { ...view(), stage: 'rejected' } as unknown as ChatRequestView;
     expect(statusText([closed], 'en', new Set(), NOW)).toBe("I don't have a design in progress in this chat right now. Tell me what you'd like designed.");
     const { accident } = liveChat('delivered');
-    expect(statusText([accident], 'en', new Set(), NOW)).toBe('A designer at the office is working on <b>your design</b>. It will be sent here when it is ready.');
+    expect(statusText([accident], 'en', new Set(), NOW)).toMatch(/^A designer at the office is working on the one you sent [^(]+ \(“do a better design thats similar…”\)\. It will be sent here when it is ready\.$/);
   });
 });
 
@@ -373,8 +375,9 @@ describe('the live sequences through intake', () => {
     await seed(chat, { stage: 'rejected', rev: 3, title: 'KAAE: Old flyer…', createdAgo: 60, activeAgo: 5 });
     const answer = await intake(app, says(chat, "what's the status of my designs?"));
     const text = String(answer.chatAnswer.text);
-    expect(text).not.toMatch(/being sent to you now|do a better design|Old flyer/);
-    expect(text).toContain('A designer at the office is working on <b>your design</b>.');
+    expect(text).not.toMatch(/being sent to you now|Old flyer/);
+    // ADR-230 addendum (L16, changed deliberately): named by when it was sent and the start of its words, quoted.
+    expect(text).toMatch(/A designer at the office is working on the one you sent [^(]+ \(“do a better design thats similar…”\)\./);
     const k12Lines = text.split('\n\n').filter((l) => l.includes('KAAE K-12 Pilot Study'));
     expect(k12Lines).toHaveLength(2);
     expect(k12Lines.some((l) => /\(asked for [^)]+\) has been delivered\.$/.test(l))).toBe(true);
