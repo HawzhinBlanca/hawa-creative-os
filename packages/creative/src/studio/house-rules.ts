@@ -103,12 +103,25 @@ export function requiredContrast(fontSize: number, bold: boolean): number {
   return fontSize >= c.largeMinPx || (bold && fontSize >= c.largeBoldMinPx) ? c.large : c.normal;
 }
 
+/**
+ * ADR-238: whether a layout's logo clear space is the client guideline's own (a cover composed from
+ * its page grammar), rather than the stronger of it and the house's.
+ */
+export function usesGuidelineClearSpace(layout: { composition?: { grammar: 'page' | 'cover' } }): boolean {
+  return layout.composition?.grammar === 'cover';
+}
+
 export function minLogoWidth(canvasWidth: number): number {
   return Math.max(HOUSE_RULES.logo.minWidthPx, Math.round(HOUSE_RULES.logo.minWidthShareOfCanvas * canvasWidth));
 }
 
-/** The box around the logo that must hold no text and no rule. */
-export function logoClearZone(logo: { x: number; y: number; width: number; height: number }, clientMinimumPx = 0) {
-  const cs = Math.max(HOUSE_RULES.logo.clearSpaceShareOfHeight * logo.height, clientMinimumPx);
+/**
+ * The box around the logo that must hold no text and no rule: the stronger of the house's half its
+ * height and the client's own minimum. With `clientOnly` (ADR-238: a cover composed from the
+ * client's guideline, which sets its own clear space, KAAE's K height) the client's minimum alone,
+ * when it names one; the house's 100px minimum width still applies through the LOGO check.
+ */
+export function logoClearZone(logo: { x: number; y: number; width: number; height: number }, clientMinimumPx = 0, options: { clientOnly?: boolean } = {}) {
+  const cs = options.clientOnly && clientMinimumPx > 0 ? clientMinimumPx : Math.max(HOUSE_RULES.logo.clearSpaceShareOfHeight * logo.height, clientMinimumPx);
   return { x: logo.x - cs, y: logo.y - cs, width: logo.width + 2 * cs, height: logo.height + 2 * cs };
 }

@@ -142,7 +142,7 @@ The withdrawn indigo is refused by hard QA's PALETTE rule, in a fill or a gradie
 |---|---|
 | Minimum 80px digital | The validator's LOGO check: the stronger of the reference's 80px and the house's 100px or 8% of the canvas, so 100px applies. The DNA reader now accepts a client minimum down to 16px (it refused anything under 100). |
 | Never stretched | The validator's 1% aspect check. |
-| Clear space = height of the K (0.15 of the logo box, measured on the official PNG: 404 of 2687 px) | `logoConstraints.clearSpaceShareOfHeight`. The validator and hard QA take the strongest of it, the pixel rule and the house's half-height, which is larger and so decides. |
+| Clear space = height of the K (0.15 of the logo box, measured on the official PNG: 404 of 2687 px) | `logoConstraints.clearSpaceShareOfHeight`. The validator and hard QA take the strongest of it, the pixel rule and the house's half-height, which is larger and so decides. A cover composed from the grammar keeps the K alone (section 11). |
 | Nothing enters the clear space | Text and rules: the validator's LOGO check. New `LOGO_CLEAR_SPACE` covers accents, card edges and cards reaching into it. New `ORNAMENT` covers brand elements. |
 | No effects or shadows | New `LOGO_EFFECT`: a shape with a drop shadow holding the logo. The logo itself is the official file in a box; nothing can recolour or rotate it. |
 | Never on a busy ground | New `LOGO_BUSY_GROUND`. With a render, it measures the luma deviation of the clear-space ring on the no-text composite, over 0.12. A recipe instead reads its ADR-180 record: a bare logo on a busy ground fails, and a scrim or tab is the permitted lift. |
@@ -205,8 +205,41 @@ KAAE's Studio reads the packaged reference, so the design change deploys with th
 ## 10. Consequences
 
 - **Saved runs.** A run created before deploy carries the old reference hash, so its next stage refuses with `CLIENT_REFERENCE_CHANGED`.
-- **The judge still chooses.** In the live trial it preferred the model's own restyled layout for the text-only brief. That layout was on the grammar: white page, header, serif title, gold bar, italic lead, a card and the foot rule. For the photo brief it chose the guideline page. See LIVE_PROOF.json for which candidate won each run.
+- **The judge still chooses, within the guideline.** Since section 11, a composed design that passed hard QA is overruled only by a clear margin. Before it, in the live trial the judge preferred the model's own restyled layout for the text-only brief. That layout was on the grammar: white page, header, serif title, gold bar, italic lead, a card and the foot rule. For the photo brief it chose the guideline page. See LIVE_PROOF.json for which candidate won each run.
 - **Not done here.**
   - The Desk (`apps/desk/**`, Codex's) still loads Cairo, Noto Naskh and Playfair in places. The handoff is in `plans/kaae-2025-guideline/INVENTORY.md`.
   - The Canva brand kit and the production DNA row wait for section 9.
   - Client DNA learning rows in production cannot be changed by SQL; the handoff is in the inventory.
+
+## 11. Follow-up (2026-10-02): the guideline decides unless the judge clearly disagrees
+
+**Why.** In proof (c) the judge chose the model's restyled cover over the guideline's own composed covers. That cover was a flat Midnight panel laid on the gradient, which the guideline's cover never has. The composed cover's title also sat low: the composer kept the house's logo clear space (half the logo's height, 162px on the centred cover) rather than the guideline's (the height of the K, 49px).
+
+**Selection.** This reuses ADR-170's tie-break prior (`art-direction/prior.ts`) rather than adding a mechanism.
+
+- `guidelinePrior(a, b, deviations)` prefers a design composed from the client's page grammar (`layout.composition`) over one that is not. Between two that are not, it prefers fewer departures from the grammar.
+- `guidelineDeviations(layout, grammar)` (page-grammar.ts) names each departure:
+  - a flat dark panel on the gradient cover;
+  - a dark design with no gradient ground;
+  - a light page missing the header rule and its gold segment, the title bar or the foot rule;
+  - a Latin face outside the grammar's.
+- `selectWinnerV3` takes `pageGrammar` (passed by `runJudgeStageV3` from `ctx.pageGrammar`). The judge then sees the best composed candidate against the best other one, in rank order, rather than the top two. The favoured design wins unless the judge chose the other with a clear margin in both presentation orders (`judgeClearMargin`: at least 0.75 of the votes, or of the weighted votes on a photo brief, so four of five) and then passed its canary.
+- The decision is recorded as `decidedBy: 'art_direction_prior'` with `prior: { basis: 'guideline', reason, instead }`. `instead` is the new `judge_without_clear_margin`, or `composite_after_tie` / `composite_judge_unreliable` as before.
+- `humanChoiceRecommended` is false for `judge_without_clear_margin`: the client's guideline decided, not an uncertainty. It stays true after a tie or a failed canary.
+- Without a page grammar nothing changes.
+
+**The judge and the visual review.** `guidelineFidelityRule(grammar)` is appended after the client's house art-direction rules, so their R-numbers hold. `houseRulesFor(ctx)` in v3.stage.ts feeds it to the pairwise judge, the ADR-237 visual review and the refinement judge. The rule says that the departures above count against a design in brand fit. It fits the judge's 240-character limit for one rule.
+
+**Clear space.** `logoClearZone(logo, clientPx, { clientOnly })` and `usesGuidelineClearSpace(layout)` (house-rules.ts) apply only to a layout whose `composition.grammar` is `cover`. The composer, the validator, hard QA (`logoRuleDefects`) and the logo-ground pass then use the client's clear space alone. Pages, model layouts and every other client keep the stronger of the house and client rules. The minimum width is unchanged: the house's 100px decides over the guideline's 80px. On 1080x1350, the composed covers' titles move from y=700 to 618 (pattern) and from 549 to 496 (sunburst).
+
+**Proof.**
+
+- Regression tests:
+  - `packages/creative/test/kaae-2025-guideline-selection.test.ts` (12): prior, deviations, clear margin, selection with a scripted judge (3-2 keeps the composed cover; 4-1 lets the judge decide; no grammar keeps the old behaviour), the fidelity rule in the judge and review prompts, and the cover clear space in the composer, validator and hard QA.
+  - Two tests added to `apps/core/test/kaae-2025-guideline.test.ts`: `houseRulesFor`, and the real judge stage on an evening invitation keeping the composed navy cover against a 3-2 judge.
+- Red on 4c95154a (source reverted, tests kept): creative 10 of 12 fail (the two that pass are guards: the judge picking the composed cover, and the 100px minimum); core 2 of 13 fail (the two new ones).
+- Live, real `gpt-6.1-sol`, $0.33 of the $0.80 allowed (LIVE_PROOF.json `followUp`):
+  - live8: the model cover failed hard QA (CONTRAST), and the judge chose the composed sunburst cover in both orders.
+  - live9: all three passed. The judge saw the guideline pair (composed pattern cover against the model cover) and chose the composed cover 3-2 in both orders, so the prior was not needed.
+  - The winner is the composed cover in both runs.
+- **Desk.** `StudioJudgeNotice.tsx` (Codex's) words `art_direction_prior` as an art-direction tie-break. A `prior.basis` of `guideline` should read as "the client's guideline decided". This is handed off in CODEX_MERGE_NOTE.md.

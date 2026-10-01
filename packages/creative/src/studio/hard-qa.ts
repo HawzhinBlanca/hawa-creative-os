@@ -11,7 +11,7 @@ import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } f
 import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
 import { LOGO_MAX_BUSYNESS, logoBackingExcess } from './art-direction/logo-ground.js';
-import { logoClearZone } from './house-rules.js';
+import { logoClearZone, usesGuidelineClearSpace } from './house-rules.js';
 import { clientLogoClearSpacePx } from './validate-layout-v2.js';
 import type { Box } from './layout-v2.js';
 import { PNG } from 'pngjs';
@@ -408,7 +408,7 @@ export function logoRuleDefects(
   const out: Array<{ code: 'LOGO_CLEAR_SPACE' | 'LOGO_EFFECT' | 'LOGO_BUSY_GROUND'; message: string }> = [];
   const logo = layout.logo;
   if (!logo || logo.width <= 0 || logo.height <= 0) return out;
-  const clear = logoClearZone(logo, clientClearPx);
+  const clear = logoClearZone(logo, clientClearPx, { clientOnly: usesGuidelineClearSpace(layout) });
   const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
   const holds = (outer: Box, inner: Box) =>
     inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;

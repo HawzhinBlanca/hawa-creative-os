@@ -1,495 +1,655 @@
 {
-  "version": 1,
-  "date": "2026-10-01/02",
-  "adr": "ADR-238",
-  "script": "scripts/kaae_2025_guideline_live_trial.ts",
-  "environment": "local; DesignStudioService pipeline v3, production tier, real gpt-6.1-sol; throwaway clone of the test template DB on 127.0.0.1:55432; no Canva, no Telegram, no production DB",
-  "key": "the production OpenAI key, read in-process by the trial (as ADR-237); never printed or written",
-  "images": "kept outside the repository (the photo brief shows a client photo): session scratchpad kaae2025-proofs/ (a_qa_workshop_winner.png, b_k12_field_visit_winner.png, c_cover_*.png, compare_*.png)",
-  "cap": "$3 for the whole proof; spent $2.17 (sessions $2.00 recorded in their session files, plus $0.162 for live5 text, whose session file was not written because the stale cover run after it was stopped, plus about $0.007 for that stopped run's brief call)",
-  "runs": [
+ "version": 1,
+ "date": "2026-10-01/02",
+ "adr": "ADR-238",
+ "script": "scripts/kaae_2025_guideline_live_trial.ts",
+ "environment": "local; DesignStudioService pipeline v3, production tier, real gpt-6.1-sol; throwaway clone of the test template DB on 127.0.0.1:55432; no Canva, no Telegram, no production DB",
+ "key": "the production OpenAI key, read in-process by the trial (as ADR-237); never printed or written",
+ "images": "kept outside the repository (the photo brief shows a client photo): session scratchpad kaae2025-proofs/ (a_qa_workshop_winner.png, b_k12_field_visit_winner.png, c_cover_*.png, compare_*.png)",
+ "cap": "$3 for the whole proof; spent $2.17 (sessions $2.00 recorded in their session files, plus $0.162 for live5 text, whose session file was not written because the stale cover run after it was stopped, plus about $0.007 for that stopped run's brief call)",
+ "runs": [
+  {
+   "session": "live1",
+   "run": "run1_text",
+   "status": "transferring",
+   "winner": "cand2_none",
+   "calls": 10,
+   "costUsd": 0.19039,
+   "candidates": [
     {
-      "session": "live1",
-      "run": "run1_text",
-      "status": "transferring",
-      "winner": "cand2_none",
-      "calls": 10,
-      "costUsd": 0.19039,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "Guideline page (details on a KAAE Blue card)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline page (details on white cards)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "winner",
-          "name": "Quiet Statutory Folio",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Quality Assurance Workshop",
-        "For school principals",
-        "22 October 2026 · 10:00 AM",
-        "Divan Hotel, Erbil",
-        "Seats are limited, please register early"
-      ]
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "Guideline page (details on a KAAE Blue card)",
+     "recipe": "none"
     },
     {
-      "session": "live1",
-      "sessionUsd": 0.19039,
-      "note": "first run; composed pages at f<=1.3; the judge chose the model layout"
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline page (details on white cards)",
+     "recipe": "none"
     },
     {
-      "session": "live2",
-      "run": "run1_text",
-      "status": "transferring",
-      "winner": "cand2_none",
-      "calls": 10,
-      "costUsd": 0.19096,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "Guideline page (details on a KAAE Blue card)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline page (details on white cards)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "winner",
-          "name": "Offset institutional folio",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Quality Assurance Workshop",
-        "For school principals",
-        "22 October 2026 · 10:00 AM",
-        "Divan Hotel, Erbil",
-        "Seats are limited, please register early"
-      ]
-    },
-    {
-      "session": "live2",
-      "run": "run2_cover",
-      "status": "transferring",
-      "winner": "cand2_none",
-      "calls": 10,
-      "costUsd": 0.17839,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient, triangle pattern)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "winner",
-          "name": "Ceremonial Central Spine",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Accreditation Cycle 2027",
-        "Applications now open",
-        "From 1 November 2026",
-        "kaae.org"
-      ]
-    },
-    {
-      "session": "live2",
-      "run": "run3_photo",
-      "status": "failed",
-      "winner": null,
-      "calls": 2,
-      "costUsd": 0.03693,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "eliminated",
-          "name": "House default: An untouched group or event photo; a bottom scrim rising from the light pag",
-          "recipe": "scrim_caption"
-        },
-        {
-          "ordinal": 1,
-          "status": "eliminated",
-          "name": "Awaiting v3 layout generation",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "eliminated",
-          "name": "House default: Full-bleed hero photo; a gradient fade over the bottom 40-50%, to the light",
-          "recipe": "hero_fade_report"
-        }
-      ],
-      "copy": [
-        "KAAE K-12 Pilot Study",
-        "Field Visit Report",
-        "Insights from KAAE school field visits and next steps toward education quality improvement.",
-        "Read the full report at kaae.org"
-      ]
-    },
-    {
-      "session": "live2",
-      "sessionUsd": 0.40628,
-      "note": "photo run failed QA (COPY_OVERFLOW: the grammar restyle changed a measured face after the solver set it), fixed by splitting conform into type and marks"
-    },
-    {
-      "session": "live3",
-      "run": "run1_text",
-      "status": "transferring",
-      "winner": "cand2_none",
-      "calls": 12,
-      "costUsd": 0.21589,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "Guideline page (details on a KAAE Blue card)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline page (details on white cards)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "winner",
-          "name": "Offset institutional folio",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Quality Assurance Workshop",
-        "For school principals",
-        "22 October 2026 · 10:00 AM",
-        "Divan Hotel, Erbil",
-        "Seats are limited, please register early"
-      ]
-    },
-    {
-      "session": "live3",
-      "run": "run2_cover",
-      "status": "transferring",
-      "winner": "cand2_none",
-      "calls": 10,
-      "costUsd": 0.17918,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient, triangle pattern)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "winner",
-          "name": "Ceremonial Central Spine",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Accreditation Cycle 2027",
-        "Applications now open",
-        "From 1 November 2026",
-        "kaae.org"
-      ]
-    },
-    {
-      "session": "live3",
-      "run": "run3_photo",
-      "status": "transferring",
-      "winner": "cand1_fade_to_paper",
-      "calls": 8,
-      "costUsd": 0.14176,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "House default: An untouched group or event photo; a bottom scrim rising from the light pag",
-          "recipe": "scrim_caption"
-        },
-        {
-          "ordinal": 1,
-          "status": "winner",
-          "name": "A house-adapted paper treatment presents the complete school scene as a dominant rounded d",
-          "recipe": "fade_to_paper"
-        },
-        {
-          "ordinal": 2,
-          "status": "runner_up",
-          "name": "A more ceremonial light report treatment centers the source-ordered copy on white around a",
-          "recipe": "hero_fade_report"
-        }
-      ],
-      "copy": [
-        "KAAE K-12 Pilot Study",
-        "Field Visit Report",
-        "Insights from KAAE school field visits and next steps toward education quality improvement.",
-        "Read the full report at kaae.org"
-      ]
-    },
-    {
-      "session": "live3",
-      "sessionUsd": 0.53682,
-      "note": "photo run: the guideline page won"
-    },
-    {
-      "session": "live4",
-      "run": "run1_text",
-      "status": "transferring",
-      "winner": "cand2_none",
-      "calls": 10,
-      "costUsd": 0.18791,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "Guideline page (details on a KAAE Blue card)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline page (details on white cards)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "winner",
-          "name": "Ceremonial framed page",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Quality Assurance Workshop",
-        "For school principals",
-        "22 October 2026 · 10:00 AM",
-        "Divan Hotel, Erbil",
-        "Seats are limited, please register early"
-      ]
-    },
-    {
-      "session": "live4",
-      "run": "run2_cover",
-      "status": "transferring",
-      "winner": "cand2_none",
-      "calls": 10,
-      "costUsd": 0.17861,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient, triangle pattern)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "winner",
-          "name": "Ceremonial Central Spine",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Accreditation Cycle 2027",
-        "Applications now open",
-        "From 1 November 2026",
-        "kaae.org"
-      ]
-    },
-    {
-      "session": "live4",
-      "sessionUsd": 0.36652,
-      "note": "after restraining sizes and scoping the photo-only rules"
-    },
-    {
-      "session": "live5",
-      "run": "run1_text",
-      "status": "transferring",
-      "winner": "cand0_none",
-      "calls": 8,
-      "costUsd": 0.16218,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "winner",
-          "name": "Guideline page (details on a KAAE Blue card)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "eliminated",
-          "name": "Awaiting v3 layout generation",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "runner_up",
-          "name": "Editorial statutory spine",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Quality Assurance Workshop",
-        "For school principals",
-        "22 October 2026 · 10:00 AM",
-        "Divan Hotel, Erbil",
-        "Seats are limited, please register early"
-      ]
-    },
-    {
-      "session": "live5",
-      "sessionUsd": null,
-      "note": "text run: the composed guideline page won; the stale cover run was stopped after its brief call (about $0.007, unrecorded)"
-    },
-    {
-      "session": "live6",
-      "run": "run1_cover",
-      "status": "transferring",
-      "winner": "cand2_none",
-      "calls": 10,
-      "costUsd": 0.17567,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient, centred, triangle pattern)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient, sunburst)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "winner",
-          "name": "Ceremonial Central Spine",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Accreditation Cycle 2027",
-        "Applications now open",
-        "From 1 November 2026",
-        "kaae.org"
-      ]
-    },
-    {
-      "session": "live6",
-      "sessionUsd": 0.17567,
-      "note": "cover with the start-side sunburst variant"
-    },
-    {
-      "session": "live7",
-      "run": "run1_cover",
-      "status": "transferring",
-      "winner": "cand2_none",
-      "calls": 10,
-      "costUsd": 0.1903,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient, centred, triangle pattern)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline cover (navy gradient, sunburst)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "winner",
-          "name": "Ceremonial Central Spine",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Accreditation Cycle 2027",
-        "Applications now open",
-        "From 1 November 2026",
-        "kaae.org"
-      ]
-    },
-    {
-      "session": "live7",
-      "run": "run2_text",
-      "status": "transferring",
-      "winner": "cand0_none",
-      "calls": 8,
-      "costUsd": 0.1346,
-      "candidates": [
-        {
-          "ordinal": 0,
-          "status": "winner",
-          "name": "Guideline page (details on a KAAE Blue card)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 1,
-          "status": "runner_up",
-          "name": "Guideline page (details on white cards)",
-          "recipe": "none"
-        },
-        {
-          "ordinal": 2,
-          "status": "runner_up",
-          "name": "Institutional Editorial",
-          "recipe": "none"
-        }
-      ],
-      "copy": [
-        "Quality Assurance Workshop",
-        "For school principals",
-        "22 October 2026 · 10:00 AM",
-        "Divan Hotel, Erbil",
-        "Seats are limited, please register early"
-      ]
-    },
-    {
-      "session": "live7",
-      "sessionUsd": 0.32491,
-      "note": "final: text and cover after the cover rules were stated"
+     "ordinal": 2,
+     "status": "winner",
+     "name": "Quiet Statutory Folio",
+     "recipe": "none"
     }
+   ],
+   "copy": [
+    "Quality Assurance Workshop",
+    "For school principals",
+    "22 October 2026 · 10:00 AM",
+    "Divan Hotel, Erbil",
+    "Seats are limited, please register early"
+   ]
+  },
+  {
+   "session": "live1",
+   "sessionUsd": 0.19039,
+   "note": "first run; composed pages at f<=1.3; the judge chose the model layout"
+  },
+  {
+   "session": "live2",
+   "run": "run1_text",
+   "status": "transferring",
+   "winner": "cand2_none",
+   "calls": 10,
+   "costUsd": 0.19096,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "Guideline page (details on a KAAE Blue card)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline page (details on white cards)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "winner",
+     "name": "Offset institutional folio",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Quality Assurance Workshop",
+    "For school principals",
+    "22 October 2026 · 10:00 AM",
+    "Divan Hotel, Erbil",
+    "Seats are limited, please register early"
+   ]
+  },
+  {
+   "session": "live2",
+   "run": "run2_cover",
+   "status": "transferring",
+   "winner": "cand2_none",
+   "calls": 10,
+   "costUsd": 0.17839,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient, triangle pattern)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "winner",
+     "name": "Ceremonial Central Spine",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Accreditation Cycle 2027",
+    "Applications now open",
+    "From 1 November 2026",
+    "kaae.org"
+   ]
+  },
+  {
+   "session": "live2",
+   "run": "run3_photo",
+   "status": "failed",
+   "winner": null,
+   "calls": 2,
+   "costUsd": 0.03693,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "eliminated",
+     "name": "House default: An untouched group or event photo; a bottom scrim rising from the light pag",
+     "recipe": "scrim_caption"
+    },
+    {
+     "ordinal": 1,
+     "status": "eliminated",
+     "name": "Awaiting v3 layout generation",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "eliminated",
+     "name": "House default: Full-bleed hero photo; a gradient fade over the bottom 40-50%, to the light",
+     "recipe": "hero_fade_report"
+    }
+   ],
+   "copy": [
+    "KAAE K-12 Pilot Study",
+    "Field Visit Report",
+    "Insights from KAAE school field visits and next steps toward education quality improvement.",
+    "Read the full report at kaae.org"
+   ]
+  },
+  {
+   "session": "live2",
+   "sessionUsd": 0.40628,
+   "note": "photo run failed QA (COPY_OVERFLOW: the grammar restyle changed a measured face after the solver set it), fixed by splitting conform into type and marks"
+  },
+  {
+   "session": "live3",
+   "run": "run1_text",
+   "status": "transferring",
+   "winner": "cand2_none",
+   "calls": 12,
+   "costUsd": 0.21589,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "Guideline page (details on a KAAE Blue card)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline page (details on white cards)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "winner",
+     "name": "Offset institutional folio",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Quality Assurance Workshop",
+    "For school principals",
+    "22 October 2026 · 10:00 AM",
+    "Divan Hotel, Erbil",
+    "Seats are limited, please register early"
+   ]
+  },
+  {
+   "session": "live3",
+   "run": "run2_cover",
+   "status": "transferring",
+   "winner": "cand2_none",
+   "calls": 10,
+   "costUsd": 0.17918,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient, triangle pattern)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "winner",
+     "name": "Ceremonial Central Spine",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Accreditation Cycle 2027",
+    "Applications now open",
+    "From 1 November 2026",
+    "kaae.org"
+   ]
+  },
+  {
+   "session": "live3",
+   "run": "run3_photo",
+   "status": "transferring",
+   "winner": "cand1_fade_to_paper",
+   "calls": 8,
+   "costUsd": 0.14176,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "House default: An untouched group or event photo; a bottom scrim rising from the light pag",
+     "recipe": "scrim_caption"
+    },
+    {
+     "ordinal": 1,
+     "status": "winner",
+     "name": "A house-adapted paper treatment presents the complete school scene as a dominant rounded d",
+     "recipe": "fade_to_paper"
+    },
+    {
+     "ordinal": 2,
+     "status": "runner_up",
+     "name": "A more ceremonial light report treatment centers the source-ordered copy on white around a",
+     "recipe": "hero_fade_report"
+    }
+   ],
+   "copy": [
+    "KAAE K-12 Pilot Study",
+    "Field Visit Report",
+    "Insights from KAAE school field visits and next steps toward education quality improvement.",
+    "Read the full report at kaae.org"
+   ]
+  },
+  {
+   "session": "live3",
+   "sessionUsd": 0.53682,
+   "note": "photo run: the guideline page won"
+  },
+  {
+   "session": "live4",
+   "run": "run1_text",
+   "status": "transferring",
+   "winner": "cand2_none",
+   "calls": 10,
+   "costUsd": 0.18791,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "Guideline page (details on a KAAE Blue card)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline page (details on white cards)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "winner",
+     "name": "Ceremonial framed page",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Quality Assurance Workshop",
+    "For school principals",
+    "22 October 2026 · 10:00 AM",
+    "Divan Hotel, Erbil",
+    "Seats are limited, please register early"
+   ]
+  },
+  {
+   "session": "live4",
+   "run": "run2_cover",
+   "status": "transferring",
+   "winner": "cand2_none",
+   "calls": 10,
+   "costUsd": 0.17861,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient, triangle pattern)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "winner",
+     "name": "Ceremonial Central Spine",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Accreditation Cycle 2027",
+    "Applications now open",
+    "From 1 November 2026",
+    "kaae.org"
+   ]
+  },
+  {
+   "session": "live4",
+   "sessionUsd": 0.36652,
+   "note": "after restraining sizes and scoping the photo-only rules"
+  },
+  {
+   "session": "live5",
+   "run": "run1_text",
+   "status": "transferring",
+   "winner": "cand0_none",
+   "calls": 8,
+   "costUsd": 0.16218,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "winner",
+     "name": "Guideline page (details on a KAAE Blue card)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "eliminated",
+     "name": "Awaiting v3 layout generation",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "runner_up",
+     "name": "Editorial statutory spine",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Quality Assurance Workshop",
+    "For school principals",
+    "22 October 2026 · 10:00 AM",
+    "Divan Hotel, Erbil",
+    "Seats are limited, please register early"
+   ]
+  },
+  {
+   "session": "live5",
+   "sessionUsd": null,
+   "note": "text run: the composed guideline page won; the stale cover run was stopped after its brief call (about $0.007, unrecorded)"
+  },
+  {
+   "session": "live6",
+   "run": "run1_cover",
+   "status": "transferring",
+   "winner": "cand2_none",
+   "calls": 10,
+   "costUsd": 0.17567,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient, centred, triangle pattern)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient, sunburst)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "winner",
+     "name": "Ceremonial Central Spine",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Accreditation Cycle 2027",
+    "Applications now open",
+    "From 1 November 2026",
+    "kaae.org"
+   ]
+  },
+  {
+   "session": "live6",
+   "sessionUsd": 0.17567,
+   "note": "cover with the start-side sunburst variant"
+  },
+  {
+   "session": "live7",
+   "run": "run1_cover",
+   "status": "transferring",
+   "winner": "cand2_none",
+   "calls": 10,
+   "costUsd": 0.1903,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient, centred, triangle pattern)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline cover (navy gradient, sunburst)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "winner",
+     "name": "Ceremonial Central Spine",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Accreditation Cycle 2027",
+    "Applications now open",
+    "From 1 November 2026",
+    "kaae.org"
+   ]
+  },
+  {
+   "session": "live7",
+   "run": "run2_text",
+   "status": "transferring",
+   "winner": "cand0_none",
+   "calls": 8,
+   "costUsd": 0.1346,
+   "candidates": [
+    {
+     "ordinal": 0,
+     "status": "winner",
+     "name": "Guideline page (details on a KAAE Blue card)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 1,
+     "status": "runner_up",
+     "name": "Guideline page (details on white cards)",
+     "recipe": "none"
+    },
+    {
+     "ordinal": 2,
+     "status": "runner_up",
+     "name": "Institutional Editorial",
+     "recipe": "none"
+    }
+   ],
+   "copy": [
+    "Quality Assurance Workshop",
+    "For school principals",
+    "22 October 2026 · 10:00 AM",
+    "Divan Hotel, Erbil",
+    "Seats are limited, please register early"
+   ]
+  },
+  {
+   "session": "live7",
+   "sessionUsd": 0.32491,
+   "note": "final: text and cover after the cover rules were stated"
+  }
+ ],
+ "followUp": {
+  "date": "2026-10-02",
+  "request": "guideline-faithful selection for clients with a page grammar; guideline-fidelity rule for the judge and the visual review; the guideline clear space (the K) on composed covers; rerun proof (c) within $0.80",
+  "cap": "$0.80; spent $0.33244 (live8 $0.15612, live9 $0.17632)",
+  "images": "session scratchpad kaae2025-proofs/c_cover_winner_v2.png (live9 winner) and c_cover_winner_v2_live8_sunburst.png (live8 winner)",
+  "runs": [
+   {
+    "session": "live8",
+    "run": "run1_cover",
+    "status": "transferring",
+    "winner": "cand1_none",
+    "calls": 8,
+    "costUsd": 0.15612,
+    "candidates": [
+     {
+      "ordinal": 0,
+      "status": "runner_up",
+      "name": "Guideline cover (navy gradient, centred, triangle pattern)",
+      "recipe": "none"
+     },
+     {
+      "ordinal": 1,
+      "status": "winner",
+      "name": "Guideline cover (navy gradient, sunburst)",
+      "recipe": "none"
+     },
+     {
+      "ordinal": 2,
+      "status": "eliminated",
+      "name": "Ceremonial Central Spine",
+      "recipe": "none"
+     }
+    ],
+    "selection": {
+     "decidedBy": "judge",
+     "consistent": true,
+     "humanChoiceRecommended": false,
+     "prior": null,
+     "canaryPassed": true,
+     "judgePair": [
+      {
+       "a": "cand0_none",
+       "b": "cand1_none",
+       "swapped": false,
+       "winner": "cand1_none",
+       "votes": {
+        "brand_fit": "B",
+        "hierarchy": "B",
+        "legibility": "B",
+        "composition": "A",
+        "typographic_craft": "B"
+       }
+      },
+      {
+       "a": "cand1_none",
+       "b": "cand0_none",
+       "swapped": true,
+       "winner": "cand1_none",
+       "votes": {
+        "brand_fit": "A",
+        "hierarchy": "A",
+        "legibility": "B",
+        "composition": "B",
+        "typographic_craft": "A"
+       }
+      }
+     ]
+    },
+    "excludedByHardQa": [
+     {
+      "sourceIndex": 2,
+      "defectCodes": [
+       "CONTRAST"
+      ]
+     }
+    ],
+    "copy": [
+     "Accreditation Cycle 2027",
+     "Applications now open",
+     "From 1 November 2026",
+     "kaae.org"
+    ]
+   },
+   {
+    "session": "live9",
+    "run": "run1_cover",
+    "status": "transferring",
+    "winner": "cand0_none",
+    "calls": 10,
+    "costUsd": 0.17632,
+    "candidates": [
+     {
+      "ordinal": 0,
+      "status": "winner",
+      "name": "Guideline cover (navy gradient, centred, triangle pattern)",
+      "recipe": "none"
+     },
+     {
+      "ordinal": 1,
+      "status": "runner_up",
+      "name": "Guideline cover (navy gradient, sunburst)",
+      "recipe": "none"
+     },
+     {
+      "ordinal": 2,
+      "status": "runner_up",
+      "name": "Ceremonial Central Spine",
+      "recipe": "none"
+     }
+    ],
+    "selection": {
+     "decidedBy": "judge",
+     "consistent": true,
+     "humanChoiceRecommended": false,
+     "prior": null,
+     "canaryPassed": true,
+     "judgePair": [
+      {
+       "a": "cand0_none",
+       "b": "cand2_none",
+       "swapped": false,
+       "winner": "cand0_none",
+       "votes": {
+        "brand_fit": "A",
+        "hierarchy": "B",
+        "legibility": "A",
+        "composition": "A",
+        "typographic_craft": "B"
+       }
+      },
+      {
+       "a": "cand2_none",
+       "b": "cand0_none",
+       "swapped": true,
+       "winner": "cand0_none",
+       "votes": {
+        "brand_fit": "A",
+        "hierarchy": "A",
+        "legibility": "B",
+        "composition": "B",
+        "typographic_craft": "B"
+       }
+      }
+     ]
+    },
+    "excludedByHardQa": [],
+    "copy": [
+     "Accreditation Cycle 2027",
+     "Applications now open",
+     "From 1 November 2026",
+     "kaae.org"
+    ]
+   }
+  ],
+  "notes": [
+   "live8: the model cover failed hard QA (CONTRAST), so the judge compared the two composed covers; it chose the sunburst cover in both orders (4-1, 3-2) and passed its canary.",
+   "live9: all three passed hard QA; the judge saw the guideline pair (the best composed cover against the model cover, not the top two by rank) and chose the composed pattern cover in both orders (3-2, 3-2), canary passed. The guideline prior was not needed; it is exercised by the mocked-judge regression tests.",
+   "composed cover title now at y=618 (pattern) and y=496 (sunburst) on 1080x1350, against 700 and 549 under the house clear space at 4c95154a; logo widths 324px and 207px (house minimum 100px kept)."
   ]
+ }
 }
