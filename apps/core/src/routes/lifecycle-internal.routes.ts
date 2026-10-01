@@ -1032,17 +1032,21 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   beside = { text: say(MEDIA_MESSAGES.photoUsedWithWords, requesterLang(words)), parseMode: 'HTML' };
                 }
               }
-              if (photoInput && !lifecycleImage) {
+              if (photoInput && !priorRevisionPhoto) {
                 if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
-                if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
-                const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
-                  (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
-                if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
-                if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
-                if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
+                if (!lifecycleImage) {
+                  if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
+                  const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
+                    (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
+                  if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
+                  if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
+                  if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
+                  lifecycleImage = photo.ref;
+                }
+                // Retained bytes still need the same durable revision/request binding before projection.
                 const stored = await withRlsContext(db, system,
                   (trx) => recordRevisionPhotoDecision(trx, TENANT, update.update_id,
-                    { requestId, chatId, payloadHash, image: photo.ref }));
+                    { requestId, chatId, payloadHash, image: lifecycleImage! }));
                 if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
                     stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
                 lifecycleImage = stored.image;

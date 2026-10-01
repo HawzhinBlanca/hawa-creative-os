@@ -27,7 +27,7 @@
   },
   "connected": {
     "files": 14,
-    "passed": 237,
+    "passed": 238,
     "failed": 0,
     "strictRoots": 699,
     "runtimeScriptAndStrictTypes": "PASS",
@@ -43,7 +43,8 @@
     "Focused font regression originally 7 failed / 3 passed; connected expanded fixture had 4 SQL operation-kind failures, corrected to existing create kind without changing constraints.",
     "Sandbox refused local test DB and tsx IPC; rerun with authorized isolated test scope, originals retained.",
     "Lone-captioned photo originally downloaded twice; first handoff repair still failed because brief branch prioritized photoInput; retained reference now precedes transport.",
-    "Count fixture originally refused the real client endpoint; regression failed before fixture added."
+    "Count fixture originally refused the real client endpoint; regression failed before fixture added.",
+    "Code review found retained captioned revision skipped required source/request receipt; a cold-instance DB projection regression returned409 before repair. Both in-progress broad runs on b845eb2c were cancelled before changing source; no pass claim. Record immutable revision-photo decision and existing crash boundary before projection even when no download is needed."
   ],
   "scope": {
     "productionChanged": false,
@@ -118,6 +119,43 @@
     {
       "path": "output/qualification/2026-10-01/current-durable-suite/LINT_REPAIR.log",
       "sha256": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/ABORTED_RECEIPT_REVIEW.json",
+      "sha256": "53684286fef9a1909c77a4a4a81a8aca9c4b602336cfcfa4520877b5da363fac"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/ABORTED_RECEIPT_REVIEW_ENGINEERING_GATE.log",
+      "sha256": "ed5c3655db3f352724b40b9cb101290ec0d81951239d534ea28027d0bdc6efd9"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/ABORTED_RECEIPT_REVIEW_REPAIR_DURABLE_RUN.log",
+      "sha256": "d36d589ae71feeb6778db9a5a9897f5e46c1a103164a882bb643eab1cfc6136f"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/ABORTED_RECEIPT_REVIEW_REPAIR_START_READBACK.json",
+      "sha256": "70a2c7235929850ae8f52468a733f1e40d4eb9baa25b2a5335fa1dca95638645"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/RETAINED_REVISION_RECEIPT_RED.log",
+      "sha256": "b81787f01e34e03b9b5eb037fc41f12cb0ed27d903f5e6f6a686a7a4a3e72302"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/REPAIR_RECEIPT_CONNECTED.log",
+      "sha256": "b5e7ea1e3e0de22a53a4c5007f05b7c965ce2cfb027af79e342b23fcb5148fb3"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/TYPECHECK_RECEIPT_REPAIR.log",
+      "sha256": "ac837ff2ccd0d14796a669f18b381e55adad0500ab121e5ce81e02bff58eabe5"
     }
-  ]
+  ],
+  "firstConnected": {
+    "files": 14,
+    "passed": 237,
+    "failed": 0,
+    "strictRoots": 699,
+    "runtimeScriptAndStrictTypes": "PASS",
+    "chaosStrictTypes": "PASS",
+    "lint": "PASS"
+  }
 }

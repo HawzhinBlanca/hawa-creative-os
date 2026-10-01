@@ -23,6 +23,13 @@ reference. This argument is not exposed to the HTTP body. Captionless photo
 collection, sender/topic binding, group intent, cut-caption holds, replay receipts,
 blob validation and projection authorization retain their existing behavior.
 
+Reusing bytes never skips the revision-photo decision. Persist the same request,
+chat, source hash and image receipt before child-task projection, then expose the
+existing crash boundary. A replay consumes that immutable receipt. The first
+handoff implementation accidentally skipped it; a database-backed cold-instance
+revision regression refused projection with409. Both partial broad qualification
+runs were cancelled before correcting source; they are not pass evidence.
+
 No provider cache, database migration, model call, global photo coverage rule,
 credential or production deployment is added. Concurrent first-time download
 deduplication is not claimed by this repair. Frozen source hashes and logical

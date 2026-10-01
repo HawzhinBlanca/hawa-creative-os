@@ -841,3 +841,12 @@ now covers the actual bounded Sol image-count protocol, retaining refusal visibi
 Connected237 tests/14 files and699 strict roots pass; full current durability,
 candidate recovery and engineering gate qualification are pending. No production,
 native save, real provider or product admission change. See W6_DURABILITY_REPAIR_PROOF.json.
+
+### Retained revision receipt correction
+
+A cold-instance regression caught409 when retained bytes skipped the required
+revision-photo receipt before projection. Cancelled both partial broad runs on
+b845eb2c before correcting source; preserved their logs as not-pass evidence.
+The route now records the same immutable receipt and exposes the original crash
+boundary whether bytes were downloaded or retained. Connected238 tests/14 files
+and699 strict roots pass. Fresh full engineering and durable qualification pending.
