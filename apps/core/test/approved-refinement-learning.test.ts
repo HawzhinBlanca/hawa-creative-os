@@ -126,6 +126,15 @@ describe('Approved revision learning authority',()=>{
       INSERT INTO hawa.audit_events(tenant_id,client_id,actor_type,actor_id,action,resource_type,resource_id)
       VALUES(${tenantId}::uuid,${clientId}::uuid,'user',${outsider},'client_rule.promoted','candidate_rule','foreign_client')`.execute(trx)))
       .rejects.toMatchObject({code:'42501'});
+    await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
+      VALUES(${tenantId}::uuid,${clientId}::uuid,${outsider}::uuid,'requester',true)`.execute(owner);
+    const visible=await withRlsContext(db,{...scope,userId:outsider,role:'requester'},trx=>sql`
+      SELECT id FROM hawa.audit_events WHERE action='client_rule.promoted' AND client_id=${clientId}::uuid`.execute(trx));
+    expect(visible.rows.length).toBeGreaterThan(0);
+    await expect(withRlsContext(db,{...scope,userId:outsider,role:'requester'},trx=>sql`
+      INSERT INTO hawa.audit_events(tenant_id,client_id,actor_type,actor_id,action,resource_type,resource_id)
+      VALUES(${tenantId}::uuid,${clientId}::uuid,'user',${outsider},'client_rule.promoted','candidate_rule','read_only_member')`.execute(trx)))
+      .rejects.toMatchObject({code:'42501'});
   });
   it('refuses learning after a later failing QA attempt replaces the approved evidence',async()=>{
     await withRlsContext(db,{tenantId,clientId,userId:actorId,role:'art_director'},async trx=>{

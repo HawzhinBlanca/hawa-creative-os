@@ -271,3 +271,9 @@ or provider call, native/human/taste superiority claim or automatic training.
 Queue rebuilding, revision polarity, real calibrated taste and broader W5/product
 admission remain open. Fresh03:01 UTC live readback reconfirms all three owner
 infrastructure repairs on2c4d61ec without redeploying creative work.
+
+W6 first exact gate7481c226 retained6478pass/2fail/67skip. Startup's last
+migration expectation now includes074, and new audit RLS policies retain
+ADR033 once-per-statement checks. Actual requester membership can read its
+audit while writes still refuse. Expanded9files/81pass verifies learning,
+startup and policy controls; repaired exact full gate pending.

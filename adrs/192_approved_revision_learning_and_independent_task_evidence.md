@@ -50,3 +50,9 @@ Connected qualification:7files/69pass/0fail,662 strict roots and lint pass.
 Retained initial7 domain failures and connected/type failures establish controls
 and fixture/build repairs; detailed history in W6_APPROVED_REFINEMENT_PROOF.json.
 Exact sealed full gate pending; source-only, no paid/native/human admission.
+
+First exact7481c226 gate retained6478pass/2fail/67skip. Startup admission's
+last-migration expectation is updated to074; the new policies now preserve
+ADR033 once-per-statement membership checks with existing hoisted helpers.
+Expanded9files/81pass includes real requester read-only scope and both guards.
+Repaired exact gate remains pending; no production change.
