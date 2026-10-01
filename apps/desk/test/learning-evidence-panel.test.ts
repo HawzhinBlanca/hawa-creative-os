@@ -19,6 +19,7 @@ it('shows exact corrected designs and distinguishes the collector from the appro
 it('refuses foreign or malformed evidence and never turns a rating into approval',async()=>{
   const receipt={...base,feedbackId:'rating',target:{kind:'studio_candidate',candidateId:'candidate',runId:'run',previewSha256:'a'.repeat(64)},verdict:'rating',rating:9};
   expect(learningEvidenceFromCore('foreign',[receipt])).toBeNull();expect(learningEvidenceFromCore('client',[{...receipt,target:{kind:'bad'}}])).toBeNull();
+  expect(learningEvidenceFromCore('client',[{...receipt,actor:{id:'collector',role:{untrusted:'object'}}}])).toBeNull();
   const evidence=learningEvidenceFromCore('client',[receipt]);
   const view=await mount(React.createElement(LearningEvidencePanel,{evidence}));
   expect(view.text()).toContain('0 positive · 0 negative · 0 task holds · 1 receipts');expect(view.text()).toContain('rating 9/10');await view.unmount();

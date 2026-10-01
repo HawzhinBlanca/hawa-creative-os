@@ -91,10 +91,21 @@ export function learningTargetKey(target:LearningDesignTarget):string {
   }
   throw new Error('Learning target identity/hash is invalid');
 }
+/** Content equivalence is scoped externally by client/task and never crosses target kinds. */
+export function learningContentKey(target:LearningDesignTarget):string {
+  learningTargetKey(target);
+  return target.kind==='task'?'task':JSON.stringify([target.kind,
+    (target.kind==='studio_candidate'?target.previewSha256:target.sourceSha256).toLowerCase()]);
+}
+export function isNegativeLearningReceipt(receipt:LearningExampleReceipt):boolean {
+  return ['reject','revise','corrected'].includes(receipt.verdict) || (receipt.rating!=null && receipt.rating<=4);
+}
 export function learningReceiptKey(receipt:LearningExampleReceipt):string {
   const targetKey=learningTargetKey(receipt.target);
   if(![receipt.clientId,receipt.taskId,receipt.feedbackId,receipt.actor?.id].every(learningId) ||
-    !Number.isFinite(Date.parse(receipt.recordedAt)) ||
+    typeof receipt.recordedAt!=='string' || !Number.isFinite(Date.parse(receipt.recordedAt)) ||
+    (receipt.actor.role!==undefined && typeof receipt.actor.role!=='string') ||
+    (receipt.notes!=null && typeof receipt.notes!=='string') ||
     !['approve','reject','revise','rating','corrected'].includes(receipt.verdict) ||
     !['studio_review','revision_decision','revision_rejection','approved_refinement','task_rejection','unresolved_legacy'].includes(receipt.basis) ||
     (receipt.approval!==undefined && (![receipt.approval?.id,receipt.approval?.actorId].every(learningId))) ||
@@ -120,8 +131,8 @@ export function mergeLearningReceipts(...groups:readonly LearningExampleReceipt[
 export function resolveLearningExamples(clientId:string,receipts:readonly LearningExampleReceipt[]) {
   if(receipts.some(r=>r.clientId!==clientId)) throw new Error('Learning example client scope conflict');
   const admitted=mergeLearningReceipts([...receipts]);
-  const key=(r:LearningExampleReceipt)=>JSON.stringify([r.taskId,learningTargetKey(r.target)]);
-  const negativeExamples=admitted.filter(r=>['reject','revise','corrected'].includes(r.verdict) || (r.rating!=null && r.rating<=4));
+  const key=(r:LearningExampleReceipt)=>JSON.stringify([r.taskId,learningContentKey(r.target)]);
+  const negativeExamples=admitted.filter(isNegativeLearningReceipt);
   const rejected=new Set(negativeExamples.map(key));
   const taskHolds=new Set(negativeExamples.filter(r=>r.target.kind==='task').map(r=>r.taskId));
   const positiveExamples=admitted.filter(r=>r.verdict==='approve' && r.target.kind!=='task' &&

@@ -20,21 +20,24 @@
     "Revision-pair collector and actual approval actor are distinct",
     "Native decision authority joins actual tenant/client/task/revision/actor and bound passing QA/source/report hashes",
     "New Studio sources require the inspected preview hash; exact unbound legacy replay never gains target evidence",
-    "Rule scores remain heuristics; Desk shows distinct reviewed targets, task holds and actual source receipts"
+    "Rule scores remain heuristics; Desk shows distinct reviewed targets, task holds and actual source receipts",
+    "Full target IDs preserve attribution and approval association; negative same-content conflicts follow aliases within the same client/task/target kind",
+    "An unchanged-source approved revision copy does not invent a corrected negative example",
+    "Desk counts distinct content and refuses malformed receipt metadata"
   ],
   "acceptance": {
-    "files": 19,
-    "passed": 169,
+    "files": 21,
+    "passed": 193,
     "failed": 0,
     "skipped": 0,
-    "log": "/tmp/hawa-target-learning-connected-final-20261001.log"
+    "log": "/tmp/hawa-target-learning-content-final-20261001.log"
   },
   "typecheck": {
     "roots": 667,
     "status": "PASS",
     "log": "/tmp/hawa-target-learning-types-20261001.log"
   },
-  "build": "PASS",
+  "build": "PASS (current source; /tmp/hawa-target-learning-receipt-final-build-20261001.log)",
   "deskBuild": "PASS",
   "lint": {
     "status": "PASS",
@@ -46,11 +49,11 @@
     "syntheticSources": 500,
     "requests": 5,
     "milliseconds": [
-      81.62166699999943,
-      81.9602079999986,
-      80.89920800000073,
-      77.95395800000006,
-      77.20866699999897
+      79.49083299999984,
+      83.0889589999988,
+      81.43679100000008,
+      78.69291599999997,
+      81.16645800000151
     ],
     "providerCalls": 0
   },
@@ -62,7 +65,9 @@
     "Next connected123 cases:122pass/1fail;500 historical task holds copied into every rule caused actual10-second response timeout; retain own source and one original representative per hold basis, indexed by scoped target; unchanged10-second request bound",
     "Expanded18files/168pass; extra authority3files/19pass; final19files/169pass, overlapping counts not added",
     "First exact full gate3ea4bc07:6512pass/2fail/67skip; approval and rejection lifecycle assertions expected the old target shape. Read and assert the actual stored source hash.",
-    "First test-only correction put a revision query in the wrong fixture block; focused20pass/2fail retained. Corrected placement,3files/22pass; no runtime change."
+    "First test-only correction put a revision query in the wrong fixture block; focused20pass/2fail retained. Corrected placement,3files/22pass; no runtime change.",
+    "After the first green exact gate, a new alias regression failed9pass/1fail: identical rejected bytes under another candidate ID gained positive support. Fixed scoped content conflicts and tested actual crash/replay with the alias.",
+    "Alias connected21files/192pass; final21files/193pass also covers unchanged-source approved copy and malformed role refusal. Counts overlap, not added."
   ],
   "migration": {
     "file": "077_revision_learning_sources.sql",
@@ -72,35 +77,35 @@
   },
   "limits": [
     "Not deployed; live2c4d61ec unchanged",
-    "Exact sealed full release gate NOT_RUN for this source",
+    "New content-alias and unchanged-source source still requires a new exact sealed full release gate; prior1df green result is historical only",
     "Synthetic Studio pictures/Canva export bytes; no real native/human design admission",
     "No paid call, dependency, training run, automatic rule activation or taste calibration",
     "Search and retired inline preview projection consumers remain separate inspected boundaries",
     "Broader W5/W6/native/Canva/human/product goal remains active"
   ],
   "sourceSha256": {
-    "adrs/195_target_bound_learning_examples.md": "6273ba0417fd7573e00ec58a05798953ca9a0fd4206aa05b2ed44f7f87620420",
+    "adrs/195_target_bound_learning_examples.md": "c284064db43126988a7e31bd9978a651a1f9a96b9d6129b07a3ac982ec75f82c",
     "apps/core/src/routes/design-studio.routes.ts": "3bf8b157272b253d752bddb979b55be5a042e766d3cee959d1ddbc9fb0b9096f",
     "apps/core/src/services/learning-governance.ts": "c41ef7da3985118c3dc09e3ff45beb9763279af84d68b0d3b059a107462654ff",
     "apps/core/src/services/learning-inputs.ts": "a3d25d21f59eefca6c9fee7d690475137da656cba1b577cb6e7f6372ee1b0ce1",
     "apps/core/src/services/learning-recovery.ts": "5dfac30be892640cf6fd47409a7e2fd75d4e98629316d7801eb40eab6d1c7771",
     "apps/core/test/design-studio-routes.test.ts": "58a886744a00b041a92a79ffef2ce459e52663d6e20fdbfe4934eb55c8a41398",
-    "apps/core/test/learning-recovery.test.ts": "301902b28d41d5a81bec0bd2bcfe2969c7299834a97cb7964ba472733cb63578",
+    "apps/core/test/learning-recovery.test.ts": "627523295fa455e309766550244ae90b0f0c192b7557b1ad6297a6381736073d",
     "apps/core/test/revision-learning-authority.test.ts": "7c905dc340c5387da4ec19ca448d5ccb92e1fd9485aa0b3e205821e8e800589c",
     "apps/core/test/startup-schema-check.test.ts": "20c8c4735c6d45a8277ccfbc2b4e38d43790ae0b4e25ba49e29caa010e0c7bf0",
-    "apps/desk/src/components/LearningEvidencePanel.tsx": "1871f4f561e4a9217fbfa9400f1bd30c9beb38cbd82ab390a7d13cafe6ebd86d",
+    "apps/desk/src/components/LearningEvidencePanel.tsx": "c572b8b7d5429953d1e214e36694095dc9c0f302129702e6f72cdcf18803ce49",
     "apps/desk/src/screens/DnaScreen.tsx": "d60e2b936785f02745d4ec8e8ac0c20180640ee77489e41b5e9a6e737a96a21d",
-    "apps/desk/test/learning-evidence-panel.test.ts": "896a26c880d715e6531810ce243e0521fe69d1fd85b153ac2377e174cfa73723",
-    "packages/creative/src/feedback-miner.ts": "443372953bd03057518ffbbcd97ca348c235c14490f38a71fb670fd954564bbd",
+    "apps/desk/test/learning-evidence-panel.test.ts": "b1d949223f72c45f8064a057709a669c627cf24cdc3b8a3cf47919105d0ba5c8",
+    "packages/creative/src/feedback-miner.ts": "88ce3cfd2c7351e8363365b97f4afcd1b8c0d13a0b9e9e7d365863aa3dbbf73f",
     "packages/creative/test/feedback-attribution.test.ts": "de5dc6c0e6f68522f4283153ee4833a134ecec72dcb687b8aea646bb9c5f34fc",
     "packages/creative/test/feedback-miner.test.ts": "3aac7ef92ec491f7741fae17a04c07f2506b1cba84241cace718ce2ae2927c0e",
-    "packages/creative/test/feedback-revision-polarity.test.ts": "6a998dc76bef8f8dcc76e5daf028422430e9fd4372364ddb3b4d6219ad2b01b8",
+    "packages/creative/test/feedback-revision-polarity.test.ts": "4e3f4a2ccd7e00ff3f7fbbffb2e6e1d8879ad3cbbdb5605bd9ed56770732c1bb",
     "packages/db/migrations/077_revision_learning_sources.sql": "8297942ea635ce73d44e94c37af14150f7c94dec40f96da0e51aa9eb681b024a",
     "packages/db/src/repositories/revision.repository.ts": "6ccd3f8d2dda22dbba0ebd7ea516221d0df4ce310c68e4fc770effe48650028c",
     "packages/db/test/schema-upgrade.test.ts": "d093d21bb84a480996e03be7fad0e715c42844a04f7b45d56963999c4ca62098",
-    "packages/domain/src/feedback.ts": "e0e2dde42273fae9cde1d43a20c20832c3286bfaee7a12fc1bc2c0358d08c38b",
-    "plans/content-aware-design-2026-09-30/PLAN.md": "8613c0277687d8a180536be5dd381a6e8a0bd6ad911a66ece98f1e87b18d72ef",
-    "plans/traceability.csv": "9c695e8738e9af8b99c736769f4145aab6db1e8a0340f994a39b213589e8bce8",
+    "packages/domain/src/feedback.ts": "182e992f7b76572f67b3b7aedab494f540d65a2a0785e576e127e22d8cfa944f",
+    "plans/content-aware-design-2026-09-30/PLAN.md": "54a5e5d80ed1326b97dad024a2b0cbc544eec0a38fd68eeb261677e6b7112a76",
+    "plans/traceability.csv": "4dade1bbb86a67865322e75558616b9779520eef027424ab4046683a89be4101",
     "apps/core/test/lifecycle-design-outcome.test.ts": "a03a29d7047de8bc7f5b50764b055fa06c83530ffb6ee94dfee85c1b6671ddf0",
     "apps/core/test/lifecycle-office-desk-bridge.test.ts": "95b7bf260cc4ec94aec7dfb6171ae031fb7514e42531cb700f285ecfda0b3a71"
   },
@@ -120,7 +125,13 @@
     "/tmp/hawa-target-learning-first-full-failed-20261001.log": "cff5b9a2250d6dc0034b037980bdeca9c2cabaa26e8473ac96407c64326e1d25",
     "/tmp/hawa-target-learning-full-gate-20261001.log": "fe3cd38a3755d6c1c109cb8f7aa844e212902e87b1418239280c59617b85c4d4",
     "/tmp/hawa-target-learning-lifecycle-corrected-20261001.log": "5120811eb99f5b5fad04befac8d809dd30c45eabd79cfaa0860f46ab21c77fc8",
-    "/tmp/hawa-target-learning-lifecycle-final-20261001.log": "f3fe471d1b1b7e80f5cbe1347070262ba2e249528a1342150ac8c99b2a85706d"
+    "/tmp/hawa-target-learning-lifecycle-final-20261001.log": "f3fe471d1b1b7e80f5cbe1347070262ba2e249528a1342150ac8c99b2a85706d",
+    "/tmp/hawa-target-learning-first-green-gate-20261001.json": "efdef384c235aac978584abc4d32a9e2936b2c15878d1e2a456bd0f3c1e305c5",
+    "/tmp/hawa-target-learning-first-green-full-20261001.log": "01020ce8f94b103359adb7e13d1d2e66c33be3496f79186e3d2a59f0432844ef",
+    "/tmp/hawa-target-learning-content-alias-red-20261001.log": "3533e57c57728fb0000b393bb6758a1908f6c816dd7a404fd277b5247078ae17",
+    "/tmp/hawa-target-learning-alias-connected-20261001.log": "c3c5065c4e58d7db1046319a3cb8bb6d6164b8741870b6f20272978b0368afd6",
+    "/tmp/hawa-target-learning-content-final-20261001.log": "476e79dbf5ba9f505a8317bd7aade5dd81f2db878ad5b499d99363df37285c5a",
+    "/tmp/hawa-target-learning-receipt-final-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1"
   },
   "deskBuildLog": "/tmp/hawa-target-learning-desk-final-20261001.log",
   "failedFullGate": {
@@ -139,5 +150,15 @@
     "skipped": 0,
     "log": "/tmp/hawa-target-learning-lifecycle-final-20261001.log",
     "overlap": "One authority case overlaps the19file/169case connected set; counts are not added."
+  },
+  "priorExactQualification": {
+    "seal": "1df190086e74e42c64872217a0021fff17b87f50",
+    "passed": 6514,
+    "failed": 0,
+    "skipped": 67,
+    "stages": 8,
+    "currentSourceQualified": false,
+    "evidence": "/tmp/hawa-target-learning-first-green-gate-20261001.json",
+    "log": "/tmp/hawa-target-learning-first-green-full-20261001.log"
   }
 }

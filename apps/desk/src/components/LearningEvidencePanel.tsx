@@ -1,4 +1,4 @@
-import {learningReceiptKey,learningTargetKey,resolveLearningExamples,type LearningExampleReceipt} from '@hawa/domain/feedback';
+import {learningReceiptKey,learningContentKey,resolveLearningExamples,type LearningExampleReceipt} from '@hawa/domain/feedback';
 export type LearningEvidence=ReturnType<typeof resolveLearningExamples>;
 /** Refuse malformed/foreign receipt sets instead of presenting guessed approval counts. */
 export function learningEvidenceFromCore(clientId:string,value:unknown):LearningEvidence|null {
@@ -11,13 +11,13 @@ export function LearningEvidencePanel({evidence}:{evidence:LearningEvidence|null
   if(!evidence) return <p style={{fontSize:11}}>Reviewed-design evidence unavailable.</p>;
   const positive=new Set(evidence.positiveExamples.map(learningReceiptKey));
   const negative=new Set(evidence.negativeExamples.map(learningReceiptKey));
-  const targetKey=(receipt:LearningExampleReceipt)=>JSON.stringify([receipt.taskId,learningTargetKey(receipt.target)]);
+  const targetKey=(receipt:LearningExampleReceipt)=>JSON.stringify([receipt.taskId,learningContentKey(receipt.target)]);
   const positiveTargets=new Set(evidence.positiveExamples.map(targetKey));
   const negativeTargets=new Set(evidence.negativeExamples.filter(r=>r.target.kind!=='task').map(targetKey));
   const taskHolds=new Set(evidence.negativeExamples.filter(r=>r.target.kind==='task').map(r=>r.taskId));
   return <details style={{fontSize:11,marginTop:8}}>
     <summary>Reviewed designs: {positiveTargets.size} positive · {negativeTargets.size} negative · {taskHolds.size} task holds · {evidence.receipts.length} receipts</summary>
-    <p>Ratings are observations. Rule promotion and final design approval are separate decisions.</p>
+    <p>Ratings are observations. Identical rejected content stays held under another design ID. Rule promotion and final design approval are separate decisions.</p>
     <ul>{evidence.receipts.map(receipt=>{
       const key=learningReceiptKey(receipt),target=receipt.target;
       return <li key={key} style={{marginBottom:8,overflowWrap:'anywhere'}}>

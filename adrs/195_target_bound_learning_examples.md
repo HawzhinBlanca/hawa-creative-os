@@ -59,3 +59,20 @@ assertions expected the old decision target; add exact kind and the actual store
 revision/source hash, preserving all replay/capture/actor checks. A first test edit
 landed in the wrong block (20pass/2fail retained); corrected3files/22pass. No runtime
 code changed. Resealed exact engineering gate must still pass before publication.
+
+Content-alias review after the first green exact1df19008 gate: assigning identical
+rejected preview bytes another candidate ID produced positive support (new regression
+9pass/1fail). A new namespace is not a corrected design. Keep full target identity
+for source/action attribution and approval association, but exclude positive examples
+when the same immutable content hash is negative within the same client/task/type.
+Use preview hashes for Studio images and source hashes for revisions; do not invent
+cross-type or cross-task equivalence. Alias approvals must not support another target's
+rule; only negative content conflicts propagate. Add scoped negative-content lookup
+without another authority/cache service. UI counts distinct content, retains exact
+source target IDs and marks held approvals. Retain the first6514-pass full engineering
+result as the previous source; this change requires a new seal and full gate.
+
+An unchanged-source revision copy is not an observed correction. The approved-pair
+projection records the actual after-approval without inventing a negative before
+receipt when both source hashes match. Test a previously approved original, a genuine
+unchanged-source copy and a later rejected same-source alias.

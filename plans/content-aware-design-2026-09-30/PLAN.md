@@ -391,3 +391,14 @@ the old target shape. Correct them to require actual stored revision/source hash
 and kind; no runtime change. First misplaced test edit20pass/2fail retained; final
 3files/22pass includes genuine approval/rejection/lost-answer controls. New seal and
 mandatory repeated exact gate pending. W6_TARGET_BOUND_LEARNING_PROOF.json.
+
+
+Final content review after exact1df19008 (6514pass/0fail/67skip, all8 stages)
+reproduced a rejected-byte alias loophole (9pass/1fail): another candidate ID
+became positive for the same rejected picture. Full source IDs remain authoritative
+for attribution/approval association; negative content hashes propagate only within
+the same client/task/target kind. Actual crash/replay includes identical-byte aliases.
+An unchanged-source approved copy does not invent a negative correction. Desk counts
+distinct content and refuses malformed receipt metadata. Final21files/193pass/0fail,
+current source build passes; a new exact sealed gate is pending. Earlier full green
+result is retained as historical, not qualification of these latest edits. No deploy.

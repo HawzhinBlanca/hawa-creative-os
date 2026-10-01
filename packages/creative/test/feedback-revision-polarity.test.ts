@@ -1,7 +1,8 @@
+import {createHash} from 'node:crypto';
 import {describe,it,expect} from 'vitest';
 import {FeedbackMiner} from '../src/feedback-miner.js';
 import {refinementSnapshotHash} from '../src/refinement-evidence.js';
-const picture=(candidateId:string,hash='a'.repeat(64))=>({kind:'studio_candidate' as const,runId:'run-a',candidateId,previewSha256:hash});
+const picture=(candidateId:string,hash=createHash('sha256').update(candidateId).digest('hex'))=>({kind:'studio_candidate' as const,runId:'run-a',candidateId,previewSha256:hash});
 const event=(id:string,verdict:'approve'|'reject'|'revise'|'rating',candidateId:string,rating?:number)=>({
   id,clientId:'client-a',taskId:'task-a',actorId:'reviewer-a',actorRole:'designer',verdict,rating,
   target:picture(candidateId),notes:'Keep deliberate title spacing',createdAt:'2026-10-01T00:00:00.000Z',
@@ -68,6 +69,41 @@ describe('Exact reviewed design polarity',()=>{
       expect(rules[i].examples.receipts).toHaveLength(2);
     }
     console.info(JSON.stringify({study:'500 distinct reviewed targets and explicit approvals',elapsedMs:performance.now()-start,providerCalls:0}));
+  });
+
+  it('does not cleanse a rejected picture by assigning its identical bytes another candidate id',()=>{
+    const miner=new FeedbackMiner(),sha='c'.repeat(64);
+    miner.ingestDesignFeedback({...event('rejected-original','reject','original'),target:picture('original',sha)});
+    const clone=miner.ingestDesignFeedback({...event('approved-clone','approve','clone'),target:picture('clone',sha)})[0];
+    expect(clone.examples.positiveExampleTaskIds).toEqual([]);
+    expect(clone.examples.negativeExamples).toContainEqual(expect.objectContaining({feedbackId:'rejected-original'}));
+  });
+
+  it('propagates a later negative content conflict without crossing task or client scope',()=>{
+    const miner=new FeedbackMiner(),sha='c'.repeat(64);
+    const approved=miner.ingestDesignFeedback({...event('approved-alias','approve','alias'),target:picture('alias',sha)})[0];
+    miner.ingestDesignFeedback({...event('rejected-original','reject','original'),target:picture('original',sha),notes:null});
+    expect(approved.examples.positiveExamples).toEqual([]);
+    const separate=miner.ingestDesignFeedback({...event('other-task','approve','alias'),taskId:'other-task',target:picture('alias',sha)})[0];
+    expect(separate.examples.positiveExampleTaskIds).toEqual(['other-task']);
+    const foreign=miner.ingestDesignFeedback({...event('other-client','approve','alias'),clientId:'other-client',target:picture('alias',sha)})[0];
+    expect(foreign.examples.positiveExampleTaskIds).toEqual(['task-a']);
+  });
+
+  it('does not invent a correction or rejection when an approved revision copies unchanged source bytes',()=>{
+    const miner=new FeedbackMiner(),sha='a'.repeat(64),target={kind:'design_revision' as const,revisionId:'before',sourceSha256:sha};
+    const rule=miner.ingestDesignFeedback({...event('original-note','rating','unused',9),target})[0];
+    miner.observeLearningReceipt({feedbackId:'original-approval',clientId:'client-a',taskId:'task-a',target,verdict:'approve',
+      actor:{id:'director'},recordedAt:'2026-10-01T00:00:00Z',basis:'revision_decision',approval:{id:'approved-before',actorId:'director'}});
+    const before={clientId:'client-a',taskId:'task-a',layers:[{id:'title',type:'text' as const,text:'Unchanged'}]};
+    expect(miner.ingestTaskRefinements('client-a','task-a',before,before,{feedbackId:'same-source-pair',clientId:'client-a',taskId:'task-a',
+      beforeRevisionId:'before',afterRevisionId:'after',beforeSourceSha256:sha,afterSourceSha256:sha,
+      beforeSnapshotSha256:refinementSnapshotHash(before),afterSnapshotSha256:refinementSnapshotHash(before),
+      approvalId:'approved-after',approvedBy:'director',actor:{id:'collector'}})).toEqual([]);
+    expect(rule.examples.negativeExamples).toEqual([]);expect(rule.examples.positiveExampleTaskIds).toEqual(['task-a']);
+    miner.ingestDesignFeedback({...event('rejected-source-alias','reject','unused'),notes:null,
+      target:{kind:'design_revision',revisionId:'alias',sourceSha256:sha}});
+    expect(rule.examples.positiveExamples).toEqual([]);
   });
 
 });

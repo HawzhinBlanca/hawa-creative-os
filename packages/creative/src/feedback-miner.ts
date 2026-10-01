@@ -6,7 +6,7 @@
  */
 
 import crypto from 'node:crypto';
-import { canonicalJson,learningTargetKey,learningReceiptKey,mergeLearningReceipts,resolveLearningExamples,
+import { canonicalJson,learningTargetKey,learningContentKey,isNegativeLearningReceipt,learningReceiptKey,mergeLearningReceipts,resolveLearningExamples,
   type LearningDesignTarget,type LearningExampleReceipt } from '@hawa/domain';
 import { refinementSnapshotFromManifest, refinementSnapshotHash, type ApprovedRefinementEvidence } from './refinement-evidence.js';
 
@@ -115,6 +115,7 @@ export class FeedbackMiner {
   private feedbackEvents = new Map<string, string>();
   private learningReceipts=new Map<string,LearningExampleReceipt>();
   private receiptsByTarget=new Map<string,Map<string,LearningExampleReceipt>>();
+  private negativesByContent=new Map<string,Map<string,LearningExampleReceipt>>();
   private scopedTarget(clientId:string,taskId:string,target:LearningDesignTarget):string {
     return JSON.stringify([clientId,taskId,learningTargetKey(target)]);
   }
@@ -126,6 +127,10 @@ export class FeedbackMiner {
     actor: { id: string; role?: string; name?: string };
     recordedAt: string;
   }> = [];
+
+  private scopedContent(clientId:string,taskId:string,target:LearningDesignTarget):string {
+    return JSON.stringify([clientId,taskId,learningContentKey(target)]);
+  }
 
   /**
    * Ingests human design feedback from hawa.design_feedback
@@ -417,8 +422,10 @@ export class FeedbackMiner {
       if (previous) return [];
     }
     const pairReceipts:LearningExampleReceipt[]=evidence ? [
-      {feedbackId:evidence.feedbackId,clientId,taskId,target:{kind:'design_revision',revisionId:evidence.beforeRevisionId,sourceSha256:evidence.beforeSourceSha256},
-        verdict:'corrected',actor:structuredClone(evidence.actor),recordedAt:recordedAt ?? new Date().toISOString(),basis:'approved_refinement'},
+      ...(evidence.beforeSourceSha256.toLowerCase()!==evidence.afterSourceSha256.toLowerCase() ? [{
+        feedbackId:evidence.feedbackId,clientId,taskId,target:{kind:'design_revision' as const,revisionId:evidence.beforeRevisionId,sourceSha256:evidence.beforeSourceSha256},
+        verdict:'corrected' as const,actor:structuredClone(evidence.actor),recordedAt:recordedAt ?? new Date().toISOString(),basis:'approved_refinement' as const,
+      }] : []),
       {feedbackId:evidence.feedbackId,clientId,taskId,target:{kind:'design_revision',revisionId:evidence.afterRevisionId,sourceSha256:evidence.afterSourceSha256},
         verdict:'approve',actor:structuredClone(evidence.actor),recordedAt:recordedAt ?? new Date().toISOString(),basis:'approved_refinement',
         approval:{id:evidence.approvalId,actorId:evidence.approvedBy}},
@@ -528,13 +535,19 @@ export class FeedbackMiner {
     const bucket=this.receiptsByTarget.get(targetKey) ?? new Map<string,LearningExampleReceipt>();
     const alreadyHeld=receipt.target.kind==='task' && [...bucket.values()].some(r=>r.basis===receipt.basis);
     bucket.set(key,stored);this.receiptsByTarget.set(targetKey,bucket);
+    const negative=isNegativeLearningReceipt(receipt),contentKey=this.scopedContent(receipt.clientId,receipt.taskId,receipt.target);
+    if(negative && receipt.target.kind!=='task') {
+      const aliases=this.negativesByContent.get(contentKey) ?? new Map<string,LearningExampleReceipt>();
+      aliases.set(key,stored);this.negativesByContent.set(contentKey,aliases);
+    }
     if(receipt.target.kind==='task' && (receipt.verdict==='reject' || receipt.verdict==='revise')) {
       this.rejectedTaskIds.add(JSON.stringify([receipt.clientId,receipt.taskId]));
     }
     if(alreadyHeld) return;
     for(const rule of this.candidateRules.values()) if(rule.clientId===receipt.clientId &&
       ((receipt.target.kind==='task' && rule.evidenceTaskIds.includes(receipt.taskId)) ||
-        rule.examples.receipts?.some(r=>this.scopedTarget(r.clientId,r.taskId,r.target)===targetKey))) this.refreshRuleExamples(rule);
+        rule.examples.receipts?.some(r=>this.scopedTarget(r.clientId,r.taskId,r.target)===targetKey ||
+          (negative && this.scopedContent(r.clientId,r.taskId,r.target)===contentKey)))) this.refreshRuleExamples(rule);
   }
 
   private refreshRuleExamples(rule:CandidateRuleProposal):void {
@@ -549,7 +562,9 @@ export class FeedbackMiner {
       for(const receipt of values) if(!representatives.has(receipt.basis)) representatives.set(receipt.basis,receipt);
       return [...representatives.values()];
     });
-    rule.examples=resolveLearningExamples(rule.clientId,mergeLearningReceipts(own,related));
+    const contentKeys=new Set(own.filter(r=>r.target.kind!=='task').map(r=>this.scopedContent(r.clientId,r.taskId,r.target)));
+    const negatives=[...contentKeys].flatMap(key=>[...(this.negativesByContent.get(key)?.values() ?? [])]);
+    rule.examples=resolveLearningExamples(rule.clientId,mergeLearningReceipts(own,related,negatives));
   }
 
   public getCandidateRules(clientId?: string): CandidateRuleProposal[] {

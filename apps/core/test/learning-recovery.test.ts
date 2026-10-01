@@ -110,20 +110,22 @@ describe('Learning recovery across independent Core processes',()=>{
     await stop();
   },30000);
   it('preserves independent Studio targets and rating observations across a real crash',async()=>{
-    const task=randomUUID(),run=randomUUID(),candidateA=randomUUID(),candidateB=randomUUID();
+    const task=randomUUID(),run=randomUUID(),candidateA=randomUUID(),candidateB=randomUUID(),candidateClone=randomUUID();
     const bytes=Buffer.from('isolated polarity picture'),sha=createHash('sha256').update(bytes).digest('hex');
+    const correctedBytes=Buffer.from('isolated corrected polarity picture'),correctedSha=createHash('sha256').update(correctedBytes).digest('hex');
     await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES(${task}::uuid,${tenantId}::uuid,${clientId}::uuid,'Polarity source')`.execute(owner);
     await sql`INSERT INTO hawa.design_studio_runs(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,tier,status,budget,stages)
       VALUES(${run}::uuid,${tenantId}::uuid,${task}::uuid,${clientId}::uuid,${actorId}::uuid,${randomUUID()},'hash','{}','standard','briefing','{"maxUsd":6,"maxCalls":40,"spentUsd":0,"calls":0}','{}')`.execute(owner);
-    for(const [ordinal,id] of [candidateA,candidateB].entries()) await sql`INSERT INTO hawa.design_studio_candidates(id,run_id,tenant_id,ordinal,concept,status,preview_png,preview_sha256)
-      VALUES(${id}::uuid,${run}::uuid,${tenantId}::uuid,${ordinal},'{}','draft',${bytes},${sha})`.execute(owner);
+    for(const [ordinal,id] of [candidateA,candidateB,candidateClone].entries()) await sql`INSERT INTO hawa.design_studio_candidates(id,run_id,tenant_id,ordinal,concept,status,preview_png,preview_sha256)
+      VALUES(${id}::uuid,${run}::uuid,${tenantId}::uuid,${ordinal},'{}','draft',${id===candidateB?correctedBytes:bytes},${id===candidateB?correctedSha:sha})`.execute(owner);
     let send=await start();
-    const rating=randomUUID(),rejected=randomUUID(),accepted=randomUUID();
+    const rating=randomUUID(),rejected=randomUUID(),accepted=randomUUID(),cloneAction=randomUUID();
     const review=(candidateId:string,verdict:string,key:string,notes:string|null,ratingValue?:number)=>send(`/tasks/${task}/design-feedback`,{
-      method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({runId:run,candidateId,previewSha256:sha,verdict,notes:notes??undefined,...(ratingValue?{rating:ratingValue}:{})})});
+      method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({runId:run,candidateId,previewSha256:candidateId===candidateB?correctedSha:sha,verdict,notes:notes??undefined,...(ratingValue?{rating:ratingValue}:{})})});
     expect((await review(candidateA,'rating',rating,'Deliberate hierarchy for candidate A',9)).status).toBe(201);
     expect((await review(candidateA,'reject',rejected,null)).status).toBe(201);
     expect((await review(candidateB,'approve',accepted,'Deliberate hierarchy for candidate B')).status).toBe(201);
+    expect((await review(candidateClone,'approve',cloneAction,'Deliberate hierarchy for duplicated pixels')).status).toBe(201);
     await stop('SIGKILL');send=await start();
     const response=await send(`/clients/${clientId}/candidate-rules`);expect(response.status).toBe(200);
     const rules=(await response.json()).candidateRules;
@@ -133,6 +135,9 @@ describe('Learning recovery across independent Core processes',()=>{
     expect(a.examples.negativeExamples).toContainEqual(expect.objectContaining({feedbackId:rejected,target:expect.objectContaining({candidateId:candidateA})}));
     expect(b.examples.positiveExamples).toContainEqual(expect.objectContaining({feedbackId:accepted,target:expect.objectContaining({candidateId:candidateB})}));
     expect(b.examples.negativeExamples).toEqual([]);
+    const clone=rules.find((r:{provenance:{feedbackId:string}})=>r.provenance.feedbackId===cloneAction);
+    expect(clone.examples.positiveExamples).toEqual([]);
+    expect(clone.examples.negativeExamples).toContainEqual(expect.objectContaining({feedbackId:rejected}));
     expect((await review(candidateB,'approve',accepted,'Deliberate hierarchy for candidate B')).status).toBe(200);
     expect((await review(candidateA,'approve',randomUUID(),null)).status).toBe(201);
     const later=await send(`/clients/${clientId}/candidate-rules`);
