@@ -1,7 +1,7 @@
 # ADR-186 — Explicit request deliverables
 
 Date: 2026-10-01
-Status: accepted for implementation; qualification and live rollout pending
+Status: accepted; local sealed qualification passed, live rollout pending
 Requirements: FR-001, FR-002, FR-004, FR-005, FR-033, FR-060, FR-063, NFR-001, NFR-006
 Sources: docs/09_MESSAGING_AND_OFFICE_INBOX.md; docs/05_CREATIVE_ENGINE.md;
 docs/10_WORKFLOW_RELIABILITY.md; MASTER_SPEC.md; ADR139/184/185.
@@ -63,3 +63,7 @@ The first connected controls caught obsolete worker POST expectations and an inv
 A shared source edit cannot be forwarded as an unbound office message: doing so would leave every child's future delivery without the existing late-change hold. Retain one immutable child note under `updateId:requestId` in the existing routing store, atomically with the edit answer. Desk/office acknowledgements accept this strictly bounded identifier, still require scoped membership in the saved pending notes, and release only the selected child's note. No new table or workflow is added. Preserve the previous per-chat early-hold alert keys; additional diagnostics get separate stable keys.
 
 The pure policy and Core application planner are separated from HTTP transport. Negative client mentions reuse the same routing policy as ordinary intake. The office-wide daily admission transaction locks its counted outbox boundary; previously distinct task locks could count the same available allowance concurrently. Replays use recorded automatic/manual admission instead of re-evaluating mutable limits.
+
+## Sealed local qualification
+
+Source 9776c52d / tested seal 79975fc2: 646 files passed, 6 skipped; 6,303 tests passed, zero failures, 67 skipped, no expected failures. Strict types (653 active roots), egress lint and blueprint 1,504/0/0 passed. Evidence: plans/request-deliverables-2026-10-01/LOCAL_PROOF.json. External transports are synthetic; no paid design or live rollout is claimed. Production remains 4e500451. Native Sorani message review and creative/native/human admission remain open.

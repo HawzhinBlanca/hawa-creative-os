@@ -2,7 +2,7 @@
   "date": "2026-10-01",
   "adr": 186,
   "base": "84e41f5b",
-  "qualification": "CONNECTED_SOURCE_PASS_FULL_SEAL_PENDING_NOT_DEPLOYED",
+  "qualification": "SEALED_FULL_SUITE_PASS_NOT_DEPLOYED",
   "requirements": [
     "FR-001",
     "FR-002",
@@ -46,7 +46,18 @@
     "Negative-client fixture lacked complete facts and legitimately stayed instruction-only; complete factual source then returns false, with correct client and onboarding manual admission."
   ],
   "fullSuite": {
-    "status": "PENDING_EXACT_SEAL"
+    "status": "PASS",
+    "filesPassed": 646,
+    "filesSkipped": 6,
+    "filesTotal": 652,
+    "passed": 6303,
+    "failed": 0,
+    "skipped": 67,
+    "total": 6370,
+    "expectedFailure": 0,
+    "durationSeconds": 205.13,
+    "log": "/tmp/hawa-deliverables-full.log",
+    "testedSeal": "79975fc2dfe25c1d39af642cbc41cbe7d0d09b74"
   },
   "typecheck": {
     "status": "PASS",
@@ -86,11 +97,16 @@
     "/tmp/hawa-deliverables-negation-final.log": "54cff030652981c7385f647a4265f8913b51dfe54164f1ecc310fd58a055586a",
     "/tmp/hawa-deliverables-hold-ledger.log": "b6c651e835a38d90d4613b2fe316b34ea72d19218a39df11280479a43cd66521",
     "/tmp/hawa-deliverables-types-final.log": "0aec5f5a439bf4e988fd3c8fc23238ad0df671deb32e46717d099020b37020c4",
-    "/tmp/hawa-deliverables-lint.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5"
+    "/tmp/hawa-deliverables-lint.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
+    "/tmp/hawa-deliverables-full.log": "f7fc36da2a652604200a4fcc5c576b0a501ddac989d1433853b02622ec519967",
+    "/tmp/hawa-deliverables-blueprint.log": "4e6e0bd59c22779fc351d15c9f13d5a14532b6bc9bcce96cdab9544b688d529b",
+    "/tmp/hawa-deliverables-seal-verify.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6"
   },
   "blueprint": {
     "passed": 1504,
     "warnings": 0,
     "failed": 0
-  }
+  },
+  "sourceCommit": "9776c52d",
+  "testedSeal": "79975fc2dfe25c1d39af642cbc41cbe7d0d09b74"
 }
