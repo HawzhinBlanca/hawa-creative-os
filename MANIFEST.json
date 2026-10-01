@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T06:40:03Z",
+  "generatedAt": "2026-10-01T06:46:01Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 753,
+  "fileCount": 755,
   "files": [
     {
       "path": ".dockerignore",
@@ -974,8 +974,8 @@
     },
     {
       "path": "adrs/198_spatial_background_contrast.md",
-      "sha256": "5373e7d0febf9ac14641bf3a8de8628d8e2395832b1014937a71b23cf8a46917",
-      "bytes": 3277
+      "sha256": "935c2e8b88e76ee6949b6b5daa8ad95afda22799efe75894eeb87fa865d52b84",
+      "bytes": 4053
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1449,8 +1449,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "73a072ef1604bf162b2e26ed8ea5a46d031f829c3ed5443f8986d94c109120af",
-      "bytes": 37930
+      "sha256": "d49e6e50576bbea09b4110723b4e913747ee48f23786e2f0e466888dd581f150",
+      "bytes": 38746
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1508,6 +1508,11 @@
       "bytes": 2194
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/W5_COLOR_PREPARATION_FINDING.json",
+      "sha256": "9f2e2eff7c7d46679ad81ab9888e0596e90ce4e8f971d48eec2c17a5f0e3c079",
+      "bytes": 951
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/W5_NATIVE_MATTE_BENCHMARK.json",
       "sha256": "48ccfe7573c8b414d14de40009b69445fca9a53d8068ee0f171462941408560e",
       "bytes": 3340
@@ -1533,9 +1538,14 @@
       "bytes": 2377
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/W5_SPATIAL_BACKGROUND_GATE_EVIDENCE.json",
+      "sha256": "f3ee29d4bdfe1359b6ea7c56d247bf8268fe71979f2580582ba7cc10e3690aea",
+      "bytes": 2115
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/W5_SPATIAL_BACKGROUND_PROOF.json",
-      "sha256": "4c68aec9167b3a0c2f75d8e3f293aded514b78d689b3ddf8e321ed0523f1895b",
-      "bytes": 5589
+      "sha256": "92c972a3a427a284163c55932344a609e4fd49583d5f3842a5b9dbfbf45aee46",
+      "bytes": 6411
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_APPROVED_REFINEMENT_GATE_EVIDENCE.json",
@@ -2834,8 +2844,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "15a3af0d661f7495e9ad5285c8867631c953cb4839f77ab403ed24be9e2f77ec",
-      "bytes": 641838
+      "sha256": "2c6f7ccad37fa52d4fbd4490d54f16f72a2a57ec79c4fcff8a2c1ac1282452b5",
+      "bytes": 643488
     },
     {
       "path": "plans/user-stories.csv",

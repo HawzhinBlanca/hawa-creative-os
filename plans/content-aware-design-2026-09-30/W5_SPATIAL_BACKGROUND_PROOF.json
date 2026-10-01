@@ -1,7 +1,7 @@
 {
   "adr": "ADR198",
   "date": "2026-10-01",
-  "status": "CONNECTED_LOCAL_QUALIFIED_EXACT_RELEASE_PENDING",
+  "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-028",
     "FR-031",
@@ -98,5 +98,23 @@
     "packages/creative/test/content-background.test.ts": "99fbe89a76153575bf0a490dc9b9e6f023a5be4173f4651b38af9dbb819ad060",
     "scripts/proofs/spatial_background_benchmark.mjs": "83298b7f499a78926b08e3399465013376b5d620ebbbad138d271f95d662f54c"
   },
-  "packCorrection": "First validator refused appended test_id text; exact stable requirement test IDs restored. Additional evidence remains in acceptance_evidence."
+  "packCorrection": "First validator refused appended test_id text; exact stable requirement test IDs restored. Additional evidence remains in acceptance_evidence.",
+  "exactQualification": {
+    "testedSeal": "07ebe842a6ba4c903c5c314fe39ccb27403ddf29",
+    "runtimeCommit": "3c5a06d12d5f1d0582af83908758a4a314c51fcb",
+    "allStages": 8,
+    "testsPassed": 6555,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 663,
+    "filesSkipped": 6,
+    "strictRoots": 670,
+    "blueprintChecksAtSeal": 1658,
+    "gateEvidence": "W5_SPATIAL_BACKGROUND_GATE_EVIDENCE.json",
+    "fullTestLog": "output/qualification/2026-10-01/07ebe842/FULL_TEST_SUITE_RUN.log",
+    "fullTestLogSha256": "2fbd6b1b060abe13eff77630664ee23233aade1fd2c591ab52e87aa72462f94d",
+    "productAdmission": false,
+    "deployed": false
+  },
+  "commitHookCorrection": "First commit hook used system Python without PyYAML and refused; PATH corrected to configured Homebrew Python; required hook then passed."
 }

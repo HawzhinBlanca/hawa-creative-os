@@ -1,6 +1,6 @@
 # ADR198 — Spatial conservative contrast for editable background fields
 
-Date: 2026-10-01. Status: accepted for implementation; qualification pending.
+Date: 2026-10-01. Status: source engineering qualified; product admission open.
 Requirements: FR-028, FR-031, FR-038, FR-040, FR-041, NFR-012.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/07_MODEL_REGISTRY_AND_EVALUATION.md,
 docs/11_QA_RTL_MULTILINGUAL.md; ADR172; owner content-aware direction (2026-09-30).
@@ -52,3 +52,8 @@ additional raster or provider calls. Preserve the carrier threshold and preceden
 The first radial control ended before the ring and incorrectly expected zero;
 retain that failure and correct the footprint to actually include the ring before
 qualifying the repair. The corrected five regressions fail on the old algorithm.
+
+
+Exact sealed 07ebe842a6ba4c903c5c314fe39ccb27403ddf29 passes all eight engineering stages: 6555 tests passed, zero failed, 67 skipped; 670 strict roots, 1658 blueprint checks, newest production dump restored in isolation and negative-flag refusal. See W5_SPATIAL_BACKGROUND_PROOF.json and W5_SPATIAL_BACKGROUND_GATE_EVIDENCE.json. Source only, not deployed; native Canva/human/product admission remains open.
+
+The next independent diagnostic reproduces flat-surface ink repair in generic preparation: regional black ink4.511:1 becomes white4.442:1 under the unchanged4.5 body threshold. Both direct conformance and actual preparation reproduce it. W5_COLOR_PREPARATION_FINDING.json is source evidence, not an acceptance-test result; its regression and repair are pending.

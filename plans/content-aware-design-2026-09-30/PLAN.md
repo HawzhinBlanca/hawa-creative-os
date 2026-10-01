@@ -474,3 +474,10 @@ direct-map/search/W5/W6/native/Canva/human/product admission remains open.
 ## W5 spatial background and carrier contrast — 1 October 2026
 
 ADR198 replaces whole-canvas gradient contrast with a conservative per-text footprint enclosure (all stop intervals, four directions, quantization/edge guards; <=96 bounded subintervals). This admits genuinely readable regional composition without changing palette, ink, geometry, transfer or contrast thresholds. Exact stop minima replace nine-point opacity sampling; radial carriers include interior rings. Six initial spatial regressions and five corrected carrier regressions are retained. First historical crossing/radial fixture mismatches are recorded and corrected, not hidden. Final connected257/0/0 across6 files; overlapping21 real-raster/final-QA/carrier checks pass. Core4 checks before the carrier follow-up and670 strict roots/lint pass; exact sealed gate pending. Local helper medians about0.011ms for a regional footprint and0.028ms for maximum stop extent, zero provider calls; this is not pipeline latency or a speed improvement claim. W5_SPATIAL_BACKGROUND_PROOF.json and benchmark retain evidence. Source not deployed; broader W5/W6/native/Canva/human/recovery/product admission remains open.
+
+
+### Spatial contrast exact qualification
+
+Seal 07ebe842a6ba4c903c5c314fe39ccb27403ddf29: all8, 6555pass/0fail/67skip across663 passed files/6 skipped;670 strict roots,1658 blueprint checks,newest production dump and negative refusal pass. Runtime source3c5a06d; source not deployed. Current QA/validator improvements do not establish full W5 or native/Canva/human/product admission.
+
+Next actual W5 defect: generic conformToHouseRules/prepareGeneratedLayoutV3 replace locally readable black4.511:1 with white4.442:1 on an unchanged gray gradient because ink repair still uses a flat base. Source diagnostic retained in W5_COLOR_PREPARATION_FINDING.json; acceptance regression NOT_RUN, repair pending. Use the same spatial contrast authority in preparation, preserving palette, exact copy, geometry and thresholds.
