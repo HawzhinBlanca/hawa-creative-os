@@ -113,6 +113,7 @@ export class FakeModels {
   readonly arrivals: Array<{ schema: string | null; at: string }> = [];
   private delays: ModelDelay[] = [];
   private faults: ModelFault[] = [];
+  private geminiFailures: Array<{ model: string; n: number }> = [];
   private seq = 0;
   private fixtures: ModelFixture[];
 
@@ -126,10 +127,19 @@ export class FakeModels {
     this.arrivals.length = 0;
     this.delays = [];
     this.faults = [];
+    this.geminiFailures = [];
   }
 
   addFault(fault: ModelFault): void {
     this.faults.push({ schema: String(fault.schema), status: Number(fault.status) || 400, n: Number(fault.n) || 1 });
+  }
+
+  /** Explicit uncertain HTTP response; never supplies a successful model answer. */
+  addGeminiFailure(fault: { model: string; n?: number }): void {
+    const n = fault.n ?? 1;
+    if (typeof fault.model !== 'string' || !/^[A-Za-z0-9_.-]{1,100}$/.test(fault.model) ||
+        !Number.isInteger(n) || n < 1 || n > 10) throw new Error('Invalid Gemini failure fixture');
+    this.geminiFailures.push({ model: fault.model, n });
   }
 
   addDelay(delay: ModelDelay): void {
@@ -139,6 +149,7 @@ export class FakeModels {
   clearDelays(): void {
     this.delays = [];
     this.faults = [];
+    this.geminiFailures = [];
   }
 
   setFixtures(fixtures: ModelFixture[]): void {
@@ -183,7 +194,9 @@ export class FakeModels {
 
   async handle(req: IncomingMessage, res: ServerResponse, host: string, path: string): Promise<void> {
     const body = parseJson(await readBody(req));
-    const model = String(body.model || '');
+    const geminiModel = host === 'generativelanguage.googleapis.com'
+      ? /^\/v1beta\/models\/([A-Za-z0-9_.-]{1,100}):generateContent$/.exec(path)?.[1] : undefined;
+    const model = host === 'generativelanguage.googleapis.com' ? geminiModel || '' : String(body.model || '');
     const messages: Array<{ role: string; content: Content }> = Array.isArray(body.messages) ? body.messages : [];
     const system = textOf(messages.find((m) => m.role === 'system')?.content ?? body.system ?? body.systemInstruction?.parts?.[0]?.text);
     const firstUser = textOf(messages.find((m) => m.role === 'user')?.content);
@@ -197,6 +210,13 @@ export class FakeModels {
 
     const schema: string | null = body.response_format?.json_schema?.name ?? null;
     this.arrivals.push({ schema, at: new Date().toISOString() });
+    const geminiFailure = req.method === 'POST' && geminiModel
+      ? this.geminiFailures.find(fault => fault.n > 0 && fault.model === geminiModel) : undefined;
+    if (geminiFailure) {
+      geminiFailure.n--;
+      this.note('gemini', 'fault:generateContent', model, fingerprint, 503, imageSha256);
+      return sendJson(res, 503, { error: { message: 'chaos fault: provider acceptance unknown', type: 'server_error' } });
+    }
     const delay = this.delays.find((d) => d.n > 0 && d.schema === schema);
     if (delay) {
       delay.n--;

@@ -147,6 +147,61 @@ describe('fake models and the paid-call ledger', () => {
     expect(ledger.map((l: any) => l.route)).toEqual(['unmatched', 'unmatched:/v1beta/models/gemini:generateContent']);
   });
 
+  it('distinguishes requested Gemini models in the fingerprint ledger without retaining input text', async () => {
+    await admin('/reset', {});
+    for (const model of ['gemini-model-a', 'gemini-model-b']) {
+      expect((await provider('generativelanguage.googleapis.com', `/v1beta/models/${model}:generateContent`, {
+        method: 'POST', body: JSON.stringify({ contents: [{ parts: [{ text: 'PRIVATE_SYNTHETIC_PROMPT' }] }] }),
+      })).status).toBe(500);
+    }
+    const { ledger } = await admin('/models/ledger');
+    expect(ledger.map((l: any) => l.model)).toEqual(['gemini-model-a', 'gemini-model-b']);
+    expect(new Set(ledger.map((l: any) => l.fingerprint)).size).toBe(2);
+    expect(JSON.stringify(ledger)).not.toContain('PRIVATE_SYNTHETIC_PROMPT');
+  });
+
+  it('consumes an explicit Gemini failure only on its exact POST provider/model endpoint', async () => {
+    await admin('/reset', {});
+    expect(await admin('/models/gemini-failures', { model: 'gemini-model-a', n: 2 })).toEqual({ ok: true });
+    const path='/v1beta/models/gemini-model-a:generateContent';
+    for (const [host, route, method] of [
+      ['generativelanguage.googleapis.com', path, 'GET'],
+      ['generativelanguage.googleapis.com', '/v1beta/models/gemini-model-b:generateContent', 'POST'],
+      ['api.openai.com', path, 'POST'],
+    ]) expect((await provider(host, route, { method, ...(method==='POST'?{body:'{}'}:{}) })).status).toBe(500);
+    for (let n=0; n<2; n++) expect((await provider('generativelanguage.googleapis.com', path, { method: 'POST', body: '{}' })).status).toBe(503);
+    expect((await provider('generativelanguage.googleapis.com', path, { method: 'POST', body: '{}' })).status).toBe(500);
+    const { ledger, paid } = await admin('/models/ledger');
+    expect(ledger.filter((l: any) => l.route === 'fault:generateContent')).toHaveLength(2);
+    expect(ledger.filter((l: any) => l.route === 'fault:generateContent')).toMatchObject([
+      { provider: 'gemini', model: 'gemini-model-a', status: 503 },
+      { provider: 'gemini', model: 'gemini-model-a', status: 503 },
+    ]);
+    expect(ledger.at(-1).route).toBe('unmatched:'+path);
+    expect(paid).toEqual({});
+  });
+
+  it('refuses invalid failure targets and counts without arming a provider call', async () => {
+    await admin('/reset', {});
+    for (const fault of [{model:'../escaped',n:1}, {model:'gemini-model-a',n:0},
+      {model:'gemini-model-a',n:11}, {model:'gemini-model-a',n:1.5}]) {
+      expect(await admin('/models/gemini-failures', fault)).toEqual({error:'chaos fakes: Invalid Gemini failure fixture'});
+    }
+    const response=await provider('generativelanguage.googleapis.com', '/v1beta/models/gemini-model-a:generateContent', {method:'POST',body:'{}'});
+    expect(response.status).toBe(500);
+    expect((await admin('/models/ledger')).ledger.map((l: any)=>l.route)).toEqual(['unmatched:/v1beta/models/gemini-model-a:generateContent']);
+  });
+
+  it('clears an unused failure between scenarios while preserving its observed ledger', async () => {
+    await admin('/reset', {});
+    await admin('/models/gemini-failures', {model:'gemini-model-a',n:2});
+    const call=()=>provider('generativelanguage.googleapis.com','/v1beta/models/gemini-model-a:generateContent',{method:'POST',body:'{}'});
+    expect((await call()).status).toBe(503);
+    await admin('/faults/clear', {});
+    expect((await call()).status).toBe(500);
+    expect((await admin('/models/ledger')).ledger.map((l: any)=>l.status)).toEqual([503,500]);
+  });
+
   it('answers a tagged Canva revision and records the attached image by hash only', async () => {
     await admin('/reset', {});
     const image = Buffer.from([0xff, 0xd8, 0xff, 0x01, 0x02]);

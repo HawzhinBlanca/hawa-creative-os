@@ -394,5 +394,8 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   events.push(`Blank design ${blank.id} → explicit simulated manual edit → DNA-checked review → simulated approval/publication; real native editing remains unverified`);
   await candidateEvaluationSettlement(events,checks);
   await candidateStudioSettlement(events,checks);
+  const modelLedger=await fakes.modelLedger();
+  check('candidate request and recovery paths have no unconfigured model calls',
+    !modelLedger.ledger.some((entry: {route:string})=>entry.route.startsWith('unmatched')), 'Intentional evaluation503 failures are separately armed and checked');
   return checks;
 }

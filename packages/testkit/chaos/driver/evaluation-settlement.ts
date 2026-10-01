@@ -1,6 +1,6 @@
 /** Deployed recovery proof using an internal fake provider and an explicitly synthetic administrator. */
 import {createHash,randomUUID} from 'node:crypto';
-import {compose,FAKES_URL,query,secrets,sql} from './stack.js';
+import {compose,FAKES_URL,fakes,query,secrets,sql} from './stack.js';
 import {TENANT_ID} from './provision.js';
 import {waitUntil,type InvariantResult} from './scenario.js';
 
@@ -16,6 +16,8 @@ export async function candidateEvaluationSettlement(events:string[],checks:Invar
   };
   const ledger=async()=>((await(await fetch(`${FAKES_URL}/__fakes/models/ledger`)).json()) as {ledger:unknown[]}).ledger.length;
   const before=await ledger(),startAction=randomUUID(),runBody={name:'[TEST] deployed settlement recovery'};
+  const armed=await fakes.geminiFailure({model:'gemini-3.8-flash',n:2});
+  check('evaluation failures are explicitly armed for the requested provider/model',armed.status===200&&armed.json.ok===true);
   const first=await call('/evaluations/runs',runBody,startAction);
   check('evaluation uncertainty produces a stopped saved report',first.status===200&&first.body.status==='failed'&&first.body.report.executionStatus==='stopped'&&first.body.report.overallPassRate===null);
   const path=`/evaluations/runs/${first.body.runId}`,detail=await call(path);
@@ -45,6 +47,9 @@ export async function candidateEvaluationSettlement(events:string[],checks:Invar
     check('changed settlement intent conflicts',(await call(`${path}/settlement`,{...body,reason:'Changed'},action,token)).status===409);
     const next=await call('/evaluations/runs',{name:'[TEST] explicit new evaluation after settlement'},randomUUID());
     check('explicit fresh evaluation admits a separate provider request',next.status===200&&next.body.runId!==first.body.runId&&await ledger()===before+2,'Two synthetic provider calls total; no call on settlement/replay');
+    const calls=(await fakes.modelLedger()).ledger.slice(before) as Array<{provider:string;model:string;route:string;status:number}>;
+    check('both evaluation failures match the exact armed provider/model and are not missing fixtures',calls.length===2&&
+      calls.every(call=>call.provider==='gemini'&&call.model==='gemini-3.8-flash'&&call.route==='fault:generateContent'&&call.status===503));
     const rows=await query<{n:number}>(sql`SELECT count(*)::int AS n FROM hawa.eval_run_settlements WHERE run_id=${first.body.runId}::uuid`);
     check('one immutable settlement survives restart',rows[0].n===1);
   }finally{

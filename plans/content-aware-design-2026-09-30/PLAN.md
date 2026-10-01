@@ -684,3 +684,21 @@ without uncertain resend. Default teardown removes containers/volumes and no
 scratch directories remain. Providers/staff are synthetic,56 scenarios skipped,
 two unmatched synthetic Gemini requests retained. Production unchanged;
 separate-host/native/human/product admission remains open.
+
+
+## ADR211 explicit provider failure evidence — 1 October 2026
+
+ADR210 unmatchedGemini2 are deliberate evaluation-settlement failures, not
+unexpected design calls. Preserve historical default500 receipts. Exact URL
+model identity was missing from fake ledger/fingerprint: two models collide.
+Explicit bounded503 fixtures now bind provider/model/POST and expire/clear;
+unconfigured calls stay unmatched500. Candidate settlement checks exact2
+armed faults and the full scenario refuses unconfigured model calls.
+
+Original2 failures and introduced malformedGET fixture failure are retained.
+Final4files78 checks pass,687 strict roots/lint. No successful Gemini answer
+is fabricated; production routing/spend/uncertainty logic unchanged. Current
+full suite is not repeated for testkit-only changes; previous6812 result stays
+historical. CANDIDATE_PROVIDER_FAULT_PROOF.json binds scope and original logs.
+Clean actual candidate rehearsal is pending; no deployment/paid/native/human
+qualification. Production-dump authorization remains independently pending.
