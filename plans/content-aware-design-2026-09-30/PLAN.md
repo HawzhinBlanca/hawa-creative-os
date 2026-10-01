@@ -633,3 +633,19 @@ dump restored/migrated on the isolated test server. Mandatory negative-flag
 refusal passes. W5_FONT_FAMILY_IDENTITY_GATE_EVIDENCE.json binds original receipts.
 This supersedes the earlier pending engineering checkpoint; source-only, no
 production or paid call. Native/Canva/human and whole-product admission remain open.
+
+### ADR209 published-candidate deployed rehearsal
+
+Clean f1eb2098 passes96 named checks in R1.S3.SOURCES with sourceChanges empty,
+matching Core/worker/Desk image labels and two authenticated encrypted restores
+to new volumes. Each restores104 tables/174 policies/3 blobs/zero missing
+references. Providers/staff are synthetic and56 unselected scenarios skipped;
+two unmatched synthetic Gemini requests remain recorded. Restore-script receipts
+retain applicationReplayProved=false; subsequent scenario verifies replay and
+reconciled publication. Disposable containers are removed by default teardown.
+Private synthetic restore archives/key remained afterward; this run removed its
+own directory. Automatic successful temp cleanup is a verified next gap, not
+claimed repaired. Evidence under output/qualification/2026-10-01/f1eb2098.
+Inventory tally clarified:35 per-font declarations checked,28 globally distinct
+names across19 files. No runtime/test change in this evidence correction.
+Production unchanged; separate-host/native/Canva/human/product admission open.

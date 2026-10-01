@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T10:48:33Z",
+  "generatedAt": "2026-10-01T10:55:59Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1519,8 +1519,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "4a8a5c1dd6e1767b2d852f5c6345c59e83dbfb6bf04df89bbed0f4585120b0ae",
-      "bytes": 59607
+      "sha256": "1c8eba2ed7601d5a951de48e69cb500b18e3a755d2e9493efd09109c461f453f",
+      "bytes": 60674
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1614,8 +1614,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W5_FONT_FAMILY_IDENTITY_PROOF.json",
-      "sha256": "6b8ac33d1fde6dbdace1604d6a29135b299cc35ef09c5a48b533898fa5a09399",
-      "bytes": 6358
+      "sha256": "e1968c90f35fd0bd8f50ebde697776f22cecd97a466f84b611ecbe40c6df9360",
+      "bytes": 7430
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W5_FONT_FIDELITY_REPORT_FINDING.json",

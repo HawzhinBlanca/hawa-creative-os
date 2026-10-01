@@ -44,11 +44,12 @@
   },
   "fontNameInventory": {
     "fontFiles": 19,
-    "uniqueFamilyAndFullNamesChecked": 35,
     "allMeasuredNamesPass": true,
     "immutableFontFiles": true,
     "source": "output/qualification/2026-10-01/pptx-font-family/FONT_NAME_INVENTORY.json",
-    "check": "output/qualification/2026-10-01/pptx-font-family/INVENTORY_EQUIVALENCE_CHECK.json"
+    "check": "output/qualification/2026-10-01/pptx-font-family/INVENTORY_EQUIVALENCE_CHECK.json",
+    "perFontDeclarationChecks": 35,
+    "distinctObservedNames": 28
   },
   "historicalCanvaReinspection": {
     "exports": 5,
@@ -124,5 +125,32 @@
       "output/qualification/2026-10-01/a03387f1/RELEASE_GATE_EVIDENCE.json": "ed7643b3a99fa0da583c9551dbbe6a40e872e33a6e3b7345b308e9940a36bc1d",
       "output/qualification/2026-10-01/a03387f1/FULL_TEST_SUITE_RUN.log": "5b565e765f67badabdf8616cabf67a71d213fbb57faf067081a6566ffaf680fa"
     }
+  },
+  "measurementTallyCorrection": "35 counts per-file family/full-name checks, not globally distinct names (28); original counted field clarified without changing runtime or tests.",
+  "candidateRecovery": {
+    "candidateCommit": "f1eb209853001168de9e3f12e5d642c476b1b438",
+    "namedChecksPassed": 96,
+    "sourceChanges": {},
+    "externalProvidersAndStaff": "synthetic",
+    "restores": {
+      "DRIVE_RESTORE.json": {
+        "tables": 104,
+        "policies": 174,
+        "blobs": 3,
+        "missingReferences": 0,
+        "scriptApplicationReplayProved": false,
+        "separateHostProved": false
+      },
+      "TELEGRAM_RESTORE.json": {
+        "tables": 104,
+        "policies": 174,
+        "blobs": 3,
+        "missingReferences": 0,
+        "scriptApplicationReplayProved": false,
+        "separateHostProved": false
+      }
+    },
+    "evidence": "output/qualification/2026-10-01/f1eb2098/CANDIDATE_RECOVERY_SUMMARY.json",
+    "automaticTempCleanup": "OPEN; observed leftover private synthetic restore files manually removed"
   }
 }
