@@ -138,6 +138,8 @@ describe('D5 addendum: the office sees the draft it is asked to review', () => {
       report: { status: 'DESIGN_FAILED', code: 'STUDIO_FAILED' },
     });
     expect(failed.officePhotoAlerts).toBeUndefined();
-    expect(failed.officeAlert?.text).toContain('needs an operator');
+    // ADR-233: plain words, not "Automatic design needs an operator … DESIGN_FAILED (STUDIO_FAILED)".
+    expect(failed.officeAlert?.text).toContain('stopped without a draft');
+    expect(failed.officeAlert?.text).not.toContain('STUDIO_FAILED');
   });
 });

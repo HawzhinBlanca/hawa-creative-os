@@ -172,14 +172,17 @@ export const CHANGE_SCRIPTS: Script[] = [
   },
   {
     id: 'S043', title: 'the office sends it back; the requester changes it twice in a row', kinds: ['change', 'mind'],
-    natural: 'The first message starts the round; the second, a minute later, is kept for that round (never a second request).',
+    // ADR-233: a change after review is a native revision, which ADR-113's guard refuses at admission, so
+    // the request is back with the office before the second message arrives (the harness now reports the
+    // refusal as the DesignRun does). Each message is answered once, truthfully; never a second request.
+    natural: 'Each change is answered once: a designer makes it by hand (ADR-113); no second request opens.',
     async play(p) {
       await sentBack(p);
-      await p.say('make the logo bigger', { after: 120_000 });
+      const first = await p.say('make the logo bigger', { after: 120_000 });
       const second = await p.say('and the date is 5 December, not 4', { after: 60_000 });
-      expect(p.revisions).toHaveLength(1);
       expect(p.opened).toHaveLength(1);
-      expect(p.answer(second)).toMatch(/add that to|added|office/i);
+      for (const words of [first, second]) expect(p.h.saidFor(words).filter((s) => s.chatId === p.chatId).map((s) => s.text))
+        .toEqual([expect.stringMatching(/by hand/)]);
     },
   },
   {

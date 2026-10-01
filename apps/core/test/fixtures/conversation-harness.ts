@@ -33,15 +33,16 @@ import type { OutboundMessage, SendResult } from '@hawa/contracts';
 import { CanvaBindingRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { DoclingParser, PDF_EXTRACTOR_VERSION } from '@hawa/retrieval';
 import { createApp } from '../../src/app.js';
+import { assertNativeRevisionAdmission } from '../../src/services/native-revision-handoff.js';
 import type { OfficeIntentModel, OfficeModelDecision, OfficeModelInput } from '../../src/services/office-intent-model.js';
 import { handleUpdate, settleUpdate, type ChatInboxView, type InboxContext, type SettleInput } from '../../../worker/src/lifecycle/chat-inbox.js';
 import { createCoreClient } from '../../../worker/src/lifecycle/core-client.js';
 import { handleSend, type TelegramSenderDeps } from '../../../worker/src/lifecycle/telegram-sender.js';
 import { readStoredExportBytes } from '../../../worker/src/delivery-notification.js';
-import { checkSignedOfficeDecision, type SignedOfficeDecision } from '../../../worker/src/lifecycle/office-decision-gateway.js';
+import { checkSignedOfficeDecision, checkSignedOfficeRetry, type SignedOfficeDecision } from '../../../worker/src/lifecycle/office-decision-gateway.js';
 import {
-  openAutomaticRequest, openManualRequest, recordDesignFinished, recordOfficeDeliveryStart, recordOfficeRevision,
-  recordRequesterDecision, recordWithdraw, type AutomaticOpenContext, type LifecycleState, type OfficeDeliveryStartEvent,
+  openAutomaticRequest, openManualRequest, recordDesignFinished, recordOfficeDeliveryStart, recordOfficeRetry, recordOfficeRevision,
+  recordRequesterDecision, recordWithdraw, type AutomaticOpenContext, type OfficeRetryEvent, type LifecycleState, type OfficeDeliveryStartEvent,
   type OfficeRevisionEvent, type OpenAutomaticEvent, type OpenManualEvent, type RequesterDecisionEvent,
 } from '../../../worker/src/lifecycle/request-lifecycle.js';
 
@@ -81,7 +82,11 @@ export interface Transcript {
   revisions: Array<{ requestId: string; directive: string; step: number }>;
   /** Words kept on a request for the office (Core's late-change answers). */
   kept: Array<{ requestId: string; step: number; stage: string }>;
-  designs: Array<{ requestId: string; taskId: string; runId: string; round: number }>;
+  /**
+   * Design runs RequestLifecycle started. ADR-233: each passes Core's real admission guard
+   * (`assertNativeRevisionAdmission`) as the DesignRun's first Studio call would; `refused` is its code.
+   */
+  designs: Array<{ requestId: string; taskId: string; runId: string; round: number; refused?: string }>;
   deliveries: string[];
   /** Core's intake answers, per update (the last one for an update that was settled). */
   answers: Map<number, Record<string, any>>;
@@ -101,6 +106,14 @@ export interface HarnessOptions {
   workerToken: string;
   /** Observe actual admission when RequestLifecycle dispatches, before the next update is handled. */
   onDesignStart?: (input: Parameters<AutomaticOpenContext['startDesign']>[0]) => Promise<void>;
+  /**
+   * ADR-233: a run Core's admission guard refuses is reported to RequestLifecycle as the DesignRun reports
+   * it (DESIGN_REJECTED with the guard's code), so the request moves on exactly as in production. On by
+   * default; `false` leaves a refused run unreported, for a script that reports its outcome itself.
+   */
+  reportRefusals?: boolean;
+  /** Runs before a started design meets the admission guard (e.g. to stand in for a task an older release made). */
+  beforeDesignAdmission?: (input: Parameters<AutomaticOpenContext['startDesign']>[0]) => Promise<void>;
 }
 
 /** A thin view of a request the conversation opened. */
@@ -206,6 +219,7 @@ export class ConversationHarness {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
       const url = String(input instanceof Request ? input.url : input);
       if (url === `${RESTATE}/OfficeDecisionGateway/decide`) return self.gateway(JSON.parse(String(init?.body)));
+      if (url === `${RESTATE}/OfficeDecisionGateway/retryDesign`) return self.retryGateway(JSON.parse(String(init?.body)));
       if (url.includes('api.openai.com/v1/audio/transcriptions')) {
         const text = self.transcripts.shift();
         return Response.json({ text: text ?? '' });
@@ -236,6 +250,18 @@ export class ConversationHarness {
       const result = envelope.event.kind === 'deliver'
         ? await recordOfficeDeliveryStart(object, this.internal, envelope.event as OfficeDeliveryStartEvent)
         : await recordOfficeRevision(object, this.internal, envelope.event as OfficeRevisionEvent);
+      return Response.json(result);
+    } catch (error) {
+      return Response.json({ title: String(error) }, { status: 409 });
+    }
+  }
+
+  /** ADR-142's retry through the office gateway: checked as the worker checks it, then the object. */
+  private async retryGateway(envelope: { v: 1; event: OfficeRetryEvent; signature: string }): Promise<Response> {
+    if (checkSignedOfficeRetry(envelope, this.o.workerToken) !== 'ok') return Response.json({ title: 'unsigned' }, { status: 401 });
+    try {
+      const result = await recordOfficeRetry(this.objectFor(envelope.event.requestId), this.internal, envelope.event);
+      await this.drain();
       return Response.json(result);
     } catch (error) {
       return Response.json({ title: String(error) }, { status: 409 });
@@ -316,8 +342,9 @@ export class ConversationHarness {
       set: (_n, value) => { this.objects.set(requestId, value); },
       send: (message) => { this.background(this.sendOnce(message)); },
       startDesign: (input) => {
-        this.t.designs.push({ requestId, taskId: input.taskId, runId: input.lifecycle.runId, round: input.lifecycle.round });
-        if (this.o.onDesignStart) this.background(this.o.onDesignStart(input));
+        const run: Transcript['designs'][number] = { requestId, taskId: input.taskId, runId: input.lifecycle.runId, round: input.lifecycle.round };
+        this.t.designs.push(run);
+        this.background(this.admit(requestId, input, run));
       },
       startDelivery: (input) => { this.t.deliveries.push(input.deliveryId); },
       setChatMode: (chatId, id) => {
@@ -326,6 +353,31 @@ export class ConversationHarness {
           lastOutcome: prior?.lastOutcome ?? 'handled', at: prior?.at ?? Date.now(), mode: 'lifecycle', requestId: id });
       },
     } as AutomaticOpenContext;
+  }
+
+  /**
+   * ADR-233: the design-run boundary as production has it. The DesignRun's first Studio call passes
+   * Core's admission guard before anything is spent; only then does the requester hear that the round
+   * started (its `startNotice`). A refused run reports DESIGN_REJECTED with the guard's code.
+   */
+  private async admit(requestId: string, input: Parameters<AutomaticOpenContext['startDesign']>[0],
+    run: Transcript['designs'][number]): Promise<void> {
+    if (this.o.beforeDesignAdmission) await this.o.beforeDesignAdmission(input);
+    const refused = await withRlsContext(this.o.db, SCOPE, (trx) => assertNativeRevisionAdmission(trx, TENANT, input.taskId))
+      .then(() => undefined, (error: { code?: string }) => error?.code ?? String(error));
+    if (refused) run.refused = refused;
+    else if (input.startNotice) {
+      await this.sendOnce({ v: 1, key: input.startNotice.key, chatId: input.startNotice.chatId, kind: 'text', text: input.startNotice.text,
+        ...(input.startNotice.parseMode ? { parseMode: input.startNotice.parseMode } : {}), class: 'critical',
+        tenantId: input.tenantId, taskId: input.taskId } as OutboundMessage);
+    }
+    if (refused && this.o.reportRefusals !== false) {
+      const finished = { v: 1 as const, eventId: `dr-finished:${input.lifecycle.runId}`, requestId, runId: input.lifecycle.runId,
+        round: input.lifecycle.round, taskId: input.taskId, report: { status: 'DESIGN_REJECTED', code: refused } };
+      this.finished.push(finished);
+      await recordDesignFinished(this.objectFor(requestId), this.internal, finished);
+    }
+    if (this.o.onDesignStart) await this.o.onDesignStart(input);
   }
 
   private async open(requestId: string, event: OpenAutomaticEvent | OpenManualEvent): Promise<void> {
@@ -337,7 +389,17 @@ export class ConversationHarness {
     await this.drain();
   }
 
+  /** Every requester decision ChatInbox sent, as sent, so a test can deliver one again (a replay). */
+  readonly decisions: Array<RequesterDecisionEvent & { newTaskId: string }> = [];
+  async replayRequesterDecision(i: number): Promise<void> {
+    const event = this.decisions[i];
+    if (!event) throw new Error(`no requester decision ${i}`);
+    await recordRequesterDecision(this.objectFor(event.requestId), this.internal, event);
+    await this.drain();
+  }
+
   private async requesterDecision(requestId: string, event: RequesterDecisionEvent & { newTaskId: string }): Promise<void> {
+    this.decisions.push(event);
     this.t.revisions.push({ requestId, directive: event.directive, step: this.step });
     await recordRequesterDecision(this.objectFor(requestId), this.internal, event);
     await this.drain();

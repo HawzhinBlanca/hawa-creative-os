@@ -21,6 +21,11 @@ import { sql, withRlsContext, TaskRepository, type Database, type Kysely } from 
 import { signLifecycleOfficeEvent } from '@hawa/integrations';
 import { LifecycleProjectionConflict } from './lifecycle-projection.js';
 import { workerSigningSecretOf } from './worker-credential.js';
+import { nativeRevisionIntent } from '@hawa/domain';
+import { persistChatIntake, type ChatIntake } from './chat-intake.js';
+import { freshDirectionLine, planPendingCopyChanges, type CopyFields } from './fresh-round-copy.js';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import { log } from '../logging.js';
 
 /** Office roles that may spend on a design again. The worker's gateway admits the same set. */
@@ -37,6 +42,12 @@ export interface OfficeRetryProjection {
 export interface OfficeRetryResult {
   requestId: string; taskId: string; actionId: string; rev: number; stage: 'designing';
   runId: string; attempt: number; taskState: 'received';
+  /**
+   * ADR-233: the retried task was a redo or pending-changes round refused as a native revision before
+   * fresh rounds existed (request 95eeb08d, task cdfadbf0). Its saved intent cannot change, so the retry
+   * designs a fresh successor task (`runId` is `dr-<freshTaskId>`); the refused task is closed.
+   */
+  freshTaskId?: string;
 }
 
 const canonical = (value: unknown): string => {
@@ -104,6 +115,21 @@ export async function projectLifecycleOfficeRetry(db: Kysely<Database>, input: O
     if (attempt > MAX_OFFICE_RETRIES) {
       throw new LifecycleProjectionConflict('RETRY_LIMIT_REACHED', `This design was already retried ${earlier} times; a designer should take it over`);
     }
+    const fresh = await freshSuccessor(trx, { tenantId, requestId, taskId, chatId: request.chat_id, attempt, actionId,
+      actorId: actor.userId, reason, taskVersion: Number(task.version) });
+    if (fresh) {
+      const changed = await trx.updateTable('requests').set({ stage: 'designing', rev, current_task_id: fresh, updated_at: new Date() })
+        .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
+        .returning('request_id').executeTakeFirst();
+      if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during the office retry');
+      const result: OfficeRetryResult = { requestId, taskId, actionId, rev, stage: 'designing',
+        runId: `dr-${fresh}`, attempt, taskState: 'received', freshTaskId: fresh };
+      await trx.insertInto('lifecycle_projections').values({
+        tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,
+        payload_sha256: hash, result: result as unknown as Record<string, unknown>,
+      }).execute();
+      return result;
+    }
     await new TaskRepository(trx).transitionState({
       taskId, tenantId, expectedVersion: Number(task.version), fromState: 'failed_operator', toState: 'received',
       actorType: 'user', actorId: actor.userId,
@@ -122,6 +148,80 @@ export async function projectLifecycleOfficeRetry(db: Kysely<Database>, input: O
     }).execute();
     return result;
   });
+}
+
+/**
+ * ADR-233: the fresh successor of a redo or pending-changes round that the native-revision guard refused
+ * (its saved intent named the parent as a native revision, as every round did before fresh rounds). Null
+ * for any other task, which is retried as it is. Only a round of words alone, refused before any spend
+ * with NATIVE_REVISION_HANDOFF_REQUIRED, whose parent is this request's delivered design (a redo) or its
+ * draft superseded by pending changes, is converted. The successor is a new design of the request with the
+ * parent's copy, photos and format and the round's words as art direction; the refused task is closed.
+ */
+async function freshSuccessor(trx: Kysely<Database>, input: { tenantId: string; requestId: string; taskId: string;
+  chatId: string | null; attempt: number; actionId: string; actorId: string; reason: string; taskVersion: number }): Promise<string | null> {
+  const { tenantId, requestId, taskId } = input;
+  const created = await trx.selectFrom('outbox_commands').select('payload').where('tenant_id', '=', tenantId)
+    .where('aggregate_id', '=', taskId).where('command_type', '=', 'task.created').executeTakeFirst();
+  const own = created?.payload as Record<string, unknown> | undefined;
+  const options = own?.studioOptions && typeof own.studioOptions === 'object' ? own.studioOptions as Record<string, unknown> : {};
+  const intent = nativeRevisionIntent(own);
+  if (!own || !intent || !UUID.test(intent.parentTaskId) || !intent.directive.trim() || !input.chatId ||
+      ['clarified', 'answers', 'reformat', 'freshFrom'].some((k) => options[k] !== undefined) || own.reviewedSource || own.lifecycleAlbum) return null;
+  const refusal = (await sql<{ code: string | null }>`SELECT e.data->>'code' AS code FROM hawa.task_events e
+    WHERE e.tenant_id = ${tenantId}::uuid AND e.task_id = ${taskId}::uuid AND e.data ? 'outcome'
+    ORDER BY e.aggregate_version DESC LIMIT 1`.execute(trx)).rows[0];
+  if (refusal?.code !== 'NATIVE_REVISION_HANDOFF_REQUIRED') return null;
+  const media = (await sql<{ n: string }>`SELECT count(*) AS n FROM hawa.task_files WHERE tenant_id = ${tenantId}::uuid
+    AND task_id = ${taskId}::uuid`.execute(trx)).rows[0];
+  if (Number(media?.n ?? 0) > 0) return null;
+  const parent = await trx.selectFrom('tasks').select(['id', 'state', 'request_id', 'client_id'])
+    .where('tenant_id', '=', tenantId).where('id', '=', intent.parentTaskId).executeTakeFirst();
+  const task = await trx.selectFrom('tasks').select(['client_id']).where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirst();
+  if (!parent || parent.request_id !== requestId || parent.client_id !== task?.client_id) return null;
+  const superseded = parent.state === 'revision_requested' && (await sql<{ ok: boolean }>`SELECT EXISTS (SELECT 1 FROM hawa.task_events e
+    WHERE e.tenant_id = ${tenantId}::uuid AND e.task_id = ${parent.id}::uuid AND e.data->>'revisionTaskId' = ${taskId}
+      AND jsonb_typeof(e.data->'pendingChanges') = 'array') AS ok`.execute(trx)).rows[0]?.ok;
+  const kind = parent.state === 'complete' ? 'redo' as const : superseded ? 'pending_changes' as const : null;
+  if (!kind) return null;
+  const from = await trx.selectFrom('outbox_commands').select('payload').where('tenant_id', '=', tenantId)
+    .where('aggregate_id', '=', parent.id).where('command_type', '=', 'task.created').executeTakeFirst();
+  const p = from?.payload as Record<string, unknown> | undefined;
+  if (!p || !Array.isArray(p.exactCopy) || typeof p.designInstructions !== 'string') {
+    throw new LifecycleProjectionConflict('PARENT_BRIEF_MISSING', 'The earlier design has no complete brief to make again');
+  }
+  const directive = intent.directive.trim().slice(0, 2000);
+  const copy = kind === 'pending_changes'
+    ? planPendingCopyChanges(p.exactCopy, p as CopyFields, directive.split('\n').filter((line) => line.trim()))
+    : { ok: true as const, exactCopy: p.exactCopy, fields: p as CopyFields };
+  if (!copy.ok) throw new LifecycleProjectionConflict('WRONG_STAGE', `A change to the design's words cannot be applied safely (${copy.why}); make it by hand`);
+  const parentOptions = p.studioOptions && typeof p.studioOptions === 'object' ? p.studioOptions as Record<string, unknown> : {};
+  const inherited = Object.fromEntries(['tier', 'imagery', 'previews', 'holdForSelection']
+    .filter((name) => parentOptions[name] !== undefined).map((name) => [name, parentOptions[name]]));
+  const round = Number.isInteger(options.revisionRound) ? Number(options.revisionRound) : 1;
+  const persisted = await persistChatIntake(trx, {
+    tenantId, platform: 'telegram', sourceEventId: `lc-${requestId}-r${round}-fresh-${taskId}`, sourceChannelId: input.chatId,
+    rawText: directive, rawJson: { freshRetryOf: taskId, actionId: input.actionId, kind }, title: directive.slice(0, 200),
+    designInstructions: `${p.designInstructions}\n${freshDirectionLine(kind, directive)}`,
+    exactCopy: copy.exactCopy, clientId: task!.client_id, autoGenerate: true,
+    ...Object.fromEntries((['headlineEn', 'headlineCkb', 'copyEn', 'copyCkb'] as const)
+      .filter((k) => typeof copy.fields[k] === 'string').map((k) => [k, copy.fields[k]])),
+    ...(p.variant && typeof p.variant === 'object' ? { variant: p.variant as { width: number; height: number } } : {}),
+    ...(typeof p.designStudio === 'boolean' ? { designStudio: p.designStudio } : {}),
+    studioOptions: { ...inherited, revisionRound: round, freshFrom: { parentTaskId: parent.id, kind, directive } } as ChatIntake['studioOptions'],
+  }, { outboxState: 'recorded' });
+  if (persisted.autoGenerateDeclined) throw new LifecycleProjectionConflict('DAILY_CAP_REACHED', 'The automatic design allowance for today is used up');
+  const fresh = String(persisted.task.id);
+  const claimed = await trx.updateTable('tasks').set({ request_id: requestId }).where('tenant_id', '=', tenantId)
+    .where('id', '=', fresh).where('request_id', 'is', null).returning('id').executeTakeFirst();
+  if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The fresh round task acquired another owner');
+  await new TaskRepository(trx).transitionState({
+    taskId, tenantId, expectedVersion: input.taskVersion, fromState: 'failed_operator', toState: 'cancelled',
+    actorType: 'user', actorId: input.actorId,
+    reason: `The office retried it as a new design (attempt ${input.attempt}): ${input.reason}`.slice(0, 1000),
+    data: { officeRetry: { attempt: input.attempt, actionId: input.actionId, runId: `dr-${fresh}` }, supersededBy: fresh, freshRound: kind },
+  }, trx);
+  return fresh;
 }
 
 /** The action key of "retry this design" for one request revision, when the caller names none. */
@@ -197,7 +297,8 @@ export async function requestLifecycleDesignRetry(db: Kysely<Database>, input: {
         result.actionId === actionId && result.stage === 'designing' && result.rev === expectedRev + 1 &&
         typeof result.runId === 'string' && Number.isInteger(result.attempt)) {
       return { ok: true, status: 202, body: { requestId, taskId, actionId, rev: expectedRev + 1, stage: 'designing',
-        runId: result.runId, attempt: result.attempt as number, taskState: 'received', replayed: false } };
+        runId: result.runId, attempt: result.attempt as number, taskState: 'received', replayed: false,
+        ...(typeof result.freshTaskId === 'string' ? { freshTaskId: result.freshTaskId } : {}) } };
     }
     if (response.ok && result?.accepted === false) {
       return { ok: false, status: 409, code: String(result.code || 'NOT_RETRYABLE'), message: 'The request is no longer waiting for an office retry; refresh the task' };

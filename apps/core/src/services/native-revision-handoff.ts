@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { sql, TaskRepository, type Database, type Kysely } from '@hawa/db';
-import { nativeRevisionIntent, validReviewedRevisionCopy } from '@hawa/domain';
+import { freshRoundIntent, nativeRevisionIntent, validReviewedRevisionCopy } from '@hawa/domain';
 import { isServiceUserId } from '@hawa/contracts';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { savedDesignCopy } from './saved-design-copy.js';
@@ -25,6 +25,18 @@ export async function assertNativeRevisionAdmission(db: Db, tenantId: string, ta
   const task = await taskSource(db, tenantId, taskId);
   if (nativeRevisionIntent(task?.source) || (typeof historicalParent === 'string' && historicalParent))
     throw new CanvaFlowError(422, 'NATIVE_REVISION_HANDOFF_REQUIRED', instruction);
+  // ADR-233: a fresh round (a redo, or changes sent while the first draft was made) is a new design of
+  // its own request. Its parent must be another task of the same request and client; anything else is
+  // held exactly as a native revision is. The parent's Canva design is never opened by the round.
+  const fresh = freshRoundIntent(task?.source);
+  if (fresh) {
+    const parent = (await sql<{ ok: boolean }>`SELECT (p.request_id IS NOT NULL AND p.request_id = t.request_id
+        AND p.client_id IS NOT DISTINCT FROM t.client_id AND p.id <> t.id) AS ok
+      FROM hawa.tasks t JOIN hawa.tasks p ON p.tenant_id = t.tenant_id AND p.id = ${fresh.parentTaskId}::uuid
+      WHERE t.tenant_id = ${tenantId}::uuid AND t.id = ${taskId}::uuid`.execute(db)).rows[0];
+    if (!parent?.ok) throw new CanvaFlowError(422, 'NATIVE_REVISION_HANDOFF_REQUIRED',
+      'This new version names an earlier design outside its own request. An operator must review it before anything is made.');
+  }
 }
 
 export interface RevisionCopyConfirmation {

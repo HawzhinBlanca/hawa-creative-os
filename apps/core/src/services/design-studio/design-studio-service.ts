@@ -1,7 +1,7 @@
 import { StudioVisualInputsRepository, StudioVisualInputsError } from '@hawa/db';
 import { authorityPolicySha256, captureVisualInputs, restoreVisualInputs } from './visual-inputs.js';
 import { captureRenderFontInputs, reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
-import { StudioSubstepReplay, studioBindingText, studioSubstepKey, studioUsdMicros, type RecordedStudioAttempt, type StudioCallReservation } from '@hawa/domain';
+import { freshRoundIntent, StudioSubstepReplay, studioBindingText, studioSubstepKey, studioUsdMicros, type RecordedStudioAttempt, type StudioCallReservation } from '@hawa/domain';
 import { currentStudioSubstep, inStudioSubstep, substepBindsAuthority, substepBindsRenderer } from './substeps.js';
 import { TaskGenerationBlockedError } from '@hawa/db';
 import { assertTaskGenerationAllowed, assertStudioCallsResolved } from '../task-generation-guard.js';
@@ -565,6 +565,7 @@ export class DesignStudioService {
       throw new CanvaFlowError(422, 'CLIENT_V3_PROFILE_REQUIRED',
         'This client has no admitted Studio v3 font and exemplar profile. Use the standard Studio path until its profile is qualified.');
     }
+    const fresh = freshRoundIntent(taskCtx.task.source);
     // A change the client asked for on a design they received: the run edits that design.
     const sourceOptions = (taskCtx.task.source?.payload || taskCtx.task.source || {})?.studioOptions || {};
     const directed =
@@ -597,6 +598,9 @@ export class DesignStudioService {
       logoAspect: taskCtx.logoAspect,
       ...(pipelineV3 ? { pipelineV3: true } : {}),
       ...(directed ? { directed } : {}),
+      // ADR-233: a new design of the same request (a redo, or changes sent while the first draft was made).
+      // Recorded on the run, as `directed` is, so every stage and resume reads the same parent for photos.
+      ...(fresh ? { fresh: { parentTaskId: fresh.parentTaskId, kind: fresh.kind } } : {}),
     };
 
     const requestHash = hash(JSON.stringify(requestPayload));
@@ -733,10 +737,13 @@ export class DesignStudioService {
    */
   private async imagesForRun(s: Scope, run: { task_id: string; request: unknown }): Promise<string[]> {
     const request = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as
-      | { pipelineV3?: boolean; directed?: { parentTaskId?: string; answers?: string } }
+      | { pipelineV3?: boolean; directed?: { parentTaskId?: string; answers?: string }; fresh?: { parentTaskId?: string } }
       | undefined;
     const own = await this.requestImages(s, run.task_id);
-    const parentTaskId = request?.pipelineV3 ? request?.directed?.parentTaskId : undefined;
+    // ADR-233: a fresh round (a redo, or changes sent while the first draft was made) is a new design of
+    // the same request: it places the request's photos, from the design it follows back to the first.
+    const parentTaskId = request?.pipelineV3 && request?.directed?.parentTaskId
+      ? request.directed.parentTaskId : request?.fresh?.parentTaskId;
     if (!parentTaskId) return own;
     const parent = await this.revisionChainImages(s, parentTaskId).catch(optionalImages);
     // A change that answers a question carries the photos the question's task was sent with (an
@@ -783,16 +790,19 @@ export class DesignStudioService {
   private async chainLinksOf(s: Scope, taskId: string): Promise<{ parent?: string; answers?: string }> {
     const row = await this.tx(s, async (db) =>
       (
-        await sql<{ parent: string | null; answers: string | null }>`SELECT
+        await sql<{ parent: string | null; answers: string | null; source: unknown }>`SELECT
             COALESCE(e.data->'payload'->'studioOptions'->>'parentTaskId', e.data->'studioOptions'->>'parentTaskId') AS parent,
-            COALESCE(e.data->'payload'->'studioOptions'->>'answers', e.data->'studioOptions'->>'answers') AS answers
+            COALESCE(e.data->'payload'->'studioOptions'->>'answers', e.data->'studioOptions'->>'answers') AS answers,
+            e.data AS source
           FROM hawa.task_events e
           WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid AND e.event_type='task.created'
           ORDER BY e.aggregate_version LIMIT 1`.execute(db)
       ).rows[0]
     );
     const uuid = (v: string | null | undefined) => (typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v : undefined);
-    return { parent: uuid(row?.parent), answers: uuid(row?.answers) };
+    // A fresh round's parent (ADR-233) carries the request's photos as a revision's parent does.
+    const fresh = freshRoundIntent(row?.source)?.parentTaskId;
+    return { parent: uuid(row?.parent) ?? fresh, answers: uuid(row?.answers) };
   }
 
   /**

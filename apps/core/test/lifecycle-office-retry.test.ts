@@ -59,7 +59,10 @@ async function failedReportCover() {
   expect(failed).toMatchObject({ stage: 'manual', status: 'DESIGN_FAILED' });
   // The requester heard, in plain words, that the office is on it and nothing needs sending again.
   expect(failed.message?.text).toBe("<b>KAAE K-12 Pilot Study…</b> needs a little more time. The office is on it and will send your draft here; you don't need to send anything again.");
-  expect(failed.officeAlert?.text).toContain('STUDIO_RUN_LIMIT_TOO_SMALL');
+  // ADR-233: the office hears what happened and what to do in plain words; the code stays in the task's history.
+  expect(failed.officeAlert?.text).toContain('stopped before it made a draft');
+  expect(failed.officeAlert?.text).not.toContain('STUDIO_RUN_LIMIT_TOO_SMALL');
+  expect(failed.officeAlert?.text.endsWith(`\nDesk search: ${taskId.slice(0, 8)}`)).toBe(true);
   const designInput: DesignRunInput = { v: 1, lifecycle: { requestId, round: 0, runId }, taskId, tenantId, clientId,
     rawText: 'Design a professional report cover', sourcePlatform: 'telegram', idempotencyKey: `lifecycle:${requestId}:${taskId}`,
     canvaAutoGenerate: true, designStudio: true };

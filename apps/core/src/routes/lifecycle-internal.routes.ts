@@ -1036,7 +1036,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
              */
             const reviseRequest = async (openRequest: Omit<Pick<WaitingLifecycleRequest, 'request_id' | 'rev' | 'stage' |
               'current_task_id' | 'client_id' | 'question'>, 'stage'> & { stage: WaitingLifecycleRequest['stage'] | 'delivered' },
-            words: string, opts: { reopen?: true; answer?: string } = {}): Promise<Response> => {
+            words: string, opts: { reopen?: true; redo?: true; answer?: string } = {}): Promise<Response> => {
               if (Boolean(opts.reopen) !== (openRequest.stage === 'delivered')) throw new LifecycleProjectionConflict('WRONG_STAGE', 'Only redo words reopen a delivered design');
               if (openRequest.stage === 'awaiting_answer' &&
                   (!openRequest.question || !UUID.test(openRequest.question.id))) {
@@ -1053,7 +1053,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               let lifecycleImage = priorRevisionPhoto?.image ?? boundPhoto;
               // ADR-145: a photo its sender sent with no words just before this change goes with it.
               const scope = senderScopeOf(update);
-              const heldPhoto = !photoInput && !lifecycleImage && !admittedAlbum && scope && !openRequest.question && !opts.reopen
+              const heldPhoto = !photoInput && !lifecycleImage && !admittedAlbum && scope && !openRequest.question && !opts.reopen && !opts.redo
                 ? (await withRlsContext(db, system, async (trx) => outsideBursts(trx, TENANT, await waitingPhotos(trx, TENANT, scope)))).at(-1) ?? null : null;
               if (heldPhoto) {
                 const stored = await withRlsContext(db, system, async (trx) => {
@@ -1097,6 +1097,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 clientId: openRequest.client_id,
                 ...(questionId ? { questionId } : {}),
                 ...(opts.reopen ? { reopenDelivered: true as const } : {}),
+                // ADR-233: redo words on a design sent back for changes are a fresh round too.
+                ...(opts.redo && !opts.reopen && !questionId && !lifecycleImage && !admittedAlbum ? { redo: true as const } : {}),
                 expectedRev, rev: nextRev, key,
               });
               await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
@@ -1295,7 +1297,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     return await reviseRequest({ request_id: target.requestId, rev: target.rev,
                       stage: target.stage as WaitingLifecycleRequest['stage'], current_task_id: target.currentTaskId,
                       client_id: target.clientId, question: target.question }, plan.directive,
-                    plan.redo ? { answer: redoText(target.stage, target.title, lang, true) } : {});
+                    plan.redo ? { redo: true, answer: redoText(target.stage, target.title, lang, true) } : {});
                   } catch (err) {
                     if (!(err instanceof LifecycleProjectionConflict) || !['STALE_REVISION', 'WRONG_STAGE', 'NOT_CURRENT_DRAFT'].includes(err.code)) throw err;
                     return retried ? carryOut({ kind: 'forward', words: plan.directive }, requests, true) : replan(err.code);

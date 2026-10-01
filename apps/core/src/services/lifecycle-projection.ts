@@ -14,7 +14,7 @@ import { lifecyclePhotoInput } from './lifecycle-photo.js';
 import { verifyAlbumSnapshot } from './lifecycle-album.js';
 import { DRAFT_READY_STATUSES, bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
-import { composeCanvaStatusMessage, officeDayExhaustedNote } from './canva-status-message.js';
+import { composeCanvaStatusMessage, composeNoDraftOfficeAlert } from './canva-status-message.js';
 import { canvaEditUrl, composeOfficeDraftAlert, findDraftImage } from './office-draft-alert.js';
 import { isIntroducerTitle, storedCopy, withoutMarks } from './draft-title.js';
 import { REDO_WINDOW_DAYS, designName } from './requester-turn.js';
@@ -26,6 +26,7 @@ import { earlyHoldsFor } from './early-requester-hold.js';
 import { pauseRequesterDesign } from './requester-hold.js';
 import { officeChatsFor } from './office-chats.js';
 import { startPendingChangeRound, type PendingRound } from './lifecycle-pending-round.js';
+import { freshDirectionLine } from './fresh-round-copy.js';
 
 /** First projection of a request; later transitions must advance the same revision ledger. */
 export interface OpenLifecycleProjection {
@@ -550,9 +551,14 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     } else {
       // No design was named (an outcome naming one is a draft, outcomeHasDraft), so there is no Canva
       // link to give: the draft alert above carries it for every outcome that has a design.
-      officeText = `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.` +
-        (report.code === 'OFFICE_DAY_EXHAUSTED' ? officeDayExhaustedNote() : '') +
-        (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '');
+      // ADR-233: plain words for the office (who, which design, what to do), the task's short id last; the
+      // code stays in the task's history. It read "Automatic design needs an operator … DESIGN_REJECTED
+      // (NATIVE_REVISION_HANDOFF_REQUIRED)", in the requester's own chat too when they are an office member.
+      const requester = (await sql<{ name: string | null }>`SELECT i.payload->>'senderName' AS name FROM hawa.inbox_events i
+        WHERE i.tenant_id = ${tenantId}::uuid AND i.source_account_id = 'lifecycle_chat_intent'
+          AND i.payload->>'chatId' = ${request.chat_id} AND i.payload->>'senderId' = ${request.chat_id} AND i.payload ? 'senderName'
+        ORDER BY i.received_at DESC, i.id DESC LIMIT 1`.execute(trx)).rows[0]?.name;
+      officeText = composeNoDraftOfficeAlert({ taskId, title: requestTitle, requester, status, code: report.code });
     }
     // ADR-230 addendum (L8): changes the requester sent while this draft was being made start the next
     // round now, with the draft superseded; if no round can start, the office hears them with the draft.
@@ -564,7 +570,13 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       photoCaption = `${photoCaption ?? officeText}\n\n${pending.officeNote}`;
       if (photoCaption.length > 1000) draftImage = undefined;
     }
-    const officeAlerts = pending?.started ? [] : officeChats.map((chatId) => ({ chatId, text: officeText }));
+    // ADR-233: a requester who is also an office member hears one message about a design that ended
+    // without a draft: their own line, then the office's. Two messages a second apart (L13) read as two
+    // different stories. A draft's photo alert is unchanged (ADR-155).
+    const mergeForRequester = !hasDraft && !question && composed !== undefined && request.chat_id !== null &&
+      officeChats.includes(request.chat_id);
+    const officeAlerts = pending?.started ? [] : officeChats.filter((chatId) => !mergeForRequester || chatId !== request.chat_id)
+      .map((chatId) => ({ chatId, text: officeText }));
     const officePhotoAlerts = draftImage && !pending?.started ? officeChats.map((chatId) => ({ chatId, text: photoCaption ?? officeText, image: draftImage! })) : [];
     // #14 (ADR-145): the question in plain words, answered with a number or in the requester's own words.
     const questionText = question
@@ -574,7 +586,8 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
         options: question.options.map((option, index) => `${index + 1}. ${escapeTelegramHtml(option)}`).join('\n'),
       })
       : undefined;
-    const messageText = pending ? pending.requesterText : questionText || composed?.text;
+    const messageText = pending ? pending.requesterText : questionText ||
+      (mergeForRequester && composed ? `${composed.text}\n\n${escapeTelegramHtml(officeText)}` : composed?.text);
     const result: DesignOutcomeResult = { requestId, taskId, rev, stage: pending?.started ? 'designing' : stage, status,
       ...(pending?.started ? { pendingRound: pending.round } : {}),
       ...(revisionId ? { revisionId } : {}),
@@ -771,6 +784,12 @@ export interface RequesterRevisionWithIntakeProjection {
    * designer made by hand is refused (WRONG_STAGE) and the office redoes it.
    */
   reopenDelivered?: true;
+  /**
+   * ADR-233: the words are redo words ("do a better design", ADR-200 §6) on a design the office sent
+   * back for changes. A redo, like a reopened delivered design, is a new design of the request (a
+   * fresh round), not an edit of the parent's Canva design. Words alone, never an answer.
+   */
+  redo?: true;
 }
 
 export interface RequesterRevisionWithIntakeResult extends RequesterRevisionResult {
@@ -801,6 +820,9 @@ export async function projectLifecycleRequesterRevisionWithIntake(
   if (input.reopenDelivered !== undefined && (input.reopenDelivered !== true || input.questionId !== undefined ||
       input.lifecycleImage || input.lifecycleAlbum || input.lifecycleSource)) {
     throw new LifecycleProjectionConflict('WRONG_STAGE', 'A delivered design is reopened by redo words alone');
+  }
+  if (input.redo !== undefined && (input.redo !== true || input.questionId !== undefined || input.lifecycleSource)) {
+    throw new LifecycleProjectionConflict('WRONG_STAGE', 'A redo is redo words, never an answer or a reviewed source');
   }
   if (!/^[a-f0-9]{64}$/.test(input.sourceUpdateHash)) {
     throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The Telegram source update hash is invalid');
@@ -968,13 +990,18 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     const revisionDirective = question
       ? `${parentOptions.revisionDirective}\nAsked "${question.text}", the requester answered: ${answerText}`
       : directive.trim();
+    // ADR-233: redo words (a reopened delivered design, or a redo of one sent back for changes) start a
+    // fresh round: a new design of the request with its copy, photos and format, the words as art
+    // direction. Every other change stays a native revision of the parent (ADR-113's handoff).
+    const fresh = reopening || input.redo === true;
+    const freshDirective = directive.trim().slice(0, 2000);
     // Persist the new task via chat-intake with lifecycleOwner: 'restate'.
     const draft: ChatIntake = {
       platform: 'telegram', sourceEventId, sourceChannelId,
       rawText, rawJson: input.sourceUpdate, title: directive.trim().slice(0, 200),
       ...(input.lifecycleAlbum ? { lifecycleAlbum: input.lifecycleAlbum } : {}),
       designInstructions: `${parentPayload.designInstructions}\n${question
-        ? `Answer to "${question.text}": ${answerText}` : `Revision: ${directive.trim()}`}`,
+        ? `Answer to "${question.text}": ${answerText}` : fresh ? freshDirectionLine('redo', freshDirective) : `Revision: ${directive.trim()}`}`,
       exactCopy: parentPayload.exactCopy,
       clientId, autoGenerate: true,
       ...(typeof parentPayload.headlineEn === 'string' ? { headlineEn: parentPayload.headlineEn } : {}),
@@ -984,10 +1011,12 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       ...(parentPayload.variant && typeof parentPayload.variant === 'object'
         ? { variant: parentPayload.variant as { width: number; height: number } } : {}),
       ...(typeof parentPayload.designStudio === 'boolean' ? { designStudio: parentPayload.designStudio } : {}),
-      studioOptions: { ...inheritedOptions,
-        parentTaskId: question ? parentOptions.parentTaskId as string : priorTaskId,
-        revisionRound: round, revisionDirective,
-        ...(question ? { clarified: true, answers: priorTaskId } : {}) } as ChatIntake['studioOptions'],
+      studioOptions: (fresh
+        ? { ...inheritedOptions, revisionRound: round, freshFrom: { parentTaskId: priorTaskId, kind: 'redo', directive: freshDirective } }
+        : { ...inheritedOptions,
+          parentTaskId: question ? parentOptions.parentTaskId as string : priorTaskId,
+          revisionRound: round, revisionDirective,
+          ...(question ? { clarified: true, answers: priorTaskId } : {}) }) as ChatIntake['studioOptions'],
     };
     let persisted: Awaited<ReturnType<typeof persistChatIntake>>;
     try {
