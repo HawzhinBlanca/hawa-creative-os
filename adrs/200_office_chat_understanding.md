@@ -127,3 +127,103 @@ These are estimates from the policy's rates. No live call was made. Certain word
 - **Not tested.** No live Telegram, no real model call, no native Sorani review.
 - **Requester names.** Not known for group requests, or for requesters who have not written since this is deployed. Those drafts are "the requester", as before.
 - **Shared allowance.** Office readings share the `intake_router` role allowance with requester routing. A busy office day counts against both.
+
+## 6. Addendum (2026-10-01): redo words
+
+**Branch:** `claude/redo-understanding` (from production `53593d2c`); not deployed. No migration (Codex holds 074–077), no new dependency, no change to the design engine.
+
+### 6.1 Incident
+
+At 08:44Z the owner received the final KAAE K-12 Pilot Study design (task 5edca743, request 95eeb08d). The owner is both an office member and a requester. At 12:33Z they wrote, replying to nothing: "do a better design thats similar to earlier ones".
+
+- The office turn left it to intake, correctly: no draft was waiting, and `asksForNewDesign` read "a … design" as a brief.
+- Intake read the same words as a new brief (`explicitNew`, instruction only). It opened request 3a4c6ac4 for a designer, titled with the sentence. The reply was "Got it. A designer will make **do a better design thats similar to earlier o…** and send it to you here."
+- The model was never asked: the rules were "certain".
+- The delivered request was not among the chat's requests for redo at all. Words with no reply cannot start a round by recency (ADR-144), and a delivered design takes no round.
+
+The lead handles request 3a4c6ac4; this change does not touch production state.
+
+### 6.2 Decision
+
+**Redo words.** `readsAsRedo` (requester-turn.ts) reads these as a redo of the requester's most recent design:
+
+- English: "do a better design", "redo it", "redesign it", "make another version", "try again", "start over", "give it another go", "make it better", "similar to the earlier ones", "like the previous designs", "not good, do it again".
+- Sorani: "make it again", "make it better", "a better design / version", "another version", "like the previous ones", "not good, redo it".
+
+A redo is read before a refusal ("not good") and before a new brief ("a … design"). It must carry no new copy, date or time, no photo or album, and no status, cancel, hold or file request. "Don't redo it" is not a redo.
+
+Words with a subject of their own may also be a new design: "for the conference", an event word, Sorani "for …", "a new poster". Such words are `or-new`. "Like the earlier ones" with a subject ("a poster for Nawroz like the previous ones") stays a new brief with a style note.
+
+**Which design.** `planRedo` picks:
+
+1. the design the message replies to;
+2. otherwise the intake router's pick, when it is at least 0.85 sure;
+3. otherwise a design the words name;
+4. otherwise the design that moved last, when no other moved within 10 minutes of it.
+
+Candidates are the requester's own designs in any open stage, or delivered within 7 days (`REDO_WINDOW_MS`). The intake route reads 7 days of delivered requests; every other reading keeps its 3 days inside `planTurn`. ADR-144 says recency never starts a paid round. Redo words are the exception: they name "the latest" by their meaning.
+
+- Two close together: "Which one should I redo?" with the numbered names. The answer ("the second one", a name) applies the kept words.
+- Maybe new: "Do you mean redo *title*, or a new design?" The intake router is asked first (`plan.intent` unclear, as before). Its request now says when each design last moved, and that redo words are a change to the design they mean. A change reading keeps the redo.
+- Nothing recent: the words are read as before. "Do a better design" asks a designer for one (§6.3).
+
+**What happens.** The words are passed as sent; "similar to the earlier ones" reaches the design engine as `revisionDirective`.
+
+| Stage | What happens | The requester hears |
+|---|---|---|
+| Delivered within 7 days, opened for an automatic design | New round of the same request from its delivered task | "I'll redo *title* — the new version follows what you said, and the office checks it before it comes to you." |
+| Waiting for the requester's changes (office sent it back) | Its round, as any change starts | Same |
+| Being made, waiting for an answer | Kept on it for the office | "I'll redo *title* — it is still being made, so I've added what you said; …" |
+| With the office, approved, being delivered, with a designer | Kept on it for the office | "I'll redo *title* — I've passed what you said to the office, so the new version follows it." |
+
+The new round on a delivered design:
+
+- Core reopens it in `projectLifecycleRequesterRevisionWithIntake` (`reopenDelivered`): delivered → designing, rev + 1, a new task whose parent is the delivered task.
+- Only a request opened for an automatic design (its rev-1 projection says `autoGenerate`), delivered within 7 days, by words alone (no answer, photo, album or source).
+- A design made by hand, or one too old, is refused (`WRONG_STAGE`) and the words are kept for the office instead.
+- RequestLifecycle accepts the round only from a `chatinbox:revision:<update>` event whose Core receipt matches. It clears the finished delivery and approval of the round before, so the next approval delivers anew.
+- The daily automatic-design allowance applies as to any change (`DAILY_CAP_REACHED` is told as before).
+- Core gives the "I'll redo" line in its answer, and ChatInbox sends it in place of the usual "I'm making those changes now".
+
+**The office path.** An office member's words reach intake when the office turn returns nothing. ADR-182's guard sends a member's change back to intake when they have designs of their own on the way. Redo words now go to intake too when the member has a design of their own on the way or delivered within 7 days, unless they reply to a draft or answer the bot's question about one. Without this, "try again" from the owner would have sent another requester's waiting draft back.
+
+### 6.3 Titles
+
+A request opened from words that name no design is never titled with them. These are redo or quality words ("make me a nice poster"), chat, and questions. It is named "New design request from *first name*" (KAAE: "KAAE: New design request from …"), and the words stay its instructions. Lines that do name a design keep it as their title: copy, a date, an event, a subject ("for the graduation"), a capitalised name ("Nawroz", "KAAE"). A later line that names the design is used before the first one.
+
+The requester hears "your design" for a neutral name, in Core (`shortTitle`) and in RequestLifecycle's acknowledgement.
+
+### 6.4 Cost
+
+No new call. A redo of a delivered design starts one design round, the same as any requester change, within the daily automatic-design allowance. The intake router is asked only for `or-new` words, as for any unclear message, at ADR-144's cost (about $0.005). Its request grows by one clause per design and one sentence, about 40 tokens. The incident's words, a clear redo, ask no model.
+
+### 6.5 Verification
+
+- `apps/core/test/redo-understanding.test.ts`: 65 tests.
+  - readings: 18 redo phrasings in English and Sorani, 4 redo-or-new, 13 that are not, and media;
+  - plans: the incident with the owner as office member and requester, recency, two within minutes and the answer, redo or new and its answers, the router's pick, every stage, the 7-day window against the 3 days, a new-brief look-alike, a reply and a group;
+  - wording in English and Sorani; the title rule; the router's request;
+  - Core's reopen against the test database: started; refused for a design made by hand, one delivered 8 days ago, and a delivered one without redo words.
+- `apps/core/test/natural-language-stress.test.ts`: 10 new scripts, S151–S160 (`fixtures/nl-scripts/redo.ts`):
+  - S151, the exact incident;
+  - S152, the owner while another requester's draft waits;
+  - S153, a requester;
+  - S154–S155, Sorani;
+  - S156, two delivered a minute apart;
+  - S157, "do a poster for the conference on the 5th" stays new;
+  - S158, redo or new;
+  - S159, in review;
+  - S160, the title rule.
+- `apps/worker/test/request-lifecycle-requester.test.ts`: two new tests (the reopen, and never for a design made by hand).
+- Red first: with `apps/core/src`, `apps/worker/src` and `packages/integrations/src` at `53593d2c`, these fail:
+  - 9 of the 10 scripts. S157, the new-brief look-alike, passes on the base, as it should;
+  - 49 of the 65 unit tests. Most fail because the helpers do not exist; the 16 that pass are the "is not a redo" readings and the refusals;
+  - the worker reopen test.
+- Full runs: `apps/core`, `apps/worker` and `packages/integrations` together passed 332 files and 3,962 tests, with 3 files and 4 tests skipped. A Desk `vite build` was in place for CV-17. `pnpm typecheck` and `pnpm lint` pass.
+
+### 6.6 Limits
+
+- **Not tested live.** No live Telegram, no real model call, no native Sorani review (5 new lines in `SORANI_REVIEW.md`).
+- **A redo with a photo** is read as before: a photo is new material, and the words around it are a change or a brief.
+- **A request opened for a designer** (no design run) is never reopened automatically; the office redoes it from the kept words.
+- **Recency.** "Delivered within 7 days" and "10 minutes apart" are judgement. Two designs delivered within 10 minutes of each other are always asked about.
