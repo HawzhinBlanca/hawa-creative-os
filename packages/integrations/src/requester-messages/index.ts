@@ -27,6 +27,7 @@ import { OFFICE_MESSAGES } from './office.js';
 // ADR-230: withdrawing a request.
 import { WITHDRAW_MESSAGES } from './withdraw.js';
 import { PENDING_ROUND_MESSAGES } from './pending-round.js';
+import { NAMING_MESSAGES } from './naming.js';
 
 import type { Phrase, PhraseBook, RequesterLang } from './types.js';
 
@@ -99,8 +100,10 @@ export const REQUESTER_CATALOGUE = {
   withdraw: WITHDRAW_MESSAGES,
   /** ADR-230 addendum: changes sent while a design was being made. */
   pendingRound: PENDING_ROUND_MESSAGES,
+  /** ADR-230 addendum (L16): a request whose title names nothing, by when it was sent and its words. */
+  naming: NAMING_MESSAGES,
 } as const satisfies Record<string, PhraseBook>;
 
 export { SOURCE_MESSAGES, MEDIA_MESSAGES, INBOX_MESSAGES, ACCESS_MESSAGES, ROUTING_MESSAGES, CONVERSATION_MESSAGES,
   LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ALBUM_MESSAGES, OFFICE_MESSAGES };
-export { WITHDRAW_MESSAGES, PENDING_ROUND_MESSAGES };
+export { WITHDRAW_MESSAGES, PENDING_ROUND_MESSAGES, NAMING_MESSAGES };

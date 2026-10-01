@@ -137,12 +137,14 @@ describe('a requester\'s cancel withdraws a request nothing has been approved fo
     expect(await rows(requestId, taskId)).toEqual({ request: { rev: String(rev + 1), stage: 'cancelled' }, task: { state: 'cancelled' } });
     expect(object.state()).toMatchObject({ stage: 'cancelled', rev: rev + 1, withdrawal: { actor: 'requester', fromStage: stage } });
     const toRequester = object.sent.filter((m) => m.chatId === String(chat));
-    // ADR-231 (merged): a stored title that names no design is "your design" to the requester.
-    expect(toRequester.map((m) => m.text)).toEqual(['Cancelled <b>your design</b>. Nothing more will be made for it.']);
+    // ADR-230 addendum (L16, changed deliberately): a title that names nothing ("your design" under ADR-231)
+    // is named by when it was sent and the start of the requester's words.
+    expect(toRequester).toHaveLength(1);
+    expect(toRequester[0].text).toMatch(/^Cancelled the one you sent (?:just now|\d+ minutes ago|today at \d\d:\d\d) \(“do a better design thats similar…”\)\. Nothing more will be made for it\.$/);
     const toOffice = object.sent.filter((m) => m.chatId === String(OFFICE));
     expect(toOffice).toHaveLength(1);
-    // ADR-231 (merged): office alerts name the design by `shortTitle`, which calls a sentence title "your design".
-    expect(toOffice[0].text).toMatch(/^Sewa cancelled "your design" in the chat while it was /);
+    // ADR-230 addendum (L16, changed deliberately): the office hears which request: when, and their words.
+    expect(toOffice[0].text).toMatch(/^Sewa cancelled the request they sent (?:just now|\d+ minutes ago|today at \d\d:\d\d) \(“do a better design thats similar…”\) in the chat while it was /);
     expect(toOffice[0].text).toContain('nothing more will be made for it');
     // ADR-200's office style: no chat id, no request or task UUID in the alert; the short task id last.
     expect(toOffice[0].text).not.toContain(String(chat));
@@ -311,8 +313,8 @@ describe('the office\'s Cancel in the Desk withdraws a request-owned task (ADR-2
     expect(await rows(requestId, taskId)).toEqual({ request: { rev: '2', stage: 'cancelled' }, task: { state: 'cancelled' } });
     expect(object.state()).toMatchObject({ stage: 'cancelled', withdrawal: { actor: 'office' } });
     expect(object.sent.map((m) => [m.chatId, m.text])).toEqual([[String(chat),
-      // ADR-231 (merged): a stored title that names no design is "your design" to the requester.
-      'The office has cancelled <b>your design</b>, so nothing more will be made for it. Tell me whenever you need a new design.']]);
+      // ADR-230 addendum (L16, changed deliberately): named by when it was sent and the requester's words.
+      expect.stringMatching(/^The office has cancelled the one you sent (?:just now|\d+ minutes ago|today at \d\d:\d\d) \(“do a better design thats similar…”\), so nothing more will be made for it\. Tell me whenever you need a new design\.$/)]]);
     const again = await desk(taskId, { reason: 'Opened by mistake from a redo message.', expectedVersion }, key);
     expect(again).toMatchObject({ status: 200, body: { status: 'CANCELLED', replayed: true, rev: 2 } });
     expect(calls).toHaveLength(1);
@@ -384,7 +386,8 @@ describe('a natural cancel is read as one, and only withdrawable requests are it
     const kaae = await seed(chat, 'delivered', 7, 'KAAE K-12 Pilot Study');
     const asked = await intake(message(chat, LIVE));
     expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true, intent: 'cancel' });
-    expect(asked.chatAnswer.text).toMatch(/^Do you want me to cancel <b>.+<\/b>\?$/);
+    // ADR-230 addendum (L16): the accidental request is named by when it was sent and its words.
+    expect(asked.chatAnswer.text).toMatch(/^Do you want me to cancel the one you sent .+ \(“do a better design thats similar…”\)\?$/);
     expect(asked.chatAnswer.text).not.toContain('KAAE');
     expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, kaae.requestId))).toHaveLength(0);
     const yes = message(chat, 'yes');
@@ -426,5 +429,91 @@ describe('a natural cancel is read as one, and only withdrawable requests are it
     expect(read).toHaveBeenCalledTimes(1);
     expect(answer).toMatchObject({ lifecycleAction: 'withdraw', requestId: accidental.requestId });
     expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, kaae.requestId))).toHaveLength(0);
+  });
+});
+
+describe('a cancel with a reason, closed requests never offered, and requests named by when (ADR-230 addendum, L16/L17)', () => {
+  const LIVE_L17 = 'cancel the Teacher Appreciation Day poster, it was only a test';
+  const LIVE_L12 = 'also cancel the other one I opened by mistake this afternoon';
+  const RAW = 'do a better design thats similar to earlier ones';
+  const closeRequest = (requestId: string) => withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requests SET stage = 'cancelled', rev = rev + 1
+    WHERE request_id = ${requestId}::uuid`.execute(trx));
+
+  it.each([
+    [LIVE_L17], ['please cancel the poster, we postponed the event'], ['cancel it - plans changed'],
+    ['cancel the flyer because the event was cancelled'], ['cancel the poster, sorry, it was a mistake'],
+    ["cancel that, we don't need it anymore"],
+  ])('"%s" is a cancel', async (words) => {
+    const { readIntentByRules } = await import('../src/services/requester-turn.js');
+    expect(readIntentByRules(words).intent).toBe('cancel');
+  });
+
+  it.each([['cancel the poster, make the title bigger'], ['cancel the poster, and add a logo'], ['cancel the gold border, it was a mistake']])(
+    '"%s" asks for a change too: never a cancel', async (words) => {
+      const { readIntentByRules } = await import('../src/services/requester-turn.js');
+      expect(readIntentByRules(words).intent).not.toBe('cancel');
+    });
+
+  it('the live words withdraw "Teacher Appreciation Day" at once; nothing closed or delivered is offered', async () => {
+    const chat = chatId();
+    const old = await seed(chat, 'delivered', 7, 'KAAE: Here is the text and the photos:…');
+    const accidental = await seed(chat, 'manual', 1, RAW, false);
+    await closeRequest(accidental.requestId);
+    await seed(chat, 'in_review', 4, 'KAAE K-12 Pilot Study…');
+    const teacher = await seed(chat, 'manual', 1, 'Teacher Appreciation Day', false);
+    expect(old.requestId).toBeTruthy();
+    expect(await intake(message(chat, LIVE_L17))).toMatchObject({ lifecycleAction: 'withdraw', requestId: teacher.requestId });
+  });
+
+  it('cancel words the rules cannot place: asked among withdrawable requests only, never "A new design", never a closed one', async () => {
+    const chat = chatId();
+    await seed(chat, 'delivered', 7, 'KAAE: Here is the text and the photos:…');
+    const accidental = await seed(chat, 'manual', 1, RAW, false);
+    await closeRequest(accidental.requestId);
+    await seed(chat, 'in_review', 4, 'KAAE K-12 Pilot Study…');
+    await seed(chat, 'manual', 1, 'Teacher Appreciation Day', false);
+    const asked = await intake(message(chat, 'can you cancel my request, it was a mistake'));
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true });
+    const text = String(asked.chatAnswer.text);
+    expect(text).toMatch(/^Which design is this for\?/);
+    expect(text).toContain('Teacher Appreciation Day');
+    expect(text).toContain('KAAE K-12 Pilot Study');
+    expect(text).not.toMatch(/A new design|your design|the one you sent|Here is the text/);
+  });
+
+  it('a closed request is never planned on, whatever the store returns', async () => {
+    const { planTurn, readIntentByRules } = await import('../src/services/requester-turn.js');
+    const at = new Date().toISOString();
+    const view = (requestId: string, stage: string, title: string) => ({ requestId, stage: stage as any, rev: 2, currentTaskId: requestId, clientId: null,
+      title, activeAt: at, createdAt: at, question: null, requesterId: null });
+    const plan = planTurn({ text: 'a poster for the staff party', reading: { ...readIntentByRules('a poster for the staff party'), intent: 'unclear' },
+      requests: [view('a', 'cancelled', 'Old one'), view('b', 'rejected', 'Rejected one'), view('c', 'in_review', 'Nawroz poster')],
+      bound: [], unboundReply: false, senderId: '1', officeIds: [], group: false, addressed: true, pendingAsk: null, now: Date.now() });
+    expect(JSON.stringify(plan)).not.toMatch(/"requestId":"[ab]"/);
+  });
+
+  it('a request whose title names nothing is named by when it was sent and its words, in the question, the confirmation and the office alert', async () => {
+    const chat = chatId();
+    const accidental = await seed(chat, 'manual', 1, RAW, false);
+    await seed(chat, 'delivered', 7, 'KAAE K-12 Pilot Study…');
+    const asked = await intake(message(chat, LIVE_L12));
+    const NAMED = /the one you sent (?:just now|\d+ minutes ago|today at \d\d:\d\d) \(“do a better design thats similar…”\)/;
+    expect(asked.chatAnswer.text).toMatch(new RegExp(`^Do you want me to cancel ${NAMED.source}\\?$`));
+    const yes = message(chat, 'yes');
+    expect(await intake(yes)).toMatchObject({ lifecycleAction: 'withdraw', requestId: accidental.requestId });
+    const object = requestObject(accidental.state);
+    await recordWithdraw(object.ctx, object.core, requesterWithdraw(accidental.requestId, yes.update_id));
+    expect(object.sent.find((m) => m.chatId === String(chat))?.text).toMatch(new RegExp(`^Cancelled ${NAMED.source}\\. Nothing more will be made for it\\.$`));
+    expect(object.sent.find((m) => m.chatId === String(OFFICE))?.text)
+      .toMatch(/^Sewa cancelled the request they sent (?:just now|\d+ minutes ago|today at \d\d:\d\d) \(“do a better design thats similar…”\) in the chat while it was with a designer\./);
+  });
+
+  it('names a neutral title by the brief\'s own words, in English and Sorani', async () => {
+    const { requestLabel } = await import('../src/services/requester-turn.js');
+    const now = Date.parse('2026-10-01T15:00:00Z');
+    const r = { title: 'New design request from Hawzhin', askedAt: '2026-10-01T12:33:00Z', words: RAW };
+    expect(requestLabel(r, 'en', now)).toBe('the one you sent today at 15:33 (“do a better design thats similar…”)');
+    expect(requestLabel(r, 'ckb', now)).toBe('ئەوەی ئەمڕۆ کاتژمێر 15:33 ناردت (“do a better design thats similar…”)');
+    expect(requestLabel({ ...r, title: 'Nawroz poster' }, 'en', now)).toBe('<b>Nawroz poster</b>');
   });
 });

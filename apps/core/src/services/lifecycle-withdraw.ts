@@ -24,7 +24,7 @@ import { WITHDRAW_MESSAGES, requesterLang, say, signLifecycleOfficeEvent, type R
 import { LifecycleProjectionConflict } from './lifecycle-projection.js';
 import { lateChangeOfficeAlert, recordRoutingRefusal, type LateChangeStage, type LateRequesterChange } from './lifecycle-chat-target.js';
 import { officeChatsFor } from './office-chats.js';
-import { designName, shortTitle } from './requester-turn.js';
+import { designName, openingWords, requestLabel, sentWhen, shortTitle } from './requester-turn.js';
 import { workerSigningSecretOf } from './worker-credential.js';
 import { log } from '../logging.js';
 
@@ -74,8 +74,9 @@ const STAGE_WORDS: Record<string, string> = {
  * What a requester hears when their cancel came too late: the design was already approved, is being
  * sent, or was sent. `told`: an office member heard of it; otherwise the words are kept for the office.
  */
-export function withdrawTooLateText(stage: string, title: string, lang: RequesterLang, told: boolean): string {
-  const t = { title: designName(title, lang) };
+export function withdrawTooLateText(stage: string, title: string, lang: RequesterLang, told: boolean, label?: string): string {
+  // ADR-230 addendum (L16): `label` names a request whose title names nothing (requestLabel).
+  const t = { title: label ?? designName(title, lang) };
   if (!told) return say(WITHDRAW_MESSAGES.tooLateKept, lang, t);
   return say(stage === 'delivered' ? WITHDRAW_MESSAGES.tooLateDelivered
     : stage === 'delivering' ? WITHDRAW_MESSAGES.tooLateDelivering : WITHDRAW_MESSAGES.tooLateApproved, lang, t);
@@ -88,11 +89,17 @@ export const tooLateToWithdraw = (stage: string) => (TOO_LATE as readonly string
  * The office's word that a requester withdrew their request (ADR-230; ADR-200's office style: who and
  * which design, no chat ids; the task's short id only on the last line).
  */
-export function withdrawnOfficeAlert(input: { senderName?: string | null; title: string; fromStage: string; taskId: string }): string {
+export function withdrawnOfficeAlert(input: { senderName?: string | null; title: string; fromStage: string; taskId: string;
+  askedAt?: string; words?: string | null; now?: number }): string {
   const who = input.senderName?.trim() ? Array.from(input.senderName.trim()).slice(0, 60).join('') : 'The requester';
   const running = input.fromStage === 'designing'
     ? ' A design already being made may still finish; it will not go to review or to them.' : '';
-  return [`${who} cancelled "${shortTitle(input.title)}" in the chat while it was ${STAGE_WORDS[input.fromStage] ?? input.fromStage}. ` +
+  // ADR-230 addendum (L16): a request whose title names nothing is the one they sent then, with their words.
+  const at = input.askedAt ? Date.parse(input.askedAt) : NaN;
+  const quote = openingWords(input.words, false) || openingWords(input.title.replace(/^[^:]{1,40}:\s*/, ''), false);
+  const name = shortTitle(input.title) !== 'your design' ? `"${shortTitle(input.title)}"`
+    : `the request they sent ${Number.isFinite(at) ? sentWhen(at, input.now ?? Date.now(), 'en') : 'earlier'}${quote ? ` (${quote})` : ''}`;
+  return [`${who} cancelled ${name} in the chat while it was ${STAGE_WORDS[input.fromStage] ?? input.fromStage}. ` +
     `It is closed, and nothing more will be made for it.${running}`, '', `Task ${input.taskId.slice(0, 8)}`].join('\n');
 }
 
@@ -148,6 +155,9 @@ export async function projectLifecycleWithdraw(db: Kysely<Database>, input: With
     const title = root?.title || 'your design';
     const lang = requesterLang(decided?.words || root?.description || title);
     const chatId = request.chat_id;
+    // ADR-230 addendum (L16): named by when it was sent and the requester's words when its title names nothing.
+    const askedAt = new Date(request.created_at).toISOString();
+    const label = requestLabel({ title, askedAt, words: root?.description }, lang);
     if (!withdrawable(request.stage)) {
       if (actor.kind === 'office') {
         throw new LifecycleProjectionConflict('NOT_WITHDRAWABLE', `The request is ${request.stage}; only a request nothing has been approved for can be cancelled`);
@@ -156,7 +166,7 @@ export async function projectLifecycleWithdraw(db: Kysely<Database>, input: With
         // Already closed (an earlier cancel, a rejection): a cancelled one is said again; nothing is changed.
         return { withdrawn: false, requestId, taskId, rev: expectedRev, stage: request.stage, actor: 'requester',
           ...(chatId && request.stage === 'cancelled'
-            ? { requesterNotice: { chatId, text: say(WITHDRAW_MESSAGES.withdrawn, lang, { title: designName(title, lang) }) } } : {}),
+            ? { requesterNotice: { chatId, text: say(WITHDRAW_MESSAGES.withdrawn, lang, { title: label }) } } : {}),
           officeAlerts: [] };
       }
       // Too late: the cancel is kept for the office as any late cancel is (Deliver waits until it is read).
@@ -164,7 +174,7 @@ export async function projectLifecycleWithdraw(db: Kysely<Database>, input: With
       const stage = request.stage as LateChangeStage;
       const late: LateRequesterChange = { requestId, taskId, requestRev: expectedRev, requestStage: stage,
         text: decided!.words || '(cancel)', kind: 'cancel', title: shortTitle(title),
-        answer: withdrawTooLateText(request.stage, title, lang, office.length > 0) };
+        answer: withdrawTooLateText(request.stage, title, lang, office.length > 0, label) };
       const kept = chatId
         ? (await recordRoutingRefusal(trx, tenantId, actor.updateId, { code: 'LATE_REQUESTER_CHANGE', chatId,
           payloadHash: decided!.payloadHash, late })).late ?? late : late;
@@ -188,9 +198,9 @@ export async function projectLifecycleWithdraw(db: Kysely<Database>, input: With
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during the withdraw');
-    const named = { title: designName(title, lang) };
+    const named = { title: label };
     const officeText = actor.kind === 'requester'
-      ? withdrawnOfficeAlert({ senderName: decided?.senderName, title, fromStage: request.stage, taskId }) : null;
+      ? withdrawnOfficeAlert({ senderName: decided?.senderName, title, fromStage: request.stage, taskId, askedAt, words: root?.description }) : null;
     const result: WithdrawResult = { withdrawn: true, requestId, taskId, rev, stage: 'cancelled', fromStage: request.stage,
       actor: actor.kind,
       ...(chatId ? { requesterNotice: { chatId, text: say(actor.kind === 'requester'
@@ -340,8 +350,9 @@ export async function requestLifecycleWithdraw(db: Kysely<Database>, input: {
  * ADR-230 addendum (L12): the answer to a cancel with nothing it could withdraw. It says so, and names the
  * designs the chat has that were already delivered, so the requester knows why.
  */
-export function nothingToCancelText(shown: Array<{ title: string; stage: string }>, lang: RequesterLang): string {
+export function nothingToCancelText(shown: Array<{ title: string; stage: string; createdAt?: string; words?: string }>, lang: RequesterLang): string {
   return [say(WITHDRAW_MESSAGES.nothingToCancel, lang),
-    ...shown.filter((r) => r.stage === 'delivered').map((r) => say(WITHDRAW_MESSAGES.deliveredNotCancellable, lang, { title: designName(r.title, lang) }))]
+    ...shown.filter((r) => r.stage === 'delivered').map((r) => say(WITHDRAW_MESSAGES.deliveredNotCancellable, lang,
+      { title: requestLabel({ title: r.title, askedAt: r.createdAt, words: r.words }, lang) }))]
     .join('\n');
 }

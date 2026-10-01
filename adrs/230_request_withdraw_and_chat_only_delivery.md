@@ -142,3 +142,38 @@ A draft with no such change, and a run that ends without a draft, are unchanged.
 - unplaced cancel words go to the router once and withdraw what it names.
 
 10 of these fail on `13adc35f` sources. The other five are the not-a-cancel guards and "cancel that".
+
+## 8. Addendum (2026-10-01): a cancel with a reason; requests named by when they were sent (L16, L17)
+
+**Incidents.**
+- L17, production `53644d3b`, 16:08:42Z. "cancel the Teacher Appreciation Day poster, it was only a test" was answered with "Which design is this for? 1. your design 2. KAAE K-12 Pilot Study… (…15:16) 3. KAAE K-12 Pilot Study… (…20:39) 4. Teacher Appreciation Day 5. A new design".
+- L16. A request whose stored title is a raw sentence was "your design" in the cancel question, the confirmation and the office alert. That names nothing.
+
+The intake router does not run for KAAE in production (its active DNA carries no egress block), so the rules must carry cancels alone.
+
+**What happened in L17.** The reason clause ", it was only a test" did not match any §7 pattern. The words fell to §7's safety net: `unclear`, for the router. The router did not run, so the generic `unclear` question listed every changeable request, oldest first, and offered "A new design".
+
+**Which request "1. your design" was.** By code it cannot have been a closed one. `activeChatRequests` selects only open stages and recently delivered requests, and every planner list filters on them. Withdrawn 3a4c6ac4 (`cancelled` since 16:04) was therefore not listed. Item 1 is the oldest listed request, created before 30 September 15:16 (it sorts before item 2), whose title names nothing. That is almost certainly a design delivered within ADR-200's 7-day window under an introducer title ("KAAE: Here is the text and the photos:…", from 29 September). ^[inferred] Production rows were not read (the fix rules forbid SQL there). The lead can confirm it with the chat's requests ordered by `created_at`.
+
+**Decision.**
+1. **A reason after a cancel** (`CANCEL_REASON`, a closed list) leaves it a cancel. The reasons covered are: it was (only) a test or a mistake, (sent) by mistake, my mistake, wrong one, we postponed / cancelled / moved the event, the event was cancelled or postponed, plans changed, we changed our minds, we don't need it (anymore), not needed, no longer needed, sorry. The reason is split off at a comma, dash or colon, or before "because" / "since". Each clause must be a cancel, a filler or a reason; a clause asking for a change ("make the title bigger", "add a logo") keeps the words out of cancel. "cancel the gold border, it was a mistake" stays a change.
+2. **Cancel words the rules cannot place** (`cancelWords`) are asked about as a cancel (`planCancel` with `confirm`). The question lists only withdrawable requests, by name, never "A new design", and nothing is withdrawn without the requester's answer. When the router can run, it reads them first, as it does for `unclear`.
+3. **Closed requests are never planned on.** `planTurn` drops every stage outside its own list before anything else. This is a guard: the store already excludes them. Status lists, which-design lists and which-to-cancel lists all come from it.
+4. **Naming (L16).** A request whose title names nothing (`shortTitle` gives "your design") is named by when it was sent, in office time, and the start of the requester's own brief: at most six words and 40 characters, quoted. Example: "the one you sent today at 15:33 (“do a better design thats similar…”)" (`requestLabel`, `NAMING_MESSAGES`, English and Sorani). This naming is used in:
+   - the cancel question and the other single-option questions;
+   - every choice list and the status lines (`distinctNames`);
+   - the cancel confirmation, by the requester or the office;
+   - the too-late answer and the nothing-to-cancel answer;
+   - the office's cancel alert, in plain text: "the request they sent today at 15:33 (“…”)".
+
+   The brief's words come from the root task's description (`ChatRequestView.words`); without them, the stored title is used when it is their sentence.
+
+**Verification.** `apps/core/test/request-withdraw.test.ts`, +14 tests:
+- six reason clauses, including the exact live words, and three change guards;
+- the live L17 words withdraw "Teacher Appreciation Day" at once, with a withdrawn and a delivered request beside it;
+- unplaced cancel words list only withdrawable requests, with no "A new design" and no closed or unnamed one;
+- a closed request is never planned on;
+- the live L12 words name the accidental request by time and words, in the question, the confirmation and the office alert;
+- a neutral title named in English and Sorani.
+
+Three earlier assertions that expected "your design" were changed deliberately. 9 of the 14 fail on `53644d3b` sources. The other 5 are guards: "cancel that, we don't need it anymore", the three change guards, and the closed-stage planner guard.

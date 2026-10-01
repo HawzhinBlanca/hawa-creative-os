@@ -19,9 +19,12 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
   const days = Number.isInteger(deliveredDays) && deliveredDays >= 0 && deliveredDays <= 30 ? deliveredDays : 3;
   const rows = (await sql<{ request_id: string; rev: string | number; stage: string; current_task_id: string;
     client_id: string | null; title: string | null; created_at: Date | string; updated_at: Date | string;
-    question: ChatRequestView['question']; requester_id: string | null; requester_hold:boolean; sent_to_chat: boolean }>`
+    question: ChatRequestView['question']; requester_id: string | null; requester_hold:boolean; sent_to_chat: boolean;
+    words: string | null }>`
     SELECT r.request_id::text, r.rev, r.stage, r.current_task_id::text, t.client_id::text,
       coalesce(root.title, t.title) AS title, r.created_at, r.updated_at,
+      -- ADR-230 addendum (L16): the requester's own words, to name a request whose title names nothing.
+      left(coalesce(root.description, t.description), 300) AS words,
       p.result->'question' AS question,
       coalesce(src.payload->'message'->'from'->>'id', opener.sender_id) AS requester_id,
       (t.state='paused' AND hold.data->>'requesterHoldRequestId'=r.request_id::text
@@ -66,6 +69,7 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
     requesterId: row.requester_id,
     ...(row.requester_hold ? {requesterHold:true} : {}),
     ...(row.sent_to_chat ? { sentToChat: true } : {}),
+    ...(row.words?.trim() ? { words: row.words.trim() } : {}),
   }));
 }
 

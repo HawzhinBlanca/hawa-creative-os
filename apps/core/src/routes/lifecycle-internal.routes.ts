@@ -60,7 +60,7 @@ import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.j
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
   type IntentReceipt } from '../services/requester-turn-store.js';
 import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
-  opensForAPerson, readIntentByRules, readsAsBriefContinuation, redoText, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
+  opensForAPerson, readIntentByRules, readsAsBriefContinuation, redoText, requestLabel, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
   requesterName, spokenStage, whoWrote,
   tellText, thanksText, waitsForRequester,
   withoutBotMentions, type ChatRequestView, type IntentReading, type TurnPlan } from '../services/requester-turn.js';
@@ -1198,7 +1198,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 plan = planTurn(input);
                 // What the rules cannot place is asked of the intake router once, within the office's
                 // budget; without it (no key, no consent, no allowance, no answer) the question stands.
-                if (plan.kind === 'ask' && plan.intent === 'unclear' && intentModel) {
+                // ADR-230 addendum (L17): cancel words the rules cannot place are asked as a cancel, and read the same way.
+                if (plan.kind === 'ask' && (plan.intent === 'unclear' || (plan.intent === 'cancel' && reading.cancelWords)) && intentModel) {
                   const candidates = requests.filter((r) => plan.kind === 'ask' && plan.options.some((o) => o.requestId === r.requestId));
                   const modelReading = await intentModel.read({ tenantId: TENANT, updateId: update.update_id, chatId,
                     text, requests: candidates, lang });
@@ -1440,7 +1441,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                       {requestId:target.requestId,taskId:target.currentTaskId,requestRev:target.rev,requestStage:target.stage,text:words},update.update_id);
                     const said = photoWithoutWords && material ? say(MEDIA_MESSAGES.photoPassed, lang, { title })
                       // ADR-230: a cancel kept as a note came too late; the requester hears that, truthfully.
-                      : plan.note === 'cancel' ? withdrawTooLateText(target.stage, target.title, lang, Boolean(officeChatFor(chatId)))
+                      : plan.note === 'cancel' ? withdrawTooLateText(target.stage, target.title, lang, Boolean(officeChatFor(chatId)),
+                        requestLabel({ title: target.title, askedAt: target.createdAt, words: target.words }, lang))
                       : noteText(plan.note, spokenStage(target), target.title, lang, held, plan.redo === true);
                     const late: LateRequesterChange = { requestId: target.requestId, taskId: target.currentTaskId,
                       requestRev: target.rev, requestStage: target.stage as LateChangeStage, text: words,

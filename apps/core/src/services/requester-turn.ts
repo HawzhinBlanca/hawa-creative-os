@@ -20,7 +20,7 @@
  *    about the files: they are passed on, and are never approval (ADR-156);
  *  - only a new brief opens a request; a message that could be either asks one short question.
  */
-import { LIFECYCLE_MESSAGES, ROUTING_MESSAGES, WITHDRAW_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
+import { LIFECYCLE_MESSAGES, NAMING_MESSAGES, ROUTING_MESSAGES, WITHDRAW_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
   trimTitleMarks, type Phrase, type RequesterLang } from '@hawa/integrations';
 import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
@@ -56,6 +56,11 @@ export interface IntentReading {
    * mean a new design ("a better poster for the conference"), so the requester is asked.
    */
   redo?: 'redo' | 'or-new';
+  /**
+   * ADR-230 addendum (L17): `unclear` words that cancel a whole request in a way the patterns cannot
+   * place. They are asked about among the requests that can be withdrawn, never with "a new design".
+   */
+  cancelWords?: true;
 }
 
 export type Lang = RequesterLang;
@@ -90,6 +95,8 @@ export interface ChatRequestView {
    * notice). A request still `delivering` with this set was sent; only the office's side is unfinished.
    */
   sentToChat?: boolean;
+  /** ADR-230 addendum (L16): the start of the requester's own brief, to name a request whose title names nothing. */
+  words?: string;
 }
 
 /** A question this bot asked the sender, still open: its own update, the words it holds, the options. */
@@ -98,7 +105,7 @@ export interface PendingAsk {
   intent: Exclude<TurnIntent, 'acknowledgement' | 'status' | 'new_brief' | 'conversation'>;
   words: string;
   /** `askedAt`: when the request was opened (ADR-231), to tell two designs with the same name apart. */
-  options: Array<{ requestId: string; title: string; askedAt?: string }>;
+  options: Array<{ requestId: string; title: string; askedAt?: string; words?: string }>;
   allowNew: boolean;
   /**
    * ADR-156: the question was asked about a photo with these words. The photo is kept under the
@@ -403,16 +410,31 @@ function readsAsApproval(text: string, core: string): boolean {
  * "no need anymore, thanks", "ok forget it, sorry". Sorani: sorry, no, OK, thanks.
  */
 const CANCEL_FILLER = /^(?:ok(?:ay)?|no|nope|sorry|thanks?|thank\s+you|please|actually|well|sadly|unfortunately|hm+|ببورە|نا|نەخێر|باشە|سوپاس|تکایە)$/iu;
+/**
+ * ADR-230 addendum (live 2026-10-01 16:08Z, L17): why the requester cancels, said after it ("cancel the
+ * Teacher Appreciation Day poster, it was only a test"): a test, a mistake, the event moved or called
+ * off, plans changed, not needed any more. A closed list: a clause that asks for a change is not one.
+ */
+const CANCEL_REASON = new RegExp('^(?:(?:because|since|cause|cos)\\s+)?(?:sorry\\s+)?(?:' + [
+  "(?:it|this|that)(?:'s|\\s+(?:was|is))\\s+(?:only\\s+|just\\s+)?(?:a\\s+)?(?:test|trial|mistake|an?\\s+error|error|the\\s+wrong\\s+one|wrong)",
+  '(?:it\\s+was\\s+)?(?:sent|opened|made|ordered)\\s+by\\s+(?:mistake|accident)', 'by\\s+(?:mistake|accident)', 'my\\s+(?:mistake|bad|fault)',
+  '(?:only\\s+|just\\s+)?(?:a\\s+)?test(?:ing)?', 'wrong\\s+one',
+  "(?:we|i|they)(?:'ve|\\s+have)?\\s+(?:postponed|cancel+ed|moved|delayed|changed|called\\s+off)\\s+(?:it|the\\s+(?:event|date|plans?|meeting|ceremony|party|conference|day))",
+  '(?:the\\s+)?(?:event|meeting|ceremony|party|conference|celebration|day)\\s+(?:was|is|has\\s+been|got)\\s+(?:cancel+ed|postponed|called\\s+off|moved|delayed)',
+  '(?:the\\s+)?plans?\\s+(?:have\\s+|has\\s+)?changed', "(?:we|i)(?:'ve|\\s+have)?\\s+changed\\s+(?:our|my)\\s+minds?",
+  "(?:we|i)\\s+(?:don'?t|do\\s+not|no\\s+longer)\\s+need\\s+(?:it|this|that|them)(?:\\s+any\\s?more)?", "(?:it'?s|it\\s+is)\\s+no\\s+longer\\s+needed",
+  'not\\s+needed(?:\\s+any\\s?more)?', 'no\\s+longer\\s+needed',
+].join('|') + ')(?:\\s+(?:any\\s?more|sorry|thanks?|thank\\s+you))*$', 'iu');
 
 function readsAsCancel(core: string): boolean {
   if (!core || core.length > 160) return false;
   if (CANCEL_EN.test(core) || CANCEL_DESCRIBED.test(core)) return true;
   if (isSoraniText(core) && core.split(/\s+/).length <= 4 && any(core, CANCEL_CKB)) return true;
-  // Several clauses: one of them cancels, and the rest only surround it.
-  const clauses = core.split(/\s*[,،;.!]+\s*/).map((c) => c.trim()).filter(Boolean);
+  // Several clauses: one of them cancels, and the rest only surround it, or say why (ADR-230 addendum, L17).
+  const clauses = core.split(/\s*[,،;.!:–—]+\s*|\s+-\s+|\s+(?=(?:because|since)\s)/iu).map((c) => c.trim()).filter(Boolean);
   if (clauses.length < 2) return false;
-  const cancels = (c: string) => CANCEL_EN.test(c) || (isSoraniText(c) && c.split(/\s+/).length <= 4 && any(c, CANCEL_CKB));
-  return clauses.some(cancels) && clauses.every((c) => cancels(c) || CANCEL_FILLER.test(c));
+  const cancels = (c: string) => CANCEL_EN.test(c) || CANCEL_DESCRIBED.test(c) || (isSoraniText(c) && c.split(/\s+/).length <= 4 && any(c, CANCEL_CKB));
+  return clauses.some(cancels) && clauses.every((c) => cancels(c) || CANCEL_FILLER.test(c) || CANCEL_REASON.test(c));
 }
 
 function readsAsStatus(core: string): boolean {
@@ -590,7 +612,7 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   // ADR-230 addendum (L12): cancel words about a whole request that the patterns cannot place are never
   // read as a certain change of the latest design; they are unclear, and the intake router reads them
   // (ADR-144's one call per update, within the allowance) before anything is kept or asked.
-  if (core.length <= 160 && CANCEL_SOMEWHERE.test(core) && !readsAsHold(core)) return rules('unclear', 'Cancel words the rules cannot place', { instructionOnly: true });
+  if (core.length <= 160 && CANCEL_SOMEWHERE.test(core) && !readsAsHold(core)) return rules('unclear', 'Cancel words the rules cannot place', { instructionOnly: true, cancelWords: true });
   if (readsAsStatus(core)) return rules('status', 'Asks how a design is going');
   if (readsAsDeadline(t, core)) return rules('deadline', 'Gives a deadline or urgency');
 
@@ -882,17 +904,19 @@ export function describedForCancel(words: string, candidates: ChatRequestView[],
  * ADR-230 did), and with nothing open at all the requester hears so, naming what was delivered.
  */
 function planCancel(input: TurnInput, open: ChatRequestView[], changeable: ChatRequestView[], words: string,
-  reading: IntentReading, ask: (intent: PendingAsk['intent'], among: ChatRequestView[], allowNew: boolean) => TurnPlan): TurnPlan {
+  reading: IntentReading, ask: (intent: PendingAsk['intent'], among: ChatRequestView[], allowNew: boolean) => TurnPlan,
+  confirm = false): TurnPlan {
   const withdrawable = open.filter((r) => WITHDRAWABLE.includes(r.stage));
   if (!withdrawable.length) {
     if (open.length) {
       const picked = pickRequest(input, open, true);
-      if ('request' in picked) return applyTo('cancel', picked.request, words, picked.how, reading.confidence) ?? ask('cancel', [picked.request], false);
+      if ('request' in picked) return (confirm ? null : applyTo('cancel', picked.request, words, picked.how, reading.confidence)) ?? ask('cancel', [picked.request], false);
       if ('ambiguous' in picked) return ask('cancel', picked.ambiguous, false);
     }
     return { kind: 'reply', what: 'nothing-to-cancel', requestIds: [...changeable].sort(byActivity).slice(0, 3).map((r) => r.requestId) };
   }
-  const note = (r: ChatRequestView): TurnPlan => ({ kind: 'note', note: 'cancel', requestId: r.requestId, words });
+  // `confirm`: the words are not certainly a cancel; even a design they name is asked about first.
+  const note = (r: ChatRequestView): TurnPlan => confirm ? ask('cancel', [r], false) : ({ kind: 'note', note: 'cancel', requestId: r.requestId, words });
   if (reading.source === 'model' && reading.requestId && (reading.confidence ?? 0) >= 0.85) {
     const sure = withdrawable.find((r) => r.requestId === reading.requestId);
     if (sure) return note(sure);
@@ -908,7 +932,8 @@ function planCancel(input: TurnInput, open: ChatRequestView[], changeable: ChatR
   return ask('cancel', [...described].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), false);
 }
 
-const options = (requests: ChatRequestView[]) => requests.map((r) => ({ requestId: r.requestId, title: r.title, askedAt: r.createdAt }));
+const options = (requests: ChatRequestView[]) => requests.map((r) => ({ requestId: r.requestId, title: r.title, askedAt: r.createdAt,
+  ...(r.words ? { words: r.words.slice(0, 120) } : {}) }));
 
 /** A change bound to one request: a paid round when it waits for changes, else kept for the office. */
 function changeFor(request: ChatRequestView, words: string, how: string, confidence: number | undefined,
@@ -1057,6 +1082,8 @@ function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) 
 /** What to do with this message. Pure: the route records the plan once per update and carries it out. */
 export function planTurn(full: TurnInput): TurnPlan {
   // Delivered designs older than DELIVERED_LIVE_MS concern redo words only (ADR-200 addendum).
+  // ADR-230 addendum (L17): a closed request (withdrawn, rejected, expired) is never offered or acted on.
+  full = { ...full, requests: full.requests.filter((r) => CHANGEABLE.includes(r.stage)) };
   const input: TurnInput = { ...full, requests: full.requests.filter((r) => deliveredWithin(r, full.now, DELIVERED_LIVE_MS)) };
   const { reading, requests } = input;
   // The words as sent (line breaks included): they become a brief, a directive or a note.
@@ -1197,6 +1224,9 @@ export function planTurn(full: TurnInput): TurnPlan {
       return { kind: 'reply', what: 'nothing-to-change', requestIds: [] };
     }
     case 'unclear': {
+      // ADR-230 addendum (L17): words that cancel in a way the rules cannot place are asked about among
+      // the requests that can be withdrawn, by name, never with "a new design" and never withdrawn unasked.
+      if (reading.cancelWords && !input.bound.length) return planCancel(input, open, changeable, words, reading, ask, true);
       const bound = changeable.filter((r) => input.bound.includes(r.requestId));
       if (bound.length === 1) return changeFor(bound[0], words, 'reply', undefined) ?? ask('unclear', bound, true);
       if (!changeable.length) {
@@ -1280,12 +1310,55 @@ function askedWhen(at: number, now: number, lang: Lang): string {
 }
 
 /**
+ * ADR-230 addendum (L16): the start of a requester's own words, quoted (HTML): at most six words and 40
+ * characters, with "…" when cut. Empty for words that are a neutral name ("New design request from …").
+ */
+export function openingWords(words: string | null | undefined, html = true): string {
+  const t = withoutMarks(String(words ?? '').replace(/\s+/g, ' ').trim()).replace(/…$/u, '');
+  if (!t || isNeutralRequestTitle(t)) return '';
+  const all = t.split(' ');
+  let cut = all.slice(0, 6).join(' ');
+  if (cut.length > 40) cut = `${Array.from(cut).slice(0, 39).join('').trimEnd()}`;
+  const more = cut.length < t.length;
+  const shown = cut.replace(/[\s,.;:!?]+$/u, '');
+  return `“${html ? escapeTelegramHtml(shown) : shown}${more ? '…' : ''}”`;
+}
+
+/** When a request was sent, in the requester's words ("today at 15:33"), office time. */
+export function sentWhen(at: number, now: number, lang: Lang): string {
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 2) return say(NAMING_MESSAGES.sentJustNow, lang);
+  if (minutes < 60) return say(NAMING_MESSAGES.sentMinutesAgo, lang, { n: minutes });
+  const local = new Date(at + IRAQ_OFFSET_MS);
+  const time = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
+  const days = iraqDay(now) - iraqDay(at);
+  if (days <= 0) return say(NAMING_MESSAGES.sentToday, lang, { time });
+  if (days === 1) return say(NAMING_MESSAGES.sentYesterday, lang, { time });
+  return say(NAMING_MESSAGES.sentDaysAgo, lang, { n: days });
+}
+
+/**
+ * ADR-230 addendum (L16): a request's name as the requester reads it (HTML). One whose stored title
+ * names nothing ("your design") is named by when it was sent and the start of their words: "the one you
+ * sent today at 15:33 (“do a better design thats similar…”)". Its words are the brief's own, or the
+ * stored title when that is the sentence they sent.
+ */
+export function requestLabel(r: { title: string; askedAt?: string; words?: string }, lang: Lang, now = Date.now()): string {
+  if (shortTitle(r.title) !== 'your design') return title(r);
+  const at = r.askedAt ? Date.parse(r.askedAt) : NaN;
+  const words = openingWords(r.words) || openingWords(r.title.replace(/^[^:]{1,40}:\s*/, ''));
+  if (!Number.isFinite(at)) return words ? `${say(LIFECYCLE_MESSAGES.yourDesign, lang)} (${words})` : say(LIFECYCLE_MESSAGES.yourDesign, lang);
+  const when = sentWhen(at, now, lang);
+  return words ? say(NAMING_MESSAGES.theOneYouSent, lang, { when, words }) : say(NAMING_MESSAGES.theOneYouSentPlain, lang, { when });
+}
+
+/**
  * ADR-231: each design's name as the requester reads it (bold HTML). Designs that share a name are told
  * apart by when each was asked for ("KAAE K-12 Pilot Study… (asked for today at 08:44)"), or, asked for
  * within the same minute or with no time known, by their order ("version 2"). The live status of
  * 2026-10-01 named "KAAE K-12 Pilot Study…" twice with nothing between them.
  */
-export function distinctNames(items: ReadonlyArray<{ requestId: string; title: string; askedAt?: string }>, lang: Lang,
+export function distinctNames(items: ReadonlyArray<{ requestId: string; title: string; askedAt?: string; words?: string }>, lang: Lang,
   now: number): Map<string, string> {
   const names = new Map<string, string>();
   const groups = new Map<string, typeof items[number][]>();
@@ -1294,6 +1367,8 @@ export function distinctNames(items: ReadonlyArray<{ requestId: string; title: s
     groups.set(key, [...(groups.get(key) ?? []), item]);
   }
   for (const group of groups.values()) {
+    // ADR-230 addendum (L16): requests with no name of their own are each named by when and their words.
+    if (shortTitle(group[0].title) === 'your design') { for (const g of group) names.set(g.requestId, requestLabel(g, lang, now)); continue; }
     if (group.length === 1) { names.set(group[0].requestId, title(group[0])); continue; }
     const when = group.map((g) => (g.askedAt && Number.isFinite(Date.parse(g.askedAt)) ? askedWhen(Date.parse(g.askedAt), now, lang) : ''));
     const byTime = when.every((w) => w) && new Set(when).size === when.length;
@@ -1313,7 +1388,7 @@ export function distinctNames(items: ReadonlyArray<{ requestId: string; title: s
 export function statusText(requests: ChatRequestView[], lang: Lang, slow: ReadonlySet<string> = new Set(), now = Date.now()): string {
   const shown = requests.filter((r) => r.stage in STATUS_LINE);
   if (!shown.length) return say(ROUTING_MESSAGES.statusNothingOpen, lang);
-  const names = distinctNames(shown.map((r) => ({ requestId: r.requestId, title: r.title, askedAt: r.createdAt })), lang, now);
+  const names = distinctNames(shown.map((r) => ({ requestId: r.requestId, title: r.title, askedAt: r.createdAt, words: r.words })), lang, now);
   return shown.map((r) => {
     const stage = spokenStage(r);
     const key = stage === 'manual' && r.rev >= 3 ? 'manual-waiting' : stage;
@@ -1419,9 +1494,9 @@ export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang, no
   if (plan.redo === 'redo' && plan.options.length > 1) {
     return say(ROUTING_MESSAGES.askWhichRedo, lang, { list: plan.options.map((o, i) => `${i + 1}. ${named(o)}`).join('\n') });
   }
-  if (plan.options.length === 1 && plan.allowNew) return say(ROUTING_MESSAGES.askChangeOrNew, lang, { title: title(plan.options[0]) });
+  if (plan.options.length === 1 && plan.allowNew) return say(ROUTING_MESSAGES.askChangeOrNew, lang, { title: named(plan.options[0]) });
   if (plan.options.length === 1) {
-    return say(plan.intent === 'cancel' ? WITHDRAW_MESSAGES.askCancel : ROUTING_MESSAGES.askIsThisOne, lang, { title: title(plan.options[0]) });
+    return say(plan.intent === 'cancel' ? WITHDRAW_MESSAGES.askCancel : ROUTING_MESSAGES.askIsThisOne, lang, { title: named(plan.options[0]) });
   }
   const list = plan.options.map((o, i) => `${i + 1}. ${named(o)}`);
   if (plan.allowNew) list.push(`${plan.options.length + 1}. ${say(ROUTING_MESSAGES.aNewDesign, lang)}`);

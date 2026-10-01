@@ -306,5 +306,12 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `pendingRound.changesKept` | Your draft of {title} was finished before your changes could be added: {changes}. I've kept them for the office, which checks the design before it comes to you. | ڕەشنووسی {title} پێش ئەوەی گۆڕانکارییەکانت زیاد بکرێن تەواو بوو: {changes}. بۆ ئۆفیسەکەم هەڵگرتن، کە پێش ئەوەی دیزاینەکە بۆت بێت سەیری دەکات. | needs native review (ADR-230 addendum, changes sent while a design was being made, 2026-10-01) |
 | `withdraw.nothingToCancel` | There's nothing open for me to cancel right now. | ئێستا هیچ داواکارییەکی کراوە نییە کە هەڵیبوەشێنمەوە. | needs native review (ADR-230 addendum, natural cancel reading, 2026-10-01) |
 | `withdraw.deliveredNotCancellable` | {title} was already delivered, so there is nothing to cancel there. | {title} پێشتر گەیەندرابوو، بۆیە هیچ نییە لەوێ هەڵبوەشێنرێتەوە. | needs native review (ADR-230 addendum, natural cancel reading, 2026-10-01) |
+| `naming.theOneYouSent` | the one you sent {when} ({words}) | ئەوەی {when} ناردت ({words}) | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
+| `naming.theOneYouSentPlain` | the one you sent {when} | ئەوەی {when} ناردت | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
+| `naming.sentJustNow` | just now | ئێستا | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
+| `naming.sentMinutesAgo` | {n} minutes ago | پێش {n} خولەک | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
+| `naming.sentToday` | today at {time} | ئەمڕۆ کاتژمێر {time} | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
+| `naming.sentYesterday` | yesterday at {time} | دوێنێ کاتژمێر {time} | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
+| `naming.sentDaysAgo` | {n} days ago | پێش {n} ڕۆژ | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
 
 187 lines.
