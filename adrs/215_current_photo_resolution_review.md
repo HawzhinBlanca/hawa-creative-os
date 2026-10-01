@@ -1,6 +1,6 @@
 # ADR215 — Measure cutout and current photo resolution with rendering geometry
 
-Date: 2026-10-01. Status: connected engineering verified; exact gate and product admission pending.
+Date: 2026-10-01. Status: connected and seven-stage engineering verified; production-dump/native/human/product admission pending.
 Requirements: FR-028, FR-031, FR-038, FR-040, FR-041, NFR-012.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/07_MODEL_REGISTRY_AND_EVALUATION.md,
 docs/11_QA_RTL_MULTILINGUAL.md, MASTER_SPEC; ADR157, ADR170 and ADR214.
@@ -58,3 +58,5 @@ Canva/native/human/taste/product admission remains separate and open.
 ## Connected evidence
 
 19 pure/local-raster/editable-transfer tests and one actual Core/isolated PostgreSQL/HTTP/office-review check pass. Connected26files510pass/0fail/0skip; strict695 roots, build and lint pass. Original17 red controls, corrected genuine stale-ranking red and introduced fixture/IPC failures are retained in W4_PHOTO_RESOLUTION_REVIEW_PROOF.json. Current source edits produce fresh warnings without mutating layout or adding model calls. Exact clean engineering gate remains pending; no production/native/human/product admission claim.
+
+Exact clean seal 9664a72e passes seven engineering stages: 6875 passed / 0 failed / 67 skipped across 688 passed files / 6 skipped; 695 strict roots and 1768 package checks. Mandatory negative-flag refusal passes. Raw production-dump Stage 3 remains skipped: previous automatic approval review requires explicit transfer authorization, still pending. No all-eight qualification, deployment or native/human/product admission claim. W4_PHOTO_RESOLUTION_REVIEW_GATE_EVIDENCE.json retains actual receipts.

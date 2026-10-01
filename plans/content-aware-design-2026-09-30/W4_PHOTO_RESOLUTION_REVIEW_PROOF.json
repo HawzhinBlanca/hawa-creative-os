@@ -9,7 +9,7 @@
     "FR-041",
     "NFR-012"
   ],
-  "status": "CONNECTED_ENGINEERING_VERIFIED_EXACT_GATE_AND_PRODUCT_ADMISSION_PENDING",
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "sourceSha256": {
     "apps/core/src/services/design-studio/art-direction.ts": "852b407df1fcc53bd2ebefe23ccac546aa3381cb32aa1027aa07051caa54de9d",
     "apps/core/src/services/design-studio/stages/v3.stage.ts": "46819805dccf9dee52250a12346dd081e5a92294eb6acb0ee960f1e414bc93a9",
@@ -85,5 +85,13 @@
     "output/qualification/2026-10-01/photo-resolution-review/STRICT_SANDBOX_FAILURE.log": "8093d89c72daa0f394115b6a3ce39595433ae71f938ecaf8c94b680cb8039b6b",
     "output/qualification/2026-10-01/photo-resolution-review/STRICT_SHOT_FAILURE.log": "612d213f9e4605a911d178e427c00cf5f67abc0a7affec78043eef037b6f03cf",
     "output/qualification/2026-10-01/photo-resolution-review/STRICT_TYPES.log": "1ec2449e87a3813447d747d9568c84e7c6a31d751e75e537acc8313110f7f925"
+  },
+  "sourceCommit": "195b3b5a6a015654ee3dca44abf8c555fc13a8d2",
+  "releaseGate": {
+    "candidateCommit": "9664a72ec6ef250070f7f5ebe23ac8f0bdaf0849",
+    "proof": "plans/content-aware-design-2026-09-30/W4_PHOTO_RESOLUTION_REVIEW_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior explicit transfer approval pending",
+    "allEightQualified": false
   }
 }
