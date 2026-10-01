@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T08:59:44Z",
+  "generatedAt": "2026-10-01T11:20:21Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 684,
+  "fileCount": 685,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "69a4215bf426d28b6ea42fbca95001a6ed4f07274ad85ec3558505b2e1a6d474",
-      "bytes": 3979
+      "sha256": "134db6d40e40f865e852e185faecf9dec80ea5a6422eee65110291005d27125f",
+      "bytes": 3983
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -913,6 +913,11 @@
       "bytes": 2258
     },
     {
+      "path": "adrs/200_office_chat_understanding.md",
+      "sha256": "a0346bedbb0b962a977f5a39b9137b1b9011a6fd7f9a2554d4a1531b2ba82c39",
+      "bytes": 12994
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1594,8 +1599,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "be6c5ae20a4246c187e81b74231cc9c059a9598cfadab231ae02e49701e20a83",
-      "bytes": 60826
+      "sha256": "ec550242e91b576266caad0fb1a58c1ab6d033ef4fc4afa106e2a19b5e69a89e",
+      "bytes": 62252
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -2544,8 +2549,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2acda51d0b1e0811675641440e735e380a8497ab5b290ee597c0b1fb91790b2a",
-      "bytes": 579509
+      "sha256": "82deb21afa4d0702a627e2deb39f319b1e764f135106af21605bd907c557c14c",
+      "bytes": 582728
     },
     {
       "path": "plans/user-stories.csv",

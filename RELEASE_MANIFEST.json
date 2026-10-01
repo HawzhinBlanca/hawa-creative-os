@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-01T11:59:15+03:00",
+  "generatedAt": "2026-10-01T14:19:43+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,10 +20,10 @@
     ]
   },
   "build": {
-    "commit": "b1623f560498a395fa2013153ba003307b057d59",
+    "commit": "76bc79e455f6de66f7010f58a01a168804ccd188",
     "treeClean": true,
-    "commitTimestamp": "2026-10-01T11:59:15+03:00",
-    "branch": "claude/pending-choice-reread"
+    "commitTimestamp": "2026-10-01T14:19:43+03:00",
+    "branch": "claude/office-chat-understanding"
   },
   "migrations": {
     "targetVersion": "073_restricted_worker_database",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "7c2c94e521e713fad66896d7a15600b3834987148185ab59c0000906fc535757"
+  "sha256": "eaa17eeed41010dad66a4354943101c8274a054f7df04018d7309afc55765a8d"
 }
