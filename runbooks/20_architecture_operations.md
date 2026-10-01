@@ -601,3 +601,21 @@ are never cached by the event disclosure check.
 
 Connected reproduction and exact candidate evidence:
 `plans/content-aware-design-2026-09-30/W6_STREAM_ISOLATION_PROOF.json`.
+
+
+### Account and office membership withdrawal (ADR224)
+
+Disabling a user's stored account or deactivating/removing all of their tenant
+memberships removes subsequent SQL-backed resource read/write authority, even
+when client grants or a Desk session remain. Re-enabling the account and explicit
+active membership restores only their existing client roles; no new client or
+operator grant is inferred. The user can still display a cached sign-in until
+session refresh, while resource requests refuse. Current permissions are never
+recovered from a process cache. Existing worker/system accounts must retain their
+explicit office membership and narrow grants for their admitted jobs.
+
+Migration079 replaces only existing helpers, preserves their ACLs and statement
+InitPlan policy shape, and changes no business rows. Do not restore historical
+client-only admission or deploy a helper rollback that recreates the revoked
+account access. Production-data migration checking and rollout are separate gates.
+Evidence: `plans/content-aware-design-2026-09-30/W6_CURRENT_MEMBERSHIP_PROOF.json`.

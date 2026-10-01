@@ -31,6 +31,8 @@ const mutate = async (ruleId: string, action: string, body: unknown = {}) => {
 afterAll(async () => { await db.destroy(); await owner.destroy(); });
 beforeAll(async () => {
     await sql `INSERT INTO hawa.users(id,email,display_name) VALUES(${viewer}::uuid,${`${viewer}@test.invalid`},'Isolated viewer')`.execute(owner);
+    await sql `INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role)
+    VALUES(${tenantId}::uuid,${viewer}::uuid,'designer')`.execute(owner);
     await sql `INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
     VALUES(${tenantId}::uuid,${mine}::uuid,${viewer}::uuid,'designer',true)`.execute(owner);
 });
@@ -251,6 +253,8 @@ describe('Learning governance boundaries', () => {
     it('allows client readers to inspect moderation receipts without allowing forged writers', async () => {
         const reader = randomUUID();
         await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${reader}::uuid,${`${reader}@test.invalid`},'Read-only receipt viewer')`.execute(owner);
+        await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role)
+          VALUES(${tenantId}::uuid,${reader}::uuid,'requester')`.execute(owner);
         await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
           VALUES(${tenantId}::uuid,${mine}::uuid,${reader}::uuid,'requester',true)`.execute(owner);
         const readerScope = {...scope,userId:reader,role:'requester'};

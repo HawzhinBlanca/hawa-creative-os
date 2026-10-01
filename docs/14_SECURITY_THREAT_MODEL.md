@@ -237,3 +237,15 @@ Desk retains an exact action scoped to the office and user before POST and retri
 it after an uncertain answer or remount. Replay rechecks authority and returns the
 original receipt before checking whether newer policy revisions exist. See
 runbooks/SPENDING_POLICY.md. Other paid paths and live admission remain open.
+
+
+### Current persisted account authority (ADR224)
+
+Tenant and client resource policies require an enabled stored user and active
+tenant membership. A retained client grant, cached session or application role
+string cannot restore withdrawn office admission. Direct helper calls and
+once-per-statement client-ID policy sets enforce the same rule. Narrow client
+roles and broad tenant roles retain their existing scope. Disabling an account
+or withdrawing membership affects subsequent resource statements; this does not
+claim instantaneous session sign-out across Core instances or revoke a download
+whose bytes were already authorized and sent.

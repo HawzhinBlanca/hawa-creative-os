@@ -206,8 +206,12 @@ describe('Learning recovery across independent Core processes',()=>{
       sql`UPDATE hawa.feedback_events SET comment='Runtime source edit' WHERE id=${instruction}::uuid`.execute(trx))).rejects.toMatchObject({code:'55000'});
     const outsider=randomUUID();
     await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${outsider}::uuid,${outsider+'@test.invalid'},'Foreign scope reader')`.execute(owner);
+    await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role)
+      VALUES(${tenantId}::uuid,${outsider}::uuid,'designer')`.execute(owner);
     await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
       VALUES(${tenantId}::uuid,'c1000000-0000-4000-8000-000000000002'::uuid,${outsider}::uuid,'designer',true)`.execute(owner);
+    const assigned=await withRlsContext(db,{tenantId,userId:outsider,role:'designer'},trx=>trx.selectFrom('clients').select('id').execute());
+    expect(assigned.map(row=>row.id)).toEqual(['c1000000-0000-4000-8000-000000000002']);
     const invisible=await withRlsContext(db,{tenantId,userId:outsider,role:'designer'},trx=>trx.selectFrom('design_feedback').select('id').where('task_id','=',task).execute());
     expect(invisible).toEqual([]);await stop();
   },30000);

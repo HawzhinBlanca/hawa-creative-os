@@ -907,3 +907,16 @@ eight stable mounted files, independent worker credentials, unsafe release absen
 and effective restricted SQL role. No production deployment or provider/native
 save. Production dump transfer and all product/native/human/model/pilot/offsite
 gates remain open. W6_STREAM_ISOLATION_PROOF.json binds each artifact by hash.
+
+
+## Current account and tenant authority — 1 October2026, ADR224
+
+Actual original-byte download survives office membership withdrawal, and disabled
+designer/operator runtime contexts still read/write task rows. Five strict red
+checks retained. Forward migration079 requires enabled active office admission
+in direct and hoisted SQL authority, preserving existing narrow role sets, function
+IDs/owners/ACLs/policy expressions/InitPlans and worker grants.51 migration/client
+checks and91 affected boundary checks pass;703 roots/types/lint/chaos types pass.
+All historical foundation files untouched. Clean full source and deployed candidate
+qualification pending; no production or whole native/human/model/pilot admission.
+W6_CURRENT_MEMBERSHIP_PROOF.json.

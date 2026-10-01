@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T18:37:35Z",
+  "generatedAt": "2026-10-01T18:51:07Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 828,
+  "fileCount": 830,
   "files": [
     {
       "path": ".dockerignore",
@@ -1103,6 +1103,11 @@
       "bytes": 4672
     },
     {
+      "path": "adrs/224_current_membership_and_account_authority.md",
+      "sha256": "c2f42080b7d637c68e46c60349f16ccceb62645038e1a054aa4e0c0ed41d1ac7",
+      "bytes": 3038
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1389,8 +1394,8 @@
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
-      "sha256": "73ce2801e54c63b5dbde9d5f515caf40de4b23d0534df407781bf83ec73adbcb",
-      "bytes": 9729
+      "sha256": "145bb73ead2ebc109b2b6cf96ecfd916746a1f3f98ed49fffabf00e33d5b98c8",
+      "bytes": 10375
     },
     {
       "path": "docs/15_DATABASE_DESIGN.md",
@@ -1594,8 +1599,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "a39821d4c15475fcdda5dc04ec64c9a9ea7592da318d6862fda0d98fcac54c6c",
-      "bytes": 82066
+      "sha256": "a91989798dfca46d1f259d0dd28da3d43d9cd8217b4d1648372971f4a102c58b",
+      "bytes": 82824
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1881,6 +1886,11 @@
       "path": "plans/content-aware-design-2026-09-30/W6_CURRENT_ASSET_RECOVERY_GATE_EVIDENCE.json",
       "sha256": "17c066002106d1aaddda3171a06f302858b059068807c9696eb4618971d5e464",
       "bytes": 821
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/W6_CURRENT_MEMBERSHIP_PROOF.json",
+      "sha256": "60e1cd574e16d9923696f58dea105d3d6a2fba5ad25490c4a6cbfce856b317f9",
+      "bytes": 6605
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_DEPLOYED_ASSET_RECOVERY_PROOF.json",
@@ -3204,8 +3214,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "1a61466203987645aa0c8b3adc9b52833a395d8a6bd2c9ae651661ccf8e6dd49",
-      "bytes": 757654
+      "sha256": "a912befe6242bcdd421335ad9cc9103554c55f188286075f03bc78867e510280",
+      "bytes": 760659
     },
     {
       "path": "plans/user-stories.csv",
@@ -3299,8 +3309,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "5c8abf4b819d5a20047273766b115c70e7cec9b170f280776714bf9e0dc0246f",
-      "bytes": 40963
+      "sha256": "155c8d959fd39fa4a7a1ee963165ba626ddf9a6c7e2f241b1060361c55da8143",
+      "bytes": 42050
     },
     {
       "path": "runbooks/AVAILABILITY_MONITORING.md",

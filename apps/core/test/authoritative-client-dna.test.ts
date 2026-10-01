@@ -22,6 +22,8 @@ beforeAll(async()=>{
  await persistClientDnaFixture(app,own,headers);
  await persistClientDnaFixture(app,foreign,headers);
  await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${userId}::uuid,${userId+'@test.invalid'},'Scoped DNA reader')`.execute(owner);
+ // ADR224 requires active office admission as well as the narrower client grant.
+ await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${tenantId}::uuid,${userId}::uuid,'designer')`.execute(owner);
  await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
   VALUES(${tenantId}::uuid,${own}::uuid,${userId}::uuid,'designer',true)`.execute(owner);
  await (app as unknown as {clientDnaHydrated:Promise<number>}).clientDnaHydrated;

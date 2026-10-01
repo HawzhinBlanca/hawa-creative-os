@@ -71,6 +71,8 @@ describe.skipIf(!ownerUrl || !runtimeUrl)('policies in the database (PostgreSQL)
         await sql`INSERT INTO hawa.users (id, email, display_name) VALUES (${id}::uuid, ${`${label}-${marker}@test.invalid`}, ${label})`.execute(trx);
       }
       await sql`INSERT INTO hawa.client_memberships (tenant_id, client_id, user_id, role, active) VALUES (${tenantId}::uuid, ${mine}::uuid, ${designer}::uuid, 'designer', true)`.execute(trx);
+      // ADR224: a client grant narrows active office admission; it does not replace it.
+      await sql`INSERT INTO hawa.tenant_memberships (tenant_id, user_id, role, active) VALUES (${tenantId}::uuid, ${designer}::uuid, 'designer', true)`.execute(trx);
       await sql`INSERT INTO hawa.tenant_memberships (tenant_id, user_id, role, active) VALUES (${tenantId}::uuid, ${admin}::uuid, 'administrator', true)`.execute(trx);
       for (const client of [mine, other, mine]) {
         await sql`INSERT INTO hawa.tasks (tenant_id, client_id, title) VALUES (${tenantId}::uuid, ${client}::uuid, ${marker})`.execute(trx);

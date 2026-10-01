@@ -59,7 +59,7 @@ export async function verifyCandidateStreamIsolation(origin: string, checks: Inv
       Authorization: `Bearer ${secrets().CHAOS_BEARER_TOKEN}`, 'Content-Type': 'application/json',
     }, body: JSON.stringify(body) });
     check('synthetic stream source upload is admitted by deployed Core', saved.status === 201, `HTTP ${saved.status}`);
-    return saved.json() as Promise<{ assetId: string }>;
+    return saved.json() as Promise<{ assetId: string; sourceSha256: string }>;
   };
   try {
     const replay = await fetch(`${origin}/v1/events/stream?ticket=${encodeURIComponent(ticket.ticket!)}`);
@@ -80,6 +80,30 @@ export async function verifyCandidateStreamIsolation(origin: string, checks: Inv
     const removed = await upload(clients[0]), barrier = await upload(clients[1]); await through(barrier.assetId);
     check('open deployed stream refuses a removed client while retaining the other assignment',
       !seen.includes(removed.assetId), 'current RLS checked before ordered positive barrier');
+
+    // ADR224: this actual warmed session must lose persisted bytes when office
+    // membership/account access is withdrawn, despite its retained client grant.
+    const originalPath = `${origin}/v1/assets/${granted.assetId}/sources/${granted.sourceSha256}/content`;
+    const readOriginal = () => fetch(originalPath, { headers });
+    const original = await readOriginal();
+    const originalBytes = Buffer.from(await original.arrayBuffer());
+    check('current named session reads its assigned original before membership revocation',
+      original.status === 200 && originalBytes.length > 0, `HTTP ${original.status}; retained original bytes`);
+    await query(sql`UPDATE hawa.tenant_memberships SET active=false WHERE tenant_id=${TENANT_ID}::uuid AND user_id=${userId}::uuid`);
+    for (const path of [originalPath, `${origin}/v1/assets/${granted.assetId}/content`]) {
+      const blocked = await fetch(path, { headers });
+      check('warmed deployed session cannot read retained bytes after tenant membership revocation', blocked.status === 404, `HTTP ${blocked.status}`);
+      await blocked.body?.cancel();
+    }
+    await query(sql`UPDATE hawa.tenant_memberships SET active=true WHERE tenant_id=${TENANT_ID}::uuid AND user_id=${userId}::uuid`);
+    await query(sql`UPDATE hawa.users SET disabled_at=now() WHERE id=${userId}::uuid`);
+    const disabled = await readOriginal();
+    check('warmed deployed session cannot read its client original after account disabling', disabled.status === 404, `HTTP ${disabled.status}`);
+    await disabled.body?.cancel();
+    await query(sql`UPDATE hawa.users SET disabled_at=NULL WHERE id=${userId}::uuid`);
+    const restored = await readOriginal();
+    check('explicit account and membership restoration reopens the same byte-identical client original',
+      restored.status === 200 && originalBytes.equals(Buffer.from(await restored.arrayBuffer())), `HTTP ${restored.status}`);
     const logout = await fetch(`${origin}/v1/auth/session`, { method: 'DELETE', headers }); await logout.body?.cancel();
     check('deployed designer session can revoke its own stream credential', logout.status === 200, `HTTP ${logout.status}`);
     const afterLogout = await upload(clients[1]);
