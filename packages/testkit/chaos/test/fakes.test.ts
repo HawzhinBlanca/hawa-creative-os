@@ -118,6 +118,49 @@ describe('fake Telegram', () => {
 });
 
 describe('fake models and the paid-call ledger', () => {
+  const imageCount = (body: unknown, method = 'POST') => provider('api.openai.com', '/v1/responses/input_tokens', {
+    method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const inlineImage = (bytes: number[], detail = 'auto') => ({ type: 'input_image',
+    image_url: `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`, detail });
+
+  it('serves the bounded synthetic Sol image-count protocol without generating a completion or retaining images', async () => {
+    await admin('/reset', {});
+    const images = [inlineImage([1, 2, 3]), inlineImage([4, 5, 6], 'high')];
+    const body = { model: 'gpt-6.1-sol', input: [{ role: 'user', content: images }] };
+    const response = await imageCount(body);
+    expect(response.status).toBe(200);
+    // Fixture units only: this is not a provider token estimate or pricing measurement.
+    expect(response.json).toEqual({ object: 'response.input_tokens', input_tokens: 520 });
+    expect(response.json.choices).toBeUndefined();
+    const changed = await imageCount({ ...body, input: [{ role: 'user', content: [inlineImage([1, 2, 3], 'low'), images[1]] }] });
+    expect(changed.status).toBe(200);
+    const { ledger } = await admin('/models/ledger');
+    expect(ledger).toHaveLength(2);
+    expect(ledger[0]).toMatchObject({ route: 'input-token-count', model: 'gpt-6.1-sol', status: 200,
+      imageSha256: [crypto.createHash('sha256').update(Buffer.from([1, 2, 3])).digest('hex'),
+        crypto.createHash('sha256').update(Buffer.from([4, 5, 6])).digest('hex')] });
+    expect(ledger[0].fingerprint).not.toBe(ledger[1].fingerprint);
+    expect(JSON.stringify(ledger)).not.toContain(images[0].image_url);
+  });
+
+  it.each([
+    { model: 'unconfigured-model', input: [{ role: 'user', content: [inlineImage([1])] }] },
+    { model: 'gpt-6.1-sol', input: [] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'assistant', content: [inlineImage([1])] }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: [{ type: 'input_image', image_url: 'https://untrusted.example/photo' }] }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: [inlineImage([1], 'invented-detail')] }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: [{ type: 'input_image', image_url: 'data:image/png;base64,AA===' }] }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: Array.from({ length: 65 }, () => inlineImage([1])) }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: [inlineImage([1])] }], instructions: 'unconfigured input' },
+  ])('keeps an unsupported count request visible as an uncovered protocol (%j)', async (body) => {
+    await admin('/reset', {});
+    expect((await imageCount(body)).status).toBe(500);
+    const { ledger } = await admin('/models/ledger');
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]).toMatchObject({ route: 'unmatched:/v1/responses/input_tokens', status: 500 });
+  });
+
   const chat = (schema: string | null, user: string, extra: Record<string, unknown> = {}) =>
     provider('api.openai.com', '/v1/chat/completions', {
       method: 'POST',

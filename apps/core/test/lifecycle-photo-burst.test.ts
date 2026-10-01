@@ -58,7 +58,9 @@ function setup(chatType: 'private' | 'group' = 'private') {
   vi.stubEnv('AUTO_GENERATE_DAILY_CAP_GLOBAL', '100000');
   vi.stubEnv('AUTO_GENERATE_DAILY_CAP_PER_SENDER', '10000');
   const download = vi.fn(async (file: string) => png(Number(file)));
-  const app = createApp({ db, telegramBridge: { downloadFile: download, dispatchOutboundMessage: vi.fn(async () => ({ success: true })) } } as any);
+  const freshApp = () => createApp({ db, telegramBridge: { downloadFile: download, dispatchOutboundMessage: vi.fn(async () => ({ success: true })) } } as any);
+  let app = freshApp();
+  const restart = () => { app = freshApp(); };
   const from = { id: SENDER, first_name: 'Requester' };
   /** A photo outside an album (no media_group_id), as Telegram delivers a burst: one message per photo. */
   const photo = (file: number, caption?: string) => ({ update_id: ++id, message: { message_id: ++id, date: 1790000000, from,
@@ -91,7 +93,7 @@ function setup(chatType: 'private' | 'group' = 'private') {
   const age = (interval: string) => sql`UPDATE hawa.inbox_events SET received_at = received_at - ${interval}::interval
     WHERE tenant_id = ${tenantId}::uuid AND payload->>'chatId' = ${String(chat)}
       AND source_account_id IN ('lifecycle_album_part', 'lifecycle_album_pending', 'lifecycle_photo_held')`.execute(owner);
-  return { chat, photo, text, intake, send, settle, burst, opens, tasks, age, app, download };
+  return { chat, photo, text, intake, send, settle, burst, opens, tasks, age, app, download, restart };
 }
 
 async function project(app: ReturnType<typeof createApp>, decision: any) {
@@ -180,6 +182,7 @@ describe('photo bursts (ADR-160 addendum)', () => {
     const words = f.text(BRIEF);
     const opened = await f.intake(words);
     expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { lifecycleImage: { sha256: sha(png(21)), updateId: words.update_id } } });
+    expect(f.download).toHaveBeenCalledTimes(1);
 
     const g = setup();
     const captioned = g.photo(22, BRIEF);
@@ -190,6 +193,42 @@ describe('photo bursts (ADR-160 addendum)', () => {
     expect(photoBrief.draft.lifecycleAlbum).toBeUndefined();
     expect(await g.settle(captioned)).toMatchObject({ duplicate: true, requestId: photoBrief.requestId });
     expect(await g.opens()).toBe(1);
+    expect(g.download).toHaveBeenCalledTimes(1);
+  });
+
+  it('a retained captioned photo survives Core replacement and refuses a changed source without another download', async () => {
+    const f = setup();
+    const shot = f.photo(23, BRIEF);
+    expect(await f.send(shot)).toMatchObject({ lifecycleAction: 'settle-later' });
+    expect(f.download).toHaveBeenCalledTimes(1);
+    // No process-local cache and no usable transport after the collector has committed.
+    f.restart();
+    f.download.mockImplementation(async () => { throw new Error('unexpected second download'); });
+    const opened = await f.settle(shot);
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: {
+      lifecycleImage: { sha256: sha(png(23)), updateId: shot.update_id } } });
+    f.restart();
+    expect(await f.settle(shot)).toMatchObject({ duplicate: true, requestId: opened.requestId });
+    const altered = { ...shot, message: { ...shot.message, caption: `${BRIEF}\nCHANGED` } };
+    expect(await f.settle(altered)).toMatchObject({ intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    expect(f.download).toHaveBeenCalledTimes(1);
+    expect(await f.opens()).toBe(1);
+  });
+
+  it('a captioned photo with conversation words is held from retained bytes for its sender’s later brief', async () => {
+    const f = setup();
+    const shot = f.photo(24, 'hello');
+    expect(await f.send(shot)).toMatchObject({ lifecycleAction: 'settle-later' });
+    f.restart();
+    f.download.mockImplementation(async () => { throw new Error('unexpected second download'); });
+    const asked = await f.settle(shot);
+    expect(saidTo(asked)).toEqual([MEDIA_MESSAGES.photoHeld.en]);
+    expect(await f.opens()).toBe(0);
+    const words = f.text(BRIEF);
+    expect(await f.intake(words)).toMatchObject({ lifecycleAction: 'open-request', draft: {
+      lifecycleImage: { sha256: sha(png(24)), updateId: words.update_id } } });
+    expect(f.download).toHaveBeenCalledTimes(1);
+    expect(await f.opens()).toBe(1);
   });
 
   it('a lone photo whose caption was cut at the limit is held and asked about, then opens with the whole text', async () => {

@@ -15,7 +15,7 @@
  *    the words once. A brief ADR-143 still holds for photos takes the photo when it opens.
  * Every decision is recorded once per update and replays word for word.
  */
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, type BlobRef } from '@hawa/contracts';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { ACCESS_MESSAGES, MEDIA_MESSAGES, bold, requesterLang, say, type RequesterLang } from '@hawa/integrations';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
@@ -92,7 +92,7 @@ export function createMediaRoute(ctx: Pick<CoreContext, 'db' | 'telegramBridge' 
    * not one. `holdAnswer` is what the route answers when the photo was kept (settle later).
    */
   async function holdPhotoUpdate(update: { update_id: number } & Json, chatId: string, payloadHash: string,
-    settleDelayMs: number, captioned?: { fileId: string }): Promise<MediaAnswer | null> {
+    settleDelayMs: number, captioned?: { fileId: string }, retainedImage?: BlobRef): Promise<MediaAnswer | null> {
     // A captioned photo whose words are not a brief (and nothing waits for a change) is kept the same
     // way, and asked about at once: its words said what it is not.
     const message = record(update.message);
@@ -109,9 +109,11 @@ export function createMediaRoute(ctx: Pick<CoreContext, 'db' | 'telegramBridge' 
     const prior = await tx((trx) => readHeldPhoto(trx, DEFAULT_TENANT_ID, update.update_id));
     if (prior && prior.chatId !== chatId) return { status: 409, extra: { code: 'IDEMPOTENCY_CONFLICT' } };
     if (!prior) {
-      if (!ctx.telegramBridge) return { status: 503, extra: { code: 'NOT_CONFIGURED' } };
-      const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
-        (id) => ctx.telegramBridge!.downloadFile(id), candidate.fileId);
+      if (!retainedImage && !ctx.telegramBridge) return { status: 503, extra: { code: 'NOT_CONFIGURED' } };
+      // Only Core's source-hash-checked burst handoff supplies this internal reference (ADR221).
+      const photo = retainedImage ? { kind: 'stored' as const, ref: retainedImage }
+        : await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
+          (id) => ctx.telegramBridge!.downloadFile(id), candidate.fileId);
       if (photo.kind === 'store_unavailable') return { status: 503, extra: { code: 'NOT_CONFIGURED' } };
       if (photo.kind === 'download_unavailable') return { status: 503, extra: { code: 'PHOTO_UNAVAILABLE' } };
       if (photo.kind === 'unsupported') {

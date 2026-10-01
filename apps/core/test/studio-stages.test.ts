@@ -812,8 +812,9 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     const swapped = checkCanvaPptx(bytes, copy, { fontsByIndex: ['Verdana', 'Playfair Display', 'Verdana', 'Verdana'] });
     expect(swapped.fontPass).toBe(false);
     expect(swapped.offendingObjects[0]).toMatchObject({ index: 0, expectedFont: 'Verdana', observedFont: 'Cinzel' });
-    // A planner manifest carries its reference pack and keeps the single-font check.
-    expect(studioSentBlocks({ ...transfer.manifest, reference: { rules: { fontFamily: 'Verdana' } } })).toBeNull();
+    // A reference pack cannot replace the immutable per-block fonts actually sent (ADR220).
+    expect(studioSentBlocks({ ...transfer.manifest, reference: { rules: { fontFamily: 'Verdana' } } }))
+      .toEqual(blocks);
   });
 
   it('13. the transfer carries the official logo, found from wherever the service runs', async () => {

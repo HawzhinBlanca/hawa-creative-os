@@ -830,3 +830,14 @@ No production, paid provider, native-save, human-label or offsite-admission clai
 ADR219 connected: manual Desk creation records an unclaimable MANUAL_DESK_OWNED outbox receipt while preserving atomic task/event/receipt identity. Old source-bound no-job callbacks cannot alter manual task/version; actual default/draft/lifecycle outcome semantics remain. Original Core5pass/2fail and deployed TaskChanged race retained; stale-build and negative-fixture failures retained.14files177passed/0failed/0skipped; actual PDF31checks/four SIGKILL/six restarts/fresh dump+file restore PASS;698 strict roots/build/lint/standalone chaos types PASS. Exact current Docker and engineering gate pending. No deployment/native/human/product/RPO admission. W6_MANUAL_DESK_DISPATCH_PROOF.json.
 
 Current clean candidate cab4869d actual Docker recovery PASS: 202 named checks; six original receipts/five admitted assets; 12 exact-byte/header downloads at each of three phases. Both authenticated encrypted fresh-volume co-restores retain originals, fonts and immutable actors/timestamps; drive: 105 tables/176 policies/10 blobs/zero missing; telegram: 105 tables/176 policies/10 blobs/zero missing. Pending Delivery identity preserved, Drive effect adopted and uncertain Telegram not repeated. Owned private recovery artifacts removed for both exact nonces. Real nginx/Core/Desk/worker/PostgreSQL/Restate/Docling; all external and staff actions synthetic. 698 strict roots, standalone chaos types and lint PASS. Runtime-identical engineering candidate 55542978 seven-stage gate passes 6922/0/67,698 roots and mandatory negative refusal; production-dump transfer approval still pending. ADR219 manual receipt/worker callback/no automatic submission controls pass. No production deployment, native/human/product quality or separate-host/RPO/RTO admission. W6_DEPLOYED_ASSET_RECOVERY_PROOF.json. Initial wrong test-column failure retained.
+
+## Current full durable run and focused repairs — 1 October 2026
+
+The clean90c87686 ordinary worker-poller suite executed54 scenarios:46 passed,
+8 failed,681 named controls passed;2 rollback scenarios were unselected. Original
+receipts are retained. ADR220 fixes per-block imported font authority; ADR221
+preserves already retained lone-burst photos through intake. The synthetic provider
+now covers the actual bounded Sol image-count protocol, retaining refusal visibility.
+Connected237 tests/14 files and699 strict roots pass; full current durability,
+candidate recovery and engineering gate qualification are pending. No production,
+native save, real provider or product admission change. See W6_DURABILITY_REPAIR_PROOF.json.

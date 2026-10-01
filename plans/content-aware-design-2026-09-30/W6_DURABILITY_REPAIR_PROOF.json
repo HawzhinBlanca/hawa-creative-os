@@ -1,0 +1,123 @@
+{
+  "date": "2026-10-01",
+  "status": "CONNECTED_REPAIR_VERIFIED_FULL_DURABILITY_PENDING",
+  "requirements": [
+    "FR-004",
+    "FR-005",
+    "FR-028",
+    "FR-034",
+    "FR-035",
+    "FR-038",
+    "NFR-001",
+    "NFR-014",
+    "NFR-024"
+  ],
+  "decisions": [
+    "adrs/220_per_block_imported_font_authority.md",
+    "adrs/221_lone_photo_retained_source_handoff.md"
+  ],
+  "originalRun": {
+    "commit": "90c87686ec636bed2948f6dc032a5f62cfdbe5e4",
+    "scenarios": 54,
+    "passed": 46,
+    "failed": 8,
+    "passingControls": 681,
+    "uncoveredCountRequests": 6,
+    "rollbackScenariosUnselected": 2
+  },
+  "connected": {
+    "files": 14,
+    "passed": 237,
+    "failed": 0,
+    "strictRoots": 699,
+    "runtimeScriptAndStrictTypes": "PASS",
+    "chaosStrictTypes": "PASS",
+    "lint": "PASS"
+  },
+  "repairs": {
+    "font": "Complete immutable per-block font plan is used for new captures, including planner sources with a reference; malformed declared plans refuse; frozen old policies and rejected artifacts remain unchanged.",
+    "photo": "Source-hash-checked lone-burst retained bytes survive brief/revision/held-photo handoff and process replacement; altered source is refused.",
+    "fakeCount": "Synthetic-only bounded gpt-6.1-sol image-count request/response protocol; arbitrary fixture token units, not real accuracy, billing or model-quality evidence; unsupported inputs remain uncovered."
+  },
+  "failureHistory": [
+    "Focused font regression originally 7 failed / 3 passed; connected expanded fixture had 4 SQL operation-kind failures, corrected to existing create kind without changing constraints.",
+    "Sandbox refused local test DB and tsx IPC; rerun with authorized isolated test scope, originals retained.",
+    "Lone-captioned photo originally downloaded twice; first handoff repair still failed because brief branch prioritized photoInput; retained reference now precedes transport.",
+    "Count fixture originally refused the real client endpoint; regression failed before fixture added."
+  ],
+  "scope": {
+    "productionChanged": false,
+    "realProviderCalls": 0,
+    "nativeSave": false,
+    "fullOrdinaryDurability": "PENDING",
+    "candidateAssetRecovery": "PENDING_CURRENT_REPAIR",
+    "productionDumpTransfer": "NOT_RUN_PENDING_EXPLICIT_AUTHORIZATION",
+    "nativeHumanModelAndPilotAdmission": "OPEN"
+  },
+  "artifacts": [
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/RESULT.json",
+      "sha256": "a990966ef0d3199d9d3f38bf952fc12d333004e372d4704403bf1cd403f11131"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/RAW_SCENARIO_RECEIPT.json",
+      "sha256": "3abd7e5312f5b0022a755394a3be08265989284366f7a6180317d1d79171691f"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FONT_PLAN_RED.log",
+      "sha256": "f7a357f6e0babff389f0873ebe08f8d644c10357141cb52f4c0761f232e6d7b1"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FONT_PLAN_FIXTURE_KIND_FAILURE.log",
+      "sha256": "351b474bc17851890f1b25f8caca252a2892b6a6567e6262afa71ce6bdd615aa"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FONT_PLAN_CONNECTED.log",
+      "sha256": "ec269fe0be07cea3c6c7b7047f4dcf5173d23cb8aecf952cacec1abcde55cd6b"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/PHOTO_HANDOFF_SANDBOX_REFUSAL.log",
+      "sha256": "b3b45337d40bea85e7143d35abbb2690ef65401d033b6825bb5a49d074ce9967"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/PHOTO_HANDOFF_RED.log",
+      "sha256": "f13f94466581d4a1b3e8ea42f041de104c8d8e0a07282e638e749d25535a83ef"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/PHOTO_HANDOFF_GREEN.log",
+      "sha256": "2a3a5dd50180c9afcd0a1ef06acb9648a29536581cb175e6c2f837e4c85f1c2c"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/PHOTO_HANDOFF_CONNECTED.log",
+      "sha256": "08462c1a4e7cbc5bdd64c97cc24164d3fb4572e0c317e3e07b21b0c89ef8bc20"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/SOL_COUNT_FAKE_RED.log",
+      "sha256": "64be4213a0f221cc51932a552ab0ab6025ea303f35eb40c175b1fee3b50b7bdd"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/SOL_COUNT_FAKE_GREEN.log",
+      "sha256": "07f83a4219e5deab8cdab5617dcdeed5151451130a44f6c4624704b2be5fdb8a"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/REPAIR_CONNECTED.log",
+      "sha256": "ef7f659e176a7684e64166732a1ecdd676f8478a01e5d0167004e842492ae77a"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/TYPECHECK_INITIAL.log",
+      "sha256": "d3378a4e05697bd2525c9dd36733f78f9d667aaf098acda269ac52df2be45199"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/TYPECHECK_REPAIR.log",
+      "sha256": "ac837ff2ccd0d14796a669f18b381e55adad0500ab121e5ce81e02bff58eabe5"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/CHAOS_TYPECHECK.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/LINT_REPAIR.log",
+      "sha256": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad"
+    }
+  ]
+}

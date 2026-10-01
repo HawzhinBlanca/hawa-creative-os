@@ -52,6 +52,27 @@ type Content = string | Array<{ type: string; text?: string; image_url?: { url?:
 const textOf = (content: Content | undefined): string =>
   typeof content === 'string' ? content : Array.isArray(content) ? content.filter((p) => p.type === 'text').map((p) => p.text || '').join('\n') : '';
 
+/** Current client's image-only count request. Fixed fixture units, never a real token estimator. */
+function syntheticSolImageCount(body: any): { inputTokens: number; hashes: string[] } | null {
+  if (body.model !== 'gpt-6.1-sol' || Object.keys(body).some(key => !['model', 'input'].includes(key)) ||
+      !Array.isArray(body.input) || body.input.length !== 1) return null;
+  const input = body.input[0];
+  if (!input || input.role !== 'user' || Object.keys(input).some(key => !['role', 'content'].includes(key)) ||
+      !Array.isArray(input.content) || input.content.length < 1 || input.content.length > 64) return null;
+  const hashes: string[] = [];
+  for (const part of input.content) {
+    if (!part || part.type !== 'input_image' || typeof part.image_url !== 'string' ||
+        Object.keys(part).some(key => !['type', 'image_url', 'detail'].includes(key)) ||
+        (part.detail !== undefined && !['auto', 'low', 'high'].includes(part.detail))) return null;
+    const data = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(part.image_url)?.[1];
+    if (!data) return null;
+    const bytes = Buffer.from(data, 'base64');
+    if (!bytes.length || bytes.length > 20 * 1024 * 1024 || bytes.toString('base64') !== data) return null;
+    hashes.push(sha256(bytes));
+  }
+  return { inputTokens: 8 + hashes.length * 256, hashes };
+}
+
 /**
  * A layout the Canva planner accepts (apps/core/src/services/canva-design-planner.ts: `layout`, the
  * logo aspect check, the palette and font policies): each copy block once, stacked under the logo.
@@ -210,6 +231,14 @@ export class FakeModels {
 
     const schema: string | null = body.response_format?.json_schema?.name ?? null;
     this.arrivals.push({ schema, at: new Date().toISOString() });
+    if (req.method === 'POST' && host === 'api.openai.com' && path === '/v1/responses/input_tokens') {
+      const count = syntheticSolImageCount(body);
+      if (count) {
+        this.note('openai', 'input-token-count', model, sha256(`${path}\n${fingerprint}`), 200, count.hashes);
+        return sendJson(res, 200, { object: 'response.input_tokens', input_tokens: count.inputTokens });
+      }
+      // Unknown models, remote images and malformed shapes remain uncovered below.
+    }
     const geminiFailure = req.method === 'POST' && geminiModel
       ? this.geminiFailures.find(fault => fault.n > 0 && fault.model === geminiModel) : undefined;
     if (geminiFailure) {

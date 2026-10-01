@@ -89,15 +89,19 @@ export interface CanvaServiceOptions {
   retryDelaysMs?: { read?: number[]; create?: number[] };
 }
 /**
- * The blocks of a studio design in shape order, each with the face it was sent in: a manifest with
- * no reference pack whose plan names a font for every copy block. Null for a planner design, which
- * is checked against its single brand font.
+ * The immutable sent faces of a Studio or planner import, ordered by exact-copy identity.
+ * Reference packs do not replace a complete per-block plan. Historical sources without a plan
+ * retain their explicit reference-font policy; a declared ambiguous plan is refused by admission.
  */
 export function studioSentBlocks(manifest: any): Array<{ fontFamily: string; role?: string }> | null {
-  if (!manifest || manifest.reference || !Array.isArray(manifest.copy) || !Array.isArray(manifest.plan?.text)) return null;
-  const blocks = [...manifest.plan.text].sort((a: any, b: any) => a.copyIndex - b.copyIndex);
-  if (blocks.length !== manifest.copy.length) return null;
-  return blocks.every((t: any) => typeof t.fontFamily === 'string' && t.fontFamily) ? blocks : null;
+  if (!manifest || !Array.isArray(manifest.copy) || !manifest.copy.length ||
+      !manifest.copy.every((part: unknown) => typeof part === 'string') || !Array.isArray(manifest.plan?.text)) return null;
+  const blocks = [...manifest.plan.text];
+  if (blocks.length !== manifest.copy.length || blocks.some((t: any) => !t || typeof t !== 'object' ||
+      Array.isArray(t) || !Number.isSafeInteger(t.copyIndex) || typeof t.fontFamily !== 'string' ||
+      !t.fontFamily.trim() || (t.role !== undefined && typeof t.role !== 'string'))) return null;
+  blocks.sort((a: any, b: any) => a.copyIndex - b.copyIndex);
+  return blocks.every((t: any, index: number) => t.copyIndex === index) ? blocks : null;
 }
 
 /** Only explicit booleans on each uniquely indexed source block establish a direction. */
@@ -612,6 +616,8 @@ export class CanvaConnectService {
           } else if (source) {
             const manifest=source.manifest, blocks=studioSentBlocks(manifest);
             const directionsByIndex=importedSourceDirections(manifest);
+            if (manifest?.plan !== undefined && !blocks)
+              fail(422,'SOURCE_REQUIRED','The imported source has an incomplete or ambiguous per-block font plan');
             if (!Array.isArray(manifest?.copy) || !manifest.copy.length || !manifest.copy.every((part:unknown)=>typeof part==='string') ||
                 (!blocks && !manifest.reference?.rules?.fontFamily))
               fail(422,'SOURCE_REQUIRED','The imported source has no complete saved copy and font policy');
@@ -706,12 +712,14 @@ export class CanvaConnectService {
               expectedCopy:policy.copy,checkingPolicy:policy};
           } else {
             const source=await this.editableSource(s,taskId,row.client_id,row.design_id);
-            // A studio design carries no reference pack: it chooses a face per block, recorded in its plan,
-            // and Canva must keep each one. Every studio transfer failed SOURCE_REQUIRED here until
-            // 2026-09-18, the first live pilot, because only the planner's single-font check existed.
+            // Legacy operations have no frozen policy. A complete imported plan supplies each block's
+            // face, including planner sources with a reference pack (ADR220); only plan-free historical
+            // sources use the explicit reference/script policy below.
             const manifest=source?.manifest;
             const sentBlocks=studioSentBlocks(manifest);
             const directionsByIndex=importedSourceDirections(manifest);
+            if (manifest?.plan !== undefined && !sentBlocks)
+              fail(422,'SOURCE_REQUIRED','The imported source has an incomplete or ambiguous per-block font plan');
             if(sentBlocks){
               contentCheck={...checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body'),directionsByIndex}),expectedCopy:manifest.copy};
             }else{
