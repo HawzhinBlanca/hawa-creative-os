@@ -1,0 +1,96 @@
+{
+  "date": "2026-10-01T09:21:25.320Z",
+  "providerCalls": 0,
+  "sourceSha256": "739e6d00d19cb4bc2eceb7853810d13bc8bb7f47d060ba8c5d7827e0ff492c99",
+  "result": [
+    {
+      "name": "literal",
+      "independentCopyMatches": true,
+      "copyPass": true,
+      "fontPass": true,
+      "sourceTextObjects": [
+        {
+          "id": "ppt/slides/slide1.xml#2",
+          "type": "text",
+          "text": "Original 123.45\nExact date 2026",
+          "source": {
+            "format": "pptx",
+            "part": "ppt/slides/slide1.xml",
+            "shapeId": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decimal",
+      "independentCopyMatches": true,
+      "copyPass": false,
+      "fontPass": true,
+      "sourceTextObjects": [
+        {
+          "id": "ppt/slides/slide1.xml#2",
+          "type": "text",
+          "text": "&#79;&#114;&#105;&#103;&#105;&#110;&#97;&#108; 123.45\nExact date 2026",
+          "source": {
+            "format": "pptx",
+            "part": "ppt/slides/slide1.xml",
+            "shapeId": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "hexadecimal",
+      "independentCopyMatches": true,
+      "copyPass": false,
+      "fontPass": true,
+      "sourceTextObjects": [
+        {
+          "id": "ppt/slides/slide1.xml#2",
+          "type": "text",
+          "text": "&#x4f;&#x72;&#x69;&#x67;&#x69;&#x6e;&#x61;&#x6c; 123.45\nExact date 2026",
+          "source": {
+            "format": "pptx",
+            "part": "ppt/slides/slide1.xml",
+            "shapeId": "2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "newline",
+      "independentCopyMatches": true,
+      "copyPass": false,
+      "fontPass": true,
+      "sourceTextObjects": [
+        {
+          "id": "ppt/slides/slide1.xml#2",
+          "type": "text",
+          "text": "Original 123.45\nExact date&#10;2026",
+          "source": {
+            "format": "pptx",
+            "part": "ppt/slides/slide1.xml",
+            "shapeId": "2"
+          }
+        }
+      ]
+    }
+  ],
+  "acceptanceRegression": "NOT_RUN",
+  "repair": "PENDING",
+  "scope": "actual source checker and independent XML character-reference decoding, synthetic fixture only",
+  "prototype": {
+    "status": "LOCAL_OPTION_CONTROL_ONLY_NOT_APPLICATION_REPAIR",
+    "result": {
+      "decimal": "Original",
+      "hexadecimal": "Original",
+      "newline": "Exact\ndate",
+      "escapedNumeric": "&#10;",
+      "escapedNamed": "&lt;",
+      "xmlNamed": "<&>",
+      "htmlOnly": "&nbsp;"
+    },
+    "policy": "explicit five XML named entities plus numeric references; HTML-only entities remain literal; escaped entity-looking copy is not decoded twice",
+    "acceptanceRegression": "NOT_RUN"
+  }
+}

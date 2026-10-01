@@ -1,7 +1,7 @@
 # ADR205 — Exercise current service boundaries in the deployed candidate
 
-Date: 2026-10-01. Status: proposed; acceptance pending.
-Requirements: FR-069, FR-070, NFR-012, NFR-024, NFR-025.
+Date: 2026-10-01. Status: engineering source and fake-provider recovery qualified; real native/human admission open.
+Requirements: FR-029, FR-041, FR-042, FR-060, FR-069, FR-070, FR-079; NFR-009, NFR-012, NFR-024, NFR-025.
 Sources: docs/10_WORKFLOW_RELIABILITY.md; docs/14_SECURITY_THREAT_MODEL.md;
 MASTER_SPEC; ADR183; R26 deployed candidate and coordinated recovery contracts.
 
@@ -66,3 +66,21 @@ passes stages 1–7, but one of 6,709 executed tests fails: the VM-resource test
 separate Compose fixture omits all three new interpolation variables. Supply only
 those synthetic fixture values. Preserve every CPU, memory and swap assertion.
 Retain the original failing gate; qualify the corrected exact source.
+
+
+## Exact qualification
+
+Clean d85fc087 deployed/recovery rehearsal passes96 named checks with no source
+drift; both authenticated encrypted restores match104tables/174policies/3blobs
+before writers resume. Journal replay preserves one Drive file and Sheet row; the
+uncertain Telegram effect is not sent again, and explicit synthetic staff evidence
+settles once. Current native handoff needs no fresh model/import/create effect.
+
+Corrected clean seal7d9a7539 passes all eight engineering stages:6709tests/0fail/67skip
+across674passed files/6skipped,681 strict roots,1710 pack checks, newest production
+dump invariants and mandatory negative flag refusal. Runtime/candidate/recovery
+source is byte-identical to d85fc087; only the VM test fixture and metadata differ.
+Original failed trials/gate are retained. Source8d3f24a7 and pending-choice/refusal
+source1ba5bda9 are integrated. This work does not deploy the creative candidate or
+qualify native Canva, human authorship/taste, real providers or whole-product gates.
+Evidence: plans/content-aware-design-2026-09-30/CANDIDATE_SERVICE_BOUNDARY_PROOF.json.
