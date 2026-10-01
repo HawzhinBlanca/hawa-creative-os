@@ -34,4 +34,14 @@ export const CLIENT_QUESTION_MESSAGES = {
     en: "It's been a while since I asked, so I've passed your request to the office to choose the organisation.",
     ckb: 'ماوەیەکە پرسیارەکەم کردووە، بۆیە داواکارییەکەت ناردم بۆ ئۆفیسەکە بۆ ئەوەی دامەزراوەکە هەڵبژێرن.',
   },
+  /** Nobody answered within thirty minutes: the office chooses (said once). */
+  timedOutToOffice: {
+    en: "I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation.",
+    ckb: 'نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن.',
+  },
+  /** The organisation named after the brief went to the office: the office is told. `{title}` bold, `{client}` bold. */
+  clientNoted: {
+    en: "Thanks. I've told the office that {title} is for {client}.",
+    ckb: 'سوپاس. بە ئۆفیسەکەم ڕاگەیاند کە {title} بۆ {client}ە.',
+  },
 } as const satisfies PhraseBook;

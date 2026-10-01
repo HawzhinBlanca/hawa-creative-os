@@ -18,7 +18,18 @@ Date: 2026-10-01. Status: accepted (owner decisions of 2026-10-01) on branch `cl
 - **Once and replay-safe.** The question (`lifecycle_client_question`) and its answer (`lifecycle_client_resolution`) are inbox-ledger rows under the brief's update (first write wins). The kept brief opens under the answering update through the usual new-brief decision, so a replay of the answer replays the open. A replay of the brief asks the same question and opens nothing, and a second answer finds the question closed.
 - **Wording.** English and Sorani in `packages/integrations/src/requester-messages/client-question.ts` (`clientQuestion.*`), answered in the language of the answer; the Sorani lines are listed in SORANI_REVIEW.md for native review. Natural language only.
 
-**Open.** A question nobody answers keeps its brief unopened. The stale sweep does not cover it, so the office does not hear of it. Albums and multi-design briefs still open for the office when no client is named. A group chat asks the sender in the group.
+- **Nothing is dropped (ADR-144): the timeout.** Core's question carries `clientQuestionSettle: { delayMs: 1,800,000 }`. ChatInbox then schedules a durable delayed settle of the brief's update under its own key (`settle:<update>:client-question`; ADR-143's mechanism, no new infrastructure).
+  - **Backup.** If that call is lost, the poller's settle sweep (`/v1/internal/telegram/settle-sweep`, every five minutes) lists every question unanswered after 30 minutes, with the brief's stored update.
+  - **The settle** (`clientQuestionTimeout`):
+    - not yet due → nothing;
+    - already answered → nothing;
+    - due → it writes the resolution `timeout` under the brief's own update and reads the kept brief again. It opens for the office to choose, exactly as "not sure" does.
+  - **Told once.** The sender hears once: "I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation." The notice goes under its own key (`client-question:<update>`), so a replay of the settle or a sweep's second send says nothing again.
+  - **The race.** The answer and the timeout both write the same resolution row; the first write decides, and the other opens nothing.
+  - **A later answer.** An answer after the timeout that names an organisation (a reply, or a short answer) opens nothing again. The sender hears "Thanks. I've told the office that <design> is for <organisation>.", and the office is told to assign it in the Desk.
+  - **Worker changes** (`chat-inbox.ts`, `core-client.ts`): the timeout settle is scheduled, and the keyed notice is sent under its own key.
+
+**Open.** Albums and multi-design briefs still open for the office when no client is named. A group chat asks the sender in the group. A photo sent before the brief, and still waiting for words, is not taken by a timeout's open (an answer's open takes it).
 
 ## 2. "Capitalize first letters"
 
@@ -42,4 +53,10 @@ Existing tests that encoded the silent open or the lower-case lines were updated
 - the friction audit's F2 accepts the question;
 - ADR-232 copy tests expect "For school principals" and "Staff football tournament".
 
-apps/core, apps/worker and packages/integrations: 4,168 passed, 4 skipped. `pnpm typecheck` and `pnpm lint` pass.
+Timeout (follow-up), 3 Core tests and 1 worker test, all failing before:
+- unanswered: the settle opens the brief once for the office and announces it once under its key; replays and the sweep open nothing more; early settles and sweeps do nothing;
+- an answer just before the timeout wins, and the settle then opens nothing;
+- an answer after the timeout names the organisation for the office and opens nothing;
+- worker: the timeout settle is scheduled once under its key, an out-of-range delay is refused, and the timeout's notice goes under its own key.
+
+apps/core, apps/worker and packages/integrations: 4,176 passed, 4 skipped. `pnpm typecheck` and `pnpm lint` pass.

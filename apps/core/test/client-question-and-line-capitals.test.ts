@@ -171,3 +171,67 @@ describe('a brief that names no organisation asks who it is for (ADR-235)', () =
     expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: KAAE, rawText: second } });
   });
 });
+
+// --- nobody answers: the timeout (ADR-144: nothing is dropped) ------------------------------------------
+
+const settleOf = async (update: unknown) => (await (await app().request('/v1/internal/telegram/intake', { method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WORKER}` },
+  body: JSON.stringify({ v: 1, update, mode: 'lifecycle', languageSiblings: true, briefHold: true, settle: true }) })).json()) as Record<string, any>;
+const sweep = async () => ((await (await app().request('/v1/internal/telegram/settle-sweep', { method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WORKER}` }, body: '{}' })).json()) as { due: Array<{ update: { update_id: number } }> }).due;
+const at = (minutes: number) => vi.spyOn(Date, 'now').mockReturnValue(Date.parse(new Date().toISOString()) + minutes * 60_000);
+
+describe('a question nobody answers times out and the brief opens for the office (ADR-235)', () => {
+  it('unanswered: the settle opens it once for the office and says so once; replays and the sweep open nothing more', async () => {
+    const chat = outsiderChat();
+    const brief = message(chat, OUTSIDER, TEACHER);
+    const asked = await intake(brief);
+    // ChatInbox schedules the brief's settle for the question's timeout.
+    expect(asked).toMatchObject({ clientQuestion: true, clientQuestionSettle: { delayMs: 30 * 60_000 } });
+    // Early (a settle the sweep sent before its time): nothing, and the sweep does not list it yet.
+    expect(await settleOf(brief)).toMatchObject({ settle: 'skipped' });
+    expect((await sweep()).map((d) => d.update.update_id)).not.toContain(brief.update_id);
+    at(31);
+    // Lost delayed call: the sweep lists the question once it is due.
+    expect((await sweep()).map((d) => d.update.update_id)).toContain(brief.update_id);
+    const opened = await settleOf(brief);
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', duplicate: false,
+      draft: { clientId: null, autoGenerate: false, rawText: TEACHER },
+      notice: { text: "I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation." },
+      noticeKey: `client-question:${brief.update_id}` });
+    // Replays (the delayed call and the sweep's) give the same open and the same keyed notice: said once.
+    const again = await settleOf(brief);
+    expect(again).toMatchObject({ duplicate: true, requestId: opened.requestId, noticeKey: `client-question:${brief.update_id}` });
+    expect((await sweep()).map((d) => d.update.update_id)).not.toContain(brief.update_id);
+    // The brief replayed opens the same request.
+    expect(await intake(brief)).toMatchObject({ duplicate: true, requestId: opened.requestId });
+  });
+
+  it('an answer just before the timeout wins: the settle then opens nothing', async () => {
+    const chat = outsiderChat();
+    const brief = message(chat, OUTSIDER, TEACHER);
+    expect((await intake(brief)).clientQuestionSettle).toEqual({ delayMs: 30 * 60_000 });
+    at(29);
+    const answered = await intake(message(chat, OUTSIDER, 'KAAE'));
+    expect(answered).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: KAAE, rawText: TEACHER } });
+    at(31);
+    expect(await settleOf(brief)).toMatchObject({ settle: 'skipped' });
+    expect((await sweep()).map((d) => d.update.update_id)).not.toContain(brief.update_id);
+  });
+
+  it('an answer after the timeout names the organisation for the office and opens nothing again', async () => {
+    const chat = outsiderChat();
+    const brief = message(chat, OUTSIDER, TEACHER);
+    await intake(brief);
+    at(31);
+    const opened = await settleOf(brief);
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null } });
+    at(40);
+    const late = await intake(message(chat, OUTSIDER, 'KAAE'));
+    expect(late).toMatchObject({ lifecycleAction: 'chat-answer',
+      chatAnswer: { text: expect.stringContaining("I've told the office that") } });
+    expect(late.chatAnswer.text).toContain('Kurdistan Accrediting Association for Education');
+    expect(late.officeAlerts?.[0]?.text ?? late.officeAlert?.text).toMatch(/is for Kurdistan Accrediting Association for Education/);
+    expect(late).not.toHaveProperty('draft');
+  });
+});

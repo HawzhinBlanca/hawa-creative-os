@@ -15,6 +15,12 @@
  * organisation, or "I don't know"). Anything else is read as if no question had been asked. An answer
  * after `CLIENT_QUESTION_MS`, or to a question with an older stamp, opens the kept brief for the office
  * to choose, and says so: the words are kept, never lost and never guessed for.
+ *
+ * Nothing is dropped (ADR-144): a question nobody answers times out. ChatInbox settles the brief's update
+ * `CLIENT_QUESTION_MS` after the question (a durable delayed call, ADR-143), and the poller's settle
+ * sweep sends the settle again if that call was lost. The settle opens the kept brief for the office to
+ * choose, exactly as "not sure" does, and the sender hears it once. The timeout and an answer race for
+ * the same resolution row: whichever is written first decides, and the other opens nothing.
  */
 import { createHash } from 'node:crypto';
 import { sql, type Database, type Kysely } from '@hawa/db';
@@ -50,9 +56,11 @@ export interface ClientQuestion {
   askedAt: string;
   askRules: number;
   payloadHash: string;
+  /** The brief's Telegram update, for the settle sweep to send again (ADR-235 timeout). */
+  sourceUpdate?: unknown;
 }
 
-export type ClientAnswerOutcome = 'client' | 'office' | 'unmatched' | 'expired';
+export type ClientAnswerOutcome = 'client' | 'office' | 'unmatched' | 'expired' | 'timeout';
 export interface ClientResolution { byUpdateId: number; outcome: ClientAnswerOutcome; clientId?: string }
 
 async function readRow<T>(trx: Tx, tenantId: string, kind: string, id: string): Promise<T | null> {
@@ -147,4 +155,59 @@ export async function readClientAnswer(trx: Tx, tenantId: string, input: { quest
   if (late) return { outcome: 'expired' };
   if (clientId) return { outcome: 'client', clientId };
   return { outcome: dontKnow ? 'office' : 'unmatched' };
+}
+
+// --- the timeout ---------------------------------------------------------------------------------------
+
+/**
+ * What the settle of a brief's update does about its question: nothing to do with one (`null`), nothing
+ * yet or any more (`skip`: not due, or answered), or open the kept brief for the office (`open`, also on
+ * the replay of a timeout that already won).
+ */
+export async function clientQuestionTimeout(trx: Tx, tenantId: string, briefUpdateId: number, now = Date.now()):
+  Promise<{ kind: 'open'; question: ClientQuestion } | { kind: 'skip' } | null> {
+  const question = await readRow<ClientQuestion>(trx, tenantId, QUESTION, String(briefUpdateId));
+  if (!question) return null;
+  const prior = await readClientResolution(trx, tenantId, briefUpdateId);
+  if (prior) return prior.byUpdateId === briefUpdateId && prior.outcome === 'timeout' ? { kind: 'open', question } : { kind: 'skip' };
+  if (now - Date.parse(question.askedAt) < CLIENT_QUESTION_MS) return { kind: 'skip' };
+  const won = await resolveClientQuestion(trx, tenantId, briefUpdateId, { byUpdateId: briefUpdateId, outcome: 'timeout' });
+  return won.byUpdateId === briefUpdateId && won.outcome === 'timeout' ? { kind: 'open', question } : { kind: 'skip' };
+}
+
+/** Questions nobody answered in time, whose own delayed settle may have been lost: the poller's sweep sends them again. */
+export async function overdueClientQuestions(trx: Tx, tenantId: string, now = Date.now(), limit = 50): Promise<Array<{ chatId: string; update: unknown }>> {
+  const rows = (await sql<{ payload: ClientQuestion }>`SELECT q.payload FROM hawa.inbox_events q
+    WHERE q.tenant_id = ${tenantId}::uuid AND q.source_account_id = ${QUESTION}
+      AND q.received_at > now() - (${FORGOTTEN_MS} * interval '1 millisecond')
+      AND NOT EXISTS (SELECT 1 FROM hawa.inbox_events r WHERE r.tenant_id = q.tenant_id
+        AND r.source_account_id = ${RESOLUTION} AND r.source_event_id = q.source_event_id)
+    ORDER BY q.received_at LIMIT ${limit}`.execute(trx)).rows;
+  return rows.map((r) => r.payload).filter((q) => q.sourceUpdate && now - Date.parse(q.askedAt) >= CLIENT_QUESTION_MS)
+    .map((q) => ({ chatId: q.chatId, update: q.sourceUpdate }));
+}
+
+/**
+ * The sender's newest question that timed out (within a day), with the request its brief opened: a later
+ * answer that names the organisation is passed to the office for that request, never opened again.
+ */
+export async function timedOutClientQuestion(trx: Tx, tenantId: string, scope: { chatId: string; senderId: string; topicId: string }):
+  Promise<{ question: ClientQuestion; requestId: string | null; title: string | null } | null> {
+  const row = (await sql<{ payload: ClientQuestion; decision: { requestId?: string; draft?: { title?: string } } | null }>`SELECT q.payload,
+      d.payload AS decision
+    FROM hawa.inbox_events q JOIN hawa.inbox_events r ON r.tenant_id = q.tenant_id
+      AND r.source_account_id = ${RESOLUTION} AND r.source_event_id = q.source_event_id AND r.payload->>'outcome' = 'timeout'
+    LEFT JOIN hawa.inbox_events d ON d.tenant_id = q.tenant_id AND d.source_account_id = 'lifecycle_chat_open'
+      AND d.source_event_id = q.source_event_id
+    WHERE q.tenant_id = ${tenantId}::uuid AND q.source_account_id = ${QUESTION}
+      AND q.payload->>'chatId' = ${scope.chatId} AND q.payload->>'senderId' = ${scope.senderId}
+      AND q.payload->>'topicId' = ${scope.topicId} AND q.received_at > now() - (${FORGOTTEN_MS} * interval '1 millisecond')
+    ORDER BY q.received_at DESC, q.id DESC LIMIT 1`.execute(trx)).rows[0];
+  return row ? { question: row.payload, requestId: row.decision?.requestId ?? null, title: row.decision?.draft?.title ?? null } : null;
+}
+
+/** The organisation's name as the office knows it. */
+export async function clientName(trx: Tx, tenantId: string, clientId: string): Promise<string | null> {
+  return (await sql<{ name: string }>`SELECT name FROM hawa.clients WHERE tenant_id = ${tenantId}::uuid AND id::text = ${clientId}`
+    .execute(trx)).rows[0]?.name ?? null;
 }

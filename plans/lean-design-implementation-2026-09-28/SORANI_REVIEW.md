@@ -315,5 +315,7 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `clientQuestion.passedToOffice` | No problem. I've passed it to the office, and they'll choose the organisation. | کێشە نییە. ناردم بۆ ئۆفیسەکە، ئەوان دامەزراوەکە هەڵدەبژێرن. | needs native review |
 | `clientQuestion.notMatchedToOffice` | I couldn't match that to an organisation I know, so I've passed it to the office to choose. | نەمتوانی ئەوە بە دامەزراوەیەک کە دەیناسم ببەستمەوە، بۆیە ناردم بۆ ئۆفیسەکە بۆ ئەوەی هەڵیبژێرن. | needs native review |
 | `clientQuestion.expiredToOffice` | It's been a while since I asked, so I've passed your request to the office to choose the organisation. | ماوەیەکە پرسیارەکەم کردووە، بۆیە داواکارییەکەت ناردم بۆ ئۆفیسەکە بۆ ئەوەی دامەزراوەکە هەڵبژێرن. | needs native review |
+| `clientQuestion.timedOutToOffice` | I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. | نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن. | needs native review |
+| `clientQuestion.clientNoted` | Thanks. I've told the office that {title} is for {client}. | سوپاس. بە ئۆفیسەکەم ڕاگەیاند کە {title} بۆ {client}ە. | needs native review |
 
 187 lines.

@@ -80,8 +80,10 @@ import { CanvaFlowError } from '../services/canva-flow-error.js';
 import { officeTelegramTurn } from '../services/office-telegram-turn.js';
 import { createOfficeIntentModel, type OfficeIntentModel } from '../services/office-intent-model.js';
 import { createCopyExtractionModel, extractRequestCopy, type CopyExtractionModel } from '../services/request-copy-extraction.js';
-import { CLIENT_QUESTION_RULES, answeredUpdateOf, knownClientNames, pendingClientQuestion, readClientAnswer, readClientResolution,
-  recordClientQuestion, resolveClientQuestion, type ClientQuestion } from '../services/lifecycle-client-question.js';
+import { CLIENT_QUESTION_MS, CLIENT_QUESTION_RULES, answeredUpdateOf, clientName, clientQuestionTimeout, knownClientNames,
+  overdueClientQuestions, pendingClientQuestion, readClientAnswer, readClientResolution, recordClientQuestion, resolveClientQuestion,
+  saysDontKnow, timedOutClientQuestion, type ClientQuestion } from '../services/lifecycle-client-question.js';
+import { plainClientAnswer, resolveSourceClient } from '../services/lifecycle-source-natural.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
 export function isInternalPath(path: string): boolean {
@@ -285,13 +287,18 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     let releasedDeferral = false;
     // ADR-145: words said beside the answer (a video's words were used; a file could not be opened).
     let beside: { text: string; parseMode: 'HTML' } | null = null;
+    // ADR-235: the key ChatInbox sends `beside` under, when it must not be the update's usual notice key.
+    let besideKey: string | null = null;
+    // ADR-235: the settle of a kept brief whose question nobody answered: it opens for the office.
+    let clientTimeout: ClientQuestion | null = null;
     if (mode !== 'legacy' && mode !== 'lifecycle') {
       return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
     }
 
     const handled = (intakeStatus: number, extra: Record<string, unknown> = {}) =>
       // ADR-155 section 6: an office alert reaches every office member, not only the first (office-chats.ts).
-      c.json({ v: 1, kind: 'handled', intakeStatus, ...withOfficeAlerts(extra), ...(beside && !extra.notice ? { notice: beside } : {}) }, 200);
+      c.json({ v: 1, kind: 'handled', intakeStatus, ...withOfficeAlerts(extra),
+        ...(beside && !extra.notice ? { notice: beside, ...(besideKey ? { noticeKey: besideKey } : {}) } : {}) }, 200);
 
     const senderAllowedFor = (u: UpdateLike): boolean => {
       const carrier = (u.message ?? u.edited_message ?? u.channel_post) as Record<string, any> | undefined;
@@ -396,6 +403,20 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // A `/use_album` reply to a photo keeps its old meaning; a plain one binds like any text (ADR-143).
     const repliedConfirmation = isAlbumConfirmation(preparedUpdate) && Boolean(incomingMessage?.reply_to_message);
     const textMessage = !albumPart && !repliedConfirmation && typeof incomingMessage?.text === 'string';
+    // ADR-235: the settle ChatInbox scheduled for a kept brief's question (or the sweep sent again). Not yet
+    // due, or answered: nothing. Due: the brief is read again below and opens for the office to choose,
+    // as "not sure" does, and its sender hears it once. A replay of a timeout that won opens nothing new.
+    if (settle && textMessage && db) {
+      const due = await withRlsContext(db, SYSTEM_SCOPE, (trx) => clientQuestionTimeout(trx, DEFAULT_TENANT_ID, preparedUpdate.update_id));
+      if (due?.kind === 'skip') return handled(200, { settle: 'skipped' });
+      if (due?.kind === 'open') {
+        clientTimeout = due.question;
+        settle = false;
+        releasedDeferral = true;
+        beside = { text: say(CLIENT_QUESTION_MESSAGES.timedOutToOffice, requesterLang(due.question.words)), parseMode: 'HTML' };
+        besideKey = `client-question:${due.question.briefUpdateId}`;
+      }
+    }
     // ADR-145: the settle of a message set behind its sender's held brief. While that brief is still
     // held it waits again; once the brief has opened, the message is read as it arrived.
     if (settle && textMessage && db) {
@@ -489,8 +510,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             if (settled) return settled;
           }
         } else if (textMessage) {
-          const heldReplay = settle ? 'none' : await tx((trx) => heldBriefReplay(trx, DEFAULT_TENANT_ID, source));
-          if (settle) {
+          // ADR-235: a kept brief's timeout is read below as the brief; it is no held brief or album words.
+          const heldReplay = settle || clientTimeout ? 'none' : await tx((trx) => heldBriefReplay(trx, DEFAULT_TENANT_ID, source));
+          if (clientTimeout) {
+            // Nothing here.
+          } else if (settle) {
             const held = await tx((trx) => settleHeldBrief(trx, DEFAULT_TENANT_ID, source));
             if (held === 'skip') return handled(200, { settle: 'skipped' });
             if (held === 'wait') return settleLater('brief', albumSettleMs());
@@ -945,11 +969,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   : say(CLIENT_QUESTION_MESSAGES.askClient, lang);
                 const stored = await recordClientQuestion(trx, TENANT, { briefUpdateId: update.update_id, chatId, senderId: scope.senderId,
                   topicId: scope.topic, words: briefText, instructionOnly, ...(image ? { image } : {}), text, listed: names,
-                  askedAt: new Date().toISOString(), askRules: CLIENT_QUESTION_RULES, payloadHash });
+                  askedAt: new Date().toISOString(), askRules: CLIENT_QUESTION_RULES, payloadHash, sourceUpdate: update });
                 return { stored, answered: await readClientResolution(trx, TENANT, update.update_id) };
               });
               if (stored.payloadHash !== payloadHash || stored.chatId !== chatId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+              // ChatInbox settles the brief's update when the question times out (a durable delayed call).
               return handled(200, { lifecycleAction: 'chat-answer', chatId, clientQuestion: true,
+                clientQuestionSettle: { delayMs: CLIENT_QUESTION_MS },
                 chatAnswer: { text: stored.text, parseMode: 'HTML' }, ...(answered ? { duplicate: true } : {}) });
             };
 
@@ -957,6 +983,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             const openBrief = async (briefText: string, instructionOnly: boolean, takeHeldPhoto = true,
               /** ADR-235: the organisation the sender named for a kept brief, or the office to choose it; and its photo. */
               opts: { clientId?: string; forOffice?: boolean; keptImage?: ClientQuestion['image'] } = {}): Promise<Response> => {
+              // ADR-235: the kept brief whose question timed out opens, as it was kept, for the office to choose.
+              if (clientTimeout && clientTimeout.briefUpdateId === update.update_id) {
+                briefText = clientTimeout.words;
+                instructionOnly = clientTimeout.instructionOnly;
+                takeHeldPhoto = false;
+                opts = { forOffice: true, ...(clientTimeout.image ? { keptImage: clientTimeout.image } : {}) };
+              }
               // What was to be said beside the answer before this brief was read (a video's words were used).
               const besideOnEntry = beside;
               const sender = (msg as Record<string, { id?: unknown; first_name?: unknown }>).from;
@@ -1213,6 +1246,25 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   const resolution = await resolveClientQuestion(trx, TENANT, pending.question.briefUpdateId, { byUpdateId: update.update_id, ...answer });
                   return resolution.byUpdateId === update.update_id ? { question: pending.question, resolution } : null;
                 });
+                // An organisation named after the question timed out: the office is told, nothing opens again.
+                const late = !kept && scope ? await withRlsContext(db, system, async (trx) => {
+                  const timedOut = await timedOutClientQuestion(trx, TENANT, { chatId, senderId: scope.senderId, topicId: scope.topic });
+                  if (!timedOut || saysDontKnow(text)) return null;
+                  const replied = (await answeredUpdateOf(trx, TENANT, replyMessageId)) === timedOut.question.briefUpdateId;
+                  const clientId = await resolveSourceClient(trx, TENANT, { chatId, words: text });
+                  if (!clientId || (!replied && !(plainClientAnswer(text) && !/\p{N}/u.test(text) &&
+                    !/\b(?:poster|flyer|banner|design|invitation|card|post|story)s?\b|پۆستەر|پۆست|دیزاین/iu.test(text)))) return null;
+                  return { ...timedOut, client: await clientName(trx, TENANT, clientId) ?? text.trim() };
+                }) : null;
+                if (late) {
+                  const lang = requesterLang(text, requesterLang(late.question.words));
+                  const title = late.title ?? say(LIFECYCLE_MESSAGES.yourDesign, lang);
+                  const office = officeChatFor(chatId);
+                  return handled(200, { lifecycleAction: 'chat-answer', chatId,
+                    chatAnswer: { text: say(CLIENT_QUESTION_MESSAGES.clientNoted, lang, { title: bold(title), client: bold(late.client) }), parseMode: 'HTML' },
+                    ...(office ? { officeAlert: { chatId: office, text: `The requester says "${title}" is for ${late.client}. ` +
+                      'It was passed to you because they had not said who it was for; please assign it in the Desk.' } } : {}) });
+                }
                 if (kept) {
                   const { question, resolution } = kept;
                   // Answered in the language of the answer (an English brief may be answered in Sorani).
@@ -1661,6 +1713,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     if (!db) return problem(c, 503, 'Database Unavailable', 'The sweep reads the saved albums');
     const due = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
       async (trx) => [...await overdueSettles(trx, DEFAULT_TENANT_ID),
+        // ADR-235: kept briefs whose question nobody answered and whose own delayed settle was lost.
+        ...await overdueClientQuestions(trx, DEFAULT_TENANT_ID) as Array<{ chatId: string; update: any }>,
         // ADR-145: kept photos never settled, and messages set behind a held brief never read.
         ...await overduePhotos(trx, DEFAULT_TENANT_ID), ...await overdueDeferrals(trx, DEFAULT_TENANT_ID)]);
     return c.json({ v: 1, due }, 200);

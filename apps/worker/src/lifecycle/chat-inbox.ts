@@ -65,6 +65,10 @@ export type IntakeAnswer =
       settle?: { kind: 'album' | 'brief' | 'photo'; delayMs: number };
       /** ADR-145: words Core says beside its answer, sent once per update. */
       notice?: { text: string; parseMode?: 'HTML' };
+      /** ADR-235: the key the notice is sent under instead of the update's (a kept brief's timeout). */
+      noticeKey?: string;
+      /** ADR-235: "who is this design for?" was asked; settle the brief's update after `delayMs` (its timeout). */
+      clientQuestionSettle?: { delayMs: number };
       /** ADR-145 (N5): a sender outside the intake list was already answered in this chat today. */
       quiet?: boolean;
       /**
@@ -291,6 +295,10 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
         ...(done.chatAnswer.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) });
       // ADR-144: approval or timing words passed to the office (never an approval by themselves).
       alertOffice(`notify.office:requester-note:${update.update_id}`);
+      // ADR-235: the question's timeout, a durable delayed settle of the brief's update under its own key
+      // (a replay schedules nothing twice; an answer before it makes the settle open nothing).
+      if (done.clientQuestionSettle) ctx.scheduleSettle({ v: 1, update, attempt: 0 }, done.clientQuestionSettle.delayMs,
+        `settle:${update.update_id}:client-question`);
     }
     if (done.lifecycleAction === 'album-message') {
       if (!done.chatId || !done.albumMessage || !done.albumNoticeKey) throw new Error('Core returned an incomplete album notice');
@@ -426,7 +434,7 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
     // ADR-145: words Core said beside its answer (the photo sent before was used; a video's words were).
     if (done.notice) {
       const chat = done.chatId ?? chatOfUpdate(update);
-      if (chat) ctx.sendNotice({ v: 1, key: `chatinbox:notice:${update.update_id}`, chatId: chat, kind: 'text',
+      if (chat) ctx.sendNotice({ v: 1, key: done.noticeKey ? `chatinbox:${done.noticeKey}` : `chatinbox:notice:${update.update_id}`, chatId: chat, kind: 'text',
         class: 'critical', text: done.notice.text, ...(done.notice.parseMode === 'HTML' ? { parseMode: 'HTML' as const } : {}) });
     }
     if (!settling) {

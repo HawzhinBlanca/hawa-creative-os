@@ -805,6 +805,30 @@ describe('album and brief settles (ADR-143)', () => {
     await expect(c.intake(photo, 'lifecycle')).rejects.toThrow('invalid settle');
   });
 
+  it('ADR-235: "who is this design for?" schedules its timeout settle once; the timeout\'s notice goes under its own key', async () => {
+    const asked = { v: 1, kind: 'handled', intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: '555', clientQuestion: true,
+      clientQuestionSettle: { delayMs: 1_800_000 }, chatAnswer: { text: 'Who is this design for?', parseMode: 'HTML' } };
+    const client = (body: unknown) => createCoreClient({ baseUrl: 'http://core', token: 'fixture-token',
+      fetch: (async () => Response.json(body)) as any });
+    const read = await client(asked).intake(update, 'lifecycle');
+    expect(read).toMatchObject({ lifecycleAction: 'chat-answer', clientQuestionSettle: { delayMs: 1_800_000 } });
+    await expect(client({ ...asked, clientQuestionSettle: { delayMs: 99 * 60 * 60_000 } }).intake(update, 'lifecycle')).rejects.toThrow('client question settle');
+    const ctx = new FakeContext();
+    ctx.crashOnSet = 1;
+    await untilSettled(ctx, () => handleUpdate(ctx, input, core([async () => read])));
+    // The crash replays the schedule under the same key, which Restate deduplicates.
+    expect(ctx.settles.map((s) => s.key)).toEqual(['settle:4242:client-question', 'settle:4242:client-question']);
+    expect(ctx.settles[0]).toMatchObject({ delayMs: 1_800_000, input: { v: 1, update, attempt: 0 } });
+    // The timeout's settle opens the kept brief and says so under the question's own key, not the update's.
+    const timedOut = await client({ v: 1, kind: 'handled', intakeStatus: 200, lifecycleAction: 'chat-answer', chatId: '555',
+      chatAnswer: { text: 'x' }, notice: { text: "I haven't heard who this design is for…", parseMode: 'HTML' }, noticeKey: 'client-question:4242' })
+      .intake(update, 'lifecycle', undefined, { settle: true });
+    expect(timedOut).toMatchObject({ noticeKey: 'client-question:4242' });
+    const settleCtx = new FakeContext();
+    await settleUpdate(settleCtx, { v: 1, update, attempt: 0 }, core([async () => timedOut]));
+    expect(settleCtx.notices).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'chatinbox:client-question:4242' })]));
+  });
+
   it('ChatInbox binds a settle handler next to handleUpdate', () => {
     const handlers = (chatInbox as any).handlers ?? (chatInbox as any).object;
     expect(handlers?.settle).toBeTruthy();
