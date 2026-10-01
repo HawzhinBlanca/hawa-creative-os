@@ -11,7 +11,8 @@ import { hasOwnedRecoveryCleanup } from './recovery-cleanup-evidence.js';
 const execFileAsync = promisify(execFile);
 
 export async function restorePendingDelivery(taskId: string, chat: string, started: number,
-  events: string[], checks: InvariantResult[] = []): Promise<InvariantResult[]> {
+  events: string[], checks: InvariantResult[] = [],
+  afterRestore?: (phase: string) => Promise<void>): Promise<InvariantResult[]> {
   const check = (name: string, ok: boolean, detail: string) => {
     checks.push({name, ok, detail});
     if (!ok) throw new Error(`${name}: ${detail}`);
@@ -41,6 +42,7 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
     compose(['up', '-d', '--no-deps', '--no-build', '--pull', 'never', '--force-recreate', '--wait', 'worker-blue']);
     // nginx retains upstream addresses across container replacement.
     compose(['restart', 'nginx']);
+    if (afterRestore) await afterRestore(phase);
     events.push(`${phase}: restored PostgreSQL, Restate and blobs from authenticated encrypted archives to new volumes; resumed exact images`);
     return receipt;
   };

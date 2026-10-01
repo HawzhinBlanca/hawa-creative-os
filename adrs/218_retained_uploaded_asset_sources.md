@@ -60,3 +60,19 @@ Connected actual Core/PostgreSQL, source/asset/search/security/blob/migration ch
 First exact clean82c5f157 retained:6915 passed /4 failed /67 skipped. Route/startup/media-type expected inventories updated. The new source policies had introduced actual per-row membership calls, violating ADR033; use its existing scalar membership subqueries/client arrays while preserving tenant and asset receipt scope. Isolated synthetic databases on55432 rebuilt for the not-yet-published/deployed078 checksum. Expanded18files/195passed/0failed/0skipped and698 strict roots PASS. Corrected exact gate pending; no deployment or product admission.
 
 Exact clean seal 92a0703f passes seven engineering stages: 6919 passed / 0 failed / 67 skipped across 691 passed files / 6 skipped; 698 strict roots and 1786 package checks. Mandatory negative-flag refusal passes. Raw production-dump Stage 3 remains skipped: previous automatic approval review requires explicit transfer authorization, still pending. No all-eight qualification, deployment or native/human/product admission claim. W6_ASSET_SOURCE_RETENTION_GATE_EVIDENCE.json retains actual receipts.
+
+## Current deployed encrypted recovery qualification — pending
+
+Requirements: FR-018, FR-070, NFR-003, NFR-024, NFR-025. Sources: docs/14_SECURITY_THREAT_MODEL.md, MASTER_SPEC.md, docs/20_DEPLOYMENT_BACKUP_DR.md, runbooks/10_BACKUP_RESTORE.md.
+
+Extend the existing isolated candidate source/delivery scenario with actual deployed
+SVG original/derivative, PNG, WebP, TTF and WOFF2 upload/download verification. Two
+distinct SVG originals reconcile one sanitized asset. Verify exact bytes, immutable
+source identity/actors/timestamps, scoped unknown-hash denial, worker denial and
+private sandbox headers before and after each authenticated encrypted restore.
+Retain the existing pending Drive/Telegram no-resend checks. All client data, actors
+and provider responses are synthetic; native quality, human judgments, offsite
+recovery and production-dump transfer remain independent and unadmitted.
+
+Permanent scenario helper typecheck, 698 strict roots and lint pass. Actual Docker
+qualification has not run yet. Evidence: output/qualification/2026-10-01/current-asset-recovery/.

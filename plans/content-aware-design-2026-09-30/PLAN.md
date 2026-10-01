@@ -814,3 +814,15 @@ Actual no-content admission, lost SVG bytes and binary metadata hash reproduced 
 First exact clean82c5f157 retained:6915 passed /4 failed /67 skipped. Route/startup/media-type expected inventories updated. The new source policies had introduced actual per-row membership calls, violating ADR033; use its existing scalar membership subqueries/client arrays while preserving tenant and asset receipt scope. Isolated synthetic databases on55432 rebuilt for the not-yet-published/deployed078 checksum. Expanded18files/195passed/0failed/0skipped and698 strict roots PASS. Corrected exact gate pending; no deployment or product admission.
 
 Exact clean seal 92a0703f passes seven engineering stages: 6919 passed / 0 failed / 67 skipped across 691 passed files / 6 skipped; 698 strict roots and 1786 package checks. Mandatory negative-flag refusal passes. Raw production-dump Stage 3 remains skipped: previous automatic approval review requires explicit transfer authorization, still pending. No all-eight qualification, deployment or native/human/product admission claim. W6_ASSET_SOURCE_RETENTION_GATE_EVIDENCE.json retains actual receipts.
+
+
+## Current candidate asset recovery — 1 October 2026, pending
+
+ADR218 source retention is engineering-qualified but its exact current Docker
+restore remains unproven. Extend the existing synthetic candidate source/review/
+delivery rehearsal with six actual uploaded originals, five admitted assets and
+verified downloads before and after both encrypted fresh-volume restores. Check
+original actors/timestamps, sandbox headers, unknown-source denial and restricted
+worker denial alongside the existing uncertain external-effect reconciliation.
+Permanent helper typecheck, 698 strict roots and lint pass; deployed run pending.
+No production, paid provider, native-save, human-label or offsite-admission claim.

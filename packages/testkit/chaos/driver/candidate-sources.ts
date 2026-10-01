@@ -11,6 +11,7 @@ import { restorePendingDelivery } from './candidate-recovery.js';
 import { candidateEvaluationSettlement } from './evaluation-settlement.js';
 import { candidateStudioSettlement } from './studio-settlement.js';
 import { appendFixtureCopy } from './fixture-native-edit.js';
+import { retainCandidateAssetSources } from './candidate-asset-sources.js';
 import { chatInboxInvocations, designOutcome, RequestEndedError, imageDocumentUpdate, sendToChatInbox, tasksOfChat, textUpdate, waitUntil,
   type InvariantResult } from './scenario.js';
 
@@ -85,6 +86,7 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   check('Desk session is persisted by the running Core', login.status === 201 && session.durable === true && !!session.token, `HTTP ${login.status}; durable=${session.durable}`);
   // Temporary synthetic session for optional browser inspection, never release evidence or logs.
   writeFileSync(join(CHAOS_DIR, '.run', 'candidate-session.json'), JSON.stringify({ origin, token: session.token }), { mode: 0o600 });
+  const verifyRetainedAssets = await retainCandidateAssetSources(origin, session.token!, checks);
   const get = (path: string) => fetch(`${origin}/v1${path}`, { headers: { Authorization: `Bearer ${session.token}` } });
   const action = async (path: string, body: unknown, key: string = randomUUID(), token = secrets().CHAOS_REVIEWER_KEY,
     headers: Record<string, string> = {}) => {
@@ -257,7 +259,7 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   const recovery = process.env.HAWA_CHAOS_RECOVERY === '1';
   if (recovery) await fakes.hold('core.delivery.after-drive', {mode: 'workflow'});
   await action(`/tasks/${child.current_task_id}/publish`, { approvalId: approval.decisionId });
-  if (recovery) await restorePendingDelivery(child.current_task_id, chat, suiteStarted, events, checks);
+  if (recovery) await restorePendingDelivery(child.current_task_id, chat, suiteStarted, events, checks, verifyRetainedAssets);
   const delivered = await waitUntil('reviewed source request delivered', async () => { const [r] = await requests(); return r?.stage === 'delivered' ? r : null; });
   const tasks = await tasksOfChat(chat);
   check('PDF new request and voice revision reach one logical simulated delivery', tasks.length === 2 && tasks[1].state === 'complete' &&
