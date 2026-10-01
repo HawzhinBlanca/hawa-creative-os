@@ -9,7 +9,7 @@
     "FR-041",
     "NFR-012"
   ],
-  "status": "CONNECTED_ENGINEERING_VERIFIED_EXACT_GATE_PENDING_PRODUCT_ADMISSION_OPEN",
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "sourceSha256": {
     "packages/creative/src/studio/background-planning.ts": "e5afb295c83ef3cf890a5b5dd7bef88da40262c13612b61199bedbcd3cce0f79",
     "packages/creative/src/studio/art-direction/solver.ts": "fbda9d4d761a26165819fa5ab8b1e4785a16ada0850ef33a99ede74be72a23ad",
@@ -55,7 +55,13 @@
     "JSON replay deterministic; source choices unchanged",
     "retained layout passes actual local raster contrast and native live factual text/photo bytes"
   ],
-  "releaseGate": "NOT_RUN_YET",
+  "releaseGate": {
+    "candidateCommit": "82857284f6cae44672ef6d060195cf2fefe11f79",
+    "proof": "plans/content-aware-design-2026-09-30/W2_CANDIDATE_BACKGROUND_REFUSAL_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior transfer approval pending",
+    "allEightQualified": false
+  },
   "productionChanged": false,
   "providers": "synthetic only; no paid calls",
   "limits": [
@@ -70,6 +76,14 @@
     "output/qualification/2026-10-01/candidate-background-refusal/CONNECTED.log": "5826c034b47637b6286669806ffbc3018cb490963684ecaa13f032b3527a5f5c",
     "output/qualification/2026-10-01/candidate-background-refusal/BUILD.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
     "output/qualification/2026-10-01/candidate-background-refusal/STRICT_TYPES.log": "290b89c2e40548742ce310a901c5135d9de16b0f7b67c2d81efb570ae9ea2df1",
-    "output/qualification/2026-10-01/candidate-background-refusal/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad"
+    "output/qualification/2026-10-01/candidate-background-refusal/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/candidate-background-refusal/EXHAUSTED_PROPOSALS.json": "29408aface62235efd7e32694f45c9e548d58c6747ea8a9c42df2e080fc32ae2"
+  },
+  "sourceCommit": "250512cdb4190358429ed0974d7c604a429190b3",
+  "exhaustedProposals": {
+    "calls": 1,
+    "rejected": true,
+    "retainedBackgroundReasons": true,
+    "scope": "supplementary actual local generation probe; synthetic provider"
   }
 }

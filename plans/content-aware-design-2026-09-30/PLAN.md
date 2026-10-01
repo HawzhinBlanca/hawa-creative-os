@@ -728,3 +728,11 @@ files274pass/0fail/0skip,689 strict roots/build/lint pass. Actual Core preparati
 local raster contrast, editable factual text/photo bytes and replay verified.
 Exact gate pending; real Canva/human/product admission open, no deploy.
 W2_CANDIDATE_BACKGROUND_REFUSAL_PROOF.json retains scope and evidence.
+
+Exact clean seal82857284 passes seven engineering stages,6823pass/0fail/67skip
+across682 passed files/6 skipped,689 strict roots and1750 package checks. Mandatory
+negative-flag refusal passes. Raw Stage3 is skipped; production-dump transfer
+authorization remains pending after automatic approval review rejection. No
+all-eight/product admission or deployment claim. The all-infeasible proposal
+probe also refuses with original reasons and one synthetic call.
+W2_CANDIDATE_BACKGROUND_REFUSAL_GATE_EVIDENCE.json retains actual receipts.

@@ -1,6 +1,6 @@
 # ADR212 — Candidate-local background infeasibility
 
-Date: 2026-10-01. Status: connected engineering verified; exact gate and product admission pending.
+Date: 2026-10-01. Status: connected and seven-stage engineering verified; production-dump and product admission pending.
 Requirements: FR-028, FR-031, FR-038, FR-040, FR-041, NFR-012.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/11_QA_RTL_MULTILINGUAL.md,
 MASTER_SPEC; ADR170, ADR181 and ADR206.
@@ -46,3 +46,11 @@ roots, build and lint pass. The actual Core proposal/preparation path retains
 viable concepts and warns with the original refused-background reason. The
 initial four failures and first raster-fixture failure are preserved in
 W2_CANDIDATE_BACKGROUND_REFUSAL_PROOF.json. No deployment or paid provider call.
+
+Exact clean seal82857284 passes seven engineering stages,6823pass/0fail/67skip
+across682 passed files/6 skipped,689 strict roots and1750 package checks. Mandatory
+negative-flag refusal passes. Raw Stage3 is skipped; production-dump transfer
+authorization remains pending after automatic approval review rejection. No
+all-eight/product admission or deployment claim. The all-infeasible proposal
+probe also refuses with original reasons and one synthetic call.
+W2_CANDIDATE_BACKGROUND_REFUSAL_GATE_EVIDENCE.json retains actual receipts.
