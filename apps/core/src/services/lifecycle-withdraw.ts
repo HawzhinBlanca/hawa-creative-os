@@ -24,7 +24,7 @@ import { WITHDRAW_MESSAGES, requesterLang, say, signLifecycleOfficeEvent, type R
 import { LifecycleProjectionConflict } from './lifecycle-projection.js';
 import { lateChangeOfficeAlert, recordRoutingRefusal, type LateChangeStage, type LateRequesterChange } from './lifecycle-chat-target.js';
 import { officeChatsFor } from './office-chats.js';
-import { designName, openingWords, requestLabel, sentWhen, shortTitle } from './requester-turn.js';
+import { designName, distinctNames, openingWords, requestLabel, sentWhen, shortTitle } from './requester-turn.js';
 import { workerSigningSecretOf } from './worker-credential.js';
 import { log } from '../logging.js';
 
@@ -103,6 +103,25 @@ export function withdrawnOfficeAlert(input: { senderName?: string | null; title:
     `It is closed, and nothing more will be made for it.${running}`, '', `Task ${input.taskId.slice(0, 8)}`].join('\n');
 }
 
+/**
+ * ADR-239 follow-up (live 2026-10-01): the office cancelled a K-12 Pilot Study request and its redo, and
+ * the requester got "The office has cancelled KAAE K-12 Pilot Study…" twice, word for word. A request is
+ * named among this chat's requests of the same name by ADR-231's `distinctNames` ("… (asked for today at
+ * 08:44)", or "(version 2)"); one with a name of its own is named as before.
+ */
+async function namedInChat(trx: Kysely<Database>, tenantId: string, chatId: string,
+  self: { requestId: string; title: string; askedAt: string; words?: string }, lang: RequesterLang): Promise<string> {
+  const key = shortTitle(self.title).toLowerCase();
+  const rows = (await sql<{ request_id: string; created_at: Date | string; title: string | null; description: string | null }>`
+    SELECT r.request_id::text, r.created_at, root.title, root.description FROM hawa.requests r
+      LEFT JOIN hawa.tasks root ON root.tenant_id = r.tenant_id AND root.id = r.root_task_id
+    WHERE r.tenant_id = ${tenantId}::uuid AND r.chat_id = ${chatId} AND r.owner = 'restate' AND r.request_id <> ${self.requestId}::uuid
+    ORDER BY r.created_at DESC LIMIT 50`.execute(trx)).rows;
+  const siblings = rows.filter((r) => shortTitle(r.title || 'your design').toLowerCase() === key)
+    .map((r) => ({ requestId: r.request_id, title: r.title || 'your design', askedAt: new Date(r.created_at).toISOString(), words: r.description ?? undefined }));
+  return distinctNames([self, ...siblings], lang, Date.now()).get(self.requestId) ?? requestLabel(self, lang);
+}
+
 /** The decision Core's intake recorded for a requester's Telegram update, as stored. */
 async function recordedWithdraw(trx: Kysely<Database>, tenantId: string, updateId: number) {
   const row = (await sql<{ payload: Record<string, any>; payload_hash: string }>`SELECT payload, payload_hash
@@ -157,7 +176,8 @@ export async function projectLifecycleWithdraw(db: Kysely<Database>, input: With
     const chatId = request.chat_id;
     // ADR-230 addendum (L16): named by when it was sent and the requester's words when its title names nothing.
     const askedAt = new Date(request.created_at).toISOString();
-    const label = requestLabel({ title, askedAt, words: root?.description }, lang);
+    const label = chatId ? await namedInChat(trx, tenantId, chatId, { requestId, title, askedAt, words: root?.description ?? undefined }, lang)
+      : requestLabel({ title, askedAt, words: root?.description }, lang);
     if (!withdrawable(request.stage)) {
       if (actor.kind === 'office') {
         throw new LifecycleProjectionConflict('NOT_WITHDRAWABLE', `The request is ${request.stage}; only a request nothing has been approved for can be cancelled`);

@@ -145,9 +145,11 @@ export const ROUTING_MESSAGES = {
   },
   // ADR-230 section 6: a change sent while a draft is being made (`designing`) starts a new round with it
   // when that draft finishes; if no round can start, the draft alert lists it and the requester is told.
+  // ADR-239 follow-up (canary 2026-10-02): whether a round can start (the day's allowance, the round
+  // limit) is known only then, so it promises nothing: it said "as soon as the current draft is done".
   changeAddedNextRound: {
-    en: "Got it. I'll add that to {title} as soon as the current draft is done.",
-    ckb: 'تێگەیشتم. هەر کە ڕەشنووسەکەی ئێستا تەواو بوو، ئەوە بۆ {title} زیاد دەکەم.',
+    en: "Got it. I'll add that to {title} once the current draft is done, or pass it to the office if I can't.",
+    ckb: 'تێگەیشتم. کە ڕەشنووسەکەی ئێستا تەواو بوو، ئەوە بۆ {title} زیاد دەکەم، یان ئەگەر نەمتوانی دەیدەمە ئۆفیسەکە.',
   },
   changePassedInReview: {
     en: "Got it. The office is checking {title} now, and I've passed your change to them.",

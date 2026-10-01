@@ -97,9 +97,11 @@ describe('L4: the requester hears what really happens', () => {
 
   // ADR-230 section 6 (merged after ADR-231): a change kept while a draft is being made starts a new round
   // when that draft finishes, so the requester hears it will be added then, and the office is told the same.
+  // ADR-239 follow-up (changed deliberately): it promised the change "as soon as the current draft is done"
+  // before the day's allowance or the round limit was known; now it says the office gets it if it can't be added.
   it('a change kept while the draft is being made is added when that draft is done, as the office is told', () => {
     expect(noteText('change', 'designing', K12, 'en')).toBe(
-      "Got it. I'll add that to <b>KAAE K-12 Pilot Study…</b> as soon as the current draft is done.");
+      "Got it. I'll add that to <b>KAAE K-12 Pilot Study…</b> once the current draft is done, or pass it to the office if I can't.");
     const alert = lateChangeOfficeAlert({ requestId: randomUUID(), taskId: randomUUID(), requestRev: 1, requestStage: 'designing',
       text: 'also please add that seats are limited', title: 'KAAE K-12 Pilot Study…' }, ME, '93000001', 'Hawzhin Blanca')!.text;
     expect(alert).toMatch(/It will be added automatically in a new round when the current draft finishes; if a round can't start, the draft alert will list it\./);

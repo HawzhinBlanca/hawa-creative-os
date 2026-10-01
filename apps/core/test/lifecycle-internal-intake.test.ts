@@ -224,7 +224,7 @@ describe('a requester change after the design reached the office (finding 13 of 
     (reply.message as Record<string, unknown>).reply_to_message = { message_id: 813 };
     const answer = await intake(app, reply, 'lifecycle', requestId);
     expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change',
-      requestId, requestStage: 'designing', chatAnswer: { text: expect.stringContaining("as soon as the current draft is done") } });
+      requestId, requestStage: 'designing', chatAnswer: { text: expect.stringContaining("once the current draft is done, or pass it to the office if I can't") } });
     expect(answer.body.officeAlert.text).toContain(words);
     expect(await tasksInChat(chat)).toHaveLength(1);
     expect(await lateReceipt(reply.update_id)).toEqual([expect.objectContaining({

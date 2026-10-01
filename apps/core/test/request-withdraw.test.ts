@@ -320,6 +320,30 @@ describe('the office\'s Cancel in the Desk withdraws a request-owned task (ADR-2
     expect(calls).toHaveLength(1);
   });
 
+  // ADR-239 follow-up (live 2026-10-01): the office cancelled a request and its redo, which share a name, and
+  // the requester got the same sentence twice. Each is now named apart (ADR-231's distinctNames).
+  it('names which one when the office cancels two requests of the same name (the original and its redo)', async () => {
+    const chat = chatId();
+    const original = await seed(chat, 'manual', 3, 'KAAE K-12 Pilot Study…', true);
+    // When it was opened is the owner's to set (hawa_app may not rewrite it).
+    const owner = createDb(process.env.TEST_DATABASE_OWNER_URL!);
+    try {
+      await sql`UPDATE hawa.requests SET created_at = now() - interval '3 hours' WHERE request_id = ${original.requestId}::uuid`.execute(owner);
+    } finally { await owner.destroy(); }
+    const redo = await seed(chat, 'designing', 1, 'KAAE K-12 Pilot Study…');
+    const told: string[] = [];
+    for (const r of [redo, original]) {
+      const object = requestObject(r.state);
+      gateway(object);
+      expect((await desk(r.taskId, { reason: 'Duplicate of the redo', expectedVersion: await version(r.taskId) })).status).toBe(202);
+      told.push(...object.sent.filter((m) => m.chatId === String(chat)).map((m) => String(m.text)));
+    }
+    expect(told).toHaveLength(2);
+    expect(told[0]).toBe('The office has cancelled <b>KAAE K-12 Pilot Study…</b> (asked for just now), so nothing more will be made for it. Tell me whenever you need a new design.');
+    expect(told[1]).toMatch(/^The office has cancelled <b>KAAE K-12 Pilot Study…<\/b> \(asked for (?:today|yesterday) at \d\d:\d\d\), so nothing more will be made for it\./);
+    expect(new Set(told).size).toBe(2);
+  });
+
   it.each([
     ['approved', 3, /already approved/],
     ['delivering', 4, /being sent to the requester/],
@@ -463,6 +487,26 @@ describe('a cancel with a reason, closed requests never offered, and requests na
     const teacher = await seed(chat, 'manual', 1, 'Teacher Appreciation Day', false);
     expect(old.requestId).toBeTruthy();
     expect(await intake(message(chat, LIVE_L17))).toMatchObject({ lifecycleAction: 'withdraw', requestId: teacher.requestId });
+  });
+
+  // ADR-239 follow-up (canary, 2026-10-02): a named cancel with a trailing apology or reason withdraws at
+  // once, as "it was only a test" does; it was asked "Do you want me to cancel …?".
+  it.each([
+    ['cancel the Science Fair flyer, sorry, it was by mistake'],
+    ['cancel the Science Fair flyer, it was by mistake'],
+    ['cancel the Science Fair flyer, by mistake'],
+    ['cancel the Science Fair flyer, it was sent by accident'],
+    ['please cancel the Science Fair flyer, my mistake'],
+    ['cancel the Science Fair flyer, wrong one, sorry'],
+    ['cancel the Science Fair flyer, sorry'],
+    ['cancel the Science Fair flyer. Sorry, I sent it by mistake'],
+  ])('"%s" names the design and withdraws it at once', async (words) => {
+    const chat = chatId();
+    await seed(chat, 'in_review', 4, 'KAAE K-12 Pilot Study…');
+    const flyer = await seed(chat, 'designing', 1, 'Science Fair flyer');
+    const decided = await intake(message(chat, words));
+    expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId: flyer.requestId });
+    expect(decided.chatAnswer).toBeUndefined();
   });
 
   it('cancel words the rules cannot place: asked among withdrawable requests only, never "A new design", never a closed one', async () => {
