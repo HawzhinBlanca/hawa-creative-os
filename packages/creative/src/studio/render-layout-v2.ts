@@ -1087,11 +1087,19 @@ export function fontCoversText(
     return { covers: false, missing: [] };
   }
 
+  return fontCoversCharacters(font, text);
+}
+
+/** Shared coverage calculation for an already verified font-file snapshot. */
+function fontCoversCharacters(
+  font: { layout(text: string): { glyphs: Array<{ id: number }> } },
+  text: string
+): { covers: boolean; missing: string[] } {
   const missing = new Set<string>();
   for (const ch of Array.from(text)) {
     if (/\s/.test(ch)) continue;
     try {
-      if (font.layout(ch).glyphs.some((g: any) => g.id === 0)) missing.add(ch);
+      if (font.layout(ch).glyphs.some((g) => g.id === 0)) missing.add(ch);
     } catch {
       missing.add(ch);
     }
@@ -1149,7 +1157,7 @@ export interface AdmittedFontFace {
 }
 
 const renderFontRegistryCache = new Map<string, { sha256: string; registry: RenderFontRegistry }>();
-const admittedFaceCache = new Map<string, AdmittedFontFace[]>();
+const admittedFaceCache = new Map<string, { basis: string; faces: AdmittedFontFace[] }>();
 
 /**
  * render-fonts.json, from this module's own location.
@@ -1260,9 +1268,7 @@ export function admittedFontFaces(options: {
 }): AdmittedFontFace[] {
   const file = resolveRenderFontsPath(options.registryPath);
   const key = `${file}|${options.fontsDir || ''}|${options.script}|${options.role}|${options.bold ? 1 : 0}`;
-  const cached = admittedFaceCache.get(key);
-  if (cached) return cached;
-
+  // ADR200: a hit must not bypass current policy, declared weight presence or measured bytes.
   const registry = loadRenderFontRegistry({ registryPath: options.registryPath });
   const required = registry.scripts?.[options.script]?.requiredCharacters ?? '';
   const declared = Object.values(registry.families || {}).filter(
@@ -1270,10 +1276,26 @@ export function admittedFontFaces(options: {
       family.admitted && family.script === options.script && typeof family.roles?.[options.role] === 'number'
   );
 
-  const drawable: AdmittedFontFace[] = declared
-    .map((family) => ({ family, weights: presentWeights(family) }))
+  const candidates = declared.map((family) => {
+    const weights = presentWeights(family);
+    let measured: ReturnType<typeof loadFontEntry> | undefined;
+    if (weights.length) {
+      try { measured = loadFontEntry(family.name, false, false, resolveFontsDir(options)); }
+      catch { /* An unavailable or invalid measured file is never an admitted face. */ }
+    }
+    return { family, weights, measured };
+  });
+  // The loader keeps parsed fonts for unchanged fingerprints and verifies changed bytes.
+  // Reuse that identity; full renderer/OS capture is a different boundary, not a glyph query.
+  const basis = JSON.stringify(candidates.map(({ family, weights, measured }) =>
+    [family.name, weights, measured?.sha256 ?? null]
+  ));
+  const cached = admittedFaceCache.get(key);
+  if (cached?.basis === basis) return cached.faces;
+
+  const drawable: AdmittedFontFace[] = candidates
     .filter(({ weights }) => weights.length > 0)
-    .filter(({ family }) => fontCoversText(family.name, required, { fontsDir: options.fontsDir }).covers)
+    .filter(({ measured }) => measured !== undefined && fontCoversCharacters(measured.font, required).covers)
     .map(({ family, weights }) => ({
       name: family.name,
       rank: family.roles[options.role] as number,
@@ -1294,7 +1316,7 @@ export function admittedFontFaces(options: {
   // without a face: keep the preferred list and let fontFaceSupports gate the emitted axis.
   const withWeight = options.bold ? drawable.filter((face) => face.hasBold) : drawable;
   const faces = withWeight.length ? withWeight : drawable;
-  admittedFaceCache.set(key, faces);
+  admittedFaceCache.set(key, { basis, faces });
   return faces;
 }
 
