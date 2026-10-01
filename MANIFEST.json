@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T19:38:46Z",
+  "generatedAt": "2026-10-01T21:28:29Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 700,
+  "fileCount": 704,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "ef0c32c6cffd09f29b2120b6cd2e8cd695a4a0c637cfd8f409a3b7c0a80749e1",
-      "bytes": 3984
+      "sha256": "fdce192b3da0227602aeeaefc3a8a99dd9c92ecbb957f0a2c0e7995011ac82d3",
+      "bytes": 3976
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -956,6 +956,11 @@
       "path": "adrs/237_sol_judge_and_visual_review.md",
       "sha256": "0473c3be176a693e6e397bcd9f2a2895ea80a13d13c46342fb212b6c391dfd90",
       "bytes": 17811
+    },
+    {
+      "path": "adrs/240_nightly_live_canary.md",
+      "sha256": "99d941961ebbf74b646473ca23af3cc3156dc27713355e693942dbdd1ff312af",
+      "bytes": 16290
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2614,8 +2619,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "3c7350a6c2e8d1ba49b7897eb56fb8891393d27a655f1b4f120bf12ff26cd6d8",
-      "bytes": 602329
+      "sha256": "642856376922ab3fbd1d60dad44fdaf18de8894e61ff0c5a14ca63b73832a5bf",
+      "bytes": 604545
     },
     {
       "path": "plans/user-stories.csv",
@@ -3093,6 +3098,16 @@
       "bytes": 3773
     },
     {
+      "path": "scripts/live_canary.ts",
+      "sha256": "3bfb49174ea3c16dd514df9f88f00843d90fe3f4266596bdcddcac43f87619f0",
+      "bytes": 12919
+    },
+    {
+      "path": "scripts/live_canary_lib.ts",
+      "sha256": "573ba59fc80f618a428a6a1b69099ab86acb9b0a29e7252043df406192a15eb6",
+      "bytes": 25839
+    },
+    {
       "path": "scripts/load/desk-tab.ts",
       "sha256": "1274f79ffdf0e6f9628eba34c64fdb011f4c080236a78e33eeee44dc5ae96a55",
       "bytes": 12966
@@ -3391,6 +3406,11 @@
       "path": "scripts/test/lint-provider-egress.test.ts",
       "sha256": "56f1cb9f80459559e2bba7fe70c8a123076b5ebe9b5f9e24559e6a2b2ae63401",
       "bytes": 1910
+    },
+    {
+      "path": "scripts/test/live-canary.test.ts",
+      "sha256": "e999efe517822096f320769aeb7e9fe751e4f41e38e4759a4e7fc6b306e1f9e6",
+      "bytes": 13677
     },
     {
       "path": "scripts/test/nginx-reload.test.ts",
