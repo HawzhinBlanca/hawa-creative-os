@@ -736,3 +736,17 @@ authorization remains pending after automatic approval review rejection. No
 all-eight/product admission or deployment claim. The all-infeasible proposal
 probe also refuses with original reasons and one synthetic call.
 W2_CANDIDATE_BACKGROUND_REFUSAL_GATE_EVIDENCE.json retains actual receipts.
+
+
+## W4 photo intent during hero recovery — 1 October 2026
+
+ADR213 fixes actual valid-support loss in bounded normalization and four-to-two
+photo collapse during same-recipe blurry-hero recovery. Valid supports retain
+narrative order; title accent/typicality/background parameters survive, and
+no-texture remains no-texture. Promoted-role collisions are removed without
+forcing unspecified uploads; requester all/count coverage remains authoritative.
+No new model call, dependency, topology or relaxed hard QA. Expanded original
+regressions14fail/1pass retained; final16files283pass/0fail/0skip,691 strict roots,
+build/lint. Actual Core/raster/editable source-photo bytes/live copy/replay pass.
+Exact gate pending; production/native/human/taste/product admission open.
+W4_PHOTO_INTENT_REPAIR_PROOF.json records the precise scope and fixture mistakes.

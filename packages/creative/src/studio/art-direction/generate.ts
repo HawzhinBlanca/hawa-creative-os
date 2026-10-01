@@ -33,6 +33,8 @@ import { RecipeInfeasibleError, TEXT_SLOTS, solveRecipe, type ArtDirectionChoice
  * the local analysis (sharpness, calm thirds, detail), so no call is added.
  */
 
+const MAX_SUPPORTING_PHOTOS = 9;
+
 export const ART_DIRECTION_JSON_SCHEMA = {
   type: 'object',
   properties: {
@@ -47,7 +49,7 @@ export const ART_DIRECTION_JSON_SCHEMA = {
           typicality: { type: 'number', description: '0 = unexpected, 1 = the most typical treatment for this brief.' },
           heroPhotoIndex: { type: 'integer' },
           texturePhotoIndex: { type: ['integer', 'null'] },
-          supportingPhotoIndices: { type: 'array', items: { type: 'integer' }, maxItems: 9, description: 'Ordered supporting source indices for a multi-photo composition; distinct from hero. Empty for single-photo recipes.' },
+          supportingPhotoIndices: { type: 'array', items: { type: 'integer' }, maxItems: MAX_SUPPORTING_PHOTOS, description: 'Ordered supporting source indices for a multi-photo composition; distinct from hero. Empty for single-photo recipes.' },
           cutoutPhotoIndex: { type: ['integer', 'null'] },
           slots: {
             type: 'array',
@@ -344,7 +346,8 @@ export function normalizeConcepts(
       heroPhotoIndex: hero,
       texturePhotoIndex: texture,
       ...(isMultiPhotoRecipe(recipe) ? { supportingPhotoIndices: Array.isArray(c.supportingPhotoIndices)
-        ? [...new Set(c.supportingPhotoIndices.slice(0, recipePhotoCapacity(recipe) - 1).filter(i => Number.isInteger(i) && indices.has(i) && i !== hero))]
+        ? [...new Set(c.supportingPhotoIndices.slice(0, MAX_SUPPORTING_PHOTOS)
+          .filter(i => Number.isInteger(i) && indices.has(i) && i !== hero))].slice(0, recipePhotoCapacity(recipe) - 1)
         : ranked.filter(p => p.photoIndex !== hero).slice(0, 1).map(p => p.photoIndex) } : {}),
       cutoutPhotoIndex: cutout,
       slots: (c.slots || [])
@@ -436,7 +439,22 @@ export function solveConcepts(
   choices.forEach((choice, index) => {
     // The concept as given; then its recipe on the photo the house would pick for it (a plate on a
     // photo with no quiet region keeps the plate, on another photo); then the other recipes.
-    const own = { ...defaultChoice(choice.recipe, options.photos, options.copyBlocks), slots: choice.slots, params: choice.params, conceptNote: choice.conceptNote };
+    const defaults = defaultChoice(choice.recipe, options.photos, options.copyBlocks);
+    const own: ArtDirectionChoice = { ...choice,
+      heroPhotoIndex: defaults.heroPhotoIndex,
+      cutoutPhotoIndex: defaults.cutoutPhotoIndex,
+      texturePhotoIndex: RECIPES[choice.recipe].texture && choice.texturePhotoIndex !== defaults.heroPhotoIndex &&
+        options.photos.some(p => p.photoIndex === choice.texturePhotoIndex)
+        ? choice.texturePhotoIndex : null,
+    };
+    // Repair the hero role, not the rest of a valid photo narrative or title treatment. A support
+    // promoted to hero is removed only from that former role; explicit coverage is still completed
+    // by the solver. Leave oversized/invalid direct inputs for its existing refusal, without an
+    // unbounded scan or a fabricated requirement to place every unspecified upload.
+    if (isMultiPhotoRecipe(choice.recipe) && choice.supportingPhotoIndices &&
+        choice.supportingPhotoIndices.length <= recipePhotoCapacity(choice.recipe) - 1) {
+      own.supportingPhotoIndices = choice.supportingPhotoIndices.filter(i => i !== own.heroPhotoIndex);
+    }
     const tries = [choice, ...(own.heroPhotoIndex !== choice.heroPhotoIndex ? [own] : []),
       ...eligible.filter((r) => r !== choice.recipe).map((r) => defaultChoice(r, options.photos, options.copyBlocks))];
     // A concept whose hero would be enlarged past 1.5x is kept only when no sharp one can replace it.
