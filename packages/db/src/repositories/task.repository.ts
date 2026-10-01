@@ -51,8 +51,8 @@ export interface CreateTaskAggregateParams {
   enqueueOutbox?: boolean;
   /** New intake validation/enrichment only; exact committed replays retain their recorded metadata. */
   prepareCreatePayload?: (trx: Kysely<Database>) => Promise<Record<string, unknown>>;
-  /** A lifecycle-owned task records its creation without making it claimable by the legacy worker. */
-  outboxState?: 'pending' | 'recorded';
+  /** Explicit lifecycle/manual ownership records creation without legacy worker dispatch. */
+  outboxState?: 'pending' | 'recorded' | 'manual';
   /** Immutable at task creation; an enrolled chat cannot switch an existing task at Deliver. */
   deliveryExecutorPin?: 'core' | 'restate';
 }
@@ -590,6 +590,8 @@ export class TaskRepository {
 
       // 4. Insert into outbox_commands if requested
       if (params.enqueueOutbox !== false) {
+        const recordedOwner = params.outboxState === 'recorded' ? 'OWNED_BY_LIFECYCLE'
+          : params.outboxState === 'manual' ? 'MANUAL_DESK_OWNED' : null;
         await dbClient
           .insertInto('outbox_commands')
           .values({
@@ -609,9 +611,9 @@ export class TaskRepository {
               requestHash: incomingHash,
               ...(params.requestBody ? { requestIdentityHash: incomingHash } : {}),
             }),
-            state: params.outboxState === 'recorded' ? 'delivered' : 'pending',
-            ...(params.outboxState === 'recorded'
-              ? { delivered_at: new Date(), last_error: 'OWNED_BY_LIFECYCLE' }
+            state: recordedOwner ? 'delivered' : 'pending',
+            ...(recordedOwner
+              ? { delivered_at: new Date(), last_error: recordedOwner }
               : {}),
           })
           .execute();

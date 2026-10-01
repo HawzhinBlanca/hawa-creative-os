@@ -323,7 +323,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
                   clientDnaVersion,
                 },
                 enqueueOutbox: true,
-                ...(manualIntake ? { requestBody: body, prepareCreatePayload: async (lockedTrx: Parameters<typeof prepareManualIntake>[0]) => ({
+                ...(manualIntake ? { outboxState: 'manual', requestBody: body, prepareCreatePayload: async (lockedTrx: Parameters<typeof prepareManualIntake>[0]) => ({
                   ...await prepareManualIntake(lockedTrx, { tenantId, clientId: body.clientId, projectId: body.projectId }),
                   ...(documentIntake ? await prepareDocumentIntake(lockedTrx, blobStore, { tenantId,
                     clientId: body.clientId, userId, source: body.sourceDocument }) : {}),

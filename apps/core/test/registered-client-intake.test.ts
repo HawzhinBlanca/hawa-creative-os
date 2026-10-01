@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
-import { createDb, withRlsContext, sql, TaskRepository } from '@hawa/db';
+import { createDb, withRlsContext, sql, TaskRepository, OutboxRepository } from '@hawa/db';
 import { kaaeClientDNA } from '@hawa/domain';
 import { createApp } from '../src/app.js';
 const db = createDb(process.env.TEST_DATABASE_URL!);
@@ -95,4 +95,56 @@ describe('registered client scope at the Desk boundary (ADR-066)', () => {
       expect(Number(count.rows[0].count)).toBe(1);
     });
   });
+  it('records manual intake atomically without making its receipt claimable by the worker', async () => {
+    const clientId = await client(), key = randomUUID();
+    const body = { title: 'Explicit manual task ownership', clientId, workflow: 'canva_manual', copyEn: 'Exact original copy' };
+    const first = await post(body, key), replay = await post(body, key);
+    expect(first.status).toBe(201); expect(replay.status).toBe(200); expect(replay.body.id).toBe(first.body.id);
+    const receipts = await withRlsContext(db, scope, async trx => {
+      const task = await trx.selectFrom('tasks').select(['state','version']).where('id','=',first.body.id).executeTakeFirstOrThrow();
+      const events = await trx.selectFrom('task_events').select('id').where('task_id','=',first.body.id).execute();
+      const outbox = await trx.selectFrom('outbox_commands').select(['state','last_error']).where('aggregate_id','=',first.body.id).execute();
+      const claims = await new OutboxRepository(trx).claimDue(100, 30, 3, trx);
+      return {task,events,outbox,claims};
+    });
+    expect(receipts.task).toMatchObject({state:'received',version:'1'});
+    expect(receipts.events).toHaveLength(1);
+    expect(receipts.outbox).toEqual([{state:'delivered',last_error:'MANUAL_DESK_OWNED'}]);
+    expect(receipts.claims.some(command => command.aggregate_id === first.body.id)).toBe(false);
+  });
+  it('ignores only the old no-automatic-job callback for an immutable manual Desk source', async () => {
+    const clientId = await client(), key = randomUUID();
+    const body = {title:'Legacy manual dispatch',clientId,workflow:'canva_manual',copyEn:'Exact copy'};
+    const old = await withRlsContext(db, scope, trx => new TaskRepository(trx).createTaskAggregate({
+      tenantId,userId:scope.userId,idempotencyKey:key,title:body.title,clientId,payload:{body,clientDnaVersion:1},enqueueOutbox:true,
+    },trx));
+    const notify = () => app().request(`/v1/tasks/${old.task.id}/notifications/canva-status`, {method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'MANUAL_DESIGN_REQUIRED',notifyRequester:false,
+        detail:'Dispatched without an automatic Canva job; nothing was generated or spent.'})});
+    for (let n=0;n<2;n++) {
+      const response=await notify(); expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({reason:'MANUAL_DESK_OWNED',notified:false});
+    }
+    await withRlsContext(db,scope,async trx => {
+      expect(await trx.selectFrom('tasks').select(['state','version']).where('id','=',old.task.id).executeTakeFirstOrThrow())
+        .toMatchObject({state:'received',version:'1'});
+      expect(await trx.selectFrom('task_events').select('id').where('task_id','=',old.task.id).execute()).toHaveLength(1);
+      expect(await trx.selectFrom('outbox_commands').select('id').where('aggregate_id','=',old.task.id).execute()).toHaveLength(1);
+    });
+  });
+
+  it('keeps real or different manual-task outcomes outside the legacy no-job fence', async () => {
+    const clientId=await client();
+    for (const extra of [{detail:'Actual generation requires a designer.'}, {runId:randomUUID()},
+        {designId:'DAGmanualown001'}, {code:'MODEL_UNAVAILABLE'}]) {
+      const saved=await post({title:'Explicit manual outcome distinction',clientId,workflow:'canva_manual'});
+      const response=await app().request(`/v1/tasks/${saved.body.id}/notifications/canva-status`, {method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'MANUAL_DESIGN_REQUIRED',notifyRequester:false,
+          detail:'Dispatched without an automatic Canva job; nothing was generated or spent.',...extra})});
+      expect(response.status).toBe(200); expect((await response.json()).reason).not.toBe('MANUAL_DESK_OWNED');
+      expect(await withRlsContext(db,scope,trx=>trx.selectFrom('tasks').select('state').where('id','=',saved.body.id).executeTakeFirstOrThrow()))
+        .toMatchObject({state:'designId' in extra ? 'human_review' : 'failed_operator'});
+    }
+  });
+
 });

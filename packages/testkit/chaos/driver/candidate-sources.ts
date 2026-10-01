@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CHAOS_DIR, REPO_ROOT, compose, deploymentReceipt, fakes, kill, query, secrets, sql, start, waitHealthy } from './stack.js';
+import { CHAOS_DIR, REPO_ROOT, compose, deploymentReceipt, fakes, kill, query, restateQuery, secrets, sql, start, waitHealthy } from './stack.js';
 import { KAAE_CLIENT_ID } from './provision.js';
 import { captureForReview } from '../../../../apps/desk/src/services/canvaCapture.js';
 import { checkedCanvaExportFixture } from '../../src/canva-export-fixture.js';
@@ -290,6 +290,29 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   const resumed = await action(`/tasks/${manual.id}/canva/generate`, { width: 1080, height: 1350 }, generationKey, session.token);
   check('saved bilingual Desk copy imports through the explicit generation action', generated.status === 'retrieved' &&
     !!generated.planId && resumed.planId === generated.planId, `status=${generated.status}; replay=${resumed.status}`);
+  for (let replay=0;replay<2;replay++) {
+    const staleNoJob=await fetch(`${origin}/v1/internal/tasks/${manual.id}/notifications/canva-status`, {
+      method:'POST',headers:{Authorization:`Bearer ${secrets().CHAOS_WORKER_TOKEN}`,'Content-Type':'application/json'},
+      body:JSON.stringify({status:'MANUAL_DESIGN_REQUIRED',notifyRequester:false,
+        detail:'Dispatched without an automatic Canva job; nothing was generated or spent.'}),signal:AbortSignal.timeout(15000),
+    });
+    const ignored=await staleNoJob.json();
+    check(`old worker no-job callback ${replay+1} cannot take ownership of a manual Desk task`,
+      staleNoJob.status===200 && ignored.reason==='MANUAL_DESK_OWNED' && ignored.notified===false,`HTTP ${staleNoJob.status}`);
+  }
+  const [manualOwnership] = await query<{state:string;version:string;receipts:string;recorded:string}>(sql`
+    SELECT t.state,t.version,
+      (SELECT count(*) FROM hawa.outbox_commands o WHERE o.aggregate_id=t.id AND o.command_type='task.created') AS receipts,
+      (SELECT count(*) FROM hawa.outbox_commands o WHERE o.aggregate_id=t.id AND o.command_type='task.created'
+        AND o.state='delivered' AND o.last_error='MANUAL_DESK_OWNED') AS recorded
+    FROM hawa.tasks t WHERE t.id=${manual.id}::uuid`);
+  check('manual Desk generation retains its office-owned task version and recorded creation receipt',
+    manualOwnership.state==='received' && Number(manualOwnership.version)===1 && Number(manualOwnership.receipts)===1 &&
+    Number(manualOwnership.recorded)===1,JSON.stringify(manualOwnership));
+  const unwantedManualRuns=await restateQuery<{id:string}>(
+    `SELECT id FROM sys_invocation WHERE target_service_name='TaskWorkflow' AND target_service_key='task-wf-${manual.id}'`);
+  check('the real worker submits no automatic TaskWorkflow for a manual Desk request',unwantedManualRuns.length===0,
+    `${unwantedManualRuns.length} automatic submissions`);
   const plans = await query<{request: {copy: string[]; instructions: string}; source_sha256: string}>(sql`
     SELECT request,source_sha256 FROM hawa.canva_design_plans WHERE task_id=${manual.id}::uuid`);
   check('the saved plan preserves both exact copy blocks and separate instructions', plans.length === 1 &&

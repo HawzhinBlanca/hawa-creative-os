@@ -826,3 +826,5 @@ original actors/timestamps, sandbox headers, unknown-source denial and restricte
 worker denial alongside the existing uncertain external-effect reconciliation.
 Permanent helper typecheck, 698 strict roots and lint pass; deployed run pending.
 No production, paid provider, native-save, human-label or offsite-admission claim.
+
+ADR219 connected: manual Desk creation records an unclaimable MANUAL_DESK_OWNED outbox receipt while preserving atomic task/event/receipt identity. Old source-bound no-job callbacks cannot alter manual task/version; actual default/draft/lifecycle outcome semantics remain. Original Core5pass/2fail and deployed TaskChanged race retained; stale-build and negative-fixture failures retained.14files177passed/0failed/0skipped; actual PDF31checks/four SIGKILL/six restarts/fresh dump+file restore PASS;698 strict roots/build/lint/standalone chaos types PASS. Exact current Docker and engineering gate pending. No deployment/native/human/product/RPO admission. W6_MANUAL_DESK_DISPATCH_PROOF.json.
