@@ -20,7 +20,17 @@
  * What: approval ("approved", "ok send it", "looks good, send"), a change (anything that describes one,
  * including "ok but make the title bigger"), a rejection ("reject", "no, cancel this"); anything else
  * about a replied-to draft is asked about briefly. The words are read by the requester rules
- * (requester-turn.ts) plus a few office phrases; no model is called.
+ * (requester-turn.ts) plus a few office phrases.
+ *
+ * ADR-200 (owner, 2026-10-01: "the chat from telegram should work like a chat"): when those rules are
+ * not certain, the words are also read by a model in the context of the chat (office-intent-model.ts):
+ * the drafts waiting, which picture this member saw last, their last messages and the bot's answers.
+ * The model is advice. Refusing or negating words never approve, an approval needs a clear target,
+ * and an approval that would send a draft to someone other than this member is first asked about
+ * ("Send <title> to <requester> now?"); a plain yes sends that revision, anything else is a new turn.
+ * The conversation names drafts too: "the other one", "the one for Sewa", "the earlier draft", and
+ * words right after the bot asked about a draft are about that draft. Without the model (off, failed,
+ * or refused by the office's allowance) the rules decide alone, as before.
  *
  * How: exactly the Desk's Core actions (office-decisions.ts), under the office team's principal with the
  * member's chat id recorded (authMethod `telegram_office`): approval pins the captured files the Desk
@@ -42,8 +52,9 @@ import { officeChatIds } from './office-chats.js';
 import { decideRequestOwned, startRequestOwnedDelivery, type OfficeActionAnswer } from './office-decisions.js';
 import type { DeliverableStore } from './pinned-deliverables.js';
 import { cleanDraftTitle } from './draft-title.js';
+import type { OfficeIntentModel, OfficeModelDecision, OfficeModelLine } from './office-intent-model.js';
 import { asksForNewDesign, corePhrase, parseChoice, readIntentByRules, readsAsChange, refusesApproval,
-  saysMoreThanRefusal } from './requester-turn.js';
+  saysMoreThanRefusal, titleMatch } from './requester-turn.js';
 
 const TURN_ACCOUNT = 'office_telegram_turn';
 const INTENT_ACCOUNT = 'lifecycle_chat_intent';
@@ -73,9 +84,10 @@ const OFFICE_CANCEL = /^(?:no[\s,،!.]+)?(?:cancel|scrap|drop|forget)(?:\s+(?:it
  * choice) is stamped with it; an answer to a question asked under another version, or longer ago than
  * `PENDING_ASK_MS`, does nothing and is told so (ADR-040 addendum, incident 2026-10-01: a "which
  * draft?" saved under the old rules held an approval reading of "the design is not approved, …", and
- * "3" an hour later, after the fix was deployed, applied it). Raise it whenever the reading changes.
+ * "3" an hour later, after the fix was deployed, applied it). Raise it whenever the reading changes:
+ * 3 is ADR-200 (the model reading, the conversation's references and the send confirmation).
  */
-export const OFFICE_TURN_RULES = 2;
+export const OFFICE_TURN_RULES = 3;
 /** How long a question the bot asked an office member stays open. */
 export const PENDING_ASK_MS = 30 * 60_000;
 /** Negation anywhere in kept words: approval reached through a choice must have none. */
@@ -128,19 +140,49 @@ export type OfficePlan =
       /** Late requester words the member was shown and answered (their update ids). */
       acknowledge?: string[];
       /** Words with no reply, applied to the draft last sent to this member: when it was sent (ISO). */
-      lastSent?: string }
+      lastSent?: string;
+      /** ADR-200: how the draft was found (a reply, the only one waiting, the conversation, a name, the model…). */
+      basis?: TargetBasis;
+      /**
+       * ADR-200: approval said "yes" to the bot's "Send … now?", or "send it anyway" after the requester's
+       * late words were shown: it is not asked about again.
+       */
+      confirmed?: boolean;
+      /** ADR-200: the revision a confirmation named; it approves no other. */
+      revisionId?: string;
+      /** ADR-200: approval asked about whoever asked for the draft: its words or its target are not certain. */
+      needsConfirm?: boolean;
+      /** ADR-200: a "yes" to a confirmation asked too long ago or under other rules: asked again. */
+      again?: boolean }
   /**
    * "Which draft?": the member's words are kept, never what they were read as. The answer reads them
    * again by the rules of its own time (ADR-040 addendum, incident 2026-10-01).
    */
   | { kind: 'ask-which'; words: string; options: QueuedDraft[] }
-  | { kind: 'ask-what'; requestId: string; alertRev: number | null }
+  /** "What should I do with …?" (with `facts`: who asked for it, when it came, its photos, first). */
+  | { kind: 'ask-what'; requestId: string; alertRev: number | null; facts?: boolean }
   | { kind: 'ask-late'; requestId: string; alertRev: number | null; updateIds: string[] }
+  /**
+   * ADR-200: "Send <title> to <requester> now?", stamped with the revision it names. A plain yes in
+   * any language approves that revision; a plain no sends nothing; anything else is a new turn.
+   */
+  | { kind: 'ask-send'; requestId: string; rev: number; revisionId: string }
+  /** ADR-200: a plain no (or "cancel") to "Send … now?": nothing is sent or decided. */
+  | { kind: 'not-sent'; requestId: string }
   /** An answer to a question asked too long ago or under other rules: nothing is done. */
   | { kind: 'lost-track' };
 
+/** ADR-200: how the decision's draft was found. */
+export type TargetBasis = 'reply' | 'only' | 'discussion' | 'last-shown' | 'choice' | 'words' | 'model' | 'confirm';
+
+/** ADR-200: what read the words (kept on the turn's receipt). */
+export type ReadingNote = { source: 'rules'; consulted?: boolean } |
+  { source: 'model'; kind: OfficeModelDecision['kind']; draft: number; confidence: number };
+
 interface TurnReceipt {
   updateId: number; chatId: string; messageId: string | null; lang: RequesterLang; plan: OfficePlan;
+  /** ADR-200: the member's words (the chat's history for the next reading), and what read them. */
+  text?: string; reading?: ReadingNote;
   /** The draft the decision was first sent for, so a replay names the same task and revision. */
   target?: { taskId: string; revisionId: string };
   /** The approval body as first built (pins, visual check), so a replay sends the same decision. */
@@ -244,7 +286,17 @@ export interface QueuedDraft {
   photos?: number;
   /** Who asked for it: their first name, and whether it is this member. */
   requester?: string | null; own?: boolean;
+  /** ADR-200: whose draft it is (a model reading needs every client's consent). */
+  clientId?: string | null;
 }
+
+/**
+ * ADR-200: who asked for a request, when its opening message did not keep the Telegram update (a typed
+ * brief): the first name on the latest intake decision of its private chat (`senderName`).
+ */
+const REQUESTER_NAME = sql`(SELECT i.payload->>'senderName' FROM hawa.inbox_events i
+  WHERE i.tenant_id = r.tenant_id AND i.source_account_id = 'lifecycle_chat_intent' AND i.payload->>'chatId' = r.chat_id
+    AND i.payload->>'senderId' = r.chat_id AND i.payload ? 'senderName' ORDER BY i.received_at DESC, i.id DESC LIMIT 1)`;
 
 /** At most this many drafts are listed, newest first. */
 const QUEUE_LIST = 5;
@@ -256,9 +308,9 @@ const QUEUE_LIST = 5;
 async function officeQueue(trx: Kysely<Database>, tenantId: string, chatId: string): Promise<QueuedDraft[]> {
   const first = officeChatIds()[0] ?? '';
   return (await sql<{ request_id: string; title: string | null; copy: unknown; photos: string | number; chat_id: string;
-    first_name: string | null; alerted_at: Date | string | null; updated_at: Date | string }>`SELECT r.request_id::text,
-      coalesce(root.title, t.title) AS title, r.chat_id, r.updated_at,
-      src.payload->'message'->'from'->>'first_name' AS first_name,
+    first_name: string | null; alerted_at: Date | string | null; updated_at: Date | string; client_id: string | null }>`SELECT r.request_id::text,
+      coalesce(root.title, t.title) AS title, r.chat_id, r.updated_at, t.client_id::text AS client_id,
+      coalesce(src.payload->'message'->'from'->>'first_name', ${REQUESTER_NAME}) AS first_name,
       (SELECT coalesce(e.data->'payload'->'exactCopy', e.data->'exactCopy') FROM hawa.task_events e
         WHERE e.tenant_id = r.tenant_id AND e.task_id = r.root_task_id AND e.event_type = 'task.created'
         ORDER BY e.aggregate_version LIMIT 1) AS copy,
@@ -280,7 +332,7 @@ async function officeQueue(trx: Kysely<Database>, tenantId: string, chatId: stri
     .map((row) => ({ requestId: row.request_id, title: displayTitle(row.title, row.copy),
       sentAt: new Date(row.alerted_at ?? row.updated_at).toISOString(), alerted: row.alerted_at !== null,
       photos: Number(row.photos) || 0, requester: row.first_name?.trim() ? row.first_name.trim().slice(0, 60) : null,
-      own: row.chat_id === chatId }))
+      own: row.chat_id === chatId, clientId: row.client_id }))
     .sort((a, b) => b.sentAt.localeCompare(a.sentAt) || a.requestId.localeCompare(b.requestId))
     .slice(0, QUEUE_LIST);
 }
@@ -318,7 +370,7 @@ const displayTitle = (value: string | null | undefined, copy?: unknown) => {
 
 /** A stored turn as JSON: every field is checked before it is used. */
 interface StoredTurn {
-  chatId?: unknown; messageId?: unknown; lang?: unknown; plan?: { kind?: unknown };
+  chatId?: unknown; messageId?: unknown; lang?: unknown; plan?: { kind?: unknown }; text?: unknown;
   target?: { taskId?: unknown; revisionId?: unknown }; approval?: Record<string, unknown>; ask?: unknown;
   askRules?: unknown; askedAt?: unknown;
   answer?: { status?: unknown; extra?: Record<string, unknown> };
@@ -330,6 +382,7 @@ function parseReceipt(updateId: number, payload: StoredTurn | undefined): TurnRe
   const answer = payload.answer;
   return { updateId, chatId: payload.chatId, messageId: typeof payload.messageId === 'string' ? payload.messageId : null,
     lang: payload.lang === 'ckb' ? 'ckb' : 'en', plan: payload.plan as OfficePlan,
+    ...(typeof payload.text === 'string' ? { text: payload.text } : {}),
     ...(target && typeof target.taskId === 'string' && typeof target.revisionId === 'string'
       ? { target: { taskId: target.taskId, revisionId: target.revisionId } } : {}),
     ...(payload.approval ? { approval: payload.approval } : {}), ...(payload.ask ? { ask: payload.ask as OfficePlan } : {}),
@@ -347,7 +400,8 @@ async function readTurn(trx: Kysely<Database>, tenantId: string, updateId: numbe
 
 /** Records the plan once; the first record wins, and a replay reads it back. */
 async function recordTurn(trx: Kysely<Database>, tenantId: string, receipt: TurnReceipt, hash: string): Promise<TurnReceipt> {
-  const payload = { chatId: receipt.chatId, messageId: receipt.messageId, lang: receipt.lang, plan: receipt.plan };
+  const payload = { chatId: receipt.chatId, messageId: receipt.messageId, lang: receipt.lang, plan: receipt.plan,
+    ...(receipt.text !== undefined ? { text: receipt.text } : {}), ...(receipt.reading ? { reading: receipt.reading } : {}) };
   await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
     VALUES (${tenantId}::uuid, ${TURN_ACCOUNT}, ${String(receipt.updateId)}, 'office_telegram_turn',
       ${JSON.stringify(payload)}::jsonb, ${hash}, true) ON CONFLICT DO NOTHING`.execute(trx);
@@ -399,7 +453,7 @@ async function draftState(trx: Kysely<Database>, tenantId: string, requestId: st
   const row = (await sql<{ rev: string | number; stage: string; current_task_id: string; chat_id: string;
     current_design_revision_id: string | null; state: string; title: string | null; first_name: string | null; copy: unknown }>`
     SELECT r.rev, r.stage, r.current_task_id::text, r.chat_id, t.current_design_revision_id::text, t.state,
-      coalesce(root.title, t.title) AS title, src.payload->'message'->'from'->>'first_name' AS first_name,
+      coalesce(root.title, t.title) AS title, coalesce(src.payload->'message'->'from'->>'first_name', ${REQUESTER_NAME}) AS first_name,
       (SELECT coalesce(e.data->'payload'->'exactCopy', e.data->'exactCopy') FROM hawa.task_events e
         WHERE e.tenant_id = r.tenant_id AND e.task_id = r.root_task_id AND e.event_type = 'task.created'
         ORDER BY e.aggregate_version LIMIT 1) AS copy
@@ -463,8 +517,22 @@ async function approvalEvidence(trx: Kysely<Database>, tenantId: string, input: 
 // The turn
 // ---------------------------------------------------------------------------------------------
 
-export interface OfficeTurnDeps { db: Kysely<Database>; deliverableStore: DeliverableStore; tenantId: string }
+export interface OfficeTurnDeps {
+  db: Kysely<Database>; deliverableStore: DeliverableStore; tenantId: string;
+  /** ADR-200: the model reading of words the rules are not certain about; null or absent: the rules alone. */
+  model?: OfficeIntentModel | null;
+}
 export type OfficeTurnAnswer = { status: number; extra: Record<string, unknown> };
+
+/**
+ * ADR-200: whether an approval that would send a draft to someone other than the approving member is
+ * confirmed first ("Send <title> to <requester> now?"). On unless `HAWA_OFFICE_CONFIRM_SEND` says off.
+ * Off, approval words that are certain send at once, as before; an approval whose words or draft are
+ * not certain is still asked about.
+ */
+export function sendConfirmationOn(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !/^(?:off|false|0|no)$/i.test(String(env.HAWA_OFFICE_CONFIRM_SEND ?? '').trim());
+}
 
 /**
  * Handles an office member's words about a draft, or answers null when the update is not that (intake
@@ -479,73 +547,234 @@ export async function officeTelegramTurn(deps: OfficeTurnDeps, update: Record<st
   if (receipt && receipt.chatId !== message.chatId) return { status: 409, extra: { code: 'IDEMPOTENCY_CONFLICT' } };
   if (receipt?.answer) return receipt.answer;
   if (!receipt) {
-    const plan = await tx((trx) => planOf(trx, tenantId, message));
+    const planned = await tx((trx) => planOf(trx, tenantId, message, Date.now()));
+    let plan: OfficePlan | null;
+    let reading: ReadingNote = { source: 'rules' };
+    if (planned?.kind === 'consult') {
+      // ADR-200: outside any transaction (the call may take seconds); once per update (its ledger).
+      const decision = deps.model ? await deps.model.read({ tenantId, updateId: message.updateId, chatId: message.chatId,
+        text: message.text, drafts: planned.drafts, history: planned.history, replyTo: planned.replyTo }).catch((error) => {
+        log.warn('[core:office-telegram] the office reading failed:', error instanceof Error ? error.message : error);
+        return null;
+      }) : null;
+      plan = combine(message.text, planned, decision, Date.now());
+      reading = decision ? { source: 'model', kind: decision.kind, draft: decision.draft, confidence: decision.confidence }
+        : { source: 'rules', consulted: Boolean(deps.model) };
+    } else plan = planned;
     if (!plan) return null;
     const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
     receipt = await tx((trx) => recordTurn(trx, tenantId, { updateId: message.updateId, chatId: message.chatId,
-      messageId: message.messageId, lang: requesterLang(message.text), plan }, hash));
+      messageId: message.messageId, lang: requesterLang(message.text), plan, text: message.text.slice(0, 2000), reading }, hash));
   }
   const outcome = await carryOut(deps, receipt);
   if (outcome.retry) return outcome.retry;
   const answer: OfficeTurnAnswer = { status: 200, extra: { lifecycleAction: 'chat-answer', chatId: message.chatId,
-    chatAnswer: { text: outcome.text, parseMode: 'HTML' }, officeTurn: receipt.plan.kind === 'decide' ? receipt.plan.intent : receipt.plan.kind } };
+    chatAnswer: { text: outcome.text, parseMode: 'HTML' },
+    officeTurn: outcome.ask?.kind === 'ask-send' ? 'ask-send' : receipt.plan.kind === 'decide' ? receipt.plan.intent : receipt.plan.kind } };
   // A question is stamped with the rules it was asked under and when, so its answer can tell (see `openAskIsCurrent`).
   await tx((trx) => extendTurn(trx, tenantId, message.updateId, { answer,
     ...(outcome.ask ? { ask: outcome.ask, askRules: OFFICE_TURN_RULES, askedAt: new Date().toISOString() } : {}) }));
   return answer;
 }
 
-async function planOf(trx: Kysely<Database>, tenantId: string, m: OfficeMessage): Promise<OfficePlan | null> {
+/** ADR-200: what the model is asked with, and what the rules alone would do when no reading comes. */
+interface Consult {
+  kind: 'consult';
+  /** The rules' plan: what is done when the model is off, fails, refuses, or is unsure. */
+  fallback: OfficePlan | null;
+  reading: { intent: OfficeIntent; rejectionCategory?: RejectionCategory };
+  queue: QueuedDraft[];
+  own: boolean;
+  replied: { requestId: string; rev: number } | null;
+  discussion: string | null;
+  reference: Reference;
+  drafts: Parameters<OfficeIntentModel['read']>[0]['drafts'];
+  history: OfficeModelLine[];
+  replyTo: string | null;
+}
+
+type Planned = OfficePlan | Consult | null;
+
+async function planOf(trx: Kysely<Database>, tenantId: string, m: OfficeMessage, now: number): Promise<Planned> {
   const reading = readOfficeIntent(m.text);
+  let replied: { requestId: string; rev: number } | null = null;
+  let repliedAsk: OfficePlan | null = null;
   if (m.replyTo) {
     const alert = await officeAlertFor(trx, tenantId, m.chatId, m.replyTo);
-    if (alert) {
-      return reading.intent === 'unclear' ? { kind: 'ask-what', requestId: alert.requestId, alertRev: alert.rev }
-        : { kind: 'decide', intent: reading.intent, requestId: alert.requestId, alertRev: alert.rev, words: m.text,
-          ...(reading.rejectionCategory ? { rejectionCategory: reading.rejectionCategory } : {}) };
+    if (alert) replied = { requestId: alert.requestId, rev: alert.rev };
+    else {
+      const asked = await openAsk(trx, tenantId, m.chatId, m.updateId, m.replyTo);
+      if (!asked) return null;
+      const ask = asked.ask!;
+      // A reply to a question asked too long ago, or under other rules, answers nothing.
+      if (!openAskIsCurrent(asked, now)) {
+        const stale = staleAnswer(ask, m.text, true);
+        if (stale !== undefined) return stale;
+      } else {
+        const answer = answerTo(ask, m.text);
+        if (answer) return answer;
+        // Words in reply to the bot's question that do not answer it: asked again, plainly. Words in
+        // reply to "Send … now?" that are neither yes nor no are a new turn about that draft (ADR-200).
+        if (ask.kind !== 'ask-send') {
+          return ask.kind === 'ask-which' ? { ...ask }
+            : ask.kind === 'ask-what' || ask.kind === 'ask-late' ? { kind: 'ask-what', requestId: ask.requestId, alertRev: ask.alertRev } : null;
+        }
+      }
+      repliedAsk = ask;
     }
-    const asked = await openAsk(trx, tenantId, m.chatId, m.updateId, m.replyTo);
-    if (!asked) return null;
-    // A reply to a question asked too long ago, or under other rules, answers nothing.
-    if (!openAskIsCurrent(asked, Date.now())) return { kind: 'lost-track' };
-    const ask = asked.ask!;
-    // Words in reply to the bot's question that do not answer it: asked again, plainly.
-    return answerTo(ask, m.text) ?? (ask.kind === 'ask-which' ? { ...ask }
-      : ask.kind === 'ask-what' || ask.kind === 'ask-late' ? { kind: 'ask-what', requestId: ask.requestId, alertRev: ask.alertRev } : null);
+  } else {
+    const asked = await openAsk(trx, tenantId, m.chatId, m.updateId, null);
+    if (asked) {
+      // Words that would answer a question asked too long ago, or under other rules, do nothing ("3" an
+      // hour after "which draft?"); words that do not answer it are read as if it had not been asked.
+      if (!openAskIsCurrent(asked, now)) {
+        const stale = staleAnswer(asked.ask!, m.text, false);
+        if (stale !== undefined) return stale;
+      } else {
+        const answered = answerTo(asked.ask!, m.text);
+        if (answered) return answered;
+      }
+    }
   }
-  const asked = await openAsk(trx, tenantId, m.chatId, m.updateId, null);
-  const answered = asked ? answerTo(asked.ask!, m.text) : null;
-  // Words that would answer a question asked too long ago, or under other rules, do nothing ("3" an hour
-  // after "which draft?"); words that do not answer it are read as if it had not been asked.
-  if (answered && !openAskIsCurrent(asked!, Date.now())) return { kind: 'lost-track' };
-  if (answered) return answered;
-  // With no reply, only words that clearly decide are the office's; the rest (the owner's own briefs,
-  // questions, thanks) are read by intake as before.
-  if (reading.intent === 'unclear' || (reading.intent === 'change' && asksForNewDesign(m.text))) return null;
-  // A change with no reply from a member who has designs of their own on the way (the owner as a
-  // requester) is about their own design: requester routing places it, never on someone else's draft.
-  const own = await ownOpenRequests(trx, tenantId, m.chatId);
-  if (reading.intent === 'change' && own) return null;
-  // ADR-182: so is a cancellation ("cancel that"). Approval or rejection words with no reply from such a
-  // member ("ok send it when it's ready") may be about their own design too: the one waiting draft is
-  // named and asked about, never decided by guess.
-  if (own && reading.intent === 'reject' && reading.rejectionCategory === 'task') return null;
+
+  const turns = await recentTurns(trx, tenantId, m.chatId, m.updateId);
+  const rules = readIntentByRules(m.text).intent;
+  const certainlyNotOffice = !replied && (asksForNewDesign(m.text) || rules === 'new_brief' || (rules === 'acknowledgement' && !plainYes(m.text)));
+  // With no reply, only words that clearly decide are the office's; a brief or thanks of the member's
+  // own is read by intake as before, and asks no model. "looks good", "ok" may be about a draft (ADR-200).
+  if (!replied && reading.intent === 'unclear' && certainlyNotOffice) return null;
+  if (!replied && reading.intent === 'change' && asksForNewDesign(m.text)) return null;
   const queue = await officeQueue(trx, tenantId, m.chatId);
+  const inQueue = (id: string | null | undefined) => (id && queue.some((q) => q.requestId === id) ? id : null);
+  // ADR-200: the draft the bot was just talking about with this member (its last question or answer).
+  const discussion = inQueue(repliedAsk && 'requestId' in repliedAsk ? repliedAsk.requestId : discussed(turns, now));
+
+  if (replied) {
+    const fallback: OfficePlan = reading.intent === 'unclear' ? { kind: 'ask-what', requestId: replied.requestId, alertRev: replied.rev }
+      : { kind: 'decide', intent: reading.intent, requestId: replied.requestId, alertRev: replied.rev, words: m.text, basis: 'reply',
+        ...(reading.rejectionCategory ? { rejectionCategory: reading.rejectionCategory } : {}) };
+    const reference = referencedDraft(m.text, queue, replied.requestId, lastList(turns, now));
+    // A reply that decides in plain words is certain; so is a reply about a draft no longer waiting.
+    const certain = !inQueue(replied.requestId) || (reading.intent !== 'unclear' &&
+      (reading.intent !== 'approve' || unambiguousApproval(m.text)) && reference === null);
+    if (certain) return fallback;
+    return consultOf(m, fallback, reading, queue, false, replied, discussion, reference, turns, now);
+  }
+
   if (!queue.length) return null;
-  const decision = { intent: reading.intent, words: m.text,
-    ...(reading.rejectionCategory ? { rejectionCategory: reading.rejectionCategory } : {}) };
-  if (queue.length === 1 && !own) return { kind: 'decide', ...decision, requestId: queue[0].requestId, alertRev: null };
+  // ADR-182: a change or a cancellation with no reply from a member who has designs of their own on the
+  // way is about their own design (requester routing places it), unless the bot was just talking about
+  // a waiting draft with them (ADR-200).
+  const own = await ownOpenRequests(trx, tenantId, m.chatId);
+  if (!discussion && own && (reading.intent === 'change' || (reading.intent === 'reject' && reading.rejectionCategory === 'task'))) return null;
+  const anchor = discussion ?? lastSentDraft(queue, now)?.requestId ?? null;
+  const reference = referencedDraft(m.text, queue, anchor, lastList(turns, now));
+  const fallback = rulesPlan(reading, m.text, queue, own, discussion, reference, now);
+  const certain = reference === null && fallback?.kind === 'decide' && ['only', 'discussion'].includes(fallback.basis ?? '') &&
+    (fallback.intent !== 'approve' || unambiguousApproval(m.text));
+  if (certain) return fallback;
+  return consultOf(m, fallback, reading, queue, own, null, discussion, reference, turns, now);
+}
+
+/**
+ * What the rules alone do with words that reply to nothing (ADR-040 addendum, ADR-182): the draft the
+ * bot was just talking about (ADR-200), the one waiting, or the one this member was sent last;
+ * otherwise "which draft?". Unclear words are left to intake, unless they name a draft (ADR-200).
+ */
+function rulesPlan(reading: Consult['reading'], words: string, queue: QueuedDraft[], own: boolean, discussion: string | null,
+  reference: Reference, now: number): OfficePlan | null {
+  const named = reference && 'index' in reference ? queue[reference.index] : null;
+  if (reading.intent === 'unclear') {
+    // "not this one, the other", "the Dara one looks good": the draft is named, the rest is not clear
+    // to the rules: asked about, by name. Unclear words that name no draft are left to intake.
+    return named ? { kind: 'ask-what', requestId: named.requestId, alertRev: null } : null;
+  }
+  const decision = { intent: reading.intent, words, ...(reading.rejectionCategory ? { rejectionCategory: reading.rejectionCategory } : {}) };
+  if (named) return { kind: 'decide', ...decision, requestId: named.requestId, alertRev: null, basis: 'words', lastSent: named.sentAt,
+    ...(reading.intent === 'approve' ? { needsConfirm: true } : {}) };
+  if (reference) return { kind: 'ask-which', words, options: queue };
+  if (discussion) return { kind: 'decide', ...decision, requestId: discussion, alertRev: null, basis: 'discussion' };
+  if (queue.length === 1 && !own) return { kind: 'decide', ...decision, requestId: queue[0].requestId, alertRev: null, basis: 'only' };
   // ADR-040 addendum (2026-10-01): with several waiting, words with no reply are about the draft this
   // member was sent last, when it came within two hours and no other came close to it. The answer
   // names that draft first, so a wrong guess shows. A member with designs of their own on the way is
   // still asked (ADR-182): their words may be about those.
-  const last = own ? null : lastSentDraft(queue, Date.now());
-  if (last) return { kind: 'decide', ...decision, requestId: last.requestId, alertRev: null, lastSent: last.sentAt };
-  return { kind: 'ask-which', words: m.text, options: queue };
+  const last = own ? null : lastSentDraft(queue, now);
+  if (last) return { kind: 'decide', ...decision, requestId: last.requestId, alertRev: null, lastSent: last.sentAt, basis: 'last-shown' };
+  return { kind: 'ask-which', words, options: queue };
+}
+
+function consultOf(m: OfficeMessage, fallback: OfficePlan | null, reading: Consult['reading'], queue: QueuedDraft[], own: boolean,
+  replied: Consult['replied'], discussion: string | null, reference: Reference, turns: RecentTurn[], now: number): Consult {
+  const newest = queue.find((q) => q.alerted);
+  const drafts = queue.map((q) => ({ title: q.title, sent: agoText(q.sentAt ? Date.parse(q.sentAt) : now, now), lastShown: q === newest,
+    photos: q.photos ?? 0, requester: q.own ? 'you' : q.requester ?? 'a requester', clientId: q.clientId ?? null }));
+  const at = (id: string | null) => queue.findIndex((q) => q.requestId === id) + 1;
+  const replyTo = replied ? (at(replied.requestId) ? `the picture of draft ${at(replied.requestId)}` : 'the picture of a draft no longer waiting')
+    : discussion && m.replyTo ? `the bot's question about draft ${at(discussion)}` : null;
+  return { kind: 'consult', fallback, reading, queue, own, replied, discussion, reference, drafts,
+    history: historyLines(turns, queue, now), replyTo };
 }
 
 /**
- * Whether the question a turn asked may still be answered: asked under the current rules
+ * ADR-200: the model's reading, held to the rules. The draft: a reply, then a draft the words name
+ * (the conversation's "the other one", a name), then the draft the bot was just talking about, then
+ * the model's pick when it is sure, then the rules' only or last-shown draft; a disagreement asks
+ * "which draft?". The meaning: refusing words are read by the rules, never as approval; a rejection
+ * needs rejecting words; approval is confirmed unless its words only approve and its draft is certain.
+ */
+function combine(words: string, c: Consult, d: OfficeModelDecision | null, now: number): OfficePlan | null {
+  if (!d || d.kind === 'unclear' || d.confidence < 0.6) return c.fallback;
+  if (d.kind === 'new_request' || d.kind === 'chat') {
+    if (d.confidence < 0.7) return c.fallback;
+    return c.replied ? { kind: 'ask-what', requestId: c.replied.requestId, alertRev: c.replied.rev } : null;
+  }
+  const { queue } = c;
+  const pick = d.draft >= 1 && d.draft <= queue.length ? queue[d.draft - 1] : null;
+  const ask: OfficePlan = { kind: 'ask-which', words, options: queue };
+  let target: { requestId: string; alertRev: number | null; basis: TargetBasis; sentAt?: string } | null = null;
+  const disagrees = (id: string) => pick !== null && pick.requestId !== id && d.confidence >= 0.75;
+  if (c.reference && 'index' in c.reference) {
+    const named = queue[c.reference.index];
+    target = { requestId: named.requestId, alertRev: null, basis: 'words', sentAt: named.sentAt };
+  } else if (c.reference && 'ambiguous' in c.reference) {
+    return ask;
+  } else if (c.replied) {
+    target = { requestId: c.replied.requestId, alertRev: c.replied.rev, basis: 'reply' };
+  } else if (c.discussion) {
+    target = { requestId: c.discussion, alertRev: null, basis: 'discussion' };
+  } else if (pick && d.confidence >= 0.75) {
+    target = { requestId: pick.requestId, alertRev: null, basis: 'model', sentAt: pick.sentAt };
+  } else if (queue.length === 1 && !c.own) {
+    target = { requestId: queue[0].requestId, alertRev: null, basis: 'only' };
+  } else if (!c.own) {
+    const last = lastSentDraft(queue, now);
+    if (last) target = { requestId: last.requestId, alertRev: null, basis: 'last-shown', sentAt: last.sentAt };
+  }
+  // A question about no particular draft ("is my poster ready?") is not the office's: intake answers it.
+  if (d.kind === 'question' && (!target || ['only', 'last-shown'].includes(target.basis))) return c.fallback;
+  if (!target || disagrees(target.requestId)) return ask;
+  // ADR-182: a member with designs of their own on the way may mean those; the model's guess never
+  // sends their words back on someone else's draft. Intake (requester routing) places them.
+  if (c.own && target.basis === 'model' && (d.kind === 'change' || d.kind === 'reject')) return null;
+  const named = ['words', 'model', 'last-shown'].includes(target.basis) ? { lastSent: target.sentAt } : {};
+  const on = { requestId: target.requestId, alertRev: target.alertRev, basis: target.basis, words };
+  const rules = c.reading;
+  const byRules = (): OfficePlan => rules.intent === 'unclear' || rules.intent === 'approve'
+    ? { kind: 'ask-what', requestId: target!.requestId, alertRev: target!.alertRev }
+    : { kind: 'decide', intent: rules.intent, ...on, ...named, ...(rules.rejectionCategory ? { rejectionCategory: rules.rejectionCategory } : {}) };
+  if (d.kind === 'question') return { kind: 'ask-what', requestId: target.requestId, alertRev: target.alertRev, facts: true };
+  // Rejecting needs rejecting words: the model alone asks what to do.
+  if (d.kind === 'reject') return rules.intent === 'reject' ? byRules() : { kind: 'ask-what', requestId: target.requestId, alertRev: target.alertRev };
+  if (d.kind === 'change') return rules.intent === 'reject' ? byRules() : { kind: 'decide', intent: 'change', ...on, ...named };
+  // Approval: words the rules read as a refusal, a change or a rejection are read by the rules.
+  if (refusesApproval(words) || rules.intent === 'change' || rules.intent === 'reject') return byRules();
+  const certain = unambiguousApproval(words) && ['reply', 'only', 'discussion'].includes(target.basis);
+  return { kind: 'decide', intent: 'approve', ...on, ...named, ...(certain ? {} : { needsConfirm: true }) };
+}
+
+/**
+ * Whether a turn's question may still be answered: asked under the current rules
  * (`OFFICE_TURN_RULES`; a question stored before the stamp existed has none) and within
  * `PENDING_ASK_MS`.
  */
@@ -557,6 +786,25 @@ export function openAskIsCurrent(turn: Pick<TurnReceipt, 'askRules' | 'askedAt'>
 
 /** "the newest", "latest one", "the most recent"; Sorani "the newest", "the latest". */
 const NEWEST = /^(?:(?:the\s+)?(?:newest|latest|most\s+recent)(?:\s+(?:one|draft|design))?|نوێترین(?:یان)?|دواهەمین)[\s.!]*$/iu;
+
+/**
+ * ADR-200: a plain yes to "Send … now?", in English, Sorani, Kurmanji or Arabic: "yes", "ok", "sure",
+ * "send it", "go ahead", "looks good", "👍", "بەڵێ" (yes), "باشە" (ok), "بینێرە" (send it), "erê",
+ * "نعم". Only these words, said on their own: "ok but change the title" is not a yes.
+ */
+const YES_WORD = '(?:yes|yeah|yep|yup|ya|ok(?:ay)?|sure|of\\s+course|certainly|correct|right|confirm(?:ed)?|please(?:\\s+do)?|do\\s+it|go(?:\\s+ahead)?|' +
+  'approved?|looks?\\s+(?:good|great|fine|perfect)|good|great|perfect|fine|lgtm|پەسەندە|جوانە|' +
+  'send(?:\\s+(?:it|them))?(?:\\s+now)?|👍|✅|👌|بەڵێ|بەلێ|ئا|ئەرێ|ئەڵبەت|باشە|بنێرە|بینێرە|بینێرن|ئێستا\\s+بینێرە|erê|belê|نعم|ايوه|تمام)';
+const PLAIN_YES = new RegExp(`^(?:${YES_WORD}[\\s,،!.]*)+$`, 'iu');
+/** "no", "not yet", "wait", "hold on", "don't"; Sorani "no", "not yet", "wait". */
+const NO_WORD = '(?:no|nope|nah|not\\s+(?:yet|now)|wait|hold\\s+on|hold\\s+it|don\'?t|stop|later|نا|نەخێر|نە|هێشتا\\s+نا|ڕاوەستە|چاوەڕێ\\s+بکە|na|nexêr)';
+const PLAIN_NO = new RegExp(`^(?:${NO_WORD}[\\s,،!.]*)+$`, 'iu');
+
+/** ADR-200: a plain yes, said on its own (politeness around it allowed). */
+export function plainYes(text: string): boolean {
+  const t = String(text ?? '').trim();
+  return Boolean(t) && (PLAIN_YES.test(t) || PLAIN_YES.test(corePhrase(t)));
+}
 
 /** The member's answer to the bot's question, as a decision, or null when the words do not answer it. */
 function answerTo(ask: OfficePlan, text: string): OfficePlan | null {
@@ -574,17 +822,177 @@ function answerTo(ask: OfficePlan, text: string): OfficePlan | null {
     if (reading.intent === 'unclear' || (reading.intent === 'approve' && !unambiguousApproval(ask.words))) {
       return { kind: 'ask-what', requestId, alertRev: null };
     }
-    return { kind: 'decide', intent: reading.intent, requestId, alertRev: null, words: ask.words,
+    return { kind: 'decide', intent: reading.intent, requestId, alertRev: null, words: ask.words, basis: 'choice',
       ...(reading.rejectionCategory ? { rejectionCategory: reading.rejectionCategory } : {}) };
   }
   if (ask.kind === 'ask-what' || ask.kind === 'ask-late') {
     const reading = readOfficeIntent(text);
     if (reading.intent === 'unclear') return null;
-    return { kind: 'decide', intent: reading.intent, requestId: ask.requestId, alertRev: ask.alertRev, words: text,
+    return { kind: 'decide', intent: reading.intent, requestId: ask.requestId, alertRev: ask.alertRev, words: text, basis: 'discussion',
       ...(reading.rejectionCategory ? { rejectionCategory: reading.rejectionCategory } : {}),
-      ...(ask.kind === 'ask-late' ? { acknowledge: ask.updateIds } : {}) };
+      // "send it anyway" after the requester's late words were shown is the confirmation (ADR-200).
+      ...(ask.kind === 'ask-late' ? { acknowledge: ask.updateIds, ...(reading.intent === 'approve' ? { confirmed: true } : {}) } : {}) };
+  }
+  if (ask.kind === 'ask-send') {
+    const core = corePhrase(text);
+    if (plainYes(text)) {
+      return { kind: 'decide', intent: 'approve', requestId: ask.requestId, alertRev: ask.rev, revisionId: ask.revisionId, words: text,
+        basis: 'confirm', confirmed: true };
+    }
+    // "no", "not yet", "cancel it": nothing is sent. Rejecting the design takes rejecting words.
+    if (PLAIN_NO.test(core) || PLAIN_NO.test(text.trim()) || OFFICE_CANCEL.test(core)) return { kind: 'not-sent', requestId: ask.requestId };
   }
   return null;
+}
+
+/**
+ * An answer to a question asked too long ago or under other rules. A yes to "Send … now?" asks it
+ * again (nothing is sent on an old yes), a no sends nothing; other questions are lost track of, as
+ * before (ADR-040 addendum). Undefined: the words are a new turn.
+ */
+function staleAnswer(ask: OfficePlan, text: string, replied: boolean): OfficePlan | null | undefined {
+  if (ask.kind === 'ask-send') {
+    if (plainYes(text)) return { kind: 'decide', intent: 'approve', requestId: ask.requestId, alertRev: null, words: text, needsConfirm: true, again: true };
+    const answered = answerTo(ask, text);
+    return answered ?? undefined;
+  }
+  if (replied || answerTo(ask, text)) return { kind: 'lost-track' };
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------------------------
+// ADR-200: the conversation (this member's recent turns) and the drafts its words name
+// ---------------------------------------------------------------------------------------------
+
+interface RecentTurn { at: number; office: boolean; receipt: TurnReceipt | null }
+
+/** This member's latest turns of the last day, newest first: office turns and (as a marker) intake turns. */
+async function recentTurns(trx: Kysely<Database>, tenantId: string, chatId: string, updateId: number): Promise<RecentTurn[]> {
+  return (await sql<{ source_account_id: string; source_event_id: string; payload: StoredTurn; received_at: Date | string }>`SELECT
+      source_account_id, source_event_id, payload, received_at FROM hawa.inbox_events
+    WHERE tenant_id = ${tenantId}::uuid AND source_account_id IN (${TURN_ACCOUNT}, ${INTENT_ACCOUNT})
+      AND payload->>'chatId' = ${chatId} AND source_event_id <> ${String(updateId)} AND received_at > now() - interval '1 day'
+    ORDER BY received_at DESC, id DESC LIMIT 6`.execute(trx)).rows.map((row) => ({ at: new Date(row.received_at).getTime(),
+      office: row.source_account_id === TURN_ACCOUNT,
+      receipt: row.source_account_id === TURN_ACCOUNT ? parseReceipt(Number(row.source_event_id), row.payload) : null }));
+}
+
+/** The draft the bot's latest answer to this member was about, within `PENDING_ASK_MS`, or null. */
+function discussed(turns: RecentTurn[], now: number): string | null {
+  const latest = turns[0];
+  if (!latest?.office || !latest.receipt || now - latest.at > PENDING_ASK_MS) return null;
+  const ask = latest.receipt.ask;
+  if (ask && 'requestId' in ask) return ask.requestId;
+  const plan = latest.receipt.plan;
+  return plan.kind === 'decide' || plan.kind === 'not-sent' || plan.kind === 'ask-what' ? plan.requestId : null;
+}
+
+/** The numbered list the bot last showed this member (newest first), within `PENDING_ASK_MS`. */
+function lastList(turns: RecentTurn[], now: number): string[] | null {
+  for (const turn of turns) {
+    if (now - turn.at > PENDING_ASK_MS) return null;
+    const ask = turn.receipt?.ask ?? (turn.receipt?.plan.kind === 'ask-which' ? turn.receipt.plan : undefined);
+    if (ask?.kind === 'ask-which' && Array.isArray(ask.options)) return ask.options.map((o) => o.requestId);
+  }
+  return null;
+}
+
+/**
+ * Where the words point: a draft (`index` in the queue), several (`ambiguous`), a draft that the words
+ * name but nothing deterministic resolves (`mentions`: the model's pick may), or nothing (null).
+ */
+export type Reference = { index: number } | { ambiguous: true } | { mentions: true } | null;
+
+const OTHER = /(?:^|[^\p{L}])(?:the\s+)?other(?:\s+(?:one|draft|design))?(?![\p{L}])|ئەوی\s*تر|ئەوەی\s*تر|ئەویتریان/iu;
+const OLDER = /(?:^|[^\p{L}])(?:the\s+)?(?:earlier|older|previous)(?:\s+(?:one|draft|design))?(?![\p{L}])|پێشووەکە|کۆنەکە/iu;
+const NEWER = /(?:^|[^\p{L}])(?:the\s+)?(?:newest|latest|newer|most\s+recent)(?:\s+(?:one|draft|design))?(?![\p{L}])|(?:^|[^\p{L}])the\s+new\s+(?:one|draft)(?![\p{L}])|نوێترین|نوێیەکە/iu;
+const THIS_ONE = /(?:^|[^\p{L}])(?:that|this)\s+(?:one|draft|design)(?![\p{L}])/iu;
+const ORDINAL_WORDS: Record<string, number> = { first: 1, '1st': 1, second: 2, '2nd': 2, third: 3, '3rd': 3, fourth: 4, '4th': 4,
+  fifth: 5, '5th': 5, 'یەکەم': 1, 'دووەم': 2, 'سێیەم': 3, 'چوارەم': 4, 'پێنجەم': 5 };
+const ORDINAL = /(?:^|[^\p{L}])(?:the\s+)?(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th)\s+(?:one|draft|design)(?![\p{L}])|(?:^|[^\p{L}])number\s+([1-5])(?![\p{N}])|(یەکەم|دووەم|سێیەم|چوارەم|پێنجەم)(?:یان|ەکە|ین)/iu;
+/** "the one for Sewa", "the Sewa one", "Sewa's one", Sorani "Sewa's" (هی سێوە). */
+const NAMED = [
+  /(?:^|[^\p{L}])the\s+(?:one|draft|design|poster|flyer|banner|card|invitation)\s+(?:for|from|of|by|about)\s+([^,.;:!?\n]{2,40})/iu,
+  /(?:^|[^\p{L}])the\s+([\p{L}\p{N}][\p{L}\p{N}'’&-]*(?:\s+[\p{L}\p{N}][\p{L}\p{N}'’&-]*){0,2})\s+(?:one|draft|design)(?![\p{L}])/iu,
+  /([\p{L}]{2,30})['’]s\s+(?:one|draft|design|poster)(?![\p{L}])/iu,
+  /(?:^|\s)(?:هی|ئەوەی)\s+([\p{L}]{2,30})/u,
+];
+const GENERIC = /^(?:other|earlier|older|previous|newest|latest|newer|new|last|first|second|third|fourth|fifth|same|right|wrong|this|that|next|old|final|good|bad|best)$/iu;
+const words = (text: string) => text.toLowerCase().normalize('NFKC').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+/** ADR-200: the waiting draft the member's words name, from the conversation; see `Reference`. */
+export function referencedDraft(text: string, queue: readonly QueuedDraft[], anchor: string | null, list: readonly string[] | null): Reference {
+  const t = String(text ?? '');
+  const at = (id: string | null | undefined) => (id ? queue.findIndex((q) => q.requestId === id) : -1);
+  if (OTHER.test(t)) {
+    const a = at(anchor);
+    return queue.length === 2 && a >= 0 ? { index: 1 - a } : { ambiguous: true };
+  }
+  const ordinal = ORDINAL.exec(t);
+  if (ordinal) {
+    const k = ordinal[2] ? Number(ordinal[2]) : ORDINAL_WORDS[(ordinal[1] ?? ordinal[3]).toLowerCase()];
+    const i = list && k ? at(list[k - 1]) : -1;
+    return i >= 0 ? { index: i } : { mentions: true };
+  }
+  if (NEWER.test(t)) return queue.length ? { index: 0 } : null;
+  if (OLDER.test(t)) return queue.length === 2 ? { index: 1 } : { mentions: true };
+  for (const pattern of NAMED) {
+    const phrase = pattern.exec(t)?.[1]?.trim();
+    if (!phrase || GENERIC.test(phrase)) continue;
+    const said = new Set(words(phrase));
+    if (said.has('you') || said.has('me') || said.has('mine')) {
+      const mine = queue.flatMap((q, i) => (q.own ? [i] : []));
+      return mine.length === 1 ? { index: mine[0] } : mine.length ? { ambiguous: true } : { mentions: true };
+    }
+    const byName = queue.flatMap((q, i) => (q.requester && said.has(words(q.requester)[0] ?? '') ? [i] : []));
+    if (byName.length === 1) return { index: byName[0] };
+    const pool = byName.length > 1 ? byName.map((i) => queue[i]) : [...queue];
+    const byTitle = titleMatch(phrase, pool);
+    if (byTitle !== null) return { index: queue.indexOf(pool[byTitle]) };
+    return byName.length > 1 ? { ambiguous: true } : { mentions: true };
+  }
+  if (THIS_ONE.test(t)) {
+    const a = at(anchor);
+    return a >= 0 ? { index: a } : { mentions: true };
+  }
+  return null;
+}
+
+/** "just now", "12 minutes ago", "3 hours ago", "2 days ago": for the model, in English. */
+function agoText(at: number, now: number): string {
+  const minutes = Math.max(0, Math.floor((now - at) / 60_000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  return `${Math.floor(hours / 24)} days ago`;
+}
+
+const unescapeHtml = (text: string) => text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+
+/**
+ * The chat so far, oldest first, as the model is shown it: the member's own words, and the bot's
+ * answers with every design name that is not a waiting draft, and every requester's quoted words,
+ * left out (a model reading sends only the waiting drafts' clients' words, and only with their consent).
+ */
+function historyLines(turns: RecentTurn[], queue: readonly QueuedDraft[], now: number): OfficeModelLine[] {
+  const known = new Set(queue.flatMap((q) => [q.title, q.requester ?? '']).filter(Boolean));
+  const lines: OfficeModelLine[] = [];
+  for (const turn of [...turns].reverse()) {
+    const r = turn.receipt;
+    if (!turn.office || !r) continue;
+    const said = r.text ?? (r.plan.kind === 'decide' || r.plan.kind === 'ask-which' ? r.plan.words : null);
+    const ago = agoText(turn.at, now);
+    if (said) lines.push({ who: 'member', text: said.slice(0, 600), ago });
+    const chat = (r.answer?.extra as { chatAnswer?: { text?: unknown } } | undefined)?.chatAnswer?.text;
+    if (typeof chat === 'string') {
+      const bot = unescapeHtml(chat.replace(/«[^»]*»/g, '«the requester\'s words»')
+        .replace(/<b>([^<]*)<\/b>/g, (_m, name: string) => (known.has(unescapeHtml(name)) ? `"${name}"` : 'a design'))
+        .replace(/<[^>]+>/g, ''));
+      lines.push({ who: 'bot', text: bot.slice(0, 600), ago });
+    }
+  }
+  return lines.slice(-8);
 }
 
 type Outcome = { text: string; ask?: OfficePlan; retry?: undefined } | { retry: OfficeTurnAnswer };
@@ -596,7 +1004,8 @@ type Outcome = { text: string; ask?: OfficePlan; retry?: undefined } | { retry: 
 async function carryOut(deps: OfficeTurnDeps, receipt: TurnReceipt): Promise<Outcome> {
   const outcome = await carryOutPlan(deps, receipt);
   const plan = receipt.plan;
-  if (outcome.retry || plan.kind !== 'decide' || !plan.lastSent) return outcome;
+  // "Send <title> to <requester> now?" names the draft itself (ADR-200).
+  if (outcome.retry || plan.kind !== 'decide' || !plan.lastSent || outcome.ask?.kind === 'ask-send') return outcome;
   const state = await withRlsContext(deps.db, SYSTEM(deps.tenantId), (trx) => draftState(trx, deps.tenantId, plan.requestId));
   const about = say(OFFICE_MESSAGES.aboutDraft, receipt.lang,
     { title: bold(state?.title ?? '?'), when: whenText(Date.parse(plan.lastSent), Date.now(), receipt.lang) });
@@ -614,9 +1023,24 @@ async function carryOutPlan(deps: OfficeTurnDeps, receipt: TurnReceipt): Promise
   const state = await tx((trx) => draftState(trx, tenantId, plan.requestId));
   if (!state) return { text: phrase(OFFICE_MESSAGES.notRecorded, { title: bold('?') }) };
   const title = bold(state.title);
-  const requester = state.chatId === receipt.chatId ? phrase(OFFICE_MESSAGES.you)
+  const own = state.chatId === receipt.chatId;
+  const requester = own ? phrase(OFFICE_MESSAGES.you)
     : state.requesterName ? bold(state.requesterName) : phrase(OFFICE_MESSAGES.theRequester);
-  if (plan.kind === 'ask-what') return { text: phrase(OFFICE_MESSAGES.whatToDo, { title }), ask: plan };
+  // ADR-200: a plain no to "Send … now?": nothing is sent, and the draft keeps waiting.
+  if (plan.kind === 'not-sent') return { text: phrase(OFFICE_MESSAGES.notSent, { title }) };
+  if (plan.kind === 'ask-what' && plan.facts) {
+    // ADR-200: a question about a draft is answered with what the office knows of it, then asked about.
+    const queued = (await tx((trx) => officeQueue(trx, tenantId, receipt.chatId))).find((q) => q.requestId === plan.requestId);
+    if (queued?.sentAt) {
+      const photos = queued.photos ?? 0;
+      return { ask: { kind: 'ask-what', requestId: plan.requestId, alertRev: plan.alertRev }, text: phrase(OFFICE_MESSAGES.draftFacts, { title, requester,
+        when: whenText(Date.parse(queued.sentAt), Date.now(), lang),
+        photos: photos === 0 ? phrase(OFFICE_MESSAGES.noPhotos) : photos === 1 ? phrase(OFFICE_MESSAGES.onePhoto) : phrase(OFFICE_MESSAGES.photos, { n: String(photos) }) }) };
+    }
+  }
+  if (plan.kind === 'ask-what') return { text: phrase(OFFICE_MESSAGES.whatToDo, { title }), ask: { kind: 'ask-what', requestId: plan.requestId, alertRev: plan.alertRev } };
+  // A confirmation is only ever asked, never planned: nothing to carry out.
+  if (plan.kind === 'ask-send') return { text: phrase(OFFICE_MESSAGES.lostTrack) };
 
   // The draft the member answered must be the one still waiting; someone may have decided first. A
   // replay of this turn's own recorded decision is sent again as it was (the Desk's receipts answer it).
@@ -627,6 +1051,8 @@ async function carryOutPlan(deps: OfficeTurnDeps, receipt: TurnReceipt): Promise
       return { text: stageWords(state.stage, phrase, title) };
     }
     if (alertRev !== state.rev) return { text: phrase(OFFICE_MESSAGES.olderDraft, { title }) };
+    // ADR-200: a "yes" approves the revision it was asked about, and no newer one.
+    if (plan.kind === 'decide' && plan.revisionId && plan.revisionId !== state.revisionId) return { text: phrase(OFFICE_MESSAGES.olderDraft, { title }) };
   }
   if (namedOfficeReviewMode()) return { text: phrase(OFFICE_MESSAGES.namedReviewer, { title }) };
   if (plan.kind !== 'decide') return { text: phrase(OFFICE_MESSAGES.whatToDo, { title }), ask: plan };
@@ -659,6 +1085,14 @@ async function carryOutPlan(deps: OfficeTurnDeps, receipt: TurnReceipt): Promise
       const evidence = await tx((trx) => approvalEvidence(trx, tenantId, { chatId: receipt.chatId, requestId: plan.requestId,
         rev, taskId: target.taskId, revisionId: target.revisionId }));
       if (!evidence.ok) return { text: phrase(evidence.why === 'check' ? OFFICE_MESSAGES.checkFailed : OFFICE_MESSAGES.useDesk, { title }) };
+      // ADR-200: an approval that would send the draft to someone else is asked about first, by name;
+      // so is any approval whose words or draft are not certain. The question names this revision: a
+      // plain yes approves it, and nothing else does.
+      if (!decided && !plan.confirmed && (plan.needsConfirm || !unambiguousApproval(plan.words) || (!own && sendConfirmationOn()))) {
+        const question = phrase(own ? OFFICE_MESSAGES.confirmSendOwn : OFFICE_MESSAGES.confirmSend, { title, requester });
+        return { text: plan.again ? `${phrase(OFFICE_MESSAGES.askedAgain, { title })}\n${question}` : question,
+          ask: { kind: 'ask-send', requestId: plan.requestId, rev, revisionId: target.revisionId } };
+      }
       body = { action: 'approve', reason: `Approved in Telegram by office member ${receipt.chatId}, on the draft's picture`,
         pinnedExportIds: evidence.pinnedExportIds, ...(evidence.rtlVisualReview ? { rtlVisualReview: evidence.rtlVisualReview } : {}),
         telegram: { ...telegram, visualCheck: evidence.visualCheck } };
@@ -695,7 +1129,7 @@ async function carryOutPlan(deps: OfficeTurnDeps, receipt: TurnReceipt): Promise
       body: { action: 'revision_requested', revisionRequest, telegram }, isOwnedApproval: false, isOwnedRejection: false,
       revisionRequest, rejectionCategory: null, pinIds: [] });
     if (!sent.ok) return refusal(sent, db, tenantId, plan.requestId, phrase, title, true);
-    return { text: state.chatId === receipt.chatId ? phrase(OFFICE_MESSAGES.sentBackOwn, { title })
+    return { text: own ? phrase(OFFICE_MESSAGES.sentBackOwn, { title })
       : phrase(OFFICE_MESSAGES.sentBack, { title, requester }) };
   }
 

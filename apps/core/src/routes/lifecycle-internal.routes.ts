@@ -76,6 +76,7 @@ import { parseNativeReviewSubmission } from '@hawa/domain';
 import { projectLifecycleNativeReview } from '../services/lifecycle-native-review.js';
 import { CanvaFlowError } from '../services/canva-flow-error.js';
 import { officeTelegramTurn } from '../services/office-telegram-turn.js';
+import { createOfficeIntentModel, type OfficeIntentModel } from '../services/office-intent-model.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
 export function isInternalPath(path: string): boolean {
@@ -208,6 +209,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   // ADR-144: the intake router, asked only about what the rules cannot place. Tests pass their own.
   const intentModel: RequesterIntentModel | null = ctx.options?.requesterIntentModel !== undefined
     ? ctx.options.requesterIntentModel : (db ? createRequesterIntentModel(db) : null);
+  // ADR-200: the same router reads an office member's words when the office turn's rules are not certain.
+  const officeModel: OfficeIntentModel | null = ctx.options?.officeIntentModel !== undefined ? ctx.options.officeIntentModel
+    : ctx.options?.requesterIntentModel === null ? null : (db ? createOfficeIntentModel(db) : null);
 
   // Registered on /v1/internal/* only (not under every prefix, as registerRoute does): one address,
   // which nginx does not need to serve, for one caller.
@@ -345,7 +349,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       // ADR-040 addendum: an office member approving, sending back or rejecting a draft in their private
       // chat, in plain words, through the Desk's own actions. Anything else of theirs is read below.
       if (!settle) {
-        const office = await officeTelegramTurn({ db, deliverableStore: ctx.deliverableStore, tenantId: DEFAULT_TENANT_ID }, incoming);
+        const office = await officeTelegramTurn({ db, deliverableStore: ctx.deliverableStore, tenantId: DEFAULT_TENANT_ID,
+          model: officeModel }, incoming);
         if (office) return handled(office.status, office.extra);
       }
     }
@@ -1190,8 +1195,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   plan = { ...plan, words: `${photoWithoutWords ? '(no words)' : plan.words}\n[The requester also sent a photo. It is in the Telegram chat.]` };
                 }
               }
+              // ADR-200: the sender's first name, so the office can name whose draft it is ("the one for Sewa").
+              const firstName = (sender as { first_name?: unknown } | undefined)?.first_name;
+              const senderName = typeof firstName === 'string' && firstName.trim() ? Array.from(firstName.trim()).slice(0, 60).join('') : undefined;
               const receipt = (answer?: { status: number; extra: Record<string, unknown> }): IntentReceipt => ({
-                updateId: update.update_id, chatId, senderId,
+                updateId: update.update_id, chatId, senderId, ...(senderName ? { senderName } : {}),
                 messageId: Number.isSafeInteger(message.message_id) ? String(message.message_id) : null,
                 payloadHash, reading, plan, ...(answer ? { answer } : {}) });
               const decided = async (status: number, extra: Record<string, unknown>): Promise<Response> => {

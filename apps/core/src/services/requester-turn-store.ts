@@ -134,6 +134,8 @@ export interface IntentReceipt {
   updateId: number;
   chatId: string;
   senderId: string;
+  /** ADR-200: the sender's first name, as Telegram gave it (the office names drafts by it). */
+  senderName?: string;
   messageId: string | null;
   payloadHash: string;
   reading: IntentReading;
@@ -166,7 +168,8 @@ export async function readIntentReceipt(trx: Kysely<Database>, tenantId: string,
 /** Records the decision once; the first record wins, and a replay reads it back. */
 export async function recordIntentReceipt(trx: Kysely<Database>, tenantId: string,
   receipt: IntentReceipt): Promise<IntentReceipt> {
-  const payload = { chatId: receipt.chatId, senderId: receipt.senderId, messageId: receipt.messageId,
+  const payload = { chatId: receipt.chatId, senderId: receipt.senderId, ...(receipt.senderName ? { senderName: receipt.senderName } : {}),
+    messageId: receipt.messageId,
     reading: receipt.reading, plan: receipt.plan, ...(receipt.answer ? { answer: receipt.answer } : {}) };
   await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id,
       event_kind, payload, payload_hash, verified)
