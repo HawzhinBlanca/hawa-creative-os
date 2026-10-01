@@ -1,7 +1,7 @@
 {
   "adr": "ADR202",
   "date": "2026-10-01",
-  "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING",
+  "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-038",
     "FR-041",
@@ -79,5 +79,22 @@
     "Local sample fidelity does not establish all-copy shaping/weights or native Canva fidelity.",
     "Original diagnostic is not a production outage.",
     "Broader W5/W6/native Canva/human/recovery/product admission remains open."
-  ]
+  ],
+  "exactQualification": {
+    "testedSeal": "ef76a307584e08502e0ae1af590b346f5d9afe8f",
+    "runtimeCommit": "cad1f1c1067b5bcc4fbc2746c7d680eb3005dbb1",
+    "allStages": 8,
+    "testsPassed": 6592,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 669,
+    "filesSkipped": 6,
+    "strictRoots": 676,
+    "blueprintChecksAtSeal": 1694,
+    "gateEvidence": "W5_FONT_FIDELITY_REVIEW_GATE_EVIDENCE.json",
+    "fullTestLog": "output/qualification/2026-10-01/ef76a307/FULL_TEST_SUITE_RUN.log",
+    "fullTestLogSha256": "e6b1f1e9f503e955c4b8060af04283026a7a56fe0cf784ffcb017eeb77345872",
+    "deployed": false,
+    "productAdmission": false
+  }
 }

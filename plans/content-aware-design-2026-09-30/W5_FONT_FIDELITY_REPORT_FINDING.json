@@ -21,9 +21,10 @@
   "nextAction": "Add actual probe/manifest/render/review and Core evidence regressions, carry measured/unmeasured/uncovered truth to review, preserve exact copy and existing hard QA/provider bounds; do not fabricate native quality or make a warning a new gate without an explicit policy decision.",
   "resolution": {
     "date": "2026-10-01",
-    "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING",
+    "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
     "proof": "W5_FONT_FIDELITY_REVIEW_PROOF.json",
     "connected": "13 files/93 passed/0 failed/0 skipped",
-    "note": "Original observation retained. Four-state truth now reaches render, saved QA, Core HTTP, office/Desk and plain requester font notices; exact gate pending, not deployed."
+    "note": "Original observation retained; four-state truth qualified through actual probe/render/saved QA/HTTP/office/Desk/requester notices. All8 stages/6592pass/0fail/67skip; not deployed, product admission open.",
+    "testedSeal": "ef76a307584e08502e0ae1af590b346f5d9afe8f"
   }
 }

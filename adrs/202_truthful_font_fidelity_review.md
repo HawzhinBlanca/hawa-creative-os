@@ -1,6 +1,6 @@
 # ADR202 — Preserve font fidelity truth through render and review
 
-Date: 2026-10-01. Status: accepted; connected qualified, exact release gate pending.
+Date: 2026-10-01. Status: accepted; exact engineering qualified, deployment/product admission open.
 Requirements: FR-038, FR-041, NFR-012, NFR-024.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/11_QA_RTL_MULTILINGUAL.md;
 ADR157/201; W5_FONT_FIDELITY_REPORT_FINDING.json.
@@ -42,3 +42,7 @@ report scope, live copy, saved Core QA/HTTP evidence and Desk warning display;
 retain original failures and strict/connected/exact engineering results.
 Local font identity/ink samples do not establish all-copy shaping, native Canva
 fidelity, human design quality or broader product admission.
+
+Exact sealed ef76a307584e08502e0ae1af590b346f5d9afe8f: all8 engineering stages,6592pass/0fail/67skip,
+676 strict roots and newest production dump/negative refusal pass.
+See W5_FONT_FIDELITY_REVIEW_PROOF.json and its exact gate evidence.
