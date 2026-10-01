@@ -1,7 +1,7 @@
 # ADR-187: Final QA measures the shipping layout
 
 Date: 2026-10-01
-Status: accepted; exact sealed engineering pass, deployment/product admission pending
+Status: accepted; engineering live rollout verified2c4d61ec, product admission open
 Requirements: FR-038, FR-041
 Sources: docs/05_CREATIVE_ENGINE.md; docs/11_QA_RTL_MULTILINGUAL.md; docs/30_CURRENT_STUDIO_CONTRACT.md
 
@@ -35,3 +35,5 @@ This repair does not qualify subjective composition quality or native Canva.
 Focused proof: three red cases and one existing pass; rebuilt connected seven-file suite107 passed/0 failed/0 skipped. The first green attempt read stale dist and remains retained. See plans/final-qa-basis-2026-10-01/LOCAL_PROOF.json.
 
 Exact sealed qualification056f236e (source d300591e): eight mandatory stages passed, full6305/0failed/67skipped,653 typed roots,1518 blueprint checks, latest production dump and lint pass. This QA repair is not deployed; live0605a713 remains verified.
+
+Live rollout2c4d61ec verified2026-10-01 at01:17 UTC after mandatory6305-pass gate. Actual green worker/services/leadership/image receipt and all three service-boundary repairs pass; earlier source-only qualification wording is retained as a dated checkpoint. See LIVE_DEPLOYMENT_PROOF.json.
