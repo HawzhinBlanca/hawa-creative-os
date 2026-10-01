@@ -1,7 +1,7 @@
 # ADR209 — Explicit captured font family identity
 
 Date: 2026-10-01
-Status: Accepted for implementation; sealed qualification pending
+Status: Accepted; exact source engineering verified on a03387f1; native/product admission open
 Requirements: FR-028, FR-034, FR-038, FR-041, NFR-012, NFR-024
 
 ## Evidence and reason

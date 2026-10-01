@@ -624,3 +624,12 @@ Canva exports/43 objects pass. Core rechecks version8 receipts, records one fail
 review across replay and refuses approvalHTTP412 while preserving bytes/hash.
 W5_FONT_FAMILY_IDENTITY_PROOF.json retains evidence. Exact sealed gate pending;
 no production/paid call/native glyph/weight/render/human/product qualification.
+
+### ADR209 exact engineering qualification
+
+Clean a03387f1 passes all8 stages:6802pass/0fail/67skip,678 passed files/6
+skipped,685 strict roots,1734 package checks and the actual newest production
+dump restored/migrated on the isolated test server. Mandatory negative-flag
+refusal passes. W5_FONT_FAMILY_IDENTITY_GATE_EVIDENCE.json binds original receipts.
+This supersedes the earlier pending engineering checkpoint; source-only, no
+production or paid call. Native/Canva/human and whole-product admission remain open.
