@@ -1,0 +1,25 @@
+# KAAE 2025 integration review — 2 October 2026
+
+Requirements: FR-017, FR-023, FR-038. Preserve MASTER_SPEC invariants2,5,7,8 and the owner-directed content-aware/photo-selection rule. Source: docs/05_CREATIVE_ENGINE.md; ADR238 in Claude's unfinished worktree.
+
+## Confirmed parser boundary issue
+
+Read-only source probe of `.claude/worktrees/kaae-2025/packages/creative/src/studio/page-grammar.ts` (`pageGrammarFromRaw`, line102; downstream `middleStop`/`headerPrimitives`) freezes SHA256 `803c38d3e5c5f8a0948eedda7a32ceebe729b64c2d5b39d47e1f5296d7624155`. The parser walks colors and requires only top-level members, then asserts PageGrammar without validating nested structure or numeric values.
+
+| Input | Parser | Downstream result |
+| --- | --- | --- |
+| Required top-level members present as empty objects | Accepted | TypeError |
+| Header accent gradient has zero stops | Accepted | TypeError |
+| Header accent widthShare is a nonnumeric string | Accepted | Nonfinite native shape geometry |
+
+Receipt: `output/qualification/2026-10-02/native-acceptance/GRAMMAR_REVIEW.json`; reproduction: `/private/tmp/hawa-grammar-review.mjs`. Source hash is checked before/after the probe. No Claude files were edited, no provider call or deployment performed. These failures apply to that unfinished snapshot, not current production or the published research branch.
+
+## Required repair at integration
+
+Validate the complete optional grammar at its reference admission boundary, before composition or paid model work: required nested objects; actual string/font/color types and palette membership; finite, bounded dimensions/shares/opacity; nonempty bounded ordered gradient stops with valid endpoints; bounded ornament counts and permitted enums. Missing grammar remains optional; supplied invalid grammar returns a structured refusal with the failing field. Do not hide a malformed supplied grammar by silently omitting it.
+
+Add direct refusal controls for the three reproduced inputs, plus a valid grammar and absent-grammar compatibility. Keep whole pipeline source/coverage/photo-intent, exact-copy, logo and native transfer assertions during the eventual merge; no global KAAE style should be imposed on other clients.
+
+## Release work still required
+
+The branch reference remainsbaffce10; its new guideline source is uncommitted. Re-read the completed commit and ADR238 evidence before integrating. Desk brand-face/showcase handoffs and the active DNA row/Canva brand kit remain separate items in Claude's `plans/kaae-2025-guideline/INVENTORY.md`. Do not assert the kit or source fonts are admitted from the palette update. Actual current Canva edit/save/reopen, native-language/human quality and production admission remain open.

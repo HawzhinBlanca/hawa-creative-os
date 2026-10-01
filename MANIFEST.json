@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T21:24:50Z",
+  "generatedAt": "2026-10-01T21:28:56Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 850,
+  "fileCount": 851,
   "files": [
     {
       "path": ".dockerignore",
@@ -1651,6 +1651,11 @@
       "path": "plans/content-aware-design-2026-09-30/INTEGRATED_RELEASE_PROOF.json",
       "sha256": "29d869bb120fd6e8c8d3c0a6b610b4ee5823ebf7d5e1dae5917ac2e95b6bb7f4",
       "bytes": 4129
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/KAAE2025_INTEGRATION_REVIEW.md",
+      "sha256": "858186477d8d03e29ceb186e9d801e74168fa898558e981597c48b9dcdae8480",
+      "bytes": 2735
     },
     {
       "path": "plans/content-aware-design-2026-09-30/LIVE_LANE_INVENTORY.json",
