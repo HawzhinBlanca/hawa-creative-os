@@ -42,7 +42,8 @@ import { officeChatIds } from './office-chats.js';
 import { decideRequestOwned, startRequestOwnedDelivery, type OfficeActionAnswer } from './office-decisions.js';
 import type { DeliverableStore } from './pinned-deliverables.js';
 import { cleanDraftTitle } from './draft-title.js';
-import { asksForNewDesign, corePhrase, parseChoice, readIntentByRules, readsAsChange } from './requester-turn.js';
+import { asksForNewDesign, corePhrase, parseChoice, readIntentByRules, readsAsChange, refusesApproval,
+  saysMoreThanRefusal } from './requester-turn.js';
 
 const TURN_ACCOUNT = 'office_telegram_turn';
 const INTENT_ACCOUNT = 'lifecycle_chat_intent';
@@ -60,14 +61,36 @@ const OFFICE_REJECT = /^(?:no[\s,،!.]+)?(?:reject(?:ed|\s+(?:it|this|that))?|de
 /** "no, cancel this", "cancel it": a rejection of the whole design (category `task`). */
 const OFFICE_CANCEL = /^(?:no[\s,،!.]+)?(?:cancel|scrap|drop|forget)(?:\s+(?:it|this|that|the\s+design))?[\s!.]*$/iu;
 /**
- * Approval words that refuse it: "the design is not approved", "don't send it", "isn't ready"; Sorani
- * "not approved", "I don't approve it", "don't send it". The owner's words of 2026-10-01 ("the design is
- * not approved, the images cut with no content awareness, should have more images…") read as approval,
- * because "approved" is an approval phrase and nothing after it read as a change.
+ * Approval words that refuse it ("the design is not approved", "don't send it", "I can't approve this")
+ * are found by the requester rules' refusal reading (requester-turn.ts `refusesApproval`). The owner's
+ * words of 2026-10-01 ("the design is not approved, the images cut with no content awareness, should
+ * have more images…") read as approval, because "approved" is an approval phrase and nothing after it
+ * read as a change.
  */
-const OFFICE_NOT_APPROVED = /\b(?:not|isn'?t|is\s+not|aren'?t|wasn'?t|never)\s+(?:yet\s+)?(?:approved?|ready|good|ok(?:ay)?|fine|acceptable)\b|\b(?:don'?t|do\s+not|doesn'?t|never)\s+(?:send|approve|ship|publish|print)\b|(?:پەسەند\s*نییە|پەسەند\s*نەکراوە|پەسەندی\s*ناکەم|مەینێرە|مەنێرە|نەینێرە|نەنێرە)/giu;
-/** Words around a refusal that say nothing more about the draft. */
-const REFUSAL_FILLER = /\b(?:the|this|that|it|its|design|draft|poster|picture|one|is|yet|sorry|please|so|and|but)\b|(?:دیزاینەکە|ئەمە|ئەوە|هێشتا)/giu;
+
+/**
+ * The version of the rules that read an office member's words. A question the bot asked (a pending
+ * choice) is stamped with it; an answer to a question asked under another version, or longer ago than
+ * `PENDING_ASK_MS`, does nothing and is told so (ADR-040 addendum, incident 2026-10-01: a "which
+ * draft?" saved under the old rules held an approval reading of "the design is not approved, …", and
+ * "3" an hour later, after the fix was deployed, applied it). Raise it whenever the reading changes.
+ */
+export const OFFICE_TURN_RULES = 2;
+/** How long a question the bot asked an office member stays open. */
+export const PENDING_ASK_MS = 30 * 60_000;
+/** Negation anywhere in kept words: approval reached through a choice must have none. */
+const NEGATION = /\b(?:not|no|nope|never|nothing|none|neither|nor|without|wrong|bad|but|however|except)\b|n'?t\b|(?:^|[\s,،.!])(?:نا|نەخێر|نەک)(?=$|[\s,،.!])|(?:نییە|نەکراوە|ناکەم|ناکەین|ناوێت|مە[یی]?نێر|نە[یی]?نێر)/iu;
+
+/**
+ * Whether kept words are an approval and nothing else, by the current rules: they read as approval,
+ * refuse nothing, negate nothing, ask nothing and ask for no change. Approval reached by answering a
+ * numbered or named choice requires it; otherwise the member is asked (ADR-040 addendum, 2026-10-01).
+ */
+export function unambiguousApproval(words: string): boolean {
+  const t = String(words ?? '').trim();
+  return readOfficeIntent(t).intent === 'approve' && !refusesApproval(t) && !NEGATION.test(t) && !/[?؟]/u.test(t) &&
+    !readsAsChange(t) && readIntentByRules(t).intent !== 'change';
+}
 
 /**
  * What an office member's words mean for a draft. A change mixed with approval ("ok but make the title
@@ -78,22 +101,22 @@ export function readOfficeIntent(text: string): { intent: OfficeIntent; rejectio
   if (!t || t.startsWith('/')) return { intent: 'unclear' };
   const core = corePhrase(t);
   if (OFFICE_CANCEL.test(core) || OFFICE_CANCEL.test(t)) return { intent: 'reject', rejectionCategory: 'task' };
+  // A refusal is never approval. With anything said about the draft it is what to change ("not approved,
+  // the photos are cropped badly"); "not approved" alone rejects; "not good", "don't send it" alone are
+  // asked about.
+  const refuses = refusesApproval(t);
+  if (refuses && saysMoreThanRefusal(t)) return { intent: 'change' };
   if (OFFICE_REJECT.test(core) || OFFICE_REJECT.test(t)) return { intent: 'reject', rejectionCategory: 'concept' };
-  // A refusal is never approval. With anything said about the draft it is what to change; "not approved"
-  // alone rejects, as above; "not good", "don't send it" alone are asked about.
-  if (t.match(OFFICE_NOT_APPROVED)) {
-    const rest = t.replace(OFFICE_NOT_APPROVED, ' ').replace(REFUSAL_FILLER, ' ').split(/[\s,،.!:;…-]+/u).filter(Boolean);
-    if (rest.length >= 2) return { intent: 'change' };
-    return /approv|پەسەند/iu.test(t) ? { intent: 'reject', rejectionCategory: 'concept' } : { intent: 'unclear' };
-  }
+  if (refuses) return /approv|پەسەند/iu.test(t) ? { intent: 'reject', rejectionCategory: 'concept' } : { intent: 'unclear' };
   // A new brief ("make a poster for Nawroz") is never a change to a draft: intake opens it as before.
   if (asksForNewDesign(t)) return { intent: 'unclear' };
   const reading = readIntentByRules(t);
   if (reading.intent === 'new_brief') return { intent: 'unclear' };
   if (reading.intent === 'change' || readsAsChange(t)) return { intent: 'change' };
-  if (reading.intent === 'approval') return { intent: 'approve' };
   if (reading.intent === 'cancel') return { intent: 'reject', rejectionCategory: 'task' };
-  if (OFFICE_APPROVE.test(core) || OFFICE_APPROVE.test(t.replace(/\s+/g, ' '))) return { intent: 'approve' };
+  const approves = reading.intent === 'approval' || OFFICE_APPROVE.test(core) || OFFICE_APPROVE.test(t.replace(/\s+/g, ' '));
+  // "approved?", "is it approved?" ask; they approve nothing.
+  if (approves && !/[?؟]\s*$/u.test(t)) return { intent: 'approve' };
   return { intent: 'unclear' };
 }
 
@@ -106,10 +129,15 @@ export type OfficePlan =
       acknowledge?: string[];
       /** Words with no reply, applied to the draft last sent to this member: when it was sent (ISO). */
       lastSent?: string }
-  | { kind: 'ask-which'; intent: 'approve' | 'change' | 'reject'; words: string; rejectionCategory?: RejectionCategory;
-      options: QueuedDraft[] }
+  /**
+   * "Which draft?": the member's words are kept, never what they were read as. The answer reads them
+   * again by the rules of its own time (ADR-040 addendum, incident 2026-10-01).
+   */
+  | { kind: 'ask-which'; words: string; options: QueuedDraft[] }
   | { kind: 'ask-what'; requestId: string; alertRev: number | null }
-  | { kind: 'ask-late'; requestId: string; alertRev: number | null; updateIds: string[] };
+  | { kind: 'ask-late'; requestId: string; alertRev: number | null; updateIds: string[] }
+  /** An answer to a question asked too long ago or under other rules: nothing is done. */
+  | { kind: 'lost-track' };
 
 interface TurnReceipt {
   updateId: number; chatId: string; messageId: string | null; lang: RequesterLang; plan: OfficePlan;
@@ -119,6 +147,8 @@ interface TurnReceipt {
   approval?: Record<string, unknown>;
   /** A question the answer asked (the next message may answer it). */
   ask?: OfficePlan;
+  /** The rules version the question was asked under, and when (ISO): see `OFFICE_TURN_RULES`. */
+  askRules?: number; askedAt?: string;
   answer?: { status: number; extra: Record<string, unknown> };
 }
 
@@ -290,6 +320,7 @@ const displayTitle = (value: string | null | undefined, copy?: unknown) => {
 interface StoredTurn {
   chatId?: unknown; messageId?: unknown; lang?: unknown; plan?: { kind?: unknown };
   target?: { taskId?: unknown; revisionId?: unknown }; approval?: Record<string, unknown>; ask?: unknown;
+  askRules?: unknown; askedAt?: unknown;
   answer?: { status?: unknown; extra?: Record<string, unknown> };
 }
 
@@ -302,6 +333,8 @@ function parseReceipt(updateId: number, payload: StoredTurn | undefined): TurnRe
     ...(target && typeof target.taskId === 'string' && typeof target.revisionId === 'string'
       ? { target: { taskId: target.taskId, revisionId: target.revisionId } } : {}),
     ...(payload.approval ? { approval: payload.approval } : {}), ...(payload.ask ? { ask: payload.ask as OfficePlan } : {}),
+    ...(typeof payload.askRules === 'number' ? { askRules: payload.askRules } : {}),
+    ...(typeof payload.askedAt === 'string' ? { askedAt: payload.askedAt } : {}),
     ...(answer && typeof answer.status === 'number' && answer.extra ? { answer: { status: answer.status, extra: answer.extra } } : {}) };
 }
 
@@ -456,7 +489,9 @@ export async function officeTelegramTurn(deps: OfficeTurnDeps, update: Record<st
   if (outcome.retry) return outcome.retry;
   const answer: OfficeTurnAnswer = { status: 200, extra: { lifecycleAction: 'chat-answer', chatId: message.chatId,
     chatAnswer: { text: outcome.text, parseMode: 'HTML' }, officeTurn: receipt.plan.kind === 'decide' ? receipt.plan.intent : receipt.plan.kind } };
-  await tx((trx) => extendTurn(trx, tenantId, message.updateId, { answer, ...(outcome.ask ? { ask: outcome.ask } : {}) }));
+  // A question is stamped with the rules it was asked under and when, so its answer can tell (see `openAskIsCurrent`).
+  await tx((trx) => extendTurn(trx, tenantId, message.updateId, { answer,
+    ...(outcome.ask ? { ask: outcome.ask, askRules: OFFICE_TURN_RULES, askedAt: new Date().toISOString() } : {}) }));
   return answer;
 }
 
@@ -471,6 +506,8 @@ async function planOf(trx: Kysely<Database>, tenantId: string, m: OfficeMessage)
     }
     const asked = await openAsk(trx, tenantId, m.chatId, m.updateId, m.replyTo);
     if (!asked) return null;
+    // A reply to a question asked too long ago, or under other rules, answers nothing.
+    if (!openAskIsCurrent(asked, Date.now())) return { kind: 'lost-track' };
     const ask = asked.ask!;
     // Words in reply to the bot's question that do not answer it: asked again, plainly.
     return answerTo(ask, m.text) ?? (ask.kind === 'ask-which' ? { ...ask }
@@ -478,6 +515,9 @@ async function planOf(trx: Kysely<Database>, tenantId: string, m: OfficeMessage)
   }
   const asked = await openAsk(trx, tenantId, m.chatId, m.updateId, null);
   const answered = asked ? answerTo(asked.ask!, m.text) : null;
+  // Words that would answer a question asked too long ago, or under other rules, do nothing ("3" an hour
+  // after "which draft?"); words that do not answer it are read as if it had not been asked.
+  if (answered && !openAskIsCurrent(asked!, Date.now())) return { kind: 'lost-track' };
   if (answered) return answered;
   // With no reply, only words that clearly decide are the office's; the rest (the owner's own briefs,
   // questions, thanks) are read by intake as before.
@@ -501,7 +541,18 @@ async function planOf(trx: Kysely<Database>, tenantId: string, m: OfficeMessage)
   // still asked (ADR-182): their words may be about those.
   const last = own ? null : lastSentDraft(queue, Date.now());
   if (last) return { kind: 'decide', ...decision, requestId: last.requestId, alertRev: null, lastSent: last.sentAt };
-  return { kind: 'ask-which', ...decision, options: queue };
+  return { kind: 'ask-which', words: m.text, options: queue };
+}
+
+/**
+ * Whether the question a turn asked may still be answered: asked under the current rules
+ * (`OFFICE_TURN_RULES`; a question stored before the stamp existed has none) and within
+ * `PENDING_ASK_MS`.
+ */
+export function openAskIsCurrent(turn: Pick<TurnReceipt, 'askRules' | 'askedAt'>, now: number): boolean {
+  if (turn.askRules !== OFFICE_TURN_RULES || typeof turn.askedAt !== 'string') return false;
+  const at = Date.parse(turn.askedAt);
+  return Number.isFinite(at) && now - at >= 0 && now - at <= PENDING_ASK_MS;
 }
 
 /** "the newest", "latest one", "the most recent"; Sorani "the newest", "the latest". */
@@ -515,8 +566,16 @@ function answerTo(ask: OfficePlan, text: string): OfficePlan | null {
     // The list is newest first: "the newest" is its first line (parseChoice takes "latest" as the last).
     const choice = NEWEST.test(corePhrase(text)) ? { option: 0 } : parseChoice(text, { options: ask.options, allowNew: false });
     if (!choice || !('option' in choice)) return null;
-    return { kind: 'decide', intent: ask.intent, requestId: ask.options[choice.option].requestId, alertRev: null, words: ask.words,
-      ...(ask.rejectionCategory ? { rejectionCategory: ask.rejectionCategory } : {}) };
+    const requestId = ask.options[choice.option].requestId;
+    // ADR-040 addendum (incident 2026-10-01): the kept words are read again now, never as they were
+    // read when the question was asked. Approval through a choice needs words that only approve;
+    // anything less is asked about, and a refusal with feedback is the change.
+    const reading = readOfficeIntent(ask.words);
+    if (reading.intent === 'unclear' || (reading.intent === 'approve' && !unambiguousApproval(ask.words))) {
+      return { kind: 'ask-what', requestId, alertRev: null };
+    }
+    return { kind: 'decide', intent: reading.intent, requestId, alertRev: null, words: ask.words,
+      ...(reading.rejectionCategory ? { rejectionCategory: reading.rejectionCategory } : {}) };
   }
   if (ask.kind === 'ask-what' || ask.kind === 'ask-late') {
     const reading = readOfficeIntent(text);
@@ -550,6 +609,7 @@ async function carryOutPlan(deps: OfficeTurnDeps, receipt: TurnReceipt): Promise
   const lang = receipt.lang;
   const plan = receipt.plan;
   const phrase = (p: Phrase, params: Record<string, string> = {}) => say(p, lang, params);
+  if (plan.kind === 'lost-track') return { text: phrase(OFFICE_MESSAGES.lostTrack) };
   if (plan.kind === 'ask-which') return { text: phrase(OFFICE_MESSAGES.whichDraft, { list: choiceList(plan.options, lang, Date.now()) }), ask: plan };
   const state = await tx((trx) => draftState(trx, tenantId, plan.requestId));
   if (!state) return { text: phrase(OFFICE_MESSAGES.notRecorded, { title: bold('?') }) };

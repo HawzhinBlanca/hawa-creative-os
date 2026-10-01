@@ -44,6 +44,11 @@ export interface IntentReading {
   confidence?: number;
   /** conversation: a question the bot cannot answer itself ("how much does a poster cost?"); the office answers it (ADR-182). */
   question?: boolean;
+  /**
+   * change: the words only refuse ("not approved", "don't send it"; ADR-040 addendum, 2026-10-01). The
+   * office hears that the requester is not happy; with nothing said to change, no round starts.
+   */
+  refusalOnly?: boolean;
 }
 
 export type Lang = RequesterLang;
@@ -154,6 +159,27 @@ const APPROVAL_PHRASES = [
 ];
 /** Praise that goes with approval and is not a change: "looks good", "perfect". */
 const PRAISE = /\b(?:it\s+)?(?:looks?|is|it'?s)?\s*(?:very\s+|really\s+|so\s+)?(?:good|great|perfect|fine|nice|lovely|excellent|beautiful|amazing|all\s+good|ok(?:ay)?)\b/giu;
+
+/**
+ * ADR-040 addendum (incident 2026-10-01): approval words that refuse it: "the design is not approved",
+ * "don't send it", "I can't approve this", "isn't ready"; Sorani "not approved", "I don't approve it",
+ * "don't send it". "Approved" and "send it" are approval phrases, so these read as approval until a
+ * refusal is looked for first. Office and requester readings both use it.
+ */
+export const REFUSAL = /\b(?:not|isn'?t|is\s+not|aren'?t|wasn'?t|never)\s+(?:yet\s+)?(?:approved?|ready|good|ok(?:ay)?|fine|acceptable)\b|\b(?:don'?t|do\s+not|doesn'?t|does\s+not|never|can'?t|cannot|can\s+not|won'?t|will\s+not|wouldn'?t|shouldn'?t|should\s+not|mustn'?t|must\s+not)\s+(?:yet\s+)?(?:send|approve|ship|publish|print|deliver|post|share|forward|e-?mail)\b|(?:پەسەند\s*نییە|پەسەند\s*نەکراوە|پەسەندی\s*ناکەم|پەسەندی\s*ناکەین|مەینێرە|مەنێرە|نەینێرە|نەنێرە|مەینێرن|نەینێرن)/giu;
+/** Words around a refusal that say nothing more about the draft. */
+const REFUSAL_FILLER = /\b(?:the|this|that|it|its|them|design|draft|poster|picture|one|is|yet|sorry|please|so|and|but|i|we|you|to|me|us|now|again|anyone|anything)\b|(?:دیزاینەکە|ئەمە|ئەوە|هێشتا)/giu;
+
+/** Whether the words refuse approval or sending ("not approved", "don't send it"). */
+export function refusesApproval(text: string): boolean {
+  REFUSAL.lastIndex = 0;
+  return REFUSAL.test(text);
+}
+
+/** What a refusal says beyond refusing: at least two words of it are what to change. */
+export function saysMoreThanRefusal(text: string): boolean {
+  return text.replace(REFUSAL, ' ').replace(REFUSAL_FILLER, ' ').split(/[\s,،.!?؟:;…-]+/u).filter(Boolean).length >= 2;
+}
 
 /**
  * ADR-156 (audit #9): words that ask the office about the files themselves: to send them again, that
@@ -333,7 +359,7 @@ export function readsAsChange(text: string): boolean {
 }
 
 function readsAsApproval(text: string, core: string): boolean {
-  if (core.length > 160 || !any(core, APPROVAL_PHRASES)) return false;
+  if (core.length > 160 || !any(core, APPROVAL_PHRASES) || refusesApproval(core)) return false;
   let rest = core;
   for (const phrase of APPROVAL_PHRASES) rest = rest.replace(new RegExp(phrase.replace(/\s+/g, '\\s+'), 'giu'), ' ');
   rest = rest.replace(PRAISE, ' ').replace(/[\s,،!.:;-]+/g, ' ').trim();
@@ -421,6 +447,12 @@ export function readIntentByRules(text: string): IntentReading {
     ({ intent, reason, source: 'rules', ...extra });
   if (!t) return rules('conversation', 'No words');
   if (t.startsWith('/')) return rules('conversation', 'A chat command');
+  // ADR-040 addendum (2026-10-01): "not approved", "don't send it" are never happiness, nor a request
+  // for the files ("don't send it again"): the requester is not happy, and what else they say is the change.
+  if (refusesApproval(core) && !asksForNewDesign(t)) {
+    return saysMoreThanRefusal(core) ? rules('change', 'Refuses the draft and says what to change')
+      : rules('change', 'Refuses the draft; the office hears the requester is not happy', { refusalOnly: true });
+  }
   if (readsAsDeliveryRequest(t, core)) return rules('delivery_request', 'Asks the office about the files (again, a format, an email, a resolution)');
   if (readsAsApproval(t, core)) return rules('approval', 'Approval words; the office decides');
   if (isAcknowledgement(t) || (core && isAcknowledgement(core) && core.length <= 60)) return rules('acknowledgement', 'Thanks, an OK or a receipt');
@@ -667,6 +699,34 @@ function changeFor(request: ChatRequestView, words: string, how: string, confide
   return { kind: 'note', note: 'change', requestId: request.requestId, words, ...(resolves ? { resolves } : {}) };
 }
 
+/**
+ * A change whose words only refuse ("not approved", "don't send it") never starts a paid round: with a
+ * design waiting for the requester's changes it goes to the office; otherwise it is kept for the office
+ * as any change is (ADR-040 addendum, 2026-10-01).
+ */
+function changeOrRefusal(reading: Pick<IntentReading, 'refusalOnly'>, request: ChatRequestView, words: string, how: string,
+  confidence: number | undefined, resolves?: number): TurnPlan | null {
+  if (reading.refusalOnly && waitsForRequester(request)) return { kind: 'forward', words };
+  return changeFor(request, words, how, confidence, resolves);
+}
+
+/**
+ * The plan for an answer to the bot's question about kept words. Approval or change words are read
+ * again by the current rules (ADR-040 addendum, 2026-10-01): words kept as approval that now refuse
+ * ("the design is not approved, ...") are the requester not being happy, never happiness.
+ */
+function answerPlan(ask: PendingAsk, chosen: ChatRequestView): TurnPlan | null {
+  if (ask.intent === 'approval' || ask.intent === 'change') {
+    const again = readIntentByRules(ask.words);
+    if (ask.intent === 'approval' && again.intent !== 'approval') {
+      return again.intent === 'change' ? changeOrRefusal(again, chosen, ask.words, 'named', undefined, ask.updateId)
+        : { kind: 'forward', words: ask.words };
+    }
+    if (ask.intent === 'change' && again.refusalOnly) return changeOrRefusal(again, chosen, ask.words, 'named', undefined, ask.updateId);
+  }
+  return applyTo(ask.intent, chosen, ask.words, 'named', undefined, ask.updateId);
+}
+
 /** A brief opened after "new" was chosen drafts automatically only when it carries its own copy. */
 export function opensForAPerson(words: string): boolean {
   const reading = readIntentByRules(words);
@@ -715,7 +775,7 @@ export function planTurn(input: TurnInput): TurnPlan {
       if ('new' in choice) return { kind: 'open', text: ask.words, instructionOnly: opensForAPerson(ask.words), resolves: ask.updateId };
       const chosen = requests.find((r) => r.requestId === ask.options[choice.option]?.requestId);
       if (chosen && mayAct(chosen)) {
-        const plan = applyTo(ask.intent, chosen, ask.words, 'named', undefined, ask.updateId);
+        const plan = answerPlan(ask, chosen);
         if (plan) return plan;
       }
       if (!chosen) return { kind: 'reply', what: 'nothing-to-change', requestIds: [] };
@@ -809,6 +869,8 @@ export function planTurn(input: TurnInput): TurnPlan {
         // Nothing to change. A reply (to anything) is answered so; a plain message is read as it
         // always was: a styling message opens as a manual request, a question is answered.
         if (input.bound.length || input.unboundReply) return { kind: 'reply', what: 'nothing-to-change', requestIds: [] };
+        // "Not approved", "don't send it" with no design to place them on: the office hears them.
+        if (reading.refusalOnly) return { kind: 'forward', words };
         const h = classifyWithHeuristics(words, false, false);
         if (h.kind === 'new_brief') return { kind: 'open', text: words, instructionOnly: true };
         // ADR-182: "can you make videos?" reads like a change but asks the office a question.
@@ -816,7 +878,7 @@ export function planTurn(input: TurnInput): TurnPlan {
       }
       const picked = pickRequest(input, changeable, true);
       if ('request' in picked) {
-        return changeFor(picked.request, words, picked.how, reading.confidence) ?? ask('change', [picked.request], false);
+        return changeOrRefusal(reading, picked.request, words, picked.how, reading.confidence) ?? ask('change', [picked.request], false);
       }
       if ('ambiguous' in picked) return ask('change', picked.ambiguous, false);
       return { kind: 'reply', what: 'nothing-to-change', requestIds: [] };

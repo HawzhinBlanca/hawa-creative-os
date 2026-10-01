@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { CanvaBindingRepository, createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { projectLifecycleDesignOutcome, projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
-import { readOfficeIntent } from '../src/services/office-telegram-turn.js';
+import { OFFICE_TURN_RULES, openAskIsCurrent, readOfficeIntent, unambiguousApproval } from '../src/services/office-telegram-turn.js';
 import { checkSignedOfficeDecision, type SignedOfficeDecision } from '../../worker/src/lifecycle/office-decision-gateway.js';
 import { recordOfficeDeliveryStart, recordOfficeRevision,
   type AutomaticLifecycleState, type AutomaticOpenContext } from '../../worker/src/lifecycle/request-lifecycle.js';
@@ -440,6 +440,10 @@ describe('which draft, when several wait (ADR-040 addendum, 2026-10-01)', () => 
   it.each([
     [OWNER_WORDS, 'change'], ['the design is not approved', 'reject'], ['not approved yet', 'reject'],
     ["not good, the colours are too dark", 'change'], ["don't send it", 'unclear'], ['پەسەند نییە', 'reject'],
+    // Incident 2026-10-01, second pass: feedback after "not approved" is the change, not a rejection;
+    // "I can't approve this" and questions are never approval.
+    ['not approved, the photos are cropped badly', 'change'], ["I can't approve this", 'reject'], ['approved?', 'unclear'],
+    ['is it approved?', 'unclear'], ['please don\'t publish it', 'unclear'],
   ] as const)('refusing words are never approval: "%s" → %s', (words, intent) => {
     expect(readOfficeIntent(words).intent).toBe(intent);
   });
@@ -540,5 +544,154 @@ describe('which draft, when several wait (ADR-040 addendum, 2026-10-01)', () => 
     expect(answer.chatAnswer.text).toContain('Which design is this for?');
     expect(answer.chatAnswer.text).toContain('<b>KAAE K-12 Pilot Study…</b>');
     expect(answer.chatAnswer.text).not.toContain(RLM);
+  });
+});
+
+/**
+ * ADR-040 addendum, incident 2026-10-01 (task 5edca743, request 95eeb08d). At 07:35Z the owner wrote,
+ * with no reply, "the design is not approved, the images cut with no content awareness, should have more
+ * images organized creatively, not just straight image on same old bg". The rules of the day read it as
+ * approval, and with three drafts waiting the bot saved a "which draft?" holding that approval reading.
+ * The fixed reading was deployed at about 08:05Z; at 08:44Z the owner answered "3" to the old question,
+ * the stored approval was applied, and the draft was approved and delivered. A pending choice now keeps
+ * only the words, which the answer reads again; approval through a choice needs words that only
+ * approve; and a question asked under other rules, or more than 30 minutes ago, does nothing.
+ */
+describe('a pending "which draft?" is read again when answered (ADR-040 addendum, incident 2026-10-01)', () => {
+  const INCIDENT_WORDS = 'the design is not approved, the images cut with no content awareness, should have more images organized creatively, not just straight image on same old bg';
+  const LOST = 'I\'ve lost track of that question — please reply to the draft picture with what you want.';
+
+  /**
+   * The "which draft?" turn as a deploy before this fix stored it: the decision kind read at question
+   * time (`intent: 'approve'`) beside the words, the options newest first, and (optionally) the stamp.
+   */
+  async function storedChoice(chat: number, words: string, drafts: Array<{ requestId: string; title: string }>,
+    stamp: { rules?: number; minutesAgo?: number } | null, botMessageId?: string) {
+    const updateId = nextUpdate++;
+    const ask = { kind: 'ask-which', intent: 'approve', words, options: drafts.map((d) => ({ requestId: d.requestId, title: d.title,
+      sentAt: new Date().toISOString(), alerted: true, photos: 0, requester: null, own: false })) };
+    const askedAt = new Date(Date.now() - (stamp?.minutesAgo ?? 0) * 60_000).toISOString();
+    const payload = { chatId: String(chat), messageId: '1', lang: 'en', plan: ask, ask,
+      answer: { status: 200, extra: { lifecycleAction: 'chat-answer', chatId: String(chat), chatAnswer: { text: 'Which draft do you mean?' } } },
+      ...(stamp ? { askRules: stamp.rules ?? OFFICE_TURN_RULES, askedAt } : {}) };
+    await withRlsContext(db, scope, async (trx) => {
+      // Stored now, so it is the member's latest turn whatever earlier tests left; `askedAt` says when it was asked.
+      await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+        VALUES (${tenantId}::uuid, 'office_telegram_turn', ${String(updateId)}, 'office_telegram_turn', ${JSON.stringify(payload)}::jsonb,
+          ${`stored-choice-${updateId}`}, true)`.execute(trx);
+      if (botMessageId) {
+        // TelegramSender's mark for the question it sent: a reply to that message names the question.
+        const key = `lc:chatinbox:chat-answer:${updateId}:send`;
+        await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+          VALUES (${tenantId}::uuid, 'telegram_delivery', ${key}, 'telegram_message_sent',
+            ${JSON.stringify({ messageId: botMessageId, chatId: String(chat) })}::jsonb, ${`${key}:sent`}, true)`.execute(trx);
+      }
+    });
+  }
+
+  /** Three drafts in review, sent days ago (none is "the one just sent"), listed newest first. */
+  async function threeDrafts() {
+    await emptyQueue();
+    const day = 24 * 60;
+    const first = await draftInReview('KAAE field visit report', { alertedMinutesAgo: 4 * day });
+    const second = await draftInReview('KAAE K-12 Pilot Study', { alertedMinutesAgo: 3 * day });
+    const third = await draftInReview('Pilot Study second version', { alertedMinutesAgo: 2 * day });
+    return [third, second, first];
+  }
+
+  const untouched = async (drafts: Array<{ requestId: string; taskId: string }>) => {
+    for (const draft of drafts) {
+      expect(await rows(draft.requestId, draft.taskId)).toMatchObject({ request: { stage: 'in_review', rev: '2' }, approvals: [] });
+    }
+  };
+
+  it('the incident replayed: kept words stored as approval are read again, and "3" sends the draft back, never approves or delivers', async () => {
+    const options = await threeDrafts();
+    await storedChoice(OFFICE_A, INCIDENT_WORDS, options, {});
+    const { calls } = gateway();
+    const before = deliveries.length;
+    const answered = await intake(say(OFFICE_A, '3'));
+    expect(answered.chatAnswer.text).toBe('Sent back for changes with your words. I have sent your note on <b>KAAE field visit report</b> ' +
+      'to the requester; the next draft starts once they answer.');
+    expect(calls.map((c) => c.kind)).toEqual(['revise']);
+    expect(deliveries.length).toBe(before);
+    expect((await rows(options[2].requestId, options[2].taskId)).approvals).toMatchObject([{ decision: 'revision_requested',
+      decision_payload: { revisionRequest: { comment: INCIDENT_WORDS } } }]);
+    await untouched(options.slice(0, 2));
+  });
+
+  it('approval through a choice needs kept words that only approve: anything less is asked about', async () => {
+    const options = await threeDrafts();
+    await storedChoice(OFFICE_B, 'no problem, send it', options, {});
+    const { calls } = gateway();
+    const answered = await intake(say(OFFICE_B, '1'));
+    expect(answered.chatAnswer.text).toContain('What should I do with <b>Pilot Study second version</b>');
+    expect(calls).toHaveLength(0);
+    await untouched(options);
+  });
+
+  it('a question stored under older reading rules is discarded: the answer does nothing and says so', async () => {
+    const options = await threeDrafts();
+    // As every question stored before this fix: no stamp at all.
+    await storedChoice(OFFICE_A, INCIDENT_WORDS, options, null);
+    const { transport } = gateway();
+    const unstamped = await intake(say(OFFICE_A, '3'));
+    expect(unstamped).toMatchObject({ officeTurn: 'lost-track', chatAnswer: { text: LOST } });
+    // An older stamp, answered by replying to the question itself.
+    await storedChoice(OFFICE_A, 'approved', options, { rules: OFFICE_TURN_RULES - 1 }, '88001');
+    const replied = await intake(say(OFFICE_A, '2', replyTo('88001')));
+    expect(replied).toMatchObject({ officeTurn: 'lost-track', chatAnswer: { text: LOST } });
+    expect(transport).not.toHaveBeenCalled();
+    await untouched(options);
+  });
+
+  it('a question expires after 30 minutes: the answer does nothing and says so', async () => {
+    const options = await threeDrafts();
+    await storedChoice(OFFICE_B, 'approved', options, { minutesAgo: 31 });
+    const { transport } = gateway();
+    const late = await intake(say(OFFICE_B, '2'));
+    expect(late).toMatchObject({ officeTurn: 'lost-track', chatAnswer: { text: LOST } });
+    expect(transport).not.toHaveBeenCalled();
+    await untouched(options);
+    const now = Date.now();
+    expect(openAskIsCurrent({ askRules: OFFICE_TURN_RULES, askedAt: new Date(now - 29 * 60_000).toISOString() }, now)).toBe(true);
+    expect(openAskIsCurrent({ askRules: OFFICE_TURN_RULES, askedAt: new Date(now - 31 * 60_000).toISOString() }, now)).toBe(false);
+  });
+
+  it('genuine "approved" kept with a current question, then "2", approves and delivers as before', async () => {
+    const options = await threeDrafts();
+    await storedChoice(OFFICE_A, 'approved', options, { minutesAgo: 5 });
+    const { calls } = gateway();
+    const answered = await intake(say(OFFICE_A, '2'));
+    expect(answered.chatAnswer.text).toBe('Approved. Sending <b>KAAE K-12 Pilot Study</b> to the requester now.');
+    expect(calls.map((c) => c.kind)).toEqual(['approve', 'deliver']);
+    await untouched([options[0], options[2]]);
+  });
+
+  it('a question asked now keeps only the words, is stamped, and its answer reads them again', async () => {
+    await emptyQueue();
+    const first = await draftInReview('Library week poster', { alertedMinutesAgo: 12 });
+    const second = await draftInReview('Library week flyer', { alertedMinutesAgo: 10 });
+    const { calls } = gateway();
+    const asked = await intake(say(OFFICE_B, 'not approved, the photos are cropped badly'));
+    expect(asked.chatAnswer.text).toMatch(/^Which draft do you mean\?/);
+    const stored = await withRlsContext(db, scope, (trx) => sql<{ payload: Record<string, any> }>`SELECT payload FROM hawa.inbox_events
+      WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'office_telegram_turn' AND payload->>'chatId' = ${String(OFFICE_B)}
+      ORDER BY received_at DESC, id DESC LIMIT 1`.execute(trx));
+    expect(stored.rows[0].payload).toMatchObject({ askRules: OFFICE_TURN_RULES,
+      ask: { kind: 'ask-which', words: 'not approved, the photos are cropped badly' } });
+    expect(stored.rows[0].payload.ask.intent).toBeUndefined();
+    await intake(say(OFFICE_B, '2'));
+    expect(calls.map((c) => c.kind)).toEqual(['revise']);
+    expect((await rows(first.requestId, first.taskId)).approvals).toMatchObject([{ decision: 'revision_requested' }]);
+    await untouched([second]);
+  });
+
+  it.each([
+    ['approved', true], ['ok send it', true], ['looks good, send it', true], ['پەسەندە', true],
+    [INCIDENT_WORDS, false], ['not approved', false], ["don't send it", false], ['no problem, send it', false],
+    ['approved?', false], ['ok but make the title bigger', false], ["I can't approve this", false], ['پەسەند نییە', false],
+  ] as const)('"%s" is an unambiguous approval: %s', (words, expected) => {
+    expect(unambiguousApproval(words)).toBe(expected);
   });
 });
