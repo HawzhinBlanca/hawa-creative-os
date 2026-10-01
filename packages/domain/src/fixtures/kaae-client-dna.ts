@@ -9,58 +9,48 @@ export const kaaeClientDNA: ClientDNA = {
   status: 'active',
   defaultLocale: 'en',
   defaultDirection: 'ltr',
+  // ADR-236: the brand guideline's palette (BRAND GUIDLINES.pdf, colour palette page), light grounds
+  // first: the guideline's pages are white and cream under an indigo band. Its body ink is black.
   colors: [
     {
-      name: 'KAAE Primary Blue',
-      hex: '#4770A3',
-      role: 'primary',
-      cmyk: '55,33,0,35',
-      pantone: 'PANTONE 5415 C',
-    },
-    {
-      name: 'KAAE Kurdistan Sun Gold',
-      hex: '#F7B500',
-      role: 'accent',
-      cmyk: '0,20,64,17',
-      pantone: 'PANTONE 7549 C',
-    },
-    {
-      name: 'KAAE Royal Navy',
-      hex: '#1E3A5F',
-      role: 'secondary',
-      cmyk: '85,60,15,30',
-      pantone: 'PANTONE 534 C',
-    },
-    {
-      name: 'KAAE Ocean Blue',
-      hex: '#2C5282',
-      role: 'surface',
-      cmyk: '65,40,0,37',
-    },
-    {
-      name: 'KAAE Midnight Depth',
-      hex: '#0A1628',
-      role: 'background',
-      cmyk: '90,75,40,65',
-    },
-    {
-      name: 'KAAE Academic Cream Paper',
-      hex: '#FDF8F3',
-      role: 'background',
-      cmyk: '0,2,6,0',
-      pantone: 'PANTONE 9184 C',
-    },
-    {
-      name: 'KAAE Pure White',
+      name: 'KAAE White',
       hex: '#FFFFFF',
       role: 'background',
-      cmyk: '0,0,0,0',
     },
     {
-      name: 'KAAE High-Legibility Charcoal Ink',
-      hex: '#1A1A1A',
+      name: 'KAAE Cream',
+      hex: '#FFF2DB',
+      role: 'background',
+    },
+    {
+      name: 'KAAE Indigo',
+      hex: '#17087A',
+      role: 'primary',
+    },
+    {
+      name: 'KAAE Royal Indigo',
+      hex: '#3833A3',
+      role: 'surface',
+    },
+    {
+      name: 'KAAE Blue',
+      hex: '#4770A3',
+      role: 'secondary',
+    },
+    {
+      name: 'KAAE Gold',
+      hex: '#E8B85C',
+      role: 'accent',
+    },
+    {
+      name: 'KAAE Bright Blue',
+      hex: '#0F73DE',
+      role: 'accent',
+    },
+    {
+      name: 'KAAE Ink',
+      hex: '#000000',
       role: 'text',
-      cmyk: '0,0,0,90',
     },
   ],
   fonts: [

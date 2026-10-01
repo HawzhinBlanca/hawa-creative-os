@@ -52,6 +52,11 @@ export interface ArtDirectionParams {
   frame?: 'none' | 'outer' | 'inset';
   /** Text alignment: `start` is left for Latin, right for Sorani. */
   align?: 'start' | 'center';
+  /**
+   * ADR-236: the light page when surfaceTone is cream: the brand's cream (the default) or white
+   * (the brand guideline's own pages, or a requester who asks for white).
+   */
+  paper?: 'cream' | 'white';
 }
 
 export interface ArtDirectionChoice {
@@ -700,6 +705,25 @@ class SolveContext {
     return this.input.choice.params?.align === 'center' ? 'center' : 'start';
   }
 
+  // ----- ground (ADR-236) --------------------------------------------------------------------------
+
+  /** Whether the concept sits on the brand's light page (the guideline's default) rather than navy. */
+  isLight(): boolean {
+    return this.input.choice.params?.surfaceTone === 'cream';
+  }
+
+  /** The light page: cream, or white where the concept names white. */
+  paper(): Hex {
+    return this.input.choice.params?.paper === 'white' ? this.tones.white : this.tones.cream;
+  }
+
+  /** The ground of a recipe that can sit on navy or on the page, and the text colours it carries. */
+  ground(): { background: Hex; colours: Palette } {
+    return this.isLight()
+      ? { background: this.paper(), colours: surfacePalette(this.tones, 'cream') }
+      : { background: this.tones.navy, colours: surfacePalette(this.tones, 'navy') };
+  }
+
   // ----- frames ----------------------------------------------------------------------------------
 
   /** A gold frame: `outer` a border at the canvas edge, `inset` a thin line inside it. Returns its inner inset. */
@@ -903,7 +927,8 @@ class SolveContext {
     const texture = this.texture(hero);
     const align = this.align();
     const inner = this.frame(this.input.choice.params?.frame === 'outer' ? 'outer' : this.input.choice.params?.frame === 'none' ? 'none' : 'inset');
-    const colours = surfacePalette(this.tones, 'navy');
+    // ADR-236: the fade closes to the page (paper) on a light concept, to navy on a dark one.
+    const { background, colours } = this.ground();
     const logo = this.logoAt('top-start');
     const all = this.blocks;
     const fadeShare = clamp(this.input.choice.params?.fadeShare ?? 0.46, 0.35, 0.55);
@@ -927,11 +952,11 @@ class SolveContext {
         tex.opacity = 0.85;
       }
       this.overlays.push({
-        kind: 'gradient', purpose: 'fade', color: this.tones.navy, direction: this.rtl ? 'to-right' : 'to-left',
+        kind: 'gradient', purpose: 'fade', color: background, direction: this.rtl ? 'to-right' : 'to-left',
         x: this.rtl ? this.W - fadeW : 0, y: 0, width: fadeW, height: this.H,
         stops: [{ at: 0, opacity: 0 }, { at: 0.3, opacity: 0.8 }, { at: 0.55, opacity: 0.93 }, { at: 1, opacity: 0.97 }],
       });
-      return this.finish({ background: this.tones.navy, text, logo, titleZone: { x: colX, y, width: colW, height: h }, hero, texture });
+      return this.finish({ background, text, logo, titleZone: { x: colX, y, width: colW, height: h }, hero, texture });
     }
 
     // Portrait and square: the text column is the safe area's width, anchored to its bottom; the
@@ -967,7 +992,7 @@ class SolveContext {
       tex.opacity = 0.9;
     }
     const fade: OverlayElement = {
-      kind: 'gradient', purpose: 'fade', color: this.tones.navy, direction: 'to-bottom',
+      kind: 'gradient', purpose: 'fade', color: background, direction: 'to-bottom',
       x: 0, y: fadeTop, width: this.W, height: fadeH,
       stops: texture
         ? [{ at: 0, opacity: 0 }, { at: 0.24, opacity: 0.6 }, { at: 0.46, opacity: 0.8 }, { at: 0.72, opacity: 0.92 }, { at: 1, opacity: 0.96 }]
@@ -977,7 +1002,7 @@ class SolveContext {
     // as a line in the fade (run 7 of the live trials, 2026-09-30).
     if (!texture) this.sealPhotoEdge(fade, heroBottom);
     this.overlays.push(fade);
-    return this.finish({ background: this.tones.navy, text, logo, titleZone: { x: colX, y: textTop, width: colW, height: h }, hero, texture });
+    return this.finish({ background, text, logo, titleZone: { x: colX, y: textTop, width: colW, height: h }, hero, texture });
   }
 
   canvas(): Box {
@@ -1027,7 +1052,9 @@ class SolveContext {
     const tabY = Math.round(cardY - tabH / 2);
     this.shapes.push({ kind: 'rect', role: 'panel', layer: 'overlay', surface: 'tab', color: this.tones.navy, x: tabX, y: tabY, width: tabW, height: tabH });
     const logo = { x: tabX + tabPadX, y: tabY + tabPadY, width: logoSize.width, height: logoSize.height };
-    return this.finish({ background: this.tones.navy, text, logo, titleZone: { x: cardX, y: cardY, width: cardW, height: cardH }, hero });
+    // ADR-236: the office's carousel post is already the light one (a cream card on the photo); its
+    // ground, under the frame, is the page's paper on a light concept.
+    return this.finish({ background: this.isLight() ? this.paper() : this.tones.navy, text, logo, titleZone: { x: cardX, y: cardY, width: cardW, height: cardH }, hero });
   }
 
   /**
@@ -1049,6 +1076,9 @@ class SolveContext {
     this.frame(this.input.choice.params?.frame === 'inset' ? 'inset' : 'none');
     const logo = this.logoAt('top-center');
     const navy = surfacePalette(this.tones, 'navy');
+    // ADR-236: the plate is always navy (the guideline's plates and bands); the lines below it sit
+    // on the page's paper on a light concept, on a navy scrim on a dark one.
+    const { background, colours: restColours } = this.ground();
     let head = this.pick(['title', 'accent']);
     let rest = this.pick(['body', 'cta', 'meta', 'footer']);
     if (!SolveContext.ordered(head, rest)) {
@@ -1070,7 +1100,7 @@ class SolveContext {
     const sets = this.fitScalePreferOneLine(
       [
         { blocks: head, width: plateColW - 2 * padX, colours: navy, align: 'center' },
-        ...(rest.length ? [{ blocks: rest, width: restW, colours: navy, align: 'center' as const }] : []),
+        ...(rest.length ? [{ blocks: rest, width: restW, colours: restColours, align: 'center' as const }] : []),
       ],
       ([h, r]) => this.stackHeight(h) + 2 * padY <= zone.bottom - zone.top && (!r || this.stackHeight(r) <= restMax)
     );
@@ -1092,21 +1122,21 @@ class SolveContext {
     const text = this.placeStack(headSet, plateX + padX, plateW - 2 * padX, plateTop + padY, 'center', navy);
     let scrim: OverlayElement | undefined;
     if (sets[1]) {
-      text.push(...this.placeStack(sets[1], this.safe.x, restW, rTop, 'center', navy));
+      text.push(...this.placeStack(sets[1], this.safe.x, restW, rTop, 'center', restColours));
       const scrimH = Math.round(Math.min(this.H * 0.55, (this.H - rTop) / 0.6));
       scrim = {
-        kind: 'gradient', purpose: 'scrim', color: this.tones.navy, direction: 'to-bottom', x: 0, y: this.H - scrimH, width: this.W, height: scrimH,
+        kind: 'gradient', purpose: 'scrim', color: background, direction: 'to-bottom', x: 0, y: this.H - scrimH, width: this.W, height: scrimH,
         stops: [{ at: 0, opacity: 0 }, { at: 0.38, opacity: 0.8 }, { at: 1, opacity: 0.94 }],
       };
     } else if (heroBottom < this.H) {
-      scrim = { kind: 'gradient', purpose: 'scrim', color: this.tones.navy, direction: 'to-bottom', x: 0, y: heroBottom, width: this.W, height: this.H - heroBottom,
+      scrim = { kind: 'gradient', purpose: 'scrim', color: background, direction: 'to-bottom', x: 0, y: heroBottom, width: this.W, height: this.H - heroBottom,
         stops: [{ at: 0, opacity: 0.97 }, { at: 1, opacity: 0.97 }] };
     }
     if (scrim) {
       this.sealPhotoEdge(scrim, heroBottom);
       this.overlays.push(scrim);
     }
-    return this.finish({ background: this.tones.navy, text, logo, titleZone: { x: plateX, y: plateTop, width: plateW, height: plateH }, hero });
+    return this.finish({ background, text, logo, titleZone: { x: plateX, y: plateTop, width: plateW, height: plateH }, hero });
   }
 
   /**
@@ -1122,7 +1152,8 @@ class SolveContext {
     this.officeType = !this.wide;
     this.bodyMaxWidth = this.wide ? undefined : Math.round(OFFICE_BODY_MEASURE * this.W);
     const inner = this.frame(this.input.choice.params?.frame === 'inset' ? 'inset' : 'none');
-    const colours = surfacePalette(this.tones, 'navy');
+    // ADR-236: the caption sits on the page's paper rising over the photo, or on a navy scrim.
+    const { background, colours } = this.ground();
     const align = this.align();
     const logo = this.logoAt('top-start');
     const colX = Math.max(this.safe.x, inner + Math.round(0.035 * this.s));
@@ -1152,12 +1183,12 @@ class SolveContext {
     // Deep enough that the headline sits where the scrim is already ~80% navy, however tall the copy.
     const scrimH = Math.round(Math.min(this.H, (this.H - top) / 0.62));
     const scrim: OverlayElement = {
-      kind: 'gradient', purpose: 'scrim', color: this.tones.navy, direction: 'to-bottom', x: 0, y: this.H - scrimH, width: this.W, height: scrimH,
+      kind: 'gradient', purpose: 'scrim', color: background, direction: 'to-bottom', x: 0, y: this.H - scrimH, width: this.W, height: scrimH,
       stops: [{ at: 0, opacity: 0 }, { at: 0.36, opacity: 0.8 }, { at: 1, opacity: 0.95 }],
     };
     this.sealPhotoEdge(scrim, heroBox.y + heroBox.height);
     this.overlays.push(scrim);
-    return this.finish({ background: this.tones.navy, text, logo, titleZone: { x, y: top, width: colW, height: h }, hero });
+    return this.finish({ background, text, logo, titleZone: { x, y: top, width: colW, height: h }, hero });
   }
 
   /**
@@ -1198,7 +1229,8 @@ class SolveContext {
   cutoutSpeaker(): StudioLayoutV2 {
     const person = this.photo(this.input.choice.cutoutPhotoIndex) ?? this.input.photos.find((p) => p.cutoutSize);
     if (!person?.cutoutSize) throw new RecipeInfeasibleError(this.recipe, 'no person cut out of a photo');
-    const colours = surfacePalette(this.tones, 'navy');
+    // ADR-236: the person stands on the page's paper on a light concept, on navy on a dark one.
+    const { background, colours } = this.ground();
     const colX = this.wide ? Math.round(0.46 * this.W) : Math.round(0.4 * this.W);
     // The person's box ends where the text column starts: the person stands beside the copy, never under it.
     const personW = Math.min(Math.round((this.wide ? 0.4 : 0.56) * this.W), colX - Math.round(0.02 * this.W));
@@ -1219,12 +1251,15 @@ class SolveContext {
       box: intBox({ x: 0, y: Math.round(this.H - personH * 1.05), width: Math.min(colX - Math.round(0.01 * this.W), personW), height: Math.round(personH * 1.05) }),
       calmRegion: intBox({ x: 0, y: Math.round(this.H - personH * 1.05), width: Math.min(colX - Math.round(0.01 * this.W), personW), height: Math.round(personH * 1.05) }),
     };
-    return this.finish({ background: this.tones.navy, text, logo, titleZone: { x: colX, y: top, width: colW, height: h }, cutout: person, art });
+    return this.finish({ background, text, logo, titleZone: { x: colX, y: top, width: colW, height: h }, cutout: person, art });
   }
 
   /**
    * Reference example 6. Cream paper; the photo rises from the bottom and fades into the paper; the
    * title sits on a navy plate under the logo and the other lines in navy on the paper.
+   *
+   * ADR-236: on white paper (the brand guideline's own pages) the plate becomes the guideline's
+   * header: a navy band across the top of the page holding the logo and the title.
    */
   fadeToPaper(): StudioLayoutV2 {
     const hero = this.hero();
@@ -1257,12 +1292,16 @@ class SolveContext {
     );
     const hh = this.stackHeight(sets[0]);
     const widest = Math.max(...sets[0].map((b) => b.lineWidth));
-    const plateW = Math.min(colW, widest + 2 * padX + 8);
-    const plateX = this.rtl ? x + colW - plateW : x;
-    this.shapes.push({
-      kind: 'rect', role: 'panel', layer: 'overlay', surface: 'plate', color: this.tones.navy, x: plateX, y: top, width: plateW, height: hh + 2 * padY,
-    });
-    const text = this.placeStack(sets[0], plateX + padX, plateW - 2 * padX, top + padY, 'start', navy);
+    const band = this.input.choice.params?.paper === 'white' && !this.wide;
+    const plateW = band ? colW : Math.min(colW, widest + 2 * padX + 8);
+    const plateX = band ? x : this.rtl ? x + colW - plateW : x;
+    this.shapes.push(band
+      ? { kind: 'rect', role: 'panel', layer: 'overlay', surface: 'plate', color: this.tones.navy, x: 0, y: 0, width: this.W, height: top + hh + 2 * padY }
+      : { kind: 'rect', role: 'panel', layer: 'overlay', surface: 'plate', color: this.tones.navy, x: plateX, y: top, width: plateW, height: hh + 2 * padY });
+    // In the band the title lines up with the logo, at the page's margin.
+    const text = band
+      ? this.placeStack(sets[0], this.rtl ? x + 2 * padX : x, colW - 2 * padX, top + padY, 'start', navy)
+      : this.placeStack(sets[0], plateX + padX, plateW - 2 * padX, top + padY, 'start', navy);
     let bottomOfText = top + hh + 2 * padY;
     if (sets[1]) {
       const rTop = bottomOfText + Math.round(0.03 * this.s);
@@ -1278,7 +1317,7 @@ class SolveContext {
       const ph = this.placeHero(hero, { x: 0, y: photoTop, width: this.W, height: this.H - photoTop });
       ph.fade = { edge: 'top', length: 0.45 };
     }
-    return this.finish({ background: this.tones.cream, text, logo, titleZone: { x: plateX, y: top, width: plateW, height: hh + 2 * padY }, hero });
+    return this.finish({ background: this.paper(), text, logo, titleZone: { x: plateX, y: top, width: plateW, height: hh + 2 * padY }, hero });
   }
 }
 

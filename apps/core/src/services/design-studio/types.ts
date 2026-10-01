@@ -41,6 +41,12 @@ export interface CreativeBrief {
   riskFlags: string[];
   /** Brand-palette hex the client explicitly asked for as the background; '' when they did not. Absent on briefs before 2026-09-18. */
   requestedBackground?: string;
+  /**
+   * ADR-236: the ground the requester's own words asked for (light: white or cream paper; dark),
+   * read with no call. Honoured over the model's choice of ground. Absent before 2026-10-01 and when
+   * the words name no tone.
+   */
+  tonePreference?: import('@hawa/creative').TonePreference;
   /** What an attached image is: the client's logo, a style reference, or nothing to design from. Absent before 2026-09-19. */
   referenceRole?: 'none' | 'logo' | 'style_reference';
   /** What to take from a style reference: composition, colour placement, ornament, mood. */

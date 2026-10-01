@@ -71,49 +71,44 @@
     "deprecatedAssetIds": [],
     "colors": [
       {
-        "token": "kaae-blue",
-        "srgb": "#4770A3",
-        "usage": "Primary institutional brand identity; academic stability, quality assurance, and trust (PMS 5415 C)"
-      },
-      {
-        "token": "kaae-gold",
-        "srgb": "#F7B500",
-        "usage": "Primary brand accent; Kurdistan sun gold, achievement, excellence, and distinction (PMS 7549 C)"
-      },
-      {
-        "token": "kaae-royal",
-        "srgb": "#1E3A5F",
-        "usage": "Secondary institutional authority, hero title typography, and card structural backing"
-      },
-      {
-        "token": "kaae-ocean",
-        "srgb": "#2C5282",
-        "usage": "Secondary bridge blue; interactive accents, badges, and container panels"
-      },
-      {
-        "token": "kaae-midnight",
-        "srgb": "#0A1628",
-        "usage": "Deep keynote canvas, high-contrast dark mode, and executive presentation fields"
-      },
-      {
-        "token": "kaae-sky",
-        "srgb": "#4A90E2",
-        "usage": "Clarity highlight, metadata chips, and active indicator bars"
+        "token": "kaae-white",
+        "srgb": "#FFFFFF",
+        "usage": "Default page: the brand guideline's white pages; card ground on a cream page"
       },
       {
         "token": "kaae-cream",
-        "srgb": "#FDF8F3",
-        "usage": "Light mode canvas; dignified warm academic cream ground (PMS 9184 C)"
+        "srgb": "#FFF2DB",
+        "usage": "Light page and card fill: the guideline's cream; office cards and grid paper"
       },
       {
-        "token": "kaae-pure-white",
-        "srgb": "#FFFFFF",
-        "usage": "Container card ground, sharp borders, and high-contrast letterheads"
+        "token": "kaae-indigo",
+        "srgb": "#17087A",
+        "usage": "Primary dark: header bands, plates, tabs, scrims and titles on a light page; the ground of evening or dark invitations and keynote screens"
       },
       {
-        "token": "kaae-charcoal-ink",
-        "srgb": "#1A1A1A",
-        "usage": "Primary editorial body copy and legal proclamation ink"
+        "token": "kaae-royal-indigo",
+        "srgb": "#3833A3",
+        "usage": "Royal indigo: band gradients, plates, and accent lines on a light page"
+      },
+      {
+        "token": "kaae-blue",
+        "srgb": "#4770A3",
+        "usage": "Blue: secondary lines, rules and icons"
+      },
+      {
+        "token": "kaae-bright-blue",
+        "srgb": "#0F73DE",
+        "usage": "Bright blue: one highlight at most, sparingly"
+      },
+      {
+        "token": "kaae-gold",
+        "srgb": "#E8B85C",
+        "usage": "Gold: thin rules, frames, borders and the title's accent line on indigo; never text on white or cream"
+      },
+      {
+        "token": "kaae-ink",
+        "srgb": "#000000",
+        "usage": "Body ink on a light page, as the guideline sets its body text"
       }
     ],
     "fonts": [

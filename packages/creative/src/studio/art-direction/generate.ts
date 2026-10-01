@@ -17,6 +17,7 @@ import {
 } from './recipes.js';
 import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
 import { RecipeInfeasibleError, TEXT_SLOTS, solveRecipe, type ArtDirectionChoice, type SolverPhoto, type TextSlot } from './solver.js';
+import { resolveSurfaceTone, type TonePreference } from './tone.js';
 
 /**
  * ADR-170: the art-director layout call for a brief with photos. The model reads the brief, the
@@ -116,7 +117,7 @@ RECIPES (closed set; use only those the request lists as eligible)
 ${recipes}
 
 Per-subject patterns the office uses:
-- report release, study, field visit = hero_fade_report (hero + navy fade + two-colour title + URL pill);
+- report release, study, field visit = hero_fade_report (hero + fade + two-colour title + URL pill);
 - event, forum, speaker = cutout_speaker;
 - meeting, delegation, visit of officials = scrim_caption;
 - occasion, greeting = sky_title;
@@ -127,7 +128,7 @@ Per-subject patterns the office uses:
 ================================================================================
 SLOTS (every copy block gets exactly one)
 ================================================================================
-- title: the bold main line (white on navy, navy on cream). Exactly one block.
+- title: the bold main line (navy on the light page or a card, white on navy). Exactly one block.
 - accent: the gold line of a two-colour title. Only a block directly before or after the title in the copy (for example a report's name under its study's name).
 - body: small light text.
 - cta: a short call to action or URL, set in a gold pill. Only copy that is itself a URL or a few words of action; never longer text.
@@ -139,7 +140,7 @@ Copy is set exactly as written, in the order written, top to bottom. Never inven
 PHOTOS
 ================================================================================
 - The hero must literally show the subject, be sharp, and ideally have a quiet region (sky, wall, blur). Use the photo review and the local measurements given for each photo; look at the photos yourself.
-- A texture photo is optional, only in recipes that allow it, and never the hero. Choose a busy, related scene (a crowd, a classroom) that reads well faded into navy.
+- A texture photo is optional, only in recipes that allow it, and never the hero. Choose a busy, related scene (a crowd, a classroom) that reads well faded into the fade.
 - Leave every other photo out, unless the request's REQUIRED PHOTOS asks for more; then use only the eligible recipes, which can place them. The office reviews the photos left out.
 - heroPhotoIndex, texturePhotoIndex and cutoutPhotoIndex are photoIndex values from the list.
 
@@ -147,7 +148,7 @@ PHOTOS
 PARAMETERS
 ================================================================================
 - fadeShare: 0.35-0.55, the share of the canvas the fade covers (hero_fade_report); null for the default.
-- surfaceTone: navy, cream or auto (the engine picks from the photo's quiet area).
+- surfaceTone: cream (the light page: white or cream paper, the client's default unless its rules say otherwise), navy (a dark ground: only for an evening or dark invitation, a keynote or stage screen, or a dark photo), or auto (the engine picks from the requester's words and the photo).
 - frame: outer (a gold border: series and carousels), inset (a thin gold line: single report posts), or none.
 - align: start (left for English, right for Sorani) or center.
 
@@ -190,6 +191,11 @@ export interface GenerateArtDirectedOptions {
   /** The brief's role per copy block, for blocks a concept leaves without a slot. */
   briefRoles?: Record<number, string>;
   fontsDir?: string;
+  /**
+   * ADR-236: the ground the requester asked for in words ("on white", "dark", "an evening gala"),
+   * recorded in the brief. It decides every concept's ground over the model's own choice.
+   */
+  tonePreference?: Pick<TonePreference, 'tone' | 'ground'>;
 }
 
 export interface GenerateArtDirectedResult {
@@ -265,7 +271,7 @@ ELIGIBLE RECIPES for these photos: ${eligible.join(', ')}.
 OFFICE EXEMPLARS (published designs of this client; the attached example images are these):
 ${exemplarLines}
 
-TASK: Return exactly three concepts. Use only eligible recipes. ${eligible.length > 1 ? "Use at least two different recipes." : "Vary the hero and surface treatment within the eligible recipe."} Give every copy block exactly one slot.`;
+${options.tonePreference ? `GROUND: the requester asked for a ${options.tonePreference.tone === 'dark' ? 'dark (navy) ground' : `light ground${options.tonePreference.ground ? ` (${options.tonePreference.ground})` : ''}`}; every concept uses it.\n\n` : ''}TASK: Return exactly three concepts. Use only eligible recipes. ${eligible.length > 1 ? "Use at least two different recipes." : "Vary the hero and surface treatment within the eligible recipe."} Give every copy block exactly one slot.`;
 }
 
 /** The concept a request falls back to for a recipe: best hero, texture where allowed, slots from the brief. */
@@ -382,6 +388,14 @@ export function solveConcepts(
     text[b.index] = b.text;
     scripts[b.index] = b.script;
   }
+  // ADR-236: every concept's ground, decided by the requester's words, then the hero's darkness;
+  // otherwise the light page. A recipe that falls back to another keeps the same decision.
+  const toned = (choice: ArtDirectionChoice): ArtDirectionChoice => {
+    const heroIndex = choice.recipe === 'cutout_speaker' ? choice.cutoutPhotoIndex : choice.heroPhotoIndex;
+    const hero = options.photos.find((p) => p.photoIndex === heroIndex) ?? options.photos[0];
+    const tone = resolveSurfaceTone({ requested: choice.params?.surfaceTone, preference: options.tonePreference, heroLuminance: hero?.quietLuminance });
+    return { ...choice, params: { ...choice.params, ...tone } };
+  };
   const solve = (choice: ArtDirectionChoice) =>
     solveRecipe({
       width: options.canvasWidth,
@@ -406,11 +420,11 @@ export function solveConcepts(
     // photo with no quiet region keeps the plate, on another photo); then the other recipes.
     const own = { ...defaultChoice(choice.recipe, options.photos, options.copyBlocks), slots: choice.slots, params: choice.params, conceptNote: choice.conceptNote };
     const tries = [choice, ...(own.heroPhotoIndex !== choice.heroPhotoIndex ? [own] : []),
-      ...eligible.filter((r) => r !== choice.recipe).map((r) => defaultChoice(r, options.photos, options.copyBlocks))];
+      ...eligible.filter((r) => r !== choice.recipe).map((r) => defaultChoice(r, options.photos, options.copyBlocks))].map(toned);
     // A concept whose hero would be enlarged past 1.5x is kept only when no sharp one can replace it.
     let soft: { layout: StudioLayoutV2; attempt: ArtDirectionChoice } | undefined;
-    for (const attempt of tries) {
-      if (attempt !== choice && kept.some((k) => k.recipe === attempt.recipe)) continue;
+    for (const [k, attempt] of tries.entries()) {
+      if (k > 0 && kept.some((taken) => taken.recipe === attempt.recipe)) continue;
       try {
         const layout = solve(attempt);
         if ((layout.photos?.length ?? 0) < requiredPhotoCount(options.photoSelection, options.photos.length))

@@ -67,7 +67,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_fade_report: {
     id: 'hero_fade_report',
     reference: 'example 3 (KAAE K-12 Pilot Study / Field Visit Report)',
-    summary: 'Full-bleed hero photo; a navy gradient fade over the bottom 40-50%; optionally a second photo blended into the fade; a two-colour title on the fade (white line + gold line), body text, a call-to-action pill.',
+    summary: 'Full-bleed hero photo; a gradient fade over the bottom 40-50%, to the light page (navy title and accent lines) or to navy (white line + gold line); optionally a second photo blended into the fade; body text, a call-to-action pill.',
     bestFor: 'report releases, studies, field visits, news with a strong scene photo',
     minPhotos: 1,
     texture: true,
@@ -100,7 +100,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   scrim_caption: {
     id: 'scrim_caption',
     reference: 'example 7 (event photo with bottom caption)',
-    summary: 'An untouched group or event photo; a bottom navy scrim; the caption on it and a short gold rule.',
+    summary: 'An untouched group or event photo; a bottom scrim rising from the light page (or navy); the caption on it and a short gold rule.',
     bestFor: 'meetings, visits, delegations, events where the people are the news',
     minPhotos: 1,
     texture: false,
@@ -122,7 +122,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   cutout_speaker: {
     id: 'cutout_speaker',
     reference: 'examples 4-5 (speaker cut-out on navy with rays)',
-    summary: 'A person cut out of their photo at the bottom corner, bleeding off the edge, on navy with a sunburst motif behind; the text block beside them.',
+    summary: 'A person cut out of their photo at the bottom corner, bleeding off the edge, on the light page (or navy) with a sunburst motif behind; the text block beside them.',
     bestFor: 'speakers, forums, webinars, interviews: one person is the news',
     minPhotos: 1,
     texture: false,

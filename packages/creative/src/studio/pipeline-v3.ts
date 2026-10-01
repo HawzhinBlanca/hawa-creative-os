@@ -2,6 +2,7 @@ import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { photoRecipeOf, HERO_SOFT_UPSCALE } from './layout-v2.js';
 import { artDirectionPrior } from './art-direction/prior.js';
+import { brandTones } from './art-direction/solver.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
 import { renderLayoutV2, measureWrappedLines, measureTextGeometry, balancedBoxWidths, admittedFontFace, findAdmittedFontFace, type RenderLayoutOptions } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
@@ -273,6 +274,22 @@ export function nearestPaletteColour(colour: string, palette: string[]): string 
   return best;
 }
 
+/**
+ * ADR-236: the palette colour a ground (a background, a panel, an overlay) snaps to. A palette may
+ * carry a neutral near-black ink for body text (KAAE's guideline sets its body text in black); a dark
+ * ground snaps to the brand's own darkest blue instead, never to the ink. Without a dark brand blue
+ * this is nearestPaletteColour.
+ */
+export function nearestGroundColour(colour: string, palette: string[]): string {
+  const near = nearestPaletteColour(colour, palette);
+  if (!near || palette.length < 2) return near;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(normalizeHex(near).slice(i, i + 2), 16));
+  const neutralInk = Math.max(r, g, b) - Math.min(r, g, b) < 16 && hexToLuminance(normalizeHex(near)) < 0.03;
+  if (!neutralInk) return near;
+  const { navy } = brandTones(palette);
+  return normalizeHex(navy) !== normalizeHex(near) && hexToLuminance(navy) < 0.2 ? navy : near;
+}
+
 const BANNED_ART_WORD = new RegExp(`\\b(?:${FORBIDDEN_ART_WORDS.join('|')})\\b`, 'i');
 /** Words that open a phrase placing or excluding something: "behind hero text", "no text". */
 const ART_PHRASE_OPENER = /\b(?:behind|under|beneath|below|above|over|around|near|beside|framing|for|with|without|no|avoiding|excluding|free of)\b/gi;
@@ -317,10 +334,10 @@ export function conformToHouseRules(
 ): StudioLayoutV2 {
   // Brand colours only: every colour QA checks is snapped to the nearest one in the palette.
   if (palette && palette.length) {
-    layout.background.color = nearestPaletteColour(layout.background.color, palette);
-    if (layout.art?.scrim) layout.art.scrim.color = nearestPaletteColour(layout.art.scrim.color, palette);
+    layout.background.color = nearestGroundColour(layout.background.color, palette);
+    if (layout.art?.scrim) layout.art.scrim.color = nearestGroundColour(layout.art.scrim.color, palette);
     for (const s of layout.shapes || []) {
-      s.color = nearestPaletteColour(s.color, palette);
+      s.color = s.role === 'panel' ? nearestGroundColour(s.color, palette) : nearestPaletteColour(s.color, palette);
       if (s.strokeColor) s.strokeColor = nearestPaletteColour(s.strokeColor, palette);
     }
     for (const tx of layout.text) tx.color = nearestPaletteColour(tx.color, palette);
@@ -860,13 +877,13 @@ export function prepareGeneratedLayoutV3(
 
 /** The brand palette applied to every colour of a layout, and nothing else (a solved recipe). */
 function conformColoursOnly(layout: StudioLayoutV2, palette: string[]): StudioLayoutV2 {
-  layout.background.color = nearestPaletteColour(layout.background.color, palette);
+  layout.background.color = nearestGroundColour(layout.background.color, palette);
   for (const s of layout.shapes || []) {
-    s.color = nearestPaletteColour(s.color, palette);
+    s.color = s.role === 'panel' ? nearestGroundColour(s.color, palette) : nearestPaletteColour(s.color, palette);
     if (s.strokeColor) s.strokeColor = nearestPaletteColour(s.strokeColor, palette);
     if (s.shadow) s.shadow.color = nearestPaletteColour(s.shadow.color, palette);
   }
-  for (const o of layout.overlays || []) o.color = nearestPaletteColour(o.color, palette);
+  for (const o of layout.overlays || []) o.color = nearestGroundColour(o.color, palette);
   for (const t of layout.text) {
     t.color = nearestPaletteColour(t.color, palette);
     if (t.accentColor) t.accentColor = nearestPaletteColour(t.accentColor, palette);
