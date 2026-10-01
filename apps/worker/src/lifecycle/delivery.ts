@@ -35,7 +35,7 @@ import { requestIdHeaders, withInvocationLogContext } from '../logging.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { RequestLifecycleApi } from './request-lifecycle.js';
 import { acceptedWorkerSecrets } from './worker-secrets.js';
-import { officeAlertKey, officeChatIdsFromEnv, officeRecipients } from './office-chats.js';
+import { officeAlertKey, officeAlertRoute, officeChatIdsFromEnv, officeRecipients } from './office-chats.js';
 
 /** A Core step's retry: from 2 s doubling to 30 s, for up to 10 minutes (as TaskWorkflow's steps). */
 export const PREPARE_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30000, maxRetryDuration: 10 * 60 * 1000 };
@@ -195,7 +195,8 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
       });
       if (sent.outcome === 'sent') filesSent++;
       else if (sent.outcome === 'uncertain') uncertain.push(file.filename);
-      else refused.push(`${file.filename} (${sent.error})`);
+      // ADR-240: a file recorded for the canary never reached anyone, so it is not delivered.
+      else refused.push(`${file.filename} (${sent.outcome === 'canary_sink' ? 'CANARY_SINK: recorded for the canary, not sent' : sent.error})`);
     }
     // The notice says what is known. A refused file leaves the delivery failed and the notice unsent,
     // as Core's own delivery did: the office follows up.
@@ -234,7 +235,7 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
       await ctx.send({
         v: 1,
         key: officeAlertKey(`${input.deliveryId}:failed-alert`, index, officeChat),
-        chatId: officeChat,
+        ...officeAlertRoute(officeChat, chatId),
         kind: 'text',
         text: composeDeliveryFailedAlert(input.taskId, chatId, 1, outcome.reason || 'delivery failed'),
         class: 'critical',

@@ -170,7 +170,12 @@ export type OfficePlan =
   /** ADR-200: a plain no (or "cancel") to "Send … now?": nothing is sent or decided. */
   | { kind: 'not-sent'; requestId: string }
   /** An answer to a question asked too long ago or under other rules: nothing is done. */
-  | { kind: 'lost-track' };
+  | { kind: 'lost-track' }
+  /**
+   * ADR-239: the member cancelled a request of their own in their own words. It is theirs as its
+   * requester: intake reads the words and withdraws it (ADR-230); the office turn answers nothing.
+   */
+  | { kind: 'requester-withdraw'; requestId: string };
 
 /** ADR-200: how the decision's draft was found. */
 export type TargetBasis = 'reply' | 'only' | 'discussion' | 'last-shown' | 'choice' | 'words' | 'model' | 'confirm';
@@ -577,10 +582,14 @@ export async function officeTelegramTurn(deps: OfficeTurnDeps, update: Record<st
         : { source: 'rules', consulted: Boolean(deps.model) };
     } else plan = planned;
     if (!plan) return null;
+    const ownCancel = await tx((trx) => ownRequestCancelled(trx, tenantId, message, plan!));
+    if (ownCancel) plan = { kind: 'requester-withdraw', requestId: ownCancel };
     const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
     receipt = await tx((trx) => recordTurn(trx, tenantId, { updateId: message.updateId, chatId: message.chatId,
       messageId: message.messageId, lang: requesterLang(message.text), plan, text: message.text.slice(0, 2000), reading }, hash));
   }
+  // ADR-239: recorded, so a replay hands the same words to intake whatever the queue holds by then.
+  if (receipt.plan.kind === 'requester-withdraw') return null;
   const outcome = await carryOut(deps, receipt);
   if (outcome.retry) return outcome.retry;
   const answer: OfficeTurnAnswer = { status: 200, extra: { lifecycleAction: 'chat-answer', chatId: message.chatId,
@@ -590,6 +599,23 @@ export async function officeTelegramTurn(deps: OfficeTurnDeps, update: Record<st
   await tx((trx) => extendTurn(trx, tenantId, message.updateId, { answer,
     ...(outcome.ask ? { ask: outcome.ask, askRules: OFFICE_TURN_RULES, askedAt: new Date().toISOString() } : {}) }));
   return answer;
+}
+
+/**
+ * ADR-239 (live 2026-10-01): the owner is an office member and a requester in one chat. "please cancel
+ * the Quality Assurance Workshop poster, it was only a test", about their own draft waiting for review,
+ * was taken as the office's rejection ("Rejected: … Nothing was sent to you."). Words that cancel a
+ * whole request (the rules' `task` rejection: "cancel it", "scrap this", "please cancel the … poster"),
+ * said in this message about a request this member asked for, are the requester's: the request id, so
+ * intake withdraws it as any requester's cancel (ADR-230). Rejecting words ("reject", "not approved")
+ * and approval stay the office's (ADR-040, ADR-200). An answer to the bot's question (kept words) is not
+ * handed over: intake would read only the answer.
+ */
+async function ownRequestCancelled(trx: Kysely<Database>, tenantId: string, m: OfficeMessage, plan: OfficePlan): Promise<string | null> {
+  if (plan.kind !== 'decide' || plan.intent !== 'reject' || plan.rejectionCategory !== 'task' || plan.words !== m.text) return null;
+  const row = (await sql<{ chat_id: string | null }>`SELECT chat_id FROM hawa.requests WHERE tenant_id = ${tenantId}::uuid
+    AND request_id = ${plan.requestId}::uuid AND owner = 'restate'`.execute(trx)).rows[0];
+  return row?.chat_id === m.chatId ? plan.requestId : null;
 }
 
 /** ADR-200: what the model is asked with, and what the rules alone would do when no reading comes. */
@@ -1068,8 +1094,9 @@ async function carryOutPlan(deps: OfficeTurnDeps, receipt: TurnReceipt): Promise
     }
   }
   if (plan.kind === 'ask-what') return { text: phrase(OFFICE_MESSAGES.whatToDo, { title }), ask: { kind: 'ask-what', requestId: plan.requestId, alertRev: plan.alertRev } };
-  // A confirmation is only ever asked, never planned: nothing to carry out.
-  if (plan.kind === 'ask-send') return { text: phrase(OFFICE_MESSAGES.lostTrack) };
+  // A confirmation is only ever asked, never planned: nothing to carry out. A requester's withdraw is
+  // intake's (ADR-239): officeTelegramTurn never carries it out.
+  if (plan.kind === 'ask-send' || plan.kind === 'requester-withdraw') return { text: phrase(OFFICE_MESSAGES.lostTrack) };
 
   // The draft the member answered must be the one still waiting; someone may have decided first. A
   // replay of this turn's own recorded decision is sent again as it was (the Desk's receipts answer it).

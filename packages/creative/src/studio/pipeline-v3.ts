@@ -2,9 +2,9 @@ import { applyContentBackground } from './background-planning.js';
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { photoRecipeOf, HERO_SOFT_UPSCALE } from './layout-v2.js';
-import { type RecipePreferenceContext, artDirectionPrior } from './art-direction/prior.js';
+import { type RecipePreferenceContext, artDirectionPrior, guidelinePrior, judgeClearMargin } from './art-direction/prior.js';
 import { brandTones } from './art-direction/solver.js';
-import { conformMarksToPageGrammar, conformTypeToPageGrammar, type PageGrammar } from './page-grammar.js';
+import { conformMarksToPageGrammar, conformTypeToPageGrammar, guidelineDeviations, type PageGrammar } from './page-grammar.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
 import { renderLayoutV2, measureWrappedLines, measureTextGeometry, balancedBoxWidths, admittedFontFace, findAdmittedFontFace, type RenderLayoutOptions } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
@@ -108,6 +108,13 @@ export interface PipelineV3CallOptions {
   subjects?: string[];
   /** Scope-checked loaded reference evidence; absent grants no style tie-break. */
   recipePreferences?: RecipePreferenceContext;
+  /**
+   * ADR-238: the client's page grammar. When set, the incumbent judge compares the best design
+   * composed from the grammar (one that passed hard QA) against the best one that was not, and the
+   * guideline prior keeps the composed one unless the judge prefers the other by a clear margin in
+   * both presentation orders and passes its canary.
+   */
+  pageGrammar?: PageGrammar;
 }
 
 /**
@@ -1802,7 +1809,12 @@ export interface WinnerSelectionV3 {
    * ADR-170: when the judge left two art-directed candidates undecided (a tie across the two orders,
    * or a pick that failed its canary), the house prior chose instead of the composite, and why.
    */
-  prior?: { basis: 'client_reference' | 'sharpness'; reason: string; instead: 'composite_after_tie' | 'composite_judge_unreliable' };
+  prior?: {
+    basis: 'client_reference' | 'sharpness' | 'guideline';
+    reason: string;
+    /** ADR-238 `judge_without_clear_margin`: the judge preferred the other, but not clearly in both orders. */
+    instead: 'composite_after_tie' | 'composite_judge_unreliable' | 'judge_without_clear_margin';
+  };
   /** The incumbent's match. Null when the challenger judged or no judge ran. */
   match: PairwiseMatchResult | null;
   /** The incumbent's canary run on `subject` — its pick, or the higher composite after a tie. */
@@ -1823,6 +1835,18 @@ export interface WinnerSelectionV3 {
     canaryUnavailable?: 'degraded_canary_identical_bytes';
     subject: RankedCandidateV3;
   };
+}
+
+/**
+ * ADR-238: the pair the judge sees for a client with a page grammar: the best-ranked design composed
+ * from the grammar against the best-ranked one that was not, in rank order. Without one of each, the
+ * top two as before.
+ */
+function guidelinePair(ranked: RankedCandidateV3[]): [RankedCandidateV3, RankedCandidateV3] {
+  const composed = ranked.find((c) => c.layout.composition);
+  const other = ranked.find((c) => !c.layout.composition);
+  if (!composed || !other) return [ranked[0], ranked[1]];
+  return ranked.indexOf(composed) < ranked.indexOf(other) ? [composed, other] : [other, composed];
 }
 
 /**
@@ -1880,7 +1904,7 @@ export async function selectWinnerV3(
     ...(isPlainBaseline(c.layout) ? { baseline: true } : {}),
   });
 
-  const [first, second] = ranked;
+  const [first, second] = options.pageGrammar ? guidelinePair(ranked) : ranked;
   const firstId = `candidate_${first.sourceIndex}`;
   const secondId = `candidate_${second.sourceIndex}`;
   const match = await comparePairWithOrderSwap(asJudgeInput(first, firstId), asJudgeInput(second, secondId), judgeOptions);
@@ -1909,6 +1933,30 @@ export async function selectWinnerV3(
   const canaryPassed = canaryMatch.winnerId === 'chosen';
   const canary = { passed: canaryPassed, match: canaryMatch, subject: tentative };
 
+  // ADR-238: for a client with a page grammar, the guideline prior goes first. The design it favours
+  // (composed from the grammar, else the one with fewer departures from it) stands unless the judge
+  // chose the other by a clear margin in both orders and then passed its canary.
+  if (options.pageGrammar) {
+    const grammar = options.pageGrammar;
+    const decision = guidelinePrior(first.layout, second.layout, {
+      a: guidelineDeviations(first.layout, grammar), b: guidelineDeviations(second.layout, grammar),
+    });
+    if (decision.winner) {
+      const favoured = decision.winner === 'a' ? first : second;
+      const other = favoured === first ? second : first;
+      const otherId = other === first ? firstId : secondId;
+      const overruled = judgePick === other && canaryPassed && judgeClearMargin(match, otherId);
+      if (!overruled && !(judgePick === favoured && canaryPassed)) {
+        const instead = !judgePick ? 'composite_after_tie' : !canaryPassed ? 'composite_judge_unreliable' : 'judge_without_clear_margin';
+        return { winner: favoured, runnerUp: other, decidedBy: 'art_direction_prior', match, canary,
+          judgeReliable: canaryPassed, protocol,
+          // The guideline decided against a judge that leaned the other way without a clear margin:
+          // that is the client's rule, not an uncertainty for a person to settle.
+          humanChoiceRecommended: instead !== 'judge_without_clear_margin',
+          prior: { basis: 'guideline', reason: decision.reason, instead } };
+      }
+    }
+  }
   // Where the judge did not decide, the review findings break the tie (ADR-157): a design a person
   // would have to query goes second. Otherwise the higher composite stands, as before.
   const [lead, next] = fewerFindingsFirst(first, second);

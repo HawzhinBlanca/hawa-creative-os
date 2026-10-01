@@ -28,7 +28,7 @@ import { withInvocationLogContext, log } from '../logging.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
 import type { OpenAutomaticEvent, OpenManualEvent, RequesterDecisionEvent, WithdrawEvent } from './request-lifecycle.js';
 import { TelegramSenderApi } from './telegram-sender.js';
-import { officeAlertKey } from './office-chats.js';
+import { officeAlertKey, officeAlertRoute } from './office-chats.js';
 import { ACCESS_MESSAGES, INBOX_MESSAGES, requesterLang, say, type RequesterLang } from '@hawa/integrations';
 
 /** Fields are only ever added, and only as optional (PHASE2_DESIGN.md section 4). */
@@ -268,8 +268,9 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
    */
   const alertOffice = (key: string) => {
     const alerts = done.officeAlerts?.length ? done.officeAlerts : done.officeAlert ? [done.officeAlert] : [];
+    // ADR-240: about the canary's chat, the alert is recorded in that chat instead of reaching the office.
     alerts.forEach((alert, index) => ctx.sendNotice({ v: 1, key: officeAlertKey(key, index, alert.chatId),
-      chatId: alert.chatId, kind: 'text', class: 'critical', text: alert.text }));
+      ...officeAlertRoute(alert.chatId, chatOfUpdate(update)), kind: 'text', class: 'critical', text: alert.text }));
   };
   {
     if (done.lifecycleAction === 'settle-later') {

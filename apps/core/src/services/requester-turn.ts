@@ -414,10 +414,13 @@ const CANCEL_FILLER = /^(?:ok(?:ay)?|no|nope|sorry|thanks?|thank\s+you|please|ac
  * ADR-230 addendum (live 2026-10-01 16:08Z, L17): why the requester cancels, said after it ("cancel the
  * Teacher Appreciation Day poster, it was only a test"): a test, a mistake, the event moved or called
  * off, plans changed, not needed any more. A closed list: a clause that asks for a change is not one.
+ * ADR-239 follow-up: "it was by mistake" and "I sent it by mistake" are mistakes too.
  */
 const CANCEL_REASON = new RegExp('^(?:(?:because|since|cause|cos)\\s+)?(?:sorry\\s+)?(?:' + [
   "(?:it|this|that)(?:'s|\\s+(?:was|is))\\s+(?:only\\s+|just\\s+)?(?:a\\s+)?(?:test|trial|mistake|an?\\s+error|error|the\\s+wrong\\s+one|wrong)",
-  '(?:it\\s+was\\s+)?(?:sent|opened|made|ordered)\\s+by\\s+(?:mistake|accident)', 'by\\s+(?:mistake|accident)', 'my\\s+(?:mistake|bad|fault)',
+  // ADR-239 follow-up (canary 2026-10-02): "it was by mistake", "I sent it by mistake", "it was sent by accident".
+  "(?:(?:it|this|that)(?:'s|\\s+(?:was|is))\\s+|(?:i|we)\\s+)?(?:(?:sent|opened|made|ordered|asked\\s+for)\\s+(?:(?:it|this|that)\\s+)?)?by\\s+(?:mistake|accident)",
+  'my\\s+(?:mistake|bad|fault)',
   '(?:only\\s+|just\\s+)?(?:a\\s+)?test(?:ing)?', 'wrong\\s+one',
   "(?:we|i|they)(?:'ve|\\s+have)?\\s+(?:postponed|cancel+ed|moved|delayed|changed|called\\s+off)\\s+(?:it|the\\s+(?:event|date|plans?|meeting|ceremony|party|conference|day))",
   '(?:the\\s+)?(?:event|meeting|ceremony|party|conference|celebration|day)\\s+(?:was|is|has\\s+been|got)\\s+(?:cancel+ed|postponed|called\\s+off|moved|delayed)',

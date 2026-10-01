@@ -54,3 +54,16 @@
   - The corpus run at `baffce10` already shows 109 regressions against the 2026-09-20 baseline, before this change.
   - This branch's plain mode is 160/200 against 161/200 at base. The one difference is a stored design that the new LOGO_CLEAR_SPACE refuses: an accent in the logo's clear space.
 - **Reference hash.** The reference hash changes, so in-flight KAAE runs refuse with `CLIENT_REFERENCE_CHANGED` after deploy.
+
+## Follow-up (2026-10-02, section 11 of ADR-238): selection, fidelity rule, cover clear space
+
+| File | This branch | Merge |
+|---|---|---|
+| `packages/creative/src/studio/pipeline-v3.ts` | imports `guidelinePrior`, `judgeClearMargin`, `guidelineDeviations`; `PipelineV3CallOptions.pageGrammar`; `WinnerSelectionV3.prior` basis `guideline`, instead `judge_without_clear_margin`; `guidelinePair()` before `selectWinnerV3`; in `selectWinnerV3` the pair is `guidelinePair(ranked)` when a grammar is set, and the guideline block runs before `fewerFindingsFirst` | If Codex changed `selectWinnerV3`, keep its body and re-apply the two insertions: the pair line, and the `if (options.pageGrammar)` block just before the ADR-157 findings tie-break. The brief-bound challenger is untouched. |
+| `packages/creative/src/studio/art-direction/prior.ts` | `basis` union adds `guideline`; new `guidelinePrior`, `GUIDELINE_CLEAR_MARGIN`, `judgeClearMargin` | Additive. |
+| `packages/creative/src/studio/page-grammar.ts` | new `guidelineDeviations`, `guidelineFidelityRule`; the composer's clear zone uses `{ clientOnly: cover }` | Additive. |
+| `packages/creative/src/studio/house-rules.ts` | `logoClearZone(logo, clientPx, { clientOnly })`; `usesGuidelineClearSpace(layout)` | Additive; existing callers unchanged. |
+| `validate-layout-v2.ts`, `hard-qa.ts`, `art-direction/logo-ground.ts` | the logo clear zone takes `clientOnly` for a composed cover | Re-apply on Codex's lines if they moved. |
+| `apps/core/src/services/design-studio/stages/v3.stage.ts` | `houseRulesFor(ctx)` replaces the three `ctx.artDirectionRules` spreads (judge, visual review context, refinement judge); `runJudgeStageV3` passes `pageGrammar` | Re-apply `houseRulesFor` wherever Codex's code passes `houseRules: ctx.artDirectionRules`. |
+
+**Desk handoff (Codex owns `apps/desk/**`).** `StudioJudgeNotice.tsx` explains `decidedBy: 'art_direction_prior'` as the house art-direction tie-break. When `stages.tournament.prior.basis === 'guideline'`, it should say the client's guideline decided. With `instead: 'judge_without_clear_margin'`, it should add that the judge leaned the other way without a clear margin. `humanChoiceRecommended` is false in that case.

@@ -16,6 +16,7 @@ import {
   type StudioJudgeProtocol,
   photoSelectionFromInstructions,
   imagePixelSize,
+  guidelineFidelityRule,
 } from '@hawa/creative';
 import type { StageContext, CandidateState, Concept, Archetype, MotifKind, CreativeBrief } from '../types.js';
 import { candidateRenderOptions } from './asset-inputs.js';
@@ -397,6 +398,16 @@ export async function runReviseStageV3(
   return { candidate: ranked[0].candidate, outcome, layout: outcome.layout };
 }
 
+/**
+ * The rules the judge, the visual review and the refinement judge weigh: the client's house
+ * art-direction rules (ADR-170) and, for a client with a page grammar, its guideline-fidelity rule
+ * (ADR-238), last so the house rules keep their R-numbers.
+ */
+export function houseRulesFor(ctx: Pick<StageContext, 'artDirectionRules' | 'pageGrammar'>): { houseRules?: string[] } {
+  const rules = [...(ctx.artDirectionRules ?? []), ...(ctx.pageGrammar ? [guidelineFidelityRule(ctx.pageGrammar)] : [])];
+  return rules.length ? { houseRules: rules } : {};
+}
+
 /** P07: the judge and its canary choose between the top two candidates. */
 export async function runJudgeStageV3(
   ctx: StageContext,
@@ -418,7 +429,7 @@ export async function runJudgeStageV3(
     judgeProtocol: judge.protocol,
     judgeBrief: judge.brief,
     // ADR-170: the client's house art-direction rules, which the judge weighs on photo briefs.
-    ...(ctx.artDirectionRules?.length ? { houseRules: ctx.artDirectionRules } : {}),
+    ...houseRulesFor(ctx),
     // ADR-170: the brief's subject, for the house prior when the judge leaves two recipes undecided.
     ...(judge.subjects?.length ? { subjects: judge.subjects } : {}),
     ...(ctx.exemplarRetrieval && ctx.exemplarPolicySha256 && typeof ctx.referencePack.clientId === 'string' ? { recipePreferences: {
@@ -426,6 +437,8 @@ export async function runJudgeStageV3(
       policySha256: ctx.exemplarPolicySha256, loadedIds: ctx.exemplarRetrieval.loadedIds,
       matches: ctx.exemplarRetrieval.matches,
     } } : {}),
+    // ADR-238: a client with a page grammar: its composed design stands unless the judge clearly prefers another.
+    ...(ctx.pageGrammar ? { pageGrammar: ctx.pageGrammar } : {}),
   });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;
@@ -454,7 +467,7 @@ function visualReviewContextFor(ctx: StageContext, brief: Partial<CreativeBrief>
   return {
     brief: judgeBriefForStageV3(ctx, brief),
     clientRules: [ctx.promotedRules, ctx.clientRules].filter((r) => typeof r === 'string' && r.trim()).join('\n\n'),
-    ...(ctx.artDirectionRules?.length ? { houseRules: ctx.artDirectionRules } : {}),
+    ...houseRulesFor(ctx),
     ...(ctx.clientProfile ? { clientProfile: ctx.clientProfile } : {}),
     ...(ctx.reference ? { reference: ctx.reference } : {}),
   };
@@ -604,7 +617,7 @@ export async function runVisualRefinementStageV3(
           inStudioSubstep(`review-judge/candidate-${stored.ordinal + 1}-round-${round}`, () => judgeRefinementV3(before, after, copy, {
             client: ctx.client, reference: ctx.reference, clientProfile: ctx.clientProfile, judgeBrief,
             renderOptions: candidateRenderOptions(ctx, current),
-            ...(ctx.artDirectionRules?.length ? { houseRules: ctx.artDirectionRules } : {}),
+            ...houseRulesFor(ctx),
           })));
       } catch (err) {
         if (!reviewMayContinue(err)) throw err;

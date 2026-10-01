@@ -63,12 +63,65 @@ export function sharpnessClass(upscale: number): 0 | 1 | 2 {
 export interface ArtDirectionPriorDecision {
   /** The candidate the prior prefers, or null when it sees no difference. */
   winner: 'a' | 'b' | null;
-  basis: 'client_reference' | 'sharpness' | null;
+  /** Client-scoped reference/gradient guideline evidence; no global subject preference. */
+  basis: 'client_reference' | 'sharpness' | 'guideline' | null;
   /** Why, in words the office can read. */
   reason: string;
 }
 
 type Candidate = Pick<StudioLayoutV2, 'artDirection'>;
+
+/**
+ * ADR-238: the guideline prior, for a client whose reference carries a page grammar (KAAE's 2025
+ * guideline). A design composed whole from the grammar is the guideline's own page or cover, so it
+ * is preferred over one that is not. Between two that are not, the one with fewer departures from
+ * the grammar (`deviations`, from page-grammar.ts guidelineDeviations) is preferred. The judge can
+ * still overrule it, but only by a clear margin in both presentation orders (see
+ * judgeClearMargin and selectWinnerV3).
+ */
+export function guidelinePrior(
+  a: Pick<StudioLayoutV2, 'composition'>,
+  b: Pick<StudioLayoutV2, 'composition'>,
+  deviations?: { a: string[]; b: string[] }
+): ArtDirectionPriorDecision {
+  const ca = Boolean(a.composition);
+  const cb = Boolean(b.composition);
+  if (ca !== cb) {
+    const winner = ca ? 'a' : 'b';
+    const kind = (ca ? a : b).composition!.grammar;
+    return { winner, basis: 'guideline', reason: `it is the client guideline's own ${kind}, composed from its page grammar` };
+  }
+  if (deviations && deviations.a.length !== deviations.b.length) {
+    const winner = deviations.a.length < deviations.b.length ? 'a' : 'b';
+    const loser = winner === 'a' ? deviations.b : deviations.a;
+    return { winner, basis: 'guideline', reason: `the other departs from the client guideline: ${loser.join('; ')}` };
+  }
+  return { winner: null, basis: null, reason: 'equally faithful to the client guideline' };
+}
+
+/**
+ * The share of the judge's votes (weighted on a photo brief) a candidate needs in each presentation
+ * order to overrule the guideline prior: four of five dimensions.
+ */
+export const GUIDELINE_CLEAR_MARGIN = 0.75;
+
+/** Whether the judge chose `candidateId` by a clear margin (GUIDELINE_CLEAR_MARGIN) in both orders. */
+export function judgeClearMargin(
+  match: {
+    orderAB: { candidateAId: string | number; winnerVotesA: number; winnerVotesB: number; weightedVotesA?: number; weightedVotesB?: number };
+    orderBA: { candidateAId: string | number; winnerVotesA: number; winnerVotesB: number; weightedVotesA?: number; weightedVotesB?: number };
+  },
+  candidateId: string | number
+): boolean {
+  const share = (o: typeof match.orderAB) => {
+    const asA = o.candidateAId === candidateId;
+    const [mine, theirs] = o.weightedVotesA !== undefined && o.weightedVotesB !== undefined
+      ? asA ? [o.weightedVotesA, o.weightedVotesB] : [o.weightedVotesB, o.weightedVotesA]
+      : asA ? [o.winnerVotesA, o.winnerVotesB] : [o.winnerVotesB, o.winnerVotesA];
+    return mine + theirs > 0 ? mine / (mine + theirs) : 0;
+  };
+  return share(match.orderAB) >= GUIDELINE_CLEAR_MARGIN && share(match.orderBA) >= GUIDELINE_CLEAR_MARGIN;
+}
 
 export function artDirectionPrior(a: Candidate, b: Candidate, subjects: readonly string[] | undefined, preferences?: RecipePreferenceContext): ArtDirectionPriorDecision {
   const ra = a.artDirection?.recipe;

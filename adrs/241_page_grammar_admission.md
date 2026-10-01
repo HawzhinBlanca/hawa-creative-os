@@ -1,7 +1,7 @@
-# ADR-239 — Validate optional client page grammar at reference admission
+# ADR-241 — Validate optional client page grammar at reference admission
 
 Date: 2026-10-02
-Status: implemented; focused connected source qualification passed; ADR238 integration pending
+Status: implemented; merged source qualified at dffe7a3a; latest-live reconciliation pending
 Requirements: FR-017, FR-023, FR-038
 Sources: docs/08_MEMORY_RAG_CLIENT_DNA.md, docs/07_MODEL_REGISTRY_AND_EVALUATION.md,
 docs/05_CREATIVE_ENGINE.md, plans/content-aware-design-2026-09-30/KAAE2025_INTEGRATION_REVIEW.md.
@@ -51,3 +51,11 @@ gradient can express the same inset effect by repeating the end colours; this
 convention keeps the parser, native shapes and renderer consistent without choosing
 a client style. Preserve typed metadata, original input hashes, explicit supplied-
 invalid refusal, scoped client palette and content-aware multiple-photo safeguards.
+
+
+## Identifier reconciliation — 2 October 2026
+
+Originally published as research ADR239 in8ca1fa4a/8e813a0e. Current production
+1e0616f0 carries the separately lead-assigned ADR239 for consent-preserving DNA saves
+and double-role replies. This admission decision is now ADR241; both histories remain
+valid for their dated sources. No runtime contract change follows from renumbering.

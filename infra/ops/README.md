@@ -40,6 +40,13 @@ old layout, rollback and verification are in `runbooks/PRODUCTION_RELEASE_DIRECT
 | Schema drill | `infra/backup/backup_restore_drill.sh` | `design.hawa.backup-restore-drill`: Sundays 04:00 | `hawa-backup-restore-drill.timer`: Sundays 04:00 |
 | Data drill | `infra/backup/restore_drill.sh` | `design.hawa.restore-drill`: the 1st, 05:00 | `hawa-restore-drill.timer`: the 1st, 05:00 |
 | Off-site copy | `infra/backup/offsite_copy.sh` | `design.hawa.offsite-copy`: 05:30 | `hawa-offsite-copy.timer`: 05:30 |
+| Live canary (ADR-240) | `infra/ops/live_canary.sh` | `design.hawa.live-canary`: 03:30, after the backup | `hawa-live-canary.timer`: 03:30, not caught up |
+
+The live canary plays a fixed conversation through the real Telegram request path as a chat no person
+can own (`scripts/live_canary.ts`; results in `~/.hawa/logs/canary/`). It holds the deploy lock
+(`infra/ops/deploy_lock.py`, which `deploy.sh --apply` also holds), skips a night during a deploy, above
+load 10 or until `HAWA_CANARY_CHAT_ID` is set in `.env.production`, and alerts the operator through
+`watchdog.sh --notify` when a night fails or two in a row are skipped.
 
 Logs go to `~/.hawa/logs/<launch agent label>.log` on both hosts. The settings the jobs need
 (`HAWA_BACKUP_ARCHIVE_DEST`, `HAWA_BACKUP_ARCHIVE_KEYFILE`, `HAWA_BACKUP_ARCHIVE_KEEP`,

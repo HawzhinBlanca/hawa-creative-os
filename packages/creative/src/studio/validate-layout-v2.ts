@@ -4,7 +4,7 @@ import { photoRecipeOf } from './layout-v2.js';
 import { photosMayOverlap } from './photo-cutout.js';
 import { recipePhotoMinimum } from './photo-selection.js';
 import { carrierOf, shapePaintsOver } from './art-direction/surfaces.js';
-import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast, isStoryFormat, getSafeZoneBox } from './house-rules.js';
+import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast, isStoryFormat, getSafeZoneBox, usesGuidelineClearSpace } from './house-rules.js';
 
 export interface ValidationReference {
   rules: {
@@ -640,8 +640,10 @@ export function validateLayoutV2(
   // Respect the stronger of the house rule and the client's stated minimum, in pixels or as a share
   // of the logo's height (ADR-238: KAAE's is the height of its K).
   const clientClearPx = clientLogoClearSpacePx(layout.logo, context.reference);
-  const cs = Math.max(HOUSE_RULES.logo.clearSpaceShareOfHeight * layout.logo.height, clientClearPx);
-  const logoClearSpace: Box = logoClearZone(layout.logo, clientClearPx);
+  // ADR-238: a cover composed from the client's guideline keeps the guideline's own clear space.
+  const clientOnly = usesGuidelineClearSpace(layout) && clientClearPx > 0;
+  const cs = clientOnly ? clientClearPx : Math.max(HOUSE_RULES.logo.clearSpaceShareOfHeight * layout.logo.height, clientClearPx);
+  const logoClearSpace: Box = logoClearZone(layout.logo, clientClearPx, { clientOnly });
 
   for (const t of layout.text) {
     if (boxesIntersect(t, logoClearSpace)) {

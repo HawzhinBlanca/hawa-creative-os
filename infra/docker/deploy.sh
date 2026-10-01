@@ -287,6 +287,13 @@ echo "=== Hawa Creative OS production deployment ($([[ $APPLY == 1 ]] && echo ap
 echo "Build stamp: ${HAWA_BUILD_COMMIT}"
 HOST_ROLE_RC=0; HOST_ROLE="$(hawa_host_role)" || HOST_ROLE_RC=$?
 refuse_inactive_host "$HOST_ROLE" "$HOST_ROLE_RC"
+# ADR-240: an applying deploy holds the deploy lock (infra/ops/deploy_lock.py) for its whole run, the
+# release's own run included (the lock is inherited). It waits for a nightly live canary in progress
+# (HAWA_DEPLOY_LOCK_WAIT seconds, 1800 by default), and the canary never starts while a deploy holds it.
+# The script runs again from the top under the lock.
+if [[ "$APPLY" == 1 && "${HAWA_DEPLOY_LOCK_HELD:-}" != 1 ]]; then
+  exec python3 "${ROOT_DIR}/infra/ops/deploy_lock.py" --wait "${HAWA_DEPLOY_LOCK_WAIT:-1800}" -- bash "${BASH_SOURCE[0]}" "$@"
+fi
 
 # 0. The release directory (ADR-158). Production never runs from the checkout this was started in (on
 # 2026-09-30 that was /Users/hawzhin/Hawdesign, on another tool's branch): the commit gets its own

@@ -351,7 +351,9 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
     ? { x: r((W - lw) / 2), y: safe.y + r(0.03 * H), width: lw, height: lh }
     : { x: cover && rtl ? contentX + contentW - lw : contentX, y: safe.y, width: lw, height: lh };
   const clearPx = Math.max(input.logoClearSpacePx ?? 0, (input.logoClearSpaceShare ?? 0) * lh);
-  const clear = logoClearZone(logo, clearPx);
+  // A cover keeps the guideline's own clear space (KAAE: the height of the K, p.4) rather than the
+  // house's half the logo's height, which set the cover's title far below its logo.
+  const clear = logoClearZone(logo, clearPx, { clientOnly: cover });
   const shapes: ShapeElement[] = [];
   const text: TextElement[] = [];
   const ornaments: OrnamentElement[] = [];
@@ -845,6 +847,50 @@ export function conformMarksToPageGrammar(layout: StudioLayoutV2, g: PageGrammar
     if (!blocked) layout.shapes.push(bar);
   }
   return layout;
+}
+
+/**
+ * ADR-238: where a design departs from the client's page grammar, in words: what the judge's and the
+ * visual review's guideline-fidelity rule names, and what the guideline prior counts.
+ * - a flat dark panel laid over a gradient cover (the guideline's cover has none);
+ * - a dark design with no gradient cover ground;
+ * - a light page without the header rule and its gold segment, the gold bar under its title, or the
+ *   gradient rule at its foot;
+ * - a Latin block outside the guideline's faces, or a Sorani block outside the admitted ones.
+ */
+export function guidelineDeviations(layout: StudioLayoutV2, g: PageGrammar, options: { arabicFonts?: string[] } = {}): string[] {
+  const out: string[] = [];
+  const has = (p: string) => layout.shapes.some((s) => s.primitive === p);
+  const area = layout.width * layout.height;
+  const dark = hexToLuminance(layout.background.color) < 0.2 || has('cover_ground');
+  if (dark) {
+    if (!has('cover_ground')) out.push('a dark design without the guideline cover\'s gradient ground');
+    const flat = layout.shapes.filter((s) => s.role === 'panel' && s.primitive !== 'cover_ground' && s.fill !== 'none' && !s.gradient &&
+      hexToLuminance(s.color) < 0.2 && s.width * s.height > 0.08 * area);
+    if (flat.length && has('cover_ground')) out.push('a flat dark panel on the gradient cover');
+  } else {
+    if (!has('header_rule') || !has('header_accent')) out.push('no header rule with its gold segment');
+    if (!has('title_bar')) out.push('no gold bar under the title');
+    if (!has('foot_rule')) out.push('no gradient rule at the foot');
+  }
+  const latinFaces = new Set([g.title.fontFamily, g.lead.fontFamily, g.body.fontFamily, g.header.label.fontFamily, g.stat.fontFamily, g.cover.subtitle.fontFamily]);
+  const offLatin = [...new Set(layout.text.filter((t) => !t.rtl && !latinFaces.has(t.fontFamily)).map((t) => t.fontFamily))];
+  if (offLatin.length) out.push(`a typeface outside the guideline (${offLatin.join(', ')})`);
+  if (options.arabicFonts?.length) {
+    const offArabic = [...new Set(layout.text.filter((t) => t.rtl && !options.arabicFonts!.includes(t.fontFamily)).map((t) => t.fontFamily))];
+    if (offArabic.length) out.push(`a Sorani typeface outside the admitted ones (${offArabic.join(', ')})`);
+  }
+  return out;
+}
+
+/**
+ * ADR-238: the guideline-fidelity rule the judge and the visual review read with the client's house
+ * rules, from its page grammar: a design that departs from the guideline counts against it. Within
+ * the judge's 240-character limit for one rule (MAX_JUDGE_HOUSE_RULE_CHARS).
+ */
+export function guidelineFidelityRule(g: PageGrammar): string {
+  const faces = [...new Set([g.title.fontFamily, g.lead.fontFamily, g.body.fontFamily])].join(', ');
+  return `Guideline fidelity (brand fit): count against a design a flat dark panel on the gradient cover; a page without the header rule and gold segment, the gold title bar or the foot rule; a face other than ${faces} or the Sorani sans.`;
 }
 
 /** The grammar in words, for the layout model's request (the system prompt names no client). */

@@ -1072,7 +1072,11 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
 
       const stages = typeof final.stages === 'string' ? JSON.parse(final.stages) : final.stages;
       expect(stages.tournament.pipeline).toBe('v3');
-      expect(stages.tournament.decidedBy).toBe('composite_after_tie');
+      // ADR-238 section 11: KAAE has a page grammar, so a judge that picks by position (a tie across
+      // the two orders) leaves the pair to the guideline prior, which keeps the composed guideline page.
+      expect(stages.tournament.decidedBy).toBe('art_direction_prior');
+      expect(stages.tournament.prior).toMatchObject({ basis: 'guideline', instead: 'composite_after_tie' });
+      expect(stages.tournament.humanChoiceRecommended).toBe(true);
       expect(stages.revise.pipeline).toBe('v3');
       // A judge that picks by position cannot pass a two-order canary.
       expect(final.judge_status).toBe('UNRELIABLE');
@@ -1101,6 +1105,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       ]);
       expect(concepts.slice(0, 2).map((c: any) => c.name)).toEqual(['Guideline page (details on a KAAE Blue card)', 'Guideline page (details on white cards)']);
       expect(candidates.filter((c: any) => c.status === 'winner')).toHaveLength(1);
+      expect(concepts[candidates.findIndex((c: any) => c.status === 'winner')].name).toMatch(/^Guideline page/);
       expect(final.winner_candidate_id).toBeTruthy();
       expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
     } finally {

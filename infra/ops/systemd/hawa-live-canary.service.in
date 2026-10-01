@@ -1,0 +1,21 @@
+# Rendered by infra/ops/install_systemd_units.sh (ADR-141); edit the template in infra/ops/systemd/, not the copy.
+[Unit]
+Description=Hawa nightly live canary of the Telegram request path (infra/ops/live_canary.sh, ADR-240)
+Documentation=file://@ROOT@/infra/ops/README.md
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@ROOT@
+Environment=HOME=@HOME@
+Environment=PATH=@PATH@
+# The canary's own settings are read from the deployed release's .env.production; this file only
+# carries the host role, as for the watchdog.
+EnvironmentFile=-@ENV_FILE@
+ExecStart=/bin/bash @ROOT@/infra/ops/live_canary.sh
+TimeoutStartSec=2h
+StandardOutput=append:@LOGS@/design.hawa.live-canary.log
+StandardError=append:@LOGS@/design.hawa.live-canary.log

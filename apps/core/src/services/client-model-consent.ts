@@ -80,6 +80,17 @@ function humanAdministrator(actor: ModelConsentActor): { tenantId: string; userI
   return { tenantId: actor.tenantId, userId, label: actor.actorId || userId };
 }
 
+/** The same identity rules, answered rather than thrown: null when the actor is not a human administrator. */
+function humanAdministratorOrNull(actor: ModelConsentActor) {
+  try { return humanAdministrator(actor); } catch (error) { if (error instanceof ModelConsentError) return null; throw error; }
+}
+
+/** Whether this person holds an active administrator membership of the tenant in Postgres (inside the caller's RLS context). */
+async function activeAdministrator(trx: Kysely<Database>, tenantId: string): Promise<boolean> {
+  return Boolean((await sql<{ ok: boolean }>`SELECT hawa.has_tenant_role(${tenantId}::uuid,
+    ARRAY['administrator']::hawa.membership_role[]) AS ok`.execute(trx)).rows[0]?.ok);
+}
+
 interface DnaRow { id: string; version: number; dna: Record<string, unknown>; content_hash: string; created_by: string | null; approved_by: string | null }
 const parsed = (dna: unknown) => (typeof dna === 'string' ? JSON.parse(dna) : dna) as Record<string, unknown>;
 const privacyOf = (dna: Record<string, unknown>) =>
@@ -112,9 +123,7 @@ export async function recordClientModelConsent(db: Kysely<Database>, clientRepo:
 
   const outcome = await withRlsContext(db, { ...scope, clientId: client }, async (trx) => {
     // The role the credential claims must also be an active membership of this person in Postgres.
-    const member = (await sql<{ ok: boolean }>`SELECT hawa.has_tenant_role(${admin.tenantId}::uuid,
-      ARRAY['administrator']::hawa.membership_role[]) AS ok`.execute(trx)).rows[0]?.ok;
-    if (!member) return fail(403, 'HUMAN_ADMINISTRATOR_REQUIRED', 'This person is not an active administrator of the office.');
+    if (!await activeAdministrator(trx, admin.tenantId)) return fail(403, 'HUMAN_ADMINISTRATOR_REQUIRED', 'This person is not an active administrator of the office.');
     const row = await trx.selectFrom('clients').select(['id', 'code', 'status']).where('tenant_id', '=', admin.tenantId)
       .where('id', '=', client).executeTakeFirst();
     if (!row || row.status !== 'active') return fail(404, 'CLIENT_NOT_FOUND', `Client '${clientRef}' is not an active client of this office.`);
@@ -179,4 +188,65 @@ export async function readClientModelConsent(db: Kysely<Database>, clientRepo: C
       privacy: dna ? privacyOf(dna) : null, commitMessage: typeof dna?.__commitMessage === 'string' ? dna.__commitMessage : null,
       clientPolicy: policy.model_egress_policy ?? null, modelReading: { openai: await egressAllowed(trx, actor.tenantId!, client) } };
   });
+}
+
+/**
+ * ADR-239: a DNA save keeps the client's model consent only when it is safe to. POST /dna, /snapshots
+ * and /dna/rollback used to save every new version with approved_by NULL, so egressAllowed() and voice
+ * admission closed for the client with no word to anyone. Now, when the version it supersedes was
+ * approved with a privacy block, the save is by a human administrator (the model-consent action's
+ * identity rules and an active membership in Postgres) and its privacy block is canonically identical,
+ * the new version is approved by that administrator, with an audit row. Any other save stays unapproved,
+ * and the caller tells the Desk so (`modelReadingAfterSave`).
+ */
+export type DnaSaveVia = 'dna' | 'snapshot' | 'rollback';
+export interface DnaSaveConsent { kept: boolean; reason: string | null }
+export interface DnaSaveParams {
+  tenantId: string; clientId: string; version: number; dna: Record<string, unknown>; contentHash: string;
+  createdBy: string | null; expectedVersion?: number; via: DnaSaveVia;
+}
+
+const NO_CONSENT = 'This client has no administrator-approved consent to model reading. An administrator records it with the model-consent action (ADR-234).';
+const NOT_ADMIN = 'Only an office administrator, signed in as a person, keeps the client\'s model consent when saving DNA. An administrator must record the consent again (ADR-234).';
+const PRIVACY_CHANGED = 'The privacy block changed in this save, so the client\'s model consent was not carried over. An administrator must record it again (ADR-234).';
+const VERSION_MOVED = 'The active DNA version changed during this save, so the client\'s model consent was not carried over.';
+
+export async function saveDnaVersionKeepingConsent(trx: Kysely<Database>, clientRepo: ClientRepository, actor: ModelConsentActor,
+  params: DnaSaveParams): Promise<{ saved: { id: string }; consent: DnaSaveConsent }> {
+  // The consent action's lock: a save and a consent change for one client never interleave.
+  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`client-dna:${params.tenantId}:${params.clientId}`}, 0))`.execute(trx);
+  const active = await activeRow(trx, params.tenantId, params.clientId);
+  const before = active?.approved_by && !isServiceUserId(active.approved_by) ? privacyOf(parsed(active.dna)) : null;
+  const admin = humanAdministratorOrNull(actor);
+  let reason: string | null = null;
+  if (!active || !before) reason = NO_CONSENT;
+  else if (active.version !== params.version - 1) reason = VERSION_MOVED;
+  else if (canonicalJson(privacyOf(params.dna)) !== canonicalJson(before)) reason = PRIVACY_CHANGED;
+  else if (!admin || admin.tenantId !== params.tenantId || !await activeAdministrator(trx, params.tenantId)) reason = NOT_ADMIN;
+  const kept = reason === null && Boolean(admin);
+  const saved = await clientRepo.saveDnaVersion({ tenantId: params.tenantId, clientId: params.clientId, version: params.version,
+    dna: params.dna, contentHash: params.contentHash, createdBy: params.createdBy, approvedBy: kept ? admin!.userId : null,
+    expectedVersion: params.expectedVersion }, trx) as { id: string };
+  if (kept) {
+    await sql`INSERT INTO hawa.audit_events (tenant_id, actor_type, actor_id, action, resource_type, resource_id, client_id,
+        reason, before_hash, after_hash, data)
+      VALUES (${params.tenantId}::uuid, 'user', ${admin!.userId}, 'client.model_consent.kept', 'client_dna_version', ${saved.id},
+        ${params.clientId}::uuid, ${`An administrator saved client DNA through ${params.via} with the privacy block unchanged`},
+        ${active!.content_hash}, ${params.contentHash},
+        ${JSON.stringify({ adr: 'ADR-239', via: params.via, fromVersion: active!.version, toVersion: params.version, privacy: before,
+          previousApprovedBy: active!.approved_by,
+          actor: { userId: admin!.userId, actorId: actor.actorId ?? null, authMethod: actor.authMethod ?? null, role: actor.role } })}::jsonb)`.execute(trx);
+  }
+  return { saved, consent: { kept, reason } };
+}
+
+/**
+ * What the readers see after a DNA save, through the real egressAllowed(): `{ openai: true }`, or
+ * `{ openai: false, reason }` for the Desk to show, so model reading never switches off unseen.
+ */
+export async function modelReadingAfterSave(db: Kysely<Database>, scope: { tenantId: string; userId: string; role: string },
+  clientId: string, consent: DnaSaveConsent): Promise<{ openai: boolean; reason?: string }> {
+  const openai = await withRlsContext(db, { ...scope, clientId }, (trx) => egressAllowed(trx, scope.tenantId, clientId));
+  if (openai) return { openai };
+  return { openai, reason: consent.reason ?? 'The client\'s recorded consent or its model policy does not admit OpenAI.' };
 }

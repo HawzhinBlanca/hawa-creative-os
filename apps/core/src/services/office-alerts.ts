@@ -3,7 +3,7 @@
  * G4): the Canva outcome route sends them, and so does the Telegram handler, through a same-name
  * binding left in app.ts until Telegram intake moves (G9).
  */
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, isReservedCanaryChatId } from '@hawa/contracts';
 import { withRlsContext } from '@hawa/db';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { log } from '../logging.js';
@@ -18,8 +18,11 @@ export function createOfficeAlerts({ db, outboxRepo }: Pick<CoreContext, 'db' | 
    */
   async function enqueueOfficeAlert(taskId: string, key: string, message: { text: string; parse_mode: 'HTML' }, requesterChat?: string): Promise<boolean> {
     const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
-    if (!db || !outboxRepo || !office || office === requesterChat) {
-      log.warn(`[office-alert] ${key}: not sent (${!db || !outboxRepo ? 'no database' : !office ? 'no office chat configured' : "the office chat is the requester's own"})`);
+    // ADR-240: nothing about the nightly canary's requests reaches the office.
+    const canary = isReservedCanaryChatId(requesterChat);
+    if (!db || !outboxRepo || !office || office === requesterChat || canary) {
+      log.warn(`[office-alert] ${key}: not sent (${!db || !outboxRepo ? 'no database' : !office ? 'no office chat configured'
+        : canary ? 'the request is the nightly canary\'s' : "the office chat is the requester's own"})`);
       return false;
     }
     const outbox = outboxRepo;

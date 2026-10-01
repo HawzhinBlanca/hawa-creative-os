@@ -78,8 +78,9 @@ describe('D5 addendum: the office sees the draft it is asked to review', () => {
     expect(caption).toContain(`For ${clientName}`);
     expect(caption).toContain(`Edit in Canva: https://www.canva.com/design/${designId}/edit`);
     // ADR-180: office members approve in Telegram (ADR-040 addendum), so the caption says how, in plain
-    // words, in English and Sorani: reply to the picture with "approved", or say what to change.
-    expect(caption).toContain('Reply to this picture with “approved” to send it to the requester, or say what to change. You can also decide in Hawa Desk.');
+    // words, in English and Sorani. ADR-239 (changed deliberately): plain chat, no reply target.
+    expect(caption).toContain('Just say “approved” to send it to the requester, or tell me what to change. You can also decide in Hawa Desk.');
+    expect(caption).not.toMatch(/reply to/i);
     expect(caption).toContain('«پەسەندە»');
     expect(caption).not.toContain('office computer');
     expect(caption).not.toContain('127.0.0.1');
@@ -88,7 +89,7 @@ describe('D5 addendum: the office sees the draft it is asked to review', () => {
     // Telegram needs the picture: it still says where approval happens.
     const text = result.officeAlerts![0].text;
     expect(text).toContain('Hawa Desk on the office computer');
-    expect(text).not.toContain('Reply to this picture');
+    expect(text).not.toContain('Just say “approved”');
     expect(result.officeAlerts).toEqual(OFFICE.map((chatId) => ({ chatId, text })));
     expect(result.officeAlert).toEqual(result.officeAlerts![0]);
   });

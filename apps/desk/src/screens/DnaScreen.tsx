@@ -3,6 +3,8 @@ import { extractPaletteFromFile, type ExtractedPalette } from '../services/palet
 import { apiClient } from '../api/client.js';
 import {LearningEvidencePanel,learningEvidenceFromCore,type LearningEvidence} from '../components/LearningEvidencePanel.js';
 import { DocumentInspectionPanel } from '../components/DocumentInspectionPanel.js';
+import { ClientModelConsentPanel } from '../components/ClientModelConsentPanel.js';
+import type { ClientModelReading } from '../api/client.js';
 import { read, reasonOf } from '../services/statusReport.js';
 
 import { readClientDirectory, type ClientSummary } from '../services/clientDirectory.js';
@@ -65,6 +67,7 @@ export interface ClientDNA {
     autoApprovalEligibleTemplates: string[];
   };
   updatedAt: string;
+  modelReading?: ClientModelReading;
 }
 
 export interface ClientDnaSnapshot {
@@ -76,6 +79,7 @@ export interface ClientDnaSnapshot {
   createdBy: string;
   createdAt: string;
   dna: ClientDNA;
+  modelReading?: ClientModelReading;
 }
 
 // WCAG Contrast Helper
@@ -225,6 +229,8 @@ const DnaClientScreen: React.FC<{
   const [undoPalette, setUndoPalette] = useState<{ dna: ClientDNA; expectedVersion: number } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [modelReading, setModelReading] = useState<ClientModelReading | undefined>();
+  const [reviewConsent, setReviewConsent] = useState(false);
   // Sections Core has not answered for, with the reason. An unread section shows as unknown, never as empty.
   const [unread, setUnread] = useState<Partial<Record<DnaSection, string>>>(NOT_READ_YET);
   const markRead = (section: DnaSection, reason?: string) =>
@@ -321,8 +327,11 @@ const DnaClientScreen: React.FC<{
   const saveDnaChanges = async (updatedDna: ClientDNA, successMessage: string, undo?: ClientDNA): Promise<boolean> => {
     setLoading(true);
     try {
-      const saved: ClientDNA = await apiClient.clients.saveDna(updatedDna.clientId, updatedDna);
+      const { modelReading: _status, ...body } = updatedDna;
+      const saved: ClientDNA = await apiClient.clients.saveDna(updatedDna.clientId, body);
       setCurrentDna(saved);
+      setModelReading(saved.modelReading);
+      setReviewConsent(false);
       setUndoPalette(undo ? { dna: undo, expectedVersion: saved.version } : null);
       setSaveSuccess(successMessage);
       loadClientDirectory();
@@ -596,6 +605,8 @@ const DnaClientScreen: React.FC<{
         createdBy: snapshotAuthor,
       });
       setSnapshots((prev) => [snap, ...prev]);
+      setModelReading(snap.modelReading);
+      setReviewConsent(false);
       setCurrentDna((prev) => (prev ? { ...prev, version: snap.version } : null));
       setShowSnapshotModal(false);
       setSnapshotMessage('');
@@ -788,6 +799,21 @@ const DnaClientScreen: React.FC<{
               }}>Undo color removal</button>}
             </div>
           )}
+
+          {modelReading?.openai === false && <div className="finding" role="alert" style={{ marginBottom: 16 }}>
+            <b>Model reading is now off for this client</b>
+            <p>{modelReading.reason || 'Core did not admit OpenAI reading after this save.'}</p>
+          </div>}
+          {currentDna && <button className="btn" disabled={loading || isCommittingSnapshot}
+            onClick={() => setReviewConsent(value => !value)} aria-expanded={reviewConsent}>
+            {reviewConsent ? 'Close consent review' : 'Review model consent'}
+          </button>}
+          {reviewConsent && currentDna && <ClientModelConsentPanel clientId={selectedClientId} onRecorded={async () => {
+            setModelReading(undefined);
+            setUndoPalette(null);
+            await loadClientData(selectedClientId);
+            await loadClientDirectory();
+          }} />}
 
           {errorNotice && (
             <div className="finding" style={{ borderColor: '#e12d39', background: '#fef2f2', marginBottom: 16 }}>

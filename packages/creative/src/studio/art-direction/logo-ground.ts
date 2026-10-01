@@ -2,7 +2,7 @@ import { protectedRegionsOnCanvas, type SourceRegion, type RegionStatus } from '
 import { PNG } from 'pngjs';
 import type { Box, LogoGroundRecord, OverlayElement, ShapeElement, StudioLayoutV2 } from '../layout-v2.js';
 import { photoRecipeOf } from '../layout-v2.js';
-import { getSafeZoneBox, logoClearZone } from '../house-rules.js';
+import { getSafeZoneBox, logoClearZone, usesGuidelineClearSpace } from '../house-rules.js';
 import { brandTones } from './solver.js';
 import { calculateLuminanceContrastRatio, rgbToLuminance } from '../composite-contrast.js';
 import { coverCrop } from '../photo-crop.js';
@@ -68,9 +68,9 @@ export const LOGO_TAB_MAX_PAD_SHARE = 0.4;
  * navy square of 2026-09-30 filled exactly that box). A card or plate the logo sits on is the design's
  * surface, not a backing: only a tab holding the logo and a radial scrim under it count.
  */
-export function logoBackingExcess(layout: Pick<StudioLayoutV2, 'logo' | 'shapes' | 'overlays'>, clearSpacePx = 0): number {
+export function logoBackingExcess(layout: Pick<StudioLayoutV2, 'logo' | 'shapes' | 'overlays'> & Partial<Pick<StudioLayoutV2, 'composition'>>, clearSpacePx = 0): number {
   if (!layout.logo) return 0;
-  const clear = logoClearZone(layout.logo, clearSpacePx);
+  const clear = logoClearZone(layout.logo, clearSpacePx, { clientOnly: usesGuidelineClearSpace(layout) });
   const pad = Math.min(clear.x < layout.logo.x ? layout.logo.x - clear.x : 0, LOGO_TAB_MAX_PAD_SHARE * layout.logo.height);
   const thin = { x: layout.logo.x - pad, y: layout.logo.y - pad, width: layout.logo.width + 2 * pad, height: layout.logo.height + 2 * pad };
   const backings: Array<[Box, Box]> = [

@@ -1,0 +1,37 @@
+# ADR-242 — Bind preserved model consent audits to the actual version pair
+
+Date: 2026-10-02
+Status: implementation and connected qualification in progress
+Requirements: FR-054, FR-066, NFR-006, NFR-007
+Sources: MASTER_SPEC.md invariants7–9; docs/14_SECURITY_THREAT_MODEL.md;
+docs/18_FEEDBACK_LEARNING.md; ADR226/forward081; live ADR239.
+
+## Evidence
+
+Integrating live1e0616f0 with research8e813a0e reproduces three real API failures:
+administrator DNA save, snapshot and rollback return500 because the new
+`client.model_consent.kept` audit lacks purpose-specific INSERT authority.
+Eight connected files:129 passed/3 failed; original receipt retained. The existing
+grant/withdraw policies must remain intact; tenant-only INSERT would bypass them.
+
+## Decision
+
+Add forward082, leaving applied migrations unchanged. A kept-consent audit requires
+the current enabled administrator, human actor, exact tenant/client, no task,
+the actual new active DNA row approved/created by that actor, and the directly
+preceding superseded approved human version. Both privacy objects must agree.
+Resource ID, before/after hashes, version numbers, prior approver and recorded
+privacy/actor data must name those exact rows. Permit only the three known save
+routes. A restrictive policy also prevents an existing task policy bypass.
+
+Service identities are not human approvers. The save helper reports missing prior
+human consent rather than attempting to preserve service-issued approval. No new
+provider permission, automatic consent grant, migration rewrite or actor substitution.
+
+## Acceptance
+
+The three actual routes succeed under hawa_app with matching audits. Direct actual
+RLS controls refuse wrong actor/client/hash/version/privacy, absent prior approval,
+service approval, changed privacy and task-policy bypass. Existing grant/withdraw,
+tenant/client isolation and worker-role restrictions remain. Full qualification and
+production-data migration validation are separate gates; no production write here.

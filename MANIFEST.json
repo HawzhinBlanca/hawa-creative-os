@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T22:40:56Z",
+  "generatedAt": "2026-10-01T23:10:02Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 860,
+  "fileCount": 867,
   "files": [
     {
       "path": ".dockerignore",
@@ -1164,13 +1164,28 @@
     },
     {
       "path": "adrs/238_kaae_2025_guideline.md",
-      "sha256": "0d16beb07008b309bf63c8ca8de484660edcbfc12b825b23990260328b15570f",
-      "bytes": 18222
+      "sha256": "eedcf85bf56d32263f513b528de8f9ab99300bfdbd547fced1f58770562393ff",
+      "bytes": 22915
     },
     {
-      "path": "adrs/239_page_grammar_admission.md",
-      "sha256": "7dd560314f0e6300bff58374ac8934b031a6066a9b872b7096c4ff4257476eef",
-      "bytes": 3422
+      "path": "adrs/239_consent_preserving_dna_saves_and_double_role_replies.md",
+      "sha256": "7e0210e99a3ca25b484dd7ce981fe4b0ade6beae878f09de9a269299c8a020bb",
+      "bytes": 17193
+    },
+    {
+      "path": "adrs/240_nightly_live_canary.md",
+      "sha256": "99d941961ebbf74b646473ca23af3cc3156dc27713355e693942dbdd1ff312af",
+      "bytes": 16290
+    },
+    {
+      "path": "adrs/241_page_grammar_admission.md",
+      "sha256": "8f2b1c744691624ff4415e0300dc6ef29bbb94229f5447e9241031ae8047a8db",
+      "bytes": 3807
+    },
+    {
+      "path": "adrs/242_kept_model_consent_audit_authority.md",
+      "sha256": "1e9eb9dca1256f08bc34e17a9c79d0a280bfb96925c919683bd9ae8eb53e4af0",
+      "bytes": 2002
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1678,6 +1693,11 @@
       "bytes": 2187
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/LIVE1E_INTEGRATION_PROOF.json",
+      "sha256": "cd6d45d850cf088d96494883064af5303c18ab60bbf47e0952f243b5449da5dc",
+      "bytes": 4564
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/LIVE_LANE_INVENTORY.json",
       "sha256": "3c634eebf6e501c07f343ed9de2c706a145040dad645aff10385df04afd14d84",
       "bytes": 2542
@@ -2154,8 +2174,8 @@
     },
     {
       "path": "plans/kaae-2025-guideline/CODEX_MERGE_NOTE.md",
-      "sha256": "7d4e305924e9abc846589bec64e066b4fff5efb11b4e1047f7f4cad44c363929",
-      "bytes": 9237
+      "sha256": "40264220e43863e5ef1614eb12aaf26be9d6f2cdcdf619f3aea8275ffc76682b",
+      "bytes": 11459
     },
     {
       "path": "plans/kaae-2025-guideline/INVENTORY.md",
@@ -2164,8 +2184,8 @@
     },
     {
       "path": "plans/kaae-2025-guideline/LIVE_PROOF.json",
-      "sha256": "f8903e68bcdfd1a7936b185e81041c77ca23ec97840cbd2326935b3a63e090c7",
-      "bytes": 13769
+      "sha256": "ca734a3f90a7249a30288e32b280e0aff39e07534a502523e4a64f1b28aaf5f9",
+      "bytes": 16295
     },
     {
       "path": "plans/kaae-2025-guideline/apply-kaae-dna-2025.sh",
@@ -2389,8 +2409,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "6ab6bc12f3b07612c25e5fd0181c2c07cad2fef19c0b44117e54901e6ed7903e",
-      "bytes": 74268
+      "sha256": "3c9f55e4469694a2edc61391e6447bf5deffa21a0a267a260221ad404470deb8",
+      "bytes": 74492
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -3349,8 +3369,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "82c8f1bf997c9826449e8327adc459293fe0f34e9383e445a2b6d01c99e907e0",
-      "bytes": 815984
+      "sha256": "b31a504ecc5aeb4bb76421050977baed0e1a785fb3a07dd3e31ad96694fa902c",
+      "bytes": 824637
     },
     {
       "path": "plans/user-stories.csv",
@@ -3833,6 +3853,16 @@
       "bytes": 3773
     },
     {
+      "path": "scripts/live_canary.ts",
+      "sha256": "3bfb49174ea3c16dd514df9f88f00843d90fe3f4266596bdcddcac43f87619f0",
+      "bytes": 12919
+    },
+    {
+      "path": "scripts/live_canary_lib.ts",
+      "sha256": "573ba59fc80f618a428a6a1b69099ab86acb9b0a29e7252043df406192a15eb6",
+      "bytes": 25839
+    },
+    {
       "path": "scripts/load/desk-tab.ts",
       "sha256": "1274f79ffdf0e6f9628eba34c64fdb011f4c080236a78e33eeee44dc5ae96a55",
       "bytes": 12966
@@ -4191,6 +4221,11 @@
       "path": "scripts/test/lint-provider-egress.test.ts",
       "sha256": "56f1cb9f80459559e2bba7fe70c8a123076b5ebe9b5f9e24559e6a2b2ae63401",
       "bytes": 1910
+    },
+    {
+      "path": "scripts/test/live-canary.test.ts",
+      "sha256": "e999efe517822096f320769aeb7e9fe751e4f41e38e4759a4e7fc6b306e1f9e6",
+      "bytes": 13677
     },
     {
       "path": "scripts/test/nginx-reload.test.ts",

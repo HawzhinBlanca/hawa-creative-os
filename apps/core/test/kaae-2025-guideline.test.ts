@@ -18,13 +18,15 @@ import {
   studioReferenceFromRaw,
   tonePreferenceFromWords,
   pageGrammarFromRaw,
+  guidelineFidelityRule,
+  JUDGE_DIMENSIONS,
   PNG,
   logoClearZone,
   type StudioLayoutV2,
 } from '@hawa/creative';
 import { kaaeClientDNA } from '@hawa/domain';
 import type { CandidateState, CreativeBrief, StageContext } from '../src/services/design-studio/types.js';
-import { runLayoutsStage, runRenderStage, rankStudioCandidatesV3, layoutBriefV3 } from '../src/services/design-studio/stages/index.js';
+import { runLayoutsStage, runRenderStage, rankStudioCandidatesV3, layoutBriefV3, runJudgeStageV3, houseRulesFor } from '../src/services/design-studio/stages/index.js';
 import { requestedBackgroundFor } from '../src/services/design-studio/stages/brief.stage.js';
 import { paletteFallbacksOf } from '../src/services/client-design-reference.js';
 import { packagedAdmittedDisplayFonts } from '../src/services/design-studio/design-studio-service.js';
@@ -399,4 +401,41 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
     expect(fade.hardQa?.passed, fade.hardQa?.messages.join(' | ')).toBe(true);
     save('photo-report-dark_hero_fade_report', fade.layout, REPORT_COPY, [{ bytes: reportPhoto.bytes, mediaType: reportPhoto.mimeType }]);
   }, 240000);
+});
+
+describe('ADR-238 follow-up: the guideline decides the cover unless the judge clearly prefers another', () => {
+  /** Five votes, `votesA` of them to the design shown as A. */
+  const verdict = (votesA: number) => ({
+    dimensions: Object.fromEntries(JUDGE_DIMENSIONS.map((d, i) => [d, { winner: i < votesA ? 'A' : 'B', rationale: 'r' }])),
+    majorityWinner: votesA >= 3 ? 'A' : 'B', summary: 's',
+  });
+
+  it('gives the judge, the visual review and the refinement judge the guideline-fidelity rule after the house rules', () => {
+    const rules = artDirectionRulesFromRaw(REFERENCE);
+    expect(houseRulesFor({ artDirectionRules: rules, pageGrammar: GRAMMAR }).houseRules).toEqual([...rules, guidelineFidelityRule(GRAMMAR)]);
+    expect(houseRulesFor({ artDirectionRules: rules })).toEqual({ houseRules: rules });
+    expect(houseRulesFor({})).toEqual({});
+  });
+
+  it('the judge stage keeps the composed navy cover of an evening invitation against a judge that prefers the model\'s by three votes of five', async () => {
+    const { ctx, ranked } = await typographicRun(GALA_COPY, GALA_ROLES, 'An evening invitation for the gala dinner, dark navy.', GALA_ANSWER);
+    const eligible = ranked.filter((r) => r.hardQa?.passed);
+    const composedFirst = eligible.findIndex((r) => r.layout.composition) < eligible.findIndex((r) => !r.layout.composition);
+    expect(eligible.some((r) => !r.layout.composition)).toBe(true);
+    // The judge prefers the model's design 3-2 in both orders, then passes its canary.
+    const plan = composedFirst ? [verdict(2), verdict(3), verdict(5), verdict(0)] : [verdict(3), verdict(2), verdict(5), verdict(0)];
+    const requests: any[] = [];
+    const judge = { createStructuredCompletion: async (req: any) => {
+      requests.push(req);
+      const data = plan[requests.length - 1];
+      return { data, rawText: JSON.stringify(data), receipt: { ...RECEIPT, model: 'gpt-4.1-mini' } };
+    } };
+    const { selection, winner } = await runJudgeStageV3({ ...ctx, client: judge as any }, ranked.map((r) => r.candidate));
+    expect(requests).toHaveLength(4);
+    expect(requests[0].messages[0].content).toContain(JSON.stringify(guidelineFidelityRule(GRAMMAR)));
+    expect(selection.decidedBy).toBe('art_direction_prior');
+    expect(selection.prior).toMatchObject({ basis: 'guideline', instead: 'judge_without_clear_margin' });
+    expect(selection.humanChoiceRecommended).toBe(false);
+    expect(ranked.find((r) => r.candidate === winner)!.layout.composition?.grammar).toBe('cover');
+  }, 120000);
 });

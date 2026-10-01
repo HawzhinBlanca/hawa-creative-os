@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-02",
+  "status": "CONNECTED_PASS_FULL_QUALIFICATION_PENDING",
+  "researchParent": "8e813a0e33485c946b753142743e406adbfd28f1",
+  "productionParent": "1e0616f083f20aafdd633b58d5dd6b7e577598b1",
+  "requirements": [
+    "FR-054",
+    "FR-066",
+    "NFR-006",
+    "NFR-007"
+  ],
+  "connected": {
+    "files": 7,
+    "passed": 90,
+    "failed": 0,
+    "skipped": 0
+  },
+  "strictTestRoots": 733,
+  "strictTypecheck": "PASS",
+  "fullSourceGatePassed": false,
+  "productionChanges": false,
+  "admissionQualified": false,
+  "migration": "082_kept_model_consent_audit_authority.sql",
+  "repairs": [
+    "Real merged DNA-save/snapshot/rollback RLS audit failures reproduced and fixed with purpose-bound forward policy.",
+    "Service-approved prior DNA cannot establish carried human consent.",
+    "Desk explains actual off status, administrator explicit decision/reason/version, exact unchanged replay after uncertain transport, stale conflict requires current read.",
+    "Client guideline prior and scoped reference prior both retained, explicit background/photo/source/hard-QA guards preserved.",
+    "Research grammar ADR239 renamed ADR241; live consent ADR239 retained."
+  ],
+  "originalFailures": {
+    "connected": {
+      "passed": 129,
+      "failed": 3
+    },
+    "positiveAuditReturningSelectFixture": {
+      "passed": 39,
+      "failed": 1
+    },
+    "singleColorRemovalFixture": {
+      "passed": 56,
+      "failed": 1
+    },
+    "coldLazyImportHarness": {
+      "passed": 89,
+      "failed": 1
+    },
+    "sandbox": {
+      "deskTests": "EPERM isolated test port",
+      "typecheck": "EPERM tsx local IPC"
+    }
+  },
+  "logs": {
+    "connected": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-connected.log",
+      "sha256": "d2c00cfa2b9a0607fb53f557a0e07263fe34a977dcb508615032bb7546264098"
+    },
+    "consent-repair": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-consent-repair.log",
+      "sha256": "45687ace2ba572da099e8fec4d7b2512e499854068daef2cbfcc7311d0e8ac76"
+    },
+    "consent-repair2": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-consent-repair2.log",
+      "sha256": "4677639a09c5257135e9b04acbd7c7ab58ac066d493f3dc1dc927aa9c8b2c80d"
+    },
+    "desk-consent": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-desk-consent.log",
+      "sha256": "25f295081a2c44951175e452f6fee38947848e16b3bddd3922495fc5887e03a1"
+    },
+    "desk-consent2": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-desk-consent2.log",
+      "sha256": "b957c94b5ddb84f0b019f2da9d161a281cd080f1d3d28707edc363ecbc1026ca"
+    },
+    "consent-connected": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-consent-connected.log",
+      "sha256": "7a4302f1a6a7d7d4bc2ff14c5f0292acfdd5ec034f05f96ecb8bb72752f16739"
+    },
+    "consent-connected2": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-consent-connected2.log",
+      "sha256": "abf54a47d89e2d65e50e4e81b95b6b8c688854532eafa08dd370135d0a65f5cc"
+    },
+    "typecheck": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-typecheck.log",
+      "sha256": "759989eec5f909e938767d2f98b56d2903f8fe0b762a4229111d61b3f85de55e"
+    },
+    "typecheck2": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-typecheck2.log",
+      "sha256": "bafd04bc28f1c2f9994c42f81d54ea4ac7ca67f8e66b31bff0c79c48f1462e9b"
+    },
+    "provision": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-provision.log",
+      "sha256": "692c166abe03c0939680b52bb333f9149d947ff323e2d8d3fd067445ed63e2f9"
+    },
+    "build": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "desk-build": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-desk-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "open": [
+    "Clean combined full release qualification.",
+    "Production-data migration validation has no transfer authorization.",
+    "Deployment of combined source and actual candidate receipt.",
+    "Native Canva save/edit/reopen/export and Sorani/Arabic reading.",
+    "Independent human visual-quality review and real team pilot.",
+    "Actual publication and separate-host recovery."
+  ]
+}

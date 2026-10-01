@@ -60,10 +60,11 @@ describe('the office draft photo alert (ADR-180)', () => {
     expect(caption).not.toContain('KAAE: ');
   });
 
-  it('says, in plain words and in English and Sorani, that a reply of "approved" sends it, or what to change, or Hawa Desk', () => {
+  it('says, in plain words and in English and Sorani, that "approved" sends it, or what to change, or Hawa Desk', () => {
     const caption = composeOfficeDraftAlert({ ...base, requestedBy: 'Shilan', telegramDecision: true });
     const lines = caption.split('\n');
-    expect(lines.at(-2)).toBe('Reply to this picture with “approved” to send it to Shilan, or say what to change. You can also decide in Hawa Desk.');
+    // ADR-239 (changed deliberately): plain chat, no reply target.
+    expect(lines.at(-2)).toBe('Just say “approved” to send it to Shilan, or tell me what to change. You can also decide in Hawa Desk.');
     expect(lines.at(-1)).toContain('«پەسەندە»');
     expect(lines.at(-1)).toContain('Shilan');
     expect(caption).not.toMatch(/office computer|(?:^|\s)\/[a-z_]{2,}/m);
@@ -74,7 +75,7 @@ describe('the office draft photo alert (ADR-180)', () => {
   it('without the picture (the text alert), approval stays in Hawa Desk', () => {
     const text = composeOfficeDraftAlert(base);
     expect(text).toContain('Approve or send it back in Hawa Desk on the office computer.');
-    expect(text).not.toContain('Reply to this picture');
+    expect(text).not.toContain('Just say “approved”');
   });
 });
 
