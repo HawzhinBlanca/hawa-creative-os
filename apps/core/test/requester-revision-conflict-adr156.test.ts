@@ -89,6 +89,7 @@ describe('a round that could not start still gets an answer (audit P2)', () => {
     expect(answer).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer',
       chatAnswer: { text: ROUTING_MESSAGES.forwardedToOffice.en },
       officeAlert: { chatId: String(OFFICE), text: expect.stringContaining('make the title bigger') } });
-    expect(answer.officeAlert.text).toMatch(/changed while they were read/);
+    // ADR-231: the requester by name, in plainer words.
+    expect(answer.officeAlert.text).toMatch(/changed while the words were being read/);
   });
 });

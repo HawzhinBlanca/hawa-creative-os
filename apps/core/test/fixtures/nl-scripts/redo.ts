@@ -147,14 +147,16 @@ export const REDO_SCRIPTS: Script[] = [
   },
   {
     id: 'S159', title: '"make another version" while the draft is with the office', kinds: ['redo', 'in-review'],
-    natural: 'Kept on the design for the office, answered "I\'ll redo …"; no paid round by itself.',
+    // ADR-231: "I'll redo …" only when a round starts; here the requester hears the words went to the office.
+    natural: 'Kept on the design for the office; told no new version started and the office has the words; no paid round by itself.',
     async play(p) {
       await p.say(KAAE_EVENING);
       await p.draftReady(0);
       const redo = await p.say('make another version', { after: 5 * 60_000 });
       expect(p.kept.map((k) => k.requestId)).toEqual([p.request(0)]);
       expect(p.revisions).toHaveLength(0);
-      expect(p.answer(redo)).toMatch(/^I'll redo <b>KAAE members evening.*office/);
+      expect(p.answer(redo)).toMatch(/^<b>KAAE members evening.*<\/b> is with the office for a final check, so I haven't started a new version\. I've passed what you said to them/);
+      expect(p.answer(redo)).not.toMatch(/I'll redo/);
     },
   },
   {

@@ -1210,3 +1210,45 @@ describe('the office reading\'s paid call (ADR-200)', () => {
     expect(await ledger(update)).toHaveLength(0);
   });
 });
+
+describe('the approval choice lists only drafts that can be approved (ADR-231, live 2026-10-01 14:03Z)', () => {
+  beforeEach(() => forgetOfficeTurns());
+
+  it('"looks good, send it" from the owner: the one approvable draft is confirmed by name, never a list with approved ones', async () => {
+    await emptyQueue();
+    // Two K-12 drafts approved earlier whose requests still read `in_review` (as the live list showed them).
+    const day = 24 * 60;
+    const approvedEarlier = [];
+    for (const [title, minutes, photos] of [[`KAAE: ${RLM}KAAE K-12 Pilot Study…`, day - 60, 1], ['KAAE K-12 Pilot Study', day + 13 * 60, 6]] as const) {
+      const draft = await draftInReview(title, { alertedMinutesAgo: minutes, photos });
+      gateway();
+      expect((await intake(say(OFFICE_B, 'approved', replyTo(draft.messageIds[OFFICE_B])))).chatAnswer.text).toMatch(/^Approved\. Sending /);
+      await withRlsContext(db, scope, async (trx) => {
+        await sql`UPDATE hawa.requests SET stage = 'in_review' WHERE tenant_id = ${tenantId}::uuid AND request_id = ${draft.requestId}::uuid`.execute(trx);
+        await sql`UPDATE hawa.tasks SET state = 'human_review' WHERE tenant_id = ${tenantId}::uuid AND id = ${draft.taskId}::uuid`.execute(trx);
+      });
+      approvedEarlier.push(draft);
+    }
+    // The owner's own request opened by mistake for a designer, and their Instagram post, sent 3 minutes ago.
+    const accident = await draftInReview('do a better design thats similar to earlier o…', { requesterChat: String(OFFICE_A), alertedMinutesAgo: 90 });
+    await sql`UPDATE hawa.requests SET stage = 'manual', rev = 1 WHERE tenant_id = ${tenantId}::uuid AND request_id = ${accident.requestId}::uuid`.execute(owner);
+    const post = await draftInReview('KAAE: Instagram post announcing…', { requesterChat: String(OFFICE_A), alertedMinutesAgo: 3 });
+    delete process.env.HAWA_OFFICE_CONFIRM_SEND;
+    try {
+      const { calls } = gateway();
+      const asked = await intake(say(OFFICE_A, 'looks good, send it'));
+      expect(asked.chatAnswer.text).toBe('Approve <b>KAAE: Instagram post announcing…</b> and send it to you now?');
+      expect(asked.chatAnswer.text).not.toMatch(/Which draft|K-12/);
+      expect(calls).toHaveLength(0);
+      const sent = await intake(say(OFFICE_A, 'yes'));
+      expect(sent.chatAnswer.text).toBe('Approved. Sending <b>KAAE: Instagram post announcing…</b> to you now.');
+      expect(calls.map((c) => c.kind)).toEqual(['approve', 'deliver']);
+      expect((await rows(post.requestId, post.taskId)).request).toMatchObject({ stage: 'delivering' });
+      for (const draft of approvedEarlier) expect((await rows(draft.requestId, draft.taskId)).approvals).toHaveLength(1);
+    } finally {
+      process.env.HAWA_OFFICE_CONFIRM_SEND = 'off';
+      await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requests SET stage = 'delivered'
+        WHERE tenant_id = ${tenantId}::uuid AND request_id = ANY(${[accident.requestId, post.requestId]}::uuid[])`.execute(trx));
+    }
+  });
+});

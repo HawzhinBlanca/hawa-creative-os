@@ -147,8 +147,10 @@ describe('redo words are about the requester\'s most recent design', () => {
 
   it('the requester hears the design named, in English and Sorani', () => {
     expect(redoText('delivered', 'KAAE: KAAE K-12 Pilot Study…', 'en', true)).toMatch(/^I'll redo <b>KAAE K-12 Pilot Study…<\/b> — /);
-    expect(redoText('in_review', 'KAAE: KAAE K-12 Pilot Study…', 'en')).toMatch(/passed what you said to the office/);
-    expect(redoText('designing', 'KAAE: KAAE K-12 Pilot Study…', 'ckb')).toMatch(/^<b>KAAE K-12 Pilot Study…<\/b> دووبارە دەکەمەوە/);
+    // ADR-231: kept words never promise a redo.
+    expect(redoText('in_review', 'KAAE: KAAE K-12 Pilot Study…', 'en')).toMatch(/haven't started a new version\. I've passed what you said to them/);
+    // "… is still being made, so I can't redo it yet"
+    expect(redoText('designing', 'KAAE: KAAE K-12 Pilot Study…', 'ckb')).toMatch(/^<b>KAAE K-12 Pilot Study…<\/b> هێشتا دروست دەکرێت/);
   });
 });
 

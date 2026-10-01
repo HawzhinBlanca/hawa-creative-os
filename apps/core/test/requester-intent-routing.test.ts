@@ -200,7 +200,7 @@ describe('a message while designs are open', () => {
     const answer = await intake(app(), update);
     expect(answer).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change',
       requestId: designing.requestId, requestStage: 'designing',
-      chatAnswer: { text: "Got it. I've added that to <b>KAAE members evening</b>; the office will see it before the design is sent to you." },
+      chatAnswer: { text: "Got it. I've kept that with <b>KAAE members evening</b> for the office; they'll see it before the design is sent to you." },
       officeAlert: { chatId: String(OFFICE), text: expect.stringContaining('the date should be 5 October not 4') } });
     expect(answer.officeAlert.text).toMatch(/while it was still being designed/);
     expect(await tasksInChat(chat)).toHaveLength(1);

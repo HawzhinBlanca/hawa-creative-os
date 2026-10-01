@@ -161,10 +161,14 @@ export class Play {
   get revisions() { return this.h.t.revisions.filter((r) => this.opened.some((o) => o.requestId === r.requestId)); }
   /** Words kept on a request for the office. */
   get kept() { return this.h.t.kept.filter((k) => this.opened.some((o) => o.requestId === k.requestId)); }
-  /** Messages to office members about this chat. */
+  /**
+   * Messages to office members about this chat. ADR-231: an alert names the requester (their Telegram
+   * name), not the chat's id.
+   */
   get officeHeard(): Sent[] {
     const members = this.office.map((m) => String(m.id));
     return this.h.t.sent.filter((s) => members.includes(s.chatId) && (s.text.includes(this.chatId) ||
+      s.text.startsWith(`${this.me.name} `) || s.text.startsWith(`${this.colleague.name} `) ||
       this.opened.some((o) => s.key.startsWith(o.requestId))));
   }
   /** The brief of the i-th request, as opened. */
