@@ -599,3 +599,14 @@ real Canva exports/43 live objects retain copy/font/addressability compatibility
 and negative controls. Core retained-byte rechecks/replay/approval refusal pass.
 W5_PPTX_SCRIPT_FONT_PROOF.json retains scope/log/source hashes. Exact sealed gate
 pending; no production deployment, paid call, native-render or human admission.
+
+### ADR208 exact engineering qualification
+
+Clean d6aef7ef full suite6770/0/67,677 passed files/6 skipped,684 strict roots;
+7 technical stages pass. Stage3 originally skipped because the invocation
+omitted HAWA_PREDEPLOY_SNAPSHOTS. Preserve that raw receipt. The separate actual
+same-candidate newest-dump restore/migration/invariant check passes; source
+unchanged between executions. W5_PPTX_SCRIPT_FONT_GATE_EVIDENCE.json binds both
+receipts without changing the original skipped verdict. Required engineering
+checks verified; native/new-export/human/product admission remains open. No
+production deployment or paid call.

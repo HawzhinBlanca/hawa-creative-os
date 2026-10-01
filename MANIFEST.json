@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T10:21:00Z",
+  "generatedAt": "2026-10-01T10:27:06Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 788,
+  "fileCount": 789,
   "files": [
     {
       "path": ".dockerignore",
@@ -1024,8 +1024,8 @@
     },
     {
       "path": "adrs/208_script_specific_pptx_font_evidence.md",
-      "sha256": "499a0b2a214f047ccdb0a996e26264169987cb75ad8e05cc8118d2e168772eca",
-      "bytes": 2757
+      "sha256": "8642066efad738b8fb05bfc563a88eeb6c13af97d343b685e039b5f70ef496e2",
+      "bytes": 3322
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1389,8 +1389,8 @@
     },
     {
       "path": "docs/29_ACCEPTANCE_GATES.md",
-      "sha256": "525805c70dbe0692401c8254cbc60f649d9840b5b9f590b0c3cf340fd999c21a",
-      "bytes": 3666
+      "sha256": "170195f2781159565dd5e4e6508197e3a3e39b7d0e89fc9bb7f978e9ccd5c9f1",
+      "bytes": 3710
     },
     {
       "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
@@ -1514,8 +1514,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "820539972f3c98d312022661eee628b7d2d8ada6a7059b35d7316655455629c4",
-      "bytes": 57612
+      "sha256": "ba0ac74c67147f32fd14becdd234397afa1f0199f506cf188bee5882e36b1d18",
+      "bytes": 58237
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1648,9 +1648,14 @@
       "bytes": 5428
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/W5_PPTX_SCRIPT_FONT_GATE_EVIDENCE.json",
+      "sha256": "d6eb6bde5ec012133af2c747a6266d8c00f6430cde10d94ad5dda2777604034c",
+      "bytes": 2360
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/W5_PPTX_SCRIPT_FONT_PROOF.json",
-      "sha256": "de936998b51b430efbcb5914999c07cbfda4b5b63eee5ca9cc215d6ec1479da9",
-      "bytes": 4820
+      "sha256": "e0fcf6399d69be0db088ced5055363ffb4c314fd2306785001461d4216a5727d",
+      "bytes": 7268
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W5_RASTER_PROBE_CACHE_FINDING.json",
@@ -3004,8 +3009,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "5b405ff3c1c1006c0e10516e79e68d5bdcd61d61cd7e0f6eb8e9e54def7e4d4a",
-      "bytes": 684079
+      "sha256": "61ecab73f91f4ccea418555a08636b5aa7784be550f25a924bcfcd854720cd9e",
+      "bytes": 685873
     },
     {
       "path": "plans/user-stories.csv",

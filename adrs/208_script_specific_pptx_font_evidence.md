@@ -1,6 +1,6 @@
 # ADR208 — Script-specific captured PPTX font evidence
 
-Date: 2026-10-01. Status: accepted for implementation; qualification pending.
+Date: 2026-10-01. Status: source engineering qualified; native/human/product admission open.
 Requirements: FR-028, FR-034, FR-038, FR-041, NFR-012, NFR-024.
 Sources: MASTER_SPEC.md; docs/05_CREATIVE_ENGINE.md;
 docs/07_MODEL_REGISTRY_AND_EVALUATION.md; docs/11_QA_RTL_MULTILINGUAL.md;
@@ -40,3 +40,12 @@ Primary format sources, accessed 2026-10-01:
 - https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.complexscriptfont?view=openxml-3.0.1
 - https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.latinfont?view=openxml-3.0.1
 - https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.field?view=openxml-3.0.1
+
+
+Exact source qualification: clean d6aef7ef full suite6770pass/0fail/67skip,
+684 strict roots,7 technical stages pass. The first invocation omitted the
+snapshot override and explicitly skipped Stage3; retain its original receipt.
+A separate actual restore/migration/invariant run against newest production dump
+predeploy_20261001T090959Z on the same unchanged candidate passes. No production
+mutation or complete native/human admission is inferred. Exact combined proof:
+plans/content-aware-design-2026-09-30/W5_PPTX_SCRIPT_FONT_GATE_EVIDENCE.json.

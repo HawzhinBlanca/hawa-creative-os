@@ -1,7 +1,7 @@
 {
   "date": "2026-10-01",
   "adr": 208,
-  "status": "CONNECTED_QUALIFIED_EXACT_GATE_PENDING_NATIVE_HUMAN_PRODUCT_OPEN",
+  "status": "EXACT_REQUIRED_ENGINEERING_CHECKS_VERIFIED_NATIVE_HUMAN_PRODUCT_OPEN",
   "requirements": [
     "FR-028",
     "FR-034",
@@ -25,7 +25,7 @@
   "strictTypes": {
     "testRoots": 684,
     "passed": true,
-    "note": "Final two additional tests are compiled again by the required exact gate."
+    "note": "All684 test roots compiled in exact candidate preflight."
   },
   "lint": {
     "passed": true
@@ -103,5 +103,45 @@
     "passed": 1728,
     "warnings": 0,
     "failed": 0
+  },
+  "exactEngineering": {
+    "candidateCommit": "d6aef7ef72265aa1b1bc177cc9df787b3a4329e3",
+    "status": "REQUIRED_ENGINEERING_CHECKS_VERIFIED_PRODUCT_ADMISSION_OPEN",
+    "sourceChangedBetweenChecks": false,
+    "rawPreflight": {
+      "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+      "technicalStagesPassed": 7,
+      "technicalStagesSkipped": {
+        "Stage3": "Snapshot directory override omitted in first invocation; raw receipt retained"
+      }
+    },
+    "separateStage3": {
+      "status": "passed",
+      "dump": "predeploy_20261001T090959Z.dump",
+      "sameCandidateBinding": "output/qualification/2026-10-01/d6aef7ef/DUMP_CHECK_BINDING.json",
+      "productionChanged": false
+    },
+    "suite": {
+      "passed": 6770,
+      "failed": 0,
+      "skipped": 67,
+      "filesPassed": 677,
+      "filesSkipped": 6
+    },
+    "strictTestRoots": 684,
+    "sourceManifestSha256": "50a15171ccb05f6480ce14b39ea98b0a56a1c6f2f860fd2d91190826836f3254",
+    "admissionQualified": false,
+    "artifacts": {
+      "output/qualification/2026-10-01/d6aef7ef/EXACT_GATE.log": "f32f2563e450876a46418b818cd0c26ea0b42b859ab2433e745a1de312d4a14a",
+      "output/qualification/2026-10-01/d6aef7ef/TEST_DB_PROVISION.log": "336ff22f53b4a3fea01bf514699007aa793865e351b45da27310dadad063c59d",
+      "output/qualification/2026-10-01/d6aef7ef/PREDEPLOY_DUMP_CHECK.json": "e0002a801be76c59f3eaedf9b5aa5014eaf311d49ad89e488a39720cca99ca68",
+      "output/qualification/2026-10-01/d6aef7ef/PREDEPLOY_DUMP_CHECK.log": "2cd86e5b76691db06126e413583580784234c6b6cf862541e244f8f762d414bc",
+      "output/qualification/2026-10-01/d6aef7ef/NEGATIVE_REFUSAL.log": "be5906eb427b0a1dcec5933682499784bbc58fa2a531a3a3f8418575fdf6416b",
+      "output/qualification/2026-10-01/d6aef7ef/DUMP_CHECK_BINDING.json": "a10a912d0e26360840071b524f8fb2ba1166a0940d966f6e60218118b21351e2",
+      "output/qualification/2026-10-01/d6aef7ef/RELEASE_GATE_EVIDENCE.json": "ec544e7079deac365d77e013cc28d8497570afe5fff480b076ee3dc009cd4738",
+      "output/qualification/2026-10-01/d6aef7ef/ACTUAL_PREDEPLOY_DUMP_CHECK.log": "fe7bf631c8e5a843ac6159e24485e3c4246b313a4e3ae398dee43744579b071c",
+      "output/qualification/2026-10-01/d6aef7ef/ACTUAL_PREDEPLOY_DUMP_CHECK.json": "eb20e937854ab7a03d24a9cefcc00d16029efafe3823d6dfddea0309992f5683",
+      "output/qualification/2026-10-01/d6aef7ef/FULL_TEST_SUITE_RUN.log": "f48bba45b4f74174ba08a12693dc5aa658205107815f17f59ca15b1e661af349"
+    }
   }
 }
