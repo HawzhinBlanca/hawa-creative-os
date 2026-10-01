@@ -77,3 +77,38 @@ The live test of production `b83c9f1d` on 2026-10-01 (`LIVE_TEST_2026-10-01.md`,
 - Changed deliberately, with the reason in each test: `requester-intent-routing.test.ts` (a cancel in review is a withdraw decision; approved is kept and told truthfully), `lifecycle-design-proof.test.ts` (Cancel no longer answers LIFECYCLE_OWNED), and NL scripts S044, S080, S081, S082, S084, S087 (the request is closed; `conversation-harness.ts` gives ChatInbox the object's `withdraw`).
 - Red before: with this branch's sources reverted to `b83c9f1d` and the new tests kept, 31 tests fail (18 + 5 + 1 + 1 + 6). The two that pass are guards: a short file count and an unconfirmed notice close nothing.
 - Not run: live Telegram, a Restate server, chaos, a native Sorani review.
+
+## 6. Addendum (2026-10-01): a change sent while the design is being made is applied (L8)
+
+**Incident.** Request ab48fb97: at 13:59 "also please add that seats are limited" arrived while the request was `designing`. Intake kept it as a pending change (ADR-144) and told the requester "I've added that …". The draft finished at 14:00 without it and went to office review as if nothing had been said. The office's draft alert did not mention it.
+
+**Decision.** When a design run finishes *with a draft*, Core's design-outcome projection reads the changes kept from that very round. A change counts when it is a late change of kind `change`, kept while the request was `designing` at the revision the run finished at, and not yet read by an office member (`pendingDesigningChanges`). If there are any, the same transaction (`startPendingChangeRound`, under a savepoint) does five things:
+- it records the draft as before, then moves its task `human_review → revision_requested`, so it is never reviewed;
+- it creates the next round's task as a requester revision does: the draft's brief, exact copy, format and Studio options, `parentTaskId` = the draft's task, `revisionRound` + 1, and the requester's words, in order, as `revisionDirective`;
+- it keeps the request `designing` on the new task, at the outcome's revision;
+- it marks those changes read by this round (`lifecycle_late_change_ack`, actor `lifecycle_pending_round`), so they are never applied twice and Deliver does not wait for them;
+- it returns `pendingRound` with no office alert, and the requester's line "Your first draft of *title* is done. I'm now adding what you asked while it was being made: “…”. The office checks the new version before it comes to you." (`PENDING_ROUND_MESSAGES`).
+
+RequestLifecycle's `designFinished` accepts a `designing` outcome only with `pendingRound`. It moves to the new task and run (round from Core), sends the outcome's message, and starts the run. The handler may now start a design run, but only that one.
+
+The round is the requester's own instruction, so its paid run is allowed. It counts against the daily automatic-design allowance like any change, and makes no other model call.
+
+**When a round cannot start**, the savepoint is rolled back and the draft goes to review as before. This happens when the allowance is used up, the draft's brief cannot be found, or the request already had `MAX_PENDING_ROUNDS` (3) such rounds. In that case:
+- The office's alert ends with "NOT IN THIS DRAFT: …", the reason, and every change word for word. A photo caption that would pass 1,000 characters is dropped, so the full text alert goes instead.
+- The changes stay unread, so Deliver waits for them.
+- The requester hears "Your draft of *title* was finished before your changes could be added: “…”. The office has them …" (or "I've kept them for the office" with no office chat).
+
+A draft with no such change, and a run that ends without a draft, are unchanged. A manual request has no design run, so it never reaches this.
+
+**Replay.** The receipt makes Core's projection idempotent. A finish reported again for the superseded run (`pendingRoundFrom`) resends the same outcome keys and starts the same run under the same workflow key; the marker is cleared at the next outcome.
+
+**Not changed here:** the 13:59 answer ("I've added that …") is L4's wording (another branch). With this change it is true once the draft finishes.
+
+**Verification.** `apps/core/test/pending-change-round.test.ts` (5, through ChatInbox, intake, design-outcome, TelegramSender and RequestLifecycle in the conversation harness):
+- the exact live words: no office alert for the first draft, a child round with the words as its directive, the requester's line, and the next draft reviewed normally;
+- a replayed finish starts nothing new and sends nothing again;
+- the allowance used up: review, the office alert quotes the change, the requester is told the office has it, and Deliver still waits;
+- the round limit;
+- a draft with no change.
+
+4 of 5 fail on the previous sources; the fifth is the unchanged path.
