@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { createDb } from '@hawa/db';
@@ -190,22 +191,27 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
   });
 
   it('strictly isolates data retrieval boundary and excludes Canva restricted IP from external fine-tuning and benchmarks', () => {
+    // Inventory is explicit test data; the miner never invents real client assets.
+    const inventory = [
+      {id:'owned-logo',clientId:'client_drustee',type:'logo',name:'Fixture logo',lineage:'client_owned' as const},
+      {id:'restricted-template',clientId:'client_drustee',type:'template',name:'Fixture vendor item',lineage:'canva_derived_restricted' as const},
+    ];
     // 1. Client generation query allows client-owned assets
-    const genBoundary = miner.evaluateDataRetrievalBoundary('client_drustee', 'client_generation');
+    const genBoundary = miner.evaluateDataRetrievalBoundary('client_drustee', 'client_generation', inventory);
     expect(genBoundary.permittedItems.length).toBeGreaterThan(0);
     expect(genBoundary.permittedItems.every((i) => i.lineage === 'client_owned')).toBe(true);
     expect(genBoundary.restrictedExcludedItems.length).toBeGreaterThan(0);
     expect(genBoundary.restrictedExcludedItems.every((i) => i.lineage === 'canva_derived_restricted')).toBe(true);
 
     // 2. External fine-tuning query blocks both client-owned and Canva restricted assets
-    const ftBoundary = miner.evaluateDataRetrievalBoundary('client_drustee', 'external_fine_tuning');
+    const ftBoundary = miner.evaluateDataRetrievalBoundary('client_drustee', 'external_fine_tuning', inventory);
     expect(ftBoundary.permittedItems).toHaveLength(0);
     expect(ftBoundary.restrictedExcludedItems.some((i) => i.reason.includes('Vendor IP restriction'))).toBe(true);
 
     // 3. Benchmark query blocks export of proprietary Canva heuristics
-    const bmBoundary = miner.evaluateDataRetrievalBoundary('client_drustee', 'benchmark');
+    const bmBoundary = miner.evaluateDataRetrievalBoundary('client_drustee', 'benchmark', inventory);
     expect(bmBoundary.permittedItems).toHaveLength(0);
-    expect(bmBoundary.restrictedExcludedItems.some((i) => i.id === 'canva_layout_heuristic_internal')).toBe(true);
+    expect(bmBoundary.restrictedExcludedItems.some((i) => i.id === 'restricted-template')).toBe(true);
   });
 
   it('exposes governed learning and data boundary endpoints via HTTP API', async () => {
@@ -255,12 +261,16 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
     const rollbackJson = await rollbackRes.json();
     expect(rollbackJson.rolledBack).toBe(true);
 
-    // 5. Record negative feedback via HTTP
+    // 5. Record negative feedback for an actual stored task via HTTP
+    const taskRes=await app.request('/v1/tasks',{method:'POST',headers:authHeaders,body:JSON.stringify({
+      clientId:'c1000000-0000-4000-8000-000000000003',title:'Isolated negative feedback',
+    })});
+    expect(taskRes.status).toBe(201);const task=await taskRes.json();
     const negRes = await app.request('/v1/clients/c1000000-0000-4000-8000-000000000003/negative-feedback', {
       method: 'POST',
-      headers: authHeaders,
+      headers: {...authHeaders,'Idempotency-Key':randomUUID()},
       body: JSON.stringify({
-        taskId: 'task_api_bad',
+        taskId: task.id,
         feedbackText: 'Color scheme violated high contrast accessibility standard',
       }),
     });
@@ -275,6 +285,6 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
     expect(lineRes.status).toBe(200);
     const lineJson = await lineRes.json();
     expect(lineJson.permittedItems).toHaveLength(0);
-    expect(lineJson.restrictedExcludedItems.length).toBeGreaterThan(0);
+    expect(lineJson.restrictedExcludedItems).toEqual([]);
   });
 });

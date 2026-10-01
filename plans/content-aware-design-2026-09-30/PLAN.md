@@ -286,3 +286,29 @@ repaired/refused and passing gate; only guarded disposable databases rebuilt.
 W6_APPROVED_REFINEMENT_GATE_EVIDENCE.json preserves the exact gate identity.
 Metadata sealing preserves tested runtime/tests/infra/database/gate code.
 No deployment or paid/native/human claim; broad W5/W6/product gates stay open.
+
+## W6 learning access and moderation — 1 October 2026, ADR193
+
+Actual authorized client lookup protects candidate/lineage reads and mutations;
+strict fields and verified actor roles remove malformed inputs and role attribution
+spoofing. Remove implicit file activation that fabricated director provenance.
+
+Prepare moderation without mutation, serialize the projection and PostgreSQL
+client transaction, compose from current DNA with expected versions and record
+immutable dismissal/rollback receipts atomically. Real commit failures preserve
+active DNA/status; concurrent removals preserve both and dismissal cannot race
+pending activation. Keep newer rejection evidence committed during activation.
+
+Lineage reports actual scoped stored asset inventory, with unknown rights excluded,
+not invented logos/fonts/vendor internals. Rejections require a stored task and
+action key; durable events commit before mining, exact retry reconciles and changed
+reuse refuses. Conservative task-level negative polarity remains.
+
+Initial5 failures, compatibility22/7 and86/1, plus IPC refusal retained. The
+receipt expansion87/1 exposed a test assuming HTTP start order was transaction
+order; the corrected barrier proves lock arrival before dispatching dismissal.
+Corrected
+13files/88pass,663 strict roots/lint pass; exact gate pending. Proof:
+W6_LEARNING_GOVERNANCE_PROOF.json. Source only; no paid call or deployment.
+Queue rebuilding, full action-key governance/revision polarity/taste/native/Canva/
+human/recovery/whole-product admission remain open.

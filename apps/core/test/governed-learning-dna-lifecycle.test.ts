@@ -93,11 +93,11 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
     });
     expect(unauthRes.status).toBe(401);
 
-    // 3b. Unauthorized role (e.g. generic guest/requester) -> 403
+    // 3b. A verified operator cannot promote by requesting a director role -> 403.
     const forbiddenRes = await app.request(`/v1/clients/${drusteeClientId}/candidate-rules/${candidateRule.id}/promote`, {
       method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({ role: 'requester' }),
+      headers: {...authHeaders,Authorization:`Bearer ${process.env.HAWA_BEARER_TOKEN}`},
+      body: JSON.stringify({ role: 'art_director' }),
     });
     expect(forbiddenRes.status).toBe(403);
   });

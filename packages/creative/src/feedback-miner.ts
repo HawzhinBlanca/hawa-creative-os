@@ -6,8 +6,6 @@
  */
 
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import { canonicalJson } from '@hawa/domain';
 import { refinementSnapshotFromManifest, refinementSnapshotHash, type ApprovedRefinementEvidence } from './refinement-evidence.js';
 
@@ -70,6 +68,15 @@ export interface DesignFeedbackRecord {
   createdAt?: string;
 }
 
+/** Stored inventory supplied by an authorized adapter; absent rights remain unknown. */
+export interface LearningInventoryItem {
+  id: string;
+  clientId: string;
+  type: string;
+  name: string;
+  lineage: 'client_owned' | 'canva_derived_restricted' | 'rights_unknown';
+}
+
 export interface CandidateRuleProposal {
   refinementEvidence?: ApprovedRefinementEvidence[];
   id: string;
@@ -87,14 +94,11 @@ export interface CandidateRuleProposal {
   provenance: RuleProvenance;
   examples: RuleExamples;
   conflicts: string[];
-  promotedByRole?: 'art_director' | 'creative_director';
+  promotedByRole?: 'art_director' | 'creative_director' | 'administrator';
   promotedAt?: string;
   sha256Digest: string;
   dataLineage: 'client_owned' | 'canva_derived_restricted';
 }
-
-/** The DNA file is missing (the production image has no config/): said once per process. */
-let warnedNoDnaFile = false;
 
 export class FeedbackMiner {
   private candidateRules = new Map<string, CandidateRuleProposal>();
@@ -495,86 +499,8 @@ export class FeedbackMiner {
   /**
    * Hydrates rules from canonical Client DNA specification file if present.
    */
-  public loadClientDnaRules(clientId?: string): void {
-    const isKaae =
-      !clientId ||
-      clientId === 'c1000000-0000-4000-8000-000000000002' ||
-      clientId === 'client-kaae' ||
-      clientId === 'client-office-1' ||
-      clientId.includes('kaae');
-    if (!isKaae) return;
-
-    try {
-      const candidates = [
-        path.join(process.cwd(), 'config', 'clients', 'kaae.dna.json'),
-        path.join(process.cwd(), '..', '..', 'config', 'clients', 'kaae.dna.json'),
-        path.join(process.cwd(), '..', 'config', 'clients', 'kaae.dna.json'),
-        '/app/config/clients/kaae.dna.json',
-      ];
-      const found = candidates.find((p) => fs.existsSync(p));
-      if (!found) {
-        // Said once, not silently skipped: the file is not in the production image.
-        if (!warnedNoDnaFile) {
-          warnedNoDnaFile = true;
-          console.warn(`[feedback-miner] config/clients/kaae.dna.json was not found (${candidates.join(', ')}); its layout rules are not offered as candidates.`);
-        }
-        return;
-      }
-
-      const dna = JSON.parse(fs.readFileSync(found, 'utf-8'));
-      const targetClientId = clientId || dna.clientId || 'c1000000-0000-4000-8000-000000000002';
-      const layoutRules: string[] = dna.guidelines?.layoutRules || [];
-
-      for (let i = 0; i < layoutRules.length; i++) {
-        const text = layoutRules[i];
-        const ruleKey = `${targetClientId}:persisted:${i}`;
-        if (!this.candidateRules.has(ruleKey)) {
-          const id = `rule_dna_${i}`;
-          const sha256Digest = crypto.createHash('sha256').update(text).digest('hex');
-          this.candidateRules.set(ruleKey, {
-            id,
-            clientId: targetClientId,
-            title: `Client DNA Rule #${i + 1}`,
-            category: 'layout',
-            ruleText: text,
-            rationale: 'Loaded from canonical Client DNA specification',
-            frequency: 1,
-            evidenceTaskIds: [],
-            status: 'PROMOTED',
-            promotedByRole: 'creative_director',
-            promotedAt: dna.updatedAt || new Date().toISOString(),
-            confidence: 1.0,
-            scope: 'client_scoped',
-            explicitness: 'explicit_operator_instruction',
-            provenance: {
-              taskId: 'dna_init',
-              clientId: targetClientId,
-              actor: { id: 'system', role: 'creative_director', name: 'Client DNA' },
-              recordedAt: dna.updatedAt || new Date().toISOString(),
-            },
-            examples: { positiveExampleTaskIds: [], negativeExampleTaskIds: [] },
-            conflicts: [],
-            sha256Digest,
-            dataLineage: 'client_owned',
-          });
-        }
-      }
-    } catch {
-      // Safe fallback if filesystem access is restricted
-    }
-  }
-
+  /** Candidates are observed/proposed data; filesystem files never establish human approval. */
   public getCandidateRules(clientId?: string): CandidateRuleProposal[] {
-    const isKaae =
-      !clientId ||
-      clientId === 'c1000000-0000-4000-8000-000000000002' ||
-      clientId === 'client-kaae' ||
-      clientId === 'client-office-1' ||
-      clientId.includes('kaae');
-    if (isKaae && (!this.candidateRules.size || !Array.from(this.candidateRules.values()).some((r) => r.clientId === clientId))) {
-      this.loadClientDnaRules(clientId);
-    }
-
     const rules = Array.from(this.candidateRules.values());
     if (clientId) {
       return rules.filter((r) => r.clientId === clientId);
@@ -775,15 +701,30 @@ export class FeedbackMiner {
 
   public commitRulePromotion(prepared:{promoted:boolean;rule?:CandidateRuleProposal}): void {
     if (!prepared.promoted || !prepared.rule) return;
-    const rule=Array.from(this.candidateRules.values()).find(r=>r.id===prepared.rule!.id);
-    if (!rule || rule.clientId!==prepared.rule.clientId || rule.sha256Digest!==prepared.rule.sha256Digest) {
-      throw new Error('Prepared rule promotion identity conflict');
+    this.commitRuleSnapshot(prepared.rule);
+  }
+
+  public commitRuleSnapshot(prepared:CandidateRuleProposal): void {
+    const rule=Array.from(this.candidateRules.values()).find(r=>r.id===prepared.id);
+    if (!rule || rule.clientId!==prepared.clientId || rule.sha256Digest!==prepared.sha256Digest) {
+      throw new Error('Prepared rule moderation identity conflict');
     }
-    Object.assign(rule,structuredClone(prepared.rule));
+    // Feedback may commit while moderation waits for its own transaction. Preserve
+    // that newer evidence instead of replacing it with the prepared snapshot.
+    const negative=[...new Set([...rule.examples.negativeExampleTaskIds,...prepared.examples.negativeExampleTaskIds])];
+    const positive=[...new Set([...rule.examples.positiveExampleTaskIds,...prepared.examples.positiveExampleTaskIds])]
+      .filter(task=>!negative.includes(task));
+    const evidence=[...new Set([...rule.evidenceTaskIds,...prepared.evidenceTaskIds])];
+    const refinements=new Map([...rule.refinementEvidence || [],...prepared.refinementEvidence || []]
+      .map(receipt=>[receipt.feedbackId,receipt]));
+    const frequency=Math.max(rule.frequency,prepared.frequency);
+    Object.assign(rule,structuredClone(prepared),{frequency,evidenceTaskIds:evidence,
+      examples:{positiveExampleTaskIds:positive,negativeExampleTaskIds:negative},
+      ...(refinements.size ? {refinementEvidence:[...refinements.values()]}:{})});
   }
 
   /**
-   * Reversible Rollback (FR-067):
+   * Reversible Rollback (FR-054):
    * Rolls back a promoted rule to DISMISSED while preserving original history.
    */
   public rollbackPromotedRule(
@@ -827,7 +768,8 @@ export class FeedbackMiner {
    */
   public evaluateDataRetrievalBoundary(
     clientId: string,
-    queryPurpose: 'client_generation' | 'external_fine_tuning' | 'benchmark'
+    queryPurpose: 'client_generation' | 'external_fine_tuning' | 'benchmark',
+    inventory: readonly LearningInventoryItem[] = []
   ): {
     clientId: string;
     queryPurpose: string;
@@ -836,51 +778,29 @@ export class FeedbackMiner {
       id: string;
       type: string;
       name: string;
-      lineage: 'canva_derived_restricted';
+      lineage: LearningInventoryItem['lineage'];
       reason: string;
     }>;
   } {
-    // Client-owned assets (always permitted for client generation)
-    const clientOwned = [
-      { id: `${clientId}_logo`, type: 'vector_logo', name: 'Official Brand Logo', lineage: 'client_owned' as const },
-      { id: `${clientId}_palette`, type: 'brand_palette', name: 'Approved Color Tokens', lineage: 'client_owned' as const },
-      { id: `${clientId}_copy`, type: 'approved_copy', name: 'Verbatim Approved Copy Blocks', lineage: 'client_owned' as const },
-      { id: `${clientId}_typography`, type: 'font_metadata', name: 'OFL Font Vazirmatn Spec', lineage: 'client_owned' as const },
-    ];
-
-    // Restricted Canva-derived assets
-    const canvaRestricted = [
-      {
-        id: 'canva_stock_template_elem_01',
-        type: 'canva_proprietary_vector',
-        name: 'Canva Stock Ornament Element #4821',
-        lineage: 'canva_derived_restricted' as const,
-        reason: 'Vendor IP restriction: Canva stock assets cannot be extracted for model fine-tuning or style-memory',
-      },
-      {
-        id: 'canva_layout_heuristic_internal',
-        type: 'canva_internal_weights',
-        name: 'Canva Magic Switch Layout Heuristic Graph',
-        lineage: 'canva_derived_restricted' as const,
-        reason: 'Vendor IP restriction: Internal Canva heuristics prohibited in external benchmarks',
-      },
-    ];
-
-    if (queryPurpose === 'external_fine_tuning' || queryPurpose === 'benchmark') {
-      return {
-        clientId,
-        queryPurpose,
-        permittedItems: [], // No client data or restricted data permitted for external fine-tuning
-        restrictedExcludedItems: canvaRestricted,
-      };
+    if (!clientId || inventory.some(item => item.clientId !== clientId)) {
+      throw new Error('Learning inventory client scope is missing or conflicting');
     }
-
-    return {
-      clientId,
-      queryPurpose,
-      permittedItems: clientOwned,
-      restrictedExcludedItems: canvaRestricted,
-    };
+    const permittedItems: Array<{id:string;type:string;name:string;lineage:'client_owned'}> = [];
+    const restrictedExcludedItems: Array<{id:string;type:string;name:string;lineage:LearningInventoryItem['lineage'];reason:string}> = [];
+    for (const item of inventory) {
+      const {id,type,name,lineage} = item;
+      if (lineage === 'client_owned' && queryPurpose === 'client_generation') {
+        permittedItems.push({id,type,name,lineage});
+      } else {
+        const reason = lineage === 'canva_derived_restricted'
+          ? 'Vendor IP restriction: restricted assets are excluded from learning retrieval.'
+          : lineage === 'client_owned'
+            ? 'Client material is not admitted for external fine-tuning or benchmarking.'
+            : 'Rights are unknown; no retrieval permission is inferred from an upload.';
+        restrictedExcludedItems.push({id,type,name,lineage,reason});
+      }
+    }
+    return {clientId,queryPurpose,permittedItems,restrictedExcludedItems};
   }
 }
 
