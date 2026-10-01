@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T01:27:21Z",
+  "generatedAt": "2026-10-01T01:41:35Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 718,
+  "fileCount": 721,
   "files": [
     {
       "path": ".dockerignore",
@@ -928,6 +928,11 @@
       "bytes": 1718
     },
     {
+      "path": "adrs/189_reproducible_bundle_and_recipe_evidence.md",
+      "sha256": "e984ff2a3f2e2bbd5c80690226bfa6b93c326b282e40c22009e8848ccae86a94",
+      "bytes": 2460
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1378,9 +1383,19 @@
       "bytes": 6895
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/INTEGRATED_RELEASE_PROOF.json",
+      "sha256": "008564b6fcde4d9d6ad583dad92260663fa14082fdf34360e07bc099b27b1443",
+      "bytes": 2080
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/LIVE_LANE_INVENTORY.json",
+      "sha256": "55a6d671fd8b5cf7d90b3dc1e6b6aa14e52fb257238ce6e258dfc32c528feb96",
+      "bytes": 1486
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "71929d8aa3e15227a940cf0d069066b4a848b74915f29ebbc425117119785f84",
-      "bytes": 16413
+      "sha256": "e186ba4b99b7aaa631ad40a006e55ad5654f7ac5d7bffe474837487f4c8f398e",
+      "bytes": 17222
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -2664,8 +2679,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2110b290ff4ba2283419fb0ff666e039347a2ac599594740358464d4e79050c2",
-      "bytes": 593597
+      "sha256": "25fcf11a406fefb129a16997847cea2372222d08257b7d5aa0fa6049359548af",
+      "bytes": 595472
     },
     {
       "path": "plans/user-stories.csv",
@@ -2994,8 +3009,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "86d401caefeccfd7a6f2001bf8ca484269fa920044f1cfdd769391e9c5548a1f",
-      "bytes": 20095
+      "sha256": "a90ba1f45c14774a60ae66808bca50546ef17b56415b2253014bc4c61437fd38",
+      "bytes": 20539
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",

@@ -26,10 +26,13 @@ const TYPOGRAPHIC_BRIEFS = [
 ];
 
 describe('Office-published photo exemplars (ADR-170)', () => {
-  it('ships 8-12 office photo designs covering every photo recipe, downscaled, hashed and traced to their source', () => {
+  it('retains 8-12 office photo designs covering the original seven recipes, downscaled, hashed and traced to their source', () => {
     expect(photoEntries.length).toBeGreaterThanOrEqual(8);
     expect(photoEntries.length).toBeLessThanOrEqual(12);
-    expect(new Set(photoEntries.map((e: any) => e.recipe))).toEqual(new Set(PHOTO_RECIPE_IDS));
+    expect(new Set(photoEntries.map((e: any) => e.recipe))).toEqual(new Set([
+      'hero_fade_report', 'hero_plate', 'hero_card', 'cutout_speaker', 'sky_title', 'scrim_caption', 'fade_to_paper',
+    ]));
+    expect(photoEntries.every((e: any) => PHOTO_RECIPE_IDS.includes(e.recipe))).toBe(true);
     for (const e of photoEntries) {
       const bytes = fs.readFileSync(path.join(assets, 'exemplars', e.filename));
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(e.sha256);
@@ -55,6 +58,21 @@ describe('Office-published photo exemplars (ADR-170)', () => {
     const k12 = photoEntries.filter((e: any) => /^kaae raphic (kurdi )?10\.jpg\.jpeg$/.test(e.provenance.sourceFile));
     expect(k12.map((e: any) => [e.recipe, e.language, e.photoCount])).toEqual([
       ['hero_fade_report', 'en', 2], ['hero_fade_report', 'ckb', 2]]);
+  });
+
+  it('exposes the five new geometries without admitted references and never invents coverage', () => {
+    const result = index.retrieveTopExemplars({ ...K12_REPORT, photoCount: 6 }, 3);
+    expect(result.evidence.photoRecipeCoverage?.eligible).toHaveLength(12);
+    expect(result.evidence.photoRecipeCoverage?.represented).toHaveLength(7);
+    expect(new Set(result.evidence.photoRecipeCoverage?.missing)).toEqual(new Set([
+      'hero_storyboard', 'editorial_split', 'photo_diptych', 'photo_sequence', 'photo_mosaic',
+    ]));
+    expect(result.evidence.warnings.some(w => w.startsWith('MISSING_PHOTO_RECIPE_EXEMPLARS:'))).toBe(true);
+    const unavailable = index.retrieveTopExemplars({ text: 'Speaker', photoCount: 1, eligibleRecipes: ['cutout_speaker'] }, 3, []);
+    expect(unavailable.evidence.photoRecipeCoverage?.represented).toEqual([]);
+    expect(unavailable.evidence.photoRecipeCoverage?.missing).toEqual(['cutout_speaker']);
+    expect(unavailable.retrievedExemplars).toEqual([]);
+    expect(unavailable.evidence.warnings.some(w => w.startsWith('MISSING_PHOTO_RECIPE_EXEMPLARS:'))).toBe(true);
   });
 
   it('reinstates the dropped photo post with its reasoning and keeps the dropped history', () => {
@@ -89,7 +107,9 @@ describe('Office-published photo exemplars (ADR-170)', () => {
     expect(first.descriptor).toBe(photoEntries[0].descriptor);
     expect(first.subject).toContain('report_release');
     expect(result.evidence.matches[0]).toMatchObject({ recipe: 'hero_fade_report', subjectMatches: ['report_release'] });
-    expect(result.evidence.warnings).toEqual([]);
+    expect(result.evidence.warnings).toEqual([
+      expect.stringMatching(/^MISSING_PHOTO_RECIPE_EXEMPLARS:/),
+    ]);
     expect(result.apiCostUsd).toBe(0);
   });
 

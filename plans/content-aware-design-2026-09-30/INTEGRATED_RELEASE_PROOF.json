@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-01",
+  "status": "FIRST_COMBINED_FULL_GATE_FAILED_REPAIRS_IN_PROGRESS",
+  "testedSeal": "21896bffbae22e403389ffd9f1fb399bcbf60d26",
+  "sourceCandidate": "1726387f",
+  "firstFullRun": {
+    "passed": 6424,
+    "failed": 2,
+    "skipped": 67,
+    "filesPassed": 649,
+    "filesFailed": 2,
+    "filesSkipped": 6,
+    "durationSeconds": 214.15,
+    "stages1Through7": "PASS",
+    "failures": [
+      "Desk dist prerequisite absent in standalone gate",
+      "Historic office exemplar coverage test equated twelve supported geometries with seven represented recipes"
+    ]
+  },
+  "repairs": [
+    "ADR189 mandatory Desk build in stage1; actual build entry492.16kB and existing budget test retained",
+    "Explicit eligible/represented/missing reference coverage and diagnostic; all original office asset hashes/provenance retained, no human example invented",
+    "ADR189 mandatory manifest corruption/refusal drill before marking negativeRefusalTest.verified=true"
+  ],
+  "firstFocusedRepair": {
+    "passed": 28,
+    "failed": 1,
+    "cause": "Positive photo-ranking test still expected no warning despite the known five missing references; corrected to assert the new exact warning class."
+  },
+  "qualification": "Full combined source and five missing recipe/native/human references remain open",
+  "logs": {
+    "/tmp/hawa-content-integrated-full-gate-20261001.log": "be538173c378f3cac8b0bd575b90b7035620e3cf359e5a180f01be0f51968304",
+    "/tmp/hawa-content-integrated-first-full-tests-20261001.log": "e22726af813e2581bd4bdac947f1986c1a475c3c84e5765bfe827f1b54da0a51",
+    "/tmp/hawa-content-coverage-connected-20261001.log": "8f24278501e59741a6f075c83957df70a236629ef90f15e462ce63746ed70724",
+    "/tmp/hawa-content-desk-bundle-build-20261001.log": "378ed1147545b24c93028a33ce79355f4d3b6c75189f7316c67ece74ea59864f",
+    "/tmp/hawa-content-coverage-fixed-20261001.log": "d1a056273d330d8a97ece2ba08ca948185c709f380f3614db7abf60a304d8921"
+  },
+  "focusedRepairAfterWarningAssertion": {
+    "files": 6,
+    "passed": 29,
+    "failed": 0,
+    "skipped": 0
+  }
+}

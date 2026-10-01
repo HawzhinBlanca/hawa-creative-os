@@ -63,6 +63,13 @@ export interface ExemplarRetrievalEvidence {
   matches: Array<{ id: string; lexicalScore: number; matchedTokens: string[]; formatMatch: boolean;
     recipe?: PhotoRecipeId; subjectMatches?: string[] }>;
   warnings: string[];
+  /** Available admitted references, distinct from supported geometry (ADR-189). Photo briefs only. */
+  photoRecipeCoverage?: {
+    method: 'eligible-recipe-coverage-v1';
+    eligible: PhotoRecipeId[];
+    represented: PhotoRecipeId[];
+    missing: PhotoRecipeId[];
+  };
 }
 export interface ExemplarRetrievalResult {
   brief: string;
@@ -241,10 +248,25 @@ export class ExemplarRetrievalIndex {
     const query = [...new Set(exemplarSearchTokens(`${brief.text} ${brief.category ?? ''}`))];
     const photoCount = Number.isSafeInteger(brief.photoCount) && Number(brief.photoCount) > 0 ? Number(brief.photoCount) : 0;
     const warnings: string[] = [];
+    const photoRecipeCoverage = photoCount > 0 && k > 0 ? (() => {
+      const eligible = PHOTO_RECIPE_IDS.filter(id => !brief.eligibleRecipes || brief.eligibleRecipes.includes(id));
+      const availableRecipes = new Set(available.filter(d => d.exemplar.photoCount > 0).map(d => d.exemplar.recipe));
+      return { method: 'eligible-recipe-coverage-v1' as const, eligible,
+        represented: eligible.filter(id => availableRecipes.has(id)),
+        missing: eligible.filter(id => !availableRecipes.has(id)) };
+    })() : undefined;
+    const coverageWarning = photoRecipeCoverage?.missing.length
+      ? `MISSING_PHOTO_RECIPE_EXEMPLARS: no available admitted reference for ${photoRecipeCoverage.missing.join(', ')}; reference/taste qualification remains open.`
+      : undefined;
     if (photoCount > 0 && k > 0) {
       const photo = this.retrievePhotoExemplars(brief, k, available, query, start, fromCache);
-      if (photo) return photo;
+      if (photo) {
+        photo.evidence.photoRecipeCoverage = photoRecipeCoverage;
+        if (coverageWarning) photo.evidence.warnings.push(coverageWarning);
+        return photo;
+      }
       warnings.push('NO_ELIGIBLE_PHOTO_EXEMPLAR: no available photo exemplar has an eligible recipe; typographic exemplars were used.');
+      if (coverageWarning) warnings.push(coverageWarning);
     }
     // A typographic brief sees only the owner-confirmed typographic set, ranked exactly as before
     // photo exemplars existed: they take no part in its frequencies, order or selection.
@@ -264,7 +286,8 @@ export class ExemplarRetrievalIndex {
       evidence: { algorithm: EXEMPLAR_RETRIEVAL_VERSION, manifestSha256: this.manifestSha256, mode,
         queryTokenCount: query.length, matchedTokenCount: matched.size, eligibleCount: documents.length,
         matches: selected.map(r => ({ id: r.doc.exemplar.id, lexicalScore: r.lexicalScore, matchedTokens: r.matchedTokens, formatMatch: r.formatMatch })),
-        warnings: [...warnings, ...(k === 0 || hasLexical ? [] : !documents.length ? ['NO_ELIGIBLE_EXEMPLARS: no approved available examples were selected.'] : ['NO_LEXICAL_MATCH: selected by available format and curator order; cross-language semantic retrieval was not run.'])] },
+        warnings: [...warnings, ...(k === 0 || hasLexical ? [] : !documents.length ? ['NO_ELIGIBLE_EXEMPLARS: no approved available examples were selected.'] : ['NO_LEXICAL_MATCH: selected by available format and curator order; cross-language semantic retrieval was not run.'])],
+        ...(photoRecipeCoverage ? { photoRecipeCoverage } : {}) },
     };
   }
 

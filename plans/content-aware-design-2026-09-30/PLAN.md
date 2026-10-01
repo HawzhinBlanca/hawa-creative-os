@@ -188,3 +188,8 @@ Preserved W3 source/diagnostics in79d335eb, then merged qualified2c4d61ec (ADR18
 ## W5 first local resource optimization — 1 October 2026
 
 ADR188 removes the native job used solely to generate a white reference matte. Official artwork remains actually rasterized; exact white-pixel/contrast equivalence and one-job work count pass with real native output, transparency and fractional position controls. Red3/7 skipped; full focused6 files50 pass/0 fail/0 skip and658 test roots/build pass. Nine paired native helper measurements preserve contrast/source bytes; medians78.1ms/74.7ms are not pipeline p95. No cache/providers/dependencies added; perceptual color, bounded refinement, cache/replay identity and overall W5 qualification remain pending. W5_NATIVE_MATTE_PROOF.json records the exact scope.
+
+
+## Combined preflight repairs — 1 October 2026
+
+The first clean combined seal21896bff passed stages1–7 but failed two full-suite tests (6424 passed/2 failed/67 skipped). ADR189 makes Desk bundle construction an explicit gate prerequisite and reports the seven represented versus five missing photo recipe references, without inventing human examples. The first focused repair28/1 warning mismatch is retained; corrected connected6 files29 pass/0 fail/0 skip. The normal gate now executes its actual flag-corruption/refusal drill before recording it verified. A new exact clean full gate remains pending. LIVE_LANE_INVENTORY.json is aggregate historical metadata: all nine sampled failed runs were created before the current intake release; it does not estimate current quality or prove feedback absent.

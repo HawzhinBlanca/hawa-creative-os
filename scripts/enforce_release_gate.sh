@@ -93,6 +93,9 @@ echo ""
 echo "--> [Stage 1/8] Running static typecheck across all workspace packages..."
 T_START=$(date +%s)
 pnpm typecheck
+# The full-suite bundle-budget check reads the actual Vite output. A clean checkout has none;
+# relying on an old ignored dist made standalone preflight depend on local history (ADR-189).
+pnpm --filter @hawa/desk build
 T_END=$(date +%s)
 STAGE_STATUS+=("typecheck:PASS ($((T_END - T_START))s)")
 echo "    [PASS] Typecheck completed cleanly."
@@ -199,6 +202,9 @@ echo ""
 echo "--> [Stage 6/8] Verifying source-candidate manifest invariants..."
 T_START=$(date +%s)
 pnpm tsx "${ROOT_DIR}/scripts/verify_release_manifest.ts"
+bash "${ROOT_DIR}/scripts/enforce_release_gate.sh" --test-refusal \
+  > "${OUTPUT_DIR}/NEGATIVE_FLAG_REFUSAL.log" 2>&1 \
+  || { echo "FATAL: Mandatory-flag refusal drill failed; inspect NEGATIVE_FLAG_REFUSAL.log."; exit 1; }
 T_END=$(date +%s)
 STAGE_STATUS+=("release_manifest:PASS ($((T_END - T_START))s)")
 echo "    [PASS] Source-candidate checksum and topology verified."
