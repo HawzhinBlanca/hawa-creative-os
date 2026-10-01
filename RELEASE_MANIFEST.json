@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-01T08:47:26+03:00",
+  "generatedAt": "2026-10-01T09:13:45+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "4ea792fb505efefdef3b9fa3816e1d0e36108c5d",
+    "commit": "f9d8434ebe753dfbc2e837eb4c9856a2f83d188c",
     "treeClean": true,
-    "commitTimestamp": "2026-10-01T08:47:26+03:00",
+    "commitTimestamp": "2026-10-01T09:13:45+03:00",
     "branch": "codex/content-aware-design"
   },
   "migrations": {
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "01f0a470278ce013a26d0c9be8cf19c50efa00e78ac0450b121c35b0078f984b",
+        "apps/core/src/app.ts": "8e85e9b7fc48456372c206bbdc17eaa019e013b5198f58c4b160c9d47e7fe6af",
         "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "e54306c6920584635253c580029e571d22cbcbfb5aa7db4984e92f5e07ba5e4f"
+  "sha256": "c8766adfbf2a3a87587a95acdd6f1a2367c3c712e3be712ed58efc45921f2c57"
 }
