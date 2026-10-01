@@ -635,6 +635,63 @@ paths:
       responses:
         '201': {description: Draft DNA version created, content: {application/json: {schema: {$ref: '../schemas/ClientDNA.schema.json'}}}}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/dna/model-consent:
+    get:
+      tags: [Clients]
+      operationId: getClientModelConsent
+      summary: What the model-reading gates see for this client now (ADR-234)
+      description: Office staff (administrator, operator, auditor). Reads the active DNA version, whether it is approved, its privacy block, the client's egress policy and whether the intake router's gate admits OpenAI. Changes nothing.
+      parameters: [{$ref: '#/components/parameters/ClientId'}]
+      responses:
+        '200':
+          description: Current consent state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clientId, version, approved, approvedBy, privacy, commitMessage, clientPolicy, modelReading]
+                properties:
+                  clientId: {type: string, format: uuid}
+                  version: {type: [integer, 'null']}
+                  approved: {type: boolean}
+                  approvedBy: {type: [string, 'null'], format: uuid}
+                  privacy: {type: [object, 'null']}
+                  commitMessage: {type: [string, 'null']}
+                  clientPolicy: {type: [object, 'null']}
+                  modelReading: {type: object, required: [openai], properties: {openai: {type: boolean}}}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      tags: [Clients]
+      operationId: recordClientModelConsent
+      summary: Record or withdraw a client's consent to model readings (ADR-234)
+      description: >-
+        A person with the administrator role only (never a service, worker or test identity; the
+        membership is checked in PostgreSQL). Makes the next DNA version with the active DNA unchanged
+        except privacy.modelEgressMode and privacy.allowedProviders, created and approved by the acting
+        administrator; supersedes the previous version and appends an audit event. providers [] or mode
+        none/local_only withdraws (stored as local_only with no providers). The same request sent again
+        after it was applied answers 200 with replayed true; any other request on a stale version is 409.
+      parameters: [{$ref: '#/components/parameters/ClientId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedVersion, mode, providers, reason]
+              properties:
+                expectedVersion: {type: integer, minimum: 1}
+                mode: {type: string, enum: [approved_providers, evaluated_external_allowed, local_only, none]}
+                providers: {type: array, uniqueItems: true, maxItems: 3, items: {type: string, enum: [openai, google, anthropic]}}
+                reason: {type: string, minLength: 3, maxLength: 500}
+      responses:
+        '201': {description: New approved DNA version recorded, content: {application/json: {schema: {$ref: '#/components/schemas/ClientModelConsentResult'}}}}
+        '200': {description: Replay of an applied request, or the consent was already recorded, content: {application/json: {schema: {$ref: '#/components/schemas/ClientModelConsentResult'}}}}
+        '400': {description: Anything but the four fields, an unknown provider or mode, or no reason}
+        '403': {description: Not an administrator, or not a person who is an active administrator of the office}
+        '409': {description: The active DNA version is not expectedVersion (and this is not a replay), or the client has no DNA}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/clients/{clientId}/source-files:
     get:
       tags: [Clients]
@@ -1279,6 +1336,19 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    ClientModelConsentResult:
+      type: object
+      required: [clientId, version, previousVersion, changed, replayed, privacy, approvedBy, contentHash, modelReading]
+      properties:
+        clientId: {type: string, format: uuid}
+        version: {type: integer}
+        previousVersion: {type: integer}
+        changed: {type: boolean}
+        replayed: {type: boolean}
+        privacy: {type: object}
+        approvedBy: {type: string, format: uuid}
+        contentHash: {type: string}
+        modelReading: {type: object, required: [openai], properties: {openai: {type: boolean}}}
     PublicationInspectionState:
       type: object
       required: [schemaVersion, tenantId, userId, checkedAt, schedule, items, nextAfter]
