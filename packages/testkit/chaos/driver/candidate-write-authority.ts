@@ -12,8 +12,8 @@ export async function verifyCandidateWriteAuthority(checks: InvariantResult[]): 
     checks.push({ name, ok, detail });
     if (!ok) throw new Error(`${name}: ${detail}`);
   };
-  const userId = randomUUID(), operatorId = randomUUID(), clients = [randomUUID(),randomUUID()];
-  for (const [id,role] of [[userId,'designer'],[operatorId,'operator']]) {
+  const userId = randomUUID(), operatorId = randomUUID(), administratorId = randomUUID(), clients = [randomUUID(),randomUUID()];
+  for (const [id,role] of [[userId,'designer'],[operatorId,'operator'],[administratorId,'administrator']]) {
     await query(sql`INSERT INTO hawa.users(id,email,display_name) VALUES (${id}::uuid,${id+'@example.test'},'Synthetic write authority actor')`);
     await query(sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES (${TENANT_ID}::uuid,${id}::uuid,${role}::hawa.membership_role)`);
   }
@@ -67,4 +67,26 @@ export async function verifyCandidateWriteAuthority(checks: InvariantResult[]): 
   const expected = createHash('sha256').update(readFileSync(join(REPO_ROOT,'packages/db/migrations/080_task_write_scope_authority.sql'))).digest('hex');
   const stored = await query<{ sha256: string }>(sql`SELECT sha256 FROM hawa.schema_upgrades WHERE name='080_task_write_scope_authority.sql'`);
   check('candidate migration080 receipt matches the exact source checksum',stored.length === 1 && stored[0].sha256 === expected,expected);
+
+  const consentVersion = randomUUID();
+  const consentDna = { privacy: { modelEgressMode: 'approved_providers', allowedProviders: ['openai'] } };
+  const consentHash = createHash('sha256').update(JSON.stringify(consentDna)).digest('hex');
+  await query(sql`INSERT INTO hawa.client_dna_versions(id,tenant_id,client_id,version,status,dna,content_hash,approved_by)
+    VALUES(${consentVersion}::uuid,${TENANT_ID}::uuid,${clients[0]}::uuid,2,'active',
+      ${JSON.stringify(consentDna)}::jsonb,${consentHash},${administratorId}::uuid)`);
+  const consentAudit = (actor: string, hash = consentHash, task: string | null = null) => runtime(actor,trx => sql`
+    INSERT INTO hawa.audit_events(tenant_id,client_id,task_id,actor_type,actor_id,action,resource_type,resource_id,after_hash)
+    VALUES(${TENANT_ID}::uuid,${clients[0]}::uuid,${task}::uuid,'user',${actor},
+      'client.model_consent.granted','client_dna_version',${consentVersion},${hash})`.execute(trx));
+  const consentWritten = await consentAudit(administratorId);
+  check('candidate named stored administrator can append source-bound consent evidence',
+    Number(consentWritten.numAffectedRows) === 1,'actual hawa_app write');
+  await refuse('candidate operator cannot forge administrator consent evidence',() => consentAudit(operatorId),'42501');
+  await refuse('candidate consent audit refuses an after-hash outside its approved DNA snapshot',
+    () => consentAudit(administratorId,'b'.repeat(64)),'42501');
+  await refuse('candidate task policy cannot bypass source-bound consent authority',
+    () => consentAudit(administratorId,consentHash,taskId),'42501');
+  const consentExpected = createHash('sha256').update(readFileSync(join(REPO_ROOT,'packages/db/migrations/081_model_consent_audit_authority.sql'))).digest('hex');
+  const consentStored = await query<{sha256:string}>(sql`SELECT sha256 FROM hawa.schema_upgrades WHERE name='081_model_consent_audit_authority.sql'`);
+  check('candidate migration081 receipt matches the exact source checksum',consentStored.length === 1 && consentStored[0].sha256 === consentExpected,consentExpected);
 }

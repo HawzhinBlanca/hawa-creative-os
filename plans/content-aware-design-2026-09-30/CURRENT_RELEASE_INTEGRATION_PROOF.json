@@ -1,6 +1,6 @@
 {
   "date": "2026-10-01",
-  "status": "INTEGRATED_CONNECTED_CHECKS_PASS_FULL_RELEASE_QUALIFICATION_PENDING",
+  "status": "INTEGRATED_FULL_7515_PASS_4_FAIL_REPAIRED_CONNECTED_38_PASS_FULL_RERUN_PENDING",
   "researchParent": "dce6004c514ed35f003e7db35966b267b0c49ca4",
   "liveParent": "baffce10408707f74f1265206366c0af0d482096",
   "requirements": [
@@ -18,7 +18,8 @@
     "adrs/172_content_aware_editable_art_direction.md",
     "adrs/225_task_write_scope_authority.md",
     "adrs/236_kaae_brand_guideline_light_first.md",
-    "adrs/237_sol_judge_and_visual_review.md"
+    "adrs/237_sol_judge_and_visual_review.md",
+    "adrs/226_model_consent_audit_authority.md"
   ],
   "connected": {
     "filesPassed": 16,
@@ -58,17 +59,51 @@
     "packages/creative/src/studio/art-direction/recipes.ts": "fa21864e0fe253d504f6524621599364f02ed8eef3c7f8b53e73c844fe7b9472",
     "packages/creative/src/studio/art-direction/solver.ts": "b87e1e15cf47eb496b65ff8b7495e0fe3260498679e6bb7466d704f214492005",
     "packages/creative/src/studio/pipeline-v3.ts": "fd625e46ca29bfbf3e27efbbd0c7555008f1a23444b5ae10cc02d9a1c20d785a",
-    "packages/creative/test/kaae-light-guideline.test.ts": "67ecb48ca46512c0998c6d128f9013f39602c2121c2ed6c991dc0fa8887280fb"
+    "packages/creative/test/kaae-light-guideline.test.ts": "67ecb48ca46512c0998c6d128f9013f39602c2121c2ed6c991dc0fa8887280fb",
+    "apps/core/test/art-direction-e2e.test.ts": "835575007beb523a31a32a1469242e109e5992071106b574bf0dca7e29a7d412",
+    "packages/db/migrations/081_model_consent_audit_authority.sql": "fdfa3c1c1806c0e0cdd9286f99541c05ef2623540ddee7471902950e8ad87ea2",
+    "packages/db/test/model-consent-audit-authority.test.ts": "c80d680d306e5612db0b9728a7bfd8754f6a746c641e197f7d2b79e2599abe34",
+    "packages/testkit/chaos/driver/candidate-write-authority.ts": "0b3a10101f33586c42b3f36389cf01eeac390f5e1865087415d973cd4363e9a2",
+    "apps/core/test/startup-schema-check.test.ts": "de85d9095f8c6119dc53a57e4d3928e2668a13dac356352e5a04b60ff0dfd9ff",
+    "packages/db/test/schema-upgrade.test.ts": "88b44090a2a03e79b7cd2d766cabae434cc6bf76f01bfe5fd43e97dc95c1413c"
   },
   "failureHistory": [
     "Initial conflict resolver rejected prompt separator lines and subsequent typechecks caught incomplete file tails; all affected files restored from actual Git merge inputs and re-resolved with exact hunk counts. No integration commit/deployment preceded correction.",
     "Missing merged palette luminance import initially caused43 failures/132 positives.",
     "Corrected16-file run exposed9 actual tone/transfer incompatibilities with166 positives; original exact-source and narrative assertions preserved.",
     "Four strict new white-paper editorial controls failed before the solver repair.",
-    "Final unchanged strict connected suite plus four new controls:179/0."
+    "Final unchanged strict connected suite plus four new controls:179/0.",
+    "First exact integrated full run7515/4/67: three legitimate model-consent API/replay/withdrawal failures from missing purpose-specific audit permission; one old removed KAAE palette fixture. Forward081 source-bound permission and approved palette fixture repair38 connected controls without weaker assertions. Full rerun pending."
   ],
-  "fullEngineering": "PENDING",
-  "candidateRecovery": "PENDING",
+  "fullEngineering": {
+    "commit": "d66a92712397092da24a115975d47135a200403c",
+    "status": "FAILED",
+    "passed": 7515,
+    "failed": 4,
+    "skipped": 67,
+    "passingFiles": 713,
+    "failedFiles": 2,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/FIRST_FULL_GATE.log"
+  },
+  "candidateRecovery": {
+    "commit": "d66a92712397092da24a115975d47135a200403c",
+    "passed": 232,
+    "failed": 0,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/last-run.json",
+    "policyCount": 177,
+    "note": "Before forward081; not current repaired runtime qualification."
+  },
   "productionDeployment": "NOT_PERFORMED",
-  "wholeProductAdmission": false
+  "wholeProductAdmission": false,
+  "repair": {
+    "decision": "adrs/226_model_consent_audit_authority.md",
+    "connectedFiles": 6,
+    "passed": 38,
+    "failed": 0,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/VERIFIED_CONSENT_SCOPE_CONNECTED.log",
+    "currentFullSource": "PENDING",
+    "currentCandidateRecovery": "PENDING",
+    "migration": "packages/db/migrations/081_model_consent_audit_authority.sql",
+    "scope": "Only actual current administrator consent audit INSERTs, tied to actor/tenant/client/source/hash and recorded privacy state; restrictive guard prevents task policy bypass. Existing read grants unchanged."
+  }
 }

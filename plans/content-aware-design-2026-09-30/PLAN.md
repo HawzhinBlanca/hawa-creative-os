@@ -967,3 +967,14 @@ explicit white paper now reaches all four editorial compositions. Original
 failed receipts retained; corrected16files179/0,722 roots and lint pass. Full
 source/candidate/deployment qualification pending. No real native or human-quality
 admission claimed. See CURRENT_RELEASE_INTEGRATION_PROOF.json.
+
+
+### Integrated full-run repair — ADR226
+
+Exactd66a9271 full source7515/4/67 failed: consent audit permission blocks three
+legitimate API/replay/withdrawal controls, and one fixture used a removed KAAE
+background. Preserve failure receipt. Forward081 adds only source-state-bound
+administrator consent audit insertion with a restrictive task-bypass guard;
+existing reads/grants unchanged. Six files/38 connected checks pass. Current full
+source and candidate recovery reruns pending; earlier232 candidate controls do
+not qualify this newly repaired schema. No production or product admission.

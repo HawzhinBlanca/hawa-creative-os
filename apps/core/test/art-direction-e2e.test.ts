@@ -244,14 +244,14 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
 
     // ADR-172: the production adapter passes the requester decision through the same one-call
     // recipe path. All solved geometries remain readable after the surface color changes.
-    const requested = await runLayoutsStage({ ...ctx, requestedBackground: '#1E3A5F' }, brief, [],
+    const requested = await runLayoutsStage({ ...ctx, requestedBackground: '#17087A' }, brief, [],
       [0, 1, 2].map((ordinal) => ({ id: randomUUID(), ordinal })));
     expect(requests).toHaveLength(2);
-    expect(requests[1].messages[1].content[0].text).toContain('"requestedColor":"#1E3A5F"');
-    expect(requested.every(c => c.currentLayout.background.color === '#1E3A5F')).toBe(true);
+    expect(requests[1].messages[1].content[0].text).toContain('"requestedColor":"#17087A"');
+    expect(requested.every(c => c.currentLayout.background.color === '#17087A')).toBe(true);
     expect(requested.every(c => c.currentLayout.background.decision?.basis === 'requester')).toBe(true);
-    const requestedRenders = await runRenderStage({ ...ctx, requestedBackground: '#1E3A5F' }, requested);
-    for (const r of rankStudioCandidatesV3({ ...ctx, requestedBackground: '#1E3A5F' }, requestedRenders)) {
+    const requestedRenders = await runRenderStage({ ...ctx, requestedBackground: '#17087A' }, requested);
+    for (const r of rankStudioCandidatesV3({ ...ctx, requestedBackground: '#17087A' }, requestedRenders)) {
       expect(r.hardQa?.passed, r.hardQa?.messages.join(' | ')).toBe(true);
     }
 
