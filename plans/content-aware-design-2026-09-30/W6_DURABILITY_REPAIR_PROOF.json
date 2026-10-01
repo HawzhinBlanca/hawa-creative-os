@@ -1,13 +1,15 @@
 {
   "date": "2026-10-01",
-  "status": "CONNECTED_REPAIR_VERIFIED_FULL_DURABILITY_PENDING",
+  "status": "CURRENT_ENGINEERING_54_ORDINARY_DURABLE_AND_CANDIDATE_RECOVERY_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-004",
     "FR-005",
+    "FR-025",
     "FR-028",
     "FR-034",
     "FR-035",
     "FR-038",
+    "FR-056",
     "NFR-001",
     "NFR-014",
     "NFR-024"
@@ -55,10 +57,11 @@
     "productionChanged": false,
     "realProviderCalls": 0,
     "nativeSave": false,
-    "fullOrdinaryDurability": "PENDING",
-    "candidateAssetRecovery": "PENDING_CURRENT_REPAIR",
+    "fullOrdinaryDurability": "PASS_54_SYNTHETIC_ORDINARY_SCENARIOS",
+    "candidateAssetRecovery": "PASS_CURRENT_SYNTHETIC_CANDIDATE_SAME_HOST_RECOVERY",
     "productionDumpTransfer": "NOT_RUN_PENDING_EXPLICIT_AUTHORIZATION",
-    "nativeHumanModelAndPilotAdmission": "OPEN"
+    "nativeHumanModelAndPilotAdmission": "OPEN",
+    "engineering": "PASS_SEVEN_TECHNICAL_STAGES_WITH_PRODUCTION_DUMP_NOT_RUN"
   },
   "artifacts": [
     {
@@ -212,6 +215,74 @@
     {
       "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_LINT.log",
       "sha256": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FULL_RESULT.json",
+      "sha256": "3e4d545dd83679e24a5d90a16a08f51ab65a74d3977d0dabce81b7bbf37443ca"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FULL_RAW_SCENARIO_RECEIPT.json",
+      "sha256": "e7dd8a4371682b6f382f6b69d05c35fab67da3454aba900219998d35fdc9d161"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FULL_START_READBACK.json",
+      "sha256": "d36ca81267d89123de495a4272fdab60c2e0f49c7b6bb747ba6a735f3fd89400"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FULL_END_READBACK.json",
+      "sha256": "de68100dddf1312c4ac26bfc85f6e42b74b025235290c34f8670b950b8e10ab1"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/REPAIR_FULL_DURABLE_RUN.log",
+      "sha256": "a35c23be2b098cf41ed5451f8a12509c179514a1ad6c13653916b1711d359065"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_ENGINEERING_GATE.log",
+      "sha256": "4bf92722e8c50f9a74cfa33f978b78fd815ec8a6bf10b47f3c919235efd892c3"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_FULL_TEST_SUITE_RUN.log",
+      "sha256": "896f3dad87ea586ca1a203594c4e2eaf44c1c22768d0aa2798f70d330a684c2b"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_RELEASE_GATE_EVIDENCE.json",
+      "sha256": "385060e0689cca90044efe2ec7c5a2a6c854633f82c5667d4160c34ae806fa3b"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_NEGATIVE_FLAG_REFUSAL.log",
+      "sha256": "d46e3c6fef41b655e38df62fdbebb1bd1417f45a01c94f4444ad67840943112d"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_PREDEPLOY_DUMP_CHECK.json",
+      "sha256": "e18d3c5b356ca522563da745a55962f8dd2a3b83608e5fc6ac778abe461e0220"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/CURRENT_CANDIDATE_RAW_RECEIPT.json",
+      "sha256": "16de1832267c1f531a1cf96c0bf90208980038e78b0e6ec0ee5c8a7f06f1d03d"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/CURRENT_CANDIDATE_RESULT.json",
+      "sha256": "57c3bde0bc00af17ac95321775d0e0ffbd7ddba84a63e30169317a5600bc6841"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/CURRENT_CANDIDATE_DRIVE_RESTORE.json",
+      "sha256": "7e7bf571fcdef1cdc33fa16bf8db5baef67716ff0aefd4ab27ccff1327bc527b"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/CURRENT_CANDIDATE_TELEGRAM_RESTORE.json",
+      "sha256": "228c80c0a57bd2c4443eb4da3f4fa82d77c0be81ba6b8970036dd1703d3cd956"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/CURRENT_CANDIDATE_RECOVERY.log",
+      "sha256": "e7101bd1f01ddd68d4d0f3cabdbb87aaeaa31a5efef67b4638368594012cb880"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_OWNED_STACK_TEARDOWN.json",
+      "sha256": "e1bcc66c06c2ec3ed50d85fbe14aa6634b631efd1e85564e9ad17a2563c61f41"
+    },
+    {
+      "path": "output/qualification/2026-10-01/current-durable-suite/FINAL_OWNED_STACK_TEARDOWN.log",
+      "sha256": "74c7922e59b3a71f4bc8551127023b33b87cd2b213d2e7f07ec8b2d7c9a19739"
     }
   ],
   "firstConnected": {
@@ -260,5 +331,91 @@
     "filesSkipped": 6,
     "status": "FAILED_TEST_SUITE",
     "reason": "Negative font fixture returned unchanged Arial source bytes; preserve false assertions and genuinely substitute exported Verdana."
+  },
+  "currentQualification": {
+    "commit": "bc25c8ca1125946c506b51b433a5d35591708d81",
+    "engineeringStagesPassed": 7,
+    "suite": {
+      "passed": 6949,
+      "failed": 0,
+      "skipped": 67,
+      "filesPassed": 692,
+      "filesSkipped": 6
+    },
+    "strictRoots": 699,
+    "negativeFlagRefusal": "PASS",
+    "productionDump": "NOT_RUN_PENDING_EXPLICIT_AUTHORIZATION",
+    "allEightEngineeringStagesQualified": false,
+    "ordinaryDurable": {
+      "scenarios": 54,
+      "passed": 54,
+      "controlsPassed": 779,
+      "controlsTotal": 779,
+      "uncoveredModelCalls": 0,
+      "totalMs": 1882613,
+      "sampledMemoryOnly": "start/end and scenario samples; not a continuous peak measurement",
+      "peakSampledTotalMiB": 1393
+    },
+    "candidateSourceRecovery": {
+      "status": "PASS_SYNTHETIC_CANDIDATE_AND_SAME_HOST_RECOVERY_ONLY",
+      "controlsPassed": 202,
+      "controlsTotal": 202,
+      "totalMs": 158931,
+      "restores": {
+        "drive": {
+          "tableCount": 105,
+          "policyCount": 176,
+          "verifiedBlobCount": 10,
+          "missingBlobReferences": 0,
+          "restoreValidationSeconds": 8.686,
+          "writersStoppedBeforeCaptureAndDuringValidation": true,
+          "allRowsAndPoliciesMatch": true,
+          "allStoreFilesMatch": true,
+          "externalServiceSurvived": true,
+          "privateArtifactsCleanup": {
+            "removed": true,
+            "scope": "this_recovery"
+          }
+        },
+        "telegram": {
+          "tableCount": 105,
+          "policyCount": 176,
+          "verifiedBlobCount": 10,
+          "missingBlobReferences": 0,
+          "restoreValidationSeconds": 8.631,
+          "writersStoppedBeforeCaptureAndDuringValidation": true,
+          "allRowsAndPoliciesMatch": true,
+          "allStoreFilesMatch": true,
+          "externalServiceSurvived": true,
+          "privateArtifactsCleanup": {
+            "removed": true,
+            "scope": "this_recovery"
+          }
+        }
+      },
+      "scope": {
+        "externalProvidersAndStaff": "synthetic",
+        "parser": "real offline Docling",
+        "actualNginxDeskCoreWorker": true,
+        "productionChanged": false,
+        "nativeSave": false,
+        "offsitePitrRpoRto": false,
+        "productAdmission": false
+      }
+    },
+    "productionChanged": false,
+    "realProviderCalls": 0,
+    "nativeSave": false,
+    "productAdmission": false
+  },
+  "ownedStackTeardown": {
+    "at": "2026-10-01T17:56:39.071496+00:00",
+    "scope": "owned hawa-chaos project only",
+    "containersRemaining": [],
+    "volumesRemaining": [],
+    "lockRemaining": false,
+    "privateRunFilesRemaining": [],
+    "receiptsArchivedBeforeTeardown": true,
+    "productionChanged": false
   }
 }

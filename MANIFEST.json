@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-01T17:19:47Z",
+  "generatedAt": "2026-10-01T17:56:46Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1084,18 +1084,18 @@
     },
     {
       "path": "adrs/220_per_block_imported_font_authority.md",
-      "sha256": "69502c5f6c486b79c7db23bc434d5dfab6fc598e4cefddf65135b82987e4a248",
-      "bytes": 2795
+      "sha256": "42c16b873812186aab00cc24547fd5be019922ad1126efd6fce0f72b0f5edb82",
+      "bytes": 3660
     },
     {
       "path": "adrs/221_lone_photo_retained_source_handoff.md",
-      "sha256": "38a93ffffae2d305b5eccdcce00b7b480f44a0b87ce50435159a76439112e609",
-      "bytes": 2358
+      "sha256": "383eeb15871db105904be6a93eba5cfc319340e953cf20daa1fd860d7f2d73ce",
+      "bytes": 3223
     },
     {
       "path": "adrs/222_durable_harness_generation_and_owner_contract.md",
-      "sha256": "3ca1decbf0a58c2846fcd79b50b78ca2dc97914def76f83bb46665e0d8a80aa3",
-      "bytes": 2521
+      "sha256": "06695cff009fd1a83b52145598110468e54786e6ecb63424ccac16d02e943f15",
+      "bytes": 3386
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1589,8 +1589,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PLAN.md",
-      "sha256": "19bd15b01bc5cfb93ca7d86ae650b33ca1893375f9943236d5eede944a0b117f",
-      "bytes": 79305
+      "sha256": "a000c2c0858ecb4d5546816ac6394423c19111734b3b3a6226a385e83b412cff",
+      "bytes": 80113
     },
     {
       "path": "plans/content-aware-design-2026-09-30/PROOF.json",
@@ -1894,8 +1894,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_DURABILITY_REPAIR_PROOF.json",
-      "sha256": "d6d8e7161a40a01a07733b1c9272ca22089963893933f254dd8125d80e05f52b",
-      "bytes": 12485
+      "sha256": "fd2e3b7ea5eb44f303270532c50c77b6bd6483399278fc6024b37ac275cc7f45",
+      "bytes": 18783
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W6_FEEDBACK_ATTRIBUTION_GATE_EVIDENCE.json",
@@ -3194,8 +3194,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "0250696c6266b921b34e936c2ece62122de9c01626105957f3dcf271031c506d",
-      "bytes": 746196
+      "sha256": "296d52580e9f5926b4c5ff10bdb70313302cf79533326232ca873407f89ca78d",
+      "bytes": 750739
     },
     {
       "path": "plans/user-stories.csv",

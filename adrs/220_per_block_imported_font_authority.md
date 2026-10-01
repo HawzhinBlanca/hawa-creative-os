@@ -1,6 +1,6 @@
 # ADR220 — Per-block imported font authority
 
-Date: 2026-10-01. Status: proposed; qualification pending.
+Date: 2026-10-01. Status: locally implemented and qualified on bc25c8ca; production/product admission remains open.
 Requirements: FR-028, FR-034, FR-035, FR-038, NFR-014, NFR-024.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/11_QA_RTL_MULTILINGUAL.md,
 docs/30_CURRENT_STUDIO_CONTRACT.md, MASTER_SPEC.md, ADR208, ADR209.
@@ -44,3 +44,16 @@ Core/PostgreSQL capture are required. Rerun current bilingual delivery through t
 real isolated Core/worker/Restate stack, relevant connected acceptance and the exact
 engineering gate. Keep other original full-suite failures and unselected rollback,
 production-dump, genuine native/human/product admission scopes explicit.
+
+## Current qualification — 2026-10-01
+
+Exact clean bc25c8ca passes 6,949 source tests (0 failures, 67 skips), 699 strict
+roots, seven technical gate stages, mandatory flag refusal, and 54/54 ordinary
+Docker durable scenarios (779/779 controls; zero uncovered model calls).
+The same candidate also passes 202/202 deployed source/recovery controls
+with real nginx, Desk, Core, worker and offline Docling, including both encrypted
+fresh-volume co-restores. External adapters and staff actions are synthetic.
+Original red/failed/cancelled receipts remain retained. Native/human/model/pilot
+admission, offsite/PITR/RPO/RTO and authorized production-dump checks remain open.
+No production deployment, native save or real provider call.
+See plans/content-aware-design-2026-09-30/W6_DURABILITY_REPAIR_PROOF.json.

@@ -862,3 +862,16 @@ The source suite6947 pass/1 fail exposed a font-negative fixture returning uncha
 Arial bytes; its provider fixture now genuinely substitutes Verdana while all
 negative assertions remain. Connected295 tests/16 files,699 roots and27 loopback
 ledger boundary tests pass. Full current gates and candidate recovery remain pending.
+
+## Current qualification — 2026-10-01
+
+Exact clean bc25c8ca passes 6,949 source tests (0 failures, 67 skips), 699 strict
+roots, seven technical gate stages, mandatory flag refusal, and 54/54 ordinary
+Docker durable scenarios (779/779 controls; zero uncovered model calls).
+The same candidate also passes 202/202 deployed source/recovery controls
+with real nginx, Desk, Core, worker and offline Docling, including both encrypted
+fresh-volume co-restores. External adapters and staff actions are synthetic.
+Original red/failed/cancelled receipts remain retained. Native/human/model/pilot
+admission, offsite/PITR/RPO/RTO and authorized production-dump checks remain open.
+No production deployment, native save or real provider call.
+See plans/content-aware-design-2026-09-30/W6_DURABILITY_REPAIR_PROOF.json.
