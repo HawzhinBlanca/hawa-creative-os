@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-01T23:32:17+03:00",
+  "generatedAt": "2026-10-01T23:49:22+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "d54bc6b159ddbb9dc91495542cac6475304ecdf7",
+    "commit": "f2a3f5f5f81712ecb1d5f5f3dfacb619fe40b5bd",
     "treeClean": true,
-    "commitTimestamp": "2026-10-01T23:32:17+03:00",
+    "commitTimestamp": "2026-10-01T23:49:22+03:00",
     "branch": "codex/content-aware-design"
   },
   "migrations": {
-    "targetVersion": "080_task_write_scope_authority",
-    "latestMigrationFile": "080_task_write_scope_authority.sql",
-    "totalMigrations": 80
+    "targetVersion": "081_model_consent_audit_authority",
+    "latestMigrationFile": "081_model_consent_audit_authority.sql",
+    "totalMigrations": 81
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "3ce48bb52552900b98fce2de31530f16577f9205eca94d6fc8d8d25b2abd11cb"
+  "sha256": "c60392fd498038afd5948cdd2fd408c9678b00be7ec2031bc2de418e56375cd9"
 }
