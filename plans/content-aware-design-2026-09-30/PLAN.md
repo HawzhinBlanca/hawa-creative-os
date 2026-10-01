@@ -198,3 +198,8 @@ The first clean combined seal21896bff passed stages1–7 but failed two full-sui
 ### Refusal-drill correction and first repaired full pass
 
 Seal c952e1a5 passes all8 stages,6427 tests/0 failed/67 skipped,651 passed files/6 skipped; Desk was absent before invocation and actually rebuilt. Initial claim that the refusal drill never ran was incorrect: it already ran at evidence emission. ADR189 now moves it earlier, retains diagnostics and reuses its result once; the intermediate duplicate invocation is removed. A final exact seal remains pending. No design/runtime/test change in this consolidation. Original claims/failures are retained with this correction.
+
+
+## Final combined source qualification
+
+Seal 8222c9806949344b5490230c682c6c24484944a6 passes all8 engineering stages,6427 tests/0 failures/67 skips,658 typed roots,1594 blueprint checks and newest production-dump invariants. Final negative control is logged once before the full suite; lint/egress pass. Original failed and first passing runs are retained. Metadata-only proof follow-up does not alter runtime/tests/gate code. Content-aware source is not deployed; five missing recipe references and W3 native/Canva/human, broader W5/W6 and recovery/product admission stay open.

@@ -1,7 +1,7 @@
 # ADR-189: Reproducible bundle and explicit recipe evidence
 
 Date: 2026-10-01
-Status: proposed; first combined full gate failed two checks
+Status: implemented; exact combined engineering qualified, native/human admission open
 Requirements: FR-038, FR-041, FR-074, NFR-014, NFR-025
 Sources: docs/05_CREATIVE_ENGINE.md; docs/11_QA_RTL_MULTILINGUAL.md; MASTER_SPEC.md; ADR172
 
@@ -46,3 +46,8 @@ Actual fresh Desk build and existing budget test; original photo asset/provenanc
 checks; exact missing-five coverage and unavailable-reference controls; current
 connected retrieval tests and a new exact sealed full gate. Original full failures
 are retained. This decision does not qualify the five missing recipes or Canva.
+
+
+## Qualified follow-up
+
+Final seal 8222c9806949344b5490230c682c6c24484944a6 passes all8 stages,6427 tests/0 failed/67 skipped;658 typed roots and1594 blueprint checks. Existing bundle budgets and actual one logged stage6 corruption/refusal control pass. Original first full6424/2/67, focused28/1 and incorrect refusal diagnosis remain recorded. Final native/Canva/human/product admission is open; this candidate is not deployed. Evidence: plans/content-aware-design-2026-09-30/INTEGRATED_RELEASE_PROOF.json.
