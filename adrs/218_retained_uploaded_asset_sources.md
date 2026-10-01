@@ -1,6 +1,6 @@
 # ADR218 — Retain uploaded asset bytes and source provenance
 
-Date: 2026-10-01. Status: connected qualification verified; exact engineering and product admission pending.
+Date: 2026-10-01. Status: connected and seven-stage engineering verified; production-dump/native/human/product admission pending.
 Requirements: FR-018, FR-011, FR-077, NFR-012.
 Sources: docs/08_MEMORY_RAG_CLIENT_DNA.md, docs/09_MESSAGING_AND_OFFICE_INBOX.md,
 docs/14_SECURITY_THREAT_MODEL.md, docs/17_UI_UX.md, MASTER_SPEC.md, ADR035.
@@ -58,3 +58,5 @@ view-coverage check; both references must also survive a real garbage-collection
 Connected actual Core/PostgreSQL, source/asset/search/security/blob/migration checks:14 files /154 passed /0 failed /0 skipped;19 new Core controls;698 strict test roots, build and lint PASS.14 backup checks pass with actual archives/crypto and explicitly simulated Docker/SQL. Disposable font parsing checks both declared and transformed table expansion and an outline; child environments omit office credentials. Actual local OTF decoder check passes separately; no portable OTF-upload/native glyph proof is claimed. Original build, FK inventory, CSP overwrite, loader/migration-list, encoder and legacy fixture failures remain in the evidence archive. W6_ASSET_SOURCE_RETENTION_PROOF.json. Exact gate and production-dump/native/human/product admission remain open.
 
 First exact clean82c5f157 retained:6915 passed /4 failed /67 skipped. Route/startup/media-type expected inventories updated. The new source policies had introduced actual per-row membership calls, violating ADR033; use its existing scalar membership subqueries/client arrays while preserving tenant and asset receipt scope. Isolated synthetic databases on55432 rebuilt for the not-yet-published/deployed078 checksum. Expanded18files/195passed/0failed/0skipped and698 strict roots PASS. Corrected exact gate pending; no deployment or product admission.
+
+Exact clean seal 92a0703f passes seven engineering stages: 6919 passed / 0 failed / 67 skipped across 691 passed files / 6 skipped; 698 strict roots and 1786 package checks. Mandatory negative-flag refusal passes. Raw production-dump Stage 3 remains skipped: previous automatic approval review requires explicit transfer authorization, still pending. No all-eight qualification, deployment or native/human/product admission claim. W6_ASSET_SOURCE_RETENTION_GATE_EVIDENCE.json retains actual receipts.

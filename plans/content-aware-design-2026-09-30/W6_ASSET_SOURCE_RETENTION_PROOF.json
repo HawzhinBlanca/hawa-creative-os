@@ -1,7 +1,7 @@
 {
   "date": "2026-10-01",
   "adr": "ADR218",
-  "status": "CONNECTED_VERIFIED_EXACT_ENGINEERING_GATE_PENDING_PRODUCT_ADMISSION_OPEN",
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "requirements": [
     "FR-018",
     "FR-011",
@@ -94,7 +94,9 @@
     "output/qualification/2026-10-01/asset-source-retention/CONNECTED_GATE_REPAIR.log": "498ef2730b913f30cd4de1f7d1d79f9e37e97a0fb6c912b508de642b86b6b6b4",
     "output/qualification/2026-10-01/asset-source-retention/CONNECTED_INITIAL.log": "e4f76129b6a4f399ffcf418eddab52ae2d46d6e5a8ff03e60c2e0c6e3f792d60",
     "output/qualification/2026-10-01/asset-source-retention/CONNECTED_LOADER_FAILURE.log": "e584305f0034d9182333886b5238ecf24a2bf226a4c9443b27ebcd3b4ecf1525",
-    "output/qualification/2026-10-01/asset-source-retention/EXACT_GATE.log": "6c1c4271e571833c6f7a8aabc34227ce5dc3752d6e0b75e9b559e3ad21c46722",
+    "output/qualification/2026-10-01/asset-source-retention/CORRECTED_SEAL.log": "75fe00e76764d0b9f3b5efde043fde4e02ed51b05419d4666a060b390671f14b",
+    "output/qualification/2026-10-01/asset-source-retention/CORRECTED_SEAL_COMMIT.log": "d2fcab411474c5dc12f0a081615b557ba12615c0f7c476a528467aec3f7f7526",
+    "output/qualification/2026-10-01/asset-source-retention/EXACT_GATE.log": "37471bcbe3992b943f6a8af6e5889d482b5471a0fc7952c13228a0a9d6a7ff84",
     "output/qualification/2026-10-01/asset-source-retention/EXACT_GATE_FIRST_FAILED.log": "6c1c4271e571833c6f7a8aabc34227ce5dc3752d6e0b75e9b559e3ad21c46722",
     "output/qualification/2026-10-01/asset-source-retention/FIRST_FAILED_FULL_TEST_SUITE_RUN.log": "5b608e6c42cac5e9d710b5357538d9b10f794f068e2aaf0335a2aa85a031a80d",
     "output/qualification/2026-10-01/asset-source-retention/FIRST_FAILED_NEGATIVE_FLAG_REFUSAL.log": "cef41279c3698dbdf914f084e32e11f145061593ada1dbd595f6692d544e14a4",
@@ -102,23 +104,41 @@
     "output/qualification/2026-10-01/asset-source-retention/FIRST_FAILED_PREDEPLOY_DUMP_CHECK.log": "7c98e4a1baa5b5026530af0b4bc8b4f0dd4f3521519912dafc92dba40223a12f",
     "output/qualification/2026-10-01/asset-source-retention/FIRST_FAILED_TEST_DB_PROVISION.log": "baa20299210c6de4ff54dd4e2a336249713d24fb0ff7bd5fb752ef6a2bb41080",
     "output/qualification/2026-10-01/asset-source-retention/FIRST_GATE_FAILURE.json": "f64ce96f5c31a7f9436f07afae58835a09ac4089132940bb0cc1ce1191600ece",
+    "output/qualification/2026-10-01/asset-source-retention/FULL_TEST_SUITE_RUN.log": "3df01758d0c3e7796c9fa0ff3416801812912ca946f56ebe944d93116b33afd8",
     "output/qualification/2026-10-01/asset-source-retention/ISOLATED_REBUILD.log": "ebd40f7b712bacfa3881625329e71a7e9eb01f7030a331e54efb27a28fa3b7f9",
     "output/qualification/2026-10-01/asset-source-retention/LEGACY_UPLOAD_COMPATIBILITY.log": "1a43e2ea91c1de069b4949abd93592605dfc63d1fe56659b2fd502553998fc0e",
     "output/qualification/2026-10-01/asset-source-retention/LINT.log": "81268e527353f47331d24d3376399d7ca56af0e0b9082620660ccb3328b23cb4",
+    "output/qualification/2026-10-01/asset-source-retention/NEGATIVE_FLAG_REFUSAL.log": "5faa70b3f8013824b2fab1ce33b49785c92172fe7b278fa4f6309ee46cc54e84",
     "output/qualification/2026-10-01/asset-source-retention/OTF_LOCAL_CHECK.log": "1c1d0055a24745f96d1b46332b4c2b3f01d3ef307f6b1515c118fc2f355f69a9",
+    "output/qualification/2026-10-01/asset-source-retention/PREDEPLOY_DUMP_CHECK.json": "465c9374d0d07805ddcd2baa42a4562549f2a45f45be204c56dc195c0c2ea2a6",
+    "output/qualification/2026-10-01/asset-source-retention/PREDEPLOY_DUMP_CHECK.log": "7c98e4a1baa5b5026530af0b4bc8b4f0dd4f3521519912dafc92dba40223a12f",
     "output/qualification/2026-10-01/asset-source-retention/RED.log": "fcf812768fce21897b941095d529f87f543094252d959820fc477911a01cd387",
+    "output/qualification/2026-10-01/asset-source-retention/RELEASE_GATE_EVIDENCE.json": "75fd7b16baca4a0d08e1c29b05f6ed1325b4a5819f82c855f8b80005f78bb0dc",
+    "output/qualification/2026-10-01/asset-source-retention/REPAIR_COMMIT.log": "437ea58f84c6541899d79873d21ece9e490b1abd108ac9f3882f3b831d347d92",
+    "output/qualification/2026-10-01/asset-source-retention/REPAIR_MANIFEST.log": "1a742da3b0bcc1004fe7068745e91e8d65de5fdf6c6149472dd34fe5ee38a1ad",
     "output/qualification/2026-10-01/asset-source-retention/ROUTE_INVENTORY_UPDATE.log": "f552317c10a79c20c40b38a5e2568975742700c2ef60498c6096d16ff9ddb6b7",
     "output/qualification/2026-10-01/asset-source-retention/SEAL_COMMIT.log": "ce860f276479c780cf1c3e1e2ebdab1c1d2e73b4097b57bbd6b65af8c18cb208",
     "output/qualification/2026-10-01/asset-source-retention/SEAL_MANIFEST_GENERATE.log": "871c4b34ccc68c86e055a6c9a9b998ead64f508cb6b6a264de9089bd711446bc",
     "output/qualification/2026-10-01/asset-source-retention/SOURCE_COMMIT.log": "c46b9a78397f935422b4a27b4c1db0c20a01daf720503869c1b1cb457ae8411b",
     "output/qualification/2026-10-01/asset-source-retention/SOURCE_MANIFEST.log": "1a742da3b0bcc1004fe7068745e91e8d65de5fdf6c6149472dd34fe5ee38a1ad",
     "output/qualification/2026-10-01/asset-source-retention/SOURCE_PACK.log": "211bb766d138bf95968b1affe26196d7e7a1bc3deece56faf224ea7763810eb3",
-    "output/qualification/2026-10-01/asset-source-retention/STRICT_TYPES.log": "0031a004f728e76517d5ff1e692abac40006c9b65ad82d82e0592c7777a293b8"
+    "output/qualification/2026-10-01/asset-source-retention/STRICT_TYPES.log": "0031a004f728e76517d5ff1e692abac40006c9b65ad82d82e0592c7777a293b8",
+    "output/qualification/2026-10-01/asset-source-retention/TEST_DB_PROVISION.log": "9385c743c5ac4d9f3f6b9b368f0ef5edd07add6534794614f86d4d4556f20d10"
   },
   "productionChanged": false,
   "limits": [
     "FR011 qualified upload/read client boundary only; full generation-attempt admission remains independent.",
     "Production-data migration transfer approval pending after automatic-review rejection.",
     "Native Canva edit/save/reopen/glyph/export, genuine taste labels/human quality, deployed current candidate recovery and real office pilot/product admission remain open."
-  ]
+  ],
+  "sourceCommit": "64d6216b3b59c7e74be2113f93ae8d5c20e08a9b",
+  "releaseGate": {
+    "candidateCommit": "92a0703ffbfe9dc68b57bd4997bca94d340a5bc1",
+    "proof": "plans/content-aware-design-2026-09-30/W6_ASSET_SOURCE_RETENTION_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior explicit transfer approval pending",
+    "allEightQualified": false
+  },
+  "originalSourceCommit": "5c9297cd",
+  "failedTestedSeal": "82c5f157"
 }
