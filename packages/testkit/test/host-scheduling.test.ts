@@ -32,7 +32,8 @@ describe('systemd units (Linux)', () => {
 
   it('renders a service and a timer for each launch agent, with nothing left unrendered', () => {
     expect(res.status, res.stderr).toBe(0);
-    expect(fs.readdirSync(out).sort()).toEqual(['hawa-backup-restore-drill', 'hawa-nightly-backup', 'hawa-offsite-copy', 'hawa-restore-drill', 'hawa-watchdog']
+    // ADR-240 added the nightly live canary to both hosts' jobs.
+    expect(fs.readdirSync(out).sort()).toEqual(['hawa-backup-restore-drill', 'hawa-live-canary', 'hawa-nightly-backup', 'hawa-offsite-copy', 'hawa-restore-drill', 'hawa-watchdog']
       .flatMap((u) => [`${u}.service`, `${u}.timer`]));
     for (const f of fs.readdirSync(out)) expect(unit(f)).not.toMatch(/@[A-Z_]+@/);
   });
@@ -45,9 +46,11 @@ describe('systemd units (Linux)', () => {
     expect(unit('hawa-backup-restore-drill.timer')).toMatch(/^OnCalendar=Sun \*-\*-\* 04:00:00 Asia\/Baghdad$/m);
     expect(unit('hawa-restore-drill.timer')).toMatch(/^OnCalendar=\*-\*-01 05:00:00 Asia\/Baghdad$/m);
     expect(unit('hawa-offsite-copy.timer')).toMatch(/^OnCalendar=\*-\*-\* 05:30:00 Asia\/Baghdad$/m);
+    expect(unit('hawa-live-canary.timer')).toMatch(/^OnCalendar=\*-\*-\* 03:30:00 Asia\/Baghdad$/m);
+    expect(unit('hawa-live-canary.timer')).toMatch(/^Persistent=false$/m);
     const scripts: Record<string, string> = { 'hawa-watchdog': 'infra/ops/watchdog.sh', 'hawa-nightly-backup': 'infra/backup/nightly_backup.sh',
       'hawa-backup-restore-drill': 'infra/backup/backup_restore_drill.sh', 'hawa-restore-drill': 'infra/backup/restore_drill.sh',
-      'hawa-offsite-copy': 'infra/backup/offsite_copy.sh' };
+      'hawa-offsite-copy': 'infra/backup/offsite_copy.sh', 'hawa-live-canary': 'infra/ops/live_canary.sh' };
     for (const [name, script] of Object.entries(scripts)) {
       const svc = unit(`${name}.service`);
       expect(svc).toContain(`ExecStart=/bin/bash ${repo}/${script}`);
@@ -107,14 +110,21 @@ describe.runIf(os.platform() === 'darwin')('launch agents (macOS)', () => {
   const read = (label: string) => fs.readFileSync(path.join(out, `${label}.plist`), 'utf8');
   const envOf = (label: string) => JSON.parse(execFileSync('plutil', ['-extract', 'EnvironmentVariables', 'json', '-o', '-', path.join(out, `${label}.plist`)], { encoding: 'utf8' }));
 
-  it('renders five valid plists without calling launchctl', () => {
+  it('renders six valid plists without calling launchctl', () => {
     expect(res.status, res.stderr).toBe(0);
-    expect(res.stdout).toContain('rendered 5 launch agents');
-    for (const label of ['design.hawa.watchdog', 'design.hawa.nightly-backup', 'design.hawa.backup-restore-drill', 'design.hawa.restore-drill', 'design.hawa.offsite-copy']) {
+    expect(res.stdout).toContain('rendered 6 launch agents');
+    for (const label of ['design.hawa.watchdog', 'design.hawa.nightly-backup', 'design.hawa.backup-restore-drill', 'design.hawa.restore-drill', 'design.hawa.offsite-copy',
+      'design.hawa.live-canary']) {
       expect(spawnSync('plutil', ['-lint', path.join(out, `${label}.plist`)]).status, label).toBe(0);
     }
     expect(fs.existsSync(path.join(tmp, 'home', '.hawa'))).toBe(false);
     expect(fs.existsSync(launchctlCalls)).toBe(false);
+  });
+
+  it('the live canary (ADR-240) runs infra/ops/live_canary.sh at 03:30, with no settings of its own', () => {
+    expect(read('design.hawa.live-canary')).toContain('<key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer>');
+    expect(read('design.hawa.live-canary')).toContain(`<string>${repo}/infra/ops/live_canary.sh</string>`);
+    expect(Object.keys(envOf('design.hawa.live-canary')).sort()).toEqual(['HOME', 'PATH']);
   });
 
   it('the off-site agent runs at 05:30 with the nightly job\'s archive settings and its own destination', () => {

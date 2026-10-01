@@ -17,6 +17,7 @@
 #   bash infra/ops/watchdog.sh              # one pass (what the launch agent runs every 5 minutes)
 #   bash infra/ops/watchdog.sh --status     # print the assessment only, never alert
 #   bash infra/ops/watchdog.sh --announce   # send "watchdog armed" once (proves alerts reach you)
+#   bash infra/ops/watchdog.sh --notify TEXT # send TEXT to the operator and nothing else (ADR-240)
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 source "$ROOT/infra/ops/host_lib.sh"
@@ -50,6 +51,12 @@ notify() {
   [[ -n "$token" && -n "$chat" ]] || return 0
   curl -s -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" || true
 }
+# ADR-240: `--notify <text>` sends one message to the operator through this same path and does nothing
+# else; the nightly live canary (infra/ops/live_canary.sh) reports a failed night with it.
+if [[ "$MODE" == "--notify" ]]; then
+  [[ -n "${2:-}" ]] || { echo "watchdog.sh --notify needs the message" >&2; exit 64; }
+  notify "$2"; say "notified the operator"; exit 0
+fi
 # What a problem list is, without its numbers: "only 5/6 stack containers" and "only 4/6" are the same
 # problem, "core degraded" and "Postgres crashed" are not.
 problem_key() { printf '%s' "$1" | sed -E 's/[0-9]+([.:][0-9]+)*/#/g'; }
