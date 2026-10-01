@@ -31,6 +31,7 @@ STORES = {'postgres': ('postgres', '/var/lib/postgresql/data', 'chaos_postgres')
           'restate': ('restate', '/restate-data', 'chaos_restate'),
           'blobs': ('core', '/var/lib/hawa/blobs', 'chaos_blobs')}
 EXTENSIONS = {'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
+              'image/svg+xml': 'svg', 'font/ttf': 'ttf', 'font/otf': 'otf', 'font/woff2': 'woff2',
               'application/pdf': 'pdf', 'audio/ogg': 'ogg',
               'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx'}
 

@@ -16,6 +16,111 @@ tags:
   - name: Evaluations
   - name: Integrations
 paths:
+  /v1/assets/upload:
+    post:
+      tags: [Clients]
+      operationId: retainUploadedAsset
+      summary: Inspect and retain actual client asset bytes
+      description: Requires a currently writable active client. Accepts one file up to 10 MiB in a bounded JSON envelope. SVG content is sanitized; each distinct original is retained separately. The server measures size and hashes actual bytes. Client plus admitted SHA-256 reconciles retries, preserving first asset metadata and append-only source receipts. A 503 after interruption may already have committed; retry the same complete content. No font installation, DNA activation, learned label or provider call occurs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, filename, mimeType]
+              properties:
+                clientId: {type: string, maxLength: 128}
+                filename: {type: string, minLength: 1, maxLength: 255}
+                mimeType: {type: string, enum: [image/png, image/jpeg, image/webp, image/svg+xml, font/ttf, font/otf, font/woff2]}
+                category: {type: string, minLength: 1, maxLength: 80}
+                sizeBytes: {type: integer, minimum: 1, maximum: 10485760, description: Optional hint; must equal the actual supplied byte count.}
+                content: {type: string, description: UTF-8 SVG only; mutually exclusive with contentBase64.}
+                contentBase64: {type: string, description: Canonical padded base64 without prefixes or whitespace.}
+              oneOf:
+                - required: [content]
+                  not: {required: [contentBase64]}
+                - required: [contentBase64]
+                  not: {required: [content]}
+      responses:
+        '201':
+          description: Retained admitted asset with separately addressed original source.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RetainedUploadedAsset'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '408': {$ref: '#/components/responses/Problem'}
+        '413': {$ref: '#/components/responses/Problem'}
+        '415': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /v1/assets/{assetId}/content:
+    get:
+      tags: [Clients]
+      operationId: downloadRetainedAsset
+      summary: Download verified admitted asset bytes within current client authority
+      description: Resolves the actual scoped asset before its blob. Verifies bytes even for conditional reads. Uses attachment, nosniff, sandbox CSP and private no-store headers. Historical metadata-only assets return 409; corrupt or missing retained bytes return 503. A content hash alone grants no access.
+      parameters:
+        - {$ref: '#/components/parameters/AssetId'}
+      responses:
+        '200': {description: Verified file bytes in the recorded admitted media type.}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /v1/assets/{assetId}/sources:
+    get:
+      tags: [Clients]
+      operationId: listUploadedAssetSources
+      summary: List original source receipts for an authorized asset
+      description: Newest 100 source receipts ordered by server time and hash. Explicit truncation does not prove absent older history. Receipts are append-only.
+      parameters:
+        - {$ref: '#/components/parameters/AssetId'}
+      responses:
+        '200':
+          description: Scoped provenance with explicit truncation.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assetId, items, truncated]
+                properties:
+                  assetId: {type: string, format: uuid}
+                  truncated: {type: boolean}
+                  items:
+                    type: array
+                    maxItems: 100
+                    items:
+                      type: object
+                      required: [sourceSha256, filename, uploadedBy, createdAt]
+                      properties:
+                        sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+                        filename: {type: string}
+                        uploadedBy: {type: string}
+                        createdAt: {type: string, format: date-time}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /v1/assets/{assetId}/sources/{sourceSha256}/content:
+    get:
+      tags: [Clients]
+      operationId: downloadOriginalAssetSource
+      summary: Recover an authorized asset's verified original source
+      description: Resolves a matching tenant/client/asset/source receipt first. Original unsanitized bytes are served only as application/octet-stream attachments with sandbox CSP, nosniff and private no-store. Unknown receipt or unauthorized asset returns 404; unavailable or corrupt bytes return 503.
+      parameters:
+        - {$ref: '#/components/parameters/AssetId'}
+        - name: sourceSha256
+          in: path
+          required: true
+          schema: {type: string, pattern: '^[0-9a-f]{64}$'}
+      responses:
+        '200': {description: Verified original file bytes, content type application/octet-stream.}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /v1/search:
     get:
       tags: [Operations]
@@ -1289,6 +1394,11 @@ components:
       type: openIdConnect
       openIdConnectUrl: https://accounts.google.com/.well-known/openid-configuration
   parameters:
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
     TaskId:
       name: taskId
       in: path
@@ -1334,6 +1444,22 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    RetainedUploadedAsset:
+      type: object
+      required: [assetId, clientId, category, filename, mimeType, sha256, sourceSha256, sizeBytes, storageKey, sanitized, createdAt, contentUrl]
+      properties:
+        assetId: {type: string, format: uuid}
+        clientId: {type: string, format: uuid}
+        category: {type: string}
+        filename: {type: string}
+        mimeType: {type: string}
+        sha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        sizeBytes: {type: integer, minimum: 1}
+        storageKey: {type: string}
+        sanitized: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        contentUrl: {type: string}
     PublicationInspectionState:
       type: object
       required: [schemaVersion, tenantId, userId, checkedAt, schedule, items, nextAfter]

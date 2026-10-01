@@ -320,11 +320,12 @@ describe.skipIf(!appUrl || !ownerUrl)('blob garbage collection against PostgreSQ
     const withFk = fks.rows.map((r) => `${String(r.tbl).replace(/^hawa\./, '')}.${r.col}`);
     // ADR-111 and ADR-112 retain studio model images and visual inputs through hawa.blobs (061, 062).
     const RETAINED_STUDIO = ['design_studio_call_results.image_blob_sha256', 'studio_visual_input_assets.blob_sha256'];
-    expect(withFk.sort()).toEqual([...WITH_FOREIGN_KEY, 'client_documents.source_sha256', ...RETAINED_STUDIO].sort());
+    const UPLOADED_SOURCES = ['brand_assets.blob_sha256', 'uploaded_asset_sources.source_sha256'];
+    expect(withFk.sort()).toEqual([...WITH_FOREIGN_KEY, 'client_documents.source_sha256', ...RETAINED_STUDIO, ...UPLOADED_SOURCES].sort());
     for (const column of withFk) expect(inView, `${column} has a foreign key to hawa.blobs but blob_references does not read it`).toContain(column);
     // ADR-061 also retains a pending lifecycle decision's JSON blob reference before its
     // task_files row exists. The intake test exercises that branch; it has no foreign key.
     expect([...inView].sort()).toEqual([...BRANCHES,
-      'client_documents.source_sha256', 'inbox_events.event_kind', 'inbox_events.payload', 'inbox_events.source_account_id', ...RETAINED_STUDIO].sort());
+      'client_documents.source_sha256', 'inbox_events.event_kind', 'inbox_events.payload', 'inbox_events.source_account_id', ...RETAINED_STUDIO, ...UPLOADED_SOURCES].sort());
   });
 });

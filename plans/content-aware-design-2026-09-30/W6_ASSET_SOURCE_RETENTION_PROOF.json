@@ -1,0 +1,103 @@
+{
+  "date": "2026-10-01",
+  "adr": "ADR218",
+  "status": "CONNECTED_VERIFIED_EXACT_ENGINEERING_GATE_PENDING_PRODUCT_ADMISSION_OPEN",
+  "requirements": [
+    "FR-018",
+    "FR-011",
+    "FR-077",
+    "NFR-012"
+  ],
+  "baselineCommit": "e47bb4749e3afa03074582870423fa1828835c55",
+  "reproduction": {
+    "actualCorePostgres": true,
+    "passed": 0,
+    "failed": 3,
+    "log": "output/qualification/2026-10-01/asset-source-retention/RED.log",
+    "findings": [
+      "metadata-only upload returns201",
+      "supplied SVG has no retained content",
+      "supplied base64 hashes metadata instead of bytes"
+    ]
+  },
+  "failureHistory": [
+    "Initial build failed on assumed unavailable Sharp dependency; replaced with existing ffmpeg/rsvg/fontkit, no installation.",
+    "Initial connected74pass/1fail: GC expected FK inventory missed two new roots; expanded real FK/view/collection checks.",
+    "Expanded85pass/1fail: global CSP middleware replaced sandbox CSP; preserve actual route policy.",
+    "Loader run55pass/1fail and5 suite import failures: Vitest does not support import.meta.resolve; use standard createRequire/pathToFileURL. Migration expected list also missed078.",
+    "Encoder run failed because local ffmpeg lacks optional libwebp encoder; use actual synthetic WebP generated once with bundled Pillow. Core uses its existing decoder.",
+    "Existing upload callers23pass/7fail: fake strings/metadata-only/in-memory admission and missing-client error regressed. Migrate acceptance fixtures to real bytes and PostgreSQL; preserve CLIENT_REQUIRED input refusal before requiring source storage.",
+    "Source commit hook refused the stale generated blueprint manifest before committing; refresh and validate the generated files, without bypassing the hook."
+  ],
+  "acceptance": {
+    "newCoreTests": 19,
+    "connected": {
+      "files": 14,
+      "passed": 154,
+      "failed": 0,
+      "skipped": 0
+    },
+    "backupPython": {
+      "passed": 14,
+      "failed": 0,
+      "scope": "real archive/crypto refusal checks; Docker/SQL simulated in recovery harness, not a deployed full restore"
+    },
+    "strictRoots": 698,
+    "build": "PASS",
+    "lint": "PASS",
+    "openApiYaml": "PASS",
+    "diffCheck": "PASS",
+    "retention": "real SHA/size/path and exact cold content; original SVG variants remain separately retrievable while sharing sanitized admitted identity; files and receipts are verified before admission",
+    "authority": "actual assigned designer own/peer/foreign-tenant/shared-hash/unknown-receipt negative boundaries and auditor refusal before store write",
+    "recovery": "cold Core duplicate/concurrent source identity, actual transactional receipt failure rollback/retry, injected before/after-commit response interruptions, busy slot/retry, unavailable store, conditional corruption refusal and append-only owner mutation refusal",
+    "otf": "actual read-only local STIX OTF decoder PASS recorded separately; not a portable full-suite OTF upload fixture or native-editor glyph admission",
+    "retentionRoots": "actual GC preserves original and derivative hashes; actual FK/view inventories and new restore extension archive coverage pass; actual migration apply/concurrent retry/checksum refusal pass",
+    "resources": "existing storage/decoder/font libraries; no provider call, model/embedding dependency, font installation, Client DNA activation or learned label",
+    "decoderBounds": "actual PNG/JPEG/WebP/TTF/WOFF2 decoding; large pixel/WOFF2 header rejection; disposable font parser bounds transformed-table expansion and outline decoding; processes omit office environment and have5s timeout/64KiB output limits; no every-glyph quality claim"
+  },
+  "sourceSha256": {
+    "api/openapi.yaml": "baf1d74242799625891ed7eb70311b2a90c8e436edc3d22f4723d56e5ab80aa2",
+    "apps/core/src/app.ts": "dd7e1ebd5fd03eef8e686cb48a9b38668223c890d2691c0115d57155abed8778",
+    "apps/core/src/routes/assets.routes.ts": "30e36c98f361e4a7b4b7db8c63d235d56e1fdcde75c784fc98065933cd990dd9",
+    "apps/core/src/services/uploaded-asset-input.ts": "8badc3e27a4260a8364cb76eccbf860779c5eb4cc129bf64f7d99ba336b2c91b",
+    "apps/core/src/services/uploaded-assets.ts": "018c265587d31fdc32beb0f7c1f775f01c8264f26ac38ebb1db44127c39034cf",
+    "apps/core/test/asset-source-retention.test.ts": "b5a9e0e04ef89b70559c85265eca6d0bf347726c7517efe48c5be6b8f78b4561",
+    "apps/core/test/security.test.ts": "e837d40f06bf984d3d4799a09529f0b3044f5e3a0ac124764444750d99d1a0cb",
+    "apps/core/test/track-b-gates.test.ts": "ab07088ffeccab488e92c6e4347766f1ab68a28b613e6e972eec444ffd05d7d7",
+    "docs/08_MEMORY_RAG_CLIENT_DNA.md": "e87515d95c567b5edaa1abdaaf8f832fc0869b864ad95b2b480495392c8a3f57",
+    "docs/14_SECURITY_THREAT_MODEL.md": "6d251961464aca83043519562e42bf3df57839edafdc7e7f7ad0733351f5bc50",
+    "infra/backup/candidate_recovery.py": "dbf5888baa94dfecf3d1ed479a7b3a8fd6268f9c0fb35964d0fa93610ede0daa",
+    "infra/backup/test_candidate_recovery.py": "1368c5b9159cf8a494ad6420cd0416731c4adb1ded6fa9db135d589a1c9ee4a2",
+    "packages/contracts/src/blobs.ts": "7730fb14bb3b7f7989173f4f01f441cec81dccdbe4984f994a331c90e589669e",
+    "packages/creative/src/index.ts": "6cf9c999f835e567f88a868126679ecad051efea4b1ac2c0af762769683634ca",
+    "packages/creative/src/uploaded-asset-inspection.ts": "8968f20d2d87dfc830cec0fa60bcc502ac68bce6dd67652a415fd48abe2587c8",
+    "packages/db/migrations/078_uploaded_asset_sources.sql": "205b6dcbfe84cda29909745ab25bf086ca0341224020c41e01984d58f7fed6e8",
+    "packages/db/test/blob-gc.test.ts": "be501cc5b550f52070e9d5b43b960b97feaeaa223c41a05e457e026747aa1f01",
+    "packages/db/test/schema-upgrade.test.ts": "49a0c8026e1fe176ba11cb6d7afc7b9ca0c6a99f08c29e272ad3207260a8c8fd",
+    "packages/domain/src/sanitizer.ts": "b70e7b80562d8fa4f67a023e9d54902b566d529b75c817b7d9c1ea31d2a25c90",
+    "packages/domain/test/sanitizer.test.ts": "c051fc63f0a9ee01487e9afe1021e432b7c7fc1849d0e988aea99670d5a12b81"
+  },
+  "artifacts": {
+    "output/qualification/2026-10-01/asset-source-retention/BACKUP.log": "bddcd3ebb9df742842b4092e4c23d47873f9389306dffeb25cdcff79fe9febcf",
+    "output/qualification/2026-10-01/asset-source-retention/BUILD.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/asset-source-retention/BUILD_INITIAL_FAILURE.log": "6d3038f642a051c3a7e47774368b65231d0935e7ab05e995c01c099e6051828b",
+    "output/qualification/2026-10-01/asset-source-retention/CONNECTED_COMPLETE.log": "18601edac3362efeceadb9e127d6c1d68386bbf7e258ac51d979e671f160583b",
+    "output/qualification/2026-10-01/asset-source-retention/CONNECTED_CREDENTIAL_FREE.log": "92f9a27f818337c36b7bae104339a0557f22a5774d47354e52f0cdf088cfea5e",
+    "output/qualification/2026-10-01/asset-source-retention/CONNECTED_ENCODER_FAILURE.log": "2e31cbc58ec020deaad7064890b43004760a72fc0093f31e75941894b5c03412",
+    "output/qualification/2026-10-01/asset-source-retention/CONNECTED_EXPANDED.log": "546789f4fd297131ff2a17e90de9b05cdfd3cde2ecb6743fab2d47bd90853ff0",
+    "output/qualification/2026-10-01/asset-source-retention/CONNECTED_FINAL.log": "963635a35c1ec9137787f1f1e96519352e05455a11f7c315f2d91318dc0186f8",
+    "output/qualification/2026-10-01/asset-source-retention/CONNECTED_INITIAL.log": "e4f76129b6a4f399ffcf418eddab52ae2d46d6e5a8ff03e60c2e0c6e3f792d60",
+    "output/qualification/2026-10-01/asset-source-retention/CONNECTED_LOADER_FAILURE.log": "e584305f0034d9182333886b5238ecf24a2bf226a4c9443b27ebcd3b4ecf1525",
+    "output/qualification/2026-10-01/asset-source-retention/LEGACY_UPLOAD_COMPATIBILITY.log": "1a43e2ea91c1de069b4949abd93592605dfc63d1fe56659b2fd502553998fc0e",
+    "output/qualification/2026-10-01/asset-source-retention/LINT.log": "81268e527353f47331d24d3376399d7ca56af0e0b9082620660ccb3328b23cb4",
+    "output/qualification/2026-10-01/asset-source-retention/OTF_LOCAL_CHECK.log": "1c1d0055a24745f96d1b46332b4c2b3f01d3ef307f6b1515c118fc2f355f69a9",
+    "output/qualification/2026-10-01/asset-source-retention/RED.log": "fcf812768fce21897b941095d529f87f543094252d959820fc477911a01cd387",
+    "output/qualification/2026-10-01/asset-source-retention/STRICT_TYPES.log": "0031a004f728e76517d5ff1e692abac40006c9b65ad82d82e0592c7777a293b8"
+  },
+  "productionChanged": false,
+  "limits": [
+    "FR011 qualified upload/read client boundary only; full generation-attempt admission remains independent.",
+    "Production-data migration transfer approval pending after automatic-review rejection.",
+    "Native Canva edit/save/reopen/glyph/export, genuine taste labels/human quality, deployed current candidate recovery and real office pilot/product admission remain open."
+  ]
+}

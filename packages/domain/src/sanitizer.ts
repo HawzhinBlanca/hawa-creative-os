@@ -180,6 +180,10 @@ export function validateUploadedAsset(asset: AssetUploadRequest): AssetValidatio
   }
 
   // 4. File size check
+  const actualSize = typeof asset.content === 'string' ? Buffer.byteLength(asset.content, 'utf8') : asset.content?.byteLength;
+  if (!actualSize) violations.push('Actual file content is required');
+  if (!Number.isSafeInteger(asset.sizeBytes) || (actualSize !== undefined && asset.sizeBytes !== actualSize))
+    violations.push('File size must match the actual supplied bytes');
   if (asset.sizeBytes <= 0) {
     violations.push('File size must be greater than zero');
   }
@@ -234,8 +238,6 @@ export function validateUploadedAsset(asset: AssetUploadRequest): AssetValidatio
     hash.update(asset.content, 'utf8');
   } else if (asset.content) {
     hash.update(asset.content);
-  } else {
-    hash.update(`${asset.filename}:${asset.mimeType}:${asset.sizeBytes}`);
   }
   const sha256 = hash.digest('hex');
 

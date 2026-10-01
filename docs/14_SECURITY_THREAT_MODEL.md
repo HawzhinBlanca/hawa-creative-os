@@ -187,6 +187,13 @@ Per client/project define:
 - prompt-injection suite cannot alter privileged state;
 - ComfyUI/WAHA network isolation verified;
 - source hashes and approval invalidation verified;
+- Uploaded asset byte inspection is bounded by file size, pixel/table expansion,
+  one active parse per Core and disposable decoder processes with time/output
+  limits. Current client write authority precedes retention and is rechecked at
+  receipt commit. Original SVG sources download as sandboxed octet-stream
+  attachments; admitted bytes also retain attachment/sandbox headers. Global
+  middleware must preserve route-specific CSP. Missing/corrupt sources fail closed
+  even on conditional reads (ADR218).
 - least-privilege Drive/Sheets access proven.
 
 ### Release identity (ADR-038, 2026-09-25)

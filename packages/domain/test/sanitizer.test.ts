@@ -127,7 +127,7 @@ describe('Asset Upload Validation & Security Engine', () => {
     const res = validateUploadedAsset({
       filename: 'brand_logo_main.png',
       mimeType: 'image/png',
-      sizeBytes: 1024,
+      sizeBytes: pngMagicBytes.byteLength,
       content: pngMagicBytes,
     });
 

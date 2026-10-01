@@ -67,6 +67,18 @@ Requirements:
 - deleted/superseded sources become inactive, not silently lost;
 - embeddings include model/version/dimension.
 
+### Uploaded asset source retention (ADR218)
+
+Generic `/v1/assets/upload` requires actual content, a currently writable active
+client, measured size, media verification and bounded decoding. The admitted hash
+identifies verified stored bytes, including sanitized SVG derivatives. Distinct
+originals have separate append-only source receipts; both original and admitted
+files are foreign-keyed garbage-collection and backup roots. Retrying the same
+client/content reconciles identity without replacing first asset metadata.
+Historical metadata-only rows remain unavailable until genuine bytes are supplied.
+Scoped downloads verify actual bytes and never grant access from a hash alone.
+Uploading a font does not install it or activate Client DNA.
+
 ## 5. Hybrid retrieval
 
 Retrieval sequence:

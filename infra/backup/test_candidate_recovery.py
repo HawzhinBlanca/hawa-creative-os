@@ -14,6 +14,23 @@ from restate_nightly import metadata_mac, sha256
 
 
 class CoordinatedRecoveryTest(unittest.TestCase):
+    def test_retained_uploaded_sources_are_verified_from_actual_restore_archive(self):
+        rows = []
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'sources.tar'
+            with tarfile.open(path, 'w') as archive:
+                for media, extension in [('image/svg+xml','svg'),('font/ttf','ttf'),('font/otf','otf'),('font/woff2','woff2')]:
+                    payload = ('synthetic retained ' + media).encode()
+                    digest = hashlib.sha256(payload).hexdigest()
+                    rows.append({'sha256':digest,'media_type':media,'size':len(payload)})
+                    member = tarfile.TarInfo(f'sha256/{digest[:2]}/{digest}.{extension}')
+                    member.size = len(payload)
+                    archive.addfile(member, io.BytesIO(payload))
+            members = archive_members(path)
+            self.assertEqual(verify_blobs(rows,members),4)
+            members.pop(next(iter(members)))
+            with self.assertRaisesRegex(DrillError,'missing or corrupt'): verify_blobs(rows,members)
+
     def test_invalid_caller_recovery_identity_is_refused_before_mutation(self):
         with patch('candidate_recovery.docker') as docker:
             for identity in ['../foreign','a'*15,'A'*16,'a'*17]:

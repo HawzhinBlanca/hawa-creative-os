@@ -68,3 +68,4 @@ export * from './studio/background-field.js';
 export * from './studio/background-planning.js';
 
 export * from './rule-moderation.js';
+export * from './uploaded-asset-inspection.js';

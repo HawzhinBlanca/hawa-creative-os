@@ -189,8 +189,11 @@ export function createApp(options?: CreateAppOptions) {
     c.header('X-Frame-Options', 'DENY');
     c.header('X-XSS-Protection', '1; mode=block');
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-    c.header('Content-Security-Policy', "default-src 'none'; img-src 'self' data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https:; frame-ancestors 'none';");
     await next();
+    // Download and nonce-bearing HTML handlers own their more specific policy.
+    if (!c.res.headers.has('Content-Security-Policy')) {
+      c.header('Content-Security-Policy', "default-src 'none'; img-src 'self' data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https:; frame-ancestors 'none';");
+    }
   });
 
   app.onError((err, c) => {
