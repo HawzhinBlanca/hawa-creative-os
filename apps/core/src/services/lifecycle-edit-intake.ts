@@ -17,14 +17,14 @@
  */
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { MEDIA_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
+import { MEDIA_MESSAGES, bold, requesterLang, say, escapeTelegramHtml } from '@hawa/integrations';
 import { createHash } from 'node:crypto';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { replyLanguage } from './lifecycle-album.js';
 import { shortTitle } from './requester-turn.js';
 import { claimPhoto, originalMessage, readEditDecision, readMediaAnswer, recordEditDecision, recordMediaAnswer,
   recordPendingEdit } from './lifecycle-media-intake.js';
-import type { LateRequesterChange } from './lifecycle-chat-target.js';
+import { readNewBriefDecision, recordRoutingRefusal, type LateRequesterChange } from './lifecycle-chat-target.js';
 
 type Tx = Kysely<Database>;
 type Json = Record<string, any>;
@@ -82,7 +82,7 @@ export function createEditIntake(ctx: Pick<CoreContext, 'db'>) {
       const quoted = words.length > 1500 ? `${words.slice(0, 1500)}…` : words;
       return answerOnce(say(MEDIA_MESSAGES.editForwarded, lang), office ? { officeAlert: { chatId: office, text: [
         `The requester in chat ${chatId} edited an earlier message (${messageId}) that the bot has no current record of. Nothing was changed.`,
-        '', 'Their new words:', quoted || '(no words)'].join('\n') } } : {});
+        '', 'Their new words:', escapeTelegramHtml(quoted) || '(no words)'].join('\n') } } : {});
     };
 
     const original = await tx((trx) => originalMessage(trx, DEFAULT_TENANT_ID, chatId, messageId));
@@ -105,19 +105,53 @@ export function createEditIntake(ctx: Pick<CoreContext, 'db'>) {
         return reread((trx) => claimPhoto(trx, DEFAULT_TENANT_ID, original.updateId,
           { byUpdateId: update.update_id, how: 'brief' }).then(() => undefined));
       case 'open':
-        return note(original.requestId);
+        return original.ambiguous ? noteBundle(original.updateId) : note(original.requestId);
       case 'intent': {
         const plan = original.plan;
         if (plan.kind === 'open') {
-          const opened = await tx(async (trx) => (await sql<{ request_id: string }>`SELECT payload->>'requestId' AS request_id
+          const opened = await tx(async (trx) => (await sql<{ request_id: string;ambiguous:boolean }>`SELECT payload->>'requestId' AS request_id,
+              jsonb_array_length(coalesce(payload->'siblings','[]'::jsonb))>0 AS ambiguous
             FROM hawa.inbox_events WHERE tenant_id = ${DEFAULT_TENANT_ID}::uuid AND source_account_id = 'lifecycle_chat_open'
-              AND source_event_id = ${String(original.updateId)}`.execute(trx)).rows[0]?.request_id);
-          return opened ? note(opened) : forward();
+              AND source_event_id = ${String(original.updateId)}`.execute(trx)).rows[0]);
+          return opened?.ambiguous ? noteBundle(original.updateId) : opened ? note(opened.request_id) : forward();
         }
         if (typeof plan.requestId === 'string' && ['revise', 'note', 'tell'].includes(plan.kind)) return note(plan.requestId);
         // It opened nothing and changed nothing: read it again as it now reads.
         return words ? reread() : forward();
       }
+    }
+
+    /** A shared source edit affects every child until a person has reviewed that child's note.
+     * Record all notes with the answer in one transaction; never release another child's hold
+     * merely because someone acknowledged the first child's note. */
+    async function noteBundle(openUpdateId:number):Promise<EditOutcome> {
+      if (!words) return forward();
+      return tx(async trx=>{
+        const decision=await readNewBriefDecision(trx,DEFAULT_TENANT_ID,openUpdateId);
+        if (!decision || decision.chatId!==chatId || !decision.siblings?.length) throw new Error('Missing shared source decision');
+        const ids=[decision.requestId,...decision.siblings.map(s=>s.requestId)];
+        const targets=(await sql<{request_id:string;stage:LateRequesterChange['requestStage'];rev:number;task_id:string;title:string}>`
+          SELECT r.request_id::text,r.stage,r.rev::integer AS rev,r.current_task_id::text AS task_id,coalesce(root.title,t.title) AS title
+          FROM hawa.requests r JOIN hawa.tasks t ON t.tenant_id=r.tenant_id AND t.id=r.current_task_id
+          LEFT JOIN hawa.tasks root ON root.tenant_id=r.tenant_id AND root.id=r.root_task_id
+          WHERE r.tenant_id=${DEFAULT_TENANT_ID}::uuid AND r.chat_id=${chatId} AND r.request_id::text=ANY(${ids}::text[])`.execute(trx)).rows;
+        if (targets.length!==ids.length) return {kind:'answer',answer:{status:503,extra:{code:'REQUEST_OPENING',chatId}}};
+        for (const target of targets) {
+          if (!LATE_STAGES.has(target.stage)) continue;
+          const late:LateRequesterChange={requestId:target.request_id,taskId:target.task_id,requestRev:target.rev,
+            requestStage:target.stage,kind:'change',title:shortTitle(target.title),
+            text:`[The requester edited the shared source of several designs. No individual design was selected and no copy was changed.]\n${words}`};
+          const saved=await recordRoutingRefusal(trx,DEFAULT_TENANT_ID,`${update.update_id}:${target.request_id}`,
+            {code:'LATE_REQUESTER_CHANGE',chatId,payloadHash,late});
+          if (saved.payloadHash!==payloadHash || saved.late?.requestId!==target.request_id) throw new Error('Changed shared edit replay');
+        }
+        await recordEditDecision(trx,DEFAULT_TENANT_ID,update.update_id,{kind:'answered'},payloadHash);
+        const office=deps.officeChatId && deps.officeChatId!==chatId ? deps.officeChatId : null;
+        const answer=chatAnswer(chatId,say(MEDIA_MESSAGES.editForwarded,lang),{code:'AMBIGUOUS_REQUEST',
+          ...(office ? {officeAlert:{chatId:office,text:`The requester edited the shared source of ${ids.length} designs. No individual design was selected. Each active child has its own saved note; new delivery waits for that child's office acknowledgement. No design copy was changed.\n\n${escapeTelegramHtml(words.slice(0,1500))}`}} : {})});
+        const stored=await recordMediaAnswer(trx,DEFAULT_TENANT_ID,update.update_id,payloadHash,answer);
+        return {kind:'answer',answer:{status:stored.status,extra:stored.extra}};
+      });
     }
 
     /** The new words go to the office as a note on the design the message opened or changed. */

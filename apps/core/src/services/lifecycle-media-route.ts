@@ -147,6 +147,8 @@ export function createMediaRoute(ctx: Pick<CoreContext, 'db' | 'telegramBridge' 
     if (!use && await tx((trx) => pendingHeldBrief(trx, DEFAULT_TENANT_ID, scope, update.update_id))) return settleAgain;
     const opened = await tx((trx) => recentOpenBy(trx, DEFAULT_TENANT_ID, scope, photo.at));
     if (opened) {
+      if (opened.ambiguous) return answerOnce(update.update_id,`settle:${update.update_id}`,async()=>({status:409,
+        extra:{lifecycleAction:'request-choice-required',code:'AMBIGUOUS_REQUEST',chatId}}));
       const target = await tx((trx) => requestFor(trx, opened.requestId));
       // The open is decided but RequestLifecycle has not projected it yet: settle again shortly.
       if (!target) return settleAgain;

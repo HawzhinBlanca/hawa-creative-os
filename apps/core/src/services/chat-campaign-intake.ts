@@ -5,12 +5,12 @@ import { log } from '../logging.js';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { type RequestContext, type StudioOperation, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
+import { requestOperatingSubject, type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml } from '@hawa/integrations';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
-import { autoDraftAllowedFor, clientPackOf, matchRequestClient } from './client-packs.js';
+import { autoDraftAllowedFor, clientPackOf, matchRequestClient, positiveClientWords } from './client-packs.js';
 import { defaultCanvasFor } from '@hawa/creative';
 import { isValidUuid, inlineTemplateCopyMissing, cutText, startsWithName, stripLeadingMarks } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, DEFAULT_CLIENT_ID } from '../core-context.js';
@@ -95,6 +95,8 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     voiceTranscript?: string;
     referenceImageBase64?: string;
     explicitClientId?: string | null;
+    /** Core's source-derived format, fixed before retrieval. Never read from rawJson. */
+    variantOverride?: { width: number; height: number };
     autoGenerate?: boolean;
     rawJson?: any;
     deskBaseUrl?: string;
@@ -110,11 +112,8 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     let clientAmbiguous = false;
     // ADR-182: an organisation the words say it is NOT for ("This one is for Nova, not KAAE", "instead
     // of KAAE", Sorani "not KAAE") names no client: it opened for KAAE and was drafted in KAAE's brand.
-    const unsaid = (value: string) => value
-      .replace(/\b(?:not|isn'?t|is\s+not|instead\s+of|rather\s+than)\s+(?:for\s+|of\s+)?(?:the\s+)?[\p{L}\p{N}_-]+/giu, ' ')
-      .replace(/(?:نەک|لە\s+جیاتی)\s+(?:بۆ\s+)?[\p{L}\p{N}_-]+/gu, ' ');
-    const namedText = unsaid(rawText);
-    const namedNormalized = unsaid(normalizedText);
+    const namedText = positiveClientWords(rawText);
+    const namedNormalized = positiveClientWords(normalizedText);
     if (!clientId) {
       const packMatch = matchRequestClient({ chatId: sourceChannelId, rawText: namedText, normalizedText: namedNormalized });
       if (packMatch.kind === 'chat' || packMatch.kind === 'named') clientId = packMatch.pack.id;
@@ -291,7 +290,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     // and the direction marks a Sorani keyboard puts before Latin copy are not part of the name (ADR-180).
     const titleFor = (headline: string) => {
       const label = isKaae ? 'KAAE' : senderName;
-      const line = spokenTitle(stripLeadingMarks(headline));
+      const line = spokenTitle(stripLeadingMarks(requestOperatingSubject(rawText, headline) ?? headline));
       if (!line) return `${label}: no copy sent`;
       return startsWithName(line, label) ? `${cutText(line, 45)}…` : `${label}: ${cutText(line, 45)}…`;
     };
@@ -341,10 +340,15 @@ function buildChatCampaignIntake(ctx: CoreContext) {
 
     // A pack client other than KAAE gets its own default canvas (a thumbnail client: 1280x720).
     const packCanvas = (() => { const pack = isKaae ? undefined : clientPackOf(clientId); return pack ? defaultCanvasFor(pack) : undefined; })();
-    const variantWidth = packCanvas?.width ?? 1080;
-    const variantHeight = packCanvas?.height ?? (isInvitation || isKaae ? 1350 : 1080);
-    const variantAspect = packCanvas?.aspect ?? (isInvitation || isKaae ? '4:5' : '1:1');
-    const variantRole: 'instagram_post' | 'instagram_story' | 'billboard' | 'banner' | 'custom' = isInvitation ? 'custom' : 'instagram_post';
+    const override = input.variantOverride;
+    if (override && (!Number.isInteger(override.width) || !Number.isInteger(override.height) ||
+        override.width < 1 || override.height < 1 || override.width > 16384 || override.height > 16384))
+      throw new Error('Invalid source-derived canvas');
+    const variantWidth = override?.width ?? packCanvas?.width ?? 1080;
+    const variantHeight = override?.height ?? packCanvas?.height ?? (isInvitation || isKaae ? 1350 : 1080);
+    const variantAspect = override ? `${variantWidth}:${variantHeight}` : packCanvas?.aspect ?? (isInvitation || isKaae ? '4:5' : '1:1');
+    const variantRole: 'instagram_post' | 'instagram_story' | 'billboard' | 'banner' | 'custom' =
+      override?.width === 1080 && override.height === 1920 ? 'instagram_story' : isInvitation || override ? 'custom' : 'instagram_post';
 
     const brief: DesignBrief = {
       briefId: crypto.randomUUID(),

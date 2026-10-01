@@ -1,5 +1,6 @@
 import { sql, type Database, type Kysely } from '@hawa/db';
 import type { ChatIntake } from './chat-intake.js';
+import { parseDeliverableEvidence } from './request-deliverable-evidence.js';
 
 /** Core-owned identity of the original brief, never supplied as workflow policy by a model. */
 export interface BriefAnchor {
@@ -36,15 +37,18 @@ export async function lockBriefAnchor(trx: Kysely<Database>, tenantId: string, a
 
 /** Primary and language siblings are bound to the same reviewed Core decision. */
 export async function anchoredDecisionFor(trx: Kysely<Database>, tenantId: string, requestId: string):
-  Promise<{ anchor: BriefAnchor; draft: ChatIntake } | null> {
+  Promise<{ anchor?: BriefAnchor; draft: ChatIntake;sourceUpdate?:unknown;detailsRequired:boolean } | null> {
   const row = (await sql<{ payload: { requestId: string; draft: ChatIntake; briefAnchor?: unknown;
+    sourceUpdate?:unknown;deliverableCount?:unknown;deliverableDetailsRequired?:unknown;
     siblings?: Array<{ requestId: string; draft: ChatIntake }> } }>`SELECT payload FROM hawa.inbox_events
     WHERE tenant_id=${tenantId}::uuid AND source_account_id='lifecycle_chat_open'
       AND (payload->>'requestId'=${requestId} OR EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(payload->'siblings','[]'::jsonb)) s
         WHERE s->>'requestId'=${requestId})) LIMIT 1`.execute(trx)).rows[0];
-  if (!row?.payload.briefAnchor) return null; // Older decisions retain their replay contract.
-  const anchor = parseBriefAnchor(row.payload.briefAnchor);
+  if (!row || (!row.payload.briefAnchor && !row.payload.deliverableCount)) return null; // Older decisions retain their replay contract.
+  const anchor = row.payload.briefAnchor===undefined ? undefined : parseBriefAnchor(row.payload.briefAnchor);
   const draft = row.payload.requestId === requestId ? row.payload.draft : row.payload.siblings?.find(s=>s.requestId===requestId)?.draft;
-  if (!anchor || !draft) throw new Error('Invalid Core brief anchor');
-  return { anchor, draft };
+  if (anchor===null || !draft) throw new Error('Invalid Core brief anchor');
+  const evidence=parseDeliverableEvidence(row.payload);
+  return { ...(anchor ? {anchor} : {}), draft,sourceUpdate:row.payload.sourceUpdate,
+    detailsRequired:evidence.deliverableDetailsRequired?.includes(requestId) ?? false };
 }

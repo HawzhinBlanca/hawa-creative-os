@@ -136,10 +136,11 @@ export async function waitingPhotos(trx: Tx, tenantId: string, scope: SenderScop
  * or captioned photo made (ADR-144's intent record names the sender; a photo brief keeps its update).
  */
 export async function recentOpenBy(trx: Tx, tenantId: string, scope: SenderScope, beforeMs: number):
-  Promise<{ requestId: string; updateId: number; at: number; album: boolean } | null> {
-  const row = (await sql<{ source_event_id: string; request_id: string; at: number; album: boolean }>`SELECT o.source_event_id,
+  Promise<{ requestId: string; updateId: number; at: number; album: boolean;ambiguous:boolean } | null> {
+  const row = (await sql<{ source_event_id: string; request_id: string; at: number; album: boolean;ambiguous:boolean }>`SELECT o.source_event_id,
       o.payload->>'requestId' AS request_id, (extract(epoch FROM o.received_at) * 1000)::float8 AS at,
-      (o.payload->'draft'->'lifecycleAlbum') IS NOT NULL AS album
+      (o.payload->'draft'->'lifecycleAlbum') IS NOT NULL AS album,
+      jsonb_array_length(coalesce(o.payload->'siblings','[]'::jsonb))>0 AS ambiguous
     FROM hawa.inbox_events o
     WHERE o.tenant_id = ${tenantId}::uuid AND o.source_account_id = 'lifecycle_chat_open'
       AND o.payload->>'chatId' = ${scope.chatId}
@@ -150,7 +151,7 @@ export async function recentOpenBy(trx: Tx, tenantId: string, scope: SenderScope
         OR EXISTS (SELECT 1 FROM hawa.inbox_events b WHERE b.tenant_id = o.tenant_id AND b.source_account_id = 'lifecycle_brief_held'
             AND b.source_event_id = o.source_event_id AND b.payload->>'senderId' = ${scope.senderId}))
     ORDER BY o.received_at DESC, o.id DESC LIMIT 1`.execute(trx)).rows[0];
-  return row ? { requestId: row.request_id, updateId: Number(row.source_event_id), at: Number(row.at), album: row.album } : null;
+  return row ? { requestId: row.request_id, updateId: Number(row.source_event_id), at: Number(row.at), album: row.album,ambiguous:row.ambiguous } : null;
 }
 
 /** The sender's brief ADR-143 still holds for photos (not released, not taken by an album), if any. */
@@ -281,7 +282,7 @@ export async function pendingEditWords(trx: Tx, tenantId: string, target: number
 
 export type OriginalMessage =
   | { kind: 'intent'; updateId: number; plan: { kind: string; requestId?: string } }
-  | { kind: 'open'; updateId: number; requestId: string }
+  | { kind: 'open'; updateId: number; requestId: string;ambiguous?:true }
   | { kind: 'held-photo'; updateId: number; used: boolean }
   | { kind: 'held-brief'; updateId: number }
   | { kind: 'deferred'; updateId: number }
@@ -308,11 +309,12 @@ export async function originalMessage(trx: Tx, tenantId: string, chatId: string,
       AND payload->>'chatId' = ${chatId} AND payload->>'messageId' = ${messageId}
     ORDER BY received_at DESC LIMIT 1`.execute(trx)).rows[0];
   if (intent?.plan?.kind) return { kind: 'intent', updateId: Number(intent.source_event_id), plan: intent.plan };
-  const open = (await sql<{ source_event_id: string; request_id: string }>`SELECT source_event_id, payload->>'requestId' AS request_id
+  const open = (await sql<{ source_event_id: string; request_id: string;ambiguous:boolean }>`SELECT source_event_id, payload->>'requestId' AS request_id,
+      jsonb_array_length(coalesce(payload->'siblings','[]'::jsonb))>0 AS ambiguous
     FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'lifecycle_chat_open'
       AND payload->>'chatId' = ${chatId} AND payload->'sourceUpdate'->'message'->>'message_id' = ${messageId}
     ORDER BY received_at DESC LIMIT 1`.execute(trx)).rows[0];
-  if (open) return { kind: 'open', updateId: Number(open.source_event_id), requestId: open.request_id };
+  if (open) return { kind: 'open', updateId: Number(open.source_event_id), requestId: open.request_id,...(open.ambiguous ? {ambiguous:true} : {}) };
   const photo = (await sql<{ source_event_id: string; used: boolean }>`SELECT h.source_event_id,
       EXISTS (SELECT 1 FROM hawa.inbox_events u WHERE u.tenant_id = h.tenant_id AND u.source_account_id = 'lifecycle_photo_used'
         AND u.source_event_id = h.source_event_id) AS used

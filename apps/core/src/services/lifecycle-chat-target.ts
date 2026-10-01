@@ -5,6 +5,7 @@ import { parseBlobRef, type BlobRef } from '@hawa/contracts';
 import type { ChatIntake } from './chat-intake.js';
 import type { RequesterRevisionWithIntakeResult } from './lifecycle-projection.js';
 import { parseBriefAnchor, type BriefAnchor } from './lifecycle-brief-anchor.js';
+import { parseDeliverableEvidence } from './request-deliverable-evidence.js';
 
 export interface WaitingLifecycleRequest {
   request_id: string;
@@ -29,6 +30,9 @@ export interface NewBriefDecision {
   sourceUpdate?: unknown;
   /** Core-owned pre-projection hold identity (ADR-185), outside the worker draft. */
   briefAnchor?: BriefAnchor;
+  /** Source-derived allocation evidence stays in Core, never accepted from worker drafts. */
+  deliverableCount?: number;
+  deliverableDetailsRequired?: string[];
   /**
    * The other requests the same update opens (ADR-139: an English-and-Kurdish brief opens one request
    * per language). Each is opened, projected and replayed exactly as the first.
@@ -41,6 +45,7 @@ export function decisionDraftFor(decision: NewBriefDecision, requestId: string):
   if (decision.requestId === requestId) return decision.draft;
   return decision.siblings?.find((s) => s.requestId === requestId)?.draft ?? null;
 }
+
 
 export interface RevisionPhotoDecision {
   requestId: string;
@@ -104,7 +109,10 @@ export async function readNewBriefDecision(trx: Kysely<Database>, tenantId: stri
       typeof (s as { draft?: unknown }).draft !== 'object'))) throw new Error('Invalid stored new-brief decision');
   const briefAnchor = row.payload.briefAnchor === undefined ? undefined : parseBriefAnchor(row.payload.briefAnchor);
   if (briefAnchor === null) throw new Error('Invalid stored new-brief anchor');
+  const deliverables=parseDeliverableEvidence({requestId,siblings:siblings as NewBriefDecision['siblings'],
+    deliverableCount:row.payload.deliverableCount,deliverableDetailsRequired:row.payload.deliverableDetailsRequired});
   return { requestId, chatId, payloadHash: row.payload_hash, draft: draft as ChatIntake,
+    ...deliverables,
     ...(briefAnchor ? { briefAnchor } : {}),
     ...(row.payload.sourceUpdate !== undefined ? { sourceUpdate: row.payload.sourceUpdate } : {}),
     ...(Array.isArray(siblings) && siblings.length ? { siblings: siblings as NewBriefDecision['siblings'] } : {}) };
@@ -120,6 +128,7 @@ export async function recordNewBriefDecision(trx: Kysely<Database>, tenantId: st
         draft: decision.draft,
         ...(decision.briefAnchor ? { briefAnchor: decision.briefAnchor } : {}),
         ...(decision.sourceUpdate !== undefined ? { sourceUpdate: decision.sourceUpdate } : {}),
+        ...parseDeliverableEvidence(decision),
         ...(decision.siblings?.length ? { siblings: decision.siblings } : {}) })}::jsonb, ${decision.payloadHash}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
   const stored = await readNewBriefDecision(trx, tenantId, updateId);
@@ -235,7 +244,7 @@ function parseLateChange(payload: Record<string, unknown>): LateRequesterChange 
 }
 
 export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string,
-  updateId: number): Promise<RoutingRefusal | null> {
+  updateId: number | string): Promise<RoutingRefusal | null> {
   const row = (await sql<{ payload: Record<string, unknown>; payload_hash: string }>`SELECT payload, payload_hash
     FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
       AND source_account_id = 'lifecycle_chat_routing' AND source_event_id = ${String(updateId)}
@@ -253,7 +262,7 @@ export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string
 
 /** Save an actionable refusal before answering Core; a lost answer replays the same choice. */
 export async function recordRoutingRefusal(trx: Kysely<Database>, tenantId: string,
-  updateId: number, refusal: RoutingRefusal): Promise<RoutingRefusal> {
+  updateId: number | string, refusal: RoutingRefusal): Promise<RoutingRefusal> {
   if ((refusal.code === 'LATE_REQUESTER_CHANGE') !== Boolean(refusal.late) ||
       (refusal.late && !parseLateChange({ ...refusal.late }))) {
     throw new Error('A late requester change carries its request and words, and only it does');

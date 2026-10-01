@@ -22,7 +22,7 @@ const taskState=(taskId:string)=>withRlsContext(db,scope,trx=>trx.selectFrom('ta
 const resume=(taskId:string,version:number)=>controlTask(db,{tenantId,actorId:userId,role:'operator'},taskId,'resume',
   {expectedVersion:version,key:randomUUID(),reason:'Office checked the original requester words'});
 
-async function fixture(manual=false,siblings=false) {
+async function fixture(manual=false,siblings:boolean|number=false) {
   const u=++serial,chat=String(u),sender=String(u+1),requestId=randomUUID();
   const update={update_id:u,message:{message_id:u,date:Math.floor(Date.now()/1000),
     chat:{id:u,type:'private'},from:{id:u+1,first_name:'Synthetic requester'},text:KAAE_EVENING}};
@@ -33,13 +33,15 @@ async function fixture(manual=false,siblings=false) {
     title:'Synthetic early hold',rawText:KAAE_EVENING,exactCopy:['Synthetic early hold'],designInstructions:'Use supplied copy',
     clientId:'c1000000-0000-4000-8000-000000000002',autoGenerate:!manual,designStudio:false};
   const siblingId=randomUUID(),siblingDraft={...draft,sourceEventId:`lc-${siblingId}-r0`};
+  const extraSiblings=Array.from({length:typeof siblings==='number' ? siblings-1 : 0},()=>{const id=randomUUID();return {requestId:id,draft:{...draft,sourceEventId:`lc-${id}-r0`}};});
   const decision=()=>withRlsContext(db,scope,trx=>recordNewBriefDecision(trx,tenantId,u,
     {requestId,chatId:chat,payloadHash:'a'.repeat(64),draft,briefAnchor:anchor,
-      ...(siblings ? {siblings:[{requestId:siblingId,draft:siblingDraft}]} : {})}));
+      ...(siblings ? {siblings:[{requestId:siblingId,draft:siblingDraft},...extraSiblings]} : {}),
+      ...(typeof siblings==='number' ? {deliverableCount:siblings+1,deliverableDetailsRequired:[]} : {})}));
   const input={update:{...update,update_id:++serial,message:{...update.message,message_id:serial,text:"Wait, don't make it yet"}},
     text:"Wait, don't make it yet",answer:'The design is paused.',payloadHash:'b'.repeat(64),isHold:true};
   const projection:OpenLifecycleProjection={requestId,tenantId,expectedRev:0,rev:1,key:`${requestId}:1:open`,draft};
-  return {anchor,update,input,decision,projection,chat,sender,siblingId,siblingDraft,
+  return {anchor,update,input,decision,projection,chat,sender,siblingId,siblingDraft,extraSiblings,
     hold:()=>withRlsContext(db,scope,trx=>acceptEarlyHold(trx,tenantId,input)),
     project:()=>projectLifecycleOpen(db,projection,null)};
 }
@@ -114,6 +116,15 @@ describe('early hold receipt and authoritative initial projection',()=>{
     const {activeChatRequests}=await import('../src/services/requester-turn-store.js');
     expect((await withRlsContext(db,scope,trx=>activeChatRequests(trx,tenantId,f.chat))).map(r=>r.requesterId))
       .toEqual([f.sender,f.sender]);
+  });
+  it('all explicit deliverables inherit an original-brief hold before concurrent projection',async()=>{
+    const f=await fixture(false,3);await f.hold();await f.decision();
+    const children=[{requestId:f.projection.requestId,draft:f.projection.draft},
+      {requestId:f.siblingId,draft:f.siblingDraft},...f.extraSiblings];
+    const projected=await Promise.all(children.map(child=>projectLifecycleOpen(db,{...f.projection,...child,
+      key:`${child.requestId}:1:open`},null)));
+    expect(projected).toHaveLength(4);
+    for(const result of projected){expect(result.requesterHold).toBe(true);expect((await taskState(result.taskId)).state).toBe('paused');}
   });
   it('rejects worker mutation of the reviewed brief before creating a task',async()=>{
     const f=await fixture();await f.decision();

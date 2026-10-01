@@ -118,12 +118,13 @@ export const BRIEF_SCRIPTS: Script[] = [
   {
     id: 'S031a', title: 'a forwarded brief whose first line is an instruction is named after its event', kinds: ['brief', 'title'],
     natural: 'The requester hears the design named after the event ("the KAAE accreditation workshop"), not after its date line.',
-    open: 'the name comes from the first line of the copy after the instruction ("Date: 22 November 2026, 10 am")',
     async play(p) {
       await p.forward('Please make a poster for the KAAE accreditation workshop', { originalSender: 'Dr. Karwan' });
       await p.forward('Date: 22 November 2026, 10 am\nVenue: KAAE hall, Erbil', { originalSender: 'Dr. Karwan', after: 1_000, quiet: true });
       await p.wait(60_000);
       expect(p.words).toMatch(/accreditation workshop/);
+      expect(p.opened[0].draft.title).toMatch(/accreditation workshop/);
+      expect(p.opened[0].draft.title).not.toMatch(/Date:/);
     },
   },
   {
@@ -229,12 +230,18 @@ export const BRIEF_SCRIPTS: Script[] = [
   },
   {
     id: 'S022', title: 'two designs asked for in one message', kinds: ['brief', 'two-requests', 'en'],
-    natural: 'Both designs are taken: two requests, or one that goes to a designer; never one automatic draft for two designs.',
-    open: 'a message asking for two designs opens one request whose automatic draft is one design',
+    natural: 'Two independent requests and automatic design runs, with the requested formats and no mixed event facts.',
     async play(p) {
       await p.say('We need 2 designs for KAAE: a poster for the graduation on 12 October 2026 at the Rotana hotel, and an Instagram story for the open day on 20 October 2026 at the campus.');
       await p.wait(60_000);
-      expect(p.opened.length === 2 || p.h.t.designs.length === 0).toBe(true);
+      expect(p.opened).toHaveLength(2);
+      expect(p.h.t.designs).toHaveLength(2);
+      expect(p.opened[0].draft.variant).toEqual({width:1080,height:1350});
+      expect(p.opened[1].draft.variant).toEqual({width:1080,height:1920});
+      expect(p.brief(0)).toContain('12 October 2026');
+      expect(p.brief(0)).not.toContain('20 October 2026');
+      expect(p.brief(1)).toContain('20 October 2026');
+      expect(p.brief(1)).not.toContain('12 October 2026');
     },
   },
   {

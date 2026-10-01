@@ -56,6 +56,7 @@ export interface OpenManualEvent {
 
 export interface ManualLifecycleState {
   initialRequesterHold?: {officeAlerts:Array<{chatId:string;text:string}>};
+  initialOfficeAlerts?:Array<{chatId:string;text:string}>;
   v: 1;
   requestId: string;
   tenantId: string;
@@ -300,7 +301,7 @@ const requesterFields = (draft: { rawText: string; title: string }): Pick<Manual
 });
 
 function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
-  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title' | 'initialRequesterHold'>): void {
+  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title' | 'initialRequesterHold' | 'initialOfficeAlerts'>): void {
   ctx.send({
     v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
     text: requesterText(state, state.initialRequesterHold ? ROUTING_MESSAGES.statusHeld : LIFECYCLE_MESSAGES.receivedForDesigner), parseMode: 'HTML', class: 'critical',
@@ -309,9 +310,15 @@ function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
   sendInitialHoldAlerts(ctx,state);
 }
 
-function sendInitialHoldAlerts(ctx: Pick<OpenContext,'send'>,state:Pick<ManualLifecycleState,'requestId'|'tenantId'|'taskId'|'initialRequesterHold'>): void {
-  for (const alert of state.initialRequesterHold?.officeAlerts ?? []) ctx.send({v:1,
-    key:`${state.requestId}:1:early-hold-office:${alert.chatId}`,chatId:alert.chatId,kind:'text',text:alert.text,
+function sendInitialHoldAlerts(ctx: Pick<OpenContext,'send'>,state:Pick<ManualLifecycleState,'requestId'|'tenantId'|'taskId'|'initialRequesterHold'|'initialOfficeAlerts'>): void {
+  const perChat=new Map<string,number>();
+  for (const alert of state.initialRequesterHold?.officeAlerts ?? []) {
+    const index=perChat.get(alert.chatId) ?? 0;perChat.set(alert.chatId,index+1);
+    ctx.send({v:1,key:`${state.requestId}:1:early-hold-office:${alert.chatId}${index ? `:${index}` : ''}`,
+      chatId:alert.chatId,kind:'text',text:alert.text,parseMode:'HTML',class:'critical',tenantId:state.tenantId,taskId:state.taskId});
+  }
+  for (const [index,alert] of (state.initialOfficeAlerts ?? []).entries()) ctx.send({v:1,
+    key:`${state.requestId}:1:initial-office:${index}:${alert.chatId}`,chatId:alert.chatId,kind:'text',text:alert.text,
     parseMode:'HTML',class:'critical',tenantId:state.tenantId,taskId:state.taskId});
 }
 
@@ -409,6 +416,7 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
     owner: 'restate', stage: 'manual', rev: 1, taskId: projected.taskId,
     openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
     ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
+    ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);
@@ -465,6 +473,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
       owner: 'restate', stage: 'manual', rev: 1, taskId: projected.taskId,
       openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
       ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
+    ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
     };
     ctx.set('lc', manual);
     ctx.setChatMode?.(event.chatId, event.requestId);
@@ -490,6 +499,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
     owner: 'restate', stage: 'designing', rev: 1, taskId: projected.taskId,
     openEventId: event.eventId, openSha256: fingerprint, runId, designInput, ...requesterFields(event.draft),
     ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
+    ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);

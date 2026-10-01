@@ -211,9 +211,9 @@ export function readsAsHold(text: string): boolean {
   if (!t || t.length > 500) return false;
   // Pronouns must name the whole job, not a design element ("hold this button", "pause it animation").
   const wholeJobTail = '(?=$|[\\s,.!:-]+(?:please\\b|for\\s+now\\b|until\\b|while\\b|because\\b|we\\b|i\\b)|[,.!:-])';
-  return /^(?:(?:wait|hold\s+on|hang\s+on)[\s,.!:-]+)?(?:don['’]?t|do\s+not)\s+(?:make|start|continue|proceed\s+with)\s+(?:it|this|that|the\s+(?:design|poster|draft))\s+(?:yet|for\s+now)\b/i.test(t) ||
-    new RegExp('^(?:hold|pause)\\s+(?:it|this|that|the\\s+(?:design|poster|draft))' + wholeJobTail, 'i').test(t) ||
-    new RegExp('^put\\s+(?:it|this|that|the\\s+(?:design|poster|draft))\\s+on\\s+hold' + wholeJobTail, 'i').test(t) ||
+  return /^(?:(?:wait|hold\s+on|hang\s+on)[\s,.!:-]+)?(?:don['’]?t|do\s+not)\s+(?:make|start|continue|proceed\s+with)\s+(?:it|them|this|that|(?:the|these|those)\s+(?:designs?|posters?|drafts?))\s+(?:yet|for\s+now)\b/i.test(t) ||
+    new RegExp('^(?:hold|pause)\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))' + wholeJobTail, 'i').test(t) ||
+    new RegExp('^put\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))\\s+on\\s+hold' + wholeJobTail, 'i').test(t) ||
     /^(?:wait|hold\s+on|hang\s+on)[\s!.]*$/i.test(t) ||
     /^(?:ڕایبگرە|ڕاوەستە)(?:[\s،,.!]|$)/u.test(t);
 }

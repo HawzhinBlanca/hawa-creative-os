@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { handleUpdate, INTAKE_ATTEMPTS, MAX_SETTLE_ROUNDS, chatInbox, settleUpdate, type ChatInboxCore, type InboxContext,
   type SettleInput } from '../src/lifecycle/chat-inbox.js';
 import { createCoreClient } from '../src/lifecycle/core-client.js';
+import { randomUUID } from 'node:crypto';
 
 /**
  * ChatInbox.handleUpdate (Phase 2.1, PHASE2_DESIGN.md section 2.2) hands one update to Core's intake
@@ -125,6 +126,24 @@ describe('ChatInbox.handleUpdate', () => {
     expect(ctx.lifecycleOpens.filter((o: any) => o.requestId === ckb).every((o: any) => o.event.draft.rawText === 'چوارچێوەی ستانداردەکان')).toBe(true);
     expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: en });
   });
+  it('retains every eight-child open identity after a lost third dispatch answer and a later state-write crash',async()=>{
+    const ctx=new FakeContext(),ids=Array.from({length:8},()=>randomUUID());
+    const children=ids.map(id=>({requestId:id,draft:{platform:'telegram',sourceEventId:`lc-${id}-r0`,sourceChannelId:'555',
+      rawText:`source copy ${id}`,title:'KAAE graduation',designInstructions:'',exactCopy:[],clientId:'c1000000-0000-4000-8000-000000000002',autoGenerate:false}}));
+    const c=core([async()=>({kind:'done',intakeStatus:200,lifecycleAction:'open-request',requestId:ids[0],chatId:'555',
+      draft:children[0].draft,siblings:children.slice(1)})]);
+    const send=ctx.sendLifecycleOpen.bind(ctx);let interrupted=false;
+    ctx.sendLifecycleOpen=async(id,event)=>{
+      await send(id,event);
+      if(id===ids[2] && !interrupted){interrupted=true;throw new Error('third answer lost after dispatch');}
+    };
+    ctx.crashOnSet=1;
+    expect(await untilSettled(ctx,()=>handleUpdate(ctx,input,c))).toMatchObject({outcome:'handled'});
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(new Set(ctx.lifecycleOpens.map(o=>(o.event as {eventId:string}).eventId))).toEqual(new Set(ids.map(id=>`open:${id}`)));
+    for(const child of children) expect(ctx.lifecycleOpens.filter(o=>o.requestId===child.requestId).every(o=>
+      JSON.stringify((o.event as {draft:unknown}).draft)===JSON.stringify(child.draft))).toBe(true);
+  });
 
   it('hands the update to intake once and is done', async () => {
     const ctx = new FakeContext();
@@ -224,7 +243,7 @@ describe('the Core client ChatInbox uses', () => {
     expect(calls[0].init.headers['x-request-id']).toBe('tg-4242');
     // languageSiblings: this worker opens every request an open-request answer names (ADR-139).
     // briefHold: it schedules the settles Core asks for (ADR-143).
-    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy', languageSiblings: true, briefHold: true });
+    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy', languageSiblings: true, maxDeliverables:8, briefHold: true });
   });
 
   it('reads the sibling requests of a bilingual open, and refuses a malformed one (ADR-139)', async () => {
@@ -239,6 +258,24 @@ describe('the Core client ChatInbox uses', () => {
     await expect(answer([{ requestId: ckb, draft: draftOf(en) }])).rejects.toThrow('invalid lifecycle open');
     await expect(answer([{ requestId: en, draft: draftOf(en) }])).rejects.toThrow('invalid lifecycle open');
     await expect(answer('not a list')).rejects.toThrow('invalid lifecycle open');
+  });
+
+  it('validates the entire eight-deliverable response and rejects missing, duplicate or excess children',async()=>{
+    const ids=Array.from({length:8},()=>randomUUID());
+    const draftOf=(id:string)=>({platform:'telegram',sourceEventId:`lc-${id}-r0`,sourceChannelId:'555',rawText:'source copy',title:'title',autoGenerate:true});
+    const children=ids.slice(1).map(id=>({requestId:id,draft:draftOf(id)}));
+    const source={...update,message:{...update.message,text:'Create 8 designs for KAAE: Poster for graduation'}};
+    const answer=(siblings:unknown,deliverableCount:unknown=8)=>client(async(_url,init)=>{
+      expect(JSON.parse(String(init?.body)).maxDeliverables).toBe(8);
+      return Response.json({v:1,kind:'handled',intakeStatus:200,lifecycleAction:'open-request',requestId:ids[0],chatId:'555',
+        draft:draftOf(ids[0]),siblings,...(deliverableCount===null ? {} : {deliverableCount})});
+    }).intake(source,'legacy');
+    await expect(answer(children)).resolves.toMatchObject({siblings:children});
+    await expect(answer(children.slice(0,6))).rejects.toThrow('invalid lifecycle open');
+    await expect(answer(children.slice(0,6),7)).rejects.toThrow('invalid lifecycle open');
+    await expect(answer([...children.slice(0,6),children[0]])).rejects.toThrow('invalid lifecycle open');
+    await expect(answer([...children,{requestId:randomUUID(),draft:draftOf(randomUUID())}],9)).rejects.toThrow('invalid lifecycle open');
+    await expect(answer(children,null)).rejects.toThrow('invalid lifecycle open');
   });
 
   it('classifies intake\'s answers: final, retryable, and waits', async () => {

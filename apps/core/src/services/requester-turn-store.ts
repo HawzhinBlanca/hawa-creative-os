@@ -64,11 +64,13 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
  * projection lands would miss the request it is about.
  */
 export async function openingChatRequests(trx: Kysely<Database>, tenantId: string, chatId: string): Promise<string[]> {
-  return (await sql<{ request_id: string }>`SELECT e.payload->>'requestId' AS request_id FROM hawa.inbox_events e
+  return (await sql<{ request_id: string }>`SELECT child.request_id FROM hawa.inbox_events e
+    CROSS JOIN LATERAL (SELECT e.payload->>'requestId' AS request_id UNION ALL
+      SELECT s->>'requestId' FROM jsonb_array_elements(coalesce(e.payload->'siblings','[]'::jsonb)) s) child
     WHERE e.tenant_id = ${tenantId}::uuid AND e.source_account_id = 'lifecycle_chat_open'
       AND e.payload->>'chatId' = ${chatId} AND e.received_at > now() - interval '10 minutes'
       AND NOT EXISTS (SELECT 1 FROM hawa.requests r WHERE r.tenant_id = e.tenant_id
-        AND r.request_id::text = e.payload->>'requestId')`.execute(trx)).rows.map((row) => row.request_id);
+        AND r.request_id::text = child.request_id)`.execute(trx)).rows.map((row) => row.request_id);
 }
 
 /**

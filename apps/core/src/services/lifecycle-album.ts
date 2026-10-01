@@ -708,7 +708,7 @@ export async function isLoneBurstPhoto(trx: Tx, tenant: string, update: Update):
 async function burstMaterial(trx: Tx, tenant: string, input: { keys: string[]; selected: Part[]; update: Update;
   chatId: string; scope: { chatId: string; senderId: string; topic: string }; firstAt: number; lang: Lang; words: string }): Promise<AlbumOutcome | null> {
   const opened = await recentOpenBy(trx, tenant, input.scope, input.firstAt);
-  if (!opened) return null;
+  if (!opened || opened.ambiguous) return null; // The set stays available for explicit words; never join only the first child.
   const target = (await sql<{ stage: string; rev: string | number; task_id: string; title: string | null }>`SELECT r.stage, r.rev,
       r.current_task_id::text AS task_id, coalesce(root.title, t.title) AS title
     FROM hawa.requests r JOIN hawa.tasks t ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id

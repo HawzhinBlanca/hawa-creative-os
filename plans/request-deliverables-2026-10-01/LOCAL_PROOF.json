@@ -1,0 +1,96 @@
+{
+  "date": "2026-10-01",
+  "adr": 186,
+  "base": "84e41f5b",
+  "qualification": "CONNECTED_SOURCE_PASS_FULL_SEAL_PENDING_NOT_DEPLOYED",
+  "requirements": [
+    "FR-001",
+    "FR-002",
+    "FR-004",
+    "FR-005",
+    "FR-033",
+    "FR-060",
+    "FR-063",
+    "NFR-001",
+    "NFR-006"
+  ],
+  "production": "4e500451",
+  "redBefore": {
+    "failed": 2,
+    "scripts": [
+      "S022",
+      "S031a"
+    ],
+    "log": "/tmp/hawa-deliverables-red.log"
+  },
+  "connected": {
+    "files": 14,
+    "distinctPassed": 300,
+    "finalBatch": {
+      "passed": 299,
+      "failed": 1,
+      "reason": "The final remaining assertion expected an absent optional flag; a complete source correctly produced false. The corrected complete-source case passed separately."
+    },
+    "correctedTarget": {
+      "passed": 1,
+      "failed": 0
+    },
+    "expectedFail": 0
+  },
+  "retainedFailures": [
+    "New domain export was initially unavailable through stale built package output; rebuilt the package before real Core tests",
+    "Initial worker exact POST assertion omitted the newly advertised capacity; corrected contract expectation",
+    "Mutation fixture requested an invalid 500x600 envelope; it was correctly refused at 400 before canonical comparison. A valid but altered 1000x1200 source then proves canonical conflict at 409.",
+    "Photo-choice assertion expected different wording; actual natural prompt asked Which one is this for. Fixed the assertion and required both event names.",
+    "Independent ledger control exposed singular-only hold grammar: plural whole-job holds now use the existing anchored policy.",
+    "Negative-client fixture lacked complete facts and legitimately stayed instruction-only; complete factual source then returns false, with correct client and onboarding manual admission."
+  ],
+  "fullSuite": {
+    "status": "PENDING_EXACT_SEAL"
+  },
+  "typecheck": {
+    "status": "PASS",
+    "activeTestRoots": 653
+  },
+  "lint": {
+    "status": "PASS",
+    "productionAny": 939,
+    "ceiling": 1053,
+    "existingProviderExceptions": 10
+  },
+  "acceptance": [
+    "Actual S022: two requests and two design dispatches, 1080x1350 poster and 1080x1920 story, isolated dates",
+    "Actual S031a: persisted and requester-visible workshop title, no Date title",
+    "Three independently persisted scoped tasks; saved complete decision and task projection replay",
+    "Eight-child worker complete-bundle validation and stable dispatch IDs after lost answer/state crash",
+    "Explicit limit and invalid canvas: no truncated bundle or silent format substitution",
+    "Independent clients and negative mentions, onboarding manual admission",
+    "Concurrent daily allowance and immutable replay outcomes",
+    "Three held child dispatches denied by actual paid-call ledger; resume releases only selected child",
+    "Actual manual office alerts and unattached-photo ambiguity",
+    "Shared-source edit notes for all children; acknowledging first leaves second pending"
+  ],
+  "limitations": [
+    "Candidate not deployed",
+    "External providers in conversation proof are fakes; no paid live design generated",
+    "New refusal-message native Sorani wording requires genuine review",
+    "Creative W3/W5/W6, native logo/font/Canva and real human preference/pilot proof remain open",
+    "Draining workers below the bundle bound refuse the whole decision and need compatible worker handling; no smaller replay"
+  ],
+  "logs": {
+    "/tmp/hawa-deliverables-red.log": "09a8b2e6cedf8efcf9191a9f9087d809362ad9cea210213e2d3d8fbf9553c5f3",
+    "/tmp/hawa-deliverables-policy.log": "3322545a17e8fd55259e8ba86b26634d4843653660448475c0e7c7b957fcef60",
+    "/tmp/hawa-deliverables-connected.log": "725fc6055c25717594a914d17c78262a050e2676789de8a4d516281fd16fcd52",
+    "/tmp/hawa-deliverables-edit.log": "0bef89b3bef77e6e6ce3fb8af53b7d09e2cd4ec878ebcd5d27300132feb171b0",
+    "/tmp/hawa-deliverables-qualification.log": "26f3fd63d4103b43b121bdcb16936dbcfc54b4e67f39f69b74821a836a6a8774",
+    "/tmp/hawa-deliverables-negation-final.log": "54cff030652981c7385f647a4265f8913b51dfe54164f1ecc310fd58a055586a",
+    "/tmp/hawa-deliverables-hold-ledger.log": "b6c651e835a38d90d4613b2fe316b34ea72d19218a39df11280479a43cd66521",
+    "/tmp/hawa-deliverables-types-final.log": "0aec5f5a439bf4e988fd3c8fc23238ad0df671deb32e46717d099020b37020c4",
+    "/tmp/hawa-deliverables-lint.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5"
+  },
+  "blueprint": {
+    "passed": 1504,
+    "warnings": 0,
+    "failed": 0
+  }
+}

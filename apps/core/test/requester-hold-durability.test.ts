@@ -170,6 +170,39 @@ describe('holds through the actual requester conversation',()=>{
     await expect(repo.recordCallStart(call)).resolves.toMatchObject({status:'uncertain'});
     expect(await repo.getCallsForRun(runId,tenantId)).toHaveLength(1);
   });
+  it('an original-source hold blocks paid admission for every explicit child and resume affects only the selected child',async()=>{
+    const office=[{id:++officeSeed,name:'Office'}],repo=new DesignStudioRepository(db);
+    const calls:Parameters<DesignStudioRepository['recordCallStart']>[0][]=[],admissionCodes:string[]=[],states:string[]=[];
+    const callsByTask=new Map<string,Parameters<DesignStudioRepository['recordCallStart']>[0]>();
+    const h=new ConversationHarness({db,owner,office,workerToken:worker,onDesignStart:async input=>{
+      states.push((await state(input.taskId)).state);
+      if (!input.clientId) throw new Error('Missing scoped client');
+      const runId=randomUUID();
+      await repo.createRun({id:runId,tenantId,taskId:input.taskId,clientId:input.clientId,actorId,
+        requestKey:`child-hold-${runId}`,requestHash:'a'.repeat(64),request:{},tier:'premium'});
+      const call={id:randomUUID(),runId,tenantId,actorId,stage:'briefing',provider:'openai',model:'synthetic-test',
+        reservation:{version:1 as const,policy:'synthetic-test',requestSha256:'a'.repeat(64),usd:0.01,inputTokens:10,outputTokens:10},
+        requestedModel:'synthetic-test',callOrdinal:1,logicalCallSha256:'b'.repeat(64)};
+      calls.push(call);callsByTask.set(input.taskId,call);
+      try {await repo.recordCallStart(call);admissionCodes.push('ADMITTED');}
+      catch(error){if((error as {code?:string}).code!=='TASK_PAUSED') throw error;admissionCodes.push('TASK_PAUSED');}
+    }});await h.emptyOfficeQueue();
+    const p=new Play(h,office);
+    await p.say('Create 3 designs for KAAE: a poster for graduation on 12 October and a story for open day on 20 October and a banner for workshop on 25 October');
+    await p.say("Wait, don't make them yet",{after:1000});await p.wait(30_000);
+    expect(p.opened).toHaveLength(3);
+    expect(states).toEqual(['paused','paused','paused']);
+    expect(admissionCodes).toEqual(['TASK_PAUSED','TASK_PAUSED','TASK_PAUSED']);
+    for(const call of calls) expect(await repo.getCallsForRun(call.runId,tenantId)).toHaveLength(0);
+    const requests=await h.requests(p.chatId);
+    const selected=requests[0],current=await h.taskState(selected.requestId);
+    await resume(selected.taskId,Number(current.version));
+    const selectedCall=callsByTask.get(selected.taskId);
+    if(!selectedCall) throw new Error('Missing selected child call');
+    await expect(repo.recordCallStart(selectedCall)).resolves.toMatchObject({status:'uncertain'});
+    for(const request of requests.slice(1)) expect((await h.taskState(request.requestId)).state).toBe('paused');
+    for(const call of calls.filter(call=>call!==selectedCall)) expect(await repo.getCallsForRun(call.runId,tenantId)).toHaveLength(0);
+  });
   it('asks which design to hold rather than pausing both',async()=>{
     const p=await play();await p.say('Another poster please: KAAE staff football tournament, 14 November 2026 at 4 pm, Franso Hariri stadium.');
     await p.wait(20_000);expect(p.opened).toHaveLength(2);
