@@ -66,12 +66,22 @@ export interface OutboundMessage {
   /** Optional durable callback after a verified critical send mark, for request waitpoints. */
   onSent?: { kind: 'question'; requestId: string; requestRev: number;
     taskId: string; questionId: string };
+  /**
+   * ADR-240: an office alert about a canary request, moved to the canary chat; the office member it
+   * would have reached. Only the canary chat's sender ever receives a message carrying it.
+   */
+  canaryFor?: string;
 }
 
+/**
+ * canary_sink (ADR-240): the message was for the canary chat, or about a canary request, and was
+ * recorded instead of sent. It never reached Telegram, so it never counts as a requester's receipt.
+ */
 export type SendResult =
   | { outcome: 'sent'; messageId?: string }
   | { outcome: 'uncertain'; error: string }
-  | { outcome: 'refused'; error: string };
+  | { outcome: 'refused'; error: string }
+  | { outcome: 'canary_sink'; messageId: string };
 
 /** The Delivery workflow's input. Its key is `deliveryId`. */
 export interface DeliveryInput {

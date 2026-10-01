@@ -7,6 +7,7 @@
 #   hawa-backup-restore-drill  Sundays 04:00:                        infra/backup/backup_restore_drill.sh (schema parity)
 #   hawa-restore-drill         the 1st of each month, 05:00:         infra/backup/restore_drill.sh (data and files)
 #   hawa-offsite-copy          05:30:                                infra/backup/offsite_copy.sh (off until configured)
+#   hawa-live-canary           03:30 Asia/Baghdad:                   infra/ops/live_canary.sh (ADR-240; skipped until configured)
 #
 #   sudo bash infra/ops/install_systemd_units.sh [--user hawa]    # install or refresh; enable and start the timers
 #   sudo bash infra/ops/install_systemd_units.sh --uninstall      # stop, disable and remove them (settings are kept)
@@ -27,8 +28,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SRC="$ROOT/infra/ops/systemd"
 UNIT_DIR="${HAWA_SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
 ENV_FILE="${HAWA_BACKUP_ENV_FILE:-/etc/hawa/backup.env}"
-UNITS=(hawa-watchdog hawa-nightly-backup hawa-backup-restore-drill hawa-restore-drill hawa-offsite-copy)
-LABELS=(design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill design.hawa.restore-drill design.hawa.offsite-copy)
+UNITS=(hawa-watchdog hawa-nightly-backup hawa-backup-restore-drill hawa-restore-drill hawa-offsite-copy hawa-live-canary)
+LABELS=(design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill design.hawa.restore-drill design.hawa.offsite-copy design.hawa.live-canary)
 CARRIED=(HAWA_BACKUP_ARCHIVE_DEST HAWA_BACKUP_ARCHIVE_KEYFILE HAWA_BACKUP_ARCHIVE_KEEP HAWA_RESTATE_BACKUP_ENABLED
   HAWA_RESTATE_BACKUP_HELPER_IMAGE HAWA_OFFSITE_DEST HAWA_OFFSITE_RSH HAWA_OFFSITE_KEEP HAWA_HOST_ROLE)
 die() { echo "ERROR: $1" >&2; exit 1; }

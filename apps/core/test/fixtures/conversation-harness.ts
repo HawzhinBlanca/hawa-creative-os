@@ -29,7 +29,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { vi } from 'vitest';
-import type { OutboundMessage, SendResult } from '@hawa/contracts';
+import { canaryChatIdFromEnv, type OutboundMessage, type SendResult } from '@hawa/contracts';
 import { CanvaBindingRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { DoclingParser, PDF_EXTRACTOR_VERSION } from '@hawa/retrieval';
 import { createApp } from '../../src/app.js';
@@ -198,6 +198,8 @@ export class ConversationHarness {
       readDraftImage: async (ref: any) => (ref?.id ? this.exports.get(ref.id)?.bytes ?? null : null),
       officeChatIds: () => o.office.map((p) => String(p.id)),
       markRetryDelaysMs: [5],
+      // ADR-240: the worker's own canary sink, configured as production configures it (HAWA_CANARY_CHAT_ID).
+      canaryChatId: () => canaryChatIdFromEnv(process.env),
     } as TelegramSenderDeps;
     this.installFetch();
   }

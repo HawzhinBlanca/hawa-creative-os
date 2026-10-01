@@ -10,6 +10,7 @@
  */
 import crypto from 'node:crypto';
 import { sql, withRlsContext, type Kysely, type Database } from '@hawa/db';
+import { isReservedCanaryChatId } from '@hawa/contracts';
 import { INBOX_MESSAGES } from '@hawa/integrations';
 
 export interface PolledUpdate { update_id: number }
@@ -100,9 +101,11 @@ export async function parkTelegramUpdate(
         ${payloadHash}, true, ${reason.slice(0, 2000)}
       WHERE NOT EXISTS (SELECT 1 FROM hawa.inbox_events WHERE tenant_id = ${identity.tenantId}::uuid
         AND source_account_id = 'telegram' AND source_event_id = ${sourceEventId})`.execute(trx);
-    // The sender's own chat already gets the notice; alerting it again would only repeat it.
-    const offices = [...new Set([...(options.officeChatId ? [options.officeChatId] : []), ...(options.officeChatIds ?? [])])]
-      .filter((office) => office && office !== parkedUpdateChat(update));
+    // The sender's own chat already gets the notice; alerting it again would only repeat it. The nightly
+    // canary's chat (ADR-240) alerts nobody: the canary reports its own failures to the operator.
+    const offices = isReservedCanaryChatId(parkedUpdateChat(update)) ? []
+      : [...new Set([...(options.officeChatId ? [options.officeChatId] : []), ...(options.officeChatIds ?? [])])]
+        .filter((office) => office && office !== parkedUpdateChat(update));
     for (const [index, office] of offices.entries()) {
       const message = { text: composeParkedUpdateAlert(update, reason) };
       const key = `notify.office:telegram-update-parked:${update.update_id}${index === 0 ? '' : `:${office}`}`;
