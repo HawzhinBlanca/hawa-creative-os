@@ -267,7 +267,7 @@ describe('fake models and the paid-call ledger', () => {
     await admin('/reset', {});
     const image = Buffer.from([0xff, 0xd8, 0xff, 0x01, 0x02]);
     const request = { width: 1080, height: 1350, copy: ['Exact title'], copyScripts: ['latin'],
-      logoAspect: 1.37, formalBodyFonts: { latin: 'Verdana' },
+      logoAspect: 1.37, formalBodyFonts: { latin: 'Inter' },
       reference: { rules: { palette: ['#0A1628', '#FDF8F3'] } } };
     const text = `Design Brief:\n${JSON.stringify(request)}\n\nOperator Revision Directive: "Use the new image."`;
     const response = await chat('canva_design_plan', '', { messages: [
@@ -286,7 +286,7 @@ describe('fake models and the paid-call ledger', () => {
   });
 
   it('builds a planner layout that places every copy block once, at the logo aspect Core checks', () => {
-    const plan: any = plannerLayout({ width: 1080, height: 1350, copy: ['Title', 'Body one', 'Body two'], copyScripts: ['latin', 'latin', 'latin'], logoAspect: 1.37, formalBodyFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }, reference: { rules: { palette: ['#0A1628', '#FDF8F3'] } } });
+    const plan: any = plannerLayout({ width: 1080, height: 1350, copy: ['Title', 'Body one', 'Body two'], copyScripts: ['latin', 'latin', 'latin'], logoAspect: 1.37, formalBodyFonts: { latin: 'Inter', arabic: 'Noto Sans Arabic' }, reference: { rules: { palette: ['#0A1628', '#FDF8F3'] } } });
     expect(plan.text.map((t: any) => t.copyIndex)).toEqual([0, 1, 2]);
     expect(Math.abs(plan.logo.width / plan.logo.height - 1.37) / 1.37).toBeLessThan(0.01);
     expect(plan.logo.width).toBeGreaterThanOrEqual(100);

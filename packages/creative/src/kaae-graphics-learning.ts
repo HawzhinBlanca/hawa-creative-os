@@ -90,6 +90,7 @@ export interface KaaeLearnedKnowledgeGraph {
   extractedColorPalette: Array<{ name: string; hex: string; role: string; usage: string }>;
   typographicStandards: {
     primaryLatin: string;
+    latinDisplay?: string;
     kurdishDisplay: string;
     kurdishBody: string;
     scaleHeadlinePt: number;
@@ -243,12 +244,14 @@ export class KaaeGraphicsLearningEngine {
       aspectRatio = '5:4 (Presentation Slide)';
     }
 
+    // KAAE Brand Guidelines, Excellence Edition (KAAE_Guidelines4.pdf, 2025): primary p.7, extended p.8.
     const detectedColors = [
-      { name: 'KAAE Midnight Navy', hex: '#160874', role: 'primary' },
-      { name: 'KAAE Kurdistan Sun Gold', hex: '#E8B85C', role: 'accent' },
-      { name: 'KAAE Academic Royal', hex: '#35309B', role: 'secondary' },
-      { name: 'KAAE Parchment Cream', hex: '#FFF2DB', role: 'surface' },
-      { name: 'KAAE Deep Keynote Canvas', hex: '#0A1628', role: 'background' },
+      { name: 'KAAE Blue', hex: '#4770A3', role: 'primary' },
+      { name: 'KAAE Gold', hex: '#F7B500', role: 'accent' },
+      { name: 'KAAE Royal', hex: '#1E3A5F', role: 'secondary' },
+      { name: 'KAAE Cream', hex: '#FDF8F3', role: 'surface' },
+      { name: 'KAAE White', hex: '#FFFFFF', role: 'background' },
+      { name: 'KAAE Midnight', hex: '#0A1628', role: 'text' },
     ];
 
     const isCertificate = format === 'certificate';
@@ -256,7 +259,7 @@ export class KaaeGraphicsLearningEngine {
 
     const learnedRules: string[] = [
       `Enforce UAX #9 First-Strong directional isolation on all Kurdish Sorani text nodes`,
-      `Maintain minimum 4.5:1 WCAG contrast ratio for all secondary metadata text against navy background`,
+      `Maintain minimum 4.5:1 WCAG contrast ratio for all secondary metadata text: Midnight or KAAE Blue on white, white on navy`,
       `Anchor official KAAE 21-ray presidential seal at top-center (certificates) or top-right (RTL feeds)`,
       isCertificate
         ? `Apply 4-sided mathematical Guilloche security borders with dual executive signature blocks`
@@ -274,9 +277,9 @@ export class KaaeGraphicsLearningEngine {
       dimensions: dims,
       detectedColors,
       typography: {
-        primaryFont: 'Verdana',
-        displayFont: 'Cairo',
-        bodyFont: 'Noto Naskh Arabic',
+        primaryFont: 'Inter',
+        displayFont: 'IBM Plex Sans Arabic',
+        bodyFont: 'Noto Sans Arabic',
         estimatedHeadlineSize: isCertificate ? 36 : isFeedOrStory ? 32 : 28,
         estimatedBodySize: isCertificate ? 14 : isFeedOrStory ? 16 : 14,
         direction: 'rtl',
@@ -417,17 +420,20 @@ export class KaaeGraphicsLearningEngine {
       },
       lastUpdated: new Date().toISOString(),
       totalReferencesAnalyzed: referenceItems.length,
+      // KAAE Brand Guidelines, Excellence Edition (KAAE_Guidelines4.pdf, 2025): primary p.7, extended p.8.
       extractedColorPalette: [
-        { name: 'KAAE Midnight Navy', hex: '#160874', role: 'primary', usage: 'Official foundation, authority headers, formal document backgrounds' },
-        { name: 'KAAE Kurdistan Sun Gold', hex: '#E8B85C', role: 'accent', usage: 'Official seals, distinction badges, metallic foil borders, achievement plinths' },
-        { name: 'KAAE Academic Royal', hex: '#35309B', role: 'secondary', usage: 'Publication covers, ribbon headers, and secondary panel structures' },
-        { name: 'KAAE Parchment Cream', hex: '#FFF2DB', role: 'surface', usage: 'Warm archival diploma background, parchment contrast fields' },
-        { name: 'KAAE Deep Keynote Canvas', hex: '#0A1628', role: 'background', usage: 'Keynote LED widescreen backdrops, high-contrast dark digital announcements' },
+        { name: 'KAAE Blue', hex: '#4770A3', role: 'primary', usage: 'Titles, italic leads, letter-spaced section labels and brand cards (Pantone 5415 C)' },
+        { name: 'KAAE Gold', hex: '#F7B500', role: 'accent', usage: 'Title bar, the gold segment of the header rule, card edges and numbers on navy (Pantone 7549 C)' },
+        { name: 'KAAE Royal', hex: '#1E3A5F', role: 'secondary', usage: 'Dark cards and the middle of the foot rule' },
+        { name: 'KAAE Cream', hex: '#FDF8F3', role: 'surface', usage: 'Card tint with a gold left edge' },
+        { name: 'KAAE White', hex: '#FFFFFF', role: 'background', usage: 'The page: white with generous margins' },
+        { name: 'KAAE Midnight', hex: '#0A1628', role: 'text', usage: 'Body text on light; the end of the KAAE Blue to Midnight cover gradient' },
       ],
       typographicStandards: {
-        primaryLatin: 'Verdana',
-        kurdishDisplay: 'Cairo',
-        kurdishBody: 'Noto Naskh Arabic',
+        primaryLatin: 'Inter',
+        latinDisplay: 'Crimson Pro',
+        kurdishDisplay: 'IBM Plex Sans Arabic',
+        kurdishBody: 'Noto Sans Arabic',
         scaleHeadlinePt: 32,
         scaleBodyPt: 16,
       },
@@ -500,9 +506,9 @@ export class KaaeGraphicsLearningEngine {
       compositionalInvariants: [
         'Zero flattened raster text: all copy must remain editable vector text nodes with live OpenType shaping',
         'Strict Kurdish Sorani orthography: standard Kurdish alphabet (ک, ی), diacritic clearances (ڵ, ۆ, ێ, ڕ), ZWNJ preservation',
-        'Official 21-ray sun seal must maintain minimum 28px digital / 15mm print clear space without aspect distortion',
+        'Official KAAE logo keeps clear space equal to the height of its "K" and a minimum width of 80px digital / 20mm print, without aspect distortion (KAAE_Guidelines4.pdf pp.4-5)',
         'Every deliverable must state legal authority citation under Kurdistan Regional Parliament Law No. 6 of 2022',
-        'All primary headlines must maintain minimum 7.0:1 AAA contrast against dark navy or parchment backgrounds',
+        'All primary headlines must maintain minimum 4.5:1 contrast: KAAE Blue or Midnight on white, white on the KAAE Blue to Midnight cover gradient',
         'Institutional announcements must state official slogan: "Empowering Education, Inspiring the Future"',
       ],
       referenceItems,
@@ -602,10 +608,10 @@ export class KaaeGraphicsLearningEngine {
     const comp = this.getDeepCompendium();
     if (comp?.fifteenGraphicCampaignArchetypes) return comp.fifteenGraphicCampaignArchetypes;
     return [
-      { id: 'kaae_eligibility_decree', ratio: '4:5 / A4', name: 'University Eligibility Status Decree', primaryPalette: ['#002050', '#E8B85C', '#FFFFFF'] },
-      { id: 'kaae_global_milestone', ratio: '4:5', name: 'Global Network Accreditation Milestone', primaryPalette: ['#160874', '#E8B85C', '#FFF2DB'] },
-      { id: 'kaae_evaluator_call', ratio: '4:5', name: 'Call for National & International Peer Evaluators', primaryPalette: ['#160874', '#35309B', '#FFFFFF'] },
-      { id: 'kaae_metrics_card', ratio: '4:5 / 16:9', name: 'OTA Social Media Analytics & Reach Infographic', primaryPalette: ['#0A1628', '#E8B85C', '#35309B'] },
+      { id: 'kaae_eligibility_decree', ratio: '4:5 / A4', name: 'University Eligibility Status Decree', primaryPalette: ['#1E3A5F', '#F7B500', '#FFFFFF'] },
+      { id: 'kaae_global_milestone', ratio: '4:5', name: 'Global Network Accreditation Milestone', primaryPalette: ['#0A1628', '#F7B500', '#FDF8F3'] },
+      { id: 'kaae_evaluator_call', ratio: '4:5', name: 'Call for National & International Peer Evaluators', primaryPalette: ['#0A1628', '#2C5282', '#FFFFFF'] },
+      { id: 'kaae_metrics_card', ratio: '4:5 / 16:9', name: 'OTA Social Media Analytics & Reach Infographic', primaryPalette: ['#0A1628', '#F7B500', '#2C5282'] },
     ];
   }
 

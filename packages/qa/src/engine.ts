@@ -384,7 +384,7 @@ export class DeterministicQAEngine implements QAEngine {
     // 8. Check visible typography, invisible text, overflow, and font glyphs (CV-14, FR-034, FR-037, FR-038)
     const typoFindings: QAFinding[] = [];
     const soraniRegex = /[\u067E\u0686\u06AF\u06A4\u06C6\u06CE\u06B5\u0695\u06D5]/;
-    const supportedSoraniFonts = ['cairo', 'vazirmatn', 'noto naskh arabic', 'noto sans arabic', 'rabar'];
+    const supportedSoraniFonts = ['cairo', 'vazirmatn', 'noto naskh arabic', 'noto sans arabic', 'ibm plex sans arabic', 'rabar'];
 
     for (const node of request.manifest.nodes) {
       // Invisible text check
@@ -428,7 +428,7 @@ export class DeterministicQAEngine implements QAEngine {
         const rawFont = (node as any).font || (node as any).fontFamily || (node as any).textStyle?.fontFamily || '';
         if (rawFont) {
           const fontNormalized = rawFont.toLowerCase().replace(/[\s-_]/g, '');
-          const hasKurdishSupport = ['cairo', 'vazirmatn', 'notonaskharabic', 'notosansarabic', 'rabar'].some((f) => fontNormalized.includes(f));
+          const hasKurdishSupport = ['cairo', 'vazirmatn', 'notonaskharabic', 'notosansarabic', 'ibmplexsansarabic', 'rabar'].some((f) => fontNormalized.includes(f));
           if (!hasKurdishSupport) {
             typoFindings.push({
               ruleId: 'FONT_GLYPH_COVERAGE_DEFECT',

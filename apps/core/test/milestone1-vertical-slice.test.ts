@@ -234,7 +234,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
       },
       clientDna: {
         clientId: kaaeClientId,
-        brandColors: { primary: '#160874', secondary: '#E8B85C' },
+        brandColors: { primary: '#4770A3', secondary: '#F7B500' }, // KAAE Blue and KAAE Gold, KAAE_Guidelines4.pdf p.7
         typography: { primaryFont: 'Noto Sans Arabic' },
         logoVariants: [{ id: 'seal_primary', role: 'logo_primary', sha256: logoSha256 }],
         forbiddenWords: ['unaccredited', 'untested'],

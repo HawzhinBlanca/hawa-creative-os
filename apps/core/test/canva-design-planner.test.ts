@@ -63,11 +63,13 @@ describe('exact copy selection',()=>{
     const make=(palette:string[],latin:string,arabic:string)=>buildPlannerSystemPrompt({
       reference:{rules:{palette}},formalBodyFonts:{latin,arabic},admittedFonts:[latin,arabic],
     });
-    const one=make(['#0A1628','#F7B500'],'Verdana','Noto Sans Arabic');
-    const two=make(['#214365','#EFABCD'],'Inter','Cairo');
+    const one=make(['#4770A3','#F7B500'],'Inter','Noto Sans Arabic');
+    const two=make(['#214365','#EFABCD'],'Plus Jakarta Sans','Cairo');
     expect(one).toContain('#F7B500');
+    expect(one).toContain('"Inter"');
     expect(two).toContain('#EFABCD');
-    expect(two).toContain('"Inter"');
+    expect(two).toContain('"Plus Jakarta Sans"');
+    expect(two).not.toContain('"Inter"');
     expect(two).not.toContain('#F7B500');
     expect(two).not.toContain('KAAE');
     expect(()=>make(['#not-a-color','#EFABCD'],'Inter','Cairo')).toThrow('verified palette');
@@ -132,8 +134,8 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   const logo = foundLogo ? readFileSync(foundLogo) : Buffer.alloc(32);
   const ratio = logo.length >= 24 ? (logo.readUInt32BE(16) / (logo.readUInt32BE(20) || 1)) || 1 : 1;
   const plan={width:1200,height:1697,background:'#081F35',shapes:[],logo:{x:500,y:50,width:200,height:200/ratio},text:[
-    {copyIndex:0,x:100,y:600,width:1000,height:100,fontSize:32,fontFamily:'Verdana',color:'#fff2db',align:'center'},
-    {copyIndex:1,x:100,y:750,width:1000,height:100,fontSize:24,fontFamily:'Verdana',color:'#fff2db',align:'left'}]};
+    {copyIndex:0,x:100,y:600,width:1000,height:100,fontSize:32,fontFamily:'Inter',color:'#FDF8F3',align:'center'},
+    {copyIndex:1,x:100,y:750,width:1000,height:100,fontSize:24,fontFamily:'Inter',color:'#FDF8F3',align:'left'}]};
   const intake=async(includeExemplarImages=false)=>{
     // Legacy planner-only flag is retained alongside a normalized option by chat intake.
     const studioOptions=includeExemplarImages?{tier:'standard' as const,includeExemplarImages:true}:undefined;
@@ -267,8 +269,8 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(saved.result.manifest).toMatchObject({copyScripts:['latin','arabic'],rtlFont:'Noto Sans Arabic',rtlFontProvisional:true,rtlBlocks:1});
     expect(saved.result.manifest.copyLocales).toEqual(['und','und']);
     expect(saved.result.manifest.plan.text[1]).toMatchObject({rtl:true,align:'right',fontFamily:'Noto Sans Arabic'});
-    expect(saved.result.manifest.plan.text[0]).toMatchObject({fontFamily:'Verdana'});
-    const check=checkCanvaPptx(new Uint8Array(saved.source_content),saved.result.manifest.copy,'Verdana',{scriptFonts:{arabic:'Noto Sans Arabic'}});
+    expect(saved.result.manifest.plan.text[0]).toMatchObject({fontFamily:'Inter'});
+    const check=checkCanvaPptx(new Uint8Array(saved.source_content),saved.result.manifest.copy,'Inter',{scriptFonts:{arabic:'Noto Sans Arabic'}});
     expect(check).toMatchObject({copyPass:true,fontPass:true,rtlPass:true,arabicTextObjectCount:1,rtlTextObjectCount:1});
   });
   it('persists explicitly labelled Desk languages with the generated exact-copy source',async()=>{
@@ -283,7 +285,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const saved=(await sql<any>`SELECT request,result,source_content FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
     expect(saved.request.copyLocales).toEqual(['en','ckb']);
     expect(saved.result.manifest).toMatchObject({copy:[copyEn,copyCkb],copyLocales:['en','ckb']});
-    expect(checkCanvaPptx(new Uint8Array(saved.source_content),[copyEn,copyCkb],'Verdana',
+    expect(checkCanvaPptx(new Uint8Array(saved.source_content),[copyEn,copyCkb],'Inter',
       {scriptFonts:{arabic:'Noto Sans Arabic'}})).toMatchObject({copyPass:true,rtlPass:true});
   });
   it('refuses copy in a script the transfer cannot set, before any paid call',async()=>{

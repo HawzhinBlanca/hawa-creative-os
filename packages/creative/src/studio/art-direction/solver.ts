@@ -23,6 +23,7 @@ import { rankPhotosForHero, type QuietArea } from './recipes.js';
 import { candidateRecipeTypeScales, type RecipeTypeScale as TypeScale } from './type-scale-search.js';
 import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
 import { protectedCropFocus, protectedRegionsOnCanvas, type SourceRegion, type RegionStatus } from '../protected-regions.js';
+import { GrammarInfeasibleError, composeGrammarLayout, conformMarksToPageGrammar, type PageGrammar } from '../page-grammar.js';
 
 /**
  * ADR-170: the recipe solver. It turns the layout model's art-direction choice (a recipe, which
@@ -124,6 +125,15 @@ export interface SolveRecipeInput {
   fonts?: { latinDisplay?: string; latinBody?: string; arabicDisplay?: string; arabicBody?: string };
   fontsDir?: string;
   backgroundPlanning?: BackgroundPlanningInput;
+  /**
+   * ADR-238: the client's page grammar (its reference's `rules.pageGrammar`). With one, a light
+   * concept is set in the grammar's faces and colours with its title bar and foot rule, and
+   * fade_to_paper on white is the guideline's own page: the header, the title and its bar, the lead,
+   * the photo in a rounded card, the details on cards and the foot rule.
+   */
+  grammar?: PageGrammar;
+  /** ADR-238: the client's logo clear space as a share of the logo's height. */
+  logoClearSpaceShare?: number;
 }
 
 /** A choice this canvas and copy cannot carry: the candidate is dropped, never forced into shape. */
@@ -386,8 +396,8 @@ class SolveContext {
     this.rtl = this.blocks.filter((b) => b.arabic).length > this.blocks.length / 2;
     this.recipe = input.choice.recipe;
     this.fonts = {
-      latinDisplay: input.fonts?.latinDisplay || 'Verdana',
-      latinBody: input.fonts?.latinBody || 'Verdana',
+      latinDisplay: input.fonts?.latinDisplay || input.grammar?.title.fontFamily || 'Verdana',
+      latinBody: input.fonts?.latinBody || input.grammar?.body.fontFamily || 'Verdana',
       arabicDisplay: input.fonts?.arabicDisplay || 'Noto Sans Arabic',
       arabicBody: input.fonts?.arabicBody || 'Noto Sans Arabic',
     };
@@ -539,7 +549,7 @@ class SolveContext {
   }
 
   logoClear(logo: Box): Box {
-    return logoClearZone(logo, this.input.logoClearSpacePx);
+    return logoClearZone(logo, this.clientClearPx(logo));
   }
 
   /** The logo in a top corner of the safe area: the start corner, or the given one. */
@@ -570,16 +580,21 @@ class SolveContext {
     const rangeKey = b.arabic ? 'arabic' : 'latin';
     const lh = HOUSE_RULES.lineHeight[rangeKey];
     const lineHeight = b.arabic ? (display ? 1.6 : 1.7) : display ? 1.2 : this.officeType ? 1.3 : 1.4;
+    // ADR-238: with a page grammar the accent line is the guideline's lead (italic, never bold), not a
+    // second bold title line; a call to action stays in the display face.
+    const lead = Boolean(this.input.grammar) && b.slot === 'accent' && !b.arabic;
     const el: TextElement = {
       copyIndex: b.copyIndex,
       role: b.role,
       ...intBox(box),
       fontSize,
       lineHeight: Math.min(lh.max, Math.max(lh.min, lineHeight)),
-      fontFamily: b.arabic ? (display ? this.fonts.arabicDisplay : this.fonts.arabicBody) : display ? this.fonts.latinDisplay : this.fonts.latinBody,
+      fontFamily: b.arabic ? (display ? this.fonts.arabicDisplay : this.fonts.arabicBody)
+        : lead ? this.input.grammar!.lead.fontFamily : display ? this.fonts.latinDisplay : this.fonts.latinBody,
       color,
       align: align === 'center' ? 'center' : b.arabic ? 'right' : 'left',
-      bold: display,
+      bold: display && !lead,
+      ...(lead && this.isLight() && this.input.grammar!.lead.italic ? { italic: true } : {}),
       ...(b.arabic ? { rtl: true, letterSpacing: 0 } : {}),
     };
     return el;
@@ -748,8 +763,18 @@ class SolveContext {
   /** The ground of a recipe that can sit on navy or on the page, and the text colours it carries. */
   ground(): { background: Hex; colours: Palette } {
     return this.isLight()
-      ? { background: this.paper(), colours: surfacePalette(this.tones, 'cream') }
+      ? { background: this.paper(), colours: this.lightColours() }
       : { background: this.tones.navy, colours: surfacePalette(this.tones, 'navy') };
+  }
+
+  /**
+   * Text colours on the light page: the grammar's (ADR-238: KAAE Blue titles and lead, Midnight body),
+   * or the brand tones' navy set (ADR-236) for a client with no grammar.
+   */
+  lightColours(): Palette {
+    const g = this.input.grammar;
+    const base = surfacePalette(this.tones, 'cream');
+    return g ? { ...base, title: g.title.color, accent: g.lead.color, body: g.body.color } : base;
   }
 
   // ----- frames ----------------------------------------------------------------------------------
@@ -827,8 +852,18 @@ class SolveContext {
     }
     this.applyTitleAccent(layout);
     this.balanceWidows(layout);
+    if (this.input.grammar && this.isLight() && !layout.composition) {
+      // The solver set its blocks in the grammar's faces already (its measurements depend on them):
+      // only the grammar's marks are added.
+      conformMarksToPageGrammar(layout, this.input.grammar, { logoClearSpacePx: this.clientClearPx(layout.logo) });
+    }
     this.checkLayout(layout);
     return layout;
+  }
+
+  /** The client's own logo clear space in pixels for a logo box (ADR-238). */
+  clientClearPx(logo: Box): number {
+    return Math.max(this.input.logoClearSpacePx ?? 0, (this.input.logoClearSpaceShare ?? 0) * logo.height);
   }
 
   /**
@@ -897,7 +932,7 @@ class SolveContext {
       const fallback = this.faceBox(photo);
       const boxes = p?.regions?.length && photo.treatment !== 'cutout' ? protectedRegionsOnCanvas(photo, p) : fallback ? [fallback] : [];
       for (const face of boxes) {
-        const covers = [...layout.text, ...layout.shapes.filter((sh) => sh.role === 'panel' && sh.fill !== 'none'), layout.logo].find((b) => hit(b, face));
+        const covers = [...layout.text, ...layout.shapes.filter((sh) => sh.role === 'panel' && sh.fill !== 'none' && sh.layer === 'overlay'), layout.logo].find((b) => hit(b, face));
         if (covers) throw new RecipeInfeasibleError(this.recipe, `the copy or its plate would cover the faces in photo ${photo.photoIndex}`);
       }
     }
@@ -938,7 +973,8 @@ class SolveContext {
 
   editorialColours(): { background: Hex; colours: Palette } {
     const tone = this.input.choice.params.surfaceTone ?? 'cream';
-    return { background: tone === 'cream' ? this.paper() : this.tones.navy, colours: surfacePalette(this.tones, tone) };
+    return { background: tone === 'cream' ? this.paper() : this.tones.navy,
+      colours: tone === 'cream' ? this.lightColours() : surfacePalette(this.tones, tone) };
   }
 
   /** Copy/photo split: side by side for square/wide, editorial header above photo for portrait. */
@@ -1008,7 +1044,7 @@ class SolveContext {
 
   heroStoryboard(): StudioLayoutV2 {
     const [hero, ...supporting] = this.selectedPhotos(2, 10);
-    const colours = surfacePalette(this.tones, this.input.choice.params.surfaceTone === 'cream' ? 'cream' : 'navy');
+    const colours = this.input.choice.params.surfaceTone === 'cream' ? this.lightColours() : surfacePalette(this.tones, 'navy');
     const background = this.input.choice.params.surfaceTone === 'cream' ? this.tones.cream : this.tones.navy;
     const align = this.align();
     const bottom = this.safe.y + this.safe.height;
@@ -1378,6 +1414,58 @@ class SolveContext {
   }
 
   /**
+   * ADR-238: the client guideline's own page with its one photo (KAAE 2025, pp.1-15): the header
+   * (logo, label, rule and gold segment), the serif title and its bar, the italic lead, the photo in a
+   * rounded card with a soft shadow, the details on cards, and the gradient rule at the foot. Composed
+   * by the page grammar; recorded as fade_to_paper on white, the recipe it replaces.
+   */
+  grammarPage(hero: SolverPhoto): StudioLayoutV2 {
+    const roles: Record<number, string> = {};
+    for (const b of this.blocks) {
+      const asked = this.input.briefRoles?.[b.copyIndex];
+      roles[b.copyIndex] = b.slot === 'title' ? 'title' : b.slot === 'accent' ? (asked === 'eyebrow' ? 'eyebrow' : 'subtitle') : b.slot === 'cta' ? 'cta'
+        : b.slot === 'footer' ? 'footer' : b.slot === 'meta' ? b.role : (this.input.briefRoles?.[b.copyIndex] === 'eyebrow' ? 'eyebrow' : 'body');
+    }
+    let layout: StudioLayoutV2;
+    try {
+      layout = composeGrammarLayout({
+        width: this.W,
+        height: this.H,
+        grammar: this.input.grammar!,
+        copy: this.input.copy,
+        roles,
+        logoAspect: this.input.logoAspect,
+        logoMinimumWidthPx: this.input.logoMinimumWidthPx,
+        logoClearSpacePx: this.input.logoClearSpacePx,
+        logoClearSpaceShare: this.input.logoClearSpaceShare,
+        tone: 'page',
+        variant: 'brand_card',
+        photo: { photoIndex: hero.photoIndex, width: hero.width, height: hero.height, focus: this.focusOf(hero) },
+        fonts: { arabicDisplay: this.fonts.arabicDisplay, arabicBody: this.fonts.arabicBody },
+        fontsDir: this.input.fontsDir,
+      });
+    } catch (err) {
+      if (err instanceof GrammarInfeasibleError) throw new RecipeInfeasibleError(this.recipe, err.message);
+      throw err;
+    }
+    for (const p of layout.photos ?? []) this.photos.push(p);
+    const used = new Set(this.photos.map((p) => p.photoIndex));
+    const title = layout.text.find((t) => t.role === 'title')!;
+    const upscale = this.heroUpscale();
+    layout.artDirection = {
+      recipe: this.recipe,
+      conceptNote: (this.input.choice.conceptNote || 'The guideline page: header, serif title and gold bar, italic lead, the photo in a rounded card, details on cards, gradient foot rule.').slice(0, 400),
+      titleZone: intBox(title),
+      heroPhotoIndex: hero.photoIndex,
+      omittedPhotos: this.input.photos.map((p) => p.photoIndex).filter((i) => !used.has(i)).sort((a, b) => a - b),
+      rtl: this.rtl,
+      ...(upscale ? { heroUpscale: upscale } : {}),
+    };
+    this.checkLayout(layout);
+    return layout;
+  }
+
+  /**
    * Reference example 6. Cream paper; the photo rises from the bottom and fades into the paper; the
    * title sits on a navy plate under the logo and the other lines in navy on the paper.
    *
@@ -1386,6 +1474,7 @@ class SolveContext {
    */
   fadeToPaper(): StudioLayoutV2 {
     const hero = this.hero();
+    if (this.input.grammar && this.isLight() && this.input.choice.params?.paper !== 'cream' && !this.wide) return this.grammarPage(hero);
     const cream = surfacePalette(this.tones, 'cream');
     const navy = surfacePalette(this.tones, 'navy');
     const logo = this.logoAt('top-start');
@@ -1443,6 +1532,8 @@ class SolveContext {
     return this.finish({ background: this.paper(), text, logo, titleZone: { x: plateX, y: top, width: plateW, height: hh + 2 * padY }, hero });
   }
 }
+
+export { GrammarInfeasibleError };
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, Number.isFinite(v) ? v : lo));

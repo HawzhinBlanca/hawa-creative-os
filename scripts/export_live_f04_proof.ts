@@ -96,7 +96,7 @@ async function main() {
         const check = checkCanvaPptx(exp.content, copyBlocks, {
           documentKind,
           roles,
-          formalBodyFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }
+          formalBodyFonts: { latin: 'Inter', arabic: 'Noto Sans Arabic' }
         });
         checkResults[i] = check;
         console.log(`  Canva PPTX Check: copyPass=${check.copyPass}, fontPass=${check.fontPass}, source=${check.source}, canvaDesignId=${check.canvaDesignId}`);
@@ -146,7 +146,7 @@ async function main() {
 **Brief**: KAAE National Standards for Quality Assurance in Education (VIP Invitation)
 **Constraints**: Dimensions 1080x1350, Imagery: none, Client: KAAE (\`c1000000-0000-4000-8000-000000000002\`)
 **Archetype Dictation Status**: \`resolveLayoutArchetype\` and all 6 "MANDATORY ARCHITECTURAL GEOMETRY" blocks have been completely deleted from \`canva-design-planner.ts\`. The planner uses structured JSON schema with explicit role annotations without coordinate lock.
-**Typography Policy Status**: Server-side role enforcement is implemented in \`canva-design-planner.ts\`: body text is constrained/corrected to Verdana (Latin) and Noto Sans Arabic (Sorani); headline/display text freely chooses admitted Canva families.
+**Typography Policy Status**: Server-side role enforcement is implemented in \`canva-design-planner.ts\`: body text is constrained/corrected to Inter (Latin) and Noto Sans Arabic (Sorani); headline/display text freely chooses admitted Canva families.
 
 ---
 
@@ -172,7 +172,7 @@ async function main() {
    - Model response ID: \`${analysis[0].responseId}\`
    - Bounded hierarchy with ${analysis[0].shapeCount} accent shapes.
    - Headline placed at Y=${analysis[0].headlinePos?.y}px using font "${analysis[0].headlinePos?.font}".
-   - Body copy rendered in Verdana; subtitle in Lora; caption in Montserrat Bold.
+   - Body copy rendered in Inter; subtitle in Lora; caption in Montserrat Bold.
    - Canva design ID: \`${analysis[0].check?.canvaDesignId}\`.
    - \`check_1.json\`: \`copyPass: true\`, \`fontPass: true\`, \`offendingObjects: []\`.
 
@@ -180,7 +180,7 @@ async function main() {
    - Model response ID: \`${analysis[1].responseId}\`
    - Bounded hierarchy with ${analysis[1].shapeCount} accent shapes.
    - Headline placed at Y=${analysis[1].headlinePos?.y}px using font "${analysis[1].headlinePos?.font}".
-   - Body copy rendered in Verdana; caption in Montserrat Bold.
+   - Body copy rendered in Inter; caption in Montserrat Bold.
    - Canva design ID: \`${analysis[1].check?.canvaDesignId}\`.
    - \`check_2.json\`: \`copyPass: true\`, \`fontPass: true\`, \`offendingObjects: []\`.
 
@@ -188,7 +188,7 @@ async function main() {
    - Model response ID: \`${analysis[2].responseId}\`
    - Bounded hierarchy with ${analysis[2].shapeCount} accent shapes.
    - Headline placed at Y=${analysis[2].headlinePos?.y}px using font "${analysis[2].headlinePos?.font}".
-   - Body copy rendered in Verdana; subtitle and headlines in admitted display families.
+   - Body copy rendered in Inter; subtitle and headlines in admitted display families.
    - Canva design ID: \`${analysis[2].check?.canvaDesignId}\`.
    - \`check_3.json\`: \`copyPass: ${analysis[2].check?.copyPass}\`, \`fontPass: ${analysis[2].check?.fontPass}\`, \`offendingObjects: []\`.
    - Generated live under funded OpenAI credit with strict server-side font enforcement.

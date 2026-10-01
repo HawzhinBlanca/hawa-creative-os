@@ -226,8 +226,9 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
   brief.subjectTags = (Array.isArray(brief.subjectTags) ? brief.subjectTags : []).filter((t) => (BRIEF_SUBJECT_TAGS as readonly string[]).includes(t));
   brief.referenceSeen = images.length > 0;
   brief.styleSpec = { ...NEUTRAL_STYLE_SPEC, ...(brief.styleSpec || {}) };
-  // ADR-236: the ground the requester asked for in words ("on white", "like the brand book", "dark",
-  // "an evening gala"), read with no call and kept with the brief, so a resume or a change keeps it.
+  // ADR-236: the ground the requester asked for in words ("on white", "as per the brand guideline",
+  // "dark", "an evening gala", ADR-238: "an announcement cover"), read with no call and kept with the
+  // brief, so a resume or a change keeps it.
   const tonePreference = tonePreferenceFromWords(ctx.instructions);
   if (tonePreference) brief.tonePreference = tonePreference;
   else delete brief.tonePreference;

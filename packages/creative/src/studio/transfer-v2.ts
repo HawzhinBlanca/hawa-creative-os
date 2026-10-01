@@ -3,7 +3,10 @@ import { lineGeometry } from './line-geometry.js';
 import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
-import type { ArtConfig, Box, Hex, OverlayElement, ShapeElement, StudioLayoutV2 } from './layout-v2.js';
+import type { ArtConfig, Box, Hex, OverlayElement, ShapeElement, ShapeGradient, StudioLayoutV2 } from './layout-v2.js';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { gradientOoxml } from './shape-gradient.js';
+import { ornamentSvgDocument } from './brand-elements.js';
 import { svgFileName } from './svg-files.js';
 import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fittedTextOf, fontFaceSupports, overlaySvg, svgToPngAsync } from './render-layout-v2.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
@@ -321,6 +324,7 @@ export async function encodeStudioTransferV2(
     'Plus Jakarta Sans',
     'Vazirmatn',
     'Inter',
+    'Crimson Pro',
     ...(options.extraFonts || []).filter((f) => typeof f === 'string' && /^[A-Za-z0-9 ]{2,40}$/.test(f)),
   ];
 
@@ -444,6 +448,9 @@ export async function encodeStudioTransferV2(
   }
 
   // 2. Shapes: every shape but the overlay ones (ADR-170), which go over the photos below.
+  // ADR-238: a shape with a gradient is written with a flat fill by pptxgenjs, which cannot write
+  // a:gradFill, and its fill is replaced in the slide XML afterwards (withGradientFills).
+  const gradientFills = new Map<string, { gradient: ShapeGradient; opacity: number }>();
   const addShape = (shape: ShapeElement, index: number) => {
     const kind = shape.kind || 'rect';
     const transparency = shape.opacity !== undefined && shape.opacity !== null ? Math.round((1 - shape.opacity) * 100) : 0;
@@ -479,11 +486,19 @@ export async function encodeStudioTransferV2(
       ? pptx.ShapeType.roundRect
       : pptx.ShapeType.rect;
 
+    // A plate, card, tab or pill is named for what it is, so the client finds it in Canva's layers;
+    // so is a page-grammar part (ADR-238), which a gradient fill also needs to be found by below.
+    const objectName = shape.primitive
+      ? `${PRIMITIVE_NAMES[shape.primitive]} ${index}`
+      : shape.surface ? `${shape.surface[0].toUpperCase()}${shape.surface.slice(1)} ${index}` : shape.role === 'frame' ? `Frame ${index}` : undefined;
+    if (shape.gradient && shape.fill !== 'none') {
+      gradientFills.set(objectName ?? `Gradient ${index}`, { gradient: shape.gradient, opacity: shape.opacity ?? 1 });
+    }
+    const name = objectName ?? (shape.gradient && shape.fill !== 'none' ? `Gradient ${index}` : undefined);
     slide.addShape(type, {
       ...geom,
       rotate,
-      // A plate, card, tab or pill is named for what it is, so the client finds it in Canva's layers.
-      ...(shape.surface ? { objectName: `${shape.surface[0].toUpperCase()}${shape.surface.slice(1)} ${index}` } : shape.role === 'frame' ? { objectName: `Frame ${index}` } : {}),
+      ...(name ? { objectName: name } : {}),
       // A stroke-only frame: a fill of zero opacity (pptxgenjs writes no <a:noFill/>, and a shape with
       // no fill element would take the theme's fill in Canva).
       fill: shape.fill === 'none' ? { color: hex(shape.color), transparency: 100 } : { color: hex(shape.color), transparency },
@@ -509,8 +524,28 @@ export async function encodeStudioTransferV2(
       ...(kind === 'roundRect' && shape.radius ? { rectRadius: shape.radius / 96 } : {}),
     });
   };
+  // A cover's gradient ground first (ADR-238), then the brand elements over it, then the other shapes.
   layout.shapes.forEach((shape, i) => {
-    if (shape.layer !== 'overlay') addShape(shape, i);
+    if (shape.layer !== 'overlay' && shape.primitive === 'cover_ground') addShape(shape, i);
+  });
+  // ADR-238: brand elements, each the preview's own vector markup baked into a transparent PNG at
+  // the layout's pixels, over the ground and under every other shape, as the preview stacks them.
+  for (const [i, o] of (layout.ornaments ?? []).entries()) {
+    bounds(o);
+    hex(o.color);
+    const png = await svgToPngAsync(ornamentSvgDocument(o, `element-${i}`), o.width, o.height, options.rsvgConvertPath ? { rsvgConvertPath: options.rsvgConvertPath } : {});
+    slide.addImage({
+      data: `image/png;base64,${png.toString('base64')}`,
+      x: o.x / 96,
+      y: o.y / 96,
+      w: o.width / 96,
+      h: o.height / 96,
+      objectName: `${o.kind === 'sunburst' ? 'Sunburst' : 'Triangle pattern'} ${i}`,
+    });
+  }
+
+  layout.shapes.forEach((shape, i) => {
+    if (shape.layer !== 'overlay' && shape.primitive !== 'cover_ground') addShape(shape, i);
   });
 
   // 2b. Client photos, above the shapes and below the text, as the renderer draws them. `cover` with
@@ -697,7 +732,8 @@ export async function encodeStudioTransferV2(
     });
   }
 
-  const bytes = encodeNativeBackgroundField((await pptx.write({ outputType: 'nodebuffer' })) as Buffer, layout.background.field);
+  const written = encodeNativeBackgroundField((await pptx.write({ outputType: 'nodebuffer' })) as Buffer, layout.background.field);
+  const bytes = gradientFills.size ? withGradientFills(written, gradientFills) : written;
   const sha256 = createHash('sha256').update(bytes).digest('hex');
 
   const plan = studioLayoutV2ToTransferPlan(layout);
@@ -720,6 +756,50 @@ export async function encodeStudioTransferV2(
       version: 2,
     },
   };
+}
+
+/** What each page-grammar part is called in the deck's layers (ADR-238). */
+const PRIMITIVE_NAMES: Record<NonNullable<ShapeElement['primitive']>, string> = {
+  header_rule: 'Header rule',
+  header_accent: 'Header gold segment',
+  title_bar: 'Title bar',
+  card: 'Card',
+  card_edge: 'Card edge',
+  foot_rule: 'Foot rule',
+  cover_ground: 'Cover ground',
+};
+
+/**
+ * ADR-238: the deck with each named shape's flat fill replaced by its native gradient fill
+ * (`a:gradFill`), so a title bar, a foot rule or a cover's ground arrives in Canva as one editable
+ * shape with the gradient the preview drew. Only the shape's own fill (the first solid fill of its
+ * shape properties) changes; its outline, shadow and geometry are pptxgenjs's.
+ */
+export function withGradientFills(pptx: Buffer, fills: Map<string, { gradient: ShapeGradient; opacity: number }>): Buffer {
+  const files = unzipSync(new Uint8Array(pptx));
+  let replaced = 0;
+  for (const name of Object.keys(files)) {
+    if (!/^ppt\/slides\/slide\d+\.xml$/.test(name)) continue;
+    let xml = strFromU8(files[name]);
+    xml = xml.replace(/<p:sp>[\s\S]*?<\/p:sp>/g, (sp) => {
+      const nameAttr = sp.match(/<p:cNvPr [^>]*name="([^"]*)"/)?.[1];
+      const fill = nameAttr ? fills.get(unescapeXmlAttr(nameAttr)) : undefined;
+      if (!fill) return sp;
+      return sp.replace(/(<p:spPr>[\s\S]*?)<a:solidFill>[\s\S]*?<\/a:solidFill>/, (_m, head: string) => {
+        replaced++;
+        return `${head}${gradientOoxml(fill.gradient, fill.opacity)}`;
+      });
+    });
+    files[name] = strToU8(xml);
+  }
+  if (replaced !== fills.size) {
+    throw new Error(`GRADIENT_FILL_UNWRITTEN: ${fills.size - replaced} of ${fills.size} gradient shape(s) not found in the deck`);
+  }
+  return Buffer.from(zipSync(files, { level: 6 }));
+}
+
+function unescapeXmlAttr(v: string): string {
+  return v.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 
 /**

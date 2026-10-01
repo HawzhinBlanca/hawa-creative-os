@@ -14,6 +14,11 @@ import {
   settleLogoGround,
   faceBoxesOf,
   generateArtDirectedCandidatesV3,
+  composeGrammarLayout,
+  GrammarInfeasibleError,
+  pageGrammarPrompt,
+  hexToLuminance,
+  type PageGrammar,
 } from '@hawa/creative';
 import { photoFactsFor } from '../art-direction.js';
 import { renderBriefContractForPrompt } from '@hawa/domain';
@@ -223,7 +228,8 @@ export async function runLayoutsStage(
     // the solver computes every layout. The typographic path below is unchanged for no-photo briefs.
     const artDirected = Boolean(ctx.photos?.length);
     const photoFacts = artDirected ? await photoFactsFor(ctx) : [];
-    const logoConstraintsV3 = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number } | undefined;
+    const logoConstraintsV3 = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number; clearSpaceShareOfHeight?: number } | undefined;
+    const grammar = ctx.pageGrammar;
     const v3Result = artDirected ? await inStudioSubstep('layout/set', () => generateArtDirectedCandidatesV3({
       client: ctx.client as any,
       brief: briefSummary,
@@ -246,6 +252,8 @@ export async function runLayoutsStage(
       briefRoles: Object.fromEntries(copyBlockSlots.map((b) => [b.index, b.role])),
       // ADR-236: the ground the requester asked for in words decides every concept's ground.
       ...(brief.tonePreference ? { tonePreference: brief.tonePreference } : {}),
+      // ADR-238: the client's page grammar sets the light concepts and adds the guideline page.
+      ...(grammar ? { grammar, logoClearSpaceShare: logoConstraintsV3?.clearSpaceShareOfHeight } : {}),
     })) : await inStudioSubstep('layout/set', () => generateLayoutCandidatesV3({
       client: ctx.client as any,
       brief: briefSummary,
@@ -258,9 +266,10 @@ export async function runLayoutsStage(
       logoAspect: ctx.logoAspect || 1.0,
       reference: ctx.reference,
       clientProfile: ctx.clientProfile,
+      ...(grammar ? { pageGrammar: pageGrammarPrompt(grammar) } : {}),
     }));
 
-    const prepared = v3Result.layouts.map((rawLayout, i) => {
+    const prepared: CandidateState[] = v3Result.layouts.map((rawLayout, i) => {
       const layout = prepareGeneratedLayoutV3(rawLayout, copy, {
         width: ctx.width,
         height: ctx.height,
@@ -270,6 +279,13 @@ export async function runLayoutsStage(
         ornament: ctx.ornament,
         style: ctx.style,
         allowArt: brief.imageryStrategy !== 'none',
+        ...(grammar ? {
+          grammar,
+          logoClearSpacePx: logoConstraintsV3?.clearSpacePx,
+          logoClearSpaceShare: logoConstraintsV3?.clearSpaceShareOfHeight,
+          arabicDisplayFonts: ctx.referencePack.admittedDisplayFonts?.arabic,
+          arabicBody: ctx.arabicFont,
+        } : {}),
       });
       const existing = existingCandidates?.find((c) => c.ordinal === i);
       return {
@@ -294,6 +310,22 @@ export async function runLayoutsStage(
         });
         candidate.currentLayout = settled;
         candidate.layouts = [settled];
+      }
+    }
+    // ADR-238: a design with no photo for a client with a page grammar is first set from the grammar
+    // itself: two variants of the guideline's page (or of its cover, for a dark brief), composed and
+    // measured with no model call, ahead of the model's best layout restyled to the grammar. The run
+    // keeps three candidates, so the critique and judge calls per design do not grow.
+    if (grammar && !artDirected) {
+      const composed = composedGrammarCandidates(ctx, brief, grammar, copy, copyBlockSlots, logoConstraintsV3);
+      if (composed.length) {
+        const merged = [...composed, ...prepared].slice(0, Math.max(3, composed.length));
+        merged.forEach((candidate, i) => {
+          const existing = existingCandidates?.find((c) => c.ordinal === i);
+          candidate.ordinal = i;
+          candidate.id = existing?.id || candidate.id;
+        });
+        prepared.splice(0, prepared.length, ...merged);
       }
     }
     const replaced = 'replaced' in v3Result ? (v3Result.replaced as Array<{ reason: string }>) : [];
@@ -432,6 +464,69 @@ export async function runLayoutsStage(
   }
 
   return candidates;
+}
+
+/**
+ * ADR-238: the client's page grammar set whole: the guideline's page in two variants (details on a
+ * KAAE Blue card, or on white cards), or its navy-gradient cover when the brief asks for a dark
+ * ground (the requester's words, an evening or a cover). A variant the copy cannot fill is skipped.
+ */
+export function composedGrammarCandidates(
+  ctx: StageContext,
+  brief: CreativeBrief,
+  grammar: PageGrammar,
+  copy: ReturnType<typeof copyForStageV3>,
+  slots: CopyBlockSlotInput[],
+  logo: { minimumWidthPx?: number; clearSpacePx?: number; clearSpaceShareOfHeight?: number } | undefined
+): CandidateState[] {
+  const requested = ctx.requestedBackground;
+  const dark = brief.tonePreference?.tone === 'dark' || (requested ? hexToLuminance(requested) < 0.2 : false);
+  const tone = dark ? 'cover' as const : 'page' as const;
+  const variants = tone === 'cover' ? ['pattern', 'sunburst'] : ['brand_card', 'cards'];
+  const roles = Object.fromEntries(slots.map((b) => [b.index, b.role]));
+  const arabicDisplay = ctx.referencePack.admittedDisplayFonts?.arabic?.find((f) => f !== ctx.arabicFont) ?? ctx.arabicFont;
+  const out: CandidateState[] = [];
+  for (const variant of variants) {
+    let layout: StudioLayoutV2;
+    try {
+      layout = composeGrammarLayout({
+        width: ctx.width,
+        height: ctx.height,
+        grammar,
+        copy,
+        roles,
+        logoAspect: ctx.logoAspect || 1,
+        logoMinimumWidthPx: logo?.minimumWidthPx,
+        logoClearSpacePx: logo?.clearSpacePx,
+        logoClearSpaceShare: logo?.clearSpaceShareOfHeight,
+        tone,
+        variant,
+        fonts: { arabicDisplay, arabicBody: ctx.arabicFont },
+        ...(requested && !dark ? { pageBackground: requested } : {}),
+      });
+    } catch (err) {
+      if (err instanceof GrammarInfeasibleError) {
+        log.warn(`[LayoutsStage] page grammar ${tone}/${variant} skipped: ${err.message}`);
+        continue;
+      }
+      throw err;
+    }
+    const prepared = prepareGeneratedLayoutV3(layout, copy, { width: ctx.width, height: ctx.height, logoAspect: ctx.logoAspect, palette: ctx.referencePack.palette });
+    const name = tone === 'cover' ? `Guideline cover (${variant === 'pattern' ? 'navy gradient, centred, triangle pattern' : 'navy gradient, sunburst'})`
+      : `Guideline page (${variant === 'cards' ? 'details on white cards' : 'details on a KAAE Blue card'})`;
+    const raw = { id: `grammar-${tone}-${variant}`, conceptTitle: name, compositionArchetype: tone === 'cover' ? 'monolith_centered' : 'hero_statement_grid',
+      typeScale: { base: 16, ratio: 1.333 }, art: null } as unknown as Parameters<typeof conceptFromV3Candidate>[0];
+    out.push({
+      id: randomUUID(),
+      ordinal: out.length,
+      concept: { ...conceptFromV3Candidate(raw, prepared, out.length, variants.length), whyDifferent: `Composed from the client's page grammar (${variant})` },
+      layouts: [prepared],
+      currentLayout: prepared,
+      critiques: [],
+      status: 'draft' as const,
+    });
+  }
+  return out;
 }
 
 /**

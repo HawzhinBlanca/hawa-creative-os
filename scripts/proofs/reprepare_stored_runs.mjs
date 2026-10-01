@@ -72,12 +72,23 @@ export function readStyleFixtures(dir = FIXTURES_DIR) {
  */
 export function productionModes(creative, styleFixtures = readStyleFixtures()) {
   const ornament = creative.resolveOrnamentSettings({});
+  // ADR-238: production passes the client's page grammar (KAAE's 2025 guideline) with its logo rules
+  // and admitted Sorani faces; the gate runs the stored designs through it as its own mode.
+  const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/creative/assets/kaae-reference.json'), 'utf8'));
+  const grammar = creative.pageGrammarFromRaw ? creative.pageGrammarFromRaw(raw) : undefined;
   return [
     // These historical corpus modes allow imagery. The no-imagery route has its own Studio
     // admission regression; name this input explicitly instead of relying on the default.
     { name: 'plain', options: { allowArt: true } },
     { name: 'ornament', options: { ornament, allowArt: true } },
     ...styleFixtures.map(({ name, spec }) => ({ name: `style:${name}`, options: { ornament, style: spec, allowArt: true } })),
+    ...(grammar ? [{ name: 'grammar', options: {
+      ornament, allowArt: true, grammar,
+      logoClearSpacePx: raw.rules.logoConstraints?.clearSpacePx ?? 0,
+      logoClearSpaceShare: raw.rules.logoConstraints?.clearSpaceShareOfHeight ?? 0,
+      arabicDisplayFonts: raw.rules.typography.display.admitted.filter((f) => /arabic/i.test(f)),
+      arabicBody: raw.rules.scriptFonts.arabic,
+    } }] : []),
   ];
 }
 

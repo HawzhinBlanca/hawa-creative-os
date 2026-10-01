@@ -238,6 +238,11 @@ export interface StageContext {
   reference?: import('@hawa/creative').ClientReference;
   /** Brand ornament (texture, gold dividers) added to layouts that lack it; HAWA_DESIGN_*. */
   ornament?: import('@hawa/creative').OrnamentSettings;
+  /**
+   * ADR-238: the client's page grammar, from its reference pack (KAAE: the 2025 guideline's header,
+   * title bar, lead, cards, foot rule and cover). Absent for a client whose reference names none.
+   */
+  pageGrammar?: import('@hawa/creative').PageGrammar;
   /** The brief's style spec, applied to every layout in preparation. */
   style?: import('@hawa/creative').StyleSpec;
   /** ADR-170: where the faces are in each photo (stages.photoFocus), for the recipe solver's crops. */

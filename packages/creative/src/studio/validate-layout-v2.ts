@@ -19,6 +19,11 @@ export interface ValidationReference {
   logoAspect: number; // width / height
   logoMinimumWidthPx?: number;
   logoClearSpacePx?: number;
+  /**
+   * ADR-238: the client's clear space as a share of the logo's height (KAAE: the height of its K,
+   * 0.15). The stronger of it, `logoClearSpacePx` and the house's half-height applies.
+   */
+  logoClearSpaceShareOfHeight?: number;
 }
 
 export interface LayoutValidationContext {
@@ -53,6 +58,7 @@ export type ValidationErrorCode =
   | 'CONTRAST'
   | 'ART_SAFETY'
   | 'PHOTOS'
+  | 'ORNAMENT'
   | 'COUNTS';
 
 export interface ValidationFailure {
@@ -99,7 +105,7 @@ const FORBIDDEN_ART_REGEX = new RegExp(`\\b(${FORBIDDEN_ART_WORDS.join('|')})\\b
 
 /** Display faces QA admits for Latin copy when the client has no admitted-font list of its own. */
 const DEFAULT_ADMITTED_LATIN_DISPLAY = [
-  'Cinzel', 'Playfair Display', 'Montserrat', 'Lora', 'Bodoni Moda', 'Cairo', 'Plus Jakarta Sans', 'Vazirmatn', 'Inter', 'Verdana',
+  'Cinzel', 'Playfair Display', 'Montserrat', 'Lora', 'Bodoni Moda', 'Cairo', 'Plus Jakarta Sans', 'Vazirmatn', 'Inter', 'Verdana', 'Crimson Pro',
 ];
 const DEFAULT_ADMITTED_ARABIC = ['Noto Sans Arabic', 'Amiri', 'IBM Plex Sans Arabic'];
 
@@ -122,6 +128,11 @@ export function admittedFamiliesForQa(input: {
     ? { latin: unique([input.latinFont, ...client.latin]), arabic: unique([arabicScriptFont, ...client.arabic]) }
     : { latin: unique([input.latinFont || 'Verdana', input.draftFont || 'Verdana', 'Verdana', ...DEFAULT_ADMITTED_LATIN_DISPLAY]),
       arabic: unique([...DEFAULT_ADMITTED_ARABIC, input.arabicFont]) };
+}
+
+/** The client's own logo clear space in pixels for a logo box (ADR-238), before the house rule. */
+export function clientLogoClearSpacePx(logo: Box, reference: Pick<ValidationReference, 'logoClearSpacePx' | 'logoClearSpaceShareOfHeight'>): number {
+  return Math.max(reference.logoClearSpacePx ?? 0, (reference.logoClearSpaceShareOfHeight ?? 0) * logo.height);
 }
 
 export function validateLayoutV2(
@@ -262,6 +273,16 @@ export function validateLayoutV2(
   for (const o of layout.overlays || []) {
     if (!allowedPalette.has(normalizeHex(o.color))) {
       return { ok: false, code: 'PALETTE', message: `Overlay colour ${o.color} is not in reference palette` };
+    }
+  }
+  // ADR-238: every stop of a gradient and every brand element is in the palette too.
+  for (const s of layout.shapes || []) {
+    const off = s.gradient?.stops.find((st) => !allowedPalette.has(normalizeHex(st.color)));
+    if (off) return { ok: false, code: 'PALETTE', message: `Gradient colour ${off.color} is not in reference palette` };
+  }
+  for (const o of layout.ornaments || []) {
+    if (!allowedPalette.has(normalizeHex(o.color))) {
+      return { ok: false, code: 'PALETTE', message: `Brand element colour ${o.color} is not in reference palette` };
     }
   }
   for (const s of layout.shapes || []) {
@@ -616,9 +637,11 @@ export function validateLayoutV2(
     };
   }
 
-  // Respect the stronger of the house rule and the client's stated minimum.
-  const cs = Math.max(HOUSE_RULES.logo.clearSpaceShareOfHeight * layout.logo.height, context.reference.logoClearSpacePx ?? 0);
-  const logoClearSpace: Box = logoClearZone(layout.logo, context.reference.logoClearSpacePx);
+  // Respect the stronger of the house rule and the client's stated minimum, in pixels or as a share
+  // of the logo's height (ADR-238: KAAE's is the height of its K).
+  const clientClearPx = clientLogoClearSpacePx(layout.logo, context.reference);
+  const cs = Math.max(HOUSE_RULES.logo.clearSpaceShareOfHeight * layout.logo.height, clientClearPx);
+  const logoClearSpace: Box = logoClearZone(layout.logo, clientClearPx);
 
   for (const t of layout.text) {
     if (boxesIntersect(t, logoClearSpace)) {
@@ -636,6 +659,21 @@ export function validateLayoutV2(
         code: 'LOGO',
         message: `Rule shape violates logo clear space (${cs.toFixed(1)}px)`,
       };
+    }
+  }
+
+  // 12b. ORNAMENT (ADR-238): a brand element stays inside the canvas and never lies under copy, the
+  // logo or its clear space.
+  for (const o of layout.ornaments || []) {
+    if (!boxContains(canvasBox, o)) {
+      return { ok: false, code: 'ORNAMENT', message: `Brand element ${o.kind} leaves the canvas` };
+    }
+    const under = layout.text.find((t) => boxesIntersect(t, o));
+    if (under) {
+      return { ok: false, code: 'ORNAMENT', message: `Brand element ${o.kind} lies under copy block ${under.copyIndex}` };
+    }
+    if (boxesIntersect(o, logoClearSpace)) {
+      return { ok: false, code: 'ORNAMENT', message: `Brand element ${o.kind} enters the logo's clear space (${cs.toFixed(1)}px)` };
     }
   }
 

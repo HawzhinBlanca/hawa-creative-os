@@ -112,7 +112,9 @@ export async function resolveClientDesignReference(
   }
   const minimumWidthPx = logoAsset.minimumWidthPx ?? 100;
   const clearSpacePx = logoAsset.clearSpacePx ?? 0;
-  if (!Number.isInteger(minimumWidthPx) || minimumWidthPx < 100 || minimumWidthPx > 2400 ||
+  // A client's own minimum may be under the house's 100px (ADR-238: KAAE's 2025 guideline says 80px
+  // digital, p.4); hard QA still applies the stronger of the two. Under a favicon's 16px is no rule.
+  if (!Number.isInteger(minimumWidthPx) || minimumWidthPx < 16 || minimumWidthPx > 2400 ||
       !Number.isInteger(clearSpacePx) || clearSpacePx < 0 || clearSpacePx > 1200) {
     throw new CanvaFlowError(422, 'CLIENT_LOGO_RULES_INVALID', 'The primary logo has invalid minimum width or clear space rules.');
   }

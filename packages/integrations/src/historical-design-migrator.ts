@@ -227,7 +227,7 @@ export class HistoricalDesignMigrator {
           fontSize,
           fontFamily: 'Vazirmatn',
           fontWeight: isHeadline ? 'bold' : 'normal',
-          color: isHeadline ? '#FFFFFF' : '#D4A94C',
+          color: isHeadline ? '#FFFFFF' : '#F7B500',
           textAlign: 'right', // Standard Kurdish Sorani alignment
           lineHeight: 1.45,
         },

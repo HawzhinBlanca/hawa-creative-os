@@ -33,7 +33,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
       name: 'KAAE (Kurdistan Accrediting Association for Education)',
       shortCode: 'kaae',
       primaryColor: '#4770A3',
-      font: 'Cairo',
+      font: 'IBM Plex Sans Arabic', // Sorani titles, KAAE_Guidelines4.pdf p.10
       domain: 'education_accreditation',
       logoSha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc',
       prompts: [

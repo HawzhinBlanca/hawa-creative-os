@@ -40,3 +40,14 @@ then require structured refusals, valid/no-grammar compatibility, unchanged refe
 identity, palette isolation, bounded gradient/font/geometry controls and the existing
 connected client-reference/composition suites. Preserve red receipts and record the
 verification scope in traceability. Native/human/product admission is independent.
+
+## Integration follow-up — completed ADR238 source, 2 October 2026
+
+Claude committed the finalized guideline at4c95154a during this repair. Consolidate
+its renderer parser onto this pure admission function. The merged grammar uses the
+completed native contract: gradient stops span0..1 and angles are0..360. The earlier
+inset/negative-angle acceptance in8ca1fa4a is historical focused evidence. A full-span
+gradient can express the same inset effect by repeating the end colours; this
+convention keeps the parser, native shapes and renderer consistent without choosing
+a client style. Preserve typed metadata, original input hashes, explicit supplied-
+invalid refusal, scoped client palette and content-aware multiple-photo safeguards.

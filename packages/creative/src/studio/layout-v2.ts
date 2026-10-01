@@ -53,6 +53,54 @@ export interface ShapeElement extends Box {
   surface?: ShapeSurface;
   /** ADR-170: a soft drop shadow under a plate or card. */
   shadow?: ShapeShadow;
+  /**
+   * ADR-238: a linear gradient fill in place of `color` (which stays the shape's representative
+   * colour: the declared-contrast model, the palette check and any consumer that cannot draw a
+   * gradient read it). The preview draws an SVG linear gradient; the Canva deck a native
+   * `a:gradFill` on the same shape, so it stays an editable shape.
+   */
+  gradient?: ShapeGradient;
+  /**
+   * ADR-238: which part of a client's page grammar this shape is (the guideline header rule and its
+   * gold segment, the bar under a title, a card and its gold edge, the rule at the foot, a cover's
+   * ground). It names the shape in the Canva deck and lets QA and the pipeline find them.
+   */
+  primitive?: PagePrimitive;
+}
+
+/** ADR-238: the page-grammar parts a shape can be (see ShapeElement.primitive). */
+export const PAGE_PRIMITIVES = ['header_rule', 'header_accent', 'title_bar', 'card', 'card_edge', 'foot_rule', 'cover_ground'] as const;
+export type PagePrimitive = (typeof PAGE_PRIMITIVES)[number];
+
+/** ADR-238: a linear gradient, `angle` in degrees clockwise from left-to-right (90 runs top to bottom). */
+export interface ShapeGradient {
+  angle: number;
+  /** Two to eight stops, `at` a share of the gradient line (0..1, ascending). */
+  stops: Array<{ at: number; color: Hex }>;
+}
+
+/**
+ * ADR-238: a brand element drawn as vector art (the client guideline's elements page): a quarter-disc
+ * `sunburst` with rays, set in a corner (`corner` is the disc's centre), or a `triangle_pattern`, a
+ * mosaic of triangles fading toward `fade`. Drawn over the background and under every shape, photo
+ * and text; never over copy or the logo's clear space (validation).
+ */
+export interface OrnamentElement extends Box {
+  kind: OrnamentKind;
+  color: Hex;
+  /** 0..1, the element's strongest opacity. */
+  opacity: number;
+  corner?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  fade?: 'to-top' | 'to-bottom';
+}
+export const ORNAMENT_KINDS = ['sunburst', 'triangle_pattern'] as const;
+export type OrnamentKind = (typeof ORNAMENT_KINDS)[number];
+
+/** ADR-238: a layout composed from a client's page grammar, which preparation leaves whole. */
+export interface CompositionRecord {
+  grammar: 'page' | 'cover';
+  /** Which of the composer's variants it is. */
+  variant: string;
 }
 
 export const SHAPE_SURFACES = ['plate', 'card', 'tab', 'pill'] as const;
@@ -217,6 +265,10 @@ export interface StudioLayoutV2 {
   overlays?: OverlayElement[];
   /** ADR-170: the recipe this layout was solved from. Absent: a layout the model drew itself. */
   artDirection?: ArtDirectionRecord;
+  /** ADR-238: brand elements (sunburst, triangle pattern), over the background, under everything else. */
+  ornaments?: OrnamentElement[];
+  /** ADR-238: set on a layout composed whole from the client's page grammar. */
+  composition?: CompositionRecord;
 }
 
 /**
@@ -383,6 +435,19 @@ export const shapeElementSchema = boxSchema.extend({
     blur: z.number().min(0).max(80),
     offsetY: z.number().min(0).max(80),
   }).strict().optional(),
+  gradient: z.object({
+    angle: z.number().min(0).max(360),
+    stops: z.array(z.object({ at: z.number().min(0).max(1), color: hexSchema }).strict()).min(2).max(8),
+  }).strict().optional(),
+  primitive: z.enum(PAGE_PRIMITIVES).optional(),
+}).strict();
+
+export const ornamentElementSchema = boxSchema.extend({
+  kind: z.enum(ORNAMENT_KINDS),
+  color: hexSchema,
+  opacity: z.number().min(0).max(1),
+  corner: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']).optional(),
+  fade: z.enum(['to-top', 'to-bottom']).optional(),
 }).strict();
 
 export const overlayElementSchema = boxSchema.extend({
@@ -500,6 +565,8 @@ export const studioLayoutV2Schema = z.object({
   photos: z.array(photoElementSchema).max(10).optional(),
   overlays: z.array(overlayElementSchema).max(6).optional(),
   artDirection: artDirectionRecordSchema.optional(),
+  ornaments: z.array(ornamentElementSchema).max(4).optional(),
+  composition: z.object({ grammar: z.enum(['page', 'cover']), variant: z.string().min(1).max(40) }).strict().optional(),
 }).strict();
 
 /** ADR-170: the recipe of a layout solved as photo art direction, or undefined (typographic or model-drawn). */

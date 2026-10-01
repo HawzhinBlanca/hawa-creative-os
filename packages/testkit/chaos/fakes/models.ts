@@ -89,7 +89,7 @@ export function plannerLayout(request: any): Record<string, unknown> {
   const logoHeight = Math.round((logoWidth / (Number(request.logoAspect) || 1)) * 1000) / 1000;
   const top = 70 + logoHeight + 40;
   const slot = Math.max(60, Math.floor((height - top - 70) / Math.max(1, copy.length)));
-  const fonts = request.formalBodyFonts || { latin: 'Verdana', arabic: 'Noto Sans Arabic' };
+  const fonts = request.formalBodyFonts || { latin: 'Inter', arabic: 'Noto Sans Arabic' };
   return {
     width,
     height,

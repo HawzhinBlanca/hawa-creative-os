@@ -36,7 +36,7 @@ describe('Desk DOMPurify SVG Sanitizer (Phase 3 & HD-004)', () => {
   });
 
   it('preserves legitimate Kurdish Sorani text and valid SVG vector shapes', () => {
-    const valid = '<svg viewBox="0 0 100 100"><rect fill="#160874" width="100" height="100"/><text x="10" y="20" fill="#E8B85C">سڵاو لە هەولێر</text></svg>';
+    const valid = '<svg viewBox="0 0 100 100"><rect fill="#0A1628" width="100" height="100"/><text x="10" y="20" fill="#F7B500">سڵاو لە هەولێر</text></svg>';
     const cleaned = sanitizeSvgContent(valid);
     expect(cleaned).toContain('سڵاو لە هەولێر');
     expect(cleaned).toContain('rect');

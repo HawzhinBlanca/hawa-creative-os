@@ -22,7 +22,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     width: 1080,
     height: 1350,
     grid: { margin: 86, columns: 6, gutter: 20, baseline: 8 },
-    background: { color: '#17087A' },
+    background: { color: '#0A1628' },
     art: {
       source: 'procedural',
       motif: 'thin-rules',
@@ -37,7 +37,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         width: 908,
         height: 2,
         kind: 'rect',
-        color: '#E8B85C',
+        color: '#F7B500',
         role: 'rule',
       },
     ],
@@ -52,7 +52,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         role: 'title',
         fontSize: 48,
         lineHeight: 1.2,
-        fontFamily: 'Verdana',
+        fontFamily: 'Inter',
         color: '#FFFFFF',
         align: 'center',
         bold: true,
@@ -66,8 +66,8 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         role: 'body',
         fontSize: 20,
         lineHeight: 1.4,
-        fontFamily: 'Verdana',
-        color: '#FFF2DB',
+        fontFamily: 'Inter',
+        color: '#FDF8F3',
         align: 'center',
       },
     ],
@@ -122,7 +122,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
               archetype: 'editorial-centered',
               artStrategy: 'none',
               typographicScale: { ratio: 1.4, titleSize: 48, bodySize: 20 },
-              colourRoles: { background: '#17087A', title: '#FFFFFF', body: '#FFF2DB', accent: '#E8B85C', rule: '#4770A3' },
+              colourRoles: { background: '#0A1628', title: '#FFFFFF', body: '#FDF8F3', accent: '#F7B500', rule: '#4770A3' },
               layoutIdea: 'Centered authority',
               whyDifferent: 'Pure editorial balance',
             },
@@ -132,7 +132,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
               archetype: 'framed-invitation',
               artStrategy: 'none',
               typographicScale: { ratio: 1.4, titleSize: 48, bodySize: 20 },
-              colourRoles: { background: '#17087A', title: '#FFFFFF', body: '#FFF2DB', accent: '#E8B85C', rule: '#4770A3' },
+              colourRoles: { background: '#0A1628', title: '#FFFFFF', body: '#FDF8F3', accent: '#F7B500', rule: '#4770A3' },
               layoutIdea: 'Outer rules with inner title',
               whyDifferent: 'Border framing',
             },
@@ -142,7 +142,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
               archetype: 'monumental-title',
               artStrategy: 'none',
               typographicScale: { ratio: 1.4, titleSize: 48, bodySize: 20 },
-              colourRoles: { background: '#17087A', title: '#FFFFFF', body: '#FFF2DB', accent: '#E8B85C', rule: '#4770A3' },
+              colourRoles: { background: '#0A1628', title: '#FFFFFF', body: '#FDF8F3', accent: '#F7B500', rule: '#4770A3' },
               layoutIdea: 'Giant headline focus',
               whyDifferent: 'Scale contrast',
             },
@@ -170,7 +170,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
           },
           evidence: {
             hierarchy: 'Title clearly dominates body copy',
-            typography: 'Verdana rendered crisply',
+            typography: 'Inter rendered crisply',
             composition: 'Centered column with balanced margins',
             whitespace: '55% calm breathing room',
             brandFidelity: 'Official KAAE Midnight Navy and Gold',
@@ -326,7 +326,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       expect(sent).toContain('#214365');
       expect(sent).toContain('Inter');
       expect(sent).not.toContain('KAAE');
-      expect(sent).not.toContain('#E8B85C');
+      expect(sent).not.toContain('#F7B500');
       expect((await service.resume(scope,taskId,run.id)).status).toBe('laying_out');
       expect((await service.resume(scope,taskId,run.id)).status).toBe('rendering');
       expect((await service.resume(scope,taskId,run.id)).status).toBe('critiquing');
@@ -334,7 +334,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       for (const [, init] of fetcher.mock.calls) {
         const prompt = JSON.stringify(init);
         expect(prompt).not.toContain('KAAE');
-        expect(prompt).not.toContain('#E8B85C');
+        expect(prompt).not.toContain('#F7B500');
       }
       const candidates = (await sql<{layouts:unknown;preview_png:Buffer|null}>`SELECT layouts,preview_png FROM hawa.design_studio_candidates
         WHERE tenant_id=${scope.tenantId}::uuid AND run_id=${run.id}::uuid ORDER BY ordinal`.execute(db)).rows;
@@ -345,7 +345,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         if (!Array.isArray(layouts) || !layouts[0]) continue;
         expect(layouts[0].logo.width).toBeGreaterThanOrEqual(130);
         expect(layouts[0].background.color).toBe(ownPalette[0]);
-        expect(JSON.stringify(layouts[0])).not.toContain('#E8B85C');
+        expect(JSON.stringify(layouts[0])).not.toContain('#F7B500');
       }
 
       let completed = 'critiquing';
@@ -367,7 +367,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       for (const [, init] of fetcher.mock.calls) {
         const prompt = JSON.stringify(init);
         expect(prompt).not.toContain('KAAE');
-        expect(prompt).not.toContain('#E8B85C');
+        expect(prompt).not.toContain('#F7B500');
       }
 
       const unavailableClientId = randomUUID();
@@ -979,10 +979,10 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       {
         id: 'c1', conceptTitle: 'Monolith Centered', compositionArchetype: 'monolith_centered',
         typeScale: { base: 14, ratio: 1.25 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
-        background: { color: '#17087A' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null, shapes: [],
+        background: { color: '#0A1628' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null, shapes: [],
         text: [
-          { copyIndex: 0, role: 'title', x: 0.074, y: 0.16, width: 0.852, height: 0.09, fontSize: 0.031, lineHeight: 1.3, letterSpacing: null, fontFamily: 'Cinzel', color: '#C5A059', align: 'center', bold: true, italic: false, rtl: false },
-          { copyIndex: 1, role: 'body', x: 0.092, y: 0.40, width: 0.816, height: 0.18, fontSize: 0.013, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FFF2DB', align: 'center', bold: false, italic: false, rtl: false },
+          { copyIndex: 0, role: 'title', x: 0.074, y: 0.16, width: 0.852, height: 0.09, fontSize: 0.031, lineHeight: 1.3, letterSpacing: null, fontFamily: 'Crimson Pro', color: '#C5A059', align: 'center', bold: true, italic: false, rtl: false },
+          { copyIndex: 1, role: 'body', x: 0.092, y: 0.40, width: 0.816, height: 0.18, fontSize: 0.013, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Inter', color: '#FDF8F3', align: 'center', bold: false, italic: false, rtl: false },
         ],
       },
       {
@@ -992,17 +992,17 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         shapes: [{ x: 0.074, y: 0.15, width: 0.002, height: 0.75, kind: 'line', color: '#C5A059', opacity: 1, radius: null, strokeWidth: null, strokeColor: null, role: 'rule' }],
         text: [
           { copyIndex: 0, role: 'title', x: 0.111, y: 0.18, width: 0.815, height: 0.12, fontSize: 0.035, lineHeight: 1.25, letterSpacing: null, fontFamily: 'Lora', color: '#C5A059', align: 'left', bold: true, italic: false, rtl: false },
-          { copyIndex: 1, role: 'body', x: 0.111, y: 0.45, width: 0.750, height: 0.20, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FFFFFF', align: 'left', bold: false, italic: false, rtl: false },
+          { copyIndex: 1, role: 'body', x: 0.111, y: 0.45, width: 0.750, height: 0.20, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Inter', color: '#FFFFFF', align: 'left', bold: false, italic: false, rtl: false },
         ],
       },
       {
         id: 'c3', conceptTitle: 'Hero Statement Grid', compositionArchetype: 'hero_statement_grid',
         typeScale: { base: 15, ratio: 1.414 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
-        background: { color: '#17087A' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null,
-        shapes: [{ x: 0.074, y: 0.48, width: 0.852, height: 0.38, kind: 'roundRect', color: '#3833A3', opacity: 0.8, radius: 0.015, strokeWidth: null, strokeColor: null, role: 'panel' }],
+        background: { color: '#0A1628' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null,
+        shapes: [{ x: 0.074, y: 0.48, width: 0.852, height: 0.38, kind: 'roundRect', color: '#1E3A5F', opacity: 0.8, radius: 0.015, strokeWidth: null, strokeColor: null, role: 'panel' }],
         text: [
-          { copyIndex: 0, role: 'title', x: 0.074, y: 0.18, width: 0.852, height: 0.14, fontSize: 0.038, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Cinzel', color: '#E8B85C', align: 'center', bold: true, italic: false, rtl: false },
-          { copyIndex: 1, role: 'body', x: 0.111, y: 0.52, width: 0.778, height: 0.25, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FFF2DB', align: 'left', bold: false, italic: false, rtl: false },
+          { copyIndex: 0, role: 'title', x: 0.074, y: 0.18, width: 0.852, height: 0.14, fontSize: 0.038, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Crimson Pro', color: '#F7B500', align: 'center', bold: true, italic: false, rtl: false },
+          { copyIndex: 1, role: 'body', x: 0.111, y: 0.52, width: 0.778, height: 0.25, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Inter', color: '#FDF8F3', align: 'left', bold: false, italic: false, rtl: false },
         ],
       },
     ];
@@ -1087,16 +1087,19 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         expect(verdict.pipeline).toBe('v3');
       }
 
-      // Candidates carry the generator's own archetypes, and exactly one is the winner.
+      // ADR-238: KAAE's page grammar sets the first two candidates (the guideline page, its details on
+      // a KAAE Blue card and on white cards); the generator's first layout, restyled to the grammar,
+      // is the third. Three candidates, as before; exactly one is the winner.
       const candidates = (
         await sql<any>`SELECT status, rank, concept FROM hawa.design_studio_candidates WHERE run_id=${run.id}::uuid ORDER BY ordinal`.execute(db)
       ).rows;
       const concepts = candidates.map((c: any) => (typeof c.concept === 'string' ? JSON.parse(c.concept) : c.concept));
       expect(concepts.map((c: any) => c.layoutIdea)).toEqual([
-        'v3 monolith_centered',
-        'v3 asymmetric_editorial',
         'v3 hero_statement_grid',
+        'v3 hero_statement_grid',
+        'v3 monolith_centered',
       ]);
+      expect(concepts.slice(0, 2).map((c: any) => c.name)).toEqual(['Guideline page (details on a KAAE Blue card)', 'Guideline page (details on white cards)']);
       expect(candidates.filter((c: any) => c.status === 'winner')).toHaveLength(1);
       expect(final.winner_candidate_id).toBeTruthy();
       expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
@@ -1115,10 +1118,10 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     {
       id: 'c1', conceptTitle: 'Monolith Centered', compositionArchetype: 'monolith_centered',
       typeScale: { base: 14, ratio: 1.25 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
-      background: { color: '#17087A' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null, shapes: [],
+      background: { color: '#0A1628' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null, shapes: [],
       text: [
-        { copyIndex: 0, role: 'title', x: 0.074, y: 0.16, width: 0.852, height: 0.09, fontSize: 0.031, lineHeight: 1.3, letterSpacing: null, fontFamily: 'Cinzel', color: '#C5A059', align: 'center', bold: true, italic: false, rtl: false },
-        { copyIndex: 1, role: 'body', x: 0.092, y: 0.40, width: 0.816, height: 0.18, fontSize: 0.013, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FFF2DB', align: 'center', bold: false, italic: false, rtl: false },
+        { copyIndex: 0, role: 'title', x: 0.074, y: 0.16, width: 0.852, height: 0.09, fontSize: 0.031, lineHeight: 1.3, letterSpacing: null, fontFamily: 'Crimson Pro', color: '#C5A059', align: 'center', bold: true, italic: false, rtl: false },
+        { copyIndex: 1, role: 'body', x: 0.092, y: 0.40, width: 0.816, height: 0.18, fontSize: 0.013, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Inter', color: '#FDF8F3', align: 'center', bold: false, italic: false, rtl: false },
       ],
     },
     {
@@ -1128,17 +1131,17 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       shapes: [{ x: 0.074, y: 0.15, width: 0.002, height: 0.75, kind: 'line', color: '#C5A059', opacity: 1, radius: null, strokeWidth: null, strokeColor: null, role: 'rule' }],
       text: [
         { copyIndex: 0, role: 'title', x: 0.111, y: 0.18, width: 0.815, height: 0.12, fontSize: 0.035, lineHeight: 1.25, letterSpacing: null, fontFamily: 'Lora', color: '#C5A059', align: 'left', bold: true, italic: false, rtl: false },
-        { copyIndex: 1, role: 'body', x: 0.111, y: 0.45, width: 0.750, height: 0.20, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FFFFFF', align: 'left', bold: false, italic: false, rtl: false },
+        { copyIndex: 1, role: 'body', x: 0.111, y: 0.45, width: 0.750, height: 0.20, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Inter', color: '#FFFFFF', align: 'left', bold: false, italic: false, rtl: false },
       ],
     },
     {
       id: 'c3', conceptTitle: 'Hero Statement Grid', compositionArchetype: 'hero_statement_grid',
       typeScale: { base: 15, ratio: 1.414 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
-      background: { color: '#17087A' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null,
-      shapes: [{ x: 0.074, y: 0.48, width: 0.852, height: 0.38, kind: 'roundRect', color: '#3833A3', opacity: 0.8, radius: 0.015, strokeWidth: null, strokeColor: null, role: 'panel' }],
+      background: { color: '#0A1628' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null,
+      shapes: [{ x: 0.074, y: 0.48, width: 0.852, height: 0.38, kind: 'roundRect', color: '#1E3A5F', opacity: 0.8, radius: 0.015, strokeWidth: null, strokeColor: null, role: 'panel' }],
       text: [
-        { copyIndex: 0, role: 'title', x: 0.074, y: 0.18, width: 0.852, height: 0.14, fontSize: 0.038, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Cinzel', color: '#E8B85C', align: 'center', bold: true, italic: false, rtl: false },
-        { copyIndex: 1, role: 'body', x: 0.111, y: 0.52, width: 0.778, height: 0.25, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FFF2DB', align: 'left', bold: false, italic: false, rtl: false },
+        { copyIndex: 0, role: 'title', x: 0.074, y: 0.18, width: 0.852, height: 0.14, fontSize: 0.038, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Crimson Pro', color: '#F7B500', align: 'center', bold: true, italic: false, rtl: false },
+        { copyIndex: 1, role: 'body', x: 0.111, y: 0.52, width: 0.778, height: 0.25, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Inter', color: '#FDF8F3', align: 'left', bold: false, italic: false, rtl: false },
       ],
     },
   ];

@@ -32,9 +32,9 @@ describe('KaaeGraphicsLearningEngine Unit & Integration Test', () => {
     expect(extraction.dimensions.height).toBe(1350);
     expect(extraction.format).toBe('feed');
     expect(extraction.detectedColors.length).toBeGreaterThanOrEqual(3);
-    expect(extraction.typography.primaryFont).toBe('Verdana');
-    expect(extraction.typography.displayFont).toBe('Cairo');
-    expect(extraction.typography.bodyFont).toBe('Noto Naskh Arabic');
+    expect(extraction.typography.primaryFont).toBe('Inter');
+    expect(extraction.typography.displayFont).toBe('IBM Plex Sans Arabic');
+    expect(extraction.typography.bodyFont).toBe('Noto Sans Arabic');
     expect(extraction.learnedRules.length).toBeGreaterThanOrEqual(4);
   });
 
@@ -120,6 +120,13 @@ describe('KaaeGraphicsLearningEngine Unit & Integration Test', () => {
       expect(extraction.dimensions.height).toBe(1080);
       expect(extraction.format).toBe('landscape');
       expect(extraction.aspectRatio).toContain('16:9');
+      // KAAE Brand Guidelines, Excellence Edition (KAAE_Guidelines4.pdf, 2025): palette pp.7-8, Sorani sans p.10.
+      const hexes = extraction.detectedColors.map((c) => c.hex);
+      expect(hexes).toEqual(expect.arrayContaining(['#4770A3', '#F7B500', '#0A1628', '#FFFFFF', '#FDF8F3']));
+      expect(extraction.detectedColors.find((c) => c.role === 'primary')?.hex).toBe('#4770A3');
+      expect(extraction.typography.primaryFont).toBe('Inter');
+      expect(extraction.typography.displayFont).toBe('IBM Plex Sans Arabic');
+      expect(extraction.typography.bodyFont).toBe('Noto Sans Arabic');
     } finally {
       if (fs.existsSync(tempSvg)) {
         fs.unlinkSync(tempSvg);
@@ -127,12 +134,23 @@ describe('KaaeGraphicsLearningEngine Unit & Integration Test', () => {
     }
   });
 
+  it('carries only the 2025 guideline palette and fonts, none of the withdrawn guideline', () => {
+    // The withdrawn guideline's values and stale KAAE values, split so that a repository grep for them
+    // finds only the code that still carries them.
+    const withdrawn = new RegExp(['1708 7A', '3833 A3', '0F73 DE', 'E8B8 5C', 'FFF2 DB', '1608 74', '3530 9B', '0020 50',
+      'C5A0 59', 'D4A9 4C', 'FFD1 5C', '2D4A 73', 'Verd ana', 'Cai ro', 'Nas kh', 'Min ion'].map((v) => v.replace(' ', '')).join('|'), 'i');
+    const archetypes = engine.getFifteenGraphicArchetypes();
+    expect(JSON.stringify(archetypes)).not.toMatch(withdrawn);
+    const source = fs.readFileSync(path.join(repoRoot, 'packages/creative/src/kaae-graphics-learning.ts'), 'utf8');
+    expect(source).not.toMatch(withdrawn);
+  });
+
   it('accurately parses square SVG dimensions from viewBox', () => {
     const tempSvg = path.join(repoRoot, 'packages/creative/test/fixtures_temp_square.svg');
     try {
       fs.writeFileSync(
         tempSvg,
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080"><rect width="1080" height="1080" fill="#160874"/></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080"><rect width="1080" height="1080" fill="#1E3A5F"/></svg>'
       );
       const extraction = engine.analyzeReferenceFile(tempSvg);
       expect(extraction.dimensions.width).toBe(1080);

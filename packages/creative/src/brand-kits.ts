@@ -17,6 +17,8 @@ export interface BrandPalette {
 export interface BrandTypography {
   latinFont: string;
   kurdishFont: string;
+  /** The title face when it differs from latinFont (KAAE: Crimson Pro titles over Inter body). */
+  latinDisplayFont?: string;
   headlineWeight: number;
   copyWeight: number;
 }
@@ -167,19 +169,22 @@ export const CANONICAL_BRAND_KITS: Record<string, BrandKitDefinition> = {
     industry: 'Educational Accreditation & Institutional Quality',
     industryKurdish: 'متمانەبەخشی و ستانداردەکانی خوێندنی باڵا و پەروەردە',
     verifiedSha256: KAAE_PRIMARY_LOGO_SHA256,
+    // KAAE Brand Guidelines, Excellence Edition (KAAE_Guidelines4.pdf, 2025): primary palette and
+    // gradients p.7, extended palette p.8; titles Crimson Pro Bold, body Inter, Sorani sans (p.10).
     palette: {
-      primary: '#4770A3',      // Official KAAE Blue (Pantone 5415 C)
-      secondary: '#0A1628',    // Midnight Depth Foundation
-      accent: '#F7B500',       // Kurdistan Sun Gold (Pantone 7549 C)
-      background: 'linear-gradient(150deg, #0A1628 0%, #1E3A5F 50%, #2C5282 100%)',
+      primary: '#4770A3',      // KAAE Blue (Pantone 5415 C)
+      secondary: '#0A1628',    // Midnight: body ink, cover gradient end
+      accent: '#F7B500',       // KAAE Gold (Pantone 7549 C)
+      background: 'linear-gradient(135deg, #4770A3 0%, #0A1628 100%)', // cover: KAAE Blue to Midnight
       text: '#FFFFFF',
-      cardBg: 'rgba(253, 248, 243, 0.98)', // Academic Cream Paper
+      cardBg: 'rgba(253, 248, 243, 0.98)', // Cream #FDF8F3
     },
     typography: {
-      latinFont: 'Verdana',
-      kurdishFont: 'Cairo',
+      latinFont: 'Inter',
+      latinDisplayFont: 'Crimson Pro',
+      kurdishFont: 'Noto Sans Arabic',
       headlineWeight: 700,
-      copyWeight: 600,
+      copyWeight: 400,
     },
     logoText: 'KAAE · دەستەی متمانەبەخشی',
     logoBadge: '🏛️ LAW NO. 6 OF 2022',

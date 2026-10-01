@@ -38,7 +38,7 @@ describe('pure client-neutral page grammar admission', () => {
     ['header.accent.widthShare', -0.1], ['header.logoWidthShare', 0], ['header.logoWidthShare', 1.01],
     ['header.rule.opacity', 1.01], ['cards.shadow.blurShare', Infinity], ['page.marginShare', 0.5],
     ['body.sizeShare', 0], ['body.lineHeight', 0], ['body.lineHeight', 5.01], ['title.letterSpacing', -1.01],
-    ['cover.angle', Infinity], ['cover.angle', 361], ['elements.sunburst.rays', 1.5],
+    ['cover.angle', Infinity], ['cover.angle', 361], ['cover.angle', -1], ['elements.sunburst.rays', 1.5],
     ['elements.sunburst.rays', 65], ['elements.trianglePattern.opacityOnDark', -0.1],
     ['body.bold', 'true'], ['body.fontFamily', ''], ['body.fontFamily', '  '], ['body.fontFamily', 'Inter\nInjected'],
     ['body.fontFamily', 'x'.repeat(129)], ['body.color', 'white'], ['cards.dark.fill', '#123456'],
@@ -53,6 +53,7 @@ describe('pure client-neutral page grammar admission', () => {
     [], [{ at: 0, color: '#336699' }],
     [{ at: 0.8, color: '#336699' }, { at: 0.2, color: '#FFD700' }],
     [{ at: 0.5, color: '#336699' }, { at: 0.5, color: '#FFD700' }],
+    [{ at: 0.2, color: '#336699' }, { at: 0.8, color: '#FFD700' }],
     [{ at: -0.1, color: '#336699' }, { at: 1, color: '#FFD700' }],
     [{ at: 0, color: '#336699' }, { at: Infinity, color: '#FFD700' }],
     [{ at: 0, color: '#336699' }, { at: 1, color: '#123456' }],
@@ -61,12 +62,11 @@ describe('pure client-neutral page grammar admission', () => {
     expect(() => admitPageGrammarFromReference(reference(changed('header.accent.stops', stops)))).toThrow(PageGrammarInvalidError);
   });
 
-  it('allows inset gradient endpoints and independent client palettes', () => {
+  it('uses independent client palettes without rewriting source colours', () => {
     const grammar = grammarFixture();
-    grammar.header.accent.stops = [{ at: 0.2, color: '#336699' }, { at: 0.8, color: '#FFD700' }];
     const raw = JSON.stringify(reference(grammar));
     const remapped = raw.replaceAll('#336699', '#AABBCC').replaceAll('#FFD700', '#445566');
-    expect(admitPageGrammarFromReference(JSON.parse(remapped))?.header.accent.stops[1].at).toBe(0.8);
+    expect(admitPageGrammarFromReference(JSON.parse(remapped))?.header.accent.stops[1].color).toBe('#445566');
     expect(() => admitPageGrammarFromReference(reference(grammar, ['#FFFFFF', '#112233', '#AABBCC', '#445566']))).toThrow(PageGrammarInvalidError);
   });
 

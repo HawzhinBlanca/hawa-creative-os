@@ -11,6 +11,9 @@ const paletteSchema = z.array(z.string().regex(/^#[0-9a-f]{6}$/i)).min(1).max(64
 function grammarSchema(palette: ReadonlySet<string>) {
   const color = z.string().regex(/^#[0-9a-f]{6}$/i).refine(value => palette.has(value.toUpperCase()));
   const stops = z.array(z.object({ at: share, color }).strict()).min(2).max(8).superRefine((values, context) => {
+    if (values.length && (values[0].at !== 0 || values[values.length - 1].at !== 1)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: 'Stops must span the gradient line.' });
+    }
     for (let i = 1; i < values.length; i++) {
       if (values[i].at <= values[i - 1].at) {
         context.addIssue({ code: z.ZodIssueCode.custom, path: [i, 'at'], message: 'Stops must ascend strictly.' });
@@ -43,7 +46,7 @@ function grammarSchema(palette: ReadonlySet<string>) {
       labelColor: color, labelColorOnDark: color }).strict(),
     footRule: z.object({ heightShare: dimension, stops }).strict(),
     cover: z.object({
-      angle: z.number().finite().min(-360).max(360), stops, logoWidthShare: dimension, title: color, body: color,
+      angle: z.number().finite().min(0).max(360), stops, logoWidthShare: dimension, title: color, body: color,
       subtitle: z.object({ fontFamily: font, color, letterSpacing: tracking, sizeShare: dimension }).strict(),
     }).strict(),
     elements: z.object({

@@ -1,6 +1,7 @@
 import { backgroundFieldLuminanceBounds } from './background-field.js';
 import { PNG } from 'pngjs';
-import type { StudioLayoutV2, Box, TextElement } from './layout-v2.js';
+import type { StudioLayoutV2, Box, ShapeElement, TextElement } from './layout-v2.js';
+import { fillColoursUnder } from './shape-gradient.js';
 import { hexToRgb } from './color-science.js';
 import { carrierOf } from './art-direction/surfaces.js';
 import { rgbToLuminance, calculateLuminanceContrastRatio } from './luminance.js';
@@ -18,10 +19,15 @@ export function hexToLuminance(hex: string): number {
  * metric uses, so the gate and the metric agree.
  */
 export function declaredBackgroundColour(layout: StudioLayoutV2, box: Box): string {
+  return declaredSurface(layout, box).color;
+}
+
+/** The surface the layout declares behind a box: its colour, and the shape it is when it is one. */
+function declaredSurface(layout: StudioLayoutV2, box: Box): { color: string; shape?: ShapeElement } {
   // ADR-170: a plate, card or pill over the photos is on top of everything; then a fade or scrim
   // opaque enough to carry the text; then the shapes under the photos, as before.
   const carrier = carrierOf(layout, box);
-  if (carrier) return carrier.kind === 'shape' ? carrier.shape.color : carrier.overlay.color;
+  if (carrier) return carrier.kind === 'shape' ? { color: carrier.shape.color, shape: carrier.shape } : { color: carrier.overlay.color };
   const shapes = layout.shapes || [];
   for (let i = shapes.length - 1; i >= 0; i--) {
     const s = shapes[i];
@@ -29,14 +35,27 @@ export function declaredBackgroundColour(layout: StudioLayoutV2, box: Box): stri
     if (s.role !== 'panel' && s.kind !== 'rect' && s.kind !== 'roundRect') continue;
     const containsX = box.x >= s.x - 20 && box.x + box.width <= s.x + s.width + 20;
     const containsY = box.y >= s.y - 20 && box.y + box.height <= s.y + s.height + 20;
-    if (containsX && containsY && s.color && s.color.startsWith('#')) return s.color;
+    if (containsX && containsY && s.color && s.color.startsWith('#')) return { color: s.color, shape: s };
   }
-  return layout.background.color;
+  return { color: layout.background.color };
 }
 
 /** A local decision snapshot. Recreate after changing geometry, field or carriers; never persist. */
 export function declaredColorContrastEvaluator(layout: StudioLayoutV2, box: Box): (color: string) => number {
-  const surface = declaredBackgroundColour(layout, box);
+  const declared = declaredSurface(layout, box);
+  const surface = declared.color;
+  if (declared.shape?.gradient) {
+    // Independent sRGB channel envelopes include interior luminance turns between stops.
+    // Expand rounded samples by one byte so this remains a conservative continuous bound.
+    const grounds = fillColoursUnder(declared.shape, box).map(hexToRgb);
+    const low = rgbToLuminance(...[0, 1, 2].map(i => Math.max(0, Math.min(...grounds.map(rgb => rgb[i])) - 1)) as [number, number, number]);
+    const high = rgbToLuminance(...[0, 1, 2].map(i => Math.min(255, Math.max(...grounds.map(rgb => rgb[i])) + 1)) as [number, number, number]);
+    return color => {
+      const ink = hexToLuminance(color);
+      if (ink >= low && ink <= high) return 1;
+      return Math.min(calculateLuminanceContrastRatio(ink, low), calculateLuminanceContrastRatio(ink, high));
+    };
+  }
   // A real carrier wins. Otherwise enclose every field color under this footprint, including
   // interior stops and luminance crossings; remote parts of the canvas do not carry this ink.
   if (layout.background.field && !carrierOf(layout, box) && surface === layout.background.color) {

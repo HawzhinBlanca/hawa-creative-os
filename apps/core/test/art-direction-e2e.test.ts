@@ -12,12 +12,14 @@ import {
   encodeStudioTransferV2,
   imagePixelSize,
   photoSelectionFromInstructions,
+  pageGrammarFromRaw,
   renderLayoutV2,
   tonePreferenceFromWords,
   PNG,
   type StudioLayoutV2,
 } from '@hawa/creative';
 import type { CandidateState, CreativeBrief, StageContext } from '../src/services/design-studio/types.js';
+import { packagedAdmittedDisplayFonts } from '../src/services/design-studio/design-studio-service.js';
 import { runLayoutsStage, runRenderStage, runQAStage, rankStudioCandidatesV3, photosBrief } from '../src/services/design-studio/stages/index.js';
 import { briefPhotoFacts, photoFactsFor } from '../src/services/design-studio/art-direction.js';
 
@@ -155,8 +157,10 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
       runId: randomUUID(), tenantId: randomUUID(), taskId: randomUUID(), clientId: REFERENCE.clientId, actorId: 'e2e',
       width: 1080, height: 1350, tier: 'standard', instructions: INSTRUCTIONS,
       copyBlocks: COPY.map((text) => ({ text, script: 'latin' as const })),
-      referencePack: { palette: PALETTE, referenceFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }, clientId: REFERENCE.clientId },
-      promotedRules: REFERENCE.rules.colorUsage, latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 1,
+      referencePack: { palette: PALETTE, referenceFonts: { latin: 'Inter', arabic: 'Noto Sans Arabic' }, clientId: REFERENCE.clientId,
+        admittedDisplayFonts: packagedAdmittedDisplayFonts(REFERENCE), logoConstraints: REFERENCE.rules.logoConstraints },
+      pageGrammar: pageGrammarFromRaw(REFERENCE),
+      promotedRules: REFERENCE.rules.colorUsage, latinFont: 'Inter', arabicFont: 'Noto Sans Arabic', logoAspect: 1,
       logo: KAAE_TEST_CLIENT_LOGO, client: client as any, pipelineV3: true, imageryStrategy: 'photographic',
       // The selection the owner's words record: "choose the best ones", no count (half the photos, 3).
       photoSelection: photoSelectionFromInstructions(INSTRUCTIONS, 6),
@@ -190,7 +194,7 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     // The model was shown the photos at high detail and the house rules as data.
     const user = requests[0].messages[1].content;
     expect(user.filter((p: any) => p.type === 'image_url').every((p: any) => p.image_url.detail === 'high')).toBe(true);
-    expect(user[0].text).toContain('R1. Pick ONE hero photo');
+    expect(user[0].text).toContain('R1. With photos: choose the composition');
     expect(requests[0].messages[0].content).not.toMatch(/KAAE/);
     expect(photosBrief(ctx.photos, 1080, 1350, undefined, ctx.photoSelection)).toContain('choose');
 
@@ -233,7 +237,7 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     const layout: StudioLayoutV2 = winner.currentLayout;
     // One hero and one blended texture; the title and gold line on the fade; the inset gold line.
     expect(layout.photos!.map((p) => [p.photoIndex, p.role])).toEqual([[0, 'hero'], [4, 'texture']]);
-    expect(layout.text.find((t) => t.copyIndex === 1)!.color.toUpperCase()).toBe('#E8B85C');
+    expect(layout.text.find((t) => t.copyIndex === 1)!.color.toUpperCase()).toBe('#F7B500');
     for (const t of layout.text) expect(qa.measuredContrast![t.copyIndex]).toBeGreaterThanOrEqual(t.fontSize >= 24 && t.bold ? 3 : 4.5);
 
     // The Canva deck: the hero native, the fade its own PNG, the text native.
@@ -244,14 +248,14 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
 
     // ADR-172: the production adapter passes the requester decision through the same one-call
     // recipe path. All solved geometries remain readable after the surface color changes.
-    const requested = await runLayoutsStage({ ...ctx, requestedBackground: '#17087A' }, brief, [],
+    const requested = await runLayoutsStage({ ...ctx, requestedBackground: '#0A1628' }, brief, [],
       [0, 1, 2].map((ordinal) => ({ id: randomUUID(), ordinal })));
     expect(requests).toHaveLength(2);
-    expect(requests[1].messages[1].content[0].text).toContain('"requestedColor":"#17087A"');
-    expect(requested.every(c => c.currentLayout.background.color === '#17087A')).toBe(true);
+    expect(requests[1].messages[1].content[0].text).toContain('"requestedColor":"#0A1628"');
+    expect(requested.every(c => c.currentLayout.background.color === '#0A1628')).toBe(true);
     expect(requested.every(c => c.currentLayout.background.decision?.basis === 'requester')).toBe(true);
-    const requestedRenders = await runRenderStage({ ...ctx, requestedBackground: '#17087A' }, requested);
-    for (const r of rankStudioCandidatesV3({ ...ctx, requestedBackground: '#17087A' }, requestedRenders)) {
+    const requestedRenders = await runRenderStage({ ...ctx, requestedBackground: '#0A1628' }, requested);
+    for (const r of rankStudioCandidatesV3({ ...ctx, requestedBackground: '#0A1628' }, requestedRenders)) {
       expect(r.hardQa?.passed, r.hardQa?.messages.join(' | ')).toBe(true);
     }
 

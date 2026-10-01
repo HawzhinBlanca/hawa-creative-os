@@ -171,8 +171,8 @@ export const BRAND_KITS: Record<string, BrandKit> = {
       cardBg: 'rgba(253, 248, 243, 0.98)', // Academic Cream Paper
     },
     typography: {
-      latinFont: 'Inter',
-      kurdishFont: 'Cairo',
+      latinFont: 'Crimson Pro',
+      kurdishFont: 'IBM Plex Sans Arabic',
       headlineWeight: 700,
       copyWeight: 600,
     },

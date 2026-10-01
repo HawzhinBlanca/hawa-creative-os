@@ -18,7 +18,7 @@ import type {
   PhotoOutline,
   PhotoTreatment,
 } from './layout-v2.js';
-import { studioLayoutV2Schema, PHOTO_TREATMENTS } from './layout-v2.js';
+import { studioLayoutV2Schema, PHOTO_TREATMENTS, PAGE_PRIMITIVES, type PagePrimitive } from './layout-v2.js';
 import { photoFocusOrUndefined } from './photo-crop.js';
 import { photoTreatmentFields } from './photo-treatments.js';
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
@@ -48,7 +48,7 @@ export interface NormalizedTextElement extends NormalizedBox {
   fontSize: number;
   lineHeight: number;
   letterSpacing: number | null;
-  fontFamily: 'Cinzel' | 'Lora' | 'Cairo' | 'Playfair Display' | 'Cormorant Garamond' | 'Amiri' | 'Verdana' | 'Noto Sans Arabic';
+  fontFamily: 'Cinzel' | 'Lora' | 'Cairo' | 'Playfair Display' | 'Cormorant Garamond' | 'Amiri' | 'Verdana' | 'Noto Sans Arabic' | 'Crimson Pro' | 'Inter';
   color: string;
   align: 'left' | 'center' | 'right';
   bold: boolean;
@@ -64,6 +64,8 @@ export interface NormalizedShapeElement extends NormalizedBox {
   strokeWidth: number | null;
   strokeColor: string | null;
   role: 'rule' | 'panel' | 'accent' | 'frame';
+  /** ADR-238: which part of the client's page grammar the shape is; null for a plain shape. */
+  primitive?: PagePrimitive | null;
 }
 
 export interface NormalizedArtConfig {
@@ -374,6 +376,7 @@ export function scaleNormalizedLayoutToV2(
           ? resolveStrokeWidth(s.strokeWidth, box, canvasWidth, canvasHeight)
           : undefined,
       strokeColor,
+      ...(s.primitive && (PAGE_PRIMITIVES as readonly string[]).includes(s.primitive) ? { primitive: s.primitive } : {}),
     };
   });
 
@@ -595,6 +598,10 @@ export function findSeparatorGaps(shapes: ShapeElement[], text: TextElement[]): 
   for (let i = 0; i < shapes.length; i++) {
     const s = shapes[i];
     if (!isSeparatorCandidate(s)) continue;
+    // ADR-238: a page-grammar mark is attached to what it marks by design: the bar sits just under
+    // its title, the header rule under the logo's clear space, the foot rule at the foot. Like a
+    // panel's own rule, it is not a divider to centre between two blocks.
+    if (s.primitive) continue;
 
     const sTop = s.y;
     const sBottom = s.y + s.height;
@@ -783,7 +790,7 @@ export function balanceCanvasMargins(
   if (shift === 0) return 0;
 
   // ADR-236: a band bled off the top or bottom edge stays on that edge. Shifted with the rest it left
-  // a sliver of ground along it (5px of white under the indigo footer band of a light poster).
+  // a sliver of ground along it (5px of white under the navy footer band of a light poster).
   const bleedsOffTopOrBottom = (b: { y: number; height: number }) => b.y <= 1 || b.y + b.height >= layout.height - 1;
   for (const b of boxes) if (!(composed.includes(b as ShapeElement) && bleedsOffTopOrBottom(b))) b.y += shift;
   return 1;
@@ -1091,6 +1098,11 @@ export const LAYOUT_V3_JSON_SCHEMA = {
                 strokeWidth: { type: ['number', 'null'] },
                 strokeColor: { type: ['string', 'null'] },
                 role: { type: 'string', enum: ['rule', 'panel', 'accent', 'frame'] },
+                primitive: {
+                  type: ['string', 'null'],
+                  enum: [...PAGE_PRIMITIVES, null],
+                  description: "The part of the client's page grammar this shape is, when the request gives one; null otherwise.",
+                },
               },
               required: [
                 'x',
@@ -1104,6 +1116,7 @@ export const LAYOUT_V3_JSON_SCHEMA = {
                 'strokeWidth',
                 'strokeColor',
                 'role',
+                'primitive',
               ],
               additionalProperties: false,
             },
@@ -1263,6 +1276,8 @@ export interface GenerateLayoutCandidatesOptions {
   visualInputs?: LayoutVisualInput[];
   /** Who the client is: its client pack's profile (ADR-127). The system prompt names no client. */
   clientProfile?: string;
+  /** ADR-238: the client's page grammar in words, when its reference has one. */
+  pageGrammar?: string;
 }
 
 export interface GenerateLayoutCandidatesResult {
@@ -1394,6 +1409,11 @@ If a layout candidate requests an art layer (art.source = "generated" or "proced
 - Background art opacity must be moderate (0.15 to 0.40) to prevent text occlusion.
 - art.prompt describes the imagery alone, in a few words. It must not contain the words ${FORBIDDEN_ART_WORDS.map((w) => `"${w}"`).join(', ')} — not even to say where the copy sits ("behind the hero text") or what to leave out ("no text"): image models draw what a prompt names, and a prompt with one of these words is rejected.
 
+================================================================================
+6. CLIENT PAGE GRAMMAR (when the request gives one)
+================================================================================
+Some clients' guidelines define a page grammar: a header (the logo with a thin rule under it and a short accent segment), a title with a short bar under it, an italic lead line, rounded cards, and a gradient rule at the foot; or, for a cover, a gradient ground. When the request gives a CLIENT PAGE GRAMMAR, compose with it and tag each such shape with its primitive: "header_rule", "header_accent", "title_bar", "card" (role "panel"), "card_edge" (role "accent"), "foot_rule", "cover_ground" (role "panel", the whole canvas). The server draws every tagged shape in the grammar's own colours, gradients, radius and shadow, so give only its box. Keep the header rule and the accent segment clear of the logo's clear space, and the bar clear of the next block. With no grammar, set primitive to null.
+
 Adhere strictly to this specification and produce three publication-ready layouts.`;
 }
 
@@ -1440,8 +1460,10 @@ export function buildLayoutV3UserPrompt(options: {
   logoAspect?: number;
   /** Who the client is (its client pack's profile, ADR-127). The system prompt names no client. */
   clientProfile?: string;
+  /** ADR-238: the client's page grammar in words (pageGrammarPrompt), when its reference has one. */
+  pageGrammar?: string;
 }): string {
-  const { brief, copyBlocks, palette, canvasWidth, canvasHeight, exemplars, isRtl, logoAspect, clientProfile } = options;
+  const { brief, copyBlocks, palette, canvasWidth, canvasHeight, exemplars, isRtl, logoAspect, clientProfile, pageGrammar } = options;
 
   const capacitySlots = copyBlocks.map((b) => computeCapacitySlot(b, canvasWidth, canvasHeight));
 
@@ -1510,7 +1532,9 @@ CRITICAL CONSTRAINTS:
 11. SAFE AREA: every text box and the logo lie entirely inside the margin (${Math.round(HOUSE_RULES.safeMarginShare * 100)}% of the canvas's short edge).
 12. ORDER (QA rejects anything else): stack the blocks top to bottom in Block index order, the order the client wrote them. Never set a block above a block with a lower index in the same column; blocks may sit side by side in separate columns.
 13. CLIENT DIRECTION: the design brief quotes the client's own instructions. Where they name a background, colour, texture or treatment from the brand, every candidate follows it; the candidates differ in composition, not in ignoring the client.
-14. BRAND ORNAMENT: every candidate carries the brand's detail, not bare text on a flat colour. Add thin rules (role "rule", 2px tall, in the palette's gold accent) that set the title off from what follows and the date block off from the body, each short and centred in its gap. Leave clear gaps where they go. A subtle background texture is added to any candidate without artwork.`;
+${pageGrammar
+    ? `14. CLIENT PAGE GRAMMAR (section 6; every candidate follows it, the candidates differ in composition): ${pageGrammar}`
+    : `14. BRAND ORNAMENT: every candidate carries the brand's detail, not bare text on a flat colour. Add thin rules (role "rule", 2px tall, in the palette's gold accent) that set the title off from what follows and the date block off from the body, each short and centred in its gap. Leave clear gaps where they go. A subtle background texture is added to any candidate without artwork.`}`;
 }
 
 /**
@@ -1533,6 +1557,7 @@ export async function generateLayoutCandidatesV3(
     exemplars: options.exemplars,
     isRtl: options.isRtl,
     logoAspect: options.logoAspect,
+    ...(options.pageGrammar ? { pageGrammar: options.pageGrammar } : {}),
   });
 
   const visualParts = (options.visualInputs ?? []).flatMap((input) => [

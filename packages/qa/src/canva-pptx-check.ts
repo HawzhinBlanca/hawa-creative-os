@@ -13,6 +13,8 @@ export const DEFAULT_ADMITTED_FONTS = [
   'Inter',
   'Verdana',
   'Noto Sans Arabic',
+  'Crimson Pro',
+  'IBM Plex Sans Arabic',
 ];
 
 export interface OffendingFontObject {

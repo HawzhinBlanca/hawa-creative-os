@@ -1009,3 +1009,21 @@ receipts retained. Current Claude reference snapshot admitted without rewriting 
 Absent grammar remains optional, colors stay within each client's palette and no
 client style/photo-count default is installed. Unfinished ADR238 parser/renderer merge
 and native/human/production admission remain open. See W5_PAGE_GRAMMAR_ADMISSION_PROOF.json.
+
+
+## Completed ADR238 source integration — 2 October 2026
+
+Claude finalized clean4c95154a during the ADR239 repair. Integrated it with8ca1fa4a,
+consolidated the parser onto typed admission and preserved source/photo/continuous
+background/strict native-font and QA authority. Client grammar now reaches editorial
+and storyboard compositions. A guideline alternative cannot replace multiple-photo
+or cutout intent; owner-directed one/several and explicit-only coverage replace the
+reference's hero-only wording. Desk handoffs complete; official logo untouched.
+
+Final18files299/0/0,725 strict roots/build/Desk build/lint PASS. Original264/4 and
+intermediate failures retained. Two current-client multi-photo layouts pass measured
+render QA and actual editable-copy/font/source-byte checks. An independent raster
+control verifies the gradient contrast enclosure. Local measured logo scrims must
+remain inside clear space; blanket light-overlay assertion replaced with that bound.
+Full source gate pending; no production/DNA/Canva-kit/native-save/human admission.
+See KAAE2025_INTEGRATED_PROOF.json for exact sources and receipts.

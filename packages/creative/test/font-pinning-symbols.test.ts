@@ -187,9 +187,10 @@ describe('the committed fonts.conf (FONTCONFIG_FILE in the core image)', () => {
   it('puts the symbol faces first for the same Latin families as the generated one', () => {
     const xml = fs.readFileSync(path.join(FONTS, 'fonts.conf'), 'utf8');
     const tested = [...xml.matchAll(/<test name="family" compare="eq"><string>([^<]*)<\/string><\/test>/g)].map((m) => m[1]);
-    expect(tested.sort()).toEqual(['Cinzel', 'Inter', 'Playfair Display', 'Plus Jakarta Sans', 'Verdana']);
+    // Crimson Pro joined 2026-10-01 (ADR-238: KAAE's 2025 guideline titles).
+    expect(tested.sort()).toEqual(['Cinzel', 'Crimson Pro', 'Inter', 'Playfair Display', 'Plus Jakarta Sans', 'Verdana']);
     expect(symbolFirstFamilies(FONTS)).toEqual(
-      pinnedSystemFontFiles().length ? ['Cinzel', 'Inter', 'Playfair Display', 'Plus Jakarta Sans', 'Verdana'] : ['Cinzel', 'Inter', 'Playfair Display', 'Plus Jakarta Sans']
+      pinnedSystemFontFiles().length ? ['Cinzel', 'Crimson Pro', 'Inter', 'Playfair Display', 'Plus Jakarta Sans', 'Verdana'] : ['Cinzel', 'Crimson Pro', 'Inter', 'Playfair Display', 'Plus Jakarta Sans']
     );
   });
 });
