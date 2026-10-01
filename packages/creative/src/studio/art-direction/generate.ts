@@ -34,6 +34,8 @@ import { RecipeInfeasibleError, TEXT_SLOTS, solveRecipe, type ArtDirectionChoice
  */
 
 const MAX_SUPPORTING_PHOTOS = 9;
+/** The source contract supports ten photos; local recovery never enumerates more heroes. */
+const MAX_ALTERNATE_HEROES = MAX_SUPPORTING_PHOTOS + 1;
 
 export const ART_DIRECTION_JSON_SCHEMA = {
   type: 'object',
@@ -433,29 +435,35 @@ export function solveConcepts(
         colorIndex: choice.params.backgroundColorIndex, ...options.backgroundPlanning },
     });
   const eligible = eligibleRecipes(options.photos, requiredPhotoCount(options.photoSelection, options.photos.length));
+  const ranked = rankPhotosForHero(options.photos);
   const layouts: StudioLayoutV2[] = [];
   const kept: ArtDirectionChoice[] = [];
   const replaced: GenerateArtDirectedResult['replaced'] = [];
   choices.forEach((choice, index) => {
-    // The concept as given; then its recipe on the photo the house would pick for it (a plate on a
-    // photo with no quiet region keeps the plate, on another photo); then the other recipes.
+    // Keep the proposal first, then the recipe's default source, then ranked alternate heroes.
+    // A subject-fit winner can be too small or impossible to crop: selecting it again in every
+    // default recipe must not hide a feasible sharp source in the same composition.
     const defaults = defaultChoice(choice.recipe, options.photos, options.copyBlocks);
-    const own: ArtDirectionChoice = { ...choice,
-      heroPhotoIndex: defaults.heroPhotoIndex,
-      cutoutPhotoIndex: defaults.cutoutPhotoIndex,
-      texturePhotoIndex: RECIPES[choice.recipe].texture && choice.texturePhotoIndex !== defaults.heroPhotoIndex &&
-        options.photos.some(p => p.photoIndex === choice.texturePhotoIndex)
-        ? choice.texturePhotoIndex : null,
-    };
-    // Repair the hero role, not the rest of a valid photo narrative or title treatment. A support
-    // promoted to hero is removed only from that former role; explicit coverage is still completed
-    // by the solver. Leave oversized/invalid direct inputs for its existing refusal, without an
-    // unbounded scan or a fabricated requirement to place every unspecified upload.
-    if (isMultiPhotoRecipe(choice.recipe) && choice.supportingPhotoIndices &&
-        choice.supportingPhotoIndices.length <= recipePhotoCapacity(choice.recipe) - 1) {
-      own.supportingPhotoIndices = choice.supportingPhotoIndices.filter(i => i !== own.heroPhotoIndex);
-    }
-    const tries = [choice, ...(own.heroPhotoIndex !== choice.heroPhotoIndex ? [own] : []),
+    const heroIndices = [...new Set([defaults.heroPhotoIndex,
+      ...ranked.filter(p => !RECIPES[choice.recipe].needsCutout || p.cutout).map(p => p.photoIndex)])]
+      .filter((i): i is number => i !== null).slice(0, MAX_ALTERNATE_HEROES)
+      .filter(i => i !== choice.heroPhotoIndex);
+    const own = heroIndices.map(heroPhotoIndex => {
+      const attempt: ArtDirectionChoice = { ...choice, heroPhotoIndex,
+        cutoutPhotoIndex: RECIPES[choice.recipe].needsCutout ? heroPhotoIndex : null,
+        texturePhotoIndex: RECIPES[choice.recipe].texture && choice.texturePhotoIndex !== heroPhotoIndex &&
+          options.photos.some(p => p.photoIndex === choice.texturePhotoIndex)
+          ? choice.texturePhotoIndex : null,
+      };
+      // Preserve the narrative/treatment; remove only a promoted role collision. Oversized direct
+      // support input remains the solver's refusal rather than an unbounded scan or forced collage.
+      if (isMultiPhotoRecipe(choice.recipe) && choice.supportingPhotoIndices &&
+          choice.supportingPhotoIndices.length <= recipePhotoCapacity(choice.recipe) - 1) {
+        attempt.supportingPhotoIndices = choice.supportingPhotoIndices.filter(i => i !== heroPhotoIndex);
+      }
+      return attempt;
+    });
+    const tries = [choice, ...own,
       ...eligible.filter((r) => r !== choice.recipe).map((r) => defaultChoice(r, options.photos, options.copyBlocks))];
     // A concept whose hero would be enlarged past 1.5x is kept only when no sharp one can replace it.
     let soft: { layout: StudioLayoutV2; attempt: ArtDirectionChoice } | undefined;

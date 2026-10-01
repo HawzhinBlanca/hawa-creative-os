@@ -757,3 +757,21 @@ negative-flag refusal passes. Raw production-dump Stage3 skipped; previous
 automatic approval review requires explicit transfer authorization, still pending.
 No all-eight, production deployment, native/human or product admission claim.
 W4_PHOTO_INTENT_REPAIR_GATE_EVIDENCE.json retains actual receipts.
+
+
+## W4 bounded alternate hero search — 1 October 2026
+
+ADR214 closes actual 4.84x blurry-hero retention despite a directly feasible
+0.40x same-composition alternate. Original/default/ranked supplied sources are
+tried under a ten-alternate bound before switching recipe; selected narrative,
+exact treatment and omissions survive. Actual Core retains three sharp distinct
+concepts with one call. Original fast path, soft fallback, crop/coverage/policy
+refusals and admitted cutout source roles remain; no cutout-resolution policy
+change. Observed repair two solves instead of eleven; exhausted paths may incur
+more bounded local solves, not a pipeline speed or human quality claim.
+
+Original11fail/2pass and corrected expanded12fail/3pass retained, alongside
+introduced declaration/transfer/cutout fixture and stale-build failures. Final
+18files275pass/0fail/0skip;693 strict roots/build/lint PASS. Exact engineering
+gate pending; production-dump authorization and native/human/product admission
+remain open. W4_ALTERNATE_HERO_SEARCH_PROOF.json records verified scope.
