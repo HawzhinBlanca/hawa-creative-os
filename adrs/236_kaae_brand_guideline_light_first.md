@@ -1,7 +1,7 @@
 # ADR-236: KAAE Designs Follow the Brand Guideline, Light First
 
 **Date:** 2026-10-01
-**Status:** Implemented on branch `claude/kaae-light-guideline` (from production `3726c8c6`); not deployed. The production DNA row is a separate step for the lead after deploy (section 6).
+**Status:** Superseded by ADR-238 (2026-10-01): the owner handed over the 2025 guideline ("Brand Guidelines — Excellence Edition", KAAE_Guidelines4.pdf) and withdrew the brand book this ADR applied. ADR-238 keeps this ADR's light-first logic (sections 3-5) and replaces its palette, fonts and rules. Originally implemented on branch `claude/kaae-light-guideline` (from production `3726c8c6`) and deployed.
 **Requirements:** FR-017 (versioned authoritative brand identity), FR-013 (the design brief carries the requester's requirements), FR-023 (a design plan cites the rules it used).
 **Changes a foundation:** no. No migration, no new dependency, no new paid call per design. The requester's tone is read with no model call.
 **Builds on:** ADR-127 (client packs and palette-only colours), ADR-170 (art-directed photo recipes), ADR-180 (house style), ADR-234 (model consent on a new DNA version).
