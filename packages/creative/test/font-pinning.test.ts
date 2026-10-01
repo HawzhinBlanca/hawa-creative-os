@@ -147,7 +147,8 @@ describe('the rasteriser sees only the pinned font files', () => {
     const fake = path.join(dir, 'rsvg-convert');
     fs.writeFileSync(
       fake,
-      `#!/bin/sh\necho "FONTCONFIG_FILE=$FONTCONFIG_FILE PANGOCAIRO_BACKEND=$PANGOCAIRO_BACKEND" >> '${log}'\ncat '${pngFile}'\n`,
+      // ADR201 identifies the executable before raster cache reuse; --version is not a render.
+      `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'rsvg font-pin fixture 1'; exit; fi\necho "FONTCONFIG_FILE=$FONTCONFIG_FILE PANGOCAIRO_BACKEND=$PANGOCAIRO_BACKEND" >> '${log}'\ncat '${pngFile}'\n`,
       { mode: 0o755 }
     );
     const layout = layoutWith([{ fontFamily: 'Verdana' }]);
@@ -283,7 +284,7 @@ describe('font fidelity per script', () => {
     for (let i = 0; i < img.data.length; i++) img.data[i] = (i * 7919) % 251;
     fs.writeFileSync(pngFile, PNG.sync.write(img));
     const fake = path.join(dir, 'rsvg-convert');
-    fs.writeFileSync(fake, `#!/bin/sh\necho call >> '${log}'\ncat '${pngFile}'\n`, { mode: 0o755 });
+    fs.writeFileSync(fake, `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'rsvg sentinel-count fixture 1'; exit; fi\necho call >> '${log}'\ncat '${pngFile}'\n`, { mode: 0o755 });
     const families = ['Inter', 'Cinzel', 'Playfair Display'];
     for (const family of families) probeFontInkWidth(family, { rsvgConvertPath: fake, script: 'latin', sizePx: 41 });
     // One probe per family and one sentinel for all three (the canvas no longer depends on the family).

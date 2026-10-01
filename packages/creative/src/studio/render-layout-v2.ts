@@ -341,7 +341,7 @@ export interface FontInkCheck {
 }
 
 const inkCheckCache = new Map<string, FontInkCheck>();
-const sentinelHashCache = new Map<string, string | null>();
+const sentinelHashCache = new Map<string, string>();
 
 /** The part of a fontkit font the ink check reads. */
 interface InkFont {
@@ -394,9 +394,6 @@ export function probeFontInkWidth(
   const fontsDir = resolveFontsDir(options);
   const fontFile = options.fontFile || fontFileFor(family, false, false, fontsDir);
   const sizePx = options.sizePx ?? FONT_INK_SIZE;
-  const key = `${rsvg}|${fontconfigFile}|${family}|${fontFile}|${options.script ?? ''}|${sizePx}`;
-  const cached = inkCheckCache.get(key);
-  if (cached) return cached;
 
   const unmeasured = (reason: NonNullable<FontInkCheck['unmeasuredReason']>, why: string, sample = '', script: FontProbeScript | '' = ''): FontInkCheck => ({
     family,
@@ -415,12 +412,30 @@ export function probeFontInkWidth(
     message: `FONT_INK_UNMEASURED: '${family}' (${fontFile}): ${why}`,
   });
 
-  let font: InkFont;
+  let fontEntry: ReturnType<typeof loadFontPathEntry>;
   try {
-    font = fk.openSync(fontFile) as unknown as InkFont;
+    fontEntry = loadFontPathEntry(fontFile);
   } catch {
     return unmeasured('unopenable', 'the file cannot be opened');
   }
+  let renderer: RendererRuntimeIdentity;
+  let configSha256: string;
+  try {
+    renderer = rendererRuntimeIdentity({ rsvgConvertPath: rsvg });
+    configSha256 = createHash('sha256').update(fs.readFileSync(fontconfigFile)).digest('hex');
+  } catch {
+    return unmeasured('no-rasteriser', 'the current renderer or font configuration cannot be verified');
+  }
+  // ADR201: generated configurations bind all allowed fonts. Arbitrary configurations may
+  // include mutable files/directories outside that inventory, so both probes must run fresh.
+  const cacheable = !options.fontconfigFile ||
+    path.resolve(fontconfigFile) === path.resolve(pinnedFontconfigFile(fontsDir));
+  const rasterBasis = JSON.stringify([rsvg, renderer, fontconfigFile, configSha256]);
+  const key = JSON.stringify([rasterBasis, family, fontFile, fontEntry.sha256, options.script ?? '', sizePx]);
+  const cached = cacheable ? inkCheckCache.get(key) : undefined;
+  if (cached) return cached;
+
+  const font = fontEntry.font as InkFont;
   const covers = (text: string) => {
     try {
       return !font.layout(text).glyphs.some((g) => g.id === 0);
@@ -436,7 +451,7 @@ export function probeFontInkWidth(
   if (!script) {
     const which = options.script ? `the ${options.script} samples` : 'any sample';
     const check = unmeasured('uncovered', `the face does not draw ${which}`);
-    inkCheckCache.set(key, check);
+    if (cacheable) inkCheckCache.set(key, check);
     return check;
   }
   const sample = sampleFor(script) as string;
@@ -450,12 +465,15 @@ export function probeFontInkWidth(
 
   // The same sample, canvas and size in a family that cannot exist: what the fallback face draws.
   // The canvas depends only on the sample and the size, so every family shares this rasterisation.
-  const sentinelKey = `${rsvg}|${fontconfigFile}|${sizePx}|${sample}`;
-  if (!sentinelHashCache.has(sentinelKey)) {
+  const sentinelKey = JSON.stringify([rasterBasis, sizePx, sample]);
+  let sentinelHash = cacheable ? sentinelHashCache.get(sentinelKey) : undefined;
+  if (sentinelHash === undefined) {
     const sentinel = rasteriseProbe(inkProbeSvg(FONT_PROBE_SENTINEL, sample, sizePx), rsvg, fontconfigFile);
-    sentinelHashCache.set(sentinelKey, sentinel ? createHash('sha256').update(sentinel).digest('hex') : null);
+    if (!sentinel) return unmeasured('no-rasteriser', 'the sentinel comparison could not be measured', sample, script);
+    sentinelHash = createHash('sha256').update(sentinel).digest('hex');
+    if (cacheable) sentinelHashCache.set(sentinelKey, sentinelHash);
   }
-  const sameAsSentinel = sentinelHashCache.get(sentinelKey) === createHash('sha256').update(png).digest('hex');
+  const sameAsSentinel = sentinelHash === createHash('sha256').update(png).digest('hex');
 
   const img = PNG.sync.read(png);
   let left = Infinity;
@@ -497,7 +515,7 @@ export function probeFontInkWidth(
     sameAsSentinel,
     message,
   };
-  inkCheckCache.set(key, check);
+  if (cacheable) inkCheckCache.set(key, check);
   return check;
 }
 
@@ -809,6 +827,11 @@ export function fontFileFor(fontFamily: string, bold?: boolean, italic?: boolean
  */
 function loadFontEntry(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string) {
   const fontPath = fontFileFor(fontFamily, bold, italic, fontsDir);
+  return loadFontPathEntry(fontPath);
+}
+
+/** Stable content identity and parsed font for either a resolved family or an explicit file. */
+function loadFontPathEntry(fontPath: string) {
   const fingerprint = () => {
     const st = fs.statSync(fontPath, { bigint: true });
     return `${st.dev}:${st.ino}:${st.size}:${st.mtimeNs}:${st.ctimeNs}`;
