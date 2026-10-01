@@ -1,6 +1,6 @@
 # ADR214 — Search supplied alternate heroes before discarding a composition
 
-Date: 2026-10-01. Status: connected engineering verified; exact gate and product admission pending.
+Date: 2026-10-01. Status: connected and seven-stage engineering verified; production-dump/native/human/product admission pending.
 Requirements: FR-028, FR-031, FR-038, FR-040, FR-041, NFR-012.
 Sources: docs/05_CREATIVE_ENGINE.md, docs/07_MODEL_REGISTRY_AND_EVALUATION.md,
 docs/11_QA_RTL_MULTILINGUAL.md, MASTER_SPEC; ADR170, ADR181 and ADR213.
@@ -53,3 +53,10 @@ original fast path, refusal bounds and deterministic replay pass. Original and
 introduced failures retained in W4_ALTERNATE_HERO_SEARCH_PROOF.json. Cutout
 source eligibility is verified; its existing resolution policy is unchanged.
 No production deploy or paid call; native/human/product admission remains open.
+
+Exact clean seale3bf5306 passes seven engineering stages,6855pass/0fail/67skip
+across686 passed files/6 skipped,693 strict roots and1762 package checks. Mandatory
+negative-flag refusal passes. Raw production-dump Stage3 skipped; previous
+automatic approval review requires explicit transfer authorization, still pending.
+No all-eight, production deployment, native/human or product admission claim.
+W4_ALTERNATE_HERO_SEARCH_GATE_EVIDENCE.json retains actual receipts.

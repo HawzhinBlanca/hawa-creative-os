@@ -9,7 +9,7 @@
     "FR-041",
     "NFR-012"
   ],
-  "status": "CONNECTED_VERIFIED_EXACT_GATE_AND_PRODUCT_ADMISSION_OPEN",
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
   "sourceSha256": {
     "packages/creative/src/studio/art-direction/generate.ts": "8566e5bfec3fd2c9d29db394331c8e7759d6195f189f2225ad7bf355f2d5c8d9",
     "packages/creative/test/art-direction-alternate-hero.test.ts": "a60936be78f1a098266ebf2efdce11b62b0a539120d8fdab5e90aa07e18eb50e",
@@ -95,5 +95,13 @@
     "output/qualification/2026-10-01/alternate-hero-search/RED.log": "2e57974100a644da560d8018d78677add38746c129f08907a98d4a00f44cff21",
     "output/qualification/2026-10-01/alternate-hero-search/RED_EXPANDED.log": "a5d3f22396d98e54ba1d6a0e390d1a4bc3ef6e3545b698dd77a6f3ccf0ddac76",
     "output/qualification/2026-10-01/alternate-hero-search/STRICT_TYPES.log": "59abdabc8069163f5c6c272f26de7afc9b58c7f4736d8f298247e8841c1af969"
+  },
+  "sourceCommit": "1068dc4548e15586aca306dbfd6e9f44957cfca1",
+  "releaseGate": {
+    "candidateCommit": "e3bf5306952f5692c613514ac8acbb37fd5429ac",
+    "proof": "plans/content-aware-design-2026-09-30/W4_ALTERNATE_HERO_SEARCH_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior explicit transfer approval pending",
+    "allEightQualified": false
   }
 }
