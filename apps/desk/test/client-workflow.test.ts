@@ -51,6 +51,7 @@ describe('registered client workflow', () => {
     runtime = createDeskRuntime({ stream: new FakeStream(), doc: {hidden:false} });
     view = await mount(React.createElement(DeskProviders, {runtime, children:React.createElement(App)}));
     await advance(500);
+    await vi.dynamicImportSettled();
     expect(view.text()).toContain(b);
     expect(calls.some(c => c.path === `/v1/clients/${a}/dna`)).toBe(false);
   });

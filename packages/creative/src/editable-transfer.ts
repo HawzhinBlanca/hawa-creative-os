@@ -1,3 +1,5 @@
+import type { BackgroundField } from './studio/background-field.js';
+import { BACKGROUND_FIELD_OBJECT, encodeNativeBackgroundField } from './studio/background-transfer.js';
 /** A deterministic input validation failure; storage/encoding exceptions remain retryable. */
 export class EditableTransferValidationError extends Error {
   readonly code='EDITABLE_TRANSFER_INVALID';
@@ -11,6 +13,7 @@ import { isFontAdmitted } from './font-policy.js';
 
 export interface EditableTransferPlan {
   width: number; height: number; background: string;
+  backgroundField?: BackgroundField;
   text: Array<{ copyIndex: number; x: number; y: number; width: number; height: number;
     fontSize: number; fontFamily: string; color: string; align: 'left'|'center'|'right'; bold?: boolean;
     italic?: boolean;
@@ -88,6 +91,7 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
   const pptx=new PptxGenJS();pptx.defineLayout({name:'HAWA',width:plan.width/96,height:plan.height/96});pptx.layout='HAWA';
   pptx.author='Hawa';pptx.subject='Editable Canva transfer; source copy is immutable';
   const slide=pptx.addSlide();slide.background={color:hex(plan.background)};
+  if (plan.backgroundField) slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: plan.width / 96, h: plan.height / 96, objectName: BACKGROUND_FIELD_OBJECT, fill: { color: hex(plan.background) }, line: { transparency: 100 } });
   if(plan.backgroundImage){
     slide.addImage({data:`${plan.backgroundImage.mimeType};base64,${plan.backgroundImage.bytes.toString('base64')}`,x:0,y:0,w:plan.width/96,h:plan.height/96});
   }
@@ -121,7 +125,7 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
       margin:0,lineSpacing:Math.round(t.fontSize*(t.lineHeight||1.4)*0.75*100)/100,breakLine:false,vertAnchor:'middle',paraSpaceAfterPt:0,fit:'resize',lang:copyLocales[t.copyIndex],...(t.rtl?{rtlMode:true}:{})});
   }
   if(plan.logo&&logo)slide.addImage({data:`${logo.mimeType};base64,${logo.bytes.toString('base64')}`,x:plan.logo.x/96,y:plan.logo.y/96,w:plan.logo.width/96,h:plan.logo.height/96});
-  const bytes=await pptx.write({outputType:'nodebuffer'}) as Buffer;
+  const bytes=encodeNativeBackgroundField(await pptx.write({outputType:'nodebuffer'}) as Buffer, plan.backgroundField);
   return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),manifest:{width:plan.width,height:plan.height,
     copy,copyLocales,copySha256:createHash('sha256').update(JSON.stringify(copy)).digest('hex'),logoSha256:logo?.sha256||null,plan,
     rtlBlocks:plan.text.filter(t=>t.rtl).map(t=>t.copyIndex),

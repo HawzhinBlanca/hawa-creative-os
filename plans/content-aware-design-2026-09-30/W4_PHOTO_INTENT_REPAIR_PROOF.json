@@ -1,0 +1,105 @@
+{
+  "date": "2026-10-01T12:13:20.912639+00:00",
+  "adr": "ADR213",
+  "requirements": [
+    "FR-028",
+    "FR-031",
+    "FR-038",
+    "FR-040",
+    "FR-041",
+    "NFR-012"
+  ],
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
+  "sourceSha256": {
+    "packages/creative/src/studio/art-direction/generate.ts": "58e7ece7e2be5b1f31e0df68e238108d1abf6864d6093f4cb21d6bc770429e11",
+    "packages/creative/test/art-direction-photo-intent.test.ts": "95646eb6c9f1da5ab7358277d37d585be14babfb7e2ea7d81448de2dea41e7a5",
+    "apps/core/test/art-direction-photo-intent.test.ts": "be7869bcece4713fbf58127ce66834ed82312736981d7eb5d09a644fc26df1fd"
+  },
+  "diagnosis": {
+    "normalization": "diptych valid support displaced by malformed/hero prefix because capacity truncation precedes filtering",
+    "heroRecovery": "feasible ordered4-photo plan reset to2, valid texture/title accent/typicality lost; explicit no-texture can acquire unrelated default texture",
+    "scope": "actual deterministic synthetic functions, no claimed live incident or human preference result"
+  },
+  "failureHistory": {
+    "originalRed": {
+      "failed": 11,
+      "passed": 1,
+      "scope": "3 prefix fixtures accidentally passed a number instead of an array; diagnostic function independently reproduced the real defect"
+    },
+    "correctedRed": {
+      "failed": 11,
+      "passed": 1,
+      "scope": "correctly typed actual support arrays against original published generator, with fixed generator restored afterward"
+    },
+    "expandedRed": {
+      "failed": 14,
+      "passed": 1,
+      "scope": "includes no-texture/collision and counted coverage controls against original generator"
+    },
+    "firstGreen": {
+      "failed": 4,
+      "passed": 8,
+      "scope": "3 parameterized fixture mistakes and1 wrapped SVG full-string assumption; corrected, original logs retained"
+    },
+    "strictInitial": "test copy-role string widened beyond CopyBlockSlotInput; explicitly typed fixture and all strict roots passed"
+  },
+  "acceptance": {
+    "focusedCoreAndTransfer": {
+      "files": 2,
+      "passed": 16,
+      "failed": 0
+    },
+    "connected": {
+      "files": 16,
+      "passed": 283,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictRoots": 691,
+    "build": "PASS",
+    "lint": "PASS",
+    "actualCore": "all3 distinct compositions retain chosen source0,4,3,1 through resolution recovery; omission evidence and original warning retained",
+    "raster": "actual local no-text pixels meet unchanged copy contrast floors",
+    "editableTransfer": "exact factual live copy and official logo supplied; every selected photo hash retained, omitted photo hashes absent",
+    "replay": "same choice unchanged; deterministic JSON replay",
+    "bounds": "at most9 raw support entries; same candidate/model/repair budgets",
+    "calls": "one synthetic art-director call with original billing receipt"
+  },
+  "behavior": [
+    "filter/deduplicate before capacity under model bound",
+    "preserve valid supporting narrative, title accent, typicality, slots and parameters during same-recipe hero repair",
+    "remove promoted support collision without forcing unspecified uploads",
+    "preserve no-texture; clear invalid/colliding optional texture without adding unrelated scene",
+    "explicit all/count coverage remains completed by existing solver",
+    "other-recipe default fallback and hard geometry/crop/schema/copy/contrast checks remain unchanged"
+  ],
+  "releaseGate": {
+    "candidateCommit": "c9a845a77aa28b63fd6e2285515fcac623a15487",
+    "proof": "plans/content-aware-design-2026-09-30/W4_PHOTO_INTENT_REPAIR_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior explicit transfer approval pending",
+    "allEightQualified": false
+  },
+  "productionChanged": false,
+  "externalProviders": "synthetic only; no paid call",
+  "limits": [
+    "production-dump transfer authorization pending after earlier automatic-review rejection",
+    "real Canva/native/human/taste/product admission unproved"
+  ],
+  "artifacts": {
+    "output/qualification/2026-10-01/photo-intent-repair/DIAGNOSTIC.log": "9b2ecd9a58fba81b7b76a8c82aac9d367d879f15258c126c349b973243953c39",
+    "output/qualification/2026-10-01/photo-intent-repair/RED_INITIAL.log": "16752ee350097e2546e1b2987e69f0bede5c3b2a74b27e84b3c01d8439900369",
+    "output/qualification/2026-10-01/photo-intent-repair/RED_CORRECTED.log": "3e185c73b66deae7f2cdca6e93de81a76d9faac487f87b3ca36053942d3b22d4",
+    "output/qualification/2026-10-01/photo-intent-repair/RED_EXPANDED.log": "a13a2139706525b7587247a1eeb6360437b3b2a35150534ac661797a6425d304",
+    "output/qualification/2026-10-01/photo-intent-repair/GREEN_FIXTURE_FAILURE.log": "64045dbc90cc2e82a7947821f0ea15cc9aa516843df73f0daf7fb05fa6b02ba3",
+    "output/qualification/2026-10-01/photo-intent-repair/GREEN_FINAL_LOCAL.log": "647f33c7183dfe1ade5753a530d078db469785522a936794dcab4786dfa257df",
+    "output/qualification/2026-10-01/photo-intent-repair/CORE_CONNECTED.log": "b5be1bb372041061be25a62727b916f74f9c5c3d2f51c63a673a857d0f4d7e3c",
+    "output/qualification/2026-10-01/photo-intent-repair/CONNECTED.log": "67423fb0f83cfc1e28801ae6e493953024deb5207f79fa8304f09fb946eade67",
+    "output/qualification/2026-10-01/photo-intent-repair/BUILD_INITIAL.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/photo-intent-repair/BUILD_FINAL.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/photo-intent-repair/STRICT_INITIAL_REFUSAL.log": "a2ce6236e56e864f73a0e5b8cd1740d160e3f36024ae591f1ac9453ed2848e75",
+    "output/qualification/2026-10-01/photo-intent-repair/STRICT_TYPES.log": "9a5adf0e40e1c7fa24a3f8133fe8331b40dc38402f5fc05df9e6dd5869d1589f",
+    "output/qualification/2026-10-01/photo-intent-repair/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad"
+  },
+  "sourceCommit": "9819a2ad848b5ff9979e495a84b90740ee572bdc"
+}

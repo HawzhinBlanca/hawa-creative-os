@@ -47,3 +47,22 @@ it('keeps a style fallback visible as a review choice after judge uncertainty', 
   expect(view.text()).toContain('judge');
   await view.unmount();
 });
+
+it('explains the guideline decision when the judge leaned the other way', async () => {
+  const view = await mount(React.createElement(StudioJudgeNotice, { tournament: {
+    decidedBy: 'art_direction_prior', humanChoiceRecommended: false,
+    prior: { basis: 'guideline', instead: 'judge_without_clear_margin' } } }));
+  expect(view.text()).toContain('client guideline selected');
+  expect(view.text()).toContain('judge preferred another');
+  expect(view.text()).not.toContain('Choose the design yourself');
+  await view.unmount();
+});
+
+it('keeps human choice visible after an unreliable guideline decision', async () => {
+  const view = await mount(React.createElement(StudioJudgeNotice, { tournament: {
+    decidedBy: 'art_direction_prior', humanChoiceRecommended: true,
+    prior: { basis: 'guideline', instead: 'composite_judge_unreliable' } } }));
+  expect(view.text()).toContain('Choose the design yourself');
+  expect(view.text()).toContain('client guideline supplied');
+  await view.unmount();
+});

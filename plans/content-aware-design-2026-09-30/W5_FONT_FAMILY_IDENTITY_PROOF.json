@@ -1,0 +1,158 @@
+{
+  "date": "2026-10-01",
+  "adr": 209,
+  "status": "ALL_EIGHT_ENGINEERING_STAGES_VERIFIED_NATIVE_HUMAN_PRODUCT_OPEN",
+  "requirements": [
+    "FR-028",
+    "FR-034",
+    "FR-038",
+    "FR-041",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "beforeRepair": {
+    "failed": 15,
+    "passed": 58,
+    "files": 3,
+    "log": "output/qualification/2026-10-01/pptx-font-family/RED.log"
+  },
+  "developmentFailures": [
+    {
+      "phase": "new lookup unknown family",
+      "failed": 2,
+      "passed": 27,
+      "reason": "Inherited constructor/__proto__ values are not arrays; own-property guard added",
+      "log": "output/qualification/2026-10-01/pptx-font-family/UNKNOWN_NAME_RED.log"
+    }
+  ],
+  "connected": {
+    "files": 6,
+    "passed": 135,
+    "failed": 0,
+    "skipped": 0,
+    "earlierRunsNotAdded": true,
+    "log": "output/qualification/2026-10-01/pptx-font-family/CONNECTED.log"
+  },
+  "strictTypes": {
+    "testRoots": 685,
+    "passed": true
+  },
+  "lint": {
+    "passed": true,
+    "anyCount": 926,
+    "ceiling": 1053
+  },
+  "fontNameInventory": {
+    "fontFiles": 19,
+    "allMeasuredNamesPass": true,
+    "immutableFontFiles": true,
+    "source": "output/qualification/2026-10-01/pptx-font-family/FONT_NAME_INVENTORY.json",
+    "check": "output/qualification/2026-10-01/pptx-font-family/INVENTORY_EQUIVALENCE_CHECK.json",
+    "perFontDeclarationChecks": 35,
+    "distinctObservedNames": 28
+  },
+  "historicalCanvaReinspection": {
+    "exports": 5,
+    "liveTextObjects": 43,
+    "sourceHashesUnchanged": true,
+    "copyAndFontPass": true,
+    "wrongFontAndCopyRefused": true,
+    "source": "output/qualification/2026-10-01/pptx-font-family/HISTORICAL_NATIVE_REINSPECTION.json"
+  },
+  "coreEvidence": [
+    "generated wrong prefixed Latin/Arabic names refused despite stored version8 passing receipt",
+    "one failed review/QC across replay for Verdana Fake",
+    "approval HTTP412",
+    "source bytes/hash preserved; nativeVerification unverified"
+  ],
+  "policy": "Exact family or explicitly measured full/family names; no arbitrary suffix grammar; manual exact DNA membership unchanged; unknown families exact only",
+  "limitations": [
+    "Declared names do not certify actual native font files, glyph shaping or weight fidelity",
+    "Existing Latin/Arabic slot policy only; other scripts remain unqualified",
+    "Historical exports are not current native edit/reopen or rendering qualification",
+    "No production deployment or paid model call",
+    "Broad W5/W6/native/human/product admission remains open"
+  ],
+  "formatSources": [
+    "https://learn.microsoft.com/en-us/typography/opentype/spec/name",
+    "https://learn.microsoft.com/en-us/typography/opentype/spec/stat"
+  ],
+  "sourceSha256": {
+    "packages/qa/src/canva-pptx-check.ts": "72b8cd58feac0ec92bf590b506e1f4f5921cfa0e220cddbbdc6546bc4dec7574",
+    "packages/qa/test/pptx-font-family-identity.test.ts": "8cd9b0b5a7b2e65e98e31f2a5f1873165d81670e6dc05d5a9f3254a4faf62109",
+    "packages/qa/test/pptx-script-fonts.test.ts": "385e8d73bf34c74164950fd904cf8bf119531495432a555e152d33910f86bd54",
+    "apps/core/test/canva-export-qc.test.ts": "2f3b5d839307bdd595621d830125737e4b96e1e7741e5fa3bb2f38518ee96aa3",
+    "apps/core/test/manual-canva-review.test.ts": "943fb9352e22f3c9140c1a9e7720559d238c85b49ed8ebf84f13d361318564a1"
+  },
+  "artifacts": {
+    "output/qualification/2026-10-01/pptx-font-family/INVENTORY_EQUIVALENCE_CHECK.json": "cca56b258b444b2d6784801d28eafc60b38b8290065c213f42c02a7b0c52f82f",
+    "output/qualification/2026-10-01/pptx-font-family/UNKNOWN_NAME_RED.log": "9e6ba6c1596672b216a8cbb19506d1acee678dd9234eca6eeab9f07473462f4e",
+    "output/qualification/2026-10-01/pptx-font-family/RED.log": "a54bdfa414b81f1c5cf46bb5491216468ae0611eefc4f1188747b5fef075bd59",
+    "output/qualification/2026-10-01/pptx-font-family/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/pptx-font-family/HISTORICAL_NATIVE_REINSPECTION.json": "f5d6e2518bfd38e5744dc65d458d37f45494ad8cdf72c645fde36bd603fc5df1",
+    "output/qualification/2026-10-01/pptx-font-family/FONT_NAME_INVENTORY.json": "a8c7f00a57c6b2212048a7887d503a87ea7fb256c5a19b8e5f083ae08982e60d",
+    "output/qualification/2026-10-01/pptx-font-family/STRICT_TYPES.log": "de1a6e9115c60bf4e1e005db6ab7885d7e93c626d83d3e6f9d7dc9dbb55f5e8e",
+    "output/qualification/2026-10-01/pptx-font-family/FIRST_GREEN.log": "56c5782091906d9da4db4daf535a37218f582082d660368cb6909e654d53a7e5",
+    "output/qualification/2026-10-01/pptx-font-family/CONNECTED.log": "9b566ec19e50c9ab1b893f32ed609de08330d300f9c9cb5c8ba1574e32b35f4d",
+    "output/qualification/2026-10-01/pptx-font-family/BUILD.log": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454"
+  },
+  "exactEngineering": {
+    "candidateCommit": "a03387f10d5ab67a5b25b9147c8e39bdb71d6054",
+    "status": "ALL_EIGHT_ENGINEERING_STAGES_VERIFIED_PRODUCT_ADMISSION_OPEN",
+    "technicalStagesPassed": 8,
+    "suite": {
+      "passed": 6802,
+      "failed": 0,
+      "skipped": 67,
+      "filesPassed": 678,
+      "filesSkipped": 6
+    },
+    "strictTestRoots": 685,
+    "newestDump": {
+      "status": "passed",
+      "dump": "predeploy_20261001T090959Z.dump",
+      "productionChanged": false
+    },
+    "negativeFlagRefusal": "PASS",
+    "sourceChangedDuringGate": false,
+    "admissionQualified": false,
+    "artifacts": {
+      "output/qualification/2026-10-01/a03387f1/NEGATIVE_FLAG_REFUSAL.log": "a6c2679a87bb1d406037007ab5111e793829ea56166e3a574e911ad8f4bbff02",
+      "output/qualification/2026-10-01/a03387f1/EXACT_GATE.log": "2b7f8b425e1ff093bf2ffd26c321018440f92e3e8ab09e52277affba5028abf1",
+      "output/qualification/2026-10-01/a03387f1/TEST_DB_PROVISION.log": "336ff22f53b4a3fea01bf514699007aa793865e351b45da27310dadad063c59d",
+      "output/qualification/2026-10-01/a03387f1/PREDEPLOY_DUMP_CHECK.json": "ad3883d860f2e345f9e03a816a0d27c6ca8ca52bf94c3ab14ff33afbe58dd42e",
+      "output/qualification/2026-10-01/a03387f1/PREDEPLOY_DUMP_CHECK.log": "e00c0f3506a887383daf365163e9ddac558dd077cea283206e27f9e9bee60009",
+      "output/qualification/2026-10-01/a03387f1/RELEASE_GATE_EVIDENCE.json": "ed7643b3a99fa0da583c9551dbbe6a40e872e33a6e3b7345b308e9940a36bc1d",
+      "output/qualification/2026-10-01/a03387f1/FULL_TEST_SUITE_RUN.log": "5b565e765f67badabdf8616cabf67a71d213fbb57faf067081a6566ffaf680fa"
+    }
+  },
+  "measurementTallyCorrection": "35 counts per-file family/full-name checks, not globally distinct names (28); original counted field clarified without changing runtime or tests.",
+  "candidateRecovery": {
+    "candidateCommit": "f1eb209853001168de9e3f12e5d642c476b1b438",
+    "namedChecksPassed": 96,
+    "sourceChanges": {},
+    "externalProvidersAndStaff": "synthetic",
+    "restores": {
+      "DRIVE_RESTORE.json": {
+        "tables": 104,
+        "policies": 174,
+        "blobs": 3,
+        "missingReferences": 0,
+        "scriptApplicationReplayProved": false,
+        "separateHostProved": false
+      },
+      "TELEGRAM_RESTORE.json": {
+        "tables": 104,
+        "policies": 174,
+        "blobs": 3,
+        "missingReferences": 0,
+        "scriptApplicationReplayProved": false,
+        "separateHostProved": false
+      }
+    },
+    "evidence": "output/qualification/2026-10-01/f1eb2098/CANDIDATE_RECOVERY_SUMMARY.json",
+    "automaticTempCleanup": "CORRECTED: success cleanup already existed; retained directory belonged to failed97e9b3bf restore",
+    "supersededCleanupDiagnosis": "OPEN; observed leftover private synthetic restore files manually removed",
+    "cleanupDiagnosisCorrection": "output/qualification/2026-10-01/restore-owned-cleanup/DIAGNOSIS_CORRECTION.json"
+  }
+}

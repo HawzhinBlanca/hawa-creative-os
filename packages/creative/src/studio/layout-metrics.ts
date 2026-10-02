@@ -1,5 +1,5 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
-import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
+import { declaredTextContrast } from './composite-contrast.js';
 import { shapePaintsOver } from './art-direction/surfaces.js';
 
 export interface LayoutMetrics {
@@ -97,22 +97,23 @@ export function computeLayoutMetrics(
     edgesX.push(el.x, el.x + el.width);
   }
 
-  // An element centred on the canvas axis, or on another element's centre, is aligned: that is
-  // how a centred composition aligns. Counting edges only, this gate rejected three of the owner's
-  // six confirmed exemplars (0.542, 0.600, 0.667 against 0.70) and 13 of the 20 production-model
-  // qualification designs, while the deliberately off-grid fixture still fails with centres
-  // counted (0.600). Its 0.70 threshold was justified on the v3 alignment metric's exemplar scores
-  // (0.792–1.000), which is a different measure; with centres counted, this one agrees with them.
+  // ADR204: text aligns on its declared left/right/centre axis. A narrower flush body column does
+  // not need the title's unused right edge; coincident box centres do not align ragged left text.
+  // Shapes/logos retain geometric centre support, including genuinely centred text. Thresholds
+  // are unchanged; alignment consistency is not a calibrated human aesthetic score.
+  const textAxes = layout.text.map(t => t.align === 'center' ? t.x + t.width / 2 : t.align === 'right' ? t.x + t.width : t.x);
   const centresX = allElements.map((el) => el.x + el.width / 2);
-  const centred = centresX.map(
-    (c, k) => Math.abs(c - width / 2) <= threshold || centresX.some((o, j) => j !== k && Math.abs(o - c) <= threshold)
-  );
+  const alignedAxis = centresX.map((c, k) => k < layout.text.length
+    ? gridLinesX.some(x => Math.abs(textAxes[k] - x) <= threshold) ||
+      textAxes.some((x, j) => j !== k && Math.abs(textAxes[k] - x) <= threshold)
+    : Math.abs(c - width / 2) <= threshold || centresX.some((other, j) => j !== k &&
+      (j >= layout.text.length || layout.text[j].align === 'center') && Math.abs(other - c) <= threshold));
 
   // Check alignment of each edge
   let alignedEdges = 0;
   for (let i = 0; i < edgesX.length; i++) {
     const x = edgesX[i];
-    let isAligned = centred[Math.floor(i / 2)];
+    let isAligned = alignedAxis[Math.floor(i / 2)];
 
     // Check against grid lines
     for (const gx of gridLinesX) {
@@ -229,11 +230,8 @@ export function computeLayoutMetrics(
   // 8. Contrast P05
   const contrastP05: Record<number, number> = options.contrastValues || {};
   if (!options.contrastValues) {
-    const bgColor = typeof layout.background === 'object' && layout.background ? layout.background.color : String(layout.background);
-    const bgLum = hexToLuminance(bgColor);
     for (const t of layout.text) {
-      const textLum = hexToLuminance(t.color);
-      contrastP05[t.copyIndex] = parseFloat(calculateLuminanceContrastRatio(textLum, bgLum).toFixed(2));
+      contrastP05[t.copyIndex] = parseFloat(declaredTextContrast(layout, t).toFixed(2));
     }
   }
 

@@ -40,23 +40,29 @@ export function overlayOpacityOver(o: OverlayElement, box: Box): number {
   if (!contains(o, box, 1)) return 0;
   // The share along the overlay's direction of each end of the box.
   const along = (v: number, start: number, length: number) => Math.min(1, Math.max(0, (v - start) / Math.max(1, length)));
+  let a: number, b: number;
   if (o.direction === 'radial') {
     // The farthest corner of the box from the centre, as a share of the way out to the ellipse.
     const cx = o.x + o.width / 2, cy = o.y + o.height / 2;
     const far = Math.max(...[[box.x, box.y], [box.x + box.width, box.y], [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]
       .map(([x, y]) => Math.hypot((x - cx) / Math.max(1, o.width / 2), (y - cy) / Math.max(1, o.height / 2))));
-    return far >= 1 ? 0 : overlayOpacityAt(o, far);
-  }
-  let a: number, b: number;
-  switch (o.direction) {
+    if (far >= 1) return 0;
+    // Distance is continuous over a rectangle. The nearest point is the centre projected
+    // onto the rectangle; inspecting only its farthest corner misses interior clear rings.
+    const nearX = Math.max(box.x, Math.min(cx, box.x + box.width));
+    const nearY = Math.max(box.y, Math.min(cy, box.y + box.height));
+    a = Math.hypot((nearX - cx) / Math.max(1, o.width / 2), (nearY - cy) / Math.max(1, o.height / 2));
+    b = far;
+  } else switch (o.direction) {
     case 'to-bottom': a = along(box.y, o.y, o.height); b = along(box.y + box.height, o.y, o.height); break;
     case 'to-top': a = 1 - along(box.y + box.height, o.y, o.height); b = 1 - along(box.y, o.y, o.height); break;
     case 'to-right': a = along(box.x, o.x, o.width); b = along(box.x + box.width, o.x, o.width); break;
     default: a = 1 - along(box.x + box.width, o.x, o.width); b = 1 - along(box.x, o.x, o.width); break;
   }
-  // Sampled along the span: stops may rise and fall between the ends.
-  let least = Infinity;
-  for (let k = 0; k <= 8; k++) least = Math.min(least, overlayOpacityAt(o, a + ((b - a) * k) / 8));
+  // ADR198: a piecewise-linear opacity reaches its minimum at an endpoint or a stop.
+  // Fixed samples can miss arbitrarily narrow clear valleys even in an admitted eight-stop field.
+  let least = Math.min(overlayOpacityAt(o, a), overlayOpacityAt(o, b));
+  for (const stop of o.stops) if (stop.at >= a && stop.at <= b) least = Math.min(least, stop.opacity);
   return least;
 }
 

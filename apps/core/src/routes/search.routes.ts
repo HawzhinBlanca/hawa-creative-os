@@ -2,20 +2,25 @@ import type { RouteContext } from './types.js';
 import type { ClientDNA } from '@hawa/domain';
 import { API_STATUS_OF_DB_STATE } from '@hawa/contracts';
 import { deskReviewPath } from '@hawa/contracts/desk-navigation';
-import { globalFeedbackMiner } from '@hawa/creative';
+import { globalFeedbackMiner, type CandidateRuleProposal } from '@hawa/creative';
 import { VaultSearchEngine, extractSearchTokens, type SearchableItem, type SearchCategory } from '@hawa/retrieval';
 import { sql, toApiTaskStatus, withRlsContext } from '@hawa/db';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
-import { listUploadedAssets } from '../services/uploaded-assets.js';
+import { searchUploadedAssets } from '../services/uploaded-assets.js';
 import { log } from '../logging.js';
+import { searchHistory, searchWords } from '../services/search-history.js';
+import { reconstructClientLearning } from '../services/learning-recovery.js';
 
 /** What the search indexes: tasks, clients (keyed by the id a scoped search names) and assets. */
 interface Searchable {
   tasks: Array<{ id: string; title?: string; clientId?: string | null; status: string; objective?: string; requestText?: string; currentPhase?: string; latestRevisionId?: string; tags?: string[]; updatedAt?: string }>;
   clients: Array<[string, ClientDNA]>;
+  identities: Array<{id:string;name:string;code:string|null;updatedAt:string}>;
+  history: SearchableItem[];
   assets: Array<{ assetId: string; clientId?: string; filename?: string; mimeType?: string; category?: string; sha256?: string; storageKey?: string | null; sizeBytes?: number; createdAt?: string }>;
   /** A client's code and `client-<code>` spellings, to its Postgres id. */
   aliases: Map<string, string>;
+  rules: CandidateRuleProposal[];
   /** More tasks are in scope than one search reads (TASK_CEILING); the answer may miss some. */
   truncated: boolean;
 }
@@ -36,8 +41,13 @@ const NAV_ROUTES: Record<string, string> = {
  * on its client's DNA page, a navigation item is its own screen, and an uploaded asset is listed on
  * no Desk screen, so it opens nothing rather than a page without it.
  */
-export function searchResultUrl(item: { id: string; category: string; clientId: string }): string | null {
+export function searchResultUrl(item: { id: string; category: string; clientId: string; metadata?: Record<string, unknown> }): string | null {
   if (item.category === 'tasks') return deskReviewPath({ taskId: item.id }).slice(1);
+  if (['feedback','revisions','copy'].includes(item.category) && typeof item.metadata?.taskId === 'string') {
+    const revisionId = typeof item.metadata.revisionId === 'string' ? item.metadata.revisionId : undefined;
+    return deskReviewPath({taskId:item.metadata.taskId,...(revisionId ? {revisionId} : {})}).slice(1);
+  }
+  if (item.category === 'feedback') return `#/dna?client=${item.clientId}`;
   if (item.category === 'clients' || item.category === 'rules') return `#/dna?client=${item.clientId}`;
   return NAV_ROUTES[item.id] ?? null;
 }
@@ -64,13 +74,15 @@ export function registerSearchRoutes(ctx: RouteContext): void {
    * process held in memory and the DNA it loaded at start-up, so the Desk's search found nothing
    * another Core, or this one before a restart, had created. Without a database, the no-database store.
    */
-  async function searchable(auth: { tenantId?: string; userId?: string; role?: string }, requestedClientId?: string, query = ''): Promise<Searchable> {
+  async function searchable(auth: { tenantId?: string; userId?: string; role?: string }, requestedClientId?: string, query = '', category: SearchCategory = 'all'): Promise<Searchable> {
     if (!db) {
       return {
         tasks: Array.from(tasks.entries()).map(([id, t]) => ({ ...t, id, objective: briefs.get(id)?.objective, requestText: t.description })),
         clients: Array.from(clientDnas.entries()),
+        identities: [], history: [],
         assets: Array.from(uploadedAssets.values()),
         aliases: new Map(),
+        rules: (category==='all' || category==='rules') ? Array.from(clientDnas.keys()).flatMap(id=>globalFeedbackMiner.getCandidateRules(id)) : [],
         truncated: false,
       };
     }
@@ -78,20 +90,27 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : value ? String(value) : undefined);
     const requestedScope = requestedClientId && requestedClientId !== 'all' ? requestedClientId : undefined;
     const clientRows = await withRlsContext(db, scope, async (trx) =>
-        (await sql<{ client_id: string; code: string | null; dna: unknown }>`
-          SELECT v.client_id, c.code, v.dna FROM hawa.client_dna_versions v
-          JOIN hawa.clients c ON c.id = v.client_id AND c.tenant_id = v.tenant_id
-          WHERE v.tenant_id = ${scope.tenantId}::uuid AND v.status = 'active'
+        (await sql<{ client_id: string; code: string | null; name:string; updated_at:Date; dna: unknown }>`
+          SELECT c.id AS client_id, c.code, c.name, c.updated_at, v.dna FROM hawa.clients c
+          LEFT JOIN hawa.client_dna_versions v ON c.id = v.client_id AND c.tenant_id = v.tenant_id AND v.status='active'
+          WHERE c.tenant_id = ${scope.tenantId}::uuid
             ${requestedScope ? sql`AND (c.id::text=${requestedScope} OR c.code=${requestedScope} OR 'client-' || c.code=${requestedScope})` : sql``}`.execute(trx)).rows);
     const aliases = new Map<string, string>();
     const clients: Array<[string, ClientDNA]> = [];
+    const rules: CandidateRuleProposal[] = [];
     for (const row of clientRows) {
-      const dna = (typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna) as ClientDNA | null;
-      if (!dna || typeof dna !== 'object') continue;
-      clients.push([row.client_id, dna]);
       if (row.code) {
         aliases.set(row.code, row.client_id);
         aliases.set(`client-${row.code}`, row.client_id);
+      }
+      const dna = (typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna) as ClientDNA | null;
+      if (dna && typeof dna === 'object') clients.push([row.client_id, dna]);
+      // The source/moderation/DNA statement supplies this request's snapshot. Another
+      // endpoint or a warm process projection must not determine what search can find.
+      if(category==='all' || category==='rules') {
+        const learning=await withRlsContext(db,{...scope,clientId:row.client_id},
+          trx=>reconstructClientLearning(trx,scope.tenantId,row.client_id));
+        rules.push(...learning.rules);
       }
     }
 
@@ -103,8 +122,8 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     // is indexed under the default client, so a search scoped to it reads those.
     const resolved = requestedClientId && requestedClientId !== 'all'
       ? aliases.get(requestedClientId) || requestedClientId : undefined;
-    const assets = resolved === undefined ? await listUploadedAssets(db, scope)
-      : UUID.test(resolved) ? await listUploadedAssets(db, scope, resolved) : [];
+    const assetSearch = (category === 'all' || category === 'assets') && (resolved === undefined || UUID.test(resolved))
+      ? await searchUploadedAssets(db, scope, query, resolved) : { items: [], truncated: false };
     const clientFilter = resolved === undefined ? sql``
       : resolved === defaultClientId ? sql`AND t.client_id IS NULL`
         : UUID.test(resolved) ? sql`AND t.client_id = ${resolved}::uuid`
@@ -113,14 +132,10 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     type TaskRow = { id: string; title: string | null; client_id: string | null; state: string; current_design_revision_id: string | null; created_at: Date; updated_at: Date; objective: string | null; request_text: string | null };
     // Match before the bounded read, so an old request cannot disappear behind unrelated new work.
     // Keep the retrieval engine's OR-token semantics and Sorani/Arabic normalization.
-    const tokens = extractSearchTokens(query);
     const corpus = sql`concat_ws(' ', t.id::text, t.title, t.description, t.state, ${sql`CASE t.state ${sql.join(Object.entries(API_STATUS_OF_DB_STATE).map(([state, api]) => sql`WHEN ${state} THEN ${api}`), sql` `)} END`}, 'Status Phase INTAKE',
       b.brief::text, source.payload->>'rawRequestText', source.payload->>'copyEn',
       source.payload->>'copyCkb', source.payload->'exactCopy')`;
-    const normalized = sql`btrim(regexp_replace(regexp_replace(
-      translate(lower(normalize(${corpus}, NFC)), 'كي٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', 'کی01234567890123456789'),
-      ${'[\u064B-\u065F\u0670]'}, '', 'g'), ${'[\u200C-\u200F\u202A-\u202E\u2066-\u2069،؛؟]'}, ' ', 'g'))`;
-    const wordFilter = tokens.length ? sql`AND (${sql.join(tokens.map(token => sql`strpos(${normalized}, ${token}) > 0`), sql` OR `)})` : sql``;
+    const wordFilter = sql`AND ${searchWords(corpus,query)}`;
     const taskRows: TaskRow[] = [];
     let truncated = false;
     let after: { createdAt: Date; id: string } | undefined;
@@ -150,15 +165,19 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     }
     if (truncated) log.warn(`[core:search] more than ${ceiling} matching tasks in scope; the search read the newest ${ceiling} matches`);
 
+    const history=await searchHistory(db,scope,resolved,query,category);
     return {
+      identities: clientRows.map(row=>({id:row.client_id,name:row.name,code:row.code,updatedAt:iso(row.updated_at)!})),
+      history: history.items,
       tasks: taskRows.map((t) => ({
         id: t.id, title: t.title || undefined, clientId: t.client_id, status: toApiTaskStatus(t.state),
         objective: t.objective || undefined, requestText: t.request_text || undefined, latestRevisionId: t.current_design_revision_id || undefined, updatedAt: iso(t.updated_at),
       })),
       clients,
-      assets,
+      assets: assetSearch.items,
       aliases,
-      truncated,
+      rules,
+      truncated: truncated || history.truncated || assetSearch.truncated,
     };
   }
 
@@ -197,6 +216,11 @@ export function registerSearchRoutes(ctx: RouteContext): void {
       });
     }
 
+    // Registered identity is searchable even before active DNA exists.
+    for (const c of state.identities) engine.indexItem({id:c.id,category:'clients',clientId:c.id,
+      title:c.name,subtitle:`Code: ${c.code ?? 'unavailable'}`,bodyText:`${c.name} ${c.code ?? ''} ${c.id}`,updatedAt:c.updatedAt});
+    for (const item of state.history) engine.indexItem(item);
+
     // Index clients
     for (const [cId, cData] of state.clients) {
       const primaryHex = cData.colors?.find((c) => c.role === 'primary')?.hex || '#0B192C';
@@ -224,8 +248,8 @@ export function registerSearchRoutes(ctx: RouteContext): void {
         category: 'assets',
         clientId: cId,
         title: asset.filename || assetId,
-        subtitle: `${asset.mimeType} · ${asset.sizeBytes || 1024} B`,
-        bodyText: `${asset.filename} ${asset.mimeType} ${asset.category || ''} ${asset.sha256 || ''}`,
+        subtitle: `${asset.mimeType} · ${typeof asset.sizeBytes === 'number' && Number.isFinite(asset.sizeBytes) && asset.sizeBytes >= 0 ? `${asset.sizeBytes} B` : 'Size unavailable'}`,
+        bodyText: `${assetId} ${asset.filename} ${asset.mimeType} ${asset.category || ''} ${asset.sha256 || ''}`,
         tags: [asset.mimeType || 'unknown', asset.category || 'asset'],
         metadata: { sha256: asset.sha256, storageKey: asset.storageKey },
         updatedAt: asset.createdAt || new Date().toISOString(),
@@ -233,23 +257,20 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     }
 
     // Index candidate and promoted rules
-    for (const [cId] of state.clients) {
-      const rules = globalFeedbackMiner.getCandidateRules(cId);
-      for (const rule of rules) {
-        engine.indexItem({
-          id: rule.id,
-          category: 'rules',
-          clientId: cId,
-          title: rule.title,
-          subtitle: `Confidence: ${Math.round(rule.confidence * 100)}% · Freq: ${rule.frequency}`,
-          bodyText: `${rule.title} ${rule.ruleText} ${rule.category} ${rule.rationale}`,
-          tags: [rule.category, rule.status],
-          metadata: { confidence: rule.confidence, frequency: rule.frequency },
-          updatedAt: rule.promotedAt || new Date().toISOString(),
-        });
-      }
+    for (const rule of state.rules) {
+      engine.indexItem({
+        id: rule.id,
+        category: 'rules',
+        clientId: rule.clientId,
+        title: rule.title,
+        subtitle: `Heuristic score: ${rule.confidence.toFixed(2)} · Freq: ${rule.frequency}`,
+        bodyText: `${rule.title} ${rule.ruleText} ${rule.category} ${rule.rationale}`,
+        tags: [rule.category, rule.status],
+        status: rule.status,
+        metadata: { confidence: rule.confidence, frequency: rule.frequency },
+        updatedAt: rule.promotedAt || rule.provenance.recordedAt,
+      });
     }
-
     return engine;
   }
 
@@ -260,17 +281,19 @@ export function registerSearchRoutes(ctx: RouteContext): void {
     const q = (c.req.query('q') || c.req.query('query') || '').trim();
     if (q.length > 512 || extractSearchTokens(q).length > 64) return problem(c,422,'Search Too Long','Use up to 512 characters and 64 search words.');
     const requestedClientId = c.req.query('clientId');
+    const category = (c.req.query('category') || 'all') as SearchCategory;
+    if (!['all','tasks','clients','assets','rules','copy','feedback','revisions'].includes(category))
+      return problem(c,400,'Invalid Search Category','Choose a supported search category.');
     let state: Searchable;
     try {
-      state = await searchable(auth, requestedClientId, q);
+      state = await searchable(auth, requestedClientId, q, category);
     } catch (err) {
       log.error('[core:search] Could not read what to search:', err);
-      return problem(c, 503, 'Database Unavailable', 'The search could not read the tasks, clients and assets; try again');
+      return problem(c, 503, 'Database Unavailable', 'The search could not verify stored office history; try again');
     }
 
     // A client named by its code is searched by its Postgres id, which is what the items carry.
     const clientId = requestedClientId ? state.aliases.get(requestedClientId) || requestedClientId : requestedClientId;
-    const category = (c.req.query('category') || 'all') as SearchCategory;
     const limit = parseInt(c.req.query('limit') || '25', 10);
     const offset = parseInt(c.req.query('offset') || '0', 10);
 

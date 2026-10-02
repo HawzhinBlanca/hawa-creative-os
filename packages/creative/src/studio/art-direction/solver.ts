@@ -1,3 +1,5 @@
+import { applyContentBackground, BackgroundInfeasibleError, type BackgroundPlanningInput } from '../background-planning.js';
+import { declaredTextContrast, declaredColorContrast } from '../composite-contrast.js';
 import { HERO_SHARP_UPSCALE } from '../layout-v2.js';
 import type {
   Box,
@@ -15,8 +17,12 @@ import { calculateLuminanceContrastRatio, hexToLuminance } from '../composite-co
 import { hexToRgb } from '../color-science.js';
 import { maxStrokeWidth } from '../studio-normalize.js';
 import { coverCrop } from '../photo-crop.js';
-import type { QuietArea } from './recipes.js';
-import type { PhotoSelection } from '../photo-selection.js';
+import { photoUpscale } from '../photo-cutout.js';
+import { packPhotoSequence } from './photo-packing.js';
+import { rankPhotosForHero, type QuietArea } from './recipes.js';
+import { candidateRecipeTypeScales, type RecipeTypeScale as TypeScale } from './type-scale-search.js';
+import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
+import { protectedCropFocus, protectedRegionsOnCanvas, type SourceRegion, type RegionStatus } from '../protected-regions.js';
 import { GrammarInfeasibleError, composeGrammarLayout, conformMarksToPageGrammar, type PageGrammar } from '../page-grammar.js';
 
 /**
@@ -49,6 +55,9 @@ export interface ArtDirectionParams {
   fadeShare?: number;
   /** The tone of the surface text sits on where the recipe lets it vary. */
   surfaceTone?: 'navy' | 'cream';
+  backgroundIntent?: 'documentary' | 'editorial' | 'showcase';
+  backgroundMode?: 'solid' | 'gradient';
+  backgroundColorIndex?: number | null;
   /** A gold outer frame (series, carousels) or a thin inset line (single report posts). */
   frame?: 'none' | 'outer' | 'inset';
   /** Text alignment: `start` is left for Latin, right for Sorani. */
@@ -67,6 +76,8 @@ export interface ArtDirectionChoice {
   typicality?: number;
   heroPhotoIndex: number | null;
   texturePhotoIndex: number | null;
+  /** Ordered supporting source indices; bounded and validated by the solver. */
+  supportingPhotoIndices?: number[];
   cutoutPhotoIndex: number | null;
   slots: Array<{ copyIndex: number; slot: TextSlot }>;
   /** Words of a single title block to set in gold, exactly as they appear in the copy. */
@@ -83,6 +94,8 @@ export interface SolverPhoto {
   focus?: { x: number; y: number };
   /** The tallest face's height as a share of the photo's height, when the detector found a face. */
   faceShare?: number;
+  regions?: SourceRegion[];
+  regionStatus?: RegionStatus;
   /** The local analysis' centre of detail, used when there is no face. */
   salient?: { x: number; y: number };
   /** Where the photo is calm. */
@@ -91,6 +104,8 @@ export interface SolverPhoto {
   quietLuminance?: number;
   /** The cut-out's size when a person cut out of this photo passed its checks. */
   cutoutSize?: { width: number; height: number };
+  /** Actual retained PNG pixels; null records that an existing cutout could not be measured. */
+  cutoutPixelSize?: { width: number; height: number } | null;
 }
 
 export interface SolveRecipeInput {
@@ -109,6 +124,7 @@ export interface SolveRecipeInput {
   logoClearSpacePx?: number;
   fonts?: { latinDisplay?: string; latinBody?: string; arabicDisplay?: string; arabicBody?: string };
   fontsDir?: string;
+  backgroundPlanning?: BackgroundPlanningInput;
   /**
    * ADR-238: the client's page grammar (its reference's `rules.pageGrammar`). With one, a light
    * concept is set in the grammar's faces and colours with its title bar and foot rule, and
@@ -275,13 +291,6 @@ function blocksOf(input: SolveRecipeInput): Block[] {
   });
 }
 
-interface TypeScale {
-  title: number;
-  accent: number;
-  body: number;
-  footer: number;
-}
-
 interface SetBlock {
   block: Block;
   el: TextElement;
@@ -323,6 +332,10 @@ export function solveRecipe(input: SolveRecipeInput): StudioLayoutV2 {
   switch (recipe) {
     case 'hero_fade_report': return ctx.heroFadeReport();
     case 'hero_storyboard': return ctx.heroStoryboard();
+    case 'editorial_split': return ctx.editorialSplit();
+    case 'photo_diptych': return ctx.editorialPhotos(true);
+    case 'photo_sequence': return ctx.editorialPhotos(false);
+    case 'photo_mosaic': return ctx.editorialMosaic();
     case 'hero_card': return ctx.heroCard();
     case 'hero_plate': return ctx.heroPlate();
     case 'scrim_caption': return ctx.scrimCaption();
@@ -415,7 +428,11 @@ class SolveContext {
   }
 
   placeHero(p: SolverPhoto, box: Box, role: PhotoElement['role'] = 'hero'): PhotoElement {
-    const el: PhotoElement = { photoIndex: p.photoIndex, role, ...intBox(box), radius: 0, focus: this.focusOf(p) };
+    let focus: { x: number; y: number } | null;
+    try { focus = protectedCropFocus(intBox(box), p, this.focusOf(p)); }
+    catch { throw new RecipeInfeasibleError(this.recipe, `photo ${p.photoIndex} has invalid subject regions`); }
+    if (!focus) throw new RecipeInfeasibleError(this.recipe, `photo ${p.photoIndex} cannot retain every subject in this crop`);
+    const el: PhotoElement = { photoIndex: p.photoIndex, role, ...intBox(box), radius: 0, focus };
     this.photos.push(el);
     return el;
   }
@@ -427,6 +444,11 @@ class SolveContext {
    */
   faceBox(el: PhotoElement): Box | undefined {
     const p = this.photo(el.photoIndex);
+    if (p?.regions?.length && el.treatment !== 'cutout') {
+      const boxes = protectedRegionsOnCanvas(el, p);
+      const x = Math.min(...boxes.map(b => b.x)), y = Math.min(...boxes.map(b => b.y));
+      return { x, y, width: Math.max(...boxes.map(b => b.x + b.width)) - x, height: Math.max(...boxes.map(b => b.y + b.height)) - y };
+    }
     if (!p?.focus || !p.faceShare || el.treatment === 'cutout') return undefined;
     const crop = coverCrop(el, p, el.focus ?? p.focus);
     const scale = el.height / crop.sh;
@@ -493,13 +515,14 @@ class SolveContext {
     overlay.stops = stops;
   }
 
-  /** How much the hero's own pixels are enlarged in its box, as the renderer crops it. */
+  /** Main source pixels, including contained cutout portraits, as the renderer places them. */
   heroUpscale(): number | undefined {
-    const el = this.photos.find((p) => p.role === 'hero');
+    const el = this.photos.find((p) => p.role === 'hero') ?? this.photos.find(p => p.treatment === 'cutout');
     const p = el ? this.photo(el.photoIndex) : undefined;
     if (!el || !p) return undefined;
-    const crop = coverCrop(el, p, el.focus);
-    return Math.round((el.width / crop.sw) * 100) / 100;
+    const cutout = p.cutoutPixelSize === null ? null : p.cutoutPixelSize
+      ? { ...p.cutoutPixelSize, placement: p.cutoutSize } : p.cutoutSize;
+    return Math.round(photoUpscale(el, { width: p.width, height: p.height, cutout }) * 100) / 100;
   }
 
   /**
@@ -542,15 +565,6 @@ class SolveContext {
   }
 
   // ----- type ------------------------------------------------------------------------------------
-
-  /** The type scale at a factor of the canvas's natural sizes; the title at least 2.2x the body. */
-  typeScale(factor: number): TypeScale {
-    const minBody = Math.ceil(HOUSE_RULES.minBodyShareOfWidth * this.W);
-    const base = this.officeType && !this.wide ? OFFICE_BODY_SHARE * this.W : 0.026 * this.s;
-    const body = Math.max(minBody, Math.round(base * Math.min(1, factor + 0.12)));
-    const title = Math.max(Math.ceil(HOUSE_RULES.titleToBodyMin * body), Math.round(0.066 * this.s * factor));
-    return { title, accent: Math.round(title * 0.92), body, footer: Math.max(HOUSE_RULES.minFontPx, Math.min(body, Math.round(body * 0.82))) };
-  }
 
   sizeOf(b: Block, scale: TypeScale): number {
     switch (b.slot) {
@@ -645,8 +659,22 @@ class SolveContext {
     titleLines = 2,
     minFactor = 0.5
   ): SetBlock[][] {
-    for (let factor = 1; factor >= minFactor - 1e-9; factor -= 0.04) {
-      const scale = this.typeScale(factor);
+    let scales: TypeScale[];
+    try {
+      scales = candidateRecipeTypeScales({ naturalTitle: 0.066 * this.s,
+        naturalBody: this.officeType && !this.wide ? OFFICE_BODY_SHARE * this.W : 0.026 * this.s,
+        minimumBody: Math.ceil(HOUSE_RULES.minBodyShareOfWidth * this.W), minimumFont: HOUSE_RULES.minFontPx,
+        titleToBodyMinimum: HOUSE_RULES.titleToBodyMin }, minFactor);
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      throw new RecipeInfeasibleError(this.recipe, error.message);
+    }
+    const measuredSizes = new Set<string>();
+    for (const scale of scales) {
+      // A title-only change does not warrant remeasuring a group containing only body text.
+      const sizes = groups.flatMap(g => g.blocks.map(b => this.sizeOf(b, scale))).join(',');
+      if (measuredSizes.has(sizes)) continue;
+      measuredSizes.add(sizes);
       const sets = groups.map((g) => this.setGroup(g.blocks, g.width, scale, g.colours, g.align));
       const flat = sets.flat();
       const titleOk = flat.every((b) => (b.block.slot === 'title' || b.block.slot === 'accent' ? b.lines <= titleLines : true));
@@ -784,6 +812,11 @@ class SolveContext {
     art?: StudioLayoutV2['art'];
   }): StudioLayoutV2 {
     const used = new Set(this.photos.map((p) => p.photoIndex));
+    // Some photo recipes do not reserve a frame in their geometry. Carry an explicitly
+    // selected frame as its own thin overlay, using the existing brand/stroke rules.
+    // Missing/none remains unframed; recipes that already drew it keep one frame.
+    const frame = this.input.choice.params?.frame;
+    if ((frame === 'outer' || frame === 'inset') && !this.shapes.some(s => s.role === 'frame')) this.frame(frame);
     // ADR-180: the logo is set bare. Whether its ground needs a scrim or a thin tab is read from the
     // rendered pixels afterwards (settleLogoGround), not assumed from the geometry: a cream tab on
     // every logo that touched a photo was a box the office does not draw on a calm wall or sky.
@@ -812,6 +845,16 @@ class SolveContext {
         ...(upscale ? { heroUpscale: upscale } : {}),
       },
     };
+    if (this.input.backgroundPlanning) {
+      try {
+        applyContentBackground(layout, this.input.palette, { ...this.input.backgroundPlanning, photos: this.input.photos });
+      } catch (error) {
+        // Reject only this valid-but-unreadable composition. Invalid policy and unexpected errors
+        // still stop the call; solveConcepts records and replaces only recipe infeasibility.
+        if (!(error instanceof BackgroundInfeasibleError)) throw error;
+        throw new RecipeInfeasibleError(this.recipe, error.message);
+      }
+    }
     this.applyTitleAccent(layout);
     this.balanceWidows(layout);
     if (this.input.grammar && this.isLight() && !layout.composition) {
@@ -860,7 +903,7 @@ class SolveContext {
     const onNavy = contrast(this.tones.gold, layout.background.color) >= requiredContrast(title.fontSize, true);
     const surface = this.surfaceBehind(layout, title);
     if (!onNavy && surface !== this.tones.navy && surface !== this.tones.deep) return;
-    if (contrast(this.tones.gold, surface) < requiredContrast(title.fontSize, true)) return;
+    if (declaredColorContrast(layout, title, this.tones.gold) < requiredContrast(title.fontSize, true)) return;
     title.accentColor = this.tones.gold;
     title.accentText = want.join(' ');
   }
@@ -890,19 +933,20 @@ class SolveContext {
     // No title, plate or card over a face the detector found in the hero: on 2026-09-30 a navy plate
     // sat across both visitors' faces in the live trial, and every check passed it.
     for (const photo of layout.photos ?? []) {
-      if (photo.role !== 'hero') continue;
-      const face = this.faceBox(photo);
-      if (!face) continue;
-      // Only overlay panels are drawn over the photos; a card under a photo (ADR-238) frames it.
-      const covers = [...layout.text, ...layout.shapes.filter((sh) => sh.role === 'panel' && sh.fill !== 'none' && sh.layer === 'overlay'), layout.logo].find((b) => hit(b, face));
-      if (covers) throw new RecipeInfeasibleError(this.recipe, 'the copy or its plate would cover the faces in the hero photo');
+      const p = this.photo(photo.photoIndex);
+      const fallback = this.faceBox(photo);
+      const boxes = p?.regions?.length && photo.treatment !== 'cutout' ? protectedRegionsOnCanvas(photo, p) : fallback ? [fallback] : [];
+      for (const face of boxes) {
+        const covers = [...layout.text, ...layout.shapes.filter((sh) => sh.role === 'panel' && sh.fill !== 'none' && sh.layer === 'overlay'), layout.logo].find((b) => hit(b, face));
+        if (covers) throw new RecipeInfeasibleError(this.recipe, `the copy or its plate would cover the faces in photo ${photo.photoIndex}`);
+      }
     }
     for (const t of layout.text) {
       if (!inside(this.safe, t)) throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} leaves the safe area`);
       if (hit(t, clear)) throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} is in the logo's clear space`);
       for (const u of layout.text) if (u !== t && hit(t, u)) throw new RecipeInfeasibleError(this.recipe, `copy blocks ${t.copyIndex} and ${u.copyIndex} overlap`);
       const surface = this.surfaceBehind(layout, t);
-      const ratio = contrast(t.color, surface);
+      const ratio = declaredTextContrast(layout, t);
       if (ratio < requiredContrast(t.fontSize, Boolean(t.bold))) {
         throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} is ${ratio.toFixed(2)}:1 on its surface`);
       }
@@ -912,20 +956,100 @@ class SolveContext {
   // ===============================================================================================
   // Recipes
 
-  /**
-   * Reference example 3. The hero fills the canvas from the top and runs off three edges; a navy fade
-   * rises over its lower part; a second photo, if chosen, is blended into the fade; the title (a
-   * white line and a gold line), the body and the call to action sit on the fade, anchored to the
-   * bottom margin. On a wide canvas the fade and the text take the start side instead.
-   */
-  heroStoryboard(): StudioLayoutV2 {
+  /** Ordered validated source roles, completing only explicit coverage obligations. */
+  selectedPhotos(minimumForRecipe: number, maximum: number): SolverPhoto[] {
     const hero = this.hero();
-    const count = this.input.photoSelection?.mode === 'choose'
-      ? Math.min(this.input.photos.length, Math.max(2, this.input.photoSelection.minimum))
-      : this.input.photos.length;
-    const supporting = this.input.photos.filter(p => p.photoIndex !== hero.photoIndex).slice(0, count - 1);
-    if (!supporting.length || count > 10) throw new RecipeInfeasibleError(this.recipe, 'storyboard needs 2 to 10 photos');
-    const colours = surfacePalette(this.tones, this.input.choice.params.surfaceTone === 'cream' ? 'cream' : 'navy');
+    const minimum = Math.max(minimumForRecipe, recipePhotoMinimum(this.input.photoSelection, this.input.photos.length));
+    const available = new Map(this.input.photos.filter(p => p.photoIndex !== hero.photoIndex).map(p => [p.photoIndex, p]));
+    const requested = this.input.choice.supportingPhotoIndices;
+    if (requested && (requested.length > maximum - 1 || requested.some(i => !Number.isInteger(i) || !available.has(i))))
+      throw new RecipeInfeasibleError(this.recipe, 'invalid supporting photo indices');
+    const ranked = rankPhotosForHero(this.input.photos).filter(p => p.photoIndex !== hero.photoIndex).map(p => p.photoIndex);
+    const order = [...new Set(requested ?? ranked.slice(0, Math.max(0, minimumForRecipe - 1)))];
+    for (const index of ranked) {
+      if (order.length >= minimum - 1) break;
+      if (!order.includes(index)) order.push(index);
+    }
+    const result = [hero, ...order.map(i => available.get(i)!)];
+    if (result.length < minimum || result.length > maximum)
+      throw new RecipeInfeasibleError(this.recipe, `requires ${minimum} photos within capacity ${maximum}`);
+    return result;
+  }
+
+  editorialColours(): { background: Hex; colours: Palette } {
+    const tone = this.input.choice.params.surfaceTone ?? 'cream';
+    return { background: tone === 'cream' ? this.paper() : this.tones.navy,
+      colours: tone === 'cream' ? this.lightColours() : surfacePalette(this.tones, tone) };
+  }
+
+  /** Copy/photo split: side by side for square/wide, editorial header above photo for portrait. */
+  editorialSplit(): StudioLayoutV2 {
+    const [hero] = this.selectedPhotos(1, 1);
+    if (this.W / this.H < .9) return this.editorialPhotos(false, [hero]);
+    return this.editorialMosaic([hero]);
+  }
+
+  /** Copy column opposite a justified source-aspect image field; no image under text or logo. */
+  editorialMosaic(selected = this.selectedPhotos(2, 10)): StudioLayoutV2 {
+    const { background, colours } = this.editorialColours();
+    const photoW = Math.round(.56 * this.W), gap = Math.round(.045 * this.s);
+    const photoX = this.rtl ? 0 : this.W - photoW;
+    const copyX = this.rtl ? photoW + gap : this.safe.x;
+    const copyW = Math.floor(this.W - photoW - gap - this.safe.x);
+    const logo = { ...this.logoAt('top-start'), x: this.rtl ? copyX + copyW - this.logoSize().width : copyX };
+    const top = this.logoClear(logo).y + this.logoClear(logo).height + Math.round(.025 * this.s);
+    const availableH = this.safe.y + this.safe.height - top;
+    const align = this.align();
+    const [set] = this.fitScale([{ blocks: this.blocks, width: copyW, colours, align }], ([g]) => this.stackHeight(g) <= availableH, 3);
+    const h = this.stackHeight(set), textTop = Math.round(top + Math.max(0, (availableH - h) * .35));
+    const area = { x: photoX, y: 0, width: photoW, height: this.H };
+    const boxes = selected.length === 1 ? [{ photoIndex: selected[0].photoIndex, ...area }]
+      : packPhotoSequence(selected, area, Math.round(.014 * this.s), this.s, this.rtl);
+    if (!boxes) throw new RecipeInfeasibleError(this.recipe, 'no readable subject-safe editorial photo field');
+    boxes.forEach((b, i) => this.placeHero(selected[i], b, i === 0 ? 'hero' : 'inset'));
+    const text = this.placeStack(set, copyX, copyW, textTop, align, colours);
+    return this.finish({ background, text, logo, titleZone: { x: copyX, y: textTop, width: copyW, height: h }, hero: selected[0] });
+  }
+
+  /** Header above paired/ordered images; source aspects determine unequal widths and row splits. */
+  editorialPhotos(pair: boolean, selected = this.selectedPhotos(2, pair ? 2 : 10)): StudioLayoutV2 {
+    const { background, colours } = this.editorialColours();
+    const logo = this.logoAt('top-start'), align = this.align();
+    const clear = this.logoClear(logo), gap = Math.round(.014 * this.s);
+    const copyX = this.wide && !this.rtl ? Math.ceil(clear.x + clear.width + .025 * this.s) : this.safe.x;
+    const copyRight = this.wide && this.rtl ? Math.floor(clear.x - .025 * this.s) : this.safe.x + this.safe.width;
+    const copyW = copyRight - copyX;
+    const top = this.wide ? this.safe.y : clear.y + clear.height + Math.round(.025 * this.s);
+    const bottom = this.safe.y + this.safe.height;
+    const areaFor = (set: SetBlock[]) => {
+      const imageTop = Math.ceil(Math.max(top + this.stackHeight(set), clear.y + clear.height) + .04 * this.s);
+      return { x: this.safe.x, y: imageTop, width: this.safe.width, height: bottom - imageTop };
+    };
+    const boxesFor = (area: Box): Array<Box & { photoIndex: number }> | null => {
+      let boxes: Array<Box & { photoIndex: number }> | null;
+      if (selected.length === 1) boxes = [{ photoIndex: selected[0].photoIndex, x: 0, y: area.y, width: this.W, height: this.H - area.y }];
+      else if (pair) {
+        const usableW = area.width - gap, aspects = selected.map(p => p.width / p.height);
+        const firstW = Math.round(usableW * aspects[0] / (aspects[0] + aspects[1]));
+        boxes = selected.map((p, i) => ({ photoIndex: p.photoIndex,
+          x: this.rtl ? (i === 0 ? area.x + area.width - firstW : area.x) : (i === 0 ? area.x : area.x + firstW + gap),
+          y: area.y, width: i === 0 ? firstW : usableW - firstW, height: area.height }));
+      } else boxes = packPhotoSequence(selected, area, gap, this.s, this.rtl);
+      if (!boxes || boxes.some((b, i) => Math.min(b.width, b.height) < Math.round(this.s * (i === 0 ? .22 : .12)))) return null;
+      try { if (boxes.some((box, i) => !protectedCropFocus(box, selected[i], this.focusOf(selected[i])))) return null; } catch { return null; }
+      return boxes;
+    };
+    // Joint local fit: largest measured type whose header leaves readable, subject-safe photos.
+    const [set] = this.fitScale([{ blocks: this.blocks, width: copyW, colours, align }], ([g]) => Boolean(boxesFor(areaFor(g))), 3);
+    const h = this.stackHeight(set), boxes = boxesFor(areaFor(set))!;
+    boxes.forEach((b, i) => this.placeHero(selected[i], b, i === 0 ? 'hero' : 'inset'));
+    const text = this.placeStack(set, copyX, copyW, top, align, colours);
+    return this.finish({ background, text, logo, titleZone: { x: copyX, y: top, width: copyW, height: h }, hero: selected[0] });
+  }
+
+  heroStoryboard(): StudioLayoutV2 {
+    const [hero, ...supporting] = this.selectedPhotos(2, 10);
+    const colours = this.input.choice.params.surfaceTone === 'cream' ? this.lightColours() : surfacePalette(this.tones, 'navy');
     const background = this.input.choice.params.surfaceTone === 'cream' ? this.tones.cream : this.tones.navy;
     const align = this.align();
     const bottom = this.safe.y + this.safe.height;
@@ -1264,8 +1388,12 @@ class SolveContext {
    */
   cutoutSpeaker(): StudioLayoutV2 {
     const person = this.photo(this.input.choice.cutoutPhotoIndex) ?? this.input.photos.find((p) => p.cutoutSize);
-    if (!person?.cutoutSize) throw new RecipeInfeasibleError(this.recipe, 'no person cut out of a photo');
-    // ADR-236: the person stands on the page's paper on a light concept, on navy on a dark one.
+    if (!person?.cutoutSize || person.cutoutPixelSize === null ||
+        ![person.cutoutSize.width, person.cutoutSize.height,
+          ...(person.cutoutPixelSize ? [person.cutoutPixelSize.width, person.cutoutPixelSize.height] : [])]
+          .every(n => Number.isFinite(n) && n > 0))
+      throw new RecipeInfeasibleError(this.recipe, 'no usable person cut out of a photo');
+    // Preserve the subject evidence guard and the client's requested light/dark ground.
     const { background, colours } = this.ground();
     const colX = this.wide ? Math.round(0.46 * this.W) : Math.round(0.4 * this.W);
     // The person's box ends where the text column starts: the person stands beside the copy, never under it.

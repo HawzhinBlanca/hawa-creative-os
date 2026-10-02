@@ -1,3 +1,4 @@
+import { protectedRegionsOnCanvas, type SourceRegion, type RegionStatus } from '../protected-regions.js';
 import { PNG } from 'pngjs';
 import type { Box, LogoGroundRecord, OverlayElement, ShapeElement, StudioLayoutV2 } from '../layout-v2.js';
 import { photoRecipeOf } from '../layout-v2.js';
@@ -6,6 +7,7 @@ import { brandTones } from './solver.js';
 import { calculateLuminanceContrastRatio, rgbToLuminance } from '../composite-contrast.js';
 import { coverCrop } from '../photo-crop.js';
 import { renderLayoutV2ToSvg, svgToPngAsync, type RenderLayoutOptions } from '../render-layout-v2.js';
+import { compileLogoVisibility, readLogoVisibility, type LogoVisibilityReading, type LogoVisibilityTemplate } from './logo-visibility.js';
 
 /**
  * ADR-180 (owner, 2026-09-30: "current design has logo background"): the logo sat in a heavy navy
@@ -14,8 +16,7 @@ import { renderLayoutV2ToSvg, svgToPngAsync, type RenderLayoutOptions } from '..
  * the picture, the fade, the plate, the card or the paper, and lifts it only where the picture is busy.
  *
  * So the logo now goes bare, and its ground is measured on the rendered pixels: the logo's contrast
- * on what is under it (the 95th percentile over its ink, so its lettering and outline must read, not
- * every pale ray), and how busy that ground is (the standard deviation of its luma under the logo
+ * on what is under it, and how busy that ground is (the standard deviation of its luma under the logo
  * box). A quiet ground keeps the logo bare. Otherwise the calmer top corner is tried; then the
  * lightest radial scrim that makes it read (weakest first, in the tone nearest the ground); and only when no scrim
  * does, a thin cream rounded tab, the logo plus a few pixels. Nothing behind the logo ever reaches
@@ -23,7 +24,7 @@ import { renderLayoutV2ToSvg, svgToPngAsync, type RenderLayoutOptions } from '..
  * a render of the clear-space box alone.
  */
 
-/** The logo's ink must reach this contrast on its ground: WCAG's 3:1 for graphics. */
+/** Local engineering contrast target; this is not a universal logo accessibility requirement. */
 export const LOGO_MIN_CONTRAST = 3;
 /** A ground busier than this under the logo box (luma standard deviation, 0..1) is lifted. */
 export const LOGO_MAX_BUSYNESS = 0.12;
@@ -37,6 +38,8 @@ export interface LogoGroundReading {
   inkShare: number;
   /** The ground's mean luma under the logo box, 0..1. */
   luma: number;
+  /** Source-bound features, including invisible components; historical readings omit this. */
+  visibility?: LogoVisibilityReading;
 }
 
 const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
@@ -123,7 +126,44 @@ export function readLogoGround(withLogo: PNG, ground: PNG, region: Box, logo: Bo
  * the office publishes it.
  */
 export function logoGroundQuiet(r: LogoGroundReading, native = LOGO_MIN_CONTRAST / 0.9): boolean {
-  return r.contrast >= Math.min(LOGO_MIN_CONTRAST, 0.9 * native) && r.busyness <= LOGO_MAX_BUSYNESS;
+  return r.visibility?.passed === true && r.contrast >= Math.min(LOGO_MIN_CONTRAST, 0.9 * native) && r.busyness <= LOGO_MAX_BUSYNESS;
+}
+
+export interface RenderedLogoTemplate {
+  signature: LogoVisibilityTemplate;
+  region: Box;
+  logo: Box;
+}
+
+/** Official artwork at the same pixel phase and placed size as the final renderer. */
+export async function renderLogoTemplate(layout: StudioLayoutV2, options: RenderLayoutOptions): Promise<RenderedLogoTemplate> {
+  const { noTextSvg, files } = renderLayoutV2ToSvg(layout, options);
+  const image = noTextSvg.match(/<image id="logo"[^>]*\/>/)?.[0];
+  if (!image) throw new Error('LOGO_UNMEASURED: official logo source is absent');
+  const logo = layout.logo;
+  const region = { x: Math.floor(logo.x) - 2, y: Math.floor(logo.y) - 2,
+    width: Math.ceil(logo.x + logo.width) - Math.floor(logo.x) + 4,
+    height: Math.ceil(logo.y + logo.height) - Math.floor(logo.y) + 4 };
+  if (region.width * region.height > 1024 * 1024) throw new Error('LOGO_UNMEASURED: placed logo exceeds measurement bound');
+  const svg = `<svg width="${region.width}" height="${region.height}" viewBox="${region.x} ${region.y} ${region.width} ${region.height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">${image}</svg>`;
+  const pixels = PNG.sync.read(await svgToPngAsync(svg, region.width, region.height, options, files));
+  return { signature: compileLogoVisibility(pixels), region, logo: { ...logo } };
+}
+
+/** Final QA reads the actual composite; the stored layout's logoGround claim is irrelevant. */
+export function readRenderedLogoVisibility(composite: Buffer, logo: Box, template: RenderedLogoTemplate): LogoVisibilityReading {
+  for (const k of ['x', 'y', 'width', 'height'] as const) {
+    if (logo[k] !== template.logo[k]) throw new Error('LOGO_UNMEASURED: stale source geometry');
+  }
+  const full = PNG.sync.read(composite), r = template.region;
+  if (r.x < 0 || r.y < 0 || r.x + r.width > full.width || r.y + r.height > full.height) {
+    throw new Error('LOGO_UNMEASURED: logo signature extends outside the final composite');
+  }
+  const crop = new PNG({ width: r.width, height: r.height });
+  for (let y = 0; y < r.height; y++) {
+    full.data.copy(crop.data, y * r.width * 4, ((y + r.y) * full.width + r.x) * 4, ((y + r.y) * full.width + r.x + r.width) * 4);
+  }
+  return readLogoVisibility(crop, template.signature);
 }
 
 /** The logo's own contrast on white, at the size it is drawn: what it reads like as designed. */
@@ -134,11 +174,12 @@ export async function nativeLogoContrast(layout: StudioLayoutV2, options: Render
   const { x, y, width, height } = layout.logo;
   const open = `<svg width="${width}" height="${height}" viewBox="${x} ${y} ${width} ${height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`;
   const white = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#FFFFFF"/>`;
-  const [a, b] = await Promise.all([
-    svgToPngAsync(`${open}${white}${logo}</svg>`, width, height, options, files),
-    svgToPngAsync(`${open}${white}</svg>`, width, height, options, files),
-  ]);
-  return readLogoGround(PNG.sync.read(a), PNG.sync.read(b), { x, y, width, height }, layout.logo).contrast;
+  const artwork = PNG.sync.read(await svgToPngAsync(`${open}${white}${logo}</svg>`, width, height, options, files));
+  // ADR-188: the reference is an opaque white viewport, independent of artwork and fonts.
+  // Match the actual native output dimensions; only the official artwork needs a native job.
+  const matte = new PNG({ width: artwork.width, height: artwork.height });
+  matte.data.fill(255);
+  return readLogoGround(artwork, matte, { x, y, width, height }, layout.logo).contrast;
 }
 
 /** Renders the design's no-text composite over `region` only, with and without the logo. */
@@ -156,29 +197,29 @@ async function renderRegion(layout: StudioLayoutV2, region: Box, options: Render
   return { withLogo: PNG.sync.read(a), ground: PNG.sync.read(b) };
 }
 
-/** The region a logo's ground is read over: its clear-space box, on the canvas. */
-function regionFor(layout: StudioLayoutV2, logo: Box, clearSpacePx: number): Box {
-  const c = logoClearZone(logo, clearSpacePx);
-  const x = Math.max(0, Math.floor(c.x)), y = Math.max(0, Math.floor(c.y));
-  return { x, y, width: Math.max(2, Math.min(layout.width, Math.ceil(c.x + c.width)) - x), height: Math.max(2, Math.min(layout.height, Math.ceil(c.y + c.height)) - y) };
-}
-
 /** Measures the logo's ground in a layout as it would be rendered. */
-export async function measureLogoGround(layout: StudioLayoutV2, options: RenderLayoutOptions, clearSpacePx = 0): Promise<LogoGroundReading> {
-  const region = regionFor(layout, layout.logo, clearSpacePx);
+export async function measureLogoGround(layout: StudioLayoutV2, options: RenderLayoutOptions, _clearSpacePx = 0, source?: RenderedLogoTemplate): Promise<LogoGroundReading> {
+  const template = source ?? await renderLogoTemplate(layout, options);
+  const region = template.region;
   const { withLogo, ground } = await renderRegion(layout, region, options);
-  return readLogoGround(withLogo, ground, region, layout.logo);
+  return { ...readLogoGround(withLogo, ground, region, layout.logo), visibility: readLogoVisibility(withLogo, template.signature) };
 }
 
 /** Where the faces the detector found land on the canvas, for the photos placed in a layout. */
 export function faceBoxesOf(
   layout: Pick<StudioLayoutV2, 'photos'>,
-  photos: Array<{ photoIndex: number; width: number; height: number; focus?: { x: number; y: number }; faceShare?: number }>
+  photos: Array<{ photoIndex: number; width: number; height: number; focus?: { x: number; y: number }; faceShare?: number; regions?: SourceRegion[]; regionStatus?: RegionStatus }>
 ): Box[] {
   const out: Box[] = [];
   for (const el of layout.photos ?? []) {
     const p = photos.find((q) => q.photoIndex === el.photoIndex);
-    if (!p?.focus || !p.faceShare || el.treatment === 'cutout' || el.role === 'texture') continue;
+    if (!p || el.treatment === 'cutout') continue;
+    if (p.regionStatus === 'invalid') throw new Error('PHOTO_REGION_INVALID: logo placement cannot trust invalid subject regions');
+    if (p.regionStatus === 'measured') {
+      out.push(...protectedRegionsOnCanvas(el, p));
+      continue;
+    }
+    if (!p.focus || !p.faceShare || el.role === 'texture') continue;
     const crop = coverCrop(el, p, el.focus ?? p.focus);
     const scale = el.height / crop.sh;
     const cx = el.x + (p.focus.x * p.width - crop.sx) * scale;
@@ -236,12 +277,11 @@ export async function settleLogoGround(layout: StudioLayoutV2, opts: SettleLogoO
   };
   const record = (l: StudioLayoutV2, treatment: LogoGroundRecord['treatment'], r: LogoGroundReading, moved: boolean): StudioLayoutV2 => ({
     ...l,
-    artDirection: { ...l.artDirection!, logoGround: { treatment, contrast: Math.min(21, Math.max(1, r.contrast)), busyness: Math.min(1, r.busyness), ...(moved ? { moved: true } : {}) } },
+    artDirection: { ...l.artDirection!, logoGround: { treatment, contrast: Math.min(21, Math.max(1, r.contrast)), busyness: Math.min(1, r.busyness), ...(r.visibility ? { visibility: r.visibility } : {}), ...(moved ? { moved: true } : {}) } },
   });
-  // The hero_card wordmark tab is the recipe's own surface (rulebook item 4): the logo already reads on it.
-  const onSurface = bare.shapes.some((s) => s.layer === 'overlay' && s.role === 'panel' && s.fill !== 'none' && holds(s, bare.logo, 1));
-  const here = await measureLogoGround(bare, opts.render, clearSpacePx);
-  if (onSurface) return record(bare, 'none', here, false);
+  const template = await renderLogoTemplate(bare, opts.render);
+  const measure = (l: StudioLayoutV2) => measureLogoGround(l, opts.render, clearSpacePx, template);
+  const here = await measure(bare);
   const native = await nativeLogoContrast(bare, opts.render);
   const quiet = (r: LogoGroundReading) => logoGroundQuiet(r, native);
   if (quiet(here)) return record(bare, 'none', here, false);
@@ -263,15 +303,19 @@ export async function settleLogoGround(layout: StudioLayoutV2, opts: SettleLogoO
           stops: [{ at: 0, opacity }, { at: 0.55, opacity: Math.round(0.85 * opacity * 1000) / 1000 }, { at: 1, opacity: 0 }],
         };
         const tried: StudioLayoutV2 = { ...bare, overlays: [...(bare.overlays ?? []), scrim] };
-        const reading = await measureLogoGround(tried, opts.render, clearSpacePx);
+        const reading = await measure(tried);
         if (quiet(reading)) return record(tried, 'scrim', reading, false);
       }
     }
   }
-  // Only then a thin cream tab: the logo and a few pixels, rounded, well inside its clear space.
-  const pad = Math.max(4, Math.round(0.07 * bare.logo.height));
+  // Only then a thin approved-tone tab. Every fallback must actually pass, including existing panels.
+  const pad = Math.min(Math.max(4, Math.round(0.07 * bare.logo.height)), LOGO_TAB_MAX_PAD_SHARE * bare.logo.height);
   const tabBox = intBox({ x: bare.logo.x - pad, y: bare.logo.y - pad, width: bare.logo.width + 2 * pad, height: bare.logo.height + 2 * pad });
-  const tab: ShapeElement = { kind: 'roundRect', role: 'panel', layer: 'overlay', surface: 'tab', color: cream, ...tabBox, radius: Math.round(0.2 * tabBox.height) };
-  const tabbed: StudioLayoutV2 = { ...bare, shapes: [...bare.shapes, tab] };
-  return record(tabbed, 'tab', await measureLogoGround(tabbed, opts.render, clearSpacePx), false);
+  for (const color of [cream, navy]) {
+    const tab: ShapeElement = { kind: 'roundRect', role: 'panel', layer: 'overlay', surface: 'tab', color, ...tabBox, radius: Math.round(0.2 * tabBox.height) };
+    const tabbed: StudioLayoutV2 = { ...bare, shapes: [...bare.shapes, tab] };
+    const reading = await measure(tabbed);
+    if (logoBackingExcess(tabbed, clearSpacePx) <= 1 && quiet(reading)) return record(tabbed, 'tab', reading, false);
+  }
+  throw new Error('LOGO_UNREADABLE: no permitted placement, scrim or thin approved-tone tab preserves the source artwork');
 }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { sql, type BlobStore, type Database, type Kysely } from '@hawa/db';
 import { readPreferringStore } from '../blob-store-context.js';
-import { cutoutPlacement, coverCrop, PHOTO_ZOOM_MAX, type PhotoCutoutAsset, type PhotoElement, type StudioLayoutV2 } from '@hawa/creative';
+import { cutoutPlacement, coverCrop, PHOTO_ZOOM_MAX, sourceRegionsFromPixels, type SourceRegion, type RegionStatus, type PhotoCutoutAsset, type PhotoElement, type StudioLayoutV2 } from '@hawa/creative';
 import type { ContentPhoto } from './types.js';
 import { SOFT_PHOTO_SCALE } from './studio-status-note.js';
 import { log } from '../../logging.js';
@@ -237,8 +237,9 @@ export class PhotoCutouts {
         const body = (await res.json().catch(() => ({}))) as {
           ok?: boolean;
           orientation?: unknown;
+          width?: unknown;
           height?: unknown;
-          faces?: Array<{ height?: unknown }>;
+          faces?: Array<{ x?: unknown; y?: unknown; width?: unknown; height?: unknown }>;
           focus?: { x?: unknown; y?: unknown };
           runtime?: unknown;
         };
@@ -254,7 +255,9 @@ export class PhotoCutouts {
         // The tallest face as a share of the photo's height: what matching heads across photos needs.
         const tallest = Math.max(0, ...(Array.isArray(body.faces) ? body.faces : []).map((f) => Number(f?.height) || 0));
         const faceShare = Number(body.height) > 0 && tallest > 0 ? Math.min(1, tallest / Number(body.height)) : undefined;
+        const regions = sourceRegionsFromPixels(body.faces, body.width, body.height);
         out.push({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)), ...(faceShare ? { faceShare: Math.round(faceShare * 10000) / 10000 } : {}),
+          ...regions,
           derivation: { sourceSha256: createHash('sha256').update(photo.bytes).digest('hex'), ...runtimeFacts(body.runtime) } });
       } catch {
         out.push(undefined);
@@ -455,6 +458,8 @@ export interface PhotoFaces {
   x: number;
   y: number;
   faceShare?: number;
+  regions?: SourceRegion[];
+  regionStatus?: RegionStatus;
   /** The photo and the detector run that found this point (ADR-123); pinned with the visual inputs. */
   derivation?: { sourceSha256: string; runtimeSha256?: string; faceModelSha256?: string };
 }

@@ -1,0 +1,30 @@
+{
+  "candidateCommit": "a03387f10d5ab67a5b25b9147c8e39bdb71d6054",
+  "status": "ALL_EIGHT_ENGINEERING_STAGES_VERIFIED_PRODUCT_ADMISSION_OPEN",
+  "technicalStagesPassed": 8,
+  "suite": {
+    "passed": 6802,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 678,
+    "filesSkipped": 6
+  },
+  "strictTestRoots": 685,
+  "newestDump": {
+    "status": "passed",
+    "dump": "predeploy_20261001T090959Z.dump",
+    "productionChanged": false
+  },
+  "negativeFlagRefusal": "PASS",
+  "sourceChangedDuringGate": false,
+  "admissionQualified": false,
+  "artifacts": {
+    "output/qualification/2026-10-01/a03387f1/NEGATIVE_FLAG_REFUSAL.log": "a6c2679a87bb1d406037007ab5111e793829ea56166e3a574e911ad8f4bbff02",
+    "output/qualification/2026-10-01/a03387f1/EXACT_GATE.log": "2b7f8b425e1ff093bf2ffd26c321018440f92e3e8ab09e52277affba5028abf1",
+    "output/qualification/2026-10-01/a03387f1/TEST_DB_PROVISION.log": "336ff22f53b4a3fea01bf514699007aa793865e351b45da27310dadad063c59d",
+    "output/qualification/2026-10-01/a03387f1/PREDEPLOY_DUMP_CHECK.json": "ad3883d860f2e345f9e03a816a0d27c6ca8ca52bf94c3ab14ff33afbe58dd42e",
+    "output/qualification/2026-10-01/a03387f1/PREDEPLOY_DUMP_CHECK.log": "e00c0f3506a887383daf365163e9ddac558dd077cea283206e27f9e9bee60009",
+    "output/qualification/2026-10-01/a03387f1/RELEASE_GATE_EVIDENCE.json": "ed7643b3a99fa0da583c9551dbbe6a40e872e33a6e3b7345b308e9940a36bc1d",
+    "output/qualification/2026-10-01/a03387f1/FULL_TEST_SUITE_RUN.log": "5b565e765f67badabdf8616cabf67a71d213fbb57faf067081a6566ffaf680fa"
+  }
+}

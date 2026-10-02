@@ -288,3 +288,32 @@ times, coverage, successful/failed/unknown/missing slots, uncertainty bounds and
 successful readiness-probe latency. No samples means unknown measurements. Failed,
 malformed or mismatched-month reads clear earlier evidence; stale replies cannot
 replace a newer selection. Never turn partial coverage into a compliant month.
+
+
+### Stored office search (ADR216)
+
+`GET /v1/search` searches registered client identity even before active DNA exists,
+original request copy, stored Studio copy, historical revision copy, ledger and
+Studio feedback, and revisions. Categories are `all`, `tasks`, `clients`, `assets`,
+`rules`, `copy`, `feedback` and `revisions`. Unknown categories are refused before
+storage access. Current tenant/client membership is enforced in PostgreSQL before
+bounded matching; aliases resolve only through authorized registered clients.
+Source client/task/revision disagreement is excluded. History opens its actual
+stored task/revision through the existing review navigation contract; taskless
+client feedback opens that client's DNA screen. Search is read-only and creates
+no approval, preference label or rule activation.
+
+History reads at most 5,000 matching records per category by default; a finite
+positive `HAWA_SEARCH_HISTORY_CEILING` is clamped to 1–20,000. Original-task bounds
+remain separate. `truncated: true` means results are incomplete; neither an empty
+answer nor a storage failure certifies absent history. Stored read failure returns
+503 and cannot reuse a warmed process result. Normalized Sorani matching preserves
+original returned text. Only named copy/text/instruction fields are indexed;
+arbitrary source manifests and provider/transport metadata are excluded.
+
+Asset search matches authorized active names, media types, kinds, content hashes
+and asset IDs before its database bound (ADR217). Default 5,000 matches; a finite
+positive `HAWA_SEARCH_ASSET_CEILING` is clamped to 1–20,000. One extra matching row
+sets `truncated`, and creation time plus ID defines deterministic ordering. Asset
+metadata/storage locations are not searchable text. Unknown byte size is shown
+as unavailable. The separate `/v1/assets` inventory retains its newest-500 limit.

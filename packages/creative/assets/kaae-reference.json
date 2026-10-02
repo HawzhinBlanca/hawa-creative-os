@@ -69,43 +69,187 @@
     "rtl": "Sorani Kurdish blocks are right-to-left: right-align them, keep them separate from Latin blocks, and give them about 20% more width and height than Latin text of the same size. The page header keeps the logo at the top left (p.10).",
     "pageGrammar": {
       "source": "KAAE_Guidelines4.pdf, Excellence Edition (2025): pages 1-15 (header, title, bar, lead, cards, foot rule), page 0 (cover), page 13 (elements).",
-      "page": { "background": "#FFFFFF", "marginShare": 0.07 },
+      "page": {
+        "background": "#FFFFFF",
+        "marginShare": 0.07
+      },
       "header": {
         "logoWidthShare": 0.12,
-        "rule": { "color": "#0A1628", "opacity": 0.08, "thicknessShare": 0.003 },
-        "accent": { "widthShare": 0.11, "thicknessShare": 0.004, "stops": [{ "at": 0, "color": "#F7B500" }, { "at": 0.5, "color": "#FFD700" }, { "at": 1, "color": "#F7B500" }] },
-        "label": { "fontFamily": "Inter", "bold": true, "color": "#4770A3", "letterSpacing": 0.06, "sizeShare": 0.02 }
+        "rule": {
+          "color": "#0A1628",
+          "opacity": 0.08,
+          "thicknessShare": 0.003
+        },
+        "accent": {
+          "widthShare": 0.11,
+          "thicknessShare": 0.004,
+          "stops": [
+            {
+              "at": 0,
+              "color": "#F7B500"
+            },
+            {
+              "at": 0.5,
+              "color": "#FFD700"
+            },
+            {
+              "at": 1,
+              "color": "#F7B500"
+            }
+          ]
+        },
+        "label": {
+          "fontFamily": "Inter",
+          "bold": true,
+          "color": "#4770A3",
+          "letterSpacing": 0.06,
+          "sizeShare": 0.02
+        }
       },
-      "title": { "fontFamily": "Crimson Pro", "bold": true, "color": "#4770A3", "colorOnDark": "#FFFFFF", "sizeShare": 0.08, "lineHeight": 1.2, "letterSpacing": -0.01 },
-      "titleBar": { "widthShare": 0.085, "heightShare": 0.0065, "gapShare": 0.018, "stops": [{ "at": 0, "color": "#F7B500" }, { "at": 0.5, "color": "#FFD700" }, { "at": 1, "color": "#F7B500" }] },
-      "lead": { "fontFamily": "Inter", "italic": true, "color": "#4770A3", "colorOnDark": "#F7B500", "sizeShare": 0.036, "lineHeight": 1.45 },
-      "body": { "fontFamily": "Inter", "color": "#0A1628", "colorOnDark": "#FFFFFF", "sizeShare": 0.03, "lineHeight": 1.5 },
+      "title": {
+        "fontFamily": "Crimson Pro",
+        "bold": true,
+        "color": "#4770A3",
+        "colorOnDark": "#FFFFFF",
+        "sizeShare": 0.08,
+        "lineHeight": 1.2,
+        "letterSpacing": -0.01
+      },
+      "titleBar": {
+        "widthShare": 0.085,
+        "heightShare": 0.0065,
+        "gapShare": 0.018,
+        "stops": [
+          {
+            "at": 0,
+            "color": "#F7B500"
+          },
+          {
+            "at": 0.5,
+            "color": "#FFD700"
+          },
+          {
+            "at": 1,
+            "color": "#F7B500"
+          }
+        ]
+      },
+      "lead": {
+        "fontFamily": "Inter",
+        "italic": true,
+        "color": "#4770A3",
+        "colorOnDark": "#F7B500",
+        "sizeShare": 0.036,
+        "lineHeight": 1.45
+      },
+      "body": {
+        "fontFamily": "Inter",
+        "color": "#0A1628",
+        "colorOnDark": "#FFFFFF",
+        "sizeShare": 0.03,
+        "lineHeight": 1.5
+      },
       "cards": {
         "radiusShare": 0.012,
-        "shadow": { "color": "#0A1628", "opacity": 0.1, "blurShare": 0.02, "offsetShare": 0.005 },
-        "plain": { "fill": "#FFFFFF", "title": "#4770A3", "text": "#0A1628" },
-        "brand": { "fill": "#4770A3", "title": "#FFD700", "text": "#FFFFFF" },
-        "tint": { "fill": "#FDF8F3", "edge": "#F7B500", "edgeShare": 0.005, "title": "#0A1628", "text": "#0A1628" },
-        "dark": { "fill": "#1E3A5F", "title": "#F7B500", "text": "#FFFFFF" }
+        "shadow": {
+          "color": "#0A1628",
+          "opacity": 0.1,
+          "blurShare": 0.02,
+          "offsetShare": 0.005
+        },
+        "plain": {
+          "fill": "#FFFFFF",
+          "title": "#4770A3",
+          "text": "#0A1628"
+        },
+        "brand": {
+          "fill": "#4770A3",
+          "title": "#FFD700",
+          "text": "#FFFFFF"
+        },
+        "tint": {
+          "fill": "#FDF8F3",
+          "edge": "#F7B500",
+          "edgeShare": 0.005,
+          "title": "#0A1628",
+          "text": "#0A1628"
+        },
+        "dark": {
+          "fill": "#1E3A5F",
+          "title": "#F7B500",
+          "text": "#FFFFFF"
+        }
       },
-      "stat": { "fontFamily": "Crimson Pro", "bold": true, "colorOnDark": "#F7B500", "colorOnLight": "#4770A3", "labelColor": "#4770A3", "labelColorOnDark": "#FFFFFF" },
-      "footRule": { "heightShare": 0.005, "stops": [{ "at": 0, "color": "#4770A3" }, { "at": 0.45, "color": "#1E3A5F" }, { "at": 0.8, "color": "#F7B500" }, { "at": 1, "color": "#FFD700" }] },
+      "stat": {
+        "fontFamily": "Crimson Pro",
+        "bold": true,
+        "colorOnDark": "#F7B500",
+        "colorOnLight": "#4770A3",
+        "labelColor": "#4770A3",
+        "labelColorOnDark": "#FFFFFF"
+      },
+      "footRule": {
+        "heightShare": 0.005,
+        "stops": [
+          {
+            "at": 0,
+            "color": "#4770A3"
+          },
+          {
+            "at": 0.45,
+            "color": "#1E3A5F"
+          },
+          {
+            "at": 0.8,
+            "color": "#F7B500"
+          },
+          {
+            "at": 1,
+            "color": "#FFD700"
+          }
+        ]
+      },
       "cover": {
         "angle": 45,
-        "stops": [{ "at": 0, "color": "#4770A3" }, { "at": 1, "color": "#0A1628" }],
+        "stops": [
+          {
+            "at": 0,
+            "color": "#4770A3"
+          },
+          {
+            "at": 1,
+            "color": "#0A1628"
+          }
+        ],
         "logoWidthShare": 0.3,
         "title": "#FFFFFF",
-        "subtitle": { "fontFamily": "Inter", "color": "#F7B500", "letterSpacing": 0.1, "sizeShare": 0.03 },
+        "subtitle": {
+          "fontFamily": "Inter",
+          "color": "#F7B500",
+          "letterSpacing": 0.1,
+          "sizeShare": 0.03
+        },
         "body": "#FFFFFF"
       },
       "elements": {
-        "sunburst": { "color": "#0A1628", "opacityOnLight": 0.06, "colorOnDark": "#4A90E2", "opacityOnDark": 0.14, "rays": 5 },
-        "trianglePattern": { "color": "#2C5282", "opacityOnLight": 0.1, "colorOnDark": "#4A90E2", "opacityOnDark": 0.16 },
+        "sunburst": {
+          "color": "#0A1628",
+          "opacityOnLight": 0.06,
+          "colorOnDark": "#4A90E2",
+          "opacityOnDark": 0.14,
+          "rays": 5
+        },
+        "trianglePattern": {
+          "color": "#2C5282",
+          "opacityOnLight": 0.1,
+          "colorOnDark": "#4A90E2",
+          "opacityOnDark": 0.16
+        },
         "rule": "Optional and subtle (p.13): a quarter-disc sunburst in a corner or a triangle mosaic band fading upward, never over copy or the logo's clear space."
       }
     },
     "artDirection": [
-      "With photos: pick ONE hero photo that literally shows the subject. A second photo only as a texture blended into the text zone, never a grid cell. No multi-photo grids in social posts.",
+      "With photos: choose the composition that best communicates the subject: one hero or several photos with distinct roles. Use a diptych, sequence, mosaic or hero with supporting views when the content benefits. Only use every photo or a fixed count when the requester explicitly asks; never force a collage by default.",
       "With photos: on a white page the hero sits in a rounded card with a soft shadow under the header, title, gold bar and lead; full-bleed, it fills 60-100% of the canvas off two edges, with a quiet region for any title over it.",
       "Text always sits on something: the white page, a rounded white, KAAE Blue or cream card, or a fade to white or to navy over 35-50% of the height. Never bare text on a busy photo.",
       "Elements bridge edges: a call-to-action tab straddling a card, a portrait breaking over a panel.",
@@ -114,7 +258,7 @@
       "Colour, as the 2025 guideline sets it: light first. A white page; KAAE Blue titles and leads; Midnight body text; KAAE Gold only for the title bar, the header accent, a card's left edge and numbers on navy. Keep the photo's natural grade.",
       "Type: a bold serif title in KAAE Blue (white on navy), a short gold bar under it, an italic KAAE Blue lead, Inter body. Logo top-left over the header rule; a URL in the footer. With no photo, type, cards and rules are the design.",
       "Bilingual: the same geometry in both languages. Sorani is right-aligned in the same boxes, the gold bar under the title's right end; never mirror the photo.",
-      "With several photos: rank them by subject fit, sharpness and quiet space. Use the best as the hero, optionally one more as a faded texture, and drop the rest.",
+      "With several photos: rank subject fit, sharpness and useful composition space. Select a strong hero when it tells the whole story, or meaningful supporting views when they add information. Preserve explicit requester coverage and count; otherwise omit redundant or weak photos with visible reasons.",
       "A navy-gradient ground (KAAE Blue to Midnight) only for a cover or announcement, an evening invitation, a keynote or stage screen, a dark photo hero, or when the requester asks for dark or navy. Otherwise the white page."
     ],
     "artDirectionSource": "Office art-direction rulebook, from ~20 of KAAE's published photo designs (ADR-170, 2026-09-30), re-pointed at the 2025 guideline (ADR-238).",

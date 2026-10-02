@@ -103,6 +103,27 @@ afterAll(async () => {
 });
 
 describe('ADR-239: a DNA save keeps the client\'s model consent only when it is safe to', () => {
+  it('refuses a stale Desk save and snapshot without changing the active DNA or its consent', async () => {
+    const current = await deskSave(office);
+    const before = await versions();
+    const beforeAudits = await kept();
+    for (const path of ['/dna', '/snapshots']) {
+      const body = path === '/dna' ? { ...current, name: 'Stale replacement', expectedVersion: 1 }
+        : { commitMessage: 'Stale snapshot', expectedVersion: 1 };
+      const result = await app().request(at(path), { method: 'POST', headers: office, body: JSON.stringify(body) });
+      expect(result.status, await result.clone().text()).toBe(409);
+    }
+    expect(await versions()).toEqual(before);
+    expect(await kept()).toEqual(beforeAudits);
+    expect(await allowed()).toBe(true);
+  });
+  it('a service-issued prior approval is not carried forward as human model consent', async () => {
+    await seed(CONSENT, SYSTEM_AUTOMATION_USER_ID);
+    const saved = await deskSave(office);
+    expect(saved.modelReading).toEqual({ openai: false, reason: expect.stringMatching(/no administrator-approved consent/) });
+    expect((await versions())[1].approved_by).toBeNull();
+    expect(await kept()).toHaveLength(0);
+  });
   it('the office administrator\'s Desk save with the privacy block unchanged keeps model reading on, approved by them and audited', async () => {
     expect(await allowed()).toBe(true);
     const saved = await deskSave(office);

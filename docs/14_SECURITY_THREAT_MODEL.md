@@ -36,6 +36,14 @@ Controls:
 - adversarial leakage tests;
 - no global model context containing unrelated clients.
 
+ADR223 also requires the live event stream to authorize every resource against
+current task/client rows under RLS. Authenticated principals do not carry a single
+client ID; a tenant match alone is insufficient. A task-only event derives scope
+from its stored task, and a declared client must agree. System event names grant
+no bypass. Unknown/unavailable scope is not disclosed; a failed or overloaded
+subscription closes. Current client/tenant grants are read for every event, while
+the existing bounded session refresh policy remains separately applicable.
+
 ### Prompt injection
 
 Messages/documents/assets are data. They cannot change:
@@ -187,6 +195,13 @@ Per client/project define:
 - prompt-injection suite cannot alter privileged state;
 - ComfyUI/WAHA network isolation verified;
 - source hashes and approval invalidation verified;
+- Uploaded asset byte inspection is bounded by file size, pixel/table expansion,
+  one active parse per Core and disposable decoder processes with time/output
+  limits. Current client write authority precedes retention and is rechecked at
+  receipt commit. Original SVG sources download as sandboxed octet-stream
+  attachments; admitted bytes also retain attachment/sandbox headers. Global
+  middleware must preserve route-specific CSP. Missing/corrupt sources fail closed
+  even on conditional reads (ADR218).
 - least-privilege Drive/Sheets access proven.
 
 ### Release identity (ADR-038, 2026-09-25)
@@ -222,3 +237,15 @@ Desk retains an exact action scoped to the office and user before POST and retri
 it after an uncertain answer or remount. Replay rechecks authority and returns the
 original receipt before checking whether newer policy revisions exist. See
 runbooks/SPENDING_POLICY.md. Other paid paths and live admission remain open.
+
+
+### Current persisted account authority (ADR224)
+
+Tenant and client resource policies require an enabled stored user and active
+tenant membership. A retained client grant, cached session or application role
+string cannot restore withdrawn office admission. Direct helper calls and
+once-per-statement client-ID policy sets enforce the same rule. Narrow client
+roles and broad tenant roles retain their existing scope. Disabling an account
+or withdrawing membership affects subsequent resource statements; this does not
+claim instantaneous session sign-out across Core instances or revoke a download
+whose bytes were already authorized and sent.

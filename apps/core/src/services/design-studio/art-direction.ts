@@ -28,7 +28,8 @@ export async function photoFactsFor(
 ): Promise<Array<PhotoFacts & SolverPhoto>> {
   const out: Array<PhotoFacts & SolverPhoto> = [];
   for (const [photoIndex, photo] of (ctx.photos ?? []).entries()) {
-    const size = (photo.width && photo.height ? { width: photo.width, height: photo.height } : imagePixelSize(photo.bytes)) ?? { width: 1, height: 1 };
+    const size = imagePixelSize(photo.bytes) ??
+      (photo.width && photo.height ? { width: photo.width, height: photo.height } : { width: 1, height: 1 });
     // The detector answers every photo it reads; with no face it answers the centre and no face
     // height. That centre is not a face: counted as one, it told the art director "faces found" for a
     // photo of a woman in profile and cropped on the middle instead of the photo's measured detail
@@ -47,11 +48,13 @@ export async function photoFactsFor(
       photoIndex,
       width: size.width,
       height: size.height,
+      ...(detected?.regionStatus ? { regionStatus: detected.regionStatus, ...(detected.regions ? { regions: detected.regions } : {}) } : {}),
       ...(photo.review?.subjectFit ? { subjectFit: photo.review.subjectFit } : {}),
       ...(photo.review?.shot ? { shot: photo.review.shot } : {}),
       ...(photo.review?.quietArea ? { quietArea: photo.review.quietArea } : {}),
       ...(face ? { focus: { x: face.x, y: face.y }, faces: true, ...(face.faceShare ? { faceShare: face.faceShare } : {}) } : {}),
-      ...(cut ? { cutout: true, cutoutSize: { width: cut.width, height: cut.height } } : {}),
+      ...(cut ? { cutout: true, cutoutSize: { width: cut.width, height: cut.height },
+        cutoutPixelSize: imagePixelSize(cut.png) } : {}),
       ...(analysis
         ? {
             sharpness: analysis.sharpness,

@@ -1,3 +1,6 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
 import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { describe, expect, it, afterAll, vi } from 'vitest';
 import { FakePublisher } from '@hawa/testkit';
@@ -318,3 +321,5 @@ describe('durable publication expectation', () => {
     expect((await sql`SELECT * FROM hawa.publication_sheet_expectations WHERE publication_id=${f.publication_id}::uuid`.execute(owner)).rows).toHaveLength(1);
   });
 });
+
+prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:testDb}), 'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});

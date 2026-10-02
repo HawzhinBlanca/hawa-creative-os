@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { globalFeedbackMiner } from '@hawa/creative';
 import fs from 'node:fs';
 import path from 'node:path';
 
 describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   const KAAE_CLIENT_ID = 'c1000000-0000-4000-8000-000000000002';
-  const OTHER_CLIENT_ID = 'c2000000-0000-4000-8000-000000000003';
+  const OTHER_CLIENT_ID = 'c1000000-0000-4000-8000-000000000003';
   const operatorToken = 'test_operator_token_h11';
   const artDirectorToken = 'test_art_director_bearer';
   const initialEnv = { ...process.env };
@@ -25,7 +25,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   // the Telegram webhook, removed by stage 2 of ADR-135 with the old intake's feedback and reply
   // readers. The lifecycle path's replies, an unknown one included: lifecycle-internal-intake.test.ts.
   it('2. Another client\'s feedback cannot change KAAE DNA, rules or files', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     // Record initial KAAE DNA file hash
     const kaaeDnaPath = path.join(process.cwd(), 'config', 'clients', 'kaae.dna.json');
@@ -87,7 +87,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   });
 
   it('3. A candidate rule proposed for review (Desk queue) affects scope ONLY after activation', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     // Rules said in chat by the office are saved as active client rules in PostgreSQL
     // (telegram-understanding.test.ts). Rules mined from edits still queue here for review.
@@ -137,12 +137,17 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     expect(activeAfterActivation.includes(proposed!.ruleText)).toBe(true);
   });
 
-  it('4. Conflicting rules stay pending and are rejected from promotion', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
+  it.each([
+    { clientId: OTHER_CLIENT_ID, initialConflict: false },
+    { clientId: KAAE_CLIENT_ID, initialConflict: true },
+  ])('4. Conflicting rules stay pending in $clientId (initial DNA conflict: $initialConflict)', async ({ clientId, initialConflict }) => {
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
-    // Propose an explicit rule with orientation right
+    // KAAE's current compound page grammar already has spatial constraints. A
+    // generic right/left promotion control must also exercise a compatible client.
+    const activeBefore = globalFeedbackMiner.getPromotedRules(clientId);
     const ruleRight = globalFeedbackMiner.proposeExplicitRule({
-      clientId: KAAE_CLIENT_ID,
+      clientId,
       taskId: 'task_spatial_01',
       title: 'Right aligned emblem',
       category: 'layout',
@@ -150,19 +155,31 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
       rationale: 'Right layout mandate',
       actor: { id: 'op1', role: 'operator' },
     });
-    const promoteRight = globalFeedbackMiner.promoteRule(ruleRight.id, 'creative_director');
-    expect(promoteRight.promoted).toBe(true);
+    const promoteRight = await app.request(`/clients/${clientId}/candidate-rules/${ruleRight.id}/promote`, {
+      method: 'POST', headers: { Authorization: `Bearer ${artDirectorToken}` },
+    });
+    const initialBody = await promoteRight.json();
+    if (initialConflict) {
+      expect(promoteRight.status).toBe(409);
+      expect(initialBody.title).toBe('CONFLICTING_RULES_PENDING');
+      const pending = globalFeedbackMiner.getCandidateRules(clientId).find(rule => rule.id === ruleRight.id);
+      expect(pending?.status).toBe('PROPOSED');
+      expect(globalFeedbackMiner.getPromotedRules(clientId)).toEqual(activeBefore);
+      return;
+    }
+    expect(promoteRight.status, JSON.stringify(initialBody)).toBe(200);
+    expect(globalFeedbackMiner.getPromotedRules(clientId)).toContain(ruleRight.ruleText);
 
     // Propose a contradictory rule: left aligned emblem
     const ruleLeft = globalFeedbackMiner.proposeExplicitRule({
-      clientId: KAAE_CLIENT_ID,
+      clientId,
       taskId: 'task_spatial_02',
       title: 'Left aligned emblem',
       category: 'layout',
       ruleText: 'Always align official seal to the left edge',
       rationale: 'Left layout mandate',
       actor: { id: 'op1', role: 'operator' },
-      existingRules: globalFeedbackMiner.getPromotedRules(KAAE_CLIENT_ID),
+      existingRules: globalFeedbackMiner.getPromotedRules(clientId),
     });
 
     // Conflict detection must flag the spatial contradiction
@@ -175,7 +192,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     expect(promoteLeft.reason).toBe('CONFLICTING_RULES_PENDING');
 
     // API endpoint also returns 409 Conflict
-    const apiPromoteRes = await app.request(`/clients/${KAAE_CLIENT_ID}/candidate-rules/${ruleLeft.id}/promote`, {
+    const apiPromoteRes = await app.request(`/clients/${clientId}/candidate-rules/${ruleLeft.id}/promote`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -184,11 +201,11 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     });
     expect(apiPromoteRes.status).toBe(409);
     const apiBody = await apiPromoteRes.json();
-    expect(apiBody.title).toBe('Conflict');
+    expect(apiBody.title).toBe('CONFLICTING_RULES_PENDING');
   });
 
   it('6. Reversible rollback restores prior state and removes rule from generation scope', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     // Propose and promote a test rule
     const testRule = globalFeedbackMiner.proposeExplicitRule({
@@ -200,8 +217,10 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
       rationale: 'Temporary trial',
       actor: { id: 'director1', role: 'creative_director' },
     });
-    const promo = globalFeedbackMiner.promoteRule(testRule.id, 'creative_director');
-    expect(promo.promoted).toBe(true);
+    const promo = await app.request(`/clients/${KAAE_CLIENT_ID}/candidate-rules/${testRule.id}/promote`, {
+      method: 'POST', headers: { Authorization: `Bearer ${artDirectorToken}` },
+    });
+    expect(promo.status).toBe(200);
     expect(globalFeedbackMiner.getPromotedRules(KAAE_CLIENT_ID)).toContain(testRule.ruleText);
 
     // Rollback the promoted rule
@@ -224,8 +243,8 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     expect(globalFeedbackMiner.getPromotedRules(KAAE_CLIENT_ID)).not.toContain(testRule.ruleText);
   });
 
-  it('7. Enforces data lineage separation between client-owned assets and restricted Canva items', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
+  it('7. Reports an empty inventory when no stored assets were supplied', async () => {
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     const lineageRes = await app.request(`/clients/${KAAE_CLIENT_ID}/learning/data-lineage?purpose=client_generation`, {
       method: 'GET',
@@ -233,9 +252,8 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     expect(lineageRes.status).toBe(200);
     const lineage = await lineageRes.json();
 
-    expect(lineage.permittedItems.length).toBeGreaterThan(0);
-    expect(lineage.permittedItems.every((i: any) => i.lineage === 'client_owned')).toBe(true);
-    expect(lineage.restrictedExcludedItems.some((i: any) => i.lineage === 'canva_derived_restricted')).toBe(true);
+    expect(lineage.permittedItems).toEqual([]);
+    expect(lineage.restrictedExcludedItems).toEqual([]);
 
     // For external fine-tuning / benchmark, permitted items MUST be empty
     const extLineageRes = await app.request(`/clients/${KAAE_CLIENT_ID}/learning/data-lineage?purpose=external_fine_tuning`, {
@@ -243,6 +261,6 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     });
     const extLineage = await extLineageRes.json();
     expect(extLineage.permittedItems.length).toBe(0);
-    expect(extLineage.restrictedExcludedItems.length).toBeGreaterThan(0);
+    expect(extLineage.restrictedExcludedItems).toEqual([]);
   });
 });

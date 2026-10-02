@@ -1,0 +1,107 @@
+{
+  "date": "2026-10-01T12:38:18.449244+00:00",
+  "adr": "ADR214",
+  "requirements": [
+    "FR-028",
+    "FR-031",
+    "FR-038",
+    "FR-040",
+    "FR-041",
+    "NFR-012"
+  ],
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
+  "sourceSha256": {
+    "packages/creative/src/studio/art-direction/generate.ts": "8566e5bfec3fd2c9d29db394331c8e7759d6195f189f2225ad7bf355f2d5c8d9",
+    "packages/creative/test/art-direction-alternate-hero.test.ts": "a60936be78f1a098266ebf2efdce11b62b0a539120d8fdab5e90aa07e18eb50e",
+    "apps/core/test/art-direction-alternate-hero.test.ts": "cc10edcc4f328adaa9f2627834ca87cb66b82a9177cda896eab931d3c934c9fc"
+  },
+  "diagnosis": {
+    "originalDefaultHero": 0,
+    "originalHeroUpscale": 4.84,
+    "directFeasibleAlternateHero": 1,
+    "directFeasibleUpscale": 0.4,
+    "originalSolveAttempts": 11,
+    "repairedSolveAttempts": 2,
+    "scope": "actual synthetic solver and actual Core preparation; no claimed production incident or professional taste result"
+  },
+  "failureHistory": {
+    "originalRed": {
+      "failed": 11,
+      "passed": 2
+    },
+    "initialGreen": "no tests ran: misplaced ranked declaration duplicated the prompt declaration; corrected before continuing",
+    "correctedGreen": {
+      "failed": 1,
+      "passed": 12,
+      "reason": "incorrect transfer expectation split the unsplit factual title; corrected to actual exact title"
+    },
+    "expandedFirstGreen": {
+      "failed": 2,
+      "passed": 14,
+      "reason": "Core read stale original compiled package; build refreshed. Cutout fixture wrongly expected the existing hero-only soft rule to cover cutouts; changed to a genuine missing-cutout-size refusal. No cutout-resolution policy change or qualification claimed."
+    },
+    "expandedCorrectedRed": {
+      "failed": 12,
+      "passed": 3,
+      "scope": "actual original generator from published HEAD; fixed source restored byte-for-byte in finally"
+    },
+    "initialCommit": "hook refused default Python without PyYAML; use configured Homebrew Python. CSV writer also introduced CRLF across traceability, corrected to existing LF before commit; final diff check passes."
+  },
+  "acceptance": {
+    "focused": {
+      "files": 2,
+      "passed": 16,
+      "failed": 0
+    },
+    "connected": {
+      "files": 18,
+      "passed": 275,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictRoots": 693,
+    "build": "PASS",
+    "lint": "PASS",
+    "diffCheck": "PASS",
+    "actualCore": "three distinct native source compositions use sharp lower-ranked hero1; omission0 and original upscale warnings retained",
+    "roles": "selected supporting narrative/title-accent/slots/parameters/typicality preserved; optional texture collision cleared without adding a scene",
+    "hardRules": "actual invalid and impossible protected crops rejected, explicit all/count coverage completed, invalid requester policy aborts",
+    "bounds": "original then default and up to ten distinct alternate sources; ordinary unchanged other-recipe fallbacks; no extra model/repair round",
+    "fastPath": "actual feasible original invokes solver once",
+    "softFallback": "when every supplied hero is soft, original warned result retained",
+    "cutout": "alternate is limited to existing cutout evidence and actual solver confirms required size; unsupported sharp regular source not tried as cutout",
+    "replay": "original immutable; deterministic JSON replay",
+    "editableTransfer": "local raster contrast passes unchanged floors; exact live title/body, official supplied logo and selected original photo bytes retained; omitted photo absent",
+    "calls": "one synthetic call with original billing/response/cache receipt"
+  },
+  "resourceTradeoff": "observed two-source repair uses two solves instead of eleven; exhausted search may add bounded local solves (at most eleven same-recipe including original for oversized direct inputs, plus one default per other eligible recipe); no pipeline latency or human quality claim",
+  "productionChanged": false,
+  "externalProviders": "synthetic only; no paid call",
+  "limits": [
+    "production-dump transfer explicitly pending after automatic approval review rejection",
+    "real Canva/native/human/taste/product admission unproved",
+    "no change to existing cutout source-resolution policy"
+  ],
+  "artifacts": {
+    "output/qualification/2026-10-01/alternate-hero-search/BUILD.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/alternate-hero-search/CONNECTED.log": "f29c4e4186f6b2b9e834802a2c553fe7e80f0e2893682a75129396e30f36f1a1",
+    "output/qualification/2026-10-01/alternate-hero-search/DIAGNOSTIC.log": "1ea656c134c928beaaae45a345added7ec74f404829f84c43f31d2cf1a5cd306",
+    "output/qualification/2026-10-01/alternate-hero-search/DIAGNOSTIC_FIXED.log": "3b13daa5e522896703f39d0e06233a4e83cc5981e5b08ad6900da3232348609d",
+    "output/qualification/2026-10-01/alternate-hero-search/GREEN_CORRECTED.log": "f245774bb62a67cb6823030a7685d4768de50a7d6ad2f530b3e82cacea830191",
+    "output/qualification/2026-10-01/alternate-hero-search/GREEN_EXPANDED.log": "85ad858cf2bed5af7b115cc667171dbb1d641a724c8f06710f535c80234e72f0",
+    "output/qualification/2026-10-01/alternate-hero-search/GREEN_FINAL.log": "456cad2fa073d723dbbd84b4d20d09560cc67bd82d85e3ee9fb2194726b52d86",
+    "output/qualification/2026-10-01/alternate-hero-search/GREEN_INITIAL.log": "6b4f24928db56cc1c8e66b51d1a9353ddb25e59d563d20c0b41fbf5f79fcf171",
+    "output/qualification/2026-10-01/alternate-hero-search/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/alternate-hero-search/RED.log": "2e57974100a644da560d8018d78677add38746c129f08907a98d4a00f44cff21",
+    "output/qualification/2026-10-01/alternate-hero-search/RED_EXPANDED.log": "a5d3f22396d98e54ba1d6a0e390d1a4bc3ef6e3545b698dd77a6f3ccf0ddac76",
+    "output/qualification/2026-10-01/alternate-hero-search/STRICT_TYPES.log": "59abdabc8069163f5c6c272f26de7afc9b58c7f4736d8f298247e8841c1af969"
+  },
+  "sourceCommit": "1068dc4548e15586aca306dbfd6e9f44957cfca1",
+  "releaseGate": {
+    "candidateCommit": "e3bf5306952f5692c613514ac8acbb37fd5429ac",
+    "proof": "plans/content-aware-design-2026-09-30/W4_ALTERNATE_HERO_SEARCH_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior explicit transfer approval pending",
+    "allEightQualified": false
+  }
+}

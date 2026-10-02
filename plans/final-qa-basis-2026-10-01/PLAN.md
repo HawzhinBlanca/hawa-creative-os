@@ -8,3 +8,8 @@ Requirements: FR-038 (docs/05_CREATIVE_ENGINE.md), FR-041 (docs/11_QA_RTL_MULTIL
 4. Publish qualified source: final evidence/seal prepared. QA rollout and actual image/worker readback: PENDING. Live0605a713 retains all three independently verified service-boundary repairs.
 
 No native Canva, blind taste, real multilingual or whole-product admission is claimed. W3/W5/W6 remain separately open. See LOCAL_PROOF.json for limitations and all original attempts.
+
+
+## Live rollout — 1 October 2026
+
+2c4d61ec is live after all eight mandatory stages/latest-dump checks and6305 full test passes. Green hosts eight Restate services with live outbox/successful Telegram polling; blue drained/stopped. Fresh01:17 UTC nginx/stable proof/independent scoped credentials/restricted actual worker DB/unsafe-release absence/office200 readback passes. Native/Canva/human/full product admission remains open. Earlier not-deployed text records the source qualification stage. See LIVE_DEPLOYMENT_PROOF.json.

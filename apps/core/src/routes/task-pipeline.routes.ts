@@ -4,7 +4,6 @@ import crypto from 'node:crypto';
 import { type StudioOperation } from '@hawa/contracts';
 import { TaskStateMachine, extractProtectedTokens, type DesignBrief } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
-import { globalFeedbackMiner } from '@hawa/creative';
 import { KAAE_CLIENT_ID } from '@hawa/integrations';
 import { manifestFromOperations } from '../services/generated-manifest.js';
 import { inlineTemplateCopyMissing, COPY_REQUIRED_DETAIL } from '../core-helpers.js';
@@ -290,7 +289,6 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
     };
 
     const isKaae = currentClientId === KAAE_CLIENT_ID || currentClientId === 'client-office-1' || currentClientId === 'client-kaae' || String(currentClientId).includes('kaae');
-    const effectiveRules = currentClientId ? globalFeedbackMiner.getPromotedRules(currentClientId) : [];
     const isBrandClient = currentClientId === 'client-fastpay' || currentClientId === 'client-aster' || currentClientId === 'client-drustee';
     const template = isKaae ? 'kaae' : isBrandClient ? 'brand' : null;
     if (template && inlineTemplateCopyMissing(template, task || dbTask || {})) {
@@ -303,6 +301,15 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
     if (isKaae) {
       return problem(c, 410, 'LEGACY_TEMPLATES_RETIRED', "KAAE's designs are made in the design studio; this legacy generator no longer drafts them.");
     }
+
+    let designDna: Awaited<ReturnType<typeof resolveClientDna>>;
+    try {
+      designDna=await resolveClientDna(currentClientId,{tenantId,userId:auth.userId,role:auth.role,requireDatabase:true});
+    } catch {
+      return problem(c,503,'Client DNA Unavailable','The current client rules could not be read; no design was generated.');
+    }
+    if(db && !designDna) return problem(c,409,'Client DNA Required','Active DNA for this authorized client is required before generating.');
+    const effectiveRules=designDna?.guidelines?.layoutRules ?? [];
 
     let ops: StudioOperation[] = [];
     if (isBrandClient) {
@@ -362,7 +369,7 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
         manifest,
         renders: [],
         brief: brief as any,
-        clientDna: ((await resolveClientDna(currentClientId)) as any) || { assets: [] },
+        clientDna: (designDna as unknown as Parameters<typeof qaEngine.run>[1]['clientDna']) || { assets: [] },
         profile: { name: 'generation', version: '1.0', rules: {} },
         repairCycle: 0,
       }

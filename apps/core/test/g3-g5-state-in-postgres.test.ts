@@ -1,3 +1,6 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
 import crypto from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDb, withRlsContext } from '@hawa/db';
@@ -300,3 +303,5 @@ describe('reviewer comments are recorded in review_comments', () => {
     expect((await (await a.request(`/tasks/${second}/comments`)).json()).comments).toEqual([]);
   });
 });
+
+prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:testDb}), 'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});

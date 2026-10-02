@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { extractPaletteFromFile, type ExtractedPalette } from '../services/paletteExtractor.js';
 import { apiClient } from '../api/client.js';
+import {LearningEvidencePanel,learningEvidenceFromCore,type LearningEvidence} from '../components/LearningEvidencePanel.js';
 import { DocumentInspectionPanel } from '../components/DocumentInspectionPanel.js';
+import { ClientModelConsentPanel } from '../components/ClientModelConsentPanel.js';
+import type { ClientModelReading } from '../api/client.js';
 import { read, reasonOf } from '../services/statusReport.js';
 
 import { readClientDirectory, type ClientSummary } from '../services/clientDirectory.js';
@@ -64,6 +67,7 @@ export interface ClientDNA {
     autoApprovalEligibleTemplates: string[];
   };
   updatedAt: string;
+  modelReading?: ClientModelReading;
 }
 
 export interface ClientDnaSnapshot {
@@ -75,6 +79,7 @@ export interface ClientDnaSnapshot {
   createdBy: string;
   createdAt: string;
   dna: ClientDNA;
+  modelReading?: ClientModelReading;
 }
 
 // WCAG Contrast Helper
@@ -116,6 +121,7 @@ export interface CandidateRule {
   evidenceTasks: number | null;
   status: 'proposed' | 'promoted' | 'dismissed';
   rationale: string;
+  examples?:LearningEvidence|null;
 }
 
 const numberOrNull = (value: unknown): number | null =>
@@ -135,6 +141,7 @@ export function candidateRuleFromCore(rule: any): CandidateRule {
     evidenceTasks: Array.isArray(rule?.evidenceTaskIds) ? rule.evidenceTaskIds.length : null,
     status: status === 'promoted' ? 'promoted' : status === 'dismissed' ? 'dismissed' : 'proposed',
     rationale: String(rule?.rationale ?? ''),
+    ...(rule?.examples?{examples:learningEvidenceFromCore(String(rule?.clientId ?? ''),rule.examples.receipts)}:{}),
   };
 }
 
@@ -222,6 +229,8 @@ const DnaClientScreen: React.FC<{
   const [undoPalette, setUndoPalette] = useState<{ dna: ClientDNA; expectedVersion: number } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [modelReading, setModelReading] = useState<ClientModelReading | undefined>();
+  const [reviewConsent, setReviewConsent] = useState(false);
   // Sections Core has not answered for, with the reason. An unread section shows as unknown, never as empty.
   const [unread, setUnread] = useState<Partial<Record<DnaSection, string>>>(NOT_READ_YET);
   const markRead = (section: DnaSection, reason?: string) =>
@@ -318,8 +327,11 @@ const DnaClientScreen: React.FC<{
   const saveDnaChanges = async (updatedDna: ClientDNA, successMessage: string, undo?: ClientDNA): Promise<boolean> => {
     setLoading(true);
     try {
-      const saved: ClientDNA = await apiClient.clients.saveDna(updatedDna.clientId, updatedDna);
+      const { modelReading: _status, ...body } = updatedDna;
+      const saved: ClientDNA = await apiClient.clients.saveDna(updatedDna.clientId, body, updatedDna.version);
       setCurrentDna(saved);
+      setModelReading(saved.modelReading);
+      setReviewConsent(false);
       setUndoPalette(undo ? { dna: undo, expectedVersion: saved.version } : null);
       setSaveSuccess(successMessage);
       loadClientDirectory();
@@ -591,8 +603,11 @@ const DnaClientScreen: React.FC<{
       const snap: ClientDnaSnapshot = await apiClient.clients.commitSnapshot(currentDna.clientId, {
         commitMessage: snapshotMessage.trim() || `Manual governance snapshot v${currentDna.version + 1}`,
         createdBy: snapshotAuthor,
+        expectedVersion: currentDna.version,
       });
       setSnapshots((prev) => [snap, ...prev]);
+      setModelReading(snap.modelReading);
+      setReviewConsent(false);
       setCurrentDna((prev) => (prev ? { ...prev, version: snap.version } : null));
       setShowSnapshotModal(false);
       setSnapshotMessage('');
@@ -785,6 +800,21 @@ const DnaClientScreen: React.FC<{
               }}>Undo color removal</button>}
             </div>
           )}
+
+          {modelReading?.openai === false && <div className="finding" role="alert" style={{ marginBottom: 16 }}>
+            <b>Model reading is now off for this client</b>
+            <p>{modelReading.reason || 'Core did not admit OpenAI reading after this save.'}</p>
+          </div>}
+          {currentDna && <button className="btn" disabled={loading || isCommittingSnapshot}
+            onClick={() => setReviewConsent(value => !value)} aria-expanded={reviewConsent}>
+            {reviewConsent ? 'Close consent review' : 'Review model consent'}
+          </button>}
+          {reviewConsent && currentDna && <ClientModelConsentPanel clientId={selectedClientId} onRecorded={async () => {
+            setModelReading(undefined);
+            setUndoPalette(null);
+            await loadClientData(selectedClientId);
+            await loadClientDirectory();
+          }} />}
 
           {errorNotice && (
             <div className="finding" style={{ borderColor: '#e12d39', background: '#fef2f2', marginBottom: 16 }}>
@@ -1565,7 +1595,7 @@ const DnaClientScreen: React.FC<{
                         color: rule.status === 'promoted' ? '#ffffff' : 'var(--accent-text, #0369a1)',
                       }}
                     >
-                      {rule.status === 'promoted' ? '✓ PROMOTED' : rule.confidence === null ? 'confidence not reported' : `${Math.round(rule.confidence * 100)}% CONFIDENCE`}
+                      {rule.status === 'promoted' ? '✓ PROMOTED' : rule.confidence === null ? 'heuristic score not reported' : `Heuristic score: ${rule.confidence.toFixed(2)}`}
                     </span>
                   </div>
                   <p style={{ margin: '4px 0', fontSize: 11, color: rule.status === 'promoted' ? '#166534' : 'var(--muted)' }}>
@@ -1578,6 +1608,7 @@ const DnaClientScreen: React.FC<{
                     <span>Evidence tasks: <b>{rule.evidenceTasks ?? '—'}</b></span>
                   </div>
 
+                  <LearningEvidencePanel evidence={rule.examples}/>
                   {rule.status !== 'promoted' && (
                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                       <button

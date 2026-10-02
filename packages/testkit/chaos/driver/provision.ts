@@ -12,7 +12,9 @@
  */
 import { randomBytes } from 'node:crypto';
 import { upgradeCanvaSchema } from '../../../db/src/upgrade.js';
+import { provisionWorkerDatabase } from '../../../db/src/provision-worker-role.js';
 import { CanvaTokenCipher } from '../../../../apps/core/src/services/canva-connect-service.js';
+import { computeDnaHash } from '../../../../apps/core/src/core-helpers.js';
 import { runCli } from '../../../../scripts/restate-bluegreen.js';
 import { PORTS, RESTATE_ADMIN_URL, query, secrets, sql, type Service } from './stack.js';
 
@@ -24,7 +26,12 @@ export async function upgradeSchema(): Promise<{ applied: string[]; verified: st
   // No grants of its own: db/03-grants.sql ran at init, as in production, and the upgrades grant
   // their own tables. The driver used to grant every table in full, which hid that production's init
   // left the worker unable to lease a command (2026-09-24).
-  return upgradeCanvaSchema(`postgresql://hawa_owner:${secrets().CHAOS_OWNER_PASSWORD}@127.0.0.1:${PORTS.postgres}/hawa_chaos`);
+  const auth = secrets();
+  const adminUrl = `postgresql://hawa_owner:${auth.CHAOS_OWNER_PASSWORD}@127.0.0.1:${PORTS.postgres}/hawa_chaos`;
+  const result = await upgradeCanvaSchema(adminUrl);
+  await provisionWorkerDatabase(adminUrl,
+    `postgresql://hawa_worker_login:${auth.CHAOS_WORKER_PASSWORD}@127.0.0.1:${PORTS.postgres}/hawa_chaos`);
+  return result;
 }
 
 export async function connectCanva(): Promise<void> {
@@ -46,6 +53,7 @@ export const KAAE_CLIENT_ID = 'c1000000-0000-4000-8000-000000000002';
  */
 export async function kaaeClientDna(): Promise<void> {
   const dna = {
+    tenantId: TENANT_ID,
     clientId: KAAE_CLIENT_ID,
     name: 'Kurdistan Accrediting Association for Education',
     code: 'KAAE',
@@ -61,8 +69,10 @@ export async function kaaeClientDna(): Promise<void> {
     destinations: { productionFolderId: 'chaos-kaae-production', spreadsheetId: 'chaos-kaae-tracker', sheetId: 0 },
     approvalPolicy: { requiredRoles: ['art_director'], allowAutoApproval: false, autoApprovalEligibleTemplates: [] },
   };
-  await query(sql`INSERT INTO hawa.client_dna_versions (tenant_id, client_id, version, status, dna, content_hash, effective_from)
-    VALUES (${TENANT_ID}::uuid, ${KAAE_CLIENT_ID}::uuid, 1, 'active', ${JSON.stringify(dna)}::jsonb, md5(${JSON.stringify(dna)}), now())
+  // Explicit synthetic office author, not live human/taste evidence. Manual capture
+  // validates the same scoped identity and SHA-256 contract as production.
+  await query(sql`INSERT INTO hawa.client_dna_versions (tenant_id, client_id, version, status, dna, content_hash, effective_from, created_by)
+    VALUES (${TENANT_ID}::uuid, ${KAAE_CLIENT_ID}::uuid, 1, 'active', ${JSON.stringify(dna)}::jsonb, ${computeDnaHash(dna)}, now(), ${OPERATOR_USER_ID}::uuid)
     ON CONFLICT (client_id, version) DO NOTHING`);
 }
 

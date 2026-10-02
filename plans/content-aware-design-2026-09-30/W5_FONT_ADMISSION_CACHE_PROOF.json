@@ -1,0 +1,79 @@
+{
+  "adr": "ADR200",
+  "date": "2026-10-01",
+  "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
+  "requirements": [
+    "FR-028",
+    "FR-038",
+    "FR-041",
+    "NFR-012"
+  ],
+  "retainedRegressions": {
+    "initial": {
+      "passed": 0,
+      "failed": 6
+    },
+    "firstConnected": {
+      "files": 3,
+      "passed": 25,
+      "failed": 0
+    }
+  },
+  "acceptance": {
+    "connected": {
+      "files": 11,
+      "passed": 86,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictTestRoots": 672,
+    "lint": "PASS; 925 any occurrences; no new provider-egress exceptions",
+    "warmPolicyRevocation": "PASS",
+    "corruptOrMissingPolicy": "PASS",
+    "samePathReplacementRestoredMtime": "PASS through actual admittedFontFace",
+    "missingCorruptAndRestoredFonts": "PASS",
+    "declaredWeightPresence": "PASS",
+    "unchangedInputsRetainCacheHit": "PASS; including byte-identical registry rewrite",
+    "roleRevocation": "PASS",
+    "actualLocalRasterAndEditableTransfer": "PASS; connected local evidence, not native Canva admission",
+    "coreSavedVisualInputs": "PASS with isolated databases and mocked providers"
+  },
+  "policy": "Current registry reload precedes cache hit; result basis names declared weight presence and actual regular measured font SHA via existing fingerprint/content/parsed-font loader. No full renderer/OS inventory on each glyph query. Existing weight-selection policy preserved.",
+  "providerCalls": 0,
+  "dependenciesAdded": 0,
+  "hardThresholdsChanged": false,
+  "sourceSha256": {
+    "packages/creative/src/studio/render-layout-v2.ts": "2f42567e9bc3fc48610e104c4951c04229debbddbd4e1ff1d3dec04fda360001",
+    "packages/creative/test/font-admission-cache.test.ts": "1ec8ff2c7caf7db84fe5d6a1011ea31ed5a1137faaa8fb9a9541d68b043aebc2"
+  },
+  "logs": {
+    "output/qualification/2026-10-01/font-admission-cache-development/hawa-font-admission-cache-red-20261001.log": "bed9bf2a22684682893c6a94dddd7f13b767b205ae061f4bf8bfcd12dde06d72",
+    "output/qualification/2026-10-01/font-admission-cache-development/hawa-font-admission-cache-connected-20261001.log": "63a511b4c5fedcdb8a309e0b72164f7aa406db6b3897cbd583cd2bb6f7fa5ce2",
+    "output/qualification/2026-10-01/font-admission-cache-development/hawa-font-admission-cache-final-connected-20261001.log": "7eec03c6957f0c7853a1b3b45bb2521406949e5f1c169979ab9ca666be4e959c",
+    "output/qualification/2026-10-01/font-admission-cache-development/hawa-font-admission-cache-types-20261001.log": "0291afa53e1332fa07d9c92814bfcfb1dcbdfc06b23f361856a1b9769a7c6d99",
+    "output/qualification/2026-10-01/font-admission-cache-development/hawa-font-admission-cache-lint-20261001.log": "81268e527353f47331d24d3376399d7ca56af0e0b9082620660ccb3328b23cb4"
+  },
+  "deployment": "NOT_DEPLOYED",
+  "limits": [
+    "Original diagnostic did not establish a live outage; Core also invalidates at input capture.",
+    "Glyph-only admission does not establish raster fidelity; existing capture/renderer identity remains authoritative.",
+    "Broader W5/W6/native Canva/human/recovery/product admission remains open."
+  ],
+  "exactQualification": {
+    "testedSeal": "e02f321e6f1cc023bed1e403c46c4710b0496fd7",
+    "runtimeCommit": "02f55d23b910e64363737dfedc5ab9c07a9e44e2",
+    "allStages": 8,
+    "testsPassed": 6573,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 665,
+    "filesSkipped": 6,
+    "strictRoots": 672,
+    "blueprintChecksAtSeal": 1678,
+    "gateEvidence": "W5_FONT_ADMISSION_CACHE_GATE_EVIDENCE.json",
+    "fullTestLog": "output/qualification/2026-10-01/e02f321e/FULL_TEST_SUITE_RUN.log",
+    "fullTestLogSha256": "5bef17ccedc7dcc1adc632d8c625465b363a0ee04373e471322cd567d6aae180",
+    "deployed": false,
+    "productAdmission": false
+  }
+}

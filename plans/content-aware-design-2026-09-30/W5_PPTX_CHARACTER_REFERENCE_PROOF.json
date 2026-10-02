@@ -1,0 +1,104 @@
+{
+  "adr": "ADR207",
+  "date": "2026-10-01T09:57:33.310141+00:00",
+  "status": "EXACT_ENGINEERING_QUALIFIED_NATIVE_HUMAN_PRODUCT_OPEN",
+  "requirements": [
+    "FR-028",
+    "FR-034",
+    "FR-038",
+    "FR-041",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "sourceSha256": {
+    "packages/qa/src/canva-pptx-check.ts": "68c9889d5acaba05d86c60171ce8faf22f8c8288e3a54f1e68b88131b8bc30b6",
+    "packages/qa/test/pptx-character-references.test.ts": "3ebcd37f081c08e24c9b64739590e65057faa976ae87b619f775fe36863e9c0f",
+    "packages/qa/test/fixtures/character-reference-deck.ts": "a7312e544b31c5c3a9ad196294682a88cc2a33257d98e8002ec342c1cc485ec3",
+    "apps/core/test/manual-canva-review.test.ts": "4eb45c5136e9030d5a66f3e74e42b372c8ba0ed4e94f4aaab4767861b82a0324"
+  },
+  "retainedFailures": {
+    "initial": {
+      "passed": 6,
+      "failed": 22
+    },
+    "firstConnected": {
+      "passed": 53,
+      "failed": 1,
+      "reason": "numeric references shrink; pinned positive expanded-length guard does not count these. Add explicit numeric-reference inspection budget rather than claim existing guard"
+    },
+    "missingFileSelection": "first Core selection named nonexistent manual-review-core.test.ts; actual5 files65pass. Corrected to manual-canva-review and connected9 files137pass. Counts are not added.",
+    "strictCoreFixture": "Buffer<ArrayBufferLike> required a concrete ArrayBuffer-backed copy; fixed without unsafe cast or source-byte changes"
+  },
+  "acceptance": {
+    "connected": {
+      "files": 9,
+      "passed": 137,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictRoots": 683,
+    "lint": "PASS",
+    "referenceCases": [
+      "decimal",
+      "hexadecimal",
+      "padded numbers",
+      "newline/tab",
+      "supplementary Unicode",
+      "Sorani numeric text",
+      "observed identity/font/RTL attributes",
+      "escaped numeric/named strings",
+      "literal CDATA"
+    ],
+    "guards": [
+      "invalid XML1.0 codepoints and syntax refuse",
+      "numeric identity collision is unaddressable",
+      "font and paragraph-direction conflicts refuse",
+      "HTML-only names not decoded",
+      "DTD/entity declarations refuse",
+      "25MiB compressed/8MiB part/64MiB total/500 entries remain",
+      "100000 numeric references per part accepted;100001 refuses"
+    ],
+    "core": "actual retained-byte manual review/source hash and one revision/check across replay; invalid controls block despite stored passing receipt; nativeVerification stays unverified",
+    "providerCalls": 0,
+    "dependenciesChanged": false,
+    "checkVersion": 7
+  },
+  "logs": {
+    "output/qualification/2026-10-01/pptx-character-references/FIRST_CORE.log": "0966635fbbbc435c8a7138e305516840b8d72012d641162a30b3bb13e2281835",
+    "output/qualification/2026-10-01/pptx-character-references/RED.log": "abe6100e534dc22855b321db0f0e4fddf129f6e730d3ab802f9d0d67498627af",
+    "output/qualification/2026-10-01/pptx-character-references/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/pptx-character-references/FIRST_COMBINED_TYPES.log": "9e45c6d25845d3a8061a21acd9752bed706bcc70f67c717fed70cb6526d06a30",
+    "output/qualification/2026-10-01/pptx-character-references/STRICT_TYPES.log": "9e45c6d25845d3a8061a21acd9752bed706bcc70f67c717fed70cb6526d06a30",
+    "output/qualification/2026-10-01/pptx-character-references/CORE_BUFFER_TYPE_REFUSAL.log": "03ff72371bfcb3137e1490c64f32ee9305dfe7c9808576f76fa3f0ab1fdb8999",
+    "output/qualification/2026-10-01/pptx-character-references/FIRST_CONNECTED.log": "0b07bc9e798ad3bc6c30baa1b15100042c71ff4855553307874e76431ab435fd",
+    "output/qualification/2026-10-01/pptx-character-references/CONNECTED.log": "0e4b71ba9704e9153b8036bc60993fa2a411b36a721bf7fc5d28e6cb2167d58b"
+  },
+  "exactGate": {
+    "status": "PASS",
+    "commit": "e879ce292ad1cd0067369056bdb945fb95ff567d",
+    "stagesPassed": 8,
+    "testsPassed": 6750,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 676,
+    "filesSkipped": 6,
+    "strictRoots": 683,
+    "packPassed": 1722,
+    "newestProductionDump": "isolated restore/invariants PASS",
+    "negativeFlagRefusal": "PASS",
+    "receipt": "output/qualification/2026-10-01/e879ce29/RELEASE_GATE_EVIDENCE.json",
+    "nativeHumanProductAdmission": "OPEN",
+    "productionDeployment": "NOT_PERFORMED"
+  },
+  "nativeCanvaHuman": "NOT_RUN",
+  "productionDeployment": "NOT_PERFORMED",
+  "gateLogsSha256": {
+    "output/qualification/2026-10-01/e879ce29/NEGATIVE_FLAG_REFUSAL.log": "b41b2dcb6803be191b70f852a0c319ac27ac4b2275ddbbd58aa80fdbec94628c",
+    "output/qualification/2026-10-01/e879ce29/EXACT_GATE.log": "e07f6cba8a504c7fcb2ab5ec254455bc28304e1cf4736b45323ee96433997835",
+    "output/qualification/2026-10-01/e879ce29/TEST_DB_PROVISION.log": "336ff22f53b4a3fea01bf514699007aa793865e351b45da27310dadad063c59d",
+    "output/qualification/2026-10-01/e879ce29/PREDEPLOY_DUMP_CHECK.json": "d208030cad32f19d62c6575f5ae0fa1d7ff88abb744b27e1e3ce5c54b72a801a",
+    "output/qualification/2026-10-01/e879ce29/PREDEPLOY_DUMP_CHECK.log": "2e23c2a22207c658369b321f4ac30387c2285a441af8a73283239a842637d1ce",
+    "output/qualification/2026-10-01/e879ce29/RELEASE_GATE_EVIDENCE.json": "cb7638e495352f825b121fdb5d881908803e664dd4cbf17742e920f9c34dcc00",
+    "output/qualification/2026-10-01/e879ce29/FULL_TEST_SUITE_RUN.log": "c5f109a5523e7eac4fc2d1def81ce31a85f19ba24c729247bf367eaac7b3538d"
+  }
+}

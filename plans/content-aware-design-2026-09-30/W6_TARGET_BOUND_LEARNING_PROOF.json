@@ -1,0 +1,183 @@
+{
+  "date": "2026-10-01",
+  "adr": 195,
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_PRODUCT_OPEN",
+  "requirements": [
+    "FR-022",
+    "FR-052",
+    "FR-053",
+    "FR-054",
+    "NFR-006",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "baseline": "4d6f552b5216aab6d4567c5a0bda747007b782c4",
+  "policy": [
+    "Feedback binds to exact candidate/run/preview hash or stored revision/source hash",
+    "Explicit approval alone creates positive support for an associated target; ratings do not",
+    "Exact-target contradictions hold that target; another corrected approved target can remain positive",
+    "Explicit task-wide rejection and conservative unbound legacy holds remain task-wide",
+    "Revision-pair collector and actual approval actor are distinct",
+    "Native decision authority joins actual tenant/client/task/revision/actor and bound passing QA/source/report hashes",
+    "New Studio sources require the inspected preview hash; exact unbound legacy replay never gains target evidence",
+    "Rule scores remain heuristics; Desk shows distinct reviewed targets, task holds and actual source receipts",
+    "Full target IDs preserve attribution and approval association; negative same-content conflicts follow aliases within the same client/task/target kind",
+    "An unchanged-source approved revision copy does not invent a corrected negative example",
+    "Desk counts distinct content and refuses malformed receipt metadata"
+  ],
+  "acceptance": {
+    "files": 21,
+    "passed": 193,
+    "failed": 0,
+    "skipped": 0,
+    "log": "/tmp/hawa-target-learning-content-final-20261001.log"
+  },
+  "typecheck": {
+    "roots": 667,
+    "status": "PASS",
+    "log": "/tmp/hawa-target-learning-types-20261001.log"
+  },
+  "build": "PASS (current source; /tmp/hawa-target-learning-receipt-final-build-20261001.log)",
+  "deskBuild": "PASS",
+  "lint": {
+    "status": "PASS",
+    "anyCount": 932,
+    "existingEgressExceptions": 10,
+    "log": "/tmp/hawa-target-learning-content-final-lint-20261001.log"
+  },
+  "crashEvidence": "Actual independent Core processes and SIGKILL with exact replay, target polarity and original actor recovery; disposable PostgreSQL on55432, providers blocked",
+  "profile": {
+    "syntheticSources": 500,
+    "requests": 5,
+    "milliseconds": [
+      79.49083299999984,
+      83.0889589999988,
+      81.43679100000008,
+      78.69291599999997,
+      81.16645800000151
+    ],
+    "providerCalls": 0
+  },
+  "retainedFailures": [
+    "Six initial polarity regressions failed on published4d6f552b",
+    "Initial domain sandbox refused local PostgreSQL access; approved isolated rerun executed32 cases and exposed4 historical-fixture assumptions; corrected fixtures retain unbound approval exclusion",
+    "Build refused an unused React import; removed unused import",
+    "First connected120 cases:102pass/18fail; recovery SQL compared text to UUID, corrected types",
+    "Next connected123 cases:122pass/1fail;500 historical task holds copied into every rule caused actual10-second response timeout; retain own source and one original representative per hold basis, indexed by scoped target; unchanged10-second request bound",
+    "Expanded18files/168pass; extra authority3files/19pass; final19files/169pass, overlapping counts not added",
+    "First exact full gate3ea4bc07:6512pass/2fail/67skip; approval and rejection lifecycle assertions expected the old target shape. Read and assert the actual stored source hash.",
+    "First test-only correction put a revision query in the wrong fixture block; focused20pass/2fail retained. Corrected placement,3files/22pass; no runtime change.",
+    "After the first green exact gate, a new alias regression failed9pass/1fail: identical rejected bytes under another candidate ID gained positive support. Fixed scoped content conflicts and tested actual crash/replay with the alias.",
+    "Alias connected21files/192pass; final21files/193pass also covers unchanged-source approved copy and malformed role refusal. Counts overlap, not added."
+  ],
+  "migration": {
+    "file": "077_revision_learning_sources.sql",
+    "published076Unchanged": true,
+    "publicTriggerExecute": "not granted",
+    "workerRoleControl": "PASS"
+  },
+  "limits": [
+    "Not deployed; live2c4d61ec unchanged",
+    "Exact sealed engineering gate passed; current-candidate deployment, native/Canva and human design admission remain NOT_RUN",
+    "Synthetic Studio pictures/Canva export bytes; no real native/human design admission",
+    "No paid call, dependency, training run, automatic rule activation or taste calibration",
+    "Search and retired inline preview projection consumers remain separate inspected boundaries",
+    "Broader W5/W6/native/Canva/human/product goal remains active"
+  ],
+  "sourceSha256": {
+    "adrs/195_target_bound_learning_examples.md": "fe90e92f6733e672d9f7eba9ac308e1c35fa2295ce17e448beb418fcc1b1497f",
+    "apps/core/src/routes/design-studio.routes.ts": "3bf8b157272b253d752bddb979b55be5a042e766d3cee959d1ddbc9fb0b9096f",
+    "apps/core/src/services/learning-governance.ts": "c41ef7da3985118c3dc09e3ff45beb9763279af84d68b0d3b059a107462654ff",
+    "apps/core/src/services/learning-inputs.ts": "a3d25d21f59eefca6c9fee7d690475137da656cba1b577cb6e7f6372ee1b0ce1",
+    "apps/core/src/services/learning-recovery.ts": "5dfac30be892640cf6fd47409a7e2fd75d4e98629316d7801eb40eab6d1c7771",
+    "apps/core/test/design-studio-routes.test.ts": "58a886744a00b041a92a79ffef2ce459e52663d6e20fdbfe4934eb55c8a41398",
+    "apps/core/test/learning-recovery.test.ts": "627523295fa455e309766550244ae90b0f0c192b7557b1ad6297a6381736073d",
+    "apps/core/test/revision-learning-authority.test.ts": "7c905dc340c5387da4ec19ca448d5ccb92e1fd9485aa0b3e205821e8e800589c",
+    "apps/core/test/startup-schema-check.test.ts": "20c8c4735c6d45a8277ccfbc2b4e38d43790ae0b4e25ba49e29caa010e0c7bf0",
+    "apps/desk/src/components/LearningEvidencePanel.tsx": "c572b8b7d5429953d1e214e36694095dc9c0f302129702e6f72cdcf18803ce49",
+    "apps/desk/src/screens/DnaScreen.tsx": "d60e2b936785f02745d4ec8e8ac0c20180640ee77489e41b5e9a6e737a96a21d",
+    "apps/desk/test/learning-evidence-panel.test.ts": "b1d949223f72c45f8064a057709a669c627cf24cdc3b8a3cf47919105d0ba5c8",
+    "packages/creative/src/feedback-miner.ts": "88ce3cfd2c7351e8363365b97f4afcd1b8c0d13a0b9e9e7d365863aa3dbbf73f",
+    "packages/creative/test/feedback-attribution.test.ts": "de5dc6c0e6f68522f4283153ee4833a134ecec72dcb687b8aea646bb9c5f34fc",
+    "packages/creative/test/feedback-miner.test.ts": "3aac7ef92ec491f7741fae17a04c07f2506b1cba84241cace718ce2ae2927c0e",
+    "packages/creative/test/feedback-revision-polarity.test.ts": "4e3f4a2ccd7e00ff3f7fbbffb2e6e1d8879ad3cbbdb5605bd9ed56770732c1bb",
+    "packages/db/migrations/077_revision_learning_sources.sql": "8297942ea635ce73d44e94c37af14150f7c94dec40f96da0e51aa9eb681b024a",
+    "packages/db/src/repositories/revision.repository.ts": "6ccd3f8d2dda22dbba0ebd7ea516221d0df4ce310c68e4fc770effe48650028c",
+    "packages/db/test/schema-upgrade.test.ts": "d093d21bb84a480996e03be7fad0e715c42844a04f7b45d56963999c4ca62098",
+    "packages/domain/src/feedback.ts": "182e992f7b76572f67b3b7aedab494f540d65a2a0785e576e127e22d8cfa944f",
+    "plans/content-aware-design-2026-09-30/PLAN.md": "cd5665e189c3a45a20afc078838609b89f1b90d3b37a0457042543d37ac03025",
+    "plans/traceability.csv": "9e0358bf04fe1bd7f9c079f65977c9bb0e821bac3e18c76b00acbafd879f476c",
+    "apps/core/test/lifecycle-design-outcome.test.ts": "a03a29d7047de8bc7f5b50764b055fa06c83530ffb6ee94dfee85c1b6671ddf0",
+    "apps/core/test/lifecycle-office-desk-bridge.test.ts": "95b7bf260cc4ec94aec7dfb6171ae031fb7514e42531cb700f285ecfda0b3a71"
+  },
+  "logs": {
+    "/tmp/hawa-target-learning-red-20261001.log": "5cc04e9a145a0a5de4ab558933f3c343220bc0e2d57b62142d0abc5321ca74e6",
+    "/tmp/hawa-target-learning-domain-access-20261001.log": "1bce91ecaaf10461fb9dc78e21a6a2f5abb1fa602232005123e1fef3cbb24e70",
+    "/tmp/hawa-target-learning-connected-first-20261001.log": "380d6c8528ea1bd0100dcd6d81b297fdfb925c2ab52487192610a248cdb2db1b",
+    "/tmp/hawa-target-learning-connected-corrected-20261001.log": "6a647eea388165fcc5a2e0d14456b2dfb61249d3afb69828d853ee6ecc729511",
+    "/tmp/hawa-target-learning-connected-optimized-20261001.log": "9c4524518ab28740e25b417b4475a04d38b041219f9c0840798bc85adc7b8f76",
+    "/tmp/hawa-target-learning-authority-final-20261001.log": "fb9ae96541cf767f93e3196dcdc32b93c7111df4733a6371e2719e87d41622ab",
+    "/tmp/hawa-target-learning-connected-final-20261001.log": "4f4a200a5340a7a4025f29dbc078cbbedccdb28965b10cb4d741f9da40901436",
+    "/tmp/hawa-target-learning-types-20261001.log": "023835cb9964615641108404dd0959f141d6b7bd79e78882aa0841d9eeb31027",
+    "/tmp/hawa-target-learning-build-final-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "/tmp/hawa-target-learning-desk-build-20261001.log": "87ca06d8c681011a7779ea43bff7bce9b19df0c9463b720b6b988d3b98046552",
+    "/tmp/hawa-target-learning-lint-20261001.log": "7297b01a112008246738c27616aa050f787074b116f423108fb17d2471376cb5",
+    "/tmp/hawa-target-learning-desk-final-20261001.log": "5f10ed1c3b216928e983269006c7d8e06584c73e3a9f33938a983a42a21daa4f",
+    "/tmp/hawa-target-learning-first-full-failed-20261001.log": "cff5b9a2250d6dc0034b037980bdeca9c2cabaa26e8473ac96407c64326e1d25",
+    "/tmp/hawa-target-learning-full-gate-20261001.log": "fe3cd38a3755d6c1c109cb8f7aa844e212902e87b1418239280c59617b85c4d4",
+    "/tmp/hawa-target-learning-lifecycle-corrected-20261001.log": "5120811eb99f5b5fad04befac8d809dd30c45eabd79cfaa0860f46ab21c77fc8",
+    "/tmp/hawa-target-learning-lifecycle-final-20261001.log": "f3fe471d1b1b7e80f5cbe1347070262ba2e249528a1342150ac8c99b2a85706d",
+    "/tmp/hawa-target-learning-first-green-gate-20261001.json": "efdef384c235aac978584abc4d32a9e2936b2c15878d1e2a456bd0f3c1e305c5",
+    "/tmp/hawa-target-learning-first-green-full-20261001.log": "01020ce8f94b103359adb7e13d1d2e66c33be3496f79186e3d2a59f0432844ef",
+    "/tmp/hawa-target-learning-content-alias-red-20261001.log": "3533e57c57728fb0000b393bb6758a1908f6c816dd7a404fd277b5247078ae17",
+    "/tmp/hawa-target-learning-alias-connected-20261001.log": "c3c5065c4e58d7db1046319a3cb8bb6d6164b8741870b6f20272978b0368afd6",
+    "/tmp/hawa-target-learning-content-final-20261001.log": "476e79dbf5ba9f505a8317bd7aade5dd81f2db878ad5b499d99363df37285c5a",
+    "/tmp/hawa-target-learning-receipt-final-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "/tmp/hawa-target-learning-content-final-lint-20261001.log": "7297b01a112008246738c27616aa050f787074b116f423108fb17d2471376cb5",
+    "/tmp/hawa-target-learning-content-exact-gate-20261001.log": "91bd32cf6727c952057965b05990e52bf4b4334b7b23a8e5a93b29d6078373ad"
+  },
+  "deskBuildLog": "/tmp/hawa-target-learning-desk-final-20261001.log",
+  "failedFullGate": {
+    "seal": "3ea4bc07f96a964892f4db854ae4164536e3a316",
+    "passed": 6512,
+    "failed": 2,
+    "skipped": 67,
+    "durationSeconds": 219.2,
+    "log": "/tmp/hawa-target-learning-first-full-failed-20261001.log",
+    "reason": "Two exact old target-shape assertions; now read and assert actual stored revision/source hash, no runtime change."
+  },
+  "lifecycleFollowup": {
+    "files": 3,
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0,
+    "log": "/tmp/hawa-target-learning-lifecycle-final-20261001.log",
+    "overlap": "One authority case overlaps the19file/169case connected set; counts are not added."
+  },
+  "priorExactQualification": {
+    "seal": "1df190086e74e42c64872217a0021fff17b87f50",
+    "passed": 6514,
+    "failed": 0,
+    "skipped": 67,
+    "stages": 8,
+    "currentSourceQualified": false,
+    "evidence": "/tmp/hawa-target-learning-first-green-gate-20261001.json",
+    "log": "/tmp/hawa-target-learning-first-green-full-20261001.log"
+  },
+  "exactQualification": {
+    "seal": "71331b1d466f01d78aad2447b26f51f687be611a",
+    "passed": 6517,
+    "failed": 0,
+    "skipped": 67,
+    "stages": 8,
+    "typeRoots": 667,
+    "evidence": "plans/content-aware-design-2026-09-30/W6_TARGET_BOUND_LEARNING_GATE_EVIDENCE.json",
+    "fullLog": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/FULL_TEST_SUITE_RUN.log",
+    "fullLogSha256": "88f09a65b6810dcef1b6e0bfd7cbd3a031e1d61f012bf3c8edbfdfd849ccd82a",
+    "gateLog": "/tmp/hawa-target-learning-content-exact-gate-20261001.log",
+    "engineeringOnly": true,
+    "deployed": false,
+    "fullLogAvailability": "Historical SHA retained; the shared output/release-gate full log was overwritten by the next mandatory run. The copied ADR195 gate JSON and unique orchestration log remain retained; this path must not be used to verify the old detailed log."
+  },
+  "retentionCorrection": "ADR196 preserves its full log under an ignored per-seal qualification directory. ADR195 original detailed log cannot be recovered; no substitute or new test run is claimed."
+}

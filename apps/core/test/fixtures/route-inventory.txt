@@ -17,6 +17,9 @@ GET /api/adapters/figma/cloud-status
 GET /api/adapters/telegram/status
 GET /api/adapters/telegram/webhook/info
 GET /api/assets
+GET /api/assets/:assetId/content
+GET /api/assets/:assetId/sources
+GET /api/assets/:assetId/sources/:sourceSha256/content
 GET /api/auth/google/callback
 GET /api/auth/google/start
 GET /api/auth/providers
@@ -114,6 +117,9 @@ GET /api/v1/adapters/figma/cloud-status
 GET /api/v1/adapters/telegram/status
 GET /api/v1/adapters/telegram/webhook/info
 GET /api/v1/assets
+GET /api/v1/assets/:assetId/content
+GET /api/v1/assets/:assetId/sources
+GET /api/v1/assets/:assetId/sources/:sourceSha256/content
 GET /api/v1/auth/google/callback
 GET /api/v1/auth/google/start
 GET /api/v1/auth/providers
@@ -213,6 +219,9 @@ GET /api/v1/webhooks/whatsapp/actions
 GET /api/waha/health
 GET /api/webhooks/whatsapp/actions
 GET /assets
+GET /assets/:assetId/content
+GET /assets/:assetId/sources
+GET /assets/:assetId/sources/:sourceSha256/content
 GET /auth/google/callback
 GET /auth/google/start
 GET /auth/providers
@@ -312,6 +321,9 @@ GET /v1/adapters/figma/cloud-status
 GET /v1/adapters/telegram/status
 GET /v1/adapters/telegram/webhook/info
 GET /v1/assets
+GET /v1/assets/:assetId/content
+GET /v1/assets/:assetId/sources
+GET /v1/assets/:assetId/sources/:sourceSha256/content
 GET /v1/auth/google/callback
 GET /v1/auth/google/start
 GET /v1/auth/providers

@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-01",
+  "status": "SOURCE_INSPECTION_CONFIRMED_RUNTIME_REGRESSION_NOT_RUN",
+  "scope": "W6 client-attributed genuine feedback; no live feedback mutation or model call",
+  "finding": "Core invokes ingestDesignFeedback without an authoritative clientId or context; the miner falls back to a fixed KAAE client. This permits cross-client attribution rather than learned client-specific preferences.",
+  "nextAction": "Bind feedback to the authorized task client from the existing RLS join; remove fallback, refuse contradictory/missing client evidence; test independent clients and replay; inspect existing persisted evidence before any automatic learning.",
+  "sources": {
+    "apps/core/src/routes/design-studio.routes.ts": "de9c3dce5f0e4facf942ffc4e5c6c5d68eb7aab445a63f7aac75e927161fcbb3",
+    "packages/creative/src/feedback-miner.ts": "ef9eef5d1c4532cf92772301af0755a7f749dbb4e25ad757fb6ee172790ff72c"
+  },
+  "deployedRepair": false
+}

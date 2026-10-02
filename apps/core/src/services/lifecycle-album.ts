@@ -324,7 +324,7 @@ export type AlbumOutcome =
   /** ADR-160: settle this album again after `delayMs`; `notice` is said beside it (once, keyed by the update). */
   | { kind: 'wait'; delayMs: number; notice: string | null }
   /** A photo burst of one photo (ADR-160 addendum): intake reads it as the lone photo it is (ADR-145). */
-  | { kind: 'alone' }
+  | { kind: 'alone'; image: BlobRef }
   /** One burst photo with its words (a cut caption and its rest): intake opens `update` with `image`. */
   | { kind: 'photo'; update: Update; image: BlobRef }
   /** A burst that became material of its sender's design: `text` is said (HTML), once. */
@@ -906,7 +906,8 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   if (prior) return outcomeOf(prior);
   await senderLock(trx, tenant, part.chatId, part.senderId);
   // A burst photo read as a lone photo keeps being read so (ADR-145 settles it, perhaps more than once).
-  if (part.burst && await settledState(trx, tenant, part.groupKey) === 'alone') return { kind: 'alone' };
+  if (part.burst && await settledState(trx, tenant, part.groupKey) === 'alone')
+    return part.image && !part.error ? { kind: 'alone', image: part.image } : { kind: 'skip' };
   // The album's whole set (ADR-160): the newest photo of the set settles it.
   const keys = await albumSet(trx, tenant, part);
   await lockSet(trx, tenant, keys);
@@ -929,7 +930,7 @@ export async function settleAlbum(trx: Tx, tenant: string, update: Update): Prom
   if (part.burst && (await burstTaken(trx, tenant, part.groupKey) ||
       (selected.length === 1 && !captionMayBeCut(record(part.source.message)?.caption)))) {
     await markSettled(trx, tenant, part.groupKey, 'alone', update.update_id);
-    return { kind: 'alone' };
+    return part.image && !part.error ? { kind: 'alone', image: part.image } : { kind: 'skip' };
   }
   const times = await albumTimes(trx, tenant, keys);
   const late = times.now - times.last > LATE_SETTLE_MS;

@@ -246,7 +246,7 @@ export interface StageContext {
   /** The brief's style spec, applied to every layout in preparation. */
   style?: import('@hawa/creative').StyleSpec;
   /** ADR-170: where the faces are in each photo (stages.photoFocus), for the recipe solver's crops. */
-  photoFaces?: Array<{ x: number; y: number; faceShare?: number } | null>;
+  photoFaces?: Array<import('./photo-cutouts.js').PhotoFaces | null>;
   /** ADR-170: the client's house art-direction rules, from its reference. */
   artDirectionRules?: string[];
   /** ADR-170: the brief's subject tags, for photo exemplar retrieval. */

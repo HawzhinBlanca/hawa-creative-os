@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDb, sql, type Database, type Kysely } from '@hawa/db';
+import { writeOfficeProofInclude } from './office-proof.js';
 
 export const CHAOS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const REPO_ROOT = resolve(CHAOS_DIR, '..', '..', '..');
@@ -76,13 +77,14 @@ export async function configureStack(target: StackTarget): Promise<void> {
 }
 
 /** The environment compose interpolates for the configured target (ports and image tag). */
-function composeEnvironment(): NodeJS.ProcessEnv {
+export function composeEnvironment(): NodeJS.ProcessEnv {
   return {
     ...process.env,
     CHAOS_PORT_POSTGRES: String(PORTS.postgres),
     CHAOS_PORT_RESTATE_ADMIN: String(PORTS.restateAdmin),
     CHAOS_PORT_RESTATE_INGRESS: String(PORTS.restateIngress),
     CHAOS_PORT_FAKES: String(PORTS.fakes),
+    CHAOS_OFFICE_PROOF_FILE: officeProofFile(),
     ...(IMAGE_TAG ? { CHAOS_IMAGE_TAG: IMAGE_TAG } : {}),
   };
 }
@@ -92,12 +94,16 @@ export function envFile(): string {
   return ENV_FILE;
 }
 
+export function officeProofFile(): string { return `${ENV_FILE}.office-proof.conf`; }
+
 export type Service = 'postgres' | 'restate' | 'core' | 'worker-blue' | 'worker-green' | 'fakes' | 'docling' | 'desk' | 'nginx';
 const SERVICES: readonly Service[] = ['postgres', 'restate', 'core', 'worker-blue', 'worker-green', 'fakes', 'docling', 'desk', 'nginx'];
 
 export interface ChaosSecrets {
   CHAOS_OWNER_PASSWORD: string;
   CHAOS_APP_PASSWORD: string;
+  CHAOS_WORKER_PASSWORD: string;
+  CHAOS_OFFICE_PROXY_PROOF: string;
   CHAOS_BEARER_TOKEN: string;
   CHAOS_REVIEWER_KEY: string;
   CHAOS_ADMIN_KEY: string;
@@ -122,6 +128,8 @@ export function secrets(): ChaosSecrets {
   const made: ChaosSecrets = {
     CHAOS_OWNER_PASSWORD: hex(16),
     CHAOS_APP_PASSWORD: hex(16),
+    CHAOS_WORKER_PASSWORD: hex(32),
+    CHAOS_OFFICE_PROXY_PROOF: hex(32),
     CHAOS_BEARER_TOKEN: hex(24),
     CHAOS_REVIEWER_KEY: hex(24),
     CHAOS_ADMIN_KEY: hex(24),
@@ -164,7 +172,7 @@ export function run(cmd: string, args: string[], options: { allowFail?: boolean;
 }
 
 export function compose(args: string[], options: { allowFail?: boolean; timeoutMs?: number } = {}) {
-  secrets();
+  writeOfficeProofInclude(officeProofFile(), secrets().CHAOS_OFFICE_PROXY_PROOF);
   return run('docker', ['compose', '-p', PROJECT, '-f', COMPOSE_FILE,
     ...(PROJECT === DEFAULT_PROJECT && existsSync(RECOVERY_OVERRIDE) ? ['-f', RECOVERY_OVERRIDE] : []),
     ...(PROJECT === DEFAULT_PROJECT && existsSync(RELEASE_OVERRIDE) ? ['-f', RELEASE_OVERRIDE] : []),
@@ -229,6 +237,7 @@ export function down(options: { volumes?: boolean } = {}): void {
   }
   if (options.volumes) {
     rmSync(ENV_FILE, { force: true });
+    rmSync(officeProofFile(), { force: true });
     if (PROJECT === DEFAULT_PROJECT) rmSync(RELEASE_OVERRIDE, { force: true });
     expectFreshDatabase = true;
   }
@@ -463,9 +472,11 @@ export const fakes = {
   googleDelay: (delay: { path: string; delayMs: number; n?: number }) => call('/__fakes/google/faults', { body: delay }),
   canvaLedger: () => call('/__fakes/canva/ledger').then((r) => r.json.ledger as any[]),
   canvaManualEdit: (body: {designId:string;contentBase64:string}) => call('/__fakes/canva/manual-edit', {body}),
+  canvaManualCopy: (designId: string) => call('/__fakes/canva/manual-copy', {body: {designId}}),
   modelLedger: () => call('/__fakes/models/ledger').then((r) => r.json),
   modelDelay: (delay: { schema: string; delayMs: number; n?: number }) => call('/__fakes/models/delays', { body: delay }),
   modelFault: (fault: { schema: string; status: number; n?: number }) => call('/__fakes/models/faults', { body: fault }),
+  geminiFailure: (fault: { model: string; n?: number }) => call('/__fakes/models/gemini-failures', { body: fault }),
   hold: (point: string, match: Record<string, string> = {}, n = 1) => call('/__chaos/hold', { body: { point, match, n } }),
   wait: (point: string, timeoutMs = 120_000) => call(`/__chaos/wait?point=${encodeURIComponent(point)}&timeoutMs=${timeoutMs}`).then((r) => (r.status === 200 ? r.json : null)),
   release: (point?: string) => call('/__chaos/release', { body: point ? { point } : {} }),

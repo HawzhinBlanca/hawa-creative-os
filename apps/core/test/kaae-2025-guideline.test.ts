@@ -21,6 +21,7 @@ import {
   guidelineFidelityRule,
   JUDGE_DIMENSIONS,
   PNG,
+  logoClearZone,
   type StudioLayoutV2,
 } from '@hawa/creative';
 import { kaaeClientDNA } from '@hawa/domain';
@@ -372,7 +373,16 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
     for (const r of ranked) {
       const recipe = r.layout.artDirection?.recipe;
       expect(r.layout.background.color, `${recipe} ground`).toBe(WHITE);
-      for (const o of r.layout.overlays ?? []) expect(hexToLuminance(o.color)).toBeGreaterThan(0.7);
+      for (const o of r.layout.overlays ?? []) {
+        if (hexToLuminance(o.color) > 0.7) continue;
+        // A measured local logo scrim may use a dark approved colour; it cannot tint the page.
+        const clear = logoClearZone(r.layout.logo);
+        expect(o.direction).toBe('radial');
+        expect(o.x).toBeGreaterThanOrEqual(clear.x - 1);
+        expect(o.y).toBeGreaterThanOrEqual(clear.y - 1);
+        expect(o.x + o.width).toBeLessThanOrEqual(clear.x + clear.width + 1);
+        expect(o.y + o.height).toBeLessThanOrEqual(clear.y + clear.height + 1);
+      }
       // The serif title, in KAAE Blue on the page or white on a navy plate.
       const title = r.layout.text.find((t) => t.role === 'title')!;
       expect(title.fontFamily).toBe('Crimson Pro');

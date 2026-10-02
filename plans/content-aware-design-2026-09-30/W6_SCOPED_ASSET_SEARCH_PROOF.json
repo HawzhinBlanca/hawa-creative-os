@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-01T13:49:39.604108+00:00",
+  "adr": "ADR217",
+  "requirements": [
+    "FR-077",
+    "FR-011",
+    "NFR-012"
+  ],
+  "status": "CONNECTED_AND_SEVEN_STAGE_ENGINEERING_VERIFIED_PRODUCT_ADMISSION_OPEN",
+  "sourceSha256": {
+    "apps/core/src/routes/search.routes.ts": "20551922090746d0c5c5e236477aad53cd9f4db0d03316972e7f6b129c525dca",
+    "apps/core/src/services/uploaded-assets.ts": "a5aa94a23019c1a03fc1dcac4b63c7e8b28fdeca77ee9b5ffb047887d9f27407",
+    "apps/core/src/services/search-history.ts": "7c1986d067e0261b722409d00f037d872bb8c8fa34e419c610f5b704d9eb1889",
+    "packages/retrieval/src/search-engine.ts": "85a829fb91519d3896c83e0dd1c748c4605c02798eeb31f46476b78d126627e3",
+    "apps/core/test/search-assets.test.ts": "a64bf08ea4abdd10609147cf508461a2d18560661df6340a0992b66b0633d333",
+    "docs/17_UI_UX.md": "d72320e8d72b39f2850786d582db93febaf7a9233ba78a21ad9d0d3d8262e390"
+  },
+  "diagnosis": {
+    "baseline": "683eb6eb",
+    "originalRed": {
+      "failed": 7,
+      "passed": 1
+    },
+    "scope": "actual cold Core/HTTP and isolated synthetic PostgreSQL, not a production incident",
+    "findings": [
+      "newest-500 inventory bound hides older matching assets",
+      "stored assets without measured size show invented 1024-byte size"
+    ]
+  },
+  "failureHistory": [
+    "First size test failed on missing old asset before checking size. Replaced that size fixture with an independently discoverable recent asset; qualified red verifies literal 1024 B. Both logs retained.",
+    "Read command named nonexistent docs/07_ASSET_INGESTION.md; linked normative sources were then inspected. This was a read error, not a test."
+  ],
+  "acceptance": {
+    "newAssetTests": 9,
+    "connected": {
+      "files": 6,
+      "passed": 55,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictRoots": 697,
+    "build": "PASS",
+    "lint": "PASS",
+    "diffCheck": "PASS",
+    "retrieval": "old name/hash/asset ID/kind/media and normalized Sorani matches before bound; original returned name preserved",
+    "scope": "operator sees real peer fixture; assigned designer cannot retrieve peer via broad or explicit query; unknown alias, foreign tenant and inactive rows excluded; authorized alias works",
+    "bounds": "default5000 and finite positive override clamped1\u201320000; actual20005 matching-row probe returns total20000/truncated=true; invalid values fall back and fraction rounds down; equal timestamps use ID tie-break",
+    "inventory": "separate /v1/assets still returns its newest500; search does not require reading it for unrelated categories",
+    "integrity": "arbitrary metadata/storage text excluded; unknown size unavailable; real revoked SELECT after warmed asset search returns503/no previous results",
+    "resources": "no model/embedding/provider/dependency/schema change; no whole-pipeline latency/quality claim"
+  },
+  "productionChanged": false,
+  "externalProviders": "no paid calls; search requires no provider",
+  "limits": [
+    "production-dump transfer approval remains pending after prior automatic review rejection",
+    "FR011 covers current scoped read boundary, not new generation-attempt admission",
+    "real native Canva/human/taste/recovery/pilot/product admission remains open"
+  ],
+  "artifacts": {
+    "output/qualification/2026-10-01/asset-search/BUILD.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "output/qualification/2026-10-01/asset-search/CONNECTED.log": "6923aff24158618e0ac4de6eb946e41e6a14391471c0da3844e5d8ee4c7a072a",
+    "output/qualification/2026-10-01/asset-search/CONNECTED_FINAL.log": "07fd8d924d2d4a991532243fdeef4c44961752db1e5fd2760fcee8784626f3b3",
+    "output/qualification/2026-10-01/asset-search/LINT.log": "6d426ac8ffa0c219d73056b684f25a66bd330e3329a887db3a48122cab9ed7ad",
+    "output/qualification/2026-10-01/asset-search/RED.log": "44e6808ab37dd9ae3d361b630afcbc8521ab939f37e59cc28324a4296560c2f5",
+    "output/qualification/2026-10-01/asset-search/RED_QUALIFIED.log": "fdd59e6c8900eb48436f324db9c63f3d695a4a81a25b12372ed01161bcca0f21",
+    "output/qualification/2026-10-01/asset-search/STRICT_TYPES.log": "664b62ec407f77c54219d71e636989d7d30f175948f8ddce87024eaa7c3b295e"
+  },
+  "sourceCommit": "679ad5f9d674b48ea2b2a834edb2749602510f8e",
+  "releaseGate": {
+    "candidateCommit": "ad0b2cb1bcb00c029682872f689d82b4a47e2bc3",
+    "proof": "plans/content-aware-design-2026-09-30/W6_SCOPED_ASSET_SEARCH_GATE_EVIDENCE.json",
+    "stagesPassed": 7,
+    "productionDump": "NOT_RUN: prior explicit transfer approval pending",
+    "allEightQualified": false
+  }
+}

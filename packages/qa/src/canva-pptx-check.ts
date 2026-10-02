@@ -59,9 +59,65 @@ export interface PptxCheckOptions {
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
+// ADR209: full/legacy family names measured from the pinned office font inventory.
+// This establishes declared-name equivalence only, not admission, glyphs or native font files.
+const VERIFIED_FONT_NAMES: Readonly<Record<string, readonly string[]>> = {
+  'verdana': ['verdana bold', 'verdana italic', 'verdana bold italic'],
+  'noto sans arabic': ['noto sans arabic regular', 'noto sans arabic bold'],
+  'cinzel': ['cinzel semibold', 'cinzel bold'],
+  'playfair display': ['playfair display bold', 'playfair display semibold', 'playfair display semibold italic'],
+  'amiri': ['amiri regular', 'amiri bold'],
+  'ibm plex sans arabic': ['ibm plex sans arabic regular', 'ibm plex sans arabic bold'],
+  'cairo': ['cairo regular'],
+  'plus jakarta sans': ['plus jakarta sans medium', 'plus jakarta sans bold'],
+  'vazirmatn': ['vazirmatn regular', 'vazirmatn bold'],
+};
+
+function fontFamilyMatches(observed: string, expected: string, caseSensitive = false): boolean {
+  const observedLower = observed.toLowerCase(), expectedLower = expected.toLowerCase();
+  if (caseSensitive ? observed === expected : observedLower === expectedLower) return true;
+  if (caseSensitive && !observed.startsWith(expected + ' ')) return false;
+  return Object.hasOwn(VERIFIED_FONT_NAMES, expectedLower) && VERIFIED_FONT_NAMES[expectedLower].includes(observedLower);
+}
+
+/** ADR207: validate before the decoder can erase controls or accept a numeric prefix. */
+function canonicalXmlCharacterReferences(xml: string): string {
+  const chunks: string[] = [];
+  let from = 0, references = 0;
+  for (let i = 0; i < xml.length; i++) {
+    // These XML regions contain literals, not character references. indexOf skips each once.
+    const literalEnd = xml.startsWith('<![CDATA[', i) ? ']]>'
+      : xml.startsWith('<!--', i) ? '-->' : xml.startsWith('<?', i) ? '?>' : undefined;
+    if (literalEnd) {
+      const end = xml.indexOf(literalEnd, i + (literalEnd === ']]>' ? 9 : literalEnd === '-->' ? 4 : 2));
+      if (end < 0) throw new Error('Unterminated PPTX XML literal');
+      i = end + literalEnd.length - 1;
+      continue;
+    }
+    if (xml[i] !== '&' || xml[i + 1] !== '#') continue;
+    if (++references > 100000) throw new Error('XML character reference inspection limit exceeded');
+    const end = xml.indexOf(';', i + 2);
+    const token = end < 0 ? '' : xml.slice(i + 2, end);
+    if (!/^(?:[0-9]+|x[0-9a-fA-F]+)$/.test(token)) throw new Error('Invalid XML character reference');
+    const code = token[0] === 'x' ? Number.parseInt(token.slice(1), 16) : Number(token);
+    const valid = code === 9 || code === 10 || code === 13 ||
+      code >= 0x20 && code <= 0xD7FF || code >= 0xE000 && code <= 0xFFFD || code >= 0x10000 && code <= 0x10FFFF;
+    if (!valid) throw new Error('Invalid XML character reference');
+    // Retain lexical equivalence while avoiding the pinned decoder's token-length window.
+    const canonical = `&#${code};`;
+    if (xml.slice(i, end + 1) !== canonical) {
+      chunks.push(xml.slice(from, i), canonical);
+      from = end + 1;
+    }
+    i = end;
+  }
+  return chunks.length ? chunks.join('') + xml.slice(from) : xml;
+}
+
 /**
- * The PPTX parts `keep` names, unzipped within the import limits every reader of a captured export
- * shares: 25 MB packed, 500 entries, 8 MB a part, 64 MB expanded, no path that leaves the archive.
+ * ADR-256: the PPTX parts `keep` names, unzipped within the same import limits `checkCanvaPptx` applies
+ * (25 MB packed, 500 entries, 8 MB a part, 64 MB expanded, no path that leaves the archive). Used by
+ * `readPptxTextLayout` (canva-pptx-layout.ts) to measure the shipped export.
  */
 export function unzipPptxParts(bytes: Uint8Array, keep: (name: string) => boolean): Record<string, Uint8Array> {
   if (bytes.length > 25 * 1024 * 1024) throw new Error('PPTX exceeds import limit');
@@ -82,19 +138,21 @@ export function unzipPptxParts(bytes: Uint8Array, keep: (name: string) => boolea
   });
 }
 
-const pptxXmlParser = new XMLParser({
+const layoutXmlParser = new XMLParser({
   preserveOrder: true,
   ignoreAttributes: false,
   trimValues: false,
   parseTagValue: false,
   processEntities: true,
+  // @ts-expect-error 5.11.1 accepts an explicit entity map at runtime; its type declares only boolean.
+  htmlEntities: { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" },
 });
 
-/** One PPTX XML part, in document order (fast-xml-parser preserveOrder); entities are refused. */
+/** ADR-256: one PPTX XML part, read as `checkCanvaPptx` reads it (ADR207 character references, no entities). */
 export function parsePptxXml(b: Uint8Array): any[] {
   const text = strFromU8(b);
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('XML entities are forbidden');
-  return pptxXmlParser.parse(text);
+  return layoutXmlParser.parse(canonicalXmlCharacterReferences(text));
 }
 
 export function checkCanvaPptx(
@@ -118,8 +176,22 @@ export function checkCanvaPptx(
     throw new Error('Invalid captured paragraph direction policy');
   }
 
-  const files = unzipPptxParts(bytes, (name) =>
-    /^ppt\/slides\/slide\d+\.xml$/.test(name) || name === 'ppt/presentation.xml' || name === 'docProps/core.xml');
+  if (bytes.length > 25 * 1024 * 1024) throw new Error('PPTX exceeds import limit');
+  let total = 0, count = 0;
+  const seen = new Set<string>();
+  const files = unzipSync(bytes, {
+    filter: (file) => {
+      if (++count > 500 || seen.has(file.name) || file.name.includes('..') || file.name.startsWith('/')) {
+        throw new Error('Unsupported ZIP directory');
+      }
+      seen.add(file.name);
+      total += file.originalSize;
+      if (file.originalSize > 8 * 1024 * 1024 || total > 64 * 1024 * 1024) {
+        throw new Error('Expanded PPTX exceeds inspection limit');
+      }
+      return /^ppt\/slides\/slide\d+\.xml$/.test(file.name) || file.name === 'ppt/presentation.xml' || file.name === 'docProps/core.xml';
+    },
+  });
 
   const names = Object.keys(files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
   if (names.length !== 1 || !files['ppt/presentation.xml']) {
@@ -139,16 +211,30 @@ export function checkCanvaPptx(
     }
   }
 
-  const parse = parsePptxXml;
+  const parser = new XMLParser({
+    preserveOrder: true,
+    ignoreAttributes: false,
+    trimValues: false,
+    parseTagValue: false,
+    processEntities: true,
+    // @ts-expect-error 5.11.1 accepts an explicit entity map at runtime; its type declares only boolean.
+    htmlEntities: { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" },
+  });
+
+  const parse = (b: Uint8Array) => {
+    const text = strFromU8(b);
+    if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('XML entities are forbidden');
+    return parser.parse(canonicalXmlCharacterReferences(text));
+  };
 
   const doc = parse(files[names[0]]);
   const shapes: any[] = [];
-  const find = (node: any, tag: string, found: any[]) => {
+  const find = (node: any, tag: string | string[], found: any[]) => {
     if (Array.isArray(node)) {
       for (const item of node) find(item, tag, found);
     } else if (node && typeof node === 'object') {
       for (const [key, value] of Object.entries(node)) {
-        if (key === tag) found.push(value);
+        if (typeof tag === 'string' ? key === tag : tag.includes(key)) found.push(value);
         else if (key !== ':@') find(value, tag, found);
       }
     }
@@ -249,7 +335,7 @@ export function checkCanvaPptx(
     }
 
     const runs: any[] = [];
-    find(shape, 'a:r', runs);
+    find(shape, ['a:r', 'a:fld'], runs);
     if (!runs.length) {
       unresolvedFont = true;
       offendingObjects.push({
@@ -261,129 +347,77 @@ export function checkCanvaPptx(
     }
 
     for (const run of runs) {
+      const runTextNodes: any[] = [];
+      find(run, 'a:t', runTextNodes);
+      const runText = runTextNodes.flatMap(node => Array.isArray(node) ? node : [node])
+        .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join('');
+      if (!runText.trim()) continue;
+      const scripts: Array<'latin' | 'arabic'> = [];
+      if (ARABIC_SCRIPT.test(runText)) scripts.push('arabic');
+      if (/\p{Script=Latin}/u.test(runText) || !scripts.length) scripts.push('latin');
+
       const properties: any[] = [];
       find(run, 'a:rPr', properties);
-      const runFaces: string[] = [];
       const facesByTag: Record<string, string[]> = {};
       const inspectChild = (child: any) => {
         if (!child || typeof child !== 'object') return;
-        for (const tag of ['a:latin', 'a:cs', 'a:ea']) {
+        for (const tag of ['a:latin', 'a:cs']) {
           if (child[tag]) {
             const tf = child[':@']?.['@_typeface'] || (child[tag] as any)?.['@_typeface'];
-            if (tf && typeof tf === 'string' && tf.trim()) {
-              runFaces.push(tf.trim());
-              (facesByTag[tag] ||= []).push(tf.trim());
-            }
+            if (tf && typeof tf === 'string' && tf.trim()) (facesByTag[tag] ||= []).push(tf.trim());
           }
         }
       };
-
       for (const props of properties) {
-        if (Array.isArray(props)) {
-          for (const child of props) inspectChild(child);
-        } else if (props && typeof props === 'object') {
-          inspectChild(props);
-        }
+        if (Array.isArray(props)) for (const child of props) inspectChild(child);
+        else inspectChild(props);
       }
 
-      if (!runFaces.length) {
-        unresolvedFont = true;
-        offendingObjects.push({
-          index: textIdx,
-          text: text.trim().slice(0, 50),
-          observedFont: 'unresolved',
-          reason: 'No typeface attribute in run properties',
-        });
-      } else {
-        const observedFace = runFaces[0];
-        fonts.push(observedFace);
-
-        // Determine expected font & validate role-based typography
-        const role = options.roles?.[textIdx] || 'body';
-        const isFormal = options.documentKind === 'formal_document';
-
-        if (options.allowedFontsByScript) {
-          const runTextNodes: any[] = [];
-          find(run, 'a:t', runTextNodes);
-          const runText = runTextNodes.flatMap(node => Array.isArray(node) ? node : [node])
-            .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join('');
-          const scripts: Array<'latin' | 'arabic'> = [];
-          if (ARABIC_SCRIPT.test(runText)) scripts.push('arabic');
-          if (/[A-Za-z\u00C0-\u024F]/u.test(runText) || !scripts.length) scripts.push('latin');
-          for (const script of scripts) {
-            const allowed = options.allowedFontsByScript[script] || [];
-            const declared = facesByTag[script === 'arabic' ? 'a:cs' : 'a:latin'] || [];
-            fontExpectations.push(...allowed);
-            if (!declared.length || !declared.every(face => allowed.some(font => face.toLowerCase() === font.toLowerCase()))) {
-              offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), observedFont: declared.join(', ') || 'unresolved',
-                reason: `The ${script} run must explicitly use an approved client font family` });
-            }
-          }
-        } else if (options.fontsByIndex) {
-          const expectedFont = options.fontsByIndex[textIdx];
-          fontExpectations.push(expectedFont || 'none sent');
-          const sent = (expectedFont || '').toLowerCase();
-          const kept = Boolean(sent) && runFaces.some((f) => f.toLowerCase() === sent || f.toLowerCase().startsWith(sent + ' '));
-          if (!kept) {
-            offendingObjects.push({
-              index: textIdx,
-              text: text.trim().slice(0, 50),
-              role,
-              observedFont: observedFace,
-              expectedFont,
-              reason: expectedFont
-                ? `Sent in '${expectedFont}', returned by Canva in '${observedFace}'`
-                : 'Canva returned a text object that was not sent',
-            });
-          }
-        } else if (isFormal && role === 'body') {
-          const expected = isArabic ? formalBodyArabic : formalBodyLatin;
-          fontExpectations.push(expected);
-          const matches = observedFace.toLowerCase() === expected || observedFace.toLowerCase().startsWith(expected + ' ');
-          if (!matches) {
-            offendingObjects.push({
-              index: textIdx,
-              text: text.trim().slice(0, 50),
-              role,
-              observedFont: observedFace,
-              expectedFont: isArabic ? (options.formalBodyFonts?.arabic || 'Noto Sans Arabic') : (options.formalBodyFonts?.latin || 'Verdana'),
-              // Name the face this client's policy asks for (KAAE's formal body is Inter since its 2025 guideline).
-              reason: `Formal document body must use ${isArabic ? (options.formalBodyFonts?.arabic || 'Noto Sans Arabic') : (options.formalBodyFonts?.latin || 'Verdana')}; observed '${observedFace}'`,
-            });
-          }
-        } else if (options.documentKind === 'formal_document' || options.documentKind === 'design_piece') {
-          // Free choice of Canva-native display fonts from admitted list
-          const matchesAdmitted = admitted.some(
-            (a) => observedFace.toLowerCase() === a || observedFace.toLowerCase().startsWith(a + ' ')
-          );
-          fontExpectations.push(observedFace);
-          if (!matchesAdmitted) {
-            offendingObjects.push({
-              index: textIdx,
-              text: text.trim().slice(0, 50),
-              role,
-              observedFont: observedFace,
-              reason: `Typeface '${observedFace}' is not in the admitted Canva-native font list`,
-            });
-          }
-        } else {
-          // Standard / legacy single-font mode (for tests passing requiredFont)
-          const expectedFont = isArabic && options.scriptFonts?.arabic
-            ? options.scriptFonts.arabic
-            : requiredFont;
-          fontExpectations.push(expectedFont);
-          const matched = runFaces.find((f) => f === expectedFont || f.startsWith(expectedFont + ' '));
-          if (!matched) {
-            offendingObjects.push({
-              index: textIdx,
-              text: text.trim().slice(0, 50),
-              role,
-              observedFont: observedFace,
-              expectedFont,
-              reason: `Expected font '${expectedFont}', observed '${observedFace}' (Canva substitution or unlisted font)`,
-            });
-          }
+      const role = options.roles?.[textIdx] || 'body';
+      for (const script of scripts) {
+        const declared = facesByTag[script === 'arabic' ? 'a:cs' : 'a:latin'] || [];
+        const observedFont = declared.join(', ') || 'unresolved';
+        if (declared.length !== 1) {
+          unresolvedFont = true;
+          offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), role, observedFont,
+            reason: `The ${script} run must have one explicit font family declaration` });
+          continue;
         }
+        const face = declared[0];
+        fonts.push(face);
+        const familyMatches = (expected: string) => fontFamilyMatches(face, expected);
+        let expectedFont: string | undefined;
+        let matches: boolean;
+        let reason: string;
+        if (options.allowedFontsByScript) {
+          const allowed = options.allowedFontsByScript[script] || [];
+          fontExpectations.push(...allowed);
+          matches = allowed.some(font => face.toLowerCase() === font.toLowerCase());
+          reason = `The ${script} run must explicitly use an approved client font family`;
+        } else if (options.fontsByIndex) {
+          expectedFont = options.fontsByIndex[textIdx];
+          fontExpectations.push(expectedFont || 'none sent');
+          matches = expectedFont !== undefined && expectedFont !== '' && familyMatches(expectedFont);
+          reason = expectedFont ? `Sent in '${expectedFont}', returned by Canva in '${face}' for ${script} text`
+            : 'Canva returned a text object that was not sent';
+        } else if (options.documentKind === 'formal_document' && role === 'body') {
+          expectedFont = script === 'arabic' ? (options.formalBodyFonts?.arabic || options.scriptFonts?.arabic || 'Noto Sans Arabic')
+            : (options.formalBodyFonts?.latin || 'Verdana');
+          fontExpectations.push(expectedFont);
+          matches = familyMatches(script === 'arabic' ? formalBodyArabic : formalBodyLatin);
+          reason = `Formal document body must use ${expectedFont}; observed '${face}' for ${script} text`;
+        } else if (options.documentKind === 'formal_document' || options.documentKind === 'design_piece') {
+          fontExpectations.push(face);
+          matches = admitted.some(familyMatches);
+          reason = `Typeface '${face}' is not in the admitted Canva-native font list`;
+        } else {
+          expectedFont = script === 'arabic' && options.scriptFonts?.arabic ? options.scriptFonts.arabic : requiredFont;
+          fontExpectations.push(expectedFont);
+          matches = fontFamilyMatches(face, expectedFont, true);
+          reason = `Expected font '${expectedFont}', observed '${face}' (Canva substitution or unlisted font)`;
+        }
+        if (!matches) offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), role,
+          observedFont, ...(expectedFont ? {expectedFont} : {}), reason });
       }
     }
   }
@@ -408,7 +442,7 @@ export function checkCanvaPptx(
     : null;
 
   return {
-    checkVersion: 6,
+    checkVersion: 9,
     sourceTextObjects: unaddressableText ? null : sourceTextObjects,
     source: detectedSource,
     canvaDesignId,

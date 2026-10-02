@@ -1,4 +1,5 @@
 import { evaluateThumbnailLayout } from './thumbnail-rules.js';
+import { admitPageGrammarFromReference } from './page-grammar-admission.js';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { HERO_SOFT_UPSCALE, photoRecipeOf } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
@@ -7,10 +8,13 @@ import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast, measuredInkContrast } from './composite-contrast.js';
 import { checkCopyCompleteness, instructionLanguageFindings, type CopyOrigin, type ReviewFinding } from './copy-completeness.js';
 import { omittedPhotoIndices, recipePhotoMinimum, type PhotoSelection } from './photo-selection.js';
-import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } from './render-layout-v2.js';
+import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions, type FontFidelityVerdict } from './render-layout-v2.js';
 import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
-import { LOGO_MAX_BUSYNESS, logoBackingExcess } from './art-direction/logo-ground.js';
+import { photoRegionViolations, type PhotoRegionEvidence } from './protected-regions.js';
+import { photoUpscale, type PhotoResolutionSource } from './photo-cutout.js';
+import { logoBackingExcess, readRenderedLogoVisibility, type RenderedLogoTemplate } from './art-direction/logo-ground.js';
+import { LOGO_MAX_BUSYNESS } from './art-direction/logo-ground.js';
 import { logoClearZone, usesGuidelineClearSpace } from './house-rules.js';
 import { clientLogoClearSpacePx } from './validate-layout-v2.js';
 import type { Box } from './layout-v2.js';
@@ -45,6 +49,10 @@ export interface HardQaContext {
    * and refused every design that placed the client's photos (2026-09-22, run b7fc5555).
    */
   photoCount?: number;
+  /** ADR-172: source regions bound to the saved face stage; independent of solved geometry. */
+  photoRegions?: Array<PhotoRegionEvidence | undefined>;
+  /** Current retained pixels, not the saved art-direction scale; absent only for legacy callers. */
+  photoSources?: Array<PhotoResolutionSource | undefined>;
   /**
    * The client's playbook (ADR-127). A video thumbnail also answers to the thumbnail rules: nothing
    * under the platform's badge or buttons, and a hook legible at listing size.
@@ -65,8 +73,12 @@ export interface HardQaContext {
    * not only against the colour the layout declares behind it.
    */
   renderedComposite?: Buffer;
+  /** Source raster at this geometry; final QA measures actual pixels, never saved metadata. */
+  logoVisibilityTemplate?: RenderedLogoTemplate;
+  /** Final render/edit gates require source measurement; preliminary geometry gates may omit it. */
+  logoVisibilityRequired?: boolean;
   /** The renderer's font fidelity for this host (`RenderLayoutV2Result.fontFidelity`). */
-  fontFidelity?: Record<string, 'exact' | 'stand-in'>;
+  fontFidelity?: Record<string, FontFidelityVerdict>;
 }
 
 export interface HardQaOutcome {
@@ -366,6 +378,19 @@ export function evaluateHardQa(
     defectCodes.push('LOGO_BACKING');
     messages.push(`LOGO_BACKING: what is drawn behind the logo reaches ${backingExcess}px past the thin tab or clear-space box it may cover`);
   }
+  if (ctx.logoVisibilityRequired || ctx.logoVisibilityTemplate) {
+    try {
+      if (!ctx.renderedComposite || !ctx.logoVisibilityTemplate) throw new Error('source or final composite absent');
+      const reading = readRenderedLogoVisibility(ctx.renderedComposite, checked.logo, ctx.logoVisibilityTemplate);
+      if (!reading.passed) {
+        defectCodes.push('LOGO_UNREADABLE');
+        messages.push(`LOGO_UNREADABLE: visible source features ${reading.coverage.toFixed(3)}, worst component ${reading.worstComponent.toFixed(3)}`);
+      }
+    } catch (err) {
+      defectCodes.push('LOGO_UNMEASURED');
+      messages.push(`LOGO_UNMEASURED: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
   // ADR-238 (KAAE 2025 guideline, pp.3-6): the logo's own rules, beyond its size and aspect (the
   // validator's LOGO check): nothing enters its clear space, it carries no effect or shadow, and it
   // never sits on a busy ground.
@@ -375,9 +400,21 @@ export function evaluateHardQa(
   }
 
   const findings = [...reviewFindings(layout, ctx), ...unmeasured];
+  if (ctx.photoRegions) {
+    for (const message of photoRegionViolations(layout, ctx.photoRegions)) {
+      const code = message.split(':', 1)[0];
+      if (!defectCodes.includes(code)) defectCodes.push(code);
+      messages.push(message);
+    }
+    for (const photo of layout.photos ?? []) {
+      if (photo.treatment === 'cutout' || ctx.photoRegions[photo.photoIndex]?.regionStatus) continue;
+      findings.push({ code: 'PHOTO_REGIONS_UNMEASURED', severity: 'warning',
+        message: `Photo ${photo.photoIndex + 1}: individual subject regions were not measured; crop and subject visibility need human review.` });
+    }
+  }
   // Photos a design left out where leaving them out was allowed, for office review: the requester let
-  // it choose (ADR-157), or a recipe followed the house style and no words of the requester bound
-  // every photo (ADR-180).
+  // it choose (ADR-157), or a recipe chose a content-aware subset and no requester words bound
+  // every photo (ADR-180/181).
   const recipeChose = Boolean(photoRecipeOf(layout)) && recipePhotoMinimum(ctx.photoSelection, ctx.photoCount ?? 0) < (ctx.photoCount ?? 0);
   const omittedPhotos = ctx.photoSelection?.mode === 'choose' || recipeChose ? omittedPhotoIndices(layout.photos, ctx.photoCount ?? 0) : [];
 
@@ -467,8 +504,8 @@ export function clearSpaceBusyness(composite: Buffer, logo: Box, clear: Box): nu
  * for every candidate of a run; a substituted face depends on the candidate's own type choices.
  */
 export function reviewFindings(
-  layout: Pick<StudioLayoutV2, 'text'> & Partial<Pick<StudioLayoutV2, 'artDirection'>>,
-  ctx: Pick<HardQaContext, 'copyText' | 'instructions' | 'copyOrigin' | 'fontFidelity'>
+  layout: Pick<StudioLayoutV2, 'text'> & Partial<Pick<StudioLayoutV2, 'artDirection' | 'photos'>>,
+  ctx: Pick<HardQaContext, 'copyText' | 'instructions' | 'copyOrigin' | 'fontFidelity' | 'photoSources'>
 ): ReviewFinding[] {
   const findings: ReviewFinding[] = [];
   if (ctx.copyText) {
@@ -478,23 +515,57 @@ export function reviewFindings(
   // A face the renderer cannot draw is replaced by a declared stand-in, so the preview the judge
   // scored is not set in the face the design names, and the Canva deck (which names it) will differ.
   // It used to be only a console warning.
-  const substituted = [...new Set(layout.text.map((t) => t.fontFamily))].filter((f) => ctx.fontFidelity?.[f] === 'stand-in');
-  for (const family of substituted) {
+  for (const family of new Set(layout.text.map((t) => t.fontFamily))) {
+    // Preliminary geometry checks may have no render manifest. Supplied evidence must name
+    // every used family; a missing or unknown entry is not proof of exact rendering (ADR202).
+    if (!ctx.fontFidelity) continue;
+    const verdict = ctx.fontFidelity[family];
+    if (verdict === 'exact') continue;
     const blocks = layout.text.filter((t) => t.fontFamily === family).map((t) => t.copyIndex);
+    const blockLabel = `block${blocks.length === 1 ? '' : 's'} ${blocks.join(', ')}`;
+    if (verdict !== 'stand-in') {
+      const uncovered = verdict === 'uncovered';
+      const code = uncovered ? 'FONT_FIDELITY_UNCOVERED' : 'FONT_FIDELITY_UNMEASURED';
+      findings.push({
+        code,
+        severity: 'warning',
+        message: uncovered
+          ? `${code}: the local face for ${family} (${blockLabel}) does not cover its verification sample; inspect the text in the final export. Exact copy and glyph checks still apply.`
+          : `${code}: the rendered font for ${family} (${blockLabel}) could not be verified; inspect its appearance in the final export before approval.`,
+      });
+      continue;
+    }
     findings.push({
       code: 'FONT_SUBSTITUTED',
       severity: 'warning',
-      message: `FONT_SUBSTITUTED: the renderer drew a stand-in for ${family} (block${blocks.length === 1 ? '' : 's'} ${blocks.join(', ')}); the preview does not show the face the design names.`,
+      message: `FONT_SUBSTITUTED: the renderer drew a stand-in for ${family} (${blockLabel}); the preview does not show the face the design names.`,
     });
   }
   // ADR-170: a hero shown much larger than its own pixels looks soft (the album's 1280x853 photos
   // stretched 1.6x over a 1080x1350 canvas in the live trials). A warning, never a failure.
-  const upscale = layout.artDirection?.heroUpscale;
-  if (typeof upscale === 'number' && upscale > HERO_SOFT_UPSCALE) {
+  if (ctx.photoSources) {
+    const primary = layout.photos?.find(p => p.role === 'hero') ?? layout.photos?.find(p => p.treatment === 'cutout');
+    for (const photo of layout.photos ?? []) {
+      const source = ctx.photoSources[photo.photoIndex];
+      try {
+        if (!source) throw new RangeError('source pixels unavailable');
+        const upscale = photoUpscale(photo, source);
+        if (upscale <= HERO_SOFT_UPSCALE) continue;
+        const code = photo === primary ? 'HERO_UPSCALED' : 'PHOTO_UPSCALED';
+        findings.push({ code, severity: 'warning',
+          message: `${code}: Photo ${photo.photoIndex + 1}${photo.treatment === 'cutout' && source.cutout ? ' cutout' : ''} is shown at ${upscale.toFixed(1)}x its current source pixels and may look soft; a larger original would be sharper.` });
+      } catch (error) {
+        if (!(error instanceof RangeError)) throw error;
+        findings.push({ code: 'PHOTO_RESOLUTION_UNMEASURED', severity: 'warning',
+          message: `PHOTO_RESOLUTION_UNMEASURED: Photo ${photo.photoIndex + 1} has no usable current pixel dimensions; inspect its sharpness before approving.` });
+      }
+    }
+  } else if (typeof layout.artDirection?.heroUpscale === 'number' && layout.artDirection.heroUpscale > HERO_SOFT_UPSCALE) {
+    const upscale = layout.artDirection.heroUpscale;
     findings.push({
       code: 'HERO_UPSCALED',
       severity: 'warning',
-      message: `HERO_UPSCALED: the main photo is shown at ${upscale.toFixed(1)}x its own size and may look soft; a larger original would be sharper.`,
+      message: `HERO_UPSCALED: the planned main photo was measured at ${upscale.toFixed(1)}x its own size and may look soft; current source pixels were not supplied for review.`,
     });
   }
   return findings;
@@ -544,6 +615,7 @@ export function artDirectionRulesFromRaw(rawRef: any): string[] {
  * not in KAAE's, so its designs could not be checked against the palette production enforces.
  */
 export function studioReferenceFromRaw(rawRef: any): StudioReferenceRules {
+  admitPageGrammarFromReference(rawRef);
   // A reference pack names its client's palette. One that does not is refused: this used to fill in
   // KAAE's palette, so any other client's design would have been made in KAAE's colours (ADR-127).
   if (!Array.isArray(rawRef?.rules?.palette) || rawRef.rules.palette.length === 0) {

@@ -62,6 +62,49 @@ describe.skipIf(!url)('blank Canva checked export with frozen client policy',()=
   });
   afterAll(()=>db.destroy());
   const start=()=>service.startExport(scope,taskId,'blank-check-0001','pptx',1);
+  async function importedSource(manifest:Record<string,unknown>){
+    const operationId=randomUUID(),sourceId=randomUUID();
+    await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version)
+      VALUES(${operationId}::uuid,${tenantId}::uuid,${taskId}::uuid,${clientId}::uuid,${actorId},${randomUUID()},'synthetic-source','create','retrieved',${designId},1)`.execute(db);
+    await sql`INSERT INTO hawa.canva_editable_sources(id,tenant_id,task_id,client_id,actor_id,operation_id,sha256,content,manifest)
+      VALUES(${sourceId}::uuid,${tenantId}::uuid,${taskId}::uuid,${clientId}::uuid,${actorId},${operationId}::uuid,
+        ${createHash('sha256').update(pptx).digest('hex')},${pptx},${JSON.stringify(manifest)}::jsonb)`.execute(db);
+    return sourceId;
+  }
+  it('freezes the actual planner faces without reinterpreting an older rejected operation',async()=>{
+    const copy=['Exact copy 123.45'];
+    const plan={width:640,height:640,background:'#FFFFFF',shapes:[],
+      text:[{copyIndex:0,x:20,y:20,width:600,height:100,fontSize:24,fontFamily:'Cinzel',color:'#000000',align:'left' as const,rtl:false}]};
+    pptx=Buffer.from((await encodeEditableTransfer(plan,copy)).bytes);
+    const sourceId=await importedSource({copy,plan,reference:{rules:{fontFamily:'Verdana'}}});
+    const oldId=randomUUID(),jobId=randomUUID();requests.set(jobId,'pptx');
+    const oldPolicy={version:1,kind:'imported_source',sourceId,copy,requiredFont:'Verdana'};
+    await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version,remote_job_id,metadata)
+      VALUES(${oldId}::uuid,${tenantId}::uuid,${taskId}::uuid,${clientId}::uuid,${actorId},${randomUUID()},'synthetic-old-policy','export','submitted',${designId},1,${jobId},
+        ${JSON.stringify({format:'pptx',designUpdatedAt:designVersion,checkingPolicy:oldPolicy})}::jsonb)`.execute(db);
+    const old=await service.exportStatus(scope,taskId,oldId);
+    expect(old.artifact.content_check).toMatchObject({copyPass:true,fontPass:false,checkingPolicy:oldPolicy});
+    const operation=await start(),checked=await new CanvaConnectService(db,options).exportStatus(scope,taskId,operation.operationId);
+    expect(checked.artifact.content_check).toMatchObject({copyPass:true,fontPass:true,fullReleasePass:false,
+      checkingPolicy:{kind:'imported_source',sourceId,options:{fontsByIndex:['Cinzel']}}});
+    const replay=await service.startExport(scope,taskId,'blank-check-0001','pptx',1);
+    assert('artifact' in replay && replay.artifact);expect(replay.artifact.id).toBe(checked.artifact.id);
+    const oldReplay=await service.exportStatus(scope,taskId,oldId);
+    expect(oldReplay.artifact.content_check.fontPass).toBe(false);expect(exportCalls).toBe(1);
+  });
+  it.each([
+    {name:'missing family',text:[{copyIndex:0}]},
+    {name:'foreign index',text:[{copyIndex:4,fontFamily:'Verdana'}]},
+  ])('refuses a declared imported plan with $name before an export is dispatched',async({text})=>{
+    await importedSource({copy:['Exact copy 123.45'],plan:{text},reference:{rules:{fontFamily:'Verdana'}}});
+    await expect(start()).rejects.toMatchObject({code:'SOURCE_REQUIRED'});expect(exportCalls).toBe(0);
+  });
+  it('retains the explicit reference-only policy for a historical source with no plan',async()=>{
+    await importedSource({copy:['Exact copy 123.45'],reference:{rules:{fontFamily:'Verdana'}}});
+    const operation=await start(),checked=await service.exportStatus(scope,taskId,operation.operationId);
+    expect(checked.artifact.content_check).toMatchObject({copyPass:true,fontPass:true,
+      checkingPolicy:{kind:'imported_source',requiredFont:'Verdana'}});
+  });
   async function capture(){
     const pngOp=await service.startExport(scope,taskId,'blank-preview-01','png',1);
     const png=await service.exportStatus(scope,taskId,pngOp.operationId);

@@ -57,5 +57,11 @@
     "evidence": "RELEASE_GATE_EVIDENCE.json",
     "qualification": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN"
   },
-  "negativeRefusalDrill": "Gate reports verified historical drill; not independently repeated for this slice."
+  "negativeRefusalDrill": "Gate reports verified historical drill; not independently repeated for this slice.",
+  "deployedFollowUp": {
+    "date": "2026-10-01",
+    "commit": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
+    "evidence": "LIVE_DEPLOYMENT_PROOF.json",
+    "qualification": "ENGINEERING_LIVE_PRODUCT_ADMISSION_OPEN"
+  }
 }

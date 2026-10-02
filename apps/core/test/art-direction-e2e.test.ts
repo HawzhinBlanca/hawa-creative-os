@@ -12,12 +12,14 @@ import {
   encodeStudioTransferV2,
   imagePixelSize,
   photoSelectionFromInstructions,
+  pageGrammarFromRaw,
   renderLayoutV2,
   tonePreferenceFromWords,
   PNG,
   type StudioLayoutV2,
 } from '@hawa/creative';
 import type { CandidateState, CreativeBrief, StageContext } from '../src/services/design-studio/types.js';
+import { packagedAdmittedDisplayFonts } from '../src/services/design-studio/design-studio-service.js';
 import { runLayoutsStage, runRenderStage, runQAStage, rankStudioCandidatesV3, photosBrief } from '../src/services/design-studio/stages/index.js';
 import { briefPhotoFacts, photoFactsFor } from '../src/services/design-studio/art-direction.js';
 
@@ -109,6 +111,19 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     expect(face).toMatchObject({ faces: true, focus: { x: 0.3, y: 0.33 } });
   });
 
+  it('retains measured individual and invalid region evidence through the art-direction adapter', async () => {
+    const bytes = PNG.sync.write(new PNG({ width: 100, height: 100 }));
+    const photo = { bytes, mimeType: 'image/png' as const, dataUrl: '', width: 100, height: 100 };
+    const regions = [{ kind: 'face' as const, x: .1, y: .2, width: .15, height: .2 }];
+    const [measured, invalid] = await photoFactsFor({ photos: [photo, photo], photoFaces: [
+      { x: .2, y: .3, faceShare: .2, regionStatus: 'measured', regions },
+      { x: .5, y: .5, regionStatus: 'invalid' },
+    ] });
+    expect(measured).toMatchObject({ regionStatus: 'measured', regions });
+    expect(invalid).toMatchObject({ regionStatus: 'invalid' });
+    expect(invalid.faces).toBeUndefined();
+  });
+
   it('retrieves the office\'s own K-12 field-visit report among the photo exemplars', () => {
     const manifest = JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'));
     const brief = {
@@ -127,11 +142,12 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     const photos = albumPhotos();
     expect(photos).toHaveLength(6);
     const requests: any[] = [];
+    let modelAnswer: unknown = MODEL_ANSWER;
     const client = {
       createStructuredCompletion: async (req: any) => {
         requests.push(req);
         return {
-          data: MODEL_ANSWER, rawText: JSON.stringify(MODEL_ANSWER),
+          data: modelAnswer, rawText: JSON.stringify(modelAnswer),
           receipt: { responseId: 'resp_e2e', xRequestId: null, model: 'mock', inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, costUsd: 0, latencyMs: 0 },
         };
       },
@@ -141,8 +157,10 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
       runId: randomUUID(), tenantId: randomUUID(), taskId: randomUUID(), clientId: REFERENCE.clientId, actorId: 'e2e',
       width: 1080, height: 1350, tier: 'standard', instructions: INSTRUCTIONS,
       copyBlocks: COPY.map((text) => ({ text, script: 'latin' as const })),
-      referencePack: { palette: PALETTE, referenceFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }, clientId: REFERENCE.clientId },
-      promotedRules: REFERENCE.rules.colorUsage, latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 1,
+      referencePack: { palette: PALETTE, referenceFonts: { latin: 'Inter', arabic: 'Noto Sans Arabic' }, clientId: REFERENCE.clientId,
+        admittedDisplayFonts: packagedAdmittedDisplayFonts(REFERENCE), logoConstraints: REFERENCE.rules.logoConstraints },
+      pageGrammar: pageGrammarFromRaw(REFERENCE),
+      promotedRules: REFERENCE.rules.colorUsage, latinFont: 'Inter', arabicFont: 'Noto Sans Arabic', logoAspect: 1,
       logo: KAAE_TEST_CLIENT_LOGO, client: client as any, pipelineV3: true, imageryStrategy: 'photographic',
       // The selection the owner's words record: "choose the best ones", no count (half the photos, 3).
       photoSelection: photoSelectionFromInstructions(INSTRUCTIONS, 6),
@@ -176,7 +194,7 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     // The model was shown the photos at high detail and the house rules as data.
     const user = requests[0].messages[1].content;
     expect(user.filter((p: any) => p.type === 'image_url').every((p: any) => p.image_url.detail === 'high')).toBe(true);
-    expect(user[0].text).toContain('R1. With photos: pick ONE hero photo');
+    expect(user[0].text).toContain('R1. With photos: choose the composition');
     expect(requests[0].messages[0].content).not.toMatch(/KAAE/);
     expect(photosBrief(ctx.photos, 1080, 1350, undefined, ctx.photoSelection)).toContain('choose');
 
@@ -206,6 +224,16 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
     expect(qa.messages).toEqual([]);
     expect(qa.passed).toBe(true);
     expect(qa.omittedPhotos).toEqual([1, 2, 3, 5]);
+    // W3: the final gate measures the current source and composite, even with an old passed record.
+    const missingLogo = await runQAStage({ ...ctx, logo: undefined }, { ...winner });
+    expect(missingLogo.passed).toBe(false);
+    expect(missingLogo.defectCodes).toContain('LOGO_UNMEASURED');
+    const whiteLogo = new PNG({ width: 128, height: 128 }); whiteLogo.data.fill(255);
+    const whiteBytes = PNG.sync.write(whiteLogo);
+    const invisibleLogo = await runQAStage({ ...ctx, logo: { bytes: whiteBytes,
+      sha256: createHash('sha256').update(whiteBytes).digest('hex'), mimeType: 'image/png' } }, { ...winner });
+    expect(invisibleLogo.passed).toBe(false);
+    expect(invisibleLogo.defectCodes).toContain('LOGO_UNREADABLE');
     const layout: StudioLayoutV2 = winner.currentLayout;
     // One hero and one blended texture; the title and gold line on the fade; the inset gold line.
     expect(layout.photos!.map((p) => [p.photoIndex, p.role])).toEqual([[0, 'hero'], [4, 'texture']]);
@@ -217,6 +245,53 @@ describe('art direction end to end: the KAAE K-12 field visit report (ADR-170)',
       photos: photos.map((p) => ({ bytes: p.bytes, mimeType: p.mimeType })),
     });
     expect(deck.bytes.length).toBeGreaterThan(1000);
+
+    // ADR-172: the production adapter passes the requester decision through the same one-call
+    // recipe path. All solved geometries remain readable after the surface color changes.
+    const requested = await runLayoutsStage({ ...ctx, requestedBackground: '#0A1628' }, brief, [],
+      [0, 1, 2].map((ordinal) => ({ id: randomUUID(), ordinal })));
+    expect(requests).toHaveLength(2);
+    expect(requests[1].messages[1].content[0].text).toContain('"requestedColor":"#0A1628"');
+    expect(requested.every(c => c.currentLayout.background.color === '#0A1628')).toBe(true);
+    expect(requested.every(c => c.currentLayout.background.decision?.basis === 'requester')).toBe(true);
+    const requestedRenders = await runRenderStage({ ...ctx, requestedBackground: '#0A1628' }, requested);
+    for (const r of rankStudioCandidatesV3({ ...ctx, requestedBackground: '#0A1628' }, requestedRenders)) {
+      expect(r.hardQa?.passed, r.hardQa?.messages.join(' | ')).toBe(true);
+    }
+
+    // ADR-181: a different client/content direction may choose several meaningful images
+    // without a counted instruction. Existing per-client KAAE fade evidence above stays intact.
+    modelAnswer = { concepts: [{ ...MODEL_ANSWER.concepts[0], recipe: 'hero_storyboard',
+      heroPhotoIndex: 0, texturePhotoIndex: null, supportingPhotoIndices: [5, 2], surfaceTone: 'cream',
+      conceptNote: 'Primary scene followed by two related moments' }, ...MODEL_ANSWER.concepts.slice(1)] };
+    const flexibleCtx = { ...ctx, instructions: 'Create an editorial announcement; choose photos for the strongest composition.',
+      artDirectionRules: [], photoSelection: photoSelectionFromInstructions(undefined, 6) };
+    const flexible = await runLayoutsStage(flexibleCtx, brief, [], [0, 1, 2].map(ordinal => ({ id: randomUUID(), ordinal })));
+    expect(requests).toHaveLength(3); // one existing model call for each generation, no new role/call
+    const story = flexible.find(c => c.currentLayout.artDirection?.recipe === 'hero_storyboard');
+    expect(story).toBeDefined();
+    expect(story!.currentLayout.photos?.map(p => p.photoIndex)).toEqual([0, 5, 2]);
+    expect(story!.currentLayout.artDirection?.omittedPhotos).toEqual([1, 3, 4]);
+    const flexibleRendered = await runRenderStage(flexibleCtx, [story!]);
+    const flexibleRanked = rankStudioCandidatesV3(flexibleCtx, flexibleRendered);
+    expect(flexibleRanked[0].hardQa?.passed, flexibleRanked[0].hardQa?.messages.join(' | ')).toBe(true);
+
+    // Three genuinely distinct native coverage geometries share the same exact source set.
+    modelAnswer = { concepts: ['hero_storyboard', 'photo_sequence', 'photo_mosaic'].map(recipe => ({
+      ...MODEL_ANSWER.concepts[0], recipe, heroPhotoIndex: 0, texturePhotoIndex: null,
+      supportingPhotoIndices: [5, 2, 1, 4, 3], surfaceTone: 'cream', frame: 'none',
+      conceptNote: `Coverage-safe ${recipe}` })) };
+    const allCtx = { ...flexibleCtx, width: 1920, height: 1080, instructions: 'Use all six photos with the exact supplied copy.',
+      photoSelection: photoSelectionFromInstructions('Use all six photos.', 6) };
+    const allCandidates = await runLayoutsStage(allCtx, brief, [], [0, 1, 2].map(ordinal => ({ id: randomUUID(), ordinal })));
+    expect(requests).toHaveLength(4);
+    expect(new Set(allCandidates.map(c => c.currentLayout.artDirection?.recipe))).toEqual(new Set(['hero_storyboard', 'photo_sequence', 'photo_mosaic']));
+    const allRendered = await runRenderStage(allCtx, allCandidates);
+    for (const candidate of rankStudioCandidatesV3(allCtx, allRendered)) {
+      expect(candidate.hardQa?.passed, candidate.hardQa?.messages.join(' | ')).toBe(true);
+      expect(candidate.layout.photos?.map(p => p.photoIndex)).toEqual([0, 5, 2, 1, 4, 3]);
+      expect(candidate.layout.artDirection?.omittedPhotos).toEqual([]);
+    }
 
     if (out) {
       writeFileSync(join(out, 'e2e_hero_fade_report.layout.json'), JSON.stringify(layout, null, 2));

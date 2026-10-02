@@ -242,6 +242,7 @@ describe('versioned lifecycle design outcome', () => {
       status: 409, body: { code: 'IDEMPOTENCY_CONFLICT' },
     });
     const rows = await withRlsContext(db, scope, async (trx) => ({
+      revision:await trx.selectFrom('design_revisions').select('source_sha256').where('tenant_id','=',tenantId).where('task_id','=',taskId).where('id','=',revisionId).executeTakeFirstOrThrow(),
       request: await trx.selectFrom('requests').select(['rev', 'stage']).where('request_id', '=', requestId).executeTakeFirst(),
       task: await trx.selectFrom('tasks').select(['state']).where('id', '=', taskId).executeTakeFirst(),
       approval: await trx.selectFrom('approvals').select(['decision', 'reason', 'decision_payload'])
@@ -257,7 +258,7 @@ describe('versioned lifecycle design outcome', () => {
       decision_payload: { rejectionCategory: 'concept' } });
     expect(rows.events).toHaveLength(1);
     expect(rows.feedback).toEqual([expect.objectContaining({ category: 'rejection.concept',
-      actor_id: scope.userId, target: { approvalId: first.body.approvalId,
+      actor_id: scope.userId, target: {kind:'revision_decision_v1',sourceSha256:rows.revision.source_sha256, approvalId: first.body.approvalId,
         decision: 'rejected', revisionId, rejectionCategory: 'concept' } })]);
   });
 });

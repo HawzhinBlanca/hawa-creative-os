@@ -1,0 +1,171 @@
+{
+  "date": "2026-10-02",
+  "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+  "researchParent": "8ca1fa4ace6cb0f6a3a0daaddda8b979dab15680",
+  "guidelineParent": "4c95154ac42f094845afb6e7415394d9b7f5fb43",
+  "requirements": [
+    "FR-013",
+    "FR-017",
+    "FR-023",
+    "FR-038"
+  ],
+  "connected": {
+    "files": 18,
+    "passed": 299,
+    "failed": 0,
+    "skipped": 0
+  },
+  "strictTestRoots": 725,
+  "build": "PASS",
+  "deskBuild": "PASS",
+  "lint": "PASS; 940 any/1053 ceiling; provider-egress exceptions unchanged",
+  "originalFailures": {
+    "initialConnected": {
+      "passed": 264,
+      "failed": 4
+    },
+    "build": "Possibly undefined indexed photo fixed with a narrowed local array",
+    "intermediate": "Palette/client default/import and source-copy test mismatches retained in raw logs"
+  },
+  "decisions": [
+    "Consolidated renderer parser onto Core/shared-reader typed admission; explicitly supplied invalid grammar refuses without private value echo.",
+    "Completed native gradient convention spans0..1/angles0..360; original broader ADR239 acceptance remains historical proof.",
+    "Kept both scoped continuous backgrounds and native shape gradients through preview, contrast and PPTX encoding.",
+    "Added actual raster interior-luminance control; declared shape-gradient contrast conservatively encloses channel turns.",
+    "Kept all supporting-photo subject regions and counted only overlays as occluding photo faces.",
+    "Client grammar page ground/ink/fonts reach content-aware editorial and storyboard compositions; requester colour wins.",
+    "Guideline single-photo alternative cannot replace multiple-photo or cutout composition or violate explicit count.",
+    "Owner photo rule replaces new reference hero-only text: content decides one/several, explicit-only coverage, no forced default collage.",
+    "Two current client multi-photo layouts pass render/hard QA, exact stored photo/logo bytes in PPTX and actual copy/font/addressable-text checks.",
+    "Preserved exact script/family identity checks; invisible word joiners verified through existing production checker.",
+    "Localized measured radial logo scrim allowed only within clear space; white page and no oversized box remain tested.",
+    "Desk KAAE font/showcase handoffs updated; other client font loads and official logo bytes preserved."
+  ],
+  "sourceSha256": {
+    "packages/creative/assets/kaae-reference.json": "bbfcd3a971b804c1671b3e1d9962e6bfca386919d35fe76669e12b74eeeab807",
+    "packages/creative/src/studio/page-grammar-admission.ts": "61d6ef185274d7daa114eafd4483f8f705c8d6ac24bd0749bc6dfc1b45f60826",
+    "packages/creative/src/studio/page-grammar.ts": "79e11eed8a7c6a05bed2604d0ebda427709e11e081ab9a74d0f40bffd62a7e4e",
+    "packages/creative/src/studio/art-direction/generate.ts": "7f059b737e268fc5c359ac4ee3e132deee3dc9868bbd453f75a8d09abcc141ae",
+    "packages/creative/src/studio/art-direction/solver.ts": "ec41ca0cd423de562771eeb42d411715addfc2cd11f40b3390106419ee12604c",
+    "packages/creative/src/studio/composite-contrast.ts": "26e62e504f8d49a06419215b38cb1d9b5458b42337992a139dc96988615867cc",
+    "packages/creative/src/studio/transfer-v2.ts": "6d77ee9e37cb601fb14235b74c6043ace26245ae6f33df9079f50bb372351faf",
+    "packages/creative/src/studio/hard-qa.ts": "98718433ad881c4938b11250fb9857b657337df7d9a4b85e687f7226eb3a449d",
+    "packages/qa/src/canva-pptx-check.ts": "dafeb5589dfcaaa6d8eb49c6980b8e372ac0595b563b62b2b6cbbfc48dc88556",
+    "apps/desk/index.html": "1a97a24af4855336c7ddbad6c055b2623f5049c1fe473010c0bb597d2f117142",
+    "apps/desk/src/services/brandKits.ts": "d02afa141fb991e6b71adad62bdcc16e886aec9496502d163b015d3b0d15f5d3"
+  },
+  "receipts": {
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-connected.log": "66dcead3168ef1416a9ca00b4b8ca5018edcb9ecbdb30a2492633ab782d1204c",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-desk-build.log": "1e1ebb8683ffbdadcb0ee0d354c0793c5c2ba01fd3536f30184be989bf22a935",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-final-connected.log": "841fdca83fc15716bba61524519668f2c17a4feaed451ca88da1fe2769570658",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-final-lint.log": "3a0fb2622451a0b1531fdd1334d10bb6e19ead54dd7e23af049b3a64756e42a2",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-final-types.log": "2a46bdcfd9ea68e710f599c09b74ed00ada5fab06ced5a9fd0256661463c8e4e",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-integrated-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-integrated-build2.log": "1b4791050f1a2e11cd977b4eedab00e132ee70057553812f79a81e8457c4833c",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-integrated-build3.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-integrated-build4.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-integrated-build5.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-integrated-build6.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-merge.log": "9582a70747cfb3ce6bc8832aaf7a8503890dbe839697692bd501407eaaec5433",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-repair.log": "7fcd5a056b3498b05f7b7b44fab7c5ff1e9b2df874dcdb14f701ec2cc1a0e66e",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-repair2.log": "fef7a2a75264333fd9a0991694c0995105f4bc2fd3ae5aea0a3bad501a83add1",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-repair3.log": "1e518c6530cc1b76143748e7e799af422a47bdc04b3952622d9d715d396848cc",
+    "output/qualification/2026-10-02/kaae2025-integration/hawa-kaae2025-types.log": "2a46bdcfd9ea68e710f599c09b74ed00ada5fab06ced5a9fd0256661463c8e4e",
+    "output/qualification/2026-10-02/kaae2025-integration/full-initial/NEGATIVE_FLAG_REFUSAL.log": "8dc254b6468de6de7f11830a8fee62e7b3d7c0669387481a90ee015532e32bb8",
+    "output/qualification/2026-10-02/kaae2025-integration/full-initial/ENGINEERING_PREFLIGHT.log": "ca35a7a7a1d36f0a9aca47fc88f5aa7a386dc02340ff96d3afff680b358b45f4",
+    "output/qualification/2026-10-02/kaae2025-integration/full-initial/FULL_TEST_SUITE_RUN.log": "8f9a5342dde06dcb1b24e2516865490d505bdc7bb5daee427ae7c1a4b3773ca3",
+    "output/qualification/2026-10-02/kaae2025-integration/LEARNING-DIAGNOSTIC.log": "0b7e8cb8b5114d1068bd10f7028012710304f18af251892e1cd557a9dae2a1e4",
+    "output/qualification/2026-10-02/kaae2025-integration/LEARNING-REPAIR.log": "4719e2672cd73af361d65fa212d7ae797a77888a0fb588fa8f9507ff7b38d4b7",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/NEGATIVE_FLAG_REFUSAL.log": "d120c90a37d57f0f7c6f2b68a9313b8562d94c09ac7df26a110b040f2ebde74f",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/TEST_DB_PROVISION.log": "a629ae9c3ab4a811e9725955b53246ff24869c0f5accdb28fae1f937a57f4b70",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/RELEASE_GATE_EVIDENCE.json": "cd70d4a59a8fc4dab7a7a93cf00006b836698aff5c91853734d3eb65a55dd976",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/ENGINEERING_PREFLIGHT.log": "c72a9f20469f3a7bbb358e998a8a8ec441c25d1b15a56d995ca5250a1efbd9f2",
+    "output/qualification/2026-10-02/kaae2025-integration/full-corrected/FULL_TEST_SUITE_RUN.log": "f353d07f000d234d00ce1cc692f75abd27e5ed7950a6bd0a70581dd1d92853ad",
+    "output/qualification/2026-10-02/kaae2025-integration/CANVA_MAPPING_READBACK.json": "d2a7f99590fed416a987984c12f7cc5221ca2ddd52f55dd5d3b26f2293094a13"
+  },
+  "limits": {
+    "productionDeployed": false,
+    "productionDnaUpdated": false,
+    "canvaBrandKitUpdated": false,
+    "fullSourceGatePassed": true,
+    "currentNativeSaveEditProved": false,
+    "humanDesignQualityApproved": false,
+    "paidCallsThisIntegration": 0
+  },
+  "next": "Publish tested-source-equivalent documentation/metadata checkpoint. Obtain genuine current native save/edit/export, human quality, production-data migration, deployed-candidate/publication/recovery/pilot evidence; production DNA and Canva-kit handoffs remain open.",
+  "initialFullGate": {
+    "sourceSeal": "264a7af57f18fc01096de5768aaed38af75da896",
+    "status": "FAILED",
+    "passed": 7610,
+    "failed": 1,
+    "skipped": 67,
+    "passingFiles": 717,
+    "failedFiles": 1,
+    "skippedFiles": 6,
+    "durationSeconds": 398,
+    "failure": "H11 initial right-aligned seal proposal refused CONFLICTING_RULES_PENDING by current KAAE DNA; original expected200 fixture invalid after current compound page grammar."
+  },
+  "governanceFixtureRepair": {
+    "requirements": [
+      "FR-053",
+      "FR-054"
+    ],
+    "productionCodeChanged": false,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0,
+    "files": 3,
+    "decision": "Keep current KAAE409 pending refusal and unchanged activation scope; generic compatible-client200 then conflicting409 promotion tests use existing other-client fixture. Same real route/miner/authorization and rollback checks retained. This is a fixture repair, not proof of comprehensive natural-language contradiction detection.",
+    "sourceSha256": "f769402c0ffa993d1e6a2f1b49c0efb2fae48ffdc84a32f90d3313099d68309a"
+  },
+  "fullSourceGate": {
+    "sourceSeal": "dffe7a3a16903609bdfe9bf8c72d3560dff8f390",
+    "buildSource": "a2cd98e7acb03ac854a401c544bb041ac19a27bd",
+    "evaluatedAt": "2026-10-01T22:38:38Z",
+    "cleanTree": true,
+    "passed": 7612,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 718,
+    "skippedFiles": 6,
+    "strictTestRoots": 725,
+    "technicalStagesPassed": 7,
+    "negativeFlagRefusalPassed": true,
+    "productionDataMigrationCheck": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
+    "gateEvidence": "plans/content-aware-design-2026-09-30/KAAE2025_SOURCE_GATE_EVIDENCE.json"
+  },
+  "canvaMappingReadback": {
+    "observedAt": "2026-10-01T22:36:55.225082+00:00",
+    "scope": "Read-only Canva connector account; does not establish production OAuth-account equivalence or current-source native save/edit/export.",
+    "brandKit": {
+      "id": "kAHAK-4ShnQ",
+      "listed": true,
+      "name": "kaae",
+      "colorsVerified": false,
+      "fontsVerified": false
+    },
+    "masterAndInvitation": {
+      "id": "DAHU6ovIEc4",
+      "idLookup": "NOT_FOUND",
+      "completeSavedUrlLookup": "NOT_FOUND",
+      "source": "config/clients/kaae.dna.json",
+      "meaning": "Unavailable to this connector; deletion versus account/team access not determined."
+    },
+    "standards": {
+      "id": "DAHU6lCA2Ik",
+      "lookup": "ACCESSIBLE",
+      "pages": 1
+    },
+    "candidateSearch": {
+      "query": "KAAE",
+      "firstPageResults": 25,
+      "hasContinuation": true,
+      "replacementSelected": false,
+      "scope": "Accessible designs exist; none inferred to be the approved master."
+    },
+    "sourceUseSearch": "No masterDesignUrl/invitationDesignUrl/standardsDesignUrl consumer found under apps/packages source; this is a static saved-reference access gap, not evidence of a current design-worker outage.",
+    "nativeEditingPerformed": false,
+    "productionChanged": false,
+    "sensitiveUrlsOrAccountIdsStored": false
+  }
+}

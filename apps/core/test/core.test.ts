@@ -1,8 +1,9 @@
 import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
-import { describe, it, expect, afterAll, vi } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll, vi } from 'vitest';
 import { createDb } from '@hawa/db';
 import { computeActionSignature, signActionLink } from '@hawa/integrations';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createHash } from 'node:crypto';
@@ -20,6 +21,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   /** A seeded client the legacy generator still drafts (KAAE's designs are made in the studio). */
   const HAWA_STUDIO = 'c1000000-0000-4000-8000-000000000001';
   const DRUSTEE = 'c1000000-0000-4000-8000-000000000003';
+  beforeAll(async()=>{
+    await persistClientDnaFixture(dbApp,HAWA_STUDIO,{},undefined,'client-office-1');
+    await persistClientDnaFixture(dbApp,DRUSTEE,{});
+  });
 
   it('responds to health checks', async () => {
     const res = await app.request('/health');
@@ -335,7 +340,8 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   });
 
   it('streams real-time Server-Sent Events (SSE) and broadcasts task mutations', async () => {
-    const streamRes = await app.request('/v1/events/stream');
+    // Resource disclosure needs the current persisted row under RLS (ADR223).
+    const streamRes = await dbApp.request('/v1/events/stream');
     expect(streamRes.status).toBe(200);
     expect(streamRes.headers.get('content-type')).toContain('text/event-stream');
 
@@ -349,32 +355,51 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(firstText).toContain('event: system:connected');
     expect(firstText).toContain('"status":"connected"');
 
-    // 2. Trigger task creation while stream is actively listening
-    const createPromise = app.request('/v1/tasks', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Idempotency-Key': `sse-stream-test-${Date.now()}`,
-      },
-      body: JSON.stringify({
-        title: 'SSE Stream Verification Task',
-        priority: 'routine',
-      }),
-    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // 2. Trigger a persisted task while the stream is actively listening.
+      const postRes = await dbApp.request('/v1/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `sse-stream-test-${Date.now()}`,
+        },
+        body: JSON.stringify({
+          title: 'SSE Stream Verification Task',
+          priority: 'routine',
+          clientId: HAWA_STUDIO,
+        }),
+      });
 
-    const [postRes, secondChunk] = await Promise.all([
-      createPromise,
-      reader!.read(),
-    ]);
-
-    expect(postRes.status).toBe(201);
-    expect(secondChunk.done).toBe(false);
-    const secondText = new TextDecoder().decode(secondChunk.value);
-    expect(secondText).toContain('event: task:created');
-    expect(secondText).toContain('SSE Stream Verification Task');
-
-    // 3. Clean abort stream
-    await reader!.cancel();
+      expect(postRes.status).toBe(201);
+      const task = await postRes.json();
+      const mutation = (async () => {
+        const decoder = new TextDecoder();
+        let pending = '';
+        for (;;) {
+          const part = await reader!.read();
+          if (part.done) throw new Error('Stream closed before its persisted task event');
+          pending += decoder.decode(part.value, { stream: true });
+          let boundary: number;
+          while ((boundary = pending.indexOf('\n\n')) >= 0) {
+            const frame = pending.slice(0, boundary);
+            pending = pending.slice(boundary + 2);
+            if (!frame.includes('event: task:created\n')) continue;
+            const data = frame.split('\n').find(line => line.startsWith('data: '));
+            if (!data) throw new Error('Task event has no data');
+            const payload = JSON.parse(data.slice(6));
+            if (payload.id === task.id) return payload;
+          }
+        }
+      })();
+      const payload = await Promise.race([mutation, new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('Persisted task event was not delivered')), 3000);
+      })]);
+      expect(payload).toMatchObject({ id: task.id, title: 'SSE Stream Verification Task', clientId: HAWA_STUDIO });
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      await reader!.cancel();
+    }
   });
 
   it('reports office availability as unmeasured and refuses synthetic operational execution', async () => {
@@ -613,7 +638,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(cmpData.invariantCompliance.invariant4_reference_pixels_never_ship).toBe('VERIFIED_VECTOR_SANDBOX');
   });
 
-  it('inspects Kurdish WebFont coverage, tracks AI budgets, mines feedback deltas, and provides client-scoped omnisearch', async () => {
+  it('inspects WebFont coverage, retires fixture budgets, reviews owner instructions, and provides client-scoped omnisearch', async () => {
     // 1. Font Inspection Endpoint
     const fontRes = await app.request('/v1/fonts/inspect', {
       method: 'POST',
@@ -636,28 +661,18 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     });
     expect(allocRes.status).toBe(410);
 
-    // 3. Governed Learning & Feedback Mining
-    const mineRes = await app.request('/v1/feedback/mine', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientId: 'client-drustee',
-        taskId: 'task-test-learn-1',
-        initialArtboard: {
-          taskId: 'task-test-learn-1',
-          clientId: 'client-drustee',
-          layers: [{ id: 'title', type: 'text', color: '#111827', lineHeight: 1.2, x: 50, y: 50, width: 200, height: 50 }],
-        },
-        finalArtboard: {
-          taskId: 'task-test-learn-1',
-          clientId: 'client-drustee',
-          layers: [{ id: 'title', type: 'text', color: '#01585F', lineHeight: 1.52, x: 50, y: 90, width: 200, height: 50 }],
-        },
+    // 3. An explicit owner instruction needs no invented approved task. The stored
+    // revision edit flow is exercised by approved-refinement-learning.test.ts.
+    const mineRes=await app.request('/v1/clients/client-drustee/candidate-rules/propose',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        title:'Owner typography instruction',category:'typography',ruleText:'Use the declared Drustee palette for this campaign',
+        rationale:'Explicit owner instruction for human review',
       }),
     });
     expect(mineRes.status).toBe(201);
-    const mineData = await mineRes.json();
-    expect(mineData.count).toBeGreaterThan(0);
+    const mineData=await mineRes.json();
+    expect(mineData.proposal.provenance.taskId).toBeUndefined();
+    expect(mineData.proposal.examples.positiveExampleTaskIds).toEqual([]);
 
     const candRes = await app.request('/v1/clients/client-drustee/candidate-rules');
     expect(candRes.status).toBe(200);

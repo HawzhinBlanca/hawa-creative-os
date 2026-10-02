@@ -1,0 +1,252 @@
+{
+  "date": "2026-10-02",
+  "status": "INTEGRATED_SOURCE_7535_PASS_DEPLOYED_237_PASS_PRODUCT_ADMISSION_OPEN",
+  "researchParent": "dce6004c514ed35f003e7db35966b267b0c49ca4",
+  "liveParent": "baffce10408707f74f1265206366c0af0d482096",
+  "requirements": [
+    "FR-011",
+    "FR-038",
+    "FR-040",
+    "FR-056",
+    "FR-057",
+    "FR-060",
+    "FR-079",
+    "NFR-006",
+    "NFR-012"
+  ],
+  "decisions": [
+    "adrs/172_content_aware_editable_art_direction.md",
+    "adrs/225_task_write_scope_authority.md",
+    "adrs/236_kaae_brand_guideline_light_first.md",
+    "adrs/237_sol_judge_and_visual_review.md",
+    "adrs/226_model_consent_audit_authority.md"
+  ],
+  "connected": {
+    "filesPassed": 16,
+    "passed": 179,
+    "failed": 0,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/VERIFIED_CONNECTED_INTEGRATION.log"
+  },
+  "typecheck": {
+    "roots": 723,
+    "status": "PASS",
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/with-consent/EXACT_ENGINEERING_GATE.log"
+  },
+  "lint": {
+    "status": "PASS",
+    "any": 940,
+    "ceiling": 1053,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/INTEGRATION_LINT.log"
+  },
+  "resolutions": [
+    "Both retained-asset and client-model-consent API schemas kept.",
+    "Retained client-question photo wins; already bound photo remains next fallback.",
+    "Neutral chat title and weak-copy screening retained without unused global feedback miner.",
+    "Finite valid cutout evidence remains required; client light/dark ground uses live palette.",
+    "All narrative support/source selection and alternate sharp hero guards preserved.",
+    "Three distinct feasible recipes kept; no fixed subject-to-recipe mapping restored.",
+    "An unspecified tone does not acquire a global light-page treatment.",
+    "Explicit white paper reaches all four editorial compositions; actual four-failure regression repaired.",
+    "Scoped recipe priors and live tone exports kept; missing composite luminance import restored.",
+    "Both branches requirement evidence merged per cell; generated manifests regenerated."
+  ],
+  "sourceSha256": {
+    "api/openapi.yaml": "9781746dcba7b5222bbf228577e3c4fcb0054c322bfa0afd626aacc8c532e7fe",
+    "apps/core/src/routes/lifecycle-internal.routes.ts": "033b360a47f8ad9f8d584ad13023f458d2bbb7f649493de132a65f0b87f82827",
+    "apps/core/src/services/chat-campaign-intake.ts": "dc5bb946ecdf5ab48edad663349a7f74d28e05e19eb43a556408060c16b71c79",
+    "packages/creative/src/studio/art-direction/generate.ts": "955153fd36b12ba266556be9f22617dbc00d590ac469e29a2905029db52192d5",
+    "packages/creative/src/studio/art-direction/index.ts": "6aa01981cae84ee89d0926435d9cd5a6ad151c2a85d3843738ee1d3054eb1e25",
+    "packages/creative/src/studio/art-direction/recipes.ts": "fa21864e0fe253d504f6524621599364f02ed8eef3c7f8b53e73c844fe7b9472",
+    "packages/creative/src/studio/art-direction/solver.ts": "b87e1e15cf47eb496b65ff8b7495e0fe3260498679e6bb7466d704f214492005",
+    "packages/creative/src/studio/pipeline-v3.ts": "fd625e46ca29bfbf3e27efbbd0c7555008f1a23444b5ae10cc02d9a1c20d785a",
+    "packages/creative/test/kaae-light-guideline.test.ts": "67ecb48ca46512c0998c6d128f9013f39602c2121c2ed6c991dc0fa8887280fb",
+    "apps/core/test/art-direction-e2e.test.ts": "835575007beb523a31a32a1469242e109e5992071106b574bf0dca7e29a7d412",
+    "packages/db/migrations/081_model_consent_audit_authority.sql": "fdfa3c1c1806c0e0cdd9286f99541c05ef2623540ddee7471902950e8ad87ea2",
+    "packages/db/test/model-consent-audit-authority.test.ts": "b30e91613090fffd50ee79e019903cc1138e1c475b8aeee88d93886e53fa3c84",
+    "packages/testkit/chaos/driver/candidate-write-authority.ts": "0b3a10101f33586c42b3f36389cf01eeac390f5e1865087415d973cd4363e9a2",
+    "apps/core/test/startup-schema-check.test.ts": "de85d9095f8c6119dc53a57e4d3928e2668a13dac356352e5a04b60ff0dfd9ff",
+    "packages/db/test/schema-upgrade.test.ts": "88b44090a2a03e79b7cd2d766cabae434cc6bf76f01bfe5fd43e97dc95c1413c"
+  },
+  "failureHistory": [
+    "Initial conflict resolver rejected prompt separator lines and subsequent typechecks caught incomplete file tails; all affected files restored from actual Git merge inputs and re-resolved with exact hunk counts. No integration commit/deployment preceded correction.",
+    "Missing merged palette luminance import initially caused43 failures/132 positives.",
+    "Corrected16-file run exposed9 actual tone/transfer incompatibilities with166 positives; original exact-source and narrative assertions preserved.",
+    "Four strict new white-paper editorial controls failed before the solver repair.",
+    "Final unchanged strict connected suite plus four new controls:179/0.",
+    "First exact integrated full run7515/4/67: three legitimate model-consent API/replay/withdrawal failures from missing purpose-specific audit permission; one old removed KAAE palette fixture. Forward081 source-bound permission and approved palette fixture repair38 connected controls without weaker assertions. Full rerun pending.",
+    "First repaired full gate6647a4cb stopped on unknown catalog-row test typing. Added an explicit SQL result type; no runtime, migration, harness or test assertion change. Exact clean1cf34fdb full7535/0/67 passes. Previous failed receipt retained."
+  ],
+  "fullEngineering": {
+    "commit": "1cf34fdb5aa939d8e971f0c4aea9c30e60cec768",
+    "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+    "cleanTree": true,
+    "passed": 7535,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 716,
+    "strictRoots": 723,
+    "technicalStagesPassed": 7,
+    "productionDumpStage": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
+    "negativeFlagRefusal": true,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/with-consent/RELEASE_GATE_EVIDENCE.json"
+  },
+  "candidateRecovery": {
+    "commit": "6647a4cb30220242743b7d78c31e6cf663a11d76",
+    "finishedAt": "2026-10-01T20:53:21.211Z",
+    "passed": 237,
+    "failed": 0,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/with-consent/last-run.json",
+    "currentWriteAndConsentControls": [
+      {
+        "name": "candidate write probes use the real restricted application role",
+        "ok": true,
+        "detail": "hawa_app"
+      },
+      {
+        "name": "candidate assigned designer insert without RETURNING persists its own client task",
+        "ok": true,
+        "detail": "owner readback"
+      },
+      {
+        "name": "candidate denies a designer insert into an unassigned client without RETURNING",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate denies a derived task-event insert into an unassigned client without RETURNING",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate denies disabled-account inserts despite a retained writing grant",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate denies withdrawn office membership inserts despite a retained writing grant",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate read-only client assignment cannot insert tasks through a forged administrator claim",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate selected client cannot be replaced by a broad operator",
+        "ok": true,
+        "detail": "SQL 23514"
+      },
+      {
+        "name": "candidate selected client cannot be removed by a broad operator",
+        "ok": true,
+        "detail": "SQL 23514"
+      },
+      {
+        "name": "candidate preserves same-client and unrelated authorized task updates",
+        "ok": true,
+        "detail": "one updated task"
+      },
+      {
+        "name": "candidate migration080 receipt matches the exact source checksum",
+        "ok": true,
+        "detail": "edbec71fe1bc00dd9f1a331b0fdb44a0511a3791ed4a9ec9ee4b440f2c7ef374"
+      },
+      {
+        "name": "candidate named stored administrator can append source-bound consent evidence",
+        "ok": true,
+        "detail": "actual hawa_app write"
+      },
+      {
+        "name": "candidate operator cannot forge administrator consent evidence",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate consent audit refuses an after-hash outside its approved DNA snapshot",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate task policy cannot bypass source-bound consent authority",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate migration081 receipt matches the exact source checksum",
+        "ok": true,
+        "detail": "fdfa3c1c1806c0e0cdd9286f99541c05ef2623540ddee7471902950e8ad87ea2"
+      }
+    ],
+    "recoveries": {
+      "drive": {
+        "tableCount": 105,
+        "policyCount": 179,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.511,
+        "separateHostProved": false,
+        "productionChanged": false
+      },
+      "telegram": {
+        "tableCount": 105,
+        "policyCount": 179,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.805,
+        "separateHostProved": false,
+        "productionChanged": false
+      }
+    }
+  },
+  "productionDeployment": "NOT_PERFORMED",
+  "wholeProductAdmission": false,
+  "repair": {
+    "decision": "adrs/226_model_consent_audit_authority.md",
+    "connectedFiles": 6,
+    "passed": 38,
+    "failed": 0,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/VERIFIED_CONSENT_SCOPE_CONNECTED.log",
+    "currentFullSource": "PASS",
+    "currentCandidateRecovery": "PASS",
+    "migration": "packages/db/migrations/081_model_consent_audit_authority.sql",
+    "scope": "Only actual current administrator consent audit INSERTs, tied to actor/tenant/client/source/hash and recorded privacy state; restrictive guard prevents task policy bypass. Existing read grants unchanged."
+  },
+  "firstFullEngineering": {
+    "commit": "d66a92712397092da24a115975d47135a200403c",
+    "status": "FAILED",
+    "passed": 7515,
+    "failed": 4,
+    "skipped": 67,
+    "passingFiles": 713,
+    "failedFiles": 2,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/FIRST_FULL_GATE.log"
+  },
+  "previousCandidateRecovery": {
+    "commit": "d66a92712397092da24a115975d47135a200403c",
+    "passed": 232,
+    "failed": 0,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/last-run.json",
+    "policyCount": 177,
+    "note": "Before forward081; not current repaired runtime qualification."
+  },
+  "sourceVersusDeployed": {
+    "runtimeMigrationsHarnessIdentical": true,
+    "differences": [
+      "MANIFEST.json",
+      "RELEASE_MANIFEST.json",
+      "SHA256SUMS.txt",
+      "packages/db/test/model-consent-audit-authority.test.ts"
+    ],
+    "note": "Only test catalog result-type annotation and generated seal differ. Test assertions unchanged; final source suite includes the annotation. No second image rehearsal claimed for final published metadata seal."
+  },
+  "cleanup": {
+    "ownedStackRemoved": true,
+    "syntheticSessionRemoved": true,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/integrated/with-consent/OWNED_STACK_CLEANUP.log"
+  }
+}

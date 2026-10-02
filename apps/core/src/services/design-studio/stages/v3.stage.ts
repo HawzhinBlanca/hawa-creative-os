@@ -15,6 +15,7 @@ import {
   type BriefBoundJudgeBrief,
   type StudioJudgeProtocol,
   photoSelectionFromInstructions,
+  imagePixelSize,
   guidelineFidelityRule,
 } from '@hawa/creative';
 import type { StageContext, CandidateState, Concept, Archetype, MotifKind, CreativeBrief } from '../types.js';
@@ -166,11 +167,28 @@ export function conceptFromV3Candidate(
 /** The hard-QA context of this run: the gate its winner must pass. */
 export function hardQaContextFor(
   ctx: Pick<StageContext, 'width' | 'height' | 'copyBlocks' | 'latinFont' | 'arabicFont' | 'referencePack' | 'logoAspect' | 'photos' | 'playbook'> &
-    Partial<Pick<StageContext, 'instructions' | 'photoSelection'>>
+    Partial<Pick<StageContext, 'instructions' | 'photoSelection' | 'photoFaces' | 'photoCutouts'>>
 ): HardQaContext {
   const photoCount = ctx.photos?.length ?? 0;
   return {
     photoCount,
+    photoSources: (ctx.photos ?? []).map((p, i) => {
+      const size = imagePixelSize(p.bytes);
+      const cutout = ctx.photoCutouts?.[i];
+      const cutoutPixels = cutout ? imagePixelSize(cutout.png) : undefined;
+      if (!size && !cutout) return undefined;
+      return { width: size?.width ?? 0, height: size?.height ?? 0,
+        ...(cutout ? { cutout: cutoutPixels ? { ...cutoutPixels,
+          placement: { width: cutout.width, height: cutout.height } } : null } : {}) };
+    }),
+    ...(ctx.photoFaces ? { photoRegions: (ctx.photos ?? []).map((p, i) => {
+      const faces = ctx.photoFaces?.[i];
+      if (!faces) return undefined;
+      const size = imagePixelSize(p.bytes);
+      return { width: size?.width ?? p.width ?? 0, height: size?.height ?? p.height ?? 0,
+        ...(faces.regionStatus ? { regionStatus: faces.regionStatus } : {}),
+        ...(faces.regions ? { regions: faces.regions } : {}) };
+    }) } : {}),
     // ADR-157: the brief's recorded choice, else the instructions read now; `all` when neither says.
     photoSelection: ctx.photoSelection ?? photoSelectionFromInstructions(ctx.instructions, photoCount),
     ...(ctx.instructions ? { instructions: ctx.instructions } : {}),
@@ -414,6 +432,11 @@ export async function runJudgeStageV3(
     ...houseRulesFor(ctx),
     // ADR-170: the brief's subject, for the house prior when the judge leaves two recipes undecided.
     ...(judge.subjects?.length ? { subjects: judge.subjects } : {}),
+    ...(ctx.exemplarRetrieval && ctx.exemplarPolicySha256 && typeof ctx.referencePack.clientId === 'string' ? { recipePreferences: {
+      clientId: ctx.clientId, referenceClientId: ctx.referencePack.clientId,
+      policySha256: ctx.exemplarPolicySha256, loadedIds: ctx.exemplarRetrieval.loadedIds,
+      matches: ctx.exemplarRetrieval.matches,
+    } } : {}),
     // ADR-238: a client with a page grammar: its composed design stands unless the judge clearly prefers another.
     ...(ctx.pageGrammar ? { pageGrammar: ctx.pageGrammar } : {}),
   });

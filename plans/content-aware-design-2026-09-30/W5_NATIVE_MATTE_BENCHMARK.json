@@ -1,0 +1,145 @@
+{
+  "date": "2026-10-01T01:22:47.169Z",
+  "scope": "Nine warm paired local helper measurements; explicit packaged official test logo, synthetic empty-copy controls. Not pipeline p95, Canva or human quality.",
+  "runtime": {
+    "version": 1,
+    "rsvg": {
+      "sha256": "740e788da4758d2d404ce583e4e0cb6bac8a389a092b602fe6b604165550014a",
+      "version": "rsvg-convert version 2.62.3\n\nlibraries used:\n  cairo 1.18.4\n  pango 1.58.2\n  harfbuzz 14.4.0\n  fontconfig 2.18.3"
+    },
+    "os": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "kernel": "27.0.0",
+      "distribution": {
+        "summary": "macOS 27.0 (26A428)",
+        "sha256": "edfcaab01db2e592aa15d48ab23bdab2a94665ee685c648a7d04fa8608517873"
+      }
+    }
+  },
+  "sourceAssetSha256": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+  "sourceUnchanged": true,
+  "contrastEqualityPassed": 9,
+  "nativeJobsPerMeasurement": {
+    "legacy": 2,
+    "optimized": 1,
+    "actualDelegatingSpyEvidence": "/tmp/hawa-w5-matte-connected-20261001.log"
+  },
+  "medianMs": {
+    "legacy": 78.14083299999993,
+    "optimized": 74.67275000000018
+  },
+  "relativeMedianChange": -0.044382467742566226,
+  "records": [
+    {
+      "caseIndex": 0,
+      "trial": 0,
+      "legacy": {
+        "ms": 90.64133300000003,
+        "contrast": 5.25
+      },
+      "optimized": {
+        "ms": 81.39033299999994,
+        "contrast": 5.25
+      }
+    },
+    {
+      "caseIndex": 0,
+      "trial": 1,
+      "legacy": {
+        "ms": 84.45629199999985,
+        "contrast": 5.25
+      },
+      "optimized": {
+        "ms": 80.01383399999986,
+        "contrast": 5.25
+      }
+    },
+    {
+      "caseIndex": 0,
+      "trial": 2,
+      "legacy": {
+        "ms": 76.32458299999985,
+        "contrast": 5.25
+      },
+      "optimized": {
+        "ms": 74.06733300000019,
+        "contrast": 5.25
+      }
+    },
+    {
+      "caseIndex": 1,
+      "trial": 0,
+      "legacy": {
+        "ms": 117.75491699999998,
+        "contrast": 5.25
+      },
+      "optimized": {
+        "ms": 72.20700000000011,
+        "contrast": 5.25
+      }
+    },
+    {
+      "caseIndex": 1,
+      "trial": 1,
+      "legacy": {
+        "ms": 75.96183399999995,
+        "contrast": 5.25
+      },
+      "optimized": {
+        "ms": 72.92145800000003,
+        "contrast": 5.25
+      }
+    },
+    {
+      "caseIndex": 1,
+      "trial": 2,
+      "legacy": {
+        "ms": 75.78091700000004,
+        "contrast": 5.25
+      },
+      "optimized": {
+        "ms": 71.45341699999994,
+        "contrast": 5.25
+      }
+    },
+    {
+      "caseIndex": 2,
+      "trial": 0,
+      "legacy": {
+        "ms": 123.52929200000017,
+        "contrast": 5.25
+      },
+      "optimized": {
+        "ms": 75.44083299999988,
+        "contrast": 5.25
+      }
+    },
+    {
+      "caseIndex": 2,
+      "trial": 1,
+      "legacy": {
+        "ms": 77.72791600000028,
+        "contrast": 5.25
+      },
+      "optimized": {
+        "ms": 74.80883299999982,
+        "contrast": 5.25
+      }
+    },
+    {
+      "caseIndex": 2,
+      "trial": 2,
+      "legacy": {
+        "ms": 78.14083299999993,
+        "contrast": 5.25
+      },
+      "optimized": {
+        "ms": 74.67275000000018,
+        "contrast": 5.25
+      }
+    }
+  ],
+  "newProviderCalls": 0,
+  "codeSha256": "413dd53033665f67d9c0b888dd08787f36e1a0ad85da67980bf68fc4d9f9ea60"
+}

@@ -578,6 +578,7 @@ export class RevisionRepository {
         const priority = structured?.priority;
         const rejectionCategory = params.decisionPayload?.rejectionCategory;
         const target: Record<string, unknown> = {
+          kind:'revision_decision_v1',sourceSha256:revision.source_sha256,
           approvalId: approval.id, decision: params.decision, revisionId: params.revisionId,
           ...(typeof rejectionCategory === 'string' ? { rejectionCategory } : {}),
           ...(structured ? { revisionRequest: structured } : {}),

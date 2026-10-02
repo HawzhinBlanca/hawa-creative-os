@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { startFakes, type Fakes } from '../fakes/server.ts';
 import { plannerLayout } from '../fakes/models.ts';
+import { isDesignGenerationResponse } from '../driver/model-ledger.js';
 import { chaosPoint } from '../../../observability/src/chaos-point.js';
 
 /**
@@ -118,6 +119,50 @@ describe('fake Telegram', () => {
 });
 
 describe('fake models and the paid-call ledger', () => {
+  const imageCount = (body: unknown, method = 'POST') => provider('api.openai.com', '/v1/responses/input_tokens', {
+    method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const inlineImage = (bytes: number[], detail = 'auto') => ({ type: 'input_image',
+    image_url: `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`, detail });
+
+  it('serves the bounded synthetic Sol image-count protocol without generating a completion or retaining images', async () => {
+    await admin('/reset', {});
+    const images = [inlineImage([1, 2, 3]), inlineImage([4, 5, 6], 'high')];
+    const body = { model: 'gpt-6.1-sol', input: [{ role: 'user', content: images }] };
+    const response = await imageCount(body);
+    expect(response.status).toBe(200);
+    // Fixture units only: this is not a provider token estimate or pricing measurement.
+    expect(response.json).toEqual({ object: 'response.input_tokens', input_tokens: 520 });
+    expect(response.json.choices).toBeUndefined();
+    const changed = await imageCount({ ...body, input: [{ role: 'user', content: [inlineImage([1, 2, 3], 'low'), images[1]] }] });
+    expect(changed.status).toBe(200);
+    const { ledger } = await admin('/models/ledger');
+    expect(ledger).toHaveLength(2);
+    expect(ledger[0]).toMatchObject({ route: 'input-token-count', model: 'gpt-6.1-sol', status: 200,
+      imageSha256: [crypto.createHash('sha256').update(Buffer.from([1, 2, 3])).digest('hex'),
+        crypto.createHash('sha256').update(Buffer.from([4, 5, 6])).digest('hex')] });
+    expect(ledger[0].fingerprint).not.toBe(ledger[1].fingerprint);
+    expect(JSON.stringify(ledger)).not.toContain(images[0].image_url);
+    expect((await admin('/models/ledger')).paid).toEqual({});
+  });
+
+  it.each([
+    { model: 'unconfigured-model', input: [{ role: 'user', content: [inlineImage([1])] }] },
+    { model: 'gpt-6.1-sol', input: [] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'assistant', content: [inlineImage([1])] }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: [{ type: 'input_image', image_url: 'https://untrusted.example/photo' }] }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: [inlineImage([1], 'invented-detail')] }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: [{ type: 'input_image', image_url: 'data:image/png;base64,AA===' }] }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: Array.from({ length: 65 }, () => inlineImage([1])) }] },
+    { model: 'gpt-6.1-sol', input: [{ role: 'user', content: [inlineImage([1])] }], instructions: 'unconfigured input' },
+  ])('keeps an unsupported count request visible as an uncovered protocol (%j)', async (body) => {
+    await admin('/reset', {});
+    expect((await imageCount(body)).status).toBe(500);
+    const { ledger } = await admin('/models/ledger');
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]).toMatchObject({ route: 'unmatched:/v1/responses/input_tokens', status: 500 });
+  });
+
   const chat = (schema: string | null, user: string, extra: Record<string, unknown> = {}) =>
     provider('api.openai.com', '/v1/chat/completions', {
       method: 'POST',
@@ -137,6 +182,22 @@ describe('fake models and the paid-call ledger', () => {
     expect(Object.values(paid).map((p: any) => p.n).sort()).toEqual([1, 2]);
   });
 
+  it('excluding count preflights still catches two identical successful design generations', async () => {
+    await admin('/reset', {});
+    expect((await imageCount({ model: 'gpt-6.1-sol', input: [{ role: 'user', content: [inlineImage([1, 2, 3])] }] })).status).toBe(200);
+    const brief = JSON.stringify({ width: 1080, height: 1350, copy: ['SYNTHETIC EXACT COPY'] });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect((await chat('canva_design_plan', brief, { model: 'gpt-6.1-sol' })).status).toBe(200);
+    }
+    const { ledger, paid } = await admin('/models/ledger');
+    expect(ledger).toHaveLength(3);
+    const generations = ledger.filter(isDesignGenerationResponse);
+    expect(generations).toHaveLength(2);
+    expect(generations[0].fingerprint).toBe(generations[1].fingerprint);
+    expect(Object.values(paid)).toEqual([{ route: 'canva_design_plan', n: 2 }]);
+    expect(ledger.filter((entry: any) => entry.route === 'input-token-count')).toHaveLength(1);
+  });
+
   it('refuses, and records as unmatched, a call no fixture covers', async () => {
     await admin('/reset', {});
     const res = await chat('studio_layout_v3', 'x');
@@ -145,6 +206,61 @@ describe('fake models and the paid-call ledger', () => {
     expect(gemini.status).toBe(500);
     const { ledger } = await admin('/models/ledger');
     expect(ledger.map((l: any) => l.route)).toEqual(['unmatched', 'unmatched:/v1beta/models/gemini:generateContent']);
+  });
+
+  it('distinguishes requested Gemini models in the fingerprint ledger without retaining input text', async () => {
+    await admin('/reset', {});
+    for (const model of ['gemini-model-a', 'gemini-model-b']) {
+      expect((await provider('generativelanguage.googleapis.com', `/v1beta/models/${model}:generateContent`, {
+        method: 'POST', body: JSON.stringify({ contents: [{ parts: [{ text: 'PRIVATE_SYNTHETIC_PROMPT' }] }] }),
+      })).status).toBe(500);
+    }
+    const { ledger } = await admin('/models/ledger');
+    expect(ledger.map((l: any) => l.model)).toEqual(['gemini-model-a', 'gemini-model-b']);
+    expect(new Set(ledger.map((l: any) => l.fingerprint)).size).toBe(2);
+    expect(JSON.stringify(ledger)).not.toContain('PRIVATE_SYNTHETIC_PROMPT');
+  });
+
+  it('consumes an explicit Gemini failure only on its exact POST provider/model endpoint', async () => {
+    await admin('/reset', {});
+    expect(await admin('/models/gemini-failures', { model: 'gemini-model-a', n: 2 })).toEqual({ ok: true });
+    const path='/v1beta/models/gemini-model-a:generateContent';
+    for (const [host, route, method] of [
+      ['generativelanguage.googleapis.com', path, 'GET'],
+      ['generativelanguage.googleapis.com', '/v1beta/models/gemini-model-b:generateContent', 'POST'],
+      ['api.openai.com', path, 'POST'],
+    ]) expect((await provider(host, route, { method, ...(method==='POST'?{body:'{}'}:{}) })).status).toBe(500);
+    for (let n=0; n<2; n++) expect((await provider('generativelanguage.googleapis.com', path, { method: 'POST', body: '{}' })).status).toBe(503);
+    expect((await provider('generativelanguage.googleapis.com', path, { method: 'POST', body: '{}' })).status).toBe(500);
+    const { ledger, paid } = await admin('/models/ledger');
+    expect(ledger.filter((l: any) => l.route === 'fault:generateContent')).toHaveLength(2);
+    expect(ledger.filter((l: any) => l.route === 'fault:generateContent')).toMatchObject([
+      { provider: 'gemini', model: 'gemini-model-a', status: 503 },
+      { provider: 'gemini', model: 'gemini-model-a', status: 503 },
+    ]);
+    expect(ledger.at(-1).route).toBe('unmatched:'+path);
+    expect(paid).toEqual({});
+  });
+
+  it('refuses invalid failure targets and counts without arming a provider call', async () => {
+    await admin('/reset', {});
+    for (const fault of [{model:'../escaped',n:1}, {model:'gemini-model-a',n:0},
+      {model:'gemini-model-a',n:11}, {model:'gemini-model-a',n:1.5}]) {
+      expect(await admin('/models/gemini-failures', fault)).toEqual({error:'chaos fakes: Invalid Gemini failure fixture'});
+    }
+    const response=await provider('generativelanguage.googleapis.com', '/v1beta/models/gemini-model-a:generateContent', {method:'POST',body:'{}'});
+    expect(response.status).toBe(500);
+    expect((await admin('/models/ledger')).ledger.map((l: any)=>l.route)).toEqual(['unmatched:/v1beta/models/gemini-model-a:generateContent']);
+  });
+
+  it('clears an unused failure between scenarios while preserving its observed ledger', async () => {
+    await admin('/reset', {});
+    await admin('/models/gemini-failures', {model:'gemini-model-a',n:2});
+    const call=()=>provider('generativelanguage.googleapis.com','/v1beta/models/gemini-model-a:generateContent',{method:'POST',body:'{}'});
+    expect((await call()).status).toBe(503);
+    await admin('/faults/clear', {});
+    expect((await call()).status).toBe(500);
+    expect((await admin('/models/ledger')).ledger.map((l: any)=>l.status)).toEqual([503,500]);
   });
 
   it('answers a tagged Canva revision and records the attached image by hash only', async () => {
@@ -179,6 +295,35 @@ describe('fake models and the paid-call ledger', () => {
 });
 
 describe('fake Canva', () => {
+  it('copies an existing synthetic master separately and leaves its source unchanged after editing the copy', async () => {
+    await admin('/reset', {});
+    const original=Buffer.from('PK original fixture bytes longer than thirty-two bytes');
+    const imported=await fetch(`${httpBase}/canva/rest/v1/imports`,{method:'POST',body:original}).then(r=>r.json() as Promise<any>);
+    const read=await fetch(`${httpBase}/canva/rest/v1/imports/${imported.job.id}`).then(r=>r.json() as Promise<any>);
+    const parent=read.job.result.designs[0].id;
+    const copied=await admin('/canva/manual-copy',{designId:parent});
+    expect(copied.designId).not.toBe(parent);
+    expect(Buffer.from(copied.contentBase64,'base64')).toEqual(original);
+    expect(copied.sourceSha256).toBe(crypto.createHash('sha256').update(original).digest('hex'));
+    const changed=Buffer.from('PK revised fixture bytes longer than thirty-two bytes');
+    await admin('/canva/manual-edit',{designId:copied.designId,contentBase64:changed.toString('base64')});
+    const parentAgain=await admin('/canva/manual-copy',{designId:parent});
+    expect(Buffer.from(parentAgain.contentBase64,'base64')).toEqual(original);
+    const copyAgain=await admin('/canva/manual-copy',{designId:copied.designId});
+    expect(Buffer.from(copyAgain.contentBase64,'base64')).toEqual(changed);
+    const {ledger}=await admin('/canva/ledger');
+    expect(ledger.filter((entry:any)=>entry.kind==='import')).toHaveLength(1);
+    expect(ledger.filter((entry:any)=>entry.kind==='design')).toHaveLength(0);
+    expect(ledger.filter((entry:any)=>entry.kind==='manual_edit')).toHaveLength(1);
+  });
+
+  it('refuses a synthetic copy of an unavailable master', async () => {
+    const response=await fetch(`${httpBase}/__fakes/canva/manual-copy`,{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({designId:'missing'})});
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({error:'chaos fakes: Synthetic source design is unavailable'});
+  });
+
   it('imports a deck, exports it back as the same PPTX bytes from the admitted download host, and ledgers each creation', async () => {
     await admin('/reset', {});
     const deck = Buffer.from('PK\u0003\u0004 chaos deck bytes that are longer than thirty-two bytes');

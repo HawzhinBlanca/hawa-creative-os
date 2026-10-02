@@ -1,3 +1,4 @@
+import { backgroundFieldSvg } from './background-field.js';
 import { gradientSvgDef } from './shape-gradient.js';
 import { ornamentSvg } from './brand-elements.js';
 import { measurePangoText, measurementRuntimeIdentity, type PangoMeasurement, type MeasurementRuntimeIdentity } from './pango-measurement.js';
@@ -82,6 +83,9 @@ export interface RenderLayoutOptions {
   rsvgConvertPath?: string;
 }
 
+/** A measured verdict; unavailable or uncovered evidence is never an exact match. */
+export type FontFidelityVerdict = 'exact' | 'stand-in' | 'uncovered' | 'unmeasured';
+
 export interface RenderLayoutV2Result {
   /** Reads `files` by name: to open it alone, inline them with `inlineSvgFiles` (svg-files.ts). */
   svg: string;
@@ -91,7 +95,7 @@ export interface RenderLayoutV2Result {
   /** The pictures both SVGs read, by file name, written beside them when they are rasterised. */
   files: Record<string, Buffer>;
   wrappedLines: Record<number, number>;
-  fontFidelity: Record<string, 'exact' | 'stand-in'>;
+  fontFidelity: Record<string, FontFidelityVerdict>;
   /** Where the art's calm region and each photo's crop land in the bytes drawn (ADR-123). */
   placements: LayoutPlacements;
 }
@@ -255,9 +259,8 @@ export const ADMITTED_FONT_FAMILIES = [
   'Plus Jakarta Sans',
   'Vazirmatn',
   'Inter',
-  // Admitted 2026-09-20. getFontFidelityManifest probes only what this list names, so a family
-  // missing from it is never measured for substitution — the exact blindness that let Vazirmatn
-  // sit in the registry for days while the renderer drew something else for it.
+  // Admitted 2026-09-20. This is the public default report list; actual renders probe every
+  // requested family independently of the list (ADR202).
   'IBM Plex Sans Arabic',
   // Admitted 2026-10-01 (ADR-238): the serif of KAAE's 2025 guideline titles.
   'Crimson Pro',
@@ -344,7 +347,7 @@ export interface FontInkCheck {
 }
 
 const inkCheckCache = new Map<string, FontInkCheck>();
-const sentinelHashCache = new Map<string, string | null>();
+const sentinelHashCache = new Map<string, string>();
 
 /** The part of a fontkit font the ink check reads. */
 interface InkFont {
@@ -397,9 +400,6 @@ export function probeFontInkWidth(
   const fontsDir = resolveFontsDir(options);
   const fontFile = options.fontFile || fontFileFor(family, false, false, fontsDir);
   const sizePx = options.sizePx ?? FONT_INK_SIZE;
-  const key = `${rsvg}|${fontconfigFile}|${family}|${fontFile}|${options.script ?? ''}|${sizePx}`;
-  const cached = inkCheckCache.get(key);
-  if (cached) return cached;
 
   const unmeasured = (reason: NonNullable<FontInkCheck['unmeasuredReason']>, why: string, sample = '', script: FontProbeScript | '' = ''): FontInkCheck => ({
     family,
@@ -418,12 +418,30 @@ export function probeFontInkWidth(
     message: `FONT_INK_UNMEASURED: '${family}' (${fontFile}): ${why}`,
   });
 
-  let font: InkFont;
+  let fontEntry: ReturnType<typeof loadFontPathEntry>;
   try {
-    font = fk.openSync(fontFile) as unknown as InkFont;
+    fontEntry = loadFontPathEntry(fontFile);
   } catch {
     return unmeasured('unopenable', 'the file cannot be opened');
   }
+  let renderer: RendererRuntimeIdentity;
+  let configSha256: string;
+  try {
+    renderer = rendererRuntimeIdentity({ rsvgConvertPath: rsvg });
+    configSha256 = createHash('sha256').update(fs.readFileSync(fontconfigFile)).digest('hex');
+  } catch {
+    return unmeasured('no-rasteriser', 'the current renderer or font configuration cannot be verified');
+  }
+  // ADR201: generated configurations bind all allowed fonts. Arbitrary configurations may
+  // include mutable files/directories outside that inventory, so both probes must run fresh.
+  const cacheable = !options.fontconfigFile ||
+    path.resolve(fontconfigFile) === path.resolve(pinnedFontconfigFile(fontsDir));
+  const rasterBasis = JSON.stringify([rsvg, renderer, fontconfigFile, configSha256]);
+  const key = JSON.stringify([rasterBasis, family, fontFile, fontEntry.sha256, options.script ?? '', sizePx]);
+  const cached = cacheable ? inkCheckCache.get(key) : undefined;
+  if (cached) return cached;
+
+  const font = fontEntry.font as InkFont;
   const covers = (text: string) => {
     try {
       return !font.layout(text).glyphs.some((g) => g.id === 0);
@@ -439,7 +457,7 @@ export function probeFontInkWidth(
   if (!script) {
     const which = options.script ? `the ${options.script} samples` : 'any sample';
     const check = unmeasured('uncovered', `the face does not draw ${which}`);
-    inkCheckCache.set(key, check);
+    if (cacheable) inkCheckCache.set(key, check);
     return check;
   }
   const sample = sampleFor(script) as string;
@@ -453,12 +471,15 @@ export function probeFontInkWidth(
 
   // The same sample, canvas and size in a family that cannot exist: what the fallback face draws.
   // The canvas depends only on the sample and the size, so every family shares this rasterisation.
-  const sentinelKey = `${rsvg}|${fontconfigFile}|${sizePx}|${sample}`;
-  if (!sentinelHashCache.has(sentinelKey)) {
+  const sentinelKey = JSON.stringify([rasterBasis, sizePx, sample]);
+  let sentinelHash = cacheable ? sentinelHashCache.get(sentinelKey) : undefined;
+  if (sentinelHash === undefined) {
     const sentinel = rasteriseProbe(inkProbeSvg(FONT_PROBE_SENTINEL, sample, sizePx), rsvg, fontconfigFile);
-    sentinelHashCache.set(sentinelKey, sentinel ? createHash('sha256').update(sentinel).digest('hex') : null);
+    if (!sentinel) return unmeasured('no-rasteriser', 'the sentinel comparison could not be measured', sample, script);
+    sentinelHash = createHash('sha256').update(sentinel).digest('hex');
+    if (cacheable) sentinelHashCache.set(sentinelKey, sentinelHash);
   }
-  const sameAsSentinel = sentinelHashCache.get(sentinelKey) === createHash('sha256').update(png).digest('hex');
+  const sameAsSentinel = sentinelHash === createHash('sha256').update(png).digest('hex');
 
   const img = PNG.sync.read(png);
   let left = Infinity;
@@ -500,7 +521,7 @@ export function probeFontInkWidth(
     sameAsSentinel,
     message,
   };
-  inkCheckCache.set(key, check);
+  if (cacheable) inkCheckCache.set(key, check);
   return check;
 }
 
@@ -525,7 +546,7 @@ export function assertFontInkWidth(
  * - unmeasured: no rasteriser, or it drew nothing.
  */
 export interface FontScriptFidelity {
-  verdict: 'exact' | 'stand-in' | 'uncovered' | 'unmeasured';
+  verdict: FontFidelityVerdict;
   substituted: boolean;
   ink: FontInkCheck;
 }
@@ -595,9 +616,9 @@ const inkMismatchWarned = new Set<string>();
 export function probeFontFidelity(
   family: string,
   options?: RenderLayoutOptions
-): 'exact' | 'stand-in' {
+): FontFidelityVerdict {
   const result = probeFontScripts(family, options ?? {})[fontFamilyScript(family)];
-  if (result.verdict !== 'stand-in') return 'exact';
+  if (result.verdict !== 'stand-in') return result.verdict;
   const key = `${result.ink.fontFile}|${family}|${resolveFontconfigFile(options)}`;
   if (!inkMismatchWarned.has(key)) {
     inkMismatchWarned.add(key);
@@ -612,14 +633,14 @@ export function probeFontFidelity(
  * typography on hosts where half the families were being silently substituted.
  */
 export function getFontFidelityManifest(
-  _fontsDir: string,
-  options?: RenderLayoutOptions
-): Record<string, 'exact' | 'stand-in'> {
-  const out: Record<string, 'exact' | 'stand-in'> = {};
-  for (const family of ADMITTED_FONT_FAMILIES) {
-    out[family] = probeFontFidelity(family, options);
-  }
-  return out;
+  fontsDir: string,
+  options?: RenderLayoutOptions,
+  families: readonly string[] = ADMITTED_FONT_FAMILIES
+): Record<string, FontFidelityVerdict> {
+  // Family names may come from untrusted layout data; define even prototype-like names as data.
+  return Object.fromEntries([...new Set(families)].map(family =>
+    [family, probeFontFidelity(family, { ...options, fontsDir })] as const
+  ));
 }
 
 /** Every admitted family's verdict per script, for reports that need to say which script moved. */
@@ -812,6 +833,11 @@ export function fontFileFor(fontFamily: string, bold?: boolean, italic?: boolean
  */
 function loadFontEntry(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string) {
   const fontPath = fontFileFor(fontFamily, bold, italic, fontsDir);
+  return loadFontPathEntry(fontPath);
+}
+
+/** Stable content identity and parsed font for either a resolved family or an explicit file. */
+function loadFontPathEntry(fontPath: string) {
   const fingerprint = () => {
     const st = fs.statSync(fontPath, { bigint: true });
     return `${st.dev}:${st.ino}:${st.size}:${st.mtimeNs}:${st.ctimeNs}`;
@@ -1090,11 +1116,19 @@ export function fontCoversText(
     return { covers: false, missing: [] };
   }
 
+  return fontCoversCharacters(font, text);
+}
+
+/** Shared coverage calculation for an already verified font-file snapshot. */
+function fontCoversCharacters(
+  font: { layout(text: string): { glyphs: Array<{ id: number }> } },
+  text: string
+): { covers: boolean; missing: string[] } {
   const missing = new Set<string>();
   for (const ch of Array.from(text)) {
     if (/\s/.test(ch)) continue;
     try {
-      if (font.layout(ch).glyphs.some((g: any) => g.id === 0)) missing.add(ch);
+      if (font.layout(ch).glyphs.some((g) => g.id === 0)) missing.add(ch);
     } catch {
       missing.add(ch);
     }
@@ -1152,7 +1186,7 @@ export interface AdmittedFontFace {
 }
 
 const renderFontRegistryCache = new Map<string, { sha256: string; registry: RenderFontRegistry }>();
-const admittedFaceCache = new Map<string, AdmittedFontFace[]>();
+const admittedFaceCache = new Map<string, { basis: string; faces: AdmittedFontFace[] }>();
 
 /**
  * render-fonts.json, from this module's own location.
@@ -1263,9 +1297,7 @@ export function admittedFontFaces(options: {
 }): AdmittedFontFace[] {
   const file = resolveRenderFontsPath(options.registryPath);
   const key = `${file}|${options.fontsDir || ''}|${options.script}|${options.role}|${options.bold ? 1 : 0}`;
-  const cached = admittedFaceCache.get(key);
-  if (cached) return cached;
-
+  // ADR200: a hit must not bypass current policy, declared weight presence or measured bytes.
   const registry = loadRenderFontRegistry({ registryPath: options.registryPath });
   const required = registry.scripts?.[options.script]?.requiredCharacters ?? '';
   const declared = Object.values(registry.families || {}).filter(
@@ -1273,10 +1305,26 @@ export function admittedFontFaces(options: {
       family.admitted && family.script === options.script && typeof family.roles?.[options.role] === 'number'
   );
 
-  const drawable: AdmittedFontFace[] = declared
-    .map((family) => ({ family, weights: presentWeights(family) }))
+  const candidates = declared.map((family) => {
+    const weights = presentWeights(family);
+    let measured: ReturnType<typeof loadFontEntry> | undefined;
+    if (weights.length) {
+      try { measured = loadFontEntry(family.name, false, false, resolveFontsDir(options)); }
+      catch { /* An unavailable or invalid measured file is never an admitted face. */ }
+    }
+    return { family, weights, measured };
+  });
+  // The loader keeps parsed fonts for unchanged fingerprints and verifies changed bytes.
+  // Reuse that identity; full renderer/OS capture is a different boundary, not a glyph query.
+  const basis = JSON.stringify(candidates.map(({ family, weights, measured }) =>
+    [family.name, weights, measured?.sha256 ?? null]
+  ));
+  const cached = admittedFaceCache.get(key);
+  if (cached?.basis === basis) return cached.faces;
+
+  const drawable: AdmittedFontFace[] = candidates
     .filter(({ weights }) => weights.length > 0)
-    .filter(({ family }) => fontCoversText(family.name, required, { fontsDir: options.fontsDir }).covers)
+    .filter(({ measured }) => measured !== undefined && fontCoversCharacters(measured.font, required).covers)
     .map(({ family, weights }) => ({
       name: family.name,
       rank: family.roles[options.role] as number,
@@ -1297,7 +1345,7 @@ export function admittedFontFaces(options: {
   // without a face: keep the preferred list and let fontFaceSupports gate the emitted axis.
   const withWeight = options.bold ? drawable.filter((face) => face.hasBold) : drawable;
   const faces = withWeight.length ? withWeight : drawable;
-  admittedFaceCache.set(key, faces);
+  admittedFaceCache.set(key, { basis, faces });
   return faces;
 }
 
@@ -1873,13 +1921,13 @@ export function renderLayoutV2ToSvg(
   /** The pictures the SVGs read by name; see RenderLayoutV2Result.files. */
   files: Record<string, Buffer>;
   wrappedLines: Record<number, number>;
-  fontFidelity: Record<string, 'exact' | 'stand-in'>;
+  fontFidelity: Record<string, FontFidelityVerdict>;
 } {
   const fontsDir = resolveFontsDir(options);
   // Every picture is a file beside the SVG, never a data URI in it (ADR-035; svg-files.ts).
   const svgFiles = new SvgFiles();
   const fontconfigFile = resolveFontconfigFile(options);
-  const fontFidelity = getFontFidelityManifest(fontsDir, options);
+  const fontFidelity = getFontFidelityManifest(fontsDir, options, layout.text.map(t => t.fontFamily));
 
   // Assert font resolution for all text elements
   const seenFamilies = new Set<string>();
@@ -1899,6 +1947,12 @@ export function renderLayoutV2ToSvg(
   bodyPartsNoText.push(
     `<rect id="background" width="${layout.width}" height="${layout.height}" fill="${layout.background.color}"/>`
   );
+
+  if (layout.background.field) {
+    const field = backgroundFieldSvg(layout.background.field, layout.width, layout.height);
+    defsParts.push(field.defs);
+    bodyPartsNoText.push(field.svg);
+  }
 
   // Art Layer
   if (layout.art) {

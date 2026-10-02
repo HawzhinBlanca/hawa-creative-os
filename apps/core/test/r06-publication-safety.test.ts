@@ -1,3 +1,6 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
 import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { assert, describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createDb, PublicationRepository, TaskRepository, sql, withRlsContext } from '@hawa/db';
@@ -550,3 +553,5 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     expect(pubState.sheetSync.synced).toBe(false);
   });
 });
+
+prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:testDb}), 'c1000000-0000-4000-8000-000000000003',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});

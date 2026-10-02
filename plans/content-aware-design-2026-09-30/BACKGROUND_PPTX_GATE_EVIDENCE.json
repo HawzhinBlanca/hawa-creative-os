@@ -1,0 +1,42 @@
+{
+  "taskId": "R11",
+  "name": "Make the Release Gate Reproducible and Non-Bypassable",
+  "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+  "admissionQualified": false,
+  "evaluatedAt": "2026-10-01T10:03:02Z",
+  "git": {
+    "commit": "e879ce292ad1cd0067369056bdb945fb95ff567d",
+    "branch": "codex/content-aware-design",
+    "cleanTree": true
+  },
+  "releaseManifest": {
+    "file": "RELEASE_MANIFEST.json",
+    "sha256": "26f6273523b766608db6c4aa260bf687d29abea93d595d16aab848be5cfa926d",
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    }
+  },
+  "databaseIsolation": {
+    "productionPort": 54332,
+    "testPort": 55432,
+    "isolated": true
+  },
+  "verificationStages": [
+    "Stage 1: TypeScript typecheck (pnpm typecheck)",
+    "Stage 2: Database schema & migrations check (pnpm run db:check)",
+    "Stage 3: Pending migrations on production's newest dump (predeploy-dump-check.ts): passed",
+    "Stage 4: Security & secret scanner with self-test (security_scan.py)",
+    "Stage 5: Knowledge pack validation (validate_pack.py)",
+    "Stage 6: Source-candidate manifest check (verify_release_manifest.ts)",
+    "Stage 7: Production DB & credential isolation guard",
+    "Stage 8: Full monorepo acceptance tests (6750 passed, 0 failed)"
+  ],
+  "normativeGatesEvaluated": {"GateA_StudioProof":"NOT_RUN_DEPLOYMENT_REQUIRED","GateB_SecurityClientIsolation":"NOT_RUN_DEPLOYMENT_REQUIRED","GateC_DurableOperation":"NOT_RUN_DEPLOYMENT_REQUIRED","GateD_ModelRetrievalQuality":"NOT_RUN_DEPLOYMENT_REQUIRED","GateE_DesignQA":"NOT_RUN_DEPLOYMENT_REQUIRED","GateF_HumanReview":"NOT_RUN_DEPLOYMENT_REQUIRED","GateG_Publication":"NOT_RUN_DEPLOYMENT_REQUIRED","GateH_Recovery":"NOT_RUN_DEPLOYMENT_REQUIRED"},
+  "admissionEvidence": "Current-candidate deployment, gate, and blinded human-quality evidence are not evaluated by pre-deployment checks; R27 admission remains open.",
+  "negativeRefusalTest": {
+    "command": "scripts/enforce_release_gate.sh --test-refusal",
+    "expectedBehavior": "Fail-closed non-zero exit when manifest flag violated",
+    "verified": true
+  }
+}

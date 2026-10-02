@@ -42,6 +42,17 @@ export interface ApiSessionResponse {
   tenantId?: string;
 }
 
+export interface ClientModelReading { openai: boolean; reason?: string }
+export interface ClientModelConsent {
+  clientId: string; version: number | null; approved: boolean; approvedBy: string | null;
+  privacy: { modelEgressMode?: string; allowedProviders?: string[] } | null;
+  modelReading: ClientModelReading;
+}
+export interface ClientModelConsentChange {
+  expectedVersion: number; mode: 'approved_providers' | 'local_only'; providers: ['openai'] | [];
+  reason: string;
+}
+
 export interface ApiProblemDetails {
   type?: string;
   title: string;
@@ -412,10 +423,15 @@ class HawaApiClient {
       return response.blob();
     },
     dna: (clientId: string) => this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`),
-    saveDna: (clientId: string, dna: unknown) =>
-      this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`, { method: 'POST', body: JSON.stringify(dna) }),
+    modelConsent: (clientId: string) =>
+      this.request<ClientModelConsent>(`/clients/${encodeURIComponent(clientId)}/dna/model-consent`),
+    recordModelConsent: (clientId: string, body: ClientModelConsentChange) =>
+      this.request<{ clientId: string; version: number; modelReading: ClientModelReading }>(
+        `/clients/${encodeURIComponent(clientId)}/dna/model-consent`, { method: 'POST', body: JSON.stringify(body) }),
+    saveDna: (clientId: string, dna: object, expectedVersion: number) =>
+      this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`, { method: 'POST', body: JSON.stringify({ ...dna, expectedVersion }) }),
     snapshots: (clientId: string) => this.request<any[]>(`/clients/${encodeURIComponent(clientId)}/snapshots`),
-    commitSnapshot: (clientId: string, body: { commitMessage: string; createdBy: string }) =>
+    commitSnapshot: (clientId: string, body: { commitMessage: string; createdBy: string; expectedVersion: number }) =>
       this.request<any>(`/clients/${encodeURIComponent(clientId)}/snapshots`, { method: 'POST', body: JSON.stringify(body) }),
     candidateRules: (clientId: string) => this.request<any>(`/clients/${encodeURIComponent(clientId)}/candidate-rules`),
     // No role in the body: Core takes the role from the signed-in session.

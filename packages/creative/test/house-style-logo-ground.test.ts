@@ -62,11 +62,11 @@ describe('ADR-180: office house style wins over default photo coverage', () => {
     expect(recipePhotoMinimum(photoSelectionFromInstructions('pick 6 photos', 6), 6)).toBe(6);
   });
 
-  it('offers the collage only when the requester asked for more photos in so many words', () => {
-    expect(eligibleRecipes(PHOTOS, 1)).not.toContain('hero_storyboard');
+  it('keeps multi-photo options available without forcing coverage (ADR-181)', () => {
+    expect(eligibleRecipes(PHOTOS, 1)).toContain('hero_storyboard');
     expect(eligibleRecipes(PHOTOS, 1)).toContain('hero_fade_report');
     expect(eligibleRecipes(PHOTOS, 2)).toEqual(expect.arrayContaining(['hero_storyboard', 'hero_fade_report']));
-    expect(eligibleRecipes(PHOTOS, 3)).toEqual(['hero_storyboard']);
+    expect(eligibleRecipes(PHOTOS, 3)).toEqual(['hero_storyboard', 'photo_sequence', 'photo_mosaic']);
   });
 
   it('a hero design is the request done, and the photos left out are recorded for office review', () => {
@@ -130,4 +130,28 @@ describe('ADR-180: no heavy box behind the logo', () => {
       expect(outcome.passed, outcome.messages.join('\n')).toBe(true);
     }
   }, 60000);
+});
+
+import { faceBoxesOf } from '../src/studio/art-direction/logo-ground.js';
+import { protectedRegionsOnCanvas } from '../src/studio/protected-regions.js';
+
+describe('integrated individual subject evidence for logo placement', () => {
+  it('protects separate people in a support image instead of an invented face between them', () => {
+    const photo = { photoIndex: 1, width: 1000, height: 800, focus: { x: .5, y: .4 }, faceShare: .2,
+      regionStatus: 'measured' as const, regions: [
+        { kind: 'face' as const, x: .1, y: .25, width: .1, height: .2 },
+        { kind: 'face' as const, x: .8, y: .25, width: .1, height: .2 },
+      ] };
+    const element = { photoIndex: 1, role: 'inset' as const, x: 40, y: 80, width: 500, height: 400 };
+    const boxes = faceBoxesOf({ photos: [element] }, [photo]);
+    expect(boxes).toEqual(protectedRegionsOnCanvas(element, photo));
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0].x + boxes[0].width).toBeLessThan(boxes[1].x);
+  });
+  it('never turns invalid regions into a safe empty list or measured-empty regions into a phantom face', () => {
+    const el = { photoIndex: 0, role: 'hero' as const, x: 0, y: 0, width: 1000, height: 800 };
+    const p = { photoIndex: 0, width: 1000, height: 800, focus: { x: .5, y: .5 }, faceShare: .3 };
+    expect(() => faceBoxesOf({ photos: [el] }, [{ ...p, regionStatus: 'invalid' }])).toThrow(/PHOTO_REGION_INVALID/);
+    expect(faceBoxesOf({ photos: [el] }, [{ ...p, regionStatus: 'measured', regions: [] }])).toEqual([]);
+  });
 });

@@ -1,8 +1,9 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDb, withRlsContext, ClientRepository, sql } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { hydrateClientDnaFromDb } from '../src/services/client-dna-hydration.js';
 
 /**
@@ -11,6 +12,12 @@ import { hydrateClientDnaFromDb } from '../src/services/client-dna-hydration.js'
  * fixture again, so a folder saved yesterday and still visible in the Desk was ignored by delivery.
  * Hydration makes the database win. This test does the restart: a second createApp.
  */
+beforeAll(async()=>{
+  const db=createDb(process.env.TEST_DATABASE_URL!);
+  try {await persistClientDnaFixture(createApp({db}), 'c1000000-0000-4000-8000-000000000002',
+    {Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});} finally {await db.destroy();}
+});
+
 describe('client DNA survives a restart', () => {
   const db = createDb(process.env.TEST_DATABASE_URL!);
   const tenantId = '00000000-0000-4000-a000-000000000001';

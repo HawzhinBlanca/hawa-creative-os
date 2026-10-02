@@ -22,6 +22,7 @@ import { candidateSources } from './driver/candidate-sources.js';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { isDesignGenerationResponse } from './driver/model-ledger.js';
 import { REPO_ROOT, acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, isRunning, releaseProject, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import { neutralise, restoreDump, verifyEgressFence, type EgressProbe, type NeutraliseReport, type SeedReport } from './driver/seed.js';
@@ -105,12 +106,12 @@ interface Expectation {
 // run.ts --repeat N (HAWA_CHAOS_REPEAT): each selected scenario runs N times, reported as <name>#<n>.
 const repeat = Math.max(1, Math.min(10, Number(process.env.HAWA_CHAOS_REPEAT) || 1));
 
-function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000) {
+function scenario(name: string, what: string, script: (chat: string, events: string[], observed: InvariantResult[]) => Promise<Expectation>, timeoutMs = 12 * 60_000) {
   const run = enabled && (only.length === 0 ? !name.startsWith('R10.') : only.includes(name));
   for (let n = 1; n <= repeat; n++) runScenario(repeat > 1 ? `${name}#${n}` : name, what, script, timeoutMs, run);
 }
 
-function runScenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs: number, run: boolean) {
+function runScenario(name: string, what: string, script: (chat: string, events: string[], observed: InvariantResult[]) => Promise<Expectation>, timeoutMs: number, run: boolean) {
   it.skipIf(!run)(`${name}: ${what}`, async () => {
     const chat = newChat();
     const events: string[] = [];
@@ -120,7 +121,7 @@ function runScenario(name: string, what: string, script: (chat: string, events: 
     try {
       const ledger = await fakes.modelLedger();
       const ledgerSince = Math.max(0, ...(ledger.ledger as any[]).map((l) => l.seq));
-      const expectation = await script(chat, events);
+      const expectation = await script(chat, events, report.invariants);
       await fakes.release();
       if (!expectation.skipQuiescence) await quiescent();
       report.invariants = [
@@ -234,8 +235,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     if (keep) console.log(`[chaos] HAWA_CHAOS_KEEP=1: the hawa-chaos project is still running${seeded ? ' WITH A COPY OF PRODUCTION DATA' : ''}; take it down with \`npx tsx packages/testkit/chaos/run.ts --down\`.`);
   }, 10 * 60_000);
 
-  if (candidate) scenario('R1.S3.SOURCES', 'full-app PDF source to voice revision and simulated approved delivery', async (chat, events) => ({
-    delivered: false, skipRequestChecks: true, skipQuiescence: true, extra: await candidateSources(chat, events, suiteStarted),
+  if (candidate) scenario('R1.S3.SOURCES', 'full-app PDF source to voice revision and simulated approved delivery', async (chat, events, observed) => ({
+    delivered: false, skipRequestChecks: true, skipQuiescence: true, extra: await candidateSources(chat, events, suiteStarted, observed),
   }));
 
   scenario('R1.0', 'happy path: brief, draft, approve, deliver, no faults', async (chat, events) => {
@@ -1061,11 +1062,13 @@ Insights from KAAE school field visits and next steps toward`;
     events.push(`task ${taskId}: the retried draft is in review (rev 4)`);
     return { delivered: false, operatorAlerts: 1, after: async () => {
       const checks = await albumChecks(chat, taskId, 6, { downloadsPrefix: `album-${tag}-${chat}-` });
-      const plans = ((await fakes.modelLedger()).ledger as Array<{ seq: number; route: string; status: number; imageSha256?: string[] }>)
+      const providerCalls = (await fakes.modelLedger()).ledger as Array<{ seq: number; route: string; status: number; imageSha256?: string[] }>;
+      const plans = providerCalls
         .filter((l) => l.seq > ledgerSince && (l.route === 'canva_design_plan' || l.route === 'fault:canva_design_plan'));
       // The six photos, in album order, among the images the plan was sent (the brand's own come too).
       const inOrder = (sent: string[] = []) => hashes.every((h, i) => sent.indexOf(h) >= 0 && (i === 0 || sent.indexOf(h) > sent.indexOf(hashes[i - 1])));
       const made = plans.filter((l) => l.status === 200);
+      const preflights = providerCalls.filter(l => l.seq > ledgerSince && l.route === 'input-token-count');
       const [created] = await query<{ title: string; exact: any }>(sql`SELECT t.title, o.payload->'exactCopy' AS exact
         FROM hawa.tasks t JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created' WHERE t.id = ${taskId}::uuid`);
       const copy = (Array.isArray(created?.exact) ? created.exact : []).map((b: any) => typeof b === 'string' ? b : b?.text);
@@ -1083,9 +1086,13 @@ Insights from KAAE school field visits and next steps toward`;
           detail: JSON.stringify(plans.map((p) => ({ route: p.route, status: p.status, images: p.imageSha256?.length,
             photos: hashes.filter((h) => p.imageSha256?.includes(h)).length }))) },
         { name: 'the introducer line is not copy: title and exact copy are the owner\'s three lines',
-          ok: created?.title === 'KAAE: KAAE K-12 Pilot Study…' && JSON.stringify(copy) === JSON.stringify(
+          // ADR180 §4 and office-caption-and-title.test.ts: never repeat the client name.
+          ok: created?.title === 'KAAE K-12 Pilot Study…' && JSON.stringify(copy) === JSON.stringify(
             ['KAAE K-12 Pilot Study', 'Field Visit Report', 'Insights from KAAE school field visits and next steps toward']),
           detail: JSON.stringify({ title: created?.title, copy }) },
+        { name: 'native preflight counts remain visible and carry the same six immutable photos in order',
+          ok: preflights.length >= 1 && preflights.length <= 2 && preflights.every(p => p.status === 200 && inOrder(p.imageSha256)),
+          detail: JSON.stringify(preflights.map(p => ({ status: p.status, images: p.imageSha256?.length }))) },
         { name: 'the task detail names the client and shows six reference photos',
           ok: typeof detail.json?.clientName === 'string' && detail.json.clientName.length > 0 && detail.json?.referenceImageCount === 6,
           detail: JSON.stringify({ clientName: detail.json?.clientName, referenceImageCount: detail.json?.referenceImageCount }) },
@@ -1287,7 +1294,7 @@ Insights from KAAE school field visits and next steps toward`;
     // The files the office pinned at each approval (the Desk pins the QA-checked export beside the PNG).
     const pinned = await query<{ n: number }>(sql`SELECT coalesce(sum(jsonb_array_length(decision_payload->'pinnedExports')), 0)::int AS n
       FROM hawa.approvals WHERE task_id = ANY(${tasks.map((t) => t.id)}::uuid[]) AND decision = 'approved'`);
-    const ledger = ((await fakes.modelLedger()).ledger as any[]).filter((l) => l.seq > ledgerSince && l.status === 200 && l.route !== 'billing-probe');
+    const ledger = ((await fakes.modelLedger()).ledger as any[]).filter((l) => l.seq > ledgerSince && isDesignGenerationResponse(l));
     const twice = [...ledger.reduce((m, l) => m.set(l.fingerprint, (m.get(l.fingerprint) || 0) + 1), new Map<string, number>())].filter(([, n]) => n > 1);
     const kurdish = /[\u0600-\u06FF]/;
     return { delivered: false, skipRequestChecks: true, extra: [

@@ -161,6 +161,9 @@ importers:
       '@hawa/integrations':
         specifier: workspace:*
         version: link:../integrations
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       fontkit:
         specifier: ^2.0.4
         version: 2.0.4
@@ -180,9 +183,6 @@ importers:
       '@types/pngjs':
         specifier: ^6.0.5
         version: 6.0.5
-      fflate:
-        specifier: 0.8.3
-        version: 0.8.3
 
   packages/db:
     dependencies:

@@ -1,0 +1,222 @@
+{
+  "adr": "ADR205",
+  "date": "2026-10-01",
+  "status": "ENGINEERING_SOURCE_AND_DEPLOYED_RECOVERY_PASS_NATIVE_HUMAN_OPEN",
+  "requirements": [
+    "FR-069",
+    "FR-070",
+    "NFR-012",
+    "NFR-024",
+    "NFR-025",
+    "FR-029",
+    "FR-041",
+    "FR-042",
+    "FR-060",
+    "FR-079",
+    "NFR-009"
+  ],
+  "baselineFailed": {
+    "commit": "f73c25ef97b796ffc124a0aba01093e44aee8be1",
+    "filesFailed": 1,
+    "scenariosSkipped": 57,
+    "scope": "nginx exited before candidate scenario ran; independent actual nginx-t confirms missing office-proof include",
+    "receipt": "output/qualification/2026-10-01/candidate-service-boundary-development/INITIAL_REHEARSAL_FAILED.json"
+  },
+  "connected": {
+    "files": 3,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "actual Compose interpolation, real nginx validation, private/inode proof writer, restricted role and existing edge controls"
+  },
+  "strictRoots": 681,
+  "chaosStandaloneTypes": "PASS",
+  "policy": "Fake external providers only; current restricted worker role/service environment/read-only blobs and private independent office proof; no production behavior/grants changed.",
+  "sourceSha256": {
+    "packages/testkit/chaos/docker-compose.chaos.yml": "9f6fc3c0211d70aed9df243a807368f072c5bb780bf8417af63c103919dcc2eb",
+    "packages/testkit/chaos/driver/stack.ts": "a32839207deef5f8115ab74489075bfa36e0c88ccf1298e0a824eeca011b93ca",
+    "packages/testkit/chaos/driver/provision.ts": "858643069a5584e047f49c5f5f687b0dbdc19e12e6a7238324d3fa50adf8920c",
+    "packages/testkit/chaos/driver/office-proof.ts": "37414535fa7d37f9a8244c915da25c8335c7cba8550e01efd2f789ea83ef202c",
+    "packages/testkit/chaos/driver/candidate-sources.ts": "6d83453eedaf488522ec35da486e0d644d60a89200040e5b50a0639418fc340c",
+    "packages/testkit/test/chaos-service-boundaries.test.ts": "6f544e65e706f0fbcc39821de7edb45385219b75646d896622b7a9c7964843cc",
+    "packages/testkit/chaos/chaos.test.ts": "30f42f6ad7e0ceba82667c4e2c39c49afeba43623347262185772d008b37ae10",
+    "packages/testkit/chaos/driver/candidate-recovery.ts": "553ed0006fb0da8de31ee3185270237de856aec6bde71ce82337911afe5248a5",
+    "packages/testkit/chaos/driver/fixture-native-edit.ts": "ef8e38b5605a821eee794323453f5e48cac0af743013cc87d655e10363d5ffb2",
+    "packages/testkit/chaos/driver/evaluation-settlement.ts": "d69fb0449809e050af2c4c43b48af00560ac6fbc3dd0995f4468c611cec8a822",
+    "packages/testkit/chaos/driver/studio-settlement.ts": "58e991969898c081dcd3d9c5b7d11319598e4303f3e35a85bf0ea8c134ef2b93",
+    "packages/testkit/chaos/fakes/canva.ts": "136317c7162ab4f943241be5d4ea5b8843490daf52f89cd93f5968df4f4be2a1",
+    "packages/testkit/chaos/fakes/server.ts": "dc5463c6cb3164445931e64cd02a7bc3c38ad83d1149bcc1069348ec46ad19e9",
+    "packages/testkit/chaos/test/fakes.test.ts": "01400b8414802676b7a0397e8a97b40794446ee113fc22bad9b0cc5e5bdeb01a",
+    "packages/testkit/chaos/test/fixture-native-edit.test.ts": "519ce96d4bb2358f42e1f58bfe713ade505c9721e71e27c7b260219efe334219",
+    "packages/testkit/test/production-vm-resources.test.ts": "2575dacc00231f3c6d3691147d953944ed05a56b3c7d17a66eeb0be70905d4b3"
+  },
+  "logs": {
+    "output/qualification/2026-10-01/candidate-service-boundary-development/INITIAL_REHEARSAL_FAILED.log": "b2e72c654f7a96a62e7eb718af9b904565bbec0fbfe1ee325eff830d959e0f78",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-boundaries-types-20261001.log": "c1db62308b13b58e87e73072f07737de89501378ad0d26928581a24f6fd34026",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-boundaries-connected-20261001.log": "12a6fa16ec2c7e8c5b328f73e41d664ff884c28d2255a552134043c4bee63d40",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-boundaries-lint-20261001.log": "56d417c8a9de81139e3da6dc1007e08c7c3423a4d6d4076926bbda337bf4748d",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/NGINX_MISSING_INCLUDE_RED.log": "6c81731c4313c19fb66adc2a67eb3fdaba28e13b86453dca985cd2d86f509426",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-boundaries-chaos-types-20261001.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/DIAGNOSTIC_NATIVE_HANDOFF.log": "a07c6f142ba2eb3d186d39dbeb6aca0d8d3218f94ca937888f3c5e8f40079d95",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_PROOF_ENV_REFUSED.json": "129ee99257677e38e17b4fcbe16ab25f78c6242509c0ac02ecb91fce84846b62",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/DEVELOPMENT_DRIVE_RESTORE.json": "56df740cc2a84563e2c33cbc5b35431a95b2ac2d837cdf5890cea35edf050910",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-native-fixture-red-20261001.log": "57b018e5b57b9248200cb6115f7650ae92ff9db03d01bfd0333f80f019e6c217",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/INITIAL_REHEARSAL_FAILED.json": "4edfdda3d8431cd6b12379e7900a973735a045e91d3722a33855a9dcefb53047",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_SHEET_READ_REFUSED.log": "ea02c9043726e341364188925e3182f3abb8328339c074ddacbab240840b0654",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/DIAGNOSTIC_NATIVE_HANDOFF.json": "9fdb1609716585becb808c4e690c4285b86849672608c05b0b00f1a65147bf2e",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-native-handoff-recovery-types-20261001.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_SHEET_READ_REFUSED.json": "ba79d61232564e0ad09376eeb8979985925e44bbbd71d88495df14e2c3224d4e",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-native-handoff-connected-green-20261001.log": "5e8476ea5fbe042cd056d23276e89452523771600c23bcf779e4293dc985ac12",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/DEVELOPMENT_TELEGRAM_RESTORE.json": "71f3c85f36edde884989486d64d816f8470e7390c9bee0fec3048d9d92c21bce",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/NATIVE_HANDOFF_DNA_REFUSED.json": "ed5c39e1a11b750240070be129a6731e200eef0976969f88d06d7023617721b5",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-native-handoff-connected-20261001.log": "e7d92be58525e21533c22e963f3605148b4b4a53e3d7688c4b2ee65470969eeb",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/hawa-candidate-native-handoff-workspace-types-20261001.log": "a8e826d2e88c53ff1ad99af23f7138d4ed0da75726c85cb6ab0ee3762a2fa14d",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_PROOF_ENV_REFUSED.log": "d944406f81608e828035f59577b68c2e8469455a5145c5a49f1639c9f33646f7",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/RESTRICTED_REHEARSAL_VOICE_FAILED.log": "0df1916f94813da7ab449cb11dbbf61ab11ee6831739ea9726c18c81ce372916",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/NATIVE_HANDOFF_DNA_REFUSED.log": "c082e12d8e8e6c957afa7fbd8b631a3445ec3e0a9852a764981e193777d2d65c",
+    "output/qualification/2026-10-01/candidate-service-boundary-development/RESTRICTED_REHEARSAL_VOICE_FAILED.json": "4215821f5ad7405b04f95c7e3ae6d24add47251a60fe92b589860b255a43fc1c",
+    "output/qualification/2026-10-01/7d9a7539/NEGATIVE_FLAG_REFUSAL.log": "66dbcb16998e406492388cbadfd6dd409bd406bd2bc7bcf0e773e46e41a72355",
+    "output/qualification/2026-10-01/7d9a7539/EXACT_GATE.log": "e580cdfccd74bae51aa197513c7d60f4ac7f8e4a6fef18a8d497c90fb71bffd4",
+    "output/qualification/2026-10-01/7d9a7539/TEST_DB_PROVISION.log": "336ff22f53b4a3fea01bf514699007aa793865e351b45da27310dadad063c59d",
+    "output/qualification/2026-10-01/7d9a7539/PREDEPLOY_DUMP_CHECK.json": "6ee8ac1892a3d031d5964ca90aeeee4bf692358ba55f619731e0a6d1fc1cd7d0",
+    "output/qualification/2026-10-01/7d9a7539/PREDEPLOY_DUMP_CHECK.log": "bb8d7c7d6fcb8a7f6e58ffb1b2745cf7580dcdb888d292779f0a8584c333b05a",
+    "output/qualification/2026-10-01/7d9a7539/RELEASE_GATE_EVIDENCE.json": "90e320f754cef5a46c06d554260861157196b6d80b7802b6ec4917f9506a8c87",
+    "output/qualification/2026-10-01/7d9a7539/FULL_TEST_SUITE_RUN.log": "2b64d81bb3f9cb3823ab150bcddafbdacd9bb9ccb9fc741737fbd29f19b09e4c"
+  },
+  "deployment": "NO_PRODUCTION_CHANGE_THIS_WORK; office sources8d3f24a7/1ba5bda9 integrated; creative candidate not deployed",
+  "realProviders": "NOT_RUN",
+  "nativeCanvaHuman": "NOT_RUN",
+  "exactGate": {
+    "status": "PASS",
+    "commit": "7d9a7539cd5b3ce37c634e178c63f329e093ecb2",
+    "stagesPassed": 8,
+    "passed": 6709,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 674,
+    "filesSkipped": 6,
+    "strictRoots": 681,
+    "packPass": 1710,
+    "newestProductionDump": "isolated restore/invariants PASS",
+    "mandatoryNegativeFlagRefusal": "PASS",
+    "receipt": "output/qualification/2026-10-01/7d9a7539/RELEASE_GATE_EVIDENCE.json",
+    "runtimeAndCandidateEqualToDeployedRehearsal": "git file comparison: only resource test fixture and metadata changed since d85fc087",
+    "originalFailureRetained": "output/qualification/2026-10-01/d85fc087/EXACT_GATE_FAILED.json"
+  },
+  "deployedCandidateRecovery": {
+    "status": "PASS",
+    "commit": "d85fc087fdd1d9da0b745017b492686f7de74e3c",
+    "sourceChanges": 0,
+    "checksPassed": 96,
+    "checksFailed": 0,
+    "scenarioMs": 107639,
+    "totalMs": 168495,
+    "receipt": "output/qualification/2026-10-01/d85fc087/CANDIDATE_RECOVERY.json",
+    "scope": "clean-source actual deployed Core/worker/Desk/nginx/Docling; external providers and staff synthetic; both authenticated encrypted restores, journal replay and explicit staff reconciliation; not native/real-provider/human admission"
+  },
+  "latestConnected": {
+    "files": 4,
+    "passed": 44,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "current native-handoff/Core DB controls, synthetic copy without import, exact live-text edit and unrelated OOXML/style preservation, actual Compose/nginx service boundaries",
+    "overlapWithEarlierRun": true,
+    "countsNotAdded": true
+  },
+  "developmentTrials": [
+    {
+      "receipt": "output/qualification/2026-10-01/candidate-service-boundary-development/DIAGNOSTIC_NATIVE_HANDOFF.json",
+      "sourceChanges": {
+        "packages/testkit/chaos/chaos.test.ts": "30f42f6ad7e0ceba82667c4e2c39c49afeba43623347262185772d008b37ae10",
+        "packages/testkit/chaos/driver/candidate-sources.ts": "8591d2f9e53da8255cfc2836fb5901e6f3e6c60fe910a0f8ce779ca36f48bc77"
+      },
+      "passedChecks": 19,
+      "failedChecks": 0,
+      "error": "task 5abb9230-785d-4d3e-8be1-2065288290b8: candidate design ended as DESIGN_REJECTED at manual rev 5",
+      "scope": "development trial, not a clean-source qualification"
+    },
+    {
+      "receipt": "output/qualification/2026-10-01/candidate-service-boundary-development/NATIVE_HANDOFF_DNA_REFUSED.json",
+      "sourceChanges": {
+        "packages/testkit/chaos/chaos.test.ts": "30f42f6ad7e0ceba82667c4e2c39c49afeba43623347262185772d008b37ae10",
+        "packages/testkit/chaos/driver/candidate-sources.ts": "a2ee19da7be7af24b406c6315534f1d6aaa075fbce02379f3e7760c98033bda1",
+        "packages/testkit/chaos/driver/stack.ts": "52531f82bc19455503af7b5d9df71c404e737f12f35104c7d531a3a82516bf28",
+        "packages/testkit/chaos/fakes/canva.ts": "136317c7162ab4f943241be5d4ea5b8843490daf52f89cd93f5968df4f4be2a1",
+        "packages/testkit/chaos/fakes/server.ts": "dc5463c6cb3164445931e64cd02a7bc3c38ad83d1149bcc1069348ec46ad19e9",
+        "packages/testkit/chaos/test/fakes.test.ts": "01400b8414802676b7a0397e8a97b40794446ee113fc22bad9b0cc5e5bdeb01a",
+        "packages/testkit/chaos/driver/fixture-native-edit.ts": "ef8e38b5605a821eee794323453f5e48cac0af743013cc87d655e10363d5ffb2",
+        "packages/testkit/chaos/test/fixture-native-edit.test.ts": "519ce96d4bb2358f42e1f58bfe713ade505c9721e71e27c7b260219efe334219"
+      },
+      "passedChecks": 23,
+      "failedChecks": 0,
+      "error": "Desk action /tasks/b4442d3d-2f1a-49f4-9235-b3666515b5e3/canva/exports: HTTP 422: {\"type\":\"https://hawa.design/errors/422\",\"title\":\"CLIENT_REFERENCE_REQUIRED\",\"status\":422,\"detail\":\"Save an active, human-authored Client DNA version with approved fonts before checking this manual design.\",\"instance\":\"/v1/tasks/b4442d3d-2f1a-49f4-9235-b3666515b5e3/canva/exports\"}",
+      "scope": "development trial, not a clean-source qualification"
+    },
+    {
+      "receipt": "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_PROOF_ENV_REFUSED.json",
+      "sourceChanges": {
+        "packages/testkit/chaos/chaos.test.ts": "30f42f6ad7e0ceba82667c4e2c39c49afeba43623347262185772d008b37ae10",
+        "packages/testkit/chaos/driver/candidate-sources.ts": "a2ee19da7be7af24b406c6315534f1d6aaa075fbce02379f3e7760c98033bda1",
+        "packages/testkit/chaos/driver/provision.ts": "858643069a5584e047f49c5f5f687b0dbdc19e12e6a7238324d3fa50adf8920c",
+        "packages/testkit/chaos/driver/stack.ts": "52531f82bc19455503af7b5d9df71c404e737f12f35104c7d531a3a82516bf28",
+        "packages/testkit/chaos/fakes/canva.ts": "136317c7162ab4f943241be5d4ea5b8843490daf52f89cd93f5968df4f4be2a1",
+        "packages/testkit/chaos/fakes/server.ts": "dc5463c6cb3164445931e64cd02a7bc3c38ad83d1149bcc1069348ec46ad19e9",
+        "packages/testkit/chaos/test/fakes.test.ts": "01400b8414802676b7a0397e8a97b40794446ee113fc22bad9b0cc5e5bdeb01a",
+        "packages/testkit/chaos/driver/fixture-native-edit.ts": "ef8e38b5605a821eee794323453f5e48cac0af743013cc87d655e10363d5ffb2",
+        "packages/testkit/chaos/test/fixture-native-edit.test.ts": "519ce96d4bb2358f42e1f58bfe713ade505c9721e71e27c7b260219efe334219"
+      },
+      "passedChecks": 28,
+      "failedChecks": 0,
+      "error": "Coordinated drive restore failed: Freezing candidate writers for coordinated recovery.\nStores restored to fresh volumes; verifying before starting application writers.\nRecovery not admitted. No automatic restart; private artifacts: /Users/hawzhin/Hawdesign/.worktrees/content-aware-design/packages/testkit/chaos/.run/recovery-private-85vntun0\n in main\n    receipt = drill.execute()\n  File \"/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/infra/backup/candidate_recovery.py\", line 215, in execute\n    self.compose('up', '-d', '--no-deps', '--no-build', '--pull', 'never', '--force-recreate',\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n                 '--wait', '--wait-timeout', '120', 'postgres', 'restate')\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/infra/backup/candidate_recovery.py\", line 160, in compose\n    return text(['docker', 'compose', '-p', 'hawa-chaos', '-f', str(CHAOS/'docker-compose.chaos.yml'),\n                 '-f', str(OVERRIDE), '--env-file', str(RUN/'chaos.env'), *args], timeout=240)\n  File \"/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/infra/backup/drill_postgres_pitr.py\", line 41, in text\n    def text(args, **kwargs): return run(args, **kwargs).stdout.decode().strip()\n                                     ~~~^^^^^^^^^^^^^^^^\n  File \"/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/infra/backup/drill_postgres_pitr.py\", line 38, in run\n    raise DrillError(f'{args[0]} failed ({result.returncode}): {result.stderr.decode(errors=\"replace\")[-800:]} {diagnostic[-2200:]}')\ndrill_postgres_pitr.DrillError: docker failed (1): error while interpolating services.nginx.volumes.[]: required variable CHAOS_OFFICE_PROOF_FILE is missing a value\n \n",
+      "scope": "development trial, not a clean-source qualification"
+    },
+    {
+      "receipt": "output/qualification/2026-10-01/candidate-service-boundary-development/RECOVERY_SHEET_READ_REFUSED.json",
+      "sourceChanges": {
+        "packages/testkit/chaos/chaos.test.ts": "30f42f6ad7e0ceba82667c4e2c39c49afeba43623347262185772d008b37ae10",
+        "packages/testkit/chaos/driver/candidate-recovery.ts": "29ff604bc8f3946dc1e094c3891489c5116a24112551db080b57ce6c9b9f4145",
+        "packages/testkit/chaos/driver/candidate-sources.ts": "e72a56d98bf287a8593ffd07ed56793c33c370a048568ad2dfcb36830520f151",
+        "packages/testkit/chaos/driver/provision.ts": "858643069a5584e047f49c5f5f687b0dbdc19e12e6a7238324d3fa50adf8920c",
+        "packages/testkit/chaos/driver/stack.ts": "a32839207deef5f8115ab74489075bfa36e0c88ccf1298e0a824eeca011b93ca",
+        "packages/testkit/chaos/fakes/canva.ts": "136317c7162ab4f943241be5d4ea5b8843490daf52f89cd93f5968df4f4be2a1",
+        "packages/testkit/chaos/fakes/server.ts": "dc5463c6cb3164445931e64cd02a7bc3c38ad83d1149bcc1069348ec46ad19e9",
+        "packages/testkit/chaos/test/fakes.test.ts": "01400b8414802676b7a0397e8a97b40794446ee113fc22bad9b0cc5e5bdeb01a",
+        "packages/testkit/chaos/driver/fixture-native-edit.ts": "ef8e38b5605a821eee794323453f5e48cac0af743013cc87d655e10363d5ffb2",
+        "packages/testkit/chaos/test/fixture-native-edit.test.ts": "519ce96d4bb2358f42e1f58bfe713ade505c9721e71e27c7b260219efe334219"
+      },
+      "passedChecks": 48,
+      "failedChecks": 1,
+      "error": "surviving external sheet contains one task row after both restores: 0 rows",
+      "scope": "development trial, not a clean-source qualification"
+    }
+  ],
+  "developmentRestores": {
+    "status": "BOTH_STORES_PASS_WORKFLOW_FINAL_PENDING",
+    "tables": 104,
+    "policies": 174,
+    "verifiedBlobs": 3,
+    "missingReferences": 0,
+    "productionChanged": false,
+    "driveReceipt": "output/qualification/2026-10-01/candidate-service-boundary-development/DEVELOPMENT_DRIVE_RESTORE.json",
+    "telegramReceipt": "output/qualification/2026-10-01/candidate-service-boundary-development/DEVELOPMENT_TELEGRAM_RESTORE.json",
+    "applicationReplay": "uncertain Telegram send not repeated; synthetic staff settlement replay and one completed publication passed",
+    "finalFailure": "obsolete A:Z fake read returned HTTP500; current data-filter read independently returned header and one task row; corrected full rehearsal pending"
+  },
+  "retainedFixtureFailure": "numeric newline entity remains literal in current PPTX check; fixture now uses an XML literal newline. No QA threshold or parser was changed. Separate actual-parser compatibility finding remains to qualify.",
+  "resourceConnected": {
+    "files": 2,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "countsOverlap": true
+  },
+  "integratedOfficeSources": [
+    "8d3f24a76a019fb0514707133345df7911eba547",
+    "1ba5bda9dbbfd8cbc294ea4cd8b0f4d2fb229926"
+  ],
+  "nextWork": [
+    "joint approved background feasibility and atomic refusal; W2_BACKGROUND_FEASIBILITY_FINDING.json",
+    "valid XML character-reference copy compatibility; W5_PPTX_CHARACTER_REFERENCE_FINDING.json",
+    "real Canva/native preservation, human quality and full product admission"
+  ]
+}

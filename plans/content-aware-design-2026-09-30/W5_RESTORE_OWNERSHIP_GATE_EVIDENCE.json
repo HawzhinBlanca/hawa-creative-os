@@ -1,0 +1,31 @@
+{
+  "candidateCommit": "6ae60a8d3bce0676d3877dd64795b4efa0572eb0",
+  "status": "SEVEN_ENGINEERING_STAGES_PASS_PRODUCTION_DUMP_APPROVAL_PENDING_PRODUCT_ADMISSION_OPEN",
+  "technicalStagesPassed": 7,
+  "suite": {
+    "passed": 6812,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 680,
+    "filesSkipped": 6
+  },
+  "strictTestRoots": 687,
+  "newestDump": {
+    "status": "NOT_RUN_AUTOMATIC_APPROVAL_REVIEW_REJECTED",
+    "request": "explicit user authorization pending",
+    "productionChanged": false
+  },
+  "negativeFlagRefusal": "PASS",
+  "sourceChangedDuringGate": false,
+  "admissionQualified": false,
+  "rawGateStatusPreserved": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+  "scope": "raw gate executed without production dump; not all-eight qualification",
+  "artifacts": {
+    "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_NEGATIVE_FLAG_REFUSAL.log": "3b1063568accad8285b0cc5a2fb39e3634541da1424e7babf96fa420923ed6b5",
+    "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_RELEASE_GATE_EVIDENCE.json": "34a4dac0b833e7221f1d4e899420dce6eb55ed0133f344c028cfb637207aee37",
+    "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_PREDEPLOY_DUMP_CHECK.json": "465c9374d0d07805ddcd2baa42a4562549f2a45f45be204c56dc195c0c2ea2a6",
+    "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_PREDEPLOY_DUMP_CHECK.log": "7c98e4a1baa5b5026530af0b4bc8b4f0dd4f3521519912dafc92dba40223a12f",
+    "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_FULL_TEST_SUITE_RUN.log": "1105f10f80081c0acda0dcbb6ca26eb81901fb7fce76d312922982f78cae0e2b",
+    "output/qualification/2026-10-01/restore-owned-cleanup/SYNTHETIC_TEST_DB_PROVISION.log": "336ff22f53b4a3fea01bf514699007aa793865e351b45da27310dadad063c59d"
+  }
+}

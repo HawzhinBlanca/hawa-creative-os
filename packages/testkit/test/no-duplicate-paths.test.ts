@@ -1,3 +1,4 @@
+import {persistClientDnaFixture} from '../../../apps/core/test/fixtures/persisted-client-dna.js';
 import { syntheticUnchangedCanvaVersion } from '../../../apps/core/test/fixtures/synthetic-canva-version.js';
 import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
@@ -20,6 +21,7 @@ const operatorUserId = '00000000-0000-4000-b000-000000000001';
 
 /** A task with a bound Canva design, one checked export, a Desk revision and an art director's approval. */
 async function approvedTask(db: ReturnType<typeof createDb>, app: ReturnType<typeof createApp>, headers: Record<string, string>) {
+  await persistClientDnaFixture(app,'c1000000-0000-4000-8000-000000000002',headers);
   const taskId = randomUUID();
   const designId = `dup_design_${randomUUID().slice(0, 8)}`;
   const exportId = randomUUID();

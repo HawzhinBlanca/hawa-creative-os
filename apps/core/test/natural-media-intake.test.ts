@@ -6,6 +6,7 @@ import { createDb, sql, withRlsContext } from '@hawa/db';
 import { MEDIA_MESSAGES, ACCESS_MESSAGES } from '@hawa/integrations';
 import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
+import { readRevisionPhotoDecision } from '../src/services/lifecycle-chat-target.js';
 
 /**
  * ADR-145: photos, videos, edits and senders outside the intake list, as a requester sends them. A
@@ -181,6 +182,28 @@ describe('a photo with no words (audit F5)', () => {
     expect(await settle(a, shot)).toMatchObject({ lifecycleAction: 'chat-answer', chatAnswer: { text: MEDIA_MESSAGES.photoHeld.en } });
     const [task] = await tasksInChat(chat);
     expect(await taskFiles(String(task.aggregate_id))).toHaveLength(0);
+  });
+
+  it('a captioned burst photo records its revision receipt before projection and replays after Core replacement', async () => {
+    const { app: a, bridge } = app();
+    const chat = chatId();
+    const waiting = await seedRequest(chat, 'manual', 3);
+    const shot = photo(chat, { caption: 'make the background blue like this photo' });
+    expect(await intake(a, shot, { briefHold: true })).toMatchObject({ lifecycleAction: 'settle-later' });
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
+    bridge.downloadFile.mockRejectedValue(new Error('unexpected second download'));
+    const cold = app({ telegramBridge: bridge }).app;
+    const revised = await settle(cold, shot);
+    expect(revised).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-revision', requestId: waiting.requestId });
+    expect(await withRlsContext(db, scope, trx => readRevisionPhotoDecision(trx, tenantId, shot.update_id)))
+      .toMatchObject({ requestId: waiting.requestId, chatId: String(chat), payloadHash: sha(Buffer.from(JSON.stringify(shot))),
+        image: { sha256: sha(PNG) } });
+    expect(await taskFiles(revised.newTaskId)).toEqual(expect.arrayContaining([{ sha256: sha(PNG), role: 'reference_image' }]));
+    const replay = app({ telegramBridge: bridge }).app;
+    expect(await settle(replay, shot)).toMatchObject({ duplicate: true, newTaskId: revised.newTaskId });
+    expect(await settle(replay, { ...shot, message: { ...shot.message, caption: 'changed words' } }))
+      .toMatchObject({ intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
   });
 
   it('a photo sent just before a change to a design that waits for it goes with the change', async () => {

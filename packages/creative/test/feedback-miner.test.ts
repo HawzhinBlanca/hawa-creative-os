@@ -155,6 +155,7 @@ describe('FeedbackMiner: Governed Learning & Continuous Feedback Loop (B-055, B-
     it('ingests approve verdict with notes into a PROPOSED candidate rule', () => {
       const proposals = miner.ingestDesignFeedback({
         id: 'fb-001',
+        target:{kind:'studio_candidate',runId:'run',candidateId:'candidate',previewSha256:'a'.repeat(64)},
         taskId: 'task-studio-101',
         clientId: 'client-kaae',
         actorId: 'actor-director-1',

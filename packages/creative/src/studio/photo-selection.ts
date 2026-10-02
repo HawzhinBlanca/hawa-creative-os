@@ -117,8 +117,8 @@ export function photoSelectionOrUndefined(value: unknown, photoCount: number): P
  * ADR-180 (owner decision, 2026-09-30: designs follow the "office house style"): the fewest photos an
  * art-direction recipe must place. Only the requester's own words bind it: "use all the photos"
  * binds every photo, and a stated count ("pick 3") binds that count. "Choose the best ones" with no
- * count, or photos sent with nothing said about them, leaves the choice to the house rulebook: one
- * hero, at most a second photo blended into the fade (items 1 and 10). The photos left out are
+ * count, or photos sent with nothing said about them, leaves the composition free to choose
+ * one or several meaningful photos (owner clarification, ADR-181). The photos left out are
  * recorded for office review. This supersedes ADR-171's default minimum (half the photos, or all of
  * them) for recipes; a layout outside a recipe keeps ADR-157's rule.
  */

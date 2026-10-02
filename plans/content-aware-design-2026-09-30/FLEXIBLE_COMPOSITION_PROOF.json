@@ -1,0 +1,146 @@
+{
+  "date": "2026-09-30",
+  "branch": "codex/content-aware-design",
+  "baseCommit": "ae23c866",
+  "scope": "ADR181 owner clarification; W4 first source-selection slice, not full W4 or quality admission",
+  "ownerDirection": "Content/client-aware single or multiple images; explicit coverage only; KAAE hero/navy fade scoped to that client; retain ADR180 logo and office fixes",
+  "changes": [
+    "Multi-photo eligibility no longer requires an explicit count",
+    "Existing single-photo alternatives retained; no default collage",
+    "One existing model call selects bounded ordered supporting source indices",
+    "Unknown/duplicate/hero support indices filtered; forged direct choices refused",
+    "Legacy/missing support lists use one ranked support, not all uploads",
+    "Explicit all/count minima deterministically completed from ranked source facts",
+    "Ten-photo layout schema matches existing solver capacity",
+    "Global prompt supports diverse clients/content; fixed subject-to-style mapping removed",
+    "Core model answer preserves ordered subset through actual stage, rendering and hard QA",
+    "Omissions/per-image reports, source subjects, exact copy, conditional logo and background constraints retained"
+  ],
+  "productionChanged": false,
+  "deployment": "NOT_RUN",
+  "paidProviderCalls": 0,
+  "testEvidence": {
+    "connected": {
+      "files": 12,
+      "passed": 239,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/tmp/hawa-flexible-final.log",
+      "note": "Then removed an ignored renderer-only fixture option; final affected nine tests and test types rerun successfully."
+    },
+    "finalAffected": {
+      "files": 1,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/tmp/hawa-flexible-native-verified.log"
+    },
+    "types": {
+      "roots": 645,
+      "passed": true,
+      "log": "/tmp/hawa-flexible-types-verified.log"
+    },
+    "build": {
+      "passed": true,
+      "log": "/tmp/hawa-flexible-build.log"
+    },
+    "lint": {
+      "passed": true,
+      "log": "/tmp/hawa-flexible-lint.log",
+      "anyCount": 937,
+      "ceiling": 1053,
+      "providerEgress": "Passed with 10 existing exceptions, not all calls migrated"
+    },
+    "blueprint": {
+      "passed": 1482,
+      "warned": 0,
+      "failed": 0,
+      "log": "/tmp/hawa-flexible-pack.log"
+    }
+  },
+  "nativeControl": {
+    "contentSources": 10,
+    "nativePictures": 11,
+    "otherPicture": "Explicit official test logo, not generated/recolored",
+    "everySourceHashPreserved": true,
+    "logoHashPreserved": true,
+    "exactLiveCopyPreserved": true,
+    "localRasterHardQaPassed": true,
+    "nativeRendererOrCanvaAdmission": "NOT_RUN for this slice; prior W2 native typography failure remains open",
+    "inputs": "Synthetic deterministic photos and packaged explicit logo; no private client artwork committed"
+  },
+  "budgetControl": {
+    "runLimitUsd": 1,
+    "mockLayoutReservationUsd": 1.11,
+    "remainingUsd": 0.85,
+    "modelRequestSent": false,
+    "diagnosticAndReplayPreserved": true,
+    "note": "Synthetic test uses Astra pricing; prompt expanded from old ~$1.03 reservation. No actual paid cost claimed. Upper bound <1.3 asserted, no run limit raised."
+  },
+  "failureHistory": [
+    {
+      "log": "/tmp/hawa-flexible-red.log",
+      "failed": 4,
+      "reason": "Reproduced restricted eligibility, silent recipe replacement, forced all-photo default and global style instruction before repair"
+    },
+    {
+      "log": "/tmp/hawa-flexible-tests.log",
+      "passed": 190,
+      "failed": 0,
+      "files": 7,
+      "scope": "Initial connected policy check before native fixture added"
+    },
+    {
+      "log": "/tmp/hawa-flexible-connected.log",
+      "passed": 237,
+      "failed": 2,
+      "reason": "New render fixture omitted required explicit logo; legacy budget assertion tied to old prompt decimal"
+    },
+    {
+      "log": "/tmp/hawa-flexible-corrections.log",
+      "passed": 13,
+      "failed": 1,
+      "reason": "Fixture used renderer option instead of explicit transfer logo argument; budget boundary passed"
+    },
+    {
+      "log": "/tmp/hawa-flexible-boundaries.log",
+      "passed": 12,
+      "failed": 1,
+      "reason": "Explicit transfer logo fixture lacked expected content hash; new Core subset passed"
+    },
+    {
+      "log": "/tmp/hawa-flexible-types-final.log",
+      "passed": false,
+      "reason": "Renderer-only logoDataUri property rejected by TransferV2Options; removed, actual logo supplied through hashed third argument"
+    }
+  ],
+  "claudeResearchTriage": {
+    "source": "output/research/2026-09-30-content-aware-design/CLAUDE_ADDITIONS.md (read in main checkout)",
+    "earlierHeroOnlyStatement": "Superseded by owner clarification, retained as historical source",
+    "traps": [
+      "Exact palette rejects undeclared tints",
+      "Highly opaque scrims obscure lower field",
+      "Full-bleed hero limits exposed background treatment"
+    ],
+    "ideasStatus": "Gaze/horizon, grid/optical/radii, visible tints, repetition and calibrated resolution/banding remain experiments/work plan; not installed or universally validated"
+  },
+  "open": [
+    "Additional geometrically distinct topologies/aspect-aware support geometry and whole-brief diversity",
+    "W3 majority/component-aware logo visibility and native/human qualification",
+    "W5 image-derived approved tones, bounded refinement, cache/latency/cost evidence",
+    "W6 genuine approval labels, hard-vs-soft preference separation, held-out calibration/abstention",
+    "Native Canva typography/edit/reopen/export; W2 independent font fallback remains failed",
+    "Full sealed engineering/recovery gates and deployment; budget/corpus permission for large paid comparative study"
+  ],
+  "sourceHashes": {
+    "packages/creative/src/studio/art-direction/generate.ts": "e090ed91e1f53be7f81da3665d576ceea0d7d15d9a3677b81cb08600733feb74",
+    "packages/creative/src/studio/art-direction/recipes.ts": "cad6aa10d8ab64d5b0ed80f005898853cf68e9e3b7d7aaeb85ba199b580bfcd1",
+    "packages/creative/src/studio/art-direction/solver.ts": "c9e0732c17da6689170eb223a79d6c57de82f15afd7fea49b3aa26b90ace0271",
+    "packages/creative/src/studio/layout-v2.ts": "1941fd69abbaaafb8c72b04df8a9b52e780e0f3f33d3d5f7b1dde2edcb6f7b64",
+    "packages/creative/src/studio/photo-selection.ts": "4d3374063bfd3f071c3fe48bca5532b47952537c3daa120ee5508ecf3e87cd0c",
+    "packages/creative/src/studio/validate-layout-v2.ts": "37150f8ff75fb699bf028627003fe8ce271ed5d3d824cb3851aac29f807b9718",
+    "packages/creative/test/content-composition-policy.test.ts": "f33cc1f65fb5631fff9cb672f9c77a9dc65c5713ac5fa45f0a252b56b664f5f9",
+    "apps/core/test/art-direction-e2e.test.ts": "c5a7c12a29fad34006b3b66c133929d8a66aae31d711078a940982671b2f1614",
+    "apps/core/test/album-report-cover-studio.test.ts": "183633832e98393f3b84cd38a25dbe777e7f362376f1587cd0de7c1da1b2121f"
+  }
+}

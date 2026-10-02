@@ -1,0 +1,149 @@
+{
+  "date": "2026-09-30",
+  "parent": "6ba886b527d607f4bb424e9ab0a6a33ce486f739",
+  "branch": "codex/content-aware-design",
+  "status": "LOCAL_SOURCE_SCREEN_IMPLEMENTED; NATIVE_VISIBILITY_FAILED; QUALIFICATION_PENDING",
+  "requirements": [
+    "FR-026",
+    "FR-038",
+    "FR-041",
+    "FR-057"
+  ],
+  "decision": "ADR172 W3; byte-preserving source-component edges; no high-contrast minority certification; measure every panel/fallback; final and edit QA recompute independently of saved records",
+  "source_sha256": {
+    "packages/creative/src/studio/art-direction/logo-visibility.ts": "d2920ba4749d3821d3e61aa12b0a4df4d7a8eb5fa9e0914be75225552275929b",
+    "packages/creative/src/studio/art-direction/logo-ground.ts": "d5b195aca854cb5ce629376f54fd70a5f6b7a4ad9df6bd291c49a5d42262f71b",
+    "packages/creative/src/studio/luminance.ts": "38bd28da81a2319cd6cc51d3f1dedea8fb162d378cfa233e60a9b68f9b8b24f5",
+    "packages/creative/src/studio/composite-contrast.ts": "f5e0f3fcd0a10bfbc575d9828fc3f05f20730ee3ec0bc3347435ec85fec83606",
+    "packages/creative/src/studio/hard-qa.ts": "2ab57ffc9009029452a47290ae9b93b0b336c439561a7fdaddd0ff56aa3eaf5e",
+    "packages/creative/src/studio/layout-v2.ts": "2ca6585bf3f6fdbfa30ecd4fc95264637fb96a1c0b26bbf942cfeb360570031b",
+    "apps/core/src/services/design-studio/stages/qa.stage.ts": "971bbe0ae17ce18ed152c2abf5c5682fbcfc3761b31f962d278f4266e511d05a",
+    "apps/core/src/services/design-studio/stages/edit.stage.ts": "5c729dd22cda4a505ede1935a1c943de0dd36fbb7eb5d4a74f1661035fc7f99e",
+    "packages/creative/test/logo-visibility.test.ts": "cc7b19ef44cb2a7cd82f155bc1da8f37d613acddcf5b8176a37891465784ea15",
+    "apps/core/test/art-direction-e2e.test.ts": "bfe55abe72a95b83b26e426c3dbc60286827756bab76dabdb35ff126dfeae6a3",
+    "scripts/proofs/logo_visibility_probe.mjs": "496bcb9f430190149100030ca3e077410b838b80d15de2ba3785c7dc183fb6fc",
+    "scripts/proofs/logo_visibility_verify_native.mjs": "6da567f8a1416ecd86e4517d891b72ee982b04cc5f73a7065c09a7d49dc3ea0d"
+  },
+  "checks": {
+    "tests": {
+      "status": "PASSED",
+      "distinct_tests": 136,
+      "files": 10,
+      "commands": [
+        "vitest run apps/core/test/art-direction-e2e.test.ts apps/core/test/design-quality-adr157.test.ts apps/core/test/qa-regressions.test.ts apps/core/test/edit-guards.test.ts apps/core/test/studio-stages.test.ts packages/creative/test/content-topologies.test.ts packages/creative/test/logo-visibility.test.ts packages/creative/test/house-style-logo-ground.test.ts packages/creative/test/protected-regions.test.ts",
+        "vitest run packages/creative/test/studio-contrast.test.ts"
+      ],
+      "logs": [
+        "/tmp/hawa-w3-tests-final.log",
+        "/tmp/hawa-w3-contrast-final.log"
+      ],
+      "initial_runs": "15/2 and109/7 pass; subsets of final136, not additional tests"
+    },
+    "build": {
+      "status": "PASSED",
+      "log": "/tmp/hawa-w3-source-build-final.log"
+    },
+    "typecheck": {
+      "status": "PASSED",
+      "roots": 647,
+      "log": "/tmp/hawa-w3-types-final.log"
+    },
+    "lint": {
+      "status": "PASSED",
+      "any_count": 937,
+      "ceiling": 1053,
+      "existing_provider_exceptions": 10,
+      "log": "/tmp/hawa-w3-lint-final.log"
+    },
+    "native": {
+      "status": "FAILED",
+      "controls": 6,
+      "local_hard_qa_passed": 6,
+      "native_original_logo_photo_hashes_passed": 6,
+      "native_source_edge_visibility_failed": 6,
+      "exact_native_coverage_range": [
+        0.4530487804878049,
+        0.5665372396752559
+      ],
+      "native_typography": "FAILED: Verdana substitution to FrankRuhlHofshi-Bold/LinuxLibertineG",
+      "evidence": "W3_NATIVE_CONTROLS.json",
+      "log": "/tmp/hawa-w3-native-export.log",
+      "input": "synthetic grounds and explicit official test logo, no customer photos",
+      "sampling": "fixed placed source geometry; no logo mask, no coordinate search in acceptance gate"
+    },
+    "blueprint": "PENDING_REFRESH"
+  },
+  "failure_history": [
+    {
+      "check": "initial two-block native-control generation",
+      "status": "FAILED",
+      "reason": "POOR_GRID_ALIGNMENT 0.667 below0.70; replaced with documented three-block diagnostic control; two-block geometry QA remains W5 risk, not certified repaired"
+    },
+    {
+      "check": "initial requested contrast test path",
+      "status": "NOT_RUN",
+      "reason": "composite-contrast.test.ts does not exist;9 actual files133 tests ran; actual studio-contrast.test.ts then ran and3 tests passed"
+    },
+    {
+      "check": "independent native logo screen",
+      "status": "FAILED",
+      "reason": "6/6 fixed-coordinate source-edge readings fail despite retained source hashes; \u00b11px whole-logo displacement diagnostic did not resolve; no threshold change or native pass claimed"
+    }
+  ],
+  "bounds": {
+    "max_source_raster_pixels": 1048576,
+    "source_component_alpha_min": 192,
+    "noise_component_area_min": "max(3, ceil(foreground*.001))",
+    "overall_visible_feature_min": 0.9,
+    "per_component_min": 0.8,
+    "threshold_admission": "experimental engineering screen; not human/archive calibrated",
+    "source_search": "existing original corner, safe alternate top corner; up to6 radial treatments and2 approved-tone thin tabs; failure is LOGO_UNREADABLE",
+    "final_gate": "LOGO_UNMEASURED for absent/stale source geometry; LOGO_UNREADABLE for insufficient actual source features; saved logoGround metadata never certifies final pixels"
+  },
+  "cost": {
+    "provider_calls": 0,
+    "models_added": 0,
+    "dependencies_added": 0,
+    "local_settlement_six_control_ms": [
+      1077.628083,
+      334.8405829999999,
+      1111.8182499999998,
+      365.4307919999992,
+      316.862083,
+      331.95366699999977
+    ],
+    "latency_scope": "single diagnostic per control, includes cold renderer startup; not p95 or pipeline SLA"
+  },
+  "not_run": [
+    "real Canva import/edit/reopen/export",
+    "human/archive false-positive/false-negative calibration",
+    "full sealed suite and recovery",
+    "paid comparative study",
+    "deployment"
+  ],
+  "open": [
+    "native renderer/artwork edge discrepancy; root cause unproven",
+    "native typography",
+    "genuine approved variant/archive qualification",
+    "early pruning and cache under W5",
+    "exact and qualified photo-count semantics",
+    "W5/W6/full final qualification"
+  ],
+  "deployment": {
+    "changed": false,
+    "runtime_revalidated": false
+  },
+  "followUp20261001": {
+    "evidence": "W3_NATIVE_DIAGNOSIS_2026-10-01.json",
+    "fontFamiliesPassed": 6,
+    "nativeLogoFailed": 6,
+    "qualification": "NO_NATIVE_PASS; original failure evidence retained; glyph/ink/Canva NOT_RUN"
+  },
+  "rendererBasisFollowUp20261001": {
+    "evidence": "W3_NATIVE_RENDERER_BASIS_PROOF.json",
+    "intactPassed": 6,
+    "damageRefused": 27,
+    "bindingRefusals": 5,
+    "qualification": "Same-native-basis source screen passes scoped controls; universal readability/Canva/human admission remains open. Original cross-basis failures retained."
+  }
+}

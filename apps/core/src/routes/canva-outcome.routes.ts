@@ -112,6 +112,13 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
         WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.created'
         ORDER BY aggregate_version LIMIT 1`.execute(trx)).rows[0]);
     const source = created?.data?.payload || created?.data || {};
+    // A legacy creation command can already be running at rollout. Its no-job report
+    // owns no automatic work and cannot change an explicitly manual office task.
+    if (source?.body?.workflow === 'canva_manual' && status === 'MANUAL_DESIGN_REQUIRED' &&
+        detail === 'Dispatched without an automatic Canva job; nothing was generated or spent.' &&
+        body.designId == null && body.runId == null && body.code == null) {
+      return c.json({ taskId, status, notified: false, reason: 'MANUAL_DESK_OWNED' });
+    }
     const sourceChannelId = source?.sourcePlatform === 'telegram' && source?.sourceChannelId ? String(source.sourceChannelId) : undefined;
     // A reference image joined to another request has no draft of its own; the requester was told
     // where it went when it arrived, and a "queued for manual design" notice would contradict that.

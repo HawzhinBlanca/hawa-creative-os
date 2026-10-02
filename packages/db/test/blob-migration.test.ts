@@ -57,7 +57,7 @@ describe.skipIf(!appUrl || !ownerUrl)('migration 019: the blob store schema', ()
     await expect(owner.query(`UPDATE hawa.blobs SET created_at = now() - interval '1 day' WHERE sha256 = $1`, [h])).rejects.toMatchObject({ code: '55000' });
     await sql`UPDATE hawa.blobs SET unreferenced_since = now() WHERE sha256 = ${h}`.execute(app);
     await expect(owner.query(`INSERT INTO hawa.blobs(sha256, size, media_type) VALUES ('NOT-HEX', 1, 'image/png')`)).rejects.toMatchObject({ code: '23514' });
-    await expect(owner.query(`INSERT INTO hawa.blobs(sha256, size, media_type) VALUES ($1, 1, 'image/svg+xml')`, [hex()])).rejects.toMatchObject({ code: '23514' });
+    await expect(owner.query(`INSERT INTO hawa.blobs(sha256, size, media_type) VALUES ($1, 1, 'image/tiff')`, [hex()])).rejects.toMatchObject({ code: '23514' });
   });
 
   it('gives the application role only what put and the collector need', async () => {

@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-01T07:02:42.965Z",
+  "temporaryRegistryOnly": true,
+  "approvedBefore": 1,
+  "cachedAfterAllLatinAdmissionRevoked": 1,
+  "refused": false,
+  "sourceFile": "packages/creative/src/studio/render-layout-v2.ts",
+  "sourceSha256": "3b2c58b1711d332631541c16dac1953768549a4a8e1f1300205cae5d2849b70a",
+  "providerCalls": 0,
+  "limitations": [
+    "Standalone exported-function cache reproduction; Core captureRenderFontInputs also invalidates caches, and live impact is not established.",
+    "No production registry/font/file or policy was modified.",
+    "Acceptance regression NOT_RUN; repair pending."
+  ],
+  "sourceSeal": "baf680aab2fff29c290c46634321312311ea1782",
+  "cause": "admittedFontFaces checks admittedFaceCache before loadRenderFontRegistry rehashes and invalidates the policy cache.",
+  "reproduction": "Copy the current registry to a temporary file; call admittedFontFaces for latin/body at that path; set every Latin family admitted=false; rewrite the same temporary path; call admittedFontFaces again in the same process without captureRenderFontInputs.",
+  "nextAction": "Add actual same-process policy-revocation regression, inspect font-file and renderer identity changes, and enforce current identity before cache reuse without invalidating on every unchanged call.",
+  "resolution": {
+    "adr": "ADR200",
+    "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
+    "testedSeal": "e02f321e6f1cc023bed1e403c46c4710b0496fd7",
+    "proof": "W5_FONT_ADMISSION_CACHE_PROOF.json",
+    "deployed": false
+  }
+}

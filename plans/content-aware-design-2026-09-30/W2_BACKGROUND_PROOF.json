@@ -1,0 +1,118 @@
+{
+  "date": "2026-09-30",
+  "baseline": "1acb5dcc",
+  "scope": "W2 local engineering: requested background propagation, bounded content/concept/reference planning, typed approved gradient, conservative and actual rendered contrast, native editable DrawingML/reconstruction. Full native Canva/human/release qualification remains open.",
+  "tests": {
+    "passed": 216,
+    "failed": 0,
+    "skipped": 0,
+    "files": 9,
+    "log": "/tmp/hawa-background-final-tests.log",
+    "command": "pnpm --config.verifyDepsBeforeRun=false exec vitest run packages/creative/test/content-background.test.ts packages/creative/test/art-direction-solver.test.ts packages/creative/test/art-direction-round2.test.ts packages/creative/test/art-direction-render-qa.test.ts packages/creative/test/required-photo-composition.test.ts packages/creative/test/transfer-v2.test.ts packages/creative/test/style-spec.test.ts packages/creative/test/studio-visual-inputs.test.ts apps/core/test/art-direction-e2e.test.ts apps/core/test/studio-visual-inputs.test.ts",
+    "note": "The named packages/creative/test/studio-visual-inputs.test.ts filter does not exist; nine real files ran. Core saved visual-input tests did run."
+  },
+  "build": {
+    "passed": true,
+    "log": "/tmp/hawa-background-build-final.log"
+  },
+  "lint": {
+    "passed": true,
+    "log": "/tmp/hawa-background-lint.log",
+    "anyCount": 937,
+    "egress": "existing exceptions retained; not a universal migration"
+  },
+  "types": {
+    "passed": true,
+    "roots": 642,
+    "log": "/tmp/hawa-background-types-final.log"
+  },
+  "security": {
+    "passed": true,
+    "secrets": 0,
+    "allowlistHits": 45,
+    "log": "/tmp/hawa-background-security.log"
+  },
+  "nativeBackground": {
+    "controls": 4,
+    "comparedBackgroundPixels": 2593728,
+    "tolerancePerChannel": 3,
+    "passed": true,
+    "artifact": "plans/content-aware-design-2026-09-30/BACKGROUND_NATIVE_CONTROLS.json",
+    "workingFiles": "/tmp/hawa-background-controls-20260930",
+    "commands": [
+      "node scripts/proofs/content_background_probe.mjs /tmp/hawa-background-controls-20260930",
+      "soffice -env:UserInstallation=file:///tmp/hawa-background-lo-profile --headless --convert-to pdf --outdir /tmp/hawa-background-controls-20260930 <four direction PPTX controls>",
+      "pdftoppm -r 96 -png -singlefile <each control PDF> <each native PNG>",
+      "node scripts/proofs/content_background_verify_native.mjs /tmp/hawa-background-controls-20260930"
+    ],
+    "sourceIdentity": "logo and photo SHA256 retained in native package",
+    "fontQualification": "FAILED in independent control: native source Verdana substituted by FrankRuhlHofshi-Bold, confirmed PDF FontName/BaseFont; not background failure",
+    "canva": "NOT_RUN"
+  },
+  "retainedFailures": [
+    {
+      "scope": "initial request regressions",
+      "failed": 3,
+      "passed": 0,
+      "log": "/tmp/hawa-background-red-actual.log"
+    },
+    {
+      "scope": "first connected run",
+      "failed": 3,
+      "passed": 169,
+      "log": "/tmp/hawa-background-first-tests.log",
+      "resolution": "Old background-ignore assertion updated to requested-color behavior; new fixture lineHeight and ZIP-directory counting corrected."
+    },
+    {
+      "scope": "pnpm dependency relink",
+      "status": "Initial no-TTY automatic installs refused; offline security-metadata lookup stalled and was interrupted. Frozen pinned normal install reused239/downloaded0, versions unchanged. Optional pnpm automatic dependency relink disabled after explicit frozen install; repository lint/security/manifest gates still run."
+    },
+    {
+      "scope": "first build",
+      "status": "one TS narrowing failure in background placeholder fill; fixed and final build passed",
+      "log": "/tmp/hawa-background-build4.log"
+    },
+    {
+      "scope": "native verifier",
+      "status": "PyMuPDF unavailable; used bundled pdftoppm. Initial exact-raster-size check rejected 801x1000; PDF MediaBox shows800.0126x999.9874px point quantization. Verifier now checks real page geometry under0.1px and compares intended800x1000 area, excluding extra fringe."
+    },
+    {
+      "scope": "native typography",
+      "status": "Native control font substituted; remains unqualified and recorded separately from passing background geometry/pixel controls."
+    }
+  ],
+  "dependencyChange": "existing pinned fflate0.8.3 promoted from dev to runtime for native gradient serialization; no new version/package",
+  "paidCalls": 0,
+  "productionChanged": false,
+  "sourceHashes": {
+    "packages/creative/src/studio/background-field.ts": "c775bc4b6ddf3af35fc675fc7385f521d36984ae6ba5097ce19569f7a1a24a1b",
+    "packages/creative/src/studio/background-planning.ts": "98fb0183e6c5905d751ca4e3dd9881273f629a9daeed4fc79d9905a159fea2a8",
+    "packages/creative/src/studio/background-transfer.ts": "f0a2364dfc0928042a588a801d6b181f2621d0ec814ba1e56a7a108b3c51dd96",
+    "packages/creative/src/studio/art-direction/generate.ts": "53d0d1aa96f37488ea3f5fe63a7901db7df44ee0bd4e7ab1507280c7f4d88d73",
+    "packages/creative/src/studio/art-direction/solver.ts": "4830c5e6a4dd93dea8088142200e3e34188f48b0beaefaabc3d829f7dadf7d51",
+    "packages/creative/src/studio/layout-v2.ts": "6731666e7a0586c3ff8b22a337907507a268db7145c8f3dd67c0556ab9d0ecf8",
+    "packages/creative/src/studio/render-layout-v2.ts": "17270c5e03d950d1abf9376da725aa5eee06520e59ecfd553cdbfa6396fbcf62",
+    "packages/creative/src/studio/transfer-v2.ts": "9eca201744397b7c382b0c93caf7ece7df8dfdb29787a184bf5d5669c12581e8",
+    "packages/creative/src/editable-transfer.ts": "0a5029809ce348bf6537800ded9fb49933ece87befa3d94f1c157f9d2b6970a4",
+    "packages/creative/src/studio/composite-contrast.ts": "3933f6d05a9e95183866effb788f050c3255e634b440da0b60283ae7648c94f4",
+    "apps/core/src/services/design-studio/stages/layouts.stage.ts": "f5f948c49aeb4975a83e51ab9a62fa6a73a6cbc0393f9e600877e1a1e7962fa0",
+    "scripts/proofs/content_background_probe.mjs": "d844a99238e22d72889f96a4b43835181c617e0b9969e4f25df7914883e86a1f",
+    "scripts/proofs/content_background_verify_native.mjs": "04f6ed2626eedd546fee8efbd82ab2c7951f4d1194b7208e97d64b1d1f2a3cf1",
+    "pnpm-lock.yaml": "e4024ae881f5367456a2d4acea3d77871706bc881ebcbae2db1c4ec558fbe7ce"
+  },
+  "open": [
+    "W2 actual Canva native field/edit/reopen/export and human quality qualification",
+    "W3 conditional measured logo placement/carrier",
+    "W4 varied coverage-safe topologies/narrative order",
+    "W5 image-derived color and local geometry/type refinement/cache/cost proof",
+    "W6 genuine preference labels/held-out calibration",
+    "final sealed full/recovery gates and deployment",
+    "professional comparison and allowed corpus/API budget"
+  ],
+  "blueprint": {
+    "passed": 1474,
+    "warnings": 0,
+    "failed": 0,
+    "log": "/tmp/hawa-background-pack.log"
+  }
+}

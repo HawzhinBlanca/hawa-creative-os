@@ -1,3 +1,5 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from '../../../apps/core/test/fixtures/persisted-client-dna.js';
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -28,6 +30,8 @@ describe('Task R14: Controlled Office Pilot Protocol (FR-080, NFR-010, NFR-018, 
   const db = createDb(connectionString);
   const exports = memoryExportStore();
   const app = createAppWithClientFixtures({ db, deliverableStore: exports.store });
+  prepareDna(async()=>{for(const clientId of ['c1000000-0000-4000-8000-000000000002','c1000000-0000-4000-8000-000000000003','c1000000-0000-4000-8000-000000000004']) await persistClientDnaFixture(app,clientId,{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});
+
 
   afterAll(async () => {
     if (db) await db.destroy();

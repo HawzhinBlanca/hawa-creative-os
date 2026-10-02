@@ -188,6 +188,8 @@ describe('retained PDF request handoff', () => {
   it('lets a client-level designer retain their own PDF for an operator to confirm without granting other clients', async () => {
     const id = await client(), other = await client(), userId = randomUUID();
     await sql`INSERT INTO hawa.users(id,email,display_name) VALUES (${userId}::uuid,${userId+'@example.test'},'Scoped designer')`.execute(owner);
+    await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role,active)
+      VALUES (${tenantId}::uuid,${userId}::uuid,'designer',true)`.execute(owner);
     await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
       VALUES (${tenantId}::uuid,${id}::uuid,${userId}::uuid,'designer',true)`.execute(owner);
     const designer = createApp({ db, testAuth: { principal: { role: 'designer', userId } } });

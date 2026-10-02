@@ -1,0 +1,296 @@
+{
+  "date": "2026-10-02",
+  "status": "ENGINEERING_SOURCE_AND_ISOLATED_CANDIDATE_PASSED_ADMISSION_OPEN",
+  "researchParent": "8e813a0e33485c946b753142743e406adbfd28f1",
+  "productionParent": "1e0616f083f20aafdd633b58d5dd6b7e577598b1",
+  "requirements": [
+    "FR-054",
+    "FR-066",
+    "NFR-006",
+    "NFR-007"
+  ],
+  "connected": {
+    "files": 7,
+    "passed": 90,
+    "failed": 0,
+    "skipped": 0
+  },
+  "strictTestRoots": 733,
+  "strictTypecheck": "PASS",
+  "fullSourceGatePassed": true,
+  "productionChanges": false,
+  "admissionQualified": false,
+  "migration": "082_kept_model_consent_audit_authority.sql",
+  "repairs": [
+    "Real merged DNA-save/snapshot/rollback RLS audit failures reproduced and fixed with purpose-bound forward policy.",
+    "Service-approved prior DNA cannot establish carried human consent.",
+    "Desk explains actual off status, administrator explicit decision/reason/version, exact unchanged replay after uncertain transport, stale conflict requires current read.",
+    "Client guideline prior and scoped reference prior both retained, explicit background/photo/source/hard-QA guards preserved.",
+    "Research grammar ADR239 renamed ADR241; live consent ADR239 retained."
+  ],
+  "originalFailures": {
+    "connected": {
+      "passed": 129,
+      "failed": 3
+    },
+    "positiveAuditReturningSelectFixture": {
+      "passed": 39,
+      "failed": 1
+    },
+    "singleColorRemovalFixture": {
+      "passed": 56,
+      "failed": 1
+    },
+    "coldLazyImportHarness": {
+      "passed": 89,
+      "failed": 1
+    },
+    "sandbox": {
+      "deskTests": "EPERM isolated test port",
+      "typecheck": "EPERM tsx local IPC"
+    }
+  },
+  "logs": {
+    "connected": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-connected.log",
+      "sha256": "d2c00cfa2b9a0607fb53f557a0e07263fe34a977dcb508615032bb7546264098"
+    },
+    "consent-repair": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-consent-repair.log",
+      "sha256": "45687ace2ba572da099e8fec4d7b2512e499854068daef2cbfcc7311d0e8ac76"
+    },
+    "consent-repair2": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-consent-repair2.log",
+      "sha256": "4677639a09c5257135e9b04acbd7c7ab58ac066d493f3dc1dc927aa9c8b2c80d"
+    },
+    "desk-consent": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-desk-consent.log",
+      "sha256": "25f295081a2c44951175e452f6fee38947848e16b3bddd3922495fc5887e03a1"
+    },
+    "desk-consent2": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-desk-consent2.log",
+      "sha256": "b957c94b5ddb84f0b019f2da9d161a281cd080f1d3d28707edc363ecbc1026ca"
+    },
+    "consent-connected": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-consent-connected.log",
+      "sha256": "7a4302f1a6a7d7d4bc2ff14c5f0292acfdd5ec034f05f96ecb8bb72752f16739"
+    },
+    "consent-connected2": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-consent-connected2.log",
+      "sha256": "abf54a47d89e2d65e50e4e81b95b6b8c688854532eafa08dd370135d0a65f5cc"
+    },
+    "typecheck": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-typecheck.log",
+      "sha256": "759989eec5f909e938767d2f98b56d2903f8fe0b762a4229111d61b3f85de55e"
+    },
+    "typecheck2": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-typecheck2.log",
+      "sha256": "bafd04bc28f1c2f9994c42f81d54ea4ac7ca67f8e66b31bff0c79c48f1462e9b"
+    },
+    "provision": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-provision.log",
+      "sha256": "692c166abe03c0939680b52bb333f9149d947ff323e2d8d3fd067445ed63e2f9"
+    },
+    "build": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "desk-build": {
+      "path": "output/qualification/2026-10-02/live1e-integration/hawa-live1e-desk-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "DESK_REVISION_RED": {
+      "path": "output/qualification/2026-10-02/live1e-integration/DESK_REVISION_RED.log",
+      "sha256": "1031e30a0eff70b12de7377192af65c352463ce3340e1e9649ca09f366ced786"
+    },
+    "DESK_REVISION_FINAL": {
+      "path": "output/qualification/2026-10-02/live1e-integration/DESK_REVISION_FINAL.log",
+      "sha256": "d4009b0a170c78b5f1edbbd74270f1aee566537e10a7ff82be98835baeb45fc0"
+    },
+    "REVISION_TYPECHECK_INITIAL": {
+      "path": "output/qualification/2026-10-02/live1e-integration/REVISION_TYPECHECK_INITIAL.log",
+      "sha256": "7d82515c9ac1499b4a6cfddb093156b1030268264edb1623b68f561c364827fb"
+    },
+    "REVISION_TYPECHECK_FINAL": {
+      "path": "output/qualification/2026-10-02/live1e-integration/REVISION_TYPECHECK_FINAL.log",
+      "sha256": "bafd04bc28f1c2f9994c42f81d54ea4ac7ca67f8e66b31bff0c79c48f1462e9b"
+    }
+  },
+  "open": [
+    "Publish qualified source by normal fast-forward to authorized research branch.",
+    "Production-data migration validation has no transfer authorization.",
+    "Deployment of combined source and actual live readback.",
+    "Production DNA/Canva kit update and missing saved master/invitation access.",
+    "Native Canva save/edit/reopen/export and Sorani/Arabic reading.",
+    "Independent human visual-quality review and real team pilot.",
+    "Actual publication and separate-host recovery."
+  ],
+  "fullInitial": {
+    "commit": "4748d969ec4404bd4e7842032965a7d51e699eb0",
+    "passed": 7714,
+    "failed": 2,
+    "skipped": 67,
+    "passingFiles": 724,
+    "failedFiles": 2,
+    "skippedFiles": 6,
+    "durationSeconds": 268.33,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/full-initial/FULL_TEST_SUITE_RUN.log",
+    "diagnosis": "Both explicit migration inventories omit082; real discovered/applied upgrade and actual consent controls passed."
+  },
+  "migrationInventoryRepair": {
+    "files": 4,
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/MIGRATION_INVENTORY_REPAIR.log",
+    "changes": [
+      "Explicit startup LAST and upgrade expected inventory now include082; no dynamic self-confirming assertion.",
+      "Added six real candidate restricted-role preserved-consent/checksum checks; execution pending."
+    ],
+    "productionRuntimeChanged": false,
+    "sha256": "20b8e9596e64ad80ac48f09ac3a20cab3d845fd2835c21c997b6d875d5d32f9e"
+  },
+  "fullMigrationCorrected": {
+    "commit": "5dbad16e34e37088db8a9aeea85493505cc865d3",
+    "passed": 7716,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 726,
+    "skippedFiles": 6,
+    "durationSeconds": 270.29,
+    "technicalStagesPassed": 7,
+    "productionDumpStage": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
+    "negativeFlagRefusal": true,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/full-corrected/RELEASE_GATE_EVIDENCE.json",
+    "scope": "Before the subsequent Desk expectedVersion handoff repair; do not transfer this result to final source."
+  },
+  "deskRevisionRepair": {
+    "before": {
+      "passed": 6,
+      "failed": 2,
+      "receipt": "output/qualification/2026-10-02/live1e-integration/DESK_REVISION_RED.log"
+    },
+    "connected": {
+      "files": 7,
+      "passed": 91,
+      "failed": 0,
+      "skipped": 0,
+      "receipt": "output/qualification/2026-10-02/live1e-integration/DESK_REVISION_FINAL.log"
+    },
+    "strictTestRoots": 733,
+    "strictTypecheck": "PASS",
+    "originalTypeErrors": "Two test callers omitted the new required expectedVersion; updated explicit request bodies, original log retained.",
+    "changes": [
+      "Typed API requires read-version for every Desk brand save and governance snapshot.",
+      "Current editor/undo version forwarded; server contract and authorization unchanged.",
+      "Real Core stale-save/snapshot control refuses409 without changing active DNA, consent or audit; UI stale edit preserves its view and displays the conflict.",
+      "Snapshot response off-status verified in actual DOM."
+    ],
+    "fullFinalGate": "PASS_ON_7f43b588",
+    "productionChanges": false
+  },
+  "fullFinal": {
+    "commit": "7f43b588c94e45badabdef2483825bcba45a7a12",
+    "sourceCommit": "29bca5fd3784a316b01da39b47a606676e6877b2",
+    "passed": 7719,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 726,
+    "skippedFiles": 6,
+    "strictTestRoots": 733,
+    "technicalStagesPassed": 7,
+    "productionDumpStage": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
+    "negativeFlagRefusal": true,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/full-final/RELEASE_GATE_EVIDENCE.json",
+    "durationSeconds": 265.9
+  },
+  "candidateFinal": {
+    "commit": "7f43b588c94e45badabdef2483825bcba45a7a12",
+    "finishedAt": "2026-10-01T23:36:49.029Z",
+    "passed": 243,
+    "failed": 0,
+    "sourceChanges": {},
+    "scenarioTests": {
+      "passed": 1,
+      "skipped": 56,
+      "scope": "Only required R1.S3.SOURCES --candidate --recovery scenario selected; other chaos scenarios not run here."
+    },
+    "fakeExternalProviders": true,
+    "uncoveredModelCalls": [],
+    "productionChanged": false,
+    "receipt": "output/qualification/2026-10-02/live1e-integration/candidate-final/last-run.json",
+    "preservedConsentControls": [
+      {
+        "name": "candidate administrator can preserve consent only against its exact approved version pair",
+        "ok": true,
+        "detail": "actual hawa_app write"
+      },
+      {
+        "name": "candidate operator cannot forge preserved consent",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate preserved consent refuses a mismatched preceding hash",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate task policy cannot bypass preserved consent authority",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate preserved consent refuses changed stored privacy",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate migration082 receipt matches the exact source checksum",
+        "ok": true,
+        "detail": "fcba4719056d7f68af3c27f4279919e7dc7f96ae7b2fb763bb353b1bb99ad501"
+      }
+    ],
+    "recoveries": {
+      "drive": {
+        "tableCount": 105,
+        "policyCount": 181,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.134,
+        "separateHostProved": false,
+        "productionChanged": false
+      },
+      "telegram": {
+        "tableCount": 105,
+        "policyCount": 181,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.145,
+        "separateHostProved": false,
+        "productionChanged": false
+      }
+    }
+  },
+  "liveServiceBoundaryReadback": {
+    "observedDate": "2026-10-02",
+    "release": "1e0616f083f20aafdd633b58d5dd6b7e577598b1",
+    "nginxConfigurationTest": "PASS; mounted proof readable",
+    "workerDatabaseIdentity": "hawa_worker_login",
+    "workerAppRoleMembership": false,
+    "workerApprovalInsert": false,
+    "workerTaskUpdate": false,
+    "workerSchemaCreate": false,
+    "workerTemporaryCreate": false,
+    "workerOperatorOrProviderEnvironmentPresent": false,
+    "designWorkerOperatorTaskListStatus": 401,
+    "designWorkerCredentialDistinctFromAllThreeOperatorFields": true,
+    "knownUnsafeRollbackPrefixesRemaining": [],
+    "productionChanged": false,
+    "newReleaseDeployed": false
+  }
+}

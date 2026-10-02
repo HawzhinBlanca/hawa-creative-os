@@ -1,0 +1,15 @@
+================================================================================
+          HAWA CREATIVE OS — ENGINEERING RELEASE PREFLIGHT
+================================================================================
+Root Directory: /Users/hawzhin/Hawdesign/.worktrees/content-aware-design
+Execution Mode: NEGATIVE CONTROL (Test Refusal)
+Timestamp:      2026-10-01T01:48:47Z
+================================================================================
+[REFUSAL DRILL] Testing Gate Refusal under corrupted release manifest...
+[REFUSAL DRILL PASSED] Gate strictly refused corrupted candidate (exit code: 1):
+  Verifying release manifest...
+RELEASE MANIFEST VERIFICATION FAILED:
+  - Validation error: Production flags must remain "off" until admission gates pass
+  - Manifest SHA-256 checksum mismatch: declared 1381d10b395d4be517e34cf5a461163f531b807a40208c8ad1122617c9561847, calculated d7f9d3983f435dbd2889e9fe4b4d8b1b9bbf28e80f686e773e393995a8ca4b64
+  - DESIGN_PIPELINE_V3 flag must be 'off' (observed 'on')
+Refusal counterexample verified: source-manifest flag violation rejected.

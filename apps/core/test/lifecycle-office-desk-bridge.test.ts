@@ -1,3 +1,6 @@
+import {beforeAll as prepareDna} from 'vitest';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { deliveryBaseId } from '@hawa/contracts';
 import { assert, afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -832,6 +835,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect((await restartedCore.request(path, { method: 'POST', headers,
       body: JSON.stringify({ ...body, reason: 'Changed reason' }) })).status).toBe(409);
     const rows = await withRlsContext(db, scope, async (trx) => ({
+      revision:await trx.selectFrom('design_revisions').select('source_sha256').where('tenant_id','=',tenantId).where('task_id','=',taskId).where('id','=',revisionId).executeTakeFirstOrThrow(),
       request: await trx.selectFrom('requests').select(['stage', 'rev']).where('request_id', '=', requestId).executeTakeFirst(),
       task: await trx.selectFrom('tasks').select(['state', 'version']).where('id', '=', taskId).executeTakeFirst(),
       approvals: await trx.selectFrom('approvals').select(['id', 'decision', 'qc_run_id', 'decision_payload'])
@@ -850,7 +854,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
         officeApprovalProof: { rtlVisualReview: body.rtlVisualReview },
         rtlVisualReview: { confirmed: true, qcRunId, exportSha256: sha256, reviewerId: userId } } }]);
     expect(rows.feedback).toEqual([expect.objectContaining({ category: 'decision.approved',
-      actor_id: userId, target: { approvalId: result.decisionId, decision: 'approved', revisionId } })]);
+      actor_id: userId, target: {kind:'revision_decision_v1',sourceSha256:rows.revision.source_sha256, approvalId: result.decisionId, decision: 'approved', revisionId } })]);
     expect(rows.receipts.map((row) => Number(row.rev)).sort()).toEqual([1, 2, 3]);
     expect(transport).toHaveBeenCalledTimes(2);
 
@@ -1148,3 +1152,5 @@ describe('a requester change after approval holds request-owned delivery (findin
     }
   });
 });
+
+prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:db}), 'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});

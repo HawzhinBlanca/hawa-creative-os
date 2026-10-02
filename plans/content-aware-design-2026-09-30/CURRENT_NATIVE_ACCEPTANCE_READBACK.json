@@ -1,0 +1,187 @@
+{
+  "date": "2026-10-02",
+  "status": "BOUNDED_NATIVE_COMPATIBILITY_PASS_FULL_ADMISSION_OPEN",
+  "qualifiedParent": "6954f175cef82679535e2bb4d29db0527c52fd43",
+  "requirements": [
+    "FR-034",
+    "FR-035",
+    "FR-038",
+    "FR-057",
+    "NFR-020"
+  ],
+  "settingsRepair": {
+    "reason": "Observed live UI claimed GPT-4.1 mini visual judge; actual current health resolves judge to gpt-6.1-sol. Remove hardcoded model claims; retained design model receipts and deterministic QA remain authoritative.",
+    "existingTestsPassed": 12,
+    "deskBuild": "PASS",
+    "newTestsAdded": false
+  },
+  "live": {
+    "observedAt": "2026-10-01T21:24:31.003934+00:00",
+    "status": "healthy",
+    "buildCommit": "baffce10408707f74f1265206366c0af0d482096",
+    "models": {
+      "tier": "production",
+      "text": "gpt-6.1-sol",
+      "layout": "gpt-6.1-sol",
+      "critique": "gpt-6.1-sol",
+      "judge": "gpt-6.1-sol"
+    }
+  },
+  "retainedRealCanvaExports": {
+    "date": "2026-10-01T21:19:47.645Z",
+    "scope": "Current source checker applied offline to retained real Canva exports; no new native operation or edit/save/reopen, glyph, human or current composition admission inferred.",
+    "probeCorrection": "First probe read the Core projected fontFamilyPass field from the lower-level checker. Corrected to its actual fontPass contract; source and thresholds unchanged.",
+    "checkerSha256": "72b8cd58feac0ec92bf590b506e1f4f5921cfa0e220cddbbdc6546bc4dec7574",
+    "fixtureSha256": "9f332a9252bf2df4dba279383a1078471398d695363afc41eb8ab711710bb8ac",
+    "journalSha256": "e0894be21fefd62bea491a5013a964ce1f0d994ef7fd79d9ba851e2fd513a820",
+    "controls": [
+      {
+        "id": "group-1-round-2",
+        "caseCount": 10,
+        "exportSha256": "5138c60337e629fd2fc6c04c3993ca9aa64b323d497420d936fb8bed6eae1512",
+        "copyPass": true,
+        "fontFamilyPass": true,
+        "fontCoverage": "unknown: PPTX family evidence is not rendered glyph coverage",
+        "textObjectCount": 10,
+        "fullReleasePass": false,
+        "changedCopyRefused": true,
+        "wrongFontRefused": true
+      },
+      {
+        "id": "group-2",
+        "caseCount": 10,
+        "exportSha256": "4f139e585e8eaf1142f818e6b690a76e4c0a281e5b04e5acb476aac3edd80757",
+        "copyPass": true,
+        "fontFamilyPass": true,
+        "fontCoverage": "unknown: PPTX family evidence is not rendered glyph coverage",
+        "textObjectCount": 10,
+        "fullReleasePass": false,
+        "changedCopyRefused": true,
+        "wrongFontRefused": true
+      },
+      {
+        "id": "group-3",
+        "caseCount": 10,
+        "exportSha256": "5486d2cd427a5bd28b06fe090c6653b6fe408620cb70a5f874ecc8f628129ff2",
+        "copyPass": true,
+        "fontFamilyPass": true,
+        "fontCoverage": "unknown: PPTX family evidence is not rendered glyph coverage",
+        "textObjectCount": 10,
+        "fullReleasePass": false,
+        "changedCopyRefused": true,
+        "wrongFontRefused": true
+      },
+      {
+        "id": "group-4",
+        "caseCount": 10,
+        "exportSha256": "ff92c95c150b6c1affa26808e8514abff7f1eaf3c43638f6cc9cdc60d9ef3c3c",
+        "copyPass": true,
+        "fontFamilyPass": true,
+        "fontCoverage": "unknown: PPTX family evidence is not rendered glyph coverage",
+        "textObjectCount": 10,
+        "fullReleasePass": false,
+        "changedCopyRefused": true,
+        "wrongFontRefused": true
+      }
+    ],
+    "caseCount": 40,
+    "providerCalls": 0,
+    "productionChanged": false,
+    "fullMultilingualAdmission": false
+  },
+  "whiteCompositionTransfers": {
+    "count": 5,
+    "providerCalls": 0,
+    "inputs": "synthetic geometric controls and explicit official test logo; not customer design qualification",
+    "geometryComparedPixels": 6475710,
+    "sourcePixelsCompared": 4228430,
+    "controls": [
+      {
+        "recipe": "editorial_split",
+        "photos": 1,
+        "hardQaPassed": true,
+        "sourceAndLiveCopyIdentity": true,
+        "nativeGeometryPassed": true,
+        "nativeFontNames": [
+          "CAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "DAAAAA+Verdana-Bold"
+        ]
+      },
+      {
+        "recipe": "photo_diptych",
+        "photos": 2,
+        "hardQaPassed": true,
+        "sourceAndLiveCopyIdentity": true,
+        "nativeGeometryPassed": true,
+        "nativeFontNames": [
+          "CAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "DAAAAA+Verdana-Bold"
+        ]
+      },
+      {
+        "recipe": "photo_sequence",
+        "photos": 6,
+        "hardQaPassed": true,
+        "sourceAndLiveCopyIdentity": true,
+        "nativeGeometryPassed": true,
+        "nativeFontNames": [
+          "CAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "DAAAAA+Verdana-Bold"
+        ]
+      },
+      {
+        "recipe": "photo_mosaic",
+        "photos": 6,
+        "hardQaPassed": true,
+        "sourceAndLiveCopyIdentity": true,
+        "nativeGeometryPassed": true,
+        "nativeFontNames": [
+          "CAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "DAAAAA+Verdana-Bold"
+        ]
+      },
+      {
+        "recipe": "hero_storyboard",
+        "photos": 6,
+        "hardQaPassed": true,
+        "sourceAndLiveCopyIdentity": true,
+        "nativeGeometryPassed": true,
+        "nativeFontNames": [
+          "CAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "DAAAAA+Verdana-Bold"
+        ]
+      }
+    ],
+    "renderer": "LibreOfficeDev 26.8.0.0.alpha0 2c87e51eeaa2b413ff4ae097b2705eea1995d8e5",
+    "maskScope": "Typography/logo boxes expanded32px, 3px resampling neighborhoods and photo edges excluded; geometry agreement cannot establish glyph/logo or human quality."
+  },
+  "currentUIInspection": {
+    "canvaAccount": "authorized",
+    "historicalSmokeTask": "No captured native preview; automated font/glyph/contrast/margin checks unmeasured; approve and deliver disabled.",
+    "productionWritesPerformed": false
+  },
+  "mergeReadback": {
+    "branch": "claude/kaae-2025-guideline",
+    "committedHead": "baffce10408707f74f1265206366c0af0d482096",
+    "newGuideline": "Uncommitted working changes; not a completed branch delta; no edits or merge performed."
+  },
+  "open": [
+    "Current native Canva edit/save/reopen and current-composition export",
+    "Human Sorani/Arabic reading and independent design-quality review",
+    "New guideline integration after its source is finalized",
+    "Production-data migration transfer and real publication/recovery/pilot admission"
+  ],
+  "sourceSha256": {
+    "apps/desk/src/screens/SettingsScreen.tsx": "ee22d194a79f560cf5ad7eaeaa391ac2cc7cc0d9d49810197d6312eb1e6ad4ce",
+    "packages/qa/src/canva-pptx-check.ts": "72b8cd58feac0ec92bf590b506e1f4f5921cfa0e220cddbbdc6546bc4dec7574",
+    "packages/creative/src/studio/art-direction/solver.ts": "b87e1e15cf47eb496b65ff8b7495e0fe3260498679e6bb7466d704f214492005",
+    "packages/creative/src/studio/transfer-v2.ts": "9eca201744397b7c382b0c93caf7ece7df8dfdb29787a184bf5d5669c12581e8"
+  },
+  "wholeProductAdmission": false,
+  "productionDeployed": false
+}

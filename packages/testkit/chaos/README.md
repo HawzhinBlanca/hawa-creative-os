@@ -180,6 +180,11 @@ private Compose override points at recovered volumes and is also used by `--down
 teardown removes original and recovered candidate stores. A failed restore leaves
 writers stopped and private recovery artifacts in `.run/recovery-private-*` for
 diagnosis. Do not resume the original stores after external effects have advanced.
+Successful restores already remove their own scratch directory, even with `--keep`;
+that option retains the candidate's store volumes. ADR210 binds the successful
+cleanup receipt to the caller's fresh recovery nonce, task and restored volumes
+before application writers resume. Other failed runs' directories remain intact.
+An old directory's presence does not prove a new restore failed cleanup.
 This proves coherent same-host recovery only, not independent-host/off-host recovery,
 arbitrary database-PITR/Restate capture-gap repair or real provider acceptance.
 

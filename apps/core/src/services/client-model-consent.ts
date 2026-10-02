@@ -216,7 +216,7 @@ export async function saveDnaVersionKeepingConsent(trx: Kysely<Database>, client
   // The consent action's lock: a save and a consent change for one client never interleave.
   await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`client-dna:${params.tenantId}:${params.clientId}`}, 0))`.execute(trx);
   const active = await activeRow(trx, params.tenantId, params.clientId);
-  const before = active?.approved_by ? privacyOf(parsed(active.dna)) : null;
+  const before = active?.approved_by && !isServiceUserId(active.approved_by) ? privacyOf(parsed(active.dna)) : null;
   const admin = humanAdministratorOrNull(actor);
   let reason: string | null = null;
   if (!active || !before) reason = NO_CONSENT;

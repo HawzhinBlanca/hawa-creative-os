@@ -1,8 +1,9 @@
 import crypto, { createHash } from 'node:crypto';
-import { describe, expect, it, vi, afterAll } from 'vitest';
+import { describe, expect, it, vi, afterAll, beforeAll } from 'vitest';
 import { createDb } from '@hawa/db';
 import { signActionLink } from '@hawa/integrations';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 
 /** A signed approve-and-publish, posted as the review link's confirmation page does (ADR-159). */
@@ -15,6 +16,8 @@ const signedPublish = (taskId: string) => {
 // 1.3, groups G3 and G5), so these apps run on this file's own test database.
 const testDb = createDb(process.env.TEST_DATABASE_URL!);
 afterAll(() => testDb.destroy());
+beforeAll(async()=>{await persistClientDnaFixture(createAppWithClientFixtures({db:testDb}),
+  'c1000000-0000-4000-8000-000000000002',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});
 
 /**
  * Delivery sends exactly the Canva exports the reviewer pinned when approving (owner decision,

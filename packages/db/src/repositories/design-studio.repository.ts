@@ -173,6 +173,8 @@ export interface RecordFeedbackParams {
   runId?: string | null;
   candidateId?: string | null;
   actorId: string;
+  actorRole?: string | null;
+  clientId?: string | null;
   source: DesignFeedbackSource;
   verdict: DesignFeedbackVerdict;
   rating?: number | null;
@@ -801,6 +803,8 @@ export class DesignStudioRepository {
           run_id: params.runId || null,
           candidate_id: params.candidateId || null,
           actor_id: params.actorId,
+          actor_role: params.actorRole ?? null,
+          client_id: params.clientId ?? null,
           source: params.source,
           verdict: params.verdict,
           rating: params.rating !== undefined ? params.rating : null,

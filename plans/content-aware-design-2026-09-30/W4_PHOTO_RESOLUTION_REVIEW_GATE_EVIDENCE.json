@@ -1,0 +1,33 @@
+{
+  "candidateCommit": "9664a72ec6ef250070f7f5ebe23ac8f0bdaf0849",
+  "status": "SEVEN_ENGINEERING_STAGES_PASS_PRODUCTION_DUMP_APPROVAL_PENDING_PRODUCT_ADMISSION_OPEN",
+  "technicalStagesPassed": 7,
+  "suite": {
+    "passed": 6875,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 688,
+    "filesSkipped": 6
+  },
+  "strictTestRoots": 695,
+  "packPassed": 1768,
+  "newestDump": {
+    "status": "NOT_RUN_AUTOMATIC_APPROVAL_REVIEW_REJECTED",
+    "request": "prior explicit transfer authorization remains pending",
+    "productionChanged": false
+  },
+  "negativeFlagRefusal": "PASS",
+  "sourceChangedDuringGate": false,
+  "admissionQualified": false,
+  "rawGateStatusPreserved": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+  "scope": "exact clean source with production dump excluded; not all-eight qualification",
+  "artifacts": {
+    "output/qualification/2026-10-01/photo-resolution-review/EXACT_GATE.log": "ea5da614de3c566e02b12f16a086d733ba450b1ef4782e81f81ba88dd4dd8074",
+    "output/qualification/2026-10-01/photo-resolution-review/FULL_TEST_SUITE_RUN.log": "5617d252b615d15d0de70b1120d72b0f636301a6127710e78b5efe9b26ab4e0c",
+    "output/qualification/2026-10-01/photo-resolution-review/NEGATIVE_FLAG_REFUSAL.log": "1a841b8d21015f312d3f9227c7dc17d5fea145cd704d82610151db122fe1e95e",
+    "output/qualification/2026-10-01/photo-resolution-review/PREDEPLOY_DUMP_CHECK.json": "e18d3c5b356ca522563da745a55962f8dd2a3b83608e5fc6ac778abe461e0220",
+    "output/qualification/2026-10-01/photo-resolution-review/PREDEPLOY_DUMP_CHECK.log": "7c98e4a1baa5b5026530af0b4bc8b4f0dd4f3521519912dafc92dba40223a12f",
+    "output/qualification/2026-10-01/photo-resolution-review/RELEASE_GATE_EVIDENCE.json": "554e84327d77df890cee6fa44a22f1dacc51844d7f1b73b4870697bfd4f73601",
+    "output/qualification/2026-10-01/photo-resolution-review/TEST_DB_PROVISION.log": "336ff22f53b4a3fea01bf514699007aa793865e351b45da27310dadad063c59d"
+  }
+}

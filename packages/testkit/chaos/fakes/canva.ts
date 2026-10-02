@@ -21,7 +21,7 @@ export interface CanvaFault {
 
 export interface CanvaLedgerEntry {
   seq: number;
-  kind: 'import' | 'export' | 'design' | 'token' | 'download' | 'manual_edit';
+  kind: 'import' | 'export' | 'design' | 'token' | 'download' | 'manual_edit' | 'manual_copy';
   id: string;
   sourceSha256?: string;
   designId?: string;
@@ -69,6 +69,18 @@ export class FakeCanva {
   private jobs = new Map<string, Job>();
   private faults: CanvaFault[] = [];
   readonly ledger: CanvaLedgerEntry[] = [];
+
+  /** Test control only: copy the existing synthetic master without any generation/import. */
+  copyDesign(parentId: string): { designId: string; contentBase64: string; sourceSha256: string } {
+    const parent = this.designs.get(parentId);
+    if (!parent?.source) throw new Error('Synthetic source design is unavailable');
+    const id = `DAchaos${this.run}${String(this.seq + 1).padStart(6, '0')}`;
+    const source = Buffer.from(parent.source);
+    this.designs.set(id, { ...parent, id, source });
+    const sourceSha256 = sha256(source);
+    this.note({ kind: 'manual_copy', id, designId: id, sourceSha256, status: 200 });
+    return { designId: id, contentBase64: source.toString('base64'), sourceSha256 };
+  }
 
   /** Test control only: synthetic bytes stand in for a person's native edit. Never an import. */
   editDesign(id: string, source: Buffer): void {

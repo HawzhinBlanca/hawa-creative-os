@@ -394,7 +394,11 @@ describe('pipeline v3 — refinement', { timeout: 30000 }, () => {
   });
 
   it('refines a failing candidate with the critic seeing the real copy, and adopts a passing repair', async () => {
-    const failing = broken();
+    // Keep the intended style and editable layers; only the geometry is damaged.
+    const failing = centred();
+    const damaged = broken();
+    failing.text = failing.text.map((t, i) => ({ ...t, x: damaged.text[i].x, y: damaged.text[i].y,
+      width: damaged.text[i].width, height: damaged.text[i].height, fontSize: damaged.text[i].fontSize }));
     const { client, calls } = mockClient({ repairLayout: centred() });
     const [top] = rankCandidatesV3([{ sourceIndex: 3, layout: failing }], COPY);
     expect(top.metrics.passed).toBe(false);
@@ -413,6 +417,16 @@ describe('pipeline v3 — refinement', { timeout: 30000 }, () => {
     const round = outcome.result.rounds[0];
     expect(round.calls.map((c) => c.stage)).toEqual(['critique', 'repair']);
     expect(round.calls[1]).toMatchObject({ inputTokens: 1000, cachedTokens: 200, outputTokens: 100 });
+  });
+
+  it('rejects the old full-redesign mock that changes style and adds shapes during a geometry repair', async () => {
+    const { client } = mockClient({ repairLayout: centred() });
+    const [top] = rankCandidatesV3([{ sourceIndex: 3, layout: broken() }], COPY);
+    const outcome = await refineCandidateV3(top, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
+    expect(outcome.adopted).toBe(false);
+    expect(outcome.result.rounds[0].rejection?.code).toBe('repair_changed_protected_input');
+    expect(outcome.result.rounds[0].calls).toHaveLength(2);
+    expect(outcome.layout).toEqual(top.layout);
   });
 });
 

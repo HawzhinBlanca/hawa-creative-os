@@ -1,0 +1,126 @@
+{
+  "adrs": [
+    "ADR203",
+    "ADR204"
+  ],
+  "date": "2026-10-01",
+  "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
+  "requirements": [
+    "FR-038",
+    "FR-041",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "retainedRegressions": {
+    "originalMissedSize": {
+      "failed": 1,
+      "passed": 0
+    },
+    "expandedSearch": {
+      "passed": 116,
+      "failed": 1,
+      "reason": "Manual endpoint expectation wrong; independent dense oracle already passed; corrected to47/43/21/17."
+    },
+    "coreInitial": {
+      "filesFailed": 1,
+      "passed": 15,
+      "reason": "Core fixture imported fflate which it does not own; OOXML inspection moved to existing creative dependency, no new dependency."
+    },
+    "coreActualQa": {
+      "failed": 1,
+      "passed": 16,
+      "reason": "Actual narrower flush-left body scored0.667 below unchanged0.70 alignment gate."
+    },
+    "alignmentRed": {
+      "failed": 3,
+      "passed": 2
+    },
+    "firstStrict": {
+      "roots": 679,
+      "reason": "Measured contrast is a Record, not an array; use Object.values."
+    },
+    "sandboxTypecheck": "tsx IPC denied by sandbox; authorized verification rerun outside sandbox passed."
+  },
+  "acceptance": {
+    "connected": {
+      "files": 19,
+      "passed": 379,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictTestRoots": 679,
+    "lint": "PASS;925 any occurrences; no new egress exceptions",
+    "actualCorePixelsQaTransfer": "PASS; actual solveConcepts, explicit scoped logo, measured text and pixel contrast, raster1080x1350, live exact transfer copy and SHA identity, zero provider dispatch",
+    "editableCreativeTransfer": "PASS; native OOXML copy/font sizes and retained source-photo bytes/hash",
+    "scaleStateCoverage": "PASS; independent dense oracle, exact endpoints, integer state dedup, existing one-line preference and floors",
+    "alignmentControls": "PASS; unequal-width left/right/centre, false-centre left/right refusal, unchanged0.5%-width tolerance, six approved exemplars and deliberate off-grid control"
+  },
+  "searchLimits": {
+    "roundingTransitions": 1024,
+    "distinctScales": 512,
+    "invalidOrOversized": "Explicit RecipeInfeasibleError before glyph measurement"
+  },
+  "benchmark": {
+    "path": "output/qualification/2026-10-01/type-scale-diagnostic/BENCHMARK.json",
+    "sha256": "d3ac788f6dac2d14fdfc560fbcde2d525c7399f774f68bf53efe55d610788382",
+    "scope": "actual local recipe solves, 3 warmups then 12 paired alternating iterations; synthetic copy/photos, no provider calls or pipeline SLA",
+    "cases": 8,
+    "pairedIterationsPerCase": 12,
+    "maxObservedMs": 9.018625000000043,
+    "finding": "Pressure title/body53/24 becomes56/25. Infeasible mosaic p50 about3.28ms becomes5.95ms; finer coverage adds local cost. No pipeline SLA or general speed claim."
+  },
+  "policy": "Existing palette, exact copy, assets, fonts, hierarchy, recipes and explicit photo count preserved; metric follows declared text axis, not a client whitelist.",
+  "providerCalls": 0,
+  "dependenciesAdded": 0,
+  "hardThresholdsChanged": false,
+  "sourceSha256": {
+    "packages/creative/src/studio/art-direction/solver.ts": "f1bf061c89eaef8ac015ee50df41ecd3c3fe7649ed292aa2456ef00850aa7f7d",
+    "packages/creative/src/studio/art-direction/type-scale-search.ts": "add3360185a7640ec909fcf5f5d4d1ecb9eac72ca07b0ef1e0f00ac4c3ec8677",
+    "packages/creative/src/studio/layout-metrics.ts": "810c60ddad6bcb71716beaa029400a8b79926be164850c92599b22664f05fd5b",
+    "packages/creative/test/type-scale-search.test.ts": "32df5d1d149635d97621b8fa5b40742f10872e7d9ec443e913041bf445ed6199",
+    "packages/creative/test/alignment-axes.test.ts": "196a9495eedf047ef7a07d722269e37766bee6e9e6e6783591cd69136413bdf4",
+    "packages/creative/test/fixtures/type-scale-input.ts": "bf879c28d11c4831d871877ee89c0ca35ce3e23a4a5a1e289d24c03bc57217d8",
+    "apps/core/test/type-scale-search.test.ts": "251eba9afd4c4fc5bd521be1a01c9db0238551a87be0596e8b13d0cee0c7c0bf"
+  },
+  "logs": {
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-fit-diagnostic-20261001.log": "e8ccb7f75d39bf09964b47ffcf838c9b5bdef28d747f8471b2b9e0ee54bad319",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-alignment-connected-20261001.log": "8eed922c7f8f9b9979eb94c636f1b719b25f1535fef20d73c06479774b353975",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-search-expanded-20261001.log": "b0398a634ba9fd1c0db3e99326703a99a3ff45f2bbcf6095a7ae2d3950c99f74",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-search-first-connected-20261001.log": "0727f58fbc1de7d0ff3ff5510819dd18d0bc70d69a65c4a0e8f6dbf12219f79a",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-search-vertical-repaired-20261001.log": "1b9d7b33cdcf44e653176deb32ddb804c8b0c9b278356fb37bec185d96b05ff4",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-search-vertical-20261001.log": "7c5b489bfe47922a0f12d3162f4e57ae334d2ca6c9b5eb51ad60cdf7e3abab58",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-search-types-20261001.log": "9973ae8ee599f2421214c559216a91eb6cdeaa54288b771239110413f73cb4cd",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-benchmark-20261001.log": "9623bd129709e40b248103a4f173e13ec82141af2582ff3205a901451bd9aba5",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-alignment-types-20261001.log": "ff309dee412d6b0bcc9cda50b8292d8125679fa886dc51650cd8cf18b40a2467",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-alignment-vertical-final-20261001.log": "974a5837fd806f15b96fe4ef3fb61fc0f78ea00ee660f4575205773b255743a9",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-search-core-grid-diagnostic-20261001.log": "8e24d1ff2425191699921eab71db73eba42add0d568fd1c14769fa79f448eac5",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-type-scale-search-red-20261001.log": "6c99abe4c6698896a95acf6ebd9c0e916826382e8d35dac97e344ddf9238a865",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-alignment-axes-red-20261001.log": "3985c74b19bd8af3c8d7b2a0c980beb760a982d0c519f295e8f7fcfff2488f49",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-joint-typography-connected-final-20261001.log": "6d849462d0faf9439eca9430020ed6f35f9c83191ce0792b0d21ed13b3c95e71",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-joint-typography-types-final-20261001.log": "88a7dce2c80987a5130fc7754fa3a266f79565cdf56bf9a6f72d4d6769b3eb7d",
+    "output/qualification/2026-10-01/joint-typography-development/hawa-joint-typography-lint-final-20261001.log": "81268e527353f47331d24d3376399d7ca56af0e0b9082620660ccb3328b23cb4"
+  },
+  "deployment": "NOT_DEPLOYED",
+  "limits": [
+    "Synthetic local fixtures do not establish human aesthetic superiority or native Canva quality.",
+    "Benchmark is local recipe solving, not end-to-end latency.",
+    "Broader W5/W6/native Canva/human/recovery/product admission remains open."
+  ],
+  "exactQualification": {
+    "testedSeal": "db24c6179f7184b6f2545e750cdce10469b73543",
+    "runtimeCommit": "3d44e3353fbbeb710f4c909f566e9e6e4cf9e2ea",
+    "allStages": 8,
+    "testsPassed": 6616,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 672,
+    "filesSkipped": 6,
+    "strictRoots": 679,
+    "blueprintChecksAtSeal": 1702,
+    "gateEvidence": "W5_JOINT_TYPOGRAPHY_GATE_EVIDENCE.json",
+    "fullTestLog": "output/qualification/2026-10-01/db24c617/FULL_TEST_SUITE_RUN.log",
+    "fullTestLogSha256": "9d6e55ea3acd1bb006b9292575ed67f39a58b526873be0a79095ea21f6dc891d",
+    "deployed": false,
+    "productAdmission": false
+  }
+}

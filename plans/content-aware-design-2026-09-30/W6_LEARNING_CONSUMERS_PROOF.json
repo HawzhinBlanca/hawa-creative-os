@@ -1,0 +1,108 @@
+{
+  "date": "2026-10-01",
+  "adr": 196,
+  "baseline": "f98facf32fface1b9f8cb2569390e8fd01845c47",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_PRODUCT_OPEN",
+  "requirements": [
+    "FR-052",
+    "FR-053",
+    "FR-054",
+    "FR-077",
+    "NFR-006",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "acceptance": {
+    "files": 10,
+    "passed": 100,
+    "failed": 0,
+    "skipped": 0,
+    "log": "/tmp/hawa-learning-consumers-connected-qa-20261001.log"
+  },
+  "typecheck": {
+    "roots": 668,
+    "status": "PASS",
+    "log": "/tmp/hawa-learning-consumers-types-20261001.log"
+  },
+  "lint": {
+    "status": "PASS",
+    "anyCount": 931,
+    "existingEgressExceptions": 10,
+    "log": "/tmp/hawa-learning-consumers-lint-20261001.log"
+  },
+  "policy": [
+    "Search scopes authorized clients before rebuilding source/moderation/current DNA; returned snapshots, no global cache dependency",
+    "Actual current moderation/status/actor/source timestamps are indexed; scores labeled heuristic",
+    "Only rules/all searches acquire rule sources; a task-only search does not depend on them",
+    "Generation/preview strict scoped DNA refuses cached fallback on failed or unauthorized configured database lookup",
+    "Generation shares one acquired DNA snapshot for rules and QA; optional preview failure preserves committed intake"
+  ],
+  "controls": [
+    "Actual independent Core SIGKILL; cold search before candidate GET",
+    "Actual caller memberships for unscoped/client/alias searches; no-DNA rule client included",
+    "Another Core promotes/rolls back; existing search sees latest status",
+    "Revoked audit SELECT refuses rule search503 while task-only search200",
+    "Denied caller cannot fall back to cached client DNA",
+    "Missing stored DNA409 or unreadable503 yields no revision/QC",
+    "Preview uses actual automation actor and recorded client rules; failed read leaves committed task and no preview",
+    "Existing QA, report hash, failed critical checks and approval refusal retain their assertions with explicitly saved fixture DNA"
+  ],
+  "retainedFailures": [
+    "Focused cold-search baseline1fail/9focusedskip",
+    "First build shadowed RequestContext/QA JsonObject type errors; corrected source build passes",
+    "First connected29pass/4fail: missing stored fixtures; corrected31pass/2fail: fixture auth and wrong target",
+    "Authority45pass/1fail: Hawa source fixture lookup is not the UUID; extended55pass/1fail: fake official logo matched the legacy placeholder",
+    "Final10files/100pass, counts overlap and are not added"
+  ],
+  "limits": [
+    "Source only, not deployed; live2c4d61ec unchanged",
+    "Exact sealed full engineering gate passed; deployment/native/Canva/human/product admission not qualified by these checks",
+    "Whole FR077 not complete: feedback/revision search and no-DNA client-category hits remain unqualified",
+    "Other legacy DNA resolver callers still allow fallback; only explicit strict consumers are qualified",
+    "No paid model or external provider call, dependency/migration, taste calibration or native/Canva/human/product admission"
+  ],
+  "sourceSha256": {
+    "adrs/196_durable_learning_consumers.md": "ed81eb11239c9322d0a1d8bef0422d3a555d5028e08aacc41ec6a6929a7c081a",
+    "apps/core/src/routes/search.routes.ts": "9bba4415902f019c79c6d8948ec316b902f07bf6fd7f12bd61f89974ba1a246c",
+    "apps/core/src/routes/task-pipeline.routes.ts": "6965b1c36ee1e5e0b62b00192c2621028efde88f066e22d90cb187ccca575ad5",
+    "apps/core/src/services/chat-campaign-intake.ts": "478030a1760c68d43da676f1e20247b99356c2fdd70adb895f65beed1ff257c1",
+    "apps/core/src/services/client-dna-resolver.ts": "2bef635cb22cee04d1aa385c81edef8ba9f93e2279b262d36b0dae8051ce7ebe",
+    "apps/core/test/learning-recovery.test.ts": "93822e38886e4ab8922db21e12f9c59f55c0e010c3be29faf4be1adbb1d0b459",
+    "apps/core/test/design-learning-consumers.test.ts": "4f81a1bb092d72361f897fcb424468cb925952f5aeb8afcffcc7c3b0b354dba6",
+    "apps/core/test/fixtures/persisted-client-dna.ts": "9b45ef74515efa42013a53a8731506c44b705a9481b2a7a8ba5d2de9b5136f2e",
+    "apps/core/test/generate-real-qa.test.ts": "bc8ca35d1647c0c6f8790de3312181a8bee2e1b7cb975a7c4a8cd96b08842a46",
+    "apps/core/test/learning-governance-boundaries.test.ts": "ccc82c061f62f6807e518cee04141223baba72a47242f993724bd7b73f7489f7",
+    "apps/core/test/core.test.ts": "ad8c0e8ecd7795b0ab5d19b3e23fde76212c431dfa33efe512f30c0ce1777620",
+    "apps/core/test/split-cleanup-no-memory-truth.test.ts": "a78d83c1be047b1b4f6bb3662216afa04b0ceafc8ad0b92e6b2efd7cc5cc909a",
+    "apps/core/test/approval-qc-hash.test.ts": "b78b2369ba857dcba29552ff11b3584f3d6ed85a68f857aac493fa0e7ad96de8",
+    "plans/content-aware-design-2026-09-30/PLAN.md": "15ee109d8638f244cff6f2acc01788695d49502e2af2dd6dd0c99b5e2996c10d",
+    "plans/traceability.csv": "a9bc13e44b3a2bbf62ed9461f7083fead24a6bb3b5e925dd4b388744df54b8c0"
+  },
+  "logs": {
+    "/tmp/hawa-learning-consumers-cold-search-red-20261001.log": "8ed1a71f1a208c16fffca31d96e86f6eaaf90dad79e0ef92cb6274e0dea0f48a",
+    "/tmp/hawa-learning-consumers-build-20261001.log": "2fe92ef8a75fcd298c4aff4b145389768b57e34fadb473c13e8f7b874d400948",
+    "/tmp/hawa-learning-consumers-build-corrected-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "/tmp/hawa-learning-consumers-connected-first-20261001.log": "bde24bf253f11e5228450684c683a9e6bad9f293c6f3709907bc553ebb837156",
+    "/tmp/hawa-learning-consumers-connected-corrected-20261001.log": "d26f5b43818b7fbdd22a284dd10bf70e8394ecb65eed8eed51004963aefc4e30",
+    "/tmp/hawa-learning-consumers-connected-authority-20261001.log": "f2014ac7dfb9989a7225da89b0d06ec44ab603446bd61c05e7885945f4e78447",
+    "/tmp/hawa-learning-consumers-connected-final-20261001.log": "e49e473791bf3fc4c8f7d8ac6ef1c949410d641dd39829df9e1ce78f15a67ee7",
+    "/tmp/hawa-learning-consumers-connected-qa-20261001.log": "aa313922ba55f34ff8e31ee3869eae5f5468e7c767207f9f9dcb5d6e450e404f",
+    "/tmp/hawa-learning-consumers-types-20261001.log": "bb1a045ecad3d9d777a4e671ac3904611df6cf9931cf5457995ef59296886285",
+    "/tmp/hawa-learning-consumers-lint-20261001.log": "a272690c013e7b1b60d4e41cc17d19cc7699d053e4106e5fb898d96925bf6d0d",
+    "/tmp/hawa-learning-consumers-exact-gate-20261001.log": "909b208d2f789b85bd290f9581d67d1856081b45917decd19e7c69a8504e6c08"
+  },
+  "exactQualification": {
+    "seal": "08087d18dc73a1efeba2d6e9ac449ea35565fa17",
+    "stages": 8,
+    "passed": 6523,
+    "failed": 0,
+    "skipped": 67,
+    "typeRoots": 668,
+    "evidence": "plans/content-aware-design-2026-09-30/W6_LEARNING_CONSUMERS_GATE_EVIDENCE.json",
+    "fullLog": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/qualification/2026-10-01/08087d18/FULL_TEST_SUITE_RUN.log",
+    "fullLogSha256": "647561b6a56e79177b2e3f385ece8e85d150a82bb58c167dfce7a57b7b2e86e0",
+    "gateLog": "/tmp/hawa-learning-consumers-exact-gate-20261001.log",
+    "engineeringOnly": true,
+    "deployed": false
+  }
+}

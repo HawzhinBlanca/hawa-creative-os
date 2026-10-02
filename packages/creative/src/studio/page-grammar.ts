@@ -14,7 +14,7 @@ import { balancedBoxWidths, measureTextGeometry } from './render-layout-v2.js';
 import { calculateLuminanceContrastRatio, hexToLuminance } from './composite-contrast.js';
 import { fillColoursUnder } from './shape-gradient.js';
 import { sunburstRadius } from './brand-elements.js';
-import { z } from 'zod';
+import { admitPageGrammarFromReference } from './page-grammar-admission.js';
 
 /**
  * ADR-238: a client's page grammar, read from its reference pack (`rules.pageGrammar`), and the
@@ -94,89 +94,9 @@ export interface PageGrammar {
   };
 }
 
-const HEX = /^#[0-9a-f]{6}$/i;
-
-/**
- * The grammar's schema, checked whole where the reference is admitted, before any composition or
- * paid call: every nested part present, colours six-digit hex, faces non-empty names, every share,
- * opacity and size finite and bounded, every gradient two to eight stops in ascending order. A grammar
- * that is absent stays absent; one that is present and wrong is refused, never half used (Codex's
- * integration review of 2026-10-02 reproduced three inputs the first parser let through).
- */
-const share = (max = 1) => z.number().finite().gt(0).max(max);
-const colour = z.string().regex(HEX, 'a six-digit colour');
-const face = z.string().trim().min(1).max(60);
-const stops = z.array(z.object({ at: z.number().finite().min(0).max(1), color: colour }))
-  .min(2).max(8)
-  .refine((list) => list.every((st, i) => i === 0 || st.at >= list[i - 1].at), 'gradient stops must ascend')
-  .refine((list) => list.length > 0 && list[0].at === 0 && list[list.length - 1].at === 1, 'gradient stops must run from 0 to 1');
-const type = z.object({
-  fontFamily: face,
-  bold: z.boolean().optional(),
-  italic: z.boolean().optional(),
-  color: colour,
-  colorOnDark: colour.optional(),
-  sizeShare: share(0.3),
-  lineHeight: z.number().finite().min(1).max(2).optional(),
-  letterSpacing: z.number().finite().min(-0.1).max(0.1).optional(),
-});
-const card = z.object({ fill: colour, title: colour, text: colour, edge: colour.optional(), edgeShare: share(0.05).optional() });
-const PAGE_GRAMMAR_SCHEMA = z.object({
-  page: z.object({ background: colour, marginShare: z.number().finite().min(0.06).max(0.2) }),
-  header: z.object({
-    logoWidthShare: share(0.5),
-    rule: z.object({ color: colour, opacity: z.number().finite().gt(0).max(1), thicknessShare: share(0.02) }),
-    accent: z.object({ widthShare: share(0.5), thicknessShare: share(0.02), stops }),
-    label: type,
-  }),
-  title: type,
-  titleBar: z.object({ widthShare: share(0.5), heightShare: share(0.03), gapShare: share(0.1), stops }),
-  lead: type,
-  body: type,
-  cards: z.object({
-    radiusShare: z.number().finite().min(0).max(0.1),
-    shadow: z.object({ color: colour, opacity: z.number().finite().min(0).max(1), blurShare: z.number().finite().min(0).max(0.07), offsetShare: z.number().finite().min(0).max(0.07) }),
-    plain: card, brand: card, tint: card, dark: card,
-  }),
-  stat: z.object({ fontFamily: face, bold: z.boolean().optional(), colorOnDark: colour, colorOnLight: colour, labelColor: colour, labelColorOnDark: colour }),
-  footRule: z.object({ heightShare: share(0.03), stops }),
-  cover: z.object({
-    angle: z.number().finite().min(0).max(360),
-    stops,
-    logoWidthShare: share(0.6),
-    title: colour,
-    subtitle: z.object({ fontFamily: face, color: colour, letterSpacing: z.number().finite().min(-0.1).max(0.1), sizeShare: share(0.3) }),
-    body: colour,
-  }),
-  elements: z.object({
-    sunburst: z.object({ color: colour, opacityOnLight: z.number().finite().min(0).max(1), colorOnDark: colour, opacityOnDark: z.number().finite().min(0).max(1), rays: z.number().int().min(3).max(12) }),
-    trianglePattern: z.object({ color: colour, opacityOnLight: z.number().finite().min(0).max(1), colorOnDark: colour, opacityOnDark: z.number().finite().min(0).max(1) }),
-  }),
-});
-
-/**
- * The page grammar a reference pack names, or undefined when it names none. Validated whole against
- * PAGE_GRAMMAR_SCHEMA, and every colour must be one of the pack's own palette: a grammar is a way of
- * using the palette, never a way round it.
- */
-export function pageGrammarFromRaw(rawRef: any): PageGrammar | undefined {
-  const g = rawRef?.rules?.pageGrammar;
-  if (g === undefined || g === null) return undefined;
-  if (typeof g !== 'object' || Array.isArray(g)) throw new Error('PAGE_GRAMMAR_INVALID: pageGrammar is not an object');
-  const parsed = PAGE_GRAMMAR_SCHEMA.safeParse(g);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    throw new Error(`PAGE_GRAMMAR_INVALID: pageGrammar.${issue.path.join('.')}: ${issue.message}`);
-  }
-  const palette = new Set<string>((rawRef?.rules?.palette ?? []).map((c: string) => String(c).toUpperCase()));
-  const walk = (v: unknown, path: string) => {
-    if (typeof v === 'string' && HEX.test(v)) {
-      if (!palette.has(v.toUpperCase())) throw new Error(`PAGE_GRAMMAR_INVALID: ${path} ${v} is not in the client's palette`);
-    } else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${path}[${i}]`));
-    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`);
-  };
-  walk(parsed.data, 'pageGrammar');
-  return parsed.data as PageGrammar;
+/** The same admission contract Core checks before composition and paid calls. */
+export function pageGrammarFromRaw(rawRef: unknown): PageGrammar | undefined {
+  return admitPageGrammarFromReference(rawRef);
 }
 
 // ---------------------------------------------------------------------------------------------

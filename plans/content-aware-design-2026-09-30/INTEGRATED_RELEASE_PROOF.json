@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-01",
+  "status": "EXACT_COMBINED_ENGINEERING_QUALIFIED_NATIVE_HUMAN_OPEN",
+  "testedSeal": "21896bffbae22e403389ffd9f1fb399bcbf60d26",
+  "sourceCandidate": "1726387f",
+  "firstFullRun": {
+    "passed": 6424,
+    "failed": 2,
+    "skipped": 67,
+    "filesPassed": 649,
+    "filesFailed": 2,
+    "filesSkipped": 6,
+    "durationSeconds": 214.15,
+    "stages1Through7": "PASS",
+    "failures": [
+      "Desk dist prerequisite absent in standalone gate",
+      "Historic office exemplar coverage test equated twelve supported geometries with seven represented recipes"
+    ]
+  },
+  "repairs": [
+    "ADR189 mandatory Desk build in stage1; actual build entry492.16kB and existing budget test retained",
+    "Explicit eligible/represented/missing reference coverage and diagnostic; all original office asset hashes/provenance retained, no human example invented",
+    "ADR189 mandatory manifest corruption/refusal drill before marking negativeRefusalTest.verified=true"
+  ],
+  "firstFocusedRepair": {
+    "passed": 28,
+    "failed": 1,
+    "cause": "Positive photo-ranking test still expected no warning despite the known five missing references; corrected to assert the new exact warning class."
+  },
+  "qualification": "Combined source engineering is qualified only; native Canva, human quality, five missing recipe references, W5/W6 and full recovery/product admission remain open. Not deployed.",
+  "logs": {
+    "/tmp/hawa-content-integrated-full-gate-20261001.log": "be538173c378f3cac8b0bd575b90b7035620e3cf359e5a180f01be0f51968304",
+    "/tmp/hawa-content-integrated-first-full-tests-20261001.log": "e22726af813e2581bd4bdac947f1986c1a475c3c84e5765bfe827f1b54da0a51",
+    "/tmp/hawa-content-coverage-connected-20261001.log": "8f24278501e59741a6f075c83957df70a236629ef90f15e462ce63746ed70724",
+    "/tmp/hawa-content-desk-bundle-build-20261001.log": "378ed1147545b24c93028a33ce79355f4d3b6c75189f7316c67ece74ea59864f",
+    "/tmp/hawa-content-coverage-fixed-20261001.log": "d1a056273d330d8a97ece2ba08ca948185c709f380f3614db7abf60a304d8921",
+    "/tmp/hawa-content-first-repaired-full-tests-20261001.log": "541f111b39c547e163c0a4bedf39dc68893f3f6635918cbf9c4a0ec68c8abaea",
+    "/tmp/hawa-content-first-repaired-gate-evidence-20261001.json": "204d456df5e5ae7bea1d2c61b481196e9773ba038ef734cdc7bd362343b92513",
+    "/tmp/hawa-content-final-full-gate-20261001.log": "ba85bb38526b5db2d36b6130b287b8a6b6f576b8c10eca0e501374b39a5ffe1a",
+    "/tmp/hawa-content-final-lint-20261001.log": "37a2584efe5471a680abb1a9eeb6eee0c5496771255aee082c00f350e3cc24e5",
+    "output/release-gate/FULL_TEST_SUITE_RUN.log": "3b6ac3b395c956a0e92b3ac055a62c0d54d9ef0f27cf8e0cae0913415f0982e2"
+  },
+  "focusedRepairAfterWarningAssertion": {
+    "files": 6,
+    "passed": 29,
+    "failed": 0,
+    "skipped": 0
+  },
+  "firstRepairedFullGate": {
+    "testedSeal": "c952e1a5c8a16529572da781c4d3c9bc77599e51",
+    "stagesPassed": 8,
+    "passed": 6427,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 651,
+    "filesSkipped": 6,
+    "durationSeconds": 213.77,
+    "deskInitiallyAbsent": true,
+    "deskRebuiltByGate": true,
+    "negativeControl": "PASS; this intermediate source invoked it at stage6 and again at evidence emission"
+  },
+  "correction": "The previous claim that the gate never executed its refusal drill was incorrect: it already executed at evidence emission. ADR189 moves the same required drill earlier, retains diagnostics and reuses the result without a duplicate invocation. Previous assumption retained here as correction history.",
+  "repairedTestedSeal": "8222c9806949344b5490230c682c6c24484944a6",
+  "repairedSourceCandidate": "5e34fb500836719f3487e808a2ed257a2fac1258",
+  "repairedFullGate": {
+    "stagesPassed": 8,
+    "passed": 6427,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 651,
+    "filesSkipped": 6,
+    "durationSeconds": 212.62,
+    "strictTestRoots": 658,
+    "blueprintChecks": 1594,
+    "newestProductionDump": "PASS",
+    "negativeControl": "PASS; one mandatory logged stage6 invocation, result reused at evidence emission",
+    "productAdmission": false,
+    "deployed": false
+  }
+}

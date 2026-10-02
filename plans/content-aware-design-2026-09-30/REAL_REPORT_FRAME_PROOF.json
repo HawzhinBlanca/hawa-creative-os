@@ -1,0 +1,319 @@
+{
+  "date": "2026-10-02",
+  "status": "SOURCE_AND_ISOLATED_CANDIDATE_PASSED_NATIVE_AND_HUMAN_OPEN",
+  "requirements": [
+    "FR-017",
+    "FR-023",
+    "FR-038"
+  ],
+  "parentPublication": "5ecfddecf16982e3b309677242dd437ba59f4394",
+  "reason": "Actual requester asked for a thin frame. Current storyboard and mosaic accepted explicit frame choices but returned no frame. Four red controls reproduced omission.",
+  "sourceChanges": [
+    "Pure solver finishing carries explicitly selected outer/inset frame as existing editable brand overlay when recipe has none; omitted/none remains unframed, existing frame not duplicated."
+  ],
+  "red": {
+    "passed": 123,
+    "failed": 4,
+    "receipt": "output/qualification/2026-10-02/real-report-acceptance/FRAME_RED.log"
+  },
+  "connected": {
+    "files": 5,
+    "passed": 168,
+    "failed": 0,
+    "skipped": 0,
+    "receipt": "output/qualification/2026-10-02/real-report-acceptance/FRAME_CONNECTED.log"
+  },
+  "typecheck": {
+    "status": "PASS",
+    "testRoots": 733,
+    "receipt": "output/qualification/2026-10-02/real-report-acceptance/FRAME_TYPECHECK.log"
+  },
+  "actualNativeObservation": {
+    "designId": "DAHWsS0Gv3Y",
+    "actualRequesterTask": true,
+    "sourcePhotoCount": 6,
+    "nativeTextObjects": 2,
+    "independentPhotoObjects": 3,
+    "logoImageObjects": 1,
+    "transaction": "cancelled_without_changes",
+    "scope": "Historical real completed design; not current-source native save/export or multilingual/human admission"
+  },
+  "localCurrentSourcePreviews": {
+    "manualArtDirection": true,
+    "policyVersion": 6,
+    "productionTaskDnaVersion": 5,
+    "subjectRegions": "UNKNOWN; no subject/crop safety admission",
+    "scope": "Real original request/photos, manually chosen directions through current solver/preparation/logo-ground/render/PPTX; no new model run or Canva import",
+    "outcomes": [
+      {
+        "recipe": "hero_storyboard",
+        "usedPhotoIndices": [
+          5,
+          0,
+          1
+        ],
+        "copyAndOriginalMediaIdentity": true,
+        "hardQaPassed": true,
+        "explicitFrameCount": 1,
+        "logoGroundTreatment": "scrim",
+        "previewSha256": "7741be9c7416ceb16ea765b628fb67f35c454b6e519adc434ef8e982fac99807",
+        "pptxSha256": "72dd1bdb5d077864363b9c7f563ecb56b0a7b0ed2aa8664f03518ca2323cad50"
+      },
+      {
+        "recipe": "photo_mosaic",
+        "usedPhotoIndices": [
+          5,
+          0,
+          1
+        ],
+        "copyAndOriginalMediaIdentity": true,
+        "hardQaPassed": true,
+        "explicitFrameCount": 1,
+        "logoGroundTreatment": "none",
+        "previewSha256": "3a7d9f61cf8d652bef292ea4d04564f651fa1a65a5bf7d99d7c33e1d12da52cc",
+        "pptxSha256": "fd5bd0b09f7e2aba2523897b9db5c7882ac39a3070e480037bee03364716ce8d"
+      }
+    ]
+  },
+  "probeCorrections": [
+    "Initial literal XML contains check omitted the existing compound word-joiner encoding. Corrected with keepCompoundsWhole and immutable copy manifest hash. Original JPEG hashes were preserved; suspected conversion was not observed.",
+    "Direct solver render lacked the actual production preparation/settleLogoGround steps and refused busy logo. Added those actual local stages; no threshold changed.",
+    "Literal a:noFill-only probe found zero frames; inspection shows legal zero-alpha fill. Corrected semantic transparency check; source/output unchanged."
+  ],
+  "permissions": {
+    "productionDataMigration": "APPROVED_BY_HUMAN_2026-10-02; executed; owned temporary copy deleted",
+    "canvaUpload": "APPROVED_BY_HUMAN_2026-10-02; exact PPTX native upload succeeded",
+    "canvaSave": "Explicit approval required after actual native preview; not attempted"
+  },
+  "canvaUploadOrSavePerformed": true,
+  "productionChanged": false,
+  "fullEngineeringPreflight": {
+    "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+    "qualifiedCommit": "e89da52846709ab966ceacaacf647d5fd602ad75",
+    "cleanTree": true,
+    "passed": 7723,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 726,
+    "skippedFiles": 6,
+    "durationSeconds": 265.68,
+    "technicalStagesPassed": 7,
+    "productionDataStage": "SKIPPED_PENDING_EXPLICIT_LOCAL_COPY_AUTHORIZATION",
+    "negativeFlagRefusal": true,
+    "candidateDockerOnFrameRepair": "PASS on runtime-identical7388a70d;243checks/0failures; providers and staff synthetic",
+    "gateEvidence": "plans/content-aware-design-2026-09-30/REAL_REPORT_FRAME_GATE_EVIDENCE.json",
+    "receipt": "output/qualification/2026-10-02/real-report-acceptance/full/FULL_TEST_SUITE_RUN.log"
+  },
+  "wholeProductAdmission": false,
+  "logs": {
+    "FRAME_RED.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/FRAME_RED.log",
+      "sha256": "99c1d7b9732ccb4f93edc29a23cf7012f262caace862e85b5087c0085f1f5d32"
+    },
+    "FRAME_CONNECTED.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/FRAME_CONNECTED.log",
+      "sha256": "3df7e84c1e7ee43dcd41f3fbf1480f54ebc20786c1e4443ccb5cbe8bd67d2508"
+    },
+    "FRAME_TYPECHECK.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/FRAME_TYPECHECK.log",
+      "sha256": "bafd04bc28f1c2f9994c42f81d54ea4ac7ca67f8e66b31bff0c79c48f1462e9b"
+    },
+    "CURRENT_SOURCE_PREVIEW.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/CURRENT_SOURCE_PREVIEW.log",
+      "sha256": "3c9f8ed098d5b2d9d9885a33ea87de3f251af886b8d8989474aa8fdcb4baf65f"
+    },
+    "full/RELEASE_GATE_EVIDENCE.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/RELEASE_GATE_EVIDENCE.json",
+      "sha256": "bc7fe2ce37f161e1e63852f35274a6d08af31f620d672a56b7d226ff9f920717"
+    },
+    "full/FULL_TEST_SUITE_RUN.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/FULL_TEST_SUITE_RUN.log",
+      "sha256": "3e8c8dcb181a0529982fb75d466a2ce6807b9409cc178981652c107380058548"
+    },
+    "full/TEST_DB_PROVISION.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/TEST_DB_PROVISION.log",
+      "sha256": "0455ee87066a211d6bacc37f856657dfd8dcc286fc281b884048e413271e370d"
+    },
+    "full/PREDEPLOY_DUMP_CHECK.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/PREDEPLOY_DUMP_CHECK.json",
+      "sha256": "e0002a801be76c59f3eaedf9b5aa5014eaf311d49ad89e488a39720cca99ca68"
+    },
+    "full/PREDEPLOY_DUMP_CHECK.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/PREDEPLOY_DUMP_CHECK.log",
+      "sha256": "2cd86e5b76691db06126e413583580784234c6b6cf862541e244f8f762d414bc"
+    },
+    "full/NEGATIVE_FLAG_REFUSAL.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/NEGATIVE_FLAG_REFUSAL.log",
+      "sha256": "e4500f3424b31649ecf61f5fbf26188bef773957d640710f182d9bf1ababdf3b"
+    },
+    "ENGINEERING_PREFLIGHT.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/ENGINEERING_PREFLIGHT.log",
+      "sha256": "006ff6f874957f2755ec00d23c48786741a6205c4121b33e7e9cf914c7c370e8"
+    },
+    "INDEPENDENT_PPTX_FRAME_READBACK.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/INDEPENDENT_PPTX_FRAME_READBACK.json",
+      "sha256": "30f56ee30cdba680f1fd98d32a08c499f1da859de04bcdc5901791ee6f586b16"
+    }
+  },
+  "externalGenerationCalls": 0,
+  "nativeConnectorScope": "Read real imported design, inspected editable native elements, showed native thumbnail, cancelled an unmodified inspection transaction; native save approval not fabricated.",
+  "environmentFailure": "Initial manifest/commit hook used system Python without PyYAML and refused; existing Homebrew runtime retry passed. No hook waived.",
+  "independentPptxReadback": {
+    "scope": "Independent OOXML inspection of local current-source transfer; not actual Canva/native rendering or human quality",
+    "initialProbe": "Literal a:noFill-only probe found zero frames; inspection shows legal zero-alpha fill. Corrected semantic transparency check; source/output unchanged.",
+    "results": [
+      {
+        "recipe": "hero_storyboard",
+        "pptxSha256": "72dd1bdb5d077864363b9c7f563ecb56b0a7b0ed2aa8664f03518ca2323cad50",
+        "independentTransparentVectorFrame": {
+          "strokeEmu": 28575,
+          "offset": {
+            "x": "333375",
+            "y": "333375"
+          },
+          "extent": {
+            "cx": "9620250",
+            "cy": "12192000"
+          },
+          "transparentVectorFill": true
+        },
+        "independentTextObjects": 2,
+        "missingFrameCounterexampleRefused": true,
+        "actualCanvaImport": false
+      },
+      {
+        "recipe": "photo_mosaic",
+        "pptxSha256": "fd5bd0b09f7e2aba2523897b9db5c7882ac39a3070e480037bee03364716ce8d",
+        "independentTransparentVectorFrame": {
+          "strokeEmu": 28575,
+          "offset": {
+            "x": "333375",
+            "y": "333375"
+          },
+          "extent": {
+            "cx": "9620250",
+            "cy": "12192000"
+          },
+          "transparentVectorFill": true
+        },
+        "independentTextObjects": 2,
+        "missingFrameCounterexampleRefused": true,
+        "actualCanvaImport": false
+      }
+    ]
+  },
+  "candidateCheckpointBeforeRehearsal": "NOT_RUN; previous 243-control candidate proof belongs to 7f43b588, not this repair",
+  "candidateDeploymentAndRecovery": {
+    "status": "ISOLATED_CANDIDATE_AND_SAME_HOST_RECOVERY_PASSED",
+    "commit": "7388a70deabaac17bb46a9c13fdd3f622cd74776",
+    "finishedAt": "2026-10-02T00:40:27.699Z",
+    "passed": 243,
+    "failed": 0,
+    "totalMs": 172411,
+    "sourceChanges": {},
+    "providers": "synthetic fakes",
+    "parser": "real pinned offline Docling",
+    "uncoveredModelCalls": [],
+    "productionChanged": false,
+    "nativeOrHumanAdmission": false,
+    "separateHostRecoveryProved": false,
+    "recoveries": {
+      "drive": {
+        "tableCount": 105,
+        "policyCount": 181,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.15
+      },
+      "telegram": {
+        "tableCount": 105,
+        "policyCount": 181,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.163
+      }
+    },
+    "logs": {
+      "recovery-drive.json": {
+        "path": "output/qualification/2026-10-02/real-report-acceptance/candidate/recovery-drive.json",
+        "sha256": "66c0c56a6618548e16a4a46e18f9c29e835139a19d1fa307f2a08304ed19a0aa"
+      },
+      "recovery-telegram.json": {
+        "path": "output/qualification/2026-10-02/real-report-acceptance/candidate/recovery-telegram.json",
+        "sha256": "c3964ea4b85424aa12328e9089571d646020357ac2e0ad3d994bca87d1128ce4"
+      },
+      "REHEARSAL.log": {
+        "path": "output/qualification/2026-10-02/real-report-acceptance/candidate/REHEARSAL.log",
+        "sha256": "1d969c804c693c2d121fee2434b8c22f4821c4a4c2702b349817d14703d11fa5"
+      },
+      "last-run.json": {
+        "path": "output/qualification/2026-10-02/real-report-acceptance/candidate/last-run.json",
+        "sha256": "f97deefc6466ca1e5953235b03a61514f888480fbd4e9329ffed42b6502b3e6e"
+      }
+    },
+    "scenarioTests": {
+      "passed": 1,
+      "skipped": 56,
+      "scope": "Only R1.S3.SOURCES --candidate --recovery selected"
+    },
+    "fullSourceQualification": {
+      "commit": "e89da52846709ab966ceacaacf647d5fd602ad75",
+      "postQualificationChanges": "Only proofs/traceability/generated manifests; runtime/tests/migrations/harness/build inputs identical"
+    },
+    "ownedTemporaryContainersAndLockRemoved": true,
+    "wholeProductAdmission": false
+  },
+  "approvalAndExecution": {
+    "approvedBy": "Direct human message: approve both",
+    "date": "2026-10-02",
+    "productionDataMigration": {
+      "status": "PASS",
+      "candidate": "4ab5db9dbbce13b1bcd91402e5abace2e61d40e3",
+      "newMigrationsApplied": 9,
+      "recordedMigrations": 73,
+      "scratchDatabasesRemaining": 0,
+      "temporaryCopy": "DELETED",
+      "scope": "Approved local production dump, isolated test server only; original backup unchanged. Current merged candidate has not yet passed full preflight.",
+      "receipt": "output/qualification/2026-10-02/real-report-acceptance/approved/PREDEPLOY_DUMP_CHECK.json"
+    },
+    "canvaImport": {
+      "status": "NATIVE_IMPORT_SUCCEEDED",
+      "pptxSha256": "72dd1bdb5d077864363b9c7f563ecb56b0a7b0ed2aa8664f03518ca2323cad50",
+      "designId": "DAHW2D_0ypk",
+      "separateAcceptanceDesign": true,
+      "nativeEditableTitleObjects": 2,
+      "nativeEditablePhotoObjects": 3,
+      "nativeEditableLogoAndBackingObjects": 2,
+      "dimensions": {
+        "width": 1080,
+        "height": 1350
+      },
+      "actualPreviewShownToOwner": true,
+      "inspectionTransaction": "CANCELLED_WITHOUT_CHANGES",
+      "uploadApiFailures": [
+        {
+          "status": 400,
+          "reason": "Unsupported file format ZIP"
+        },
+        {
+          "status": 400,
+          "reason": "Unsupported file format ZIP with Content-Disposition"
+        }
+      ],
+      "fallback": "Canva authenticated native upload interface imported the exact approved PPTX. No conversion to flattened image or public hosting.",
+      "scope": "Real source originals and exact title in current-source manually directed preview; native human-quality, multilingual corpus, save/reopen/export and whole-product admission remain open."
+    },
+    "currentProductionIntegration": {
+      "observedLiveCommit": "474cba4c50f567c3a58cc72943983814355bd460",
+      "mergeCommit": "63d937e98b34afa813050bb7e19d10a32cd138fa",
+      "candidateCommit": "9c22bc2a",
+      "status": "MERGED_PENDING_CURRENT_QUALIFICATION",
+      "resolvedConflicts": "Normative CSV fields preserved; both research insertions and live append-only evidence preserved. Generated manifests refreshed.",
+      "failedAttempt": "First resolver rejected FR-005 evidence insertion; subsequent commit hook refused conflict markers. Corrected CSV from three Git versions; no hook waived."
+    }
+  }
+}

@@ -19,6 +19,10 @@ Stale KAAE values were removed with them: `#C5A059`, `#D4A94C`, `#FFD15C`, `#2D4
 
 **Search.** The inventory was built on 2026-10-01 with `git grep` for KAAE, the client id `c1000000-0000-4000-8000-000000000002`, the old and new values, brand-kit, palette and font words near KAAE, and `canvaMapping`.
 
+## Lead integration readback — 2 October 2026
+
+Merged completed4c95154a with content-aware safeguards in3b7629f6; metadata seal264a7af5. All Desk font/showcase/sanitizer handoffs listed below are now implemented in the integrated research branch. Official logo unchanged. Production DNA and actual Canva kit handoffs remain open. Initial full7610/1/67 failure retained and governance fixture repaired with21 connected checks; full source retry pending. See `../content-aware-design-2026-09-30/KAAE2025_INTEGRATED_PROOF.json`. Earlier branch handoff tables below are historical inventory.
+
 ## Studio reference, fonts and design code
 
 | Location | What it holds | Status |
@@ -113,3 +117,8 @@ These name withdrawn values on purpose, to find them:
 - `packages/creative/test/kaae-2025-guideline.test.ts` and `apps/core/test/kaae-2025-guideline.test.ts` assert that the withdrawn values are absent;
 - `plans/kaae-2025-guideline/apply-kaae-dna-2025.sh` and `kaae-dna-2025.json` list the withdrawn values to remap them or refuse;
 - `packages/creative/test/kaae-graphics-learning.test.ts` fails if a withdrawn value returns.
+
+
+## Qualified integrated source — 2 October 2026
+
+Clean `dffe7a3a16903609bdfe9bf8c72d3560dff8f390`:7612/0/67 tests,725 roots,seven technical stages and negative refusal PASS. Desk handoffs complete in integrated source; production DNA and actual Canva-kit/fonts/native edits remain open. Saved master/invitation mapping unavailable to current connector, standards and named kit accessible; no replacement inferred. See `../content-aware-design-2026-09-30/KAAE2025_INTEGRATED_PROOF.json`.

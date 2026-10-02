@@ -1,0 +1,193 @@
+{
+  "date": "2026-10-01",
+  "decision": "ADR193",
+  "status": "EXACT_SEALED_ENGINEERING_QUALIFIED_PRODUCT_OPEN",
+  "requirements": [
+    "FR-022",
+    "FR-052",
+    "FR-053",
+    "FR-054",
+    "FR-055",
+    "NFR-006",
+    "NFR-012"
+  ],
+  "initialRegression": {
+    "passed": 0,
+    "failed": 5
+  },
+  "qualificationHistory": [
+    "Initial five actual scope/input/provenance/role/concurrent rollback regressions failed on de76cd16.",
+    "First connected 13 passed. Extended 22 pass / 7 fail exposed no-DNA fixtures, invented asset lists and old fake task inputs; retained and repaired with explicit DNA, actual stored tasks and supplied inventory.",
+    "Migration/RLS expansion 44 passed. Broader 86 pass / 1 fail exposed a role-body test pretending to be an unauthorized actor. Replaced it with a verified operator requesting director authority; strict malformed-role refusal remains.",
+    "Initial type command refused local tsx IPC under sandbox; rerun with approved local IPC, no compiler or coverage bypass.",
+    "Receipt expansion87pass/1fail exposed a barrier test assuming HTTP start order equaled transaction order. Corrected control proves promotion has reached its database lock before dispatching dismissal; no runtime FIFO guarantee is invented.",
+    "First exact full gate on d765b706 retained6491pass/1fail/67skip. R04 supplied a fabricated non-UUID task to an explicit instruction and expected disclosure of a foreign candidate. Removed invented task; 404 keeps the candidate absent from foreign scope. Existing malformed-task422 and actual cross-client403/404 controls remain.",
+    "Corrected exact clean seal 308873a6 passes all8 stages, 6492pass/0fail/67skip,663 typed roots/newest production dump/negative refusal. Runtime/tests/infra/gate remain unchanged through subsequent evidence-only sealing. No deployment/provider call or product admission."
+  ],
+  "connected": {
+    "files": 14,
+    "passed": 101,
+    "failed": 0,
+    "skipped": 0,
+    "log": "/tmp/hawa-learning-governance-connected-corrected-20261001.log"
+  },
+  "typecheck": {
+    "status": "PASS",
+    "roots": 663
+  },
+  "lint": "PASS;934 any;10 existing provider-egress exceptions",
+  "behavior": [
+    "Actual RLS client access before learning reads/mutations for UUIDs and aliases; canonical scope, bounded schemas, verified reviewer attribution, conflicts from authorized DNA.",
+    "No filesystem rule import that invents a human director approval. Active PostgreSQL DNA remains authority.",
+    "Pure moderation transition with process projection serialization and shared PostgreSQL client lock; authoritative DNA and latest immutable moderation read, expected DNA versions.",
+    "Dismissal/rollback receipts in the same transaction as DNA change, local activation only after actual commit; replay reconciles prior action and different-state decisions refuse.",
+    "Actual blocked-transaction tests cover pending rollback visibility and promotion/dismissal order; concurrent different removals preserve both changes.",
+    "Actual deferred commit failure rolls back both DNA and local state; scoped readers see receipts, forged writers/read-only users/foreign tenants refuse.",
+    "Lineage reports only actual scoped active stored assets. Explicit client_owned stored classification can permit client-generation retrieval; missing/unknown rights and vendor restrictions exclude; external training/benchmark permits none.",
+    "Rejection requires actual authorized task and UUID action key, immutable event before projection; changed reuse refuses and exact retries reconcile. Deferred commit failure does not mark task rejected.",
+    "New rejection evidence committed while activation is pending is retained rather than overwritten by the prepared projection."
+  ],
+  "limits": [
+    "Candidate queue and projection rebuilding across restarts remain process-local obligations; explicit proposals do not yet have full durable action-key handling.",
+    "Moderation state reconciliation is not end-to-end request idempotency; revision-level polarity, held-out taste/confidence and full product admission remain open.",
+    "Stored lineage is an inventory classification, not independent rights adjudication or a new design generation gate.",
+    "Tests use synthetic office/assets/tasks/export fixtures with actual HTTP/RLS/PostgreSQL transactions; no real native/Canva/human aesthetic admission.",
+    "No paid provider calls or deployment. Live infrastructure remains on independently qualified 2c4d61ec."
+  ],
+  "providerCalls": 0,
+  "deployed": false,
+  "logs": {
+    "hawa-learning-governance-connected-final-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-connected-final-20261001.log",
+      "sha256": "3983ff0b836d7b066da42db226533262aa72262729d01900304b53b477a06046"
+    },
+    "hawa-learning-governance-types-second-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-types-second-20261001.log",
+      "sha256": "29d7f5ab8b01f4c72907b34c1a0fe600298e7d291814029e699b5d11406fe598"
+    },
+    "hawa-learning-governance-build-first-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-build-first-20261001.log",
+      "sha256": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586"
+    },
+    "hawa-learning-governance-connected-receipts-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-connected-receipts-20261001.log",
+      "sha256": "aac7ca984abfce0cb52e9f12cce1093ec83fda4fd6d4e3e544f322c88e8dd572"
+    },
+    "hawa-learning-governance-types-first-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-types-first-20261001.log",
+      "sha256": "45fbf40baccfb2016c5700e69459b1620de8dafa1422d600586052c2ccd18045"
+    },
+    "hawa-learning-governance-connected-second-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-connected-second-20261001.log",
+      "sha256": "4c144c81035a88b50bf70686119a497398b03daa2eeb884d058869663693c4b1"
+    },
+    "hawa-learning-governance-green-first-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-green-first-20261001.log",
+      "sha256": "43620bfb75da3b02894d9faa138cf9c5d26621f29b59899041d73a67a787f32b"
+    },
+    "hawa-learning-governance-connected-qualified-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-connected-qualified-20261001.log",
+      "sha256": "e5aa3cf3b77677e3184058bcdf78d2eb4e273a64a1a2c1bd3a4916da8380b557"
+    },
+    "hawa-learning-governance-connected-first-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-connected-first-20261001.log",
+      "sha256": "0462c0e3d8580ecdc393a0db6d4b3e60d9211ccbd35483a3ad49e394cca6aea7"
+    },
+    "hawa-learning-governance-lint-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-lint-20261001.log",
+      "sha256": "e7ee7ce55fdd1f5f222f5e2fc7152d0ad6bae3584c1d47b58a8881466935ea1b"
+    },
+    "hawa-learning-governance-build-final-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-build-final-20261001.log",
+      "sha256": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586"
+    },
+    "hawa-learning-governance-build-second-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-build-second-20261001.log",
+      "sha256": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586"
+    },
+    "hawa-learning-governance-red-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-red-20261001.log",
+      "sha256": "24a93856255eb19a76121162e396a80009cf32e50d94165a0400ddd46b4c03a9"
+    },
+    "hawa-learning-governance-connected-seal-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-connected-seal-20261001.log",
+      "sha256": "d385098a8f6af649f6ff072edb1c8865c8e87fa8387cdd9efbe0733c1e6c07a7"
+    },
+    "hawa-learning-governance-connected-corrected-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-connected-corrected-20261001.log",
+      "sha256": "43679c97af89bfaf57430fad663367a2d7067d9c5a63408732ae65578544f2fd"
+    },
+    "hawa-learning-governance-full-gate-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-full-gate-20261001.log",
+      "sha256": "d0eaed833203cc57feec4f5143625210eb6acd1dd527b688bd3416d42bb1b51e"
+    },
+    "hawa-learning-governance-full-suite-first-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-full-suite-first-20261001.log",
+      "sha256": "27fb778b535d415065fdee19c52c716be6a565a8f064491e9d46e6afd1a6e3f8"
+    },
+    "FULL_TEST_SUITE_RUN.log": {
+      "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/FULL_TEST_SUITE_RUN.log",
+      "sha256": "b60b4e770292130101a40a169d3c8ebd2a6b85397b22336c54af0cb7c3a51336"
+    },
+    "NEGATIVE_FLAG_REFUSAL.log": {
+      "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/NEGATIVE_FLAG_REFUSAL.log",
+      "sha256": "92a0b3651f5dafe02ac675a422aeaee90c7798c417eb543993b0772e7b26544a"
+    },
+    "TEST_DB_PROVISION.log": {
+      "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/release-gate/TEST_DB_PROVISION.log",
+      "sha256": "82f52ba1d1e4c95f1f9dc102e0a15c98df719e8f0deba08107511c009734a92e"
+    },
+    "hawa-learning-governance-full-gate-corrected-20261001.log": {
+      "path": "/tmp/hawa-learning-governance-full-gate-corrected-20261001.log",
+      "sha256": "b2ca621d99019b027cb402f110fb6c5ecec61a75e55b163a664ad87f64a44b75"
+    }
+  },
+  "sources": {
+    "adrs/193_scoped_learning_and_atomic_moderation.md": "3a63636ed26c775ae81e3c0462488b42197381af89d68e6204cc55d3d8159527",
+    "apps/core/src/routes/client-learning.routes.ts": "b03236e96a373e1cd9201b0f4c07bcc7cf868a48d57d312e616bae5a6a575aca",
+    "apps/core/src/services/learning-governance.ts": "22050b17171e6c3ac96154d941040d89414abb4ed6fe7b53787479056c9f6a04",
+    "apps/core/test/learning-governance-boundaries.test.ts": "72a8c8de020b997dcd812e9ff456c0364e1bccbacabcc8195ab3dedc4c941660",
+    "apps/core/test/governed-learning-cv18.test.ts": "955379a9210c303614d669fba55cace08e44a6cbcd9b5730123f45c17772ada9",
+    "apps/core/test/h11-governed-learning-scope.test.ts": "04fb1e8867b478b233029d30b1ec92526202a74a5e2bf19c3cd1e24eef566b26",
+    "apps/core/test/governed-learning-dna-lifecycle.test.ts": "1a615e90c5385bb1ac56387e18605f60e5ab0c2d01f05c64e367230a6fcd1fcb",
+    "apps/core/test/startup-schema-check.test.ts": "bbebf5b5fae1fc7dc7efc4bcbbb7bc8ff5a4bcfd34f064296397ae4e995d292d",
+    "packages/creative/src/feedback-miner.ts": "599c5cb6236bbb95e707db94f2741d1559aface4063df4c823daae235cd49db0",
+    "packages/creative/src/rule-moderation.ts": "f3ebf9e427f822ee7f64c851906c2daac3088f741c4db48ff11c7802b55dfe7e",
+    "packages/db/migrations/075_client_rule_moderation_audits.sql": "601ddcaf2ed880641c102ee899c5535c039a19f325f1cb8301d9eb254abbc694",
+    "packages/db/test/schema-upgrade.test.ts": "85c28b92f540afa9b97ac3197912ffc861929e91dbfe1c80df9378b10d6eed3e",
+    "apps/core/test/r04-scope-enforcement.test.ts": "fda27022ca607bffd214527cbe32c825af3457c887c45b3412df2ba822555c2d"
+  },
+  "firstFullGate": {
+    "commit": "d765b7065eb56e465115d4e15d26eefc13986a04",
+    "passed": 6491,
+    "failed": 1,
+    "skipped": 67,
+    "suiteLog": "/tmp/hawa-learning-governance-full-suite-first-20261001.log",
+    "gateLog": "/tmp/hawa-learning-governance-full-gate-20261001.log"
+  },
+  "testedSeal": "308873a614c9cceb03d0dd48b7ec421a6ab2e902",
+  "sourceCommit": "ed5e8b5d",
+  "fullGate": {
+    "passed": 6492,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 656,
+    "filesSkipped": 6,
+    "suiteSeconds": 214.93,
+    "stagesPassed": 8,
+    "newestProductionDump": "PASS in isolated test database",
+    "negativeFlagRefusal": "PASS",
+    "admissionQualified": false,
+    "log": "/tmp/hawa-learning-governance-full-gate-corrected-20261001.log"
+  },
+  "nextBoundary": {
+    "status": "SOURCE_INSPECTION_ONLY_REPRODUCTION_PENDING",
+    "finding": "Candidate queue is process-local and Studio feedback schema/repository stores actor ID without the original reviewer role. Restart projection and historical role reconstruction need an explicit reproducible repair, not invented attribution.",
+    "sources": {
+      "packages/creative/src/feedback-miner.ts": "599c5cb6236bbb95e707db94f2741d1559aface4063df4c823daae235cd49db0",
+      "apps/core/src/routes/design-studio.routes.ts": "f5a135bd89e941771a63034cc7daa856d7e3de0d1a15cdbf05b04a66f0e6e1af",
+      "packages/db/src/repositories/design-studio.repository.ts": "c42b9a4e5153ddb0795e672ddd289790562ab83aa7d9d5e151223fbe09fadace",
+      "packages/db/src/types.ts": "ce340f4e9597b536aab170c7a513c8793628550f625d5b1e866d5042bf658074"
+    }
+  }
+}

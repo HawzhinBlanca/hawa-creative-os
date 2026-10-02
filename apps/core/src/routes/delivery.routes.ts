@@ -86,7 +86,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     }
 
     const taskId = c.req.param('taskId');
-    const task = await readCurrentTask(taskId);
+    const task = await readCurrentTask(taskId, {tenantId:auth.tenantId,userId:auth.userId,role:auth.role});
     if (!task) return problem(c, 404, 'Task Not Found');
     if (task.requestId) {
       const actionId = c.req.header('Idempotency-Key');
@@ -383,13 +383,15 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
   // --- Two-Way Outbound Review Dispatch (FR-014, FR-081) ---
   registerRoute('post', '/campaigns/:taskId/dispatch-review', async (c: any) => {
     const taskId = c.req.param('taskId');
-    const task = await resolveTaskWithFallback(taskId);
+    const auth = verifyRequestAuth(c);
+    const identity = {tenantId:auth.tenantId,userId:auth.userId,role:auth.role};
+    const task = await resolveTaskWithFallback(taskId, {strict:true,identity});
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
     // The review goes to this task's client. It used to fall back to whichever client the map listed
     // first, then to a phone number written in this file: a stranger's draft to a stranger's phone.
-    const client = await resolveClientDna(task.clientId);
+    const client = await resolveClientDna(task.clientId, identity);
     const recipientPhone = body.phone || (client as any)?.contactChannels?.phone;
 
     // The client reviews their own copy: a line they did not send is left out of the message, and a
@@ -427,11 +429,11 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
   // --- 4-in-1 Omnichannel Production Outbox Dispatch to Google Drive & Sheets (FR-012, FR-082, CV-15) ---
   registerRoute('post', '/tasks/:taskId/publish-omnichannel', async (c: any) => {
     const taskId = c.req.param('taskId');
-    const task = await readCurrentTask(taskId);
+    const auth = verifyRequestAuth(c);
+    const task = await readCurrentTask(taskId, {tenantId:auth.tenantId,userId:auth.userId,role:auth.role});
     if (!task) return problem(c, 404, 'Task Not Found');
     if (task.requestId) return problem(c, 409, 'LIFECYCLE_OWNED',
       'Deliver this request through RequestLifecycle; the legacy publisher cannot send it');
-    const auth = verifyRequestAuth(c);
     const body = await c.req.json().catch(() => ({}));
     const storedRefused = storedPolicyRefusal(c, auth, body);
     if (storedRefused) return storedRefused;
@@ -470,9 +472,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         })
       : null;
     if (existingReceipt?.state === 'complete') {
-      const client = await resolveClientDna(task.clientId);
-      const targetFolderId = client?.destinations?.productionFolderId || (client as any)?.productionDestinations?.googleDriveFolderId;
-      const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
+      const targetFolderId = existingReceipt.files[0]?.folderId;
+      const spreadsheetId = existingReceipt.sheetRow?.spreadsheetId;
       return c.json({
         ok: true,
         taskId,
@@ -482,8 +483,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         // deliveries told this one apart from a fresh one only by the marker.
         alreadyCompleted: true,
         publicationReceipt: { ...existingReceipt, detail: { verified: true, filesUploaded: existingReceipt.files.length, alreadyCompleted: true } },
-        driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
-        sheetRowUrl: spreadsheetId && existingReceipt.sheetRow?.rowNumber ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=0&range=A${existingReceipt.sheetRow.rowNumber}` : null,
+        driveFolderUrl: targetFolderId ? `https://drive.google.com/drive/folders/${targetFolderId}` : null,
+        sheetRowUrl: spreadsheetId && existingReceipt.sheetRow?.rowNumber ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=${existingReceipt.sheetRow.sheetId}&range=A${existingReceipt.sheetRow.rowNumber}` : null,
         filesCount: existingReceipt.files.length,
         publishedAt: existingReceipt.completedAt || existingReceipt.sheetRow?.syncedAt || new Date().toISOString(),
       }, 200);

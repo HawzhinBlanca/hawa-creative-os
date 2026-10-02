@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createApp } from '../src/app.js';
+import {createAppWithClientFixtures as createApp} from './fixtures/app-with-client-fixtures.js';
 
 // What these routes used to supply when the caller sent no copy.
 const INVENTED = [

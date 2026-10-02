@@ -1,0 +1,119 @@
+{
+  "date": "2026-10-01",
+  "adr": 172,
+  "requirements": [
+    "FR-026",
+    "FR-038",
+    "FR-041",
+    "FR-057"
+  ],
+  "status": "DIAGNOSTIC_FONT_FAMILY_PRESENCE_PASS_LOGO_STILL_FAILED_NOT_DEPLOYED",
+  "hypotheses": [
+    {
+      "claim": "Default native PDF export compressed/resampled the logo",
+      "observed": "Original pale-portrait PDF:338x338 DCTDecode RGB; lossless/no-reduction PDF:2687x2687 FlateDecode RGB",
+      "conclusion": "Compression is real, but disabling it does not repair visibility. Compression alone is insufficient as an explanation."
+    },
+    {
+      "claim": "Native font fallback comes from an unpinned offline font environment",
+      "observed": "Same immutable PPTX with pinned fontconfig exports Verdana and Verdana-Bold in all six native PDFs; original substituted control is rejected",
+      "conclusion": "Font-family substitution is resolved for these offline controls. Glyph/ink/wrap/bidi/Canva/human fidelity is not certified."
+    }
+  ],
+  "originalEvidence": "W3_NATIVE_CONTROLS.json",
+  "newEvidence": "W3_NATIVE_PINNED_CONTROLS.json",
+  "controls": {
+    "count": 6,
+    "sourcePptxHashesPassed": 6,
+    "nativeFontFamiliesPassed": 6,
+    "nativeLogoFailed": 6,
+    "coverageRange": [
+      0.39695121951219514,
+      0.5418284504059301
+    ],
+    "unchangedThresholds": {
+      "overall": 0.9,
+      "component": 0.8
+    },
+    "coordinateSearch": false,
+    "logoMask": false,
+    "sourceAssetChanges": false
+  },
+  "negativeControls": [
+    {
+      "case": "empty",
+      "refused": true,
+      "beforeOutputCreation": true,
+      "expectedDiagnostic": true
+    },
+    {
+      "case": "traversal",
+      "refused": true,
+      "beforeOutputCreation": true,
+      "expectedDiagnostic": true
+    },
+    {
+      "case": "duplicate",
+      "refused": true,
+      "beforeOutputCreation": true,
+      "expectedDiagnostic": true
+    },
+    {
+      "case": "overbound",
+      "refused": true,
+      "beforeOutputCreation": true,
+      "expectedDiagnostic": true
+    },
+    {
+      "case": "existing-output",
+      "refused": true,
+      "expectedDiagnostic": true
+    },
+    {
+      "case": "actual-substituted-original-fonts",
+      "refused": true,
+      "missingFamilies": [
+        "Verdana"
+      ],
+      "originalControlsPreserved": true,
+      "log": "{\"controls\":1,\"failed\":1,\"missingFontControls\":1,\"passed\":false,\"canvaQualification\":\"NOT_RUN\"}"
+    }
+  ],
+  "singleLosslessWithoutPinnedFonts": {
+    "coverage": 0.39695121951219514,
+    "passed": false,
+    "fonts": "Still substituted"
+  },
+  "sourceSha256": {
+    "scripts/proofs/logo_visibility_export_native.mjs": "dd1339fc93912da21d91fe2e7e5ece8dd6235bee6ca99152ab615122ee9cbd3f",
+    "scripts/proofs/logo_visibility_verify_native.mjs": "cc2381f10170cd49d00f8de38fb16871e218db2ea99fe41f0fe95ff2ad2ab1ca",
+    "packages/creative/src/studio/art-direction/logo-visibility.ts": "d2920ba4749d3821d3e61aa12b0a4df4d7a8eb5fa9e0914be75225552275929b"
+  },
+  "logs": {
+    "/tmp/hawa-w3-pinned-native-export-20261001.log": "58ba39610fde02882928f833439b32cd38f2ef62b2089d9ffea8e96268b6789f",
+    "/tmp/hawa-w3-pinned-native-verify-20261001.log": "c4f4d97552d172bb52b93c805cdcade050141b43b77601f1ddff04315f6ecfc0",
+    "/tmp/hawa-w3-native-diagnosis-blueprint-20261001.log": "ddc34008786319380b71c9da0c2d563f3cd2758b2ba4e6b458714ff07fc3630f"
+  },
+  "authority": "https://help.libreoffice.org/latest/en-US/text/shared/guide/pdf_params.html",
+  "reproduce": [
+    "Build the existing creative package; put bundled soffice/pdftoppm on PATH.",
+    "node scripts/proofs/logo_visibility_export_native.mjs <retained-controls> <fresh-output-directory>",
+    "node scripts/proofs/logo_visibility_verify_native.mjs <fresh-output-directory> (current expected exit1; logo still fails)"
+  ],
+  "limits": [
+    "Native logo root cause remains unproven; renderer/kernel differences are a hypothesis, not an accepted repair",
+    "Declared family presence does not establish font file/style, glyph, ink, wrapping or bidi fidelity",
+    "No production app changes, provider calls, Canva qualification or human admission",
+    "W3 source remains experimental and uncommitted; W5/W6/final qualification remain open"
+  ],
+  "readErrors": [
+    "Initial refusal harness hardcoded a nonexistent /opt/homebrew/bin/node; corrected to discover the active runtime. No controls ran in the failed harness.",
+    "Initial pinned-font helper invocation omitted the required fonts-directory argument; corrected to pass defaultFontsDir. No native control ran in that failed invocation."
+  ],
+  "blueprint": {
+    "passed": 1508,
+    "warnings": 0,
+    "failed": 0,
+    "log": "/tmp/hawa-w3-native-diagnosis-blueprint-20261001.log"
+  }
+}

@@ -1,4 +1,5 @@
 import type { Box, PhotoElement, PhotoTreatment } from './layout-v2.js';
+import { coverCrop } from './photo-crop.js';
 
 /**
  * A client's photograph with the person cut out of its background, for a photo placed with
@@ -26,6 +27,26 @@ export interface PhotoCutoutAsset {
 
 /** The size fields of a cut-out, which are all the placement reads. */
 export type PhotoCutoutGeometry = Pick<PhotoCutoutAsset, 'width' | 'height' | 'shadowWidth' | 'shadowHeight' | 'shadowX' | 'shadowY'>;
+
+/** Actual source pixels, independently of saved layout or cutout placement metadata. */
+export interface PhotoResolutionSource {
+  width: number;
+  height: number;
+  /** Undefined means framed fallback; null means an existing cutout cannot be measured. */
+  cutout?: { width: number; height: number; placement?: { width: number; height: number } } | null;
+}
+
+/** Layout pixels per source pixel, using the cover/contain rules of preview and transfer. */
+export function photoUpscale(photo: PhotoElement, source: PhotoResolutionSource): number {
+  if (photo.treatment === 'cutout' && source.cutout !== undefined) {
+    if (!source.cutout || !positive(source.cutout.width) || !positive(source.cutout.height))
+      throw new RangeError('Cut-out source pixels could not be measured');
+    const rect = cutoutPlacement(photo, source.cutout.placement ?? source.cutout).person;
+    return Math.max(rect.width / source.cutout.width, rect.height / source.cutout.height);
+  }
+  const crop = coverCrop(photo, source, photo.focus, photo.zoom);
+  return photo.width / crop.sw;
+}
 
 export interface CutoutPlacement {
   /** Where the person is drawn, in layout pixels. */

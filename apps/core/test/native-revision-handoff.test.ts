@@ -355,14 +355,23 @@ describe.skipIf(!url)('native revision admission and human copy handoff (synthet
     await bind(taskId,designId);const body=await input();
     await expect(tx(trx=>confirmNativeRevisionCopy(trx,{...scope,actorId:'00000000-0000-4000-b000-000000000011'},taskId,randomUUID(),body)))
       .rejects.toMatchObject({code:'HUMAN_REVIEW_REQUIRED'});
-    // Move the fixture's parent and binding together; preserve the real scoped FK.
+    // A selected scope is now protected even without its binding. Keep that
+    // protection intact and seed a genuinely foreign parent/new child lineage.
+    await expect(sql`UPDATE hawa.tasks SET client_id='c1000000-0000-4000-8000-000000000002'::uuid
+      WHERE id=${parentTaskId}::uuid`.execute(db)).rejects.toMatchObject({code:'23514'});
+    const foreignParent=randomUUID(),newChild=randomUUID();
     await db.transaction().execute(async trx=>{
-      await sql`DELETE FROM hawa.canva_bindings WHERE task_id=${parentTaskId}::uuid`.execute(trx);
-      await sql`UPDATE hawa.tasks SET client_id='c1000000-0000-4000-8000-000000000002'::uuid WHERE id=${parentTaskId}::uuid`.execute(trx);
+      await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title,state) VALUES
+        (${foreignParent}::uuid,${tenantId}::uuid,'c1000000-0000-4000-8000-000000000002'::uuid,'Synthetic foreign parent','human_review'),
+        (${newChild}::uuid,${tenantId}::uuid,${clientId}::uuid,'Synthetic cross-client lineage','human_review')`.execute(trx);
+      await sql`INSERT INTO hawa.task_events(tenant_id,task_id,event_type,aggregate_version,actor_type,actor_id,correlation_id,data)
+        VALUES(${tenantId}::uuid,${newChild}::uuid,'task.created',1,'user',${actorId},${randomUUID()}::uuid,
+          ${JSON.stringify({studioOptions:{parentTaskId:foreignParent},exactCopy:[{text:'Original exact date 2025'}]})}::jsonb)`.execute(trx);
       await sql`INSERT INTO hawa.canva_bindings(id,tenant_id,task_id,client_id,canva_design_id,edit_url,status,version)
-        VALUES(${randomUUID()}::uuid,${tenantId}::uuid,${parentTaskId}::uuid,'c1000000-0000-4000-8000-000000000002'::uuid,
+        VALUES(${randomUUID()}::uuid,${tenantId}::uuid,${foreignParent}::uuid,'c1000000-0000-4000-8000-000000000002'::uuid,
           ${`foreign_${randomUUID()}`},'https://www.canva.com/design/foreign/edit','bound',1)`.execute(trx);
     });
+    taskId=newChild;parentTaskId=foreignParent;designId=`copy_${randomUUID()}`;await bind(taskId,designId);
     const h=await tx(trx=>nativeRevisionHandoff(trx,tenantId,taskId));
     expect(h).toMatchObject({available:false});expect(h).not.toHaveProperty('parentEditUrl');
     await expect(confirm(randomUUID(),body)).rejects.toMatchObject({code:'NATIVE_COPY_REQUIRED'});

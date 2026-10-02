@@ -1,6 +1,7 @@
-import { describe, expect, it, afterAll } from 'vitest';
+import { describe, expect, it, afterAll, beforeAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createDb } from '@hawa/db';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { createApp } from '../src/app.js';
 
 // Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
@@ -19,6 +20,7 @@ afterAll(() => testDb.destroy());
 const json = { 'Content-Type': 'application/json' };
 const auth = { ...json, Authorization: 'Bearer test_bearer' };
 const HEX64 = /^[0-9a-f]{64}$/;
+beforeAll(()=>persistClientDnaFixture(createApp({db:testDb,testAuth:{principal:{role:'art_director'}}}),HAWA_STUDIO,{},undefined,'client-office-1'));
 
 function approve(app: ReturnType<typeof createApp>, taskId: string, revisionId: string, extra: Record<string, unknown> = {}) {
   return app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {

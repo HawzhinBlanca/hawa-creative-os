@@ -1,3 +1,6 @@
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createApp as dnaFixtureCore} from '../src/app.js';
+import {beforeAll as prepareDna} from 'vitest';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -42,6 +45,8 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
   // 1.3, groups G3 and G5): there is no in-memory outbox any more, so these apps run on this file's own
   // test database and a failed delivery is simulated on the command's row.
   const testDb = createDb(testDbUrl);
+  prepareDna(async()=>{await persistClientDnaFixture(dnaFixtureCore({db:testDb}), 'c1000000-0000-4000-8000-000000000003',{Authorization:`Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`});});
+
   const DRUSTEE = 'c1000000-0000-4000-8000-000000000003';
   const operatorScope = { tenantId: '00000000-0000-4000-a000-000000000001', userId: '00000000-0000-4000-b000-000000000001', role: 'operator' };
   /** QA passes: the subject is delivery and its outbox, and Postgres approves only after a passing run. */

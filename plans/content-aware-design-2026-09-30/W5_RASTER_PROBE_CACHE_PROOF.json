@@ -1,0 +1,79 @@
+{
+  "adr": "ADR201",
+  "date": "2026-10-01",
+  "status": "EXACT_ENGINEERING_QUALIFIED_PRODUCT_ADMISSION_OPEN",
+  "requirements": [
+    "FR-038",
+    "FR-041",
+    "NFR-012",
+    "NFR-024"
+  ],
+  "retainedRegressions": {
+    "initial": {
+      "failed": 6,
+      "passed": 1
+    },
+    "firstConnected": {
+      "files": 3,
+      "failed": 2,
+      "passed": 21,
+      "reason": "Two historical fake rasterizers emitted PNG bytes for --version or counted identity queries as raster draws. Corrected fixtures return explicit version responses without logging them as renders; exact raster counts and environment assertions preserved."
+    }
+  },
+  "acceptance": {
+    "connected": {
+      "files": 12,
+      "passed": 93,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strictTestRoots": 673,
+    "lint": "PASS; 925 any occurrences, no new provider-egress exceptions",
+    "currentRendererAndMeasuredFont": "PASS; replacement with restored mtime, failure/corruption/deletion and recovery",
+    "customIncludeMutation": "PASS; unchanged top-level file, actual local raster",
+    "sentinelIdentityAndTransientRecovery": "PASS",
+    "unchangedGeneratedInputsRetainHit": "PASS; includes explicitly supplied current generated configuration",
+    "sharedSentinelRasterCount": "PASS; 3 families + 1 shared sentinel, identity queries excluded from raster count",
+    "actualLocalRasterEditableTransferCoreVisualInputs": "PASS; local source/OOXML and isolated Core evidence, not native Canva admission"
+  },
+  "policy": "Current renderer executable/OS, config bytes and actual measured font content precede ink hit. Generated config identity binds allowed font inventory. Arbitrary custom config runs both probes fresh because included dependencies are not attested. Failed sentinel is unmeasured and not retained; unchanged generated inputs share one sentinel per sample/size.",
+  "providerCalls": 0,
+  "dependenciesAdded": 0,
+  "hardThresholdsChanged": false,
+  "sourceSha256": {
+    "packages/creative/src/studio/render-layout-v2.ts": "1c3691f8b61ae7000785bd313d1c5b7026689531c67ee890ddc6d55b22f42ce6",
+    "packages/creative/test/raster-probe-cache.test.ts": "ac6b5efa93cb7655e350a5cd12d61e61a2a59df6d1b5ecc448d6839361f29f8f",
+    "packages/creative/test/font-pinning.test.ts": "8531a29256b65d4d6a2ad7ace56e10ce2fe1e96ca03f56301154deaacddf98c1"
+  },
+  "logs": {
+    "output/qualification/2026-10-01/raster-probe-cache-development/hawa-raster-probe-cache-red-20261001.log": "81b449979a04d0bb28a4169ddcc0cd466622477e133e594865021c7cefa3fa1b",
+    "output/qualification/2026-10-01/raster-probe-cache-development/hawa-raster-probe-cache-first-connected-20261001.log": "2fcde6966956451f9b1843fe7b0db249c83d6107ffe418171320983543a32c48",
+    "output/qualification/2026-10-01/raster-probe-cache-development/hawa-raster-probe-cache-final-connected-20261001.log": "af5fbbe53f699c8eb567409e91bb9da0c8434072d8b2247a3017edbd11d46ea9",
+    "output/qualification/2026-10-01/raster-probe-cache-development/hawa-raster-probe-cache-types-20261001.log": "b64af2afae86b2930aa8d9953e00d6ca3f90fd844065fd4694545d62d85999c7",
+    "output/qualification/2026-10-01/raster-probe-cache-development/hawa-raster-probe-cache-lint-20261001.log": "81268e527353f47331d24d3376399d7ca56af0e0b9082620660ccb3328b23cb4"
+  },
+  "deployment": "NOT_DEPLOYED",
+  "limits": [
+    "Original diagnostic did not establish a live outage; Core also invalidates at input capture.",
+    "Renderer identity is not attestation of every shared-library byte or arbitrary wrapper dependency; immutable deployment artifacts remain required.",
+    "Custom configuration avoids result/sentinel reuse rather than claiming incomplete include attestation.",
+    "Broader W5/W6/native Canva/human/recovery/product admission remains open."
+  ],
+  "exactQualification": {
+    "testedSeal": "f767ddfae2ecd3bcd024d659d8c2d6a9ed4c63a1",
+    "runtimeCommit": "1af65b2ac87a5cebb78f6b9b48fe1b391a3a1264",
+    "allStages": 8,
+    "testsPassed": 6580,
+    "testsFailed": 0,
+    "testsSkipped": 67,
+    "filesPassed": 666,
+    "filesSkipped": 6,
+    "strictRoots": 673,
+    "blueprintChecksAtSeal": 1686,
+    "gateEvidence": "W5_RASTER_PROBE_CACHE_GATE_EVIDENCE.json",
+    "fullTestLog": "output/qualification/2026-10-01/f767ddfa/FULL_TEST_SUITE_RUN.log",
+    "fullTestLogSha256": "3838b41fd0b8b7c15beedd1d574b29e6dd4a8d9e0ab814968f35dcd279491eb1",
+    "deployed": false,
+    "productAdmission": false
+  }
+}

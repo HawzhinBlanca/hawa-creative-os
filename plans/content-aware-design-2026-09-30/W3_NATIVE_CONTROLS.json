@@ -1,0 +1,327 @@
+{
+  "controls": [
+    {
+      "name": "pale-portrait",
+      "width": 1080,
+      "height": 1350,
+      "rtl": false,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "8d271978f3a4f630b8837255afc43361ef21e1b5b47c49b4f3ce091d46d933f7",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 3.74,
+        "busyness": 0,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 1,
+          "worstComponent": 1,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 1,
+        "worstComponent": 1,
+        "componentCount": 1,
+        "featureCount": 3280,
+        "passed": true
+      },
+      "settlementMs": 1077.628083,
+      "previewSha256": "598fafc1124202e8e83c5b8ecb4a94350f5c3ef70093fb3b6c22fc6334ffdb4a",
+      "pptxSha256": "161aeebd20aceb1e78b7a76215b5404213c7ebc5bfcc0155838dab362ed2596e",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.4548780487804878,
+          "worstComponent": 0.4548780487804878,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": false
+        },
+        "pngSha256": "0735907293e81c1502ccac51b6b75d8709094db14e9e6c51eff97fca69db961f",
+        "pdfSha256": "6033d2619914186439cb529a2a0c926dad9f3e1678f95d03b680264c618acdee",
+        "fontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+LinuxLibertineG"
+        ],
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "dark-portrait",
+      "width": 1080,
+      "height": 1350,
+      "rtl": false,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "39f291616153ae4782574f5456963cb4581b71aa6f21868324ae67ec486c5535",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 17.65,
+        "busyness": 0,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 0.998780487804878,
+          "worstComponent": 0.998780487804878,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 0.998780487804878,
+        "worstComponent": 0.998780487804878,
+        "componentCount": 1,
+        "featureCount": 3280,
+        "passed": true
+      },
+      "settlementMs": 334.8405829999999,
+      "previewSha256": "34d8adf2a00842d84e09a7ca598c985897eb8f729373536b4a03f3e5632d5eb9",
+      "pptxSha256": "b986b1ad6db5ef5bfb9d5fcc367223f09381b5d051874edae5a22ace6037ccd3",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.4603658536585366,
+          "worstComponent": 0.4603658536585366,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": false
+        },
+        "pngSha256": "dcd7403da43a4de48907a5f8b79ac2a8b50ca8a28341445bb4926e60de38c2df",
+        "pdfSha256": "3116b683b3b9f6d118e04df26b56fa00b096e1f4afa12c3b52feb54a4e968255",
+        "fontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+LinuxLibertineG"
+        ],
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "busy-portrait",
+      "width": 1080,
+      "height": 1350,
+      "rtl": false,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "2aabd2e1a11c5dcc456f77ad7c280e757c6dd3afa89f9f21a092dbb5a1585483",
+      "treatment": {
+        "treatment": "scrim",
+        "contrast": 3.77,
+        "busyness": 0.096,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 1,
+          "worstComponent": 1,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 1,
+        "worstComponent": 1,
+        "componentCount": 1,
+        "featureCount": 3280,
+        "passed": true
+      },
+      "settlementMs": 1111.8182499999998,
+      "previewSha256": "fd5dfdb152023a4893eadc7599a7590961886b5ad66d83e6c1dd99fffaa59dd9",
+      "pptxSha256": "a8ad6a5e17b80c13a0b31b5c9903f0fdd1d19a4ca8d8356becf98d3dbed4fd94",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.4530487804878049,
+          "worstComponent": 0.4530487804878049,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": false
+        },
+        "pngSha256": "7950201f439ab7d69071d63c838720d0b624acd1ec298bff8a3bc3f59f661273",
+        "pdfSha256": "d5b1093ee0a3e0914aee5096817962a1415a91970335143d85c0ca198e6f30fd",
+        "fontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+LinuxLibertineG"
+        ],
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "pale-wide-rtl",
+      "width": 1920,
+      "height": 1080,
+      "rtl": true,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "449b3eaadd8d075db3f49bb6775457d9bf613e7e1b0611e3e2a28c43149b4ada",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 16.74,
+        "busyness": 0.003,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 0.9996470172961525,
+          "worstComponent": 0.9996470172961525,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 0.9996470172961525,
+        "worstComponent": 0.9996470172961525,
+        "componentCount": 1,
+        "featureCount": 5666,
+        "passed": true
+      },
+      "settlementMs": 365.4307919999992,
+      "previewSha256": "0099535acf7b76bd08910cb842983a3eb10342da6f6a89228c1bd275a9e5f853",
+      "pptxSha256": "f7433c52e7001e86f0192101637c97bdb8b88183796f6e7e1b4768b0895def32",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.5665372396752559,
+          "worstComponent": 0.5665372396752559,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": false
+        },
+        "pngSha256": "69a1c641ea47816f7380a0d83a2e03b12552ac0308eb75ee71483a386269bce1",
+        "pdfSha256": "d06ea46011ec8f3da4288d07d70532eceecd84a2c6b6c754939a5c3bf3313888",
+        "fontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+LinuxLibertineG"
+        ],
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "dark-wide-rtl",
+      "width": 1920,
+      "height": 1080,
+      "rtl": true,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "39f291616153ae4782574f5456963cb4581b71aa6f21868324ae67ec486c5535",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 18.11,
+        "busyness": 0,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 0.9996470172961525,
+          "worstComponent": 0.9996470172961525,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 0.9996470172961525,
+        "worstComponent": 0.9996470172961525,
+        "componentCount": 1,
+        "featureCount": 5666,
+        "passed": true
+      },
+      "settlementMs": 316.862083,
+      "previewSha256": "43f4c0632d96bae1af35b064c1654c2c3181346e0f97964c3847a73b1d3ceaf5",
+      "pptxSha256": "076102cc347ca9de6b70060140044e53b68329afd7ab03e8edcd78681b1bb32f",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.5665372396752559,
+          "worstComponent": 0.5665372396752559,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": false
+        },
+        "pngSha256": "9e5d4db6ba18b00a37b58c2f0d4a763f88d1429e5142398ffeb6c4757e7fd0d7",
+        "pdfSha256": "f11511ae6527bd369e922016ade40395f68d41ce0e11bce2a0f50ee73b4bbf0c",
+        "fontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+LinuxLibertineG"
+        ],
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "busy-wide",
+      "width": 1920,
+      "height": 1080,
+      "rtl": false,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "2aabd2e1a11c5dcc456f77ad7c280e757c6dd3afa89f9f21a092dbb5a1585483",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 18.13,
+        "busyness": 0.015,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 0.9996470172961525,
+          "worstComponent": 0.9996470172961525,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 0.9996470172961525,
+        "worstComponent": 0.9996470172961525,
+        "componentCount": 1,
+        "featureCount": 5666,
+        "passed": true
+      },
+      "settlementMs": 331.95366699999977,
+      "previewSha256": "bafb72478f9b1d2b97ec4433d9137dbfa2ca72c07fb4a785150177a09350ab20",
+      "pptxSha256": "1aae389d6b4be6a253108eacccd1430a003ce68024d97bfea5d8c952047474f2",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.5665372396752559,
+          "worstComponent": 0.5665372396752559,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": false
+        },
+        "pngSha256": "a613562453cbf90281778d0badcc3f94bb8aa847cbcc8d1ec281471fc35387a3",
+        "pdfSha256": "3c1ce3912f0c50b329b1dc39bbfb53ac4c9ed3869068502b3a84d9f6c7a87873",
+        "fontNames": [
+          "BAAAAA+FrankRuhlHofshi-Bold",
+          "CAAAAA+FrankRuhlHofshi-Bold",
+          "DAAAAA+LinuxLibertineG"
+        ],
+        "renderer": "LibreOfficeDev 26.8 alpha -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    }
+  ],
+  "providerCalls": 0,
+  "canvaQualification": "NOT_RUN",
+  "humanCalibration": "NOT_RUN",
+  "nativeTypographyQualification": "NOT_PASSED: declared Verdana substitution remains separate from source artwork visibility",
+  "nativeVisibilityPassed": false
+}

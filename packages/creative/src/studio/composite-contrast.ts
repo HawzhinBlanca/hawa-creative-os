@@ -1,28 +1,17 @@
+import { backgroundFieldLuminanceBounds } from './background-field.js';
 import { PNG } from 'pngjs';
 import type { StudioLayoutV2, Box, ShapeElement, TextElement } from './layout-v2.js';
 import { fillColoursUnder } from './shape-gradient.js';
 import { hexToRgb } from './color-science.js';
 import { carrierOf } from './art-direction/surfaces.js';
-
-export function channelToLinear(c: number): number {
-  const s = c / 255;
-  return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-}
-
-export function rgbToLuminance(r: number, g: number, b: number): number {
-  return 0.2126 * channelToLinear(r) + 0.7152 * channelToLinear(g) + 0.0722 * channelToLinear(b);
-}
+import { rgbToLuminance, calculateLuminanceContrastRatio } from './luminance.js';
+export { channelToLinear, rgbToLuminance, calculateLuminanceContrastRatio } from './luminance.js';
 
 export function hexToLuminance(hex: string): number {
   const [r, g, b] = hexToRgb(hex);
   return rgbToLuminance(r, g, b);
 }
 
-export function calculateLuminanceContrastRatio(lum1: number, lum2: number): number {
-  const lighter = Math.max(lum1, lum2);
-  const darker = Math.min(lum1, lum2);
-  return (lighter + 0.05) / (darker + 0.05);
-}
 
 /**
  * The colour behind a text box as the layout declares it: the topmost panel or rectangle that
@@ -51,15 +40,44 @@ function declaredSurface(layout: StudioLayoutV2, box: Box): { color: string; sha
   return { color: layout.background.color };
 }
 
-/**
- * A block's contrast against the surface the layout declares behind it. On a gradient (ADR-238: a
- * cover's ground) it is the worst contrast over the colours under the block's corners and centre.
- */
+/** A local decision snapshot. Recreate after changing geometry, field or carriers; never persist. */
+export function declaredColorContrastEvaluator(layout: StudioLayoutV2, box: Box): (color: string) => number {
+  const declared = declaredSurface(layout, box);
+  const surface = declared.color;
+  if (declared.shape?.gradient) {
+    // Independent sRGB channel envelopes include interior luminance turns between stops.
+    // Expand rounded samples by one byte so this remains a conservative continuous bound.
+    const grounds = fillColoursUnder(declared.shape, box).map(hexToRgb);
+    const low = rgbToLuminance(...[0, 1, 2].map(i => Math.max(0, Math.min(...grounds.map(rgb => rgb[i])) - 1)) as [number, number, number]);
+    const high = rgbToLuminance(...[0, 1, 2].map(i => Math.min(255, Math.max(...grounds.map(rgb => rgb[i])) + 1)) as [number, number, number]);
+    return color => {
+      const ink = hexToLuminance(color);
+      if (ink >= low && ink <= high) return 1;
+      return Math.min(calculateLuminanceContrastRatio(ink, low), calculateLuminanceContrastRatio(ink, high));
+    };
+  }
+  // A real carrier wins. Otherwise enclose every field color under this footprint, including
+  // interior stops and luminance crossings; remote parts of the canvas do not carry this ink.
+  if (layout.background.field && !carrierOf(layout, box) && surface === layout.background.color) {
+    const bounds = backgroundFieldLuminanceBounds(layout.background.field, layout.width, layout.height, box);
+    const low = bounds.min, high = bounds.max;
+    return color => {
+      const ink = hexToLuminance(color);
+      if (ink >= low && ink <= high) return 1;
+      return Math.min(calculateLuminanceContrastRatio(ink, low), calculateLuminanceContrastRatio(ink, high));
+    };
+  }
+  const ground = hexToLuminance(surface);
+  return color => calculateLuminanceContrastRatio(hexToLuminance(color), ground);
+}
+
+/** A block's contrast against the surface the layout declares behind it. */
+export function declaredColorContrast(layout: StudioLayoutV2, box: Box, color: string): number {
+  return declaredColorContrastEvaluator(layout, box)(color);
+}
+
 export function declaredTextContrast(layout: StudioLayoutV2, text: TextElement): number {
-  const surface = declaredSurface(layout, text);
-  const colours = surface.shape?.gradient ? fillColoursUnder(surface.shape, text) : [surface.color];
-  const ink = hexToLuminance(text.color);
-  return Math.min(...colours.map((c) => calculateLuminanceContrastRatio(ink, hexToLuminance(c))));
+  return declaredColorContrast(layout, text, text.color);
 }
 
 export interface BoxContrastEvaluation {

@@ -8,7 +8,7 @@ import { CanvaConnectService, CanvaFlowError } from '../services/canva-connect-s
 import { DesignStudioRepository, sql, withRlsContext, type CandidateImageKind } from '@hawa/db';
 import { isSha256Hex } from '@hawa/contracts';
 import { isRenderedStudioCandidate, parseStudioImagery, parseStudioTier, StudioBudgetEvidenceError, StudioBudgetExhaustedError } from '@hawa/domain';
-import { globalFeedbackMiner } from '@hawa/creative';
+import {recoverClientLearning} from '../services/learning-recovery.js';
 import { blobStoreFor, storedFileLost } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
 import { rejectUnownedLifecycleDesignWrite } from './lifecycle-design-proof.js';
@@ -395,7 +395,7 @@ export function registerDesignStudioRoutes(
         return ctx.problem(c, 422, 'Review Candidate Required', 'Choose a rendered candidate from this task before submitting feedback.');
       }
 
-      return withRlsContext(ctx.db!, { tenantId: s.tenantId, userId: s.actorId, role: s.role }, async trx => {
+      const result = await withRlsContext(ctx.db!, { tenantId: s.tenantId, userId: s.actorId, role: s.role }, async trx => {
         await sql`SELECT pg_advisory_xact_lock(hashtextextended(${actionId},0))`.execute(trx);
         const existing = await trx.selectFrom('design_feedback').selectAll()
           .where('id','=',actionId).where('tenant_id','=',s.tenantId).executeTakeFirst();
@@ -405,23 +405,32 @@ export function registerDesignStudioRoutes(
             (existing.notes || '') !== (body.notes || '') || (existing.preview_sha256 || '') !== (body.previewSha256 || '')) {
             return ctx.problem(c,409,'Feedback Action Conflict','This action already records different feedback.');
           }
-          return c.json({id:existing.id,status:'recorded',verdict:existing.verdict,rating:existing.rating,replayed:true},200);
+          const task=await trx.selectFrom('tasks').select('client_id').where('id','=',taskId).where('tenant_id','=',s.tenantId).executeTakeFirst();
+          const clientId=existing.client_id ?? task?.client_id;
+          if(!clientId || task?.client_id!==clientId) return ctx.problem(c,409,'Feedback Scope Conflict','Recorded feedback scope cannot be reconciled.');
+          return {feedback:existing,clientId,replayed:true};
         }
         const candidate = await trx.selectFrom('design_studio_candidates as candidate')
           .innerJoin('design_studio_runs as run', 'run.id', 'candidate.run_id')
           .innerJoin('tasks as task', 'task.id', 'run.task_id')
-          .select(['candidate.preview_sha256', 'candidate.preview_png'])
+          .select(['candidate.preview_sha256', 'candidate.preview_png', 'task.client_id', 'run.client_id as run_client_id'])
           .where('candidate.tenant_id', '=', s.tenantId).where('run.tenant_id', '=', s.tenantId)
           .where('task.tenant_id', '=', s.tenantId).where('task.id', '=', taskId)
           .where('run.id', '=', body.runId).where('candidate.id', '=', body.candidateId)
-          .forShare('candidate').executeTakeFirst();
+          .forShare(['candidate', 'task', 'run']).executeTakeFirst();
         if (!isRenderedStudioCandidate(candidate && { previewSha256: candidate.preview_sha256,
           hasPreviewBytes: Boolean(candidate.preview_png?.length) })) {
           return ctx.problem(c, 409, 'Candidate Not Ready', 'No rendered candidate is available to review. Wait for a preview or recover the failed design first.');
         }
 
-        if (body.previewSha256 && body.previewSha256 !== candidate?.preview_sha256) {
+        if (!isSha256Hex(body.previewSha256)) {
+          return ctx.problem(c,422,'Reviewed Preview Required','Inspect the preview and submit its saved hash.');
+        }
+        if (body.previewSha256 !== candidate?.preview_sha256) {
           return ctx.problem(c,409,'Preview Changed','The candidate preview changed. Inspect the current preview before submitting new feedback.');
+        }
+        if (!candidate?.client_id || candidate.run_client_id !== candidate.client_id) {
+          return ctx.problem(c,409,'Feedback Scope Conflict','The reviewed candidate must belong to the task client.');
         }
       const feedbackId = actionId;
       const feedbackRow = await r.recordFeedback({
@@ -431,6 +440,8 @@ export function registerDesignStudioRoutes(
         runId: body.runId || null,
         candidateId: body.candidateId || null,
         actorId: s.actorId,
+        actorRole:s.role,
+        clientId:candidate.client_id,
         source: body.source || 'desk',
         verdict: body.verdict,
         rating,
@@ -438,32 +449,26 @@ export function registerDesignStudioRoutes(
         previewSha256: body.previewSha256 || null,
       }, trx);
 
-      // Feed verdict into globalFeedbackMiner (governed learning loop)
-      const proposedRules = globalFeedbackMiner.ingestDesignFeedback({
-        id: feedbackRow.id,
-        tenantId: feedbackRow.tenant_id,
-        taskId: feedbackRow.task_id,
-        runId: feedbackRow.run_id,
-        candidateId: feedbackRow.candidate_id,
-        actorId: feedbackRow.actor_id,
-        source: feedbackRow.source as any,
-        verdict: feedbackRow.verdict as any,
-        rating: feedbackRow.rating !== null ? Number(feedbackRow.rating) : null,
-        notes: feedbackRow.notes,
-        createdAt: feedbackRow.created_at ? new Date(feedbackRow.created_at).toISOString() : undefined,
+      return {feedback:feedbackRow,clientId:candidate.client_id,replayed:false};
       });
+
+      if (result instanceof Response) return result;
+      // Only committed rows may enter the process-local learning projection.
+      const recovered=await recoverClientLearning(ctx,{authenticated:true,tenantId:s.tenantId,userId:s.actorId,role:s.role},result.clientId);
+      const proposedRules=result.replayed ? [] : recovered.rules.filter(rule=>rule.provenance.feedbackId===result.feedback.id);
+      const feedback = result.feedback;
 
       return c.json(
         {
-          id: feedbackRow.id,
+          id: feedback.id,
           status: 'recorded',
-          verdict: feedbackRow.verdict,
-          rating: feedbackRow.rating !== null ? Number(feedbackRow.rating) : null,
+          verdict: feedback.verdict,
+          rating: feedback.rating,
           rulesProposed: proposedRules.length,
+          replayed:result.replayed,
         },
-        201
+        result.replayed ? 200 : 201
       );
-      });
     })
   );
 
@@ -473,7 +478,8 @@ export function registerDesignStudioRoutes(
     '/tasks/:taskId/design-feedback',
     protect(async (c, s, _svc, r) => {
       const taskId = c.req.param('taskId');
-      const rows = await r.listFeedbackForTask(taskId, s.tenantId);
+      const rows = await withRlsContext(ctx.db!,{tenantId:s.tenantId,userId:s.actorId,role:s.role},
+        trx=>r.listFeedbackForTask(taskId,s.tenantId,trx));
       return c.json({
         feedback: rows.map((row) => ({
           id: row.id,
@@ -481,6 +487,8 @@ export function registerDesignStudioRoutes(
           runId: row.run_id,
           candidateId: row.candidate_id,
           actorId: row.actor_id,
+          actorRole:row.actor_role,
+          clientId:row.client_id,
           source: row.source,
           verdict: row.verdict,
           rating: row.rating ? parseFloat(row.rating.toString()) : null,

@@ -182,7 +182,7 @@ describe('Role-based typography validation (F12)', () => {
     const bad = checkCanvaPptx(deck('Verdana'), copy, options);
     expect(bad.fontPass).toBe(false);
     expect(bad.offendingObjects[0].expectedFont).toBe('Inter');
-    expect(bad.offendingObjects[0].reason).toBe("Formal document body must use Inter; observed 'Verdana'");
+    expect(bad.offendingObjects[0].reason).toBe("Formal document body must use Inter; observed 'Verdana' for latin text");
   });
 
   it('passes general design piece with admitted Canva-native display fonts (Cinzel, Playfair Display)', () => {

@@ -1,7 +1,8 @@
+import { applyContentBackground } from './background-planning.js';
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { photoRecipeOf, HERO_SOFT_UPSCALE } from './layout-v2.js';
-import { artDirectionPrior, guidelinePrior, judgeClearMargin } from './art-direction/prior.js';
+import { type RecipePreferenceContext, artDirectionPrior, guidelinePrior, judgeClearMargin } from './art-direction/prior.js';
 import { brandTones } from './art-direction/solver.js';
 import { conformMarksToPageGrammar, conformTypeToPageGrammar, guidelineDeviations, type PageGrammar } from './page-grammar.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
@@ -29,7 +30,7 @@ import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-q
 import { computeLayoutMetrics } from './layout-metrics.js';
 import type { ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
-import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance, inkBoxOf } from './composite-contrast.js';
+import { declaredColorContrastEvaluator, inkBoxOf, hexToLuminance } from './composite-contrast.js';
 import { coverCrop } from './photo-crop.js';
 import { normalizeHex } from './validate-layout-v2.js';
 import { applyStyleSpec, colourDecisionsOnly, composeStyleSpec, layoutDefectCount, MOVEMENT_DECISIONS, ornamentForStyle, withoutDecision, type StyleSpec } from './style-spec.js';
@@ -105,6 +106,8 @@ export interface PipelineV3CallOptions {
   houseRules?: string[];
   /** ADR-170: the brief's subject tags, for the art-direction prior when the judge does not decide. */
   subjects?: string[];
+  /** Scope-checked loaded reference evidence; absent grants no style tie-break. */
+  recipePreferences?: RecipePreferenceContext;
   /**
    * ADR-238: the client's page grammar. When set, the incumbent judge compares the best design
    * composed from the grammar (one that passed hard QA) against the best one that was not, and the
@@ -795,8 +798,7 @@ export function conformToHouseRules(
   // QA never checked. Last, because settling can move a block onto or off a panel.
   if (palette && palette.length) {
     for (const t of layout.text) {
-      const surface = declaredBackgroundColour(layout, t);
-      const on = (colour: string) => calculateLuminanceContrastRatio(hexToLuminance(colour), hexToLuminance(surface));
+      const on = declaredColorContrastEvaluator(layout, t);
       const required = requiredContrast(t.fontSize, Boolean(t.bold));
       if (on(t.color) >= required) continue;
       const readable = palette.filter((p) => on(p) >= required);
@@ -867,8 +869,11 @@ function prepareGeneratedLayoutBody(
   // every house rule the validator checks already met. The passes below move boxes the model drew;
   // on a solved composition they would re-seat its photos, re-centre its text off the fade and add
   // ornament to a photograph. Only the fonts and the brand palette are re-applied, as they are to
-  // every layout, and the requested background is ignored: a recipe's ground is its photo.
+  // every layout. ADR-172 resolves compatible background choices against the solved boxes.
   if (photoRecipeOf(layout)) {
+    if ((canvas.background || canvas.style?.texture && canvas.style.texture !== 'as_generated') && canvas.palette?.length) {
+      applyContentBackground(layout, canvas.palette, { requestedColor: canvas.background, style: canvas.style });
+    }
     const fonted = sanitizeFontsV3(layout, copy);
     return canvas.palette?.length ? conformColoursOnly(fonted, canvas.palette) : fonted;
   }
@@ -1593,8 +1598,9 @@ export function measureDesignV3(layout: StudioLayoutV2, copy: PipelineV3Copy): D
  * Orders two candidates: one that passes production's hard QA beats one that does not, then one
  * that passes the design metrics, then the higher composite. Negative when `a` ranks first.
  */
-const isSoftHero = (layout?: Pick<StudioLayoutV2, 'artDirection'>) =>
-  (layout?.artDirection?.heroUpscale ?? 0) > HERO_SOFT_UPSCALE;
+const isSoftHero = (candidate: { hardQa?: HardQaOutcome; layout?: Pick<StudioLayoutV2, 'artDirection'> }) =>
+  candidate.hardQa?.findings ? candidate.hardQa.findings.some(f => f.code === 'HERO_UPSCALED')
+    : (candidate.layout?.artDirection?.heroUpscale ?? 0) > HERO_SOFT_UPSCALE;
 
 function compareCandidatesV3(
   a: { metrics: DesignMetricsReport; hardQa?: HardQaOutcome; layout?: StudioLayoutV2 },
@@ -1605,8 +1611,8 @@ function compareCandidatesV3(
   if (qaA !== qaB) return qaA ? -1 : 1;
   // ADR-170: an art-directed candidate whose hero is enlarged past 1.5x looks soft; a sharp one
   // ranks before it, whatever the typographic metrics say.
-  const softA = isSoftHero(a.layout);
-  const softB = isSoftHero(b.layout);
+  const softA = isSoftHero(a);
+  const softB = isSoftHero(b);
   if (softA !== softB) return softA ? 1 : -1;
   if (a.metrics.passed !== b.metrics.passed) return a.metrics.passed ? -1 : 1;
   const byComposite = b.metrics.compositeScore - a.metrics.compositeScore;
@@ -1737,6 +1743,8 @@ export async function refineCandidateV3(
     minDelta: 0.01,
     copyText: copy.text,
     renderOptions: options.renderOptions,
+    repairContext: { palette: options.canvas?.palette ?? options.qa?.palette,
+      ...(options.qa ? { allowedFonts: [options.qa.latinFont, options.qa.arabicFont] } : {}) },
     force: failsQa,
     // What production's QA would say once the layout is prepared the way it will be stored.
     ...(options.qa
@@ -1802,7 +1810,7 @@ export interface WinnerSelectionV3 {
    * or a pick that failed its canary), the house prior chose instead of the composite, and why.
    */
   prior?: {
-    basis: 'subject' | 'sharpness' | 'guideline';
+    basis: 'client_reference' | 'sharpness' | 'guideline';
     reason: string;
     /** ADR-238 `judge_without_clear_margin`: the judge preferred the other, but not clearly in both orders. */
     instead: 'composite_after_tie' | 'composite_judge_unreliable' | 'judge_without_clear_margin';
@@ -1953,9 +1961,9 @@ export async function selectWinnerV3(
   // would have to query goes second. Otherwise the higher composite stands, as before.
   const [lead, next] = fewerFindingsFirst(first, second);
   // ADR-170: two art-directed candidates the judge did not separate go by the house prior (the
-  // subject's recipe, then the sharper hero), not by a composite built for typographic layouts.
+  // loaded subject-relevant client reference, then measured sharpness), not by a composite built for typographic layouts.
   if (!judgePick || !canaryPassed) {
-    const decision = artDirectionPrior(first.layout, second.layout, options.subjects);
+    const decision = artDirectionPrior(first.layout, second.layout, options.subjects, options.recipePreferences);
     if (decision.winner) {
       const winner = decision.winner === 'a' ? first : second;
       return { winner, runnerUp: winner === first ? second : first, decidedBy: 'art_direction_prior', match, canary,

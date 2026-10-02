@@ -17,6 +17,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { parseJson, readBody, sendJson, sha256 } from './http-util.ts';
+import { isDesignGenerationResponse } from '../driver/model-ledger.ts';
 
 export interface ModelFixture {
   /** The caller's `response_format.json_schema.name`. */
@@ -51,6 +52,27 @@ export function loadModelFixtures(dir: string): ModelFixture[] {
 type Content = string | Array<{ type: string; text?: string; image_url?: { url?: string } }>;
 const textOf = (content: Content | undefined): string =>
   typeof content === 'string' ? content : Array.isArray(content) ? content.filter((p) => p.type === 'text').map((p) => p.text || '').join('\n') : '';
+
+/** Current client's image-only count request. Fixed fixture units, never a real token estimator. */
+function syntheticSolImageCount(body: any): { inputTokens: number; hashes: string[] } | null {
+  if (body.model !== 'gpt-6.1-sol' || Object.keys(body).some(key => !['model', 'input'].includes(key)) ||
+      !Array.isArray(body.input) || body.input.length !== 1) return null;
+  const input = body.input[0];
+  if (!input || input.role !== 'user' || Object.keys(input).some(key => !['role', 'content'].includes(key)) ||
+      !Array.isArray(input.content) || input.content.length < 1 || input.content.length > 64) return null;
+  const hashes: string[] = [];
+  for (const part of input.content) {
+    if (!part || part.type !== 'input_image' || typeof part.image_url !== 'string' ||
+        Object.keys(part).some(key => !['type', 'image_url', 'detail'].includes(key)) ||
+        (part.detail !== undefined && !['auto', 'low', 'high'].includes(part.detail))) return null;
+    const data = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(part.image_url)?.[1];
+    if (!data) return null;
+    const bytes = Buffer.from(data, 'base64');
+    if (!bytes.length || bytes.length > 20 * 1024 * 1024 || bytes.toString('base64') !== data) return null;
+    hashes.push(sha256(bytes));
+  }
+  return { inputTokens: 8 + hashes.length * 256, hashes };
+}
 
 /**
  * A layout the Canva planner accepts (apps/core/src/services/canva-design-planner.ts: `layout`, the
@@ -113,6 +135,7 @@ export class FakeModels {
   readonly arrivals: Array<{ schema: string | null; at: string }> = [];
   private delays: ModelDelay[] = [];
   private faults: ModelFault[] = [];
+  private geminiFailures: Array<{ model: string; n: number }> = [];
   private seq = 0;
   private fixtures: ModelFixture[];
 
@@ -126,10 +149,19 @@ export class FakeModels {
     this.arrivals.length = 0;
     this.delays = [];
     this.faults = [];
+    this.geminiFailures = [];
   }
 
   addFault(fault: ModelFault): void {
     this.faults.push({ schema: String(fault.schema), status: Number(fault.status) || 400, n: Number(fault.n) || 1 });
+  }
+
+  /** Explicit uncertain HTTP response; never supplies a successful model answer. */
+  addGeminiFailure(fault: { model: string; n?: number }): void {
+    const n = fault.n ?? 1;
+    if (typeof fault.model !== 'string' || !/^[A-Za-z0-9_.-]{1,100}$/.test(fault.model) ||
+        !Number.isInteger(n) || n < 1 || n > 10) throw new Error('Invalid Gemini failure fixture');
+    this.geminiFailures.push({ model: fault.model, n });
   }
 
   addDelay(delay: ModelDelay): void {
@@ -139,16 +171,17 @@ export class FakeModels {
   clearDelays(): void {
     this.delays = [];
     this.faults = [];
+    this.geminiFailures = [];
   }
 
   setFixtures(fixtures: ModelFixture[]): void {
     this.fixtures = fixtures;
   }
 
-  /** How many times each fingerprint was paid for (answered with 200). */
+  /** Legacy `paid` field: successful design-generation responses, never actual billing evidence. */
   paidCounts(): Record<string, { route: string; n: number }> {
     const out: Record<string, { route: string; n: number }> = {};
-    for (const e of this.ledger.filter((l) => l.status === 200)) {
+    for (const e of this.ledger.filter(isDesignGenerationResponse)) {
       out[e.fingerprint] = { route: e.route, n: (out[e.fingerprint]?.n || 0) + 1 };
     }
     return out;
@@ -183,7 +216,9 @@ export class FakeModels {
 
   async handle(req: IncomingMessage, res: ServerResponse, host: string, path: string): Promise<void> {
     const body = parseJson(await readBody(req));
-    const model = String(body.model || '');
+    const geminiModel = host === 'generativelanguage.googleapis.com'
+      ? /^\/v1beta\/models\/([A-Za-z0-9_.-]{1,100}):generateContent$/.exec(path)?.[1] : undefined;
+    const model = host === 'generativelanguage.googleapis.com' ? geminiModel || '' : String(body.model || '');
     const messages: Array<{ role: string; content: Content }> = Array.isArray(body.messages) ? body.messages : [];
     const system = textOf(messages.find((m) => m.role === 'system')?.content ?? body.system ?? body.systemInstruction?.parts?.[0]?.text);
     const firstUser = textOf(messages.find((m) => m.role === 'user')?.content);
@@ -197,6 +232,21 @@ export class FakeModels {
 
     const schema: string | null = body.response_format?.json_schema?.name ?? null;
     this.arrivals.push({ schema, at: new Date().toISOString() });
+    if (req.method === 'POST' && host === 'api.openai.com' && path === '/v1/responses/input_tokens') {
+      const count = syntheticSolImageCount(body);
+      if (count) {
+        this.note('openai', 'input-token-count', model, sha256(`${path}\n${fingerprint}`), 200, count.hashes);
+        return sendJson(res, 200, { object: 'response.input_tokens', input_tokens: count.inputTokens });
+      }
+      // Unknown models, remote images and malformed shapes remain uncovered below.
+    }
+    const geminiFailure = req.method === 'POST' && geminiModel
+      ? this.geminiFailures.find(fault => fault.n > 0 && fault.model === geminiModel) : undefined;
+    if (geminiFailure) {
+      geminiFailure.n--;
+      this.note('gemini', 'fault:generateContent', model, fingerprint, 503, imageSha256);
+      return sendJson(res, 503, { error: { message: 'chaos fault: provider acceptance unknown', type: 'server_error' } });
+    }
     const delay = this.delays.find((d) => d.n > 0 && d.schema === schema);
     if (delay) {
       delay.n--;

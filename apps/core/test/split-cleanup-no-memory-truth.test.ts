@@ -1,9 +1,10 @@
 import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, TaskRepository, withRlsContext } from '@hawa/db';
 import { kaaeClientDNA } from '@hawa/domain';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { deskReviewTarget } from '@hawa/contracts/desk-navigation';
 
 /**
@@ -25,6 +26,7 @@ const artDirector = { ...json, Authorization: `Bearer ${process.env.HAWA_ART_DIR
 
 type App = ReturnType<typeof createApp>;
 const core = (): App => createApp({ db: testDb, testAuth: { principal: { role: 'art_director' } } });
+beforeAll(()=>persistClientDnaFixture(core(),HAWA_STUDIO,{},undefined,'client-office-1'));
 
 async function newTask(app: App, body: Record<string, unknown>): Promise<string> {
   const res = await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify(body) });

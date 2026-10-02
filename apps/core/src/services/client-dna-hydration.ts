@@ -78,11 +78,11 @@ export async function loadActiveClientDna(
       targetId = row?.id;
     }
     if (!targetId) return undefined;
-    const row = await trx.selectFrom('client_dna_versions').select('dna')
+    const row = await trx.selectFrom('client_dna_versions').select(['dna', 'client_id', 'tenant_id', 'version'])
       .where('tenant_id', '=', identity.tenantId).where('client_id', '=', targetId).where('status', '=', 'active').executeTakeFirst();
     if (!row?.dna) return undefined;
     const dna = typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna;
-    return dna && typeof dna === 'object' ? (dna as Record<string, unknown>) : undefined;
+    return dna && typeof dna === 'object' ? { ...dna as Record<string, unknown>, clientId: row.client_id, tenantId: row.tenant_id, version: row.version } : undefined;
   };
   return trx ? lookup(trx) : withRlsContext(db, rls, lookup);
 }

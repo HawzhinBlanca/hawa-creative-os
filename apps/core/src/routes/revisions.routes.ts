@@ -13,6 +13,7 @@ import { readTaskBrief } from '../services/brief-reader.js';
 import { rejectLegacyTaskDesignWrite } from './lifecycle-design-proof.js';
 
 class LifecycleOwnedRevisionConflict extends Error {}
+class RevisionQaWriteDenied extends Error {}
 
 /** A hawa.design_revisions row. */
 type RevisionRow = NonNullable<Awaited<ReturnType<RevisionRepository['findRevisionById']>>>;
@@ -145,7 +146,7 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     if (!rev || rev.taskId !== taskId) return problem(c, 404, 'Revision Not Found');
 
     const ctx: RequestContext = {
-      tenantId: 'tenant-default',
+      tenantId,
       taskId,
       actor: { type: 'workflow', id: 'qa_runner' },
       correlationId: crypto.randomUUID(),
@@ -218,9 +219,17 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     if (!qaRes.ok) return problem(c, 500, 'QA Failed', qaRes.error.message);
     if (db) {
       try {
-        await withRlsContext(db, { tenantId, userId: '00000000-0000-4000-a000-000000000002', role: 'operator' }, async (trx) => {
+        await withRlsContext(db, scopeOf(auth), async (trx) => {
+          // Serialize attempt allocation on the revision under the caller's write authority.
+          const writableRevision = await trx.selectFrom('design_revisions')
+            .select('id').where('id', '=', revisionId).where('task_id', '=', taskId)
+            .where('tenant_id', '=', tenantId).forUpdate().executeTakeFirst();
+          if (!writableRevision) throw new RevisionQaWriteDenied();
           const profile = await trx.selectFrom('qc_profiles').select('id').limit(1).executeTakeFirst();
           const profileId = profile?.id || 'de3a6551-acfc-4bcc-a40b-65aaf2674a12';
+          const previousAttempt = await trx.selectFrom('qc_runs').select('attempt')
+            .where('design_revision_id', '=', revisionId).where('qc_profile_id', '=', profileId)
+            .orderBy('attempt', 'desc').limit(1).executeTakeFirst();
           await trx
             .insertInto('qc_runs')
             .values({
@@ -228,6 +237,7 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
               task_id: taskId as any,
               design_revision_id: revisionId as any,
               qc_profile_id: profileId as any,
+              attempt: (previousAttempt?.attempt ?? 0) + 1,
               status: qaRes.value.status === 'passed' ? 'passed' : qaRes.value.status === 'error' ? 'error' : 'failed',
               critical_pass: qaRes.value.criticalPass === true,
               report: qaRes.value as any,
@@ -237,6 +247,10 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
         });
       } catch (err) {
         log.error('[core:qa:db] Failed to persist qc_run:', err);
+        if (err instanceof RevisionQaWriteDenied || (typeof err === 'object' && err !== null && 'code' in err && err.code === '42501')) {
+          return problem(c, 403, 'Forbidden', 'Your current permissions do not allow recording QA for this task');
+        }
+        return problem(c, 503, 'QA Evidence Unavailable', 'The QA result was not recorded; try again when evidence storage is available');
       }
     }
     return c.json(qaRes.value, 200);

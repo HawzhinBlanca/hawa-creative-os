@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { backgroundFieldSchema, type BackgroundField } from './background-field.js';
 
 export type Hex = string;
 
@@ -143,6 +144,10 @@ export type OverlayDirection = (typeof OVERLAY_DIRECTIONS)[number];
 export const RECIPE_IDS = [
   'hero_fade_report',
   'hero_storyboard',
+  'editorial_split',
+  'photo_diptych',
+  'photo_sequence',
+  'photo_mosaic',
   'hero_card',
   'hero_plate',
   'scrim_caption',
@@ -186,12 +191,17 @@ export interface ArtDirectionRecord {
 /** ADR-180: the logo's measured ground and its treatment. */
 export interface LogoGroundRecord {
   treatment: 'none' | 'scrim' | 'tab';
-  /** The logo's contrast on its ground as drawn (95th percentile of its ink pixels: its lettering and outline). */
+  /** Legacy p95 changed-pixel contrast statistic; source-feature visibility independently certifies artwork. */
   contrast: number;
   /** The ground's busyness under the logo box (standard deviation of its luma, 0..1). */
   busyness: number;
   /** The logo moved to the calmer top corner of the design. */
   moved?: boolean;
+  /** ADR172 W3: measured source edges; absent on historical records. */
+  visibility?: {
+    method: 'source-edges-v1'; coverage: number; worstComponent: number;
+    componentCount: number; featureCount: number; passed: boolean;
+  };
 }
 
 export interface TextElement extends Box {
@@ -224,13 +234,22 @@ export interface TypeScaleConfig {
   ratio: number;
 }
 
+/** ADR-172: recorded decision, not a claim that a model understood unmeasured content. */
+export interface BackgroundDecision {
+  policy: 'content-background-v1';
+  basis: 'requester' | 'reference' | 'content' | 'concept';
+  intent: 'documentary' | 'editorial' | 'showcase';
+  mode: 'scene' | 'solid' | 'gradient';
+  textAreaShare: number;
+}
+
 export interface StudioLayoutV2 {
   version: 2;
   width: number;
   height: number;
   genre?: 'social_announcement' | 'invitation' | 'poster' | 'presentation_slide' | 'banner';
   grid: GridConfig;
-  background: { color: Hex };
+  background: { color: Hex; field?: BackgroundField; decision?: BackgroundDecision };
   art?: ArtConfig;
   shapes: ShapeElement[];
   text: TextElement[];
@@ -459,6 +478,11 @@ export const artDirectionRecordSchema = z.object({
     contrast: z.number().min(1).max(21),
     busyness: z.number().min(0).max(1),
     moved: z.boolean().optional(),
+    visibility: z.object({
+      method: z.literal('source-edges-v1'), coverage: z.number().min(0).max(1),
+      worstComponent: z.number().min(0).max(1), componentCount: z.number().int().positive(),
+      featureCount: z.number().int().positive(), passed: z.boolean(),
+    }).strict().optional(),
   }).strict().optional(),
 }).strict();
 
@@ -529,13 +553,16 @@ export const studioLayoutV2Schema = z.object({
   height: z.number().int().positive(),
   genre: z.enum(['social_announcement', 'invitation', 'poster', 'presentation_slide', 'banner']).optional(),
   grid: gridSchema,
-  background: z.object({ color: hexSchema }).strict(),
+  background: z.object({ color: hexSchema, field: backgroundFieldSchema.optional(),
+    decision: z.object({ policy: z.literal('content-background-v1'), basis: z.enum(['requester', 'reference', 'content', 'concept']),
+      intent: z.enum(['documentary', 'editorial', 'showcase']), mode: z.enum(['scene', 'solid', 'gradient']),
+      textAreaShare: z.number().min(0).max(1) }).strict().optional() }).strict(),
   art: artSchema.optional(),
   shapes: z.array(shapeElementSchema).max(40),
   text: z.array(textElementSchema).min(1).max(40),
   logo: boxSchema,
   typeScale: typeScaleSchema.optional(),
-  photos: z.array(photoElementSchema).max(6).optional(),
+  photos: z.array(photoElementSchema).max(10).optional(),
   overlays: z.array(overlayElementSchema).max(6).optional(),
   artDirection: artDirectionRecordSchema.optional(),
   ornaments: z.array(ornamentElementSchema).max(4).optional(),

@@ -1,6 +1,6 @@
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
 import { measureWrappedLines, wrappedLinesOf } from './render-layout-v2.js';
-import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
+import { calculateLuminanceContrastRatio, declaredColorContrast, hexToLuminance } from './composite-contrast.js';
 import { logoClearZone, requiredContrast } from './house-rules.js';
 import { photosMayOverlap } from './photo-cutout.js';
 import type { OrnamentSettings } from './pipeline-v3.js';
@@ -277,8 +277,7 @@ export function applyStyleSpec(
     // the title: 'dark' over the navy background this client asks for is 1.0:1. A choice that
     // cannot be read is left as the generator drew it, and conformToHouseRules then repairs it from
     // the palette, which is the same path an unreadable generated colour already takes.
-    const surface = declaredBackgroundColour(layout, title);
-    const ratio = calculateLuminanceContrastRatio(hexToLuminance(want), hexToLuminance(surface));
+    const ratio = declaredColorContrast(layout, title, want);
     if (ratio >= requiredContrast(title.fontSize, Boolean(title.bold))) title.color = want;
   }
 
@@ -314,8 +313,7 @@ export function applyStyleSpec(
     }
   })();
   if (title && accentLine && (titleCopy.includes('\n') || lineWords)) {
-    const surface = declaredBackgroundColour(layout, title);
-    const ratio = calculateLuminanceContrastRatio(hexToLuminance(gold), hexToLuminance(surface));
+    const ratio = declaredColorContrast(layout, title, gold);
     if (ratio >= requiredContrast(title.fontSize, Boolean(title.bold))) {
       title.accentColor = gold;
       if (lineWords) title.accentText = lineWords;

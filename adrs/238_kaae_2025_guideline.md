@@ -211,6 +211,18 @@ KAAE's Studio reads the packaged reference, so the design change deploys with th
   - The Canva brand kit and the production DNA row wait for section 9.
   - Client DNA learning rows in production cannot be changed by SQL; the handoff is in the inventory.
 
+## Lead integration — 2 October 2026
+
+Integrated completed4c95154a with the research branch. ADR241 (originally research ADR239) is the single typed
+grammar admission boundary for Core, shared reference reading and the renderer.
+The owner's content-aware multiple-photo direction supersedes hero-only preference
+text in this pack. Guideline alternatives preserve chosen photo count/treatment;
+client grammar reaches editorial/storyboard fonts and inks. Both background systems,
+all source/subject protections and strict native font identity checks are retained.
+Desk handoffs are implemented; production DNA and Canva kit are still separate.
+Connected299/0/0,725 roots/build/lint pass; full source/native/human admission open.
+Evidence: plans/content-aware-design-2026-09-30/KAAE2025_INTEGRATED_PROOF.json.
+
 ## 11. Follow-up (2026-10-02): the guideline decides unless the judge clearly disagrees
 
 **Why.** In proof (c) the judge chose the model's restyled cover over the guideline's own composed covers. That cover was a flat Midnight panel laid on the gradient, which the guideline's cover never has. The composed cover's title also sat low: the composer kept the house's logo clear space (half the logo's height, 162px on the centred cover) rather than the guideline's (the height of the K, 49px).

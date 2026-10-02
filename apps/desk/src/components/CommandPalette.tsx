@@ -212,8 +212,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               }
             }
             setResults(merged);
-            // Core read the newest tasks only (its ceiling); older matches may be missing.
-            if (data.truncated === true) setSearchNotice('There are more matching tasks than this search can show. Add more specific words.');
+            // Bounded task or history reads can omit older matches.
+            if (data.truncated === true) setSearchNotice('There are more matches than this search can show. Add more specific words.');
           }
         }
       } catch {

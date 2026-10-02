@@ -1,3 +1,4 @@
+import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
@@ -159,6 +160,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
   let destinationSaved = false;
   async function saveKaaeDestination(app: ReturnType<typeof core>) {
     if (destinationSaved) return;
+    await persistClientDnaFixture(core(), kaae, headers);
     await (app as any).clientDnaHydrated;
     const current = await (await app.request(`/v1/clients/${kaae}/dna`, { headers })).json();
     const saved = await app.request(`/v1/clients/${kaae}/dna`, {

@@ -390,7 +390,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
 
     let admittedAlbum: AlbumSnapshot | undefined;
-    // ADR-160 addendum: one burst photo whose cut caption was completed; it opens with these words.
+    // A retained burst photo, either settled alone or joined to the rest of a cut caption.
     let boundPhoto: BlobRef | undefined;
     if (db) {
       try {
@@ -508,7 +508,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           if (outcome.kind === 'alone') {
             // A burst of one photo is read as ADR-145 reads a lone photo: a photo with words as it arrived
             // (now, after the quiet period), a kept photo with no words by its own settle below.
-            if (burst?.captioned) settle = false;
+            if (burst?.captioned) {
+              boundPhoto = outcome.image;
+              settle = false;
+            }
           } else {
             const settled = await admit(outcome, 'core.intake.after-album-settle');
             if (settled) return settled;
@@ -1059,6 +1062,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               if (opts.keptImage) {
                 // ADR-235: the photo the kept brief came with, retained when the question was asked.
                 lifecycleImage = { ...opts.keptImage, updateId: update.update_id };
+              } else if (boundPhoto) {
+                lifecycleImage = { ...boundPhoto, updateId: update.update_id };
               } else if (photoInput) {
                 if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
                 const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
@@ -1068,9 +1073,6 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 // A caption never designs without its picture (ADR-069): the picture is asked for again.
                 if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
                 lifecycleImage = { ...photo.ref, updateId: update.update_id };
-              } else if (boundPhoto) {
-                // ADR-160 addendum: the burst photo whose cut caption these words completed.
-                lifecycleImage = { ...boundPhoto, updateId: update.update_id };
               } else if (heldPhoto) {
                 // ADR-145: the photo its sender sent just before (or while the brief waited for photos).
                 lifecycleImage = { ...heldPhoto.image, updateId: update.update_id };
@@ -1163,17 +1165,21 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   beside = { text: say(MEDIA_MESSAGES.photoUsedWithWords, requesterLang(words)), parseMode: 'HTML' };
                 }
               }
-              if (photoInput && !lifecycleImage) {
+              if (photoInput && !priorRevisionPhoto) {
                 if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
-                if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
-                const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
-                  (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
-                if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
-                if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
-                if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
+                if (!lifecycleImage) {
+                  if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
+                  const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
+                    (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
+                  if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
+                  if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
+                  if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
+                  lifecycleImage = photo.ref;
+                }
+                // Retained bytes still need the same durable revision/request binding before projection.
                 const stored = await withRlsContext(db, system,
                   (trx) => recordRevisionPhotoDecision(trx, TENANT, update.update_id,
-                    { requestId, chatId, payloadHash, image: photo.ref }));
+                    { requestId, chatId, payloadHash, image: lifecycleImage! }));
                 if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
                     stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
                 lifecycleImage = stored.image;
@@ -1390,7 +1396,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     linkedLifecycleReplies(trx, TENANT, chatId, photoInput.replyMessageId ?? '0'))).some((l) =>
                     l.requestId === (plan as { requestId: string }).requestId && l.rev === byRequest(requests, l.requestId)?.rev));
                 if (keepAndAsk) {
-                  const kept = await mediaRoute.holdPhotoUpdate(update, chatId, payloadHash, albumSettleMs(), { fileId: photoInput.fileId });
+                  const kept = await mediaRoute.holdPhotoUpdate(update, chatId, payloadHash, albumSettleMs(), { fileId: photoInput.fileId }, boundPhoto);
                   if (kept) return handled(kept.status, kept.extra);
                 }
                 if (plan.kind === 'ask') plan = { ...plan, photo: true };
@@ -1570,7 +1576,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   const material = plan.note === 'change' && (MATERIAL_STAGES as readonly string[]).includes(target.stage);
                   let image: BlobRef | null = null;
                   let heldFrom: number | null = null;
-                  if (material && photoInput && !plan.resolves) {
+                  if (material && boundPhoto && !plan.resolves) {
+                    image = boundPhoto;
+                  } else if (material && photoInput && !plan.resolves) {
                     if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
                     const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
                       (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
@@ -1578,8 +1586,6 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
                     if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
                     image = photo.ref;
-                  } else if (material && boundPhoto && !plan.resolves) {
-                    image = boundPhoto;
                   } else if (material && plan.resolves) {
                     const held = await withRlsContext(db, system, (trx) => readHeldPhoto(trx, TENANT, plan.resolves!));
                     if (held && held.chatId === chatId && held.senderId === senderId) { image = held.image; heldFrom = held.updateId; }
@@ -1667,9 +1673,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 const scope = senderScopeOf(update);
                 if (!scope) return null;
                 if (!await withRlsContext(db, system, (trx) => readHeldPhoto(trx, TENANT, update.update_id))) {
-                  if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
-                  const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
-                    (id) => ctx.telegramBridge!.downloadFile(id), fileId);
+                  if (!boundPhoto && !ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
+                  const photo = boundPhoto ? { kind: 'stored' as const, ref: boundPhoto }
+                    : await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
+                      (id) => ctx.telegramBridge!.downloadFile(id), fileId);
                   if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
                   if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
                   if (photo.kind === 'unsupported') return await holdMedia('photoUnreadable');
@@ -1742,7 +1749,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             // A photo whose words are not a brief, with no design waiting for it: kept for the words, and
             // asked about (ADR-145). Album photos that answer no current design are explained.
             if (photoInput) {
-              const kept = await mediaRoute.holdPhotoUpdate(update, chatId, payloadHash, albumSettleMs(), { fileId: photoInput.fileId });
+              const kept = await mediaRoute.holdPhotoUpdate(update, chatId, payloadHash, albumSettleMs(), { fileId: photoInput.fileId }, boundPhoto);
               if (kept) return handled(kept.status, kept.extra);
             }
             if (photoInput || admittedAlbum) return await holdMedia(admittedAlbum ? 'photosUnplaced' : 'photoUnreadable');

@@ -1,8 +1,19 @@
-import { describe, it, expect } from 'vitest';
-import { createApp } from '../src/app.js';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import {createApp} from '../src/app.js';
+import {clientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {createDb,sql} from '@hawa/db';
+import {randomUUID} from 'node:crypto';
 
 describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & Asset Sandbox', () => {
-  const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
+  const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },
+    seedClientDna: map=>map.set('client-rabar',{...clientDnaFixture('client-office-1'),clientId:'client-rabar',name:'Rabar Fashion',code:'RABAR'}) });
+  const db=createDb(process.env.TEST_DATABASE_URL!),owner=createDb(process.env.TEST_DATABASE_OWNER_URL!);
+  const clientIds=new Map(['client-alpha-123','client-beta-456','client-kurdish-1','client-library-spec'].map(code=>[code,randomUUID()]));
+  const assets=createApp({db,testAuth:{principal:{role:'operator'}}});
+  beforeAll(async()=>{for(const [code,id] of clientIds) await sql`INSERT INTO hawa.clients(id,tenant_id,code,name)
+    VALUES(${id}::uuid,'00000000-0000-4000-a000-000000000001'::uuid,${code},${code})`.execute(owner);});
+  afterAll(async()=>{await db.destroy();await owner.destroy();});
+  const pixel='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6uoAAAAASUVORK5CYII=';
 
   // A task that names its client: the rubric scores against the client's brand colours and refuses
   // a task without one (SPLIT_PLAN G1). A Telegram message in a test without a database names none.
@@ -31,7 +42,7 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
 
     it('enforces strict client isolation during search (Invariant #6)', async () => {
       // Create asset for client A
-      await app.request('/assets/upload', {
+      const uploaded=await assets.request('/assets/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -39,37 +50,39 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
           mimeType: 'image/png',
           clientId: 'client-alpha-123',
           category: 'brand_asset',
-          content: 'fake_binary_png_data',
+          contentBase64: pixel,
         }),
       });
+      expect(uploaded.status).toBe(201);
 
       // Search scoped to client B must not leak client A's asset
-      const resScopedB = await app.request('/search?q=secret_menu&clientId=client-beta-456');
+      const resScopedB = await assets.request('/search?q=secret_menu&clientId=client-beta-456');
       const jsonB = await resScopedB.json();
-      const leaked = jsonB.hits.some((h: any) => h.item.clientId === 'client-alpha-123');
+      const leaked = jsonB.hits.some((h: any) => h.item.clientId === clientIds.get('client-alpha-123'));
       expect(leaked).toBe(false);
 
       // Search scoped to client A finds it
-      const resScopedA = await app.request('/search?q=secret_menu&clientId=client-alpha-123');
+      const resScopedA = await assets.request('/search?q=secret_menu&clientId=client-alpha-123');
       const jsonA = await resScopedA.json();
-      const found = jsonA.hits.some((h: any) => h.item.clientId === 'client-alpha-123');
+      const found = jsonA.hits.some((h: any) => h.item.clientId === clientIds.get('client-alpha-123'));
       expect(found).toBe(true);
     });
 
     it('supports Kurdish Sorani numeral and diacritic normalized search', async () => {
-      await app.request('/assets/upload', {
+      const uploaded=await assets.request('/assets/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           filename: 'kurdish_coffee_pack_٢٠٢٦.png',
           mimeType: 'image/png',
           clientId: 'client-kurdish-1',
-          content: 'fake_coffee_pack',
+          contentBase64: pixel,
         }),
       });
+      expect(uploaded.status).toBe(201);
 
       // Query with Western numeral 2026 should match Kurdish Eastern numeral ٢٠٢٦
-      const res = await app.request('/search?q=2026&clientId=client-kurdish-1');
+      const res = await assets.request('/search?q=2026&clientId=client-kurdish-1');
       const json = await res.json();
       expect(json.hits.length).toBeGreaterThan(0);
       expect(json.hits[0].item.title).toContain('٢٠٢٦');
@@ -218,7 +231,7 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
       const clientId = 'client-library-spec';
 
       // Upload logo
-      const uploadRes = await app.request('/assets/upload', {
+      const uploadRes = await assets.request('/assets/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -231,12 +244,12 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
       });
       expect(uploadRes.status).toBe(201);
       const asset = await uploadRes.json();
-      expect(asset.clientId).toBe(clientId);
+      expect(asset.clientId).toBe(clientIds.get(clientId));
       expect(asset.category).toBe('logo');
       expect(asset.sanitized).toBe(true);
 
       // Query by clientId
-      const listRes = await app.request(`/assets?clientId=${clientId}`);
+      const listRes = await assets.request(`/assets?clientId=${clientId}`);
       expect(listRes.status).toBe(200);
       const list = await listRes.json();
       expect(list.some((a: any) => a.assetId === asset.assetId)).toBe(true);

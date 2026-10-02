@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-01",
+  "status": "ENGINEERING_DEPLOYMENT_AND_BOUNDARIES_VERIFIED_PRODUCT_ADMISSION_OPEN",
+  "deployedCommit": "2c4d61ec4852b4cd1107071fa4100b1b49e1be39",
+  "observedAt": "2026-10-01T01:16:34.771Z",
+  "readbackAt": "2026-10-01T01:17:57.969Z",
+  "sourceCommit": "d300591e",
+  "sourceCandidateCommit": "fab60f18",
+  "gate": {
+    "passed": 6305,
+    "failed": 0,
+    "filesPassed": 646,
+    "filesSkipped": 6,
+    "skipped": 67,
+    "stagesPassed": 8,
+    "newestProductionDump": "PASS",
+    "evidence": "DEPLOYED_RELEASE_GATE_EVIDENCE.json"
+  },
+  "receipt": "LIVE_DEPLOYMENT_RECEIPT.json",
+  "serviceBoundaries": "LIVE_INFRA_READBACK.json",
+  "worker": {
+    "color": "green",
+    "services": 8,
+    "outboxActive": true,
+    "background": "live",
+    "pollSuccessful": true,
+    "pollError": false,
+    "blueDrainedAndStopped": true
+  },
+  "historicalDeadOutboxRows": 18,
+  "historicalCommandsRequeued": false,
+  "newPaidStudyCalls": 0,
+  "limits": [
+    "Product gate A-H/Canva/native/human/blinded creative/recovery qualification remain open",
+    "Content-aware source4114f6e0 remains separate and is not deployed",
+    "Engineering source is proven; actual design quality cannot be inferred from test totals"
+  ],
+  "logs": {
+    "/tmp/hawa-final-qa-deploy-2c4d61ec-20261001.log": "7bd984e002f2a40d4729ecad68adc4182209008c88e9d7c097f7475b891fc5de",
+    "/Users/hawzhin/.hawa/releases/2c4d61ec4852b4cd1107071fa4100b1b49e1be39/output/release-gate/FULL_TEST_SUITE_RUN.log": "1254265aafd3ec29707d214a77466953a8a934129619eb5e20ff9e8bd2e52898"
+  }
+}

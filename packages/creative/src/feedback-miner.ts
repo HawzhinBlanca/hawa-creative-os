@@ -6,8 +6,9 @@
  */
 
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
+import { canonicalJson,learningTargetKey,learningContentKey,isNegativeLearningReceipt,learningReceiptKey,mergeLearningReceipts,resolveLearningExamples,
+  type LearningDesignTarget,type LearningExampleReceipt } from '@hawa/domain';
+import { refinementSnapshotFromManifest, refinementSnapshotHash, type ApprovedRefinementEvidence } from './refinement-evidence.js';
 
 export interface CanvasLayerSnapshot {
   id: string;
@@ -17,10 +18,10 @@ export interface CanvasLayerSnapshot {
   fontFamily?: string;
   fontSize?: number;
   lineHeight?: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface ArtboardSnapshot {
@@ -39,7 +40,7 @@ export interface FeedbackDelta {
 }
 
 export interface RuleProvenance {
-  taskId: string;
+  taskId?: string;
   clientId: string;
   sourcePlatform?: string;
   feedbackId?: string;
@@ -48,11 +49,16 @@ export interface RuleProvenance {
 }
 
 export interface RuleExamples {
+  receipts?:LearningExampleReceipt[];
+  positiveExamples?:LearningExampleReceipt[];
+  negativeExamples?:LearningExampleReceipt[];
   positiveExampleTaskIds: string[];
   negativeExampleTaskIds: string[];
 }
 
 export interface DesignFeedbackRecord {
+  target?:LearningDesignTarget;
+  basis?:LearningExampleReceipt['basis'];
   id: string;
   tenantId?: string;
   taskId: string;
@@ -60,7 +66,7 @@ export interface DesignFeedbackRecord {
   runId?: string | null;
   candidateId?: string | null;
   actorId: string;
-  actorRole?: 'art_director' | 'creative_director' | 'operator';
+  actorRole?: string;
   source?: 'desk' | 'telegram' | 'import';
   verdict: 'approve' | 'reject' | 'revise' | 'rating';
   rating?: number | null;
@@ -68,7 +74,19 @@ export interface DesignFeedbackRecord {
   createdAt?: string;
 }
 
+/** Stored inventory supplied by an authorized adapter; absent rights remain unknown. */
+export interface LearningInventoryItem {
+  id: string;
+  clientId: string;
+  type: string;
+  name: string;
+  lineage: 'client_owned' | 'canva_derived_restricted' | 'rights_unknown';
+}
+
 export interface CandidateRuleProposal {
+  /** Monotone stored moderation revision, never supplied by a model or caller. */
+  moderationRevision?: number;
+  refinementEvidence?: ApprovedRefinementEvidence[];
   id: string;
   clientId: string;
   title: string;
@@ -84,19 +102,23 @@ export interface CandidateRuleProposal {
   provenance: RuleProvenance;
   examples: RuleExamples;
   conflicts: string[];
-  promotedByRole?: 'art_director' | 'creative_director';
+  promotedByRole?: 'art_director' | 'creative_director' | 'administrator';
   promotedAt?: string;
   sha256Digest: string;
   dataLineage: 'client_owned' | 'canva_derived_restricted';
 }
 
-/** The DNA file is missing (the production image has no config/): said once per process. */
-let warnedNoDnaFile = false;
-
 export class FeedbackMiner {
   private candidateRules = new Map<string, CandidateRuleProposal>();
-  private observedDeltas: Array<{ clientId: string; taskId: string; delta: FeedbackDelta }> = [];
+  private refinementEvents = new Map<string, string>();
   private rejectedTaskIds = new Set<string>();
+  private feedbackEvents = new Map<string, string>();
+  private learningReceipts=new Map<string,LearningExampleReceipt>();
+  private receiptsByTarget=new Map<string,Map<string,LearningExampleReceipt>>();
+  private negativesByContent=new Map<string,Map<string,LearningExampleReceipt>>();
+  private scopedTarget(clientId:string,taskId:string,target:LearningDesignTarget):string {
+    return JSON.stringify([clientId,taskId,learningTargetKey(target)]);
+  }
   private negativeFeedbackStore: Array<{
     feedbackId: string;
     taskId: string;
@@ -105,6 +127,10 @@ export class FeedbackMiner {
     actor: { id: string; role?: string; name?: string };
     recordedAt: string;
   }> = [];
+
+  private scopedContent(clientId:string,taskId:string,target:LearningDesignTarget):string {
+    return JSON.stringify([clientId,taskId,learningContentKey(target)]);
+  }
 
   /**
    * Ingests human design feedback from hawa.design_feedback
@@ -119,40 +145,62 @@ export class FeedbackMiner {
     const records = Array.isArray(feedback) ? feedback : [feedback];
     const newlyProposed: CandidateRuleProposal[] = [];
 
-    for (const record of records) {
-      const clientId =
-        record.clientId ||
-        context?.clientId ||
-        'c1000000-0000-4000-8000-000000000002';
+    // Validate the whole batch before changing evidence, including duplicate identities
+    // inside the batch. PostgreSQL remains authoritative; this guards its local projection.
+    const pendingEvents = new Map<string, string>();
+    const admitted = records.map(record => {
+      const clientId = record.clientId ?? context?.clientId;
+      if (typeof clientId !== 'string' || !clientId.trim() || clientId !== clientId.trim() ||
+          (context?.clientId !== undefined && context.clientId !== clientId)) {
+        throw new Error('Feedback client scope is missing or conflicting');
+      }
+      for (const value of [record.id, record.taskId, record.actorId]) {
+        if (typeof value !== 'string' || !value.trim()) throw new Error('Feedback identity is required');
+      }
+      if(!['approve','reject','revise','rating'].includes(record.verdict) ||
+        (record.rating!=null && (!Number.isInteger(record.rating) || record.rating<1 || record.rating>10)) ||
+        (record.createdAt!==undefined && !Number.isFinite(Date.parse(record.createdAt)))) throw new Error('Feedback verdict/rating/time is invalid');
+      if(record.target) learningReceiptKey({feedbackId:record.id,clientId,taskId:record.taskId,target:record.target,
+        verdict:record.verdict,rating:record.rating,actor:{id:record.actorId,role:record.actorRole},
+        recordedAt:record.createdAt ?? new Date().toISOString(),basis:record.basis ??
+          (record.target.kind==='studio_candidate'?'studio_review':record.target.kind==='task'?'task_rejection':'revision_rejection')});
+      const key = JSON.stringify([record.tenantId ?? null, record.id]);
+      const fingerprint = crypto.createHash('sha256').update(JSON.stringify([
+        clientId, record.taskId, record.runId ?? null, record.candidateId ?? null,
+        record.actorId, record.actorRole ?? null, record.source ?? 'desk', record.verdict,
+        record.rating ?? null, record.notes ?? null, record.createdAt ?? null,
+        record.target ? learningTargetKey(record.target) : null,record.basis ?? null,
+      ])).digest('hex');
+      const previous = pendingEvents.get(key) ?? this.feedbackEvents.get(key);
+      if (previous !== undefined && previous !== fingerprint) throw new Error('Feedback event reuse conflict');
+      pendingEvents.set(key, fingerprint);
+      return { record, clientId, key, fingerprint, replayed: previous !== undefined };
+    });
+
+    for (const { record, clientId, key, fingerprint, replayed } of admitted) {
+      if (replayed) continue;
 
       const actor = {
         id: record.actorId,
-        role: record.actorRole || 'art_director',
+        ...(record.actorRole ? { role: record.actorRole } : {}),
       };
 
       const notes = (record.notes || '').trim();
       const verdict = record.verdict;
       const rating = record.rating !== undefined ? record.rating : null;
 
-      // 1. Negative feedback handling (reject verdict or low rating <= 4)
-      if (verdict === 'reject' || (verdict === 'rating' && rating !== null && rating <= 4)) {
-        this.recordNegativeFeedback(
-          record.taskId,
-          clientId,
-          notes || `Studio design candidate rejected (rating: ${rating ?? 'N/A'})`,
-          actor
-        );
-      }
-
-      // 2. Positive feedback handling (approve verdict or high rating >= 8)
-      if (verdict === 'approve' || (verdict === 'rating' && rating !== null && rating >= 8)) {
-        if (!this.rejectedTaskIds.has(record.taskId)) {
-          for (const rule of this.candidateRules.values()) {
-            if (rule.clientId === clientId && !rule.examples.positiveExampleTaskIds.includes(record.taskId)) {
-              rule.examples.positiveExampleTaskIds.push(record.taskId);
-            }
-          }
-        }
+      let receipt:LearningExampleReceipt|undefined;
+      if(record.target) {
+        receipt={feedbackId:record.id,clientId,taskId:record.taskId,target:structuredClone(record.target),
+          verdict,rating,actor,recordedAt:record.createdAt ?? new Date().toISOString(),
+          basis:record.basis ?? (record.target.kind==='studio_candidate'?'studio_review':record.target.kind==='task'?'task_rejection':'revision_rejection'),notes:record.notes};
+        this.observeLearningReceipt(receipt);
+      } else if(verdict==='reject' || verdict==='revise' || (rating!==null && rating<=4)) {
+        const recordedAt=record.createdAt ?? new Date().toISOString(),feedbackText=notes || 'Unbound historical feedback';
+        receipt={feedbackId:record.id,clientId,taskId:record.taskId,target:{kind:'task'},verdict:'reject',actor,
+          recordedAt,basis:'unresolved_legacy',notes:feedbackText};
+        this.recordNegativeFeedback(record.taskId,clientId,feedbackText,actor,
+          {feedbackId:record.id,recordedAt,basis:'unresolved_legacy'});
       }
 
       // 3. Rule proposal mining from human operator notes
@@ -205,11 +253,11 @@ export class FeedbackMiner {
         const existingPromoted = this.getPromotedRules(clientId);
         const conflicts = this.detectConflicts(notes, existingPromoted);
 
-        const id = `crule_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
         const sha256Digest = crypto
           .createHash('sha256')
           .update(`${clientId}:${record.id || record.taskId}:${notes}`)
           .digest('hex');
+        const id = `crule_${sha256Digest}`;
 
         const proposal: CandidateRuleProposal = {
           id,
@@ -233,35 +281,36 @@ export class FeedbackMiner {
             recordedAt: record.createdAt || new Date().toISOString(),
           },
           examples: {
-            positiveExampleTaskIds:
-              verdict === 'approve' && !this.rejectedTaskIds.has(record.taskId) ? [record.taskId] : [],
-            negativeExampleTaskIds:
-              verdict === 'reject' || (rating !== null && rating <= 4) ? [record.taskId] : [],
+            positiveExampleTaskIds:[],negativeExampleTaskIds:[],
           },
           conflicts,
           sha256Digest,
           dataLineage: 'client_owned',
         };
 
-        const ruleKey = `${clientId}:feedback:${proposal.sha256Digest.substring(0, 16)}`;
+        proposal.examples.receipts=receipt?[receipt]:[];
+        this.refreshRuleExamples(proposal);
+        const ruleKey = `${clientId}:feedback:${proposal.sha256Digest}`;
         if (!this.candidateRules.has(ruleKey)) {
           this.candidateRules.set(ruleKey, proposal);
           newlyProposed.push(proposal);
         } else {
           const existing = this.candidateRules.get(ruleKey)!;
-          existing.frequency += 1;
           if (!existing.evidenceTaskIds.includes(record.taskId)) {
             existing.evidenceTaskIds.push(record.taskId);
           }
+          existing.frequency = existing.evidenceTaskIds.length;
         }
       }
+      this.feedbackEvents.set(key, fingerprint);
     }
 
     return newlyProposed;
   }
 
-  public isTaskRejected(taskId: string): boolean {
-    return this.rejectedTaskIds.has(taskId);
+  public isTaskRejected(taskId: string, clientId?: string): boolean {
+    if (clientId !== undefined) return this.rejectedTaskIds.has(JSON.stringify([clientId, taskId]));
+    return Array.from(this.rejectedTaskIds).some(key => JSON.parse(key)[1] === taskId);
   }
 
   /**
@@ -325,15 +374,15 @@ export class FeedbackMiner {
       }
 
       // 4. Layout shifts (significant vertical/horizontal repositioning)
-      const dy = Math.abs(initLayer.y - finalLayer.y);
+      const dy = initLayer.y === undefined || finalLayer.y === undefined ? 0 : Math.abs(initLayer.y - finalLayer.y);
       if (dy >= 20) {
         deltas.push({
           layerId: finalLayer.id,
           category: 'layout',
           property: 'y',
-          beforeValue: initLayer.y,
-          afterValue: finalLayer.y,
-          description: `Layer shifted vertically by ${finalLayer.y - initLayer.y}px (safe zone adjustment)`
+          beforeValue: initLayer.y!,
+          afterValue: finalLayer.y!,
+          description: `Layer shifted vertically by ${finalLayer.y! - initLayer.y!}px`
         });
       }
     }
@@ -348,14 +397,45 @@ export class FeedbackMiner {
     clientId: string,
     taskId: string,
     initial: ArtboardSnapshot,
-    final: ArtboardSnapshot
+    final: ArtboardSnapshot,
+    evidence?: ApprovedRefinementEvidence,
+    recordedAt?: string
   ): CandidateRuleProposal[] {
+    if (!clientId.trim() || !taskId.trim() || [initial, final].some(s=>s.clientId!==clientId || s.taskId!==taskId)) {
+      throw new Error('Refinement task/client scope conflict');
+    }
+    // Validate both snapshots before creating any proposal, even for direct library calls.
+    for (const snapshot of [initial,final]) refinementSnapshotFromManifest(clientId,taskId,{nodes:snapshot.layers});
+    let eventKey: string | undefined;
+    let fingerprint: string | undefined;
+    if (evidence) {
+      if (evidence.clientId!==clientId || evidence.taskId!==taskId ||
+          evidence.beforeSnapshotSha256!==refinementSnapshotHash(initial) ||
+          evidence.afterSnapshotSha256!==refinementSnapshotHash(final) ||
+          !evidence.feedbackId || !evidence.approvalId || !evidence.actor.id || !evidence.approvedBy) {
+        throw new Error('Refinement authority or snapshot hash conflict');
+      }
+      eventKey=JSON.stringify([clientId,evidence.feedbackId]);
+      fingerprint=crypto.createHash('sha256').update(canonicalJson(evidence)).digest('hex');
+      const previous=this.refinementEvents.get(eventKey);
+      if (previous && previous!==fingerprint) throw new Error('Refinement event reuse conflict');
+      if (previous) return [];
+    }
+    const pairReceipts:LearningExampleReceipt[]=evidence ? [
+      ...(evidence.beforeSourceSha256.toLowerCase()!==evidence.afterSourceSha256.toLowerCase() ? [{
+        feedbackId:evidence.feedbackId,clientId,taskId,target:{kind:'design_revision' as const,revisionId:evidence.beforeRevisionId,sourceSha256:evidence.beforeSourceSha256},
+        verdict:'corrected' as const,actor:structuredClone(evidence.actor),recordedAt:recordedAt ?? new Date().toISOString(),basis:'approved_refinement' as const,
+      }] : []),
+      {feedbackId:evidence.feedbackId,clientId,taskId,target:{kind:'design_revision',revisionId:evidence.afterRevisionId,sourceSha256:evidence.afterSourceSha256},
+        verdict:'approve',actor:structuredClone(evidence.actor),recordedAt:recordedAt ?? new Date().toISOString(),basis:'approved_refinement',
+        approval:{id:evidence.approvalId,actorId:evidence.approvedBy}},
+    ] : [];
+    mergeLearningReceipts(pairReceipts);
+    for(const receipt of pairReceipts) this.observeLearningReceipt(receipt);
     const deltas = this.diffArtboards(initial, final);
     const newlyProposed: CandidateRuleProposal[] = [];
 
     for (const delta of deltas) {
-      this.observedDeltas.push({ clientId, taskId, delta });
-
       // Identify key cluster patterns
       let ruleKey = '';
       let title = '';
@@ -365,36 +445,42 @@ export class FeedbackMiner {
       if (delta.category === 'palette') {
         ruleKey = `${clientId}:palette:${delta.afterValue}`;
         title = `Default text color override to ${delta.afterValue}`;
-        ruleText = `Use color ${delta.afterValue} for prominent text layers in ${clientId}`;
-        rationale = `Human designers repeatedly replace default colors with client brand token ${delta.afterValue}.`;
+        ruleText = `Observed color adjustment to ${delta.afterValue}; review its layer role and task applicability.`;
+        rationale = `Recorded color difference; repetition is counted across distinct tasks.`;
       } else if (delta.category === 'typography' && delta.property === 'lineHeight') {
         ruleKey = `${clientId}:typography:lineHeight:${delta.afterValue}`;
-        title = `Enforce Kurdish diacritic clearance line-height: ${delta.afterValue}`;
-        ruleText = `Ensure line-height is set to minimum ${delta.afterValue} for Kurdish typography`;
-        rationale = `Required to prevent ascender/descender diacritic clipping on characters like ڵ and ڕ.`;
+        title = `Observed line-height: ${delta.afterValue}`;
+        ruleText = `Observed line-height adjustment to ${delta.afterValue}; review font, script and task applicability.`;
+        rationale = `Recorded typography difference, without inferred glyph or clipping evidence.`;
       } else if (delta.category === 'layout' && delta.property === 'y' && Number(delta.afterValue) > Number(delta.beforeValue)) {
-        ruleKey = `${clientId}:layout:top_padding`;
-        title = `Maintain increased top safe-zone margin`;
-        ruleText = `Offset header layers downward by at least 40px`;
-        rationale = `Prevents social story UI obstruction by native Instagram/TikTok header chrome.`;
+        const distance=Number(delta.afterValue)-Number(delta.beforeValue);
+        ruleKey = `${clientId}:layout:y:${distance}`;
+        title = `Observed vertical adjustment`;
+        ruleText = `Observed vertical adjustment of ${distance}px; review layer role and task applicability.`;
+        rationale = `Recorded geometry difference, without inferred platform or safe-zone requirements.`;
       } else if (delta.category === 'copy_token') {
-        ruleKey = `${clientId}:copy:${delta.afterValue.toString().substring(0, 20)}`;
-        title = `Standardize approved copy phrase`;
-        ruleText = `Prefer approved phrasing: "${delta.afterValue}"`;
-        rationale = `Preserves exact client tone and standardized Kurdish orthography.`;
+        ruleKey = `${clientId}:copy:${crypto.createHash('sha256').update(String(delta.afterValue)).digest('hex')}`;
+        title = `Observed text replacement`;
+        ruleText = `Observed replacement phrasing: "${delta.afterValue}"; review context and task applicability.`;
+        rationale = `Recorded text difference; no inferred language, tone or client-wide preference.`;
       }
 
       if (!ruleKey) continue;
 
       let proposal = this.candidateRules.get(ruleKey);
       if (proposal) {
-        proposal.frequency += 1;
         if (!proposal.evidenceTaskIds.includes(taskId)) {
           proposal.evidenceTaskIds.push(taskId);
+          proposal.frequency = proposal.evidenceTaskIds.length;
         }
+        if (evidence && !proposal.refinementEvidence?.some(e=>e.feedbackId===evidence.feedbackId)) {
+          (proposal.refinementEvidence ??= []).push(structuredClone(evidence));
+        }
+        proposal.examples.receipts=mergeLearningReceipts(proposal.examples.receipts ?? [],pairReceipts);
+        this.refreshRuleExamples(proposal);
         proposal.confidence = Math.min(0.99, 0.5 + proposal.frequency * 0.15);
       } else {
-        const id = `crule_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const id = `crule_${crypto.createHash('sha256').update(ruleKey).digest('hex')}`;
         const sha256Digest = crypto
           .createHash('sha256')
           .update(`${clientId}:${title}:${ruleText}:${taskId}`)
@@ -413,110 +499,75 @@ export class FeedbackMiner {
           status: 'PROPOSED',
           scope: 'client_scoped',
           explicitness: 'inferred_ast_delta',
+          ...(evidence ? { refinementEvidence: [structuredClone(evidence)] } : {}),
           provenance: {
             taskId,
             clientId,
-            recordedAt: new Date().toISOString(),
+            ...(evidence ? {feedbackId:evidence.feedbackId,actor:structuredClone(evidence.actor),sourcePlatform:'approved_revision_pair'} : {sourcePlatform:'unverified_snapshot'}),
+            recordedAt: recordedAt ?? new Date().toISOString(),
           },
           examples: {
-            positiveExampleTaskIds: this.rejectedTaskIds.has(taskId) ? [] : [taskId],
-            negativeExampleTaskIds: this.rejectedTaskIds.has(taskId) ? [taskId] : [],
+            positiveExampleTaskIds:[],negativeExampleTaskIds:[],
           },
           conflicts: [],
           sha256Digest,
           dataLineage: 'client_owned',
         };
+        proposal.examples.receipts=pairReceipts;
+        this.refreshRuleExamples(proposal);
         this.candidateRules.set(ruleKey, proposal);
         newlyProposed.push(proposal);
       }
     }
 
+    if (eventKey && fingerprint) this.refinementEvents.set(eventKey,fingerprint);
+
     return newlyProposed;
   }
 
-  /**
-   * Hydrates rules from canonical Client DNA specification file if present.
-   */
-  public loadClientDnaRules(clientId?: string): void {
-    const isKaae =
-      !clientId ||
-      clientId === 'c1000000-0000-4000-8000-000000000002' ||
-      clientId === 'client-kaae' ||
-      clientId === 'client-office-1' ||
-      clientId.includes('kaae');
-    if (!isKaae) return;
-
-    try {
-      const candidates = [
-        path.join(process.cwd(), 'config', 'clients', 'kaae.dna.json'),
-        path.join(process.cwd(), '..', '..', 'config', 'clients', 'kaae.dna.json'),
-        path.join(process.cwd(), '..', 'config', 'clients', 'kaae.dna.json'),
-        '/app/config/clients/kaae.dna.json',
-      ];
-      const found = candidates.find((p) => fs.existsSync(p));
-      if (!found) {
-        // Said once, not silently skipped: the file is not in the production image.
-        if (!warnedNoDnaFile) {
-          warnedNoDnaFile = true;
-          console.warn(`[feedback-miner] config/clients/kaae.dna.json was not found (${candidates.join(', ')}); its layout rules are not offered as candidates.`);
-        }
-        return;
-      }
-
-      const dna = JSON.parse(fs.readFileSync(found, 'utf-8'));
-      const targetClientId = clientId || dna.clientId || 'c1000000-0000-4000-8000-000000000002';
-      const layoutRules: string[] = dna.guidelines?.layoutRules || [];
-
-      for (let i = 0; i < layoutRules.length; i++) {
-        const text = layoutRules[i];
-        const ruleKey = `${targetClientId}:persisted:${i}`;
-        if (!this.candidateRules.has(ruleKey)) {
-          const id = `rule_dna_${i}`;
-          const sha256Digest = crypto.createHash('sha256').update(text).digest('hex');
-          this.candidateRules.set(ruleKey, {
-            id,
-            clientId: targetClientId,
-            title: `Client DNA Rule #${i + 1}`,
-            category: 'layout',
-            ruleText: text,
-            rationale: 'Loaded from canonical Client DNA specification',
-            frequency: 1,
-            evidenceTaskIds: [],
-            status: 'PROMOTED',
-            promotedByRole: 'creative_director',
-            promotedAt: dna.updatedAt || new Date().toISOString(),
-            confidence: 1.0,
-            scope: 'client_scoped',
-            explicitness: 'explicit_operator_instruction',
-            provenance: {
-              taskId: 'dna_init',
-              clientId: targetClientId,
-              actor: { id: 'system', role: 'creative_director', name: 'Client DNA' },
-              recordedAt: dna.updatedAt || new Date().toISOString(),
-            },
-            examples: { positiveExampleTaskIds: [], negativeExampleTaskIds: [] },
-            conflicts: [],
-            sha256Digest,
-            dataLineage: 'client_owned',
-          });
-        }
-      }
-    } catch {
-      // Safe fallback if filesystem access is restricted
+  /** Candidates are observed/proposed data; filesystem files never establish human approval. */
+  public observeLearningReceipt(receipt:LearningExampleReceipt):void {
+    const key=learningReceiptKey(receipt),previous=this.learningReceipts.get(key);
+    mergeLearningReceipts(previous?[previous]:[],[receipt]);
+    const stored=structuredClone(receipt);
+    this.learningReceipts.set(key,stored);
+    const targetKey=this.scopedTarget(receipt.clientId,receipt.taskId,receipt.target);
+    const bucket=this.receiptsByTarget.get(targetKey) ?? new Map<string,LearningExampleReceipt>();
+    const alreadyHeld=receipt.target.kind==='task' && [...bucket.values()].some(r=>r.basis===receipt.basis);
+    bucket.set(key,stored);this.receiptsByTarget.set(targetKey,bucket);
+    const negative=isNegativeLearningReceipt(receipt),contentKey=this.scopedContent(receipt.clientId,receipt.taskId,receipt.target);
+    if(negative && receipt.target.kind!=='task') {
+      const aliases=this.negativesByContent.get(contentKey) ?? new Map<string,LearningExampleReceipt>();
+      aliases.set(key,stored);this.negativesByContent.set(contentKey,aliases);
     }
+    if(receipt.target.kind==='task' && (receipt.verdict==='reject' || receipt.verdict==='revise')) {
+      this.rejectedTaskIds.add(JSON.stringify([receipt.clientId,receipt.taskId]));
+    }
+    if(alreadyHeld) return;
+    for(const rule of this.candidateRules.values()) if(rule.clientId===receipt.clientId &&
+      ((receipt.target.kind==='task' && rule.evidenceTaskIds.includes(receipt.taskId)) ||
+        rule.examples.receipts?.some(r=>this.scopedTarget(r.clientId,r.taskId,r.target)===targetKey ||
+          (negative && this.scopedContent(r.clientId,r.taskId,r.target)===contentKey)))) this.refreshRuleExamples(rule);
+  }
+
+  private refreshRuleExamples(rule:CandidateRuleProposal):void {
+    const own=rule.examples.receipts ?? [],keys=new Set(own.map(r=>this.scopedTarget(r.clientId,r.taskId,r.target)));
+    for(const taskId of rule.evidenceTaskIds) keys.add(this.scopedTarget(rule.clientId,taskId,{kind:'task'}));
+    const related=[...keys].flatMap(key=>{
+      const values=[...(this.receiptsByTarget.get(key)?.values() ?? [])];
+      if(values[0]?.target.kind!=='task') return values;
+      // One original receipt per hold basis proves ineligibility. Retain each rule's own
+      // source below; copying every task-wide hold into every rule is quadratic evidence.
+      const representatives=new Map<LearningExampleReceipt['basis'],LearningExampleReceipt>();
+      for(const receipt of values) if(!representatives.has(receipt.basis)) representatives.set(receipt.basis,receipt);
+      return [...representatives.values()];
+    });
+    const contentKeys=new Set(own.filter(r=>r.target.kind!=='task').map(r=>this.scopedContent(r.clientId,r.taskId,r.target)));
+    const negatives=[...contentKeys].flatMap(key=>[...(this.negativesByContent.get(key)?.values() ?? [])]);
+    rule.examples=resolveLearningExamples(rule.clientId,mergeLearningReceipts(own,related,negatives));
   }
 
   public getCandidateRules(clientId?: string): CandidateRuleProposal[] {
-    const isKaae =
-      !clientId ||
-      clientId === 'c1000000-0000-4000-8000-000000000002' ||
-      clientId === 'client-kaae' ||
-      clientId === 'client-office-1' ||
-      clientId.includes('kaae');
-    if (isKaae && (!this.candidateRules.size || !Array.from(this.candidateRules.values()).some((r) => r.clientId === clientId))) {
-      this.loadClientDnaRules(clientId);
-    }
-
     const rules = Array.from(this.candidateRules.values());
     if (clientId) {
       return rules.filter((r) => r.clientId === clientId);
@@ -531,6 +582,59 @@ export class FeedbackMiner {
     return this.getCandidateRules(clientId)
       .filter((r) => r.status === 'PROMOTED')
       .map((r) => r.ruleText);
+  }
+
+  /** Apply an already recorded moderation decision to rebuilt source evidence. */
+  public reconcileRecordedRule(clientId:string,recorded:CandidateRuleProposal,revision:number): void {
+    if(recorded.clientId!==clientId || recorded.provenance.clientId!==clientId || !Number.isSafeInteger(revision) || revision<0) {
+      throw new Error('Recorded learning moderation scope/version conflict');
+    }
+    const matches=[...this.candidateRules.entries()].filter(([,rule])=>rule.clientId===clientId &&
+      (rule.sha256Digest===recorded.sha256Digest || (rule.explicitness==='inferred_ast_delta' && recorded.explicitness===rule.explicitness &&
+        rule.category===recorded.category && rule.ruleText===recorded.ruleText)));
+    if(matches.length>1) throw new Error('Ambiguous recorded learning identity');
+    const [key,current]=matches[0] ?? [`${clientId}:recorded:${recorded.id}`,undefined];
+    const restored=structuredClone(current ?? recorded);
+    restored.id=recorded.id;restored.sha256Digest=recorded.sha256Digest;restored.status=recorded.status;
+    restored.provenance=structuredClone(recorded.provenance);
+    restored.promotedAt=recorded.promotedAt;restored.promotedByRole=recorded.promotedByRole;
+    restored.moderationRevision=revision;
+    // Moderation alone cannot invent a source or an approved design.
+    if(!current) restored.examples.receipts=[];
+    this.refreshRuleExamples(restored);
+    this.candidateRules.set(key,restored);
+  }
+
+  /** Publish a committed scoped projection without losing newer local feedback. */
+  public adoptClientProjection(clientId:string,projection:FeedbackMiner): void {
+    const receipts=[...projection.learningReceipts.values()];
+    if(receipts.some(r=>r.clientId!==clientId)) throw new Error('Learning projection receipt scope conflict');
+    mergeLearningReceipts([...this.learningReceipts.values()],receipts);
+    const entries=[...projection.candidateRules.entries()];
+    if(entries.some(([,rule])=>rule.clientId!==clientId)) throw new Error('Learning projection scope conflict');
+    for(const receipt of receipts) this.observeLearningReceipt(receipt);
+    for(const [key,incoming] of entries) {
+      const current=this.candidateRules.get(key);
+      if(!current) this.candidateRules.set(key,structuredClone(incoming));
+      else if(current.id!==incoming.id || current.sha256Digest!==incoming.sha256Digest) {
+        if(current.moderationRevision!==undefined && incoming.moderationRevision!==undefined) {
+          throw new Error('Recorded learning identity conflict');
+        }
+        this.candidateRules.set(key,structuredClone(incoming));
+      }
+      else {
+        const prepared=structuredClone(incoming);
+        if((current.moderationRevision ?? -1)>(incoming.moderationRevision ?? -1)) {
+          prepared.status=current.status;prepared.promotedByRole=current.promotedByRole;
+          prepared.promotedAt=current.promotedAt;prepared.moderationRevision=current.moderationRevision;
+        }
+        this.commitRuleSnapshot(prepared);
+      }
+    }
+    for(const rejected of projection.rejectedTaskIds) this.rejectedTaskIds.add(rejected);
+    for(const [key,value] of projection.feedbackEvents) this.feedbackEvents.set(key,value);
+    for(const [key,value] of projection.refinementEvents) this.refinementEvents.set(key,value);
+    for(const rule of this.candidateRules.values()) if(rule.clientId===clientId) this.refreshRuleExamples(rule);
   }
 
   /**
@@ -585,30 +689,21 @@ export class FeedbackMiner {
     taskId: string,
     clientId: string,
     feedbackText: string,
-    actor: { id: string; role?: string; name?: string }
+    actor: { id: string; role?: string; name?: string },
+    options?:{feedbackId?:string;recordedAt?:string;target?:LearningDesignTarget;basis?:LearningExampleReceipt['basis']}
   ): { feedbackId: string; taskId: string; negativeExampleRecorded: true } {
-    const feedbackId = `fb_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const feedbackId = options?.feedbackId ?? `fb_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const recordedAt=options?.recordedAt ?? new Date().toISOString();
+    this.observeLearningReceipt({feedbackId,clientId,taskId,target:options?.target ?? {kind:'task'},verdict:'reject',
+      actor,recordedAt,basis:options?.basis ?? 'task_rejection',notes:feedbackText});
     this.negativeFeedbackStore.push({
       feedbackId,
       taskId,
       clientId,
       feedbackText,
       actor,
-      recordedAt: new Date().toISOString(),
+      recordedAt,
     });
-
-    // Mark task as rejected so it can never become a positive example
-    this.rejectedTaskIds.add(taskId);
-
-    // If any candidate rule previously used this task as positive evidence, remove it
-    for (const rule of this.candidateRules.values()) {
-      if (rule.examples.positiveExampleTaskIds.includes(taskId)) {
-        rule.examples.positiveExampleTaskIds = rule.examples.positiveExampleTaskIds.filter((id) => id !== taskId);
-        if (!rule.examples.negativeExampleTaskIds.includes(taskId)) {
-          rule.examples.negativeExampleTaskIds.push(taskId);
-        }
-      }
-    }
 
     return { feedbackId, taskId, negativeExampleRecorded: true };
   }
@@ -618,7 +713,7 @@ export class FeedbackMiner {
    */
   public proposeExplicitRule(input: {
     clientId: string;
-    taskId: string;
+    taskId?: string;
     title: string;
     category: 'typography' | 'palette' | 'copy_token' | 'layout';
     ruleText: string;
@@ -626,14 +721,16 @@ export class FeedbackMiner {
     actor: { id: string; role?: string; name?: string };
     existingRules?: string[];
     prohibitedPhrases?: string[];
+    sourceId?: string;
+    recordedAt?: string;
   }): CandidateRuleProposal {
     const { clientId, taskId, title, category, ruleText, rationale, actor, existingRules = [], prohibitedPhrases = [] } = input;
     const conflicts = this.detectConflicts(ruleText, existingRules, prohibitedPhrases);
 
-    const id = `crule_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const id = `crule_${input.sourceId ?? crypto.randomUUID()}`;
     const sha256Digest = crypto
       .createHash('sha256')
-      .update(`${clientId}:${title}:${ruleText}:${taskId}:${Date.now()}`)
+      .update(canonicalJson({clientId,title,category,ruleText,taskId:taskId ?? null,id}))
       .digest('hex');
 
     const proposal: CandidateRuleProposal = {
@@ -644,20 +741,22 @@ export class FeedbackMiner {
       ruleText,
       rationale,
       frequency: 1,
-      evidenceTaskIds: [taskId],
+      evidenceTaskIds: taskId ? [taskId] : [],
       confidence: 0.85,
       status: 'PROPOSED',
       scope: 'client_scoped',
       explicitness: 'explicit_operator_instruction',
       provenance: {
-        taskId,
+        ...(taskId ? {taskId} : {}),
+        ...(input.sourceId ? {feedbackId:input.sourceId} : {}),
         clientId,
+        sourcePlatform: 'owner_instruction',
         actor,
-        recordedAt: new Date().toISOString(),
+        recordedAt: input.recordedAt ?? new Date().toISOString(),
       },
       examples: {
-        positiveExampleTaskIds: this.rejectedTaskIds.has(taskId) ? [] : [taskId],
-        negativeExampleTaskIds: this.rejectedTaskIds.has(taskId) ? [taskId] : [],
+        positiveExampleTaskIds: [],
+        negativeExampleTaskIds:[],
       },
       conflicts,
       sha256Digest,
@@ -665,6 +764,7 @@ export class FeedbackMiner {
     };
 
     const ruleKey = `${clientId}:explicit:${id}`;
+    this.refreshRuleExamples(proposal);
     this.candidateRules.set(ruleKey, proposal);
     return proposal;
   }
@@ -677,14 +777,25 @@ export class FeedbackMiner {
     ruleId: string,
     role: 'art_director' | 'creative_director'
   ): { promoted: boolean; rule?: CandidateRuleProposal; auditHash: string; reason?: string } {
+    const prepared=this.prepareRulePromotion(ruleId,role);
+    this.commitRulePromotion(prepared);
+    return prepared;
+  }
+
+  /** Prepare a reviewed receipt without making it active before a database commit. */
+  public prepareRulePromotion(
+    ruleId: string,
+    role: 'art_director' | 'creative_director'
+  ): { promoted: boolean; rule?: CandidateRuleProposal; auditHash: string; reason?: string } {
     if (role !== 'art_director' && role !== 'creative_director') {
       return { promoted: false, auditHash: '', reason: 'UNAUTHORIZED_ROLE' };
     }
 
-    const rule = Array.from(this.candidateRules.values()).find((r) => r.id === ruleId);
-    if (!rule) {
+    const stored = Array.from(this.candidateRules.values()).find((r) => r.id === ruleId);
+    if (!stored) {
       return { promoted: false, auditHash: '', reason: 'RULE_NOT_FOUND' };
     }
+    const rule=structuredClone(stored);
 
     // Conflicting rules stay pending and cannot be promoted (H11)
     if (rule.conflicts && rule.conflicts.length > 0) {
@@ -703,8 +814,30 @@ export class FeedbackMiner {
     return { promoted: true, rule, auditHash };
   }
 
+  public commitRulePromotion(prepared:{promoted:boolean;rule?:CandidateRuleProposal}): void {
+    if (!prepared.promoted || !prepared.rule) return;
+    this.commitRuleSnapshot(prepared.rule);
+  }
+
+  public commitRuleSnapshot(prepared:CandidateRuleProposal): void {
+    const rule=Array.from(this.candidateRules.values()).find(r=>r.id===prepared.id);
+    if (!rule || rule.clientId!==prepared.clientId || rule.sha256Digest!==prepared.sha256Digest) {
+      throw new Error('Prepared rule moderation identity conflict');
+    }
+    // Feedback may commit while moderation waits for its own transaction. Preserve
+    // that newer evidence instead of replacing it with the prepared snapshot.
+    const receipts=mergeLearningReceipts(rule.examples.receipts ?? [],prepared.examples.receipts ?? []);
+    const evidence=[...new Set([...rule.evidenceTaskIds,...prepared.evidenceTaskIds])];
+    const refinements=new Map([...rule.refinementEvidence || [],...prepared.refinementEvidence || []]
+      .map(receipt=>[receipt.feedbackId,receipt]));
+    const frequency=Math.max(rule.frequency,prepared.frequency);
+    Object.assign(rule,structuredClone(prepared),{frequency,evidenceTaskIds:evidence,examples:{receipts},
+      ...(refinements.size ? {refinementEvidence:[...refinements.values()]}:{})});
+    this.refreshRuleExamples(rule);
+  }
+
   /**
-   * Reversible Rollback (FR-067):
+   * Reversible Rollback (FR-054):
    * Rolls back a promoted rule to DISMISSED while preserving original history.
    */
   public rollbackPromotedRule(
@@ -748,7 +881,8 @@ export class FeedbackMiner {
    */
   public evaluateDataRetrievalBoundary(
     clientId: string,
-    queryPurpose: 'client_generation' | 'external_fine_tuning' | 'benchmark'
+    queryPurpose: 'client_generation' | 'external_fine_tuning' | 'benchmark',
+    inventory: readonly LearningInventoryItem[] = []
   ): {
     clientId: string;
     queryPurpose: string;
@@ -757,51 +891,29 @@ export class FeedbackMiner {
       id: string;
       type: string;
       name: string;
-      lineage: 'canva_derived_restricted';
+      lineage: LearningInventoryItem['lineage'];
       reason: string;
     }>;
   } {
-    // Client-owned assets (always permitted for client generation)
-    const clientOwned = [
-      { id: `${clientId}_logo`, type: 'vector_logo', name: 'Official Brand Logo', lineage: 'client_owned' as const },
-      { id: `${clientId}_palette`, type: 'brand_palette', name: 'Approved Color Tokens', lineage: 'client_owned' as const },
-      { id: `${clientId}_copy`, type: 'approved_copy', name: 'Verbatim Approved Copy Blocks', lineage: 'client_owned' as const },
-      { id: `${clientId}_typography`, type: 'font_metadata', name: 'OFL Font Vazirmatn Spec', lineage: 'client_owned' as const },
-    ];
-
-    // Restricted Canva-derived assets
-    const canvaRestricted = [
-      {
-        id: 'canva_stock_template_elem_01',
-        type: 'canva_proprietary_vector',
-        name: 'Canva Stock Ornament Element #4821',
-        lineage: 'canva_derived_restricted' as const,
-        reason: 'Vendor IP restriction: Canva stock assets cannot be extracted for model fine-tuning or style-memory',
-      },
-      {
-        id: 'canva_layout_heuristic_internal',
-        type: 'canva_internal_weights',
-        name: 'Canva Magic Switch Layout Heuristic Graph',
-        lineage: 'canva_derived_restricted' as const,
-        reason: 'Vendor IP restriction: Internal Canva heuristics prohibited in external benchmarks',
-      },
-    ];
-
-    if (queryPurpose === 'external_fine_tuning' || queryPurpose === 'benchmark') {
-      return {
-        clientId,
-        queryPurpose,
-        permittedItems: [], // No client data or restricted data permitted for external fine-tuning
-        restrictedExcludedItems: canvaRestricted,
-      };
+    if (!clientId || inventory.some(item => item.clientId !== clientId)) {
+      throw new Error('Learning inventory client scope is missing or conflicting');
     }
-
-    return {
-      clientId,
-      queryPurpose,
-      permittedItems: clientOwned,
-      restrictedExcludedItems: canvaRestricted,
-    };
+    const permittedItems: Array<{id:string;type:string;name:string;lineage:'client_owned'}> = [];
+    const restrictedExcludedItems: Array<{id:string;type:string;name:string;lineage:LearningInventoryItem['lineage'];reason:string}> = [];
+    for (const item of inventory) {
+      const {id,type,name,lineage} = item;
+      if (lineage === 'client_owned' && queryPurpose === 'client_generation') {
+        permittedItems.push({id,type,name,lineage});
+      } else {
+        const reason = lineage === 'canva_derived_restricted'
+          ? 'Vendor IP restriction: restricted assets are excluded from learning retrieval.'
+          : lineage === 'client_owned'
+            ? 'Client material is not admitted for external fine-tuning or benchmarking.'
+            : 'Rights are unknown; no retrieval permission is inferred from an upload.';
+        restrictedExcludedItems.push({id,type,name,lineage,reason});
+      }
+    }
+    return {clientId,queryPurpose,permittedItems,restrictedExcludedItems};
   }
 }
 

@@ -1,12 +1,17 @@
-import crypto from 'node:crypto';
 import { registerDocumentRoutes } from './documents.routes.js';
-import { validateUploadedAsset, sanitizeSvg } from '@hawa/domain';
+import { sanitizeSvg } from '@hawa/domain';
 import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { findClientRowId } from '../services/client-row.js';
-import { listUploadedAssets, saveUploadedAsset } from '../services/uploaded-assets.js';
+import { listUploadedAssets, saveUploadedAsset, uploadedAssetContent } from '../services/uploaded-assets.js';
 import { log } from '../logging.js';
+import { sql, withRlsContext } from '@hawa/db';
+import { parseBlobRef, isSha256Hex } from '@hawa/contracts';
+import { inspectUploadedAssetBytes } from '@hawa/creative';
+import { chaosPoint } from '@hawa/observability';
+import { blobStoreFor } from '../services/blob-store-context.js';
+import { parseAssetUpload, AssetUploadError, ASSET_JSON_MAX_BYTES } from '../services/uploaded-asset-input.js';
 
 /**
  * Asset upload and SVG sanitising, and the voice-brief transcriber. Moved out of app.ts by group G1
@@ -22,69 +27,102 @@ export function registerAssetsRoutes(ctx: RouteContext): void {
   registerDocumentRoutes(ctx);
 
   // Asset Security & Ingestion
-  registerRoute('post', '/assets/upload', async (c: any) => {
-    const body = await c.req.json().catch(() => null);
-    if (!body || !body.filename || !body.mimeType) {
-      return problem(c, 400, 'Invalid Asset Request', 'filename and mimeType are required');
-    }
-
-    const validation = validateUploadedAsset({
-      filename: body.filename,
-      mimeType: body.mimeType,
-      sizeBytes: body.sizeBytes || (body.content ? (typeof body.content === 'string' ? Buffer.byteLength(body.content) : body.content.length) : 1024),
-      content: body.content,
-    });
-
-    if (!validation.ok) {
-      return problem(c, 400, 'Asset Security Policy Violation', validation.violations.join('; '));
-    }
-
-    const assetId = crypto.randomUUID();
-    const storageKey = `assets/${validation.sha256}/${body.filename}`;
-    // Every asset belongs to a client. One sent without a client was filed under the fixture office
-    // client-office-1 (SPLIT_PLAN.md section 6), where a search for the real client never found it.
-    const clientId = typeof body.clientId === 'string' && body.clientId.trim() ? body.clientId.trim() : undefined;
-    if (!clientId) return problem(c, 422, 'CLIENT_REQUIRED', 'Name the client this asset belongs to (clientId).');
-    const category = body.category || 'asset';
-
-    // With a database the admitted asset is a row of hawa.brand_assets (services/uploaded-assets.ts)
-    // for a client Postgres knows; the no-database store below held it for this process only.
-    if (db && clientRepo) {
-      const { actorId, ...scope } = scopeOf(c);
+  const store = blobStoreFor(db, ctx.options?.blobStore);
+  let assetUploadActive = false;
+  registerRoute('post', '/assets/upload', async (c: Context) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.userId || auth.role === 'service') return problem(c, 401, 'Authentication Required');
+    if (assetUploadActive) return problem(c, 503, 'ASSET_UPLOAD_BUSY', 'Another asset is being inspected. Retry shortly.');
+    if (c.req.header('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/json')
+      return problem(c, 415, 'ASSET_JSON_REQUIRED', 'Upload an asset JSON object.');
+    const declared = c.req.header('Content-Length');
+    if (declared !== undefined && (!/^\d+$/.test(declared) || Number(declared) > ASSET_JSON_MAX_BYTES))
+      return problem(c, 413, 'ASSET_SIZE_LIMIT', 'The upload exceeds the bounded JSON envelope.');
+    assetUploadActive = true;
+    try {
+      const reader = c.req.raw.body?.getReader();
+      if (!reader) throw new AssetUploadError(400, 'ASSET_INPUT_EMPTY', 'Supply actual file content.');
+      const parts: Uint8Array[] = []; let total = 0, timedOut = false;
+      const deadline = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => undefined); }, 10_000);
       try {
-        const clientRowId = await findClientRowId(db, clientRepo, scope, clientId);
-        if (!clientRowId) return problem(c, 404, 'Client Not Found', `Client '${clientId}' is not in the database`);
-        const saved = await saveUploadedAsset(db, scope, {
-          clientId: clientRowId, category, filename: body.filename, mimeType: validation.mimeType ?? body.mimeType, sha256: String(validation.sha256),
-          sanitized: Boolean(validation.sanitizedContent), uploadedBy: actorId,
-        });
-        broadcast('asset:ingested', { assetId: saved.assetId, clientId: saved.clientId, filename: saved.filename, sha256: saved.sha256 });
-        return c.json({ ...saved, ...(validation.sanitizedContent ? { sanitizedContent: validation.sanitizedContent } : {}) }, 201);
-      } catch (err) {
-        // A client id that names no client row breaks the foreign key.
-        if ((err as { code?: string })?.code === '23503') return problem(c, 404, 'Client Not Found', `Client '${clientId}' is not in the database`);
-        log.error('[core:assets] the uploaded asset could not be recorded:', err);
-        return problem(c, 503, 'Database Unavailable', 'The asset could not be recorded; try again');
-      }
+        for (;;) {
+          const part = await reader.read(); if (part.done) break;
+          total += part.value.byteLength;
+          if (total > ASSET_JSON_MAX_BYTES) throw new AssetUploadError(413, 'ASSET_SIZE_LIMIT', 'The upload exceeds the bounded JSON envelope.');
+          parts.push(part.value);
+        }
+      } finally { clearTimeout(deadline); await reader.cancel().catch(() => undefined); }
+      if (timedOut) throw new AssetUploadError(408, 'ASSET_INPUT_TIMEOUT', 'Retry the complete upload.');
+      let body: unknown;
+      try { body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(parts))); }
+      catch { throw new AssetUploadError(400, 'ASSET_JSON_INVALID', 'Supply a valid UTF-8 JSON object.'); }
+      const input = parseAssetUpload(body), { actorId, ...scope } = scopeOf(c);
+      if (!db || !clientRepo || !store) return problem(c, 503, 'ASSET_STORE_UNAVAILABLE', 'A verified database and original-file store are required.');
+      const clientId = await findClientRowId(db, clientRepo, scope, input.clientId);
+      if (!clientId || !await withRlsContext(db, scope, trx => trx.selectFrom('clients').select('id')
+        .where('tenant_id', '=', scope.tenantId).where('id', '=', clientId).where('status', '=', 'active')
+        .where(sql<boolean>`hawa.can_write_client(${scope.tenantId}::uuid,${clientId}::uuid)`).executeTakeFirst()))
+        return problem(c, 404, 'Client Not Found', 'Select an available writable client.');
+      try { await inspectUploadedAssetBytes(input.admittedBytes, input.mimeType); }
+      catch { throw new AssetUploadError(422, 'ASSET_CONTENT_UNREADABLE', 'The file could not be decoded within the upload limits.'); }
+      const source = await store.put(input.sourceBytes, input.mimeType);
+      const blob = input.sourceBytes.equals(input.admittedBytes) ? source : await store.put(input.admittedBytes, input.mimeType);
+      await store.read(source, { verify: true });
+      if (source.sha256 !== blob.sha256) await store.read(blob, { verify: true });
+      await chaosPoint('core.assets.after-bytes', { clientId, sourceSha256: source.sha256 });
+      const saved = await saveUploadedAsset(db, scope, { clientId, category: input.category, filename: input.filename,
+        blob, source, sanitized: input.sanitized, uploadedBy: actorId });
+      await chaosPoint('core.assets.after-receipt', { clientId, assetId: saved.assetId });
+      broadcast('asset:ingested', { assetId: saved.assetId, clientId, filename: saved.filename, sha256: saved.sha256 });
+      return c.json({ ...saved, contentUrl: `/v1/assets/${saved.assetId}/content`, sourceSha256: source.sha256 }, 201);
+    } catch (error) {
+      if (error instanceof AssetUploadError) return problem(c, error.status, error.code, error.message);
+      log.warn('[core:assets] Asset retention did not complete');
+      return problem(c, 503, 'ASSET_RETENTION_UNAVAILABLE', 'Asset retention could not be confirmed. Retry the same complete content after the source store and database are available.');
+    } finally { assetUploadActive = false; }
+  });
+
+  const uuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  const content = (original: boolean) => async (c: Context) => {
+    const auth = verifyRequestAuth(c), id = c.req.param('assetId') ?? '', source = original ? c.req.param('sourceSha256') : undefined;
+    if (!auth.authenticated || !auth.userId || auth.role === 'service') return problem(c, 401, 'Authentication Required');
+    if (!uuid(id) || (original && !isSha256Hex(source))) return problem(c, 404, 'Asset Not Found');
+    if (!db || !store) return problem(c, 503, 'ASSET_STORE_UNAVAILABLE');
+    c.header('Cache-Control', 'private, no-store');
+    try {
+      const { actorId: _actor, ...scope } = scopeOf(c);
+      const row = await uploadedAssetContent(db, scope, id, source);
+      if (!row) return problem(c, 404, 'Asset Not Found');
+      const ref = parseBlobRef({ sha256: row.sha256, mediaType: row.media_type, size: Number(row.size) });
+      if (!ref) return problem(c, 409, 'ASSET_SOURCE_NOT_RETAINED', 'This historical asset has no retained file. Supply its genuine original bytes.');
+      const bytes = await store.read(ref, { verify: true });
+      return new Response(new Uint8Array(bytes), { headers: { 'Content-Type': original ? 'application/octet-stream' : ref.mediaType,
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(row.filename)}`,
+        'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox",
+        'Cache-Control': 'private, no-store', 'X-Content-SHA256': ref.sha256, 'Content-Length': String(bytes.length) } });
+    } catch {
+      return problem(c, 503, 'ASSET_SOURCE_UNAVAILABLE', 'Restore missing or damaged source bytes before continuing.');
     }
-
-    const record = {
-      assetId,
-      clientId,
-      category,
-      filename: body.filename,
-      mimeType: validation.mimeType,
-      sha256: validation.sha256,
-      storageKey,
-      sanitized: Boolean(validation.sanitizedContent),
-      sanitizedContent: validation.sanitizedContent,
-      createdAt: new Date().toISOString(),
-    };
-    uploadedAssets.set(assetId, record);
-
-    broadcast('asset:ingested', { assetId, clientId, filename: record.filename, sha256: record.sha256 });
-
-    return c.json(record, 201);
+  };
+  registerRoute('get', '/assets/:assetId/content', content(false));
+  registerRoute('get', '/assets/:assetId/sources/:sourceSha256/content', content(true));
+  registerRoute('get', '/assets/:assetId/sources', async (c: Context) => {
+    const auth = verifyRequestAuth(c), id = c.req.param('assetId') ?? '';
+    if (!auth.authenticated || !auth.userId || auth.role === 'service') return problem(c, 401, 'Authentication Required');
+    if (!uuid(id)) return problem(c, 404, 'Asset Not Found');
+    if (!db) return problem(c, 503, 'Database Unavailable');
+    c.header('Cache-Control', 'private, no-store');
+    try {
+      const { actorId: _actor, ...scope } = scopeOf(c);
+      return await withRlsContext(db, scope, async trx => {
+        const asset = (await sql`SELECT id FROM hawa.brand_assets WHERE tenant_id=${scope.tenantId}::uuid AND id=${id}::uuid`.execute(trx)).rows[0];
+        if (!asset) return problem(c, 404, 'Asset Not Found');
+        const rows = (await sql`SELECT source_sha256 AS "sourceSha256",filename,uploaded_by AS "uploadedBy",created_at AS "createdAt"
+          FROM hawa.uploaded_asset_sources WHERE tenant_id=${scope.tenantId}::uuid AND asset_id=${id}::uuid
+          ORDER BY created_at DESC,source_sha256 DESC LIMIT 101`.execute(trx)).rows;
+        return c.json({ assetId: id, items: rows.slice(0,100), truncated: rows.length > 100 });
+      });
+    } catch { return problem(c, 503, 'ASSET_SOURCE_UNAVAILABLE'); }
   });
 
   registerRoute('post', '/assets/sanitize-svg', async (c: any) => {

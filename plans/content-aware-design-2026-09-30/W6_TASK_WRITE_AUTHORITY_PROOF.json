@@ -1,0 +1,166 @@
+{
+  "date": "2026-10-01",
+  "status": "SOURCE_7031_PASS_SYNTHETIC_CANDIDATE_232_PASS_PRODUCT_ADMISSION_OPEN",
+  "requirements": [
+    "NFR-006",
+    "FR-011",
+    "NFR-011",
+    "NFR-012"
+  ],
+  "decision": "adrs/225_task_write_scope_authority.md",
+  "baseCommit": "704074c1c708c0b95e4648b7779adc6935eb5391",
+  "reproduced": {
+    "strictTaskScopeFailures": 33,
+    "strictInitialQaFailures": 3,
+    "concurrentQaCollision": true
+  },
+  "focusedVerification": {
+    "filesPassed": 6,
+    "passed": 102,
+    "failed": 0,
+    "skipped": 0,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/VERIFIED_QA_SCOPE_AND_RERUN.log"
+  },
+  "fullSource": {
+    "commit": "70dc7d622a2d0658b7cafb75aeed4d9d139ec683",
+    "cleanTree": true,
+    "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+    "passed": 7031,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 699,
+    "strictRoots": 706,
+    "technicalStagesPassed": 7,
+    "productionDumpStage": "NOT_RUN_PENDING_TRANSFER_AUTHORIZATION",
+    "negativeFlagRefusal": true,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/RELEASE_GATE_EVIDENCE.json"
+  },
+  "candidateRecovery": {
+    "commit": "70dc7d622a2d0658b7cafb75aeed4d9d139ec683",
+    "finishedAt": "2026-10-01T20:14:00.351Z",
+    "passed": 232,
+    "failed": 0,
+    "newWriteAuthorityControls": [
+      {
+        "name": "candidate write probes use the real restricted application role",
+        "ok": true,
+        "detail": "hawa_app"
+      },
+      {
+        "name": "candidate assigned designer insert without RETURNING persists its own client task",
+        "ok": true,
+        "detail": "owner readback"
+      },
+      {
+        "name": "candidate denies a designer insert into an unassigned client without RETURNING",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate denies a derived task-event insert into an unassigned client without RETURNING",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate denies disabled-account inserts despite a retained writing grant",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate denies withdrawn office membership inserts despite a retained writing grant",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate read-only client assignment cannot insert tasks through a forged administrator claim",
+        "ok": true,
+        "detail": "SQL 42501"
+      },
+      {
+        "name": "candidate selected client cannot be replaced by a broad operator",
+        "ok": true,
+        "detail": "SQL 23514"
+      },
+      {
+        "name": "candidate selected client cannot be removed by a broad operator",
+        "ok": true,
+        "detail": "SQL 23514"
+      },
+      {
+        "name": "candidate preserves same-client and unrelated authorized task updates",
+        "ok": true,
+        "detail": "one updated task"
+      },
+      {
+        "name": "candidate migration080 receipt matches the exact source checksum",
+        "ok": true,
+        "detail": "edbec71fe1bc00dd9f1a331b0fdb44a0511a3791ed4a9ec9ee4b440f2c7ef374"
+      }
+    ],
+    "receipt": "output/qualification/2026-10-01/task-write-authority/last-run.json",
+    "recoveries": {
+      "drive": {
+        "tableCount": 105,
+        "policyCount": 177,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.626,
+        "separateHostProved": false,
+        "productionChanged": false
+      },
+      "telegram": {
+        "tableCount": 105,
+        "policyCount": 177,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 9.523,
+        "separateHostProved": false,
+        "productionChanged": false
+      }
+    }
+  },
+  "productionDeployment": "NOT_PERFORMED_BY_THIS_PATCH",
+  "productAdmission": "OPEN",
+  "sourceSha256": {
+    "apps/core/src/routes/revisions.routes.ts": "d72ec4fc17dd54120e83536174c2ec0f8126606771f0910c3fd8e5ab1cb91bb7",
+    "packages/db/migrations/080_task_write_scope_authority.sql": "edbec71fe1bc00dd9f1a331b0fdb44a0511a3791ed4a9ec9ee4b440f2c7ef374",
+    "packages/db/test/task-write-authority.test.ts": "70b23bd3c0df46eb8ec6fa9a5ea83af5343c840e3c0b096ec1fe72f3f62cd924",
+    "packages/db/test/task-write-migration.test.ts": "edb0794bad85fcb7238178d4c20a6cec22a0a0a4e3f6d49687556a2deb1ed450",
+    "apps/core/test/revision-qa-write-authority.test.ts": "0d440731240e6a9bcc7452a748775750c36067a89f20ca7a79c985c9d16c26e4",
+    "packages/testkit/chaos/driver/candidate-write-authority.ts": "d10ca28a99efded2c909c5ba0c62785b1622db67b79faa69336614ff3dcddd42"
+  },
+  "liveStatusReadback": "output/qualification/2026-10-01/task-write-authority/STATUS_READBACK.json",
+  "failureHistory": [
+    "Actual original SQL failures retained in COMPLETE_RED_WRITE_AUTHORITY.log.",
+    "Actual substituted QA identity and hidden persistence failure in RED_QA_WRITE_AUTHORITY.log.",
+    "Actual concurrent QA collision retained in QA_SCOPE_AND_RERUN.log.",
+    "Unprivileged typecheck refused local tsx IPC; scoped unchanged rerun passed all706 roots."
+  ],
+  "typecheck": {
+    "status": "PASS",
+    "activeRoots": 706,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/VERIFIED_QA_FINAL_TYPECHECK.log"
+  },
+  "cleanup": {
+    "ownedContainersAndVolumesAbsent": true,
+    "staleSyntheticSessionRemoved": true,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/OWNED_STACK_CLEANUP.log"
+  },
+  "lint": {
+    "status": "PASS",
+    "productionAnyCount": 924,
+    "ceiling": 1053,
+    "receipt": "output/qualification/2026-10-01/task-write-authority/VERIFIED_FINAL_LINT.log"
+  },
+  "integration": {
+    "currentLiveCommit": "baffce10408707f74f1265206366c0af0d482096",
+    "status": "NOT_MERGED",
+    "conflictingFiles": 12,
+    "preview": "output/qualification/2026-10-01/task-write-authority/LIVE_RELEASE_MERGE_PREVIEW.log",
+    "note": "Preserve content-aware scope, photo and refinement contracts alongside ADR236 light-first KAAE palette and ADR237 owner-directed Sol visual review. No production change by this repair."
+  }
+}

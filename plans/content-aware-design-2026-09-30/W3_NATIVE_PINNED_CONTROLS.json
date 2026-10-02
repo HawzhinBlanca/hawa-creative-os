@@ -1,0 +1,490 @@
+{
+  "controls": [
+    {
+      "name": "pale-portrait",
+      "width": 1080,
+      "height": 1350,
+      "rtl": false,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "8d271978f3a4f630b8837255afc43361ef21e1b5b47c49b4f3ce091d46d933f7",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 3.74,
+        "busyness": 0,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 1,
+          "worstComponent": 1,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 1,
+        "worstComponent": 1,
+        "componentCount": 1,
+        "featureCount": 3280,
+        "passed": true
+      },
+      "settlementMs": 1077.628083,
+      "previewSha256": "598fafc1124202e8e83c5b8ecb4a94350f5c3ef70093fb3b6c22fc6334ffdb4a",
+      "pptxSha256": "161aeebd20aceb1e78b7a76215b5404213c7ebc5bfcc0155838dab362ed2596e",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "nativeInputPptxSha256": "161aeebd20aceb1e78b7a76215b5404213c7ebc5bfcc0155838dab362ed2596e",
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.39695121951219514,
+          "worstComponent": 0.39695121951219514,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": false
+        },
+        "pngSha256": "86bed6cabb01d95537ffd4b1d5a62ae95bae2dd2a180b22981f611410120a785",
+        "pdfSha256": "c778d8178529346581558c23e34c3ee493c6eb57a9e2aca70de67e1eb692e993",
+        "fontNames": [
+          "DAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "CAAAAA+Verdana-Bold"
+        ],
+        "requestedFamilies": [
+          "Verdana"
+        ],
+        "missingFamilies": [],
+        "fontFamilyPresencePassed": true,
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 2c87e51eeaa2b413ff4ae097b2705eea1995d8e5 -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "dark-portrait",
+      "width": 1080,
+      "height": 1350,
+      "rtl": false,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "39f291616153ae4782574f5456963cb4581b71aa6f21868324ae67ec486c5535",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 17.65,
+        "busyness": 0,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 0.998780487804878,
+          "worstComponent": 0.998780487804878,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 0.998780487804878,
+        "worstComponent": 0.998780487804878,
+        "componentCount": 1,
+        "featureCount": 3280,
+        "passed": true
+      },
+      "settlementMs": 334.8405829999999,
+      "previewSha256": "34d8adf2a00842d84e09a7ca598c985897eb8f729373536b4a03f3e5632d5eb9",
+      "pptxSha256": "b986b1ad6db5ef5bfb9d5fcc367223f09381b5d051874edae5a22ace6037ccd3",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "nativeInputPptxSha256": "b986b1ad6db5ef5bfb9d5fcc367223f09381b5d051874edae5a22ace6037ccd3",
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.4054878048780488,
+          "worstComponent": 0.4054878048780488,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": false
+        },
+        "pngSha256": "c48b45accef897c880e19aeb670dcd11b957df98380fb8e05465701d7ff36c8b",
+        "pdfSha256": "e2407665f53686356f747181f9f65435bbc1f6cbcb7450ad9009a2100bcf4ecd",
+        "fontNames": [
+          "DAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "CAAAAA+Verdana-Bold"
+        ],
+        "requestedFamilies": [
+          "Verdana"
+        ],
+        "missingFamilies": [],
+        "fontFamilyPresencePassed": true,
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 2c87e51eeaa2b413ff4ae097b2705eea1995d8e5 -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "busy-portrait",
+      "width": 1080,
+      "height": 1350,
+      "rtl": false,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "2aabd2e1a11c5dcc456f77ad7c280e757c6dd3afa89f9f21a092dbb5a1585483",
+      "treatment": {
+        "treatment": "scrim",
+        "contrast": 3.77,
+        "busyness": 0.096,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 1,
+          "worstComponent": 1,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 1,
+        "worstComponent": 1,
+        "componentCount": 1,
+        "featureCount": 3280,
+        "passed": true
+      },
+      "settlementMs": 1111.8182499999998,
+      "previewSha256": "fd5dfdb152023a4893eadc7599a7590961886b5ad66d83e6c1dd99fffaa59dd9",
+      "pptxSha256": "a8ad6a5e17b80c13a0b31b5c9903f0fdd1d19a4ca8d8356becf98d3dbed4fd94",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "nativeInputPptxSha256": "a8ad6a5e17b80c13a0b31b5c9903f0fdd1d19a4ca8d8356becf98d3dbed4fd94",
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.39939024390243905,
+          "worstComponent": 0.39939024390243905,
+          "componentCount": 1,
+          "featureCount": 3280,
+          "passed": false
+        },
+        "pngSha256": "ff9c92312bda04f734bb98539ef94a57fd1571ba5cdee6ce847dfe3bef90a2f3",
+        "pdfSha256": "f4a16757e405d9e0d5c3160518b552fa1276018e122d78cffe2a5e723e84643b",
+        "fontNames": [
+          "DAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "CAAAAA+Verdana-Bold"
+        ],
+        "requestedFamilies": [
+          "Verdana"
+        ],
+        "missingFamilies": [],
+        "fontFamilyPresencePassed": true,
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 2c87e51eeaa2b413ff4ae097b2705eea1995d8e5 -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "pale-wide-rtl",
+      "width": 1920,
+      "height": 1080,
+      "rtl": true,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "449b3eaadd8d075db3f49bb6775457d9bf613e7e1b0611e3e2a28c43149b4ada",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 16.74,
+        "busyness": 0.003,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 0.9996470172961525,
+          "worstComponent": 0.9996470172961525,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 0.9996470172961525,
+        "worstComponent": 0.9996470172961525,
+        "componentCount": 1,
+        "featureCount": 5666,
+        "passed": true
+      },
+      "settlementMs": 365.4307919999992,
+      "previewSha256": "0099535acf7b76bd08910cb842983a3eb10342da6f6a89228c1bd275a9e5f853",
+      "pptxSha256": "f7433c52e7001e86f0192101637c97bdb8b88183796f6e7e1b4768b0895def32",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "nativeInputPptxSha256": "f7433c52e7001e86f0192101637c97bdb8b88183796f6e7e1b4768b0895def32",
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.5418284504059301,
+          "worstComponent": 0.5418284504059301,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": false
+        },
+        "pngSha256": "bcd33e3654d1f0fe90d30dec85836ce73c153e23420ed90a47f74efa0603a039",
+        "pdfSha256": "85ec695d54bc8c8451674d99f88cfcf7c259128b7c08dc55e861cca17447e676",
+        "fontNames": [
+          "DAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "CAAAAA+Verdana-Bold"
+        ],
+        "requestedFamilies": [
+          "Verdana"
+        ],
+        "missingFamilies": [],
+        "fontFamilyPresencePassed": true,
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 2c87e51eeaa2b413ff4ae097b2705eea1995d8e5 -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "dark-wide-rtl",
+      "width": 1920,
+      "height": 1080,
+      "rtl": true,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "39f291616153ae4782574f5456963cb4581b71aa6f21868324ae67ec486c5535",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 18.11,
+        "busyness": 0,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 0.9996470172961525,
+          "worstComponent": 0.9996470172961525,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 0.9996470172961525,
+        "worstComponent": 0.9996470172961525,
+        "componentCount": 1,
+        "featureCount": 5666,
+        "passed": true
+      },
+      "settlementMs": 316.862083,
+      "previewSha256": "43f4c0632d96bae1af35b064c1654c2c3181346e0f97964c3847a73b1d3ceaf5",
+      "pptxSha256": "076102cc347ca9de6b70060140044e53b68329afd7ab03e8edcd78681b1bb32f",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "nativeInputPptxSha256": "076102cc347ca9de6b70060140044e53b68329afd7ab03e8edcd78681b1bb32f",
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.5418284504059301,
+          "worstComponent": 0.5418284504059301,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": false
+        },
+        "pngSha256": "20b6438ec80c74a7209f3456e71fa2e077e58c81f078b227d27596043a75a1a9",
+        "pdfSha256": "fe89da443a4bf8923f26305ec0d9942eef8df83e6e951e809f3e47c8cd99ab4a",
+        "fontNames": [
+          "DAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "CAAAAA+Verdana-Bold"
+        ],
+        "requestedFamilies": [
+          "Verdana"
+        ],
+        "missingFamilies": [],
+        "fontFamilyPresencePassed": true,
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 2c87e51eeaa2b413ff4ae097b2705eea1995d8e5 -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    },
+    {
+      "name": "busy-wide",
+      "width": 1920,
+      "height": 1080,
+      "rtl": false,
+      "logoHash": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+      "sourceHash": "2aabd2e1a11c5dcc456f77ad7c280e757c6dd3afa89f9f21a092dbb5a1585483",
+      "treatment": {
+        "treatment": "none",
+        "contrast": 18.13,
+        "busyness": 0.015,
+        "visibility": {
+          "method": "source-edges-v1",
+          "coverage": 0.9996470172961525,
+          "worstComponent": 0.9996470172961525,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": true
+        }
+      },
+      "reading": {
+        "method": "source-edges-v1",
+        "coverage": 0.9996470172961525,
+        "worstComponent": 0.9996470172961525,
+        "componentCount": 1,
+        "featureCount": 5666,
+        "passed": true
+      },
+      "settlementMs": 331.95366699999977,
+      "previewSha256": "bafb72478f9b1d2b97ec4433d9137dbfa2ca72c07fb4a785150177a09350ab20",
+      "pptxSha256": "1aae389d6b4be6a253108eacccd1430a003ce68024d97bfea5d8c952047474f2",
+      "sourceIdentityPassed": true,
+      "hardQaPassed": true,
+      "nativeInputPptxSha256": "1aae389d6b4be6a253108eacccd1430a003ce68024d97bfea5d8c952047474f2",
+      "native": {
+        "reading": {
+          "method": "source-edges-v1",
+          "coverage": 0.5418284504059301,
+          "worstComponent": 0.5418284504059301,
+          "componentCount": 1,
+          "featureCount": 5666,
+          "passed": false
+        },
+        "pngSha256": "a02c93451fbd64e297679c86fd0a64b9da63041ebf52243dc58fc057557a6e71",
+        "pdfSha256": "0bc38428e2a6a658c6187aa138ba9c274dd93011430d06c999d9b148de8d04a5",
+        "fontNames": [
+          "DAAAAA+Verdana",
+          "BAAAAA+Verdana-Bold",
+          "CAAAAA+Verdana-Bold"
+        ],
+        "requestedFamilies": [
+          "Verdana"
+        ],
+        "missingFamilies": [],
+        "fontFamilyPresencePassed": true,
+        "renderer": "LibreOfficeDev 26.8.0.0.alpha0 2c87e51eeaa2b413ff4ae097b2705eea1995d8e5 -> pdftoppm96dpi; no logo mask or coordinate search",
+        "passed": false
+      }
+    }
+  ],
+  "providerCalls": 0,
+  "canvaQualification": "NOT_RUN",
+  "humanCalibration": "NOT_RUN",
+  "nativeTypographyQualification": "FONT_FAMILY_PRESENCE_PASS_ONLY: actual glyph/ink/bidi/Canva fidelity NOT_RUN",
+  "nativeExport": {
+    "input": "/private/tmp/hawa-w3-logo-controls-20260930",
+    "renderer": "LibreOfficeDev 26.8.0.0.alpha0 2c87e51eeaa2b413ff4ae097b2705eea1995d8e5",
+    "options": {
+      "UseLosslessCompression": {
+        "type": "boolean",
+        "value": "true"
+      },
+      "ReduceImageResolution": {
+        "type": "boolean",
+        "value": "false"
+      }
+    },
+    "fontInventory": [
+      {
+        "name": "package/Amiri-Bold.ttf",
+        "sha256": "cfccb794268e7d573d857e6d6a67f89cf8a053e8ffd85dfa0c8ec1bb36fc4827"
+      },
+      {
+        "name": "package/Amiri-Regular.ttf",
+        "sha256": "ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7"
+      },
+      {
+        "name": "package/Cairo-Regular.ttf",
+        "sha256": "667c987182391c91f4e57a2f455b1794fb5e3ee6ca4ef3383e86bb690fa9c964"
+      },
+      {
+        "name": "package/Cinzel-Bold.ttf",
+        "sha256": "2c6b1ff0d368efb73636700b69dbef707fa5602a06d085a4e91e5125082651f0"
+      },
+      {
+        "name": "package/Cinzel-SemiBold.ttf",
+        "sha256": "5150b3609eeaaa9c6d7e093cb9b16ab8ec2f7110ddf0cbe751887e6f158398af"
+      },
+      {
+        "name": "package/HawaSymbols-Bold.ttf",
+        "sha256": "1dc566e8b82122f70b1c880f4e4a816891bcc8b063dd49c7a228ca8e92d94665"
+      },
+      {
+        "name": "package/HawaSymbols-Regular.ttf",
+        "sha256": "0ebe724c802409485b413a7a79d436460ddd3a2e9e19f23c30bb4f86c39506a2"
+      },
+      {
+        "name": "package/IBMPlexSansArabic-Bold.ttf",
+        "sha256": "691e0c891a38637ae6bbdb69700f8042cb0724a137bee615068ffdb92244f61f"
+      },
+      {
+        "name": "package/IBMPlexSansArabic-Regular.ttf",
+        "sha256": "6f611412270a132bbac838da9259d4c68569b4175f3b3b8fa3fa36a30b56dab9"
+      },
+      {
+        "name": "package/Inter-Black.ttf",
+        "sha256": "c32b6c08dea050086fa789eafa414fa3768721a8063b54bce2ef0b3c287e1d2d"
+      },
+      {
+        "name": "package/Inter-Bold.ttf",
+        "sha256": "c0ce77048ab920e0fbfc167bb647b6795c71eadce34781061aea272c57fc3443"
+      },
+      {
+        "name": "package/Inter-ExtraBold.ttf",
+        "sha256": "4c7c1cdb4365b130b400f8679cf4e00b451a4f3ddc0773dd0de0bd25a1cfe016"
+      },
+      {
+        "name": "package/Inter-Medium.ttf",
+        "sha256": "638a0061c7615acd491523a27c8ed50c18d5448e2b668b92f93003f63cbc64b1"
+      },
+      {
+        "name": "package/Inter-Regular.ttf",
+        "sha256": "00ba8f073d30f44ba2f950e6d4112713cd34ea51e002f3e2c19b07644d115d57"
+      },
+      {
+        "name": "package/Inter-SemiBold.ttf",
+        "sha256": "9645b86eff5cc928aa7345bd76e61187096d2f2ce5623a550de1ee93f58e6293"
+      },
+      {
+        "name": "package/NotoSansArabic-Bold.ttf",
+        "sha256": "f4cb79f842a07d1bcf597879574358fb7010f73761396d1d0f2445dfedb4d2ca"
+      },
+      {
+        "name": "package/NotoSansArabic-Regular.ttf",
+        "sha256": "bd86ca02f087d7f3c3788ba458fb6b73744c7639ed276b8d870dba6def6c40d0"
+      },
+      {
+        "name": "package/PlayfairDisplay-Bold.ttf",
+        "sha256": "adefc53e7b3d483f1fa5e85edd82b7689ca79db25a1f6786bd7949cdcfeec601"
+      },
+      {
+        "name": "package/PlayfairDisplay-Italic.ttf",
+        "sha256": "5b667e91b59a4e1d7985eb9933be7f03ad46e1ea6380b8e729ff6f136ef2ab42"
+      },
+      {
+        "name": "package/PlusJakartaSans-Bold.ttf",
+        "sha256": "32971ad7976930539a11c79ce91ce84092df7f25c5be716b594601842f10a7ae"
+      },
+      {
+        "name": "package/PlusJakartaSans-Regular.ttf",
+        "sha256": "b4fc14ec283d54236fd302cdb92546f98ae0ff061ca5ee23453a02bdf4628791"
+      },
+      {
+        "name": "package/Vazirmatn-Bold.ttf",
+        "sha256": "f635fdbea28f265de395ba83b4b1570dcf2f58d13c65469e61903b1c2d2ae723"
+      },
+      {
+        "name": "package/Vazirmatn-Regular.ttf",
+        "sha256": "b69fd4c680b8f3f225feabcc655a2c585d97627b8f5f5c0f9985e894069f3a56"
+      },
+      {
+        "name": "system//System/Library/Fonts/Supplemental/Verdana Bold Italic.ttf",
+        "sha256": "252ef50efa09218d77d83311b531c14d7c0d45230e79389bd3db78448bc942f4"
+      },
+      {
+        "name": "system//System/Library/Fonts/Supplemental/Verdana Bold.ttf",
+        "sha256": "480f66b66430bdfa6e9a2199e4bf8f79d915221e60d58e7a32b4ff50645de2e0"
+      },
+      {
+        "name": "system//System/Library/Fonts/Supplemental/Verdana Italic.ttf",
+        "sha256": "a1149e84da9e5c0a9b4cad68b62542b8503cb16ed8d1d7efd2640b36ce202b44"
+      },
+      {
+        "name": "system//System/Library/Fonts/Supplemental/Verdana.ttf",
+        "sha256": "0da8c12f3e15d95585434d2cf294b3113a3e3fc84bf9ba9d64f2ef834ef4bd98"
+      }
+    ],
+    "fontconfigSha256": "fa14c7d8b669b290a588145ac35dd7d0671e76e4ac9f2fb549a3a96270246b08",
+    "scope": "Independent offline diagnostic; family presence cannot establish glyph, ink, bidi, Canva or human fidelity."
+  },
+  "nativeDeclaredFontFamiliesPassed": true,
+  "nativeVisibilityPassed": false
+}

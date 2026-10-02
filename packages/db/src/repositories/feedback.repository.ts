@@ -2,6 +2,7 @@ import type { Kysely } from 'kysely';
 import type { Database, FeedbackEventsTable } from '../types.js';
 
 export interface CreateFeedbackEventParams {
+  id?: string;
   tenantId: string;
   clientId: string;
   projectId?: string | null;
@@ -28,6 +29,7 @@ export class FeedbackRepository {
     const [event] = await dbClient
       .insertInto('feedback_events')
       .values({
+        ...(params.id ? { id: params.id } : {}),
         tenant_id: params.tenantId,
         client_id: params.clientId,
         project_id: params.projectId || null,

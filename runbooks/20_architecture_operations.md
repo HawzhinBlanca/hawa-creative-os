@@ -582,3 +582,40 @@ Brief to first draft, 10 chats at once, from pickup (10 of 10 drafts, no errors,
   Nothing else about it changes: its paid call stays unresolved and its task is not planned again
   until an operator reconciles it (ADR-101).
 - **A refused brief costs nothing:** no plan row, no admitted call, no allowance reserved.
+
+### Scoped live updates (ADR223, 1 October 2026)
+
+Live updates use the same current PostgreSQL task/client access as ordinary reads.
+A designer can have several assigned clients; the stream honors new grants and
+withdrawals without reconnecting. Shared trusted-office access keeps its existing
+office-wide operator identity. A named credential retains its own permissions.
+
+The stream sends no resource payload when its current scope cannot be verified.
+It closes on an authorization/read/write error or 64 pending events. Desk asks
+for a fresh one-use ticket on reconnect and uses its existing polling fallback
+while the stream is unavailable. Closing one subscription does not cancel a task
+or change a committed approval/publication. Same-instance sign-out is checked
+before the next event; other-instance session revocation retains the existing
+60-second refresh cache and 15-second heartbeat policy. Client/tenant memberships
+are never cached by the event disclosure check.
+
+Connected reproduction and exact candidate evidence:
+`plans/content-aware-design-2026-09-30/W6_STREAM_ISOLATION_PROOF.json`.
+
+
+### Account and office membership withdrawal (ADR224)
+
+Disabling a user's stored account or deactivating/removing all of their tenant
+memberships removes subsequent SQL-backed resource read/write authority, even
+when client grants or a Desk session remain. Re-enabling the account and explicit
+active membership restores only their existing client roles; no new client or
+operator grant is inferred. The user can still display a cached sign-in until
+session refresh, while resource requests refuse. Current permissions are never
+recovered from a process cache. Existing worker/system accounts must retain their
+explicit office membership and narrow grants for their admitted jobs.
+
+Migration079 replaces only existing helpers, preserves their ACLs and statement
+InitPlan policy shape, and changes no business rows. Do not restore historical
+client-only admission or deploy a helper rollback that recreates the revoked
+account access. Production-data migration checking and rollout are separate gates.
+Evidence: `plans/content-aware-design-2026-09-30/W6_CURRENT_MEMBERSHIP_PROOF.json`.

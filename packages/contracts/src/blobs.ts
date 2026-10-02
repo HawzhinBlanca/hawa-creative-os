@@ -8,6 +8,10 @@
 
 /** The media types the store accepts, with the extension each file gets on disk. */
 export const BLOB_MEDIA_TYPES = {
+  'image/svg+xml': 'svg',
+  'font/ttf': 'ttf',
+  'font/otf': 'otf',
+  'font/woff2': 'woff2',
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
@@ -78,6 +82,11 @@ export function sniffBlobMediaType(bytes: Uint8Array): BlobMediaType | undefined
   if (b.length >= 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
   if (b.length >= 6 && (ascii(0, 6) === 'GIF87a' || ascii(0, 6) === 'GIF89a')) return 'image/gif';
   if (b.length >= 5 && ascii(0, 5) === '%PDF-') return 'application/pdf';
+  if (b.length >= 12 && (ascii(0, 4) === 'true' || (b[0] === 0 && b[1] === 1 && b[2] === 0 && b[3] === 0))) return 'font/ttf';
+  if (b.length >= 12 && ascii(0, 4) === 'OTTO') return 'font/otf';
+  if (b.length >= 48 && ascii(0, 4) === 'wOF2') return 'font/woff2';
+  const text = new TextDecoder('utf-8').decode(b.subarray(0, 4096));
+  if (/^\s*(?:<\?xml[\s\S]*?\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg(?:\s|>)/i.test(text)) return 'image/svg+xml';
   // Storage sniff only; source admission performs full bounded Ogg/Opus inspection.
   if (b.length >= 47 && ascii(0, 4) === 'OggS' && b[4] === 0 && b[26] === 1 &&
       ascii(28, 36) === 'OpusHead') return 'audio/ogg';

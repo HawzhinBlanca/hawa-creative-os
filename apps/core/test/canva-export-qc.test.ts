@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { checkCanvaPptx } from '@hawa/qa';
 import { evaluateCanvaExportQc } from '../src/app.js';
+import { scriptFontDeck, scriptFontRun } from '../../../packages/qa/test/fixtures/script-font-deck.js';
 
 /**
  * The approval gate reads the qc_runs row this evaluator produces for a Canva draft. An earlier
@@ -81,6 +82,31 @@ const storedRow = (bytes: Uint8Array) => ({
 });
 
 describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
+  it.each([
+    {text:'Hello',face:'Verdana Fake',expected:'Verdana'},
+    {text:'سڵاو',face:'Noto Sans Arabic Fake',expected:'Noto Sans Arabic'},
+  ])('refuses a prefixed wrong family despite a stored version8 pass: $text', ({text,face,expected}) => {
+    const bytes=scriptFontDeck(scriptFontRun(text,face,face));
+    const old={...checkCanvaPptx(bytes,[text],{fontsByIndex:[expected]}),checkVersion:8,fontPass:true};
+    const result=evaluateCanvaExportQc({sha256:sha256(bytes),format:'pptx',content:bytes,content_check:old},[text]);
+    expect(result.criticalPass).toBe(false);
+    expect(result.qaReport.copyFidelity).toBe(true);
+    expect(result.qaReport.fontFamilyPass).toBe(false);
+    expect(result.qaReport.fontCoverage).toBeNull();
+  });
+  it.each([
+    {text:'سڵاو',latin:'Noto Sans Arabic',arabic:'Arial',expected:'Noto Sans Arabic'},
+    {text:'Hello',latin:'Arial',arabic:'Verdana',expected:'Verdana'},
+  ])('rechecks the used generated font slot despite a stored version7 pass: $text', ({text,latin,arabic,expected}) => {
+    const bytes=scriptFontDeck(scriptFontRun(text,latin,arabic));
+    const old={...checkCanvaPptx(bytes,[text],{fontsByIndex:[expected]}),checkVersion:7,fontPass:true};
+    const result=evaluateCanvaExportQc({sha256:sha256(bytes),format:'pptx',content:bytes,content_check:old},[text]);
+    expect(result.criticalPass).toBe(false);
+    expect(result.qaReport.copyFidelity).toBe(true);
+    expect(result.qaReport.fontFamilyPass).toBe(false);
+    expect(result.qaReport.fontCoverage).toBeNull();
+    expect(result.qaReport.errors.join(' ')).toMatch(/font/i);
+  });
   it('passes an export whose copy, fonts and direction survived Canva, and says what it did not measure', () => {
     const r = evaluateCanvaExportQc(storedRow(pptx()), COPY);
     expect(r.status).toBe('passed');

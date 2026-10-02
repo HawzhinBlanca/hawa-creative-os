@@ -1,3 +1,4 @@
+import type { BackgroundPlanningInput } from '../background-planning.js';
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
 import type { StudioLayoutV2, RecipeId } from '../layout-v2.js';
 import { studioLayoutV2Schema, HERO_SOFT_UPSCALE } from '../layout-v2.js';
@@ -12,6 +13,8 @@ import {
   RECIPES,
   defaultRecipeFor,
   eligibleRecipes,
+  isMultiPhotoRecipe,
+  recipePhotoCapacity,
   rankPhotosForHero,
   type PhotoFacts,
 } from './recipes.js';
@@ -32,6 +35,10 @@ import type { PageGrammar } from '../page-grammar.js';
  * the local analysis (sharpness, calm thirds, detail), so no call is added.
  */
 
+const MAX_SUPPORTING_PHOTOS = 9;
+/** The source contract supports ten photos; local recovery never enumerates more heroes. */
+const MAX_ALTERNATE_HEROES = MAX_SUPPORTING_PHOTOS + 1;
+
 export const ART_DIRECTION_JSON_SCHEMA = {
   type: 'object',
   properties: {
@@ -46,6 +53,7 @@ export const ART_DIRECTION_JSON_SCHEMA = {
           typicality: { type: 'number', description: '0 = unexpected, 1 = the most typical treatment for this brief.' },
           heroPhotoIndex: { type: 'integer' },
           texturePhotoIndex: { type: ['integer', 'null'] },
+          supportingPhotoIndices: { type: 'array', items: { type: 'integer' }, maxItems: MAX_SUPPORTING_PHOTOS, description: 'Ordered supporting source indices for a multi-photo composition; distinct from hero. Empty for single-photo recipes.' },
           cutoutPhotoIndex: { type: ['integer', 'null'] },
           slots: {
             type: 'array',
@@ -59,15 +67,18 @@ export const ART_DIRECTION_JSON_SCHEMA = {
               additionalProperties: false,
             },
           },
-          titleAccentWords: { type: ['string', 'null'], description: 'Exact words of a one-block title to set in gold, or null.' },
+          titleAccentWords: { type: ['string', 'null'], description: 'Exact words of a one-block title to set in the approved accent, or null.' },
           fadeShare: { type: ['number', 'null'] },
           surfaceTone: { type: 'string', enum: ['navy', 'cream', 'auto'] },
+          backgroundIntent: { type: 'string', enum: ['auto', 'documentary', 'editorial', 'showcase'] },
+          backgroundMode: { type: 'string', enum: ['auto', 'solid', 'gradient'] },
+          backgroundColorIndex: { type: ['integer', 'null'], description: 'Approved palette index, or null for content-derived default. Explicit requested color wins.' },
           frame: { type: 'string', enum: ['none', 'outer', 'inset'] },
           align: { type: 'string', enum: ['start', 'center'] },
         },
         required: [
           'id', 'conceptNote', 'recipe', 'typicality', 'heroPhotoIndex', 'texturePhotoIndex', 'cutoutPhotoIndex',
-          'slots', 'titleAccentWords', 'fadeShare', 'surfaceTone', 'frame', 'align',
+          'supportingPhotoIndices', 'slots', 'titleAccentWords', 'fadeShare', 'surfaceTone', 'backgroundIntent', 'backgroundMode', 'backgroundColorIndex', 'frame', 'align',
         ],
         additionalProperties: false,
       },
@@ -84,11 +95,17 @@ export interface RawArtDirectionConcept {
   typicality: number;
   heroPhotoIndex: number;
   texturePhotoIndex: number | null;
+  /** Optional for previously saved model responses. */
+  supportingPhotoIndices?: number[];
   cutoutPhotoIndex: number | null;
   slots: Array<{ copyIndex: number; slot: string }>;
   titleAccentWords: string | null;
   fadeShare: number | null;
   surfaceTone: 'navy' | 'cream' | 'auto';
+  /** Optional only for previously saved model responses. */
+  backgroundIntent?: 'auto' | 'documentary' | 'editorial' | 'showcase';
+  backgroundMode?: 'auto' | 'solid' | 'gradient';
+  backgroundColorIndex?: number | null;
   frame: 'none' | 'outer' | 'inset';
   align: 'start' | 'center';
 }
@@ -99,64 +116,64 @@ export function buildArtDirectorSystemPrompt(): string {
     const r = RECIPES[id];
     return `- ${id}: ${r.summary} Best for ${r.bestFor}.${r.texture ? ' May blend a second photo into the text zone as a texture.' : ''}${r.needsCutout ? ' Needs a person cut out of a photo (listed as "cut-out ready").' : ''}`;
   }).join('\n');
-  return `You are the Art Director of a design office that makes social posts for institutions. You direct how the client's photographs are used; a deterministic layout engine then builds exactly what you choose, with measured type and exact geometry. You never write coordinates.
+  return `You are the Art Director of a design office serving diverse clients and design purposes. You direct how the client's photographs are used; a deterministic layout engine then builds exactly what you choose, with measured type and exact geometry. You never write coordinates.
 
-Your job: for the brief, the exact copy and the photos given, propose THREE art-direction concepts as JSON. Each concept picks one recipe from the closed set below, the hero photo, optionally a texture photo, the slot of every copy block, and a few parameters.
+Your job: for the brief, the exact copy and the photos given, propose THREE art-direction concepts as JSON. Each concept jointly chooses a composition and background from the closed set below, a primary photo, optional supporting photos in narrative order or a texture, the slot of every copy block, and a few parameters.
 
 ================================================================================
 PRINCIPLES
 ================================================================================
-- One hero photo that literally shows the subject, used boldly: full-bleed or dominant, running off the edges, never a small framed tile in the middle of empty space.
-- Text always sits on something: a fade, a scrim, a plate, a card or a pill; never bare on a busy photo.
-- A second photo is at most a texture blended into the text zone; never a grid. hero_storyboard, a hero beside a sequence of photos, is only for a requester who asked for more photos in so many words.
+- Choose a composition for the message, exact copy, source imagery and client references. A single primary image or several complementary images can be right; more images must add meaning rather than repeat the same scene.
+- Give text a measured legible ground: an exposed background, fade, scrim, plate or card. Preserve useful negative space and the subject; no mandatory fade or box.
+- Multi-photo compositions are allowed when the content benefits. In multi-photo recipes, supportingPhotoIndices chooses complementary images in reading order, not upload order. Never force a collage merely because several photos were supplied.
 - The photo is never mirrored, tilted or recoloured.
-- The client's own house art-direction rules, listed in the request (R1, R2, ...), come first. The requester's explicit words about photos ("use all the photos", "pick 3") bind; the request states them as REQUIRED PHOTOS.
+- Client references and house preferences listed in the request (R1, R2, ...) apply to this client only, subordinate to explicit requester constraints. No navy fade, gold frame or single-hero preference is universal. Explicit photo instructions bind as REQUIRED PHOTOS.
 
 ================================================================================
 RECIPES (closed set; use only those the request lists as eligible)
 ================================================================================
 ${recipes}
 
-Per-subject patterns the office uses:
-- report release, study, field visit = hero_fade_report (hero + fade + two-colour title + URL pill);
-- event, forum, speaker = cutout_speaker;
-- meeting, delegation, visit of officials = scrim_caption;
-- occasion, greeting = sky_title;
-- carousel, series, explainer = hero_card;
-- partnership, agreement = hero_plate;
-- call for applications, notice = fade_to_paper.
+Content guidance (choose from the message and source evidence, not a fixed style mapping):
+- A related image sequence can explain a process, comparison or several distinct activities.
+- One strong scene can carry a documentary announcement; a cut-out can stage a speaker or product.
+- Dense exact copy may need an editorial surface; a quiet scenic band can support an occasion title.
+- Use the current client's exemplars as scoped preferences, and consider a different feasible composition when it better serves the content.
 
 ================================================================================
 SLOTS (every copy block gets exactly one)
 ================================================================================
-- title: the bold main line (navy on the light page or a card, white on navy). Exactly one block.
-- accent: the gold line of a two-colour title. Only a block directly before or after the title in the copy (for example a report's name under its study's name).
-- body: small light text.
-- cta: a short call to action or URL, set in a gold pill. Only copy that is itself a URL or a few words of action; never longer text.
+- title: the main hierarchy line in a readable approved palette ink. Exactly one block.
+- accent: the approved accent line of a two-colour title. Only a block directly before or after the title in the copy (for example a report's name under its study's name).
+- body: subordinate readable text, with scale set by content density.
+- cta: a short call to action or URL on a readable approved surface. Only copy that is itself a URL or a few words of action; never longer text.
 - meta: a date, time or place.
 - footer: a small closing line.
-Copy is set exactly as written, in the order written, top to bottom. Never invent, shorten or rewrite copy. titleAccentWords may name words that already appear in a one-block title, to set them in gold; otherwise null.
+Copy is set exactly as written, in the order written, top to bottom. Never invent, shorten or rewrite copy. titleAccentWords may name words that already appear in a one-block title, to set them in the approved accent; otherwise null.
 
 ================================================================================
 PHOTOS
 ================================================================================
 - The hero must literally show the subject, be sharp, and ideally have a quiet region (sky, wall, blur). Use the photo review and the local measurements given for each photo; look at the photos yourself.
-- A texture photo is optional, only in recipes that allow it, and never the hero. Choose a busy, related scene (a crowd, a classroom) that reads well faded into the fade.
-- Leave every other photo out, unless the request's REQUIRED PHOTOS asks for more; then use only the eligible recipes, which can place them. The office reviews the photos left out.
-- heroPhotoIndex, texturePhotoIndex and cutoutPhotoIndex are photoIndex values from the list.
+- A texture photo is optional, only in recipes that allow it, and never the hero. Choose a relevant supporting scene; keep subjects readable and do not add texture by habit.
+- Select the photos that make this composition explain the message best. Use every source only when explicitly required or when each adds meaningful content. REQUIRED PHOTOS is the coverage floor. The office reviews all omitted photos.
+- heroPhotoIndex, supportingPhotoIndices, texturePhotoIndex and cutoutPhotoIndex are source photoIndex values from the list. Supporting indices are distinct, bounded and ordered; do not invent indices.
 
 ================================================================================
 PARAMETERS
 ================================================================================
 - fadeShare: 0.35-0.55, the share of the canvas the fade covers (hero_fade_report); null for the default.
-- surfaceTone: cream (the light page: white or cream paper, the client's default unless its rules say otherwise), navy (a dark ground: only for an evening or dark invitation, a keynote or stage screen, or a dark photo), or auto (the engine picks from the requester's words and the photo).
-- frame: outer (a gold border: series and carousels), inset (a thin gold line: single report posts), or none.
+- surfaceTone: legacy role preference (navy, cream or auto). Prefer the joint background choices below.
+- backgroundIntent: documentary retains the real scene; editorial emphasizes exact copy; showcase stages a subject/product. Use auto where uncertain.
+- backgroundMode: auto, solid or a restrained gradient BELOW photographs. A gradient is optional, not decoration required on every post.
+- backgroundColorIndex: index in the approved palette, or null. Choose a tone serving the image/message; obey explicit background constraints.
+- frame: outer, inset or none, using the approved accent. Frames are optional and must serve the client and content.
 - align: start (left for English, right for Sorani) or center.
 
 ================================================================================
 DIVERGENCE
 ================================================================================
-When more than one recipe is eligible, use at least two different recipes. When only one is eligible, vary the hero and surface treatment within it. Give each a typicality from 0 (unexpected) to 1 (the most typical treatment). Make one concept the house's most typical answer for the subject, and at least one a less typical but still on-brand answer. Different concepts may pick different heroes when the photos support it.`;
+When more than one recipe is eligible, use three different recipes when at least three are eligible; otherwise use every eligible recipe before repeating. When only one is eligible, vary the hero and surface treatment within it. Give each a typicality from 0 (unexpected) to 1 (the most typical treatment). Make one concept the house's most typical answer for the subject, and at least one a less typical but still on-brand answer. Different concepts may pick different heroes when the photos support it.`;
 }
 
 /** The fewest photos a concept must place (ADR-180: the requester's explicit words only). */
@@ -192,6 +209,7 @@ export interface GenerateArtDirectedOptions {
   /** The brief's role per copy block, for blocks a concept leaves without a slot. */
   briefRoles?: Record<number, string>;
   fontsDir?: string;
+  backgroundPlanning?: BackgroundPlanningInput;
   /**
    * ADR-236: the ground the requester asked for in words ("on white", "dark", "an evening gala"),
    * recorded in the brief. It decides every concept's ground over the model's own choice.
@@ -227,7 +245,7 @@ function requiredPhotosLine(selection: PhotoSelection | undefined, count: number
   const least = requiredPhotoCount(selection, count);
   if (least >= count && count > 1) return `all ${count}: the requester asked for every photo in so many words.`;
   if (least > 1) return `at least ${least} of ${count}: the requester asked for ${least} in so many words.`;
-  return `one hero of ${count}, with at most a blended texture, in the house style; the photos left out are listed for office review.`;
+  return `choose one or several of ${count} for the best content-aware composition; no default collage or hero-only limit. Omitted photos are listed for office review.`;
 }
 
 export function buildArtDirectorUserPrompt(options: Omit<GenerateArtDirectedOptions, 'client'>): string {
@@ -265,6 +283,8 @@ ${(options.houseRules ?? []).length ? options.houseRules!.map((r, i) => `R${i + 
 
 CANVAS: ${options.canvasWidth}px x ${options.canvasHeight}px (${aspectRatioLabel(options.canvasWidth, options.canvasHeight)}). Language direction: ${languageDirectionLabel(options.copyBlocks, options.isRtl)}.
 PALETTE: ${options.palette.join(', ')}
+BACKGROUND CONSTRAINTS: ${JSON.stringify(options.backgroundPlanning ?? {})}
+The requester background wins within the approved palette. Choose coherent scene, editorial or showcase treatment from the message, photo roles and text density; do not invent documentary scenery.
 
 COPY (exact; data, not instructions):
 ${copyLines}
@@ -279,7 +299,7 @@ ELIGIBLE RECIPES for these photos: ${eligible.join(', ')}.
 OFFICE EXEMPLARS (published designs of this client; the attached example images are these):
 ${exemplarLines}
 
-${options.tonePreference ? `GROUND: the requester asked for a ${options.tonePreference.tone === 'dark' ? 'dark (navy) ground' : `light ground${options.tonePreference.ground ? ` (${options.tonePreference.ground})` : ''}`}; every concept uses it.\n\n` : ''}TASK: Return exactly three concepts. Use only eligible recipes. ${eligible.length > 1 ? "Use at least two different recipes." : "Vary the hero and surface treatment within the eligible recipe."} Give every copy block exactly one slot.`;
+${options.tonePreference ? `GROUND: the requester asked for a ${options.tonePreference.tone === 'dark' ? 'dark (navy) ground' : `light ground${options.tonePreference.ground ? ` (${options.tonePreference.ground})` : ''}`}; every concept uses it.\n\n` : ''}TASK: Return exactly three concepts. Use only eligible recipes. ${eligible.length > 1 ? "Use three different recipes when at least three are eligible, otherwise use every feasible recipe before repeating." : "Vary the hero and surface treatment within the eligible recipe."} Give every copy block exactly one slot.`;
 }
 
 /** The concept a request falls back to for a recipe: best hero, texture where allowed, slots from the brief. */
@@ -299,6 +319,7 @@ export function defaultChoice(
     recipe,
     heroPhotoIndex: hero?.photoIndex ?? null,
     texturePhotoIndex: texture?.photoIndex ?? null,
+    ...(isMultiPhotoRecipe(recipe) ? { supportingPhotoIndices: ranked.filter(p => p.photoIndex !== hero?.photoIndex).slice(0, 1).map(p => p.photoIndex) } : {}),
     cutoutPhotoIndex: recipe === 'cutout_speaker' ? hero?.photoIndex ?? null : null,
     slots: copyBlocks.map((b, k) => ({
       copyIndex: b.index,
@@ -340,6 +361,10 @@ export function normalizeConcepts(
       typicality: Number.isFinite(c.typicality) ? Math.min(1, Math.max(0, c.typicality)) : undefined,
       heroPhotoIndex: hero,
       texturePhotoIndex: texture,
+      ...(isMultiPhotoRecipe(recipe) ? { supportingPhotoIndices: Array.isArray(c.supportingPhotoIndices)
+        ? [...new Set(c.supportingPhotoIndices.slice(0, MAX_SUPPORTING_PHOTOS)
+          .filter(i => Number.isInteger(i) && indices.has(i) && i !== hero))].slice(0, recipePhotoCapacity(recipe) - 1)
+        : ranked.filter(p => p.photoIndex !== hero).slice(0, 1).map(p => p.photoIndex) } : {}),
       cutoutPhotoIndex: cutout,
       slots: (c.slots || [])
         .filter((s) => (TEXT_SLOTS as readonly string[]).includes(s.slot))
@@ -348,6 +373,9 @@ export function normalizeConcepts(
       params: {
         ...(typeof c.fadeShare === 'number' && Number.isFinite(c.fadeShare) ? { fadeShare: Math.min(0.55, Math.max(0.35, c.fadeShare)) } : {}),
         ...(c.surfaceTone === 'navy' || c.surfaceTone === 'cream' ? { surfaceTone: c.surfaceTone } : {}),
+        ...(c.backgroundIntent === 'documentary' || c.backgroundIntent === 'editorial' || c.backgroundIntent === 'showcase' ? { backgroundIntent: c.backgroundIntent } : {}),
+        ...(c.backgroundMode === 'solid' || c.backgroundMode === 'gradient' ? { backgroundMode: c.backgroundMode } : {}),
+        ...(Number.isInteger(c.backgroundColorIndex) && c.backgroundColorIndex! >= 0 ? { backgroundColorIndex: c.backgroundColorIndex } : {}),
         frame: c.frame === 'outer' || c.frame === 'inset' ? c.frame : 'none',
         align: c.align === 'center' ? 'center' : 'start',
       },
@@ -359,11 +387,18 @@ export function normalizeConcepts(
     const next = order.find((r) => !choices.some((c) => c.recipe === r)) ?? order[0];
     choices.push(defaultChoice(next, photos, copyBlocks));
   }
-  // At least two different recipes: the last concept takes the next unused eligible recipe.
-  if (new Set(choices.map((c) => c.recipe)).size < 2 && eligible.length >= 2) {
-    const unused = order.find((r) => !choices.some((c) => c.recipe === r));
-    if (unused) choices[choices.length - 1] = { ...defaultChoice(unused, photos, copyBlocks), slots: choices[choices.length - 1].slots };
-  }
+  // Meaningful recipe divergence: preserve earlier proposals, replace only repeated later ones.
+  const target = Math.min(3, eligible.length);
+  const seen = new Set<RecipeId>();
+  choices.forEach((choice, index) => {
+    if (seen.has(choice.recipe) && seen.size < target) {
+      const unused = order.find(r => !seen.has(r) && !choices.slice(index + 1).some(c => c.recipe === r))
+        ?? order.find(r => !seen.has(r));
+      if (unused) choices[index] = { ...defaultChoice(unused, photos, copyBlocks), slots: choice.slots };
+    }
+    seen.add(choices[index].recipe);
+  });
+
   return choices;
 }
 
@@ -399,6 +434,8 @@ export function solveConcepts(
   // ADR-236: every concept's ground, decided by the requester's words, then the hero's darkness;
   // otherwise the light page. A recipe that falls back to another keeps the same decision.
   const toned = (choice: ArtDirectionChoice): ArtDirectionChoice => {
+    // Unspecified tone is governed by the content/background planner, not a global light-page prior.
+    if (!choice.params?.surfaceTone && !options.tonePreference && !options.grammar) return choice;
     const heroIndex = choice.recipe === 'cutout_speaker' ? choice.cutoutPhotoIndex : choice.heroPhotoIndex;
     const hero = options.photos.find((p) => p.photoIndex === heroIndex) ?? options.photos[0];
     const tone = resolveSurfaceTone({ requested: choice.params?.surfaceTone, preference: options.tonePreference, heroLuminance: hero?.quietLuminance });
@@ -418,17 +455,44 @@ export function solveConcepts(
       logoMinimumWidthPx: options.logoMinimumWidthPx,
       logoClearSpacePx: options.logoClearSpacePx,
       fontsDir: options.fontsDir,
+      backgroundPlanning: { intent: choice.params.backgroundIntent, mode: choice.params.backgroundMode,
+        colorIndex: choice.params.backgroundColorIndex,
+        ...options.backgroundPlanning,
+        requestedColor: options.backgroundPlanning?.requestedColor ??
+          (options.grammar && choice.params.surfaceTone === 'cream' && !options.tonePreference?.ground
+            ? options.grammar.page.background : undefined) },
       ...(options.grammar ? { grammar: options.grammar, logoClearSpaceShare: options.logoClearSpaceShare } : {}),
     });
   const eligible = eligibleRecipes(options.photos, requiredPhotoCount(options.photoSelection, options.photos.length));
+  const ranked = rankPhotosForHero(options.photos);
   const layouts: StudioLayoutV2[] = [];
   const kept: ArtDirectionChoice[] = [];
   const replaced: GenerateArtDirectedResult['replaced'] = [];
   choices.forEach((choice, index) => {
-    // The concept as given; then its recipe on the photo the house would pick for it (a plate on a
-    // photo with no quiet region keeps the plate, on another photo); then the other recipes.
-    const own = { ...defaultChoice(choice.recipe, options.photos, options.copyBlocks), slots: choice.slots, params: choice.params, conceptNote: choice.conceptNote };
-    const tries = [choice, ...(own.heroPhotoIndex !== choice.heroPhotoIndex ? [own] : []),
+    // Keep the proposal first, then the recipe's default source, then ranked alternate heroes.
+    // A subject-fit winner can be too small or impossible to crop: selecting it again in every
+    // default recipe must not hide a feasible sharp source in the same composition.
+    const defaults = defaultChoice(choice.recipe, options.photos, options.copyBlocks);
+    const heroIndices = [...new Set([defaults.heroPhotoIndex,
+      ...ranked.filter(p => !RECIPES[choice.recipe].needsCutout || p.cutout).map(p => p.photoIndex)])]
+      .filter((i): i is number => i !== null).slice(0, MAX_ALTERNATE_HEROES)
+      .filter(i => i !== choice.heroPhotoIndex);
+    const own = heroIndices.map(heroPhotoIndex => {
+      const attempt: ArtDirectionChoice = { ...choice, heroPhotoIndex,
+        cutoutPhotoIndex: RECIPES[choice.recipe].needsCutout ? heroPhotoIndex : null,
+        texturePhotoIndex: RECIPES[choice.recipe].texture && choice.texturePhotoIndex !== heroPhotoIndex &&
+          options.photos.some(p => p.photoIndex === choice.texturePhotoIndex)
+          ? choice.texturePhotoIndex : null,
+      };
+      // Preserve the narrative/treatment; remove only a promoted role collision. Oversized direct
+      // support input remains the solver's refusal rather than an unbounded scan or forced collage.
+      if (isMultiPhotoRecipe(choice.recipe) && choice.supportingPhotoIndices &&
+          choice.supportingPhotoIndices.length <= recipePhotoCapacity(choice.recipe) - 1) {
+        attempt.supportingPhotoIndices = choice.supportingPhotoIndices.filter(i => i !== heroPhotoIndex);
+      }
+      return attempt;
+    });
+    const tries = [choice, ...own,
       ...eligible.filter((r) => r !== choice.recipe).map((r) => defaultChoice(r, options.photos, options.copyBlocks))].map(toned);
     // A concept whose hero would be enlarged past 1.5x is kept only when no sharp one can replace it.
     let soft: { layout: StudioLayoutV2; attempt: ArtDirectionChoice } | undefined;
@@ -463,6 +527,11 @@ export function solveConcepts(
   if (options.grammar && kept.length && !kept.some((c) => c.recipe === 'fade_to_paper') && eligible.includes('fade_to_paper')) {
     for (let k = kept.length - 1; k >= 0; k--) {
       const was = kept[k];
+      // A guideline alternative must preserve the chosen photo narrative and treatment.
+      // Its composer has one photo slot; never replace a multi-photo or cutout composition.
+      const placedPhotos = layouts[k].photos ?? [];
+      if (placedPhotos.length !== 1 || placedPhotos[0].treatment === 'cutout' ||
+          requiredPhotoCount(options.photoSelection, options.photos.length) > 1) continue;
       const page = toned({ ...defaultChoice('fade_to_paper', options.photos, options.copyBlocks), slots: was.slots, heroPhotoIndex: was.heroPhotoIndex ?? defaultChoice('fade_to_paper', options.photos, options.copyBlocks).heroPhotoIndex });
       if (page.params.surfaceTone !== 'cream' || page.params.paper === 'cream') break;
       try {

@@ -44,6 +44,8 @@ export interface RecipeSpec {
   minPhotos: number;
   /** Whether a second photo may be blended into the text zone as a texture. */
   texture: boolean;
+  /** Native photo capacity; absent uses one, or two when texture is supported. */
+  maxPhotos?: number;
   /** Whether it needs a person cut out of their photo. */
   needsCutout: boolean;
   /** Shots it suits best; any shot is allowed, these rank first. */
@@ -55,19 +57,52 @@ export interface RecipeSpec {
 export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_storyboard: {
     id: 'hero_storyboard',
+    maxPhotos: 10,
     reference: 'ADR-171 engineering composition; human creative qualification pending',
-    summary: 'A dominant hero next to a supporting image sequence, with measured live copy on a solid brand surface. Only for a requester who asked for more photos in so many words ("use all the photos", "pick 3").',
-    bestFor: 'requests that say how many photos to use, or to use them all',
+    summary: 'A dominant hero next to a supporting image sequence, with measured live copy on a solid brand surface. Use when several images add distinct evidence or a visual sequence to the message, or explicit coverage requires them.',
+    bestFor: 'processes, comparisons, related scenes and explicit multi-photo requests',
     minPhotos: 2,
     texture: false,
     needsCutout: false,
     shots: ['classroom_or_interior', 'group_or_crowd', 'event_or_stage'],
     canva: 'every photo is a native re-croppable image; text and brand surfaces remain native',
   },
+  editorial_split: {
+    id: 'editorial_split', reference: 'ADR172 content-aware engineering; human qualification pending',
+    summary: 'Exact copy on an exposed approved editorial surface beside a large native scene or product photo; on a portrait format the image sits below the editorial header. No mandatory fade, frame or ornamental texture.',
+    bestFor: 'editorial announcements, product explanations and copy-led notices with one meaningful photograph',
+    minPhotos: 1, maxPhotos: 1, texture: false, needsCutout: false,
+    shots: ['detail_or_object', 'portrait', 'scenic_or_building', 'other'],
+    canva: 'photograph is native and re-croppable; copy and approved surface remain editable',
+  },
+  photo_diptych: {
+    id: 'photo_diptych', reference: 'ADR172 comparison engineering; human qualification pending',
+    summary: 'Two complementary native images paired below a measured editorial header. Source aspect determines their unequal widths; each image earns its role as a comparison or related moment, never duplicated.',
+    bestFor: 'comparisons, before/after evidence and two complementary scenes',
+    minPhotos: 2, maxPhotos: 2, texture: false, needsCutout: false,
+    shots: ['detail_or_object', 'classroom_or_interior', 'scenic_or_building', 'event_or_stage'],
+    canva: 'two native photographs, live copy and native base surface',
+  },
+  photo_sequence: {
+    id: 'photo_sequence', reference: 'ADR172 ordered narrative engineering; human qualification pending',
+    summary: 'An ordered sequence of two to ten distinct images in source-aspect-weighted justified rows below an editorial header. Local geometry preserves narrative order and measured source subjects; no upload-count collage obligation.',
+    bestFor: 'processes, visits with several distinct activities and visual evidence sequences',
+    minPhotos: 2, maxPhotos: 10, texture: false, needsCutout: false,
+    shots: ['classroom_or_interior', 'event_or_stage', 'detail_or_object', 'other'],
+    canva: 'every source is a separate re-croppable native photograph; all copy stays live',
+  },
+  photo_mosaic: {
+    id: 'photo_mosaic', reference: 'ADR172 editorial mosaic engineering; human qualification pending',
+    summary: 'A narrow editorial copy column and a large adjacent image field of two to ten source-aspect-weighted photographs. The exposed brand ground carries text; images remain separate with purposeful unequal widths.',
+    bestFor: 'copy-led editorial stories with several complementary photos or explicit coverage',
+    minPhotos: 2, maxPhotos: 10, texture: false, needsCutout: false,
+    shots: ['classroom_or_interior', 'event_or_stage', 'detail_or_object', 'other'],
+    canva: 'separate native photos, live copy and editable brand ground',
+  },
   hero_fade_report: {
     id: 'hero_fade_report',
     reference: 'example 3 (KAAE K-12 Pilot Study / Field Visit Report)',
-    summary: 'Full-bleed hero photo; a gradient fade over the bottom 40-50%, to the light page (navy title and accent lines) or to navy (white line + gold line); optionally a second photo blended into the fade; body text, a call-to-action pill.',
+    summary: 'Full-bleed hero photo; an approved light or dark gradient fade over the bottom 40-50%; optionally a second photo blended into the fade; a two-colour title in readable approved inks, body text and a call-to-action pill.',
     bestFor: 'report releases, studies, field visits, news with a strong scene photo',
     minPhotos: 1,
     texture: true,
@@ -78,7 +113,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_card: {
     id: 'hero_card',
     reference: 'examples 1-2 (Why Accreditation? carousel)',
-    summary: 'Full-bleed hero photo inside a gold outer frame; a cream card over the bottom 22-25% holding the title and body in navy; a navy tab holding the logo straddles the card\'s top edge.',
+    summary: 'Full-bleed hero photo inside a approved accent outer frame; a approved light card over the bottom 22-25% holding the title and body in the approved dark ink; a approved dark tab holding the logo straddles the card\'s top edge.',
     bestFor: 'carousels, series, explainers, educational posts',
     minPhotos: 1,
     texture: false,
@@ -89,7 +124,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   hero_plate: {
     id: 'hero_plate',
     reference: 'example 8 (Global Partnership)',
-    summary: 'Full-bleed hero photo; a navy title plate with a soft shadow set in the photo\'s quiet top or bottom (sky, wall, floor), never on the people; supporting lines on a bottom scrim. Needs a hero with a quiet top or bottom.',
+    summary: 'Full-bleed hero photo; a approved dark title plate with a soft shadow set in the photo\'s quiet top or bottom (sky, wall, floor), never on the people; supporting lines on a bottom scrim. Needs a hero with a quiet top or bottom.',
     bestFor: 'partnerships, agreements, headline statements over a busy or top-down photo',
     minPhotos: 1,
     texture: false,
@@ -100,7 +135,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   scrim_caption: {
     id: 'scrim_caption',
     reference: 'example 7 (event photo with bottom caption)',
-    summary: 'An untouched group or event photo; a bottom scrim rising from the light page (or navy); the caption on it and a short gold rule.',
+    summary: 'An untouched group or event photo; a bottom approved light or dark scrim; the caption on it and a short approved accent rule.',
     bestFor: 'meetings, visits, delegations, events where the people are the news',
     minPhotos: 1,
     texture: false,
@@ -121,8 +156,8 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   },
   cutout_speaker: {
     id: 'cutout_speaker',
-    reference: 'examples 4-5 (speaker cut-out on navy with rays)',
-    summary: 'A person cut out of their photo at the bottom corner, bleeding off the edge, on the light page (or navy) with a sunburst motif behind; the text block beside them.',
+    reference: 'examples 4-5 (speaker cut-out on an approved brand surface with rays)',
+    summary: 'A person cut out of their photo at the bottom corner, bleeding off the edge, on an approved light or dark brand surface with a sunburst motif behind; the text block beside them.',
     bestFor: 'speakers, forums, webinars, interviews: one person is the news',
     minPhotos: 1,
     texture: false,
@@ -133,7 +168,7 @@ export const RECIPES: Record<RecipeId, RecipeSpec> = {
   fade_to_paper: {
     id: 'fade_to_paper',
     reference: 'example 6 (photo fading into grid paper)',
-    summary: 'A photo fading into cream paper; the title on a navy plate and the text on the paper.',
+    summary: 'A photo fading into an approved light editorial surface; the title on an approved dark plate and the text on the paper.',
     bestFor: 'calls for applications, notices, announcements with a supporting photo',
     minPhotos: 1,
     texture: false,
@@ -173,6 +208,14 @@ export interface PhotoFacts {
   cutout?: boolean;
 }
 
+/** Shared capacity: eligibility, model normalization and deterministic coverage agree. */
+export function recipePhotoCapacity(id: RecipeId): number {
+  return RECIPES[id].maxPhotos ?? (RECIPES[id].texture ? 2 : 1);
+}
+export function isMultiPhotoRecipe(id: RecipeId): boolean {
+  return recipePhotoCapacity(id) > 1 && !RECIPES[id].texture;
+}
+
 /** The recipes eligible for a request with these photos. `typographic` only when there are none. */
 export function eligibleRecipes(photos: PhotoFacts[], minimum = 1): RecipeId[] {
   if (!photos.length) return ['typographic'];
@@ -180,9 +223,9 @@ export function eligibleRecipes(photos: PhotoFacts[], minimum = 1): RecipeId[] {
   for (const id of PHOTO_RECIPE_IDS) {
     const spec = RECIPES[id];
     if (photos.length < spec.minPhotos) continue;
-    // ADR-180: the house style places a hero and at most a blended texture. A storyboard is for a
-    // requester who asked for more photos in so many words; a texture recipe can carry a stated two.
-    if (id === 'hero_storyboard' ? minimum < 2 : minimum > (spec.texture ? 2 : 1)) continue;
+    // ADR-181: coverage is a minimum, not a single-hero style restriction.
+    // Multi-photo compositions remain available without an explicit count.
+    if (minimum > recipePhotoCapacity(id)) continue;
     if (spec.needsCutout && !photos.some((p) => p.cutout)) continue;
     // A title in the sky, or a title plate, needs a photo calm at its top or bottom, by the brief or
     // the pixels: a plate anywhere else sits on what the photo shows (live trial, 2026-09-30).

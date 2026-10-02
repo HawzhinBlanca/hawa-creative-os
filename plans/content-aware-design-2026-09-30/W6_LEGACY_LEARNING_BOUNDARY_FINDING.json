@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-01",
+  "status": "SOURCE_INSPECTION_NEXT_ACCEPTANCE_NOT_RUN",
+  "scope": "Existing legacy artboard mining and explicit proposal boundaries",
+  "observations": [
+    "POST /feedback/mine accepts caller-supplied clientId/taskId/artboard snapshots without joining an authorized stored task or approved revision",
+    "ingestTaskRefinements increases frequency for each repeated matching delta, including multiple layers in one task and replay, rather than counting independent tasks",
+    "Legacy lifecycle acceptance uses a synthetic non-UUID task that is never persisted; this proves proposal mechanics, not authentic approved-task evidence",
+    "Promoted Client DNA persistence saves rule text/commit description without the complete feedback provenance record"
+  ],
+  "nextAction": "Bind legacy learning to stored authorized task/revision evidence, make independent-task counts idempotent, retain immutable source/actor lineage, and add refusal controls before treating its output as genuine taste data",
+  "sourceHashes": {
+    "apps/core/src/routes/client-learning.routes.ts": "6da7b0910516194a15991086641e0a43f350932bc6d897216fa6ce2a7587fe35",
+    "packages/creative/src/feedback-miner.ts": "783b090a9c3e9b49560e5238b0b922985cc46248c7a10371d9905f00b31fb1b2",
+    "apps/core/test/governed-learning-dna-lifecycle.test.ts": "695d7ed8dbf60b3a726a94b7c3c65e011aef0b501a0d75017f1fb12a49592462"
+  },
+  "limits": [
+    "No new runtime regression executed for these follow-up findings",
+    "No live mutation, promotion, training or paid provider call",
+    "Current exact gate tests ADR191 Studio feedback scope, not these additional learning boundaries",
+    "Explicit owner instructions may legitimately propose persistent brand rules without an approved design; distinguish them from alleged observed edit evidence."
+  ]
+}

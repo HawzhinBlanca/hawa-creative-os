@@ -20,6 +20,8 @@ export interface ReceiptFile {
 
 export interface ReceiptSheetRow {
   taskId: string;
+  spreadsheetId: string;
+  sheetId: number;
   rowNumber: number;
   status: 'COMPLETE';
   packageHash: string;
@@ -97,6 +99,8 @@ export async function readPublicationReceipt(
         ? {
             sheetRow: {
               taskId,
+              spreadsheetId: syncedRow.spreadsheet_id,
+              sheetId: syncedRow.sheet_id,
               rowNumber: Number(syncedRow.row_number),
               status: 'COMPLETE' as const,
               packageHash: syncedRow.expected_hash,
@@ -134,7 +138,7 @@ export async function readDeliveredRecords(
       .execute();
     const rows = await trx
       .selectFrom('sheet_syncs')
-      .select(['task_id', 'row_number', 'expected_hash', 'synced_at', 'updated_at'])
+      .select(['task_id', 'spreadsheet_id', 'sheet_id', 'row_number', 'expected_hash', 'synced_at', 'updated_at'])
       .where('tenant_id', '=', scope.tenantId)
       .where('status', '=', 'synced')
       .where('row_number', 'is not', null)
@@ -154,6 +158,8 @@ export async function readDeliveredRecords(
       })),
       sheetRows: rows.map((r) => ({
         taskId: String(r.task_id),
+        spreadsheetId: r.spreadsheet_id,
+        sheetId: r.sheet_id,
         rowNumber: Number(r.row_number),
         status: 'COMPLETE' as const,
         packageHash: r.expected_hash,

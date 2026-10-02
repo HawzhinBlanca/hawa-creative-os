@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-01",
+  "status": "NATIVE_HELPER_EQUIVALENCE_AND_CONNECTED_SOURCE_PASS_FULL_QUALIFICATION_PENDING",
+  "requirements": [
+    "FR-038",
+    "NFR-014",
+    "NFR-018"
+  ],
+  "decision": "ADR188; remove only the constant white matte native job; retain actual official artwork rasterization and independent final QA",
+  "red": {
+    "failed": 3,
+    "skipped": 7,
+    "reason": "Actual delegating native execFile spy observed two jobs, expected one; native white bytes/contrast equivalence had already passed."
+  },
+  "focused": {
+    "files": 6,
+    "passed": 50,
+    "failed": 0,
+    "skipped": 0
+  },
+  "strictTestRoots": 658,
+  "build": "PASS",
+  "nativeJobsPerHelper": {
+    "before": 2,
+    "after": 1
+  },
+  "nativeEquality": {
+    "sizesAndTransparency": 3,
+    "actualOriginalWhiteMatteAllRgbaChannels": 255,
+    "benchmarkPairs": 9,
+    "sourceBytesUnchanged": true
+  },
+  "benchmark": "W5_NATIVE_MATTE_BENCHMARK.json",
+  "firstMedianMs": {
+    "before": 78.14083299999993,
+    "after": 74.67275000000018
+  },
+  "wholePipelinePerformance": "NOT_MEASURED; nine warm local helper pairs are not a p95/SLA or creative-quality claim",
+  "providerCalls": 0,
+  "modelsAdded": 0,
+  "dependenciesAdded": 0,
+  "remainingW5": [
+    "Approved bounded perceptual-color policy",
+    "Bounded local geometry/type refinement",
+    "Cache/replay identity and measured full pipeline/call/latency gates"
+  ],
+  "limits": [
+    "Current content-aware source not deployed",
+    "Full combined sealed suite/Canva/human/native-quality admission pending",
+    "Only this local helper optimization is qualified; W5 overall remains open"
+  ],
+  "logs": {
+    "/tmp/hawa-w5-matte-red-20261001.log": "cd9ad05ae48a408c128d687a3af11e004d0ed58a4ca176d5b9c37cb732399112",
+    "/tmp/hawa-w5-matte-build-20261001.log": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1",
+    "/tmp/hawa-w5-matte-connected-20261001.log": "a51f51fa74331e05e5d59685cf3e3dac17be9d455786eed2d5801cf3ed8f3f57",
+    "/tmp/hawa-content-current-test-types-20261001.log": "24add67e22b4ea53857baa58851cd4dbaf4242138e18d3563bc90e546dc51897",
+    "/tmp/hawa-w5-matte-benchmark-20261001.log": "251b80f5f8163fef5aa6fa4521c0a6b83ad48a01f1a38c9b1bdcc3304264e83d"
+  },
+  "sourceSha256": {
+    "packages/creative/src/studio/art-direction/logo-ground.ts": "413dd53033665f67d9c0b888dd08787f36e1a0ad85da67980bf68fc4d9f9ea60",
+    "packages/creative/test/logo-visibility.test.ts": "6472ef4a445c7c151257e4f71a996fc2cc10dcaa5463306a57ebc1b336de21ea",
+    "scripts/proofs/logo_reference_matte_benchmark.mjs": "9c9cb9ce8d5f83f0df55147fa6adda40d48e253e5617b668c08c7482a3a20285"
+  }
+}

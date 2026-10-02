@@ -4,31 +4,35 @@ import { promisify } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { CHAOS_DIR, FAKES_URL, REPO_ROOT, closeDb, compose, fakes, query, restateQuery, secrets, sql } from './stack.js';
+import { CHAOS_DIR, FAKES_URL, REPO_ROOT, closeDb, compose, composeEnvironment, fakes, query, restateQuery, secrets, sql } from './stack.js';
 import { sentTo, waitUntil, type InvariantResult } from './scenario.js';
+import { hasOwnedRecoveryCleanup } from './recovery-cleanup-evidence.js';
 
 const execFileAsync = promisify(execFile);
 
 export async function restorePendingDelivery(taskId: string, chat: string, started: number,
-  events: string[]): Promise<InvariantResult[]> {
-  const checks: InvariantResult[] = [];
+  events: string[], checks: InvariantResult[] = [],
+  afterRestore?: (phase: string) => Promise<void>): Promise<InvariantResult[]> {
   const check = (name: string, ok: boolean, detail: string) => {
     checks.push({name, ok, detail});
     if (!ok) throw new Error(`${name}: ${detail}`);
   };
   const restore = async (phase: string) => {
     await closeDb();
+    const recoveryId=randomUUID().replaceAll('-','').slice(0,16);
     const output = join(CHAOS_DIR, '.run', `recovery-${phase}.json`);
     try {
       // Keep the event loop processing HTTP socket closures during the lengthy restore.
       await execFileAsync('python3', [join(REPO_ROOT, 'infra/backup/candidate_recovery.py'),
-        '--task-id', taskId, '--started-after', new Date(started).toISOString(), '--output', output],
-      {cwd: REPO_ROOT, encoding: 'utf8', timeout: 300_000, maxBuffer: 1024 * 1024});
+        '--task-id', taskId, '--started-after', new Date(started).toISOString(), '--recovery-id', recoveryId, '--output', output],
+      {cwd: REPO_ROOT, env: composeEnvironment(), encoding: 'utf8', timeout: 300_000, maxBuffer: 1024 * 1024});
     } catch (error) {
       const failure = error as Error & {stdout?:string;stderr?:string};
       throw new Error(`Coordinated ${phase} restore failed: ${failure.stdout?.slice(-1000)} ${failure.stderr?.slice(-1500)}`);
     }
     const receipt = JSON.parse(readFileSync(output, 'utf8'));
+    check(`${phase}: private artifacts removed for this exact recovery`,
+      hasOwnedRecoveryCleanup(receipt,{recoveryId,taskId}), 'caller nonce, task and all restored store identities match');
     check(`${phase}: fresh stores match before any writer resumes`, receipt.allRowsAndPoliciesMatch &&
       receipt.allStoreFilesMatch && receipt.externalServiceSurvived && receipt.writersStoppedBeforeCaptureAndDuringValidation,
     `${receipt.tableCount} tables / ${receipt.policyCount} policies; ${receipt.restoreValidationSeconds}s startup verification`);
@@ -38,6 +42,8 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
     compose(['up', '-d', '--no-deps', '--no-build', '--pull', 'never', '--force-recreate', '--wait', 'worker-blue']);
     // nginx retains upstream addresses across container replacement.
     compose(['restart', 'nginx']);
+    compose(['up', '-d', '--no-deps', '--no-build', '--pull', 'never', '--wait', 'nginx']);
+    if (afterRestore) await afterRestore(phase);
     events.push(`${phase}: restored PostgreSQL, Restate and blobs from authenticated encrypted archives to new volumes; resumed exact images`);
     return receipt;
   };
@@ -114,8 +120,12 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
   const publications = await query<{id:string;state:string}>(sql`SELECT id,state FROM hawa.publications WHERE task_id=${taskId}::uuid`);
   check('restored delivery records exactly one completed publication', publications.length === 1 && publications[0].state === 'complete',
     JSON.stringify(publications));
-  const sheet = await fetch(`${FAKES_URL}/google/v4/spreadsheets/chaos-kaae-tracker/values/A:Z`);
-  const rows = (await sheet.json() as {values?:unknown[][]}).values ?? [];
+  const sheet = await fetch(`${FAKES_URL}/google/v4/spreadsheets/chaos-kaae-tracker/values:batchGetByDataFilter`, {
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dataFilters:[{gridRange:{sheetId:0}}],majorDimension:'ROWS'}),
+  });
+  const rows = (await sheet.json() as {valueRanges?:Array<{valueRange?:{values?:unknown[][]}}>})
+    .valueRanges?.[0]?.valueRange?.values ?? [];
   const matching = rows.filter(row=>row.some(value=>String(value).includes(taskId)));
   check('surviving external sheet contains one task row after both restores', sheet.ok && matching.length === 1, `${matching.length} rows`);
   return checks;

@@ -85,6 +85,21 @@ For every text run:
 - preserve joining behavior and diacritics;
 - compare browser and server-renderer font versions.
 
+### Captured font declarations (ADR208)
+
+Inspect the explicit Latin/Arabic font slot used by each regular run and text
+field. An expected family in an unused slot does not qualify the actual text;
+mixed runs must satisfy each used script. Formal mixed-body runs retain their
+individual script families. Missing or conflicting used-slot declarations refuse.
+Retained field text is inspected at capture time; future field updates, native
+glyph shaping and editability remain separate unqualified capabilities.
+
+ADR209 compares exact families or explicit family/full names measured from the
+pinned office font inventory. Arbitrary family prefixes, unknown style suffixes,
+width names and provider substitution aliases do not qualify. Unknown families
+must use their exact requested name; manual Client DNA membership remains exact.
+Name equivalence does not certify font files, glyph coverage or native rendering.
+
 ### Bidirectional behavior
 
 Studio must respect explicit `rtl:false` even with an Arabic-script font. Legacy

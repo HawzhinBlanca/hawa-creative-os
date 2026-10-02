@@ -79,6 +79,34 @@ function context(w: number, h: number, rtl: boolean, insisted = false): LayoutVa
 const hit = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
   a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 
+describe('explicit framing of documentary multi-photo compositions', () => {
+  for (const recipe of ['hero_storyboard', 'photo_mosaic'] as const) {
+    for (const frame of ['inset', 'outer'] as const) {
+      it(`${recipe} carries the requested ${frame} frame without replacing its content`, () => {
+        const input = {
+          width: 1080, height: 1350, copy: { text: { 0: LATIN[0], 1: LATIN[1] } },
+          photos: PHOTOS, palette: PALETTE, logoAspect: 1,
+          choice: { recipe, heroPhotoIndex: 5, texturePhotoIndex: null, cutoutPhotoIndex: null,
+            supportingPhotoIndices: [0, 1], slots: [{ copyIndex: 0, slot: 'title' as const }, { copyIndex: 1, slot: 'accent' as const }],
+            params: { surfaceTone: 'navy' as const, frame } },
+        };
+        const layout = solveRecipe(input);
+        const frames = layout.shapes.filter(s => s.role === 'frame');
+        expect(frames).toHaveLength(1);
+        expect(frames[0]).toMatchObject({ layer: 'overlay', fill: 'none', strokeColor: '#F7B500' });
+        expect(frames[0].strokeWidth).toBeGreaterThan(0);
+        expect(layout.photos?.map(p => p.photoIndex)).toEqual([5, 0, 1]);
+        expect(layout.text.map(t => t.copyIndex)).toEqual([0, 1]);
+        expect(studioLayoutV2Schema.safeParse(layout).success).toBe(true);
+        const plain = solveRecipe({ ...input, choice: { ...input.choice, params: { ...input.choice.params, frame: 'none' } } });
+        expect(plain.shapes.filter(s => s.role === 'frame')).toEqual([]);
+        expect(layout.text).toEqual(plain.text);
+        expect(layout.logo).toEqual(plain.logo);
+      });
+    }
+  }
+});
+
 describe('recipe solver (ADR-170): every recipe x size x direction', () => {
   for (const recipe of RECIPES) {
     for (const [w, h] of SIZES) {
@@ -226,7 +254,7 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
     expect(validateLayoutV2(layout, counted)).toMatchObject({ ok: false, code: 'PHOTOS' });
   });
 
-  it('preparation, settlePhotos and the photo-box fitter leave a solved recipe as it is', () => {
+  it('preparation preserves solved geometry while honoring a requested background; fitters leave it intact', () => {
     const layout = solve('hero_fade_report', 1080, 1350, false);
     const before = JSON.parse(JSON.stringify(layout));
     const prepared = prepareGeneratedLayoutV3(JSON.parse(JSON.stringify(layout)), { text: LATIN }, {
@@ -236,9 +264,9 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
     // Fonts are re-sanitised (rtl made explicit); no box moves and no ornament is added.
     expect(prepared.photos).toEqual(before.photos);
     expect(prepared.shapes).toEqual(before.shapes);
-    expect(prepared.overlays).toEqual(before.overlays);
+    expect(prepared.overlays).toEqual(before.overlays.map((o: { color: string }) => ({ ...o, color: o.color === before.background.color ? '#1E3A5F' : o.color })));
     expect(prepared.text.map((t) => [t.x, t.y, t.width, t.height, t.fontSize])).toEqual(before.text.map((t: any) => [t.x, t.y, t.width, t.height, t.fontSize]));
-    expect(prepared.background).toEqual(before.background);
+    expect(prepared.background).toMatchObject({ color: '#1E3A5F', decision: { basis: 'requester' } });
     expect(prepared.art).toBeUndefined();
     expect(settlePhotos(JSON.parse(JSON.stringify(layout)))).toEqual(before);
     expect(fitPhotoBoxesToImages(JSON.parse(JSON.stringify(layout)), PHOTOS, { text: LATIN })).toEqual(before);

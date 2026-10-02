@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { unzipSync, strFromU8 } from 'fflate';
 import { PNG } from 'pngjs';
 import { validateLayoutV2, type LayoutValidationContext } from '../src/studio/validate-layout-v2.js';
@@ -21,6 +22,8 @@ import { admittedFontFaces, fontFaceSupports, fontFileFor, probeFontFidelity, re
 import { encodeStudioTransferV2 } from '../src/studio/transfer-v2.js';
 import { logoClearZone } from '../src/studio/house-rules.js';
 import type { StudioLayoutV2 } from '../src/studio/layout-v2.js';
+import { syntheticPhoto } from './fixtures/synthetic-photos.js';
+import { checkCanvaPptx } from '../../qa/src/canva-pptx-check.js';
 
 /**
  * ADR-238 (owner, 2026-10-01): KAAE's designs follow its 2025 guideline, "Brand Guidelines —
@@ -53,6 +56,42 @@ const solve = (recipe: ArtDirectionChoice['recipe'], params: ArtDirectionChoice[
   ...(grammar ? { grammar: G, logoClearSpaceShare: 0.15, logoMinimumWidthPx: 80 } : {}),
 });
 const contrast = (a: string, b: string) => calculateLuminanceContrastRatio(hexToLuminance(a), hexToLuminance(b));
+it('a guideline alternative preserves content-aware multiple-photo compositions through render, QA and editable transfer', async () => {
+  const photos = [photo(0.8), { ...photo(0.8), photoIndex: 1 }];
+  const choices: ArtDirectionChoice[] = ['photo_diptych', 'photo_mosaic'].map(recipe => ({
+    recipe: recipe as ArtDirectionChoice['recipe'], heroPhotoIndex: 0, supportingPhotoIndices: [1],
+    texturePhotoIndex: null, cutoutPhotoIndex: null, slots: SLOTS,
+    params: { surfaceTone: 'cream', paper: 'white', frame: 'none' },
+  }));
+  const result = solveConcepts(choices, {
+    brief: 'Compare two field visit photos', copyBlocks: Object.entries(OWNER).map(([index, text]) => ({
+      index: Number(index), text, script: 'latin' as const, role: index === '0' ? 'title' as const : 'body' as const,
+    })), photos, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, logoAspect: 1,
+    grammar: G, photoSelection: { mode: 'choose', minimum: 1 },
+  });
+  expect(result.choices.map(c => c.recipe)).toEqual(['photo_diptych', 'photo_mosaic']);
+  const files = [1, 2].map(seed => ({ bytes: syntheticPhoto(2048, 1536, seed), mimeType: 'image/png' as const }));
+  const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+  for (const layout of result.layouts) {
+    expect(layout.photos?.map(p => p.photoIndex).sort()).toEqual([0, 1]);
+    expect(layout.text.map(t => t.copyIndex).sort()).toEqual([0, 1, 2]);
+    const render = renderLayoutV2(layout, { copyText: OWNER, logoDataUri: `data:image/png;base64,${LOGO.toString('base64')}`,
+      photoFiles: files.map(f => ({ bytes: f.bytes, mediaType: f.mimeType })) });
+    const qa = evaluateHardQa(layout, { ...qaContext(Object.values(OWNER)), photoCount: 2,
+      photoSelection: { mode: 'all', minimum: 2 }, renderedComposite: render.noTextPng });
+    expect(qa.passed, qa.messages.join(' | ')).toBe(true);
+    const deck = await encodeStudioTransferV2(layout, Object.values(OWNER), { bytes: LOGO, mimeType: 'image/png', sha256: digest(LOGO) }, { photos: files });
+    const zip = unzipSync(deck.bytes);
+    const media = new Set(Object.entries(zip).filter(([path]) => path.startsWith('ppt/media/') && !path.endsWith('/')).map(([, bytes]) => digest(bytes)));
+    for (const file of files) expect(media.has(digest(file.bytes))).toBe(true);
+    expect(media.has(digest(LOGO))).toBe(true);
+    // The production checker handles only the admitted invisible word joiners used for K-12.
+    const nativeCopy = checkCanvaPptx(deck.bytes, Object.values(OWNER), { allowedFontsByScript: KAAE_FONTS });
+    expect(nativeCopy.copyPass).toBe(true);
+    expect(nativeCopy.fontPass).toBe(true);
+    expect(nativeCopy.sourceTextObjects).toHaveLength(3);
+  }
+}, 40000);
 const copyOf = (lines: string[]) => Object.fromEntries(lines.map((t, i) => [i, t]));
 const compose = (lines: string[], roles: string[], tone: 'page' | 'cover', variant?: string, scripts?: Record<number, 'latin' | 'arabic'>) => composeGrammarLayout({
   width: 1080, height: 1350, grammar: G, copy: { text: copyOf(lines), ...(scripts ? { scripts } : {}) }, roles: Object.fromEntries(roles.map((r, i) => [i, r])),
@@ -69,6 +108,17 @@ const pixel = (png: Buffer, x: number, y: number) => {
   const i = (y * img.width + x) * 4;
   return [img.data[i], img.data[i + 1], img.data[i + 2]];
 };
+
+it.each(['editorial_split', 'photo_diptych', 'photo_sequence', 'photo_mosaic'] as const)(
+  '%s preserves requester-selected white paper across content-aware compositions', (recipe) => {
+    const photos = recipe === 'editorial_split' ? [photo(0.8)] : [photo(0.8), { ...photo(0.8), photoIndex: 1 }];
+    const layout = solveRecipe({ width: 1080, height: 1350, copy: { text: OWNER }, photos,
+      palette: PALETTE, logoAspect: 1, choice: { recipe, heroPhotoIndex: 0,
+        supportingPhotoIndices: photos.slice(1).map(p => p.photoIndex), texturePhotoIndex: null,
+        cutoutPhotoIndex: null, slots: SLOTS, params: { surfaceTone: 'cream', paper: 'white', frame: 'none' } } });
+    expect(layout.background.color).toBe(WHITE);
+    expect(layout.photos?.map(p => p.photoIndex)).toEqual(photos.map(p => p.photoIndex));
+  });
 
 describe('the palette is the 2025 guideline\'s (pp.7-8), and the older brand book is gone', () => {
   it('reads KAAE Blue and Gold, the extended palette and the white page, light first', () => {
@@ -117,13 +167,13 @@ describe('the page grammar is checked whole where the reference is admitted (Cod
   });
   it('refuses a gradient with no stops, stops out of order, and stops that do not span 0..1', () => {
     expect(withGrammar((g) => { g.header.accent.stops = []; })).toThrow(/PAGE_GRAMMAR_INVALID: pageGrammar\.header\.accent\.stops/);
-    expect(withGrammar((g) => { g.footRule.stops = [{ at: 1, color: '#4770A3' }, { at: 0, color: '#F7B500' }]; })).toThrow(/ascend/);
-    expect(withGrammar((g) => { g.titleBar.stops = [{ at: 0.2, color: '#F7B500' }, { at: 0.8, color: '#FFD700' }]; })).toThrow(/0 to 1/);
+    expect(withGrammar((g) => { g.footRule.stops = [{ at: 1, color: '#4770A3' }, { at: 0, color: '#F7B500' }]; })).toThrow(/pageGrammar\.footRule\.stops/);
+    expect(withGrammar((g) => { g.titleBar.stops = [{ at: 0.2, color: '#F7B500' }, { at: 0.8, color: '#FFD700' }]; })).toThrow(/pageGrammar\.titleBar\.stops/);
   });
   it('refuses a share that is not a finite number, and a colour outside the palette', () => {
     expect(withGrammar((g) => { g.header.accent.widthShare = 'wide'; })).toThrow(/PAGE_GRAMMAR_INVALID: pageGrammar\.header\.accent\.widthShare/);
     expect(withGrammar((g) => { g.title.sizeShare = Infinity; })).toThrow(/PAGE_GRAMMAR_INVALID/);
-    expect(withGrammar((g) => { g.title.color = '#17087A'; })).toThrow(/not in the client's palette/);
+    expect(withGrammar((g) => { g.title.color = '#17087A'; })).toThrow(/pageGrammar\.title\.color/);
     expect(withGrammar((g) => { g.title.fontFamily = ''; })).toThrow(/PAGE_GRAMMAR_INVALID: pageGrammar\.title\.fontFamily/);
   });
   it('admits the guideline\'s own grammar, and a reference with none stays without one', () => {
@@ -228,6 +278,23 @@ describe('the guideline\'s layout primitives', () => {
 });
 
 describe('the guideline page and cover, composed (no model call)', () => {
+  it('declared shape-gradient contrast encloses an interior luminance dip that sparse samples miss', () => {
+    const cover = compose(COVER, COVER_ROLES, 'cover');
+    const ground = { ...cover.shapes[0], gradient: { angle: 0, stops: [{ at: 0, color: '#FF0000' }, { at: 1, color: '#00FF00' }] } };
+    const ink = { ...cover.text[0], x: 0, y: 0, width: cover.width, height: cover.height, color: '#000000' };
+    // Both endpoints and the middle look readable to black type; the actual paint dips between.
+    expect(Math.min(...[0, 0.5, 1].map(at => contrast('#000000', gradientColourAt(ground.gradient, ground, at * cover.width, 0))))).toBeGreaterThan(4.5);
+    const layout = { ...cover, shapes: [ground], text: [ink], ornaments: undefined };
+    const raster = PNG.sync.read(rendered(layout, COVER).noTextPng);
+    let observed = Infinity;
+    for (let x = 0; x < raster.width; x++) {
+      const offset = ((raster.height - 2) * raster.width + x) * 4;
+      const luminance = hexToLuminance('#' + [...raster.data.subarray(offset, offset + 3)].map(v => v.toString(16).padStart(2, '0')).join(''));
+      observed = Math.min(observed, (luminance + 0.05) / 0.05);
+    }
+    expect(observed).toBeLessThan(4.5);
+    expect(declaredTextContrast(layout, ink)).toBeLessThanOrEqual(observed);
+  });
   it('the Quality Assurance Workshop: header, serif title and bar, italic lead, details on a KAAE Blue card, cream call-to-action card, foot rule', () => {
     const page = compose(WORKSHOP, WORKSHOP_ROLES, 'page');
     expect(page.background.color).toBe(WHITE);
