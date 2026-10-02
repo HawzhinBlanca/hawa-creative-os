@@ -6,7 +6,7 @@ import { composeOfficeDraftAlert, qcReportWarnings } from '../src/services/offic
 import { COPY, SENT, capture, png, pptx, sha256, type Frame } from './fixtures/shipped-export.js';
 
 /**
- * ADR-256 (found live 2026-10-02, task f3cb89e8): the export QC checked copy, fonts and direction on
+ * ADR-257 (found live 2026-10-02, task f3cb89e8): the export QC checked copy, fonts and direction on
  * the Canva PPTX but left contrast and the safe area null, so nothing measured the design that ships.
  * They are now measured on the PNG capture of the same Canva version, with the PPTX's text frames for
  * the boxes. They are recorded and shown to the office; they never change passed or criticalPass.
@@ -20,7 +20,7 @@ const row = (bytes: Uint8Array, preview?: Buffer | null) => ({
 const TITLE: Frame = { x: 12, y: 20, w: 84, h: 20, color: '14253D' };
 const SORANI: Frame = { x: 20, y: 80, w: 68, h: 12, color: '14253D' };
 
-describe('evaluateCanvaExportQc measures contrast and the safe area on the shipped PNG (ADR-256)', () => {
+describe('evaluateCanvaExportQc measures contrast and the safe area on the shipped PNG (ADR-257)', () => {
   it('a compliant design: both true, with what was measured in its checks', () => {
     const bytes = pptx(TITLE, SORANI);
     const r = evaluateCanvaExportQc(row(bytes, capture([{ ...TITLE, ink: '#14253D' }, { ...SORANI, ink: '#14253D' }])), COPY);
@@ -144,7 +144,7 @@ describe('evaluateCanvaExportQc measures contrast and the safe area on the shipp
   });
 });
 
-describe('the office draft alert carries the export warnings (ADR-256)', () => {
+describe('the office draft alert carries the export warnings (ADR-257)', () => {
   it('adds one "Check before approving" line from the QC report, in the text and the caption', () => {
     const grey = { ...TITLE, color: 'CCCCCC', x: 2 };
     const qc = evaluateCanvaExportQc(row(pptx(grey, SORANI), capture([{ ...grey, ink: '#CCCCCC' }, { ...SORANI, ink: '#14253D' }])), COPY);

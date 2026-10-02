@@ -1,6 +1,8 @@
-# ADR-256: Contrast and the Safe Area Measured on the Canva Export That Ships
+# ADR-257: Contrast and the Safe Area Measured on the Canva Export That Ships
 
 **Date:** 2026-10-02
+
+> Renumbered 2026-10-02: deployed as ADR-256 in production e4057a7a. Codex's branch `codex/hawzhin-app-integration` already uses 256 (`256_hawzhin_workspace_customer_boundary.md`), so this record moved to 257. Code comments say ADR-257.
 **Status:** Implemented on branch `claude/hunt4-qa-titles` (from `080bdc8a`); not deployed.
 **Requirements:** FR-038 (safe zones), FR-041 (reviewers inspect QA evidence before approval).
 **Changes a foundation:** no. No migration, no new dependency, no new paid call. Two optional fields in a QC report (`warnings`, measured `contrastCompliant`/`safeMargins`).

@@ -137,13 +137,13 @@ export interface ExportRow {
   content: Buffer;
   content_check: unknown;
   capture_version: string | null;
-  /** ADR-256: the PNG capture of the same design, binding and saved version, when one was retrieved. */
+  /** ADR-257: the PNG capture of the same design, binding and saved version, when one was retrieved. */
   preview_png?: Buffer | null;
   preview_sha256?: string | null;
 }
 
 /**
- * ADR-256: the PNG capture of the same saved Canva version as the PPTX row `b` (operation `o`): the
+ * ADR-257: the PNG capture of the same saved Canva version as the PPTX row `b` (operation `o`): the
  * picture approval pins with that PPTX (same design, binding version and `designUpdatedAt`), which is
  * the one that ships. The export QC measures contrast and the safe area on it.
  */

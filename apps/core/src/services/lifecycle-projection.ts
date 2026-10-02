@@ -543,7 +543,7 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       const alert = { title: requestTitle, copy, clientName: client?.name, requestedBy,
         revised: taskId !== request.root_task_id, canvaUrl: canvaEditUrl(report.designId!), reviewUrl,
         ...(DRAFT_READY_STATUSES.has(status) ? {} : { check: `${status}${report.code ? ` (${report.code})` : ''}` }),
-        // ADR-256: low contrast or text near the edge, measured on the shipped PNG; advisory only.
+        // ADR-257: low contrast or text near the edge, measured on the shipped PNG; advisory only.
         warnings: await draftQcWarnings(trx, { tenantId, taskId }) };
       officeText = composeOfficeDraftAlert(alert);
       // ADR-180: the photo's caption says the member may reply to it (Telegram approval, ADR-040

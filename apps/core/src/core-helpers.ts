@@ -187,13 +187,13 @@ export interface CanvaQcEvaluationResult {
     fontCoverage: null;
     copyFidelity: boolean;
     /**
-     * ADR-256: measured on the PNG capture of the same Canva version, with the PPTX's text frames for
+     * ADR-257: measured on the PNG capture of the same Canva version, with the PPTX's text frames for
      * the boxes. null = not measured (no such PNG, or nothing could be read). Never part of `passed`.
      */
     contrastCompliant: boolean | null;
     safeMargins: boolean | null;
     errors: string[];
-    /** ADR-256: what a person should look at before approving (low contrast, text near the edge). Not errors. */
+    /** ADR-257: what a person should look at before approving (low contrast, text near the edge). Not errors. */
     warnings?: string[];
     checks: Array<{ name: string; passed: boolean | null; details?: any; observedFonts?: string[] }>;
     exportSha256: string | null;
@@ -219,7 +219,7 @@ const ratioText = (ratio: number) => (Math.floor(ratio * 10) / 10).toFixed(1);
 type QcCheck = CanvaQcEvaluationResult['qaReport']['checks'][number];
 
 /**
- * ADR-256: contrast and the safe area of the export that ships, measured on its PNG capture (the
+ * ADR-257: contrast and the safe area of the export that ships, measured on its PNG capture (the
  * same Canva version as the PPTX) with the PPTX's text frames for the boxes. Hard QA's safe area
  * (`getSafeZoneBox`) and contrast bands (`requiredContrast`) are reused through `measureExportText`.
  * Advisory only: the caller never folds these into `passed` or `criticalPass`.
@@ -264,7 +264,7 @@ function measureShippedExport(pptx: Uint8Array, preview: unknown, previewSha256:
 
 export function evaluateCanvaExportQc(
   exportRow?: { sha256?: string; format?: string; content?: any; content_check?: any;
-    /** ADR-256: the PNG capture of the same Canva version (`designUpdatedAt`) as this PPTX, when there is one. */
+    /** ADR-257: the PNG capture of the same Canva version (`designUpdatedAt`) as this PPTX, when there is one. */
     preview_png?: Uint8Array | null; preview_sha256?: string | null },
   expectedCopy?: Array<string | { text: string }>,
   requiredFont?: string

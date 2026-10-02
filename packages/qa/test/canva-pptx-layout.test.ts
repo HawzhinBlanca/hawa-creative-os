@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
 import { readPptxTextLayout } from '../src/canva-pptx-layout.js';
 
-/** ADR-256: the text frames the export QC measures on the shipped PNG. */
+/** ADR-257: the text frames the export QC measures on the shipped PNG. */
 const deck = (tree: string, size = '<p:sldSz cx="1000" cy="2000"/>') => zipSync({
   'ppt/presentation.xml': strToU8(`<p:presentation>${size}</p:presentation>`),
   'ppt/slides/slide1.xml': strToU8(`<p:sld><p:cSld><p:spTree>${tree}</p:spTree></p:cSld></p:sld>`),
@@ -10,7 +10,7 @@ const deck = (tree: string, size = '<p:sldSz cx="1000" cy="2000"/>') => zipSync(
 const sp = (xfrm: string, rPr = '<a:rPr sz="2400"><a:solidFill><a:srgbClr val="14253d"/></a:solidFill></a:rPr>', id = 2) =>
   `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="t"/></p:nvSpPr><p:spPr>${xfrm}</p:spPr><p:txBody><a:p><a:r>${rPr}<a:t>Title</a:t></a:r></a:p></p:txBody></p:sp>`;
 
-describe('readPptxTextLayout (ADR-256)', () => {
+describe('readPptxTextLayout (ADR-257)', () => {
   it('reads the slide size, a frame box, and its run colour, size and weight', () => {
     const layout = readPptxTextLayout(deck(sp('<a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="50"/></a:xfrm>')));
     expect(layout.slideWidth).toBe(1000);

@@ -115,7 +115,7 @@ function canonicalXmlCharacterReferences(xml: string): string {
 }
 
 /**
- * ADR-256: the PPTX parts `keep` names, unzipped within the same import limits `checkCanvaPptx` applies
+ * ADR-257: the PPTX parts `keep` names, unzipped within the same import limits `checkCanvaPptx` applies
  * (25 MB packed, 500 entries, 8 MB a part, 64 MB expanded, no path that leaves the archive). Used by
  * `readPptxTextLayout` (canva-pptx-layout.ts) to measure the shipped export.
  */
@@ -148,7 +148,7 @@ const layoutXmlParser = new XMLParser({
   htmlEntities: { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" },
 });
 
-/** ADR-256: one PPTX XML part, read as `checkCanvaPptx` reads it (ADR207 character references, no entities). */
+/** ADR-257: one PPTX XML part, read as `checkCanvaPptx` reads it (ADR207 character references, no entities). */
 export function parsePptxXml(b: Uint8Array): any[] {
   const text = strFromU8(b);
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('XML entities are forbidden');

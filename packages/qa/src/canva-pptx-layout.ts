@@ -1,5 +1,5 @@
 /**
- * ADR-256: where each text frame of a captured one-page PPTX sits on the slide, and the colour,
+ * ADR-257: where each text frame of a captured one-page PPTX sits on the slide, and the colour,
  * size and weight each of its runs declares. The export QC measures these against the PNG capture of
  * the same Canva version: the frames give the boxes, the PNG the pixels behind them.
  *

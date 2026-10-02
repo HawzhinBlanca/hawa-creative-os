@@ -23,7 +23,7 @@ const scope = { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 
 const OFFICE = ['91500001', '91500002'];
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
-/** ADR-256: a checked PPTX and its PNG, captured from one saved Canva version, or from two. */
+/** ADR-257: a checked PPTX and its PNG, captured from one saved Canva version, or from two. */
 interface Shipped { pptx: Uint8Array; png: Buffer; pngVersion?: string }
 
 async function designed(picture: 'export' | 'preview' | 'none', report: Record<string, unknown> = {}, shipped?: Shipped) {
@@ -140,7 +140,7 @@ describe('D5 addendum: the office sees the draft it is asked to review', () => {
     expect(Object.keys(result.message ?? {}).sort()).toEqual(['parseMode', 'text']);
   });
 
-  it('ADR-256: low contrast and text near the edge of the shipped PNG are named in the alert; the QC run still passes', async () => {
+  it('ADR-257: low contrast and text near the edge of the shipped PNG are named in the alert; the QC run still passes', async () => {
     const grey = { x: 2, y: 20, w: 84, h: 20, color: 'CCCCCC' };
     const deck = pptx(grey, null, ['Autumn workshop poster']);
     const { taskId, result } = await designed('export', {}, { pptx: deck, png: capture([{ ...grey, ink: '#CCCCCC' }]) });
@@ -154,7 +154,7 @@ describe('D5 addendum: the office sees the draft it is asked to review', () => {
     expect(run.report).toMatchObject({ passed: true, contrastCompliant: false, safeMargins: false });
   });
 
-  it('ADR-256: a PNG from another saved version is not measured, and the alert has no warning line', async () => {
+  it('ADR-257: a PNG from another saved version is not measured, and the alert has no warning line', async () => {
     const grey = { x: 2, y: 20, w: 84, h: 20, color: 'CCCCCC' };
     const deck = pptx(grey, null, ['Autumn workshop poster']);
     const { taskId, result } = await designed('export', {}, { pptx: deck, png: capture([{ ...grey, ink: '#CCCCCC' }]), pngVersion: '2026-10-02T08:00:00Z' });

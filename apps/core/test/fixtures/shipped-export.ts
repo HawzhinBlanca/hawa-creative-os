@@ -1,5 +1,5 @@
 /**
- * ADR-256: a small Canva-like export made in-test: a one-page PPTX (a plain title frame and a Sorani
+ * ADR-257: a small Canva-like export made in-test: a one-page PPTX (a plain title frame and a Sorani
  * line inside a Canva-style scaled group) and the PNG captured from it (glyph-like bars in each frame's
  * text colour). Core has no archive or image dependency, so both are written by hand.
  */

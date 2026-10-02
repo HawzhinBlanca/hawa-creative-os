@@ -52,7 +52,7 @@ export async function findDraftImage(trx: Kysely<Database>, input: { tenantId: s
 /** At most this many warnings are named; the rest are counted (a caption holds 1024 characters). */
 const MAX_WARNINGS = 3;
 
-/** ADR-256: one line naming the export QC's warnings, or nothing. */
+/** ADR-257: one line naming the export QC's warnings, or nothing. */
 function warningsLine(warnings: string[] | undefined): string {
   if (!warnings?.length) return '';
   const more = warnings.length - MAX_WARNINGS;
@@ -60,7 +60,7 @@ function warningsLine(warnings: string[] | undefined): string {
 }
 
 /**
- * ADR-256: the warnings a stored QC report carries (`evaluateCanvaExportQc`). A report is read back
+ * ADR-257: the warnings a stored QC report carries (`evaluateCanvaExportQc`). A report is read back
  * from the database, so only short strings are taken.
  */
 export function qcReportWarnings(report: unknown): string[] {
@@ -69,7 +69,7 @@ export function qcReportWarnings(report: unknown): string[] {
 }
 
 /**
- * ADR-256: the warnings of the task's latest QC run, for its office alert: the run the Desk shows
+ * ADR-257: the warnings of the task's latest QC run, for its office alert: the run the Desk shows
  * (tasks.routes reads the latest by task), which the outcome's bridge has just written.
  */
 export async function draftQcWarnings(trx: Kysely<Database>, input: { tenantId: string; taskId: string }): Promise<string[]> {
@@ -94,7 +94,7 @@ export interface OfficeDraftAlertInput {
   /** The outcome, when the draft came with a failed automatic check (a copy or font mismatch). */
   check?: string;
   /**
-   * ADR-256: what the export QC measured on the shipped PNG and a person should look at (low contrast,
+   * ADR-257: what the export QC measured on the shipped PNG and a person should look at (low contrast,
    * text close to the edge). Advisory: the draft can still be approved.
    */
   warnings?: string[];

@@ -72,7 +72,7 @@ export async function recordManualCanvaReview(
   let copy: string[];
   try { copy = revisionCopy?.copy ?? savedDesignCopy(task.source, '').copy; }
   catch { return blocked('The saved request has no valid exact copy. Review the request before capture.'); }
-  // ADR-256: the PNG captured with it is the picture that ships; contrast and the safe area are measured on it.
+  // ADR-257: the PNG captured with it is the picture that ships; contrast and the safe area are measured on it.
   const qc = evaluate({ ...checked, preview_png: png.content, preview_sha256: png.sha256 }, copy);
   if (!qc.sourceTextObjects?.length)
     return blocked('The captured source has no complete map of addressable live text. Inspect the source in Canva and capture a valid editable export.');

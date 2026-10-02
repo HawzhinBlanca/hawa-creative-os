@@ -1,5 +1,5 @@
 /**
- * ADR-256: contrast and the safe area measured on the Canva export that ships.
+ * ADR-257: contrast and the safe area measured on the Canva export that ships.
  *
  * Hard QA holds the Studio render to the house safe area and to WCAG AA contrast before the design
  * goes to Canva. Nothing measured the design Canva hands back, which an office member may have edited
