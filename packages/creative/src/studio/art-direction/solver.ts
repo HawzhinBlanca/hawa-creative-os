@@ -959,6 +959,7 @@ class SolveContext {
   /** Ordered validated source roles, completing only explicit coverage obligations. */
   selectedPhotos(minimumForRecipe: number, maximum: number): SolverPhoto[] {
     const hero = this.hero();
+    maximum=Math.min(maximum,this.input.photoSelection?.maximum ?? maximum);
     const minimum = Math.max(minimumForRecipe, recipePhotoMinimum(this.input.photoSelection, this.input.photos.length));
     const available = new Map(this.input.photos.filter(p => p.photoIndex !== hero.photoIndex).map(p => [p.photoIndex, p]));
     const requested = this.input.choice.supportingPhotoIndices;

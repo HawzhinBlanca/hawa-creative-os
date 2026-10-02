@@ -110,3 +110,9 @@ First sealed combined full regression:8061 passed,1 failed,67 skipped. The failu
 ## Final verified checkpoint
 
 Engine tested commit1fcc15bb:8062 passed,0 failed,67 skipped; source manifest verified. Website6d46370:840 passed,0 failed/skipped;3 actual Chromium synthetic-transport controls pass, plus types/build/affected lint. The browser found and repaired a shared nested main landmark missed by unit wrappers. Hawa gateway actual isolated Restate replay/private handoff/tamper proof passes. No deployment, publication, public generation or customer/provider acceptance claim. Subsequent commits record evidence only. Ordered photos/current preview/actions/acceptance/download/hosting and real customer journey remain required.
+
+## ADR261 customer photo continuation —2026-10-02
+
+Website uploads/reorder/automatic-all-count now implemented locally, with immutable owner/client receipts, native ffmpeg decode bounds, same-key replay and durable originals. Six-photo actual Core projection and Studio reads retain requester order; actual Restate SDK preserves six refs unchanged. Explicit count is exact in deterministic solver/hard QA; source photos cannot be dropped by a model classification. Failed uploads block submission until resolved or explicitly removed.216 focused tests,842 website tests and5 browser controls pass. First full engine8071/2/67 is retained: release seal/untracked ADR manifest refusals require a clean committed source before final qualification. No public launch, generation or deployment.
+
+Next coding slice is current captured previews, then owned actions and independent acceptance/downloads. Public hosting choice and real Supabase/customer/Canva/native RTL/restart verification remain pending. Unreleased migration085 adds photo receipts and retains all old blob GC roots.

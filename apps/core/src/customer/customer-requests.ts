@@ -1,3 +1,5 @@
+import { blobStoreFor } from '../services/blob-store-context.js';
+import { CustomerPhotoError, customerPhotos, inspectCustomerPhoto, decodeCustomerPhoto, type CustomerPhoto } from './customer-photos.js';
 import { dailyDraftCap } from '../services/chat-intake.js';
 import { randomUUID } from 'node:crypto';
 import { customerValueHash } from './customer-web-lifecycle.js';
@@ -27,6 +29,8 @@ export interface CustomerDesignRequest {
   exactCopy: Array<{ text: string; language: 'en' | 'ckb' | 'ar' }>;
   designInstructions: string;
   variant: 'square' | 'portrait' | 'story';
+  photoIds?: string[];
+  photoUsage?: { mode: 'auto' | 'all' } | { mode: 'count'; count: number };
 }
 interface Account {
   id: string;
@@ -159,10 +163,44 @@ export class CustomerRequests {
           createdAt:new Date(row.created_at).toISOString(),question:row.question ?? null}));
     });
   }
+  async checkPhotoAccess(member:WorkspaceMember,clientId:string) {
+    return this.scoped(member,async trx=>{await sql`SELECT hawa.lock_customer_request_access(${clientId}::uuid)`.execute(trx);});
+  }
+  async uploadPhoto(member:WorkspaceMember,clientId:string,key:string,filename:string,mediaType:string,bytes:Buffer,hash:string) {
+    const inspected=inspectCustomerPhoto(bytes,mediaType,filename,hash);
+    return this.scoped(member,async (trx,account)=>{
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${account.id},0))`.execute(trx);
+      await sql`SELECT hawa.lock_customer_request_access(${clientId}::uuid)`.execute(trx);
+      const prior=(await sql<{id:string;client_id:string;filename:string;sha256:string;media_type:CustomerPhoto['mediaType'];size:number;width:number;height:number}>`
+        SELECT * FROM hawa.customer_photo_receipts WHERE tenant_id=${this.tenantId}::uuid
+        AND account_id=${account.id}::uuid AND action_key=${key}`.execute(trx)).rows[0];
+      if(prior) {
+        if(prior.client_id!==clientId.toLowerCase() || prior.filename!==filename || prior.sha256!==hash || prior.media_type!==mediaType || prior.size!==bytes.length)
+          throw new CustomerPhotoError(409,'DESIGN_PHOTO_IDEMPOTENCY_CONFLICT');
+        return {photo:{id:prior.id,filename:prior.filename,sha256:prior.sha256,mediaType:prior.media_type,size:prior.size,width:prior.width,height:prior.height},created:false};
+      }
+      const used=(await sql<{n:string;bytes:string}>`SELECT * FROM hawa.customer_photo_usage()`.execute(trx)).rows[0];
+      if(Number(used.n)>=40 || Number(used.bytes)+bytes.length>100*1024*1024)
+        throw new CustomerPhotoError(429,'DESIGN_PHOTO_LIMIT');
+      const store=blobStoreFor(this.db);
+      if(!store) throw new CustomerPhotoError(503,'DESIGN_PHOTO_STORE_UNAVAILABLE');
+      await decodeCustomerPhoto(bytes,mediaType);
+      const ref=await store.put(bytes,inspected.mediaType,{trx});
+      const saved=(await sql<{id:string}>`INSERT INTO hawa.customer_photo_receipts
+        (tenant_id,account_id,client_id,subject,action_key,filename,sha256,media_type,size,width,height)
+        VALUES(${this.tenantId}::uuid,${account.id}::uuid,${clientId}::uuid,${member.subject}::uuid,${key},${filename},
+          ${ref.sha256},${ref.mediaType},${ref.size},${inspected.width},${inspected.height}) RETURNING id`.execute(trx)).rows[0];
+      return {photo:{id:saved.id,filename,...ref,width:inspected.width,height:inspected.height},created:true};
+    });
+  }
   async create(member:WorkspaceMember,key:string,body:CustomerDesignRequest) {
     return this.scoped(member,async (trx,account)=>{
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${account.id},0))`.execute(trx);
       await sql`SELECT hawa.lock_customer_request_access(${body.clientId}::uuid)`.execute(trx);
+      const photos=await customerPhotos(trx,this.tenantId,account.id,body.clientId,body.photoIds);
+      if(body.photoUsage && (!photos.length || (body.photoUsage.mode==='count' &&
+        (!Number.isInteger(body.photoUsage.count) || body.photoUsage.count<1 || body.photoUsage.count>photos.length))))
+        throw new CustomerPhotoError(422,'DESIGN_PHOTOS_INVALID');
       const hash=customerValueHash(body);
       const prior=(await sql<{request_id:string;body_hash:string}>`SELECT request_id,body_hash FROM hawa.customer_web_requests
         WHERE tenant_id=${this.tenantId}::uuid AND account_id=${account.id}::uuid AND action_key=${key}`.execute(trx)).rows[0];

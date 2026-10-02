@@ -1,3 +1,4 @@
+import type { CustomerPhotoPolicy } from '@hawa/contracts';
 import { normaliseSorani } from './copy-completeness.js';
 
 /**
@@ -12,6 +13,8 @@ export interface PhotoSelection {
   mode: 'all' | 'choose';
   /** The fewest photos a design may place. Equal to the photo count in `all` mode. */
   minimum: number;
+  /** Explicit structured requester count, when exactly this many photos are required. */
+  maximum?: number;
   /** The phrase that set `choose`, for the record. */
   matched?: string;
   /**
@@ -107,10 +110,11 @@ export function photoSelectionFromInstructions(instructions: string | undefined,
 /** The selection a stored or inherited record states, checked, or undefined when it is not one. */
 export function photoSelectionOrUndefined(value: unknown, photoCount: number): PhotoSelection | undefined {
   if (!value || typeof value !== 'object') return undefined;
-  const { mode, minimum, matched, insisted, counted } = value as Record<string, unknown>;
+  const { mode, minimum, maximum, matched, insisted, counted } = value as Record<string, unknown>;
   if (mode === 'all') return { mode: 'all', minimum: photoCount, ...(insisted === true ? { insisted: true } : {}) };
   if (mode !== 'choose' || typeof minimum !== 'number' || !Number.isInteger(minimum) || minimum < 1) return undefined;
-  return { mode: 'choose', minimum: Math.min(photoCount, minimum), ...(typeof matched === 'string' ? { matched } : {}), ...(counted === true ? { counted: true } : {}) };
+  if(maximum!==undefined && (typeof maximum!=='number' || !Number.isInteger(maximum) || maximum<minimum || maximum>photoCount))return undefined;
+  return { mode: 'choose', minimum: Math.min(photoCount, minimum), ...(maximum!==undefined ? {maximum:maximum as number} : {}), ...(typeof matched === 'string' ? { matched } : {}), ...(counted === true ? { counted: true } : {}) };
 }
 
 /**
@@ -138,9 +142,22 @@ export function omittedPhotoIndices(placed: Array<{ photoIndex: number }> | unde
 /** The line the layout model reads about choosing, or '' when every photo is placed. */
 export function photoSelectionPrompt(selection: PhotoSelection | undefined, photoCount: number): string {
   if (!selection || selection.mode !== 'choose') return '';
+  if(selection.maximum!==undefined)return `The requester requires exactly ${selection.minimum} photos. Choose the strongest ${selection.minimum} of ${photoCount}; each chosen photo appears once and all other photos are left out.`;
   return (
     `The client lets you choose among the photographs: place at least ${selection.minimum} of the ${photoCount}, ` +
     `the ones that make the strongest design, each chosen photo once with its own photoIndex, and leave the others out. ` +
     `Placing all ${photoCount} is allowed only when the composition is genuinely better for it.`
   );
+}
+
+/** Explicit website controls outrank descriptive words; models cannot drop a source photo by reclassifying it. */
+export function customerPhotoSelection(policy:CustomerPhotoPolicy|undefined,instructions:string,photoCount:number):PhotoSelection {
+  if(!policy || policy.usage.mode==='auto') return photoSelectionFromInstructions(instructions,photoCount);
+  if(policy.photoCount!==photoCount) throw new Error('The admitted customer photo set changed');
+  if(policy.usage.mode==='all')return {mode:'all',minimum:photoCount,insisted:true};
+  if(policy.usage.mode!=='count')throw new Error('Invalid customer photo use');
+  const count=policy.usage.count;
+  if(!Number.isInteger(count) || count<1 || count>photoCount)throw new Error('Invalid customer photo count');
+  return count===photoCount ? {mode:'all',minimum:photoCount,insisted:true} :
+    {mode:'choose',minimum:count,maximum:count,counted:true,matched:'Explicit website photo count'};
 }

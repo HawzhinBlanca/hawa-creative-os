@@ -81,3 +81,11 @@ describe('photo selection from the requester\'s words (ADR-157, audit #17)', () 
     expect(photoSelectionPrompt({ mode: 'all', minimum: 6 }, 6)).toBe('');
   });
 });
+
+it('retains and explains an exact structured count without permitting extra photos',()=>{
+  const selection={mode:'choose' as const,minimum:2,maximum:2,counted:true};
+  expect(photoSelectionOrUndefined(selection,6)).toEqual(selection);
+  expect(photoSelectionOrUndefined({...selection,maximum:1},6)).toBeUndefined();
+  expect(photoSelectionPrompt(selection,6)).toContain('exactly 2 photos');
+  expect(photoSelectionPrompt(selection,6)).not.toContain('Placing all');
+});

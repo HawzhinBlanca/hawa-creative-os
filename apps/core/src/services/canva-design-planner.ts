@@ -1,3 +1,4 @@
+import { orderedCustomerPhotos } from '@hawa/contracts';
 import { assertTaskGenerationAllowed, assertStudioCallsResolved } from './task-generation-guard.js';
 import { assertNativeRevisionAdmission } from './native-revision-handoff.js';
 import { orderedAlbumImages } from './lifecycle-album.js';
@@ -198,8 +199,9 @@ export class CanvaDesignPlanner {
         WHERE f.tenant_id=${s.tenantId}::uuid AND f.task_id=${taskId}::uuid
           AND f.role='reference_image' ORDER BY f.created_at,f.sha256`.execute(db)).rows);
       const album=task.source?.payload?.lifecycleAlbum ?? task.source?.lifecycleAlbum;
-      const refs=orderedAlbumImages(album,storedRefs);
-      if(refs.length>1&&!album)throw new CanvaFlowError(422,'MULTIPLE_REFERENCE_IMAGES_UNSUPPORTED',
+      const webPhotos=task.source?.payload?.customerWebPhotos ?? task.source?.customerWebPhotos;
+      const refs=orderedCustomerPhotos(webPhotos,orderedAlbumImages(album,storedRefs));
+      if(refs.length>1&&!album&&!webPhotos)throw new CanvaFlowError(422,'MULTIPLE_REFERENCE_IMAGES_UNSUPPORTED',
         'This planner can use one request-owned reference image; review the remaining images in Studio.');
       for(const ref of refs){
         if(!['image/png','image/jpeg','image/webp'].includes(ref.media_type))

@@ -66,6 +66,32 @@ paths:
         '403': {description: Current customer admission denied}
         '404': {description: Job unavailable to this owner, including shared-brand foreign jobs}
         '503': {description: Dependency unavailable}
+  /v1/customer/clients/{clientId}/photos:
+    post:
+      security: [{WorkspaceMember: []}]
+      parameters:
+        - {name: clientId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 8, maxLength: 100}}
+        - {name: X-Content-SHA256, in: header, required: true, schema: {type: string, pattern: '^[a-f0-9]{64}$'}}
+        - {name: X-Photo-Filename, in: header, required: true, description: Percent-encoded original filename, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          image/png: {schema: {type: string, format: binary}}
+          image/jpeg: {schema: {type: string, format: binary}}
+          image/webp: {schema: {type: string, format: binary}}
+      responses:
+        '201': {description: Immutable owner/client receipt; actual decoded unchanged original, content: {application/json: {schema: {$ref: '#/components/schemas/PhotoReceipt'}}}}
+        '200': {description: Same-key same-content receipt; consumes no additional upload allowance, content: {application/json: {schema: {$ref: '#/components/schemas/PhotoReceipt'}}}}
+        '400': {description: Invalid filename/header/key}
+        '401': {description: Workspace sign-in required}
+        '403': {description: Current owner/client admission denied}
+        '408': {description: Stream exceeded total 15 second deadline}
+        '409': {description: Key bound to different bytes, filename or client}
+        '413': {description: Actual stream exceeds 10 MiB}
+        '422': {description: Unsupported, corrupt, hash mismatch or dimensions exceed 24 million pixels or 12000 per axis}
+        '429': {description: Account rolling daily 40 receipt or 100 MiB allowance exhausted}
+        '503': {description: Generation readiness off, decoder busy/unavailable or storage unavailable}
   /v1/office/customer-accounts:
     get:
       security: [{NamedOfficeAdministrator: []}]
@@ -102,6 +128,22 @@ components:
     WorkspaceMember: {type: http, scheme: bearer, bearerFormat: Supabase user JWT, description: Pinned workspace issuer and current has_app_access verified server-side on every request. Office keys and anonymous or service identities are refused.}
     NamedOfficeAdministrator: {type: http, scheme: bearer, bearerFormat: Hawa named Google OIDC session, description: Current persisted administrator and active session; shared office keys cannot provision customers.}
   schemas:
+    PhotoReceipt:
+      type: object
+      required: [photo, created]
+      properties:
+        created: {type: boolean}
+        photo:
+          type: object
+          required: [id, filename, sha256, mediaType, size, width, height]
+          properties:
+            id: {type: string, format: uuid}
+            filename: {type: string, maxLength: 255}
+            sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+            mediaType: {type: string, enum: [image/png, image/jpeg, image/webp]}
+            size: {type: integer, minimum: 1, maximum: 10485760}
+            width: {type: integer, minimum: 1, maximum: 12000}
+            height: {type: integer, minimum: 1, maximum: 12000}
     CustomerDesignRequest:
       type: object
       additionalProperties: false
@@ -117,6 +159,11 @@ components:
           items: {type: object, additionalProperties: false, required: [text, language], properties: {text: {type: string, minLength: 1, maxLength: 4000}, language: {type: string, enum: [en, ckb, ar]}}}
         designInstructions: {type: string, maxLength: 4000}
         variant: {type: string, enum: [square, portrait, story]}
+        photoIds: {type: array, maxItems: 20, uniqueItems: true, items: {type: string, format: uuid}, description: Owned client-bound receipts in requester order; duplicate image hashes rejected}
+        photoUsage:
+          oneOf:
+            - {type: object, additionalProperties: false, required: [mode], properties: {mode: {type: string, enum: [auto, all]}}}
+            - {type: object, additionalProperties: false, required: [mode, count], properties: {mode: {type: string, enum: [count]}, count: {type: integer, minimum: 1, maximum: 20}}}
     CustomerJob:
       type: object
       additionalProperties: false

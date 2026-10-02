@@ -320,7 +320,7 @@ describe.skipIf(!appUrl || !ownerUrl)('blob garbage collection against PostgreSQ
     const withFk = fks.rows.map((r) => `${String(r.tbl).replace(/^hawa\./, '')}.${r.col}`);
     // ADR-111 and ADR-112 retain studio model images and visual inputs through hawa.blobs (061, 062).
     const RETAINED_STUDIO = ['design_studio_call_results.image_blob_sha256', 'studio_visual_input_assets.blob_sha256'];
-    const UPLOADED_SOURCES = ['brand_assets.blob_sha256', 'uploaded_asset_sources.source_sha256'];
+    const UPLOADED_SOURCES = ['brand_assets.blob_sha256', 'uploaded_asset_sources.source_sha256','customer_photo_receipts.sha256'];
     expect(withFk.sort()).toEqual([...WITH_FOREIGN_KEY, 'client_documents.source_sha256', ...RETAINED_STUDIO, ...UPLOADED_SOURCES].sort());
     for (const column of withFk) expect(inView, `${column} has a foreign key to hawa.blobs but blob_references does not read it`).toContain(column);
     // ADR-061 also retains a pending lifecycle decision's JSON blob reference before its

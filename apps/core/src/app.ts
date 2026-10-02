@@ -169,6 +169,8 @@ export function createApp(options?: CreateAppOptions) {
       'X-Hawa-Office-Request',
       'Authorization',
       'Idempotency-Key',
+      'X-Content-SHA256',
+      'X-Photo-Filename',
       'If-Match-Version',
       'x-telegram-bot-api-secret-token',
       'x-waha-signature',

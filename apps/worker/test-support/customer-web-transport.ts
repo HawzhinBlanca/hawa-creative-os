@@ -15,9 +15,10 @@ process.env.HAWA_WORKER_TOKEN=secret;
 process.env.HAWA_CORE_INTERNAL_URL='http://127.0.0.1:50881';
 for(const key of ['OPENAI_API_KEY','ANTHROPIC_API_KEY','GEMINI_API_KEY','TELEGRAM_BOT_TOKEN']) process.env[key]='';
 const chatId=`web:${accountId}`;
+const photos=process.argv.includes('--photos') ? {v:1,images:Array.from({length:6},(_,i)=>({sha256:String(i+1).repeat(64),mediaType:'image/png',size:i+100}))} : undefined;
 const event={v:1,eventId:`open:${requestId}`,requestId,tenantId,chatId,
   draft:{platform:'hawzhin_web',sourceEventId:`lc-${requestId}-r0`,sourceChannelId:chatId,
-    clientId,rawText:'Synthetic exact copy',title:'Synthetic test',autoGenerate:true,designStudio:true}};
+    clientId,rawText:'Synthetic exact copy',title:'Synthetic test',autoGenerate:true,designStudio:true,...(photos ? {customerWebPhotos:photos} : {})}};
 const calls:Array<{path:string;body:unknown}>=[];
 const core=createServer(async(req,res)=>{
   let raw='';for await(const chunk of req)raw+=chunk;
@@ -56,13 +57,15 @@ try {
   for(let i=0;i<80 && !calls.some(c=>c.path==='/v1/internal/customer/web-message');i++)await new Promise(resolve=>setTimeout(resolve,100));
   const evidence=calls.filter(c=>c.path.endsWith('/open-event')),projection=calls.filter(c=>c.path.endsWith('/project')),messages=calls.filter(c=>c.path.endsWith('/web-message'));
   assert.equal(evidence.length,1);assert.deepEqual(evidence[0].body,refs);assert.equal(projection.length,1);assert.equal(messages.length,1);
+  assert.deepEqual((projection[0].body as {ops:Array<{draft:unknown}>}).ops[0].draft,event.draft);
   const tampered=await json(`${ingress}/ChatInbox/${chatId}/webOpen`,{...signCustomerOpenCommand(refs,secret),commandId:randomUUID()});
   assert.equal(tampered.status,403,JSON.stringify(tampered));assert.equal(calls.length,3);
   const output={timestamp:new Date().toISOString(),success:true,mode:'isolated-real-Restate-1.7.10-synthetic-Core',
     privateLifecycleHttpStatus:privateResult.status,invocationReceipt:first.receiptId,replayedReceipt:second.receiptId,
     gatewayHttpStatus:completion.status,tamperedHttpStatus:tampered.status,coreEvidenceReads:evidence.length,
-    lifecycleProjections:projection.length,durableWebMessages:messages.length,providersCalled:false,productionTouched:false};
-  mkdirSync('output/qualification/2026-10-02/customer-boundary',{recursive:true});
-  writeFileSync('output/qualification/2026-10-02/customer-boundary/WEB_RESTATE_TRANSPORT.json',JSON.stringify(output,null,2)+'\n');
+    lifecycleProjections:projection.length,durableWebMessages:messages.length,orderedPhotoReferences:photos?.images.length ?? 0,providersCalled:false,productionTouched:false};
+  const outputDir='output/qualification/2026-10-02/'+(photos ? 'customer-photos' : 'customer-boundary');
+  mkdirSync(outputDir,{recursive:true});
+  writeFileSync(outputDir+'/WEB_RESTATE_TRANSPORT.json',JSON.stringify(output,null,2)+'\n');
   console.log(JSON.stringify(output));
 } finally {await close(worker);await close(core);}

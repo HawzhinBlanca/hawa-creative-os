@@ -345,6 +345,15 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
       .where('tenant_id', '=', tenantId).where('id', '=', taskId).where('request_id', 'is', null)
       .returning('id').executeTakeFirst();
     if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The task acquired another request owner');
+    if (web && draft.customerWebPhotos) {
+      if(!sourceStore) throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN','The customer photo store is unavailable');
+      for(const ref of draft.customerWebPhotos.images) {
+        try { await sourceStore.read(ref.sha256,{verify:true}); }
+        catch {throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN','An admitted customer photo is missing or corrupt');}
+        await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
+          VALUES(${tenantId}::uuid,${taskId}::uuid,${ref.sha256},'reference_image')`.execute(trx);
+      }
+    }
     if (draft.lifecycleAlbum) await attachAlbum(trx, tenantId, taskId, draft.lifecycleAlbum);
     if (reviewed) await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
       VALUES (${tenantId}::uuid,${taskId}::uuid,${reviewed.evidence.sourceSha256},'source_document') ON CONFLICT DO NOTHING`.execute(trx);

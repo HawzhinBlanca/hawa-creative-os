@@ -1,3 +1,5 @@
+import { customerPhotoSelection } from '@hawa/creative';
+import { orderedCustomerPhotos } from '@hawa/contracts';
 import { StudioVisualInputsRepository, StudioVisualInputsError } from '@hawa/db';
 import { authorityPolicySha256, captureVisualInputs, restoreVisualInputs } from './visual-inputs.js';
 import { captureRenderFontInputs, reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
@@ -342,13 +344,13 @@ export class DesignStudioService {
             AND f.role = 'reference_image'
           ORDER BY f.created_at, f.sha256`.execute(db)).rows);
       if (refs.length && !this.blobs) throw new RequestOwnedImageUnavailable('A request-owned image needs its durable blob store');
-      if (payload.lifecycleAlbum) found.length = 0;
+      if (payload.lifecycleAlbum || payload.customerWebPhotos) found.length = 0;
       // The request's own photos are the design's content ("using only the provided photos"). An album
       // whose stored files no longer match its manifest, or a photo of a type the Studio cannot read,
       // used to be turned into no images at all by the caller (optionalImages), and the design went on
       // without them. It stops the run instead, with the reason (2026-09-29).
       let ordered: typeof refs;
-      try { ordered = orderedAlbumImages(payload.lifecycleAlbum, refs); }
+      try { ordered = orderedCustomerPhotos(payload.customerWebPhotos,orderedAlbumImages(payload.lifecycleAlbum, refs)); }
       catch (error) {
         throw new RequestOwnedImageUnavailable(`The request's photos cannot be used: ${error instanceof Error ? error.message : String(error)}.`);
       }
@@ -609,6 +611,7 @@ export class DesignStudioService {
       holdForSelection: Boolean(params.holdForSelection),
       copyBlocks: taskCtx.copyBlocks,
       instructions: taskCtx.content.instructions,
+      ...(taskCtx.task.source?.payload?.customerWebPhotos ? {webPhotoPolicy:{photoCount:taskCtx.task.source.payload.customerWebPhotos.images.length,usage:taskCtx.task.source.payload.body?.photoUsage ?? {mode:'auto'}}} : {}),
       clientId: taskCtx.task.client_id,
       referenceHash: hash(JSON.stringify(taskCtx.reference)),
       ...(taskCtx.reference.dnaVersion ? { dnaVersion: taskCtx.reference.dnaVersion } : {}),
@@ -1359,6 +1362,7 @@ export class DesignStudioService {
       height: request.height,
       tier: parseStudioTier(run.tier) ?? 'standard',
       instructions: request.instructions,
+      ...(request.webPhotoPolicy ? {webPhotoPolicy:request.webPhotoPolicy} : {}),
       copyBlocks: request.copyBlocks,
       referencePack,
       promotedRules,
@@ -1540,8 +1544,8 @@ export class DesignStudioService {
           ctx.requestImages = images;
           ctx.attachedImage = undefined;
           const reread = await inStudioSubstep('brief/images-rebrief', () => runBriefStage(ctx));
-          const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
-          stages.brief = { ...reread, photosSent, photoSelection: photoSelectionFromInstructions(ctx.instructions, photosSent), imagesRebrief: true };
+          const photosSent = ctx.webPhotoPolicy ? images.length : (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
+          stages.brief = { ...reread, photosSent, photoSelection: customerPhotoSelection(ctx.webPhotoPolicy,ctx.instructions,photosSent), imagesRebrief: true };
           await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
           stages.brief = await this.briefAsStored(s, runId, stages.brief);
           briefSoFar = stages.brief as LateReferenceBrief;
@@ -1585,7 +1589,12 @@ export class DesignStudioService {
           ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
         }
 
-        ctx.photoSelection = recordedPhotoSelection(stages.brief, ctx.photos?.length ?? 0); // ADR-157
+        if(ctx.webPhotoPolicy) {
+          if(images.length!==ctx.webPhotoPolicy.photoCount) throw new RequestOwnedImageUnavailable('The admitted website photo set changed');
+          // Website source photos are content. A model's reference/logo classification cannot remove them.
+          ctx.photos=images.map((url,index)=>({...contentPhotoFromDataUrl(url),notes:rolesNow?.find(r=>r.index===index)?.notes ?? ''}));
+        }
+        ctx.photoSelection = ctx.webPhotoPolicy ? customerPhotoSelection(ctx.webPhotoPolicy,ctx.instructions,ctx.photos?.length ?? 0) : recordedPhotoSelection(stages.brief, ctx.photos?.length ?? 0); // ADR-157
 
         // People cut out of their photos (ADR-032), when the request, the brief's reading of the
         // reference, or the design being changed calls for them. They are made once, at the layout
@@ -1650,7 +1659,7 @@ export class DesignStudioService {
           // Recorded on the run so the requester's note can say what became of their photos.
           const photosSent = (brief.imageRoles || []).filter((r) => r.role === 'content_photo').length || (ctx.photos?.length ?? 0);
           // ADR-157: "choose the best photos" and its like, read from the requester's words, no call.
-          const photoSelection = photoSelectionFromInstructions(ctx.instructions, photosSent);
+          const photoSelection = customerPhotoSelection(ctx.webPhotoPolicy,ctx.instructions,photosSent);
           stages.brief = { ...brief, photosSent, photoSelection };
           await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
           return { runId, status: 'conceiving', stage: 'brief', spentUsd: budget.spentUsd };

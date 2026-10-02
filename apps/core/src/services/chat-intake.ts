@@ -30,6 +30,7 @@ export interface ChatIntake {
   /** Core-retained image for a lifecycle open; only its verified blob reference enters Restate. */
   lifecycleImage?: BlobRef & { updateId: number };
   lifecycleAlbum?: LifecycleAlbumRef;
+  customerWebPhotos?: import('@hawa/contracts').CustomerPhotoManifest;
   lifecycleSource?: LifecycleSourceRef;
   /** Server-authored only after verification of the immutable source confirmation. */
   reviewedSource?: ReviewedSourceEvidence;
@@ -264,6 +265,7 @@ export async function persistChatIntake(
       rawRequestText: input.rawText, headlineEn: input.headlineEn || null, headlineCkb: input.headlineCkb || null,
       copyEn: input.copyEn || null, copyCkb: input.copyCkb || null,
       designInstructions: input.designInstructions, exactCopy: input.exactCopy,
+      ...(input.customerWebPhotos ? {customerWebPhotos:input.customerWebPhotos} : {}),
       ...(input.lifecycleAlbum ? { lifecycleAlbum: input.lifecycleAlbum } : {}),
       ...(input.reviewedSource ? { reviewedSource: input.reviewedSource } : {}),
       ...(input.copyExtraction ? { copyExtraction: input.copyExtraction } : {}),

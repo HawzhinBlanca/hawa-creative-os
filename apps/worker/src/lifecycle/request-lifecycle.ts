@@ -50,6 +50,7 @@ export interface OpenManualEvent {
     isInstructionOnly?: boolean;
     lifecycleImage?: BlobRef & { updateId: number };
     lifecycleAlbum?: import('@hawa/contracts').LifecycleAlbumRef;
+    customerWebPhotos?: import('@hawa/contracts').CustomerPhotoManifest;
     lifecycleSource?: import('@hawa/contracts').LifecycleSourceRef;
   };
 }

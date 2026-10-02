@@ -1,0 +1,79 @@
+{
+  "recordedAt": "2026-10-02T15:43:40.220389+00:00",
+  "scope": "ADR261 ordered customer photo vertical slice; local only; app transfer remains incomplete",
+  "websiteCommit": "3455659e0c6f8dc4cb7bcfec009d3d546938a8af",
+  "publicGenerationEnabled": false,
+  "deployed": false,
+  "published": false,
+  "sourceState": "Implementation complete locally; release source seal and final full regression pending",
+  "passingChecks": {
+    "FINAL_PHOTO_TESTS.json": {
+      "success": true,
+      "numTotalTests": 216,
+      "numPassedTests": 216,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "WEB_RESTATE_TRANSPORT.json": {
+      "timestamp": "2026-10-02T15:39:53.955Z",
+      "success": true,
+      "mode": "isolated-real-Restate-1.7.10-synthetic-Core",
+      "privateLifecycleHttpStatus": 400,
+      "invocationReceipt": "inv_17vmGUIFCDOW6TqdkB2lYsGuO2Ddmdxgn9",
+      "replayedReceipt": "inv_17vmGUIFCDOW6TqdkB2lYsGuO2Ddmdxgn9",
+      "gatewayHttpStatus": 200,
+      "tamperedHttpStatus": 403,
+      "coreEvidenceReads": 1,
+      "lifecycleProjections": 1,
+      "durableWebMessages": 1,
+      "orderedPhotoReferences": 6,
+      "providersCalled": false,
+      "productionTouched": false
+    },
+    "FULL_SITE_TESTS.json": {
+      "success": true,
+      "numPassedTests": 842,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "BROWSER_TESTS.json": {
+      "startTime": "2026-10-02T15:21:32.115Z",
+      "duration": 12029.841,
+      "expected": 5,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    }
+  },
+  "retainedFailures": {
+    "FULL_ENGINE_TESTS.json": {
+      "success": false,
+      "numTotalTests": 8140,
+      "numPassedTests": 8071,
+      "numFailedTests": 2,
+      "numPendingTests": 67
+    },
+    "notes": [
+      "Initial 5 failures: missing fixture encoder, wrong task source table query, grant version trigger and GC union cardinality; fixed fixtures, actual ffmpeg decode retained",
+      "First focused 79/1 and follow-up 97/2 stale migration/GC inventory failures corrected; explicit GC view retains all original foreign-key roots",
+      "Actual Restate assertion used draft at top level instead of ops[0].draft; corrected fixture and measured unchanged 6-photo SDK projection",
+      "First website full841/1 undeclared photo headers; mirrored required header catalog corrected, final842/0",
+      "First full engine8071/2/67: stale RELEASE_MANIFEST and untracked ADR in blueprint manifest; final source seal required, no test bypass"
+    ]
+  },
+  "remaining": [
+    "Current captured preview",
+    "Owned revisions/questions/cancel",
+    "Independent customer acceptance and current QC/hash-bound downloads",
+    "Public gateway/hosting/HTTPS/domain",
+    "Real two-user Supabase/Canva/native RTL/restart acceptance",
+    "Inherited site CI repair"
+  ],
+  "reasoning": [
+    "Uploads are immutable account/client receipts, not approved assets or Telegram events.",
+    "Body buffering and decoder concurrency are both bounded; live owner/client locks serialize receipt/quota admission.",
+    "Explicit web count/all are structured immutable Studio policy; models cannot reclassify source photos away. Maximum enforces exact count.",
+    "Auto selection keeps content-aware one or multiple photos and user direction. Uploaded source bytes, exact copy and governed logo identity remain distinct.",
+    "Upload failure blocks website submit until retry succeeds or owner removes failed photos. Same original bytes/filename/client recover the same upload key."
+  ]
+}

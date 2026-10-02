@@ -222,6 +222,7 @@ export interface StageContext {
    * keeps it. Absent is `all`: every photo placed.
    */
   photoSelection?: import('@hawa/creative').PhotoSelection;
+  webPhotoPolicy?: import('@hawa/contracts').CustomerPhotoPolicy;
   /** Hash-verified conditioning pixels retained before the first layout call. */
   visualInputs?: import('@hawa/creative').LayoutVisualInput[];
   /**

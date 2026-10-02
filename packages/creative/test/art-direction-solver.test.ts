@@ -343,3 +343,11 @@ describe('recipe solver (ADR-170): every recipe x size x direction', () => {
     });
   });
 });
+
+it('enforces the explicit exact-photo ceiling through solver and deterministic layout QA',()=>{
+  const selection={mode:'choose' as const,minimum:1,maximum:1,counted:true};
+  expect(()=>solveRecipe({width:1080,height:1350,choice:choice('hero_storyboard'),copy:{text:LATIN},photos:PHOTOS,palette:PALETTE,logoAspect:1,photoSelection:selection})).toThrow();
+  const layout=solve('hero_storyboard',1080,1350,false);
+  expect(layout.photos!.length).toBeGreaterThan(1);
+  expect(validateLayoutV2(layout,{...context(1080,1350,false),photoSelection:selection})).toMatchObject({ok:false,code:'PHOTOS'});
+});

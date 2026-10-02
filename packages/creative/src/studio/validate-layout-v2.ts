@@ -37,7 +37,7 @@ export interface LayoutValidationContext {
    * ADR-157: in `choose` mode the requester let the design choose among the photos, so a distinct
    * subset of at least `minimum` is placed. Absent is `all`.
    */
-  photoSelection?: { mode: 'all' | 'choose'; minimum: number; insisted?: boolean; counted?: boolean };
+  photoSelection?: { mode: 'all' | 'choose'; minimum: number; maximum?: number; insisted?: boolean; counted?: boolean };
   reference: ValidationReference;
   draftFont?: string;
   contrastEvaluator?: (box: Box, fontSize: number, bold: boolean) => number;
@@ -378,6 +378,8 @@ export function validateLayoutV2(
   const recipeMinimum = recipe ? recipePhotoMinimum(context.photoSelection, photoCount) : photoCount;
   const choosing = photoCount > 0 && (recipe ? recipeMinimum < photoCount : context.photoSelection?.mode === 'choose');
   const fewest = !choosing ? photoCount : recipe ? recipeMinimum : Math.max(1, Math.min(photoCount, context.photoSelection!.minimum));
+  if(context.photoSelection?.maximum!==undefined && photos.length>context.photoSelection.maximum)
+    return {ok:false,code:'PHOTOS',message:`The requester permits at most ${context.photoSelection.maximum} photos; the design places ${photos.length}`};
   if (choosing ? photos.length < fewest || photos.length > photoCount : photos.length !== photoCount) {
     return {
       ok: false,

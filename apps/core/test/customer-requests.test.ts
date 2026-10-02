@@ -1,3 +1,11 @@
+import { customerPhotoSelection } from '@hawa/creative';
+import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { blobStoreFor } from '../src/services/blob-store-context.js';
+import { inspectCustomerPhoto, decodeCustomerPhoto } from '../src/customer/customer-photos.js';
+import { orderedCustomerPhotos } from '@hawa/contracts';
 import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
 import { customerWebOpenEvent, recordCustomerWebMessage } from '../src/customer/customer-web-lifecycle.js';
 import { projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
@@ -569,4 +577,137 @@ it('retains an uppercase UUID submission body while resolving its canonical sele
  const event=await customerWebOpenEvent(db,f.tenantId,r.job.id);
  expect(event.draft.clientId).toBe(f.clientId);
  expect((await f.service.create(f.a.member,'request_001',body)).job.id).toBe(r.job.id);
+});
+
+const photoJpeg=readFileSync(new URL('./fixtures/telegram-photo-1280.jpg',import.meta.url));
+const photoHash=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
+async function upload(f:Awaited<ReturnType<typeof fixture>>,n=0,member=f.a.member) {
+  const bytes=execFileSync('ffmpeg',['-v','error','-f','image2pipe','-i','pipe:0','-vf',`scale=32:32,hue=h=${n*37}`,
+    '-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],{input:photoJpeg,maxBuffer:65536});
+  return f.service.uploadPhoto(member,f.clientId,'photo_key_'+n,`photo${n}.png`,'image/png',bytes,photoHash(bytes));
+}
+it('decodes actual JPEG/PNG/WebP originals and refuses malformed headers, hash mismatch, traversal and pixel bombs',async()=>{
+  const jpg=inspectCustomerPhoto(photoJpeg,'image/jpeg','original.jpg',photoHash(photoJpeg));
+  expect(jpg.width).toBeGreaterThan(0);
+  await decodeCustomerPhoto(photoJpeg,'image/jpeg');
+  const webp=readFileSync(new URL('./fixtures/customer-photo-32.webp',import.meta.url));
+  expect(inspectCustomerPhoto(webp,'image/webp','image.webp',photoHash(webp))).toMatchObject({width:32,height:32});
+  await decodeCustomerPhoto(webp,'image/webp');
+  expect(()=>inspectCustomerPhoto(photoJpeg,'image/png','photo.png',photoHash(photoJpeg))).toThrow('DESIGN_PHOTO_UNREADABLE');
+  expect(()=>inspectCustomerPhoto(photoJpeg,'image/jpeg','../photo.jpg',photoHash(photoJpeg))).toThrow('DESIGN_PHOTO_INVALID');
+  expect(()=>inspectCustomerPhoto(photoJpeg,'image/jpeg','photo.jpg','0'.repeat(64))).toThrow('DESIGN_PHOTO_HASH_MISMATCH');
+  const header=Buffer.alloc(24);Buffer.from('89504e470d0a1a0a','hex').copy(header);header.write('IHDR',12);header.writeUInt32BE(32,16);header.writeUInt32BE(32,20);
+  await expect(decodeCustomerPhoto(header,'image/png')).rejects.toMatchObject({code:'DESIGN_PHOTO_UNREADABLE'});
+  header.writeUInt32BE(12000,16);header.writeUInt32BE(12000,20);
+  expect(()=>inspectCustomerPhoto(header,'image/png','bomb.png',photoHash(header))).toThrow('DESIGN_PHOTO_DIMENSIONS');
+});
+it('retains six originals in requester order through the actual canonical projection without Telegram IDs',async()=>{
+  const f=await fixture();const photos=[];
+  for(let i=0;i<6;i++)photos.push((await upload(f,i)).photo);
+  const photoIds=[...photos].reverse().map(p=>p.id);
+  const body={...f.body,photoIds,photoUsage:{mode:'all' as const}};
+  const admitted=await f.service.create(f.a.member,'six_photos',body);
+  const open=await customerWebOpenEvent(db,f.tenantId,admitted.job.id);
+  expect(open.draft).toMatchObject({platform:'hawzhin_web',customerWebPhotos:{v:1,images:[...photos].reverse().map(({sha256,mediaType,size})=>({sha256,mediaType,size}))}});
+  expect(open.draft.lifecycleAlbum).toBeUndefined();expect(open.draft.lifecycleImage).toBeUndefined();
+  expect(open.draft.designInstructions).toContain('use all photos');
+  expect(open.draft.exactCopy).toEqual(f.body.exactCopy);
+  const projected=await projectLifecycleOpen(db,{requestId:open.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:open.draft,key:'open:'+open.requestId});
+  const task=(await sql<{id:string;source:Record<string,unknown>}>`SELECT t.id,e.data AS source FROM hawa.tasks t JOIN hawa.task_events e ON e.task_id=t.id AND e.event_type='task.created' WHERE t.request_id=${open.requestId}::uuid`.execute(owner)).rows[0];
+  const refs=(await sql<{sha256:string;media_type:string;size:string}>`SELECT f.sha256,b.media_type,b.size FROM hawa.task_files f
+    JOIN hawa.blobs b ON b.sha256=f.sha256 WHERE f.task_id=${task.id}::uuid`.execute(owner)).rows;
+  expect(refs).toHaveLength(6);
+  const payload=task.source.payload as Record<string,unknown>;
+  expect(orderedCustomerPhotos(payload.customerWebPhotos,refs).map(r=>r.sha256)).toEqual([...photos].reverse().map(p=>p.sha256));
+  expect(()=>orderedCustomerPhotos(payload.customerWebPhotos,refs.slice(1))).toThrow('Incomplete');
+  const studio=new DesignStudioService(db,undefined,{blobStore:blobStoreFor(db)});
+  const readImages=(studio as unknown as {requestImages:(scope:{tenantId:string;actorId:string},taskId:string)=>Promise<string[]>}).requestImages.bind(studio);
+  const images=await readImages({tenantId:f.tenantId,actorId:CHANNEL_INGRESS_USER_ID},task.id);
+  expect(images.map(u=>photoHash(Buffer.from(u.split(',')[1],'base64')))).toEqual([...photos].reverse().map(p=>p.sha256));
+
+  await expect(projectLifecycleOpen(db,{requestId:open.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:open.draft,key:'open:'+open.requestId})).resolves.toEqual(projected);
+  for(const p of photos)expect((await blobStoreFor(db)!.read(p.sha256,{verify:true})).length).toBe(p.size);
+});
+it('never forces all photos automatically and bounds an explicit count',async()=>{
+  const f=await fixture();const a=(await upload(f,1)).photo,b=(await upload(f,2)).photo;
+  const result=await f.service.create(f.a.member,'auto_photo',{...f.body,photoIds:[a.id,b.id]});
+  expect((await customerWebOpenEvent(db,f.tenantId,result.job.id)).draft.designInstructions).toBe(f.body.designInstructions);
+  await expect(f.service.create(f.a.member,'bad_count',{...f.body,photoIds:[a.id],photoUsage:{mode:'count',count:2}})).rejects.toMatchObject({code:'DESIGN_PHOTOS_INVALID'});
+  const count=await f.service.create(f.a.member,'one_photo',{...f.body,photoIds:[a.id,b.id],photoUsage:{mode:'count',count:1}});
+  expect((await customerWebOpenEvent(db,f.tenantId,count.job.id)).draft.designInstructions).toContain('use exactly 1 photos');
+});
+it('refuses other customers, brands, duplicate content and revoked grant photos',async()=>{
+  const f=await fixture();const a=(await upload(f)).photo;
+  await expect(f.service.create(f.b.member,'other_photo',{...f.body,photoIds:[a.id]})).rejects.toMatchObject({code:'DESIGN_PHOTOS_INVALID'});
+  await expect(f.service.create(f.a.member,'repeat_photo',{...f.body,photoIds:[a.id,a.id]})).rejects.toMatchObject({code:'DESIGN_PHOTOS_INVALID'});
+  const duplicate=await f.service.uploadPhoto(f.a.member,f.clientId,'same_byte_other','other.png',a.mediaType,await blobStoreFor(db)!.read(a.sha256),a.sha256);
+  await expect(f.service.create(f.a.member,'same_bytes',{...f.body,photoIds:[a.id,duplicate.photo.id]})).rejects.toMatchObject({code:'DESIGN_PHOTOS_INVALID'});
+  await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+  await expect(f.service.create(f.a.member,'revoked_photo',{...f.body,photoIds:[a.id]})).rejects.toMatchObject({status:403});
+});
+it('serializes concurrent upload replay and preserves immutable GC roots',async()=>{
+  const f=await fixture();const result=await Promise.all([upload(f),upload(f)]);
+  expect(result.map(r=>r.created).sort()).toEqual([false,true]);expect(result[0].photo).toEqual(result[1].photo);
+  const p=result[0].photo;
+  expect((await sql`SELECT sha256 FROM hawa.blob_references WHERE sha256=${p.sha256}`.execute(owner)).rows.length).toBeGreaterThan(0);
+  await expect(sql`UPDATE hawa.customer_photo_receipts SET filename='changed' WHERE id=${p.id}::uuid`.execute(owner)).rejects.toMatchObject({code:'55000'});
+  await expect(f.service.uploadPhoto(f.a.member,f.clientId,'photo_key_0','changed.png',p.mediaType,await blobStoreFor(db)!.read(p.sha256),p.sha256)).rejects.toMatchObject({status:409});
+  await sql`INSERT INTO hawa.customer_photo_receipts(tenant_id,account_id,client_id,subject,action_key,filename,sha256,media_type,size,width,height)
+    SELECT tenant_id,account_id,client_id,subject,'quota_'||n,filename,sha256,media_type,size,width,height
+    FROM hawa.customer_photo_receipts CROSS JOIN generate_series(1,39) n WHERE id=${p.id}::uuid`.execute(owner);
+  await expect(upload(f,2)).rejects.toMatchObject({status:429});
+});
+it('mounts binary uploads under customer authentication, exact replay, disabled admission and actual streamed bounds',async()=>{
+  const f=await fixture();const app=new Hono();registerCustomerRoutes(app,f.service,async()=>f.a.member,true);
+  const headers={'Content-Type':'image/jpeg','Idempotency-Key':'http_photo','X-Content-SHA256':photoHash(photoJpeg),'X-Photo-Filename':encodeURIComponent('Original photo.jpg')};
+  const url='/v1/customer/clients/'+f.clientId+'/photos';
+  const first=await app.request(url,{method:'POST',headers,body:new Uint8Array(photoJpeg)});expect(first.status).toBe(201);
+  expect((await app.request(url,{method:'POST',headers,body:new Uint8Array(photoJpeg)})).status).toBe(200);
+  const huge=await app.request(url,{method:'POST',headers,body:new Uint8Array(10*1024*1024+1)});expect(huge.status).toBe(413);
+  const disabled=new Hono();registerCustomerRoutes(disabled,f.service,async()=>f.a.member,false);
+  expect((await disabled.request(url,{method:'POST',headers,body:new Uint8Array(photoJpeg)})).status).toBe(503);
+  await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+  expect((await app.request(url,{method:'POST',headers,body:new Uint8Array(photoJpeg)})).status).toBe(403);
+});
+
+it('binds explicit web photo choices deterministically even when words say choose best',()=>{
+  expect(customerPhotoSelection({photoCount:6,usage:{mode:'all'}},'Choose the best photos',6)).toEqual({mode:'all',minimum:6,insisted:true});
+  expect(customerPhotoSelection({photoCount:6,usage:{mode:'count',count:2}},'Use all photos',6)).toMatchObject({mode:'choose',minimum:2,maximum:2,counted:true});
+  expect(()=>customerPhotoSelection({photoCount:6,usage:{mode:'all'}},'',5)).toThrow('changed');
+});
+
+it('refuses a same-owner foreign-brand photo and never resets upload allowance after brand revocation',async()=>{
+  const f=await fixture(),otherClient=randomUUID();
+  await sql`INSERT INTO hawa.clients(id,tenant_id,code,name,status) VALUES(${otherClient}::uuid,${f.tenantId}::uuid,${otherClient},'Second synthetic brand','active')`.execute(owner);
+  await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role) VALUES(${f.tenantId}::uuid,${otherClient}::uuid,${f.a.userId}::uuid,'requester')`.execute(owner);
+  await withRlsContext(db,{tenantId:f.tenantId,userId:f.adminId,role:'administrator'},async trx=>{
+    await sql`INSERT INTO hawa.customer_client_grants(tenant_id,account_id,client_id,provisioned_by,reason)
+      VALUES(${f.tenantId}::uuid,${f.a.id}::uuid,${otherClient}::uuid,${f.adminId}::uuid,'Synthetic second brand')`.execute(trx);
+  });
+  const p=(await f.service.uploadPhoto(f.a.member,otherClient,'second_photo','second.jpg','image/jpeg',photoJpeg,photoHash(photoJpeg))).photo;
+  await expect(f.service.create(f.a.member,'wrong_brand',{...f.body,photoIds:[p.id]})).rejects.toMatchObject({code:'DESIGN_PHOTOS_INVALID'});
+  await sql`INSERT INTO hawa.customer_photo_receipts(tenant_id,account_id,client_id,subject,action_key,filename,sha256,media_type,size,width,height)
+    SELECT tenant_id,account_id,client_id,subject,'revoked_quota_'||n,filename,sha256,media_type,size,width,height
+    FROM hawa.customer_photo_receipts CROSS JOIN generate_series(1,39) n WHERE id=${p.id}::uuid`.execute(owner);
+  await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid AND client_id=${otherClient}::uuid`.execute(owner);
+  await expect(upload(f,8)).rejects.toMatchObject({status:429});
+});
+
+it('bounds concurrent streaming photo bodies before buffering and releases stalled slots on deadline',async()=>{
+  const f=await fixture(),app=new Hono();registerCustomerRoutes(app,f.service,async()=>f.a.member,true);
+  const checked=vi.spyOn(f.service,'checkPhotoAccess').mockResolvedValue(undefined);
+  const headers={'Content-Type':'image/jpeg','Idempotency-Key':'stream_photo','X-Content-SHA256':photoHash(photoJpeg),'X-Photo-Filename':'photo.jpg'};
+  const url='/v1/customer/clients/'+f.clientId+'/photos';
+  vi.useFakeTimers();
+  try {
+    const stream=()=>new ReadableStream({pull(){return new Promise(()=>undefined);},cancel(){return new Promise(()=>undefined);}});
+    const init=(body:ReadableStream)=>({method:'POST',headers,body,duplex:'half'} as RequestInit);
+    const one=app.request(url,init(stream())),two=app.request(url,init(stream()));
+    for(let i=0;i<20 && checked.mock.calls.length<2;i++)await Promise.resolve();
+    expect(checked).toHaveBeenCalledTimes(2);
+    expect((await app.request(url,{method:'POST',headers,body:new Uint8Array(photoJpeg)})).status).toBe(503);
+    await vi.advanceTimersByTimeAsync(15001);
+    expect((await one).status).toBe(408);expect((await two).status).toBe(408);
+  } finally {vi.useRealTimers();checked.mockRestore();}
+  expect((await app.request(url,{method:'POST',headers,body:new Uint8Array(photoJpeg)})).status).toBe(201);
 });

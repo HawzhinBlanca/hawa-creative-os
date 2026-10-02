@@ -1,3 +1,5 @@
+import { customerPhotos } from './customer-photos.js';
+import type { CustomerPhotoManifest } from '@hawa/contracts';
 import { createHash } from 'node:crypto';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { CHANNEL_INGRESS_USER_ID, isCustomerOpenCommand, type CustomerOpenCommand, type OutboundMessage } from '@hawa/contracts';
@@ -18,12 +20,13 @@ export interface WebReceipt {
   body:CustomerDesignRequest;body_hash:string;dna_version:number;
 }
 
-export function customerWebDraft(receipt:WebReceipt):ChatIntake {
+export function customerWebDraft(receipt:WebReceipt,photos?:CustomerPhotoManifest):ChatIntake {
   const body=receipt.body;
   if (body.clientId.toLowerCase()!==receipt.client_id || customerValueHash(body)!==receipt.body_hash)
     throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT','The retained web brief does not match its scope or hash');
   return {platform:'hawzhin_web',sourceEventId:`lc-${receipt.request_id}-r0`,sourceChannelId:`web:${receipt.account_id}`,
-    title:body.title,rawText:body.exactCopy.map(b=>b.text).join('\n\n'),designInstructions:body.designInstructions,
+    title:body.title,rawText:body.exactCopy.map(b=>b.text).join('\n\n'),designInstructions:body.designInstructions+(body.photoUsage?.mode==='all' ? '\nRequester photo requirement: use all photos.' : body.photoUsage?.mode==='count' ? `\nRequester photo requirement: use exactly ${body.photoUsage.count} photos.` : ''),
+    ...(photos ? {customerWebPhotos:photos} : {}),
     exactCopy:body.exactCopy,clientId:receipt.client_id,autoGenerate:true,designStudio:true,
     variant:{square:{width:1080,height:1080},portrait:{width:1080,height:1350},story:{width:1080,height:1920}}[body.variant],
     studioOptions:{tier:'standard',imagery:'auto'}};
@@ -51,7 +54,9 @@ export async function authorizeCustomerWebOpen(trx:Kysely<Database>,tenantId:str
     await sql`SELECT hawa.lock_customer_request_access(${receipt.client_id}::uuid)`.execute(trx);
     const dna=(await sql<{version:number}>`SELECT hawa.pin_customer_dna(${receipt.client_id}::uuid) AS version`.execute(trx)).rows[0];
     if(dna.version!==receipt.dna_version) throw new LifecycleProjectionConflict('EVIDENCE_CHANGED','The admitted brand version changed before projection');
-    return {receipt,draft:customerWebDraft(receipt),owner:{accountId:account.id,userId:account.user_id},dnaVersion:receipt.dna_version};
+    const photos=await customerPhotos(trx,tenantId,account.id,receipt.client_id,receipt.body.photoIds);
+    const manifest=photos.length ? {v:1 as const,images:photos.map(({sha256,mediaType,size})=>({sha256,mediaType,size}))} : undefined;
+    return {receipt,draft:customerWebDraft(receipt,manifest),owner:{accountId:account.id,userId:account.user_id},dnaVersion:receipt.dna_version};
   } catch(error) {
     failed=true;
     if(error && typeof error==='object' && 'code' in error && error.code==='42501')
