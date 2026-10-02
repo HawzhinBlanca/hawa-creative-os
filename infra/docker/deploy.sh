@@ -257,6 +257,11 @@ if [[ ! "$BUILD_COMMIT" =~ ^[0-9a-f]{40}$ || "$BUILD_COMMIT" != "$CHECKOUT_COMMI
   exit 1
 fi
 export HAWA_BUILD_COMMIT="$BUILD_COMMIT"
+# A deployment never drops a release someone else put live (release_lib.sh, hawa_deploy_keeps_live).
+if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
+  source "${ROOT_DIR}/infra/ops/release_lib.sh"
+  hawa_deploy_keeps_live "$ROOT_DIR" "$BUILD_COMMIT" || exit 1
+fi
 
 # Compose tags are mutable. Inspect the just-built image itself before starting Core/Desk or
 # switching Restate to a new worker. The deployment receipt will later record these image IDs.
