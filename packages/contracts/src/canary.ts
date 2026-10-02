@@ -10,6 +10,12 @@
  * sunk by a typo or a copied id. Both bounds are safe JavaScript integers.
  */
 export const CANARY_CHAT_ID_MIN = 2 ** 52;
+/**
+ * ADR-254: the canary's own client, "Canary Test" (packages/creative/assets/clients/canary-test.json and
+ * db/seed.sql). An onboarding pack, so nothing is ever designed for it automatically; it is named only by
+ * its two words, and it is never offered to an office member as an organisation to choose.
+ */
+export const CANARY_TEST_CLIENT_ID = 'c1000000-0000-4000-8000-000000000099';
 export const CANARY_CHAT_ID_MAX = 2 ** 53 - 1;
 
 /** True only for an id in the range no Telegram chat can have (written as the plain digits). */

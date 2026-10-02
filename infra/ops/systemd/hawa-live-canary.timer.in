@@ -1,9 +1,9 @@
 # Rendered by infra/ops/install_systemd_units.sh (ADR-141); edit the template in infra/ops/systemd/, not the copy.
 [Unit]
-Description=Hawa nightly live canary, 03:30 Asia/Baghdad (it waits for the nightly backup); a missed night is not caught up
+Description=Hawa nightly live canary, 04:30 Asia/Baghdad, an hour after the nightly backup (it still waits for one running, ADR-254); a missed night is not caught up
 
 [Timer]
-OnCalendar=*-*-* 03:30:00 Asia/Baghdad
+OnCalendar=*-*-* 04:30:00 Asia/Baghdad
 Persistent=false
 AccuracySec=1min
 Unit=hawa-live-canary.service

@@ -6,7 +6,7 @@ import {
   CANARY_CHAT_ID_MAX, CANARY_CHAT_ID_MIN, SYSTEM_AUTOMATION_USER_ID, canaryChatIdFromEnv, canaryChatProblem, isCanaryChat, isReservedCanaryChatId,
   type OutboundMessage,
 } from '@hawa/contracts';
-import { canarySinkFor, handleSend, markIdOf, SEND_STEP, sendAttempt, type SenderContext, type TelegramSenderDeps } from '../src/lifecycle/telegram-sender.js';
+import { cachedIntakeChats, canarySinkFor, handleSend, markIdOf, SEND_STEP, sendAttempt, type SenderContext, type TelegramSenderDeps } from '../src/lifecycle/telegram-sender.js';
 import { canarySinkMessageId, isCanaryTask, readSendMark, type TelegramSender as BridgeLike } from '../src/delivery-notification.js';
 import { officeAlertRoute } from '../src/lifecycle/office-chats.js';
 
@@ -177,6 +177,35 @@ describe('Core\'s own office messages through the outbox (notify.telegram) are s
       expect(await isCanaryTask(trx, outboxTenant, ownerTask, CANARY)).toBe(false);
       expect(await isCanaryTask(trx, outboxTenant, canaryTask, OWNER_CHAT)).toBe(false);
     });
+  });
+
+  it('the sender reads a task\'s intake once per task, and keeps no answer for a task not yet written (ADR-254)', async () => {
+    const repo = new OutboxRepository(db);
+    const created = async (chatId: string, taskId = randomUUID()) => {
+      await inTenant((trx) => repo.enqueue({ tenantId: outboxTenant, aggregateType: 'task', aggregateId: taskId, commandType: 'task.created',
+        idempotencyKey: `canary-task-${taskId}`, payload: { sourcePlatform: 'telegram', sourceChannelId: chatId } }, trx));
+      await inTenant((trx) => sql`UPDATE hawa.outbox_commands SET state = 'delivered' WHERE aggregate_id = ${taskId}::uuid`.execute(trx));
+      return taskId;
+    };
+    const { bridge } = recordingBridge();
+    const real: TelegramSenderDeps = { ...deps(bridge, CANARY), isCanaryTask: undefined };
+    const alert = (taskId: string) => message('9000001', { tenantId: outboxTenant, taskId });
+    const canaryTask = await created(CANARY), ownerTask = await created(OWNER_CHAT);
+    expect(await canarySinkFor(real, alert(canaryTask))).toBe('canary_request');
+    expect(await canarySinkFor(real, alert(ownerTask))).toBeNull();
+    // Not written yet: not the canary's now, and nothing kept, so it is read again once it is.
+    const later = randomUUID();
+    expect(await canarySinkFor(real, alert(later))).toBeNull();
+    await created(CANARY, later);
+    expect(await canarySinkFor(real, alert(later))).toBe('canary_request');
+    // A found answer is read once; an unfound one and a failed read are never kept.
+    let reads = 0;
+    const key = `cache-test|${randomUUID()}`;
+    expect(await cachedIntakeChats(key, async () => { reads += 1; return undefined; })).toBeUndefined();
+    await expect(cachedIntakeChats(key, async () => { reads += 1; throw new Error('database down'); })).rejects.toThrow('database down');
+    expect(await cachedIntakeChats(key, async () => { reads += 1; return [CANARY]; })).toEqual([CANARY]);
+    expect(await cachedIntakeChats(key, async () => { reads += 1; return []; })).toEqual([CANARY]);
+    expect(reads).toBe(3);
   });
 
   it('records one for the canary chat, and sends one for a real chat even when that chat is set as HAWA_CANARY_CHAT_ID', async () => {

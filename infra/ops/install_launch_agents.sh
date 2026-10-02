@@ -5,7 +5,7 @@
 #   design.hawa.backup-restore-drill  Sundays 04:00:                 infra/backup/backup_restore_drill.sh (schema parity)
 #   design.hawa.restore-drill         the 1st of each month, 05:00:  infra/backup/restore_drill.sh (data and files, ADR-035)
 #   design.hawa.offsite-copy          05:30:                         infra/backup/offsite_copy.sh (ADR-141; copies nothing until HAWA_OFFSITE_DEST is set)
-#   design.hawa.live-canary           03:30 local time:              infra/ops/live_canary.sh (ADR-240; after the backup, skipped until HAWA_CANARY_CHAT_ID is set)
+#   design.hawa.live-canary           04:30 local time:              infra/ops/live_canary.sh (ADR-240/254; after the backup, skipped until HAWA_CANARY_CHAT_ID is set)
 #
 #   bash infra/ops/install_launch_agents.sh            # install or refresh
 #   bash infra/ops/install_launch_agents.sh --uninstall
@@ -76,9 +76,12 @@ write_plist design.hawa.restore-drill "$ROOT/infra/backup/restore_drill.sh" "<ke
 # many sets to keep), which are added to its plist by hand; without HAWA_OFFSITE_DEST it copies nothing.
 write_plist design.hawa.offsite-copy "$ROOT/infra/backup/offsite_copy.sh" "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>5</integer><key>Minute</key><integer>30</integer></dict>" "" \
   "$(carried_env design.hawa.nightly-backup '^HAWA_' | sed -E 's#<key>HAWA_OFFSITE_[A-Z0-9_]+</key><string>[^<]*</string>##g')$(carried_env design.hawa.offsite-copy '^HAWA_OFFSITE_')"
-# The nightly live canary (ADR-240): started with the backup, it waits for the backup to finish, and
-# skips a night during a deploy, on a loaded host, or until the canary is configured in .env.production.
-write_plist design.hawa.live-canary "$ROOT/infra/ops/live_canary.sh" "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer></dict>"
+# The nightly live canary (ADR-240): an hour after the backup (ADR-254; at the same minute it could start
+# before the backup and not wait for it), it still waits for a backup that is running, and skips a night
+# during a deploy, on a loaded host, or until the canary is configured in .env.production. It takes only
+# the nightly job's archive destination, to see the backup's archive lock.
+write_plist design.hawa.live-canary "$ROOT/infra/ops/live_canary.sh" "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>4</integer><key>Minute</key><integer>30</integer></dict>" "" \
+  "$(carried_env design.hawa.nightly-backup '^HAWA_BACKUP_ARCHIVE_DEST$')"
 if [[ "$RENDER" == 1 ]]; then echo "rendered ${#AGENT_LABELS[@]} launch agents into $OUT"; exit 0; fi
 for label in "${AGENT_LABELS[@]}"; do
   launchctl bootstrap "gui/$uid" "$AGENTS/$label.plist"

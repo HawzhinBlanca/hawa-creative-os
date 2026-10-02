@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 # The nightly live canary (ADR-240): plays a fixed conversation through production's Telegram request
 # path as the canary chat (scripts/live_canary.ts) and alerts the operator when the bot got anything
-# wrong. The launch agent design.hawa.live-canary runs it at 03:30 (infra/ops/install_launch_agents.sh).
+# wrong. The launch agent design.hawa.live-canary runs it at 04:30, an hour after the nightly backup
+# (infra/ops/install_launch_agents.sh; ADR-254).
 #
 #   bash infra/ops/live_canary.sh            # one night's run
 #
 # It never runs during a deploy (it holds the deploy lock, infra/ops/deploy_lock.py, and skips the night
 # when a deploy has it), when the load average is above HAWA_CANARY_MAX_LOAD (10), or on a host that is
 # not production; it waits up to HAWA_CANARY_BACKUP_WAIT seconds (2700) for the nightly backup, which
-# stops Restate for its copy, to finish. Settings come from the deployed release's .env.production:
+# stops Restate for its copy, to finish: seen as its process, or as its exclusive hold on the archive
+# lock (HAWA_BACKUP_ARCHIVE_DEST/.restate-backup.lock, infra/backup/archive_lock.py). Settings come from the deployed release's .env.production:
 # HAWA_CANARY_CHAT_ID, HAWA_CANARY_CLIENT_ID, HAWA_CANARY_CLIENT_NAME (HAWA_CANARY_MAX_USD optional).
 # With no HAWA_CANARY_CHAT_ID there the night is skipped quietly (not configured yet).
 #
 # Results: ~/.hawa/logs/canary/<UTC stamp>.json and .txt, and latest.json/latest.txt. A failed night,
 # and a second skipped night in a row, are sent to the operator through the watchdog's alert path
-# (watchdog.sh --notify).
+# (watchdog.sh --notify). A quiet skip (not production, not configured) is recorded with "quiet": true
+# and never counts toward the two nights: it carries the last counted night's status forward
+# ("countedStatus", ADR-254).
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 source "$ROOT/infra/ops/host_lib.sh"
@@ -30,17 +34,23 @@ say() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
 mkdir -p "$OUT"; chmod 700 "$OUT"
 
 notify() { bash "$DEPLOY_ROOT/infra/ops/watchdog.sh" --notify "$1" >/dev/null 2>&1 || say "the operator could not be alerted"; }
+# The status of the last night that counts: a quiet skip's own status never does (ADR-254), so its
+# record carries the one before it.
 previous_status() { python3 -c 'import json,sys
-try: print(json.load(open(sys.argv[1])).get("status",""))
+try:
+  d = json.load(open(sys.argv[1]))
+  print(d.get("countedStatus") or "" if d.get("quiet") else d.get("status", ""))
 except Exception: print("")' "$OUT/latest.json"; }
-# A skipped night is recorded like any other; two in a row (other than "not configured") are alerted.
+# A skipped night is recorded like any other; two counted skips in a row are alerted. Quiet skips (this
+# host is not production, the canary is not configured) are recorded but neither count nor reset it.
 skip() {
   local reason="$1" quiet="${2:-}" before now
   before="$(previous_status)"; now="$(date -u +%FT%TZ)"
-  python3 - "$OUT" "$STAMP" "$now" "$reason" <<'PY'
+  python3 - "$OUT" "$STAMP" "$now" "$reason" "${quiet:+1}" "$before" <<'PY'
 import json, os, sys
-out, stamp, now, reason = sys.argv[1:5]
+out, stamp, now, reason, quiet, before = sys.argv[1:7]
 result = {"v": 1, "status": "skipped", "startedAt": now, "finishedAt": now, "mode": "unknown", "checks": [], "requests": [], "spentUsd": None, "reason": reason}
+if quiet: result.update(quiet=True, countedStatus=before or None)
 text = f"Hawa nightly canary SKIPPED {now}\nReason: {reason}\n"
 for name, body in ((f"{stamp}.json", json.dumps(result, indent=2) + "\n"), (f"{stamp}.txt", text), ("latest.json", json.dumps(result, indent=2) + "\n"), ("latest.txt", text)):
     tmp = os.path.join(out, f".{name}.tmp")
@@ -64,7 +74,13 @@ if [[ "${HAWA_DEPLOY_LOCK_HELD:-}" != 1 ]]; then
 fi
 
 # 3. Configured?
-setting() { { grep -E "^$1=" "$PROD" 2>/dev/null || true; } | tail -1 | cut -d= -f2-; }
+# A value as compose reads it: one pair of matching surrounding quotes, single or double, is not part of
+# it (ADR-254; HAWA_CANARY_CLIENT_NAME="Canary Test" was read with its quotes).
+setting() {
+  local v; v="$({ grep -E "^$1=" "$PROD" 2>/dev/null || true; } | tail -1 | cut -d= -f2- | tr -d '\r')"
+  if [[ ${#v} -ge 2 && ( ( "${v:0:1}" == '"' && "${v: -1}" == '"' ) || ( "${v:0:1}" == "'" && "${v: -1}" == "'" ) ) ]]; then v="${v:1:${#v}-2}"; fi
+  printf '%s' "$v"
+}
 export HAWA_CANARY_CHAT_ID="$(setting HAWA_CANARY_CHAT_ID)" HAWA_CANARY_CLIENT_ID="$(setting HAWA_CANARY_CLIENT_ID)" \
   HAWA_CANARY_CLIENT_NAME="$(setting HAWA_CANARY_CLIENT_NAME)"
 max_usd="$(setting HAWA_CANARY_MAX_USD)"; [[ -z "$max_usd" ]] || export HAWA_CANARY_MAX_USD="$max_usd"
@@ -76,9 +92,23 @@ if [[ -n "$load" ]] && python3 -c 'import sys; sys.exit(0 if float(sys.argv[1]) 
   skip "the load average is ${load}, above ${MAX_LOAD}"
 fi
 
-# 5. After the nightly backup, which stops Restate and pauses intake for its copy (also at 03:30).
+# 5. After the nightly backup, which stops Restate and pauses intake for its copy (03:30, an hour
+# earlier; a backup missed while the host was off runs at boot). It is running while its process is
+# seen, or while something holds the archive lock exclusively: only the nightly backup takes it so
+# (restore drills take it shared). The probe asks for a shared hold without waiting and lets go at once.
+ARCHIVE_LOCK="${HAWA_BACKUP_ARCHIVE_DEST:-$HOME/.hawa/snapshots_archive}/.restate-backup.lock"
+backup_running() {
+  pgrep -f 'infra/backup/(nightly_backup\.sh|restate_nightly\.py)' >/dev/null 2>&1 && return 0
+  [[ -f "$ARCHIVE_LOCK" ]] || return 1
+  python3 -c 'import fcntl, os, sys
+try: fd = os.open(sys.argv[1], os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+except OSError: sys.exit(1)
+try: fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+except BlockingIOError: sys.exit(0)
+fcntl.flock(fd, fcntl.LOCK_UN); sys.exit(1)' "$ARCHIVE_LOCK"
+}
 waited=0
-while pgrep -f 'infra/backup/(nightly_backup\.sh|restate_nightly\.py)' >/dev/null 2>&1; do
+while backup_running; do
   (( waited < BACKUP_WAIT )) || skip "the nightly backup was still running after ${BACKUP_WAIT} s"
   (( waited > 0 )) || say "waiting for the nightly backup to finish"
   sleep 30; waited=$((waited + 30))
