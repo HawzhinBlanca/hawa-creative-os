@@ -325,4 +325,14 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `clientQuestion.timedOutToOffice` | I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. | نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن. | needs native review |
 | `clientQuestion.clientNoted` | Thanks. I've told the office that {title} is for {client}. | سوپاس. بە ئۆفیسەکەم ڕاگەیاند کە {title} بۆ {client}ە. | needs native review |
 
+
+## intakeLimits (ADR-250)
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `intakeLimits.tooManyPassed` | This asks for {count} designs, more than I can start from one message, so I've passed it to the office. They'll follow up with you here. | ئەمە داوای {count} دیزاین دەکات، کە لەوە زیاترە لە یەک نامەدا دەستیان پێبکەم، بۆیە ناردم بۆ ئۆفیسەکە. لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
+| `intakeLimits.tooManyKept` | This asks for {count} designs, more than I can start from one message, so I've kept it for the office. They'll follow up with you here. | ئەمە داوای {count} دیزاین دەکات، کە لەوە زیاترە لە یەک نامەدا دەستیان پێبکەم، بۆیە بۆ ئۆفیسەکەم هەڵگرت. لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
+| `intakeLimits.sizePassed` | I can't make a design at {size} myself, so I've passed your message to the office. They'll find a size that works and follow up with you here. | خۆم ناتوانم دیزاینێک بە قەبارەی {size} دروست بکەم، بۆیە پەیامەکەتم گەیاندە ئۆفیسەکە. قەبارەیەکی گونجاو دەدۆزنەوە و لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
+| `intakeLimits.sizeKept` | I can't make a design at {size} myself, so I've kept your message for the office. They'll find a size that works and follow up with you here. | خۆم ناتوانم دیزاینێک بە قەبارەی {size} دروست بکەم، بۆیە پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت. قەبارەیەکی گونجاو دەدۆزنەوە و لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
+
 187 lines.
