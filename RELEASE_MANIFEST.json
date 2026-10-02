@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-02T12:55:01+03:00",
+  "generatedAt": "2026-10-02T17:24:50+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "bedd8a2536b39e388287b52297cb68bc900be8be",
+    "commit": "c3256cc214751c073c15e68c2ec69a260e161dc4",
     "treeClean": true,
-    "commitTimestamp": "2026-10-02T12:55:01+03:00",
-    "branch": "claude/hunt4-qa-titles"
+    "commitTimestamp": "2026-10-02T17:24:50+03:00",
+    "branch": "codex/hawzhin-app-integration"
   },
   "migrations": {
-    "targetVersion": "082_kept_model_consent_audit_authority",
-    "latestMigrationFile": "082_kept_model_consent_audit_authority.sql",
-    "totalMigrations": 82
+    "targetVersion": "084_customer_web_lifecycle",
+    "latestMigrationFile": "084_customer_web_lifecycle.sql",
+    "totalMigrations": 84
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "dd7e1ebd5fd03eef8e686cb48a9b38668223c890d2691c0115d57155abed8778",
+        "apps/core/src/app.ts": "239e54f82698dc7e92dacf70bb03e16e1d4c4b007e93716b1027be25e7f8c2d7",
         "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -84,11 +84,11 @@
     "sourceHashes": {
       "packages/qa/src/engine.ts": "454d81402825a4ccfdf00445b556afeb3282b01957585ba6689eec4436ab79c5",
       "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
-      "packages/qa/src/canva-pptx-check.ts": "979d89aae302dcaa6ee848c7da86cbf204aa58f21c249673137bf48c91c6ccb1",
+      "packages/qa/src/canva-pptx-check.ts": "bf4ca47b0239d6220b1802e00b6dfd002e34081bda5e4f11405e382c89af6c66",
       "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
       "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "95487122a6a3ecbd4f2b1931a3cf537120cc625672a69c1434e7a4a4166bfda5"
+  "sha256": "2f156c8ae31aa409d4ec36dd6780be04e50235bb05f5517e523c30dd0c080c0a"
 }
