@@ -4,7 +4,7 @@ import { validateLayoutV2, type LayoutValidationContext } from '../src/studio/va
 import { evaluateHardQa, studioReferenceFromRaw, type HardQaContext } from '../src/studio/hard-qa.js';
 import { composeGrammarLayout, guidelineDeviations, guidelineFidelityRule, pageGrammarFromRaw, type PageGrammar } from '../src/studio/page-grammar.js';
 import { admitPageGrammarFromReference } from '../src/studio/page-grammar-admission.js';
-import { composePosterLayout, negativeSpaceOf, POSTER_VARIANTS, type PosterVariant } from '../src/studio/poster-grammar.js';
+import { composePosterLayout, FOOT_GAP_SHARE, negativeSpaceOf, POSTER_VARIANTS, type PosterVariant } from '../src/studio/poster-grammar.js';
 import { renderLayoutV2 } from '../src/studio/render-layout-v2.js';
 import { computeLayoutMetrics } from '../src/studio/layout-metrics.js';
 import { buildPairwiseJudgeSystemPrompt, MAX_JUDGE_HOUSE_RULE_CHARS, POSTER_IMPACT_CRITERIA } from '../src/studio/pairwise-judge-v3.js';
@@ -28,6 +28,8 @@ const PALETTE = studioReferenceFromRaw(RAW).palette;
 const LOGO = readFileSync(new URL('../assets/logos/kaae-official-logo.png', import.meta.url));
 const KAAE_FONTS = { latin: ['Crimson Pro', 'Inter'], arabic: ['Noto Sans Arabic', 'IBM Plex Sans Arabic'] };
 const ARABIC = /[؀-ۿ]/;
+/** ADR-271 section 8: the smallest clear gap between the foot's parts, in px on a 1350 canvas. */
+const GAP = Math.round(FOOT_GAP_SHARE * 1350);
 
 const BRIEFS: Array<{ id: string; lines: string[]; roles: string[] }> = [
   { id: 'workshop', lines: ['Quality Assurance Workshop', 'For university deans', '15 October 2026 · 9:30 AM', 'Rotana Hotel, Erbil', 'Registration is free'], roles: ['title', 'subtitle', 'date', 'venue', 'cta'] },
@@ -135,14 +137,23 @@ describe('the three poster compositions, composed with no model call', () => {
     expect(l.shapes.some((s) => s.role === 'panel' && s.color === '#F7B500' && cta.x >= s.x && cta.x + cta.width <= s.x + s.width)).toBe(true);
   });
 
-  it('cream: the cream ground, a Royal title, the details on a Royal card with a Sun first line, a gold sunburst', () => {
+  it('cream: the cream ground, a Royal title at the top, the details on a full-bleed Royal block with a Sun first line, a gold sun on its horizon', () => {
     const [b] = BRIEFS;
     const l = poster(b.lines, b.roles, 'cream');
     expect(l.background.color).toBe('#FDF8F3');
-    expect(l.text.find((t) => t.role === 'title')!.color).toBe('#1E3A5F');
-    expect(l.shapes.some((s) => s.primitive === 'card' && s.color === '#1E3A5F')).toBe(true);
-    expect(l.text.find((t) => t.role === 'date')).toMatchObject({ color: '#FFD700', fontFamily: 'Crimson Pro' });
-    expect(l.ornaments?.[0]).toMatchObject({ kind: 'sunburst', color: '#F7B500' });
+    const title = l.text.find((t) => t.role === 'title')!;
+    expect(title.color).toBe('#1E3A5F');
+    // ADR-271 section 8: the block closes the poster, edge to edge and down to the canvas's lower edge.
+    const block = l.shapes.find((s) => s.surface === 'plate')!;
+    expect(block).toMatchObject({ x: 0, width: 1080, color: '#1E3A5F' });
+    expect(block.y + block.height).toBe(1350);
+    expect(title.y).toBeLessThan(0.3 * 1350);
+    const date = l.text.find((t) => t.role === 'date')!;
+    expect(date).toMatchObject({ color: '#FFD700', fontFamily: 'Inter', bold: true });
+    expect(date.y).toBeGreaterThan(block.y);
+    const sun = l.ornaments![0];
+    expect(sun).toMatchObject({ kind: 'sunburst', color: '#F7B500', corner: 'bottom-right' });
+    expect(sun.y + sun.height).toBe(block.y);
   });
 
   it('band: the white page with a gradient band holding the title from its starting edge, the bar bridging its edge, the foot rule', () => {
@@ -180,17 +191,19 @@ describe('the three poster compositions, composed with no model call', () => {
     expect(navy.text.find((t) => t.role === 'date')!.fontSize).toBeGreaterThanOrEqual(44);
   }, 60000);
 
-  it('band with short copy: the band ends past the title, the copy sits low and the room above holds the sunburst', () => {
+  it('band with short copy: the band sits under the logo and the guideline\'s triangle pattern rises from the foot', () => {
     const b = BRIEFS[1];
     const l = poster(b.lines, b.roles, 'band');
     const band = l.shapes.find((s) => s.role === 'panel' && s.kind === 'rect' && s.gradient)!;
     const lead = l.text.find((t) => t.role === 'subtitle')!;
-    // Before: the band at 451px and the lead ending at 1060px, a 230px empty foot over the rule.
-    expect(band.y + band.height / 2).toBeGreaterThan(1350 / 2);
+    // ADR-271 section 8: the judges saw "the top 40% empty white with a faint sun" over a low band.
+    expect(band.y - (l.logo.y + l.logo.height)).toBeLessThanOrEqual(0.1 * 1350);
     const rule = l.shapes.find((s) => s.primitive === 'foot_rule')!;
-    expect(rule.y - (lead.y + lead.height)).toBeLessThan(0.1 * 1350);
-    expect(l.ornaments?.[0]).toMatchObject({ kind: 'sunburst' });
-    expect(l.ornaments![0].y + l.ornaments![0].height).toBeLessThanOrEqual(band.y);
+    const pattern = l.ornaments![0];
+    expect(pattern).toMatchObject({ kind: 'triangle_pattern', color: '#2C5282', fade: 'to-top' });
+    expect(pattern.opacity).toBeGreaterThanOrEqual(0.5);
+    expect(pattern.y).toBeGreaterThanOrEqual(lead.y + lead.height + GAP);
+    expect(pattern.y + pattern.height).toBeLessThanOrEqual(rule.y - GAP);
     // A Sorani band runs from the right edge, as the office's Sorani title tab does.
     const ckb = BRIEFS[3];
     const sl = poster(ckb.lines, ckb.roles, 'band');
@@ -239,6 +252,146 @@ describe('the three poster compositions, composed with no model call', () => {
     const { poster: _p, ...plain } = G;
     expect(() => composePosterLayout({ ...input(BRIEFS[0].lines, BRIEFS[0].roles, plain as PageGrammar), variant: 'navy' })).toThrow(/GRAMMAR_INFEASIBLE/);
   });
+});
+
+/**
+ * ADR-271 section 8 (design audit and blind panel, 2026-10-02): the composer's defects. The panel
+ * scored the band 5.2 against navy 6.0 and cream 5.9, and named the same weaknesses throughout.
+ */
+describe('the poster composer\'s defects (ADR-271 section 8)', () => {
+  type Box = { x: number; y: number; width: number; height: number };
+  const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  const grow = (b: Box, d: number): Box => ({ x: b.x - d, y: b.y - d, width: b.width + 2 * d, height: b.height + 2 * d });
+  const all = () => BRIEFS.flatMap((b) => POSTER_VARIANTS.map((v) => ({ b, v, l: tryPoster(b.lines, b.roles, v) })).filter((x) => x.l)) as Array<{ b: typeof BRIEFS[number]; v: PosterVariant; l: StudioLayoutV2 }>;
+
+  it('1. the brand element never runs under copy, a card, a pill, the band, the bar or the rule, and keeps a clear gap from them', () => {
+    // Before: in the workshop's cream poster the sunburst ran under the details card's corner (a ray
+    // clipped by it), and in the Sorani workshop's band it sat under the card's lower left.
+    for (const { b, v, l } of all()) {
+      const o = l.ornaments?.[0];
+      expect(o, `${b.id} ${v}: a visible brand element`).toBeDefined();
+      for (const t of l.text) expect(hit(grow(t, GAP - 1), o!), `${b.id} ${v}: element on copy ${t.role}`).toBe(false);
+      for (const sh of l.shapes) {
+        if (sh.primitive === 'cover_ground') continue;
+        // The cream block is the ground the sun stands on: touching its edge, never on it.
+        const clearance = sh.surface === 'plate' ? 0 : GAP - 1;
+        expect(hit(grow(sh, clearance), o!), `${b.id} ${v}: element under ${sh.primitive ?? sh.surface ?? sh.role}`).toBe(false);
+      }
+    }
+  }, 60000);
+
+  it('2. navy, cream and band are three compositions, not one geometry in three colourways', () => {
+    // Where each poster's mass sits: the content boxes (copy, cards, pills, band, block, element) on
+    // a 12 x 15 grid. Before, navy and cream set every box of the peer call (English and Sorani) in
+    // the same place: no cell differed.
+    const cells = (l: StudioLayoutV2) => {
+      const boxes: Box[] = [...l.text, ...l.shapes.filter((sh) => sh.primitive !== 'cover_ground'), ...(l.ornaments ?? [])];
+      const out: boolean[] = [];
+      for (let j = 0; j < 15; j++) for (let i = 0; i < 12; i++) {
+        const c = { x: (i + 0.5) * 90, y: (j + 0.5) * 90 };
+        out.push(boxes.some((b) => c.x >= b.x && c.x < b.x + b.width && c.y >= b.y && c.y < b.y + b.height));
+      }
+      return out;
+    };
+    for (const b of BRIEFS) {
+      const ls = POSTER_VARIANTS.map((v) => [v, tryPoster(b.lines, b.roles, v)] as const).filter(([, l]) => l);
+      for (let i = 0; i < ls.length; i++) for (let j = i + 1; j < ls.length; j++) {
+        const a = cells(ls[i][1]!);
+        const c = cells(ls[j][1]!);
+        const differ = a.filter((x, k) => x !== c[k]).length / a.length;
+        expect(differ, `${b.id}: ${ls[i][0]} vs ${ls[j][0]}`).toBeGreaterThanOrEqual(0.12);
+      }
+      // Each composition's own structure: navy a single field, cream a block that closes it, the band a title band.
+      const shapesOf = (v: PosterVariant) => ls.find(([x]) => x === v)?.[1]?.shapes ?? [];
+      if (ls.some(([x]) => x === 'cream')) expect(shapesOf('cream').some((sh) => sh.surface === 'plate' && sh.width === 1080), b.id).toBe(b.lines.length > 1);
+      expect(shapesOf('navy').some((sh) => sh.surface === 'plate'), b.id).toBe(false);
+    }
+    // Where the room allows, navy lowers its title under the sun at the top right.
+    const peer = poster(BRIEFS[1].lines, BRIEFS[1].roles, 'navy');
+    expect(peer.ornaments![0].corner).toBe('top-right');
+    expect(peer.text.find((t) => t.role === 'title')!.y).toBeGreaterThan(poster(BRIEFS[1].lines, BRIEFS[1].roles, 'cream').text.find((t) => t.role === 'title')!.y);
+  }, 60000);
+
+  it('3. one face per details group: the date and the place in the body face, the date marked by weight and colour', () => {
+    // Before: the date was Crimson Pro bold and the place Inter regular in one two-line group.
+    for (const { b, v, l } of all()) {
+      const group = l.text.filter((t) => t.role === 'date' || t.role === 'venue');
+      expect(new Set(group.map((t) => t.fontFamily)).size, `${b.id} ${v}`).toBeLessThanOrEqual(1);
+      if (!ARABIC.test(b.lines[0])) for (const t of group) expect(t.fontFamily, `${b.id} ${v}`).toBe(G.body.fontFamily);
+    }
+    const l = poster(BRIEFS[0].lines, BRIEFS[0].roles, 'cream');
+    expect(l.text.find((t) => t.role === 'date')).toMatchObject({ bold: true, color: '#FFD700' });
+    expect(l.text.find((t) => t.role === 'venue')!.bold).toBeFalsy();
+  }, 60000);
+
+  it('4. the band sits under the logo, with no dead white over it, and its element is not a faint blob', () => {
+    for (const b of BRIEFS) {
+      const l = tryPoster(b.lines, b.roles, 'band');
+      if (!l) continue;
+      const band = l.shapes.find((s) => s.role === 'panel' && s.kind === 'rect' && s.gradient)!;
+      // Before: 0.1 of the height over the band with details, 0.82 of the room without.
+      expect(band.y - (l.logo.y + l.logo.height), b.id).toBeLessThanOrEqual(0.1 * 1350);
+      const o = l.ornaments![0];
+      // Before: KAAE Blue at 0.16 on white, which read as a grey blob.
+      expect(o.opacity, b.id).toBeGreaterThanOrEqual(0.3);
+      expect(PALETTE.map((c) => c.toUpperCase())).toContain(o.color.toUpperCase());
+    }
+    expect(G.poster!.band.pattern).toMatchObject({ color: '#2C5282' });
+    expect(G.poster!.band.sunburst.opacity).toBeGreaterThanOrEqual(0.3);
+  }, 60000);
+
+  it('5. the foot keeps clear gaps between card, pill, element and rule, and the call to action is the gold primary action', () => {
+    for (const { b, v, l } of all()) {
+      const cards = l.shapes.filter((sh) => sh.primitive === 'card');
+      const pills = l.shapes.filter((sh) => sh.surface === 'pill');
+      const rule = l.shapes.find((sh) => sh.primitive === 'foot_rule');
+      for (const p of pills) {
+        // The primary action in every composition: KAAE Gold with Midnight text (before, cream's pill was a muted KAAE Blue).
+        expect(p.color, `${b.id} ${v}`).toBe('#F7B500');
+        if (rule) expect(rule.y - (p.y + p.height), `${b.id} ${v}: pill to rule`).toBeGreaterThanOrEqual(GAP);
+        for (const c of cards) {
+          // A pill either bridges the card's lower edge or stands clear of it.
+          const bridges = p.y < c.y + c.height && p.y + p.height > c.y + c.height;
+          if (!bridges) expect(Math.max(p.y - (c.y + c.height), c.y - (p.y + p.height)), `${b.id} ${v}: pill to card`).toBeGreaterThanOrEqual(GAP);
+          else {
+            // Clear of the card's copy above it.
+            for (const t of l.text) if (t.role !== 'cta' && hit(t, c)) expect(p.y - (t.y + t.height), `${b.id} ${v}`).toBeGreaterThanOrEqual(0.5 * GAP);
+          }
+        }
+      }
+      if (rule) for (const c of cards) expect(rule.y - (c.y + c.height), `${b.id} ${v}: card to rule`).toBeGreaterThanOrEqual(GAP);
+      const cta = l.text.find((t) => t.role === 'cta');
+      if (cta) expect(cta.color, `${b.id} ${v}`).toBe('#0A1628');
+    }
+    expect(G.poster!.cream).toMatchObject({ pill: '#F7B500', pillText: '#0A1628' });
+  }, 60000);
+
+  it('6. a title-only brief is composed as one: a strong secondary lead, its own element, no dead gap, no copy added', () => {
+    for (const b of BRIEFS.filter((x) => x.roles.length === 2)) {
+      const copy = { text: copyOf(b.lines) };
+      for (const v of POSTER_VARIANTS) {
+        const l = tryPoster(b.lines, b.roles, v);
+        if (!l) continue;
+        // Copy is never invented: one block per line of the brief, each the brief's own.
+        expect(l.text.map((t) => t.copyIndex).sort(), `${b.id} ${v}`).toEqual(b.lines.map((_, i) => i));
+        const lead = l.text.find((t) => t.role === 'subtitle')!;
+        // A size up from the details' step (0.04-0.046 of the width), still under the title.
+        expect(lead.fontSize / 1080, `${b.id} ${v} lead`).toBeGreaterThanOrEqual(0.05);
+        const ns = measureDesignV3(l, copy).metrics.negativeSpace;
+        expect((ns.details as { internalGapFraction: number }).internalGapFraction, `${b.id} ${v}`).toBeLessThanOrEqual(0.22);
+        expect(ns.score, `${b.id} ${v}`).toBeGreaterThanOrEqual(0.7);
+        expect(l.ornaments?.length, `${b.id} ${v}`).toBe(1);
+      }
+      // Cream sets the lead on its block, the secondary moment opposite the title.
+      const cream = poster(b.lines, b.roles, 'cream');
+      const block = cream.shapes.find((sh) => sh.surface === 'plate')!;
+      const lead = cream.text.find((t) => t.role === 'subtitle')!;
+      expect(lead.y).toBeGreaterThan(block.y);
+      expect(lead).toMatchObject({ bold: true, color: '#FFD700' });
+    }
+    // The band's pattern rises from the foot under the lead (before: a sun over a low band).
+    expect(poster(BRIEFS[1].lines, BRIEFS[1].roles, 'band').ornaments![0].kind).toBe('triangle_pattern');
+  }, 60000);
 });
 
 describe('the guideline\'s own page keeps its grammar with the poster type scale and logo', () => {

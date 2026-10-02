@@ -75,6 +75,8 @@ export interface PosterVariantSpec {
   pill: Hex;
   pillText: Hex;
   sunburst: { color: Hex; opacity: number };
+  /** The guideline's triangle pattern, where the composition sets one (the band, rising from its foot). */
+  pattern?: { color: Hex; opacity: number };
 }
 
 /**

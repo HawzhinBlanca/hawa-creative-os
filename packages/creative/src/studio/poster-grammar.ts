@@ -30,11 +30,19 @@ import {
  * band, the details grouped at the foot, and a visible brand element. Every colour, face and
  * proportion comes from the reference's `pageGrammar.poster`; shared code names no client.
  *
- * - `navy`: the cover's navy gradient over the whole canvas, a big white serif title with a gold bar,
- *   a Sun lead, the details at the foot, a pill for the call to action, and a visible sunburst.
- * - `cream`: a cream ground, a big Royal serif title, a Royal card for the details, a pill, a gold sunburst.
- * - `band`: the white page with a full-width gradient band holding the display title, the details on
- *   a KAAE Blue card, a pill, and the gradient rule at the foot.
+ * The three are different compositions, not one layout in three colourways (ADR-271 section 8):
+ *
+ * - `navy`: the cover's navy gradient over the whole canvas, the sunburst at the top right beside the
+ *   logo, the big white title lowered under it with a gold bar and a Sun lead, the details as a block
+ *   across the content width under it, a gold pill for the call to action.
+ * - `cream`: a cream ground, the big Royal title at the top, the details on a Royal card on the far
+ *   side with the gold pill bridging its lower edge, a gold sunburst in the near bottom corner.
+ * - `band`: the white page with a gradient band under the logo holding the display title, the details
+ *   on a KAAE Blue card under the start of the title, a gold pill, the guideline's triangle pattern
+ *   rising from the foot, and the gradient rule.
+ *
+ * A title-only brief (a title and at most a lead) is composed as such: the lead a size up as the
+ * strong secondary (on cream, on the card opposite the title). No copy is added.
  *
  * The title is set as large as the copy allows between the poster's shares of the width (it grows to
  * fill its block), on the one declared type scale. Deterministic and measured with the renderer's
@@ -48,6 +56,13 @@ const r = (v: number) => Math.round(v);
 const TYPE_RATIO = 1.25;
 /** Hard QA's alignment threshold (`POOR_GRID_ALIGNMENT`). */
 const ALIGNMENT_PASS = 0.7;
+/** The smallest clear gap between the foot's parts (the card, the pill, the brand element, the rule), as a share of the height. */
+export const FOOT_GAP_SHARE = 0.03;
+/**
+ * The widest gap the composer leaves between two blocks (the logo, the head, the foot), as a share of
+ * the height: under the negative-space metric's internal-gap penalty (0.22), which counts a wider one dead.
+ */
+const MAX_GAP_SHARE = 0.18;
 
 function intBox(b: Box): Box {
   const x = Math.max(0, Math.round(b.x));
@@ -68,7 +83,7 @@ function snapX(lines: number[], x: number, reach: number, way: 'nearest' | 'up' 
 }
 const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 
-interface PosterSizes { title: number; titleStep: number; lead: number; meta: number; body: number; footer: number; label: number }
+interface PosterSizes { title: number; titleStep: number; lead: number; strongLead: number; meta: number; body: number; footer: number; label: number }
 
 /**
  * The type sizes for a title size: a body on the major-third scale under it, as near the grammar's body
@@ -89,8 +104,11 @@ function posterSizes(g: PageGrammar, W: number, title: number, detailMin = 0): P
   const step = (k: number) => r(best!.body * Math.pow(TYPE_RATIO, k));
   let detail = 1;
   while (detail < best.n - 2 && step(detail) < detailMin * W) detail++;
+  // A title-only brief's lead, the poster's strong secondary: a step over the details while the title
+  // stays the one dominant display moment (at least 2.2 times it, four steps of the scale).
+  const strong = Math.max(detail, Math.min(detail + 1, best.n - 4));
   return {
-    title: step(best.n), titleStep: best.n, lead: step(detail), meta: step(detail), body: best.body,
+    title: step(best.n), titleStep: best.n, lead: step(detail), strongLead: step(strong), meta: step(detail), body: best.body,
     footer: Math.max(HOUSE_RULES.minFontPx, step(-1)), label: Math.max(HOUSE_RULES.minFontPx, best.body),
   };
 }
@@ -114,18 +132,23 @@ export function composePosterLayout(input: ComposeGrammarInput & { variant: Post
   // The details at the poster's smallest detail size first; a composition that cannot hold them there
   // (a band under a long Sorani title) keeps the scale's first step over the body rather than dropping out.
   for (const detailMin of [...new Set([P.detailSizeShareMin ?? 0, 0])]) {
-    for (let size = hi; size >= lo; size -= 2) {
-      const sizes = posterSizes(g, W, size, detailMin);
-      if (!sizes || sizes.title > hi + 1 || sizes.title < lo) continue;
-      // The details in their column beside the brand element, else across the content width.
-      for (const fullWidth of [false, true]) {
-        const layout = attemptPoster(input, units, sizes, P, fullWidth);
-        if (!layout) continue;
-        // The poster fills its canvas: the largest title that fits with its negative space between the
-        // studio's floor (a crowded poster fails the same metric) and the poster's ceiling.
-        const ns = negativeSpaceOf(layout, input);
-        if (ns <= P.negativeSpaceMax && ns >= floor) return layout;
-        if (ns >= floor) fallback ??= layout;
+    // The brand element in its composition's own place first (navy: the top right; cream: on the
+    // block's horizon; band: the pattern rising from the foot), a smaller title rather than an element
+    // pushed to whichever corner is left; else wherever it fits.
+    for (const home of [true, false]) {
+      for (let size = hi; size >= lo; size -= 2) {
+        const sizes = posterSizes(g, W, size, detailMin);
+        if (!sizes || sizes.title > hi + 1 || sizes.title < lo) continue;
+        // The details in their column beside the brand element, else across the content width.
+        for (const fullWidth of [false, true]) {
+          const layout = attemptPoster(input, units, sizes, P, fullWidth, home);
+          if (!layout) continue;
+          // The poster fills its canvas: the largest title that fits with its negative space between the
+          // studio's floor (a crowded poster fails the same metric) and the poster's ceiling.
+          const ns = negativeSpaceOf(layout, input);
+          if (ns <= P.negativeSpaceMax && ns >= floor) return layout;
+          if (ns >= floor) fallback ??= layout;
+        }
       }
     }
     if (fallback) return fallback;
@@ -140,7 +163,7 @@ export function negativeSpaceOf(layout: StudioLayoutV2, input: Pick<ComposeGramm
   return typeof fraction === 'number' ? fraction : 1;
 }
 
-function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, units: GrammarUnit[], sizes: PosterSizes, P: PosterGrammar, fullWidth: boolean): StudioLayoutV2 | undefined {
+function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, units: GrammarUnit[], sizes: PosterSizes, P: PosterGrammar, fullWidth: boolean, home = false): StudioLayoutV2 | undefined {
   const { width: W, height: H, grammar: g, variant } = input;
   const spec: PosterVariantSpec = P[variant];
   const s = Math.min(W, H);
@@ -155,11 +178,13 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const wide = W / H > 1.25;
   const gutter = r(0.02 * s);
   const grid = gridLinesX(W, m, gutter);
+  const band = variant === 'band';
+  // The smallest clear gap between the foot's parts: the card, the pill, the brand element and the rule.
+  const gapMin = r(FOOT_GAP_SHARE * H);
 
   // ----- the ground --------------------------------------------------------------------------
   const shapes: ShapeElement[] = [];
   const text: TextElement[] = [];
-  const ornaments: OrnamentElement[] = [];
   let background: Hex;
   if (variant === 'navy') {
     shapes.push(coverGroundPrimitive(g, W, H));
@@ -190,22 +215,24 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     return { height: mm.requiredHeightPx + 1, lineWidth: mm.maxLineWidthPx, lines: mm.lineCount };
   };
   type Kind = 'title' | 'lead' | 'label' | 'meta' | 'metaFirst' | 'body' | 'cta' | 'footer';
-  const el = (b: GrammarUnit['blocks'][number], kind: Kind, size: number, color: Hex, w: number): TextElement => {
-    const display = kind === 'title' || kind === 'metaFirst';
+  const el = (b: GrammarUnit['blocks'][number], kind: Kind, size: number, color: Hex, w: number, opts: { italic?: boolean; bold?: boolean } = {}): TextElement => {
     const lhRange = b.arabic ? HOUSE_RULES.lineHeight.arabic : HOUSE_RULES.lineHeight.latin;
-    const wanted = b.arabic ? (display ? 1.6 : 1.7) : kind === 'title' ? 1.2 : kind === 'lead' ? 1.35 : display ? 1.2 : 1.45;
+    // The details' lines (a date, a place) share one tight leading, as one group; running text 1.45.
+    const wanted = b.arabic ? (kind === 'title' ? 1.6 : 1.7) : kind === 'title' ? 1.2 : kind === 'lead' ? 1.35 : kind === 'meta' || kind === 'metaFirst' ? 1.25 : 1.45;
+    // One face per group: the details (the date first, in bold, then the place) are all the body face;
+    // only the title takes the display face and the lead the grammar's lead face.
     const family = b.arabic
-      ? (display || kind === 'label' || kind === 'cta' ? arabicDisplay : arabicBody)
-      : kind === 'title' ? g.title.fontFamily : kind === 'metaFirst' ? g.stat.fontFamily : kind === 'lead' ? g.lead.fontFamily : g.body.fontFamily;
+      ? (kind === 'title' || kind === 'label' || kind === 'cta' ? arabicDisplay : arabicBody)
+      : kind === 'title' ? g.title.fontFamily : kind === 'lead' ? g.lead.fontFamily : g.body.fontFamily;
     const tracking = b.arabic ? 0 : kind === 'title' ? (g.title.letterSpacing ?? 0) : kind === 'label' ? (g.header.label.letterSpacing ?? 0) : 0;
-    const italic = !b.arabic && kind === 'lead' && variant !== 'navy' && Boolean(g.lead.italic);
-    const bold = display || kind === 'label' || kind === 'cta';
+    const italic = opts.italic ?? (!b.arabic && kind === 'lead' && variant !== 'navy' && Boolean(g.lead.italic));
+    const bold = opts.bold ?? (kind === 'title' || kind === 'metaFirst' || kind === 'label' || kind === 'cta');
     return {
       copyIndex: b.copyIndex, role: b.role, x: 0, y: 0, width: w, height: 10, fontSize: size,
       lineHeight: Math.min(lhRange.max, Math.max(lhRange.min, wanted)),
       ...(tracking ? { letterSpacing: Math.max(-HOUSE_RULES.letterSpacingMaxEm, Math.min(HOUSE_RULES.letterSpacingMaxEm, tracking)) } : {}),
       fontFamily: family, color, align: b.arabic ? 'right' : align,
-      ...(bold ? { bold: true } : {}), ...(italic ? { italic: true } : {}), ...(b.arabic ? { rtl: true, letterSpacing: 0 } : {}),
+      ...(bold ? { bold: true } : {}), ...(italic && !b.arabic ? { italic: true } : {}), ...(b.arabic ? { rtl: true, letterSpacing: 0 } : {}),
     };
   };
   /** A block set in a column at x: its measured box (the column's width), or undefined when a word overflows the column. */
@@ -230,12 +257,19 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     }
   }
 
-  // ----- the head: everything up to the title and the lead after it ----------------------------
+  // ----- the head (everything up to the title, and the lead after it) and the foot -------------
   const titleAt = flow.findIndex((u) => u.kind === 'title');
-  const headEnd = flow[titleAt + 1]?.kind === 'lead' ? titleAt + 1 : titleAt;
+  const leadAfter = flow[titleAt + 1]?.kind === 'lead';
+  const afterHead = flow.slice(titleAt + (leadAfter ? 2 : 1));
+  // A title with at most a lead (no details, no call to action) is composed as such, not as a poster
+  // missing its foot: the lead is a strong secondary, a size up; cream sets it on its foot block,
+  // where the details would stand.
+  const titleOnly = !afterHead.some((u) => u.kind === 'meta' || u.kind === 'body' || u.kind === 'cta' || u.kind === 'lead');
+  const leadOnCard = variant === 'cream' && titleOnly && leadAfter;
+  const headEnd = leadAfter && !leadOnCard ? titleAt + 1 : titleAt;
   const head = flow.slice(0, headEnd + 1);
   const foot = flow.slice(headEnd + 1);
-  const band = variant === 'band';
+  const leadSize = titleOnly ? sizes.strongLead : sizes.lead;
   const bandPad = r(0.04 * s);
   const top = Math.ceil(clear.y + clear.height) + r(0.025 * H);
   const bar = { width: r(P.titleBarWidthShare * W), height: Math.max(6, r(1.5 * g.titleBar.heightShare * W)), gap: r(0.022 * W) };
@@ -274,7 +308,7 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
       const before = titleBox === undefined;
       const onBand = band && before;
       const colour = variant === 'navy' || onBand ? spec.lead : variant === 'band' ? g.lead.color : spec.lead;
-      const p = set(el(b, u.kind === 'lead' ? 'lead' : u.kind === 'label' ? 'label' : 'body', u.kind === 'lead' ? sizes.lead : sizes.body, colour, contentW), b.text, contentX, contentW, y);
+      const p = set(el(b, u.kind === 'lead' ? 'lead' : u.kind === 'label' ? 'label' : 'body', u.kind === 'lead' ? leadSize : sizes.body, colour, contentW), b.text, contentX, contentW, y);
       if (!p) return undefined;
       headItems.push({ el: p.el, shapes: [], top: p.el.y, bottom: p.el.y + p.el.height });
       y = p.el.y + p.el.height + r((before ? 0.02 : 0.03) * H);
@@ -285,20 +319,36 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
 
   // ----- the foot: the details, grouped, with the call to action as a pill ---------------------
   const footY = band ? H - r(0.75 * m) - Math.max(3, r(g.footRule.heightShare * W)) : H;
-  const limit = band ? Math.min(safe.y + safe.height, footY - r(0.03 * W)) : safe.y + safe.height;
+  const limit = band ? Math.min(safe.y + safe.height, footY - gapMin) : safe.y + safe.height;
   const hasBody = foot.some((u) => u.kind === 'body');
-  const colShare = fullWidth ? 1 : wide ? 0.5 : hasBody ? 0.8 : 0.64;
+  // Navy sets its details straight on the ground across the content width; cream on a full-bleed
+  // Royal block that closes the poster; the band on a card in a column under the title's start.
+  const colShare = fullWidth || variant !== 'band' ? 1 : wide ? 0.5 : hasBody ? 0.8 : 0.64;
   const colW = r(colShare * contentW);
   const colX = rtl ? contentX + contentW - colW : contentX;
   const pad = r(0.035 * W);
-  const panel = variant !== 'navy';
-  const panelFill = variant === 'cream' ? spec.panel! : g.cards.brand.fill;
+  const panel = variant === 'band';
+  const block = variant === 'cream';
+  const panelFill = block ? spec.panel! : g.cards.brand.fill;
   const panelTitle = variant === 'cream' ? spec.panelTitle! : g.cards.brand.title;
   const panelText = variant === 'cream' ? spec.panelText! : g.cards.brand.text;
   const footItems: Item[] = [];
   let fy = 0;
   const details = foot.filter((u) => u.kind === 'meta' || u.kind === 'body' || u.kind === 'lead');
   const rest = foot.filter((u) => !details.includes(u));
+  // The call to action's pill, measured first: on the band it bridges the card's lower edge (the
+  // guideline's "a call-to-action tab straddling a card"), so the card keeps room under its copy.
+  const ctaUnit = rest.find((u) => u.kind === 'cta');
+  const pillOf = (u: GrammarUnit) => {
+    const t = el(u.blocks[0], 'cta', sizes.lead, spec.pillText, colW);
+    const mm = measure(t, u.blocks[0].text);
+    const padX = r(0.9 * sizes.lead);
+    const padY = r(0.45 * sizes.lead);
+    return mm.lineWidth + 2 * padX > colW - (panel && details.length ? 2 * pad : 0) + 2 ? undefined : { t, mm, padX, padY, height: mm.height + 2 * padY };
+  };
+  const ctaPill = ctaUnit ? pillOf(ctaUnit) : undefined;
+  const bridge = panel && details.length > 0 && ctaPill !== undefined;
+  let card: { x: number; y: number; width: number; height: number; ix: number; inner: number } | undefined;
   if (details.length) {
     const inner = panel ? colW - 2 * pad : colW;
     const ix = panel ? colX + pad : colX;
@@ -308,59 +358,70 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
       for (const b of u.blocks) {
         const metaFirst = u.kind === 'meta' && firstMeta && !b.arabic;
         if (u.kind === 'meta') firstMeta = false;
-        const colour = u.kind === 'meta' && (metaFirst || b.role === 'date') ? (panel ? panelTitle : spec.detail) : panel ? panelText : spec.body;
+        if (u.kind === 'lead' && leadOnCard) {
+          // The title-only lead on the card: the strong secondary, upright and bold in the card's title colour.
+          lines.push({ t: el(b, 'lead', sizes.strongLead, panelTitle, inner, { italic: false, bold: true }), copy: b.text, meta: false });
+          continue;
+        }
+        const colour = u.kind === 'meta' && (metaFirst || b.role === 'date') ? (variant === 'navy' ? spec.detail : panelTitle) : variant === 'navy' ? spec.body : panelText;
         const kind: Kind = u.kind === 'meta' ? (metaFirst ? 'metaFirst' : 'meta') : 'body';
         lines.push({ t: el(b, kind, u.kind === 'meta' ? sizes.meta : sizes.body, colour, inner), copy: b.text, meta: u.kind === 'meta' });
       }
     }
     const gap = r(0.35 * sizes.meta);
-    let ly = fy + (panel ? pad : 0);
+    let ly = fy + (variant === 'navy' ? 0 : pad);
     const placed: TextElement[] = [];
     for (const [i, l] of lines.entries()) {
       if (i) ly += gap;
       const p = set(l.t, l.copy, ix, inner, ly);
       if (!p) return undefined;
       // A date or a place is not broken over two lines while the details could take the content width.
-      if (l.meta && p.lines > 1 && !fullWidth) return undefined;
+      if (l.meta && p.lines > 1 && !fullWidth && variant !== 'navy') return undefined;
       placed.push(p.el);
       ly = p.el.y + p.el.height;
     }
-    const h = ly - fy + (panel ? pad : 0);
-    const cardShapes: ShapeElement[] = panel ? [{
+    // A bridging pill takes half its height inside the card, clear of the copy above it.
+    const padBottom = !panel ? 0 : bridge ? Math.max(pad, r(ctaPill!.height / 2) + r(0.6 * gapMin)) : pad;
+    const h = ly - fy + padBottom;
+    // The cream block runs from the foot's top to the canvas's lower edge, full bleed (placed below).
+    const cardShapes: ShapeElement[] = block ? [{ kind: 'rect', role: 'panel', surface: 'plate', x: 0, y: fy, width: W, height: h, color: panelFill }] : panel ? [{
       kind: 'roundRect', role: 'panel', primitive: 'card', surface: 'card', x: colX, y: fy, width: colW, height: h,
       radius: Math.max(4, r(g.cards.radiusShare * W)), color: panelFill,
       shadow: { color: g.cards.shadow.color, opacity: g.cards.shadow.opacity, blur: Math.min(80, r(g.cards.shadow.blurShare * W)), offsetY: Math.min(80, r(g.cards.shadow.offsetShare * W)) },
     }] : [];
     for (const t of placed) footItems.push({ el: t, shapes: [], top: t.y, bottom: t.y + t.height });
     footItems.push({ shapes: cardShapes, top: fy, bottom: fy + h });
-    fy += h + r(0.025 * H);
+    card = { x: colX, y: fy, width: colW, height: h, ix, inner };
+    // On the cream block the call to action follows the details inside it.
+    fy = block ? ly + gapMin : fy + h + gapMin;
   }
   for (const u of rest) {
     const b = u.blocks[0];
     if (u.kind === 'cta') {
-      const t = el(b, 'cta', sizes.lead, spec.pillText, colW);
-      const mm = measure(t, b.text);
-      const padX = r(0.9 * sizes.lead);
-      const padY = r(0.45 * sizes.lead);
-      if (mm.lineWidth + 2 * padX > colW + 2) {
+      if (u !== ctaUnit || !ctaPill) {
+        const t = el(b, 'cta', sizes.lead, block && card ? panelTitle : panel ? g.lead.color : spec.body, colW);
         const p = set(t, b.text, colX, colW, fy);
         if (!p) return undefined;
         footItems.push({ el: p.el, shapes: [], top: p.el.y, bottom: p.el.y + p.el.height });
-        fy = p.el.y + p.el.height + r(0.02 * H);
+        fy = p.el.y + p.el.height + gapMin;
         continue;
       }
+      const { t, mm, padY, padX, height } = ctaPill;
+      // Bridging, the pill starts where the card's copy starts and straddles its lower edge.
+      const startX = bridge ? (rtl ? card!.ix + card!.inner : card!.ix) : rtl ? colX + colW : colX;
+      const room = bridge ? card!.inner : colW;
+      const py = bridge ? card!.y + card!.height - r(height / 2) : fy;
       // The pill grows to the next grid line, so its free end lines up with the page.
       const natural = mm.lineWidth + 2 * padX + 2;
-      const pw = Math.min(colW, rtl ? colX + colW - snapX(grid, colX + colW - natural, 0.08 * W, 'down') : snapX(grid, colX + natural, 0.08 * W, 'up') - colX);
-      const px = rtl ? colX + colW - pw : colX;
-      const pill: ShapeElement = { kind: 'roundRect', role: 'panel', surface: 'card', x: px, y: fy, width: pw, height: mm.height + 2 * padY,
-        radius: r((mm.height + 2 * padY) / 2), color: spec.pill };
-      const tx: TextElement = { ...t, ...intBox({ x: px + Math.round((pw - mm.lineWidth - 4) / 2), y: fy + padY, width: mm.lineWidth + 4, height: mm.height }), align: b.arabic ? 'right' : 'left' };
-      footItems.push({ el: tx, shapes: [pill], top: fy, bottom: fy + pill.height });
-      fy += pill.height + r(0.02 * H);
+      const pw = Math.min(room, rtl ? startX - snapX(grid, startX - natural, 0.08 * W, 'down') : snapX(grid, startX + natural, 0.08 * W, 'up') - startX);
+      const px = rtl ? startX - pw : startX;
+      const pill: ShapeElement = { kind: 'roundRect', role: 'panel', surface: 'pill', x: px, y: py, width: pw, height, radius: r(height / 2), color: spec.pill };
+      const tx: TextElement = { ...t, ...intBox({ x: px + Math.round((pw - mm.lineWidth - 4) / 2), y: py + padY, width: mm.lineWidth + 4, height: mm.height }), align: b.arabic ? 'right' : 'left' };
+      footItems.push({ el: tx, shapes: [pill], top: py, bottom: py + height });
+      fy = Math.max(fy, py + height + gapMin);
     } else {
       // A footer (a web address) or any other line, small, at the foot of the column.
-      const colour = variant === 'navy' ? spec.body : g.body.color;
+      const colour = variant === 'navy' ? spec.body : block && card ? panelText : g.body.color;
       const p = set(el(b, u.kind === 'footer' ? 'footer' : 'body', u.kind === 'footer' ? sizes.footer : sizes.body, colour, colW), b.text, colX, colW, fy);
       if (!p) return undefined;
       footItems.push({ el: p.el, shapes: [], top: p.el.y, bottom: p.el.y + p.el.height });
@@ -372,19 +433,47 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const room = limit - headBottom - (footH ? minGap + footH : 0);
   if (room < 0) return undefined;
 
-  // ----- the room left over: some above the head, the rest between head and foot ---------------
-  // With no details the head is set a little above the middle of its room, as a cover's title stands.
-  // A band poster with no details sets its head low, so the room is above the band, where the brand
-  // element stands, not an empty foot under a short lead.
-  const gapAbove = footH ? r(Math.min(room * 0.3, 0.1 * H)) : band ? r(room * 0.82) : r(room * 0.42);
-  const footTop = footH ? limit - footH : 0;
+  // ----- the room left over, placed by composition -----------------------------------------------
+  // No gap between two blocks (the logo, the head, the foot) is left wider than MAX_GAP_SHARE of the
+  // height, which the negative-space metric counts as dead; what the gaps cannot take stays under the
+  // foot. Navy lowers its head under the brand element at the top right; cream keeps the title at the
+  // top and its block takes the room, down to the canvas's edge; the band sits under the logo and
+  // leaves the room under the foot, where its pattern rises.
+  const logoBottom = logo.y + logo.height;
+  const gapCap = r(MAX_GAP_SHARE * H);
+  const topCap = Math.max(0, gapCap - (top - logoBottom));
+  const midCap = Math.max(0, gapCap - minGap);
+  let left = room;
+  const take = (cap: number) => {
+    const v = Math.max(0, Math.min(left, Math.round(cap)));
+    left -= v;
+    return v;
+  };
+  let gTop = 0;
+  let gMid = 0;
+  if (variant === 'navy') {
+    gTop = take(topCap);
+    if (footH) gMid = take(midCap);
+  } else if (variant === 'cream') {
+    gTop = take(r(0.03 * H));
+    if (footH) gMid = take(midCap);
+    if (!card) gTop += take(topCap - gTop);
+  } else {
+    if (footH) gMid = take(r(0.06 * H));
+    const underFoot = take(r(0.3 * H));
+    if (footH) gMid += take(midCap - gMid);
+    gTop = take(topCap);
+    left += underFoot;
+  }
+  const footTop = headBottom + gTop + minGap + gMid;
   const shift = (i: Item, dy: number): Item => ({ ...i, top: i.top + dy, bottom: i.bottom + dy, ...(i.el ? { el: { ...i.el, y: i.el.y + dy } } : {}), shapes: i.shapes.map((sh) => ({ ...sh, y: sh.y + dy })) });
-  const headPlaced = headItems.map((i) => shift(i, gapAbove));
+  const headPlaced = headItems.map((i) => shift(i, gTop));
   const footPlaced = footItems.map((i) => shift(i, footTop));
+  for (const i of footPlaced) for (const sh of i.shapes) if (sh.surface === 'plate') sh.height = H - sh.y;
   let bandShape: ShapeElement | undefined;
   if (band) {
-    const bandTop = top + gapAbove;
-    bandShape = { kind: 'rect', role: 'panel', x: 0, y: bandTop, width: W, height: bandBottom + gapAbove - bandTop,
+    const bandTop = top + gTop;
+    bandShape = { kind: 'rect', role: 'panel', x: 0, y: bandTop, width: W, height: bandBottom + gTop - bandTop,
       color: g.cover.stops[g.cover.stops.length - 1].color, gradient: gradientOf(g.cover.stops, 0) };
     shapes.push(bandShape);
   }
@@ -415,34 +504,6 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     t.width = w;
   }
 
-  // ----- the visible brand element: the sunburst in the largest free corner --------------------
-  const sun = spec.sunburst;
-  const blocked = (b: Box) => text.some((t) => hit(t, b)) || hit(b, clear) || (bandShape !== undefined && hit(bandShape, b));
-  const cornerBox = (corner: OrnamentElement['corner'], size: number): Box => {
-    const right = corner!.endsWith('right');
-    const bottom = corner!.startsWith('bottom');
-    const yBottom = band ? footY - r(0.01 * H) : H;
-    return { x: right ? W - size : 0, y: bottom ? yBottom - size : 0, width: size, height: size };
-  };
-  const corners: Array<NonNullable<OrnamentElement['corner']>> = rtl ? ['bottom-left', 'top-right', 'bottom-right'] : ['bottom-right', 'top-right', 'bottom-left'];
-  // The first corner, in the order of preference (the foot, away from the start of the reading),
-  // that holds a sunburst of a third of the short side; else the largest that holds one at all.
-  let best: { corner: NonNullable<OrnamentElement['corner']>; size: number } | undefined;
-  const short = Math.min(W, H);
-  for (const corner of corners) {
-    let size = r(0.62 * short);
-    while (size >= r(0.2 * short) && blocked(cornerBox(corner, size))) size -= r(0.02 * short);
-    if (size < r(0.2 * short)) continue;
-    if (size >= r(0.33 * short)) {
-      best = { corner, size };
-      break;
-    }
-    if (!best || size > best.size) best = { corner, size };
-  }
-  if (best && sunburstRadius({ width: best.size, height: best.size }) > 0) {
-    ornaments.push({ kind: 'sunburst', ...cornerBox(best.corner, best.size), color: sun.color, opacity: sun.opacity, corner: best.corner });
-  }
-
   const composition: CompositionRecord = { grammar: 'poster', variant };
   const layout: StudioLayoutV2 = {
     version: 2, width: W, height: H,
@@ -452,11 +513,13 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     shapes,
     text: text.sort((a, b) => a.copyIndex - b.copyIndex),
     logo: intBox(logo),
-    ...(ornaments.length ? { ornaments } : {}),
     composition,
   };
   balanceGrammarLines(layout, input);
   if (bandShape) trimBand(bandShape, layout, titleBox.copyIndex, m, rtl);
+  const placedElement = placeBrandElement(layout, { variant, spec, clear, rtl, gapMin, footY: band ? footY : H });
+  if (home && !placedElement?.home) return undefined;
+  if (placedElement) layout.ornaments = [placedElement.element];
   // The composer promises hard QA's alignment check (a Sorani navy poster measured 0.688 against 0.70:
   // its pill's and gold bar's free edges lined up with nothing).
   if (computeLayoutMetrics(layout).alignmentScore < ALIGNMENT_PASS) return undefined;
@@ -467,6 +530,62 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     throw err;
   }
   return layout;
+}
+
+/** A box grown by d on every side. */
+const grow = (b: Box, d: number): Box => ({ x: b.x - d, y: b.y - d, width: b.width + 2 * d, height: b.height + 2 * d });
+
+/**
+ * The poster's visible brand element, clear by `gapMin` of everything that carries or frames content:
+ * the copy, the cards, the pills, the title band and bar, the foot rule, and the logo's clear space.
+ *
+ * - navy: the sunburst at the top right, beside the logo and over the lowered title;
+ * - cream: the sunburst standing on the Royal block's upper edge at the far side, a sun on the horizon;
+ * - band: the guideline's triangle pattern rising from the foot (p.13) under the details, where the
+ *   room is; the sunburst in a free corner when there is none.
+ */
+function placeBrandElement(layout: StudioLayoutV2, o: { variant: PosterVariant; spec: PosterVariantSpec; clear: Box; rtl: boolean; gapMin: number; footY: number }): { element: OrnamentElement; home: boolean } | undefined {
+  const { width: W, height: H } = layout;
+  // The cover's gradient carries the element. The cream block is a ground too: the sunburst stands on
+  // its upper edge, a sun on the horizon, and never runs onto it (the renderer draws elements under
+  // every shape but the cover's ground, so on the block it would be hidden).
+  const block = layout.shapes.find((sh) => sh.surface === 'plate' && sh.width >= W);
+  const content: Box[] = [...layout.text, ...layout.shapes.filter((sh) => sh.primitive !== 'cover_ground' && sh !== block)];
+  const blocked = (b: Box) => hit(b, o.clear) || content.some((c) => hit(grow(c, o.gapMin), b)) || (block !== undefined && hit(b, block));
+  const bottom = block ? block.y : o.footY === H ? H : o.footY - o.gapMin;
+  if (o.variant === 'band' && o.spec.pattern) {
+    const contentBottom = Math.max(...content.filter((c) => (c as ShapeElement).primitive !== 'foot_rule').map((c) => c.y + c.height));
+    const h = Math.min(bottom - (contentBottom + o.gapMin), r(0.3 * H));
+    const box: Box = { x: 0, y: bottom - h, width: W, height: h };
+    if (h >= r(0.1 * H) && !blocked(box)) return { element: { kind: 'triangle_pattern', ...box, color: o.spec.pattern.color, opacity: o.spec.pattern.opacity, fade: 'to-top' }, home: true };
+  }
+  type Corner = NonNullable<OrnamentElement['corner']>;
+  const near: Corner = o.rtl ? 'bottom-right' : 'bottom-left';
+  const far: Corner = o.rtl ? 'bottom-left' : 'bottom-right';
+  const corners: Corner[] = o.variant === 'navy' ? ['top-right', far, near] : o.variant === 'cream' ? [far, near, 'top-right'] : [far, near, 'top-right'];
+  const cornerBox = (corner: Corner, size: number): Box => ({
+    x: corner.endsWith('right') ? W - size : 0, y: corner.startsWith('bottom') ? bottom - size : 0, width: size, height: size,
+  });
+  // The first corner, in the composition's order, that holds a sunburst of a third of the short side;
+  // else the largest that holds one at all.
+  const short = Math.min(W, H);
+  let best: { corner: Corner; size: number } | undefined;
+  for (const corner of corners) {
+    let size = r(0.62 * short);
+    while (size >= r(0.2 * short) && blocked(cornerBox(corner, size))) size -= r(0.02 * short);
+    if (size < r(0.2 * short)) continue;
+    if (size >= r(0.33 * short)) {
+      best = { corner, size };
+      break;
+    }
+    if (!best || size > best.size) best = { corner, size };
+  }
+  if (!best || sunburstRadius({ width: best.size, height: best.size }) <= 0) return undefined;
+  return {
+    element: { kind: 'sunburst', ...cornerBox(best.corner, best.size), color: o.spec.sunburst.color, opacity: o.spec.sunburst.opacity, corner: best.corner },
+    // The sunburst is home in its composition's first place (navy, cream), never for the band (its pattern is).
+    home: !(o.variant === 'band' && o.spec.pattern) && best.corner === corners[0] && (block !== undefined || o.variant !== 'cream'),
+  };
 }
 
 /**

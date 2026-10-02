@@ -31,6 +31,7 @@ function grammarSchema(palette: ReadonlySet<string>) {
     ground: color.optional(), title: color, lead: color, body: color, detail: color,
     panel: color.optional(), panelTitle: color.optional(), panelText: color.optional(),
     pill: color, pillText: color, sunburst: z.object({ color, opacity: share }).strict(),
+    pattern: z.object({ color, opacity: share }).strict().optional(),
   }).strict();
   const poster = z.object({
     source: note.optional(),
