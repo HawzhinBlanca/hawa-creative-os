@@ -1,6 +1,6 @@
 {
   "date": "2026-10-02",
-  "status": "SOURCE_PREFLIGHT_PASSED_NATIVE_AND_HUMAN_OPEN",
+  "status": "SOURCE_AND_ISOLATED_CANDIDATE_PASSED_NATIVE_AND_HUMAN_OPEN",
   "requirements": [
     "FR-017",
     "FR-023",
@@ -100,7 +100,7 @@
     "technicalStagesPassed": 7,
     "productionDataStage": "SKIPPED_PENDING_EXPLICIT_LOCAL_COPY_AUTHORIZATION",
     "negativeFlagRefusal": true,
-    "candidateDockerOnFrameRepair": "NOT_RUN; previous 243-control candidate proof belongs to 7f43b588, not this repair",
+    "candidateDockerOnFrameRepair": "PASS on runtime-identical7388a70d;243checks/0failures; providers and staff synthetic",
     "gateEvidence": "plans/content-aware-design-2026-09-30/REAL_REPORT_FRAME_GATE_EVIDENCE.json",
     "receipt": "output/qualification/2026-10-02/real-report-acceptance/full/FULL_TEST_SUITE_RUN.log"
   },
@@ -201,5 +201,70 @@
         "actualCanvaImport": false
       }
     ]
+  },
+  "candidateCheckpointBeforeRehearsal": "NOT_RUN; previous 243-control candidate proof belongs to 7f43b588, not this repair",
+  "candidateDeploymentAndRecovery": {
+    "status": "ISOLATED_CANDIDATE_AND_SAME_HOST_RECOVERY_PASSED",
+    "commit": "7388a70deabaac17bb46a9c13fdd3f622cd74776",
+    "finishedAt": "2026-10-02T00:40:27.699Z",
+    "passed": 243,
+    "failed": 0,
+    "totalMs": 172411,
+    "sourceChanges": {},
+    "providers": "synthetic fakes",
+    "parser": "real pinned offline Docling",
+    "uncoveredModelCalls": [],
+    "productionChanged": false,
+    "nativeOrHumanAdmission": false,
+    "separateHostRecoveryProved": false,
+    "recoveries": {
+      "drive": {
+        "tableCount": 105,
+        "policyCount": 181,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.15
+      },
+      "telegram": {
+        "tableCount": 105,
+        "policyCount": 181,
+        "verifiedBlobCount": 16,
+        "missingBlobReferences": 0,
+        "allRowsAndPoliciesMatch": true,
+        "allStoreFilesMatch": true,
+        "restoreValidationSeconds": 8.163
+      }
+    },
+    "logs": {
+      "recovery-drive.json": {
+        "path": "output/qualification/2026-10-02/real-report-acceptance/candidate/recovery-drive.json",
+        "sha256": "66c0c56a6618548e16a4a46e18f9c29e835139a19d1fa307f2a08304ed19a0aa"
+      },
+      "recovery-telegram.json": {
+        "path": "output/qualification/2026-10-02/real-report-acceptance/candidate/recovery-telegram.json",
+        "sha256": "c3964ea4b85424aa12328e9089571d646020357ac2e0ad3d994bca87d1128ce4"
+      },
+      "REHEARSAL.log": {
+        "path": "output/qualification/2026-10-02/real-report-acceptance/candidate/REHEARSAL.log",
+        "sha256": "1d969c804c693c2d121fee2434b8c22f4821c4a4c2702b349817d14703d11fa5"
+      },
+      "last-run.json": {
+        "path": "output/qualification/2026-10-02/real-report-acceptance/candidate/last-run.json",
+        "sha256": "f97deefc6466ca1e5953235b03a61514f888480fbd4e9329ffed42b6502b3e6e"
+      }
+    },
+    "scenarioTests": {
+      "passed": 1,
+      "skipped": 56,
+      "scope": "Only R1.S3.SOURCES --candidate --recovery selected"
+    },
+    "fullSourceQualification": {
+      "commit": "e89da52846709ab966ceacaacf647d5fd602ad75",
+      "postQualificationChanges": "Only proofs/traceability/generated manifests; runtime/tests/migrations/harness/build inputs identical"
+    },
+    "ownedTemporaryContainersAndLockRemoved": true,
+    "wholeProductAdmission": false
   }
 }
