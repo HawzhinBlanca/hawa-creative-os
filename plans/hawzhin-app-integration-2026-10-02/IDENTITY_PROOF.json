@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-02",
+  "status": "LOCAL_IDENTITY_ADAPTER_ONLY",
+  "branch": "codex/hawzhin-app-integration",
+  "siteRepository": "HawzhinBlanca/hawzhinstt",
+  "siteSourceCommit": "eae4dc2ae5e883f2b233cf731be76a77a1f64ba6",
+  "siteRoute": "/designer",
+  "requirements": [
+    "FR-068",
+    "NFR-006"
+  ],
+  "focusedTests": {
+    "command": "pnpm exec vitest run apps/core/test/workspace-member.test.ts --reporter=dot",
+    "passed": 26,
+    "failed": 0,
+    "skipped": 0,
+    "timeoutFollowup": "PASS (whole deadline/no retry control)"
+  },
+  "coreTypecheck": {
+    "command": "pnpm exec tsc -b apps/core",
+    "status": "PASS"
+  },
+  "strictTestTypecheck": {
+    "command": "pnpm run typecheck:tests",
+    "status": "PASS (including final deadline control)",
+    "roots": 740
+  },
+  "scope": "Auth and membership transport doubled. Pinned real project source verified through Lovable/GitHub. No live login or public route tested.",
+  "notRun": [
+    "Customer route wiring",
+    "Persisted customer/client grants",
+    "Customer web intake and durable generation",
+    "Customer revision/download acceptance",
+    "Real native unattended import/export",
+    "Public hosting/cutover",
+    "Actual published hawzhin.app journey",
+    "Other three apps regression"
+  ],
+  "productionChanged": false,
+  "siteApplicationChanged": false,
+  "files": {
+    "apps/core/src/customer/supabase-member.ts": "89216594701ad83825755c77127ec1412fd5496fbcaa95261bdc9bdcc65aa601",
+    "apps/core/test/workspace-member.test.ts": "07237a9b627c85bb9ffa5052c4a41fbe2e71610122f618a15401436fd88768e9"
+  },
+  "blueprintValidation": {
+    "passed": 1914,
+    "warnings": 0,
+    "failed": 0
+  },
+  "initialCommitAttempt": {
+    "status": "REFUSED",
+    "reason": "Secret scanner classified an obviously synthetic long publishable-key test fixture as long_credential_assignment. Replaced with a shorter clearly synthetic valid fixture; scanner rules unchanged."
+  },
+  "additionalRefusals": [
+    {
+      "status": "REFUSED",
+      "reason": "Commit hook default system Python lacks PyYAML; explicit Homebrew Python blueprint validation passed. Correct PATH for commit; do not skip hook."
+    },
+    {
+      "status": "COMMAND_PATH_ERROR",
+      "reason": "First manual scanner command used nonexistent scripts/security_scan.py; actual scanner is infra/security/security_scan.py."
+    }
+  ]
+}
