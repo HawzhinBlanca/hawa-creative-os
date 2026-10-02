@@ -194,11 +194,11 @@ These hard guards must stay rules, outside the model, whatever it reads:
 3. **A paid round needs certainty.** A round starts only for a design that waits for the requester's changes, known by a reply, as the only candidate, by its name, or by a model reading with confidence of 0.85 or more. It never starts by recency alone. Changes to a design that is being made or is in review are kept for the office.
 4. **Copy is never invented.** A brief's exact copy comes only from the requester's own words.
 
-## After ADR-263 (rules tuned on this set, 2026-10-02)
+## After ADR-272 (rules tuned on this set, 2026-10-02)
 
-ADR-263 (`adrs/263_requester_reading_after_nlu_eval.md`) changed the rules for the failure classes above. It also added 54 English cases with `heldOut: true`. The scorer reports them apart from the original 302 (`perSet` in `BASELINE.json`). From now on, `BASELINE.json` holds the scores after ADR-263. The baseline figures above are kept for comparison.
+ADR-272 (`adrs/272_requester_reading_after_nlu_eval.md`) changed the rules for the failure classes above. It also added 54 English cases with `heldOut: true`. The scorer reports them apart from the original 302 (`perSet` in `BASELINE.json`). From now on, `BASELINE.json` holds the scores after ADR-272. The baseline figures above are kept for comparison.
 
-| Measure | Baseline | After ADR-263 |
+| Measure | Baseline | After ADR-272 |
 |---|---|---|
 | Original 302, overall | 281 (93.0 %) | 300 (99.3 %) |
 | Synthetic (102) | 86 (84.3 %) | 101 (99.0 %) |

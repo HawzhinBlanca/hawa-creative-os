@@ -21,7 +21,7 @@ const NAWROZ = view('A', 'in_review', 'KAAE: Nawroz Poster');
 
 describe('friction 1: a cancel word with nothing named asks before it withdraws', () => {
   it.each(['never mind', 'ok never mind', 'stop', 'no need', 'no, stop', 'cancel', 'not needed', 'nvm',
-    // ADR-263: "forget it" is a dismissal like "never mind"; it names nothing for certain.
+    // ADR-272: "forget it" is a dismissal like "never mind"; it names nothing for certain.
     'forget it', 'forget about it', 'just forget it',
     // "stop" (Sorani)
     'ڕاوەستە',

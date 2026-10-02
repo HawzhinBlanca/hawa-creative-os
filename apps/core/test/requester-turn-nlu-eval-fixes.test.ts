@@ -3,7 +3,7 @@ import { reconsiderNewBrief } from '../src/services/brief-or-change.js';
 import { planTurn, readIntentByRules, type ChatRequestView, type TurnInput, type TurnPlan } from '../src/services/requester-turn.js';
 
 /**
- * ADR-263: the rules-only requester reading, after the 2026-10-02 NLU evaluation (plans/nlu-eval-2026-10-02).
+ * ADR-272: the rules-only requester reading, after the 2026-10-02 NLU evaluation (plans/nlu-eval-2026-10-02).
  * Phrases are the evaluation's failures and their held-out paraphrases; Sorani lines carry their meaning in a
  * comment. Every plan here is what Core's intake plans with the model reading off: `readIntentByRules`, then
  * `planTurn`, then ADR-250's `reconsiderNewBrief`.
@@ -27,8 +27,8 @@ function plan(text: string, requests: ChatRequestView[]): TurnPlan {
 }
 
 describe('costly errors: nothing opened or withdrawn unless meant', () => {
-  // Review of ADR-263 (2026-10-02): "something for" + a time read as a new design and opened a request
-  // while one was being made; before ADR-263 it was a deadline. A time is when, not what.
+  // Review of ADR-272 (2026-10-02): "something for" + a time read as a new design and opened a request
+  // while one was being made; before ADR-272 it was a deadline. A time is when, not what.
   it.each(['we need something for tomorrow', 'we need something for tomorrow morning please', 'I need something for next week',
     'we need something for Monday', 'could you do something for this weekend'])(
     '"%s" said while a design is being made opens nothing', (words) => {
@@ -40,7 +40,7 @@ describe('costly errors: nothing opened or withdrawn unless meant', () => {
     expect(plan('we need something for the science fair next month', [])).toMatchObject({ kind: 'open' });
   });
 
-  // "stop working on it" asked "change or new?" before and after ADR-263: cancel words never offer a new design.
+  // "stop working on it" asked "change or new?" before and after ADR-272: cancel words never offer a new design.
   it('"stop working on it" is "stop it"; with "for now" it is a pause', () => {
     expect(plan('stop working on it', [DESIGNING])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
     expect(plan('please stop working on the poster', [DESIGNING])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
@@ -48,7 +48,7 @@ describe('costly errors: nothing opened or withdrawn unless meant', () => {
     expect(plan('stop working on the logo', [DESIGNING])).not.toMatchObject({ note: 'cancel' });
   });
 
-  // Before ADR-263 "don't go ahead yet" contained "go ahead" and told the office it was approved.
+  // Before ADR-272 "don't go ahead yet" contained "go ahead" and told the office it was approved.
   it.each(["don't go ahead yet", "please don't proceed for now", "don't start yet"])('"%s" pauses the design', (words) => {
     expect(plan(words, [IN_REVIEW])).toMatchObject({ kind: 'note', note: 'hold', requestId: 'A' });
   });

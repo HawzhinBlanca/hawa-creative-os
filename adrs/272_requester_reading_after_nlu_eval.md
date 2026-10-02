@@ -1,4 +1,4 @@
-# ADR-263: The Requester Rules After the NLU Evaluation
+# ADR-272: The Requester Rules After the NLU Evaluation
 
 **Date:** 2026-10-02
 **Status:** Implemented on branch `claude/nlu-eval` (from `bc0d4ac0`); not deployed.
