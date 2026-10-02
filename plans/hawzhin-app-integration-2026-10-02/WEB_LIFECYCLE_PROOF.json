@@ -171,5 +171,5 @@
     "packages/db/migrations/083_customer_owned_requests.sql": "fcee7e3949883b0e243955adb84c649b361c3758fa78954fd3790f5969624b71",
     "packages/db/migrations/084_customer_web_lifecycle.sql": "ffb4d6ee6e60e21b5b4e4109367bf06c1c0fdfb4041cdeabd56d6ad5650d1045"
   },
-  "full_regression_correction": "8061 passed,1 failed,67 skipped: one route inventory snapshot omitted the two new private customer endpoints. Snapshot updated; four route/order controls passed. Requalified final full suite pending."
+  "full_regression_correction": "8061 passed,1 failed,67 skipped: one route inventory snapshot omitted the two new private customer endpoints. Snapshot updated; 22 route inventory controls passed. Requalified final full suite pending."
 }
