@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-03T00:38:33+03:00",
+  "generatedAt": "2026-10-03T01:02:20+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "9f1f9c3babca865e62714e3c68ef4566358e9707",
+    "commit": "5780e4c27b3847beec18394050ccc2fb4e28c652",
     "treeClean": true,
-    "commitTimestamp": "2026-10-03T00:38:33+03:00",
+    "commitTimestamp": "2026-10-03T01:02:20+03:00",
     "branch": "codex/hawzhin-app-integration"
   },
   "migrations": {
@@ -75,7 +75,7 @@
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
       "apps/core/src/services/canva-design-planner.ts": "f913252c64ef050e57b84ceb79ff65fbbeb94d580eb47e541441728a2f000ed2",
       "packages/creative/src/studio/layout-generator-v3.ts": "b2fec55a85e5e1818bd8e16c33172c5c5092bdcd09d01b17d78ac6a632c8276a",
-      "packages/creative/src/studio/pairwise-judge-v3.ts": "583f3ed9f0fab9df7ff52dac59e1f5475dbb3f5b0c269159198282fc27074f6e",
+      "packages/creative/src/studio/pairwise-judge-v3.ts": "a696d3e2258e9ff95fe347ebc0127980ac7b59dc67fa858b134d2e724d4557f1",
       "packages/creative/src/studio/box-critique-v3.ts": "f6a643f5df5aaf69f355f12a6494b2479b942d2b6d702cc1cc42af8d24cb85e2"
     }
   },
@@ -84,11 +84,11 @@
     "sourceHashes": {
       "packages/qa/src/engine.ts": "454d81402825a4ccfdf00445b556afeb3282b01957585ba6689eec4436ab79c5",
       "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
-      "packages/qa/src/canva-pptx-check.ts": "bf4ca47b0239d6220b1802e00b6dfd002e34081bda5e4f11405e382c89af6c66",
+      "packages/qa/src/canva-pptx-check.ts": "6958c1af7642ef27e83e199a6c9df9e3c9b8599a8b589e915e6cd3e3fa310a38",
       "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
       "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "6ca3289c3c5d310596b81a48f8bf665943d3d594a1b8dd78c701c3d5e21bdbc0"
+  "sha256": "4eea64e3a464f7fd628e6eba059058815599eadff2420a360830fa676e13e8ea"
 }
