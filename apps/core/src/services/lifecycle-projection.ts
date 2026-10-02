@@ -1,3 +1,4 @@
+import { authorizeCustomerWebOpen, canonicalCustomerValue } from '../customer/customer-web-lifecycle.js';
 import { officeReviewUrl } from './desk-review-link.js';
 import { createHash } from 'node:crypto';
 import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef, type DraftImageRef, type LifecycleAlbumRef, type LifecycleSourceRef } from '@hawa/contracts';
@@ -237,6 +238,9 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
   const { requestId, tenantId, draft, key } = input;
   const hash = createHash('sha256').update(canonical({ ...input, draft: { ...draft, tenantId } })).digest('hex');
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    const web = draft.platform==='hawzhin_web' ? await authorizeCustomerWebOpen(trx,tenantId,requestId) : null;
+    if(web && canonicalCustomerValue(web.draft)!==canonicalCustomerValue(draft))
+      throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT','The worker changed the retained customer brief');
     const anchored = await anchoredDecisionFor(trx,tenantId,requestId);
     if (anchored) {
       if (canonical(anchored.draft)!==canonical(draft) || (anchored.anchor && anchored.anchor.chatId!==draft.sourceChannelId))
@@ -316,7 +320,7 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
           copyEn: /[\u0600-\u06ff]/.test(draft.rawText) ? '' : draft.rawText,
           copyCkb: /[\u0600-\u06ff]/.test(draft.rawText) ? draft.rawText : '' } : {}),
         ...((admittedSource ?? anchored?.sourceUpdate) !== undefined ? { rawJson: admittedSource ?? anchored?.sourceUpdate } : {}) },
-        { outboxState: 'recorded',...(anchored?.detailsRequired ? {detailsRequired:true} : {}) });
+        { outboxState: 'recorded',...(web ? {customer:{...web.owner,dnaVersion:web.dnaVersion,body:web.receipt.body}} : {}),...(anchored?.detailsRequired ? {detailsRequired:true} : {}) });
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
         throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The source event already belongs to a different executor');

@@ -385,6 +385,9 @@ export class OutboxConsumer {
   }
 
   private registerDefaultHandlers() {
+    if(!this.handlers.has('customer.request.open')) this.handlers.set('customer.request.open',async cmd=>{
+      await this.dispatcher.dispatchCustomer(cmd);
+    });
     // A Restate workflow runs once per key (workflow-dispatcher.ts), so a dispatch repeated after a
     // consumer stopped mid-command answers 409 and starts nothing twice.
     if (!this.handlers.has('task.created')) {

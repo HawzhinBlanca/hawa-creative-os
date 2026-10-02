@@ -237,7 +237,7 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
     await expect(sql`UPDATE hawa.canva_export_bytes SET sha256=${'0'.repeat(64)} WHERE id=${done.artifact.id}::uuid`.execute(db)).rejects.toThrow();
     await expect(sql`DELETE FROM hawa.canva_export_bytes WHERE id=${done.artifact.id}::uuid`.execute(db)).rejects.toThrow();
     const role='canva_probe_'+randomUUID().replaceAll('-','');
-    await sql.raw(`CREATE ROLE ${role}; GRANT USAGE ON SCHEMA hawa TO ${role}; GRANT SELECT ON hawa.canva_connections,hawa.canva_export_bytes TO ${role};`).execute(db);
+    await sql.raw(`CREATE ROLE ${role}; GRANT USAGE ON SCHEMA hawa TO ${role}; GRANT EXECUTE ON FUNCTION hawa.current_customer_id() TO ${role}; GRANT SELECT ON hawa.canva_connections,hawa.canva_export_bytes TO ${role};`).execute(db);
     try {
       await withRlsContext(db,{tenantId:randomUUID()},async d=>{
         await sql.raw(`SET LOCAL ROLE ${role}`).execute(d);

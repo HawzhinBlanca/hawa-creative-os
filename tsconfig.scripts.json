@@ -24,7 +24,8 @@
     ]
   },
   "include": [
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "apps/worker/test-support/customer-web-transport.ts"
   ],
   "exclude": [
     "scripts/generate-p01-proof.ts",

@@ -1,3 +1,4 @@
+import { signCustomerOpenCommand } from './lifecycle/customer-web-entry.js';
 /**
  * Hawa Creative OS — Durable Task Workflow Dispatcher
  * Requirements: FR-004, FR-060, FR-061, FR-062, NFR-001, NFR-003, NFR-014
@@ -28,6 +29,8 @@ export interface WorkflowSubmissionReceipt {
 export interface TaskWorkflowDispatcherOptions {
   restateIngressUrl?: string;
   runner?: TaskWorkflowRunner;
+  customerSigningSecret?:string;
+  fetcher?:typeof fetch;
   db?: Kysely<Database>;
 }
 
@@ -35,6 +38,26 @@ export class TaskWorkflowDispatcher {
   private readonly inFlightSubmissions = new Map<string, WorkflowSubmissionReceipt>();
 
   constructor(private readonly options: TaskWorkflowDispatcherOptions = {}) {}
+
+  /** Virtual-object commands use an actual ingress receipt and a retained action key. */
+  async dispatchCustomer(cmd:OutboxCommandRecord):Promise<WorkflowSubmissionReceipt> {
+    if(cmd.command_type!=='customer.request.open' || cmd.aggregate_type!=='request' ||
+      !/^[0-9a-f-]{36}$/i.test(cmd.aggregate_id) || cmd.payload?.v!==1 || cmd.payload.requestId!==cmd.aggregate_id)
+      throw new Error('INVALID_CUSTOMER_OPEN_COMMAND');
+    if(!this.options.restateIngressUrl) throw new Error('CUSTOMER_LIFECYCLE_INGRESS_NOT_CONFIGURED');
+    const signed=signCustomerOpenCommand({v:1,requestId:cmd.aggregate_id,tenantId:cmd.tenant_id,
+      accountId:cmd.payload.accountId,commandId:cmd.id,key:cmd.idempotency_key},
+      this.options.customerSigningSecret ?? process.env.HAWA_WORKER_TOKEN ?? '');
+    const response=await (this.options.fetcher ?? fetch)(`${this.options.restateIngressUrl}/ChatInbox/web:${signed.accountId}/webOpen/send`,{
+      method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':cmd.idempotency_key,...requestIdHeaders()},
+      signal:AbortSignal.timeout(10000),body:JSON.stringify(signed)});
+    if(!response.ok) throw new Error(`CUSTOMER_LIFECYCLE_SUBMISSION_FAILED: HTTP ${response.status}`);
+    const answer=await response.json().catch(()=>null) as {invocationId?:string}|null;
+    const receiptId=answer?.invocationId ?? response.headers.get('x-restate-id');
+    if(!/^inv_[A-Za-z0-9_-]+$/.test(receiptId ?? '')) throw new Error('CUSTOMER_LIFECYCLE_RECEIPT_MISSING');
+    return {workflowId:cmd.aggregate_id,aggregateId:cmd.aggregate_id,status:'submitted',idempotencyKey:cmd.idempotency_key,
+      submittedAt:new Date().toISOString(),receiptId:receiptId!};
+  }
 
   /**
    * Dispatches an outbox command to the durable workflow engine with confirmed submission.

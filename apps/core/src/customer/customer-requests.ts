@@ -1,8 +1,10 @@
+import { dailyDraftCap } from '../services/chat-intake.js';
+import { randomUUID } from 'node:crypto';
+import { customerValueHash } from './customer-web-lifecycle.js';
+import { OutboxRepository } from '@hawa/db';
 import {
   sql,
   withRlsContext,
-  TaskRepository,
-  IdempotencyConflictError,
   type Database,
   type Kysely,
 } from '@hawa/db';
@@ -42,15 +44,6 @@ export interface CustomerJob {
   createdAt: string;
   updatedAt: string;
 }
-const jobColumns = [
-  'id',
-  'client_id',
-  'title',
-  'state',
-  'version',
-  'created_at',
-  'updated_at',
-] as const;
 function job(row: {
   id: string;
   client_id: string | null;
@@ -133,122 +126,72 @@ export class CustomerRequests {
     });
   }
 
-  async list(member: WorkspaceMember) {
-    return this.scoped(member, async (trx, account) =>
-      (
-        await trx
-          .selectFrom('tasks')
-          .select(jobColumns)
-          .where('tenant_id', '=', this.tenantId)
-          .where('customer_account_id', '=', account.id)
-          .orderBy('created_at', 'desc')
-          .orderBy('id', 'desc')
-          .limit(50)
-          .execute()
-      ).map(job),
-    );
+  private async jobs(trx:Kysely<Database>,account:Account,id?:string) {
+    return (await sql<{id:string;client_id:string;title:string;state:string;version:number;created_at:Date;updated_at:Date}>`
+      SELECT w.request_id AS id,w.client_id,w.body->>'title' AS title,COALESCE(t.state::text,'received') AS state,
+        COALESCE(r.rev,1) AS version,w.created_at,COALESCE(r.updated_at,w.created_at) AS updated_at
+      FROM hawa.customer_web_requests w
+      LEFT JOIN hawa.requests r ON r.tenant_id=w.tenant_id AND r.request_id=w.request_id
+      LEFT JOIN hawa.tasks t ON t.tenant_id=r.tenant_id AND t.id=r.current_task_id
+      WHERE w.tenant_id=${this.tenantId}::uuid AND w.account_id=${account.id}::uuid
+        ${id ? sql`AND w.request_id=${id}::uuid` : sql``}
+      ORDER BY w.created_at DESC,w.request_id DESC LIMIT 50`.execute(trx)).rows.map(job);
   }
-
-  async get(member: WorkspaceMember, id: string) {
-    return this.scoped(member, async (trx, account) => {
-      const row = await trx
-        .selectFrom('tasks')
-        .select(jobColumns)
-        .where('tenant_id', '=', this.tenantId)
-        .where('customer_account_id', '=', account.id)
-        .where('id', '=', id)
-        .executeTakeFirst();
-      if (!row) throw new CustomerRequestError(404, 'DESIGN_JOB_NOT_FOUND');
-      return job(row);
+  async list(member:WorkspaceMember) {
+    return this.scoped(member,(trx,account)=>this.jobs(trx,account));
+  }
+  async get(member:WorkspaceMember,id:string) {
+    return this.scoped(member,async (trx,account)=>{
+      const rows=await this.jobs(trx,account,id);
+      if(!rows.length) throw new CustomerRequestError(404,'DESIGN_JOB_NOT_FOUND');
+      return rows[0];
     });
   }
-
-  async create(
-    member: WorkspaceMember,
-    key: string,
-    body: CustomerDesignRequest,
-  ) {
-    return this.scoped(member, async (trx, account) => {
-      // One lock covers idempotency AND admission counts across different keys.
-      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${account.id},0))`.execute(
-        trx,
-      );
-      await sql`SELECT hawa.lock_customer_request_access(${body.clientId}::uuid)`.execute(
-        trx,
-      );
-      const current = (
-        await sql<Account>`SELECT id,user_id,daily_job_limit,concurrent_job_limit
-        FROM hawa.customer_accounts WHERE id=${account.id}::uuid`.execute(trx)
-      ).rows[0];
-      if (!current) throw new CustomerRequestError(403, 'DESIGN_ACCESS_DENIED');
-      const result = await new TaskRepository(this.db).createTaskAggregate(
-        {
-          tenantId: this.tenantId,
-          userId: account.user_id,
-          customerAccountId: account.id,
-          idempotencyKey: `customer:${account.id}:${key}`,
-          clientId: body.clientId,
-          title: body.title,
-          description: body.designInstructions,
-          taskType: 'graphic_design',
-          requestBody: { ...body },
-          payload: {
-            body,
-            workflow: 'canva',
-            autoGenerate: true,
-            designStudio: true,
-            variant: {
-              square: { width: 1080, height: 1080 },
-              portrait: { width: 1080, height: 1350 },
-              story: { width: 1080, height: 1920 },
-            }[body.variant],
-            sourcePlatform: 'web',
-            rawRequestText: body.designInstructions,
-            studioOptions: { tier: 'standard', imagery: 'auto' },
-            // Copy was explicitly supplied in separate fields; model extraction is unnecessary.
-            reviewedSource: {
-              confirmation: 'request_copy_reviewed',
-              origin: 'customer_exact_copy',
-              localesConfirmedByRequester: true,
-            },
-          },
-          prepareCreatePayload: async () => {
-            const counts = (
-              await sql<{
-                daily: number;
-                concurrent: number;
-              }>`SELECT * FROM hawa.customer_job_counts()`.execute(trx)
-            ).rows[0];
-            if (
-              counts.daily >= current.daily_job_limit ||
-              counts.concurrent >= current.concurrent_job_limit
-            )
-              throw new CustomerRequestError(429, 'DESIGN_REQUEST_LIMIT');
-            const dna = (
-              await sql<{
-                version: number | null;
-              }>`SELECT hawa.pin_customer_dna(${body.clientId}::uuid) AS version`.execute(
-                trx,
-              )
-            ).rows[0];
-            if (!dna.version)
-              throw new CustomerRequestError(409, 'DESIGN_BRAND_NOT_READY');
-            return { clientDnaVersion: dna.version };
-          },
-        },
-        trx,
-      );
-      return { job: job(result.task), created: result.created };
-    }).catch((error) => {
-      if (error instanceof IdempotencyConflictError)
-        throw new CustomerRequestError(409, 'DESIGN_IDEMPOTENCY_CONFLICT');
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        error.code === '42501'
-      )
-        throw new CustomerRequestError(403, 'DESIGN_ACCESS_DENIED');
+  async messages(member:WorkspaceMember,id:string) {
+    return this.scoped(member,async (trx,account)=>{
+      if(!(await this.jobs(trx,account,id)).length) throw new CustomerRequestError(404,'DESIGN_JOB_NOT_FOUND');
+      // Select the requester read model explicitly; refs and internal routing never cross this API.
+      return (await sql<{id:string;kind:string;text:string;created_at:Date;question:unknown}>`
+        SELECT id,payload->>'kind' AS kind,COALESCE(payload->>'caption',payload->>'text','') AS text,
+          created_at,payload->'onSent' AS question FROM hawa.customer_web_messages
+        WHERE tenant_id=${this.tenantId}::uuid AND account_id=${account.id}::uuid AND request_id=${id}::uuid
+        ORDER BY created_at DESC,id DESC LIMIT 100`.execute(trx)).rows.reverse().map(row=>({id:row.id,kind:row.kind,text:row.text,
+          createdAt:new Date(row.created_at).toISOString(),question:row.question ?? null}));
+    });
+  }
+  async create(member:WorkspaceMember,key:string,body:CustomerDesignRequest) {
+    return this.scoped(member,async (trx,account)=>{
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${account.id},0))`.execute(trx);
+      await sql`SELECT hawa.lock_customer_request_access(${body.clientId}::uuid)`.execute(trx);
+      const hash=customerValueHash(body);
+      const prior=(await sql<{request_id:string;body_hash:string}>`SELECT request_id,body_hash FROM hawa.customer_web_requests
+        WHERE tenant_id=${this.tenantId}::uuid AND account_id=${account.id}::uuid AND action_key=${key}`.execute(trx)).rows[0];
+      if(prior) {
+        if(prior.body_hash!==hash) throw new CustomerRequestError(409,'DESIGN_IDEMPOTENCY_CONFLICT');
+        return {job:(await this.jobs(trx,account,prior.request_id))[0],created:false};
+      }
+      const current=(await sql<Account>`SELECT id,user_id,daily_job_limit,concurrent_job_limit FROM hawa.customer_accounts
+        WHERE id=${account.id}::uuid`.execute(trx)).rows[0];
+      if(!current) throw new CustomerRequestError(403,'DESIGN_ACCESS_DENIED');
+      const counts=(await sql<{daily:number;concurrent:number}>`SELECT * FROM hawa.customer_job_counts()`.execute(trx)).rows[0];
+      if(counts.daily>=current.daily_job_limit || counts.concurrent>=current.concurrent_job_limit)
+        throw new CustomerRequestError(429,'DESIGN_REQUEST_LIMIT');
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`auto-draft-admission:${this.tenantId}`},0))`.execute(trx);
+      const global=(await sql<{n:string}>`SELECT hawa.customer_global_job_count() AS n`.execute(trx)).rows[0];
+      if(Number(global.n)>=dailyDraftCap('AUTO_GENERATE_DAILY_CAP_GLOBAL',200))
+        throw new CustomerRequestError(429,'DESIGN_REQUEST_LIMIT');
+      const dna=(await sql<{version:number|null}>`SELECT hawa.pin_customer_dna(${body.clientId}::uuid) AS version`.execute(trx)).rows[0];
+      if(!dna.version) throw new CustomerRequestError(409,'DESIGN_BRAND_NOT_READY');
+      const requestId=randomUUID();
+      await sql`INSERT INTO hawa.customer_web_requests(request_id,tenant_id,account_id,client_id,subject,action_key,body_hash,body,dna_version)
+        VALUES(${requestId}::uuid,${this.tenantId}::uuid,${account.id}::uuid,${body.clientId}::uuid,${member.subject}::uuid,
+          ${key},${hash},${JSON.stringify(body)}::jsonb,${dna.version})`.execute(trx);
+      await new OutboxRepository(this.db).enqueue({tenantId:this.tenantId,aggregateType:'request',aggregateId:requestId,
+        commandType:'customer.request.open',idempotencyKey:`customer:${account.id}:${key}`,payload:{v:1,requestId,accountId:account.id}},trx);
+      return {job:(await this.jobs(trx,account,requestId))[0],created:true};
+    }).catch(error=>{
+      if(error && typeof error==='object' && 'code' in error && error.code==='42501')
+        throw new CustomerRequestError(403,'DESIGN_ACCESS_DENIED');
       throw error;
     });
   }

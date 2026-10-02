@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T12:19:06Z",
+  "generatedAt": "2026-10-02T14:22:41Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 886,
+  "fileCount": 888,
   "files": [
     {
       "path": ".dockerignore",
@@ -1238,14 +1238,19 @@
       "bytes": 2174
     },
     {
+      "path": "adrs/260_customer_request_lifecycle_and_web_receipts.md",
+      "sha256": "c5239d481012d5ba3449b0e7fe64c7d5d78cea421e66cc347a74724ea7f19421",
+      "bytes": 7209
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
     },
     {
       "path": "api/customer-design.openapi.yaml",
-      "sha256": "5d46018b8c36066ca28e3fa75f310b113333acfd67944fdb1b7d584460d4c562",
-      "bytes": 7800
+      "sha256": "4edc8bd6593f373a753df3fe6d02a62dd3a8ea592db69ad8b0e158affd60769e",
+      "bytes": 8205
     },
     {
       "path": "api/events.md",
@@ -2254,8 +2259,13 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/PLAN.md",
-      "sha256": "966eebb8aca32761a80778aeac5e630d280631ed0e486d104651192c810fad03",
-      "bytes": 6906
+      "sha256": "5158af422a9c402eb5be2a7956102ffda11fd4073d62f58762ac6f6fea30a5d6",
+      "bytes": 9421
+    },
+    {
+      "path": "plans/hawzhin-app-integration-2026-10-02/WEB_LIFECYCLE_PROOF.json",
+      "sha256": "9d3c4cc1a39f303b884a7379fb9a3f6e0dd34ce9f9abd68561bb0127aee7f131",
+      "bytes": 7838
     },
     {
       "path": "plans/hosting/LINUX_READINESS_PROOF.json",
@@ -3464,8 +3474,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "24e3421fb8c707e55fd1e4e6aba3bdfb64d918922c73fde279a1cd000775da04",
-      "bytes": 847262
+      "sha256": "0ad2c05aedcd7e0dd3d8f56f1faa06a4e2b618073548f928c349dde0faca0893",
+      "bytes": 851303
     },
     {
       "path": "plans/user-stories.csv",
@@ -4419,8 +4429,8 @@
     },
     {
       "path": "tsconfig.scripts.json",
-      "sha256": "ec827f51b257582f6477f8a1f0eda2ca9922aa9440158e09ee67f9ded4768e5c",
-      "bytes": 1392
+      "sha256": "03cab24e60a09398469e6e31846c8c80c5528ab598bb37a1ee8fc6104576fb47",
+      "bytes": 1450
     },
     {
       "path": "tsconfig.test.json",

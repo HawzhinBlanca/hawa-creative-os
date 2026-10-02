@@ -1,0 +1,167 @@
+{
+  "recorded_at": "2026-10-02T14:22:41.216833+00:00",
+  "scope": "ADR260 canonical web entry and message slice; overall transfer incomplete; not deployed",
+  "engine_parent_commit": "9bd9a7be0dfba4a0755defb1736a2f936eb688f8",
+  "website_parent_commit": "9007c1633a60f9ad7518a1a1d081142b3e4978b0",
+  "source_state": "Implementation worktree before checkpoint commit. No public generation or full current-engine seal claimed.",
+  "passing_runs": {
+    "CASE_KEYSET_WEB_TESTS.json": {
+      "success": true,
+      "numTotalTests": 34,
+      "numPassedTests": 34,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "WEB_SLICE_FINAL_TESTS.json": {
+      "success": true,
+      "numTotalTests": 68,
+      "numPassedTests": 68,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "WEB_ADMISSION_FREEZE_TESTS.json": {
+      "success": true,
+      "numTotalTests": 56,
+      "numPassedTests": 56,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "WEB_GATEWAY_FINAL_TESTS.json": {
+      "success": true,
+      "numTotalTests": 91,
+      "numPassedTests": 91,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    }
+  },
+  "website": {
+    "full": {
+      "success": true,
+      "numTotalTests": 840,
+      "numPassedTests": 840,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "affected": {
+      "success": true,
+      "numTotalTests": 14,
+      "numPassedTests": 14,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "types": "PASS",
+    "build": "PASS final production build",
+    "focused_lint": "PASS final affected files",
+    "scope": "Existing workspace login and /designer route; registry remains soon. Request intake/history/owned message UI only."
+  },
+  "test_roots": 745,
+  "test_typecheck": "PASS 745/745 active roots; scripts and Core/worker compile",
+  "retained_failed_attempts": {
+    "COMBINED_FULL_TESTS.json": {
+      "success": false,
+      "numTotalTests": 8116,
+      "numPassedTests": 8036,
+      "numFailedTests": 13,
+      "numPendingTests": 67
+    },
+    "REGRESSION_FIX_TESTS.json": {
+      "success": false,
+      "numTotalTests": 104,
+      "numPassedTests": 102,
+      "numFailedTests": 2,
+      "numPendingTests": 0
+    },
+    "KEYSET_FIX_TESTS.json": {
+      "success": false,
+      "numTotalTests": 32,
+      "numPassedTests": 30,
+      "numFailedTests": 2,
+      "numPendingTests": 0
+    },
+    "KEYSET_CONTEXT_TESTS.json": {
+      "success": false,
+      "numTotalTests": 25,
+      "numPassedTests": 23,
+      "numFailedTests": 2,
+      "numPendingTests": 0
+    },
+    "OFFICE_KEYSET_TESTS.json": {
+      "success": false,
+      "numTotalTests": 8,
+      "numPassedTests": 6,
+      "numFailedTests": 2,
+      "numPendingTests": 0
+    },
+    "CANONICAL_WEB_TESTS.json": {
+      "success": false,
+      "numTotalTests": 45,
+      "numPassedTests": 39,
+      "numFailedTests": 6,
+      "numPendingTests": 0
+    }
+  },
+  "repairs": [
+    "Worker policy functions have minimal explicit execute grants; no raw customer-table grant to the worker. Synthetic probe roles explicitly receive only their RLS helpers.",
+    "Membership checks and admitted-client sets use statement subqueries. Customer scope CASE preserves office indexed keyset plans; a NULL disjunction estimated 24 of 5000 rows and lost the index plan.",
+    "Migration sequence expectations updated; historical release manifest is not a current integration qualification.",
+    "Core reconstructs canonical drafts from immutable receipts; worker identity/scope/copy mutation and revoked access cannot create a task.",
+    "A web record has web_recorded + real UUID, without Telegram send marks, fake message IDs or a question-seen callback.",
+    "An aborted authorization statement cannot be masked by context cleanup; successful cleanup failures still fail the transaction.",
+    "New paid reservations recheck actual customer admission; already paid outcomes can still settle.",
+    "Total body read deadline handles stalled reads and a never-resolving cancellation hook.",
+    "One web receipt reserves one shared automatic slot; admitted web jobs do not become manual at Telegram sender limits.",
+    "Known notification formatting becomes safe text without DOM/external loads, and the feature fits the existing main landmark."
+  ],
+  "open": [
+    "Ordered owner-bound photo upload",
+    "Current capture preview",
+    "Owned revision, seen-question and cancel actions",
+    "Independent customer acceptance and hash/capture/QC-bound PNG/PPTX downloads",
+    "Always-on hosting and HTTPS/DNS gateway",
+    "Real hosted two-member/native RTL/Canva/restart journey",
+    "Current full-engine qualification and source manifest"
+  ],
+  "generation_enabled": false,
+  "launcher_status": "soon",
+  "provider_transport": "Synthetic in all tests; no new paid or external sends",
+  "source_sha256": {
+    "apps/core/src/customer/customer-requests.ts": "b64164d15c6cd854b432dad6d56042c1bab005aaee9cdf3cd219099cdf9ad83e",
+    "apps/core/src/customer/customer-web-lifecycle.ts": "5492b69b3da595d4a7ee9127cbc40233323a5f251b09196438a14925f9ce304e",
+    "apps/core/src/customer/customer.routes.ts": "7d35b8850a4f989fe8fd983193a16012b58d486c77a5f85a717b835ada53081e",
+    "apps/core/src/services/chat-intake.ts": "6a90ba01085417cfe4902bcade5fe3fe0c074890e310b17de858aca085d90ece",
+    "apps/core/src/services/lifecycle-projection.ts": "5e307639789bf3f8ce6efade9e58e4ce8de47edd83c92761328a0fc3fe024f40",
+    "apps/worker/src/workflow-dispatcher.ts": "0ffa571de5d02120865b29aeeeebd4a6021d46d1dd1dfb53aa5e50c92caf0713",
+    "apps/worker/src/lifecycle/request-lifecycle.ts": "7f6559a497107ee349f0aebeac9104e29558105abe8d0c91b4352b443429d423",
+    "apps/worker/src/lifecycle/telegram-sender.ts": "51dc7f491b7a730c8e94389bbc3fbb4d1760747a0b6112a0984d5266a83489fa",
+    "packages/db/migrations/083_customer_owned_requests.sql": "fcee7e3949883b0e243955adb84c649b361c3758fa78954fd3790f5969624b71",
+    "packages/db/migrations/084_customer_web_lifecycle.sql": "ffb4d6ee6e60e21b5b4e4109367bf06c1c0fdfb4041cdeabd56d6ad5650d1045",
+    "packages/db/src/repositories/design-studio.repository.ts": "705bc2066cd3abd445f358b312d04deada59c24fdd43efc11c44a79780491aff"
+  },
+  "real_transport": {
+    "timestamp": "2026-10-02T14:20:12.040Z",
+    "success": true,
+    "mode": "isolated-real-Restate-1.7.10-synthetic-Core",
+    "privateLifecycleHttpStatus": 400,
+    "invocationReceipt": "inv_1ahTq1hHFxRH2KDD4FdgMvhRukcpyRgW4A",
+    "replayedReceipt": "inv_1ahTq1hHFxRH2KDD4FdgMvhRukcpyRgW4A",
+    "gatewayHttpStatus": 200,
+    "tamperedHttpStatus": 403,
+    "coreEvidenceReads": 1,
+    "lifecycleProjections": 1,
+    "durableWebMessages": 1,
+    "providersCalled": false,
+    "productionTouched": false
+  },
+  "corrections": [
+    "Earlier direct-private-HTTP adapter mock passed an impossible transport. Actual isolated Restate rejects it with400. Repaired signed existing inbox gateway qualified with real transport."
+  ],
+  "source_hashes": {
+    "apps/worker/src/lifecycle/customer-web-entry.ts": "b71d30f3bc2f06e81ab67dfbb998c2bf1f4ffb7daa3a633f1bd71df7ae768a4b",
+    "apps/worker/src/lifecycle/chat-inbox.ts": "72cd03286c2913d1ddc12332adeaccce4d6f4645abac9b7ee9fa988bdc5df06a",
+    "apps/worker/src/workflow-dispatcher.ts": "10df77fbd4c963fa2fa47c361f656638d0e40564d62050ffaa9eb841b4f5abd1",
+    "apps/core/src/customer/customer-web-lifecycle.ts": "67a3fd4d8d343000324149a6b9b6a1b84261c712bdace2d66260cf3338cbbc3f",
+    "packages/contracts/src/customer-command.ts": "2b8a9d6cf22e663aaeaaec90f85d122aaa357a079f62904cd11737ceae60ec0f",
+    "packages/db/migrations/083_customer_owned_requests.sql": "fcee7e3949883b0e243955adb84c649b361c3758fa78954fd3790f5969624b71",
+    "packages/db/migrations/084_customer_web_lifecycle.sql": "ffb4d6ee6e60e21b5b4e4109367bf06c1c0fdfb4041cdeabd56d6ad5650d1045"
+  }
+}

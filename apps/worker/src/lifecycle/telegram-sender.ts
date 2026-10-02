@@ -1,3 +1,4 @@
+import { coreInternalFromEnv, type CoreInternal } from './delivery.js';
 /**
  * TelegramSender: one Restate Virtual Object per Telegram chat, which sends that chat's messages one
  * at a time (architecture programme Phase 2, slice 2.2; PHASE2_DESIGN.md section 2.6, ADR-034).
@@ -517,13 +518,21 @@ export type TelegramSenderHandlers = {
 /** How other services name it (objectClient / objectSendClient). */
 export const TelegramSenderApi: restate.VirtualObjectDefinition<'TelegramSender', TelegramSenderHandlers> = { name: 'TelegramSender' };
 
-export function createTelegramSender(deps: TelegramSenderDeps) {
+/** The existing durable service name is retained for in-flight compatibility. Web channels use
+ * Core's separate record boundary and never enter Telegram send/mark/callback code. */
+export async function sendWebMessage(core:CoreInternal,m:OutboundMessage):Promise<SendResult> {
+  if(!/^web:[0-9a-f-]{36}$/i.test(m?.chatId ?? '')) throw new restate.TerminalError('INVALID_WEB_CHANNEL');
+  const receipt=await core.post<{outcome:string;receiptId:string}>('/internal/customer/web-message',m);
+  if(receipt?.outcome!=='web_recorded' || !/^[0-9a-f-]{36}$/i.test(receipt.receiptId)) throw new Error('WEB_RECEIPT_INVALID');
+  return {outcome:'web_recorded',receiptId:receipt.receiptId};
+}
+export function createTelegramSender(deps: TelegramSenderDeps,webCore:CoreInternal=coreInternalFromEnv()) {
   return restate.object({
     name: 'TelegramSender',
     handlers: {
       send: async (ctx: restate.ObjectContext, m: OutboundMessage): Promise<SendResult> =>
         withInvocationLogContext(ctx, { taskId: m?.taskId, tenantId: m?.tenantId }, () =>
-          handleSend({
+          m?.chatId?.startsWith('web:') ? ctx.run('web-record',()=>sendWebMessage(webCore,m)) : handleSend({
             run: (name, action) => ctx.run(name, action),
             sleep: (ms) => ctx.sleep(ms),
             sendTo: (message) => {

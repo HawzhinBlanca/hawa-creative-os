@@ -26,3 +26,5 @@ export * from './operations-reliability.js';
 export * from './publication-audit.js';
 export * from './canva-amendment.js';
 export * from './canary.js';
+
+export * from './customer-command.js';

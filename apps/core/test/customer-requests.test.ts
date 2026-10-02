@@ -1,4 +1,7 @@
-import { afterAll, expect, it } from 'vitest';
+import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
+import { customerWebOpenEvent, recordCustomerWebMessage } from '../src/customer/customer-web-lifecycle.js';
+import { projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
+import { afterAll, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { createDb, sql, withRlsContext } from '@hawa/db';
@@ -76,6 +79,7 @@ async function fixture(limit = 2) {
     };
     return { id, userId, member };
   }
+  await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${tenantId}::uuid,${CHANNEL_INGRESS_USER_ID}::uuid,'operator')`.execute(owner);
   const a = await account(),
     b = await account();
   const service = new CustomerRequests(db, tenantId);
@@ -106,50 +110,43 @@ it('uses the restricted runtime role and returns only explicitly granted brands'
     new CustomerRequests(db, randomUUID()).session(f.a.member),
   ).rejects.toMatchObject({ status: 403 });
 });
-it('commits owned task, exact copy, pinned DNA and one dispatch receipt atomically', async () => {
-  const f = await fixture(),
-    r = await f.service.create(f.a.member, 'request_001', f.body);
+it('commits one owned canonical request and command before any task or paid work',async()=>{
+  const f=await fixture(),r=await f.service.create(f.a.member,'request_001',f.body);
   expect(r.created).toBe(true);
-  expect(r.job).toMatchObject({
-    clientId: f.clientId,
-    state: 'received',
-    version: 1,
-  });
-  const task = (
-    await sql<{
-      customer_account_id: string;
-      requested_by: string;
-    }>`SELECT customer_account_id,requested_by FROM hawa.tasks WHERE id=${r.job.id}::uuid`.execute(
-      owner,
-    )
-  ).rows[0];
-  expect(task).toEqual({
-    customer_account_id: f.a.id,
-    requested_by: f.a.userId,
-  });
-  const rows = (
-    await sql<{
-      payload: Record<string, unknown>;
-    }>`SELECT payload FROM hawa.outbox_commands WHERE aggregate_id=${r.job.id}::uuid`.execute(
-      owner,
-    )
-  ).rows;
-  expect(rows).toHaveLength(1);
-  expect(rows[0].payload).toMatchObject({
-    workflow: 'canva',
-    autoGenerate: true,
-    designStudio: true,
-    clientDnaVersion: 1,
-  });
-  expect(rows[0].payload.variant).toEqual({ width: 1080, height: 1080 });
-  expect(
-    savedDesignCopyLocales(rows[0].payload, [f.body.exactCopy[0].text]),
-  ).toEqual(['ar']);
-  expect(savedDesignCopyLocales(rows[0].payload, ['Changed'])).toEqual(['und']);
-  expect(savedDesignCopy(rows[0].payload, '')).toEqual({
-    copy: [f.body.exactCopy[0].text],
-    instructions: f.body.designInstructions,
-  });
+  expect(r.job).toMatchObject({clientId:f.clientId,state:'received',version:1});
+  const receipt=(await sql<{account_id:string;body:unknown;dna_version:number}>`SELECT account_id,body,dna_version
+    FROM hawa.customer_web_requests WHERE request_id=${r.job.id}::uuid`.execute(owner)).rows[0];
+  expect(receipt).toEqual({account_id:f.a.id,body:f.body,dna_version:1});
+  expect((await sql`SELECT id FROM hawa.tasks WHERE tenant_id=${f.tenantId}::uuid`.execute(owner)).rows).toHaveLength(0);
+  const commands=(await sql<{command_type:string;aggregate_type:string;payload:unknown}>`SELECT command_type,aggregate_type,payload
+    FROM hawa.outbox_commands WHERE aggregate_id=${r.job.id}::uuid`.execute(owner)).rows;
+  expect(commands).toEqual([{command_type:'customer.request.open',aggregate_type:'request',payload:{v:1,requestId:r.job.id,accountId:f.a.id}}]);
+  const event=await customerWebOpenEvent(db,f.tenantId,r.job.id);
+  const input={requestId:r.job.id,tenantId:f.tenantId,expectedRev:0 as const,rev:1 as const,key:`${r.job.id}:1:open`,draft:event.draft};
+  const projections=await Promise.all([projectLifecycleOpen(db,input),projectLifecycleOpen(db,input)]);
+  expect(projections[0]).toEqual(projections[1]);
+  const projected=projections[0];
+  const task=(await sql<{customer_account_id:string;requested_by:string;request_id:string;language:string}>`SELECT customer_account_id,requested_by,request_id,language
+    FROM hawa.tasks WHERE id=${projected.taskId}::uuid`.execute(owner)).rows[0];
+  expect(task).toEqual({customer_account_id:f.a.id,requested_by:f.a.userId,request_id:r.job.id,language:'ar'});
+  expect(projected.design).toMatchObject({sourcePlatform:'hawzhin_web',designStudio:true,variant:{width:1080,height:1080}});
+  const creation=(await sql<{payload:Record<string,unknown>;state:string}>`SELECT payload,state FROM hawa.outbox_commands
+    WHERE aggregate_id=${projected.taskId}::uuid AND command_type='task.created'`.execute(owner)).rows[0];
+  expect(creation.state).toBe('delivered');
+  expect(creation.payload).toMatchObject({lifecycleOwner:'restate',clientDnaVersion:1});
+  expect(savedDesignCopy(creation.payload,'')).toEqual({copy:[f.body.exactCopy[0].text],instructions:f.body.designInstructions});
+  expect(savedDesignCopyLocales(creation.payload,[f.body.exactCopy[0].text])).toEqual(['ar']);
+  expect((await f.service.get(f.a.member,r.job.id)).id).toBe(r.job.id);
+});
+it('resolves an open only when references match the immutable Core command and account',async()=>{
+  const f=await fixture(),r=await f.service.create(f.a.member,'command_refs_001',f.body);
+  const command=(await sql<{id:string;idempotency_key:string}>`SELECT id,idempotency_key FROM hawa.outbox_commands
+    WHERE aggregate_id=${r.job.id}::uuid AND command_type='customer.request.open'`.execute(owner)).rows[0];
+  const refs={v:1 as const,requestId:r.job.id,tenantId:f.tenantId,accountId:f.a.id,commandId:command.id,key:command.idempotency_key};
+  await expect(customerWebOpenEvent(db,f.tenantId,r.job.id,refs)).resolves.toMatchObject({requestId:r.job.id,chatId:`web:${f.a.id}`});
+  for(const bad of [{...refs,accountId:f.b.id},{...refs,commandId:randomUUID()},{...refs,key:refs.key+'tamper'},
+    {...refs,requestId:randomUUID()},{...refs,tenantId:randomUUID()}])
+    await expect(customerWebOpenEvent(db,f.tenantId,r.job.id,bad)).rejects.toMatchObject({code:'UNAUTHORIZED_ACTOR'});
 });
 it('isolates two members who share the same brand, including raw inherited RLS reads', async () => {
   const f = await fixture(),
@@ -170,7 +167,7 @@ it('isolates two members who share the same brand, including raw inherited RLS r
       );
       expect(
         (await trx.selectFrom('tasks').select('id').execute()).map((j) => j.id),
-      ).toEqual([a.job.id]);
+      ).toEqual([]);
       expect(
         (
           await trx
@@ -194,7 +191,7 @@ it('isolates two members who share the same brand, including raw inherited RLS r
     },
   );
 });
-it('concurrent duplicate retries create one task/event/dispatch, and differing bodies conflict', async () => {
+it('concurrent duplicate retries create one immutable request and dispatch, and differing bodies conflict', async () => {
   const f = await fixture(1),
     results = await Promise.all(
       [1, 2, 3].map(() => f.service.create(f.a.member, 'request_001', f.body)),
@@ -203,7 +200,7 @@ it('concurrent duplicate retries create one task/event/dispatch, and differing b
   expect(new Set(results.map((r) => r.job.id)).size).toBe(1);
   expect(
     (
-      await sql`SELECT id FROM hawa.task_events WHERE task_id=${results[0].job.id}::uuid`.execute(
+      await sql`SELECT request_id FROM hawa.customer_web_requests WHERE request_id=${results[0].job.id}::uuid`.execute(
         owner,
       )
     ).rows,
@@ -313,9 +310,11 @@ it('does not enqueue an ungranted brand or a brand without active DNA', async ()
 it('protects ownership even from office changes and audits access changes', async () => {
   const f = await fixture(),
     r = await f.service.create(f.a.member, 'request_001', f.body);
+  const event=await customerWebOpenEvent(db,f.tenantId,r.job.id);
+  const projected=await projectLifecycleOpen(db,{requestId:r.job.id,tenantId:f.tenantId,expectedRev:0,rev:1,key:`${r.job.id}:1:open`,draft:event.draft});
   for (const change of [
-    sql`UPDATE hawa.tasks SET customer_account_id=${f.b.id}::uuid WHERE id=${r.job.id}::uuid`,
-    sql`UPDATE hawa.tasks SET requested_by=${f.b.userId}::uuid WHERE id=${r.job.id}::uuid`,
+    sql`UPDATE hawa.tasks SET customer_account_id=${f.b.id}::uuid WHERE id=${projected.taskId}::uuid`,
+    sql`UPDATE hawa.tasks SET requested_by=${f.b.userId}::uuid WHERE id=${projected.taskId}::uuid`,
   ])
     await expect(change.execute(owner)).rejects.toMatchObject({
       code: '23514',
@@ -496,4 +495,78 @@ it('mounted Core keeps generation disabled, pins customer CORS and refuses works
  const foreign=await app.request('/v1/customer/jobs',{headers:{Authorization:token,Origin:'https://evil.example'}});
  expect(foreign.status).toBe(403);expect(foreign.headers.get('access-control-allow-origin')).toBeNull();
  expect((await app.request('/v1/office/customer-accounts',{method:'PUT',headers:{Authorization:'Bearer test_admin_key'},body:'{}'})).status).toBe(403);
+});
+
+it('refuses a forged web draft and revocation before projection without a task',async()=>{
+  const f=await fixture(),r=await f.service.create(f.a.member,'request_001',f.body);
+  const event=await customerWebOpenEvent(db,f.tenantId,r.job.id);
+  const input={requestId:r.job.id,tenantId:f.tenantId,expectedRev:0 as const,rev:1 as const,key:`${r.job.id}:1:open`,draft:event.draft};
+  await expect(projectLifecycleOpen(db,{...input,draft:{...input.draft,rawText:'Worker changed it'}})).rejects.toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
+  await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+  await expect(projectLifecycleOpen(db,input)).rejects.toMatchObject({code:'UNAUTHORIZED_ACTOR'});
+  expect((await sql`SELECT id FROM hawa.tasks WHERE tenant_id=${f.tenantId}::uuid`.execute(owner)).rows).toHaveLength(0);
+});
+it('records a real web receipt once and isolates messages without marking a question sent',async()=>{
+  const f=await fixture(),r=await f.service.create(f.a.member,'request_001',f.body);
+  const m={v:1 as const,key:`${r.job.id}:1:ack`,chatId:`web:${f.a.id}`,tenantId:f.tenantId,kind:'text' as const,text:'Received',class:'critical' as const};
+  const a=await recordCustomerWebMessage(db,f.tenantId,m),b=await recordCustomerWebMessage(db,f.tenantId,m);
+  expect(a).toEqual(b);expect(a.outcome).toBe('web_recorded');
+  await expect(recordCustomerWebMessage(db,f.tenantId,{...m,text:'Changed'})).rejects.toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
+  await expect(recordCustomerWebMessage(db,f.tenantId,{...m,key:`${r.job.id}:1:foreign`,chatId:`web:${f.b.id}`})).rejects.toMatchObject({code:'UNAUTHORIZED_ACTOR'});
+  await expect(recordCustomerWebMessage(db,f.tenantId,{...m,key:`${r.job.id}:1:foreign-ref`,exportRef:{tenantId:randomUUID(),taskId:randomUUID(),artifactId:randomUUID(),sha256:'0'.repeat(64)}})).rejects.toMatchObject({code:'UNAUTHORIZED_ACTOR'});
+  const messages=await f.service.messages(f.a.member,r.job.id);expect(messages).toHaveLength(1);expect(messages[0].text).toBe('Received');
+  await expect(f.service.messages(f.b.member,r.job.id)).rejects.toMatchObject({status:404});
+  expect((await sql`SELECT id FROM hawa.inbox_events WHERE tenant_id=${f.tenantId}::uuid`.execute(owner)).rows).toHaveLength(0);
+});
+
+it('rechecks customer generation access at the shared paid-reservation boundary',async()=>{
+ const f=await fixture(),r=await f.service.create(f.a.member,'request_001',f.body),event=await customerWebOpenEvent(db,f.tenantId,r.job.id);
+ const projected=await projectLifecycleOpen(db,{requestId:r.job.id,tenantId:f.tenantId,expectedRev:0,rev:1,key:`${r.job.id}:1:open`,draft:event.draft});
+ const scope={tenantId:f.tenantId,userId:f.adminId,role:'administrator'};
+ await withRlsContext(db,scope,trx=>sql`SELECT hawa.lock_customer_task_generation(${projected.taskId}::uuid)`.execute(trx));
+ await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+ await expect(withRlsContext(db,scope,trx=>sql`SELECT hawa.lock_customer_task_generation(${projected.taskId}::uuid)`.execute(trx))).rejects.toMatchObject({code:'42501'});
+});
+
+it('bounds a stalled request body without committing or awaiting an untrusted cancel hook',async()=>{
+ vi.useFakeTimers();
+ const create=vi.fn(),app=new Hono();
+ registerCustomerRoutes(app,{create} as unknown as CustomerRequests,async()=>({kind:'workspace_member',issuer:HAWZHIN_AUTH_ORIGIN,subject:randomUUID()}),true);
+ try {
+  const stream=new ReadableStream<Uint8Array>({start(controller){controller.enqueue(new TextEncoder().encode('{'));},cancel(){return new Promise(()=>undefined);}});
+  const request=new Request('http://test/v1/customer/jobs',{method:'POST',headers:{'Idempotency-Key':'request_001'},body:stream,duplex:'half'} as RequestInit);
+  const answer=app.request(request);
+  await vi.advanceTimersByTimeAsync(10001);
+  expect((await answer).status).toBe(408);expect(create).not.toHaveBeenCalled();
+ } finally {vi.useRealTimers();}
+});
+
+it('reserves global automatic slots atomically across members, and preserves replay at the cap',async()=>{
+ vi.stubEnv('AUTO_GENERATE_DAILY_CAP_GLOBAL','1');
+ try {
+  const f=await fixture(10),members=[f.a.member,f.b.member];
+  const results=await Promise.allSettled(members.map(m=>f.service.create(m,'request_001',f.body)));
+  expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);
+  expect(results.find(r=>r.status==='rejected')).toMatchObject({reason:{status:429}});
+  const index=results.findIndex(r=>r.status==='fulfilled');
+  expect((await f.service.create(members[index],'request_001',f.body)).created).toBe(false);
+ } finally {vi.unstubAllEnvs();}
+});
+it('does not silently send admitted web requests to manual work at the Telegram sender cap',async()=>{
+ vi.stubEnv('AUTO_GENERATE_DAILY_CAP_PER_SENDER','1');
+ try {
+  const f=await fixture(10);
+  for(let i=0;i<2;i++) {
+   const r=await f.service.create(f.a.member,`request_00${i}`,f.body),event=await customerWebOpenEvent(db,f.tenantId,r.job.id);
+   const projection=await projectLifecycleOpen(db,{requestId:r.job.id,tenantId:f.tenantId,expectedRev:0,rev:1,key:`${r.job.id}:1:open`,draft:event.draft});
+   expect(projection).toMatchObject({autoGenerate:true,stage:'designing'});
+  }
+ } finally {vi.unstubAllEnvs();}
+});
+
+it('retains an uppercase UUID submission body while resolving its canonical selected brand',async()=>{
+ const f=await fixture(),body={...f.body,clientId:f.clientId.toUpperCase()},r=await f.service.create(f.a.member,'request_001',body);
+ const event=await customerWebOpenEvent(db,f.tenantId,r.job.id);
+ expect(event.draft.clientId).toBe(f.clientId);
+ expect((await f.service.create(f.a.member,'request_001',body)).job.id).toBe(r.job.id);
 });

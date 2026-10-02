@@ -39,7 +39,7 @@ it('uses an independent login with no app membership, DDL, role switching or bro
   expect(identities).toEqual({name:'hawa_worker_login',app:false});
   const allowed=(await owner.query(`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='hawa' AND has_function_privilege('hawa_worker_login',p.oid,'EXECUTE') ORDER BY p.proname`)).rows.map((r:{proname:string})=>r.proname);
-  expect(allowed).toEqual(['can_access_client','can_write_client','current_tenant_id','current_user_id','has_tenant_role','is_tenant_member','member_client_ids']);
+  expect(allowed).toEqual(['can_access_client','can_write_client','current_customer_id','current_tenant_id','current_user_id','customer_can_request','customer_owns_web_request','customer_request_client_ids','has_tenant_role','is_tenant_member','member_client_ids']);
   for(const statement of [
     'SET ROLE hawa_app','SET ROLE hawa_worker','CREATE ROLE worker_escape','CREATE SCHEMA worker_escape',
     'CREATE TEMP TABLE tasks(id uuid)',

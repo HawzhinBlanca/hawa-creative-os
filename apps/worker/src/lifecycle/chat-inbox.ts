@@ -23,6 +23,8 @@
  * the length of one intake call.
  */
 import * as restate from '@restatedev/restate-sdk';
+import { openCustomerWebRequest, type SignedCustomerOpenCommand } from './customer-web-entry.js';
+import { coreInternalFromEnv } from './delivery.js';
 import type { OutboundMessage } from '@hawa/contracts';
 import { withInvocationLogContext, log } from '../logging.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
@@ -536,6 +538,17 @@ export async function setMode(
 export const chatInbox = restate.object({
   name: 'ChatInbox',
   handlers: {
+    /** References authenticated at ingress; the private lifecycle is reached only through the SDK. */
+    webOpen: restate.handlers.object.exclusive(
+      { idempotencyRetention: { days: 7 }, journalRetention: { days: 1 } },
+      async (ctx:restate.ObjectContext,input:SignedCustomerOpenCommand) => openCustomerWebRequest({
+        key:ctx.key,run:(name,action)=>ctx.run(name,action),
+        sendOpen:async(requestId,event)=>{
+          const {RequestLifecycleApi}=await import('./request-lifecycle.js');
+          ctx.objectSendClient(RequestLifecycleApi,requestId).open(event,restate.rpc.sendOpts({idempotencyKey:event.eventId}));
+        },
+      },coreInternalFromEnv(),input)
+    ),
     handleUpdate: restate.handlers.object.exclusive(
       // The poller's key tg-<update_id> answers a second send for 7 days; the journal is kept a day.
       { idempotencyRetention: { days: 7 }, journalRetention: { days: 1 } },

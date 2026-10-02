@@ -81,7 +81,8 @@ export type SendResult =
   | { outcome: 'sent'; messageId?: string }
   | { outcome: 'uncertain'; error: string }
   | { outcome: 'refused'; error: string }
-  | { outcome: 'canary_sink'; messageId: string };
+  | { outcome: 'canary_sink'; messageId: string }
+  | { outcome: 'web_recorded'; receiptId: string };
 
 /** The Delivery workflow's input. Its key is `deliveryId`. */
 export interface DeliveryInput {

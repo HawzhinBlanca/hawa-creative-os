@@ -38,7 +38,7 @@ export interface OpenManualEvent {
   tenantId: string;
   chatId: string;
   draft: {
-    platform: 'telegram';
+    platform: 'telegram'|'hawzhin_web';
     sourceEventId: string;
     sourceChannelId: string;
     rawText: string;
@@ -414,7 +414,7 @@ const openFailure = (event: OpenManualEvent | OpenAutomaticEvent): TerminalFailu
 export async function openManualRequest(ctx: OpenContext, core: CoreInternal, event: OpenManualEvent): Promise<OpenManualResult> {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       event.eventId !== `open:${event.requestId}` || event.tenantId !== DEFAULT_TENANT_ID ||
-      !/^-?\d{1,20}$/.test(event.chatId) || event.draft?.platform !== 'telegram' ||
+      !(event.draft?.platform==='hawzhin_web' ? /^web:[0-9a-f-]{36}$/i.test(event.chatId) : event.draft?.platform==='telegram' && /^-?\d{1,20}$/.test(event.chatId)) ||
       event.draft?.sourceEventId !== `lc-${event.requestId}-r0` ||
       event.draft?.sourceChannelId !== event.chatId || event.draft?.autoGenerate !== false) {
     throw invalid('this handler accepts only a versioned manual round-zero request under its own key');
@@ -460,7 +460,7 @@ function sendAutomaticAcknowledgement(ctx: AutomaticOpenContext, state: Automati
 export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: CoreInternal, event: OpenAutomaticEvent) {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       event.eventId !== `open:${event.requestId}` || event.tenantId !== DEFAULT_TENANT_ID ||
-      !/^-?\d{1,20}$/.test(event.chatId) || event.draft?.platform !== 'telegram' ||
+      !(event.draft?.platform==='hawzhin_web' ? /^web:[0-9a-f-]{36}$/i.test(event.chatId) : event.draft?.platform==='telegram' && /^-?\d{1,20}$/.test(event.chatId)) ||
       event.draft?.sourceEventId !== `lc-${event.requestId}-r0` ||
       event.draft?.sourceChannelId !== event.chatId || event.draft?.autoGenerate !== true ||
       !event.draft.clientId || !UUID.test(event.draft.clientId)) {
@@ -1423,8 +1423,8 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
               startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
-              setChatMode: (chatId, requestId) => ctx.objectSendClient(chatInbox, chatId)
-                .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })),
+              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:')) return; return ctx.objectSendClient(chatInbox, chatId)
+                .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })); },
             }, core, event as OpenAutomaticEvent) : openManualRequest({
               key: ctx.key,
               get: (name) => ctx.get<ManualLifecycleState>(name),
@@ -1432,8 +1432,8 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               set: (name, value) => ctx.set(name, value),
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
-              setChatMode: (chatId, requestId) => ctx.objectSendClient(chatInbox, chatId)
-                .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })),
+              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:')) return; return ctx.objectSendClient(chatInbox, chatId)
+                .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })); },
             }, core, event as OpenManualEvent)),
       ),
       designFinished: restate.handlers.object.exclusive(

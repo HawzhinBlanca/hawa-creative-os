@@ -67,6 +67,7 @@ describe.skipIf(!url)('real PostgreSQL binding/capture isolation', () => {
   it('RLS hides other tenants and refuses missing scope for a non-owner role', async () => {
     await sql`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hawa_ship_test') THEN CREATE ROLE hawa_ship_test NOLOGIN; END IF; END $$`.execute(db);
     await sql`GRANT USAGE ON SCHEMA hawa TO hawa_ship_test`.execute(db);
+    await sql`GRANT EXECUTE ON FUNCTION hawa.current_customer_id(),hawa.customer_can_request(uuid),hawa.customer_request_client_ids() TO hawa_ship_test`.execute(db);
     await sql`GRANT SELECT ON hawa.canva_bindings, hawa.canva_capture_sets TO hawa_ship_test`.execute(db);
     await db.transaction().execute(async trx => {
       await sql`SET LOCAL ROLE hawa_ship_test`.execute(trx);

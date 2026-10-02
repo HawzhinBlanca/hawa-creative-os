@@ -76,3 +76,31 @@ Claude's supporting response and branch now exist, including an actual official
 PPTX import/export receipt and stronger picture/logo checks. His ADR257/258 are
 reserved; this boundary uses ADR259. Merge current production/support before the
 next deployment candidate. Hosting choice remains pending.
+
+## ADR260 canonical website entry — 2026-10-02
+
+Implemented locally: stable customer-owned request receipt and quota reservation;
+canonical RequestLifecycle outbox submission with a real invocation receipt;
+Core-owned draft reconstruction and transaction-time access recheck; owned task
+projection and explicit copy locales; separate durable web message records;
+selected request detail polling; a total body-read deadline; and customer access
+recheck before each new paid Studio reservation. No Telegram send/read marks are
+used for web messages. Office keyset regressions found by the full combined suite
+were repaired without dropping customer isolation. Migration083 remains unreleased
+and was corrected before its first deployment; migration084 adds the canonical
+web receipt/message tables and the narrow generation gate.
+
+Affected proof:68 lifecycle/ownership/database tests,36 timeout/ledger tests in an
+overlapping follow-up,13 website tests; all pass without failures/skips.745 active
+backend test roots compile. Full website previous checkpoint:837 pass; current
+website and combined-source qualification in progress. Exact failed full-run and
+query-plan attempts are retained in WEB_LIFECYCLE_PROOF.json.
+
+Next required slices: ordered photo admission, current captured previews, owned
+revision/seen-question/cancel actions, independent customer acceptance and safe
+PNG/PPTX download; hosting gateway and real two-user/RTL/Canva/restart admission.
+The application still enforces generation disabled, and the launcher remains soon.
+
+Final admission follow-up:56 affected backend tests passed,0 failed/skipped, including actual chat intake and shared budget regressions. Website full suite:840 passed,0 failed/skipped;14 affected tests pass after correcting the nested main landmark. These counts replace the earlier checkpoint wording for their respective tested source. Full-engine/source seal and public customer journey remain open.
+
+Private lifecycle transport correction: direct HTTP ingress is refused by actual Restate (400, private service). Signed `ChatInbox.webOpen` now verifies worker command refs, Core matches the retained command and live ownership, and the existing SDK sends to private RequestLifecycle. Isolated real Restate rehearsal passed (same genuine replay receipt, one evidence read/projection/message, tamper403).91 affected tests pass,0 failed/skipped. See ADR260 and WEB_LIFECYCLE_PROOF.json. Full-engine regression is next; public generation and launcher remain disabled.

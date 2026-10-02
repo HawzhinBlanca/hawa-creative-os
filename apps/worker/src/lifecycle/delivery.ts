@@ -196,7 +196,7 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
       if (sent.outcome === 'sent') filesSent++;
       else if (sent.outcome === 'uncertain') uncertain.push(file.filename);
       // ADR-240: a file recorded for the canary never reached anyone, so it is not delivered.
-      else refused.push(`${file.filename} (${sent.outcome === 'canary_sink' ? 'CANARY_SINK: recorded for the canary, not sent' : sent.error})`);
+      else refused.push(`${file.filename} (${sent.outcome === 'canary_sink' ? 'CANARY_SINK: recorded for the canary, not sent' : sent.outcome === 'web_recorded' ? 'WEB_RECORDED: no customer download receipt' : sent.error})`);
     }
     // The notice says what is known. A refused file leaves the delivery failed and the notice unsent,
     // as Core's own delivery did: the office follows up.

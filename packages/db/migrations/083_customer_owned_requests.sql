@@ -37,9 +37,9 @@ CREATE TABLE hawa.customer_access_actions (
 ALTER TABLE hawa.customer_access_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hawa.customer_access_actions FORCE ROW LEVEL SECURITY;
 CREATE POLICY customer_access_actions_read ON hawa.customer_access_actions FOR SELECT USING (
- hawa.has_tenant_role(tenant_id,ARRAY['administrator']::hawa.membership_role[]));
+ (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator']::hawa.membership_role[]))));
 CREATE POLICY customer_access_actions_insert ON hawa.customer_access_actions FOR INSERT WITH CHECK (
- actor_id=hawa.current_user_id() AND hawa.has_tenant_role(tenant_id,ARRAY['administrator']::hawa.membership_role[]));
+ actor_id=hawa.current_user_id() AND (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator']::hawa.membership_role[]))));
 GRANT SELECT,INSERT ON hawa.customer_access_actions TO hawa_app;
 CREATE TRIGGER customer_access_actions_append_only BEFORE UPDATE OR DELETE ON hawa.customer_access_actions
  FOR EACH ROW EXECUTE FUNCTION hawa.forbid_update_delete();
@@ -79,8 +79,10 @@ CREATE TRIGGER customer_accounts_audit AFTER INSERT OR UPDATE ON hawa.customer_a
 CREATE TRIGGER customer_grants_audit AFTER INSERT OR UPDATE ON hawa.customer_client_grants
  FOR EACH ROW EXECUTE FUNCTION hawa.audit_customer_access();
 
-CREATE FUNCTION hawa.current_customer_id() RETURNS uuid LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
- SELECT NULLIF(current_setting('hawa.customer_id',true),'')::uuid
+-- This context getter is inlineable, like current_tenant_id(): an office NULL scope
+-- must be visible to the planner. Qualify the only function/type instead of SET search_path.
+CREATE FUNCTION hawa.current_customer_id() RETURNS uuid LANGUAGE sql STABLE AS $$
+ SELECT NULLIF(pg_catalog.current_setting('hawa.customer_id',true),'')::pg_catalog.uuid
 $$;
 CREATE FUNCTION hawa.customer_account_for_subject() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
  SELECT a.id FROM hawa.customer_accounts a
@@ -104,7 +106,23 @@ CREATE FUNCTION hawa.customer_can_request(cid uuid) RETURNS boolean LANGUAGE sql
 $$;
 REVOKE ALL ON FUNCTION hawa.current_customer_id(),hawa.customer_account_for_subject(),hawa.customer_can_request(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION hawa.current_customer_id() TO hawa_app,hawa_worker;
-GRANT EXECUTE ON FUNCTION hawa.customer_account_for_subject(),hawa.customer_can_request(uuid) TO hawa_app;
+GRANT EXECUTE ON FUNCTION hawa.customer_account_for_subject() TO hawa_app;
+-- Referenced by task policies even when the worker has no customer context.
+GRANT EXECUTE ON FUNCTION hawa.customer_can_request(uuid) TO hawa_app,hawa_worker;
+
+-- ADR033: row scope compares against one admitted-client set per statement.
+-- A per-row SECURITY DEFINER call here blocks ordered keyset plans for office lists.
+CREATE FUNCTION hawa.customer_request_client_ids() RETURNS uuid[] LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+ SELECT COALESCE(array_agg(g.client_id),'{}'::uuid[]) FROM hawa.customer_accounts a
+ JOIN hawa.customer_client_grants g ON g.account_id=a.id AND g.tenant_id=a.tenant_id AND g.active
+ JOIN hawa.clients c ON c.id=g.client_id AND c.tenant_id=g.tenant_id AND c.status='active'
+ JOIN hawa.client_memberships m ON m.tenant_id=g.tenant_id AND m.client_id=g.client_id
+   AND m.user_id=a.user_id AND m.active AND m.role='requester'
+ WHERE a.id=hawa.current_customer_id() AND a.id=hawa.customer_account_for_subject()
+   AND a.user_id=hawa.current_user_id()
+$$;
+REVOKE ALL ON FUNCTION hawa.customer_request_client_ids() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION hawa.customer_request_client_ids() TO hawa_app,hawa_worker;
 
 -- Lock authorization rows until the same intake transaction commits. VOLATILE
 -- rechecks after waiting on revocation; customers receive no UPDATE permission.
@@ -167,18 +185,18 @@ ALTER TABLE hawa.customer_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hawa.customer_client_grants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hawa.customer_access_audit ENABLE ROW LEVEL SECURITY;
 CREATE POLICY customer_accounts_read ON hawa.customer_accounts FOR SELECT USING (
- tenant_id=hawa.current_tenant_id() AND (id=hawa.customer_account_for_subject()
- OR (hawa.current_customer_id() IS NULL AND hawa.has_tenant_role(tenant_id,ARRAY['administrator']::hawa.membership_role[]))));
+ tenant_id=hawa.current_tenant_id() AND (id=(SELECT hawa.customer_account_for_subject())
+ OR (hawa.current_customer_id() IS NULL AND (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator']::hawa.membership_role[]))))));
 CREATE POLICY customer_grants_read ON hawa.customer_client_grants FOR SELECT USING (
- tenant_id=hawa.current_tenant_id() AND (account_id=hawa.customer_account_for_subject()
- OR (hawa.current_customer_id() IS NULL AND hawa.has_tenant_role(tenant_id,ARRAY['administrator']::hawa.membership_role[]))));
+ tenant_id=hawa.current_tenant_id() AND (account_id=(SELECT hawa.customer_account_for_subject())
+ OR (hawa.current_customer_id() IS NULL AND (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator']::hawa.membership_role[]))))));
 DO $$ DECLARE t text; BEGIN
  FOREACH t IN ARRAY ARRAY['customer_accounts','customer_client_grants'] LOOP
-  EXECUTE format('CREATE POLICY %I_admin ON hawa.%I FOR ALL USING (hawa.current_customer_id() IS NULL AND hawa.has_tenant_role(tenant_id,ARRAY[''administrator'']::hawa.membership_role[])) WITH CHECK (hawa.current_customer_id() IS NULL AND hawa.has_tenant_role(tenant_id,ARRAY[''administrator'']::hawa.membership_role[]))',t,t);
+  EXECUTE format('CREATE POLICY %I_admin ON hawa.%I FOR ALL USING (hawa.current_customer_id() IS NULL AND (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY[''administrator'']::hawa.membership_role[])))) WITH CHECK (hawa.current_customer_id() IS NULL AND (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY[''administrator'']::hawa.membership_role[]))))',t,t);
  END LOOP;
 END $$;
 CREATE POLICY customer_access_audit_read ON hawa.customer_access_audit FOR SELECT USING (
- hawa.current_customer_id() IS NULL AND hawa.has_tenant_role(tenant_id,ARRAY['administrator','auditor']::hawa.membership_role[]));
+ hawa.current_customer_id() IS NULL AND (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator','auditor']::hawa.membership_role[]))));
 GRANT SELECT,INSERT,UPDATE ON hawa.customer_accounts,hawa.customer_client_grants TO hawa_app;
 GRANT SELECT ON hawa.customer_access_audit TO hawa_app;
 
@@ -198,14 +216,17 @@ END $$;
 REVOKE ALL ON FUNCTION hawa.protect_customer_task_owner() FROM PUBLIC,hawa_app,hawa_worker;
 CREATE TRIGGER customer_task_owner_immutable BEFORE UPDATE OF customer_account_id,requested_by ON hawa.tasks
  FOR EACH ROW EXECUTE FUNCTION hawa.protect_customer_task_owner();
+-- CASE preserves the NULL office branch without the disjunction's near-zero
+-- selectivity estimate (24 estimated / 5000 actual rows), which lost keyset plans.
+-- The admitted-client set still runs once per statement. Both branches retain RLS.
 CREATE POLICY customer_task_scope ON hawa.tasks AS RESTRICTIVE FOR ALL USING (
- hawa.current_customer_id() IS NULL OR (customer_account_id=hawa.current_customer_id()
- AND requested_by=hawa.current_user_id() AND hawa.customer_can_request(client_id))) WITH CHECK (
- hawa.current_customer_id() IS NULL OR (customer_account_id=hawa.current_customer_id()
- AND requested_by=hawa.current_user_id() AND hawa.customer_can_request(client_id)));
+ CASE WHEN hawa.current_customer_id() IS NULL THEN true ELSE customer_account_id=hawa.current_customer_id()
+ AND requested_by=hawa.current_user_id() AND client_id=ANY ((SELECT hawa.customer_request_client_ids())::uuid[]) END) WITH CHECK (
+ CASE WHEN hawa.current_customer_id() IS NULL THEN true ELSE customer_account_id=hawa.current_customer_id()
+ AND requested_by=hawa.current_user_id() AND client_id=ANY ((SELECT hawa.customer_request_client_ids())::uuid[]) END);
 CREATE POLICY customer_task_create ON hawa.tasks FOR INSERT WITH CHECK (
  tenant_id=hawa.current_tenant_id() AND customer_account_id=hawa.current_customer_id()
- AND requested_by=hawa.current_user_id() AND hawa.customer_can_request(client_id)
+ AND requested_by=hawa.current_user_id() AND client_id=ANY ((SELECT hawa.customer_request_client_ids())::uuid[])
  AND state='received' AND version=1 AND assigned_to IS NULL);
 CREATE POLICY customer_event_create ON hawa.task_events FOR INSERT WITH CHECK (
  tenant_id=hawa.current_tenant_id() AND event_type='task.created' AND aggregate_version=1

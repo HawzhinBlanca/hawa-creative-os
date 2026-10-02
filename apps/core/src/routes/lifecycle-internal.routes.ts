@@ -1,3 +1,5 @@
+import { isCustomerOpenCommand } from '@hawa/contracts';
+import { customerWebOpenEvent, recordCustomerWebMessage, WEB_CHANNEL } from '../customer/customer-web-lifecycle.js';
 /**
  * Core's internal API for the request lifecycle on Restate (architecture programme Phase 2, ADR-034,
  * PHASE2_DESIGN.md section 2.8). Slice 2.1 adds the two calls the worker's ChatInbox makes:
@@ -166,8 +168,8 @@ function revisionBlockedAlert(chatId: string, code: string, update: UpdateLike):
 function openDraft(value: unknown, requestId: string): ChatIntake | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const d = value as Record<string, unknown>;
-  if (d.platform !== 'telegram' || d.sourceEventId !== `lc-${requestId}-r0` ||
-      typeof d.sourceChannelId !== 'string' || !/^-?\d{1,20}$/.test(d.sourceChannelId) ||
+  if (!['telegram','hawzhin_web'].includes(String(d.platform)) || d.sourceEventId !== `lc-${requestId}-r0` ||
+      typeof d.sourceChannelId !== 'string' || !(d.platform==='hawzhin_web' ? WEB_CHANNEL.test(d.sourceChannelId) : /^-?\d{1,20}$/.test(d.sourceChannelId)) ||
       typeof d.rawText !== 'string' || !d.rawText.trim() || d.rawText.length > 100_000 ||
       typeof d.title !== 'string' || !d.title.trim() || d.title.length > 500 ||
       typeof d.designInstructions !== 'string' || d.designInstructions.length > 100_000 ||
@@ -208,7 +210,7 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
   // Select the contract explicitly. A worker payload cannot choose the database principal, tenant,
   // outbox owner or a second source through spare JSON fields.
   return {
-    platform: 'telegram', sourceEventId: d.sourceEventId as string, sourceChannelId: d.sourceChannelId as string,
+    platform: d.platform as 'telegram'|'hawzhin_web', sourceEventId: d.sourceEventId as string, sourceChannelId: d.sourceChannelId as string,
     rawText: d.rawText as string, title: d.title as string,
     designInstructions: d.designInstructions as string, exactCopy: d.exactCopy as unknown[],
     clientId: d.clientId as string | null,
@@ -1840,6 +1842,28 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     } catch (err) {
       log.error(`[core:internal] update ${update.update_id} could not be parked:`, err instanceof Error ? err.message : err);
       return problem(c, 503, 'Database Unavailable', 'The dead letter could not be stored; ask again');
+    }
+  });
+
+  internal('/customer/:requestId/open-event', async c => {
+    const id=c.req.param('requestId') ?? '';
+    if(!UUID.test(id)) return problem(c,400,'Invalid customer request','A request UUID is required');
+    if(!db) return problem(c,503,'Database Unavailable','The web request needs its retained evidence');
+    const refs=await readBody(c);
+    if(!isCustomerOpenCommand(refs)) return problem(c,400,'Invalid customer command','Stored command references are required');
+    try { return c.json(await customerWebOpenEvent(db,DEFAULT_TENANT_ID,id,refs)); }
+    catch(error) {
+      if(error instanceof LifecycleProjectionConflict) return c.json({code:error.code,detail:error.message},409);
+      return problem(c,503,'Customer Request Unavailable','The admission could not be read');
+    }
+  });
+  internal('/customer/web-message', async c => {
+    const body=await readBody(c);
+    if(!db) return problem(c,503,'Database Unavailable','The web message needs durable storage');
+    try { return c.json(await recordCustomerWebMessage(db,DEFAULT_TENANT_ID,body as unknown as import('@hawa/contracts').OutboundMessage)); }
+    catch(error) {
+      if(error instanceof LifecycleProjectionConflict) return c.json({code:error.code,detail:error.message},409);
+      return problem(c,503,'Web Message Unavailable','The message record did not commit');
     }
   });
 

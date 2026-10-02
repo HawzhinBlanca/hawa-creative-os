@@ -37,7 +37,7 @@ paths:
         '503': {description: Dependency unavailable}
     post:
       security: [{WorkspaceMember: []}]
-      description: Synthetic qualified admission. Production refuses until the RequestLifecycle adapter is connected. Stable key and exact body are preserved after uncertain outcomes. Counts and live grants are checked before one atomic task/event/outbox commit.
+      description: Canonical web admission remains disabled in production until the full customer journey is qualified. Stable key and exact body are preserved after uncertain outcomes. Counts and live grants are checked before one atomic immutable web request and outbox commit; RequestLifecycle projects its owned task.
       parameters:
         - {name: Idempotency-Key, in: header, required: true, schema: {type: string, pattern: '^[a-zA-Z0-9_-]{8,100}$'}}
       requestBody:
@@ -52,6 +52,7 @@ paths:
         '401': {description: Workspace sign-in required}
         '403': {description: Current customer or brand access denied}
         '409': {description: Differing payload for the same key, or brand DNA unavailable}
+        '408': {description: Actual streamed request exceeds the total 10 second deadline; no admission committed}
         '413': {description: Actual streamed request exceeds 49152 bytes}
         '429': {description: Customer request count or concurrency limit reached}
         '503': {description: Generation not admitted or dependency unavailable; preserve the request key}
@@ -60,7 +61,7 @@ paths:
       security: [{WorkspaceMember: []}]
       parameters: [{name: id, in: path, required: true, schema: {type: string, format: uuid}}]
       responses:
-        '200': {description: Owned job projection, content: {application/json: {schema: {type: object, required: [job], properties: {job: {$ref: '#/components/schemas/CustomerJob'}}}}}}
+        '200': {description: Owned stable request projection plus latest 100 durable web messages in chronological order; no provider refs or send/read claims, content: {application/json: {schema: {type: object, required: [job, messages], properties: {job: {$ref: '#/components/schemas/CustomerJob'}, messages: {type: array, maxItems: 100, items: {type: object, required: [id, kind, text, createdAt, question]}}}}}}}
         '401': {description: Workspace sign-in required}
         '403': {description: Current customer admission denied}
         '404': {description: Job unavailable to this owner, including shared-brand foreign jobs}

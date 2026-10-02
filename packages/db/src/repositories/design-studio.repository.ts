@@ -618,6 +618,11 @@ export class DesignStudioRepository {
         .forUpdate('t').executeTakeFirst();
       const blocker = taskGenerationBlocker(task?.state);
       if (blocker) throw new TaskGenerationBlockedError(blocker, task?.state === 'paused' ? 'TASK_PAUSED' : 'TASK_GENERATION_BLOCKED');
+      await sql`SELECT hawa.lock_customer_task_generation(${task!.id}::uuid)`.execute(client).catch((error:unknown)=>{
+        if(error && typeof error==='object' && 'code' in error && error.code==='42501')
+          throw new TaskGenerationBlockedError('Customer generation access is no longer active.');
+        throw error;
+      });
       // Read after acquiring the task lock: abandonment may have committed while we waited.
       const run = await client.selectFrom('design_studio_runs').select(['status', 'budget'])
         .where('id', '=', params.runId).where('tenant_id', '=', params.tenantId).executeTakeFirst();

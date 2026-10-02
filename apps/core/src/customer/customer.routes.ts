@@ -82,7 +82,7 @@ export function registerCustomerRoutes(
       const id = c.req.param('id');
       if (!id || !z.string().uuid().safeParse(id).success)
         return c.json({ code: 'DESIGN_JOB_NOT_FOUND' }, 404);
-      return c.json({ job: await requests.get(m, id) });
+      return c.json({ job: await requests.get(m, id), messages: await requests.messages(m,id) });
     }),
   );
   app.post(
@@ -97,11 +97,15 @@ export function registerCustomerRoutes(
       // Bound actual streamed bytes; Content-Length is only a hint, never enforcement.
       const reader = c.req.raw.body?.getReader();
       if (!reader) return c.json({ code: 'DESIGN_REQUEST_INVALID' }, 400);
+      const deadline=Date.now()+10000;
       let size = 0;
       const chunks: Uint8Array[] = [];
       try {
         while (true) {
-          const chunk = await reader.read();
+          let timer:ReturnType<typeof setTimeout>|undefined;
+          const chunk = await Promise.race([reader.read(),new Promise<never>((_,reject)=>{
+            timer=setTimeout(()=>reject(new Error('CUSTOMER_BODY_TIMEOUT')),Math.max(1,deadline-Date.now()));
+          })]).finally(()=>{if(timer) clearTimeout(timer);});
           if (chunk.done) break;
           size += chunk.value.length;
           if (size > 49152)
@@ -116,11 +120,12 @@ export function registerCustomerRoutes(
         const result = await requests.create(m, key, parsed.data);
         return c.json(result, result.created ? 201 : 200);
       } catch (error) {
+        if(error instanceof Error && error.message==='CUSTOMER_BODY_TIMEOUT') return c.json({code:'DESIGN_REQUEST_TIMEOUT'},408);
         if (error instanceof SyntaxError)
           return c.json({ code: 'DESIGN_REQUEST_INVALID' }, 400);
         throw error;
       } finally {
-        await reader.cancel().catch(() => undefined);
+        void reader.cancel().catch(() => undefined);
         reader.releaseLock();
       }
     }),
