@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T12:25:18Z",
+  "generatedAt": "2026-10-02T12:54:40Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 878,
+  "fileCount": 879,
   "files": [
     {
       "path": ".dockerignore",
@@ -1226,6 +1226,11 @@
       "path": "adrs/258_export_picture_fidelity_and_unattended_readiness.md",
       "sha256": "c62da60c2362de722e169fabea8f6d5fd804f67f117bab41014c3dfe08a769e7",
       "bytes": 12739
+    },
+    {
+      "path": "adrs/261_deploy_keeps_live_release_and_5xx_error_lines.md",
+      "sha256": "49b20977e6fed07be57c8ce5a34e7416ede9f3a5186add9c198d4c4cd081838d",
+      "bytes": 2563
     },
     {
       "path": "api/canva-connect.openapi.json",

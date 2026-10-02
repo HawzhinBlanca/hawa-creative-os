@@ -9,7 +9,7 @@
 
 Two agents (Claude, Codex) develop and deploy to the one production host. On 2026-10-02 Codex put 23c28392
 live between two of Claude's deploys; Claude's next candidate did not contain it and was stopped only
-because a person-like check (`readlink ~/.hawa/current`) happened to be run. The deploy lock (ADR-240)
+because a manual check (`readlink ~/.hawa/current`) happened to be run. The deploy lock (ADR-240)
 serialises deploys but does not stop one from replacing a release with work the candidate lacks.
 
 The 2026-10-02 operations review also found that Core wrote no error-level log line in two days, although
