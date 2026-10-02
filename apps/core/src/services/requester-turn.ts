@@ -22,7 +22,7 @@
  */
 import { LIFECYCLE_MESSAGES, NAMING_MESSAGES, ROUTING_MESSAGES, WITHDRAW_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
   trimTitleMarks, type Phrase, type RequesterLang } from '@hawa/integrations';
-import { CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
+import { asksToUndoCancel, CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
 import { isIntroducerTitle, withoutMarks } from './draft-title.js';
 
@@ -634,6 +634,9 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
     ({ intent, reason, source: 'rules', ...extra });
   if (!t) return rules('conversation', 'No words');
   if (t.startsWith('/')) return rules('conversation', 'A chat command');
+  // ADR-252 (friction 7): "sorry I cancelled by mistake, please continue" takes back a cancel. It is the
+  // conversation's to answer honestly (lifecycle-chat-answers.ts), never a change of another open design.
+  if (asksToUndoCancel(core)) return rules('conversation', 'Takes back a cancel');
   // ADR-200 addendum: "do a better design", "not good, do it again", "try again" ask for the latest
   // design again. Read before a refusal ("not good") or a new brief ("a … design"); words sent with a
   // photo or an album are material, and are read as before (`redo: false`).

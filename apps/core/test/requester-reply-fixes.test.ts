@@ -209,7 +209,7 @@ describe('friction 7: taking back a cancel', () => {
   // change and keep them on the open flyer before this answer is asked. ADR-252 hands the reading over:
   // readIntentByRules must read `asksToUndoCancel(core)` as conversation before its change rules. When it
   // does, this starts failing: make it a plain `it`.
-  it.fails('"sorry I cancelled by mistake, please continue" is never kept on another open design', async () => {
+  it('"sorry I cancelled by mistake, please continue" is never kept on another open design', async () => {
     const a = app();
     const chat = chatId();
     const open = await seedRequest(chat, 'in_review', { title: 'KAAE graduation flyer', minutesAgo: 20 });

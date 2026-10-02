@@ -59,7 +59,7 @@ import { parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-
 import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.js';
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
   type IntentReceipt } from '../services/requester-turn-store.js';
-import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
+import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, hasLetters, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
   opensForAPerson, readIntentByRules, readsAsBriefContinuation, redoText, requestLabel, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
   requesterName, spokenStage, whoWrote,
   tellText, thanksText, waitsForRequester,
@@ -339,7 +339,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         const target = open[0];
         const kept = await recordLate(u, { requestId: target.requestId, taskId: target.currentTaskId, requestRev: target.rev,
           requestStage: target.stage as LateChangeStage, text: words, kind: 'change', title: shortTitle(target.title),
-          answer: say(MEDIA_MESSAGES.svgPassedForDesign, lang, { title: bold(shortTitle(target.title)) }) });
+          answer: say(MEDIA_MESSAGES.svgPassedForDesign, lang, { title: designName(target.title, lang) }) });
         return handled(kept.status, kept.extra);
       }
       const office = officeChatFor(chatId);
@@ -1224,7 +1224,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
               const message = msg as Record<string, any>;
               // A photo with no words is answered in the chat's language (ADR-143's rule), words in their own.
-              const lang = photoWithoutWords
+              // ADR-251 (friction 11): so is a message with no letters ("👍", "?", "2").
+              const lang = photoWithoutWords || !hasLetters(text)
                 ? await withRlsContext(db, system, (trx) => mediaRoute.langFor(trx, chatId, message)) : langOf(text);
               const group = ['group', 'supergroup'].includes(String(message.chat?.type || ''));
               const botName = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').toLowerCase();

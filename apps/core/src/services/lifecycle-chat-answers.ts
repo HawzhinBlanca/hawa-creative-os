@@ -375,6 +375,12 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
       return { status: 200, extra: { status: 'MESSAGE_ONLY' } };
     }
 
+    // ADR-252 (friction 7): words that name the cancel ("I cancelled by mistake, please continue") read as
+    // feedback to the heuristics; they are answered about the withdrawal, never as a brief or a change.
+    if (asksToUndoCancel(rawText)) {
+      const said = await contextAnswer(chatId, updateId, msg, rawText, 'Takes back a cancel');
+      if (said) return said;
+    }
     const classification = classifyWithHeuristics(rawText, false, false);
     if (classification.kind === 'standing_rule') {
       // "From now on, always put the logo bottom-right", on its own, is a rule for later designs.

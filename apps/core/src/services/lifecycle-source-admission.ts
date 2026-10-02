@@ -11,7 +11,7 @@ import { naturalDesignSize, sourceClientSelection, sourceCopyConfirmation, sourc
 import { linkedLifecycleReplies, waitingLifecycleRequests } from './lifecycle-chat-target.js';
 import { replyLanguage } from './lifecycle-album.js';
 import { askAboutSource, resolveSourceClient, type SourceNeed, type SourceOption } from './lifecycle-source-natural.js';
-import { shortTitle } from './requester-turn.js';
+import { designName, shortTitle } from './requester-turn.js';
 import { readSourceAdmission, readSourceUpload, saveSourceAdmission, sourceByReply, sourceHash, SourceConflict,
   type PendingSource, type SourceAdmission, type SourceIntakeAnswer } from './lifecycle-source-store.js';
 
@@ -45,8 +45,8 @@ function addressedToBot(update: unknown): boolean {
 /** The question asked about a kept source: which organisation, or which design. */
 export function sourceQuestionText(need: SourceNeed, kind: 'pdf' | 'voice', options: SourceOption[], lang: RequesterLang): string {
   if (need === 'client') return say(kind === 'voice' ? SOURCE_MESSAGES.askClientVoice : SOURCE_MESSAGES.askClientPdf, lang);
-  if (options.length === 1) return say(SOURCE_MESSAGES.askChangeOrNew, lang, { title: bold(shortTitle(options[0].title)) });
-  const list = [...options.map((o, i) => `${i + 1}. ${bold(shortTitle(o.title))}`),
+  if (options.length === 1) return say(SOURCE_MESSAGES.askChangeOrNew, lang, { title: designName(options[0].title, lang) });
+  const list = [...options.map((o, i) => `${i + 1}. ${designName(o.title, lang)}`),
     `${options.length + 1}. ${say(SOURCE_MESSAGES.newDesignOption, lang)}`].join('\n');
   return say(SOURCE_MESSAGES.askWhichDesign, lang, { list });
 }
