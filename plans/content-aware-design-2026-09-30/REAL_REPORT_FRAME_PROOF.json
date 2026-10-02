@@ -84,7 +84,6 @@
     "canvaUpload": "REJECTED_BY_AUTOMATIC_REVIEW: sensitive client photos/copy payload requires explicit destination authorization; asked user after showing concrete draft",
     "canvaSave": "Explicit approval required after actual native preview; not attempted"
   },
-  "externalProviderCalls": 0,
   "canvaUploadOrSavePerformed": false,
   "productionChanged": false,
   "fullEngineeringPreflight": "NOT_RUN_ON_THIS_REPAIR",
@@ -106,5 +105,8 @@
       "path": "output/qualification/2026-10-02/real-report-acceptance/CURRENT_SOURCE_PREVIEW.log",
       "sha256": "3c9f8ed098d5b2d9d9885a33ea87de3f251af886b8d8989474aa8fdcb4baf65f"
     }
-  }
+  },
+  "externalGenerationCalls": 0,
+  "nativeConnectorScope": "Read metadata/text/pages, open and cancel an unmodified inspection transaction, request an unused upload URL. Actual upload rejected before execution.",
+  "environmentFailure": "Initial manifest/commit hook used system Python without PyYAML and refused; existing Homebrew runtime retry passed. No hook waived."
 }
