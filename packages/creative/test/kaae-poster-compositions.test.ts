@@ -106,8 +106,11 @@ describe('the three poster compositions, composed with no model call', () => {
         const ns = negativeSpaceOf(l, { copy: { text: copyOf(b.lines) } });
         // The ceiling is a target: when no step of the type scale lands under it with the details at
         // their poster size, the nearest over it is kept (a Sorani navy poster, 0.653) rather than
-        // smaller details.
-        expect(ns, `${variant} negative space`).toBeLessThanOrEqual(0.66);
+        // smaller details. ADR-273: the union measure no longer counts a card or pill and the type on
+        // it twice, so the same Sorani workshop posters (same titles, same geometry) read emptier:
+        // navy 0.653 -> 0.664, cream 0.626 -> 0.698, band 0.563 -> 0.681. They are the emptiest the
+        // composer can make that short copy; the office's own posts measure 0.56-0.58 this way.
+        expect(ns, `${variant} negative space`).toBeLessThanOrEqual(0.7);
         expect(ns, `${variant} negative space`).toBeGreaterThanOrEqual(0.36);
         expect(guidelineDeviations(l, G, { arabicFonts: KAAE_FONTS.arabic })).toEqual([]);
         expect(validateLayoutV2(l, validation(b.lines)), variant).toMatchObject({ ok: true });

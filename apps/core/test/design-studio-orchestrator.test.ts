@@ -1071,7 +1071,10 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       // ADR-271: KAAE's grammar carries poster rules, so a text-only run is three composed poster
       // compositions and makes no layout call.
       expect(schemasSeen).not.toContain('layout_v3_candidates');
-      expect(schemasSeen).toContain('DesignCritiqueReport');
+      // ADR-273: a composed poster now passes the design metrics (it failed gridAppropriateness on
+      // ragged left text and its bleeding band), so the gated revise stage has nothing to repair and
+      // makes no critique call: one paid call fewer, and the composition is not handed to a model.
+      expect(schemasSeen).not.toContain('DesignCritiqueReport');
       expect(schemasSeen.filter((x) => x === 'PairwiseDimensionVerdict')).toHaveLength(4);
 
       const stages = typeof final.stages === 'string' ? JSON.parse(final.stages) : final.stages;
