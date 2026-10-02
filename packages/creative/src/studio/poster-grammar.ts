@@ -412,8 +412,8 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
       placed.push(p.el);
       ly = p.el.y + p.el.height;
     }
-    // A bridging pill takes half its height inside the card, clear of the copy above it.
-    const padBottom = !panel ? 0 : bridge ? Math.max(pad, r(ctaPill!.height / 2) + r(0.6 * gapMin)) : pad;
+    // The pill sits inside the card, under its copy (ADR271 section 9).
+    const padBottom = !panel ? 0 : bridge ? pad + ctaPill!.height + r(0.6 * gapMin) : pad;
     const h = ly - fy + padBottom;
     // The cream block runs from the foot's top to the canvas's lower edge, full bleed (placed below).
     const cardShapes: ShapeElement[] = block ? [{ kind: 'rect', role: 'panel', surface: 'plate', x: 0, y: fy, width: W, height: h, color: panelFill }] : panel ? [{
@@ -439,10 +439,10 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
         continue;
       }
       const { t, mm, padY, padX, height } = ctaPill;
-      // Bridging, the pill starts where the card's copy starts and straddles its lower edge.
+      // Inside the card, the pill starts where its copy starts, a padding above the lower edge.
       const startX = bridge ? (rtl ? card!.ix + card!.inner : card!.ix) : rtl ? colX + colW : colX;
       const room = bridge ? card!.inner : colW;
-      const py = bridge ? card!.y + card!.height - r(height / 2) : fy;
+      const py = bridge ? card!.y + card!.height - pad - height : fy;
       // The pill grows to the next grid line, so its free end lines up with the page.
       const natural = mm.lineWidth + 2 * padX + 2;
       const pw = Math.min(room, rtl ? startX - snapX(grid, startX - natural, 0.08 * W, 'down') : snapX(grid, startX + natural, 0.08 * W, 'up') - startX);

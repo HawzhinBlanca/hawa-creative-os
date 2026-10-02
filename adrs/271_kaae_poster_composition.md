@@ -158,3 +158,18 @@ Each composition tries its element's own place first (`home`), and accepts a sma
 - To give the sun its place on the horizon, the cream workshop title is 0.103 of the width (before 0.113).
 - The renderer draws elements under every shape except the cover's ground, so no element can sit on a card or block. That was left unchanged.
 - No gate threshold was changed.
+
+## 9. Addendum (2026-10-03): the second blind panel, and the call to action inside its card
+
+The second blind panel scored 49 designs with three judges; the judges agreed at Spearman 0.66–0.78.
+
+| Set | Overall | Publishable as-is |
+|---|---|---|
+| Round-1 posters | 5.82 | 93% |
+| Integrated posters (ADR-273, ADR-274, ADR-275, §8) | 5.81 | 90% |
+| Office posts (excluding the broken export) | 5.73 | 67% |
+| Pages shipped today | 4.0 | 0% |
+
+- **What moved:** the integrated posters gained hierarchy (6.73 → 6.90) and impact (5.87 → 6.04).
+- **What did not move:** imagery stayed at 3.0. Every judge named "generic template, no visual hook". Text-only posters have reached their ceiling, and photography is the lever that remains.
+- **The defect the judges found:** all three read the band's call-to-action pill, which straddled the card's lower edge, as an overlap. The pill now sits wholly inside the card. A test forbids a pill across any card edge.
