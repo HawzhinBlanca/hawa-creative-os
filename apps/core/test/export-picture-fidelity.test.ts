@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { crc32, deflateSync } from 'node:zlib';
 import { readPptxPictures } from '@hawa/qa';
-import { checkExportPictures, checkTextLines } from '../src/services/export-picture-fidelity.js';
+import { checkExportPictures, checkTextLines, pictureDownloadVerdict } from '../src/services/export-picture-fidelity.js';
 import { png, u8, zipSync } from './fixtures/shipped-export.js';
 
 /**
@@ -161,6 +161,33 @@ const HEAD: TextFrame = { text: 'Sorani title of the K-12 standards framework', 
 const BODY: TextFrame = { text: 'One line of body text', box: [151, 856, 778, 47], color: 'FFFFFF', sz: 1300 };
 const HEAD_PX = 2900 / 100 * 12700 / 9525, BODY_PX = 1300 / 100 * 12700 / 9525;
 
+describe('pictureDownloadVerdict: the customer download contract (ADR-258)', () => {
+  it('passes intact pictures, warns on a moved picture, blocks a lost logo, photo or transparency', async () => {
+    expect(pictureDownloadVerdict(await checkExportPictures(SOURCE, exported(), { logoBoxPx: LOGO_BOX }))).toEqual({ status: 'pass', blocks: false, reasons: [] });
+    // An edit in Canva may move a picture: the download goes ahead, the office alert names it.
+    const moved = await checkExportPictures(SOURCE, exported({}, { logo: [900, 1200, 108, 108] }), { logoBoxPx: LOGO_BOX });
+    expect(pictureDownloadVerdict(moved)).toEqual({ status: 'warn', blocks: false, reasons: ['1 picture(s) moved'] });
+    expect(pictureDownloadVerdict(await checkExportPictures(SOURCE, exported({ logo: null }), { logoBoxPx: LOGO_BOX })))
+      .toEqual({ status: 'block', blocks: true, reasons: ['the logo is missing'] });
+    expect(pictureDownloadVerdict(await checkExportPictures(SOURCE, exported({ logo: logo(true) }), { logoBoxPx: LOGO_BOX })))
+      .toEqual({ status: 'block', blocks: true, reasons: ['the logo lost its transparent background'] });
+    expect(pictureDownloadVerdict(await checkExportPictures(SOURCE, exported({ blocks: null }), { logoBoxPx: LOGO_BOX })))
+      .toEqual({ status: 'block', blocks: true, reasons: ['1 photo(s) missing'] });
+  });
+
+  it('fails closed when the check could not run or is not on record; nothing to compare is not applicable', () => {
+    expect(pictureDownloadVerdict(undefined)).toMatchObject({ status: 'block', blocks: true });
+    expect(pictureDownloadVerdict({ measured: false, code: 'error', reason: 'Not measured: rsvg-convert failed' }))
+      .toEqual({ status: 'block', blocks: true, reasons: ['the pictures could not be compared: Not measured: rsvg-convert failed'] });
+    expect(pictureDownloadVerdict({ measured: false, code: 'no_editable_source', reason: 'The design was not imported from an editable source.' }))
+      .toEqual({ status: 'not_applicable', blocks: false, reasons: [] });
+    // Records written before the code existed are read by their words.
+    expect(pictureDownloadVerdict({ measured: false, reason: 'Not measured: timeout' })).toMatchObject({ status: 'block' });
+    expect(pictureDownloadVerdict({ measured: false, reason: 'The design was not imported from an editable source; there is nothing to compare its pictures with.' }))
+      .toMatchObject({ status: 'not_applicable' });
+  });
+});
+
 describe('checkTextLines: does Canva wrap each text frame as the design did? (ADR-258)', () => {
   it('a title the design set on 3 lines and Canva on 2 is named, with both counts', () => {
     const r = checkTextLines(
@@ -293,6 +320,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('the recorded QC run carries the
 
   it('a design not imported from an editable source says there is nothing to compare', async () => {
     const { report } = await imported(exported({}, {}, false, TITLE), null);
-    expect(report.pictureFidelity).toMatchObject({ measured: false });
+    expect(report.pictureFidelity).toMatchObject({ measured: false, code: 'no_editable_source' });
+    expect(pictureDownloadVerdict(report.pictureFidelity as never)).toMatchObject({ status: 'not_applicable', blocks: false });
   });
 });
