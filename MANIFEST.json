@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T08:55:21Z",
+  "generatedAt": "2026-10-02T09:15:25Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 876,
+  "fileCount": 878,
   "files": [
     {
       "path": ".dockerignore",
@@ -1653,6 +1653,16 @@
       "bytes": 26365
     },
     {
+      "path": "plans/content-aware-design-2026-09-30/APPROVED_ACTIONS_RELEASE_GATE_EVIDENCE.json",
+      "sha256": "6d467fb3e0b9b76ffaa79b4b6bdc8ded3db33ee5db6ff53be22b4571dbdead08",
+      "bytes": 2144
+    },
+    {
+      "path": "plans/content-aware-design-2026-09-30/APPROVED_ACTIONS_RELEASE_PROOF.json",
+      "sha256": "50bd3c28cd76719fa81c65e2a4eb9e3b09041719f735693161428145781764a1",
+      "bytes": 8867
+    },
+    {
       "path": "plans/content-aware-design-2026-09-30/BACKGROUND_NATIVE_CONTROLS.json",
       "sha256": "aab71911bc222a67fc96671ccfffcb6f1bada8b64988f8c65e50a3d87ce84e4a",
       "bytes": 13380
@@ -1754,8 +1764,8 @@
     },
     {
       "path": "plans/content-aware-design-2026-09-30/REAL_REPORT_FRAME_PROOF.json",
-      "sha256": "10355d5eea02ec7b85429bb9eeaa4b514501913e37b256c45831f39d726c799e",
-      "bytes": 14217
+      "sha256": "f9ffab0595c294d3f4ae77ae6169e6f157bff44687b5bea06cf82e720e06dd4e",
+      "bytes": 14562
     },
     {
       "path": "plans/content-aware-design-2026-09-30/W2_BACKGROUND_FEASIBILITY_FINDING.json",
@@ -3414,8 +3424,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "c5cc2a32dfc1708ae6dd4cd21d5c3784244f3ecedbae002534c62a8b12d843c7",
-      "bytes": 838730
+      "sha256": "e5b3e3dc8fe6b26f6b058810276a0230180361a2e5e867e16291cc4058aa2437",
+      "bytes": 843416
     },
     {
       "path": "plans/user-stories.csv",

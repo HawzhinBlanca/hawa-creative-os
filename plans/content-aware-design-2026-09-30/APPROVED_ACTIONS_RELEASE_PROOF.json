@@ -1,0 +1,228 @@
+{
+  "date": "2026-10-02",
+  "status": "DEPLOYED_HEALTHY_NATIVE_EDITABLE_ROUNDTRIP_VERIFIED_HUMAN_AND_PRODUCT_OPEN",
+  "directHumanApproval": "approve both plus renewed yes download and verify PPTX",
+  "requirements": [
+    "FR-005",
+    "FR-017",
+    "FR-023",
+    "FR-038",
+    "FR-061",
+    "FR-066",
+    "FR-074",
+    "FR-079",
+    "NFR-007",
+    "NFR-012",
+    "NFR-013"
+  ],
+  "productionIntegration": {
+    "previousLiveCommit": "474cba4c50f567c3a58cc72943983814355bd460",
+    "mergeCommit": "63d937e98b34afa813050bb7e19d10a32cd138fa",
+    "deployedCommit": "23c28392410a4faedc733253dab391a9871e4af0",
+    "mergePreservesCurrentIntakeAndCanaryFixes": true,
+    "allEightEngineeringStagesPassed": true,
+    "tests": {
+      "passed": 7972,
+      "failed": 0,
+      "skipped": 67,
+      "passingFiles": 732,
+      "skippedFiles": 6,
+      "durationSeconds": 294.05
+    },
+    "runtime": {
+      "health": "healthy",
+      "colour": "green",
+      "outboxActive": true,
+      "poller": "live",
+      "failedPausedBackingOff": 0,
+      "stalledTasks": 0,
+      "nginxLiveConfig": "nginx -t successful",
+      "designRoles": "gpt-6.1-sol for text/layout/critique/judge",
+      "appCanvaDependency": "unverified",
+      "appModelProviderDependency": "disabled (existing manifest admission flags remain off; active office lane separate)"
+    }
+  },
+  "migrationValidation": {
+    "qualifiedCommit": "23c28392410a4faedc733253dab391a9871e4af0",
+    "checksum": "verified",
+    "appliedMigrations": 9,
+    "status": "passed",
+    "ownedTemporaryCopiesDeleted": true,
+    "notValidConstraints": 0,
+    "schemaParity": "0 missing/0 different; 551 allowed extra privileges explicitly reported"
+  },
+  "isolatedRehearsal": {
+    "checksPassed": 243,
+    "failed": 0,
+    "scenario": "R1.S3.SOURCES --candidate --recovery --poller worker",
+    "selectedScenarioPassed": 1,
+    "otherScenariosSkipped": 56,
+    "imageCommit": "fe6a759c0c7183b97680c896f964ed9f1af34aca",
+    "finishedReceiptCommit": "23c28392410a4faedc733253dab391a9871e4af0",
+    "scope": "Synthetic provider/staff actions, real Docker stack and offline Docling. Only generated manifests differ between image-source commit fe6a759c and deployed23c28392; no runtime/tests/migrations/harness/build inputs differ.",
+    "productionChangedByRehearsal": false,
+    "separateHostRecoveryProved": false,
+    "driveRecovery": {
+      "tableCount": 105,
+      "policyCount": 181,
+      "verifiedBlobCount": 16,
+      "missingBlobReferences": 0,
+      "allRowsAndPoliciesMatch": true,
+      "allStoreFilesMatch": true,
+      "restoreValidationSeconds": 8.619,
+      "privateArtifactsCleanup": {
+        "removed": true,
+        "scope": "this_recovery"
+      }
+    },
+    "telegramRecovery": {
+      "tableCount": 105,
+      "policyCount": 181,
+      "verifiedBlobCount": 16,
+      "missingBlobReferences": 0,
+      "allRowsAndPoliciesMatch": true,
+      "allStoreFilesMatch": true,
+      "restoreValidationSeconds": 8.42,
+      "privateArtifactsCleanup": {
+        "removed": true,
+        "scope": "this_recovery"
+      }
+    }
+  },
+  "nativeAcceptance": {
+    "status": "NATIVE_IMPORT_AND_EDITABLE_EXPORT_STRUCTURE_VERIFIED",
+    "nativeDesignId": "DAHW2D_0ypk",
+    "sourcePptxSha256": "72dd1bdb5d077864363b9c7f563ecb56b0a7b0ed2aa8664f03518ca2323cad50",
+    "nativePptxSha256": "a88a3a050f2e2149bc63a707a0a38dcac40653b25d32c975f87d3194d8e78478",
+    "exactTitleObjectsPreserved": true,
+    "titleObjectCount": 2,
+    "photoObjectsPreservedSeparately": 3,
+    "transparentVectorFrame": [
+      {
+        "nativeName": "Freeform 13",
+        "strokeEmu": 28575,
+        "transparentFill": true,
+        "editableCustomVectorGeometry": true
+      }
+    ],
+    "nativeFonts": [
+      "Crimson Pro Bold",
+      "Inter"
+    ],
+    "mediaReadback": [
+      {
+        "source": "image-1-1.jpeg",
+        "native": "image1.jpeg",
+        "sourceSize": [
+          1280,
+          853
+        ],
+        "nativeSize": [
+          1280,
+          853
+        ],
+        "meanAbsoluteRgbDelta": [
+          1.2180804879835874,
+          0.897942006154748,
+          1.4153914492966002
+        ],
+        "scope": "Pixel similarity diagnostic after native recompression/downsample; not byte identity or a human quality label"
+      },
+      {
+        "source": "image-1-2.jpeg",
+        "native": "image2.jpeg",
+        "sourceSize": [
+          1280,
+          853
+        ],
+        "nativeSize": [
+          1024,
+          683
+        ],
+        "meanAbsoluteRgbDelta": [
+          0.9879123581625183,
+          0.8336941228953147,
+          1.2782173659407028
+        ],
+        "scope": "Pixel similarity diagnostic after native recompression/downsample; not byte identity or a human quality label"
+      },
+      {
+        "source": "image-1-3.jpeg",
+        "native": "image3.jpeg",
+        "sourceSize": [
+          1280,
+          853
+        ],
+        "nativeSize": [
+          1024,
+          683
+        ],
+        "meanAbsoluteRgbDelta": [
+          0.6555851368045388,
+          0.5851210765922401,
+          0.8867773723462665
+        ],
+        "scope": "Pixel similarity diagnostic after native recompression/downsample; not byte identity or a human quality label"
+      }
+    ],
+    "limitations": [
+      "Canva re-encodes JPEGs and downsamples the two small photos to 1024x683 and logo to 538x538; native bytes do not equal original bytes.",
+      "Native slide height rounded by Canva from 12858750 to 12852400 EMU and frame bounds/stroke subtly transformed.",
+      "No native editing transaction was committed; human design-quality approval, native-font multilingual corpus and whole-product admission remain open."
+    ],
+    "ownerDownloadApproval": "Direct explicit yes, download and verify the PPTX after accidental browser decline; actual supported browser downloadMedia returned local file.",
+    "inspectionFailures": [
+      "Homebrew Python lacks PIL; bundled runtime rerun succeeded.",
+      "Literal p:pic count was zero because Canva uses editable image-filled vector shapes; semantic blipFill inspection verified independent media."
+    ]
+  },
+  "wholeProductAdmission": false,
+  "remaining": [
+    "Owner independent design-quality approval",
+    "Native editing/save/reopen and multilingual font/glyph corpus",
+    "Real Drive/Sheets publication and separate-host RPO/RTO recovery",
+    "Model/retrieval holdout and three-client production pilot"
+  ],
+  "logs": {
+    "final-release/RELEASE_GATE_EVIDENCE.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/final-release/RELEASE_GATE_EVIDENCE.json",
+      "sha256": "f49f55a80aa9c99ed3c3c9b3f68ec1e927d80884d75683058c0566b1a26c0529"
+    },
+    "final-release/FULL_TEST_SUITE_RUN.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/final-release/FULL_TEST_SUITE_RUN.log",
+      "sha256": "ea5e8a5b7a1777cfde3af0259ced1bb2ae6690faf6a2b87faf6da0c011df5c46"
+    },
+    "final-release/PREDEPLOY_DUMP_CHECK.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/final-release/PREDEPLOY_DUMP_CHECK.json",
+      "sha256": "f3684f3099296d8f67ca007181fe3bf026ca09bbd1b0b41ed6ecc28116d70494"
+    },
+    "final-release/LIVE_HEALTH.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/final-release/LIVE_HEALTH.json",
+      "sha256": "7fa5d74f2d91f3ef73104f784ef98c5b92b1a8e500d2a39a93ff963e7bea3ccc"
+    },
+    "final-release/LIVE_WORKER.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/final-release/LIVE_WORKER.json",
+      "sha256": "4ee1dc26aadd7b3b066ad6779bf46773fa7b4b3a7f7e254904d258fdc4165b8d"
+    },
+    "merged-candidate/last-run.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/merged-candidate/last-run.json",
+      "sha256": "8dce4019f4f5f589a1a3bdca06493eec7ead6d3ef519bf21e124b72d5c034d26"
+    },
+    "merged-candidate/REHEARSAL.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/merged-candidate/REHEARSAL.log",
+      "sha256": "1e1d84fc720a11ff2dbfc094ecd038b5877aa43da2a99e0e862a3aee52e4daba"
+    },
+    "NATIVE_ROUNDTRIP_PROOF.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/NATIVE_ROUNDTRIP_PROOF.json",
+      "sha256": "108038f79953cb54141c237bf15233800755cfff72045f1c5bea2aadf5158c88"
+    },
+    "NATIVE_CANVA_SCREENSHOT.png": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/NATIVE_CANVA_SCREENSHOT.png",
+      "sha256": "4ad0ad770e47c296723901e75c08ce7e01be3eef9ee1f85b9ffcce4ebffb6de3"
+    },
+    "DEPLOY.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/approved/DEPLOY.log",
+      "sha256": "e4583228c821a83299fdd32e25f29272ddf9147b5a6bdd4f6902891e6fe195f9"
+    }
+  }
+}
