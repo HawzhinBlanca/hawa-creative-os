@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { crc32, deflateSync } from 'node:zlib';
 import { readPptxPictures } from '@hawa/qa';
-import { checkExportPictures } from '../src/services/export-picture-fidelity.js';
-import { u8, zipSync } from './fixtures/shipped-export.js';
+import { checkExportPictures, checkTextLines } from '../src/services/export-picture-fidelity.js';
+import { png, u8, zipSync } from './fixtures/shipped-export.js';
 
 /**
  * ADR-258: the source's pictures in the Canva export. The live finding (task 5edca743, 2026-09-30): Canva
@@ -140,6 +140,47 @@ describe('checkExportPictures: the source pictures in the export (ADR-258)', () 
   });
 });
 
+/** A one-page PPTX with text frames, at full size (9525 EMU a pixel). */
+interface TextFrame { text: string; box: [number, number, number, number]; color: string; sz: number; rtl?: boolean; split?: boolean }
+function textDeck(frames: TextFrame[], height = SLIDE.cy): Uint8Array {
+  const ns = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+  const run = (t: string, f: TextFrame) => `<a:r><a:rPr sz="${f.sz}"><a:solidFill><a:srgbClr val="${f.color}"/></a:solidFill><a:latin typeface="Cinzel"/></a:rPr><a:t>${t}</a:t></a:r>`;
+  const shapes = frames.map((f, i) => `<p:sp><p:nvSpPr><p:cNvPr id="${i + 2}" name="t${i}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(f.box)}<a:prstGeom prst="rect"/></p:spPr>` +
+    `<p:txBody><a:bodyPr/><a:lstStyle/><a:p>${f.rtl ? '<a:pPr rtl="1"/>' : ''}${f.split ? run('\u200f', f) + run(f.text, f) : run(f.text, f)}</a:p></p:txBody></p:sp>`).join('');
+  return zipSync({
+    'ppt/presentation.xml': u8(`<?xml version="1.0" encoding="UTF-8"?><p:presentation ${ns}><p:sldSz cx="${SLIDE.cx}" cy="${height}"/></p:presentation>`),
+    'ppt/slides/slide1.xml': u8(`<?xml version="1.0" encoding="UTF-8"?><p:sld ${ns}><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>${shapes}</p:spTree></p:cSld></p:sld>`),
+  });
+}
+/** A 1080 x 1350 render: each frame's text drawn as `lines` bars of ink, a line apart. */
+function render(frames: Array<{ box: [number, number, number, number]; ink: string; lines: number; fontPx: number }>, background = '#0A1628'): Buffer {
+  return png(1080, 1350, background, frames.flatMap((f) => Array.from({ length: f.lines }, (_, i) => ({
+    x: f.box[0] + 10, y: Math.round(f.box[1] + i * f.fontPx * 1.3 + f.fontPx * 0.15), w: Math.round(f.box[2] * 0.8), h: Math.round(f.fontPx * 0.7), color: f.ink }))));
+}
+const HEAD: TextFrame = { text: 'Sorani title of the K-12 standards framework', box: [86, 387, 907, 265], color: 'F7B500', sz: 2900, rtl: true };
+const BODY: TextFrame = { text: 'One line of body text', box: [151, 856, 778, 47], color: 'FFFFFF', sz: 1300 };
+const HEAD_PX = 2900 / 100 * 12700 / 9525, BODY_PX = 1300 / 100 * 12700 / 9525;
+
+describe('checkTextLines: does Canva wrap each text frame as the design did? (ADR-258)', () => {
+  it('a title the design set on 3 lines and Canva on 2 is named, with both counts', () => {
+    const r = checkTextLines(
+      render([{ box: HEAD.box, ink: '#F7B500', lines: 3, fontPx: HEAD_PX }, { box: BODY.box, ink: '#FFFFFF', lines: 1, fontPx: BODY_PX }]),
+      render([{ box: HEAD.box, ink: '#F7B500', lines: 2, fontPx: HEAD_PX }, { box: BODY.box, ink: '#FFFFFF', lines: 1, fontPx: BODY_PX }]),
+      textDeck([HEAD, BODY]), textDeck([{ ...HEAD, split: true }, BODY], SLIDE.cy - 6350));
+    expect(r.frames).toEqual([{ text: 'Sorani title of the K-12 stan…', studio: 3, canva: 2 }, { text: 'One line of body text', studio: 1, canva: 1 }]);
+    expect(r.pass).toBe(false);
+    expect(r.warnings).toEqual(["'Sorani title of the K-12 stan…' wraps differently in Canva (3 lines in the design, 2 in Canva)"]);
+  });
+
+  it('the same wrapping passes, and a frame Canva renamed or dropped is unmeasured, not failed', () => {
+    const studio = render([{ box: HEAD.box, ink: '#F7B500', lines: 2, fontPx: HEAD_PX }, { box: BODY.box, ink: '#FFFFFF', lines: 1, fontPx: BODY_PX }]);
+    const same = checkTextLines(studio, studio, textDeck([HEAD, BODY]), textDeck([HEAD, BODY]));
+    expect(same).toMatchObject({ pass: true, warnings: [], unmeasured: [] });
+    const dropped = checkTextLines(studio, studio, textDeck([HEAD, BODY]), textDeck([HEAD]));
+    expect(dropped).toMatchObject({ pass: true, unmeasured: ['One line of body text'] });
+  });
+});
+
 // The recorded QC run and the office alert, through the lifecycle's own outcome path on the test database.
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, afterEach, vi } from 'vitest';
@@ -157,7 +198,7 @@ const OFFICE = ['91500011', '91500012'];
 const TITLE = 'Autumn workshop poster';
 const hash = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 
-async function imported(exportDeck: Uint8Array, source: Uint8Array | null) {
+async function imported(exportDeck: Uint8Array, source: Uint8Array | null, pictures?: { studio: Buffer; canva: Buffer }) {
   vi.stubEnv('TELEGRAM_ALLOWED_USERS', OFFICE.join(','));
   const requestId = randomUUID();
   const { taskId } = await projectLifecycleOpen(db, {
@@ -177,6 +218,19 @@ async function imported(exportDeck: Uint8Array, source: Uint8Array | null) {
       await sql`INSERT INTO hawa.canva_editable_sources (id, tenant_id, task_id, client_id, actor_id, operation_id, sha256, content, manifest)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, 'test', ${create}::uuid, ${hash(source)}, ${Buffer.from(source)},
           ${JSON.stringify({ copy: [TITLE], logo: LOGO_BOX })}::jsonb)`.execute(trx);
+    }
+    if (pictures) {
+      const runId = randomUUID();
+      await sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status, stages)
+        VALUES (${runId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, 'test', ${randomUUID()}, 'h', '{}'::jsonb, 'standard', 'transferred', '{}'::jsonb)`.execute(trx);
+      await sql`INSERT INTO hawa.design_studio_candidates (id, run_id, tenant_id, ordinal, concept, status, preview_png, preview_sha256)
+        VALUES (${randomUUID()}::uuid, ${runId}::uuid, ${tenantId}::uuid, 0, '{}'::jsonb, 'winner', ${pictures.studio}, ${hash(pictures.studio)})`.execute(trx);
+      const pngOp = randomUUID();
+      await sql`INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata)
+        VALUES (${pngOp}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, 'test', ${`png-${pngOp}`}, ${hash(pictures.canva)}, 'export', 'retrieved', ${designId}, ${binding.version},
+          '{"format":"png","designUpdatedAt":"2026-10-02T09:00:00Z"}'::jsonb)`.execute(trx);
+      await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content)
+        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, ${pngOp}::uuid, 'png', ${hash(pictures.canva)}, ${pictures.canva})`.execute(trx);
     }
     const op = randomUUID();
     const deckBytes = Buffer.from(exportDeck);
@@ -217,6 +271,24 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('the recorded QC run carries the
     expect(report.warnings).toContain('the logo is missing from the Canva export');
     const alert = result.officePhotoAlerts?.[0].text ?? result.officeAlerts?.[0].text;
     expect(alert).toContain('Check before approving: the logo is missing from the Canva export');
+  });
+
+  it('a title Canva wraps on fewer lines than the Studio render is recorded and named in the office alert', async () => {
+    const frames = (lines: number) => render([{ box: HEAD.box, ink: '#F7B500', lines, fontPx: HEAD_PX }]);
+    const words = { ...HEAD, text: TITLE };
+    const { report, result } = await imported(textDeck([words], SLIDE.cy - 6350), textDeck([words]), { studio: frames(3), canva: frames(2) });
+    expect(report.textLines).toMatchObject({ pass: false, frames: [{ studio: 3, canva: 2 }] });
+    expect(report.checks).toContainEqual(expect.objectContaining({ name: 'textLines', passed: false }));
+    expect(report.passed).toBe(true);
+    const alert = result.officePhotoAlerts?.[0].text ?? result.officeAlerts?.[0].text;
+    expect(alert).toContain(`'${TITLE}' wraps differently in Canva (3 lines in the design, 2 in Canva)`);
+  });
+
+  it('without a Studio render or a same-version PNG, the line check says why it measured nothing', async () => {
+    const { report } = await imported(exported({}, {}, false, TITLE), deck([
+      { media: 'image-1-1.png', box: [0, 0, 670, 1067] }, { media: 'image-1-2.png', box: [685, 0, 395, 526] }, { media: 'image-1-3.png', box: [76, 76, 108, 108] },
+    ], { 'image-1-1.png': sky(), 'image-1-2.png': blocks(), 'image-1-3.png': logo() }, SLIDE.cy, TITLE));
+    expect(report.textLines).toMatchObject({ measured: false, reason: 'No PNG of the same Canva version was retrieved.' });
   });
 
   it('a design not imported from an editable source says there is nothing to compare', async () => {

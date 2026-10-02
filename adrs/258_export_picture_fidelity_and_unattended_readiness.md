@@ -104,3 +104,53 @@ Measured on task 5edca743: the stored source PPTX (blob `bd5b0e17…`) against t
   - 45 files, 619 tests (Canva, export, QC, qa);
   - 192 files, 2406 passed and 3 skipped (with lifecycle, creative and qa);
   - 11 files, 51 tests on resumability (rate limit, stranded, re-drive, kill and uncertain recovery, durable workflow).
+
+## Addendum (2026-10-02, later): text lines, PDF readback, right-to-left evidence
+
+### Right-to-left joining in the native design
+
+Read on real exports, with no new design made:
+- Task 68b98306 (Sorani, imported on 2026-09-20): Canva's own PNG export has correctly joined Sorani letters in right-to-left order, with the mixed tokens "(K-12)", "2.0" and "kaae.org" in the correct positions. This was judged by eye on the PNG.
+- The exported PPTX's `rtlPass: false` is a limit of the metadata check: Canva's PPTX omits the `rtl` attribute (the check's own note says so). It is not a joining fault.
+- **The real difference: Canva wrapped the title on 2 lines where Studio set 3**, which moved the title block.
+
+### Text-line check (`checkTextLines`, `countInkLines`)
+
+- **What it measures.** For each text frame, paired with Canva's frame by text, the lines of ink in the frame colour are counted in the Studio winner's render and in Canva's same-version PNG.
+  - Runs of inked rows closer than a third of the type size are one line, because Arabic-script dots sit that close to their letters.
+  - A run shorter than a third of the type size is not a line.
+- **On task 68b98306:** title 3 → 2 (flagged), body 1 → 1, call-to-action 1 → 1.
+- **Where it runs.** On every capture next to the picture check, as `qaReport.textLines` plus a check.
+  - A difference is a warning ("'…' wraps differently in Canva (3 lines in the design, 2 in Canva)"), advisory.
+  - With no Studio render, no source or no same-version PNG it records why and measures nothing.
+- **Reads.** The source and the Studio render are read store-first (`readPreferringStore`), because a row's bytes may already have been moved to the file store.
+
+### PDF readback (`checkCanvaPdf`, `packages/qa/src/canva-pdf-check.ts`)
+
+- **Why it reads the file itself.** No PDF tool exists on the host or in the containers, so the check reads the file alone. It was measured on three real Canva PDFs exported today through the office route: tasks 0bf7f225, a4651ddd and 7a4b01ac, which are pre-lifecycle designs.
+- **What a Canva PDF looks like:**
+  - one page, MediaBox in points (810 × 1012.5 for 1080 × 1350);
+  - Type0/CIDFontType2 fonts, each with an embedded `FontFile2` and a `ToUnicode` map;
+  - text as literal strings of 2-byte codes (sometimes hex) in Flate streams;
+  - photos as images with soft masks.
+- **What it records:**
+  - page count and size, fonts and how many are embedded, live text;
+  - for each **Latin-script** line of the imported source's copy: found exactly or missing;
+  - **Arabic-script** lines as `visualOnly`. Canva writes them as shaped glyphs in visual order, which map back to fragments even when the page is right, so they are never failed from the text layer.
+- **Real results:**
+  - 7a4b01ac: 4 of 4 Latin lines found exactly, one page, 2 of 2 fonts embedded.
+  - 0bf7f225: 3 of 3 fonts embedded; a4651ddd: 2 of 2. All three are Sorani-only, so their copy is visual-only.
+- **Stored** as the PDF export's `content_check`, which was null before. Its `copyPass: false` (a missing Latin line, or copy with no live text) feeds the existing eligibility filter, which already reads `copyPass`.
+
+### Contract finding: on-demand exports of lifecycle requests
+
+- `POST /v1/tasks/:id/canva/exports` refuses a lifecycle-owned task with `409 LIFECYCLE_OWNED` ("design writes require the current worker run"). Every Telegram, and every future web, request is lifecycle-owned.
+- **A customer PDF on demand therefore needs an export step inside the RequestLifecycle and worker run**, not the office route.
+- Older pre-lifecycle tasks may instead answer `422 NATIVE_REVISION_HANDOFF_REQUIRED` (the revision handoff guard).
+
+### Verification (addendum)
+
+- `apps/core/test/export-picture-fidelity.test.ts`: 15 tests, including the text-line unit tests and 2 test-DB tests through the bridge path (stored report, office alert, "why nothing was measured").
+- `packages/qa/test/canva-pdf-check.test.ts`: 6 tests on a synthetic PDF built as Canva writes one. It covers literal and hex strings, escaped parentheses and backslash, a missing line, Arabic visual-only, two pages, a font not embedded, no live text, image bytes that contain text operators, and not a PDF.
+- Regression: 192 files, 2425 passed, 3 skipped.
+- **Real provider calls:** four PDF exports through the office route, on existing designs only (3 retrieved and hashed; one refused by the handoff guard before any call), plus the earlier supervised import.

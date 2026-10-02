@@ -14,8 +14,8 @@
  * Advisory: the result is recorded in the QC report and named in the office alert; it never changes
  * `passed` or `criticalPass` (ADR-257's rule). The customer download contract (ADR-258) reads `pass`.
  */
-import { hammingDistance, imageFingerprint, MATCH_DISTANCE, type ImageFingerprint } from '@hawa/creative';
-import { readPptxPictures, type PptxPicture, type PptxPictures } from '@hawa/qa';
+import { countInkLines, decodePicture, hammingDistance, imageFingerprint, MATCH_DISTANCE, type ImageFingerprint } from '@hawa/creative';
+import { readPptxPictures, readPptxTextLayout, type PptxPicture, type PptxPictures, type PptxTextLayout } from '@hawa/qa';
 
 export interface PictureFidelity {
   /** Every source picture is in the export at its place, and the logo kept its transparency. */
@@ -103,3 +103,51 @@ export async function checkExportPictures(sourcePptx: Uint8Array, exportPptx: Ui
   };
 }
 
+
+export interface TextLineFidelity {
+  /** Every text frame has as many lines in Canva's PNG as in the Studio render it was designed in. */
+  pass: boolean;
+  frames: Array<{ text: string; studio: number; canva: number }>;
+  /** Frames whose text or colour could not be paired or read, by their first words. */
+  unmeasured: string[];
+  warnings: string[];
+}
+
+/** A frame's text without direction marks, joiners or spacing, for pairing a source frame with Canva's. */
+const plain = (text: string) => text.replace(/[‎‏‪-‮⁦-⁩⁠​-‍\s]+/gu, '');
+const excerpt = (text: string) => { const t = text.replace(/[‎‏⁦-⁩⁠]/gu, '').trim(); return Array.from(t).length > 30 ? `${Array.from(t).slice(0, 29).join('')}…` : t; };
+
+/**
+ * ADR-258: whether Canva set each text frame on as many lines as the Studio render the design was chosen
+ * from. Live 2026-09-20 (task 68b98306): a Sorani title wrapped on 3 lines in Studio and on 2 in Canva.
+ * The source's frames place the Studio render's text; Canva's frames place its own. Frames are paired by
+ * their text. Advisory, like the picture check.
+ */
+export function checkTextLines(studioPng: Buffer, canvaPng: Buffer, sourcePptx: Uint8Array, exportPptx: Uint8Array): TextLineFidelity {
+  const source = readPptxTextLayout(sourcePptx), exported = readPptxTextLayout(exportPptx);
+  const studio = decodePicture(studioPng), canva = decodePicture(canvaPng);
+  const frames: TextLineFidelity['frames'] = [];
+  const unmeasured: string[] = [];
+  type Picture = ReturnType<typeof decodePicture>;
+  const toPx = (doc: PptxTextLayout, png: Picture) => png.width / doc.slideWidth;
+  for (const frame of source.frames) {
+    const key = plain(frame.text);
+    const twin = key ? exported.frames.find((f) => plain(f.text) === key) : undefined;
+    const ink = frame.runs.find((r) => r.color)?.color;
+    const size = frame.runs.find((r) => r.fontSizePt)?.fontSizePt;
+    const twinInk = twin?.runs.find((r) => r.color)?.color ?? ink;
+    if (!twin || !ink || !twinInk || !size) { if (key) unmeasured.push(excerpt(frame.text)); continue; }
+    const at = (f: typeof frame, doc: PptxTextLayout, png: Picture) => {
+      const k = toPx(doc, png);
+      return { box: { x: f.box.x * k, y: f.box.y * k, width: f.box.width * k, height: f.box.height * k }, fontPx: size * f.scale * 12700 * k };
+    };
+    const s = at(frame, source, studio), c = at(twin, exported, canva);
+    frames.push({ text: excerpt(frame.text), studio: countInkLines(studio, s.box, ink, s.fontPx).lines, canva: countInkLines(canva, c.box, twinInk, c.fontPx).lines });
+  }
+  const changed = frames.filter((f) => f.studio > 0 && f.canva > 0 && f.studio !== f.canva);
+  return {
+    pass: changed.length === 0,
+    frames, unmeasured,
+    warnings: changed.map((f) => `'${f.text}' wraps differently in Canva (${f.studio} line${f.studio === 1 ? '' : 's'} in the design, ${f.canva} in Canva)`),
+  };
+}

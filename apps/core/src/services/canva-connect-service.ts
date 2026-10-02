@@ -7,7 +7,7 @@ import { inspectCanvaAmendment } from './canva-amendment-observation.js';
 import { CanvaNativeCopyService, type NativeTextCopyRequest } from './canva-native-copy.js';
 import { lockNativeRecovery, type NativeActorScope } from './lifecycle-native-scope.js';
 import { resolveManualExportPolicy, type ExportCheckPolicy } from './canva-export-policy.js';
-import { checkCanvaPptx } from '@hawa/qa';
+import { checkCanvaPdf, checkCanvaPptx } from '@hawa/qa';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { sql, withRlsContext, withSessionAdvisoryLock, CanvaBindingRepository, type BlobStore, type Database, type Kysely } from '@hawa/db';
@@ -730,6 +730,18 @@ export class CanvaConnectService {
         }else{
           const validated=validator.validateArtifactBytes(bytes,row.metadata.format==='png'?'png':'pdf_standard');
           if(!validated.ok)fail(422,validated.error.code,'Canva export failed byte validation; no capture was accepted');
+          if(row.metadata.format==='pdf'){
+            // ADR-258: a PDF is read back for what its file alone can show (one page, embedded fonts, live
+            // text, the imported source's Latin-script copy found exactly). Arabic-script copy is checked
+            // visually on the PNG of the same version; a PDF that cannot be read records why.
+            try {
+              const source=await this.editableSource(s,taskId,row.client_id,row.design_id);
+              const copy=Array.isArray(source?.manifest?.copy)?source!.manifest.copy.filter((l: unknown): l is string=>typeof l==='string'):[];
+              contentCheck={...checkCanvaPdf(bytes,copy),expectedCopy:copy};
+            } catch (err) {
+              contentCheck={source:'canva_exported_pdf',pass:false,copyPass:null,errors:[`Not read: ${(err as Error)?.message || err}`]};
+            }
+          }
         }
         const { design } = await client.getDesign(row.design_id);
         if (design.id !== row.design_id || design.updated_at !== row.metadata.designUpdatedAt) {
