@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T22:24:05Z",
+  "generatedAt": "2026-10-02T22:46:11Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 911,
+  "fileCount": 912,
   "files": [
     {
       "path": ".dockerignore",
@@ -29,8 +29,8 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "dfef4edb419a6a2ab67151c98306ea1dd8cc7e8c5176cc6c5b0d556c9f97d7d1",
-      "bytes": 6283
+      "sha256": "25648b0beb1801e5d2d1796cdbb8e9faaf5ed372ccc309f9dd474cffad9266bb",
+      "bytes": 7814
     },
     {
       "path": "AGENTS.md",
@@ -1303,6 +1303,11 @@
       "bytes": 4074
     },
     {
+      "path": "adrs/281_ci_runs_on_a_clean_checkout.md",
+      "sha256": "acc33a75616a184153d5c437165afd1f366d4ac9d897ca7297110fa80045fb44",
+      "bytes": 5253
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -2494,8 +2499,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES.md",
-      "sha256": "cfd24914bdd48d4e6528d5925e9eb1098ee7f893f620e0e0ee3e7b50ab2770d2",
-      "bytes": 5963
+      "sha256": "8cf96a8dc86f802075763de43f1a0268025364dcae5c25f3fadeb7f483d6d132",
+      "bytes": 6056
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES_PROOF.json",
@@ -3579,8 +3584,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2ccc5155c884d913e26ee1e35e9362c77970e598ae56c6c72071281b8ca31e0f",
-      "bytes": 896773
+      "sha256": "c66ebe13ab98979baaca944f11d7345afc33e12ad41849af4dbf50abe772d1bc",
+      "bytes": 897391
     },
     {
       "path": "plans/user-stories.csv",
@@ -3874,8 +3879,8 @@
     },
     {
       "path": "scripts/ci/install_render_deps.sh",
-      "sha256": "1631d6362d55b4167ed6158dd514538071be0ccd50d30c829cb602faac12eb01",
-      "bytes": 1919
+      "sha256": "085cda874588b2f6b9e827a23e258c8961beef10544ba7eca528a1ffd495b263",
+      "bytes": 2757
     },
     {
       "path": "scripts/compare_cutout_outlines.ts",
@@ -4519,8 +4524,8 @@
     },
     {
       "path": "scripts/validate_pack.py",
-      "sha256": "4267c1324816b2d6febebd83324bbb21534d779be23d41183340893691748fd8",
-      "bytes": 25723
+      "sha256": "1e386d692a41842f1ae18fb659cec166619d13a720ceaebde6b8c7117cb6c114",
+      "bytes": 27895
     },
     {
       "path": "scripts/verify_live_h01_h03.ts",

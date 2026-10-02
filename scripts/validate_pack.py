@@ -349,21 +349,54 @@ def validate_documents() -> None:
     require(not empty, "no Markdown document is trivially empty" + (f"; bad={empty}" if empty else ""))
 
     forbidden = re.compile(r"\b(?:TODO|TBD|FIXME|XXX)\b", re.I)
-    hits: list[str] = []
-    broken: list[str] = []
+    hits = [str(p.relative_to(ROOT)) for p in markdown if forbidden.search(p.read_text(encoding="utf-8"))]
+    require(not hits, "documents contain no TODO/TBD/FIXME placeholders" + (f"; bad={hits}" if hits else ""))
+    broken, ignored = markdown_link_problems(markdown)
+    require(not broken, "all local Markdown links resolve" + (f"; bad={broken[:20]}" if broken else ""))
+    # ADR-281: a link into a git-ignored path resolves only on a checkout that holds a local copy
+    # (output/audits copied in by hand), so this check passed locally and failed on every clean
+    # clone and CI runner. It is refused everywhere, so both give the same verdict; cite such a
+    # path in prose as local evidence, not in git.
+    require(not ignored, "no committed Markdown links into git-ignored paths (local evidence, not in git: cite the path in prose)"
+            + (f"; bad={ignored[:20]}" if ignored else ""))
+
+
+def git_ignored(paths: list[str]) -> set[str] | None:
+    """Repository-relative paths git ignores (tracked files never count), or None without a git checkout."""
+    if not paths:
+        return set()
+    try:
+        result = subprocess.run(["git", "-C", str(ROOT), "check-ignore", "--stdin", "-z"], input="\0".join(paths) + "\0",
+                                capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    # 0: some paths are ignored, 1: none are, 128: not a git checkout (an unpacked release bundle).
+    if result.returncode not in (0, 1):
+        return None
+    return {p for p in result.stdout.split("\0") if p}
+
+
+def markdown_link_problems(markdown: list[Path]) -> tuple[list[str], list[str]]:
+    """(links whose target is missing, links from a non-ignored document into a git-ignored target)."""
     link_re = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+    links: list[tuple[Path, str, Path]] = []
     for path in markdown:
-        text = path.read_text(encoding="utf-8")
-        if forbidden.search(text):
-            hits.append(str(path.relative_to(ROOT)))
-        for match in link_re.finditer(text):
+        for match in link_re.finditer(path.read_text(encoding="utf-8")):
             target = match.group(1).split("#", 1)[0].strip()
             if not target or target.startswith(("http://", "https://", "mailto:", "#")):
                 continue
-            if not (path.parent / target).resolve().exists():
-                broken.append(f"{path.relative_to(ROOT)}->{target}")
-    require(not hits, "documents contain no TODO/TBD/FIXME placeholders" + (f"; bad={hits}" if hits else ""))
-    require(not broken, "all local Markdown links resolve" + (f"; bad={broken[:20]}" if broken else ""))
+            links.append((path, target, (path.parent / target).resolve()))
+    root = ROOT.resolve()
+    src = lambda p: str(p.relative_to(ROOT))
+    inside = [(s, t, str(r.relative_to(root))) for s, t, r in links if r.is_relative_to(root)]
+    ignored_paths = git_ignored(sorted({src(s) for s, _, _ in inside} | {r for _, _, r in inside}))
+    if ignored_paths is None:
+        warn("git is unavailable: Markdown links into git-ignored paths were not checked")
+        ignored_paths = set()
+    # A document that is itself ignored is local evidence too; only committed documents are held to this.
+    ignored = [f"{src(s)}->{t}" for s, t, r in inside if r in ignored_paths and src(s) not in ignored_paths]
+    broken = [f"{src(s)}->{t}" for s, t, r in links if not r.exists() and f"{src(s)}->{t}" not in ignored]
+    return broken, ignored
 
     prompt_files = sorted((ROOT / "prompts").glob("*.md"))
     require(len(prompt_files) >= 6, "at least six versioned prompt contracts exist")
