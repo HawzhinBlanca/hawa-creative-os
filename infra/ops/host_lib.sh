@@ -68,3 +68,17 @@ hawa_host_role() {
     *) echo "$raw"; return 2 ;;
   esac
 }
+
+# The outside heartbeat (2026-10-02 operations review): the watchdog alerts through Telegram from this same
+# host, so a host that is off, asleep, locked at FileVault after an update, or offline says nothing. A
+# healthy pass pings HAWA_HEARTBEAT_URL (an https check URL from a dead-man's-switch service the owner
+# chooses, e.g. healthchecks.io or Better Stack); that service alerts the owner when the pings stop. Read
+# from the environment or the production env file (quotes and a trailing CR stripped); unset or not https:
+# nothing is sent. Returns 1 when the ping failed, so the caller can say so.
+hawa_heartbeat() { # env file
+  local url="${HAWA_HEARTBEAT_URL:-}"
+  [[ -n "$url" ]] || url="$(grep -E '^HAWA_HEARTBEAT_URL=' "$1" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r' || true)"
+  url="${url%\"}"; url="${url#\"}"; url="${url%\'}"; url="${url#\'}"
+  [[ "$url" =~ ^https://[^[:space:]]+$ ]] || return 0
+  curl -fsS -m 10 -o /dev/null "$url" >/dev/null 2>&1 || return 1
+}

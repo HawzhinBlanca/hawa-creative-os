@@ -57,3 +57,12 @@ The same reality check found two waits nobody was told about:
 Queue cleanup (data, not code): the 52 RECEIVED and 4 AWAITING_APPROVAL Desk tasks from the 2026-09-11..20
 test, pilot and audit runs were closed with the office cancel control and a stated reason; receipts in
 output/handoffs/2026-10-02/CLAUDE_STALE_DESK_TASK_CLEANUP_RECEIPT.json.
+
+## Addendum 2 (2026-10-02): an outside heartbeat
+
+Alerts were sent through Telegram from the host they watched; a host that is off, asleep, locked at
+FileVault after an automatic update, or offline said nothing. `hawa_heartbeat` (infra/ops/host_lib.sh)
+pings `HAWA_HEARTBEAT_URL` (https only; from the environment or .env.production) on every healthy
+watchdog pass; the outside dead-man's-switch service alerts the owner when the pings stop. Unset: nothing
+is sent (today's state). Owner action: create the check (e.g. healthchecks.io, Better Stack), paste its URL
+into ~/.hawa/shared/infra/docker/.env.production. Test: packages/testkit/test/heartbeat.test.ts (4).
