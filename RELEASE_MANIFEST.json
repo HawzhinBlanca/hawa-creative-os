@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-02T23:55:19+03:00",
+  "generatedAt": "2026-10-03T00:31:21+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "a76746dfed77e376992c1849cbb8f1729a0ca80e",
+    "commit": "2bd24cfde58693423a98a08d0a2983a7eb203a5e",
     "treeClean": true,
-    "commitTimestamp": "2026-10-02T23:55:19+03:00",
+    "commitTimestamp": "2026-10-03T00:31:21+03:00",
     "branch": "codex/hawzhin-app-integration"
   },
   "migrations": {
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "72f276e4fd95f43be7aea0f679f3283135e66d09543e9b79967070108d812f61",
+        "apps/core/src/app.ts": "504106a65e3aa9db612295afa858ae2aa915a98d2c589c19215e18f11fba5321",
         "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "195744e1891628bf824beb131365e39666656cf38d8d344dfcae789e2f2cae7f"
+  "sha256": "a2ada825e14610ffded763fe7257b9660a5728ba69ecb350a64a58bb7d91d98f"
 }
