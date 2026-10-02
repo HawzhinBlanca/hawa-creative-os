@@ -1,6 +1,6 @@
 # ADR276 — Freeze display-copy allowances before export
 
-Date: 2026-10-03. Status: selected; verification pending.
+Date: 2026-10-03. Status: selected; qualified locally; hosted/native/human admission pending.
 Requirements: FR-015/017 (docs/08_MEMORY_RAG_CLIENT_DNA.md), FR-028
 (docs/07_MODEL_REGISTRY_AND_EVALUATION.md), FR-029/032
 (docs/05_CREATIVE_ENGINE.md), NFR-009/011 (MASTER_SPEC.md).
@@ -69,3 +69,16 @@ current canvas share can retain tight display leading safely at large sizes.
 Kept manifest-derived transfer policy rather than duplicating layout flags.
 The CTA and surrounding copy remain independently editable.77 affected controls
 pass; the final sealed combined full qualification is pending.
+
+## Final local qualification
+
+Sealed5b063787 passes8,277/0/67 with all latest design/support/customer changes.
+Policy100, customer112, corrected design48 and latest CTA77 focused controls pass.
+Three adversarial controls fail against the merged pre-repair baseline as expected.
+757 strict test roots, native build, types/scripts/any/egress/scanner, source seal
+and blueprint1,975/0/0 pass. Failed attempts remain in JOINT_DESIGN_PROOF.json.
+Website56d9aaf adds seven passing production-build Chromium member/performance/
+anonymous controls with unchanged budgets. Existing product source and its prior
+863 unit/nine customer-browser controls are unchanged. Real hosted/customer/native
+Canva/Sorani/human quality, coverage/reviewed visuals/live RLS/Linux and public
+hosting/HTTPS/restore remain open. No deployment or public activation is proven.

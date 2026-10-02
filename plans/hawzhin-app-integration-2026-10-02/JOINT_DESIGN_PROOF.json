@@ -1,6 +1,6 @@
 {
   "date": "2026-10-03",
-  "status": "Latest Claude CTA merge passed77 affected controls; final sealed joint full-suite qualification pending",
+  "status": "Locally qualified joint design/customer candidate; public/hosted/native/human admission pending",
   "scope": "Claude client-specific poster/caps/metrics design lane and deployment/export support merged with ADR265/266 customer workflow; ADR276 immutable display export policy repair",
   "merges": [
     "6ff2fc60",
@@ -50,9 +50,13 @@
     "anyRatchet": "passed",
     "providerEgress": "passed",
     "securityScan": "passed",
-    "fullSuite": "pending corrected sealed run",
-    "blueprint": "initial seal passed 1975/0/0; updated seal pending",
-    "releaseManifest": "initial seal passed; updated seal pending"
+    "fullSuite": "passed",
+    "blueprint": {
+      "pass": 1975,
+      "warn": 0,
+      "fail": 0
+    },
+    "releaseManifest": "passed on tested seal; final evidence seal verification follows"
   },
   "website": {
     "commit": "56d9aaf",
@@ -204,5 +208,29 @@
     "numFailedTests": 0,
     "numPendingTests": 0
   },
-  "mergeResolution": "Preserved ADR276 manifest-derived transfer allowances and indexed frozen export policy. Shared display helper uses actual canvas width at every measured scale; CTA containment and geometric controls adopted. No hard-QA threshold change."
+  "mergeResolution": "Preserved ADR276 manifest-derived transfer allowances and indexed frozen export policy. Shared display helper uses actual canvas width at every measured scale; CTA containment and geometric controls adopted. No hard-QA threshold change.",
+  "engineFull": {
+    "testedCommit": "5b06378705cdc7dcd681cabe34ecbd6fa239587c",
+    "passed": 8277,
+    "failed": 0,
+    "skipped": 67,
+    "actualTestFiles": 756,
+    "report": "output/qualification/2026-10-03/joint-design/full-joint.json"
+  },
+  "requiredCredentialFixAncestry": {
+    "72ff926d": true,
+    "74618004": true,
+    "61750d34": true
+  },
+  "sourceHashVerification": "all retained changed code/test/runtime hashes match tested candidate",
+  "verificationReports": [
+    "policy-final.json",
+    "customer-focused.json",
+    "policy-baseline-red.json",
+    "design-fixed.json",
+    "cta-focused.json",
+    "full.json",
+    "full-final.json",
+    "full-joint.json"
+  ]
 }
