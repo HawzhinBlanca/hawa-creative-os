@@ -243,7 +243,7 @@ async function addPictureFidelity(trx: Kysely<Database>, p: { tenantId: string; 
   const source = sourceRow && sourceBytes ? { content: sourceBytes, manifest: sourceRow.manifest } : null;
   await addTextLines(trx, p, exportRow, source?.content ?? null, report, store);
   if (!source?.content?.length) {
-    report.pictureFidelity = { measured: false, reason: 'The design was not imported from an editable source; there is nothing to compare its pictures with.' };
+    report.pictureFidelity = { measured: false, code: 'no_editable_source', reason: 'The design was not imported from an editable source; there is nothing to compare its pictures with.' };
     return;
   }
   try {
@@ -254,7 +254,7 @@ async function addPictureFidelity(trx: Kysely<Database>, p: { tenantId: string; 
     report.checks.push({ name: 'pictureFidelity', passed: fidelity.pass, details: { logo: fidelity.logo, missing: fidelity.missing.length, moved: fidelity.moved.length } });
     if (fidelity.warnings.length) report.warnings = [...(report.warnings ?? []), ...fidelity.warnings];
   } catch (err) {
-    report.pictureFidelity = { measured: false, reason: `Not measured: ${err instanceof Error ? err.message : String(err)}` };
+    report.pictureFidelity = { measured: false, code: 'error', reason: `Not measured: ${err instanceof Error ? err.message : String(err)}` };
     report.checks.push({ name: 'pictureFidelity', passed: null, details: 'not measured' });
   }
 }

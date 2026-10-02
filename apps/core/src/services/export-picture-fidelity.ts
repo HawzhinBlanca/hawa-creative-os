@@ -104,6 +104,46 @@ export async function checkExportPictures(sourcePptx: Uint8Array, exportPptx: Ui
 }
 
 
+/** What `qaReport.pictureFidelity` holds when the check did not run: why, as a code a caller can branch on. */
+export interface PictureFidelityNotMeasured { measured: false; code?: 'no_editable_source' | 'error'; reason: string }
+
+export interface PictureDownloadVerdict {
+  /** pass: every picture in place; warn: a picture moved (a person editing in Canva may move one);
+   *  block: the logo or a photo is missing, or a picture lost its transparency, or the check could not run;
+   *  not_applicable: the design was not imported from an editable source. */
+  status: 'pass' | 'warn' | 'block' | 'not_applicable';
+  blocks: boolean;
+  reasons: string[];
+}
+
+/**
+ * ADR-258, the customer download contract: whether the picture check recorded on an export's QC report
+ * (`qaReport.pictureFidelity`) lets that export be downloaded. Fails closed: a design imported from an
+ * editable source whose pictures could not be compared is blocked until they are (the check is re-run on
+ * the next export). A moved picture only warns, since an edit in Canva legitimately moves things; the
+ * office alert still names it. Text wrapping (`textLines`) is advisory and never blocks.
+ */
+export function pictureDownloadVerdict(recorded: PictureFidelity | PictureFidelityNotMeasured | null | undefined): PictureDownloadVerdict {
+  if (!recorded) return { status: 'block', blocks: true, reasons: ['the export has no picture check on record'] };
+  if ('measured' in recorded && recorded.measured === false) {
+    // Records written before `code` existed say why in words only.
+    const noSource = recorded.code === 'no_editable_source' || (!recorded.code && !/^Not measured/.test(recorded.reason));
+    return noSource ? { status: 'not_applicable', blocks: false, reasons: [] }
+      : { status: 'block', blocks: true, reasons: [`the pictures could not be compared: ${recorded.reason}`] };
+  }
+  const f = recorded as PictureFidelity;
+  const reasons: string[] = [];
+  if (f.logo === 'missing') reasons.push('the logo is missing');
+  if (f.logo === 'transparency_lost') reasons.push('the logo lost its transparent background');
+  const photosMissing = f.missing.length - (f.logo === 'missing' ? 1 : 0);
+  if (photosMissing > 0) reasons.push(`${photosMissing} photo(s) missing`);
+  const otherAlpha = f.transparencyLost.length - (f.logo === 'transparency_lost' ? 1 : 0);
+  if (otherAlpha > 0) reasons.push(`${otherAlpha} picture(s) lost their transparency`);
+  if (reasons.length) return { status: 'block', blocks: true, reasons };
+  if (f.moved.length) return { status: 'warn', blocks: false, reasons: [`${f.moved.length} picture(s) moved`] };
+  return { status: 'pass', blocks: false, reasons: [] };
+}
+
 export interface TextLineFidelity {
   /** Every text frame has as many lines in Canva's PNG as in the Studio render it was designed in. */
   pass: boolean;
