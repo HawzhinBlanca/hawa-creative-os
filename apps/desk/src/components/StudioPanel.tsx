@@ -9,6 +9,7 @@ import { StudioRecoveryPanel } from './StudioRecoveryPanel.js';
 import { StudioBudgetSummary, type StudioBudgetUsage } from './StudioBudgetSummary.js';
 import { StudioFeedbackForm } from './StudioFeedbackForm.js';
 import { StudioJudgeNotice } from './StudioJudgeNotice.js';
+import { OfficeLibraryPhotos } from './OfficeLibraryPhotos.js';
 
 interface CritiqueDetail {
   overall?: number;
@@ -366,6 +367,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
       {startBlocker && <p role="status">{startBlocker}</p>}
       {run && <DesignReviewFindings findings={run.stages?.qa?.findings} />}
       {run && <StudioJudgeNotice tournament={run.stages?.tournament} />}
+      {run && <OfficeLibraryPhotos record={run.stages?.officePhotoLibrary} />}
       {run&&<StudioRecoveryPanel key={`${taskId}:${run.id}`} taskId={taskId} runId={run.id} status={run.status}/>}
       {!historyLoaded && <button className="btn" disabled={busy} onClick={() => void refresh()}>Refresh Studio history</button>}
       {calls.length > 0 && <details><summary>Recorded model calls</summary>
