@@ -68,6 +68,33 @@ export const ROUTING_MESSAGES = {
     ckb: '🙏 سوپاس.\n\nهەر کاتێک ئامادە بوویت، پێم بڵێ چی لە {title} بگۆڕم.',
   },
 
+  // ADR-252 (friction 9): a short word ("no", "hmm", "continue") after a draft, which says nothing
+  // certain. It follows where the latest design stands, never the new-design greeting.
+  tellWhatToChange: {
+    en: "If you'd like anything changed, just tell me what.",
+    ckb: 'ئەگەر دەتەوێت شتێک بگۆڕدرێت، تەنها پێم بڵێ چی.',
+  },
+  // ADR-252 (friction 8): "👎", "😡" on their own. The office hears it (passed) or, without an office
+  // chat, nobody does (ask); nothing is changed by an emoji.
+  unhappyPassed: {
+    en: "I'm sorry it isn't right. I've let the office know; tell me what you'd like changed and I'll pass it on.",
+    ckb: 'ببورە کە وەک پێویست نییە. ئۆفیسەکەم ئاگادار کردەوە؛ پێم بڵێ چیت دەوێت بگۆڕدرێت و پێیانی دەگەیەنم.',
+  },
+  unhappyAsk: {
+    en: "I'm sorry it isn't right. Tell me what you'd like changed and I'll pass it to the office.",
+    ckb: 'ببورە کە وەک پێویست نییە. پێم بڵێ چیت دەوێت بگۆڕدرێت و دەیگەیەنمە ئۆفیسەکە.',
+  },
+  // ADR-252 (friction 7): "undo that", "bring it back", "I cancelled by mistake" just after a request was
+  // withdrawn. A withdrawn request is closed for good: nothing restarts it, so nothing promises it back.
+  undoPassed: {
+    en: "{title} had already been stopped, so I can't restart it myself. I've told the office you still want it; they'll follow up here. If you'd rather not wait, send me the request again.",
+    ckb: '{title} پێشتر ڕاگیرابوو، بۆیە خۆم ناتوانم دووبارە دەستی پێ بکەمەوە. بە ئۆفیسەکەم گوت کە هێشتا دەتەوێت؛ لێرە وەڵامت دەدەنەوە. ئەگەر ناتەوێت چاوەڕێ بکەیت، داواکارییەکە دووبارە بۆم بنێرەوە.',
+  },
+  undoKept: {
+    en: "{title} had already been stopped, so I can't restart it myself. If you still need it, send me the request again.",
+    ckb: '{title} پێشتر ڕاگیرابوو، بۆیە خۆم ناتوانم دووبارە دەستی پێ بکەمەوە. ئەگەر هێشتا پێویستت پێیەتی، داواکارییەکە دووبارە بۆم بنێرەوە.',
+  },
+
   // Words about a design this bot can no longer link to a current request.
   forwardedToOffice: {
     en: "I've passed your message to the office; they'll follow up here.",
@@ -91,22 +118,23 @@ export const ROUTING_MESSAGES = {
     ckb: 'ئێستا هیچ دیزاینێکم لە دەستدا نییە بۆ گۆڕین. پێم بڵێ چیت دەوێت دیزاین بکرێت، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت.',
   },
 
-  // The one short question when the message could mean more than one thing.
+  // The one short question when the message could mean more than one thing. ADR-252 (natural language
+  // only): no question tells the requester which words to type ("Just say “yes”", "Answer with the number").
   askChangeOrNew: {
-    en: 'Is this a change to {title}, or a new design? Just say “change” or “new”.',
-    ckb: 'ئەمە گۆڕانکارییە لە {title}، یان دیزاینێکی نوێیە؟ تەنها بنووسە «گۆڕانکاری» یان «نوێ».',
+    en: 'Is this a change to {title}, or a new design?',
+    ckb: 'ئەمە گۆڕانکارییە لە {title}، یان دیزاینێکی نوێیە؟',
   },
   askCancel: {
-    en: 'Do you want me to ask the office to cancel {title}? Just say “yes”.',
-    ckb: 'دەتەوێت داوا لە ئۆفیسەکە بکەم {title} هەڵبوەشێنێتەوە؟ تەنها بنووسە «بەڵێ».',
+    en: 'Do you want me to ask the office to cancel {title}?',
+    ckb: 'دەتەوێت داوا لە ئۆفیسەکە بکەم {title} هەڵبوەشێنێتەوە؟',
   },
   askIsThisOne: {
-    en: 'Is this for {title}? Just say “yes”.',
-    ckb: 'ئەمە بۆ {title}ە؟ تەنها بنووسە «بەڵێ».',
+    en: 'Is this for {title}?',
+    ckb: 'ئەمە بۆ {title}ە؟',
   },
   askWhichDesign: {
-    en: 'Which design is this for?\n{list}\n\nAnswer with the number or the name.',
-    ckb: 'ئەمە بۆ کام دیزاینە؟\n{list}\n\nبە ژمارە یان ناو وەڵام بدەرەوە.',
+    en: 'Which design is this for?\n{list}',
+    ckb: 'ئەمە بۆ کام دیزاینە؟\n{list}',
   },
   // ADR-200 addendum: redo words ("do a better design", "try again") about the requester's latest designs.
   askRedoOrNew: {

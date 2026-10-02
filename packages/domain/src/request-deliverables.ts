@@ -31,25 +31,40 @@ export function requestedDeliverableVariant(text:string):RequestDeliverable['var
   return undefined; // A generic poster keeps the client's selected default.
 }
 
+/**
+ * ADR-252 (friction 5): a greeting and a polite opener before the request ("Hi, we need …", "Hello!
+ * Can you please make …", "Good morning, could you design …"). Only the first line, and only these
+ * words: they never carry a deliverable or a fact.
+ */
+const GREETING=/^(?:(?:hi|hello|hey|hiya|dear\s+(?:team|all|office)|good\s+(?:morning|afternoon|evening|day)|salam|salaam|سڵاو|بەیانی\s+باش|ئێوارە\s+باش|ڕۆژباش)(?:\s+(?:there|team|all|everyone|guys))?\s*[,!.،:;-]*\s+)+/iu;
+const POLITE='(?:(?:please|kindly|pls)\\s+)?(?:(?:can|could|would|will)\\s+you\\s+(?:please\\s+|kindly\\s+)?|(?:we|i)\\s+would\\s+like\\s+(?:you\\s+)?to\\s+|(?:we|i)\\s+(?:want|need)\\s+you\\s+to\\s+)?';
+
 export function planRequestDeliverables(raw:string):RequestDeliverables {
-  const text=String(raw||'').trim();
-  const countPattern=/^(?:(?:please|kindly)\s+)?(?:we\s+(?:need|want)|i\s+(?:need|want)|make|create|design|prepare|(?:can|could)\s+you\s+(?:make|create|design)|دەمانەوێت|دەمەوێت|پێویستمان\s+بە|تکایە)\s+([\d٠-٩۰-۹]+|two|three|four|five|six|seven|eight|nine|ten|دوو|سێ|چوار|پێنج|شەش|حەوت|هەشت)\s+(?:(?:different|separate|distinct)\s+)?(?:designs?|posters?|graphics?|versions?|variations?|layouts?|دیزاین(?:ەکان)?|پۆستەر(?:ەکان)?|گرافیک)(?![\p{L}\p{N}_])/iu;
+  const source=String(raw||'').trim();
+  const lead=GREETING.exec(source)?.[0] ?? '';
+  const text=source.slice(lead.length);
+  const countPattern=new RegExp(`^${POLITE}(?:we\\s+(?:need|want)|i\\s+(?:need|want)|make|create|design|prepare|دەمانەوێت|دەمەوێت|پێویستمان\\s+بە|تکایە)\\s+([\\d٠-٩۰-۹]+|two|three|four|five|six|seven|eight|nine|ten|دوو|سێ|چوار|پێنج|شەش|حەوت|هەشت)\\s+(?:(?:different|separate|distinct)\\s+)?(?:designs?|posters?|graphics?|versions?|variations?|layouts?|دیزاین(?:ەکان)?|پۆستەر(?:ەکان)?|گرافیک)(?![\\p{L}\\p{N}_])`,'iu');
   const match=countPattern.exec(text);
   if (!match) {
     // Explicit formats authorize their own deliverables, without also requiring a numeric count.
-    const command=/^(?:(?:please|kindly)\s+)?(?:make|create|design|we\s+need|i\s+need)\s+/iu.exec(text);
+    const command=new RegExp(`^${POLITE}(?:make|create|design|prepare|we\\s+(?:need|want|would\\s+like)|i\\s+(?:need|want|would\\s+like))\\s+`,'iu').exec(text);
     if (!command) return {kind:'single'};
     const body=text.slice(command[0].length);
     if (copyMarker.test(body)) return {kind:'single'};
-    const pieces=body.split(new RegExp(`(?:,?\\s+(?:and|&)\\s+|[,;]\\s*)(?=${ROLE})`,'giu')).map(p=>p.trim());
+    // ADR-252: ", and also a flyer …" and "; also a story …" separate deliverables as "and" does.
+    const pieces=body.split(new RegExp(`(?:,?\\s+(?:and|&)\\s+(?:also\\s+)?|[,;]\\s*(?:also\\s+)?)(?=${ROLE})`,'giu')).map(p=>p.trim());
     if (pieces.length<2 || !pieces.every(p=>new RegExp(`^${ROLE}`,'iu').test(p))) return {kind:'single'};
+    // "… for the open day, the flyer we sent last week had the wrong date" names an earlier design, not
+    // another one asked for.
+    if (pieces.slice(1).some(p=>new RegExp(`^the\\s+${ROLE}`,'iu').test(p) && !new RegExp(`^${ROLE}\\s+(?:for|about)\\s+\\S`,'iu').test(p)))
+      return {kind:'single'};
     if (pieces.length>MAX_REQUEST_DELIVERABLES) return {kind:'limit',count:pieces.length};
     const roleOnly=new RegExp(`^${ROLE}$`,'iu');
     const commonFormats=pieces.slice(0,-1).every(p=>roleOnly.test(p));
     const lastRole=new RegExp(`^${ROLE}`,'iu').exec(pieces.at(-1)!)![0];
     const suffix=pieces.at(-1)!.slice(lastRole.length);
     const explicitSubjects=pieces.every(p=>new RegExp(`^${ROLE}\\s+(?:for|about)\\s+\\S`,'iu').test(p));
-    return {kind:'multiple',count:pieces.length,shared:command[0].trim(),parts:pieces.map((p,i)=>({
+    return {kind:'multiple',count:pieces.length,shared:(lead+command[0]).trim(),parts:pieces.map((p,i)=>({
       text:commonFormats && i<pieces.length-1 ? p+suffix : p,variant:requestedDeliverableVariant(p),
       ...(!commonFormats && !explicitSubjects ? {detailsRequired:true as const} : {})}))};
   }
@@ -57,8 +72,8 @@ export function planRequestDeliverables(raw:string):RequestDeliverables {
   if (count>MAX_REQUEST_DELIVERABLES) return {kind:'limit',count:Number.isFinite(count) ? count : Number.MAX_SAFE_INTEGER};
   if (!Number.isSafeInteger(count)||count<2) return {kind:'single'};
   const rest=text.slice(match[0].length),colon=rest.indexOf(':'),line=rest.indexOf('\n');
-  const header=colon>=0 && (line<0||colon<line) ? match[0]+rest.slice(0,colon+1) : match[0];
-  const body=(header.length>match[0].length ? rest.slice(colon+1) : rest).trim();
+  const header=lead+(colon>=0 && (line<0||colon<line) ? match[0]+rest.slice(0,colon+1) : match[0]);
+  const body=(header.length>lead.length+match[0].length ? rest.slice(colon+1) : rest).trim();
   const protectedCopy=copyMarker.exec(body);
   const boundary=protectedCopy?.index??body.length;
   const numbered=new RegExp(`(?:^|\\n)[ \\t]*([1-8١-٨۱-۸])[.)]\\s+(?=${ROLE})`,'giu');

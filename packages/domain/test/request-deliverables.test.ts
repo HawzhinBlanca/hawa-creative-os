@@ -73,6 +73,44 @@ describe('explicit request deliverables', () => {
     expect(result.count).toBe(3);
     expect(result.parts.map(p=>p.text)).toEqual(['a poster for graduation on 12 October','a story for graduation on 12 October','a banner for graduation on 12 October']);
   });
+  // ADR-252 (hunt 2, friction 5): two requests in one message were split only after a bare "make",
+  // "we need" or "I need" at the very start, so a greeting, a polite opener or ", and also" made them
+  // one request with both events' copy.
+  it.each([
+    ['Can you make a poster for the graduation on 12 October and a flyer for the open day on 20 October?',
+      ['a poster for the graduation on 12 October','a flyer for the open day on 20 October?']],
+    ['Hi, we need a poster for the graduation on 12 October and a story for the open day on 20 October',
+      ['a poster for the graduation on 12 October','a story for the open day on 20 October']],
+    ['Make a poster for the graduation on 12 October, and also a flyer for the open day on 20 October',
+      ['a poster for the graduation on 12 October','a flyer for the open day on 20 October']],
+    ['Hello! Could you please make a poster for Nawroz on 21 March; also a banner for the book fair on 2 April',
+      ['a poster for Nawroz on 21 March','a banner for the book fair on 2 April']],
+  ])('splits two requested designs after a greeting, a polite opener or "and also": %s',(raw,texts)=>{
+    const result=planRequestDeliverables(raw);
+    if(result.kind!=='multiple') throw new Error(`not split: ${raw}`);
+    expect(result.parts.map(p=>p.text)).toEqual(texts);
+    expect(result.parts.every(p=>!p.detailsRequired)).toBe(true);
+  });
+  it('keeps the greeting with the shared words of a counted request',()=>{
+    const result=planRequestDeliverables('Hi, we need 2 designs for KAAE: a poster for graduation on 12 October and a story for open day on 20 October');
+    if(result.kind!=='multiple') throw new Error('missing deliverables');
+    expect(result.shared).toBe('Hi, we need 2 designs for KAAE:');
+    expect(result.parts.map(p=>p.text)).toEqual(['a poster for graduation on 12 October','a story for open day on 20 October']);
+  });
+  it('treats several formats of one design after a polite opener as it does after "make"',()=>{
+    const result=planRequestDeliverables('Can you make a poster and an Instagram story for KAAE graduation on 12 October?');
+    if(result.kind!=='multiple') throw new Error('missing deliverables');
+    expect(result.parts.map(p=>p.text)).toEqual(['a poster for KAAE graduation on 12 October?','an Instagram story for KAAE graduation on 12 October?']);
+  });
+  it.each([
+    'Can you make a poster for our graduation with the logo and the date',
+    'Hi, can you make a poster for the book fair and use our blue colours',
+    'Could you make a poster for the workshop, the flyer we sent last week had the wrong date',
+    "Can you make a poster for KAAE's Quality Assurance Workshop for university deans. It's on 15 October 2026 at 9:30 AM in the Rotana Hotel, Erbil. Registration is free.",
+    'Hi, how are you? The poster and the story looked great',
+  ])('keeps one request whose "and" joins details, not designs: %s',raw=>{
+    expect(planRequestDeliverables(raw)).toEqual({kind:'single'});
+  });
   it('accepts independently scoped child-note receipts and refuses arbitrary strings',()=>{
     expect(isLateChangeReceiptId('123')).toBe(true);
     expect(isLateChangeReceiptId('123:00000000-0000-4000-8000-000000000011')).toBe(true);

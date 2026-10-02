@@ -72,6 +72,14 @@ export const MEDIA_MESSAGES = {
     en: "I saw your edit to {title}. I've passed the new wording to the office so it's used.",
     ckb: 'دەستکارییەکەتم لە {title} بینی. دەقە نوێیەکەم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاری بهێنن.',
   },
+  /**
+   * ADR-252 (friction 13): an edit to the words of a design already sent to the requester. The sent
+   * design keeps its old words; "so it's used" was untrue. The office decides whether to change it.
+   */
+  editPassedDelivered: {
+    en: "I saw your edit to {title}. It was already sent with the old wording, so I've passed the new wording to the office; they'll follow up here.",
+    ckb: 'دەستکارییەکەتم لە {title} بینی. پێشتر بە دەقە کۆنەکەوە نێردرابوو، بۆیە دەقە نوێیەکەم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە.',
+  },
   /** An edit the bot could not place (a fallback). */
   editSeen: {
     en: 'I saw your edit. If anything should change, just tell me here.',

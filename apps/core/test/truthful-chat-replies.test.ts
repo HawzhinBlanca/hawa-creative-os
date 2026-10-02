@@ -145,8 +145,7 @@ describe('L5: every status line is true for its stage', () => {
     const asked = planTurn(turn('the date should be 14 October', [a, b]));
     expect(asked).toMatchObject({ kind: 'ask' });
     expect(askText(asked as Extract<ReturnType<typeof planTurn>, { kind: 'ask' }>, 'en', NOW)).toBe('Which design is this for?\n' +
-      '1. <b>KAAE K-12 Pilot Study…</b> (asked for yesterday at 00:58)\n2. <b>KAAE K-12 Pilot Study…</b> (asked for today at 08:44)\n\n' +
-      'Answer with the number or the name.');
+      '1. <b>KAAE K-12 Pilot Study…</b> (asked for yesterday at 00:58)\n2. <b>KAAE K-12 Pilot Study…</b> (asked for today at 08:44)');
   });
 
   // ADR-230 addendum (L16, changed deliberately): a request named by its sentence is no longer "your design"

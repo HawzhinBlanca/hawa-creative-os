@@ -306,7 +306,7 @@ describe('PDFs in plain words (ADR-145)', () => {
     const read = await intake(f.update);
     expect(read).toMatchObject({ intakeStatus: 200, lifecycleAction: 'source-message' });
     expect(read.sourceMessage).toBe('Here is the text I found in your PDF:\n\n«Source page 1\n\nSource page 2»\n\n' +
-      'Is this exactly the text for the design? Just say “yes”, or send me the corrected text.');
+      'Is this exactly the text for the design? If not, send me the corrected text.');
     const opened = await intake(text(f, 'Yes, correct'));
     expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: f.clientId,
       rawText: 'Source page 1\n\nSource page 2', variant: { width: 1080, height: 1920 },

@@ -295,7 +295,7 @@ describe('two designs open: the natural pick', () => {
     const change = message(chat, 'make the title gold');
     const asked = await intake(app(), change);
     expect(asked).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer', choiceRequired: true,
-      chatAnswer: { text: 'Which design is this for?\n1. <b>Nawroz poster</b>\n2. <b>Graduation flyer</b>\n\nAnswer with the number or the name.' } });
+      chatAnswer: { text: 'Which design is this for?\n1. <b>Nawroz poster</b>\n2. <b>Graduation flyer</b>' } });
     expect(await tasksInChat(chat)).toHaveLength(2);
 
     const pick = message(chat, 'the second one');
@@ -347,7 +347,7 @@ describe('two designs open: the natural pick', () => {
     await seed(chat, 'in_review', 2, { title: 'KAAE members evening' });
     const first = message(chat, 'Eid greeting card for staff');
     expect(await intake(app(), first)).toMatchObject({ choiceRequired: true,
-      chatAnswer: { text: 'Is this a change to <b>KAAE members evening</b>, or a new design? Just say “change” or “new”.' } });
+      chatAnswer: { text: 'Is this a change to <b>KAAE members evening</b>, or a new design?' } });
     const answer = message(chat, 'new');
     const opened = await intake(app(), answer);
     expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { rawText: 'Eid greeting card for staff', autoGenerate: false } });
