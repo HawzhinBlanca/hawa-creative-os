@@ -1,0 +1,4347 @@
+{
+  "version": 1,
+  "created": "2026-10-02",
+  "description": "Labelled requester utterances for Hawa's message understanding (requester-turn.ts planner vocabulary). Labels say what a human office member would take the words to mean in the given context; \"unclear\" means asking is the right answer. Sorani labels and synthetic Sorani phrasing need native review before they are treated as ground truth.",
+  "intents": [
+    "new_brief",
+    "change",
+    "cancel",
+    "hold",
+    "approval",
+    "acknowledgement",
+    "status",
+    "deadline",
+    "delivery_request",
+    "conversation",
+    "unclear"
+  ],
+  "contexts": {
+    "none": "The chat has no design on the way (planned against an empty chat).",
+    "designing": "One design (A, \"Quality Assurance Workshop\") is being made; its brief arrived 5 minutes ago.",
+    "in_review": "Design A's draft is with the office for approval (in_review).",
+    "awaiting_answer": "The office sent design A back; it waits for the requester's changes (awaiting_answer, rev 3).",
+    "delivered": "Design A was delivered an hour ago (delivered, sent to the chat).",
+    "just_cancelled": "The requester withdrew a design a minute ago (closed, so not listed); another design (B, \"Teacher Appreciation Day\") is being made.",
+    "two_open": "Design A is with the office (in_review, 6 minutes ago); design B (\"Teacher Appreciation Day\") is being made (designing, 3 minutes ago)."
+  },
+  "pendingAsks": {
+    "change_or_new": "The bot just asked \"Is this a change to Quality Assurance Workshop, or a new design?\" about the words \"Quality Assurance Workshop, 22 October\"."
+  },
+  "fields": {
+    "expected.intent": "The planner intent a human would choose.",
+    "expected.alsoAccept": "Other intents that lead to an equally right outcome (used sparingly; see README).",
+    "expected.target": "The design the words are about: A, B, both, or ask (the bot should ask which); a list accepts any.",
+    "expected.refusalOnly/question/redo/undo/every/bareCancel/multi": "Finer readings, reported but not scored as intent."
+  },
+  "cases": [
+    {
+      "id": "en-brief-01",
+      "text": "Can you make a poster for KAAE's Quality Assurance Workshop for university deans. It's on 15 October 2026 at 9:30 AM in the Rotana Hotel, Erbil. Registration is free.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 L19/L21: the brief whose possessive leaked into the headline."
+    },
+    {
+      "id": "en-brief-02",
+      "text": "Can you make an Instagram post announcing our Assessment Literacy Workshop for school principals? It's on 15 October 2026 at 10:00 AM in the KAAE hall, Erbil. Registration is free.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "live-bug",
+      "note": "LIVE L9: the whole sentence was printed as copy; intent itself is a brief."
+    },
+    {
+      "id": "en-brief-03",
+      "text": "Could you design a KAAE poster for our Teacher Appreciation Day? It's on 20 October 2026 at 2:00 PM in the Rotana Hotel ballroom, Erbil. All teachers are welcome.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "live-bug",
+      "note": "LIVE L15: a client name between the article and the noun."
+    },
+    {
+      "id": "en-brief-04",
+      "text": "Hi, we need a poster for our Quality Assurance Workshop for school principals on 22 October 2026 at 10:00 AM at the Divan Hotel, Erbil. Seats are limited, please register early.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "live-bug",
+      "note": "LIVE retest ADR-235: greeting + \"we need\"."
+    },
+    {
+      "id": "en-brief-05",
+      "text": "Could you design a poster for our Teacher Appreciation Day? It's on 20 October 2026 at 2:00 PM in the Rotana Hotel ballroom, Erbil. All teachers are welcome.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "live-bug",
+      "note": "LIVE L14: unbound chat, no client named."
+    },
+    {
+      "id": "en-brief-06",
+      "text": "KAAE members evening\n\nDate: 4 December 2026, 7 pm\nVenue: Erbil International Hotel\nPlease make a poster.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "KAAE_EVENING, the stress suite's standard brief."
+    },
+    {
+      "id": "en-brief-07",
+      "text": "Hello, can you make a poster for the KAAE Nawroz party on 20 March 2027 at Sami Abdulrahman Park?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: a brief phrased as a question."
+    },
+    {
+      "id": "en-brief-08",
+      "text": "We need 2 designs for KAAE: a poster for the graduation on 12 October 2026 at the Rotana hotel, and an Instagram story for the open day on 20 October 2026 at the campus.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief",
+        "multi": true
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: two designs in one message."
+    },
+    {
+      "id": "en-brief-09",
+      "text": "Can you make a poster for the KAAE seminar on 3 November at 10 am and a flyer for the open day on 9 November?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief",
+        "multi": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 5: two designs behind a polite opener."
+    },
+    {
+      "id": "en-brief-10",
+      "text": "Hi, we need a poster for the graduation on 12 October, and also a flyer for the book fair on 18 October.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief",
+        "multi": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 5: greeting first, \"and also\" as the separator."
+    },
+    {
+      "id": "en-brief-11",
+      "text": "plz mak a postr for KAAE confrence on 5 novmber at rotana hotell, 10 am",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: misspelt brief."
+    },
+    {
+      "id": "en-brief-12",
+      "text": "Poster for the Erbil Chess Club tournament, 8 November 2026 at 3 pm, Family Mall.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: noun-first brief, non-KAAE client."
+    },
+    {
+      "id": "en-brief-13",
+      "text": "make me a nice poster",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: a request with no copy (opens for a designer)."
+    },
+    {
+      "id": "en-brief-14",
+      "text": "Another poster please: KAAE staff football tournament, 14 November 2026 at 4 pm, Franso Hariri stadium.",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts/changes.ts: a second design while one is with the office."
+    },
+    {
+      "id": "en-brief-15",
+      "text": "This one is for ZAR Podcast, not KAAE: poster for the ZAR Podcast season launch, 3 November 2026 at 6 pm, Divan Hotel.",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: \"not KAAE\" must not read as a correction."
+    },
+    {
+      "id": "en-brief-16",
+      "text": "and another poster for the KAAE open day on 20 October 2026 at the campus, 10 am",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: a second brief that starts with \"and\"."
+    },
+    {
+      "id": "en-brief-17",
+      "text": "Please prepare an invitation card for the KAAE board dinner on 30 October 2026 at 8 pm, Divan Hotel.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "live-bug",
+      "note": "LIVE L15 variant listed in the findings (\"Please prepare an invitation card for…\")."
+    },
+    {
+      "id": "en-brief-18",
+      "text": "We'd like a small flyer for the accreditation info session on 6 November 2026 at 11 am in the KAAE hall.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "live-bug",
+      "note": "LIVE L15 variants: \"We'd like…\" and an adjective before the noun."
+    },
+    {
+      "id": "en-brief-19",
+      "text": "Hey, we need something for the KAAE alumni meetup next month",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "live-bug",
+      "note": "LIVE L15 variant: \"Hey, we need something for…\" with no design noun."
+    },
+    {
+      "id": "en-brief-20",
+      "text": "Can you make a poster for our team?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "truthful.ts: an explicit new request while another design is being made."
+    },
+    {
+      "id": "en-brief-21",
+      "text": "Invitation card for the graduation ceremony, 5 October 7pm, Rotana Hotel, needed by Thursday",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "ADR-156 audit #15: a brief with a deadline beside it."
+    },
+    {
+      "id": "en-brief-22",
+      "text": "Good morning! Could you please make an Instagram story for the KAAE open day on 20 October 2026 at the campus, 10 am?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "note": "Polite opener + question form."
+    },
+    {
+      "id": "en-brief-23",
+      "text": "do a KAAE poster for the conference on the 5th",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "redo.ts S157: looks like redo words but is a new brief."
+    },
+    {
+      "id": "en-brief-24",
+      "text": "New poster please: KAAE staff football tournament, 14 November 2026 at 4 pm, Franso Hariri stadium.",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S042."
+    },
+    {
+      "id": "en-brief-25",
+      "text": "Can you also make a certificate for the workshop participants?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "note": "A different design for the same event: new, not a change, not a capability question."
+    },
+    {
+      "id": "en-brief-26",
+      "text": "also a banner for the same event please",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "note": "A further design for the event on the way."
+    },
+    {
+      "id": "en-brief-27",
+      "text": "Poster for the KAAE staff football tournament, 14 November 2026 at 4 pm, Franso Hariri stadium. We need it by next Thursday.",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: a brief with its own deadline is a brief, not a deadline."
+    },
+    {
+      "id": "en-brief-28",
+      "text": "Hi! Could we get a flyer and an Instagram post for the Quality Week launch on 2 November 2026, 10 am, KAAE hall?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief",
+        "multi": true
+      },
+      "source": "synthetic",
+      "note": "Two formats of one event."
+    },
+    {
+      "id": "en-brief-29",
+      "text": "a poster for the conference",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief",
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "synthetic",
+      "note": "Short but says \"a poster\": a new design, with no copy yet; asking \"change or new?\" is acceptable."
+    },
+    {
+      "id": "en-change-01",
+      "text": "can you take KAAE's out of the title? just Quality Assurance Workshop",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 L19 (P1): opened a new request and a paid round."
+    },
+    {
+      "id": "en-change-02",
+      "text": "also please add that seats are limited",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "LIVE L8: a change while the design is being made."
+    },
+    {
+      "id": "en-change-03",
+      "text": "make the logo bigger and the date is 5 December",
+      "lang": "en",
+      "context": "awaiting_answer",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S030: the change the office asked for."
+    },
+    {
+      "id": "en-change-04",
+      "text": "can you make the title bigger?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S035: a change phrased as a question."
+    },
+    {
+      "id": "en-change-05",
+      "text": "the date should be 5 December, not 4",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "office-and-groups.ts."
+    },
+    {
+      "id": "en-change-06",
+      "text": "sorry, the date is the 5th not the 4th",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: a correction right after the brief."
+    },
+    {
+      "id": "en-change-07",
+      "text": "actually, make it green instead of blue",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S037."
+    },
+    {
+      "id": "en-change-08",
+      "text": "take the phone number out",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"take X out\" removal."
+    },
+    {
+      "id": "en-change-09",
+      "text": "remove the registration line",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Removal."
+    },
+    {
+      "id": "en-change-10",
+      "text": "replace the photo with the one of the main hall",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Replacement."
+    },
+    {
+      "id": "en-change-11",
+      "text": "please use our blue colours",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: a style line after the brief."
+    },
+    {
+      "id": "en-change-12",
+      "text": "the venue is wrong, it's the Divan Hotel",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Correction."
+    },
+    {
+      "id": "en-change-13",
+      "text": "put the logo bottom right",
+      "lang": "en",
+      "context": "awaiting_answer",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Placement change the office asked for."
+    },
+    {
+      "id": "en-change-14",
+      "text": "Thanks! but make the logo bigger",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: thanks that carries a change."
+    },
+    {
+      "id": "en-change-15",
+      "text": "can you change the date to 6 December?",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S036: change after delivery."
+    },
+    {
+      "id": "en-change-16",
+      "text": "the phone number on this is wrong, it should be 0750 123 4567",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S041."
+    },
+    {
+      "id": "en-change-17",
+      "text": "change the date to the 5th",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "change",
+        "target": [
+          "ask",
+          "B"
+        ]
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S039: two designs, names neither; ask or the newer one."
+    },
+    {
+      "id": "en-change-18",
+      "text": "on the Teacher Appreciation Day poster, make the logo bigger",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "change",
+        "target": "B"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S040 adapted: the change names its design."
+    },
+    {
+      "id": "en-change-19",
+      "text": "make the Quality Assurance Workshop title gold",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Names design A by its title."
+    },
+    {
+      "id": "en-change-20",
+      "text": "drop the subtitle",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"drop\" is also a cancel verb; the object is a part of the design."
+    },
+    {
+      "id": "en-change-21",
+      "text": "it should say Quality Assurance Workshop, without KAAE's",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 L19/L21 variant."
+    },
+    {
+      "id": "en-change-22",
+      "text": "no KAAE in the headline please",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Removal phrased with \"no\"."
+    },
+    {
+      "id": "en-change-23",
+      "text": "take out the time, it's not confirmed yet",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"take out\" with a reason."
+    },
+    {
+      "id": "en-change-24",
+      "text": "the time is 10:30 now",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "A fact changed."
+    },
+    {
+      "id": "en-change-25",
+      "text": "not approved, the logo is too small",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "ADR-040 addendum: refusal with a change."
+    },
+    {
+      "id": "en-change-26",
+      "text": "don't send it yet, the date is wrong",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Refusal of sending + correction."
+    },
+    {
+      "id": "en-change-27",
+      "text": "do a better design that's similar to the earlier ones, use more of the photos",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true
+      },
+      "source": "live-bug",
+      "note": "LIVE L2/L4: redo words."
+    },
+    {
+      "id": "en-change-28",
+      "text": "do a better design that's similar to the earlier ones, use more of the photos arranged creatively, not the same plain background",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true
+      },
+      "source": "live-bug",
+      "note": "LIVE L13: redo of the delivered design."
+    },
+    {
+      "id": "en-change-29",
+      "text": "do a better design thats similar to earlier ones",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true
+      },
+      "source": "live-bug",
+      "note": "Incident 2026-10-01 12:33Z: opened a request by mistake."
+    },
+    {
+      "id": "en-change-30",
+      "text": "redo it",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true
+      },
+      "source": "stress-fixture",
+      "note": "redo.ts."
+    },
+    {
+      "id": "en-change-31",
+      "text": "try again",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true
+      },
+      "source": "stress-fixture",
+      "note": "redo.ts: redo words while the draft is with the office."
+    },
+    {
+      "id": "en-change-32",
+      "text": "make another version",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true
+      },
+      "source": "stress-fixture",
+      "note": "redo.ts S159: kept on the design for the office."
+    },
+    {
+      "id": "en-change-33",
+      "text": "make it more colourful",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Style change."
+    },
+    {
+      "id": "en-change-34",
+      "text": "can you make the background darker?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Change as a question."
+    },
+    {
+      "id": "en-change-35",
+      "text": "hmm the font is hard to read",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Complaint that implies a change."
+    },
+    {
+      "id": "en-change-36",
+      "text": "move the date under the title",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Layout change."
+    },
+    {
+      "id": "en-change-37",
+      "text": "add our website kaae.org at the bottom",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Addition."
+    },
+    {
+      "id": "en-change-38",
+      "text": "use the photo I sent earlier instead",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Replacement by reference."
+    },
+    {
+      "id": "en-change-39",
+      "text": "the workshop is for university deans, not school principals",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Correction of the audience line."
+    },
+    {
+      "id": "en-change-40",
+      "text": "and the date is 5 December, not 4",
+      "lang": "en",
+      "context": "awaiting_answer",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S043: second change in a row."
+    },
+    {
+      "id": "en-change-41",
+      "text": "make it look more professional",
+      "lang": "en",
+      "context": "awaiting_answer",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Vague but certain change."
+    },
+    {
+      "id": "en-change-42",
+      "text": "please cancel the gold border",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Cancel verb on a design part: a change, never a withdrawal."
+    },
+    {
+      "id": "en-change-43",
+      "text": "stop using that font",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"stop\" with a design-part object."
+    },
+    {
+      "id": "en-change-44",
+      "text": "forget the photo, just use the logo",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"forget\" with a design-part object."
+    },
+    {
+      "id": "en-change-45",
+      "text": "can you also make the logo bigger?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Contrast with L11 \"can you also make videos?\"."
+    },
+    {
+      "id": "en-change-46",
+      "text": "Edit: the date is 6 November, not 5",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 13: an edited message, re-sent as a correction."
+    },
+    {
+      "id": "en-change-47",
+      "text": "it's not good",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "refusalOnly": true
+      },
+      "source": "synthetic",
+      "note": "Unhappy, says nothing to change: the office hears it (refusal only) or a redo is asked."
+    },
+    {
+      "id": "en-change-48",
+      "text": "the design is not approved",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "refusalOnly": true
+      },
+      "source": "live-bug",
+      "note": "Incident 2026-10-01 (ADR-040 addendum): read as approval before the fix."
+    },
+    {
+      "id": "en-change-49",
+      "text": "don't send it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "refusalOnly": true
+      },
+      "source": "stress-fixture",
+      "note": "ADR-040 addendum: refusal only."
+    },
+    {
+      "id": "en-change-50",
+      "text": "I can't approve this",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "refusalOnly": true
+      },
+      "source": "synthetic",
+      "note": "Refusal only."
+    },
+    {
+      "id": "en-change-51",
+      "text": "it isn't ready to send, the logo is wrong",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Refusal with a reason that is a change."
+    },
+    {
+      "id": "en-change-52",
+      "text": "approved, but please add the date in Kurdish too",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Approval words with a change: the change wins."
+    },
+    {
+      "id": "en-change-53",
+      "text": "the title should be just \"Quality Assurance Workshop\"",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 L19/L21 variant with quoted copy."
+    },
+    {
+      "id": "en-cancel-01",
+      "text": "cancel that",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S080."
+    },
+    {
+      "id": "en-cancel-02",
+      "text": "cancel it",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts."
+    },
+    {
+      "id": "en-cancel-03",
+      "text": "could you please cancel the Quality Assurance Workshop poster, we don't need it anymore",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 L20: polite, named, with a reason."
+    },
+    {
+      "id": "en-cancel-04",
+      "text": "cancel the workshop post, we don't need it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "LIVE retest 13adc35f."
+    },
+    {
+      "id": "en-cancel-05",
+      "text": "also cancel the other one I opened by mistake this afternoon",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "LIVE L12: \"also\" + describing clause; one withdrawable request."
+    },
+    {
+      "id": "en-cancel-06",
+      "text": "cancel the Teacher Appreciation Day poster, it was only a test",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "B"
+      },
+      "source": "live-bug",
+      "note": "LIVE L17: named cancel with a reason clause."
+    },
+    {
+      "id": "en-cancel-07",
+      "text": "please cancel the Quality Assurance Workshop poster, it was only a test",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "LIVE L17 retest."
+    },
+    {
+      "id": "en-cancel-08",
+      "text": "please cancel both of them",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "both",
+        "every": "both"
+      },
+      "source": "live-bug",
+      "note": "Live 2026-10-02 07:34Z (ADR-255): \"both\"."
+    },
+    {
+      "id": "en-cancel-09",
+      "text": "cancel all of them",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "both",
+        "every": "all"
+      },
+      "source": "stress-fixture",
+      "note": "requester-cancel-several."
+    },
+    {
+      "id": "en-cancel-10",
+      "text": "cancel the last request",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "LIVE L1."
+    },
+    {
+      "id": "en-cancel-11",
+      "text": "we don't need the poster anymore",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Cancel without a cancel verb."
+    },
+    {
+      "id": "en-cancel-12",
+      "text": "please withdraw the request, the event was postponed",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Withdraw + reason."
+    },
+    {
+      "id": "en-cancel-13",
+      "text": "cancel it, plans changed",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "LIVE L17: reasons listed in the findings."
+    },
+    {
+      "id": "en-cancel-14",
+      "text": "sorry, cancel the poster, the event was cancelled",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "LIVE L17: reason \"the event was cancelled\"."
+    },
+    {
+      "id": "en-cancel-15",
+      "text": "scrap the workshop poster",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Named by a title word."
+    },
+    {
+      "id": "en-cancel-16",
+      "text": "don't make it, we'll do it ourselves",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Cancel with a reason."
+    },
+    {
+      "id": "en-cancel-17",
+      "text": "never mind, cancel it",
+      "lang": "en",
+      "context": "awaiting_answer",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S044."
+    },
+    {
+      "id": "en-cancel-18",
+      "text": "cancel the poster I sent this morning",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "LIVE L12: \"the one I just sent\", \"this morning\"."
+    },
+    {
+      "id": "en-cancel-19",
+      "text": "can you cancel the request? we found another designer",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Cancel as a question + reason."
+    },
+    {
+      "id": "en-cancel-20",
+      "text": "cancel it",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "ask"
+      },
+      "source": "synthetic",
+      "note": "Two open designs, names neither: ask which."
+    },
+    {
+      "id": "en-cancel-21",
+      "text": "no need anymore, thanks",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A",
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S081: a cancel; asking first is accepted (ADR-251)."
+    },
+    {
+      "id": "en-cancel-22",
+      "text": "we don't need it anymore",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-turn-confirmations: names the design."
+    },
+    {
+      "id": "en-cancel-23",
+      "text": "cancel the poster",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Too late to cancel, but the meaning is a cancel (the bot says so)."
+    },
+    {
+      "id": "en-cancel-24",
+      "text": "please cancel my request, sorry I sent it by mistake",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "ADR-239/LIVE L17: \"by mistake\" as the reason, not an undo."
+    },
+    {
+      "id": "en-cancel-25",
+      "text": "never mind",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 1 (P0): a bare cancel withdrew the only design without asking."
+    },
+    {
+      "id": "en-cancel-26",
+      "text": "ok never mind",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 1."
+    },
+    {
+      "id": "en-cancel-27",
+      "text": "stop",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 1."
+    },
+    {
+      "id": "en-cancel-28",
+      "text": "no need",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 1."
+    },
+    {
+      "id": "en-cancel-29",
+      "text": "forget about it",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "synthetic",
+      "note": "May be about the last thing said: ask first."
+    },
+    {
+      "id": "en-hold-01",
+      "text": "wait, don't make it yet, we are changing the date",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts."
+    },
+    {
+      "id": "en-hold-02",
+      "text": "hold it for now please",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Explicit pause."
+    },
+    {
+      "id": "en-hold-03",
+      "text": "pause the poster until we confirm the venue",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Pause with a condition."
+    },
+    {
+      "id": "en-hold-04",
+      "text": "put it on hold, the event might move",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Pause with a reason."
+    },
+    {
+      "id": "en-hold-05",
+      "text": "don't continue with the design for now, we're waiting for the speaker list",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Pause, not cancel."
+    },
+    {
+      "id": "en-hold-06",
+      "text": "wait",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "conversation",
+        "alsoAccept": [
+          "acknowledgement"
+        ]
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 10: a bare \"wait\" paused the design; it asks for a moment."
+    },
+    {
+      "id": "en-hold-07",
+      "text": "hold on",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "conversation",
+        "alsoAccept": [
+          "acknowledgement"
+        ]
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 10."
+    },
+    {
+      "id": "en-undo-01",
+      "text": "sorry I cancelled by mistake, please continue",
+      "lang": "en",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 7: was read as a change and landed on ANOTHER open design. The planner has no undo intent: the conversation answer handles it (ADR-252)."
+    },
+    {
+      "id": "en-undo-02",
+      "text": "actually continue",
+      "lang": "en",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 7: got the new-design greeting. The planner has no undo intent: the conversation answer handles it (ADR-252)."
+    },
+    {
+      "id": "en-undo-03",
+      "text": "undo that",
+      "lang": "en",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 7. The planner has no undo intent: the conversation answer handles it (ADR-252)."
+    },
+    {
+      "id": "en-undo-04",
+      "text": "bring it back",
+      "lang": "en",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 7. The planner has no undo intent: the conversation answer handles it (ADR-252)."
+    },
+    {
+      "id": "en-undo-05",
+      "text": "oops, bring it back",
+      "lang": "en",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "live-bug",
+      "note": "Live 2026-10-02: read as a short brief before the fix. The planner has no undo intent: the conversation answer handles it (ADR-252)."
+    },
+    {
+      "id": "en-undo-06",
+      "text": "I didn't mean to cancel it",
+      "lang": "en",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "stress-fixture",
+      "note": "ADR-252 explicit undo. The planner has no undo intent: the conversation answer handles it (ADR-252)."
+    },
+    {
+      "id": "en-undo-07",
+      "text": "don't cancel it after all",
+      "lang": "en",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "stress-fixture",
+      "note": "ADR-252 explicit undo. The planner has no undo intent: the conversation answer handles it (ADR-252)."
+    },
+    {
+      "id": "en-undo-08",
+      "text": "the cancellation was a mistake, we still need the poster",
+      "lang": "en",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "synthetic",
+      "note": "Undo with a reason; must not touch the other open design. The planner has no undo intent: the conversation answer handles it (ADR-252)."
+    },
+    {
+      "id": "en-approve-01",
+      "text": "looks good, send it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "LIVE L10."
+    },
+    {
+      "id": "en-approve-02",
+      "text": "approved",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "office-and-groups.ts."
+    },
+    {
+      "id": "en-approve-03",
+      "text": "Perfect! You can send it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing."
+    },
+    {
+      "id": "en-approve-04",
+      "text": "keep it as is",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing."
+    },
+    {
+      "id": "en-approve-05",
+      "text": "no changes, it's good to go",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"no\" that approves."
+    },
+    {
+      "id": "en-approve-06",
+      "text": "great, print it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Approval by instruction."
+    },
+    {
+      "id": "en-approve-07",
+      "text": "yes this is fine, go ahead",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Approval."
+    },
+    {
+      "id": "en-approve-08",
+      "text": "love it, send it to us please",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Approval with praise."
+    },
+    {
+      "id": "en-approve-09",
+      "text": "send it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing."
+    },
+    {
+      "id": "en-approve-10",
+      "text": "(edited) approved",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 13: an approval sent as an edit."
+    },
+    {
+      "id": "en-ack-01",
+      "text": "thanks!",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "live-bug",
+      "note": "LIVE \"Fine\" list."
+    },
+    {
+      "id": "en-ack-02",
+      "text": "thanks a lot, great work!",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S076."
+    },
+    {
+      "id": "en-ack-03",
+      "text": "❤️",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S071 (no letters; scored as English)."
+    },
+    {
+      "id": "en-ack-04",
+      "text": "👍",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "stress-fixture",
+      "note": "A thumbs-up on a draft may also be read as approval words."
+    },
+    {
+      "id": "en-ack-05",
+      "text": "ok",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S073: not a change, not an approval."
+    },
+    {
+      "id": "en-ack-06",
+      "text": "Thank you, we received the files.",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "Chaos R10.H1: opened a request before the fix."
+    },
+    {
+      "id": "en-ack-07",
+      "text": "I like it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 9: got the new-design greeting."
+    },
+    {
+      "id": "en-ack-08",
+      "text": "great work, thank you so much",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "synthetic",
+      "note": "Thanks after delivery."
+    },
+    {
+      "id": "en-ack-09",
+      "text": "got it, thanks",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "synthetic",
+      "note": "Receipt."
+    },
+    {
+      "id": "en-ack-10",
+      "text": "🙏",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "synthetic",
+      "note": "Emoji thanks."
+    },
+    {
+      "id": "en-ack-11",
+      "text": "😍",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S074: a sticker-like emoji on the draft."
+    },
+    {
+      "id": "en-ack-12",
+      "text": "Thanks, received!",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing."
+    },
+    {
+      "id": "en-neg-01",
+      "text": "👎",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "refusalOnly": true,
+        "alsoAccept": [
+          "conversation"
+        ]
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 8: was answered \"Thank you\". Unhappiness for the office; the planner reads lone emoji as conversation and the chat answer passes it on, so conversation is accepted."
+    },
+    {
+      "id": "en-neg-02",
+      "text": "😡",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "refusalOnly": true,
+        "alsoAccept": [
+          "conversation"
+        ]
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 8."
+    },
+    {
+      "id": "en-neg-03",
+      "text": "❌",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "refusalOnly": true,
+        "alsoAccept": [
+          "conversation"
+        ]
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 8."
+    },
+    {
+      "id": "en-status-01",
+      "text": "is it ready?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S050."
+    },
+    {
+      "id": "en-status-02",
+      "text": "any update?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S052."
+    },
+    {
+      "id": "en-status-03",
+      "text": "when will it be ready?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing."
+    },
+    {
+      "id": "en-status-04",
+      "text": "??",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S055."
+    },
+    {
+      "id": "en-status-05",
+      "text": "hello??",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S056: not a greeting."
+    },
+    {
+      "id": "en-status-06",
+      "text": "why is it taking so long??",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S057."
+    },
+    {
+      "id": "en-status-07",
+      "text": "this is useless, where is my poster???",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S058: rude, still a status question."
+    },
+    {
+      "id": "en-status-08",
+      "text": "where is my poster?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S098."
+    },
+    {
+      "id": "en-status-09",
+      "text": "what's the status of my designs?",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "live-bug",
+      "note": "LIVE L5."
+    },
+    {
+      "id": "en-status-10",
+      "text": "how's the workshop poster coming along?",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "note": "Status of one named design."
+    },
+    {
+      "id": "en-status-11",
+      "text": "is the poster done yet?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "note": "Status."
+    },
+    {
+      "id": "en-status-12",
+      "text": "did you start on it?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "note": "Status."
+    },
+    {
+      "id": "en-status-13",
+      "text": "still waiting...",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "note": "Status by complaint."
+    },
+    {
+      "id": "en-status-14",
+      "text": "how long will it take?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "note": "Status."
+    },
+    {
+      "id": "en-status-15",
+      "text": "when will I get it?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "note": "Status."
+    },
+    {
+      "id": "en-deadline-01",
+      "text": "we need it by tomorrow",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing."
+    },
+    {
+      "id": "en-deadline-02",
+      "text": "urgent please",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing."
+    },
+    {
+      "id": "en-deadline-03",
+      "text": "it has to be ready before Thursday",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Deadline."
+    },
+    {
+      "id": "en-deadline-04",
+      "text": "can we have it by 5 pm today?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Deadline as a question."
+    },
+    {
+      "id": "en-deadline-05",
+      "text": "the event is on Sunday so we need it by Saturday",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Deadline with a reason; \"Sunday\" is not a change of the date."
+    },
+    {
+      "id": "en-deadline-06",
+      "text": "ASAP please",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Urgency."
+    },
+    {
+      "id": "en-deadline-07",
+      "text": "no rush, next week is fine",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "A relaxed deadline is still timing for the office."
+    },
+    {
+      "id": "en-files-01",
+      "text": "send it again please",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S060: never approval."
+    },
+    {
+      "id": "en-files-02",
+      "text": "it didn't arrive",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S061."
+    },
+    {
+      "id": "en-files-03",
+      "text": "can you send it as a PDF?",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S063."
+    },
+    {
+      "id": "en-files-04",
+      "text": "please send it to my email sewa@example.com",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S064."
+    },
+    {
+      "id": "en-files-05",
+      "text": "send it again",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S065: never approval while the office checks it."
+    },
+    {
+      "id": "en-files-06",
+      "text": "I can't open the file",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "File problem."
+    },
+    {
+      "id": "en-files-07",
+      "text": "can I get a higher resolution version for printing?",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Resolution."
+    },
+    {
+      "id": "en-files-08",
+      "text": "can you send it on WhatsApp too?",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Another channel."
+    },
+    {
+      "id": "en-chat-01",
+      "text": "can you also make videos?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "live-bug",
+      "note": "LIVE L11: was kept as a change and blocked Deliver."
+    },
+    {
+      "id": "en-chat-02",
+      "text": "how much does a poster cost?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts."
+    },
+    {
+      "id": "en-chat-03",
+      "text": "can you make videos?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts."
+    },
+    {
+      "id": "en-chat-04",
+      "text": "who am I talking to?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts."
+    },
+    {
+      "id": "en-chat-05",
+      "text": "do you have our logo already?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts: a question for the office, not a change."
+    },
+    {
+      "id": "en-chat-06",
+      "text": "do you design logos?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "synthetic",
+      "note": "ADR-231 capability question."
+    },
+    {
+      "id": "en-chat-07",
+      "text": "could you print banners too?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "synthetic",
+      "note": "ADR-231 capability question."
+    },
+    {
+      "id": "en-chat-08",
+      "text": "what fonts can you use?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "synthetic",
+      "note": "Question, not a change."
+    },
+    {
+      "id": "en-chat-09",
+      "text": "how many photos can I send?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "synthetic",
+      "note": "Question for the office."
+    },
+    {
+      "id": "en-chat-10",
+      "text": "hello",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts: greeting."
+    },
+    {
+      "id": "en-chat-11",
+      "text": "hi",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation"
+      },
+      "source": "live-bug",
+      "note": "LIVE \"Fine\" list: greeting."
+    },
+    {
+      "id": "en-chat-12",
+      "text": "/start",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts: chat command."
+    },
+    {
+      "id": "en-chat-13",
+      "text": "From now on, always put the logo bottom-right",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "conversation"
+      },
+      "source": "stress-fixture",
+      "note": "A standing rule for later designs (conversation)."
+    },
+    {
+      "id": "en-chat-14",
+      "text": "hmm",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "conversation"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 9: got the new-design greeting. Nothing to act on; the answer layer must not greet."
+    },
+    {
+      "id": "en-unclear-01",
+      "text": "no",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 9: after a draft, \"no\" alone; ask what they mean."
+    },
+    {
+      "id": "en-unclear-02",
+      "text": "Quality Assurance Workshop, 22 October",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "note": "Repeats the name of the design on the way with a date: corrected copy or a new edition (ADR-250 asks)."
+    },
+    {
+      "id": "en-unclear-03",
+      "text": "for the deans",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "note": "A fragment: an audience correction or the start of a brief."
+    },
+    {
+      "id": "en-unclear-04",
+      "text": "and the gala dinner?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear",
+        "alsoAccept": [
+          "conversation"
+        ]
+      },
+      "source": "synthetic",
+      "note": "A new design or a question about one; passing it to the office as a question is acceptable."
+    },
+    {
+      "id": "en-unclear-05",
+      "text": "do a better design for the conference",
+      "lang": "en",
+      "context": "delivered",
+      "expected": {
+        "intent": "unclear",
+        "redo": true
+      },
+      "source": "stress-fixture",
+      "note": "redo.ts S158: redo or new; asking is right."
+    },
+    {
+      "id": "en-unclear-06",
+      "text": "Nawroz",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "note": "One word."
+    },
+    {
+      "id": "en-answer-01",
+      "text": "no, it's a change",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 2: a leading \"no\" opened a NEW request.",
+      "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "en-answer-02",
+      "text": "no, the old one",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 2.",
+      "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "en-answer-03",
+      "text": "no it's for nawroz",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 2: another design, named.",
+      "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "en-answer-04",
+      "text": "a new one",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing.",
+      "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "en-answer-05",
+      "text": "the same one",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "Picks the design asked about.",
+      "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "en-answer-06",
+      "text": "no",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "requester-turn-confirmations: a bare \"no\" to \"change or new?\" means new (the question puts \"change\" first).",
+      "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "ckb-brief-01",
+      "text": "سڵاو، پۆستەرێکمان دەوێت بۆ ئاهەنگی دەرچوونی KAAE\nبەروار: ١٢/١٠/٢٠٢٦ کاتژمێر ٥ی ئێوارە\nشوێن: هۆتێلی ڕۆتانا",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: \"Hello, we want a poster for KAAE's graduation ceremony / Date … / Place: Rotana hotel\"."
+    },
+    {
+      "id": "ckb-brief-02",
+      "text": "سڵاو، دەتوانن پۆستەرێکمان بۆ دروست بکەن بۆ ئاهەنگی نەورۆزی KAAE لە ٢٠ی ئازار لە پارکی سامی عەبدولڕەحمان؟",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: \"Hello, can you make us a poster for KAAE's Nawroz celebration on 20 March at the park?\"."
+    },
+    {
+      "id": "ckb-brief-03",
+      "text": "پۆستەرێک بەم وێنانە دروست بکە بۆ دەرچوونی KAAE، ١٢ی تشرینی یەکەم، هۆتێلی ڕۆتانا",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "media.ts: \"Make a poster with these photos for KAAE's graduation, 12 October, Rotana hotel\"."
+    },
+    {
+      "id": "ckb-brief-04",
+      "text": "سڵاو، پۆستەرێک بۆ نەورۆز دروست بکە",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: \"Hello, make a poster for Nawroz\" (no copy yet)."
+    },
+    {
+      "id": "ckb-brief-05",
+      "text": "سڵاو کاکە تکایە پۆستەرێکمان بۆ دروست بکەن بۆ سیمیناری ددان لە ٢٥ی مانگ لە هۆڵی سەعد عەبدوڵڵا",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier-unicode: \"Hello brother, please make us a poster for the dentistry seminar on the 25th in the Saad Abdullah hall\"."
+    },
+    {
+      "id": "ckb-brief-06",
+      "text": "سڵاو\n\nکۆنفرانسی ساڵانەی متمانەبەخشین\n\n٩ی ئەیلوولی ٢٠٢٦، هۆڵی سەعد عەبدوڵا",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier-unicode: \"Hello / Annual accreditation conference / 9 September 2026, Saad Abdullah hall\"."
+    },
+    {
+      "id": "ckb-brief-07",
+      "text": "KAAE Annual Conference\n15 November 2026, Rotana Hotel\n\nکۆنفرانسی ساڵانەی KAAE\n١٥ی تشرینی دووەمی ٢٠٢٦، هۆتێلی ڕۆتانا",
+      "lang": "mixed",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: a bilingual brief (same copy in both languages)."
+    },
+    {
+      "id": "ckb-brief-08",
+      "text": "Create 9 designs for KAAE: ئاهەنگی دەرچوونی قوتابیانی زانکۆ لە هۆڵی هەولێر ١٢ی تشرینی یەکەم",
+      "lang": "mixed",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief",
+        "multi": true
+      },
+      "source": "stress-fixture",
+      "note": "requester-intake-routing-adr250: English request, Sorani copy (\"university students' graduation ceremony in the Erbil hall, 12 October\")."
+    },
+    {
+      "id": "ckb-brief-09",
+      "text": "سڵاو، پۆستەرێکمان دەوێت بۆ KAAE",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: \"Hello, we want a poster for KAAE\" (first part of a split brief)."
+    },
+    {
+      "id": "ckb-brief-10",
+      "text": "تکایە پۆستێک بۆ فاستپەی دروست بکە",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Please make a post for FastPay\"."
+    },
+    {
+      "id": "ckb-brief-11",
+      "text": "slaw, postereki bo KAAE drust bka bo ahangi derchwn, 12i october la hotel rotana, katjmer 5i ewara",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: romanised Sorani, \"Hello, make a poster for KAAE for the graduation ceremony, 12 October at the Rotana hotel, at 5 in the evening\"."
+    },
+    {
+      "id": "ckb-brief-12",
+      "text": "پۆستەرێکی نوێمان دەوێت بۆ خولی ڕاهێنانی مامۆستایان، ١٠ی تشرینی دووەم کاتژمێر ٩ی بەیانی لە هۆڵی KAAE",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "note": "\"We want a new poster for the teachers' training course, 10 November at 9 in the morning in the KAAE hall\". Needs native review."
+    },
+    {
+      "id": "ckb-brief-13",
+      "text": "دوو دیزاینمان دەوێت: پۆستەرێک بۆ ئاهەنگی دەرچوون و ستۆرییەکی ئینستاگرام بۆ ڕۆژی کراوە",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief",
+        "multi": true
+      },
+      "source": "synthetic",
+      "note": "\"We want two designs: a poster for the graduation ceremony and an Instagram story for the open day\". Needs native review."
+    },
+    {
+      "id": "ckb-brief-14",
+      "text": "سوپاس، پۆستەرێکی نوێ بۆ ڕۆژی کراوە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Thanks, a new poster for the open day\" (thanks that carries a new request)."
+    },
+    {
+      "id": "ckb-change-01",
+      "text": "لۆگۆکە گەورەتر بکە و بەروارەکە بگۆڕە بۆ ٥",
+      "lang": "ckb",
+      "context": "awaiting_answer",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S034: \"Make the logo bigger and change the date to the 5th\"."
+    },
+    {
+      "id": "ckb-change-02",
+      "text": "ببورە، ڕەنگەکەی بکە بە سەوز",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "changes.ts S038: \"Sorry, make its colour green\"."
+    },
+    {
+      "id": "ckb-change-03",
+      "text": "ڕەنگی باگراوندەکە بگۆڕە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: \"Change the background colour\"."
+    },
+    {
+      "id": "ckb-change-04",
+      "text": "ڕەنگەکە تۆختر بکە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Make the colour darker\"."
+    },
+    {
+      "id": "ckb-change-05",
+      "text": "ڕەنگەکە تۆختر بکە\n\nلۆگۆکە بەرزتر بکە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier-unicode: \"Make the colour darker / Move the logo higher\" (two paragraphs, still a change)."
+    },
+    {
+      "id": "ckb-change-06",
+      "text": "بەروارەکە بگۆڕە بۆ ٥ی تشرینی دووەم",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-reply-fixes: \"Change the date to 5 November\"."
+    },
+    {
+      "id": "ckb-change-07",
+      "text": "KAAE لە ناونیشانەکە لاببە",
+      "lang": "mixed",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "live-bug",
+      "note": "HUNT2 L19 in Sorani: \"Remove KAAE from the title\". Needs native review."
+    },
+    {
+      "id": "ckb-change-08",
+      "text": "ژمارەی تەلەفۆنەکە لاببە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"Remove the phone number\". Needs native review."
+    },
+    {
+      "id": "ckb-change-09",
+      "text": "بەروارەکە هەڵەیە، ١٥ی تشرینی یەکەمە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"The date is wrong, it is 15 October\". Needs native review."
+    },
+    {
+      "id": "ckb-change-10",
+      "text": "ناونیشانەکە گەورەتر بکە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"Make the title bigger\". Needs native review."
+    },
+    {
+      "id": "ckb-change-11",
+      "text": "وێنەکە بگۆڕە بە وێنەی هۆڵەکە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"Change the photo to the photo of the hall\". Needs native review."
+    },
+    {
+      "id": "ckb-change-12",
+      "text": "باش نییە، دووبارەی بکەرەوە",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true
+      },
+      "source": "stress-fixture",
+      "note": "redo.ts: \"It's not good, redo it\"."
+    },
+    {
+      "id": "ckb-change-13",
+      "text": "دیزاینێکی باشتر بکە وەک ئەوانەی پێشوو",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true
+      },
+      "source": "stress-fixture",
+      "note": "redo.ts: \"Make a better design like the previous ones\"."
+    },
+    {
+      "id": "ckb-change-14",
+      "text": "دیزاینێکی تر دروست بکە باشتر بێت",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true,
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Make another design, a better one\" (revision feedback on the draft); asking \"change or new?\" is acceptable, opening a second request is not."
+    },
+    {
+      "id": "ckb-change-15",
+      "text": "ناوی شوێنەکە هەڵەیە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"The venue name is wrong\". Needs native review."
+    },
+    {
+      "id": "ckb-change-16",
+      "text": "لە جیاتی شین، سەوز بەکاربهێنە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"Instead of blue, use green\". Needs native review."
+    },
+    {
+      "id": "ckb-change-17",
+      "text": "پەسەند نییە، لۆگۆکە بچووکە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"Not approved, the logo is small\". Needs native review."
+    },
+    {
+      "id": "ckb-change-18",
+      "text": "پەسەند نییە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "refusalOnly": true
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: \"Not approved\" (refusal only)."
+    },
+    {
+      "id": "ckb-change-19",
+      "text": "مەینێرە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "refusalOnly": true
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: \"Don't send it\" (refusal only)."
+    },
+    {
+      "id": "ckb-change-20",
+      "text": "لۆگۆی KAAE گەورەتر بکە",
+      "lang": "mixed",
+      "context": "two_open",
+      "expected": {
+        "intent": "change",
+        "target": [
+          "ask",
+          "B"
+        ]
+      },
+      "source": "synthetic",
+      "note": "\"Make the KAAE logo bigger\": names no design of the two; ask or the newer one."
+    },
+    {
+      "id": "ckb-approve-01",
+      "text": "پەسەندە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "office-and-groups: \"It is approved\"."
+    },
+    {
+      "id": "ckb-approve-02",
+      "text": "باشە بینێرە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: \"OK, send it\"."
+    },
+    {
+      "id": "ckb-approve-03",
+      "text": "پەسەندی دەکەم، بینێرە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"I approve it, send it\". Needs native review."
+    },
+    {
+      "id": "ckb-approve-04",
+      "text": "گۆڕانکاری ناوێت، بینێرە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "approval",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"No change needed, send it\". Needs native review."
+    },
+    {
+      "id": "ckb-approve-05",
+      "text": "زۆر جوانە، کڕیارەکە حەزی لێ دەکات",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Very beautiful, the client likes it\" (praise; approval words are also fine)."
+    },
+    {
+      "id": "ckb-ack-01",
+      "text": "سوپاس",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "\"Thanks\"."
+    },
+    {
+      "id": "ckb-ack-02",
+      "text": "زۆر سوپاس",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S072: \"Thank you very much\"."
+    },
+    {
+      "id": "ckb-ack-03",
+      "text": "دەستخۆش",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Well done\"."
+    },
+    {
+      "id": "ckb-ack-04",
+      "text": "دەستت خۆش بێت",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Well done (to you)\"."
+    },
+    {
+      "id": "ckb-ack-05",
+      "text": "سوپاس، پێمان گەیشت",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Thanks, it reached us\"."
+    },
+    {
+      "id": "ckb-ack-06",
+      "text": "فایلەکانمان وەرگرت 🙏",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"We received our files\"."
+    },
+    {
+      "id": "ckb-ack-07",
+      "text": "سوپاست دەکەم",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"I thank you\"."
+    },
+    {
+      "id": "ckb-ack-08",
+      "text": "مەمنون",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "acknowledgement"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Grateful\" (loanword)."
+    },
+    {
+      "id": "ckb-status-01",
+      "text": "ئامادەیە؟",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S051: \"Is it ready?\"."
+    },
+    {
+      "id": "ckb-status-02",
+      "text": "کەی تەواو دەبێت؟",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S054: \"When will it be finished?\"."
+    },
+    {
+      "id": "ckb-status-03",
+      "text": "پۆستەرەکە چی بوو؟",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S059: \"What happened to the poster?\"."
+    },
+    {
+      "id": "ckb-status-04",
+      "text": "کەی ئامادە دەبێت؟",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S099: \"When will it be ready?\"."
+    },
+    {
+      "id": "ckb-status-05",
+      "text": "هیچ هەواڵێک هەیە؟",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "note": "\"Is there any news?\". Needs native review."
+    },
+    {
+      "id": "ckb-status-06",
+      "text": "پۆستەرەکە گەیشتە کوێ؟",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "note": "\"Where has the poster got to?\". Needs native review."
+    },
+    {
+      "id": "ckb-deadline-01",
+      "text": "تا پێنجشەممەی داهاتوو پێویستمانە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "briefs.ts: \"We need it by next Thursday\"."
+    },
+    {
+      "id": "ckb-deadline-02",
+      "text": "تا سبەی پێویستمانە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: \"We need it by tomorrow\"."
+    },
+    {
+      "id": "ckb-deadline-03",
+      "text": "شەممە پێویستمانە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-turn-adr182: \"We need it Saturday\"."
+    },
+    {
+      "id": "ckb-deadline-04",
+      "text": "پێش کۆتایی هەفتە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-turn-adr182: \"Before the end of the week\"."
+    },
+    {
+      "id": "ckb-deadline-05",
+      "text": "زۆر پەلەمانە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"We are in a big hurry\". Needs native review."
+    },
+    {
+      "id": "ckb-deadline-06",
+      "text": "بەپەلە تکایە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"Urgently please\". Needs native review."
+    },
+    {
+      "id": "ckb-cancel-01",
+      "text": "پێویست ناکات، هەڵیبوەشێنەوە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts: \"Not needed, cancel it\"."
+    },
+    {
+      "id": "ckb-cancel-02",
+      "text": "نا، هەڵیبوەشێنەوە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts: \"No, cancel it\"."
+    },
+    {
+      "id": "ckb-cancel-03",
+      "text": "هەڵیبوەشێنەوە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: \"Cancel it\"."
+    },
+    {
+      "id": "ckb-cancel-04",
+      "text": "تکایە پۆستەرەکە هەڵبوەشێنەوە",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: \"Please cancel the poster\"."
+    },
+    {
+      "id": "ckb-cancel-05",
+      "text": "هەردووکیان هەڵبوەشێنەوە",
+      "lang": "ckb",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "both",
+        "every": "both"
+      },
+      "source": "stress-fixture",
+      "note": "requester-cancel-several: \"Cancel both of them\"."
+    },
+    {
+      "id": "ckb-cancel-06",
+      "text": "هەردووکیان هەڵبوەشێنەوە، پێویستمان نییە",
+      "lang": "ckb",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "both",
+        "every": "both"
+      },
+      "source": "stress-fixture",
+      "note": "requester-cancel-several: \"Cancel both of them, we don't need them\"."
+    },
+    {
+      "id": "ckb-cancel-07",
+      "text": "هەموویان هەڵبوەشێنەوە",
+      "lang": "ckb",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "both",
+        "every": "all"
+      },
+      "source": "stress-fixture",
+      "note": "requester-cancel-several: \"Cancel all of them\"."
+    },
+    {
+      "id": "ckb-cancel-08",
+      "text": "پێویستمان نییە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A",
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "synthetic",
+      "note": "\"We don't need it\": a cancel; asking first is accepted."
+    },
+    {
+      "id": "ckb-cancel-09",
+      "text": "وازی لێ بێنە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A",
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "synthetic",
+      "note": "\"Drop it / give it up\": a cancel; asking first is accepted."
+    },
+    {
+      "id": "ckb-cancel-10",
+      "text": "پۆستەری Teacher Appreciation Day هەڵبوەشێنەوە، تەنها تاقیکردنەوە بوو",
+      "lang": "mixed",
+      "context": "two_open",
+      "expected": {
+        "intent": "cancel",
+        "target": "B"
+      },
+      "source": "live-bug",
+      "note": "LIVE L17 in Sorani: \"Cancel the Teacher Appreciation Day poster, it was only a test\". Needs native review."
+    },
+    {
+      "id": "ckb-cancel-11",
+      "text": "پێویست ناکات",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 1 in Sorani: \"No need\" (bare; ask first)."
+    },
+    {
+      "id": "ckb-cancel-12",
+      "text": "ڕاوەستە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "live-bug",
+      "note": "HUNT2 friction 1/10 in Sorani: \"Stop\" (bare; ask first)."
+    },
+    {
+      "id": "ckb-hold-01",
+      "text": "ڕایبگرە",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-turn: \"Hold it / stop it\" (a pause)."
+    },
+    {
+      "id": "ckb-hold-02",
+      "text": "ڕاوەستە، بەروارەکە دەگۆڕین",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"Stop, we are changing the date\" (pause, like en-hold-01). Needs native review."
+    },
+    {
+      "id": "ckb-hold-03",
+      "text": "هێشتا دروستی مەکە، چاوەڕێی بەروارەکەین",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"Don't make it yet, we are waiting for the date\". Needs native review."
+    },
+    {
+      "id": "ckb-undo-01",
+      "text": "بەردەوام بە",
+      "lang": "ckb",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "stress-fixture",
+      "note": "requester-reply-fixes: \"Continue\". Undo after a cancel (conversation answers it, ADR-252)."
+    },
+    {
+      "id": "ckb-undo-02",
+      "text": "ببورە، بە هەڵە هەڵمانوەشاند، بەردەوام بە",
+      "lang": "ckb",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "synthetic",
+      "note": "\"Sorry, we cancelled it by mistake, continue\". Needs native review. Undo after a cancel (conversation answers it, ADR-252)."
+    },
+    {
+      "id": "ckb-undo-03",
+      "text": "هەڵی مەوەشێنەوە",
+      "lang": "ckb",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Don't cancel it\". Undo after a cancel (conversation answers it, ADR-252)."
+    },
+    {
+      "id": "ckb-undo-04",
+      "text": "بیگەڕێنەوە",
+      "lang": "ckb",
+      "context": "just_cancelled",
+      "expected": {
+        "intent": "conversation",
+        "undo": true
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier: \"Bring it back\". Undo after a cancel (conversation answers it, ADR-252)."
+    },
+    {
+      "id": "ckb-files-01",
+      "text": "دووبارە بینێرەوە",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intake-friction-adr156: \"Send it again\"."
+    },
+    {
+      "id": "ckb-files-02",
+      "text": "بە pdf بینێرە",
+      "lang": "mixed",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intake-friction-adr156: \"Send it as a PDF\"."
+    },
+    {
+      "id": "ckb-files-03",
+      "text": "پێم نەگەیشت",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intake-friction-adr156: \"It did not reach me\"."
+    },
+    {
+      "id": "ckb-files-04",
+      "text": "پێم نەگەیشت، دووبارە بینێرەوە",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts S062: \"It did not reach me, send it again\"."
+    },
+    {
+      "id": "ckb-files-05",
+      "text": "بە ئیمەیڵ بۆمی بنێرە",
+      "lang": "ckb",
+      "context": "delivered",
+      "expected": {
+        "intent": "delivery_request",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "note": "\"Send it to me by email\". Needs native review."
+    },
+    {
+      "id": "ckb-chat-01",
+      "text": "نرخی پۆستەرێک چەندە؟",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "stress-fixture",
+      "note": "conversation.ts: \"How much is a poster?\"."
+    },
+    {
+      "id": "ckb-chat-02",
+      "text": "سڵاو",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "conversation"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier-unicode: \"Hello\" (bare greeting)."
+    },
+    {
+      "id": "ckb-chat-03",
+      "text": "سڵاو بەخێربێن",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "conversation"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier-unicode: \"Hello, welcome\"."
+    },
+    {
+      "id": "ckb-chat-04",
+      "text": "چۆنی",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "conversation"
+      },
+      "source": "stress-fixture",
+      "note": "telegram-classifier-unicode: \"How are you\"."
+    },
+    {
+      "id": "ckb-chat-05",
+      "text": "ڤیدیۆش دروست دەکەن؟",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "synthetic",
+      "note": "LIVE L11 in Sorani: \"Do you make videos too?\". Needs native review."
+    },
+    {
+      "id": "ckb-chat-06",
+      "text": "لۆگۆکەمانتان هەیە؟",
+      "lang": "ckb",
+      "context": "designing",
+      "expected": {
+        "intent": "conversation",
+        "question": true
+      },
+      "source": "synthetic",
+      "note": "\"Do you have our logo?\". Needs native review."
+    },
+    {
+      "id": "ckb-chat-07",
+      "text": "لەمەودوا هەمیشە لۆگۆکە لە خوارەوەی لای ڕاست دابنێ",
+      "lang": "ckb",
+      "context": "none",
+      "expected": {
+        "intent": "conversation"
+      },
+      "source": "synthetic",
+      "note": "\"From now on always put the logo at the bottom right\" (standing rule). Needs native review."
+    },
+    {
+      "id": "ckb-unclear-01",
+      "text": "نا",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "note": "HUNT2 friction 9 in Sorani: \"No\" after a draft."
+    },
+    {
+      "id": "ckb-unclear-02",
+      "text": "نەورۆز",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "note": "\"Nawroz\": one word."
+    },
+    {
+      "id": "ckb-answer-01",
+      "text": "نوێ",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "stress-fixture",
+      "note": "requester-intent-routing: \"New\" to \"change or new?\".",
+      "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "ckb-answer-02",
+      "text": "دەستکاری",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-turn: \"Edit\" to \"change or new?\".",
+      "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "ckb-answer-03",
+      "text": "گۆڕانکاری",
+      "lang": "ckb",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "stress-fixture",
+      "note": "requester-turn: \"A change\" to \"change or new?\".",
+      "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "ho-cancel-01",
+      "text": "just forget it",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Idiomatic dismissal, like \"never mind\": ask first."
+    },
+    {
+      "id": "ho-cancel-02",
+      "text": "oh well, forget about it then",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Idiomatic dismissal with filler: ask first."
+    },
+    {
+      "id": "ho-cancel-03",
+      "text": "forget the poster, we don't need it anymore",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Names the design and says why: a cancel."
+    },
+    {
+      "id": "ho-change-01",
+      "text": "the workshop is in the main hall, not the library",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the venue (L19 class)."
+    },
+    {
+      "id": "ho-change-02",
+      "text": "it's for the teachers, not the parents",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the audience (L19 class)."
+    },
+    {
+      "id": "ho-change-03",
+      "text": "the event is on Thursday, not Wednesday",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the day (L19 class)."
+    },
+    {
+      "id": "ho-change-04",
+      "text": "can you make another design? a nicer one",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true,
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Another, nicer design on a draft: a redo; asking is acceptable, opening is not."
+    },
+    {
+      "id": "ho-change-05",
+      "text": "do another one, but better",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true,
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Another, better one on a draft: a redo; asking is acceptable, opening is not."
+    },
+    {
+      "id": "ho-change-06",
+      "text": "get the QR code off it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Removes a part of the design."
+    },
+    {
+      "id": "ho-change-07",
+      "text": "the text is way too small",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Complaint about a part of the design."
+    },
+    {
+      "id": "ho-change-08",
+      "text": "please don't use red anywhere",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Negated styling instruction."
+    },
+    {
+      "id": "ho-change-09",
+      "text": "cancel the shadow behind the title",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Cancel + a design part is a change, never a withdrawal."
+    },
+    {
+      "id": "ho-change-10",
+      "text": "no logo on the bottom please",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Removes a part of the design."
+    },
+    {
+      "id": "ho-change-11",
+      "text": "honestly the colours look a bit dull",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Complaint about a part of the design."
+    },
+    {
+      "id": "ho-change-12",
+      "text": "please cancel the gold frame on the Teacher Appreciation Day poster",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "change",
+        "target": "B"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Cancel + a design part, named design: a change of B, never a withdrawal."
+    },
+    {
+      "id": "ho-hold-01",
+      "text": "please stop working on it for now, the speakers aren't confirmed",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Temporary stop with a reason."
+    },
+    {
+      "id": "ho-hold-02",
+      "text": "don't go ahead with the poster yet, we're still waiting on the venue",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Temporary stop with a reason."
+    },
+    {
+      "id": "ho-deadline-01",
+      "text": "no hurry, any time next week works",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Relaxed deadline."
+    },
+    {
+      "id": "ho-deadline-02",
+      "text": "take your time, Sunday is fine",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Relaxed deadline."
+    },
+    {
+      "id": "ho-ack-01",
+      "text": "looks great, the manager loves it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Praise; the office decides approval."
+    },
+    {
+      "id": "ho-ack-02",
+      "text": "beautiful, our team really likes it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Praise; the office decides approval."
+    },
+    {
+      "id": "ho-status-01",
+      "text": "how is the teacher day poster going?",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Status of one named design."
+    },
+    {
+      "id": "ho-status-02",
+      "text": "is the quality workshop poster finished yet?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Status of the named design."
+    },
+    {
+      "id": "ho-status-03",
+      "text": "how's our new workshop flyer coming on?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Status of the design, phrased loosely."
+    },
+    {
+      "id": "ho-brief-01",
+      "text": "Hi there, we need something for our staff picnic on Friday",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (L15 class)."
+    },
+    {
+      "id": "ho-brief-02",
+      "text": "Hello! I'd like something to promote the summer school",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (L15 class)."
+    },
+    {
+      "id": "ho-brief-03",
+      "text": "hey, could you do something for the science fair next week?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (L15 class)."
+    },
+    {
+      "id": "ho-brief-04",
+      "text": "Can you also make a flyer for the parents' evening on 12 November at 6 pm?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). A new design with its own event while another is in review."
+    },
+    {
+      "id": "ho-brief-05",
+      "text": "We also need a banner for the science fair, 3 December at the campus",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). A new design with its own event while another is being made."
+    },
+    {
+      "id": "ho-unclear-01",
+      "text": "for the parents",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Fragment: a change of audience or a new design; ask."
+    },
+    {
+      "id": "ho-unclear-02",
+      "text": "about the gala",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Fragment: ask what it means."
+    },
+    {
+      "id": "ho-unclear-03",
+      "text": "nope",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Bare no on a draft: ask what it means."
+    },
+    {
+      "id": "ho-change-13",
+      "text": "the seminar is in room 4, not the main auditorium",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the venue with two event words (second round, written before the follow-up fix)."
+    },
+    {
+      "id": "ho-change-14",
+      "text": "the ceremony is at the hotel, not at the campus",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the venue with two event words (second round, written before the follow-up fix)."
+    },
+    {
+      "id": "ho-brief-06",
+      "text": "Good morning, I'd love something for our charity bake sale",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (second round, written before the follow-up fix)."
+    },
+    {
+      "id": "ho-brief-07",
+      "text": "hi, we'd like something to announce the new library hours",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (second round, written before the follow-up fix)."
+    },
+    {
+      "id": "ho3-change-01",
+      "text": "can we lose the subtitle?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Removes a part."
+    },
+    {
+      "id": "ho3-change-02",
+      "text": "the logo looks squashed",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Complaint about a part."
+    },
+    {
+      "id": "ho3-change-03",
+      "text": "the keynote speaker is Dr Sara, not Dr Ali",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Correction of a name (L19 class)."
+    },
+    {
+      "id": "ho3-change-04",
+      "text": "please don't put the date in red",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Negated styling instruction."
+    },
+    {
+      "id": "ho3-change-05",
+      "text": "remove the gold, it looks cheap",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Removes a colour with a reason."
+    },
+    {
+      "id": "ho3-change-06",
+      "text": "please cancel the background photo",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Cancel + a design part is a change, never a withdrawal."
+    },
+    {
+      "id": "ho3-change-07",
+      "text": "the text is too crowded",
+      "lang": "en",
+      "context": "awaiting_answer",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Complaint about a part, the design waits for changes."
+    },
+    {
+      "id": "ho3-change-08",
+      "text": "make one more, nicer this time",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true,
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Another, nicer one on a draft: a redo; asking is acceptable, opening is not."
+    },
+    {
+      "id": "ho3-cancel-01",
+      "text": "never mind about it",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Dismissal: ask first."
+    },
+    {
+      "id": "ho3-cancel-02",
+      "text": "forget about the workshop poster",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Names the design: a cancel."
+    },
+    {
+      "id": "ho3-hold-01",
+      "text": "drop it for now, we'll come back to it next month",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Temporary stop."
+    },
+    {
+      "id": "ho3-hold-02",
+      "text": "hold off until we have the final speaker list",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Temporary stop."
+    },
+    {
+      "id": "ho3-deadline-01",
+      "text": "no hurry on this one",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Relaxed timing."
+    },
+    {
+      "id": "ho3-ack-01",
+      "text": "fantastic, my boss is really happy with it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Praise; the office decides approval."
+    },
+    {
+      "id": "ho3-status-01",
+      "text": "how are the posters coming along?",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Status of both designs."
+    },
+    {
+      "id": "ho3-brief-01",
+      "text": "Hello, we're hoping for something for the graduation party in June",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Brief opener after a greeting, no design noun."
+    },
+    {
+      "id": "ho3-brief-02",
+      "text": "can you make a new poster for the alumni dinner on 3 December at 7 pm?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). A new design with its own event while another is in review."
+    },
+    {
+      "id": "ho3-unclear-01",
+      "text": "for the alumni",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Fragment: ask what it means."
+    }
+  ]
+}
