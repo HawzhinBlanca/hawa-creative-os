@@ -1,6 +1,6 @@
 # ADR265 — Customer review of current native files
 
-Date: 2026-10-02. Status: selected; implementation qualification pending.
+Date: 2026-10-02. Status: selected; native review eligibility qualified locally; customer/public admission pending.
 Requirements: FR-029/032 (docs/05_CREATIVE_ENGINE.md), FR-043
 (docs/11_QA_RTL_MULTILINGUAL.md), FR-069 (docs/14_SECURITY_THREAT_MODEL.md),
 NFR-006/008/011/015 (MASTER_SPEC.md). ADR256/259–264 remain binding.
@@ -48,3 +48,10 @@ Actual restricted-role database and mounted HTTP controls, native transport
 controls and website stale-response/cancellation tests are required. Synthetic
 fixtures do not qualify hosted customers, Canva native language quality or launch.
 Results and original failures will be recorded in CUSTOMER_REVIEW_PROOF.json.
+
+Final sealed342a6512:8112passed/0failed/67skipped. 132 focused controls,11
+actual migration inventory/upgrade controls and746 strict roots pass. Website
+5a12787:858/0/0 and8 synthetic Chromium controls, types/build/affected lint and
+scanner pass. First full8110/2/67 is retained; both exact migration inventories
+now include088. See CUSTOMER_REVIEW_PROOF.json, including the corrected website
+scanner record. No deployment/public/native-language/customer acceptance claim.

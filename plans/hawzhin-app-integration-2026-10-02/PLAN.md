@@ -187,3 +187,13 @@ First sealed ADR265 full runefbeca3e:8110passed/2failed/67skipped. Both failures
 are explicit migration inventories still ending at087. Startup LAST and the real
 concurrent-upgrade expected list now include exactly088. Original full report is
 retained; focused migration and final sealed qualification are required.
+
+
+Final ADR265 sealed342a6512:8112passed/0failed/67skipped; source manifest
+verified. Native review eligibility is locally qualified, not a customer acceptance
+or download implementation. Website5a12787:858/0/0 and8/0/0/flaky0 actual
+Chromium synthetic controls, types/build/affected lint/scanner pass. Original
+migration inventory and synthetic scanner failures are retained. Next is canonical
+independent customer acceptance/current native/QA/hash-bound downloads. Existing
+website release gates, hosting/HTTPS/restore and real two-user/native language/
+edit-save/re-export/restart/other-app/human quality still block public launch.

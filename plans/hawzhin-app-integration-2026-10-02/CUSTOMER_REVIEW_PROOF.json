@@ -72,7 +72,14 @@
     "packages/integrations/src/canva-connect-client.ts": "b29264dbf4c1dd01145167fdc8c1ce6a6a48040c759047080071933e14871797",
     "packages/db/migrations/088_customer_native_review.sql": "6577cee8555ea3924b9df8c17cfc51b2c6fb531ac63b13ec3f35e544bfa4ec95"
   },
-  "fullEngine": "pending on committed sealed source",
+  "fullEngine": {
+    "testedCommit": "342a65129cc406c21e7ba687f67d3e0584189cf5",
+    "passed": 8112,
+    "failed": 0,
+    "skipped": 67,
+    "report": "final-full.json",
+    "sourceSeal": "verified"
+  },
   "migration": "088 unreleased; 083-087 also unreleased",
   "scope": "Independent read-only customer native review eligibility; no acceptance, download, deployment or public admission",
   "originalFailures": [
@@ -121,5 +128,6 @@
     "failed": 0,
     "skipped": 0,
     "report": "migration-controls.json"
-  }
+  },
+  "status": "Native review eligibility qualified locally; customer acceptance/download/public admission remain pending"
 }
