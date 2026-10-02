@@ -92,6 +92,46 @@ describe.skipIf(!url)('blank Canva checked export with frozen client policy',()=
     const oldReplay=await service.exportStatus(scope,taskId,oldId);
     expect(oldReplay.artifact.content_check.fontPass).toBe(false);expect(exportCalls).toBe(1);
   });
+  async function capitalsSource() {
+    const copy=['Exact copy 123.45'];
+    const plan={width:640,height:640,background:'#FFFFFF',shapes:[],text:[{copyIndex:0,
+      x:20,y:20,width:600,height:100,fontSize:24,fontFamily:'Verdana',color:'#000000',align:'left' as const,
+      rtl:false,textTransform:'uppercase' as const}]};
+    // Canva may return display capitals as actual text instead of retaining cap="all".
+    pptx=Buffer.from((await encodeEditableTransfer(plan,copy.map(text=>text.toUpperCase()))).bytes);
+    return {copy,plan};
+  }
+  it('freezes capitals before dispatch and preserves them across replacement and replay',async()=>{
+    const manifest=await capitalsSource(),sourceId=await importedSource(manifest);
+    const admitted=await start();
+    const metadata=(await sql<{metadata:{checkingPolicy:unknown}}>`SELECT metadata FROM hawa.canva_remote_operations
+      WHERE id=${admitted.operationId}::uuid`.execute(db)).rows[0].metadata;
+    expect(metadata.checkingPolicy).toMatchObject({sourceId,copy:manifest.copy,options:{uppercaseByIndex:[true]}});
+    const checked=await new CanvaConnectService(db,options).exportStatus(scope,taskId,admitted.operationId);
+    expect(checked.artifact.content_check).toMatchObject({copyPass:true,checkingPolicy:metadata.checkingPolicy});
+    const replay=await start();assert('artifact' in replay && replay.artifact);
+    expect(replay.artifact.id).toBe(checked.artifact.id);expect(exportCalls).toBe(1);
+  });
+  it('does not reinterpret a frozen strict receipt using a current capitals source',async()=>{
+    const manifest=await capitalsSource(),sourceId=await importedSource(manifest);
+    const oldId=randomUUID(),jobId=randomUUID();requests.set(jobId,'pptx');
+    const policy={version:1,kind:'imported_source',sourceId,copy:manifest.copy,requiredFont:'Verdana',options:{}};
+    await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version,remote_job_id,metadata)
+      VALUES(${oldId}::uuid,${tenantId}::uuid,${taskId}::uuid,${clientId}::uuid,${actorId},${randomUUID()},'strict-old-policy','export','submitted',${designId},1,${jobId},
+        ${JSON.stringify({format:'pptx',designUpdatedAt:designVersion,checkingPolicy:policy})}::jsonb)`.execute(db);
+    const checked=await service.exportStatus(scope,taskId,oldId);
+    expect(checked.artifact.content_check).toMatchObject({copyPass:false,checkingPolicy:policy,uppercaseByIndex:null});
+    const qc=evaluateCanvaExportQc(checked.artifact,manifest.copy);
+    expect(qc.criticalPass).toBe(false);expect(qc.qaReport.copyFidelity).toBe(false);
+  });
+  it('cannot adopt a source that appears after manual export admission',async()=>{
+    await saveDna();const manifest=await capitalsSource();
+    const admitted=await start();await importedSource(manifest);
+    const checked=await service.exportStatus(scope,taskId,admitted.operationId);
+    expect(checked.artifact.content_check).toMatchObject({copyPass:false,uppercaseByIndex:null,
+      checkingPolicy:{kind:'manual_client_dna',options:{allowedFontsByScript:{latin:['Verdana']}}}});
+    expect(exportCalls).toBe(1);
+  });
   it.each([
     {name:'missing family',text:[{copyIndex:0}]},
     {name:'foreign index',text:[{copyIndex:4,fontFamily:'Verdana'}]},

@@ -1,0 +1,153 @@
+{
+  "date": "2026-10-03",
+  "status": "Focused qualification passed; sealed combined full-suite qualification pending",
+  "scope": "Claude client-specific poster/caps/metrics design lane and deployment/export support merged with ADR265/266 customer workflow; ADR276 immutable display export policy repair",
+  "merges": [
+    "6ff2fc60",
+    "4aaed09f"
+  ],
+  "mergedHeads": [
+    "01b3e243333a5cdd00545b171f3bfbb19e35162c",
+    "605466de"
+  ],
+  "policyFocused": {
+    "numPassedTests": 100,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "customerFocused": {
+    "numPassedTests": 112,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "regressionBaseline": {
+    "commit": "4aaed09f",
+    "results": {
+      "numPassedTests": 0,
+      "numFailedTests": 3,
+      "numPendingTests": 50
+    },
+    "expectedFailures": 3,
+    "runtimeRestoredAfterControl": true
+  },
+  "originalAttempts": [
+    {
+      "results": {
+        "numPassedTests": 97,
+        "numFailedTests": 3,
+        "numPendingTests": 0
+      },
+      "reason": "Three new adversarial fixtures initially used the legacy planner encoder, which does not emit display caps. Corrected to the supported native-export variant with capitals written into text; assertions retained."
+    }
+  ],
+  "gates": {
+    "nativeBuild": "passed",
+    "types": "passed",
+    "scriptsTypes": "passed",
+    "strictTestRoots": 757,
+    "anyRatchet": "passed",
+    "providerEgress": "passed",
+    "securityScan": "passed",
+    "fullSuite": "pending",
+    "blueprint": "pending",
+    "releaseManifest": "pending"
+  },
+  "website": {
+    "commit": "a8fdd2eca50c33af7d85fbc21dbf7a648029cc05",
+    "unchangedThisSlice": true,
+    "previousUnitPassed": 863,
+    "previousBrowserPassed": 9,
+    "browserScope": "Synthetic Auth/Core only, not hosted JWT/native proof"
+  },
+  "sourceHashes": {
+    "apps/core/src/core-helpers.ts": "e8f4d6d05de8fe2e8d68b67e8d68559b3e9ee11fe33363431fb2ca55b5e3bedf",
+    "apps/core/src/logging.ts": "ebbb73165d9263f4331382f88ed35ac50470743eb8ef43ea980e147747a37fe1",
+    "apps/core/src/services/canva-connect-service.ts": "e56af97adb9f70b23437bb567c7fcdc187ab546ef95a89213b00da05eb95b126",
+    "apps/core/src/services/canva-task-outcome.ts": "f867373414f0e39aca5227e15976cbde9df4fabede83424a4a9b691c0296faa9",
+    "apps/core/src/services/design-studio/design-studio-service.ts": "8d710646b14230695696e5b4bc6255b8faba7bf25048352526a2ff57222bc97e",
+    "apps/core/src/services/design-studio/edit-ops.ts": "fa240cc944da10a064975c7980fdfccaf099b2f60d0ebb7f0f501ac0e6de9243",
+    "apps/core/src/services/design-studio/stages/edit.stage.ts": "61f120a7f9b802860d1ec177073d27db2a483323b21c07b431d07a9b4ef39fcf",
+    "apps/core/src/services/design-studio/stages/layouts.stage.ts": "ad338db44a22192008f7f18027488b0f78b17683d82de4e97414ad4b6bcd76f0",
+    "apps/core/src/services/design-studio/stages/revise.stage.ts": "1d78349f1976902e4a073d09ae8c9da32cb617b5c0985cd895b75a5db9d1dbd3",
+    "apps/core/src/services/design-studio/stages/v3.stage.ts": "259d8decd90a498d08a52b6d2149a88302bb60891f06f5d10007321323ec1662",
+    "apps/core/src/services/export-picture-fidelity.ts": "3f94857f81e520e2b975a570b9e7cbda18d5b0bbe5479744e700dce19e666e84",
+    "apps/core/src/services/lifecycle-projection.ts": "c75676314384ccf2495fc9ea62bc667c6ed24dc5df255d5955f7fb94e64f6404",
+    "apps/core/src/services/lifecycle-stale-sweep.ts": "0fc6d16739605772e63f46a4657d19df0cdec88ec8e195bee44c8a85065afafd",
+    "apps/core/src/services/request-copy-extraction.ts": "763c8375201fe9e4fa788683ae246e69cdc96eb4e761ecd4c243e98002bc8be6",
+    "apps/core/test/canva-blank-export-policy.test.ts": "b080dc0b4c876140ff034c7550fa8e61ba981e39913a6ad6a72bbe55ba5298d2",
+    "apps/core/test/canva-export-qc.test.ts": "fa1ce160b9b01c9a608fb7e3bd158603d77fe7fb2c382ef3dfe0bf1475d1a86f",
+    "apps/core/test/customer-requests.test.ts": "cdbe7ac182531604977c740c2cfe82f5c5550f8332f101f54774531fbdd97955",
+    "apps/core/test/design-studio-orchestrator.test.ts": "1aa2d3aad353e3809ae579531070e17a8249370927bf2808ddc417c396a785a4",
+    "apps/core/test/display-caps-core.test.ts": "e1db442332b6aeef2c2f2bebdc643816c879354c4b20982adb45a2fd8763ce49",
+    "apps/core/test/export-picture-fidelity.test.ts": "39f1b974696ea1e2c2733f6491e9c4e1796e1a83b9b8bd4d6a8e11e83be77b17",
+    "apps/core/test/judge-office-reference.test.ts": "689622f7cfe49aa71fe45b6c85eac0dae859fcc71a20c123670c1f8c59d143d7",
+    "apps/core/test/kaae-2025-guideline.test.ts": "9c99f881612a778c3c2f8afe019404e1979b3a97fce31a25534f4bcf14b9bda0",
+    "apps/core/test/manual-open-office-alert.test.ts": "1f50cac564be7566f9d2c6d54b706665ae8a00a370e64cd9e6865b978b65eb56",
+    "apps/core/test/native-revision-handoff.test.ts": "6e92b7a2a28d5d457052ad152166060ae6d7222134858d93d362b81b4b986986",
+    "apps/core/test/request-copy-extraction.test.ts": "f79e6db86933a83001edc13b9278c10cbf9912573686442d49ca55f16c65bef7",
+    "apps/core/test/request-log-context.test.ts": "2e87a26ae74482e91e30b3a8b4ce42da597774a19a6e69cfb2223f51a3360298",
+    "infra/docker/.env.production.example": "1ae2b52c99a8bdaa4c4cecc0fe76ddc2f1ce2f9433a451de97f222fecbae43c6",
+    "infra/docker/deploy.sh": "dfcc50746a5ef346d73f25319c40c362e757825eb8746c869c68fb9e3554643c",
+    "infra/ops/host_lib.sh": "ae746ac7ef57f82eb7dcfce4a591461c56ef3713827758d6819b04552814b9eb",
+    "infra/ops/release_lib.sh": "af337cfd511eb60378154fe45efb3af6e2fda656d583d2e2478ab118972b0483",
+    "infra/ops/watchdog.sh": "aca71423119f9819c934a031d05ff65eded1317449287f8024314c3ca85d5680",
+    "packages/creative/assets/fonts/fonts.conf": "9e02fcc72556110435a292bc0ca85234bd6e1a3f594e5ce8804bec4706f5ab9f",
+    "packages/creative/assets/kaae-reference.json": "3cd65b3e5b921f819ec0c9c714fdc5f080cb064de76708824a8ad450c2084789",
+    "packages/creative/native/README.md": "06ca404d7fd71a6b0c2b035a2ab483b514e3621c0fa15a6b2f189709bd19cdb6",
+    "packages/creative/native/text-measure.c": "2d5a7faeb1714bf28a9fc33a484573e5d318c6d3df578855abaa1f7ee52b1dee",
+    "packages/creative/src/editable-transfer.ts": "f50f308883acb1f7a7d2e9ba180891d40ba44d6b74679cb551ce51971d548715",
+    "packages/creative/src/index.ts": "a6f77dd33ec0d5ec9d9b3a1c272367a9bc4e3c0b94c4ccbd2cee908c51c28da2",
+    "packages/creative/src/studio/art-direction/generate.ts": "676b1b4b941a9fe0fcc59faaccb7817a8db51cdbb43e5bb08e338cf574f7b5e3",
+    "packages/creative/src/studio/art-direction/prior.ts": "0a2b5fc13d9b59637cdc1bec76733bce155dd14e7caac588f0ef432f6ef5d3a0",
+    "packages/creative/src/studio/art-direction/solver.ts": "61a4f84510465a7639cc63062689e9e7da69fe4353ce6f56bed8a80ef18f5bac",
+    "packages/creative/src/studio/design-metrics.ts": "2bc2d45a5ebe3d9ec6ca43d2ac7d6703eb79d93ae65b58901153c734f7253314",
+    "packages/creative/src/studio/exemplar-retrieval.ts": "42c5bbf7b3f3dc76a8a3f19db4a3abe1175899ce67aa73c8c574ff7b464d0a96",
+    "packages/creative/src/studio/export-text-lines.ts": "fa73f7267c0bccc7427d1a9bc5d8a7fa563a8340ea26630971029257dcdbc7b1",
+    "packages/creative/src/studio/hard-qa.ts": "cd1ef87ef0354433a0665465d198fbf3123f7545c7d0a56978e4b19c0ab62bca",
+    "packages/creative/src/studio/house-rules.ts": "c1ea5a5a5042baad2c308bedc5879b22305e79672c230cad04c1e48c24128c9d",
+    "packages/creative/src/studio/layout-metrics.ts": "645676df3a2b969594d662bf29ebf550bcd01004e76a34dff4fecbe378892581",
+    "packages/creative/src/studio/layout-v2.ts": "4b72447fd40c4bfc79fba3db4de76e33780a54ddae77958bdc1b2205746d731d",
+    "packages/creative/src/studio/negative-space-policy.ts": "257920561c569ecbbc46740962fcb6a29a029f2793ad478253abf1b091e1ba79",
+    "packages/creative/src/studio/page-grammar-admission.ts": "674fd1d073fc692818b24a08b632b2f411089692c81d17c0fed83991e5cc8da7",
+    "packages/creative/src/studio/page-grammar.ts": "65581af4f3c1680574d8135b1f6476aa29734e4268f4f1e56aa46a6e36450ef3",
+    "packages/creative/src/studio/pairwise-judge-v3.ts": "a696d3e2258e9ff95fe347ebc0127980ac7b59dc67fa858b134d2e724d4557f1",
+    "packages/creative/src/studio/pango-measurement.ts": "912b1c5c4307eac2f4af003c9c385c47fad170cd70c04c1f2ffa372e74088ded",
+    "packages/creative/src/studio/pipeline-v3.ts": "d99149f1d3e23d5cd1fa6d2c9732a9f876af6f285d69dbbba9ac9ee010ace12a",
+    "packages/creative/src/studio/poster-display.ts": "daa17eda16a00f6476f1ebfaf05d4e3a729c90c03ea6559c27ca7d1470e998ba",
+    "packages/creative/src/studio/poster-grammar.ts": "f77b26c7560dad660568a1edc07d47e05c5f3160312a31447c728498ad252925",
+    "packages/creative/src/studio/render-fonts.json": "c30a2243d348eecebd401ca3376c55a4052c4bf60733d5998ae192d4fa72f1bb",
+    "packages/creative/src/studio/render-layout-v2.ts": "4878954ee768ce599bb6fcc6169eec8d198be4466743cb19adfff81ee56557db",
+    "packages/creative/src/studio/style-spec.ts": "08ddc68bd756c42b88904f889bc4d7d12a0a8034cd55ec1b48ef0b851ee374aa",
+    "packages/creative/src/studio/transfer-v2.ts": "aee9dc28189962fd74a51bb0845f3967437588e66e08dd300b0b78f4ed5cd0d8",
+    "packages/creative/src/studio/validate-layout-v2.ts": "b30ed25cf37d2481e22f222fb3aaf200ad7cf7ac4830fc28d58e9aae2a6aef01",
+    "packages/creative/test/display-caps.test.ts": "81941a2d5410199633de09ad4012d3d0ae7eeb72de60b55299d290c20835c337",
+    "packages/creative/test/fixtures/office-posts/README.md": "207967cccb2e01bf9e46228500d9527a79762a6d4d056f6556f6653e36c1d099",
+    "packages/creative/test/fixtures/office-posts/gates.ts": "63f0b962cc328baab0a51f93deb768382a9dbceecdf953b23d20027a6cb7840d",
+    "packages/creative/test/fixtures/office-posts/office-posts.ts": "db6aa83cd6a7c863499a69696f99b5451023bf85c90889c64c9278df6a5d4895",
+    "packages/creative/test/gate-modes.test.ts": "ea130be5167c73d202e7d0cc2c5ea1cdb1df520668f99b5eb29d1143d3692813",
+    "packages/creative/test/judge-calibration-harness.test.ts": "598dca606b25be8851db6634ebbd56195eded955a043b6eb3f6e5d1a8f43266f",
+    "packages/creative/test/kaae-2025-guideline-selection.test.ts": "0e49edef8524d315bc80257cc0bb5e2fd49cef27f44814dccdd9bae1642ff7db",
+    "packages/creative/test/kaae-2025-guideline.test.ts": "934caa78e6b767a51f506c964c0d2145c3e4dc3dc3778800865a2ae4525f5c32",
+    "packages/creative/test/kaae-poster-compositions.test.ts": "926b95436436c675fa9a39f3cffa95ac0f22e8def178dab47d2dec1507ad4d83",
+    "packages/creative/test/negative-space-policy.test.ts": "14f57d1ff1b6d2a3cbe61a41b2bf3841abbb008605e91e5d282e2d549213b903",
+    "packages/creative/test/office-posts-gates.test.ts": "2a6a41b53774bc08c960298ee9a817d4d5ae8818ec93a3cae87076fa8e7bdbd9",
+    "packages/creative/test/selection-without-document-default.test.ts": "07621cfffe8051672df8dcafde4a438c6a5e6e14f605c740f9f98a5b96076e8a",
+    "packages/creative/test/title-color.test.ts": "6d1c2ecbc9dedde7cbef347ed751d8badc7f7b62304c18172f13bf7cd096dbb4",
+    "packages/qa/src/canva-pdf-check.ts": "f2c688c2e055d1f610712d53cf3501f7576421152df3fed467474f74b5a1c4ce",
+    "packages/qa/src/canva-pptx-check.ts": "6958c1af7642ef27e83e199a6c9df9e3c9b8599a8b589e915e6cd3e3fa310a38",
+    "packages/qa/src/index.ts": "a4d9a07d422dbeb2287e613c316e3c8ac940d9b54fa402df5ee23ce43a4bfe6e",
+    "packages/qa/test/canva-pdf-check.test.ts": "6c02588735b2210872f1d7f3b5e66c6122095e4949682fa255620dcbf33cc326",
+    "packages/qa/test/display-caps-copy.test.ts": "c5bb659cb7aab1d9f543cbd25caeacf8d5a5b1254e58d3e9796c5f75504e0206",
+    "packages/qa/test/pptx-script-fonts.test.ts": "79c534d7666f8173b4e7e8595a6ba6a004280b4b3749d794bdb59ac4d42d230e",
+    "packages/testkit/test/heartbeat.test.ts": "7e6943727e10102ff7d2d0639aa280fd1d7342d8364a405cdd86893286a70550",
+    "packages/testkit/test/release-directories.test.ts": "4dfa488e483e6a5e407dff52f642734e520a1d349232b226930e1ca5a13a79a8",
+    "scripts/experiments/judge-calibration.ts": "82d11924c469b83616474cc6d62e3fd1fa6183b747b3cc8859b8928a5e2d1478",
+    "scripts/proofs/display_caps_proof.ts": "9a2877e2b238515faf1d10a2a687262464886f00585ac5d1186fae23bd63f175"
+  },
+  "limitations": [
+    "Not deployed or publicly activated.",
+    "Real Canva caps/weighted-font export and native Sorani review remain open.",
+    "Website inherited coverage, protected-member performance, reviewed visual, deployed RLS/Linux gates remain open.",
+    "Public hosting/HTTPS/coordinated restore and real two-user upload/generation/revision/acceptance/download/restart/other-app/human quality proof remain open."
+  ]
+}

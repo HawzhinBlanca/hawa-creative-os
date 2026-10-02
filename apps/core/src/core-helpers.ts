@@ -343,20 +343,31 @@ export function evaluateCanvaExportQc(
   // the pinned PPTX with its captured font policy and current approved copy on every QC run.
   let resolvedCheck: ReturnType<typeof checkCanvaPptx> | null = null;
   try {
-    const perBlockFonts = contentCheck?.fontsByIndex;
-    if (perBlockFonts && (!Array.isArray(perBlockFonts) || !perBlockFonts.every((face: unknown) => typeof face === 'string'))) {
-      throw new Error('Invalid captured font policy');
+    const frozen=contentCheck?.checkingPolicy;
+    if (frozen) {
+      if (frozen.version!==1 || !['imported_source','manual_client_dna','initial_client_dna','revision_client_dna'].includes(frozen.kind) ||
+          !Array.isArray(frozen.copy) || frozen.copy.length!==copyToCheck.length ||
+          frozen.copy.some((part: unknown,index: number)=>part!==copyToCheck[index]) ||
+          (frozen.options!==undefined && (!frozen.options || typeof frozen.options!=='object' || Array.isArray(frozen.options))) ||
+          (!frozen.options && !frozen.requiredFont)) throw new Error('Invalid or changed frozen export checking policy');
+      // ADR276: duplicated capture fields never weaken the reserved copy/font/display policy.
+      resolvedCheck=checkCanvaPptx(bytes,copyToCheck,frozen.requiredFont || frozen.options,frozen.options);
+    } else {
+      const perBlockFonts = contentCheck?.fontsByIndex;
+      if (perBlockFonts && (!Array.isArray(perBlockFonts) || !perBlockFonts.every((face: unknown) => typeof face === 'string'))) {
+        throw new Error('Invalid captured font policy');
+      }
+      const directionOptions = {
+        ...(contentCheck?.directionsByIndex == null ? {} : { directionsByIndex: contentCheck.directionsByIndex }),
+        // ADR-275: blocks set in capitals keep their case-folded comparison on every re-check.
+        ...(contentCheck?.uppercaseByIndex == null ? {} : { uppercaseByIndex: contentCheck.uppercaseByIndex }),
+      };
+      resolvedCheck = checkCanvaPptx(bytes, copyToCheck,
+        contentCheck?.allowedFontsByScript ? { allowedFontsByScript: contentCheck.allowedFontsByScript, ...directionOptions }
+          : perBlockFonts ? { fontsByIndex: perBlockFonts, scriptFonts: contentCheck?.scriptFonts || undefined, ...directionOptions }
+          : (requiredFont || contentCheck?.requiredFont || 'Verdana'),
+        perBlockFonts ? {} : { scriptFonts: contentCheck?.scriptFonts || undefined, ...directionOptions });
     }
-    const directionOptions = {
-      ...(contentCheck?.directionsByIndex == null ? {} : { directionsByIndex: contentCheck.directionsByIndex }),
-      // ADR-275: blocks set in capitals keep their case-folded comparison on every re-check.
-      ...(contentCheck?.uppercaseByIndex == null ? {} : { uppercaseByIndex: contentCheck.uppercaseByIndex }),
-    };
-    resolvedCheck = checkCanvaPptx(bytes, copyToCheck,
-      contentCheck?.allowedFontsByScript ? { allowedFontsByScript: contentCheck.allowedFontsByScript, ...directionOptions }
-        : perBlockFonts ? { fontsByIndex: perBlockFonts, scriptFonts: contentCheck?.scriptFonts || undefined, ...directionOptions }
-        : (requiredFont || contentCheck?.requiredFont || 'Verdana'),
-      perBlockFonts ? {} : { scriptFonts: contentCheck?.scriptFonts || undefined, ...directionOptions });
   } catch (err: any) {
     errors.push(`PPTX slide check failed: ${err.message || String(err)}`);
   }

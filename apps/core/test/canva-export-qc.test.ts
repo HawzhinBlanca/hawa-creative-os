@@ -82,6 +82,22 @@ const storedRow = (bytes: Uint8Array) => ({
 });
 
 describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
+  it('cannot expand a frozen exact-copy policy through receipt-level capitals or fonts',()=>{
+    const copy=['Exact copy'],bytes=scriptFontDeck(scriptFontRun('EXACT COPY','Verdana','Verdana'));
+    const policy={version:1,kind:'imported_source',copy,requiredFont:'Verdana',options:{}};
+    const receipt={...checkCanvaPptx(bytes,copy,{fontsByIndex:['Verdana'],uppercaseByIndex:[true]}),
+      expectedCopy:copy,checkingPolicy:policy};
+    expect(receipt.copyPass).toBe(true);
+    const qc=evaluateCanvaExportQc({sha256:sha256(bytes),format:'pptx',content:bytes,content_check:receipt},copy);
+    expect(qc.criticalPass).toBe(false);expect(qc.qaReport.copyFidelity).toBe(false);
+    const frozen={...receipt,checkingPolicy:{...policy,options:{uppercaseByIndex:[true]}}};
+    expect(evaluateCanvaExportQc({sha256:sha256(bytes),format:'pptx',content:bytes,content_check:frozen},copy).qaReport.copyFidelity).toBe(true);
+    expect(evaluateCanvaExportQc({sha256:sha256(bytes),format:'pptx',content:bytes,content_check:frozen},['EXACT COPY']).criticalPass).toBe(false);
+    const wrongFace=scriptFontDeck(scriptFontRun('Exact copy','Arial','Arial'));
+    const relaxed={...checkCanvaPptx(wrongFace,copy,{allowedFontsByScript:{latin:['Arial'],arabic:[]}}),checkingPolicy:policy};
+    expect(relaxed.fontPass).toBe(true);
+    expect(evaluateCanvaExportQc({sha256:sha256(wrongFace),format:'pptx',content:wrongFace,content_check:relaxed},copy).qaReport.fontFamilyPass).toBe(false);
+  });
   it.each([
     {text:'Hello',face:'Verdana Fake',expected:'Verdana'},
     {text:'سڵاو',face:'Noto Sans Arabic Fake',expected:'Noto Sans Arabic'},

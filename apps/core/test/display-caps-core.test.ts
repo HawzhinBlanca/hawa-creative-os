@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { StudioLayoutV2, TextElement } from '@hawa/creative';
 import { applyOp, type OpContext } from '../src/services/design-studio/edit-ops.js';
 import { carryOver, keepUntouched } from '../src/services/design-studio/stages/edit.stage.js';
-import { importedSourceCapitals } from '../src/services/canva-connect-service.js';
+import { importedSourceCapitals, freezeConfirmedSourceDisplay } from '../src/services/canva-connect-service.js';
+import type { ExportCheckPolicy } from '../src/services/canva-export-policy.js';
 
 /**
  * ADR-275: a poster title in a named weight and capitals keeps both through a requester's edit,
@@ -52,5 +53,18 @@ describe('display caps through a requester edit (ADR-275)', () => {
     expect(importedSourceCapitals(manifest([{ copyIndex: 0 }, { copyIndex: 1 }]))).toBeUndefined();
     expect(importedSourceCapitals(manifest([{ copyIndex: 0, textTransform: 'uppercase' }]))).toBeUndefined();
     expect(importedSourceCapitals(null)).toBeUndefined();
+  });
+  it('retains only unchanged indexed capitals in a human confirmation, without changing its copy or fonts',()=>{
+    const policy:ExportCheckPolicy={version:1,kind:'revision_client_dna',copy:['Peer Review Week','New date'],
+      options:{allowedFontsByScript:{latin:['Inter'],arabic:[]}}};
+    const source={id:'retained-source',manifest:{copy:['Peer Review Week','Old date'],plan:{text:[
+      {copyIndex:1,textTransform:'uppercase'},{copyIndex:0,textTransform:'uppercase'}]}}};
+    expect(freezeConfirmedSourceDisplay(policy,source)).toEqual({...policy,sourceId:source.id,
+      options:{...policy.options,uppercaseByIndex:[true,false]}});
+    expect(policy.options.uppercaseByIndex).toBeUndefined();
+    for(const copy of [['New title','New date'],['Old date','Peer Review Week'],['Peer Review Week']])
+      expect(freezeConfirmedSourceDisplay({...policy,copy},source)).toEqual({...policy,copy});
+    expect(freezeConfirmedSourceDisplay(policy,{...source,manifest:{...source.manifest,plan:{text:[
+      {copyIndex:0,textTransform:'uppercase'},{copyIndex:0,textTransform:'uppercase'}]}}})).toBe(policy);
   });
 });

@@ -971,10 +971,12 @@ it('keeps action rows and events immutable with no raw worker or foreign custome
  await expect(f.service.detail(f.b.member,requestId)).rejects.toMatchObject({status:404});
 });
 
-async function nativeReviewFixture() {
+async function nativeReviewFixture(capitals=false) {
  const copy=['Verified announcement'],f=await previewFixture({variant:'portrait',exactCopy:[{text:copy[0],language:'en'}]}),
-  sourceId=randomUUID(),operation=randomUUID(),bytes=Buffer.from(syntheticPptx({x:10,y:15,w:88,h:20,color:'14253D'},null,copy));
- const hash=photoHash(bytes),policy={version:1,kind:'imported_source',sourceId,copy,options:{fontsByIndex:['Cinzel'],directionsByIndex:['ltr' as const]}};
+  sourceId=randomUUID(),operation=randomUUID(),bytes=Buffer.from(syntheticPptx({x:10,y:15,w:88,h:20,color:'14253D'},null,
+    capitals?copy.map(text=>text.toUpperCase()):copy));
+ const hash=photoHash(bytes),policy={version:1,kind:'imported_source',sourceId,copy,options:{fontsByIndex:['Cinzel'],directionsByIndex:['ltr' as const],
+   ...(capitals?{uppercaseByIndex:[true]}:{})}};
  await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version)
  VALUES(${operation}::uuid,${f.tenantId}::uuid,${f.projection.taskId}::uuid,${f.clientId}::uuid,${f.adminId},${operation},${hash},'create','retrieved',${f.designId},1)`.execute(owner);
  await sql`INSERT INTO hawa.canva_editable_sources(id,tenant_id,task_id,client_id,actor_id,operation_id,sha256,content,manifest)
@@ -1103,8 +1105,8 @@ it('withholds readiness while an owned revision action awaits canonical acknowle
  expect(f.reader.observeCustomerDesign).not.toHaveBeenCalled();
 });
 
-async function acceptanceFixture() {
- const f=await nativeReviewFixture(),review=await f.service.review(f.a.member,f.receipt.job.id,f.expected);
+async function acceptanceFixture(capitals=false) {
+ const f=await nativeReviewFixture(capitals),review=await f.service.review(f.a.member,f.receipt.job.id,f.expected);
  expect(review.status).toBe('ready');
  const body={kind:'accept' as const,expectedVersion:review.requestVersion,previewId:review.previewId,
   previewSha256:review.previewSha256,basisSha256:review.basisSha256,files:review.files};
@@ -1138,6 +1140,13 @@ it('records one independent customer acceptance, waits for durable acknowledgeme
  await acknowledgeCustomerAction(db,f.event,result);
  const rows=(await sql<{n:string}>`SELECT count(*) AS n FROM hawa.customer_acceptances WHERE tenant_id=${f.tenantId}::uuid AND action_id=${f.admitted.action.id}::uuid`.execute(owner)).rows[0];expect(Number(rows.n)).toBe(1);
  expect((await sql<{state:string}>`SELECT state FROM hawa.tasks WHERE id=${f.projection.taskId}::uuid`.execute(owner)).rows[0].state).toBe('human_review');
+});
+it('uses the frozen capitals policy through independent customer review, acceptance and native download',async()=>{
+ const f=await acceptanceFixture(true);await applyAcceptance(f);
+ const download=await f.service.download(f.a.member,f.receipt.job.id,downloadExpected(f,'pptx'));
+ expect(download.bytes.equals(f.bytes)).toBe(true);
+ expect(checkCanvaPptx(download.bytes,['Verified announcement'],{fontsByIndex:['Cinzel']}).copyPass).toBe(false);
+ expect(checkCanvaPptx(download.bytes,['Verified announcement'],{fontsByIndex:['Cinzel'],uppercaseByIndex:[true]}).copyPass).toBe(true);
 });
 it('refuses forged reviewed identities and foreign customer approval without touching Canva',async()=>{
  const f=await nativeReviewFixture(),review=await f.service.review(f.a.member,f.receipt.job.id,f.expected);

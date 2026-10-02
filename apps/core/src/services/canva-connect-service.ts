@@ -119,6 +119,17 @@ export function importedSourceCapitals(manifest: { copy?: unknown; plan?: { text
   return caps.some(Boolean) ? caps : undefined;
 }
 
+/** ADR276: a human confirmation inherits display policy only for unchanged indexed content. */
+export function freezeConfirmedSourceDisplay(policy: ExportCheckPolicy,
+  source: {id: string; manifest: {copy?: unknown; plan?: {text?: unknown}}} | null | undefined): ExportCheckPolicy {
+  const capitals=importedSourceCapitals(source?.manifest ?? null), copy=source?.manifest.copy;
+  if (!capitals || !Array.isArray(copy) || copy.length!==policy.copy.length ||
+      !copy.every(part=>typeof part==='string')) return policy;
+  const inherited=capitals.map((capital,index)=>capital && copy[index]===policy.copy[index]);
+  if (!inherited.some(Boolean)) return policy;
+  return {...policy,sourceId:source!.id,options:{...policy.options,uppercaseByIndex:inherited}};
+}
+
 /** Only explicit booleans on each uniquely indexed source block establish a direction. */
 export function importedSourceDirections(manifest: { copy?: unknown; plan?: { text?: unknown } } | null): Array<'ltr' | 'rtl' | null> | undefined {
   if (!Array.isArray(manifest?.copy) || !Array.isArray(manifest.plan?.text)) return undefined;
@@ -627,7 +638,8 @@ export class CanvaConnectService {
         if (format === 'pptx' || revisionCopy) {
           const source = format === 'pptx' ? await this.editableSource(s,taskId,binding.client_id,design.id,db) : undefined;
           if (revisionCopy) {
-            metadata.checkingPolicy=await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id,s);
+            metadata.checkingPolicy=freezeConfirmedSourceDisplay(
+              await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id,s), source);
           } else if (source) {
             const manifest=source.manifest, blocks=studioSentBlocks(manifest);
             const directionsByIndex=importedSourceDirections(manifest);
@@ -724,14 +736,9 @@ export class CanvaConnectService {
         if(row.metadata.format==='pptx'){
           const policy = row.metadata.checkingPolicy as ExportCheckPolicy | undefined;
           if (policy) {
-            // ADR-275: a block the imported design set in capitals stays case-folded after a native
-            // revision (Canva keeps cap="all"); every other block stays exact. Only when the confirmed
-            // copy still has the imported plan's block count, so indexes mean the same blocks.
-            const source=await this.editableSource(s,taskId,row.client_id,row.design_id).catch(()=>null);
-            const capitals=importedSourceCapitals(source?.manifest ?? null);
-            const options=capitals && capitals.length===policy.copy.length ? {...policy.options,uppercaseByIndex:capitals} : policy.options;
-            contentCheck={...checkCanvaPptx(bytes,policy.copy,policy.requiredFont || options,options),
-              expectedCopy:policy.copy,checkingPolicy:policy,...(options!==policy.options?{uppercaseByIndex:capitals}:{})};
+            // ADR276: retrieval cannot augment the immutable admission policy from a later source.
+            contentCheck={...checkCanvaPptx(bytes,policy.copy,policy.requiredFont || policy.options,policy.options),
+              expectedCopy:policy.copy,checkingPolicy:policy};
           } else {
             const source=await this.editableSource(s,taskId,row.client_id,row.design_id);
             // Legacy operations have no frozen policy. A complete imported plan supplies each block's

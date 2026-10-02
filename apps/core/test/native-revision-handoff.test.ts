@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
+import { encodeEditableTransfer } from '@hawa/creative';
 import { createDb, sql, withRlsContext, DesignStudioRepository } from '@hawa/db';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { CanvaDesignPlanner } from '../src/services/canva-design-planner.js';
@@ -72,6 +73,29 @@ describe.skipIf(!url)('native revision admission and human copy handoff (synthet
   const confirm=async(key=randomUUID(),body?:Awaited<ReturnType<typeof input>>)=>{
     const request=body??await input();return tx(trx=>confirmNativeRevisionCopy(trx,scope,taskId,key,request));
   };
+  it.each([true,false])('freezes confirmed source capitals only for unchanged content: %s',async unchanged=>{
+    await bind(taskId,designId);await confirm();
+    const copy=['New exact date 2026'],plan={width:640,height:640,background:'#FFFFFF',shapes:[],text:[{
+      copyIndex:0,x:20,y:20,width:600,height:100,fontSize:24,fontFamily:'Verdana',color:'#000000',align:'left' as const,
+      rtl:false,textTransform:'uppercase' as const}]};
+    // The native export variant with its display capitals written into the text.
+    pptx=Buffer.from((await encodeEditableTransfer(plan,copy.map(text=>text.toUpperCase()))).bytes);
+    const operationId=randomUUID(),sourceId=randomUUID();
+    await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version)
+      VALUES(${operationId}::uuid,${tenantId}::uuid,${taskId}::uuid,${clientId}::uuid,${actorId},${randomUUID()},'display-source','create','retrieved',${designId},1)`.execute(db);
+    await sql`INSERT INTO hawa.canva_editable_sources(id,tenant_id,task_id,client_id,actor_id,operation_id,sha256,content,manifest)
+      VALUES(${sourceId}::uuid,${tenantId}::uuid,${taskId}::uuid,${clientId}::uuid,${actorId},${operationId}::uuid,
+        ${createHash('sha256').update(pptx).digest('hex')},${pptx},
+        ${JSON.stringify({copy:unchanged?copy:['Unrelated prior title'],plan})}::jsonb)`.execute(db);
+    const admitted=await canva.startExport(scope,taskId,randomUUID(),'pptx',1);
+    const metadata=(await sql<{metadata:{checkingPolicy:{options:{uppercaseByIndex?:boolean[]};sourceId?:string}}}>
+      `SELECT metadata FROM hawa.canva_remote_operations WHERE id=${admitted.operationId}::uuid`.execute(db)).rows[0].metadata;
+    expect(metadata.checkingPolicy.options.uppercaseByIndex).toEqual(unchanged?[true]:undefined);
+    expect(metadata.checkingPolicy.sourceId).toBe(unchanged?sourceId:undefined);
+    const checked=await new CanvaConnectService(db,options).exportStatus(scope,taskId,admitted.operationId);
+    expect(checked.artifact.content_check.copyPass).toBe(unchanged);
+    expect(checked.artifact.content_check.checkingPolicy).toEqual(metadata.checkingPolicy);
+  });
   const app=()=>createApp({db,canvaOptions:options,extraBearerTokens:{test_operator_bearer:{role:'operator',sub:actorId}}});
   const post=async(path:string,body:unknown,key=randomUUID(),headers:Record<string,string>={})=>app().request(path,{method:'POST',
     headers:{'content-type':'application/json',Authorization:'Bearer test_operator_bearer','Idempotency-Key':key,...headers},body:JSON.stringify(body)});
