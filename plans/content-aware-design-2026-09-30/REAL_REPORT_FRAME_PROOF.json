@@ -1,6 +1,6 @@
 {
   "date": "2026-10-02",
-  "status": "FOCUSED_SOURCE_REPAIR_PASSED_NATIVE_AND_HUMAN_OPEN",
+  "status": "SOURCE_PREFLIGHT_PASSED_NATIVE_AND_HUMAN_OPEN",
   "requirements": [
     "FR-017",
     "FR-023",
@@ -77,7 +77,8 @@
   },
   "probeCorrections": [
     "Initial literal XML contains check omitted the existing compound word-joiner encoding. Corrected with keepCompoundsWhole and immutable copy manifest hash. Original JPEG hashes were preserved; suspected conversion was not observed.",
-    "Direct solver render lacked the actual production preparation/settleLogoGround steps and refused busy logo. Added those actual local stages; no threshold changed."
+    "Direct solver render lacked the actual production preparation/settleLogoGround steps and refused busy logo. Added those actual local stages; no threshold changed.",
+    "Literal a:noFill-only probe found zero frames; inspection shows legal zero-alpha fill. Corrected semantic transparency check; source/output unchanged."
   ],
   "permissions": {
     "productionDataMigration": "PENDING_EXPLICIT_LOCAL_COPY_AUTHORIZATION",
@@ -86,7 +87,23 @@
   },
   "canvaUploadOrSavePerformed": false,
   "productionChanged": false,
-  "fullEngineeringPreflight": "NOT_RUN_ON_THIS_REPAIR",
+  "fullEngineeringPreflight": {
+    "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
+    "qualifiedCommit": "e89da52846709ab966ceacaacf647d5fd602ad75",
+    "cleanTree": true,
+    "passed": 7723,
+    "failed": 0,
+    "skipped": 67,
+    "passingFiles": 726,
+    "skippedFiles": 6,
+    "durationSeconds": 265.68,
+    "technicalStagesPassed": 7,
+    "productionDataStage": "SKIPPED_PENDING_EXPLICIT_LOCAL_COPY_AUTHORIZATION",
+    "negativeFlagRefusal": true,
+    "candidateDockerOnFrameRepair": "NOT_RUN; previous 243-control candidate proof belongs to 7f43b588, not this repair",
+    "gateEvidence": "plans/content-aware-design-2026-09-30/REAL_REPORT_FRAME_GATE_EVIDENCE.json",
+    "receipt": "output/qualification/2026-10-02/real-report-acceptance/full/FULL_TEST_SUITE_RUN.log"
+  },
   "wholeProductAdmission": false,
   "logs": {
     "FRAME_RED.log": {
@@ -104,9 +121,85 @@
     "CURRENT_SOURCE_PREVIEW.log": {
       "path": "output/qualification/2026-10-02/real-report-acceptance/CURRENT_SOURCE_PREVIEW.log",
       "sha256": "3c9f8ed098d5b2d9d9885a33ea87de3f251af886b8d8989474aa8fdcb4baf65f"
+    },
+    "full/RELEASE_GATE_EVIDENCE.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/RELEASE_GATE_EVIDENCE.json",
+      "sha256": "bc7fe2ce37f161e1e63852f35274a6d08af31f620d672a56b7d226ff9f920717"
+    },
+    "full/FULL_TEST_SUITE_RUN.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/FULL_TEST_SUITE_RUN.log",
+      "sha256": "3e8c8dcb181a0529982fb75d466a2ce6807b9409cc178981652c107380058548"
+    },
+    "full/TEST_DB_PROVISION.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/TEST_DB_PROVISION.log",
+      "sha256": "0455ee87066a211d6bacc37f856657dfd8dcc286fc281b884048e413271e370d"
+    },
+    "full/PREDEPLOY_DUMP_CHECK.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/PREDEPLOY_DUMP_CHECK.json",
+      "sha256": "e0002a801be76c59f3eaedf9b5aa5014eaf311d49ad89e488a39720cca99ca68"
+    },
+    "full/PREDEPLOY_DUMP_CHECK.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/PREDEPLOY_DUMP_CHECK.log",
+      "sha256": "2cd86e5b76691db06126e413583580784234c6b6cf862541e244f8f762d414bc"
+    },
+    "full/NEGATIVE_FLAG_REFUSAL.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/full/NEGATIVE_FLAG_REFUSAL.log",
+      "sha256": "e4500f3424b31649ecf61f5fbf26188bef773957d640710f182d9bf1ababdf3b"
+    },
+    "ENGINEERING_PREFLIGHT.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/ENGINEERING_PREFLIGHT.log",
+      "sha256": "006ff6f874957f2755ec00d23c48786741a6205c4121b33e7e9cf914c7c370e8"
+    },
+    "INDEPENDENT_PPTX_FRAME_READBACK.json": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/INDEPENDENT_PPTX_FRAME_READBACK.json",
+      "sha256": "30f56ee30cdba680f1fd98d32a08c499f1da859de04bcdc5901791ee6f586b16"
     }
   },
   "externalGenerationCalls": 0,
   "nativeConnectorScope": "Read metadata/text/pages, open and cancel an unmodified inspection transaction, request an unused upload URL. Actual upload rejected before execution.",
-  "environmentFailure": "Initial manifest/commit hook used system Python without PyYAML and refused; existing Homebrew runtime retry passed. No hook waived."
+  "environmentFailure": "Initial manifest/commit hook used system Python without PyYAML and refused; existing Homebrew runtime retry passed. No hook waived.",
+  "independentPptxReadback": {
+    "scope": "Independent OOXML inspection of local current-source transfer; not actual Canva/native rendering or human quality",
+    "initialProbe": "Literal a:noFill-only probe found zero frames; inspection shows legal zero-alpha fill. Corrected semantic transparency check; source/output unchanged.",
+    "results": [
+      {
+        "recipe": "hero_storyboard",
+        "pptxSha256": "72dd1bdb5d077864363b9c7f563ecb56b0a7b0ed2aa8664f03518ca2323cad50",
+        "independentTransparentVectorFrame": {
+          "strokeEmu": 28575,
+          "offset": {
+            "x": "333375",
+            "y": "333375"
+          },
+          "extent": {
+            "cx": "9620250",
+            "cy": "12192000"
+          },
+          "transparentVectorFill": true
+        },
+        "independentTextObjects": 2,
+        "missingFrameCounterexampleRefused": true,
+        "actualCanvaImport": false
+      },
+      {
+        "recipe": "photo_mosaic",
+        "pptxSha256": "fd5bd0b09f7e2aba2523897b9db5c7882ac39a3070e480037bee03364716ce8d",
+        "independentTransparentVectorFrame": {
+          "strokeEmu": 28575,
+          "offset": {
+            "x": "333375",
+            "y": "333375"
+          },
+          "extent": {
+            "cx": "9620250",
+            "cy": "12192000"
+          },
+          "transparentVectorFill": true
+        },
+        "independentTextObjects": 2,
+        "missingFrameCounterexampleRefused": true,
+        "actualCanvaImport": false
+      }
+    ]
+  }
 }
