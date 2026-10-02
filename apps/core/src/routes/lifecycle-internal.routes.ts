@@ -59,7 +59,7 @@ import { parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-
 import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.js';
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
   type IntentReceipt } from '../services/requester-turn-store.js';
-import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, hasLetters, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
+import { askText, conflictOfficeAlert, designName, forwardOfficeAlert, forwardText, hasLetters, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
   opensForAPerson, readIntentByRules, readsAsBriefContinuation, redoText, requestLabel, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
   requesterName, spokenStage, whoWrote,
   tellText, thanksText, waitsForRequester,
