@@ -88,7 +88,11 @@ it('a guideline alternative preserves content-aware multiple-photo compositions 
     for (const file of files) expect(media.has(digest(file.bytes))).toBe(true);
     expect(media.has(digest(LOGO))).toBe(true);
     // The production checker handles only the admitted invisible word joiners used for K-12.
-    const nativeCopy = checkCanvaPptx(deck.bytes, Object.values(OWNER), { allowedFontsByScript: KAAE_FONTS });
+    // ADR-275: checked as production checks its imports: each block against the face it was sent in,
+    // the capitals title compared without case (its copy travels as typed under cap="all").
+    const fontsByIndex = Object.keys(OWNER).map((i) => layout.text.find((t) => t.copyIndex === Number(i))!.fontFamily);
+    const uppercaseByIndex = Object.keys(OWNER).map((i) => layout.text.find((t) => t.copyIndex === Number(i))!.textTransform === 'uppercase');
+    const nativeCopy = checkCanvaPptx(deck.bytes, Object.values(OWNER), { fontsByIndex, uppercaseByIndex });
     expect(nativeCopy.copyPass).toBe(true);
     expect(nativeCopy.fontPass).toBe(true);
     expect(nativeCopy.sourceTextObjects).toHaveLength(3);
@@ -485,7 +489,8 @@ describe('light first (ADR-236 logic, re-pointed at the 2025 palette)', () => {
     const light = solve('hero_fade_report', { frame: 'inset', align: 'start', surfaceTone: 'cream', paper: 'white' }, photo(0.8), true);
     expect(light.background.color).toBe(WHITE);
     const title = light.text.find((t) => t.role === 'title')!;
-    expect(title).toMatchObject({ fontFamily: 'Crimson Pro', color: BLUE });
+    // ADR-275 (owner, 2026-10-02): the photo designs' title takes the posters' heavy sans capitals.
+    expect(title).toMatchObject({ fontFamily: 'Inter', fontWeight: 800, textTransform: 'uppercase', color: BLUE });
     expect(light.text.find((t) => t.role === 'body')).toMatchObject({ fontFamily: 'Inter', color: MIDNIGHT });
     expect(validateLayoutV2(light, context())).toMatchObject({ ok: true });
     const dark = solve('hero_fade_report', { frame: 'inset', align: 'start', surfaceTone: 'navy' }, photo(0.8), true);

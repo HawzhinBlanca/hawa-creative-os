@@ -23,6 +23,7 @@ import { rankPhotosForHero, type QuietArea } from './recipes.js';
 import { candidateRecipeTypeScales, type RecipeTypeScale as TypeScale } from './type-scale-search.js';
 import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
 import { protectedCropFocus, protectedRegionsOnCanvas, type SourceRegion, type RegionStatus } from '../protected-regions.js';
+import { PosterDisplayFaceError, posterDisplayStyle, withPosterDisplayStyle } from '../poster-display.js';
 import { GrammarInfeasibleError, composeGrammarLayout, conformMarksToPageGrammar, type PageGrammar } from '../page-grammar.js';
 
 /**
@@ -597,6 +598,19 @@ class SolveContext {
       ...(lead && this.isLight() && this.input.grammar!.lead.italic ? { italic: true } : {}),
       ...(b.arabic ? { rtl: true, letterSpacing: 0 } : {}),
     };
+    // ADR-275: with poster display rules (KAAE: the office's heavy sans capitals), a photo design's title
+    // takes the same display face as the client's posters. A Sorani title keeps the body leading here:
+    // the recipes do not measure line ink, so the tighter display leading stays with the composer.
+    if (b.slot === 'title' && this.input.grammar?.poster?.display) {
+      let style;
+      try {
+        style = posterDisplayStyle(this.input.grammar, b.arabic ? 'arabic' : 'latin', this.input.fontsDir ? { fontsDir: this.input.fontsDir } : {});
+      } catch (err) {
+        if (err instanceof PosterDisplayFaceError) throw new RecipeInfeasibleError(this.recipe, err.message);
+        throw err;
+      }
+      if (style) return withPosterDisplayStyle(el, b.arabic ? { ...style, lineHeight: Math.max(style.lineHeight, lh.min) } : style);
+    }
     return el;
   }
 
