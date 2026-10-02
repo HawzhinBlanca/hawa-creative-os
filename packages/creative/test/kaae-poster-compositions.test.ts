@@ -113,6 +113,10 @@ describe('the three poster compositions, composed with no model call', () => {
         // smaller details.
         // ADR-275: a capitals title is width-bound ("EVALUATORS" fills the measure at 0.128 of the
         // width), so a title-only navy poster may sit a little over the 0.65 target (0.683).
+        // ADR-273: the union measure no longer counts a card or pill and the type on
+        // it twice, so the same Sorani workshop posters (same titles, same geometry) read emptier:
+        // navy 0.653 -> 0.664, cream 0.626 -> 0.698, band 0.563 -> 0.681. They are the emptiest the
+        // composer can make that short copy; the office's own posts measure 0.56-0.58 this way.
         expect(ns, `${variant} negative space`).toBeLessThanOrEqual(0.7);
         expect(ns, `${variant} negative space`).toBeGreaterThanOrEqual(0.36);
         expect(guidelineDeviations(l, G, { arabicFonts: KAAE_FONTS.arabic })).toEqual([]);

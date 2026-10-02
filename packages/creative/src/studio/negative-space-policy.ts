@@ -12,6 +12,23 @@ import { createHash } from 'node:crypto';
  * The numbers are the calibration the checker already used (see computeNegativeSpace for its
  * provenance and open questions). Moving them is a policy change: bump `version`, record the new
  * digest in the policy test, and qualify the accept/reject change it causes.
+ *
+ * 2026-10-02.1 (ADR-273), calibrated on twelve of the office's own published posts
+ * (packages/creative/test/fixtures/office-posts):
+ * - occupancy is a union, not a sum: where elements overlap, the point counts once, at the heaviest
+ *   weight on it (a band and the title on it, a card and its lines, a photo and the plate over it);
+ *   only type set over type still stacks, so a crammed layout of overlapping blocks stays crammed.
+ *   This is the measured-lines measure; the declared-box fallback keeps its box sum and its band;
+ * - a photo is ground, not content, where a fade or scrim at least OVERLAY_CARRY_MIN_OPACITY opaque
+ *   lies over it (the navy fade a report title sits on), and a photo's own fade, its opacity and an
+ *   overlay panel drawn over it reduce what it occupies;
+ * - a photo-led layout (one framed photo over half the canvas) is measured the way an art-directed
+ *   recipe is (ADR-170): the title on quiet ground, no bare text on the photo, the type not crowding.
+ *   Counted as occupied, a full-bleed photo failed every office photo post (0.00-0.13 empty);
+ * - the bands did not move: measured this way, the densest office post without a leading photo is
+ *   0.56 empty and the densest composed poster 0.48, both inside the plateau, and the crammed and
+ *   bare cases the tests reject still fail. The audit's "dense office posters fall under the floor"
+ *   came from the double counting and the photo weighting, not from the floor.
  */
 export type NegativeSpaceMeasure = 'measured_lines' | 'declared_boxes';
 
@@ -19,7 +36,7 @@ interface Band { floor: number; rampEnd: number; plateauEnd: number; taperEnd: n
 
 export const NEGATIVE_SPACE_POLICY = Object.freeze({
   id: 'studio.negative-space',
-  version: '2026-09-30.1',
+  version: '2026-10-02.1',
   /** fraction = 1 - occupied area / canvas area, clamped to 0..1. */
   occupancy: Object.freeze({
     /** measured_lines: width x min(box height, measured line count x fontSize x lineHeight). */
@@ -40,7 +57,30 @@ export const NEGATIVE_SPACE_POLICY = Object.freeze({
     photoFramedWeight: 1,
     photoCutoutWeight: 0.6,
     art: 'not_counted',
+    /**
+     * 2026-10-02.1: overlapping elements count once, at the heaviest weight on each point; type set
+     * over type still stacks (both blocks are ink), as the sum counted it. Measured lines only: the
+     * declared-box fallback keeps the box sum its band was calibrated on (the union moves 22 of the
+     * 200 stored designs across that band, and the office posts are measured with lines).
+     */
+    combine: Object.freeze({ measured_lines: 'union_max_weight_type_stacks', declared_boxes: 'sum' }),
+    /** Paint order: shapes under the photos, photos, fades and scrims, overlay panels, logo, type. */
+    layers: 'shapes_photos_overlays_overlay_panels_logo_text',
+    /** A photo counts at its weight times its opacity times its own fade's alpha (linear over the fade). */
+    photoOpacityAndFade: 'scaled',
+    /** Where a fade or scrim is at least this opaque the photo under it is ground (the carry threshold, ADR-170). */
+    groundUnderOverlayMinOpacity: 0.55,
+    /** A filled overlay panel (plate, card, tab, pill) replaces what is drawn under it with its own weight. */
+    overlayPanel: 'replaces_beneath',
+    /** Type is counted where it sets: its measured lines, centred in its box as the renderer draws them. */
+    textInkPlacement: 'centred_in_box',
   }),
+  /**
+   * 2026-10-02.1: a layout led by one framed photo over this share of the canvas is measured as an
+   * art-directed recipe is: the title on quiet ground (off the photo, or on a plate, card, pill, fade
+   * or scrim), no text bare on a photo, and inked type covering at most `inkCoverageMax` of the canvas.
+   */
+  photoLed: Object.freeze({ framedPhotoShare: 0.5, inkCoverageMax: 0.35, measure: 'quiet_region' }),
   bands: Object.freeze({
     measured_lines: Object.freeze({ floor: 0.36, rampEnd: 0.44, plateauEnd: 0.78, taperEnd: 0.84 }),
     declared_boxes: Object.freeze({ floor: 0.25, rampEnd: 0.30, plateauEnd: 0.60, taperEnd: 0.65 }),
@@ -131,8 +171,12 @@ export function negativeSpacePromptGuidance(measure: NegativeSpaceMeasure = 'mea
     `- Negative space (policy ${p.id} ${p.version}; the same definition the checker scores):`,
     `  * Negative space = 1 - occupied area / canvas area. Occupied: each text box's width x the height its copy actually sets ` +
       `(measured line count x fontSize x lineHeight, capped at the box height); the logo box; panels and frames at ${p.occupancy.panelOrFrameWeight} ` +
-      `and other shapes at ${p.occupancy.otherShapeWeight} of their area. A border or background-coloured frame covering ${p.occupancy.canvasFrameShare * 100}% ` +
-      `of the canvas is not content. Each client photograph counts: a framed photo its whole box, a cut-out person ${p.occupancy.photoCutoutWeight} of its box. Artwork is not counted.`,
+      `and other shapes at ${p.occupancy.otherShapeWeight} of their area. Overlapping elements count once (a band and the title on it are one area, at the heavier weight); type over type counts twice. ` +
+      `A border or background-coloured frame covering ${p.occupancy.canvasFrameShare * 100}% ` +
+      `of the canvas is not content. Each client photograph counts: a framed photo its box, a cut-out person ${p.occupancy.photoCutoutWeight} of its box, ` +
+      `less its own fade and opacity; under a fade or scrim at least ${p.occupancy.groundUnderOverlayMinOpacity} opaque it is ground. Artwork is not counted.`,
+    `  * A layout led by one framed photo over ${p.photoLed.framedPhotoShare * 100}% of the canvas is not held to this range or the gap limits below: its title needs quiet ground ` +
+      `(off the photo, or on a plate, card, pill, fade or scrim), no text may sit bare on the photo, and type may ink at most ${p.photoLed.inkCoverageMax * 100}% of the canvas.`,
     `  * Passing range ${f(pass.min)}-${f(pass.max)}; preferred ${f(band.rampEnd)}-${f(band.plateauEnd)}. Fuller than ${f(pass.min)} or emptier than ${f(pass.max)} fails.`,
     `  * Gaps are measured between content spans: each text box counts at its full declared height (not the lines it sets), ` +
       `the logo box, each photograph's box, and shapes at least ${p.internalGap.spanMinHeightPx}px tall other than rules; artwork is not a span.`,
