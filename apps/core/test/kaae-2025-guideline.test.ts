@@ -295,10 +295,11 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
     for (const r of ranked) {
       const W = r.layout.width;
       const title = r.layout.text.find((t) => t.role === 'title')!;
-      expect(title).toMatchObject({ fontFamily: 'Crimson Pro', bold: true });
-      // One dominant display moment: the title at 10-18% of the width, the logo at 16%.
+      // ADR-275 (owner, 2026-10-02): the office's heavy sans capitals; the copy is stored as typed.
+      expect(title).toMatchObject({ fontFamily: 'Inter', fontWeight: 800, textTransform: 'uppercase', bold: true });
+      // One dominant display moment: the title at 10-20% of the width, the logo at 16%.
       expect(title.fontSize / W).toBeGreaterThanOrEqual(0.1);
-      expect(title.fontSize / W).toBeLessThanOrEqual(0.18);
+      expect(title.fontSize / W).toBeLessThanOrEqual(0.2);
       expect(r.layout.logo.width / W).toBeGreaterThanOrEqual(0.16);
       expect(r.layout.shapes.map((x) => x.primitive)).toContain('title_bar');
       // No more of the canvas empty than the poster ceiling allows.

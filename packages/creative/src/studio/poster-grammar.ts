@@ -1,6 +1,7 @@
 import type { Box, CompositionRecord, Hex, OrnamentElement, ShapeElement, StudioLayoutV2, TextElement } from './layout-v2.js';
 import { HOUSE_RULES, getSafeZoneBox, logoClearZone, minLogoWidth } from './house-rules.js';
-import { measureTextGeometry, measureWrappedLines } from './render-layout-v2.js';
+import { lineInkClears, measureLineInkClearance, measureTextGeometry, measureWrappedLines } from './render-layout-v2.js';
+import { PosterDisplayFaceError, posterDisplayStyle, posterLabelStyle, withPosterDisplayStyle, type PosterDisplayStyle } from './poster-display.js';
 import { hexToLuminance } from './composite-contrast.js';
 import { sunburstRadius } from './brand-elements.js';
 import { computeNegativeSpace } from './design-metrics.js';
@@ -215,7 +216,29 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     return { height: mm.requiredHeightPx + 1, lineWidth: mm.maxLineWidthPx, lines: mm.lineCount };
   };
   type Kind = 'title' | 'lead' | 'label' | 'meta' | 'metaFirst' | 'body' | 'cta' | 'footer';
+  // ADR-275: the poster's display title (KAAE: the office's heavy sans capitals), per script, from the
+  // reference; undefined keeps the grammar's title face. A face that cannot draw the script makes the
+  // composition infeasible rather than drawing half the title in another face.
+  const displayStyles = new Map<'latin' | 'arabic', PosterDisplayStyle | undefined>();
+  const displayStyle = (script: 'latin' | 'arabic') => {
+    if (!displayStyles.has(script)) {
+      try {
+        displayStyles.set(script, posterDisplayStyle(g, script, input.fontsDir ? { fontsDir: input.fontsDir } : {}));
+      } catch (err) {
+        if (err instanceof PosterDisplayFaceError) throw new GrammarInfeasibleError(err.message);
+        throw err;
+      }
+    }
+    return displayStyles.get(script);
+  };
+  const labelStyle = posterLabelStyle(g);
   const el = (b: GrammarUnit['blocks'][number], kind: Kind, size: number, color: Hex, w: number, opts: { italic?: boolean; bold?: boolean } = {}): TextElement => {
+    const base = plainEl(b, kind, size, color, w, opts);
+    if (kind === 'title') return withPosterDisplayStyle(base, displayStyle(b.arabic ? 'arabic' : 'latin'));
+    if (kind === 'label' && !b.arabic && labelStyle) return { ...base, ...labelStyle };
+    return base;
+  };
+  const plainEl = (b: GrammarUnit['blocks'][number], kind: Kind, size: number, color: Hex, w: number, opts: { italic?: boolean; bold?: boolean } = {}): TextElement => {
     const lhRange = b.arabic ? HOUSE_RULES.lineHeight.arabic : HOUSE_RULES.lineHeight.latin;
     // The details' lines (a date, a place) share one tight leading, as one group; running text 1.45.
     const wanted = b.arabic ? (kind === 'title' ? 1.6 : 1.7) : kind === 'title' ? 1.2 : kind === 'lead' ? 1.35 : kind === 'meta' || kind === 'metaFirst' ? 1.25 : 1.45;
@@ -282,7 +305,16 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   for (const u of head) {
     const b = u.blocks[0];
     if (u.kind === 'title') {
-      const p = set(el(b, 'title', sizes.title, spec.title, contentW), b.text, contentX, contentW, y);
+      let titleEl = el(b, 'title', sizes.title, spec.title, contentW);
+      let p = set(titleEl, b.text, contentX, contentW, y);
+      // A Sorani display title under the body leading keeps its marks clear of the next line, measured
+      // (ADR-275): the leading steps up until the ink clears, at most to the body range.
+      while (p && b.arabic && titleEl.lineHeight < HOUSE_RULES.lineHeight.arabic.min) {
+        const clearance = measureLineInkClearance(p.el, b.text, input.fontsDir ? { fontsDir: input.fontsDir } : {});
+        if (!clearance || lineInkClears(clearance)) break;
+        titleEl = { ...titleEl, lineHeight: Math.min(HOUSE_RULES.lineHeight.arabic.min, Math.round((titleEl.lineHeight + 0.05) * 100) / 100) };
+        p = set(titleEl, b.text, contentX, contentW, y);
+      }
       if (!p) return undefined;
       if (p.lines > (b.arabic ? 3 : 4)) return undefined;
       titleBox = p.el;

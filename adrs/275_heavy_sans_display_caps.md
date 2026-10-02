@@ -202,3 +202,26 @@ fixture deck, one PPTX and PNG export, and the checks with the plan's policy. It
 - the Canva proof (section 7);
 - a native Sorani review of 1.35 leading and of IBM Plex Sans Arabic Bold as the display face. The
   research notes there is no black-weight Sorani face in the set.
+
+## Addendum (2026-10-02): wired into the poster composer
+
+This addendum covers the integration branch `claude/design-integration`, which merges ADR-271 §8, ADR-274 and this ADR.
+
+**Composer (`poster-grammar.ts`):**
+- The title takes `posterDisplayStyle` for its script: Inter 800 in capitals at leading 0.98 for English; IBM Plex Sans Arabic 700 at 1.35 for Sorani.
+- Latin labels take `posterLabelStyle`.
+- A face that cannot draw the script makes the composition infeasible (`PosterDisplayFaceError` becomes `GrammarInfeasibleError`).
+- A Sorani title under 1.6 has its line ink measured; if it fails, the leading steps up by 0.05, up to the body range.
+
+**Reference data:** `poster.titleSizeShare.max` is now 0.2, the office's "PEER". The art-direction and colour-usage text that model prompts read now asks for a heavy sans title in capitals instead of a serif one.
+
+**Result on the deterministic proof set:**
+- All 21 renders pass hard QA.
+- The three-line Sorani band now composes. It was infeasible at 1.6 leading.
+- Capitals titles are bounded by width: "EVALUATORS" fills the measure at 0.128 of the width. Two consequences follow:
+  - A title-only navy poster sits at 0.683 negative space, above the 0.65 target. The test bound is now 0.70.
+  - The band may keep its details at the scale step below the poster's detail size: 0.036 of the width for the English workshop, 0.033 for Sorani.
+
+**Natively revised designs:** the manual and revision export check (`canva-connect-service.ts`, frozen `checkingPolicy`) now receives `uppercaseByIndex` from the imported source plan, when the confirmed copy has the same block count. A capitals block therefore stays case-folded after a native revision.
+
+**Owner action:** that check matches the client's approved fonts exactly. This is deliberate: "does not broaden exact manual Client DNA membership", `pptx-font-family-identity.test.ts`. So KAAE's human-authored Client DNA needs **"Inter ExtraBold"** (OFL, locale en) added in the Desk before a revised capitals design can pass a manual export. The system does not author Client DNA itself.

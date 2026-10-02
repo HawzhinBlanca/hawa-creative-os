@@ -724,8 +724,14 @@ export class CanvaConnectService {
         if(row.metadata.format==='pptx'){
           const policy = row.metadata.checkingPolicy as ExportCheckPolicy | undefined;
           if (policy) {
-            contentCheck={...checkCanvaPptx(bytes,policy.copy,policy.requiredFont || policy.options,policy.options),
-              expectedCopy:policy.copy,checkingPolicy:policy};
+            // ADR-275: a block the imported design set in capitals stays case-folded after a native
+            // revision (Canva keeps cap="all"); every other block stays exact. Only when the confirmed
+            // copy still has the imported plan's block count, so indexes mean the same blocks.
+            const source=await this.editableSource(s,taskId,row.client_id,row.design_id).catch(()=>null);
+            const capitals=importedSourceCapitals(source?.manifest ?? null);
+            const options=capitals && capitals.length===policy.copy.length ? {...policy.options,uppercaseByIndex:capitals} : policy.options;
+            contentCheck={...checkCanvaPptx(bytes,policy.copy,policy.requiredFont || options,options),
+              expectedCopy:policy.copy,checkingPolicy:policy,...(options!==policy.options?{uppercaseByIndex:capitals}:{})};
           } else {
             const source=await this.editableSource(s,taskId,row.client_id,row.design_id);
             // Legacy operations have no frozen policy. A complete imported plan supplies each block's

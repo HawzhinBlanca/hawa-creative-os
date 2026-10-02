@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T20:17:59Z",
+  "generatedAt": "2026-10-02T20:57:30Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 880,
+  "fileCount": 886,
   "files": [
     {
       "path": ".dockerignore",
@@ -1238,6 +1238,16 @@
       "bytes": 15190
     },
     {
+      "path": "adrs/274_selection_without_the_document_default.md",
+      "sha256": "5b921b4860c313788ee598e786c405135996abfb9beccc4ec57b4c0c56d6be91",
+      "bytes": 13652
+    },
+    {
+      "path": "adrs/275_heavy_sans_display_caps.md",
+      "sha256": "cfb892b064c16805431e3fd4e6cdc6640a23810e47fa530fd9a823ed1ca4d3d6",
+      "bytes": 14853
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1661,6 +1671,11 @@
       "path": "evals/visual_quality_rubric.md",
       "sha256": "374d0c059f694f4dde4c3362f204b94d4b0ac8343f151488550b7f4ce2f34bb6",
       "bytes": 1708
+    },
+    {
+      "path": "plans/2026-10-02-canva-display-caps-proof.md",
+      "sha256": "fad46d780bcae27952349b8bb2a76a73bf5ee0bc00e5e992c85e24c80d13f8f3",
+      "bytes": 6924
     },
     {
       "path": "plans/RACI.csv",
@@ -2236,6 +2251,11 @@
       "path": "plans/hosting/PRODUCTION_HOSTING_PLAN.md",
       "sha256": "3afb30ad563bb0beaad62886feb329565ab10967be45e1e7610e8a9757d1dcbb",
       "bytes": 47459
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/frozen-set.json",
+      "sha256": "c913caf4ed345e4d5d4f68192592c5932b9fd2eb4d79616d385dd994a901676a",
+      "bytes": 8040
     },
     {
       "path": "plans/kaae-2025-guideline/CODEX_MERGE_NOTE.md",
@@ -3434,8 +3454,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2fe0878f392d63c05365a812fc364083f130727f1ec9e6234eafa769bd331f0a",
-      "bytes": 839228
+      "sha256": "dcad267401fc157e4e4f8e50c9b7e82469554757cf22eecadf67c22dfa78a8f3",
+      "bytes": 842140
     },
     {
       "path": "plans/user-stories.csv",
@@ -3768,6 +3788,11 @@
       "bytes": 20508
     },
     {
+      "path": "scripts/experiments/judge-calibration.ts",
+      "sha256": "82d11924c469b83616474cc6d62e3fd1fa6183b747b3cc8859b8928a5e2d1478",
+      "bytes": 13633
+    },
+    {
       "path": "scripts/experiments/judge-model-agreement.ts",
       "sha256": "9dd15a3e95d726ebb6b37591751f30bf5e3afeeec53b0e51bd7dce01821d28c6",
       "bytes": 11715
@@ -4031,6 +4056,11 @@
       "path": "scripts/proofs/content_topology_verify_native.mjs",
       "sha256": "157bb7c769a3adc2528ff1941d079c49686be3aa4281bd0439d8eb4e54280111",
       "bytes": 4002
+    },
+    {
+      "path": "scripts/proofs/display_caps_proof.ts",
+      "sha256": "9a2877e2b238515faf1d10a2a687262464886f00585ac5d1186fae23bd63f175",
+      "bytes": 9546
     },
     {
       "path": "scripts/proofs/gate-baseline.json",
