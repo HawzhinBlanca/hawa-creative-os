@@ -61,15 +61,24 @@ export interface IntentReading {
    * place. They are asked about among the requests that can be withdrawn, never with "a new design".
    */
   cancelWords?: true;
+  /**
+   * ADR-251 (bug hunt 2, friction 1): a cancel that names nothing ("never mind", "stop", "no need",
+   * "ok never mind"). It may be about the last thing said rather than the design, so the requester is
+   * asked "Do you want me to cancel …?" first; it never withdraws on its own.
+   */
+  bareCancel?: true;
 }
 
 export type Lang = RequesterLang;
 /**
  * The language to answer a message in (ADR-145): the script with more letters, so a Sorani message
  * that names a brand in Latin letters is answered in Sorani, and an English one quoting a Kurdish word
- * in English. A message with no letters (an emoji) is answered in English.
+ * in English. ADR-251 (friction 11): a message with no letters (an emoji, a number) is answered in
+ * `fallback`, the chat's own language when the caller knows it, else English.
  */
-export const langOf = (text: string): Lang => requesterLang(text, 'en');
+export const langOf = (text: string, fallback: Lang = 'en'): Lang => requesterLang(text, fallback);
+/** Whether the words carry any letter to tell their language by (ADR-251). */
+export const hasLetters = (text: string): boolean => /\p{L}/u.test(String(text ?? ''));
 
 export type RequestStage = 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' |
   'delivering' | 'delivered';
@@ -270,6 +279,16 @@ const CANCEL_SOMEWHERE = new RegExp(`\\b(?:cancel|withdraw|scrap|abort)\\b.*\\b(
 /** Sorani: cancel it, stop it, not needed, we don't need it, don't make it, leave it, give it up. */
 const CANCEL_CKB = ['هەڵیوەشێنەوە', 'هەڵبوەشێنەوە', 'هەڵوەشێنەوە', 'هەڵیبوەشێنەوە', 'ڕایبگرە', 'بیوەستێنە',
   'ڕاوەستە', 'پێویست ناکات', 'پێویستمان نییە', 'پێویستم نییە', 'مەیکە', 'لێی گەڕێ', 'وازی لێ بێنە'];
+/**
+ * ADR-251 (friction 1): a cancel that names what it cancels: the verb with a whole-request object ("cancel
+ * it", "don't make the poster"), a description ("the one I sent this morning"), or a verb said of "it"
+ * ("it's not needed"). Sorani words that carry their object: all of `CANCEL_CKB` but "stop" and "no need".
+ */
+const CANCEL_EN_NAMED = new RegExp(`^(?:(?:just|kindly)\\s+)?${CANCEL_VERB}\\s+${CANCEL_OBJECT}${CANCEL_POLITE}`, 'iu');
+const CANCEL_SAID_OF_IT = /^(?:(?:just|kindly)\s+)?(?:it'?s|it\s+is)\s/iu;
+/** Sorani: stop, no need. */
+const CANCEL_CKB_BARE = ['ڕاوەستە', 'پێویست ناکات'];
+const CANCEL_CKB_NAMED = CANCEL_CKB.filter((p) => !CANCEL_CKB_BARE.includes(p));
 
 /** A temporary stop of the design, never a quoted instruction or a pause of a design element. */
 export function readsAsHold(text: string): boolean {
@@ -280,9 +299,16 @@ export function readsAsHold(text: string): boolean {
   return /^(?:(?:wait|hold\s+on|hang\s+on)[\s,.!:-]+)?(?:don['’]?t|do\s+not)\s+(?:make|start|continue|proceed\s+with)\s+(?:it|them|this|that|(?:the|these|those)\s+(?:designs?|posters?|drafts?))\s+(?:yet|for\s+now)\b/i.test(t) ||
     new RegExp('^(?:hold|pause)\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))' + wholeJobTail, 'i').test(t) ||
     new RegExp('^put\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))\\s+on\\s+hold' + wholeJobTail, 'i').test(t) ||
-    /^(?:wait|hold\s+on|hang\s+on)[\s!.]*$/i.test(t) ||
-    /^(?:ڕایبگرە|ڕاوەستە)(?:[\s،,.!]|$)/u.test(t);
+    // ADR-251 (friction 10): a bare "wait" / "hold on" asks for a moment and pauses nothing (`ASKS_FOR_A_MOMENT`);
+    // a bare Sorani "stop" is a cancel that names nothing, and is asked about.
+    /^ڕایبگرە(?:[\s،,.!]|$)/u.test(t) || /^ڕاوەستە[\s،,]+[^\s،,.!]/u.test(t);
 }
+
+/**
+ * ADR-251 (bug hunt 2, friction 10): "wait", "hold on", "one moment" said alone ask the bot for a moment,
+ * usually before more words. They pause nothing; the requester's design goes on.
+ */
+const ASKS_FOR_A_MOMENT = /^(?:wait|hold\s+on|hang\s+on|one\s+(?:moment|minute|min|sec(?:ond)?)|just\s+a\s+(?:moment|minute|min|sec(?:ond)?)|a\s+moment)(?:\s+(?:wait|please))*[\s!.…]*$/iu;
 
 const STATUS_EN: RegExp[] = [
   /^(?:so\s+)?when\s+(?:will|would|can|could|is|are|do|does|should|shall)\b[^?]*\b(?:ready|done|finish(?:ed)?|complete(?:d)?|be\s+sent|be\s+delivered|arrive|get\s+(?:it|them|the\s+\p{L}+)|receive|see\s+(?:it|them|the\s+\p{L}+)|have\s+(?:it|them|the\s+\p{L}+))\b/iu,
@@ -429,15 +455,28 @@ const CANCEL_REASON = new RegExp('^(?:(?:because|since|cause|cos)\\s+)?(?:sorry\
   'not\\s+needed(?:\\s+any\\s?more)?', 'no\\s+longer\\s+needed',
 ].join('|') + ')(?:\\s+(?:any\\s?more|sorry|thanks?|thank\\s+you))*$', 'iu');
 
+const cancelClauses = (core: string) =>
+  core.split(/\s*[,،;.!:–—]+\s*|\s+-\s+|\s+(?=(?:because|since)\s)/iu).map((c) => c.trim()).filter(Boolean);
+const cancelsClause = (c: string) => CANCEL_EN.test(c) || CANCEL_DESCRIBED.test(c) || (isSoraniText(c) && c.split(/\s+/).length <= 4 && any(c, CANCEL_CKB));
+
 function readsAsCancel(core: string): boolean {
   if (!core || core.length > 160) return false;
-  if (CANCEL_EN.test(core) || CANCEL_DESCRIBED.test(core)) return true;
-  if (isSoraniText(core) && core.split(/\s+/).length <= 4 && any(core, CANCEL_CKB)) return true;
+  if (cancelsClause(core)) return true;
   // Several clauses: one of them cancels, and the rest only surround it, or say why (ADR-230 addendum, L17).
-  const clauses = core.split(/\s*[,،;.!:–—]+\s*|\s+-\s+|\s+(?=(?:because|since)\s)/iu).map((c) => c.trim()).filter(Boolean);
+  const clauses = cancelClauses(core);
   if (clauses.length < 2) return false;
-  const cancels = (c: string) => CANCEL_EN.test(c) || CANCEL_DESCRIBED.test(c) || (isSoraniText(c) && c.split(/\s+/).length <= 4 && any(c, CANCEL_CKB));
-  return clauses.some(cancels) && clauses.every((c) => cancels(c) || CANCEL_FILLER.test(c) || CANCEL_REASON.test(c));
+  return clauses.some(cancelsClause) && clauses.every((c) => cancelsClause(c) || CANCEL_FILLER.test(c) || CANCEL_REASON.test(c));
+}
+
+/**
+ * ADR-251 (friction 1): whether a cancel names nothing it cancels: no clause of it has a whole-request
+ * object or a description ("never mind", "ok never mind", "no, stop", "no need anymore"; Sorani "stop",
+ * "no need"). Such words withdrew the chat's only design unasked; they are asked about first.
+ */
+export function cancelNamesNothing(core: string): boolean {
+  const names = (c: string) => CANCEL_DESCRIBED.test(c) || CANCEL_EN_NAMED.test(c) || (CANCEL_SAID_OF_IT.test(c) && CANCEL_EN.test(c)) ||
+    (isSoraniText(c) && any(c, CANCEL_CKB_NAMED));
+  return ![core, ...cancelClauses(core)].some(names);
 }
 
 function readsAsStatus(core: string): boolean {
@@ -610,8 +649,12 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   if (readsAsDeliveryRequest(t, core)) return rules('delivery_request', 'Asks the office about the files (again, a format, an email, a resolution)');
   if (readsAsApproval(t, core)) return rules('approval', 'Approval words; the office decides');
   if (isAcknowledgement(t) || (core && isAcknowledgement(core) && core.length <= 60)) return rules('acknowledgement', 'Thanks, an OK or a receipt');
+  // ADR-251 (friction 10): "wait", "hold on" alone ask for a moment; nothing is paused.
+  if (ASKS_FOR_A_MOMENT.test(core)) return rules('acknowledgement', 'Asks for a moment; nothing is paused');
   if (readsAsHold(core)) return rules('hold', 'Asks to pause the current design');
-  if (readsAsCancel(core)) return rules('cancel', 'Asks to cancel or stop');
+  if (readsAsCancel(core)) {
+    return rules('cancel', 'Asks to cancel or stop', cancelNamesNothing(core) ? { bareCancel: true } : {});
+  }
   // ADR-230 addendum (L12): cancel words about a whole request that the patterns cannot place are never
   // read as a certain change of the latest design; they are unclear, and the intake router reads them
   // (ADR-144's one call per update, within the allowance) before anything is kept or asked.
@@ -739,8 +782,24 @@ const bareAnswer = (t: string) => t.replace(/^(?:the|number|no\.?|option|#|ئە�
   .replace(/\s+(?:one|design|poster|please|thanks?|تکایە)$/iu, '').replace(/[.!]+$/, '').trim();
 /** "new", "a new one", "separate", "نوێ" (new), "تازە" (new). */
 const SAYS_NEW = /^(?:(?:a|it'?s\s+a|its\s+a|this\s+is\s+a)\s+)?(?:new|separate|different|another)(?:\s+(?:one|design|request|poster|flyer|brief))?\b|^(?:نوێ|تازە|دیزاینی\s+نوێ|دیزاینێکی\s+نوێ)/iu;
-/** "change", "the same", "yes", "that one"; Sorani "yes", "edit", "the same". */
-const SAYS_CHANGE = /^(?:(?:a\s+)?change|(?:the\s+)?same(?:\s+one)?|yes|yeah|yep|that\s+one|this\s+one|edit|revise|revision|correction|re-?do)\b|^(?:بەڵێ|بەلێ|دەستکاری|هەمان|گۆڕانکاری|دووبارە)/iu;
+/**
+ * "change", "the same", "yes", "that one"; Sorani "yes", "edit", "the same". ADR-251 (friction 2): also
+ * "it's a change", "the old one", "the existing one", said after a "no" to "change or new?".
+ */
+const SAYS_CHANGE = /^(?:(?:it'?s|its|it\s+is|this\s+is)\s+)?(?:(?:a\s+)?change|(?:the\s+)?same(?:\s+one)?|yes|yeah|yep|that\s+one|this\s+one|edit|revise|revision|correction|re-?do|(?:the\s+)?(?:old|existing|current|earlier|previous)(?:\s+(?:one|design|poster|request))?$)\b|^(?:بەڵێ|بەلێ|دەستکاری|هەمان|گۆڕانکاری|دووبارە)/iu;
+/**
+ * ADR-251 (friction 2): "no" said alone ("no", "nope", Sorani "no"); "no thanks" is "no" once its thanks
+ * are taken off (`corePhrase`). Only this, to "Is this a change to …, or a new design?", means new.
+ */
+const BARE_NO = /^(?:no+|nope|nah|نەخێر|نا)[\s!.]*$/iu;
+/** A "no" that leads other words ("no, it's a change", "no it's for Nawroz"): the rest says what is meant. */
+const LEADING_NO = /^(?:no|nope|nah|نەخێر|نا)(?![\p{L}\p{N}])[\s,،.!:;-]*/iu;
+/**
+ * ADR-251 (friction 1): "no" to "Do you want me to cancel …?": "no", "no, keep it", "don't cancel it",
+ * "continue"; Sorani "no", "continue".
+ */
+const KEEPS_IT = /^(?:no+|nope|nah|not\s+really|(?:no[\s,]+)?(?:don'?t|do\s+not)(?:\s+cancel(?:\s+(?:it|that|this))?)?|(?:no[\s,]+)?(?:keep\s+(?:it|going|that|this)|continue|carry\s+on|go\s+on|go\s+ahead\s+with\s+it)|نەخێر|نا|(?:نا[\s،,]+)?بەردەوام\s+بە)[\s!.]*$/iu;
+export const keepsIt = (text: string): boolean => KEEPS_IT.test(corePhrase(text).toLowerCase());
 const SAYS_LAST = /^(?:(?:the\s+)?(?:last|latest|newest|most\s+recent)(?:\s+one)?|کۆتایی|دوایین|دواییان)$/iu;
 
 const tokens = (text: string) => new Set(clean(text).toLowerCase().normalize('NFKC')
@@ -759,11 +818,28 @@ export function titleMatch(text: string, options: Array<{ title: string }>): num
   return winners === 1 ? scores.indexOf(best) : null;
 }
 
-/** An answer to an open question, or null when the message is not one (it is then read on its own). */
-export function parseChoice(text: string, ask: Pick<PendingAsk, 'options' | 'allowNew'>): { option: number } | { new: true } | null {
-  const t = corePhrase(text).replace(/[٠-٩۰-۹]/g, (d) => DIGITS[d] ?? d).toLowerCase();
+/**
+ * An answer to an open question, or null when the message is not one (it is then read on its own).
+ * `adds`: a new design chosen with words of its own ("no, it's for Nawroz"), which go with its brief.
+ */
+export function parseChoice(text: string, ask: Pick<PendingAsk, 'options' | 'allowNew'>): { option: number } | { new: true; adds?: string } | null {
+  const said = corePhrase(text);
+  const t = said.replace(/[٠-٩۰-۹]/g, (d) => DIGITS[d] ?? d).toLowerCase();
   if (!t || t.length > 80) return null;
   const n = ask.options.length;
+  // ADR-251 (friction 2): a "no" that leads other words is read by the rest of them ("no, it's a change",
+  // "no, the old one", "no it's for Nawroz"). To a question with no "new design" in it ("Do you want me to
+  // cancel …?", "Is this for …?") it never picks the design asked about.
+  const leadingNo = LEADING_NO.exec(t);
+  if (leadingNo && leadingNo[0].length < t.length) {
+    if (!ask.allowNew) return null;
+    const rest = said.slice(leadingNo[0].length).trim();
+    const inner = rest ? parseChoice(rest, ask) : null;
+    if (inner) return inner;
+    // "No, it's for Nawroz" about another design: a new one, for what it names.
+    if (n === 1 && (OWN_SUBJECT_EN.test(rest) || OWN_SUBJECT_CKB.test(rest))) return { new: true, adds: rest };
+    return null;
+  }
   const number = /^(?:(?:number|no\.?|option|#)\s*)?(\d{1,2})(?:\s*[.)])?$/.exec(t) ??
     /^(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?(?:\s+one)?$/.exec(t);
   if (number) {
@@ -785,7 +861,7 @@ export function parseChoice(text: string, ask: Pick<PendingAsk, 'options' | 'all
     if (n === 1 && SAYS_CHANGE.test(t)) return { option: 0 };
     // "OK" answers "is this for …?", not "change or new?".
     if (n === 1 && !ask.allowNew && /^(?:ok(?:ay)?|sure|correct|right|باشە|ڕاستە)(?![\p{L}\p{N}])/iu.test(t)) return { option: 0 };
-    if (n === 1 && ask.allowNew && /^(?:no|nope|نەخێر|نا)\b/iu.test(t)) return { new: true };
+    if (n === 1 && ask.allowNew && BARE_NO.test(t)) return { new: true };
   }
   // A design's name ("the Nawroz one"), in a short answer: a longer message is read on its own.
   if (t.split(/\s+/).length > 6) return null;
@@ -1098,10 +1174,26 @@ export function planTurn(full: TurnInput): TurnPlan {
   // 1. An answer to the question this bot just asked the sender.
   // A reply to some other request's message is about that request, not an answer to the question.
   if (input.pendingAsk && (input.repliedToAsk || !input.bound.length)) {
+    // ADR-251 (friction 1): "no" to "Do you want me to cancel …?" keeps the design going; the requester
+    // hears where it stands.
+    if (input.pendingAsk.intent === 'cancel' && keepsIt(words)) {
+      const asked = input.pendingAsk.options.map((o) => o.requestId);
+      return { kind: 'reply', what: 'status', requestIds: requests.filter((r) => asked.includes(r.requestId)).map((r) => r.requestId) };
+    }
     const choice = parseChoice(words, input.pendingAsk);
     if (choice) {
       const ask = input.pendingAsk;
-      if ('new' in choice) return { kind: 'open', text: ask.words, instructionOnly: opensForAPerson(ask.words), resolves: ask.updateId };
+      if ('new' in choice) {
+        // ADR-251 (friction 2): "no, it's for Nawroz" about another design. A design of the chat that the
+        // added words name is asked about; otherwise a new design opens with them under its words.
+        if (choice.adds) {
+          const others = requests.filter((r) => CHANGEABLE.includes(r.stage) && !ask.options.some((o) => o.requestId === r.requestId) && mayAct(r));
+          const named = titleMatch(choice.adds, others);
+          if (named !== null) return { kind: 'ask', intent: 'unclear', words: ask.words, options: options([others[named]]), allowNew: true };
+        }
+        const text = choice.adds ? `${ask.words}\n${choice.adds}` : ask.words;
+        return { kind: 'open', text, instructionOnly: opensForAPerson(text), resolves: ask.updateId };
+      }
       const among = !ask.photo && readIntentByRules(ask.words).redo ? full.requests : requests;
       const chosen = among.find((r) => r.requestId === ask.options[choice.option]?.requestId);
       if (chosen && mayAct(chosen)) {
@@ -1170,12 +1262,15 @@ export function planTurn(full: TurnInput): TurnPlan {
       return reading.question ? { kind: 'forward', words, question: true } : { kind: 'conversation' };
     case 'cancel':
       // ADR-230 addendum (L12): a cancel withdraws, so it looks only at requests that can be withdrawn.
-      if (!input.bound.length) return planCancel(input, open, changeable, words, reading, ask);
+      // ADR-251 (friction 1): one that names nothing ("never mind", "stop") is asked about first.
+      if (!input.bound.length) return planCancel(input, open, changeable, words, reading, ask, reading.bareCancel === true);
       // falls through: a reply names its design, and a design too late to cancel is told so (ADR-230).
     case 'approval':
     case 'deadline':
     case 'hold': {
       const picked = pickRequest(input, open, true);
+      // ADR-251 (friction 1): "stop" said as a reply to a design's message is asked about too.
+      if ('request' in picked && reading.intent === 'cancel' && reading.bareCancel) return ask('cancel', [picked.request], false);
       if ('request' in picked) return applyTo(reading.intent, picked.request, words, picked.how, reading.confidence) ?? ask(reading.intent, [picked.request], false);
       if ('ambiguous' in picked) return ask(reading.intent, picked.ambiguous, false);
       // Nothing open: thanks, or where the chat stands, is all there is to say.
@@ -1247,7 +1342,14 @@ export function planTurn(full: TurnInput): TurnPlan {
 // ---------------------------------------------------------------------------------------------
 
 const say = (phrase: Phrase, lang: Lang, params: Record<string, string | number> = {}) => sayPhrase(phrase, lang, params);
-const title = (r: { title: string }) => bold(shortTitle(r.title));
+/**
+ * A design's name in bold. ADR-251 (friction 11): one with no name of its own is "your design" in the
+ * requester's language, never the English words inside a Sorani sentence.
+ */
+const title = (r: { title: string }, lang: Lang = 'en') => {
+  const name = shortTitle(r.title);
+  return bold(name === 'your design' ? say(LIFECYCLE_MESSAGES.yourDesign, lang) : name);
+};
 /**
  * ADR-231: a stored title that is a sentence naming no design (four words or more, read as redo, quality
  * words or chat). A short name ("Report", "Nawroz") is a name.
@@ -1275,7 +1377,7 @@ export function designName(value: string | null | undefined, lang: Lang): string
   // and the photos:…", task ba4469f2) has no name the requester would know: it is "your design" (ADR-142).
   const name = String(value ?? '').replace(/^[^:]{1,40}:\s*/, '').replace(/…$/, '').trim();
   if (name && isCopyIntroducer(name)) return say(LIFECYCLE_MESSAGES.yourDesign, lang);
-  return String(value ?? '').trim() ? title({ title: String(value) }) : say(LIFECYCLE_MESSAGES.yourDesign, lang);
+  return String(value ?? '').trim() ? title({ title: String(value) }, lang) : say(LIFECYCLE_MESSAGES.yourDesign, lang);
 }
 
 const STATUS_LINE: Record<RequestStage | 'manual-waiting', Phrase> = {
@@ -1347,7 +1449,7 @@ export function sentWhen(at: number, now: number, lang: Lang): string {
  * stored title when that is the sentence they sent.
  */
 export function requestLabel(r: { title: string; askedAt?: string; words?: string }, lang: Lang, now = Date.now()): string {
-  if (shortTitle(r.title) !== 'your design') return title(r);
+  if (shortTitle(r.title) !== 'your design') return title(r, lang);
   const at = r.askedAt ? Date.parse(r.askedAt) : NaN;
   const words = openingWords(r.words) || openingWords(r.title.replace(/^[^:]{1,40}:\s*/, ''));
   if (!Number.isFinite(at)) return words ? `${say(LIFECYCLE_MESSAGES.yourDesign, lang)} (${words})` : say(LIFECYCLE_MESSAGES.yourDesign, lang);
@@ -1372,11 +1474,11 @@ export function distinctNames(items: ReadonlyArray<{ requestId: string; title: s
   for (const group of groups.values()) {
     // ADR-230 addendum (L16): requests with no name of their own are each named by when and their words.
     if (shortTitle(group[0].title) === 'your design') { for (const g of group) names.set(g.requestId, requestLabel(g, lang, now)); continue; }
-    if (group.length === 1) { names.set(group[0].requestId, title(group[0])); continue; }
+    if (group.length === 1) { names.set(group[0].requestId, title(group[0], lang)); continue; }
     const when = group.map((g) => (g.askedAt && Number.isFinite(Date.parse(g.askedAt)) ? askedWhen(Date.parse(g.askedAt), now, lang) : ''));
     const byTime = when.every((w) => w) && new Set(when).size === when.length;
     const order = [...group].sort((a, b) => String(a.askedAt ?? '').localeCompare(String(b.askedAt ?? '')));
-    group.forEach((g, i) => names.set(g.requestId, `${title(g)} (${byTime ? when[i]
+    group.forEach((g, i) => names.set(g.requestId, `${title(g, lang)} (${byTime ? when[i]
       : say(ROUTING_MESSAGES.versionN, lang, { n: order.indexOf(g) + 1 })})`));
   }
   return names;
@@ -1396,7 +1498,7 @@ export function statusText(requests: ChatRequestView[], lang: Lang, slow: Readon
     const stage = spokenStage(r);
     const key = stage === 'manual' && r.rev >= 3 ? 'manual-waiting' : stage;
     const q = r.question?.text ? escapeTelegramHtml(r.question.text) : '';
-    const name = names.get(r.requestId) ?? title(r);
+    const name = names.get(r.requestId) ?? title(r, lang);
     if (stage === 'designing' && r.requesterHold) return say(ROUTING_MESSAGES.statusHeld, lang, { title: name });
     if (stage === 'designing' && slow.has(r.requestId)) return say(ROUTING_MESSAGES.statusDesigningSlow, lang, { title: name });
     return say(STATUS_LINE[key], lang, { title: name, question: q });
@@ -1451,7 +1553,7 @@ export function slowDesignOfficeAlert(who: string, slow: ChatRequestView[], now:
 
 export function thanksText(waiting: ChatRequestView[], lang: Lang): string {
   if (waiting.length !== 1) return say(ROUTING_MESSAGES.thanks, lang);
-  return say(ROUTING_MESSAGES.thanksOneWaiting, lang, { title: title(waiting[0]) });
+  return say(ROUTING_MESSAGES.thanksOneWaiting, lang, { title: title(waiting[0], lang) });
 }
 
 /** `alerted`: the office chat was told; without one the words are only kept for the office. */
@@ -1491,9 +1593,9 @@ export function nothingToChangeText(lang: Lang): string {
 /** ADR-231: `now` dates the names of designs that share one ("asked for today at 08:44"). */
 export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang, now = Date.now()): string {
   const names = distinctNames(plan.options, lang, now);
-  const named = (o: { requestId: string; title: string }) => names.get(o.requestId) ?? title(o);
+  const named = (o: { requestId: string; title: string }) => names.get(o.requestId) ?? title(o, lang);
   // ADR-200 addendum: a question about redo words names the designs and what would happen to them.
-  if (plan.redo === 'or-new' && plan.options.length === 1) return say(ROUTING_MESSAGES.askRedoOrNew, lang, { title: title(plan.options[0]) });
+  if (plan.redo === 'or-new' && plan.options.length === 1) return say(ROUTING_MESSAGES.askRedoOrNew, lang, { title: title(plan.options[0], lang) });
   if (plan.redo === 'redo' && plan.options.length > 1) {
     return say(ROUTING_MESSAGES.askWhichRedo, lang, { list: plan.options.map((o, i) => `${i + 1}. ${named(o)}`).join('\n') });
   }
@@ -1514,7 +1616,7 @@ export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang, no
  * being made, with the office, already approved or sent, delivered, or with a designer.
  */
 export function redoText(stage: string, requestTitle: string, lang: Lang, started = false): string {
-  const t = { title: title({ title: requestTitle }) };
+  const t = { title: title({ title: requestTitle }, lang) };
   if (started) return say(ROUTING_MESSAGES.redoStarted, lang, t);
   const phrase = stage === 'designing' || stage === 'awaiting_answer' ? ROUTING_MESSAGES.redoWhileDesigning
     : stage === 'manual' ? ROUTING_MESSAGES.redoPassedDesigner
@@ -1526,7 +1628,7 @@ export function redoText(stage: string, requestTitle: string, lang: Lang, starte
 /** The requester's answer to a note kept on a request (a change or a cancel). */
 export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requestTitle: string, lang: Lang, held = false, redo = false): string {
   if (redo && note === 'change') return redoText(stage, requestTitle, lang);
-  const t = { title: title({ title: requestTitle }) };
+  const t = { title: title({ title: requestTitle }, lang) };
   if (note === 'cancel') return say(ROUTING_MESSAGES.cancelAsked, lang, t);
   if (note === 'hold') return say(held ? ROUTING_MESSAGES.holdConfirmed : ROUTING_MESSAGES.holdAsked, lang, t);
   // ADR-230 section 6: a change kept while a draft is being made is applied in a new round when it finishes.
@@ -1543,11 +1645,11 @@ export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requ
  */
 export function tellText(note: TellNote, requestTitle: string, lang: Lang, alerted = true): string {
   if (note === 'delivery') {
-    return alerted ? say(ROUTING_MESSAGES.deliveryRequestPassed, lang, { title: title({ title: requestTitle }) })
+    return alerted ? say(ROUTING_MESSAGES.deliveryRequestPassed, lang, { title: title({ title: requestTitle }, lang) })
       : say(ROUTING_MESSAGES.keptForOffice, lang);
   }
   return say(note === 'approval' ? ROUTING_MESSAGES.approvalPassed : ROUTING_MESSAGES.deadlinePassed, lang,
-    { title: title({ title: requestTitle }) });
+    { title: title({ title: requestTitle }, lang) });
 }
 
 const TELL_STAGE: Record<RequestStage, string> = {

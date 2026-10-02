@@ -11,13 +11,16 @@ import { asksForNewDesign, isPlainQuestion, planTurn, readIntentByRules, readsAs
  */
 describe('temporary holds are a workflow instruction', () => {
   it.each(["wait, don't make it yet, we are changing the date", 'pause the design please',
-    'hold it until we confirm the date', 'put the poster on hold', 'wait', 'ڕاوەستە'])('%s holds', words => {
+    'hold it until we confirm the date', 'put the poster on hold'])('%s holds', words => {
     expect(readsAsHold(words)).toBe(true);
     expect(readIntentByRules(words).intent).toBe('hold');
     expect(readsAsBriefContinuation(words, 'KAAE poster')).toBe(false);
   });
   it.each(['pause the animation', 'hold this button', 'pause the design animation',
-    'Headline: "wait, don’t make it yet"', 'cancel it', 'never mind, cancel it'])('%s is not a hold', words => {
+    'Headline: "wait, don’t make it yet"', 'cancel it', 'never mind, cancel it',
+    // ADR-251 (bug hunt 2, friction 10): a bare "wait" asks for a moment, and a bare Sorani "stop" is a
+    // cancel that names nothing and is asked about (requester-turn-confirmations.test.ts). Both held before.
+    'wait', 'ڕاوەستە'])('%s is not a hold', words => {
     expect(readsAsHold(words)).toBe(false);
   });
   it('a paused paid admission propagates through all stage fallbacks', () => {
