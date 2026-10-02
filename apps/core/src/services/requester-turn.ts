@@ -353,6 +353,8 @@ export function readsAsHold(text: string): boolean {
   // on it for now", "hold off on it until …": a stop said with "yet", "for now" or "until" is a pause.
   return new RegExp(`^(?:(?:wait|hold\\s+on|hang\\s+on)[\\s,.!:-]+)?(?:don['’]?t|do\\s+not)\\s+(?:make|start|continue(?:\\s+with)?|proceed(?:\\s+with)?|go\\s+ahead\\s+with|go\\s+on\\s+with|carry\\s+on\\s+with|work\\s+on|finish)\\s+${HOLD_OBJECT}\\s+${HOLD_WHILE}`, 'iu').test(t) ||
     new RegExp(`^(?:stop|pause|halt|freeze|hold\\s+off)(?:\\s+(?:working|work))?(?:\\s+on)?(?:\\s+${HOLD_OBJECT})?\\s+${HOLD_WHILE}`, 'iu').test(t) ||
+    // "don't go ahead yet", "don't start yet", "do not proceed for now": the design is understood.
+    new RegExp(`^(?:(?:wait|hold\\s+on|hang\\s+on)[\\s,.!:-]+)?(?:please\\s+)?(?:don['’]?t|do\\s+not)\\s+(?:start|continue|proceed|go\\s+ahead|go\\s+on|carry\\s+on|finish)\\s+${HOLD_WHILE}`, 'iu').test(t) ||
     // Sorani: "don't make it yet" (هێشتا … مەکە): "yet" with a "don't" verb. Needs native review.
     /(?:^|\s)هێشتا\s+(?:\S+\s+){0,2}?(?:مەکە|مەیکە|مەکەن|مەیکەن)(?=[\s،,.!]|$)/u.test(t) ||
     new RegExp('^(?:hold|pause)\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))' + wholeJobTail, 'i').test(t) ||
@@ -485,10 +487,16 @@ const A_PART_HEAD = `(?:the|this|that|these|those|its|your|our|my|any|all\\s+the
  * the KAAE alumni meetup next month", "I'd like something to promote the summer school", "could you do something
  * for the science fair?". The subject is no part of a design ("something for the title" asks for a change).
  */
+/**
+ * A time after "something for" is when, not what: "we need something for tomorrow" said while a design is being
+ * made is a deadline (it was read as one before ADR-263), never a new request.
+ */
+const SOMETIME = '(?:tomorrow|today|tonight|(?:this|next|the)\\s+(?:morning|afternoon|evening|night|week(?:end)?|month|day|monday|tuesday|wednesday|thursday|friday|saturday|sunday|end\\s+of)|' +
+  '(?:mon|tues|wednes|thurs|fri|satur|sun)day|noon|midday|midnight|\\d)';
 const SOMETHING_FOR = new RegExp(`\\b(?:(?:i|we)(?:\\s+(?:also|really|will|would|might))?(?:\\s+(?:need|want|would\\s+like)|'d\\s+like)|` +
   `(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+)?(?:make|design|create|do|prepare)|(?:please\\s+)?(?:make|design|create|prepare)\\s+(?:us|me))\\s+` +
   `(?:something|anything)\\s+(?:(?:nice|new|simple|quick|small|special|creative)\\s+)?` +
-  `(?:for\\s+(?!(?:me|us|it|this|that|now|them|you)\\b)(?!${A_PART_HEAD}\\b)(?:(?:the|our|my|a|an|this|that)\\s+)?\\p{L}|to\\s+(?:promote|announce|advertise|celebrate|invite\\s+\\p{L}+\\s+to|mark)\\s+\\p{L})`, 'iu');
+  `(?:for\\s+(?!(?:me|us|it|this|that|now|them|you)\\b)(?!${A_PART_HEAD}\\b)(?!${SOMETIME}\\b)(?:(?:the|our|my|a|an|this|that)\\s+)?\\p{L}|to\\s+(?:promote|announce|advertise|celebrate|invite\\s+\\p{L}+\\s+to|mark)\\s+\\p{L})`, 'iu');
 /** A request for a new design ("Can you make a poster for Nawroz?"), greeting or not. */
 export function asksForNewDesign(text: string): boolean {
   const t = clean(text);

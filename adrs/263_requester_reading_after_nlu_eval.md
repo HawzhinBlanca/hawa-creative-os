@@ -130,3 +130,19 @@ These show the limit of closed lists. A model-first reader with these rules kept
 - **`apps/core/test/nlu-eval.test.ts`** reports the original set and the held-out set separately (`perSet`). It also checks that a held-out case is marked synthetic.
 - Full `apps/core` suite, `pnpm typecheck` and `pnpm lint`: see the commit message.
 - **Native review.** The Sorani reasons, "don't make it yet", "likes it", and the one synthetic Sorani test line ("we'll talk about it later") need native review. They are listed here because no catalogue phrase changed.
+
+## Addendum (2026-10-02, review): two edges found by probing
+
+Before the merge, I probed the rules for edges where a misreading opens, withdraws or approves something. Each phrase was run through the old and new rules in a fixed chat.
+
+1. **"Something for" followed by a time opened a new request.**
+   - "We need something for tomorrow" said while a design was being made opened a new request. Before this ADR it was a deadline.
+   - The new "something for" rule now skips a time after "for" (`SOMETIME`): tomorrow, today, this or next week, a weekday, and so on.
+   - "Something for Nawroz" still opens a brief.
+2. **"Don't go ahead yet" was misread twice.**
+   - Before this ADR it was approval words told to the office. After it, it got "change or new?".
+   - A pause said with no object ("don't go ahead yet", "don't start yet", "please don't proceed for now") now pauses the design on the way.
+
+**Tests:** both are pinned in `requester-turn-nlu-eval-fixes.test.ts`.
+
+**Left as found:** "stop working on it" asks "change or new?", as it did before this ADR. It should be asked about as a cancel. That is a follow-up.

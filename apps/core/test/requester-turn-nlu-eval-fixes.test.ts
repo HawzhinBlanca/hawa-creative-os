@@ -27,6 +27,24 @@ function plan(text: string, requests: ChatRequestView[]): TurnPlan {
 }
 
 describe('costly errors: nothing opened or withdrawn unless meant', () => {
+  // Review of ADR-263 (2026-10-02): "something for" + a time read as a new design and opened a request
+  // while one was being made; before ADR-263 it was a deadline. A time is when, not what.
+  it.each(['we need something for tomorrow', 'we need something for tomorrow morning please', 'I need something for next week',
+    'we need something for Monday', 'could you do something for this weekend'])(
+    '"%s" said while a design is being made opens nothing', (words) => {
+      expect(plan(words, [DESIGNING]).kind).not.toBe('open');
+    });
+
+  it('"something for" an event still opens a brief', () => {
+    expect(plan('we need something for Nawroz', [DESIGNING])).toMatchObject({ kind: 'open' });
+    expect(plan('we need something for the science fair next month', [])).toMatchObject({ kind: 'open' });
+  });
+
+  // Before ADR-263 "don't go ahead yet" contained "go ahead" and told the office it was approved.
+  it.each(["don't go ahead yet", "please don't proceed for now", "don't start yet"])('"%s" pauses the design', (words) => {
+    expect(plan(words, [IN_REVIEW])).toMatchObject({ kind: 'note', note: 'hold', requestId: 'A' });
+  });
+
   it.each(['forget about it', 'forget it', 'just forget it', 'oh well, forget about it then', 'ok forget it, sorry'])(
     '"%s" is a dismissal like "never mind": asked about, never withdrawn', (words) => {
       expect(readIntentByRules(words)).toMatchObject({ intent: 'cancel', bareCancel: true });
