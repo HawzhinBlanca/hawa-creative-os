@@ -2389,7 +2389,10 @@ export class DesignStudioService {
 
             const transferResult = await runTransferStage(ctx, winnerState);
 
-            // Hard QA verification on v2 PPTX bytes
+            // Hard QA verification on v2 PPTX bytes. ADR-275: a block the layout sets in capitals travels
+            // as typed under cap="all", so only that block is compared without regard to case.
+            const winnerText = (winnerState.currentLayout?.text ?? []) as Array<{ copyIndex?: number; textTransform?: string }>;
+            const uppercaseByIndex = ctx.copyBlocks.map((_b, i) => winnerText.some((t) => t.copyIndex === i && t.textTransform === 'uppercase'));
             const pptxCheck = checkCanvaPptx(
               new Uint8Array(transferResult.pptxBytes),
               ctx.copyBlocks.map((b) => b.text),
@@ -2397,6 +2400,7 @@ export class DesignStudioService {
               {
                 documentKind: (ctx as any).documentKind || 'design_piece',
                 scriptFonts: { arabic: ctx.arabicFont || 'Noto Sans Arabic' },
+                ...(uppercaseByIndex.some(Boolean) ? { uppercaseByIndex } : {}),
               }
             );
 

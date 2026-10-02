@@ -1,5 +1,5 @@
 import type { Box, CompositionRecord, Hex, OrnamentElement, ShapeElement, StudioLayoutV2, TextElement } from './layout-v2.js';
-import { HOUSE_RULES, getSafeZoneBox, logoClearZone, minLogoWidth } from './house-rules.js';
+import { HOUSE_RULES, getSafeZoneBox, isDisplayText, logoClearZone, minLogoWidth } from './house-rules.js';
 import { lineInkClears, measureLineInkClearance, measureTextGeometry, measureWrappedLines } from './render-layout-v2.js';
 import { PosterDisplayFaceError, posterDisplayStyle, posterLabelStyle, withPosterDisplayStyle, type PosterDisplayStyle } from './poster-display.js';
 import { hexToLuminance } from './composite-contrast.js';
@@ -234,7 +234,13 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const labelStyle = posterLabelStyle(g);
   const el = (b: GrammarUnit['blocks'][number], kind: Kind, size: number, color: Hex, w: number, opts: { italic?: boolean; bold?: boolean } = {}): TextElement => {
     const base = plainEl(b, kind, size, color, w, opts);
-    if (kind === 'title') return withPosterDisplayStyle(base, displayStyle(b.arabic ? 'arabic' : 'latin'));
+    if (kind === 'title') {
+      const style = displayStyle(b.arabic ? 'arabic' : 'latin');
+      // The display leading only at display size (isDisplayText: 0.06 of the width; a wide canvas sets
+      // smaller titles); otherwise the face, weight and capitals with the body leading.
+      const range = b.arabic ? HOUSE_RULES.lineHeight.arabic : HOUSE_RULES.lineHeight.latin;
+      return withPosterDisplayStyle(base, style && !isDisplayText({ role: 'title', fontSize: size }, W) ? { ...style, lineHeight: Math.max(style.lineHeight, range.min) } : style);
+    }
     if (kind === 'label' && !b.arabic && labelStyle) return { ...base, ...labelStyle };
     return base;
   };
@@ -412,8 +418,9 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
       placed.push(p.el);
       ly = p.el.y + p.el.height;
     }
-    // A bridging pill takes half its height inside the card, clear of the copy above it.
-    const padBottom = !panel ? 0 : bridge ? Math.max(pad, r(ctaPill!.height / 2) + r(0.6 * gapMin)) : pad;
+    // The pill sits inside the card, under its copy. (It straddled the card's lower edge until the
+    // blind panel of 2026-10-03, where all three judges read the straddle as an overlap, a slip.)
+    const padBottom = !panel ? 0 : bridge ? pad + ctaPill!.height + r(0.6 * gapMin) : pad;
     const h = ly - fy + padBottom;
     // The cream block runs from the foot's top to the canvas's lower edge, full bleed (placed below).
     const cardShapes: ShapeElement[] = block ? [{ kind: 'rect', role: 'panel', surface: 'plate', x: 0, y: fy, width: W, height: h, color: panelFill }] : panel ? [{
@@ -439,10 +446,10 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
         continue;
       }
       const { t, mm, padY, padX, height } = ctaPill;
-      // Bridging, the pill starts where the card's copy starts and straddles its lower edge.
+      // Inside the card, the pill starts where the card's copy starts, a padding above its lower edge.
       const startX = bridge ? (rtl ? card!.ix + card!.inner : card!.ix) : rtl ? colX + colW : colX;
       const room = bridge ? card!.inner : colW;
-      const py = bridge ? card!.y + card!.height - r(height / 2) : fy;
+      const py = bridge ? card!.y + card!.height - pad - height : fy;
       // The pill grows to the next grid line, so its free end lines up with the page.
       const natural = mm.lineWidth + 2 * padX + 2;
       const pw = Math.min(room, rtl ? startX - snapX(grid, startX - natural, 0.08 * W, 'down') : snapX(grid, startX + natural, 0.08 * W, 'up') - startX);

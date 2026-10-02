@@ -609,7 +609,10 @@ class SolveContext {
         if (err instanceof PosterDisplayFaceError) throw new RecipeInfeasibleError(this.recipe, err.message);
         throw err;
       }
-      if (style) return withPosterDisplayStyle(el, b.arabic ? { ...style, lineHeight: Math.max(style.lineHeight, lh.min) } : style);
+      // Recipes fit (and may shrink) a title after it is set, so a display leading chosen here could
+      // outlive the display size it needs (ADR-275: isDisplayText). The face, weight and capitals apply;
+      // the leading stays in the body range.
+      if (style) return withPosterDisplayStyle(el, { ...style, lineHeight: Math.max(style.lineHeight, lh.min) });
     }
     return el;
   }

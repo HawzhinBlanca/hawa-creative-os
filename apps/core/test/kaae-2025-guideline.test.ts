@@ -402,9 +402,10 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
         expect(o.x + o.width).toBeLessThanOrEqual(clear.x + clear.width + 1);
         expect(o.y + o.height).toBeLessThanOrEqual(clear.y + clear.height + 1);
       }
-      // The serif title, in KAAE Blue on the page or white on a navy plate.
+      // ADR-275 (owner, 2026-10-02): the posters' heavy sans capitals, in KAAE Blue on the page or white
+      // on a navy plate.
       const title = r.layout.text.find((t) => t.role === 'title')!;
-      expect(title.fontFamily).toBe('Crimson Pro');
+      expect(title).toMatchObject({ fontFamily: 'Inter', fontWeight: 800, textTransform: 'uppercase' });
       expect([BLUE, WHITE]).toContain(title.color.toUpperCase());
       expect(r.hardQa?.passed, `${recipe}: ${r.hardQa?.messages.join(' | ')}`).toBe(true);
       save(`photo-report_${recipe}`, r.layout, REPORT_COPY, [{ bytes: reportPhoto.bytes, mediaType: reportPhoto.mimeType }]);

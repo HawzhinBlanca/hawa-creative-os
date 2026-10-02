@@ -370,9 +370,12 @@ describe('the poster composer\'s defects (ADR-271 section 8)', () => {
         expect(p.color, `${b.id} ${v}`).toBe('#F7B500');
         if (rule) expect(rule.y - (p.y + p.height), `${b.id} ${v}: pill to rule`).toBeGreaterThanOrEqual(GAP);
         for (const c of cards) {
-          // A pill either bridges the card's lower edge or stands clear of it.
-          const bridges = p.y < c.y + c.height && p.y + p.height > c.y + c.height;
-          if (!bridges) expect(Math.max(p.y - (c.y + c.height), c.y - (p.y + p.height)), `${b.id} ${v}: pill to card`).toBeGreaterThanOrEqual(GAP);
+          // A pill sits wholly inside the card, or stands clear of it; never across its edge (the blind
+          // panel of 2026-10-03 read a straddling pill as an overlap).
+          const inside = p.x >= c.x && p.x + p.width <= c.x + c.width && p.y >= c.y && p.y + p.height <= c.y + c.height;
+          const crosses = !inside && p.y < c.y + c.height && p.y + p.height > c.y && p.x < c.x + c.width && p.x + p.width > c.x;
+          expect(crosses, `${b.id} ${v}: pill across the card's edge`).toBe(false);
+          if (!inside) expect(Math.max(p.y - (c.y + c.height), c.y - (p.y + p.height)), `${b.id} ${v}: pill to card`).toBeGreaterThanOrEqual(GAP);
           else {
             // Clear of the card's copy above it.
             for (const t of l.text) if (t.role !== 'cta' && hit(t, c)) expect(p.y - (t.y + t.height), `${b.id} ${v}`).toBeGreaterThanOrEqual(0.5 * GAP);
