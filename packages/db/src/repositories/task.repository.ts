@@ -27,6 +27,8 @@ export class TaskNotFoundError extends Error {
 }
 
 export interface CreateTaskAggregateParams {
+  /** ADR259: immutable customer owner; absent for office requests. */
+  customerAccountId?: string;
   tenantId: string;
   userId: string;
   idempotencyKey: string;
@@ -540,6 +542,7 @@ export class TaskRepository {
         .insertInto('tasks')
         .values({
           tenant_id: params.tenantId,
+          customer_account_id: params.customerAccountId ?? null,
           client_id: params.clientId || null,
           project_id: params.projectId || null,
           source_message_id: params.sourceMessageId || null,

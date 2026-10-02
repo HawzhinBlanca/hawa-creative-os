@@ -61,3 +61,18 @@ Sources: verified files above; ADR256; repository traceability-linked documents;
 https://supabase.com/docs/reference/javascript/auth-getuser (server verification);
 https://docs.lovable.dev/integrations/any-api (reachable backend and secrets);
 https://docs.lovable.dev/features/custom-domain (existing domain connection).
+
+## Customer boundary checkpoint — 2026-10-02 (ADR259)
+
+Actual isolated DB/RLS and mounted HTTP checks: 107 passed, zero failures/skips;
+741 strict test roots and Core build pass. Website intake/history, uncertainty
+replay, RTL and accessibility controls: 11 passed; types and production build
+pass. See `CUSTOMER_ADMISSION_PROOF.json` for original failures and corrections.
+No public launch. Core always reports generation disabled while the canonical
+RequestLifecycle web entry and durable requester sink are pending. The synthetic
+TaskWorkflow dispatch is not production-qualified and will be replaced.
+
+Claude's supporting response and branch now exist, including an actual official
+PPTX import/export receipt and stronger picture/logo checks. His ADR257/258 are
+reserved; this boundary uses ADR259. Merge current production/support before the
+next deployment candidate. Hosting choice remains pending.

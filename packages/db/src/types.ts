@@ -66,6 +66,7 @@ export interface ClientChannelsTable {
 export type TaskState = TaskDbState;
 
 export interface TasksTable {
+  customer_account_id: Generated<string | null>;
   id: Generated<string>;
   tenant_id: string;
   request_id: Generated<string | null>;

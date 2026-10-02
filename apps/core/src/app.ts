@@ -1,3 +1,7 @@
+import { registerCustomerAdminRoutes } from './customer/customer-admin.routes.js';
+import { CustomerRequests } from './customer/customer-requests.js';
+import { registerCustomerRoutes, CUSTOMER_ORIGINS } from './customer/customer.routes.js';
+import { createWorkspaceMemberVerifier } from './customer/supabase-member.js';
 import { permitsDesignWorkerRequest } from './services/design-worker-access.js';
 import { hydrateClientDnaFromDb } from './services/client-dna-hydration.js';
 import { ensureClientPackRows } from './services/client-pack-rows.js';
@@ -157,7 +161,9 @@ export function createApp(options?: CreateAppOptions) {
   // First, so every later middleware, handler and error line carries the request's id (logging.ts).
   app.use('*', requestLogContext());
   app.use('*', cors({
-    origin: officeAccess.mode === 'trusted_office' ? officeAccess.origin! : '*',
+    origin: (origin, c) => c.req.path.startsWith('/v1/customer/')
+      ? (CUSTOMER_ORIGINS.has(origin) ? origin : '')
+      : officeAccess.mode === 'trusted_office' ? officeAccess.origin! : '*',
     allowHeaders: [
       'Content-Type',
       'X-Hawa-Office-Request',
@@ -1000,6 +1006,13 @@ export function createApp(options?: CreateAppOptions) {
     streamTickets,
   };
 
+  if (options?.customerApi) {
+    if (!db || officeAccess.mode === 'trusted_office')
+      throw new Error('Customer API requires durable storage and required office authentication');
+    registerCustomerRoutes(app, new CustomerRequests(db, DEFAULT_TENANT_ID),
+      createWorkspaceMemberVerifier(options.customerApi), false); // ADR259: RequestLifecycle web admission pending.
+  }
+  registerCustomerAdminRoutes(routeContext);
   registerSystemRoutes(routeContext);
   registerPublicationInspectionRoutes(routeContext,Boolean(db && options?.enablePublicationInspections));
   registerCanvaRoutes(routeContext, options?.canvaOptions);

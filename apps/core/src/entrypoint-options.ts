@@ -14,7 +14,14 @@ import type { CreateAppOptions } from './core-helpers.js';
  * polls (ADR-129, Phase 4 operations finding 3).
  */
 export function productionAppOptions(env: Record<string, string | undefined> = process.env): CreateAppOptions {
+  const customerEnabled = env.HAWA_CUSTOMER_API_ENABLED === 'on';
+  if (customerEnabled && !env.HAWA_CUSTOMER_AUTH_PUBLISHABLE_KEY)
+    throw new Error('Customer API requires the workspace publishable authentication key');
   return {
+    ...(customerEnabled ? { customerApi: {
+      publishableKey: env.HAWA_CUSTOMER_AUTH_PUBLISHABLE_KEY!,
+      generationEnabled: env.HAWA_CUSTOMER_GENERATION_ENABLED === 'on',
+    } } : {}),
     // The bot credential is probed (getMe, at most every five minutes) whichever process polls: with
     // HAWA_TELEGRAM_POLLER=worker a revoked token was otherwise invisible to /v1/health (ADR-129).
     skipTelegramProbe: false,

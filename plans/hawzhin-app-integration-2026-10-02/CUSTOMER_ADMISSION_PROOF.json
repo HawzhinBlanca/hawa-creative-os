@@ -1,0 +1,95 @@
+{
+  "date": "2026-10-02",
+  "adr": 259,
+  "status": "LOCAL_CUSTOMER_BOUNDARY_QUALIFIED_PUBLIC_GENERATION_DISABLED",
+  "parent": "b35ab0717f398345638de3cc666a327bf528c377",
+  "backend": {
+    "command": "pnpm exec vitest run apps/core/test/customer-requests.test.ts packages/db/test/task-write-authority.test.ts apps/core/test/workspace-member.test.ts apps/core/test/production-entrypoint.test.ts apps/core/test/transfer-locale.test.ts",
+    "files": 5,
+    "passed": 107,
+    "failed": 0,
+    "skipped": 0,
+    "database": "per-file clones on isolated test server; actual hawa_app runtime role",
+    "properties": [
+      "immutable requester/account/tenant ownership",
+      "shared-brand foreign jobs hidden by restrictive RLS",
+      "live account/grant/membership/client/user revocation",
+      "concurrent duplicate and distinct-key admission serialized",
+      "exact copy, declared locale, geometry and active DNA pin preserved",
+      "only named administrator route; dedicated requester admission with idempotent expected-version actions",
+      "mounted Core generation refusal even when configured on; exact customer origin CORS; workspace credentials fail on office routes"
+    ]
+  },
+  "types": {
+    "core_build": "PASS",
+    "active_test_roots": 741,
+    "test_typecheck": "PASS"
+  },
+  "lint": {
+    "any_ratchet": "PASS; 951 <= 1053",
+    "provider_egress": "PASS",
+    "tsc_and_script_types": "PASS; before tsx CLI sandbox IPC error; final checks used node --import tsx"
+  },
+  "website": {
+    "repository": "HawzhinBlanca/hawzhinstt",
+    "branch": "codex/hawzhin-app-integration",
+    "tests": {
+      "files": 2,
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck": "PASS",
+    "production_build": "PASS",
+    "limitations": "Doubled customer API, no live member or provider. Intake/history UI only; source uploads, preview, revisions and downloads remain open. Registry remains soon.",
+    "dependency_install": "npm ci failed due stale lock/peer conflict; existing bun install --frozen-lockfile PASS, no dependency versions changed"
+  },
+  "retained_failed_attempts": [
+    {
+      "tests": "backend initial",
+      "passed": 85,
+      "failed": 12,
+      "reason": "SELECT FOR SHARE needs UPDATE policy; replaced with narrow authorization/lock functions rather than widening requester write rights"
+    },
+    {
+      "tests": "backend follow-up",
+      "passed": 96,
+      "failed": 1,
+      "reason": "PostgreSQL bigint version returned as string; normalized projection to number"
+    },
+    {
+      "tests": "administrator provisioning",
+      "passed": 105,
+      "failed": 1,
+      "reason": "users insert correctly denied; narrow administrator-only requester factory added"
+    },
+    {
+      "tests": "administrator provisioning follow-up",
+      "passed": 105,
+      "failed": 1,
+      "reason": "client membership conflict key included tenant despite actual PK excluding tenant; corrected to existing PK"
+    },
+    {
+      "tests": "website",
+      "passed": 10,
+      "failed": 1,
+      "reason": "CardTitle defaults h3 beneath h1; new feature uses h2, accessibility scan now passes"
+    }
+  ],
+  "worker": "Synthetic task/event/outbox admission only. Core is unconditionally read-only for generation until canonical RequestLifecycle web intake and durable web requester sink are installed. No legacy worker completion claim.",
+  "claude_handoff": "Primary shared CLAUDE_OPUS_55_SUPPORT_LANE_RESPONSE.md now received: support branch 46f0fcec, actual official import success and picture/logo fidelity checks. Merge pending at this checkpoint. ADR259 avoids Claude ADR257/258 collision.",
+  "not_run": [
+    "full current monorepo qualification",
+    "actual hosted customer journey",
+    "customer native RTL editing",
+    "production cutover"
+  ],
+  "source_sha256": {
+    "packages/db/migrations/083_customer_owned_requests.sql": "914f6df3710ca86cbb725215d36cf10a8b0cf89e83cd1dafc5bf07efe8c590fb",
+    "apps/core/src/customer/customer-requests.ts": "72ae6725533faa8d28f1ee1a8e4c73afe1f0dbf7e501172b16ecab7b59c4ad1e",
+    "apps/core/src/customer/customer-provisioning.ts": "04c0bbfc88a6c88b54d5b722ef040090396b6d1e3d2a067947897bfad9c1ea0b",
+    "apps/core/src/customer/customer.routes.ts": "ed5822cddc3953df4f79c0330c274aca0006a65c75802f294d6549558d6cc49b",
+    "apps/core/src/customer/customer-admin.routes.ts": "59c768ddd9869caff76d4e03bc08d65c3638a1146816e35db76d08b6a890995c",
+    "apps/core/src/services/saved-design-copy.ts": "479edd08aef07844ed33626a9b28e0e48dff76ce09f8d362903c8b332ace4761"
+  }
+}

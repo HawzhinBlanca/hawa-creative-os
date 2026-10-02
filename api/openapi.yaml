@@ -16,6 +16,14 @@ tags:
   - name: Evaluations
   - name: Integrations
 paths:
+  /v1/customer/session:
+    $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1session"
+  /v1/customer/jobs:
+    $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs"
+  /v1/customer/jobs/{id}:
+    $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}"
+  /v1/office/customer-accounts:
+    $ref: "./customer-design.openapi.yaml#/paths/~1v1~1office~1customer-accounts"
   /v1/assets/upload:
     post:
       tags: [Clients]

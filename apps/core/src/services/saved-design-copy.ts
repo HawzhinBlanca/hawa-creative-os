@@ -13,7 +13,13 @@ export function savedDesignCopyLocales(payload: unknown, copy: readonly string[]
   const p = object(outer.payload || outer);
   const body = object(p.body || p);
   const unknown = () => copy.map(() => 'und');
-  if (object(p.reviewedSource).confirmation === 'request_copy_reviewed') return unknown();
+  if (object(p.reviewedSource).confirmation === 'request_copy_reviewed') {
+    const source = object(p.reviewedSource);
+    if (source.origin !== 'customer_exact_copy' || source.localesConfirmedByRequester !== true || !Array.isArray(body.exactCopy)) return unknown();
+    const blocks = body.exactCopy.map(object);
+    if (blocks.length !== copy.length || blocks.some((block,i) => block.text !== copy[i] || !['en','ckb','ar'].includes(String(block.language)))) return unknown();
+    return blocks.map(block => String(block.language));
+  }
   const fields = object(p.sourceDocument).confirmation === 'request_copy_reviewed'
     ? ['copyEn', 'copyCkb']
     : body.workflow === 'canva_manual' ? ['headlineEn', 'copyEn', 'headlineCkb', 'copyCkb'] : [];

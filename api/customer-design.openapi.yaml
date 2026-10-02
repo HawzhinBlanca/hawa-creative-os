@@ -1,0 +1,136 @@
+openapi: 3.1.0
+info:
+  title: Hawzhin workspace customer boundary
+  version: 0.1.0
+  description: ADR259. RequestLifecycle web generation is not yet admitted; production generation is disabled. Authentication and owned request projection are separate from office authority.
+paths:
+  /v1/customer/session:
+    get:
+      security: [{WorkspaceMember: []}]
+      responses:
+        '200':
+          description: Current customer grants and generation readiness; no staff role.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accountId, clients, limits, generationEnabled]
+                properties:
+                  accountId: {type: string, format: uuid}
+                  clients: {type: array, items: {type: object, required: [id, name], properties: {id: {type: string, format: uuid}, name: {type: string}}}}
+                  limits: {type: object, properties: {dailyJobs: {type: integer}, concurrentJobs: {type: integer}}}
+                  generationEnabled: {type: boolean, description: False until canonical web lifecycle admission is qualified.}
+        '401': {description: Workspace sign-in required}
+        '403': {description: Member or customer admission denied}
+        '503': {description: Identity dependency or durable storage unavailable}
+  /v1/customer/jobs:
+    get:
+      security: [{WorkspaceMember: []}]
+      responses:
+        '200':
+          description: Latest 50 owned jobs; shared-client jobs from other customers are excluded.
+          content:
+            application/json:
+              schema: {type: object, required: [jobs], properties: {jobs: {type: array, items: {$ref: '#/components/schemas/CustomerJob'}}}}
+        '401': {description: Workspace sign-in required}
+        '403': {description: Current customer admission denied}
+        '503': {description: Dependency unavailable}
+    post:
+      security: [{WorkspaceMember: []}]
+      description: Synthetic qualified admission. Production refuses until the RequestLifecycle adapter is connected. Stable key and exact body are preserved after uncertain outcomes. Counts and live grants are checked before one atomic task/event/outbox commit.
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, pattern: '^[a-zA-Z0-9_-]{8,100}$'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CustomerDesignRequest'}
+      responses:
+        '201': {description: New committed job receipt, content: {application/json: {schema: {$ref: '#/components/schemas/JobReceipt'}}}}
+        '200': {description: Exact committed replay, content: {application/json: {schema: {$ref: '#/components/schemas/JobReceipt'}}}}
+        '400': {description: Invalid or extra fields, or missing stable request key}
+        '401': {description: Workspace sign-in required}
+        '403': {description: Current customer or brand access denied}
+        '409': {description: Differing payload for the same key, or brand DNA unavailable}
+        '413': {description: Actual streamed request exceeds 49152 bytes}
+        '429': {description: Customer request count or concurrency limit reached}
+        '503': {description: Generation not admitted or dependency unavailable; preserve the request key}
+  /v1/customer/jobs/{id}:
+    get:
+      security: [{WorkspaceMember: []}]
+      parameters: [{name: id, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses:
+        '200': {description: Owned job projection, content: {application/json: {schema: {type: object, required: [job], properties: {job: {$ref: '#/components/schemas/CustomerJob'}}}}}}
+        '401': {description: Workspace sign-in required}
+        '403': {description: Current customer admission denied}
+        '404': {description: Job unavailable to this owner, including shared-brand foreign jobs}
+        '503': {description: Dependency unavailable}
+  /v1/office/customer-accounts:
+    get:
+      security: [{NamedOfficeAdministrator: []}]
+      responses:
+        '200': {description: Latest 200 governed account mappings}
+        '403': {description: Current named administrator session required}
+    put:
+      security: [{NamedOfficeAdministrator: []}]
+      parameters: [{name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [subject, clientIds, active, expectedVersion, dailyJobs, concurrentJobs, reason]
+              properties:
+                subject: {type: string, format: uuid, description: Verified workspace Auth subject; never a browser-supplied office identity.}
+                clientIds: {type: array, uniqueItems: true, maxItems: 20, items: {type: string, format: uuid}}
+                active: {type: boolean}
+                expectedVersion: {type: integer, minimum: 0, description: Zero for initial admission; otherwise the current version.}
+                dailyJobs: {type: integer, minimum: 1, maximum: 100}
+                concurrentJobs: {type: integer, minimum: 1, maximum: 10}
+                reason: {type: string, minLength: 1, maxLength: 1000}
+      responses:
+        '200': {description: Idempotent versioned admission or revocation; dedicated requester only, immutable audit.}
+        '400': {description: Invalid fields or action key}
+        '403': {description: Named administrator or client authority absent}
+        '409': {description: Expected version or action payload conflict}
+        '503': {description: Admission transaction unavailable; preserve the action key}
+components:
+  securitySchemes:
+    WorkspaceMember: {type: http, scheme: bearer, bearerFormat: Supabase user JWT, description: Pinned workspace issuer and current has_app_access verified server-side on every request. Office keys and anonymous or service identities are refused.}
+    NamedOfficeAdministrator: {type: http, scheme: bearer, bearerFormat: Hawa named Google OIDC session, description: Current persisted administrator and active session; shared office keys cannot provision customers.}
+  schemas:
+    CustomerDesignRequest:
+      type: object
+      additionalProperties: false
+      required: [clientId, title, exactCopy, designInstructions, variant]
+      properties:
+        clientId: {type: string, format: uuid}
+        title: {type: string, minLength: 1, maxLength: 160}
+        exactCopy:
+          type: array
+          minItems: 1
+          maxItems: 8
+          description: At most 8000 characters combined; exact text is preserved, separate from instructions.
+          items: {type: object, additionalProperties: false, required: [text, language], properties: {text: {type: string, minLength: 1, maxLength: 4000}, language: {type: string, enum: [en, ckb, ar]}}}
+        designInstructions: {type: string, maxLength: 4000}
+        variant: {type: string, enum: [square, portrait, story]}
+    CustomerJob:
+      type: object
+      additionalProperties: false
+      required: [id, clientId, title, state, version, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        clientId: {type: string, format: uuid}
+        title: {type: string}
+        state: {type: string, description: Hawa task_state vocabulary.}
+        version: {type: integer, minimum: 1}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    JobReceipt:
+      type: object
+      required: [job, created]
+      properties:
+        job: {$ref: '#/components/schemas/CustomerJob'}
+        created: {type: boolean}

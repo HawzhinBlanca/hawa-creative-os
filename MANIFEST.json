@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T10:40:17Z",
+  "generatedAt": "2026-10-02T12:15:47Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 881,
+  "fileCount": 884,
   "files": [
     {
       "path": ".dockerignore",
@@ -1223,9 +1223,19 @@
       "bytes": 3118
     },
     {
+      "path": "adrs/259_customer_owned_web_requests.md",
+      "sha256": "613dc09b632386798cdc9f687079c478108fdb70e419c3b3947b496bec0732eb",
+      "bytes": 2174
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
+    },
+    {
+      "path": "api/customer-design.openapi.yaml",
+      "sha256": "5d46018b8c36066ca28e3fa75f310b113333acfd67944fdb1b7d584460d4c562",
+      "bytes": 7800
     },
     {
       "path": "api/events.md",
@@ -1234,8 +1244,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "9781746dcba7b5222bbf228577e3c4fcb0054c322bfa0afd626aacc8c532e7fe",
-      "bytes": 111201
+      "sha256": "0d3afb58b47f4d1ac2d963af60fbb4e91133334cbd2a648747471d004d7afcfb",
+      "bytes": 111608
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -2223,14 +2233,19 @@
       "bytes": 2121
     },
     {
+      "path": "plans/hawzhin-app-integration-2026-10-02/CUSTOMER_ADMISSION_PROOF.json",
+      "sha256": "4e85b484d5ffaefafb26074f75f896b5460101be46283b2e00ab0113dee7b9bd",
+      "bytes": 4570
+    },
+    {
       "path": "plans/hawzhin-app-integration-2026-10-02/IDENTITY_PROOF.json",
       "sha256": "3c06efb0b4dc2b9f0ee33b04e059781c8322d074af6414f8561633e3e984140f",
       "bytes": 2391
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/PLAN.md",
-      "sha256": "9511c7d7808309a529bd4cac88d3fad6105a126aab0a6185b9e4a750da4629a6",
-      "bytes": 5997
+      "sha256": "966eebb8aca32761a80778aeac5e630d280631ed0e486d104651192c810fad03",
+      "bytes": 6906
     },
     {
       "path": "plans/hosting/LINUX_READINESS_PROOF.json",
@@ -3439,8 +3454,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "8294eb8eb61d7877c84aa2f59c8f923057dd8aae38c055c99ed210ff30690bb8",
-      "bytes": 844292
+      "sha256": "24e3421fb8c707e55fd1e4e6aba3bdfb64d918922c73fde279a1cd000775da04",
+      "bytes": 847262
     },
     {
       "path": "plans/user-stories.csv",

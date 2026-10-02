@@ -31,3 +31,9 @@ describe('the production entrypoint', () => {
     expect(productionAppOptions({ HAWA_PUBLICATION_INSPECTIONS: 'off' }).enablePublicationInspections).toBe(false);
   });
 });
+
+it('customer API is explicit opt-in, requires its own public Auth configuration and gates generation separately', () => {
+ expect(productionAppOptions({})).not.toHaveProperty('customerApi');
+ expect(() => productionAppOptions({ HAWA_CUSTOMER_API_ENABLED: 'on' })).toThrow(/publishable/);
+ expect(productionAppOptions({ HAWA_CUSTOMER_API_ENABLED:'on', HAWA_CUSTOMER_AUTH_PUBLISHABLE_KEY:'sb_publishable_testfixture12' }).customerApi).toMatchObject({ generationEnabled:false });
+});
