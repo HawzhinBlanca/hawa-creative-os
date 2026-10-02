@@ -1,8 +1,8 @@
-import type { StudioLayoutV2, Box, TextElement, ShapeElement } from './layout-v2.js';
+import type { StudioLayoutV2, Box, TextElement, ShapeElement, OverlayElement, PhotoElement } from './layout-v2.js';
 import { declaredTextContrast } from './composite-contrast.js';
 import { requiredContrast } from './house-rules.js';
 import { photoRecipeOf } from './layout-v2.js';
-import { carrierOf } from './art-direction/surfaces.js';
+import { carrierOf, overlayOpacityAt } from './art-direction/surfaces.js';
 import { NEGATIVE_SPACE_POLICY, negativeSpacePolicyIdentity, scoreNegativeSpace, type NegativeSpaceMeasure } from './negative-space-policy.js';
 
 export interface MetricResult {
@@ -150,6 +150,19 @@ export function computeTextLegibility(layout: StudioLayoutV2): MetricResult {
   };
 }
 
+/**
+ * ADR-273: what gridAppropriateness counts as on the grid, versioned like the negative-space policy.
+ * 2026-10-02.1: canvas-edge bleeds, flush-to-margin boxes and text aligned on its own axis count for
+ * every layout (they counted only for photo recipes, ADR-170); the pass score is unchanged.
+ */
+export const GRID_APPROPRIATENESS_POLICY = Object.freeze({
+  id: 'studio.grid-appropriateness',
+  version: '2026-10-02.1',
+  /** A shape within this many px of a canvas edge bleeds off it. */
+  bleedPx: 2,
+  passScore: 0.7,
+});
+
 // 2. Grid Appropriateness
 export function computeGridAppropriateness(layout: StudioLayoutV2): MetricResult {
   const width = layout.width;
@@ -196,10 +209,20 @@ export function computeGridAppropriateness(layout: StudioLayoutV2): MetricResult
   // flush-left (or, in Sorani, flush-right) text column are set on the margin. Counted as off-grid,
   // they ranked the office's own report layout (hero_fade_report, example 3) last in every live
   // trial of 2026-09-30 and kept it from the judge; a centred plate won on grid alone.
+  //
+  // ADR-273 (GRID_APPROPRIATENESS_POLICY 2026-10-02.1), calibrated on the office's own posts: what
+  // held for recipes holds for every layout. A frame round the canvas follows the canvas edge; a
+  // shape bleeding off the canvas edge (the office's title tab, its card, its footer bar) is aligned
+  // to that edge; a box set on the margin is flush; and a text block is on the grid when its own
+  // alignment axis is (its start edge, its end edge or its centre), whatever its ragged width. The
+  // composed posters (ADR-271) failed this metric 20 of 20, ragged left text and bleeding bands, and
+  // the office's call for peer evaluators scored 0.30-0.36 as a composed poster.
   const recipe = Boolean(layout.artDirection);
-  const allBoxes: Box[] = [
+  const policy = GRID_APPROPRIATENESS_POLICY;
+  const followsCanvas = (s: ShapeElement) => s.role === 'frame' || (s.fill === 'none' && s.width >= width * 0.85 && s.height >= layout.height * 0.85);
+  const allBoxes: Array<Box & { align?: TextElement['align'] }> = [
     ...layout.text,
-    ...layout.shapes.filter(s => !(recipe && (s.role === 'frame' || s.surface === 'tab')) && (s.role !== 'panel' || (s.width < width * 0.9 && s.height < layout.height * 0.9))),
+    ...layout.shapes.filter(s => !followsCanvas(s) && !(recipe && s.surface === 'tab') && (s.role !== 'panel' || (s.width < width * 0.9 && s.height < layout.height * 0.9))),
     layout.logo
   ].filter(Boolean);
 
@@ -213,6 +236,7 @@ export function computeGridAppropriateness(layout: StudioLayoutV2): MetricResult
   const leftArr = Array.from(colLefts);
   const rightArr = Array.from(colRights);
   const centerArr = Array.from(centerLines);
+  const textSet = new Set<Box>(layout.text);
 
   for (const b of allBoxes) {
     const left = b.x;
@@ -222,25 +246,31 @@ export function computeGridAppropriateness(layout: StudioLayoutV2): MetricResult
     const leftOnCol = leftArr.some(cl => Math.abs(left - cl) <= tolerance);
     const rightOnCol = rightArr.some(cr => Math.abs(right - cr) <= tolerance);
     const isCentered = centerArr.some(cc => Math.abs(center - cc) <= tolerance);
+    const withinMargins = left >= margin - tolerance && right <= width - margin + tolerance;
 
     // Conforms if:
     // (1) Left and right edges align to grid column lines, OR
     // (2) Centered on a column / canvas axis within margins, OR
-    // (3) Left edge aligns to a column start and width spans within margin
-    const flush = recipe && (Math.abs(left - margin) <= tolerance || Math.abs(right - (width - margin)) <= tolerance);
-    if ((leftOnCol && rightOnCol) || (isCentered && left >= margin - tolerance && right <= width - margin + tolerance) || (leftOnCol && isCentered) || flush) {
+    // (3) Left edge aligns to a column start and width spans within margin, OR
+    // (4) set flush on the margin, OR (5) bleeding off the canvas edge, OR
+    // (6) a text block whose alignment axis is on the grid.
+    const flush = Math.abs(left - margin) <= tolerance || Math.abs(right - (width - margin)) <= tolerance;
+    const bleeds = left <= policy.bleedPx || right >= width - policy.bleedPx;
+    const axisOnGrid = textSet.has(b) && withinMargins && (
+      b.align === 'left' ? leftOnCol : b.align === 'right' ? rightOnCol : isCentered);
+    if ((leftOnCol && rightOnCol) || (isCentered && withinMargins) || (leftOnCol && isCentered) || flush || (!textSet.has(b) && bleeds) || axisOnGrid) {
       alignedElements++;
     }
   }
 
   const score = alignedElements / allBoxes.length;
-  const passed = score >= 0.70;
+  const passed = score >= policy.passScore;
 
   return {
     score: parseFloat(score.toFixed(3)),
     passed,
     metric: 'gridAppropriateness',
-    details: { alignedElements, totalElements: allBoxes.length }
+    details: { alignedElements, totalElements: allBoxes.length, policyId: policy.id, policyVersion: policy.version }
   };
 }
 
@@ -448,12 +478,18 @@ export function computeRegularity(layout: StudioLayoutV2): MetricResult {
     return { score: 1.0, passed: true, metric: 'regularity' };
   }
 
-  const mean = gaps.reduce((sum, g) => sum + g, 0) / gaps.length;
-  const variance = gaps.reduce((sum, g) => sum + Math.pow(g - mean, 2), 0) / gaps.length;
+  const maxGap = Math.max(...gaps);
+  // ADR-273: the dead area is a gap "without composition". A photo, a brand element or a panel
+  // spanning the whole gap composes it: the office's forum post sets its date at the foot and
+  // its paragraph at the top, with the speaker cut out beside them and its sunburst between. Such a
+  // gap separates two groups of type; it is not a step of their rhythm, so it leaves the rhythm too.
+  const composedGap = maxGap > layout.height * 0.25 && gapComposed(layout, deadGapBand(elements, maxGap));
+  const rhythm = composedGap ? gaps.filter((g, i) => i !== gaps.indexOf(maxGap)) : gaps;
+  const mean = rhythm.length ? rhythm.reduce((sum, g) => sum + g, 0) / rhythm.length : 0;
+  const variance = rhythm.length ? rhythm.reduce((sum, g) => sum + Math.pow(g - mean, 2), 0) / rhythm.length : 0;
   const std = Math.sqrt(variance);
 
-  const maxGap = Math.max(...gaps);
-  if (maxGap > layout.height * 0.25) {
+  if (maxGap > layout.height * 0.25 && !composedGap) {
     return {
       score: 0.35,
       passed: false,
@@ -476,8 +512,30 @@ export function computeRegularity(layout: StudioLayoutV2): MetricResult {
     score: parseFloat(score.toFixed(3)),
     passed,
     metric: 'regularity',
-    details: { meanGap: Math.round(mean), std: Math.round(std), cv: parseFloat(cv.toFixed(3)) }
+    details: { meanGap: Math.round(mean), std: Math.round(std), cv: parseFloat(cv.toFixed(3)), ...(composedGap ? { composedGap: maxGap } : {}) }
   };
+}
+
+/** The vertical band of the largest gap between consecutive text blocks (as computeRegularity measures it). */
+function deadGapBand(sorted: TextElement[], gap: number): { y1: number; y2: number } | undefined {
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i], b = sorted[i + 1];
+    if (b.y - (a.y + a.height) === gap) return { y1: a.y + a.height, y2: b.y };
+  }
+  return undefined;
+}
+
+/**
+ * Whether a photo, a brand element or a panel spans the whole band. Whatever covers the canvas is
+ * its ground, not composition, and generated art is not counted: it lies behind every gap alike.
+ */
+function gapComposed(layout: StudioLayoutV2, band: { y1: number; y2: number } | undefined): boolean {
+  if (!band) return false;
+  const spans = (b: Box) => b.y <= band.y1 && b.y + b.height >= band.y2;
+  const ground = (b: Box) => b.width >= layout.width * 0.95 && b.height >= layout.height * 0.95;
+  const composes = (b: Box) => spans(b) && !ground(b);
+  return (layout.photos || []).some(composes) || (layout.ornaments || []).some(composes) ||
+    (layout.shapes || []).some((s) => (s.role === 'panel' || s.role === 'accent') && s.fill !== 'none' && composes(s));
 }
 
 // 7. Typeface Pairing
@@ -529,6 +587,128 @@ export function computeTypefacePairing(layout: StudioLayoutV2): MetricResult {
   };
 }
 
+/**
+ * One element's paint for the negative-space union (policy 2026-10-02.1): `max` raises a point to
+ * its weight, `set` covers what is under it, and `ink` is type, which stacks: two blocks of type
+ * set over each other are both ink (the sum counted them twice, and so does this), while type on
+ * a band, card or fade counts once.
+ */
+interface OccupancyPaint { box: Box; weight: number; mode: 'max' | 'set' | 'ink' }
+
+/** Bands a photo's own fade is cut into; each band takes the fade's alpha at its middle, its exact mean. */
+const PHOTO_FADE_BANDS = 16;
+
+/** A photo's paint: its box at `weight`, the faded part in bands of falling alpha toward the fade's edge. */
+function photoPaint(p: PhotoElement, weight: number): OccupancyPaint[] {
+  if (!p.fade) return [{ box: p, weight, mode: 'max' }];
+  const vertical = p.fade.edge === 'top' || p.fade.edge === 'bottom';
+  const extent = vertical ? p.height : p.width;
+  const fadeLength = Math.max(0, Math.min(1, p.fade.length)) * extent;
+  const out: OccupancyPaint[] = [];
+  // Offsets are measured from the faded edge inward: alpha rises from 0 at the edge to 1 at fadeLength.
+  const band = (from: number, to: number, alpha: number) => {
+    if (to <= from) return;
+    let box: Box;
+    if (p.fade!.edge === 'top') box = { x: p.x, y: p.y + from, width: p.width, height: to - from };
+    else if (p.fade!.edge === 'bottom') box = { x: p.x, y: p.y + p.height - to, width: p.width, height: to - from };
+    else if (p.fade!.edge === 'left') box = { x: p.x + from, y: p.y, width: to - from, height: p.height };
+    else box = { x: p.x + p.width - to, y: p.y, width: to - from, height: p.height };
+    out.push({ box, weight: weight * alpha, mode: 'max' });
+  };
+  for (let i = 0; i < PHOTO_FADE_BANDS; i++) {
+    band((i / PHOTO_FADE_BANDS) * fadeLength, ((i + 1) / PHOTO_FADE_BANDS) * fadeLength, (i + 0.5) / PHOTO_FADE_BANDS);
+  }
+  band(fadeLength, extent, 1);
+  return out;
+}
+
+/**
+ * The parts of a fade or scrim at least `minOpacity` opaque, as boxes. Its opacity is piecewise
+ * linear along its direction, so each run where it carries is found exactly. A radial overlay is the
+ * soft scrim a logo gets (ADR-180), not ground for text, and is left out.
+ */
+function overlayCarryBoxes(o: OverlayElement, minOpacity: number): Box[] {
+  if (o.direction === 'radial') return [];
+  const stops = [...o.stops].sort((a, b) => a.at - b.at);
+  if (!stops.length) return [];
+  const points = [{ at: 0, opacity: overlayOpacityAt(o, 0) }, ...stops.filter((st) => st.at > 0 && st.at < 1), { at: 1, opacity: overlayOpacityAt(o, 1) }];
+  const runs: Array<[number, number]> = [];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    if (b.at <= a.at) continue;
+    const aIn = a.opacity >= minOpacity, bIn = b.opacity >= minOpacity;
+    if (!aIn && !bIn) continue;
+    const cross = a.at + ((minOpacity - a.opacity) / (b.opacity - a.opacity)) * (b.at - a.at);
+    const run: [number, number] = aIn && bIn ? [a.at, b.at] : aIn ? [a.at, cross] : [cross, b.at];
+    const last = runs[runs.length - 1];
+    if (last && Math.abs(last[1] - run[0]) < 1e-9) last[1] = run[1];
+    else runs.push(run);
+  }
+  return runs.map(([from, to]) => {
+    switch (o.direction) {
+      case 'to-bottom': return { x: o.x, y: o.y + from * o.height, width: o.width, height: (to - from) * o.height };
+      case 'to-top': return { x: o.x, y: o.y + (1 - to) * o.height, width: o.width, height: (to - from) * o.height };
+      case 'to-right': return { x: o.x + from * o.width, y: o.y, width: (to - from) * o.width, height: o.height };
+      default: return { x: o.x + (1 - to) * o.width, y: o.y, width: (to - from) * o.width, height: o.height };
+    }
+  });
+}
+
+/**
+ * The occupied area of a paint list over a canvas: the plane is cut at every box edge, and each
+ * resulting cell takes the weight the paints leave on it in order (`max` raises it, `set` replaces
+ * it), or the type stacked on it when that is more. Exact for boxes; a fade enters as its bands.
+ */
+function unionOccupiedArea(paint: OccupancyPaint[], width: number, height: number): number {
+  const clip = (v: number, hi: number) => Math.max(0, Math.min(hi, v));
+  const xs = new Set<number>([0, width]);
+  const ys = new Set<number>([0, height]);
+  for (const { box } of paint) {
+    xs.add(clip(box.x, width)); xs.add(clip(box.x + box.width, width));
+    ys.add(clip(box.y, height)); ys.add(clip(box.y + box.height, height));
+  }
+  const X = [...xs].sort((a, b) => a - b);
+  const Y = [...ys].sort((a, b) => a - b);
+  const nx = X.length - 1, ny = Y.length - 1;
+  if (nx <= 0 || ny <= 0) return 0;
+  const cells = new Float64Array(nx * ny);
+  const ink = new Float64Array(nx * ny);
+  const index = (edges: number[], v: number) => {
+    let lo = 0, hi = edges.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (edges[mid] < v) lo = mid + 1; else hi = mid; }
+    return lo;
+  };
+  for (const { box, weight, mode } of paint) {
+    const x0 = index(X, clip(box.x, width)), x1 = index(X, clip(box.x + box.width, width));
+    const y0 = index(Y, clip(box.y, height)), y1 = index(Y, clip(box.y + box.height, height));
+    for (let j = y0; j < y1; j++) {
+      for (let i = x0; i < x1; i++) {
+        const k = j * nx + i;
+        if (mode === 'ink') ink[k] += weight;
+        else cells[k] = mode === 'set' ? weight : Math.max(cells[k], weight);
+      }
+    }
+  }
+  let area = 0;
+  for (let j = 0; j < ny; j++) {
+    const h = Y[j + 1] - Y[j];
+    for (let i = 0; i < nx; i++) area += Math.max(cells[j * nx + i], ink[j * nx + i]) * (X[i + 1] - X[i]) * h;
+  }
+  return area;
+}
+
+/**
+ * The framed photo that leads a layout (policy 2026-10-02.1): one framed photo over
+ * `photoLed.framedPhotoShare` of the canvas. A cut-out, a texture and a cell of a photo grid do not
+ * lead; a layout led this way is measured as an art-directed recipe is.
+ */
+export function photoLedPhoto(layout: Pick<StudioLayoutV2, 'width' | 'height' | 'photos'>): PhotoElement | undefined {
+  const share = NEGATIVE_SPACE_POLICY.photoLed.framedPhotoShare;
+  return (layout.photos || []).find((p) => p.treatment !== 'cutout' && p.role !== 'texture' &&
+    Math.max(0, Math.min(layout.width, p.x + p.width) - Math.max(0, p.x)) * Math.max(0, Math.min(layout.height, p.y + p.height) - Math.max(0, p.y)) >=
+      share * layout.width * layout.height);
+}
+
 // 8. Negative-Space Fraction (Calibrated against 6 institutional exemplars: 0.34 - 0.57)
 /**
  * @param wrappedLines how many lines each copy block wraps to, by copyIndex. When supplied, a text
@@ -550,23 +730,23 @@ export function computeNegativeSpace(
   layout: StudioLayoutV2,
   wrappedLines?: Record<number, number>
 ): MetricResult {
-  if (photoRecipeOf(layout)) return computeRecipeQuietRegion(layout, wrappedLines);
+  if (photoRecipeOf(layout) || photoLedPhoto(layout)) return computeRecipeQuietRegion(layout, wrappedLines);
   const totalArea = layout.width * layout.height;
-  let occupiedArea = 0;
+  const occupancy = NEGATIVE_SPACE_POLICY.occupancy;
 
   interface Span { y1: number; y2: number; }
   const substantiveSpans: Span[] = [];
-
   let maxSubstantiveY = 0;
-  for (const t of layout.text || []) {
-    const lines = wrappedLines?.[t.copyIndex];
-    const inkedHeight =
-      lines && lines > 0 ? Math.min(t.height, lines * t.fontSize * t.lineHeight) : t.height;
-    occupiedArea += t.width * inkedHeight;
-    substantiveSpans.push({ y1: t.y, y2: t.y + t.height });
-    maxSubstantiveY = Math.max(maxSubstantiveY, t.y + t.height);
-  }
+  const addSpan = (y1: number, y2: number) => {
+    substantiveSpans.push({ y1, y2 });
+    maxSubstantiveY = Math.max(maxSubstantiveY, y2);
+  };
 
+  // Occupancy is a union (policy 2026-10-02.1, ADR-273): each element paints its weight over its
+  // area in the order the renderer draws it, and a point counts once, at the weight left on it. The
+  // sum it replaced counted a band and the title on it twice, and a photo under the navy fade a
+  // report title sits on as fully occupied, so the office's own posts measured 0.00-0.48 empty.
+  const paint: OccupancyPaint[] = [];
   const sameColour = (a?: string, b?: string) => {
     const norm = (h?: string) => {
       const c = (h || '').trim().toLowerCase();
@@ -574,41 +754,58 @@ export function computeNegativeSpace(
     };
     return !!a && !!b && norm(a) === norm(b);
   };
-  for (const s of layout.shapes || []) {
-    // A border around the canvas is not content. The rule used to key on the role alone, and the
-    // studio's normaliser renames frames to panels — so a background-filled border enclosing 86%
-    // of the canvas counted as 60% occupied and flipped a 76%-empty design to "29% empty". A
-    // background-filled shape that large is a border whatever it is called. Smaller outlined
-    // cards still count: the P01 calibration deliberately treats content frames as occupied.
-    const occupancy = NEGATIVE_SPACE_POLICY.occupancy;
-    const isCanvasFrame =
-      ((s.role === 'frame' || sameColour(s.color, layout.background?.color)) &&
-        s.width >= layout.width * occupancy.canvasFrameShare &&
-        s.height >= layout.height * occupancy.canvasFrameShare) ||
-      (s.width >= layout.width * occupancy.canvasShapeShare && s.height >= layout.height * occupancy.canvasShapeShare);
-    if (isCanvasFrame) continue;
-    occupiedArea += s.width * s.height * (s.role === 'panel' || s.role === 'frame' ? occupancy.panelOrFrameWeight : occupancy.otherShapeWeight);
-    if (s.height >= NEGATIVE_SPACE_POLICY.internalGap.spanMinHeightPx && s.role !== 'rule') {
-      substantiveSpans.push({ y1: s.y, y2: s.y + s.height });
-      maxSubstantiveY = Math.max(maxSubstantiveY, s.y + s.height);
-    }
+  // A border around the canvas is not content. The rule used to key on the role alone, and the
+  // studio's normaliser renames frames to panels — so a background-filled border enclosing 86%
+  // of the canvas counted as 60% occupied and flipped a 76%-empty design to "29% empty". A
+  // background-filled shape that large is a border whatever it is called. Smaller outlined
+  // cards still count: the P01 calibration deliberately treats content frames as occupied.
+  const isCanvasFrame = (s: ShapeElement) =>
+    ((s.role === 'frame' || sameColour(s.color, layout.background?.color)) &&
+      s.width >= layout.width * occupancy.canvasFrameShare &&
+      s.height >= layout.height * occupancy.canvasFrameShare) ||
+    (s.width >= layout.width * occupancy.canvasShapeShare && s.height >= layout.height * occupancy.canvasShapeShare);
+  const shapeWeight = (s: ShapeElement) => (s.role === 'panel' || s.role === 'frame' ? occupancy.panelOrFrameWeight : occupancy.otherShapeWeight);
+  const shapes = (layout.shapes || []).filter((s) => !isCanvasFrame(s));
+  for (const s of shapes) {
+    if (s.layer !== 'overlay') paint.push({ box: s, weight: shapeWeight(s), mode: 'max' });
+    if (s.height >= NEGATIVE_SPACE_POLICY.internalGap.spanMinHeightPx && s.role !== 'rule') addSpan(s.y, s.y + s.height);
   }
-
-  if (layout.logo) {
-    occupiedArea += layout.logo.width * layout.logo.height;
-    substantiveSpans.push({ y1: layout.logo.y, y2: layout.logo.y + layout.logo.height });
-    maxSubstantiveY = Math.max(maxSubstantiveY, layout.logo.y + layout.logo.height);
-  }
-
   // Photographs are content (policy 2026-09-30.1, ADR-157): counted in the occupied area and as
   // spans. Without them the gap between a logo and a photo grid measured as the gap between the
   // logo and whatever text sat under the grid, a phantom band, while the real one went unseen.
   for (const p of layout.photos || []) {
-    const weight = p.treatment === 'cutout' ? NEGATIVE_SPACE_POLICY.occupancy.photoCutoutWeight : NEGATIVE_SPACE_POLICY.occupancy.photoFramedWeight;
-    occupiedArea += p.width * p.height * weight;
-    substantiveSpans.push({ y1: p.y, y2: p.y + p.height });
-    maxSubstantiveY = Math.max(maxSubstantiveY, p.y + p.height);
+    const weight = (p.treatment === 'cutout' ? occupancy.photoCutoutWeight : occupancy.photoFramedWeight) * (p.opacity ?? 1);
+    paint.push(...photoPaint(p, weight));
+    addSpan(p.y, p.y + p.height);
   }
+  // Under a fade or scrim opaque enough to carry text, a photo is the ground the text sits on.
+  for (const o of layout.overlays || []) {
+    for (const box of overlayCarryBoxes(o, occupancy.groundUnderOverlayMinOpacity)) paint.push({ box, weight: 0, mode: 'set' });
+  }
+  for (const s of shapes) {
+    if (s.layer === 'overlay') paint.push({ box: s, weight: shapeWeight(s), mode: s.fill === 'none' ? 'max' : 'set' });
+  }
+  if (layout.logo) {
+    paint.push({ box: layout.logo, weight: 1, mode: 'max' });
+    addSpan(layout.logo.y, layout.logo.y + layout.logo.height);
+  }
+  for (const t of layout.text || []) {
+    const lines = wrappedLines?.[t.copyIndex];
+    const inkedHeight =
+      lines && lines > 0 ? Math.min(t.height, lines * t.fontSize * t.lineHeight) : t.height;
+    paint.push({ box: { x: t.x, y: t.y + (t.height - inkedHeight) / 2, width: t.width, height: inkedHeight }, weight: 1, mode: 'ink' });
+    addSpan(t.y, t.y + t.height);
+  }
+  // The declared-box fallback (no line measurement) keeps the box sum its band was calibrated on:
+  // the union moves 22 of the 200 stored designs across that band, and the office calibration is
+  // measured with lines (ADR-273).
+  const occupiedArea = wrappedLines
+    ? unionOccupiedArea(paint, layout.width, layout.height)
+    : (layout.text || []).reduce((sum, t) => sum + t.width * t.height, 0) +
+      shapes.reduce((sum, s) => sum + s.width * s.height * shapeWeight(s), 0) +
+      (layout.logo ? layout.logo.width * layout.logo.height : 0) +
+      (layout.photos || []).reduce((sum, p) => sum + p.width * p.height *
+        (p.treatment === 'cutout' ? occupancy.photoCutoutWeight : occupancy.photoFramedWeight), 0);
 
   const fraction = Math.max(0, Math.min(1, 1 - occupiedArea / totalArea));
 
@@ -669,13 +866,18 @@ export function computeNegativeSpace(
  * does. What a recipe needs instead is a quiet region for the title: the title inside the region the
  * solver reserved (the fade, plate, card or sky), carried by a surface wherever it lies over a photo,
  * and the copy not crowding the canvas (inked type under 35% of it).
+ *
+ * ADR-273 (policy 2026-10-02.1): a layout led by one framed photo (`photoLedPhoto`) is measured the
+ * same way when it carries no recipe record, as a composed poster with an office photo does. With no
+ * reserved region, the title's quiet ground is anywhere off the photos, or a carrier over them.
  */
 export function computeRecipeQuietRegion(layout: StudioLayoutV2, wrappedLines?: Record<number, number>): MetricResult {
-  const zone = layout.artDirection!.titleZone;
+  const zone = layout.artDirection?.titleZone;
   const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
   const inside = (o: Box, i: Box) => i.x >= o.x - 2 && i.y >= o.y - 2 && i.x + i.width <= o.x + o.width + 2 && i.y + i.height <= o.y + o.height + 2;
   const title = (layout.text || []).find((t) => t.role === 'title');
-  const inZone = title ? inside(zone, title) : false;
+  const onQuietGround = (t: Box) => !(layout.photos || []).some((p) => hit(p, t)) || Boolean(carrierOf(layout, t));
+  const inZone = title ? (zone ? inside(zone, title) : onQuietGround(title)) : false;
   const bare = (layout.text || []).filter((t) => (layout.photos || []).some((p) => hit(p, t)) && !carrierOf(layout, t));
   let inked = 0;
   for (const t of layout.text || []) {
@@ -683,18 +885,24 @@ export function computeRecipeQuietRegion(layout: StudioLayoutV2, wrappedLines?: 
     inked += t.width * (lines && lines > 0 ? Math.min(t.height, lines * t.fontSize * t.lineHeight) : t.height);
   }
   const coverage = inked / (layout.width * layout.height);
-  const crowding = coverage <= 0.35 ? 1 : Math.max(0, 1 - (coverage - 0.35) * 3);
+  const limit = NEGATIVE_SPACE_POLICY.photoLed.inkCoverageMax;
+  const crowding = coverage <= limit ? 1 : Math.max(0, 1 - (coverage - limit) * 3);
   const score = (inZone ? 0.45 : 0) + (bare.length ? 0 : 0.35) + 0.2 * crowding;
+  const recipe = photoRecipeOf(layout);
+  const policy = negativeSpacePolicyIdentity();
   return {
     score: parseFloat(score.toFixed(3)),
     passed: inZone && !bare.length && crowding >= 0.7,
     metric: 'negativeSpace',
     details: {
-      measure: 'recipe_quiet_region',
-      recipe: layout.artDirection!.recipe,
+      measure: recipe ? 'recipe_quiet_region' : 'photo_led_quiet_region',
+      recipe: recipe ?? null,
       titleInQuietRegion: inZone,
       bareTextOnPhoto: bare.map((t) => t.copyIndex),
       inkCoverage: parseFloat(coverage.toFixed(3)),
+      policyId: policy.id,
+      policyVersion: policy.version,
+      policySha256: policy.sha256,
     },
   };
 }

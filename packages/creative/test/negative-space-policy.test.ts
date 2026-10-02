@@ -26,6 +26,10 @@ const RECORDED_POLICY_DIGESTS: Record<string, string> = {
   '2026-09-28.2': 'c9d2cbc0c0d68d02468f360e38c72331b7d3707b30c855cb1c592c0f84f8eb69',
   // ADR-157: the client's photographs count as occupied content and as spans; artwork still does not.
   '2026-09-30.1': 'd65ec254e90ab5d1702e43d1153367d593c31dec4f3233cd4a7cee923c1839fb',
+  // ADR-273: calibrated on the office's own posts. Measured-lines occupancy is a union (type over
+  // type still stacks), a photo is ground under a carrying fade or scrim and is reduced by its own
+  // fade and opacity, and a photo-led layout is measured by its quiet region. The bands did not move.
+  '2026-10-02.1': '6f01aecc71d171b3816effdeae055f5be1289080a1eb8c7f3ccd482115ef760f',
 };
 
 /** The design-precision probe's layout: four one-line text boxes of 600x180 and a 200x100 logo. */
@@ -80,12 +84,17 @@ describe('one versioned negative-space policy (ADR-125)', () => {
     for (const value of ['0.36', '0.84', '0.44', '0.78', '0.22', '0.29', '0.25', '0.34']) expect(guidance).toContain(value);
     // The explicit measurement semantics, including what the measure does not count.
     expect(guidance).toMatch(/measured line count/);
-    expect(guidance).toMatch(/Each client photograph counts: a framed photo its whole box/);
+    // ADR-273: a framed photo counts its box less its own fade and opacity, and is ground under a carrying fade.
+    expect(guidance).toMatch(/Each client photograph counts: a framed photo its box/);
+    expect(guidance).toMatch(/under a fade or scrim at least 0.55 opaque it is ground/);
+    expect(guidance).toMatch(/Overlapping elements count once/);
+    expect(guidance).toMatch(/led by one framed photo over 50% of the canvas/);
     expect(guidance).toMatch(/Artwork is not counted/);
   });
 
   it('states the span semantics the gap and bottom void are measured with', () => {
-    expect(NEGATIVE_SPACE_POLICY.version).toBe('2026-09-30.1');
+    // ADR-273 bumped the version (union occupancy, photo ground, photo-led measure); the span semantics did not change.
+    expect(NEGATIVE_SPACE_POLICY.version).toBe('2026-10-02.1');
     expect(NEGATIVE_SPACE_POLICY.spans).toEqual({ text: 'declared_box_height', logo: 'box', shape: 'box_at_least_min_height_except_rules', photo: 'box', art: 'not_counted' });
     // Occupancy counts the lines a block sets; the gap and the bottom void use its whole declared box.
     // The logo sits inside the first text span, so it adds no gap of its own.

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T21:38:44Z",
+  "generatedAt": "2026-10-02T21:44:02Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 900,
+  "fileCount": 909,
   "files": [
     {
       "path": ".dockerignore",
@@ -1164,8 +1164,8 @@
     },
     {
       "path": "adrs/238_kaae_2025_guideline.md",
-      "sha256": "eedcf85bf56d32263f513b528de8f9ab99300bfdbd547fced1f58770562393ff",
-      "bytes": 22915
+      "sha256": "8d6eddb618ce52b297b40735ebf68626273aa0ca4a122d07acc6bdba0e32ef63",
+      "bytes": 23045
     },
     {
       "path": "adrs/239_consent_preserving_dna_saves_and_double_role_replies.md",
@@ -1229,8 +1229,8 @@
     },
     {
       "path": "adrs/258_export_picture_fidelity_and_unattended_readiness.md",
-      "sha256": "401fd1dc21118d92a4266babb163ce74133df693989992a86d717337ff263cce",
-      "bytes": 8238
+      "sha256": "c62da60c2362de722e169fabea8f6d5fd804f67f117bab41014c3dfe08a769e7",
+      "bytes": 12739
     },
     {
       "path": "adrs/259_customer_owned_web_requests.md",
@@ -1246,6 +1246,11 @@
       "path": "adrs/261_customer_ordered_photo_admission.md",
       "sha256": "5f6604b1fea7b8e2db26f2b821a76cec331ba7d75969425cbea135f8009684bc",
       "bytes": 3462
+    },
+    {
+      "path": "adrs/261_deploy_keeps_live_release_and_5xx_error_lines.md",
+      "sha256": "2cefcf20ac23ffb239f6ad8dcbc5403d484840d98134f5f152b00c4bd8842450",
+      "bytes": 3821
     },
     {
       "path": "adrs/262_customer_current_native_preview.md",
@@ -1271,6 +1276,26 @@
       "path": "adrs/266_customer_acceptance_downloads.md",
       "sha256": "675a6f4d929c1d6b96a6ed14187f5a5d7699f9ff90ec784a9cd8ec6c3f985d7a",
       "bytes": 3213
+    },
+    {
+      "path": "adrs/271_kaae_poster_composition.md",
+      "sha256": "70a386ea832cd3894fcece3b1e2c3f9530b71835492c7fa6f94c8b903584a005",
+      "bytes": 15190
+    },
+    {
+      "path": "adrs/273_gates_calibrated_on_office_posts.md",
+      "sha256": "10f900fd1b9893b15a2260d078d099648153b7022283c2529d02e4a8f9a95070",
+      "bytes": 20454
+    },
+    {
+      "path": "adrs/274_selection_without_the_document_default.md",
+      "sha256": "5b921b4860c313788ee598e786c405135996abfb9beccc4ec57b4c0c56d6be91",
+      "bytes": 13652
+    },
+    {
+      "path": "adrs/275_heavy_sans_display_caps.md",
+      "sha256": "cfb892b064c16805431e3fd4e6cdc6640a23810e47fa530fd9a823ed1ca4d3d6",
+      "bytes": 14853
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1701,6 +1726,11 @@
       "path": "evals/visual_quality_rubric.md",
       "sha256": "374d0c059f694f4dde4c3362f204b94d4b0ac8343f151488550b7f4ce2f34bb6",
       "bytes": 1708
+    },
+    {
+      "path": "plans/2026-10-02-canva-display-caps-proof.md",
+      "sha256": "fad46d780bcae27952349b8bb2a76a73bf5ee0bc00e5e992c85e24c80d13f8f3",
+      "bytes": 6924
     },
     {
       "path": "plans/RACI.csv",
@@ -2336,6 +2366,11 @@
       "path": "plans/hosting/PRODUCTION_HOSTING_PLAN.md",
       "sha256": "3afb30ad563bb0beaad62886feb329565ab10967be45e1e7610e8a9757d1dcbb",
       "bytes": 47459
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/frozen-set.json",
+      "sha256": "c913caf4ed345e4d5d4f68192592c5932b9fd2eb4d79616d385dd994a901676a",
+      "bytes": 8040
     },
     {
       "path": "plans/kaae-2025-guideline/CODEX_MERGE_NOTE.md",
@@ -3534,8 +3569,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "43486404dc6fbdc548761404ac4ca79c5a74b66368eb471cf1168a1ca7efaa7e",
-      "bytes": 879540
+      "sha256": "2bfa5e02238e94686dc12980f60706c8e4ce612d182b18b8ee1dd630275e0e3d",
+      "bytes": 884447
     },
     {
       "path": "plans/user-stories.csv",
@@ -3868,6 +3903,11 @@
       "bytes": 20508
     },
     {
+      "path": "scripts/experiments/judge-calibration.ts",
+      "sha256": "82d11924c469b83616474cc6d62e3fd1fa6183b747b3cc8859b8928a5e2d1478",
+      "bytes": 13633
+    },
+    {
       "path": "scripts/experiments/judge-model-agreement.ts",
       "sha256": "9dd15a3e95d726ebb6b37591751f30bf5e3afeeec53b0e51bd7dce01821d28c6",
       "bytes": 11715
@@ -4131,6 +4171,11 @@
       "path": "scripts/proofs/content_topology_verify_native.mjs",
       "sha256": "157bb7c769a3adc2528ff1941d079c49686be3aa4281bd0439d8eb4e54280111",
       "bytes": 4002
+    },
+    {
+      "path": "scripts/proofs/display_caps_proof.ts",
+      "sha256": "9a2877e2b238515faf1d10a2a687262464886f00585ac5d1186fae23bd63f175",
+      "bytes": 9546
     },
     {
       "path": "scripts/proofs/gate-baseline.json",

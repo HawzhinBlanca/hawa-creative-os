@@ -700,3 +700,63 @@ describe('release security retirement',()=>{
     expect(fs.existsSync(path.join(s.home,'.hawa/current'))).toBe(false);
   });
 });
+
+// 2026-10-02: two agents deploy to one host; a candidate that lacks the live release is refused.
+describe('release_lib: a deployment keeps the live release', () => {
+  const live = (s: ReturnType<typeof setup>, commit: string, link = 'current') => {
+    const dir = path.join(s.releases, commit);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(path.join(s.home, '.hawa'), { recursive: true });
+    fs.rmSync(path.join(s.home, '.hawa', link), { force: true });
+    fs.symlinkSync(dir, path.join(s.home, '.hawa', link));
+  };
+
+  it('passes a first deploy, the live commit itself, and a descendant of it', () => {
+    const s = setup();
+    expect(sh(s, `hawa_deploy_keeps_live '${s.src}' ${s.head}`).code).toBe(0);
+    live(s, s.head);
+    expect(sh(s, `hawa_deploy_keeps_live '${s.src}' ${s.head}`).code).toBe(0);
+    const next = s.commit();
+    expect(sh(s, `hawa_deploy_keeps_live '${s.src}' ${next}`).code).toBe(0);
+  });
+
+  it('refuses a candidate that does not contain the live release, naming both', () => {
+    const s = setup();
+    const base = s.head;
+    const theirs = s.commit();
+    git(s.src, 'checkout', '-q', base);
+    git(s.src, 'checkout', '-q', '-b', 'mine');
+    const mine = s.commit();
+    live(s, theirs);
+    const r = sh(s, `hawa_deploy_keeps_live '${s.src}' ${mine}`);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain(`${mine.slice(0, 12)} does not contain the live release ${theirs.slice(0, 12)}`);
+    // Merged, it passes.
+    git(s.src, 'merge', '-q', '--no-edit', '-s', 'ours', theirs);
+    expect(sh(s, `hawa_deploy_keeps_live '${s.src}' ${git(s.src, 'rev-parse', 'HEAD')}`).code).toBe(0);
+  });
+
+  it('lets the previous release through (the rollback) and an explicit override, saying so', () => {
+    const s = setup();
+    const older = s.head;
+    const newer = s.commit();
+    live(s, newer);
+    live(s, older, 'previous');
+    const rollback = sh(s, `hawa_deploy_keeps_live '${s.src}' ${older}`);
+    expect(rollback.code).toBe(0);
+    expect(rollback.err).toContain('a rollback');
+    const sideways = (() => { git(s.src, 'checkout', '-q', older); git(s.src, 'checkout', '-q', '-b', 'side'); return s.commit(); })();
+    expect(sh(s, `hawa_deploy_keeps_live '${s.src}' ${sideways}`).code).toBe(1);
+    const forced = sh(s, `hawa_deploy_keeps_live '${s.src}' ${sideways}`, { HAWA_DEPLOY_ALLOW_NON_DESCENDANT: '1' });
+    expect(forced.code).toBe(0);
+    expect(forced.err).toContain('WARNING');
+  });
+
+  it('refuses a live commit this repository does not have', () => {
+    const s = setup();
+    live(s, 'e'.repeat(40));
+    const r = sh(s, `hawa_deploy_keeps_live '${s.src}' ${s.head}`);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain('is not in this repository');
+  });
+});

@@ -134,7 +134,8 @@ describe('the regression gate runs the option sets production runs', () => {
     expect(designs.length).toBe(9);
     const modes = productionModes({ resolveOrnamentSettings, pageGrammarFromRaw }) as { name: string; options: Record<string, unknown> }[];
     for (const mode of modes) for (const d of designs) expect(() => gradeDesign(d, mode.options)).not.toThrow();
-  });
+    // About 19 s alone since ADR-273's union measure; 30 s timed out under the full suite's load.
+  }, 90_000);
 
   it('sees on the fixtures what a plain-only gate could not: the spec changes the verdict', () => {
     const designs = committedDesigns();

@@ -1,6 +1,6 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
 import { declaredTextContrast } from './composite-contrast.js';
-import { shapePaintsOver } from './art-direction/surfaces.js';
+import { carrierOf, shapePaintsOver } from './art-direction/surfaces.js';
 
 export interface LayoutMetrics {
   alignmentScore: number; // 0..1 (fraction of edges aligned to grid or other elements)
@@ -57,6 +57,36 @@ export function overlappingPairs(layout: StudioLayoutV2): string[] {
   return pairs;
 }
 
+/** ADR-273: the alignment rules hard QA's POOR_GRID_ALIGNMENT gate reads, versioned. */
+export const ALIGNMENT_POLICY = Object.freeze({
+  id: 'studio.layout-alignment',
+  version: '2026-10-02.1',
+  /** Targets besides the grid: the canvas edges, and for text, the plate, card, tab, pill or fade it sits on. */
+  targets: 'grid_margins_centre_canvas_edges_container',
+  passScore: 0.7,
+});
+
+/**
+ * ADR-273: text set on a container (a panel, or a fade or scrim that carries it) aligns to that
+ * container: centred in it, or set on its start or end edge at the same inset as the text has from
+ * the container's top (even padding). The office centres its title in a plate and sets its call to
+ * action in a pill; neither box need meet a grid line of the canvas.
+ */
+function alignedInContainer(layout: StudioLayoutV2, t: StudioLayoutV2['text'][number], threshold: number): boolean {
+  const inside = (o: Box) => t.x >= o.x - 2 && t.y >= o.y - 2 && t.x + t.width <= o.x + o.width + 2 && t.y + t.height <= o.y + o.height + 2;
+  const containers: Box[] = (layout.shapes || []).filter((s) => s.role === 'panel' && s.fill !== 'none' &&
+    !(s.width >= layout.width * 0.95 && s.height >= layout.height * 0.95) && inside(s));
+  const carrier = carrierOf(layout, t);
+  if (carrier?.kind === 'overlay') containers.push(carrier.overlay);
+  return containers.some((o) => {
+    const centred = Math.abs(t.x + t.width / 2 - (o.x + o.width / 2)) <= threshold;
+    const pad = t.y - o.y;
+    const start = Math.abs(t.x - o.x - pad) <= threshold;
+    const end = Math.abs(o.x + o.width - (t.x + t.width) - pad) <= threshold;
+    return t.align === 'center' ? centred : t.align === 'right' ? end || centred : start || centred;
+  });
+}
+
 export function computeLayoutMetrics(
   layout: StudioLayoutV2,
   options: MetricCalculationOptions = {}
@@ -66,8 +96,12 @@ export function computeLayoutMetrics(
   const canvasArea = width * height;
   const threshold = 0.005 * width; // 0.5% of width
 
-  // 1. Grid lines and alignment targets
+  // 1. Grid lines and alignment targets. ADR-273 (ALIGNMENT_POLICY 2026-10-02.1): the canvas edges
+  // are targets too. The office bleeds its title tab, its cards and its footer bar off the edge, and
+  // an edge at x=0 or x=W lined up only by coincidence with another bleed.
   const gridLinesX: number[] = [
+    0,
+    width,
     layout.grid.margin,
     width - layout.grid.margin,
     Math.round(width / 2),
@@ -105,7 +139,8 @@ export function computeLayoutMetrics(
   const centresX = allElements.map((el) => el.x + el.width / 2);
   const alignedAxis = centresX.map((c, k) => k < layout.text.length
     ? gridLinesX.some(x => Math.abs(textAxes[k] - x) <= threshold) ||
-      textAxes.some((x, j) => j !== k && Math.abs(textAxes[k] - x) <= threshold)
+      textAxes.some((x, j) => j !== k && Math.abs(textAxes[k] - x) <= threshold) ||
+      alignedInContainer(layout, layout.text[k], threshold)
     : Math.abs(c - width / 2) <= threshold || centresX.some((other, j) => j !== k &&
       (j >= layout.text.length || layout.text[j].align === 'center') && Math.abs(other - c) <= threshold));
 

@@ -347,7 +347,11 @@ export function evaluateCanvaExportQc(
     if (perBlockFonts && (!Array.isArray(perBlockFonts) || !perBlockFonts.every((face: unknown) => typeof face === 'string'))) {
       throw new Error('Invalid captured font policy');
     }
-    const directionOptions = contentCheck?.directionsByIndex == null ? {} : { directionsByIndex: contentCheck.directionsByIndex };
+    const directionOptions = {
+      ...(contentCheck?.directionsByIndex == null ? {} : { directionsByIndex: contentCheck.directionsByIndex }),
+      // ADR-275: blocks set in capitals keep their case-folded comparison on every re-check.
+      ...(contentCheck?.uppercaseByIndex == null ? {} : { uppercaseByIndex: contentCheck.uppercaseByIndex }),
+    };
     resolvedCheck = checkCanvaPptx(bytes, copyToCheck,
       contentCheck?.allowedFontsByScript ? { allowedFontsByScript: contentCheck.allowedFontsByScript, ...directionOptions }
         : perBlockFonts ? { fontsByIndex: perBlockFonts, scriptFonts: contentCheck?.scriptFonts || undefined, ...directionOptions }

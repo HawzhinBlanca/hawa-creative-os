@@ -80,6 +80,8 @@ export async function runReviseStage(
       logoClearSpacePx: logoConstraints?.clearSpacePx,
     },
     draftFont: ctx.latinFont || 'Inter',
+    // ADR-275: display leading under the body range is checked on its lines' measured ink.
+    copyText: copyMap,
   };
 
   for (const cand of candidates) {

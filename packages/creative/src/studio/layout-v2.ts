@@ -98,7 +98,8 @@ export type OrnamentKind = (typeof ORNAMENT_KINDS)[number];
 
 /** ADR-238: a layout composed from a client's page grammar, which preparation leaves whole. */
 export interface CompositionRecord {
-  grammar: 'page' | 'cover';
+  /** ADR-271: `poster`, one of the client's poster compositions (poster-grammar.ts). */
+  grammar: 'page' | 'cover' | 'poster';
   /** Which of the composer's variants it is. */
   variant: string;
 }
@@ -227,6 +228,52 @@ export interface TextElement extends Box {
    * Latin text only; a Kurdish block keeps the paragraph accent.
    */
   accentText?: string;
+  /**
+   * ADR-275: the face's weight, 100..900 in steps of 100 (CSS numbering). When set it wins over
+   * `bold`; absent, `bold` reads as 700 and its absence as 400, so every older layout keeps the
+   * face it had. The renderer measures and draws the file of the nearest weight the family ships
+   * (render-fonts.json), and the Canva deck names that weighted face.
+   */
+  fontWeight?: FontWeight;
+  /**
+   * ADR-275: the copy is drawn in capitals, the way a heavy-sans poster title is set. The stored copy
+   * is never changed: the renderer measures and draws the capitals, the Canva deck sends the copy as
+   * typed with `cap="all"` so it stays live and editable, and the exact-copy checks compare this
+   * block's copy without regard to case. Latin only: Arabic script has no case, and a block in it
+   * ignores the transform.
+   */
+  textTransform?: TextTransform;
+}
+
+/** ADR-275: the weights a text block may name (CSS numbering). */
+export const FONT_WEIGHTS = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
+export type FontWeight = (typeof FONT_WEIGHTS)[number];
+export const TEXT_TRANSFORMS = ['uppercase'] as const;
+export type TextTransform = (typeof TEXT_TRANSFORMS)[number];
+
+/** Arabic-script letters (Arabic, Supplement, Extended-A, presentation forms). */
+const ARABIC_SCRIPT_TEXT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+/** ADR-275: the weight a block is set in: `fontWeight`, else 700 for `bold`, else 400. */
+export function textFontWeight(t: Pick<TextElement, 'fontWeight' | 'bold'>): FontWeight {
+  return t.fontWeight ?? (t.bold ? 700 : 400);
+}
+
+/**
+ * ADR-275: whether a block's capitals transform applies to this copy. Never for a right-to-left block
+ * or copy with Arabic-script letters in it: the script has no case, and the transform is ignored.
+ */
+export function uppercaseApplies(t: Pick<TextElement, 'textTransform' | 'rtl'>, copy: string): boolean {
+  return t.textTransform === 'uppercase' && !t.rtl && !ARABIC_SCRIPT_TEXT.test(copy);
+}
+
+/**
+ * ADR-275: the characters a block shows for its copy: the copy itself, or its capitals when the block
+ * is set in capitals. Only measurement and drawing use it; the stored copy, its hash, the deck's text
+ * and every exact-copy comparison keep the copy as the requester typed it.
+ */
+export function displayedCopy(t: Pick<TextElement, 'textTransform' | 'rtl'>, copy: string): string {
+  return uppercaseApplies(t, copy) ? copy.toUpperCase() : copy;
 }
 
 export interface TypeScaleConfig {
@@ -502,6 +549,8 @@ export const textElementSchema = boxSchema.extend({
   accentColor: hexSchema.optional(),
   accentParagraph: z.enum(['first', 'last']).optional(),
   accentText: z.string().max(400).optional(),
+  fontWeight: z.union(FONT_WEIGHTS.map((w) => z.literal(w)) as unknown as [z.ZodLiteral<FontWeight>, z.ZodLiteral<FontWeight>, ...z.ZodLiteral<FontWeight>[]]).optional(),
+  textTransform: z.enum(TEXT_TRANSFORMS).optional(),
 }).strict();
 
 export const photoTreatmentSchema = z.enum(PHOTO_TREATMENTS);
@@ -566,7 +615,7 @@ export const studioLayoutV2Schema = z.object({
   overlays: z.array(overlayElementSchema).max(6).optional(),
   artDirection: artDirectionRecordSchema.optional(),
   ornaments: z.array(ornamentElementSchema).max(4).optional(),
-  composition: z.object({ grammar: z.enum(['page', 'cover']), variant: z.string().min(1).max(40) }).strict().optional(),
+  composition: z.object({ grammar: z.enum(['page', 'cover', 'poster']), variant: z.string().min(1).max(40) }).strict().optional(),
 }).strict();
 
 /** ADR-170: the recipe of a layout solved as photo art direction, or undefined (typographic or model-drawn). */

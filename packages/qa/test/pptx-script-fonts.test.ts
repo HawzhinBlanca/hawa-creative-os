@@ -86,6 +86,6 @@ describe('captured PPTX script-specific font evidence', () => {
     const result = checkCanvaPptx(deck(run('Hello', 'Verdana Bold', 'Unused')), ['Hello'], {fontsByIndex: ['Verdana']});
     expect(result.fontPass).toBe(true);
     expect(result.observedFonts).toEqual(['Verdana Bold']);
-    expect(result.checkVersion).toBe(9);
+    expect(result.checkVersion).toBe(10);
   });
 });

@@ -83,7 +83,11 @@ int main(int argc,char **argv) {
   if (argc==2 && strcmp(argv[1],"--identity")==0) {printf("{\"version\":1,\"runtime\":");runtime();puts("}");return 0;}
   if (argc!=7) return 2;
   double size=number(argv[1],1,4096),width=number(argv[2],0.001,1000000),spacing=number(argv[3],-4096,4096);
-  gboolean rtl=number(argv[4],0,1)==1,bold=number(argv[5],0,1)==1,italic=number(argv[6],0,1)==1;
+  /* ADR-275: argument 5 is 0 (regular), 1 (bold) or a CSS weight 100..1000. */
+  double weight_arg=number(argv[5],0,1000);
+  if (weight_arg!=0 && weight_arg!=1 && (weight_arg<100 || weight_arg!=floor(weight_arg))) return 2;
+  gboolean rtl=number(argv[4],0,1)==1,italic=number(argv[6],0,1)==1;
+  int weight=weight_arg>=100?(int)weight_arg:weight_arg==1?PANGO_WEIGHT_BOLD:PANGO_WEIGHT_NORMAL;
   char input[HAWA_MAX_INPUT+1];size_t count=fread(input,1,sizeof(input),stdin);
   if (count>HAWA_MAX_INPUT || ferror(stdin) || memchr(input,0,count) || !g_utf8_validate(input,(gssize)count,NULL)) return 2;
   input[count]=0;char *text=strchr(input,'\n');if (!text || text==input || text-input>256) return 2;*text++=0;
@@ -99,7 +103,7 @@ int main(int argc,char **argv) {
   PangoLayout *layout=pango_layout_new(ctx);pango_layout_set_auto_dir(layout,FALSE);
   PangoFontDescription *font=pango_font_description_new();
   pango_font_description_set_family(font,input);pango_font_description_set_absolute_size(font,size*PANGO_SCALE);
-  pango_font_description_set_weight(font,bold?PANGO_WEIGHT_BOLD:PANGO_WEIGHT_NORMAL);
+  pango_font_description_set_weight(font,(PangoWeight)weight);
   pango_font_description_set_style(font,italic?PANGO_STYLE_ITALIC:PANGO_STYLE_NORMAL);
   pango_layout_set_font_description(layout,font);pango_font_description_free(font);
   PangoAttrList *attrs=pango_attr_list_new();pango_attr_list_insert(attrs,pango_attr_letter_spacing_new((int)round(spacing*PANGO_SCALE)));

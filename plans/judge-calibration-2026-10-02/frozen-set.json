@@ -1,0 +1,445 @@
+{
+ "version": 1,
+ "frozenAt": "2026-10-02",
+ "source": "The blind panel of 2026-10-02 (output/research/2026-10-02-design-and-app-ratings/BLIND_PANEL_RESULTS.txt in the main checkout; 3 judges, Spearman 0.83-0.86 between them): 33 designs, 12 office posts, 15 ADR-271 posters, 6 shipped document pages. panelOverall is the panel's mean overall score of 10. The blinded images (d01.jpg ... d33.jpg) are not committed: the office posts are in packages/creative/assets/exemplars and the renders came from the deterministic ADR-271 proof renders.",
+ "label": "A pair's human label is the design with the higher panelOverall, or a tie when the two differ by less than tieMargin.",
+ "tieMargin": 0.5,
+ "pairsRule": "Each of our 21 designs against two office posts (office ids in order, rotating), plus each shipped document page against the navy poster for the same brief.",
+ "images": [
+  {
+   "id": "d01",
+   "group": "office",
+   "file": "photo03_why_accreditation_card_en.jpg",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d02",
+   "group": "office",
+   "file": "photo06_global_partnership_plate_ckb.jpg",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d03",
+   "group": "ours_new",
+   "file": "en_workshop__poster_navy.png",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d04",
+   "group": "ours_new",
+   "file": "en_peer_call__poster_band.png",
+   "panelOverall": 5.0
+  },
+  {
+   "id": "d05",
+   "group": "ours_shipped",
+   "file": "en_workshop__page_brand_card.png",
+   "panelOverall": 4.0
+  },
+  {
+   "id": "d06",
+   "group": "ours_new",
+   "file": "en_peer_call__poster_navy.png",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d07",
+   "group": "ours_shipped",
+   "file": "en_peer_call__page_brand_card.png",
+   "panelOverall": 3.0
+  },
+  {
+   "id": "d08",
+   "group": "office",
+   "file": "KAAE_Standards_Higher_Ed_1080x1350.png",
+   "panelOverall": 1.7
+  },
+  {
+   "id": "d09",
+   "group": "office",
+   "file": "photo05_global_partnership_plate_en.jpg",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d10",
+   "group": "ours_new",
+   "file": "ckb_peer_call__poster_navy.png",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d11",
+   "group": "office",
+   "file": "photo11_peer_evaluators_call_en.jpg",
+   "panelOverall": 6.7
+  },
+  {
+   "id": "d12",
+   "group": "ours_new",
+   "file": "en_peer_call__poster_cream.png",
+   "panelOverall": 5.7
+  },
+  {
+   "id": "d13",
+   "group": "ours_new",
+   "file": "ckb_workshop__poster_navy.png",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d14",
+   "group": "ours_new",
+   "file": "ckb_workshop__poster_cream.png",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d15",
+   "group": "office",
+   "file": "photo04_why_accreditation_card_ckb.jpg",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d16",
+   "group": "ours_shipped",
+   "file": "ckb_peer_call__page_brand_card.png",
+   "panelOverall": 3.3
+  },
+  {
+   "id": "d17",
+   "group": "ours_new",
+   "file": "ckb_peer_call__poster_cream.png",
+   "panelOverall": 5.7
+  },
+  {
+   "id": "d18",
+   "group": "ours_shipped",
+   "file": "en_photo_report__page_photo.png",
+   "panelOverall": 4.0
+  },
+  {
+   "id": "d19",
+   "group": "office",
+   "file": "photo01_k12_field_visit_report_en.jpg",
+   "panelOverall": 5.3
+  },
+  {
+   "id": "d20",
+   "group": "ours_new",
+   "file": "en_symposium__poster_band.png",
+   "panelOverall": 5.0
+  },
+  {
+   "id": "d21",
+   "group": "office",
+   "file": "post2_standards_higher_ed.png",
+   "panelOverall": 5.7
+  },
+  {
+   "id": "d22",
+   "group": "ours_shipped",
+   "file": "ckb_workshop__page_brand_card.png",
+   "panelOverall": 3.3
+  },
+  {
+   "id": "d23",
+   "group": "ours_new",
+   "file": "en_photo_report__page_photo.png",
+   "panelOverall": 4.0
+  },
+  {
+   "id": "d24",
+   "group": "ours_new",
+   "file": "ckb_workshop__poster_band.png",
+   "panelOverall": 5.0
+  },
+  {
+   "id": "d25",
+   "group": "office",
+   "file": "KAAE_Commences_2026_Cycle_1080x1350.png",
+   "panelOverall": 5.7
+  },
+  {
+   "id": "d26",
+   "group": "office",
+   "file": "photo02_k12_field_visit_report_ckb.jpg",
+   "panelOverall": 5.3
+  },
+  {
+   "id": "d27",
+   "group": "ours_new",
+   "file": "en_workshop__poster_cream.png",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d28",
+   "group": "ours_new",
+   "file": "en_workshop__poster_band.png",
+   "panelOverall": 5.7
+  },
+  {
+   "id": "d29",
+   "group": "ours_shipped",
+   "file": "en_symposium__page_brand_card.png",
+   "panelOverall": 3.7
+  },
+  {
+   "id": "d30",
+   "group": "office",
+   "file": "photo12_peer_evaluators_call_ckb.jpg",
+   "panelOverall": 6.3
+  },
+  {
+   "id": "d31",
+   "group": "office",
+   "file": "photo09_eid_al_adha_sky_title.jpg",
+   "panelOverall": 6.3
+  },
+  {
+   "id": "d32",
+   "group": "ours_new",
+   "file": "en_symposium__poster_cream.png",
+   "panelOverall": 6.0
+  },
+  {
+   "id": "d33",
+   "group": "ours_new",
+   "file": "en_symposium__poster_navy.png",
+   "panelOverall": 6.0
+  }
+ ],
+ "pairs": [
+  {
+   "a": "d03",
+   "b": "d01",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d03",
+   "b": "d02",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d04",
+   "b": "d08",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d04",
+   "b": "d09",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d05",
+   "b": "d11",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d05",
+   "b": "d15",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d06",
+   "b": "d19",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d06",
+   "b": "d21",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d07",
+   "b": "d25",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d07",
+   "b": "d26",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d10",
+   "b": "d30",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d10",
+   "b": "d31",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d12",
+   "b": "d01",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d12",
+   "b": "d02",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d13",
+   "b": "d08",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d13",
+   "b": "d09",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d14",
+   "b": "d11",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d14",
+   "b": "d15",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d16",
+   "b": "d19",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d16",
+   "b": "d21",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d17",
+   "b": "d25",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d17",
+   "b": "d26",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d18",
+   "b": "d30",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d18",
+   "b": "d31",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d20",
+   "b": "d01",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d20",
+   "b": "d02",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d22",
+   "b": "d08",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d22",
+   "b": "d09",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d23",
+   "b": "d11",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d23",
+   "b": "d15",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d24",
+   "b": "d19",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d24",
+   "b": "d21",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d27",
+   "b": "d25",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d27",
+   "b": "d26",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d28",
+   "b": "d30",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d28",
+   "b": "d31",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d29",
+   "b": "d01",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d29",
+   "b": "d02",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d32",
+   "b": "d08",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d32",
+   "b": "d09",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d33",
+   "b": "d11",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d33",
+   "b": "d15",
+   "kind": "ours_vs_office"
+  },
+  {
+   "a": "d05",
+   "b": "d03",
+   "kind": "document_page_vs_poster"
+  },
+  {
+   "a": "d07",
+   "b": "d06",
+   "kind": "document_page_vs_poster"
+  },
+  {
+   "a": "d16",
+   "b": "d10",
+   "kind": "document_page_vs_poster"
+  },
+  {
+   "a": "d22",
+   "b": "d13",
+   "kind": "document_page_vs_poster"
+  },
+  {
+   "a": "d29",
+   "b": "d33",
+   "kind": "document_page_vs_poster"
+  }
+ ]
+}

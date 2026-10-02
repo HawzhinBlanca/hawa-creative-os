@@ -19,6 +19,23 @@ afterEach(() => {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// 2026-10-02 review: Core wrote no error-level line in two days although routes answer 500 themselves.
+describe('a failed request is an error line', () => {
+  it('logs a 5xx at error level and a 4xx or 2xx at info', async () => {
+    capture = captureLogs();
+    const app = new Hono();
+    app.use('*', requestLogContext());
+    app.get('/fails', (c) => c.json({ title: 'Internal Server Error' }, 500));
+    app.get('/refuses', (c) => c.json({ title: 'Not Found' }, 404));
+    app.get('/works', (c) => c.json({ ok: true }));
+    for (const path of ['/fails', '/refuses', '/works']) await app.request(path, { headers: { 'x-request-id': `req-level${path.replace('/', '-')}` } });
+    const line = (id: string) => capture!.lines.find((l) => l.requestId === id && /^request/.test(String(l.msg)));
+    expect(line('req-level-fails')).toMatchObject({ level: 'error', msg: 'request', status: 500 });
+    expect(line('req-level-refuses')).toMatchObject({ level: 'info', msg: 'request', status: 404 });
+    expect(line('req-level-works')).toMatchObject({ level: 'info', msg: 'request', status: 200 });
+  });
+});
+
 describe('the request middleware', () => {
   const probe = () => {
     const app = new Hono();

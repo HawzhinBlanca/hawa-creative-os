@@ -53,7 +53,7 @@
       "sky": "#4A90E2",
       "sun": "#FFD700"
     },
-    "colorUsage": "KAAE Brand Guidelines, Excellence Edition (2025), light first. The page is White (#FFFFFF), as on the guideline's own pages, with generous margins. Primary colours: KAAE Blue (#4770A3, Pantone 5415 C) for titles, the italic lead line, the small-caps section label and brand cards; KAAE Gold (#F7B500, Pantone 7549 C) for the short gold bar under a title, the gold part of the header rule, a card's gold left edge, and numbers or card titles on navy. Body text is Midnight (#0A1628) on light; White on KAAE Blue or navy. Extended colours: Midnight (#0A1628), Royal (#1E3A5F), Ocean (#2C5282), Sky (#4A90E2), Cream (#FDF8F3), Sun (#FFD700). Gold is never text on white or cream (under 2:1); on a KAAE Blue card a card title is Sun (#FFD700). Gradients: KAAE Blue to Gold (p.7) for the rule at the foot of a page; Gold to Sun for the title bar; KAAE Blue to Midnight for a cover. Composition, as the guideline's pages are built (pp.1-15): a white page with generous margins; a header with the logo at the top left, an optional letter-spaced KAAE Blue section label at the top right and a thin grey rule with a gold gradient segment under the logo; a bold serif title in KAAE Blue with a short gold bar under it; an italic KAAE Blue lead; Midnight body text; details on rounded cards with soft shadows (a KAAE Blue card with white text and a Sun card title, white cards with KAAE Blue serif lines, or a cream card with a gold left edge for a call to action); and the KAAE Blue to Gold rule at the foot of a page. A cover (p.0) is the navy gradient (KAAE Blue at the top left to Midnight) with the logo centred (or at the top left), a white serif title, a short gold bar and an upright, letter-spaced gold subtitle, and no foot rule. A navy-gradient design only when the brief or the photo calls for it: a cover or announcement, an evening invitation, a keynote or stage screen, a dark photo hero, or the requester asks for dark or navy. Never use colours outside this palette.",
+    "colorUsage": "KAAE Brand Guidelines, Excellence Edition (2025), light first. The page is White (#FFFFFF), as on the guideline's own pages, with generous margins. Primary colours: KAAE Blue (#4770A3, Pantone 5415 C) for titles, the italic lead line, the small-caps section label and brand cards; KAAE Gold (#F7B500, Pantone 7549 C) for the short gold bar under a title, the gold part of the header rule, a card's gold left edge, and numbers or card titles on navy. Body text is Midnight (#0A1628) on light; White on KAAE Blue or navy. Extended colours: Midnight (#0A1628), Royal (#1E3A5F), Ocean (#2C5282), Sky (#4A90E2), Cream (#FDF8F3), Sun (#FFD700). Gold is never text on white or cream (under 2:1); on a KAAE Blue card a card title is Sun (#FFD700). Gradients: KAAE Blue to Gold (p.7) for the rule at the foot of a page; Gold to Sun for the title bar; KAAE Blue to Midnight for a cover. Composition (ADR-271, 2026-10-02): the guideline sets the palette, the logo, the faces and the brand elements; the office's own published posts set how a poster is composed. A poster has one dominant display moment: a heavy sans title in capitals at 10-20% of the canvas width that reads at a 300px thumbnail, a gold bar under it, the logo at 16% of the width at the top left, the details grouped at the foot, and a visible brand element. Poster compositions: a navy-gradient cover (KAAE Blue at the top left to Midnight) with a Sky sunburst at about 35% opacity at the top right and the big white capitals title lowered under it, a Sun lead, white details, a gold pill for the call to action; a cream poster (#FDF8F3) with the big Royal capitals title at the top and a full-bleed Royal block closing the poster that holds the details (a Sun first line) and a gold pill, with a gold sunburst standing on the block's edge; a white page with a navy-gradient band under the logo holding the white display title, the gold bar bridging the band's edge, the details on a KAAE Blue card with the gold pill bridging its lower edge, the triangle pattern in Ocean rising from the foot and the KAAE Blue to Gold rule at the foot; the call to action is always the gold pill; a detail group (a date and a place) is one face, the date in bold; and the guideline's document page (a white page with the header rule and its gold segment, the serif title and bar, an italic KAAE Blue lead, details on rounded cards, the foot rule). A poster leaves at most about 65% of the canvas empty. A cover (p.0) is the navy gradient (KAAE Blue at the top left to Midnight) with the logo centred (or at the top left), a white serif title, a short gold bar and an upright, letter-spaced gold subtitle, and no foot rule. Light first stays the default ground: the white or cream compositions lead, and the navy cover is one of the options, the first when the brief or the photo calls for dark (a cover or announcement, an evening invitation, a keynote or stage screen, a dark photo hero, or the requester asks for dark or navy). Never use colours outside this palette.",
     "logo": "Use the supplied official logo unchanged (pp.3-6): never stretched or distorted, rotated or tilted, recoloured, given effects or shadows, or set on a busy background. Minimum digital width 80px (print 20mm, favicon 16px simplified mark). Keep clear space around it equal to the height of its K.",
     "logoConstraints": {
       "minimumWidthPx": 80,
@@ -68,7 +68,7 @@
     "scriptFontNote": "Sorani Kurdish (p.10): the guideline sets Kurdish titles in a bold sans in KAAE Blue, right-aligned, with the gold bar under the title's right end; leads in KAAE Blue; body in Midnight. Noto Sans Arabic for body and IBM Plex Sans Arabic or Noto Sans Arabic for display are the admitted Sorani sans faces closest to it.",
     "rtl": "Sorani Kurdish blocks are right-to-left: right-align them, keep them separate from Latin blocks, and give them about 20% more width and height than Latin text of the same size. The page header keeps the logo at the top left (p.10).",
     "pageGrammar": {
-      "source": "KAAE_Guidelines4.pdf, Excellence Edition (2025): pages 1-15 (header, title, bar, lead, cards, foot rule), page 0 (cover), page 13 (elements).",
+      "source": "KAAE_Guidelines4.pdf, Excellence Edition (2025): pages 1-15 (header, title, bar, lead, cards, foot rule), page 0 (cover), page 13 (elements). Poster compositions (ADR-271): the office's own published posts.",
       "page": {
         "background": "#FFFFFF",
         "marginShare": 0.07
@@ -246,20 +246,94 @@
           "opacityOnDark": 0.16
         },
         "rule": "Optional and subtle (p.13): a quarter-disc sunburst in a corner or a triangle mosaic band fading upward, never over copy or the logo's clear space."
+      },
+      "poster": {
+        "source": "The office's own published KAAE posts (assets/exemplars: Call for Peer Evaluators, Global Partnership, Meet KAAE at the 4th Kurdistan Educational Forum, the K-12 field visit report), adopted as the poster composition standard on 2026-10-02 (ADR-271): one dominant display title, a navy or cream ground or a full-width title band, the details grouped, a visible brand element. Palette, logo, faces and elements stay the guideline's.",
+        "titleSizeShare": {
+          "min": 0.1,
+          "max": 0.2
+        },
+        "logoWidthShare": 0.16,
+        "titleBarWidthShare": 0.16,
+        "negativeSpaceMax": 0.65,
+        "detailSizeShareMin": 0.04,
+        "displayFonts": [
+          "Inter"
+        ],
+        "display": {
+          "source": "Owner's decision of 2026-10-02 (ADR-275): a poster's display title is set like the office's own published posts (assets/exemplars photo01-photo12): a heavy geometric sans in capitals with tight leading, the Sorani twin in a bold sans at about 1.35. Inter ExtraBold (bundled, OFL) is the admitted face closest to the office's display face; IBM Plex Sans Arabic Bold draws every Sorani letter (Cairo does not). The guideline's serif title above stays for document pages.",
+          "latin": {
+            "fontFamily": "Inter",
+            "fontWeight": 800,
+            "textTransform": "uppercase",
+            "lineHeight": 0.98,
+            "letterSpacing": -0.01
+          },
+          "arabic": {
+            "fontFamily": "IBM Plex Sans Arabic",
+            "fontWeight": 700,
+            "lineHeight": 1.35
+          },
+          "labelLetterSpacing": 0.08
+        },
+        "navy": {
+          "title": "#FFFFFF",
+          "lead": "#FFD700",
+          "body": "#FFFFFF",
+          "detail": "#FFD700",
+          "pill": "#F7B500",
+          "pillText": "#0A1628",
+          "sunburst": {
+            "color": "#4A90E2",
+            "opacity": 0.35
+          }
+        },
+        "cream": {
+          "ground": "#FDF8F3",
+          "title": "#1E3A5F",
+          "lead": "#4770A3",
+          "body": "#0A1628",
+          "detail": "#1E3A5F",
+          "panel": "#1E3A5F",
+          "panelTitle": "#FFD700",
+          "panelText": "#FFFFFF",
+          "pill": "#F7B500",
+          "pillText": "#0A1628",
+          "sunburst": {
+            "color": "#F7B500",
+            "opacity": 0.32
+          }
+        },
+        "band": {
+          "title": "#FFFFFF",
+          "lead": "#FFD700",
+          "body": "#0A1628",
+          "detail": "#FFD700",
+          "pill": "#F7B500",
+          "pillText": "#0A1628",
+          "sunburst": {
+            "color": "#4770A3",
+            "opacity": 0.32
+          },
+          "pattern": {
+            "color": "#2C5282",
+            "opacity": 0.6
+          }
+        }
       }
     },
     "artDirection": [
       "With photos: choose the composition that best communicates the subject: one hero or several photos with distinct roles. Use a diptych, sequence, mosaic or hero with supporting views when the content benefits. Only use every photo or a fixed count when the requester explicitly asks; never force a collage by default.",
-      "With photos: on a white page the hero sits in a rounded card with a soft shadow under the header, title, gold bar and lead; full-bleed, it fills 60-100% of the canvas off two edges, with a quiet region for any title over it.",
+      "With photos: the hero is big: full-bleed, filling 60-100% of the canvas off two edges with a quiet region for any title over it, or fading into the white page under a navy title band; not a small photo in a card on a document page.",
       "Text always sits on something: the white page, a rounded white, KAAE Blue or cream card, or a fade to white or to navy over 35-50% of the height. Never bare text on a busy photo.",
       "Elements bridge edges: a call-to-action tab straddling a card, a portrait breaking over a panel.",
       "With a photo of a person: cut out, placed bottom-left or left, bleeding off the edge, with the sunburst or triangle pattern behind. No circle masks.",
       "A thin gold line or the KAAE Blue to Gold rule at the foot frames a page. Never tilt or rotate photos.",
       "Colour, as the 2025 guideline sets it: light first. A white page; KAAE Blue titles and leads; Midnight body text; KAAE Gold only for the title bar, the header accent, a card's left edge and numbers on navy. Keep the photo's natural grade.",
-      "Type: a bold serif title in KAAE Blue (white on navy), a short gold bar under it, an italic KAAE Blue lead, Inter body. Logo top-left over the header rule; a URL in the footer. With no photo, type, cards and rules are the design.",
+      "Type: a heavy sans title in capitals (Inter ExtraBold; Sorani in IBM Plex Sans Arabic Bold, never capitalised), as the office's own posts set it, in KAAE Blue or Royal on light grounds (white on navy), 10-20% of the width and the poster's one dominant display moment, a gold bar under it, an italic KAAE Blue lead, Inter body. Logo top-left at 16% of the width. With no photo, the title is the image: big display type, a navy, cream or banded ground and the sunburst carry the poster, never a near-empty page.",
       "Bilingual: the same geometry in both languages. Sorani is right-aligned in the same boxes, the gold bar under the title's right end; never mirror the photo.",
       "With several photos: rank subject fit, sharpness and useful composition space. Select a strong hero when it tells the whole story, or meaningful supporting views when they add information. Preserve explicit requester coverage and count; otherwise omit redundant or weak photos with visible reasons.",
-      "A navy-gradient ground (KAAE Blue to Midnight) only for a cover or announcement, an evening invitation, a keynote or stage screen, a dark photo hero, or when the requester asks for dark or navy. Otherwise the white page."
+      "A navy-gradient ground (KAAE Blue to Midnight) for a cover or announcement, an evening invitation, a keynote or stage screen, a dark photo hero, or when the requester asks for dark or navy; for a text-only poster it is one of the compositions offered beside the white and cream ones."
     ],
     "artDirectionSource": "Office art-direction rulebook, from ~20 of KAAE's published photo designs (ADR-170, 2026-09-30), re-pointed at the 2025 guideline (ADR-238).",
     "colorSource": "Colour pages of KAAE_Guidelines4.pdf, Brand Guidelines — Excellence Edition (2025): primary palette p.7 (KAAE Blue #4770A3 Pantone 5415 C, KAAE Gold #F7B500 Pantone 7549 C, gradient applications), extended palette p.8. Body ink #0A1628 and lead #4770A3 measured on the rendered pages (ADR-238)."

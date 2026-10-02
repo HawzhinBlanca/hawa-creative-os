@@ -91,6 +91,12 @@ export interface ExemplarBrief {
   eligibleRecipes?: readonly string[];
   /** Subject tags of the brief, e.g. report_release, meeting, event_forum. */
   subjects?: readonly string[];
+  /**
+   * ADR-271: a text-only brief may also be shown the office's own published posts, for their
+   * composition (big display type, a navy or cream ground, a clear focal point), not their photos.
+   * Absent or false: the typographic retrieval is exactly as before (owner-confirmed set only).
+   */
+  officePosters?: boolean;
 }
 
 /** Search-only normalization. Never substitute this result for approved copy. */
@@ -269,8 +275,12 @@ export class ExemplarRetrievalIndex {
       if (coverageWarning) warnings.push(coverageWarning);
     }
     // A typographic brief sees only the owner-confirmed typographic set, ranked exactly as before
-    // photo exemplars existed: they take no part in its frequencies, order or selection.
-    const documents = available.filter(d => d.exemplar.status === 'CONFIRMED' && d.exemplar.photoCount === 0);
+    // photo exemplars existed: they take no part in its frequencies, order or selection. ADR-271: with
+    // `officePosters`, the office's published posts join the pool, and at least one of them (in the
+    // brief's script where one exists, never a language twin of another pick) is among the selection.
+    const isOfficePoster = (d: LexicalDocument) => d.exemplar.status === 'office-published' && d.exemplar.photoCount > 0;
+    const documents = available.filter(d => (d.exemplar.status === 'CONFIRMED' && d.exemplar.photoCount === 0) ||
+      (photoCount === 0 && brief.officePosters === true && isOfficePoster(d)));
     const { ranked, matched } = lexicalRank(documents, query, brief.format);
     // A format preference cannot outrank actual text evidence. With no evidence,
     // curator ranking is an explicit usable fallback, never a fabricated similarity.
@@ -279,6 +289,17 @@ export class ExemplarRetrievalIndex {
     const hasLexical = matched.size > 0;
     const candidates = hasLexical ? ranked.filter(r => r.lexicalScore > 0) : ranked;
     const selected = candidates.slice(0, Math.min(k, 10));
+    if (brief.officePosters === true && photoCount === 0 && selected.length && !selected.some(r => isOfficePoster(r.doc))) {
+      const rtl = RTL_SCRIPT.test(brief.text);
+      const fits = (language?: string) => language === 'bilingual' || (rtl ? language === 'ckb' : language === 'en');
+      const posters = ranked.filter(r => isOfficePoster(r.doc))
+        .sort((a, b) => Number(fits(b.doc.exemplar.language)) - Number(fits(a.doc.exemplar.language)) || b.lexicalScore - a.lexicalScore ||
+          a.doc.exemplar.rank - b.doc.exemplar.rank || byId(a, b));
+      if (posters.length) {
+        if (selected.length >= Math.min(k, 10)) selected.pop();
+        selected.push(posters[0]);
+      }
+    }
     const mode: ExemplarRetrievalEvidence['mode'] = !selected.length ? 'empty' : hasLexical ? 'lexical' : selected[0].formatMatch ? 'format_fallback' : 'curator_fallback';
     const retrievedExemplars = selected.map(toMatch);
     return { brief: brief.text, retrievedExemplars, retrievedIds: retrievedExemplars.map(e => e.id),

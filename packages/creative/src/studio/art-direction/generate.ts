@@ -524,7 +524,10 @@ export function solveConcepts(
   });
   // ADR-238: with a page grammar, one light concept is the guideline's own page. When the model
   // chose none, the last concept on a light ground becomes it (the same photo, the same slots).
-  if (options.grammar && kept.length && !kept.some((c) => c.recipe === 'fade_to_paper') && eligible.includes('fade_to_paper')) {
+  // ADR-274: not for a client whose grammar carries poster rules. Its posters follow the office's
+  // published posts, every one photo-led; the guideline's document page with the photo in a card
+  // replaced one of the model's photo concepts and then won the selection by default.
+  if (options.grammar && !options.grammar.poster && kept.length && !kept.some((c) => c.recipe === 'fade_to_paper') && eligible.includes('fade_to_paper')) {
     for (let k = kept.length - 1; k >= 0; k--) {
       const was = kept[k];
       // A guideline alternative must preserve the chosen photo narrative and treatment.

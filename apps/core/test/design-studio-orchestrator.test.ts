@@ -699,7 +699,9 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     process.env.DESIGN_PIPELINE_V3 = 'on';
 
     try {
-      const taskId = await createTask();
+      // ADR-271: a title no poster composition can carry, so the layout model is still called (a
+      // KAAE text-only brief the poster compositions carry makes no layout call).
+      const taskId = await createTask(`Keep title centered.\n---\n${'EXACT TITLE OF A VERY LONG ANNOUNCEMENT THAT RUNS ON AND ON '.repeat(4).trim()}\n\nExact body text line. Never rewrite it.`);
 
       const baseFetch = createMockFetch();
       const failFetch = vi.fn().mockImplementation(async (url: any, init: any) => {
@@ -1066,17 +1068,28 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
 
       // No v2 concept call: v3 invents its own archetypes. And the v3 stages ran.
       expect(conceptCalls).toBe(0);
-      expect(schemasSeen).toContain('layout_v3_candidates');
-      expect(schemasSeen).toContain('DesignCritiqueReport');
-      expect(schemasSeen.filter((x) => x === 'PairwiseDimensionVerdict')).toHaveLength(4);
+      // ADR-271: KAAE's grammar carries poster rules, so a text-only run is three composed poster
+      // compositions and makes no layout call.
+      expect(schemasSeen).not.toContain('layout_v3_candidates');
+      // ADR-273: a composed poster now passes the design metrics, so the gated revise stage has nothing
+      // to repair and makes no critique call. ADR-274: the three composed posters are judged in a round
+      // robin (three pairs, both orders: six calls) and the canary takes two: eight, each admitted
+      // through the run's ledger reservation like any other call.
+      expect(schemasSeen).not.toContain('DesignCritiqueReport');
+      expect(schemasSeen.filter((x) => x === 'PairwiseDimensionVerdict')).toHaveLength(8);
 
       const stages = typeof final.stages === 'string' ? JSON.parse(final.stages) : final.stages;
       expect(stages.tournament.pipeline).toBe('v3');
-      // ADR-238 section 11: KAAE has a page grammar, so a judge that picks by position (a tie across
-      // the two orders) leaves the pair to the guideline prior, which keeps the composed guideline page.
-      expect(stages.tournament.decidedBy).toBe('art_direction_prior');
-      expect(stages.tournament.prior).toMatchObject({ basis: 'guideline', instead: 'composite_after_tie' });
+      // A judge that picks by position (a tie across the two orders) decides nothing. ADR-271: both
+      // finalists are composed poster compositions, equally faithful to the guideline, so the
+      // guideline prior has no preference either and the composite breaks the tie.
+      expect(stages.tournament.decidedBy).toBe('composite_after_tie');
+      expect(stages.tournament.prior).toBeUndefined();
       expect(stages.tournament.humanChoiceRecommended).toBe(true);
+      // ADR-274: every pair split, so no candidate leads the round robin and the judge picked none.
+      expect(stages.tournament.roundRobin.matches).toBe(3);
+      expect(stages.tournament.roundRobin.standings.map((r: any) => r.score)).toEqual([0, 0, 0]);
+      expect(stages.tournament.judgeWinner).toBeNull();
       expect(stages.revise.pipeline).toBe('v3');
       // A judge that picks by position cannot pass a two-order canary.
       expect(final.judge_status).toBe('UNRELIABLE');
@@ -1085,27 +1098,31 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         await sql<any>`SELECT kind, order_swapped, candidate_a, candidate_b, verdict FROM hawa.design_studio_judgments WHERE run_id=${run.id}::uuid`.execute(db)
       ).rows;
       const kinds = judgments.map((j: any) => `${j.kind}${j.kind === 'pairwise' ? (j.order_swapped ? ':BA' : ':AB') : ''}`).sort();
-      expect(kinds).toEqual(['canary', 'critique', 'pairwise:AB', 'pairwise:BA']);
+      expect(kinds).toEqual(['canary', 'critique', 'pairwise:AB', 'pairwise:AB', 'pairwise:AB', 'pairwise:BA', 'pairwise:BA', 'pairwise:BA']);
       for (const j of judgments) {
         const verdict = typeof j.verdict === 'string' ? JSON.parse(j.verdict) : j.verdict;
         expect(verdict.pipeline).toBe('v3');
       }
 
-      // ADR-238: KAAE's page grammar sets the first two candidates (the guideline page, its details on
-      // a KAAE Blue card and on white cards); the generator's first layout, restyled to the grammar,
-      // is the third. Three candidates, as before; exactly one is the winner.
+      // ADR-238/262: KAAE's grammar sets all three candidates, from its poster compositions; the layout
+      // generator is not called. Three candidates, as before; exactly one is the winner.
       const candidates = (
         await sql<any>`SELECT status, rank, concept FROM hawa.design_studio_candidates WHERE run_id=${run.id}::uuid ORDER BY ordinal`.execute(db)
       ).rows;
       const concepts = candidates.map((c: any) => (typeof c.concept === 'string' ? JSON.parse(c.concept) : c.concept));
+      // ADR-271: the office's three poster compositions, each a different one.
       expect(concepts.map((c: any) => c.layoutIdea)).toEqual([
-        'v3 hero_statement_grid',
-        'v3 hero_statement_grid',
+        'v3 monolith_centered',
+        'v3 monolith_centered',
         'v3 monolith_centered',
       ]);
-      expect(concepts.slice(0, 2).map((c: any) => c.name)).toEqual(['Guideline page (details on a KAAE Blue card)', 'Guideline page (details on white cards)']);
+      expect(concepts.map((c: any) => c.name)).toEqual([
+        'Office poster (white page, full-width title band)',
+        'Office poster (cream ground, display title, details card)',
+        'Office poster (navy gradient, display title, sunburst)',
+      ]);
       expect(candidates.filter((c: any) => c.status === 'winner')).toHaveLength(1);
-      expect(concepts[candidates.findIndex((c: any) => c.status === 'winner')].name).toMatch(/^Guideline page/);
+      expect(concepts[candidates.findIndex((c: any) => c.status === 'winner')].name).toMatch(/^Office poster/);
       expect(final.winner_candidate_id).toBeTruthy();
       expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
     } finally {

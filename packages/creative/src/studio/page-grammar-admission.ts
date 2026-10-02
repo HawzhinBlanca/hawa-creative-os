@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { FONT_WEIGHTS, type FontWeight } from './layout-v2.js';
+import { HOUSE_RULES } from './house-rules.js';
 
 const share = z.number().finite().min(0).max(1);
 const dimension = z.number().finite().positive().max(1);
@@ -26,6 +28,41 @@ function grammarSchema(palette: ReadonlySet<string>) {
     lineHeight: z.number().finite().positive().max(5).optional(), letterSpacing: tracking.optional(),
   }).strict();
   const card = z.object({ fill: color, title: color, text: color, edge: color.optional(), edgeShare: dimension.optional() }).strict();
+  // ADR-271: a poster composition's colours.
+  const posterVariant = z.object({
+    ground: color.optional(), title: color, lead: color, body: color, detail: color,
+    panel: color.optional(), panelTitle: color.optional(), panelText: color.optional(),
+    pill: color, pillText: color, sunburst: z.object({ color, opacity: share }).strict(),
+    pattern: z.object({ color, opacity: share }).strict().optional(),
+  }).strict();
+  // ADR-275: the poster display policy. Leading within the house's display ranges; Arabic script
+  // takes no case transform and no tracking. Whether the face draws the script is checked where the
+  // font files are (posterDisplayStyle), as the face admission comment below says.
+  const weight = z.custom<FontWeight>(value => typeof value === 'number' && (FONT_WEIGHTS as readonly number[]).includes(value), 'A weight is 100..900 in steps of 100.');
+  const displayFace = (script: 'latin' | 'arabic') => z.object({
+    fontFamily: font, fontWeight: weight, textTransform: z.literal('uppercase').optional(),
+    lineHeight: z.number().finite().min(HOUSE_RULES.displayLineHeight[script].min).max(HOUSE_RULES.displayLineHeight[script].max),
+    letterSpacing: tracking.optional(),
+  }).strict();
+  const display = z.object({
+    source: note.optional(),
+    latin: displayFace('latin').refine(v => (v.letterSpacing ?? 0) >= -HOUSE_RULES.letterSpacingMaxEm && (v.letterSpacing ?? 0) <= HOUSE_RULES.letterSpacingMaxEm,
+      'Latin display tracking stays within the house limit.'),
+    arabic: displayFace('arabic').refine(v => v.textTransform === undefined && (v.letterSpacing ?? 0) === 0,
+      'Arabic script takes no case transform and no tracking.'),
+    labelLetterSpacing: tracking.optional(),
+  }).strict();
+  const poster = z.object({
+    source: note.optional(),
+    titleSizeShare: z.object({ min: dimension, max: dimension }).strict().refine(v => v.min <= v.max, 'The title range must ascend.'),
+    logoWidthShare: dimension, titleBarWidthShare: dimension, negativeSpaceMax: share,
+    detailSizeShareMin: dimension.optional(),
+    // ADR-274: the faces the office's posters set their display lines in, by name.
+    displayFonts: z.array(font).min(1).max(8).optional(),
+    display: display.optional(),
+    navy: posterVariant, cream: posterVariant.refine(v => Boolean(v.ground && v.panel && v.panelTitle && v.panelText), 'The cream poster names its ground and card.'),
+    band: posterVariant,
+  }).strict();
   return z.object({
     source: note.optional(),
     page: z.object({ background: color, marginShare: z.number().finite().min(0).lt(0.5) }).strict(),
@@ -55,6 +92,7 @@ function grammarSchema(palette: ReadonlySet<string>) {
       trianglePattern: z.object({ color, opacityOnLight: share, colorOnDark: color, opacityOnDark: share }).strict(),
       rule: note.optional(),
     }).strict(),
+    poster: poster.optional(),
   }).strict();
 }
 

@@ -1,6 +1,7 @@
 import type {
   Box,
   CompositionRecord,
+  FontWeight,
   Hex,
   OrnamentElement,
   PhotoElement,
@@ -58,6 +59,85 @@ export interface GrammarCard {
   edgeShare?: number;
 }
 
+/** ADR-271: one poster composition's colours (all from the client's palette). */
+export interface PosterVariantSpec {
+  /** The ground, where the composition has its own (cream). */
+  ground?: Hex;
+  title: Hex;
+  lead: Hex;
+  body: Hex;
+  /** The first detail line (a date) where it sits straight on the ground. */
+  detail: Hex;
+  /** The details card, where the composition sets one of its own (cream). */
+  panel?: Hex;
+  panelTitle?: Hex;
+  panelText?: Hex;
+  /** The call to action's pill and its text. */
+  pill: Hex;
+  pillText: Hex;
+  sunburst: { color: Hex; opacity: number };
+  /** The guideline's triangle pattern, where the composition sets one (the band, rising from its foot). */
+  pattern?: { color: Hex; opacity: number };
+}
+
+/**
+ * ADR-271: how the client's posters are composed (KAAE: from the office's own published posts), as
+ * distinct from its guideline's document pages: the title's range as shares of the width, the logo's
+ * width, the gold bar's width, the negative-space ceiling, and the three compositions' colours.
+ */
+export interface PosterGrammar {
+  source?: string;
+  titleSizeShare: { min: number; max: number };
+  logoWidthShare: number;
+  titleBarWidthShare: number;
+  negativeSpaceMax: number;
+  /**
+   * The smallest size of the details (the date, the place, the lead) as a share of the width. A post
+   * is seen about 390 points wide on a phone, so 0.04 sets them at about 16 points there; the type
+   * scale's first step over the body was 0.035, and the details read small under a poster title.
+   */
+  detailSizeShareMin?: number;
+  /**
+   * ADR-274: the faces the office's own posters set their display lines in (KAAE: the heavy sans of
+   * every published post, owner decision 2026-10-02). The guideline-fidelity rule and
+   * `guidelineDeviations` accept them on a poster's display blocks, beside the guideline's own faces.
+   * Absent: only the guideline's faces, as before.
+   */
+  displayFonts?: string[];
+  /**
+   * ADR-275: how a poster's display title is set, per script (KAAE: the office's heavy sans capitals,
+   * owner's decision of 2026-10-02). The guideline's `title` face stays for document pages. Read
+   * through `posterDisplayStyle` (poster-display.ts), which also refuses a face that cannot draw the
+   * script.
+   */
+  display?: PosterDisplayPolicy;
+  navy: PosterVariantSpec;
+  cream: PosterVariantSpec;
+  band: PosterVariantSpec;
+}
+
+/** ADR-275: one script's poster display face. */
+export interface PosterDisplayFace {
+  fontFamily: string;
+  /** CSS weight; the renderer draws the nearest weight the family ships. */
+  fontWeight: FontWeight;
+  /** Latin only: the title drawn in capitals, the copy stored as typed. */
+  textTransform?: 'uppercase';
+  /** Display leading (house-rules.ts displayLineHeight: Latin >= 0.95, Arabic script >= 1.3 with a measured ink check). */
+  lineHeight: number;
+  /** Tracking in em; capitals at display size are set solid to slightly tight. Arabic script takes none. */
+  letterSpacing?: number;
+}
+
+/** ADR-275: the poster display policy. */
+export interface PosterDisplayPolicy {
+  source?: string;
+  latin: PosterDisplayFace;
+  arabic: PosterDisplayFace;
+  /** Tracking (em) for a small Latin capitals label (an eyebrow or a tab) beside the title. */
+  labelLetterSpacing?: number;
+}
+
 export interface PageGrammar {
   page: { background: Hex; marginShare: number };
   header: {
@@ -92,6 +172,8 @@ export interface PageGrammar {
     sunburst: { color: Hex; opacityOnLight: number; colorOnDark: Hex; opacityOnDark: number; rays: number };
     trianglePattern: { color: Hex; opacityOnLight: number; colorOnDark: Hex; opacityOnDark: number };
   };
+  /** ADR-271: the poster compositions; a grammar without them composes pages and covers only. */
+  poster?: PosterGrammar;
 }
 
 /** The same admission contract Core checks before composition and paid calls. */
@@ -220,6 +302,7 @@ interface Unit {
   kind: UnitKind;
   blocks: Block[];
 }
+export type GrammarUnit = Unit;
 
 const ARABIC = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/;
 
@@ -293,15 +376,63 @@ export function composeGrammarLayout(input: ComposeGrammarInput): StudioLayoutV2
   const { width: W, height: H, grammar: g } = input;
   const units = grammarUnits(input);
   if (!units.some((u) => u.kind === 'title')) throw new GrammarInfeasibleError('no title');
-  // At most the grammar's own sizes: the guideline's pages are restrained, never shouted.
-  for (let f = 1; f >= 0.55 - 1e-9; f -= 0.05) {
-    const layout = attempt(input, units, f, false);
-    if (layout) return attempt(input, units, f, true)!;
+  // ADR-271: with poster rules the title is the poster's display moment: the largest step of the
+  // scale within the poster's title range that fits, growing to fill its block. Without them, at most
+  // the grammar's own sizes.
+  // Every poster-sized title at every scale first; then the grammar's own title size (the only pass
+  // without poster rules), whose failure at its last scale is reported as before.
+  const passes = input.grammar.poster ? [true, false] : [false];
+  for (const posterPass of passes) {
+    for (let f = 1; f >= 0.55 - 1e-9; f -= 0.05) {
+      for (const titleStep of posterPass ? titleSteps(input, f) : [undefined]) {
+        const layout = attempt(input, units, f, false, titleStep);
+        if (!layout) continue;
+        // A poster step that fits but fails the finished checks (a lead the larger title moved onto a
+        // lighter part of a gradient) gives way to the next one.
+        if (!posterPass) return attempt(input, units, f, true, titleStep)!;
+        try {
+          return attempt(input, units, f, true, titleStep)!;
+        } catch (err) {
+          if (!(err instanceof GrammarInfeasibleError)) throw err;
+        }
+      }
+    }
   }
   throw new GrammarInfeasibleError(`the copy does not fit ${W}x${H} at the house's smallest sizes`);
 }
 
-function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: boolean): StudioLayoutV2 | undefined {
+/** The body size the page composer sets at scale `f`. */
+function pageBodySize(input: ComposeGrammarInput, f: number): number {
+  return Math.max(Math.ceil(HOUSE_RULES.minBodyShareOfWidth * input.width), r(input.grammar.body.sizeShare * input.width * f));
+}
+
+/**
+ * The poster-sized title steps to try, largest first: every step of the scale whose size lies in the
+ * poster's title range (at least the smallest step at or over its minimum). When none fits at any
+ * scale, the composer falls back to the grammar's own title size, as before ADR-271.
+ */
+function titleSteps(input: ComposeGrammarInput, f: number): number[] {
+  const P = input.grammar.poster;
+  // A page with a photo keeps the photo as its focal point (a poster-sized title halved it in the
+  // proof renders): its title stays at the grammar's own size.
+  if (!P || input.photo) return [];
+  const body = pageBodySize(input, f);
+  const lo = P.titleSizeShare.min * input.width;
+  const hi = P.titleSizeShare.max * input.width;
+  const steps: number[] = [];
+  for (let n = 10; n >= MIN_TITLE_STEP; n--) {
+    const size = body * Math.pow(TYPE_RATIO, n);
+    if (size <= hi + 1 && size >= lo - 1) steps.push(n);
+  }
+  if (!steps.length) {
+    let n = MIN_TITLE_STEP;
+    while (n < 10 && body * Math.pow(TYPE_RATIO, n) < lo) n++;
+    steps.push(n);
+  }
+  return steps;
+}
+
+function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: boolean, fixedTitleStep?: number): StudioLayoutV2 | undefined {
   const { width: W, height: H, grammar: g } = input;
   const cover = input.tone === 'cover';
   const s = Math.min(W, H);
@@ -320,13 +451,13 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   // One modular scale (a major third) from the body size: the label and footer a step under it, the
   // lead and the details a step over, the title the step nearest the grammar's title size that still
   // leads the body by the house's ratio. The design declares it, so its type scale is measured as set.
-  const minBody = Math.ceil(HOUSE_RULES.minBodyShareOfWidth * W);
-  const body = Math.max(minBody, r(g.body.sizeShare * W * f));
+  const body = pageBodySize(input, f);
   const step = (n: number) => r(body * Math.pow(TYPE_RATIO, n));
   const lead = step(1);
   const wantTitle = g.title.sizeShare * W * f;
   let titleStep = MIN_TITLE_STEP;
   while (titleStep < 8 && Math.abs(step(titleStep + 1) - wantTitle) < Math.abs(step(titleStep) - wantTitle)) titleStep++;
+  if (fixedTitleStep !== undefined) titleStep = fixedTitleStep;
   const sizes: Sizes = {
     title: step(titleStep),
     titleStep,
@@ -341,7 +472,10 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   // ----- the logo and the header ----------------------------------------------------------------
   const aspect = input.logoAspect > 0 ? input.logoAspect : 1;
   const minLogo = Math.max(minLogoWidth(W), input.logoMinimumWidthPx ?? 0);
-  let lw = Math.max(minLogo, r((centred ? g.cover.logoWidthShare : cover ? 1.6 * g.header.logoWidthShare : g.header.logoWidthShare) * W));
+  // ADR-271: with poster rules the header logo is the poster's (KAAE: 0.16 of the width, not the
+  // document page's 0.12), so it reads at a thumbnail.
+  const headerLogoShare = Math.max(g.header.logoWidthShare, g.poster?.logoWidthShare ?? 0);
+  let lw = Math.max(minLogo, r((centred ? g.cover.logoWidthShare : cover ? 1.6 * headerLogoShare : headerLogoShare) * W));
   let lh = r(lw / aspect);
   while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < minLogo + 40) {
     lw += 1;
@@ -437,7 +571,9 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   // ----- the flow -------------------------------------------------------------------------------
   const footH = cover ? 0 : Math.max(3, r(g.footRule.heightShare * W));
   const footY = H - r(0.75 * m) - footH;
-  const limit = cover ? safe.y + safe.height : Math.min(safe.y + safe.height, footY - r(0.03 * W));
+  // ADR-271: a cover with the triangle band keeps the band's room when its title grows.
+  const bandRoom = cover && fixedTitleStep !== undefined && (input.variant ?? 'pattern') === 'pattern' ? r(0.15 * H) : 0;
+  const limit = cover ? safe.y + safe.height - bandRoom : Math.min(safe.y + safe.height, footY - r(0.03 * W));
   const pad = r(0.04 * W);
   const cardGap = r(0.025 * W);
   type Placed = { unit: Unit; top: number; bottom: number; texts: TextElement[]; shapes: ShapeElement[]; photo?: PhotoElement; gapAfter: number };
@@ -460,7 +596,7 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
       let t = el(b, 'title', sizes.title, titleColour, contentW);
       // A title that would break onto a second line is set on one when it fits at no less than 82%
       // of its size and still leads the body by the house's ratio, as the guideline's titles stand.
-      if (measure(t, b.text).lines > 1) {
+      if (fixedTitleStep === undefined && measure(t, b.text).lines > 1) {
         for (let n = sizes.titleStep - 1; n >= MIN_TITLE_STEP; n--) {
           const size = r(sizes.body * Math.pow(TYPE_RATIO, n));
           if (size < 0.82 * sizes.title || size < Math.ceil(HOUSE_RULES.titleToBodyMin * sizes.body) || size <= sizes.lead) break;
@@ -472,8 +608,10 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
         }
       }
       const p = place(t, b.text, contentX, contentW, y);
-      const lines = measure({ ...t, width: contentW }, b.text).lines;
-      if (lines > 3) return undefined;
+      const tm = measure({ ...t, width: contentW }, b.text);
+      if (tm.lines > 3) return undefined;
+      // ADR-271: a title grown to the poster's range never runs a word past its box.
+      if (fixedTitleStep !== undefined && tm.lineWidth > contentW + 2) return undefined;
       texts.push(p.el);
       const bar = titleBarPrimitive(g, W, p.el, p.el.align);
       unitShapes.push(bar);
@@ -672,7 +810,7 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
  * A block that would end on one stranded word ("Accreditation Cycle / 2027") gets the narrower box
  * `balancedBoxWidths` finds at the same line count, anchored on its alignment.
  */
-function balanceGrammarLines(layout: StudioLayoutV2, input: ComposeGrammarInput): void {
+export function balanceGrammarLines(layout: StudioLayoutV2, input: ComposeGrammarInput): void {
   const widths = balancedBoxWidths(layout, input.copy.text, input.fontsDir ? { fontsDir: input.fontsDir } : {});
   for (const t of layout.text) {
     const w = widths[t.copyIndex];
@@ -695,7 +833,7 @@ function restHeightEstimate(rest: Unit[], sizes: Sizes, W: number): number {
 }
 
 /** What the composer promises the validator: copy clear of the logo's clear space and of each other, legible. */
-function checkGrammarLayout(layout: StudioLayoutV2, clear: Box): void {
+export function checkGrammarLayout(layout: StudioLayoutV2, clear: Box): void {
   for (const t of layout.text) {
     if (hit(t, clear)) throw new GrammarInfeasibleError(`copy block ${t.copyIndex} is in the logo's clear space`);
     for (const u of layout.text) if (u !== t && hit(t, u)) throw new GrammarInfeasibleError(`copy blocks ${t.copyIndex} and ${u.copyIndex} overlap`);
@@ -849,6 +987,9 @@ export function conformMarksToPageGrammar(layout: StudioLayoutV2, g: PageGrammar
   return layout;
 }
 
+/** ADR-274: the blocks a poster sets in its display face (the office's posts: title, tab, lead, button). */
+export const POSTER_DISPLAY_ROLES: ReadonlyArray<StudioLayoutV2['text'][number]['role']> = ['eyebrow', 'title', 'subtitle', 'cta'];
+
 /**
  * ADR-238: where a design departs from the client's page grammar, in words: what the judge's and the
  * visual review's guideline-fidelity rule names, and what the guideline prior counts.
@@ -857,24 +998,39 @@ export function conformMarksToPageGrammar(layout: StudioLayoutV2, g: PageGrammar
  * - a light page without the header rule and its gold segment, the gold bar under its title, or the
  *   gradient rule at its foot;
  * - a Latin block outside the guideline's faces, or a Sorani block outside the admitted ones.
+ *
+ * ADR-274: for a client whose grammar carries poster rules, the office's own poster techniques are
+ * not departures. A dark title tab or panel on the gradient is the office's title tab; only the
+ * guideline's document page (`composition.grammar === 'page'`) is held to the header rule, the bar
+ * and the foot rule, so a poster without a gold bar is not counted; and the faces the reference
+ * declares for poster display (`poster.displayFonts`) are accepted on display blocks. A grammar
+ * without poster rules is read exactly as before.
  */
 export function guidelineDeviations(layout: StudioLayoutV2, g: PageGrammar, options: { arabicFonts?: string[] } = {}): string[] {
   const out: string[] = [];
   const has = (p: string) => layout.shapes.some((s) => s.primitive === p);
   const area = layout.width * layout.height;
+  const posterRules = Boolean(g.poster);
   const dark = hexToLuminance(layout.background.color) < 0.2 || has('cover_ground');
   if (dark) {
     if (!has('cover_ground')) out.push('a dark design without the guideline cover\'s gradient ground');
     const flat = layout.shapes.filter((s) => s.role === 'panel' && s.primitive !== 'cover_ground' && s.fill !== 'none' && !s.gradient &&
       hexToLuminance(s.color) < 0.2 && s.width * s.height > 0.08 * area);
-    if (flat.length && has('cover_ground')) out.push('a flat dark panel on the gradient cover');
-  } else {
-    if (!has('header_rule') || !has('header_accent')) out.push('no header rule with its gold segment');
+    if (flat.length && has('cover_ground') && !posterRules) out.push('a flat dark panel on the gradient cover');
+  } else if (posterRules) {
+    // ADR-274: only the guideline's own document page is held to its header, bar and foot rule.
+    if (layout.composition?.grammar === 'page') documentPageMarks(has, out);
+  } else if (layout.composition?.grammar === 'poster') {
+    // ADR-271: a light poster (cream, or the white page with its title band) is composed as the
+    // office's posters are, not as the guideline's document page: it keeps the gold bar.
     if (!has('title_bar')) out.push('no gold bar under the title');
-    if (!has('foot_rule')) out.push('no gradient rule at the foot');
+  } else {
+    documentPageMarks(has, out);
   }
   const latinFaces = new Set([g.title.fontFamily, g.lead.fontFamily, g.body.fontFamily, g.header.label.fontFamily, g.stat.fontFamily, g.cover.subtitle.fontFamily]);
-  const offLatin = [...new Set(layout.text.filter((t) => !t.rtl && !latinFaces.has(t.fontFamily)).map((t) => t.fontFamily))];
+  const posterDisplay = new Set(g.poster?.displayFonts ?? []);
+  const allowed = (t: StudioLayoutV2['text'][number]) => latinFaces.has(t.fontFamily) || (posterDisplay.has(t.fontFamily) && POSTER_DISPLAY_ROLES.includes(t.role));
+  const offLatin = [...new Set(layout.text.filter((t) => !t.rtl && !allowed(t)).map((t) => t.fontFamily))];
   if (offLatin.length) out.push(`a typeface outside the guideline (${offLatin.join(', ')})`);
   if (options.arabicFonts?.length) {
     const offArabic = [...new Set(layout.text.filter((t) => t.rtl && !options.arabicFonts!.includes(t.fontFamily)).map((t) => t.fontFamily))];
@@ -883,13 +1039,28 @@ export function guidelineDeviations(layout: StudioLayoutV2, g: PageGrammar, opti
   return out;
 }
 
+/** The guideline document page's marks: the header rule and its gold segment, the title bar, the foot rule. */
+function documentPageMarks(has: (p: string) => boolean, out: string[]): void {
+  if (!has('header_rule') || !has('header_accent')) out.push('no header rule with its gold segment');
+  if (!has('title_bar')) out.push('no gold bar under the title');
+  if (!has('foot_rule')) out.push('no gradient rule at the foot');
+}
+
 /**
  * ADR-238: the guideline-fidelity rule the judge and the visual review read with the client's house
  * rules, from its page grammar: a design that departs from the guideline counts against it. Within
  * the judge's 240-character limit for one rule (MAX_JUDGE_HOUSE_RULE_CHARS).
+ *
+ * ADR-274: a client with poster rules is told only what `guidelineDeviations` counts for it: the
+ * document page's marks and a face outside the guideline's and the declared poster display faces.
+ * The office's title tab, its display face and a poster without the gold bar are named as allowed,
+ * so the rule no longer counts the office's own techniques against a poster.
  */
 export function guidelineFidelityRule(g: PageGrammar): string {
-  const faces = [...new Set([g.title.fontFamily, g.lead.fontFamily, g.body.fontFamily])].join(', ');
+  const faces = [...new Set([g.title.fontFamily, g.lead.fontFamily, g.body.fontFamily, ...(g.poster?.displayFonts ?? [])])].join(', ');
+  if (g.poster) {
+    return `Guideline fidelity (brand fit): count against a design a document page lacking header rule, title bar or foot rule; a face other than ${faces} or the Sorani sans. A poster's dark title tab or missing bar is fine.`;
+  }
   return `Guideline fidelity (brand fit): count against a design a flat dark panel on the gradient cover; a page without the header rule and gold segment, the gold title bar or the foot rule; a face other than ${faces} or the Sorani sans.`;
 }
 

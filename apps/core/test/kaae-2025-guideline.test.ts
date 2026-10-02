@@ -22,6 +22,8 @@ import {
   JUDGE_DIMENSIONS,
   PNG,
   logoClearZone,
+  negativeSpaceOf,
+  POSTER_IMPACT_CRITERIA,
   type StudioLayoutV2,
 } from '@hawa/creative';
 import { kaaeClientDNA } from '@hawa/domain';
@@ -282,27 +284,44 @@ describe('ADR-238: the requester\'s words set the ground; a cover and an evening
 });
 
 describe('ADR-238 proofs: the guideline\'s pages through the real stage, render and hard QA (model mocked)', () => {
-  it('the Quality Assurance Workshop: two guideline pages and the model\'s layout in the grammar, all passing hard QA', async () => {
+  it('ADR-271: the Quality Assurance Workshop is three different office poster compositions, bold, with no layout call, all passing hard QA', async () => {
     const { ranked, requests } = await typographicRun(QA_COPY, QA_ROLES, 'Design a poster for our Quality Assurance Workshop.', LIGHT_POSTER_ANSWER);
-    // The layout call saw the guideline's rules and its page grammar.
-    const sent = JSON.stringify(requests[0].messages);
-    expect(sent).toContain('light first');
-    expect(sent).toContain('CLIENT PAGE GRAMMAR');
+    // Three compositions were set from the grammar, so the layout model was not called.
+    expect(requests).toHaveLength(0);
     expect(ranked).toHaveLength(3);
-    const composed = ranked.filter((r) => r.layout.composition?.grammar === 'page');
-    expect(composed.map((r) => r.layout.composition!.variant).sort()).toEqual(['brand_card', 'cards']);
+    expect(ranked.map((r) => r.layout.composition?.grammar)).toEqual(['poster', 'poster', 'poster']);
+    expect(ranked.map((r) => r.layout.composition!.variant).sort()).toEqual(['band', 'cream', 'navy']);
+    const grounds = new Set<string>();
+    for (const r of ranked) {
+      const W = r.layout.width;
+      const title = r.layout.text.find((t) => t.role === 'title')!;
+      // ADR-275 (owner, 2026-10-02): the office's heavy sans capitals; the copy is stored as typed.
+      expect(title).toMatchObject({ fontFamily: 'Inter', fontWeight: 800, textTransform: 'uppercase', bold: true });
+      // One dominant display moment: the title at 10-20% of the width, the logo at 16%.
+      expect(title.fontSize / W).toBeGreaterThanOrEqual(0.1);
+      expect(title.fontSize / W).toBeLessThanOrEqual(0.2);
+      expect(r.layout.logo.width / W).toBeGreaterThanOrEqual(0.16);
+      expect(r.layout.shapes.map((x) => x.primitive)).toContain('title_bar');
+      // No more of the canvas empty than the poster ceiling allows.
+      expect(negativeSpaceOf(r.layout, { copy: { text: Object.fromEntries(QA_COPY.map((c, i) => [i, c])) } })).toBeLessThanOrEqual(0.65);
+      expect(r.hardQa?.passed, `${r.candidate.concept.name}: ${r.hardQa?.messages.join(' | ')}`).toBe(true);
+      grounds.add(r.layout.background.color.toUpperCase());
+      save(`qa-workshop_${r.layout.composition!.variant}`, r.layout, QA_COPY);
+    }
+    // White (the band), cream and the navy cover: light first, and one dark option.
+    expect([...grounds].sort()).toEqual([CREAM, MIDNIGHT, WHITE].sort());
+  }, 120000);
+
+  it('ADR-271: a requester who names white gets the banded white poster and the guideline\'s own two pages', async () => {
+    const { ranked } = await typographicRun(QA_COPY, QA_ROLES, 'Design a poster for our Quality Assurance Workshop, on a white background.', LIGHT_POSTER_ANSWER);
+    expect(ranked.map((r) => `${r.layout.composition?.grammar}/${r.layout.composition?.variant}`).sort()).toEqual(['page/brand_card', 'page/cards', 'poster/band']);
     for (const r of ranked) {
       expect(r.layout.background.color.toUpperCase()).toBe(WHITE);
-      const primitives = r.layout.shapes.map((x) => x.primitive);
-      expect(primitives, `${r.candidate.concept.name}`).toEqual(expect.arrayContaining(['title_bar', 'foot_rule']));
-      const title = r.layout.text.find((t) => t.role === 'title')!;
-      expect(title).toMatchObject({ fontFamily: 'Crimson Pro', bold: true });
-      expect(r.layout.text.find((t) => t.role === 'subtitle')).toMatchObject({ fontFamily: 'Inter', italic: true });
-      expect(r.hardQa?.passed, `${r.candidate.concept.name}: ${r.hardQa?.messages.join(' | ')}`).toBe(true);
-      save(`qa-workshop_${r.candidate.ordinal}`, r.layout, QA_COPY);
+      expect(r.hardQa?.passed, r.hardQa?.messages.join(' | ')).toBe(true);
     }
-    // The page's header: the rule and its gold segment.
-    expect(composed[0].layout.shapes.map((x) => x.primitive)).toEqual(expect.arrayContaining(['header_rule', 'header_accent', 'card']));
+    const page = ranked.find((r) => r.layout.composition?.variant === 'brand_card')!;
+    expect(page.layout.shapes.map((x) => x.primitive)).toEqual(expect.arrayContaining(['header_rule', 'header_accent', 'card', 'title_bar', 'foot_rule']));
+    expect(page.layout.text.find((t) => t.role === 'title')!.fontSize / page.layout.width).toBeGreaterThanOrEqual(0.1);
   }, 120000);
 
   it('an announcement cover: the guideline\'s navy-gradient covers, passing hard QA', async () => {
@@ -362,14 +381,14 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
     return ranked as Array<(typeof ranked)[number] & { candidate: CandidateState }>;
   }
 
-  it('the one-photo report: with no tone asked, every recipe sits on the white page, one is the guideline page, all pass hard QA', async () => {
+  it('the one-photo report: with no tone asked, every recipe sits on the white page, none is replaced by the guideline page (ADR-274), all pass hard QA', async () => {
     // The model still asks for navy out of habit: the photo is bright and nothing in the brief calls for dark.
     const ranked = await photoRun('Design a report post for KAAE using this photo and the text.', 'navy');
     expect(ranked.length).toBeGreaterThanOrEqual(2);
-    const page = ranked.find((r) => r.layout.composition?.grammar === 'page');
-    expect(page, ranked.map((r) => r.layout.artDirection?.recipe).join(',')).toBeDefined();
-    expect(page!.layout.artDirection?.recipe).toBe('fade_to_paper');
-    expect(page!.layout.shapes.map((s) => s.primitive)).toEqual(expect.arrayContaining(['header_rule', 'header_accent', 'title_bar', 'card', 'foot_rule']));
+    // ADR-274: KAAE's grammar carries poster rules, so no photo concept becomes the guideline's
+    // document page (ADR-238 did that, and the page then won every split judge by default).
+    expect(ranked.some((r) => r.layout.composition), ranked.map((r) => r.layout.artDirection?.recipe).join(',')).toBe(false);
+    expect(ranked.every((r) => r.layout.artDirection?.recipe)).toBe(true);
     for (const r of ranked) {
       const recipe = r.layout.artDirection?.recipe;
       expect(r.layout.background.color, `${recipe} ground`).toBe(WHITE);
@@ -403,7 +422,7 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
   }, 240000);
 });
 
-describe('ADR-238 follow-up: the guideline decides the cover unless the judge clearly prefers another', () => {
+describe('ADR-271: the judge decides between the compositions; the guideline prior only breaks a tie', () => {
   /** Five votes, `votesA` of them to the design shown as A. */
   const verdict = (votesA: number) => ({
     dimensions: Object.fromEntries(JUDGE_DIMENSIONS.map((d, i) => [d, { winner: i < votesA ? 'A' : 'B', rationale: 'r' }])),
@@ -417,25 +436,33 @@ describe('ADR-238 follow-up: the guideline decides the cover unless the judge cl
     expect(houseRulesFor({})).toEqual({});
   });
 
-  it('the judge stage keeps the composed navy cover of an evening invitation against a judge that prefers the model\'s by three votes of five', async () => {
+  it('ADR-274: the judge sees all three compositions in a round robin; the third by composite can win; it reads the poster criteria', async () => {
     const { ctx, ranked } = await typographicRun(GALA_COPY, GALA_ROLES, 'An evening invitation for the gala dinner, dark navy.', GALA_ANSWER);
     const eligible = ranked.filter((r) => r.hardQa?.passed);
-    const composedFirst = eligible.findIndex((r) => r.layout.composition) < eligible.findIndex((r) => !r.layout.composition);
-    expect(eligible.some((r) => !r.layout.composition)).toBe(true);
-    // The judge prefers the model's design 3-2 in both orders, then passes its canary.
-    const plan = composedFirst ? [verdict(2), verdict(3), verdict(5), verdict(0)] : [verdict(3), verdict(2), verdict(5), verdict(0)];
+    expect(eligible).toHaveLength(3);
+    expect(eligible.every((r) => r.layout.composition)).toBe(true);
+    // Pairs (1st,2nd) split; the 3rd wins both of its pairs 3-2 in both orders; then the canary.
+    const plan = [verdict(3), verdict(3), verdict(2), verdict(3), verdict(2), verdict(3), verdict(5), verdict(0)];
     const requests: any[] = [];
     const judge = { createStructuredCompletion: async (req: any) => {
       requests.push(req);
       const data = plan[requests.length - 1];
       return { data, rawText: JSON.stringify(data), receipt: { ...RECEIPT, model: 'gpt-4.1-mini' } };
     } };
-    const { selection, winner } = await runJudgeStageV3({ ...ctx, client: judge as any }, ranked.map((r) => r.candidate));
-    expect(requests).toHaveLength(4);
-    expect(requests[0].messages[0].content).toContain(JSON.stringify(guidelineFidelityRule(GRAMMAR)));
-    expect(selection.decidedBy).toBe('art_direction_prior');
-    expect(selection.prior).toMatchObject({ basis: 'guideline', instead: 'judge_without_clear_margin' });
+    const { selection } = await runJudgeStageV3({ ...ctx, client: judge as any }, ranked.map((r) => r.candidate));
+    expect(requests).toHaveLength(8);
+    const system = requests[0].messages[0].content as string;
+    expect(system).toContain(JSON.stringify(guidelineFidelityRule(GRAMMAR)));
+    expect(system).toContain(POSTER_IMPACT_CRITERIA.hierarchy.trim());
+    expect(system).toContain(POSTER_IMPACT_CRITERIA.composition.trim());
+    expect(system).not.toMatch(/You must take them into account/);
+    // The office reference is off by default: two images a call.
+    expect(requests.every((r) => r.messages[1].content.filter((p: any) => p.type === 'image_url').length === 2)).toBe(true);
+    expect(selection.matches).toHaveLength(3);
+    expect(selection.winner.sourceIndex).toBe(eligible[2].sourceIndex);
+    expect(selection.roundRobin!.pickSourceIndex).toBe(eligible[2].sourceIndex);
+    expect(selection.decidedBy).toBe('judge');
+    expect(selection.prior).toBeUndefined();
     expect(selection.humanChoiceRecommended).toBe(false);
-    expect(ranked.find((r) => r.candidate === winner)!.layout.composition?.grammar).toBe('cover');
   }, 120000);
 });

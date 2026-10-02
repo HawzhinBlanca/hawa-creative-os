@@ -10,3 +10,4 @@ export * from './vision-rubric.js';
 
 export * from './canva-pptx-check.js';
 export * from './canva-pptx-layout.js';
+export * from './canva-pdf-check.js';

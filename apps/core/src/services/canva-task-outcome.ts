@@ -17,7 +17,8 @@
  *    never dragged back by a late or repeated notification.
  */
 import crypto from 'node:crypto';
-import { checkExportPictures } from './export-picture-fidelity.js';
+import { checkExportPictures, checkTextLines } from './export-picture-fidelity.js';
+import { blobStoreFor, readPreferringStore } from './blob-store-context.js';
 import { sql, withRlsContext, TaskRepository, RevisionRepository, type Kysely, type Database, type TaskState, type CreateRevisionParams } from '@hawa/db';
 
 export const DRAFT_READY_STATUSES = new Set(['DRAFT_READY', 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW']);
@@ -228,14 +229,19 @@ export type ExportQcResult =
 async function addPictureFidelity(trx: Kysely<Database>, p: { tenantId: string; taskId: string }, exportRow: ExportRow,
   qc: CanvaQcEvaluation): Promise<void> {
   if (!(exportRow.content instanceof Uint8Array) || !exportRow.content.length) return;
-  const source = (await sql<{ content: Uint8Array; manifest: { logo?: { x: number; y: number; width: number; height: number } } | null }>`
-    SELECT e.content, e.manifest FROM hawa.canva_editable_sources e
+  const sourceRow = (await sql<{ content: Uint8Array | null; sha256: string; manifest: { logo?: { x: number; y: number; width: number; height: number } } | null }>`
+    SELECT e.content, e.sha256, e.manifest FROM hawa.canva_editable_sources e
     JOIN hawa.canva_remote_operations o ON o.id = e.operation_id AND o.tenant_id = e.tenant_id AND o.kind = 'create'
     JOIN hawa.canva_bindings g ON g.tenant_id = o.tenant_id AND g.task_id = o.task_id AND g.status = 'bound' AND g.canva_design_id = o.design_id
     WHERE e.tenant_id = ${p.tenantId}::uuid AND e.task_id = ${p.taskId}::uuid
     ORDER BY e.created_at DESC LIMIT 1`.execute(trx)).rows[0];
-  const report = qc.qaReport as CanvaQcEvaluation['qaReport'] & { warnings?: string[]; pictureFidelity?: unknown;
+  const report = qc.qaReport as CanvaQcEvaluation['qaReport'] & { warnings?: string[]; pictureFidelity?: unknown; textLines?: unknown;
     checks: Array<{ name: string; passed: boolean | null; details?: unknown }> };
+  // A source's bytes may live in the file store only (ADR-035's strip): read where they are.
+  const store = blobStoreFor(trx);
+  const sourceBytes = sourceRow ? await readPreferringStore(store, sourceRow.sha256, sourceRow.content).catch(() => null) : null;
+  const source = sourceRow && sourceBytes ? { content: sourceBytes, manifest: sourceRow.manifest } : null;
+  await addTextLines(trx, p, exportRow, source?.content ?? null, report, store);
   if (!source?.content?.length) {
     report.pictureFidelity = { measured: false, reason: 'The design was not imported from an editable source; there is nothing to compare its pictures with.' };
     return;
@@ -250,6 +256,34 @@ async function addPictureFidelity(trx: Kysely<Database>, p: { tenantId: string; 
   } catch (err) {
     report.pictureFidelity = { measured: false, reason: `Not measured: ${err instanceof Error ? err.message : String(err)}` };
     report.checks.push({ name: 'pictureFidelity', passed: null, details: 'not measured' });
+  }
+}
+
+/**
+ * ADR-258: whether Canva set each text frame on as many lines as the Studio render the design was chosen
+ * from (`checkTextLines`). Needs the Studio winner's render, the source the design was imported from and
+ * the same-version PNG; without any of them it records why it measured nothing. Advisory.
+ */
+async function addTextLines(trx: Kysely<Database>, p: { tenantId: string; taskId: string }, exportRow: ExportRow,
+  source: Uint8Array | null, report: { warnings?: string[]; textLines?: unknown; checks: Array<{ name: string; passed: boolean | null; details?: unknown }> },
+  store: ReturnType<typeof blobStoreFor>): Promise<void> {
+  const why = !source ? 'The design was not imported from an editable source.'
+    : !(exportRow.preview_png instanceof Uint8Array) || !exportRow.preview_png.length ? 'No PNG of the same Canva version was retrieved.' : null;
+  if (why) { report.textLines = { measured: false, reason: why }; return; }
+  const winner = (await sql<{ preview_png: Uint8Array | null; preview_sha256: string | null }>`SELECT c.preview_png, c.preview_sha256
+    FROM hawa.design_studio_candidates c JOIN hawa.design_studio_runs r ON r.id = c.run_id AND r.tenant_id = c.tenant_id
+    WHERE r.tenant_id = ${p.tenantId}::uuid AND r.task_id = ${p.taskId}::uuid AND c.status = 'winner' AND c.preview_sha256 IS NOT NULL
+    ORDER BY c.created_at DESC LIMIT 1`.execute(trx)).rows[0];
+  const studio = winner ? await readPreferringStore(store, winner.preview_sha256, winner.preview_png).catch(() => null) : null;
+  if (!studio) { report.textLines = { measured: false, reason: 'No Studio render to compare with (a design made in Canva by hand, or a planner design).' }; return; }
+  try {
+    const lines = checkTextLines(studio, Buffer.from(exportRow.preview_png as Uint8Array), source!, exportRow.content);
+    report.textLines = lines;
+    report.checks.push({ name: 'textLines', passed: lines.pass, details: lines.frames });
+    if (lines.warnings.length) report.warnings = [...(report.warnings ?? []), ...lines.warnings];
+  } catch (err) {
+    report.textLines = { measured: false, reason: `Not measured: ${err instanceof Error ? err.message : String(err)}` };
+    report.checks.push({ name: 'textLines', passed: null, details: 'not measured' });
   }
 }
 

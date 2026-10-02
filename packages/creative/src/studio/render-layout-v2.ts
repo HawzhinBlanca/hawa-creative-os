@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 import * as fontkit from 'fontkit';
 import { PNG } from 'pngjs';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box, OverlayElement } from './layout-v2.js';
+import { displayedCopy, uppercaseApplies } from './layout-v2.js';
+import { HOUSE_RULES } from './house-rules.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
 import { coverCrop, dataUriPixelSize, imagePixelSize, photoZoomFactor, type CoverCropRect } from './photo-crop.js';
 import { dataUriBytes, imageDataUri, imageFileExtension, relabelDataUri, sniffImageType } from './image-type.js';
@@ -144,11 +146,13 @@ export const ARABIC_SCRIPT_FAMILIES = new Set([
  * before its size is reduced. Only the renderer measures wrapping, so the encoders leave it unset.
  */
 export function effectiveLetterSpacingEm(
-  t: { letterSpacing?: number; role?: string; rtl?: boolean; fontFamily?: string },
+  t: { letterSpacing?: number; role?: string; rtl?: boolean; fontFamily?: string; textTransform?: string },
   options: { eyebrowShrunkToFit?: boolean } = {}
 ): number {
   let em = t.letterSpacing || 0;
-  if (t.role === 'eyebrow' && em > 0.06) {
+  // ADR-275: a capitals label keeps the tracking the caps rule gives it (up to the house's 0.1em);
+  // the clamp below was written for tracked mixed-case eyebrows.
+  if (t.role === 'eyebrow' && em > 0.06 && t.textTransform !== 'uppercase') {
     em = 0.04;
   }
   // Arabic script is cursive: letter-spacing inserts gaps between joined letters and reads as
@@ -365,13 +369,14 @@ function inkProbeCanvasWidth(sample: string, sizePx: number): number {
   return Math.ceil(Array.from(sample).length * sizePx * 2 + 200);
 }
 
-function inkProbeSvg(family: string, sample: string, sizePx: number): string {
+function inkProbeSvg(family: string, sample: string, sizePx: number, fontWeight?: number): string {
   const width = inkProbeCanvasWidth(sample, sizePx);
   const height = Math.ceil(sizePx * 2);
+  const weightAttr = fontWeight !== undefined ? ` font-weight="${fontWeight}"` : '';
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
     `<rect width="${width}" height="${height}" fill="#ffffff"/>` +
-    `<text x="${width / 2}" y="${(sizePx * 1.3).toFixed(1)}" font-family="${escapeXml(family)}" font-size="${sizePx}" text-anchor="middle" fill="#000000">${escapeXml(sample)}</text>` +
+    `<text x="${width / 2}" y="${(sizePx * 1.3).toFixed(1)}" font-family="${escapeXml(family)}" font-size="${sizePx}"${weightAttr} text-anchor="middle" fill="#000000">${escapeXml(sample)}</text>` +
     `</svg>`
   );
 }
@@ -393,12 +398,14 @@ function inkProbeSvg(family: string, sample: string, sizePx: number): string {
  */
 export function probeFontInkWidth(
   family: string,
-  options: RenderLayoutOptions & { fontFile?: string; script?: FontProbeScript; sizePx?: number } = {}
+  options: RenderLayoutOptions & { fontFile?: string; script?: FontProbeScript; sizePx?: number;
+    /** ADR-275: draw at this weight, and measure the file of that weight (`fontFileFor`). */
+    fontWeight?: number; sample?: string } = {}
 ): FontInkCheck {
   const rsvg = resolveRsvgConvert(options);
   const fontconfigFile = resolveFontconfigFile(options);
   const fontsDir = resolveFontsDir(options);
-  const fontFile = options.fontFile || fontFileFor(family, false, false, fontsDir);
+  const fontFile = options.fontFile || fontFileFor(family, false, false, fontsDir, options.fontWeight);
   const sizePx = options.sizePx ?? FONT_INK_SIZE;
 
   const unmeasured = (reason: NonNullable<FontInkCheck['unmeasuredReason']>, why: string, sample = '', script: FontProbeScript | '' = ''): FontInkCheck => ({
@@ -437,7 +444,8 @@ export function probeFontInkWidth(
   const cacheable = !options.fontconfigFile ||
     path.resolve(fontconfigFile) === path.resolve(pinnedFontconfigFile(fontsDir));
   const rasterBasis = JSON.stringify([rsvg, renderer, fontconfigFile, configSha256]);
-  const key = JSON.stringify([rasterBasis, family, fontFile, fontEntry.sha256, options.script ?? '', sizePx]);
+  const key = JSON.stringify([rasterBasis, family, fontFile, fontEntry.sha256, options.script ?? '', sizePx,
+    ...(options.fontWeight !== undefined || options.sample !== undefined ? [options.fontWeight ?? null, options.sample ?? null] : [])]);
   const cached = cacheable ? inkCheckCache.get(key) : undefined;
   if (cached) return cached;
 
@@ -450,7 +458,7 @@ export function probeFontInkWidth(
     }
   };
   const sampleFor = (s: FontProbeScript) =>
-    [FONT_INK_SAMPLES[s], FONT_INK_BASIC_SAMPLES[s]].find((text): text is string => !!text && covers(text));
+    [options.sample, FONT_INK_SAMPLES[s], FONT_INK_BASIC_SAMPLES[s]].find((text): text is string => !!text && covers(text));
   const script: FontProbeScript | '' = options.script
     ? sampleFor(options.script) ? options.script : ''
     : sampleFor('arabic') ? 'arabic' : sampleFor('latin') ? 'latin' : '';
@@ -466,15 +474,15 @@ export function probeFontInkWidth(
   const scale = sizePx / font.unitsPerEm;
   const expectedAdvancePx = run.advanceWidth * scale;
   const expectedInkPx = (run.bbox.maxX - run.bbox.minX) * scale;
-  const png = rasteriseProbe(inkProbeSvg(family, sample, sizePx), rsvg, fontconfigFile);
+  const png = rasteriseProbe(inkProbeSvg(family, sample, sizePx, options.fontWeight), rsvg, fontconfigFile);
   if (!png) return unmeasured('no-rasteriser', 'the rasteriser is unavailable', sample, script);
 
   // The same sample, canvas and size in a family that cannot exist: what the fallback face draws.
   // The canvas depends only on the sample and the size, so every family shares this rasterisation.
-  const sentinelKey = JSON.stringify([rasterBasis, sizePx, sample]);
+  const sentinelKey = JSON.stringify([rasterBasis, sizePx, sample, ...(options.fontWeight !== undefined ? [options.fontWeight] : [])]);
   let sentinelHash = cacheable ? sentinelHashCache.get(sentinelKey) : undefined;
   if (sentinelHash === undefined) {
-    const sentinel = rasteriseProbe(inkProbeSvg(FONT_PROBE_SENTINEL, sample, sizePx), rsvg, fontconfigFile);
+    const sentinel = rasteriseProbe(inkProbeSvg(FONT_PROBE_SENTINEL, sample, sizePx, options.fontWeight), rsvg, fontconfigFile);
     if (!sentinel) return unmeasured('no-rasteriser', 'the sentinel comparison could not be measured', sample, script);
     sentinelHash = createHash('sha256').update(sentinel).digest('hex');
     if (cacheable) sentinelHashCache.set(sentinelKey, sentinelHash);
@@ -628,6 +636,41 @@ export function probeFontFidelity(
 }
 
 /**
+ * ADR-275: the key a block's face has in a render's `fontFidelity` map: the family for a block that
+ * names no weight, or that resolves to the family's regular file; otherwise the family and the weight
+ * its file declares ("Inter 800").
+ */
+export function fontFidelityKey(
+  t: Pick<TextElement, 'fontFamily' | 'bold' | 'italic' | 'fontWeight'>,
+  options: Pick<RenderLayoutOptions, 'fontsDir'> = {}
+): string {
+  if (t.fontWeight === undefined) return t.fontFamily;
+  try {
+    const face = elementFontFace(t, options);
+    if (face.file === fontFileFor(t.fontFamily, false, false, resolveFontsDir(options))) return t.fontFamily;
+    return `${t.fontFamily} ${face.weight}`;
+  } catch {
+    return `${t.fontFamily} ${t.fontWeight}`;
+  }
+}
+
+/** ADR-275: the ink verdict for one weighted face, drawn at the weight its file declares. */
+export function weightedFontFidelity(
+  t: Pick<TextElement, 'fontFamily' | 'bold' | 'italic' | 'fontWeight'>,
+  options: RenderLayoutOptions = {}
+): FontFidelityVerdict {
+  let face: ElementFontFace;
+  try {
+    face = elementFontFace(t, options);
+  } catch {
+    return 'unmeasured';
+  }
+  const ink = probeFontInkWidth(t.fontFamily, { ...options, fontFile: face.file, fontWeight: face.weight, script: fontFamilyScript(t.fontFamily) });
+  if (!ink.measured) return ink.unmeasuredReason === 'uncovered' ? 'uncovered' : 'unmeasured';
+  return ink.ok ? 'exact' : 'stand-in';
+}
+
+/**
  * Measured fidelity for every admitted family on this host. Previously this returned a hardcoded
  * table of 'exact' for all eight families and ignored its argument, so it reported exact
  * typography on hosts where half the families were being silently substituted.
@@ -750,13 +793,100 @@ function registryFontFile(
   return undefined;
 }
 
+/** ADR-275: render-fonts.json's face keys by CSS weight. */
+export const FONT_WEIGHT_KEYS: Readonly<Record<number, string>> = {
+  100: 'thin', 200: 'extraLight', 300: 'light', 400: 'regular', 500: 'medium',
+  600: 'semiBold', 700: 'bold', 800: 'extraBold', 900: 'black',
+};
+
+/**
+ * ADR-275: the upright file render-fonts.json declares for the weight nearest `weight` that the family
+ * ships. Ties go to the heavier face at 500 and over and to the lighter under it, as CSS matching
+ * does. Undefined for a family the registry does not declare.
+ */
+function registryWeightedFontFile(family: string, weight: number, fontsDir?: string): string | undefined {
+  let declared: { files?: Record<string, string> } | undefined;
+  try {
+    const families = loadRenderFontRegistry().families || {};
+    declared =
+      (families as any)[family] ||
+      Object.values(families).find((f: any) => String(f?.name).toLowerCase() === family.toLowerCase());
+  } catch {
+    return undefined;
+  }
+  if (!declared?.files) return undefined;
+  const candidates: Array<{ weight: number; file: string }> = [];
+  for (const [w, key] of Object.entries(FONT_WEIGHT_KEYS)) {
+    const rel = declared.files[key];
+    if (!rel) continue;
+    const abs = fontsDir ? path.join(fontsDir, path.basename(rel)) : creativeFilePath(rel);
+    if (abs && fs.existsSync(abs)) candidates.push({ weight: Number(w), file: abs });
+  }
+  const heavierFirst = weight >= 500;
+  candidates.sort((a, b) => {
+    const d = Math.abs(a.weight - weight) - Math.abs(b.weight - weight);
+    if (d !== 0) return d;
+    return heavierFirst ? b.weight - a.weight : a.weight - b.weight;
+  });
+  return candidates[0]?.file;
+}
+
+/**
+ * ADR-275: the face one text block is measured and drawn with: its file, the weight that file declares
+ * (OS/2 usWeightClass, which the rasteriser is asked for so it opens the same file), and the file's
+ * own family name (name ID 1: "Inter ExtraBold"), which the Canva deck names a non-regular, non-bold
+ * weight by.
+ */
+export interface ElementFontFace {
+  file: string;
+  sha256: string;
+  weight: number;
+  legacyFamilyName: string;
+}
+
+export function elementFontFace(
+  t: Pick<TextElement, 'fontFamily' | 'bold' | 'italic' | 'fontWeight'>,
+  options: Pick<RenderLayoutOptions, 'fontsDir'> = {}
+): ElementFontFace {
+  const fontsDir = resolveFontsDir(options);
+  const file = fontFileFor(t.fontFamily, t.bold, t.italic, fontsDir, t.fontWeight);
+  const entry = loadFontPathEntry(file);
+  const declaredWeight = Number(entry.font?.['OS/2']?.usWeightClass);
+  return {
+    file,
+    sha256: entry.sha256,
+    weight: Number.isFinite(declaredWeight) && declaredWeight >= 1 && declaredWeight <= 1000 ? declaredWeight : t.bold ? 700 : 400,
+    legacyFamilyName: String(entry.font?.familyName || t.fontFamily),
+  };
+}
+
+/**
+ * The SVG `font-weight` a block is drawn with. A block without `fontWeight` keeps the bold/normal
+ * the renderer always emitted (gated by fontFaceSupports). One with it asks for the weight its
+ * measured file declares, so fontconfig opens that file and never synthesises a weight.
+ */
+function drawnFontWeight(t: TextElement, fontsDir: string): string {
+  if (t.fontWeight === undefined) return fontFaceSupports(t.fontFamily, t.bold, t.italic, fontsDir).bold ? 'bold' : 'normal';
+  return String(elementFontFace(t, { fontsDir }).weight);
+}
+
 /**
  * The font file the pipeline measures a family with: the file fontkit opens for wrapping and ink
  * metrics, and so the file the rasteriser has to draw for the preview to match its own measurements.
  */
-export function fontFileFor(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): string {
+export function fontFileFor(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string, weight?: number): string {
   const dir = fontsDir || resolveFontsDir();
   const familyLower = fontFamily.toLowerCase();
+
+  // ADR-275: a block that names a weight is measured with the file of the nearest weight its family
+  // declares, which is the file the rasteriser is then asked for by that file's own weight
+  // (drawnFontWeight). A family the registry does not declare, or an italic, keeps the bold/regular
+  // choice below, with 600 and over read as bold.
+  if (weight !== undefined) {
+    const weighted = italic ? undefined : registryWeightedFontFile(fontFamily, weight, fontsDir);
+    if (weighted) return weighted;
+    bold = weight >= 600;
+  }
 
   // Only families whose registry entry declares a real regular face resolve from the registry; the
   // chain keeps Playfair Display and Cinzel, which declare none. See fontFaceSupports for why.
@@ -831,8 +961,8 @@ export function fontFileFor(fontFamily: string, bold?: boolean, italic?: boolean
 /**
  * Loads font binary via fontkit and returns Font instance.
  */
-function loadFontEntry(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string) {
-  const fontPath = fontFileFor(fontFamily, bold, italic, fontsDir);
+function loadFontEntry(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string, weight?: number) {
+  const fontPath = fontFileFor(fontFamily, bold, italic, fontsDir, weight);
   return loadFontPathEntry(fontPath);
 }
 
@@ -855,8 +985,8 @@ function loadFontPathEntry(fontPath: string) {
   return entry;
 }
 
-function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
-  return loadFontEntry(fontFamily, bold, italic, fontsDir).font;
+function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string, weight?: number): any {
+  return loadFontEntry(fontFamily, bold, italic, fontsDir, weight).font;
 }
 
 export type TextMeasurementFailure = 'MISSING_COPY' | 'EMPTY_COPY' | 'INVALID_GEOMETRY' |
@@ -884,6 +1014,9 @@ export function measureTextGeometry(
     if (typeof copy !== 'string') return failed('MISSING_COPY');
     // Default-ignorable controls are preserved in the content hash but cannot make an empty block visible.
     if (!copy.replace(/[\s\p{Default_Ignorable_Code_Point}]/gu, '')) return failed('EMPTY_COPY');
+    // ADR-275: measured as drawn (capitals for a block set in capitals); the hash above stays the
+    // hash of the copy as stored.
+    const shown = displayedCopy(t, copy);
     const letterSpacing = effectiveLetterSpacingEm(t);
     if (![t.width, t.height, t.fontSize, t.lineHeight].every((n) => Number.isFinite(n) && n > 0) ||
         !Number.isFinite(letterSpacing) || !Number.isFinite(t.letterSpacing ?? 0)) return failed('INVALID_GEOMETRY');
@@ -891,22 +1024,22 @@ export function measureTextGeometry(
     try {
       // An explicitly unavailable font directory must not turn into the default directory here.
       if (options.fontsDir && !fs.statSync(options.fontsDir).isDirectory()) return failed('FONT_UNAVAILABLE');
-      entry = loadFontEntry(t.fontFamily, t.bold, t.italic, resolveFontsDir(options));
+      entry = loadFontEntry(t.fontFamily, t.bold, t.italic, resolveFontsDir(options), t.fontWeight);
     } catch {
       return failed('FONT_UNAVAILABLE');
     }
     try {
       const { font, sha256: fontSha256 } = entry;
       if (!Number.isFinite(font.unitsPerEm) || font.unitsPerEm <= 0) return failed('SHAPING_FAILED');
-      const visible = [...new Set(Array.from(copy).filter((ch) => !/[\s\p{Default_Ignorable_Code_Point}]/u.test(ch)))];
+      const visible = [...new Set(Array.from(shown).filter((ch) => !/[\s\p{Default_Ignorable_Code_Point}]/u.test(ch)))];
       const missing = visible.filter((ch) => font.glyphForCodePoint(ch.codePointAt(0)).id === 0)
         .map((ch) => `U+${ch.codePointAt(0)!.toString(16).toUpperCase()}`);
-      const shaping = missing.length ? fallbackMeasurement(t, copy, resolveFontsDir(options)) : undefined;
+      const shaping = missing.length ? fallbackMeasurement(t, shown, resolveFontsDir(options)) : undefined;
       if (missing.length && (!shaping || shaping.lines.some(line => line.unknownGlyphs > 0))) {
         const actual = shaping ? [...new Set(shaping.lines.flatMap(line => line.missingCodePoints))].map(cp => `U+${cp.toString(16).toUpperCase()}`) : missing;
         return failed('MISSING_GLYPHS', actual.length ? actual : missing);
       }
-      const lines = shaping ? shaping.lines.map(line => line.text) : wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing);
+      const lines = shaping ? shaping.lines.map(line => line.text) : wrapTextWithFontkit(shown, t.width, font, t.fontSize, letterSpacing);
       const widths = shaping ? shaping.lines.map(line => Math.max(line.width, line.ink.x + line.ink.width) - Math.min(0, line.ink.x)) : lines.map((line) => measureTextWidth(line, font, t.fontSize, letterSpacing));
       const maxLineWidthPx = Math.ceil(Math.max(...widths));
       const inkHeight = shaping ? (lines.length - 1) * t.fontSize * t.lineHeight +
@@ -917,7 +1050,9 @@ export function measureTextGeometry(
       const method = shaping ? 'pango-wrap-v1' as const : 'fontkit-wrap-v1' as const;
       const inputSha256 = createHash('sha256').update(JSON.stringify({ method, ...(shaping ? { shapingSha256: shaping.inputSha256 } : {}), copySha256,
         fontSha256, width: t.width, height: t.height, fontSize: t.fontSize, lineHeight: t.lineHeight,
-        letterSpacing, rtl: t.rtl ?? null, bold: t.bold ?? false, italic: t.italic ?? false })).digest('hex');
+        letterSpacing, rtl: t.rtl ?? null, bold: t.bold ?? false, italic: t.italic ?? false,
+        ...(t.fontWeight !== undefined ? { fontWeight: t.fontWeight } : {}),
+        ...(uppercaseApplies(t, copy) ? { textTransform: 'uppercase' } : {}) })).digest('hex');
       return { ...identity, status: 'measured', method, ...(shaping ? { shaping } : {}), copySha256: copySha256!, fontSha256,
         inputSha256, lineCount: lines.length, maxLineWidthPx, requiredHeightPx };
     } catch {
@@ -956,9 +1091,9 @@ export function measureWrappedLines(
     const copy = copyText[t.copyIndex];
     if (!copy || !t.width) continue;
     try {
-      const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+      const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir, t.fontWeight);
       const letterSpacing = effectiveLetterSpacingEm(t);
-      out[t.copyIndex] = sharedTextLines(t, copy, font, fontsDir, t.fontSize, letterSpacing).length;
+      out[t.copyIndex] = sharedTextLines(t, displayedCopy(t, copy), font, fontsDir, t.fontSize, letterSpacing).length;
     } catch {
       // unmeasurable family here; the metric falls back to the box for this block
     }
@@ -989,10 +1124,10 @@ export function balancedBoxWidths(
   const fontsDir = resolveFontsDir(options);
   const out: Record<number, number> = {};
   for (const t of layout.text) {
-    const copy = copyText[t.copyIndex];
+    const copy = copyText[t.copyIndex] === undefined ? undefined : displayedCopy(t, copyText[t.copyIndex]);
     if (!copy || !t.width || copy.includes('\n')) continue;
     try {
-      const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+      const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir, t.fontWeight);
       const ls = effectiveLetterSpacingEm(t);
       const wrap = (w: number) => sharedTextLines({...t, width: w}, copy, font, fontsDir, t.fontSize, ls);
       const widthOf = (line: string) => {
@@ -1057,10 +1192,10 @@ export function measureMaxLineWidths(
   const fontsDir = resolveFontsDir(options);
   const out: Record<number, number> = {};
   for (const t of layout.text) {
-    const copy = copyText[t.copyIndex];
+    const copy = copyText[t.copyIndex] === undefined ? undefined : displayedCopy(t, copyText[t.copyIndex]);
     if (!copy || !t.width) continue;
     try {
-      const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+      const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir, t.fontWeight);
       const letterSpacing = effectiveLetterSpacingEm(t);
       const fallback = fallbackMeasurement(t, copy, fontsDir);
       if (fallback) {
@@ -1105,13 +1240,13 @@ export function measureMaxLineWidths(
 export function fontCoversText(
   fontFamily: string,
   text: string,
-  options: { bold?: boolean; italic?: boolean } & RenderLayoutOptions = {}
+  options: { bold?: boolean; italic?: boolean; fontWeight?: number } & RenderLayoutOptions = {}
 ): { covers: boolean; missing: string[] } {
   if (!text) return { covers: true, missing: [] };
   const fontsDir = resolveFontsDir(options);
   let font: any;
   try {
-    font = loadFont(fontFamily, options.bold, options.italic, fontsDir);
+    font = loadFont(fontFamily, options.bold, options.italic, fontsDir, options.fontWeight);
   } catch {
     return { covers: false, missing: [] };
   }
@@ -1560,12 +1695,15 @@ function drawingFontFamily(t: TextElement, copy: string, fontsDir: string): stri
 }
 
 function fallbackMeasurement(t: TextElement, copy: string, fontsDir: string, size=t.fontSize, spacing=effectiveLetterSpacingEm(t)): PangoMeasurement | undefined {
-  const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+  const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir, t.fontWeight);
   const missing = Array.from(copy).some(ch => !/[\s\p{Default_Ignorable_Code_Point}]/u.test(ch) && font.glyphForCodePoint(ch.codePointAt(0)).id === 0);
   if (!missing) return undefined;
   const axes = fontFaceSupports(t.fontFamily, t.bold, t.italic, fontsDir);
+  // ADR-275: a block that names a weight is shaped at the weight its measured file declares.
+  const weight = t.fontWeight !== undefined ? elementFontFace(t, { fontsDir }).weight : undefined;
   return measurePangoText({text: copy, family: drawingFontFamily(t, copy, fontsDir), size, width: t.width,
-    spacingPx: Number((spacing * size).toFixed(2)), rtl: t.rtl ?? false, bold: axes.bold, italic: axes.italic, fontsDir});
+    spacingPx: Number((spacing * size).toFixed(2)), rtl: t.rtl ?? false, bold: axes.bold, italic: axes.italic, fontsDir,
+    ...(weight !== undefined ? { weight } : {})});
 }
 
 function sharedTextLines(t: TextElement, copy: string, font: ReturnType<typeof loadFont>, fontsDir: string, size=t.fontSize, spacing=effectiveLetterSpacingEm(t)): string[] {
@@ -1577,8 +1715,8 @@ function sharedTextLines(t: TextElement, copy: string, font: ReturnType<typeof l
 
 /** The lines one text element wraps to, as the renderer draws them. */
 export function wrappedLinesOf(t: TextElement, copy: string, options: RenderLayoutOptions = {}): string[] {
-  const font = loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options));
-  return sharedTextLines(t, copy, font, resolveFontsDir(options));
+  const font = loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options), t.fontWeight);
+  return sharedTextLines(t, displayedCopy(t, copy), font, resolveFontsDir(options));
 }
 
 /**
@@ -1606,18 +1744,120 @@ function fitText(t: TextElement, copyText: string, font: ReturnType<typeof loadF
   return { fontSize, letterSpacingEm, lines };
 }
 
+/**
+ * ADR-275: how close the ink of one line of a block comes to the ink of the next, as drawn.
+ *
+ * Display leading under the body range is admitted only on this measurement (house-rules.ts
+ * `displayLineHeight`): a ratio cannot say whether a Sorani mark under one line meets a mark over the
+ * next, because that depends on the letters and on where each line sits across the box. Each line is
+ * laid out with the file the block is drawn with (fontkit applies the face's own mark positioning),
+ * placed across the box by the block's alignment as the renderer anchors it, and every glyph's ink
+ * box is compared with every glyph of the next line that shares columns with it. Glyph boxes are the
+ * outlines' extremes, so the gap measured is never larger than the real one.
+ *
+ * Undefined when the block cannot be measured this way: no copy, or copy the block's own face cannot
+ * draw (the renderer then shapes it with pango, which reports no per-glyph ink).
+ */
+export interface LineInkClearance {
+  method: 'fontkit-glyph-ink-v1';
+  lineCount: number;
+  fontSizePx: number;
+  lineHeight: number;
+  /** Least vertical gap in px between ink of adjacent lines that share columns; Infinity when none do. */
+  minGapPx: number;
+  /** minGapPx as a share of the block's size. */
+  minGapEm: number;
+  /** The upper line (0-based) of the tightest pair, when there are two lines or more. */
+  tightestPair?: number;
+}
+
+export function measureLineInkClearance(
+  t: TextElement,
+  copy: string,
+  options: Pick<RenderLayoutOptions, 'fontsDir'> = {}
+): LineInkClearance | undefined {
+  if (typeof copy !== 'string' || !copy.trim() || !(t.width > 0) || !(t.fontSize > 0) || !(t.lineHeight > 0)) return undefined;
+  try {
+    const fontsDir = resolveFontsDir(options);
+    const shown = displayedCopy(t, copy);
+    const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir, t.fontWeight);
+    const { fontSize, letterSpacingEm, lines } = fitText(t, shown, font, fontsDir);
+    if (fallbackMeasurement(t, shown, fontsDir, fontSize, letterSpacingEm)) return undefined;
+    const scale = fontSize / font.unitsPerEm;
+    const spacingPx = letterSpacingEm * fontSize;
+    const step = fontSize * t.lineHeight;
+    type Ink = { x0: number; x1: number; top: number; bottom: number };
+    const inkOf = (line: string): Ink[] => {
+      const run = font.layout(line);
+      const lineWidth = measureTextWidth(line, font, fontSize, letterSpacingEm);
+      const start = t.align === 'center' ? (t.width - lineWidth) / 2 : t.align === 'right' ? t.width - lineWidth : 0;
+      const boxes: Ink[] = [];
+      let pen = 0;
+      run.glyphs.forEach((glyph: any, i: number) => {
+        const pos = run.positions[i] || { xAdvance: 0, xOffset: 0, yOffset: 0 };
+        const bb = glyph.bbox;
+        if (bb && Number.isFinite(bb.minX) && bb.maxX > bb.minX && bb.maxY > bb.minY) {
+          const gx = start + (pen + (pos.xOffset || 0)) * scale + i * spacingPx;
+          boxes.push({
+            x0: gx + bb.minX * scale,
+            x1: gx + bb.maxX * scale,
+            top: -((pos.yOffset || 0) + bb.maxY) * scale,
+            bottom: -((pos.yOffset || 0) + bb.minY) * scale,
+          });
+        }
+        pen += pos.xAdvance || 0;
+      });
+      return boxes;
+    };
+    const inks = lines.map(inkOf);
+    let minGapPx = Infinity;
+    let tightestPair: number | undefined;
+    for (let i = 0; i + 1 < inks.length; i++) {
+      for (const a of inks[i]) {
+        for (const b of inks[i + 1]) {
+          if (a.x0 >= b.x1 || b.x0 >= a.x1) continue;
+          const gap = step + b.top - a.bottom;
+          if (gap < minGapPx) {
+            minGapPx = gap;
+            tightestPair = i;
+          }
+        }
+      }
+    }
+    return {
+      method: 'fontkit-glyph-ink-v1',
+      lineCount: lines.length,
+      fontSizePx: fontSize,
+      lineHeight: t.lineHeight,
+      minGapPx,
+      minGapEm: minGapPx / fontSize,
+      ...(tightestPair !== undefined ? { tightestPair } : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** ADR-275: whether a block's measured line ink keeps the house's display clearance. */
+export function lineInkClears(clearance: LineInkClearance): boolean {
+  return clearance.minGapEm >= HOUSE_RULES.displayLineHeight.inkClearanceEm;
+}
+
 /** The size (px) and tracking (em) the renderer draws one text element at, for the transfer. */
 export function fittedTextOf(t: TextElement, copy: string, options: RenderLayoutOptions = {}): { fontSize: number; letterSpacingEm: number } {
-  const { fontSize, letterSpacingEm } = fitText(t, copy, loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options)), resolveFontsDir(options));
+  const { fontSize, letterSpacingEm } = fitText(t, displayedCopy(t, copy), loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options), t.fontWeight), resolveFontsDir(options));
   return { fontSize, letterSpacingEm };
 }
 
 function renderTextElementToSvg(
   t: TextElement,
-  copyText: string,
+  typedCopy: string,
   fontsDir: string
 ): { svgSnippet: string; lineCount: number } {
-  const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+  // ADR-275: a block set in capitals is measured and drawn in capitals, its accent words with it.
+  const copyText = displayedCopy(t, typedCopy);
+  const accentText = t.accentText !== undefined && uppercaseApplies(t, typedCopy) ? t.accentText.toUpperCase() : t.accentText;
+  const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir, t.fontWeight);
   // The size and tracking the text is actually measured and drawn at (fitText).
   const { fontSize: renderFontSize, letterSpacingEm: letterSpacingVal, lines } = fitText(t, copyText, font, fontsDir);
 
@@ -1690,7 +1930,7 @@ function renderTextElementToSvg(
   const accentUntil = accented && accentFirst ? wrapped(paragraphs[0]) : 0;
   // Named words take precedence: the lines wrap on words, so a running word count says which of
   // each line's words are the accented ones.
-  const wordRange = t.accentColor && !t.rtl && !/[\u0600-\u06FF]/.test(copyText) ? accentWordRange(copyText, t.accentText) : undefined;
+  const wordRange = t.accentColor && !t.rtl && !/[\u0600-\u06FF]/.test(copyText) ? accentWordRange(copyText, accentText) : undefined;
   const tspans: string[] = [];
   let wordAt = 0;
   for (let i = 0; i < lines.length; i++) {
@@ -1725,7 +1965,7 @@ function renderTextElementToSvg(
 
   // Ask the rasteriser for exactly the face fontkit measured with — see fontFaceSupports.
   const faceAxes = fontFaceSupports(t.fontFamily, t.bold, t.italic, fontsDir);
-  const fontWeight = faceAxes.bold ? 'bold' : 'normal';
+  const fontWeight = drawnFontWeight(t, fontsDir);
   const fontStyle = faceAxes.italic ? ' font-style="italic"' : '';
   const opacityAttr = t.opacity !== undefined ? ` opacity="${t.opacity}"` : '';
   // Emit the spacing and size the lines were measured with. Using the raw t.* values here meant
@@ -1928,6 +2168,14 @@ export function renderLayoutV2ToSvg(
   const svgFiles = new SvgFiles();
   const fontconfigFile = resolveFontconfigFile(options);
   const fontFidelity = getFontFidelityManifest(fontsDir, options, layout.text.map(t => t.fontFamily));
+  // ADR-275: a block in a named weight is drawn from that weight's file, which the family-level
+  // probe (the regular face) says nothing about; each such face gets its own verdict, keyed as
+  // fontFidelityKey names it, from the same ink check drawn at that weight.
+  for (const t of layout.text) {
+    const key = fontFidelityKey(t, { fontsDir });
+    if (key === t.fontFamily || Object.hasOwn(fontFidelity, key)) continue;
+    fontFidelity[key] = weightedFontFidelity(t, { ...options, fontsDir });
+  }
 
   // Assert font resolution for all text elements
   const seenFamilies = new Set<string>();

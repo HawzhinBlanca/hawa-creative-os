@@ -75,18 +75,29 @@ type Candidate = Pick<StudioLayoutV2, 'artDirection'>;
  * ADR-238: the guideline prior, for a client whose reference carries a page grammar (KAAE's 2025
  * guideline). A design composed whole from the grammar is the guideline's own page or cover, so it
  * is preferred over one that is not. Between two that are not, the one with fewer departures from
- * the grammar (`deviations`, from page-grammar.ts guidelineDeviations) is preferred. The judge can
- * still overrule it, but only by a clear margin in both presentation orders (see
- * judgeClearMargin and selectWinnerV3).
+ * the grammar (`deviations`, from page-grammar.ts guidelineDeviations) is preferred.
+ *
+ * ADR-271: it is a tie-break only. selectWinnerV3 consults it where the judge did not decide or failed
+ * its canary; a reliable judge's pick stands. (It used to stand unless the judge chose the other by a
+ * clear margin in both orders, GUIDELINE_CLEAR_MARGIN, which kept the restrained document page
+ * against bolder posters.)
+ *
+ * ADR-274: for a client whose grammar carries poster rules (`posterRules`), being composed from the
+ * grammar is no longer a reason. It handed every split or failed judge to the guideline's document
+ * page, the design the office rated lowest (blind panel 2026-10-02: shipped document pages 3.6 of
+ * 10 against 5.2-6.0 for the posters). Only departures from the guideline count, so when both are
+ * guideline-legal the prior sees no difference and the art-direction prior, then the review findings
+ * and the composite, decide. A grammar without poster rules is unchanged.
  */
 export function guidelinePrior(
   a: Pick<StudioLayoutV2, 'composition'>,
   b: Pick<StudioLayoutV2, 'composition'>,
-  deviations?: { a: string[]; b: string[] }
+  deviations?: { a: string[]; b: string[] },
+  options: { posterRules?: boolean } = {}
 ): ArtDirectionPriorDecision {
   const ca = Boolean(a.composition);
   const cb = Boolean(b.composition);
-  if (ca !== cb) {
+  if (ca !== cb && !options.posterRules) {
     const winner = ca ? 'a' : 'b';
     const kind = (ca ? a : b).composition!.grammar;
     return { winner, basis: 'guideline', reason: `it is the client guideline's own ${kind}, composed from its page grammar` };
@@ -100,8 +111,9 @@ export function guidelinePrior(
 }
 
 /**
- * The share of the judge's votes (weighted on a photo brief) a candidate needs in each presentation
- * order to overrule the guideline prior: four of five dimensions.
+ * The share of the judge's votes (weighted on a photo brief) a candidate needed in each presentation
+ * order to overrule the guideline prior: four of five dimensions. ADR-271 retired that override
+ * (the prior only breaks ties now); kept for reading selections recorded under ADR-238.
  */
 export const GUIDELINE_CLEAR_MARGIN = 0.75;
 

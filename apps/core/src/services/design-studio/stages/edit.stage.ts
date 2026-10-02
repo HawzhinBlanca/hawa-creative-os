@@ -115,6 +115,8 @@ export async function runDirectedEditStage(
       logoClearSpacePx: logoConstraints?.clearSpacePx,
     },
     draftFont: ctx.latinFont || 'Inter',
+    // ADR-275: display leading under the body range is checked on its lines' measured ink.
+    copyText: Object.fromEntries(ctx.copyBlocks.map((b, i) => [i, b.text])),
   };
 
   // The client's photos the design shows must reach the edit. On 2026-09-23 a change to a change
@@ -521,9 +523,12 @@ export function carryOver(parent: StudioLayoutV2, edited: StudioLayoutV2, target
     if (!was) return t;
     const out: Record<string, unknown> = { ...t };
     const prior = was as unknown as Record<string, unknown>;
-    for (const key of ['rtl', 'accentColor', 'accentParagraph', 'accentText', 'letterSpacing', 'italic', 'opacity'] as const) {
+    for (const key of ['rtl', 'accentColor', 'accentParagraph', 'accentText', 'letterSpacing', 'italic', 'opacity', 'fontWeight', 'textTransform'] as const) {
       if (out[key] === undefined && prior[key] !== undefined) out[key] = prior[key];
     }
+    // ADR-275: an edit that took the bold off a block in a named weight lightened it; the weight is
+    // not carried back over it.
+    if (t.fontWeight === undefined && out.bold === false && prior.bold !== false) delete out.fontWeight;
     return out as unknown as typeof t;
   });
   edited.background = { ...parent.background, ...edited.background };
@@ -1003,7 +1008,7 @@ export function keepUntouched(parent: StudioLayoutV2, edited: StudioLayoutV2, ta
     if (!was || styleTargets.includes('all') || styleTargets.includes(`text:${t.copyIndex}`)) return t;
     const out: Record<string, unknown> = { ...t };
     const prior = was as unknown as Record<string, unknown>;
-    for (const key of ['color', 'accentColor', 'accentText', 'accentParagraph', 'fontFamily', 'bold', 'italic', 'letterSpacing', 'opacity']) {
+    for (const key of ['color', 'accentColor', 'accentText', 'accentParagraph', 'fontFamily', 'bold', 'italic', 'letterSpacing', 'opacity', 'fontWeight', 'textTransform']) {
       if (prior[key] === undefined) delete out[key];
       else out[key] = prior[key];
     }

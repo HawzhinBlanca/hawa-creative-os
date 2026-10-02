@@ -184,7 +184,8 @@ describe("the client's brand rules make gold an accent, not a mandate on titles"
     expect(colorUsage).toContain('KAAE Gold (#F7B500, Pantone 7549 C) for the short gold bar under a title');
     expect(colorUsage).toContain('Gold is never text on white or cream');
     expect(colorUsage).toContain('A cover (p.0) is the navy gradient (KAAE Blue at the top left to Midnight)');
-    expect(colorUsage).toContain('A navy-gradient design only when the brief or the photo calls for it');
+    // ADR-271: light first stays the default; the navy cover is one of the poster compositions.
+    expect(colorUsage).toContain('Light first stays the default ground: the white or cream compositions lead, and the navy cover is one of the options');
     expect(colorUsage).toContain('Never use colours outside this palette.');
     // Nothing of the withdrawn brand book, and no ban on the guideline's own navy.
     expect(colorUsage).not.toMatch(/indigo|#17087A|#E8B85C|#FFF2DB|Never use purple, violet/i);
