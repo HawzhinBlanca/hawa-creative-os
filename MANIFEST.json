@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T06:45:40Z",
+  "generatedAt": "2026-10-02T07:16:42Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "6c3b7e878d8788ba10b111953e610a56dc49aa763f433e49396365d1f56814fe",
-      "bytes": 3970
+      "sha256": "3cbef0cbae106d2221d08e658d30c4e6d43a3ca30293e01d75cba1f2d496b74d",
+      "bytes": 3971
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -974,8 +974,8 @@
     },
     {
       "path": "adrs/250_requester_intake_routing_fixes.md",
-      "sha256": "42461cd64a50905191ac22110cea42f1da21c0e2c17ea55a8835405e8fd7617c",
-      "bytes": 5678
+      "sha256": "b99f351e8ee0c86614f1a629707135196278c54548e684ffe8622eee1a7fc6f5",
+      "bytes": 6386
     },
     {
       "path": "adrs/251_requester_turn_confirmations.md",
@@ -984,8 +984,8 @@
     },
     {
       "path": "adrs/252_requester_reply_fixes.md",
-      "sha256": "33591d8c12ec24a5fcaf924dcd18c1b8ffd8cec05b3e287b85e50dac790a81bc",
-      "bytes": 7546
+      "sha256": "d0cdf0cc60e91a43ed9efa6dd1e46edd302247ddf34f37a1d46089bb549987e8",
+      "bytes": 9661
     },
     {
       "path": "adrs/253_double_role_cancel_and_client_possessive.md",
