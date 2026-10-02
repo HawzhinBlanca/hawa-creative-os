@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-02T19:33:07+03:00",
+  "generatedAt": "2026-10-02T21:47:15+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "83b6bfb4349d2a772bef0a07a4c469cc53c40615",
+    "commit": "8d72c6d5dbb38e66a1f10e4c2a16cdfd6a7660dd",
     "treeClean": true,
-    "commitTimestamp": "2026-10-02T19:33:07+03:00",
+    "commitTimestamp": "2026-10-02T21:47:15+03:00",
     "branch": "codex/hawzhin-app-integration"
   },
   "migrations": {
-    "targetVersion": "086_customer_current_preview",
-    "latestMigrationFile": "086_customer_current_preview.sql",
-    "totalMigrations": 86
+    "targetVersion": "087_customer_workflow_actions",
+    "latestMigrationFile": "087_customer_workflow_actions.sql",
+    "totalMigrations": 87
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "ea750fdc7507a28f5051c4d7e9b4f99e176e5116eb535a162a3a1cda26ec0101"
+  "sha256": "3c19f22a42a2d6380363bf9835900a457795c37ea7632c5fdad2b04bb3d23bab"
 }
