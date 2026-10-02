@@ -26,6 +26,20 @@ function grammarSchema(palette: ReadonlySet<string>) {
     lineHeight: z.number().finite().positive().max(5).optional(), letterSpacing: tracking.optional(),
   }).strict();
   const card = z.object({ fill: color, title: color, text: color, edge: color.optional(), edgeShare: dimension.optional() }).strict();
+  // ADR-262: a poster composition's colours.
+  const posterVariant = z.object({
+    ground: color.optional(), title: color, lead: color, body: color, detail: color,
+    panel: color.optional(), panelTitle: color.optional(), panelText: color.optional(),
+    pill: color, pillText: color, sunburst: z.object({ color, opacity: share }).strict(),
+  }).strict();
+  const poster = z.object({
+    source: note.optional(),
+    titleSizeShare: z.object({ min: dimension, max: dimension }).strict().refine(v => v.min <= v.max, 'The title range must ascend.'),
+    logoWidthShare: dimension, titleBarWidthShare: dimension, negativeSpaceMax: share,
+    detailSizeShareMin: dimension.optional(),
+    navy: posterVariant, cream: posterVariant.refine(v => Boolean(v.ground && v.panel && v.panelTitle && v.panelText), 'The cream poster names its ground and card.'),
+    band: posterVariant,
+  }).strict();
   return z.object({
     source: note.optional(),
     page: z.object({ background: color, marginShare: z.number().finite().min(0).lt(0.5) }).strict(),
@@ -55,6 +69,7 @@ function grammarSchema(palette: ReadonlySet<string>) {
       trianglePattern: z.object({ color, opacityOnLight: share, colorOnDark: color, opacityOnDark: share }).strict(),
       rule: note.optional(),
     }).strict(),
+    poster: poster.optional(),
   }).strict();
 }
 

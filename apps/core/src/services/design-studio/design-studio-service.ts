@@ -1291,6 +1291,9 @@ export class DesignStudioService {
           subjects: recordedBrief?.subjectTags ?? [],
           eligibleRecipes: eligibleRecipes(briefPhotoFacts(recordedBrief, runStages(run).cutoutsWanted === true)),
         } : {}),
+        // ADR-262: a text-only poster for a client with poster rules is also shown the office's own
+        // published posts, for their composition.
+        ...(photoCount === 0 && pageGrammarFromRaw(reference)?.poster ? { officePosters: true } : {}),
       };
       const available = new Map<string, { path: string; bytes: Buffer; sha256: string }>();
       const unavailableIds: string[] = [], availabilityWarnings: string[] = [];

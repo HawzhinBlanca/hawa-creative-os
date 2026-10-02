@@ -98,7 +98,8 @@ export type OrnamentKind = (typeof ORNAMENT_KINDS)[number];
 
 /** ADR-238: a layout composed from a client's page grammar, which preparation leaves whole. */
 export interface CompositionRecord {
-  grammar: 'page' | 'cover';
+  /** ADR-262: `poster`, one of the client's poster compositions (poster-grammar.ts). */
+  grammar: 'page' | 'cover' | 'poster';
   /** Which of the composer's variants it is. */
   variant: string;
 }
@@ -566,7 +567,7 @@ export const studioLayoutV2Schema = z.object({
   overlays: z.array(overlayElementSchema).max(6).optional(),
   artDirection: artDirectionRecordSchema.optional(),
   ornaments: z.array(ornamentElementSchema).max(4).optional(),
-  composition: z.object({ grammar: z.enum(['page', 'cover']), variant: z.string().min(1).max(40) }).strict().optional(),
+  composition: z.object({ grammar: z.enum(['page', 'cover', 'poster']), variant: z.string().min(1).max(40) }).strict().optional(),
 }).strict();
 
 /** ADR-170: the recipe of a layout solved as photo art direction, or undefined (typographic or model-drawn). */
