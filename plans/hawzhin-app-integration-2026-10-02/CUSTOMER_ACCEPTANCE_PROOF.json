@@ -17,7 +17,12 @@
     "numFailedTests": 0,
     "numPendingTests": 0
   },
-  "engineFull": null,
+  "engineFull": {
+    "testedCommit": "3334b11526bc0547d3c03173c6b902c22416bcb6",
+    "numPassedTests": 8128,
+    "numFailedTests": 0,
+    "numPendingTests": 67
+  },
   "strictTestRoots": 746,
   "checks": {
     "coreWorkerContractsTypes": "passed",
@@ -27,19 +32,19 @@
     "providerEgress": "passed",
     "security": "passed"
   },
-  "websiteCommit": "d041ed3db9675d637a6d56b7f98be38b9e32054d",
+  "websiteCommit": "a8fdd2eca50c33af7d85fbc21dbf7a648029cc05",
   "website": {
     "date": "2026-10-03",
     "adr": "engine ADR266",
     "scope": "Independent canonical customer acceptance and current approved PNG/editable PPTX downloads, qualified locally",
     "unit": {
-      "numPassedTests": 862,
+      "numPassedTests": 863,
       "numFailedTests": 0,
       "numPendingTests": 0
     },
     "browser": {
-      "startTime": "2026-10-02T21:25:32.707Z",
-      "duration": 26723.547,
+      "startTime": "2026-10-02T21:32:00.714Z",
+      "duration": 18537.668999999998,
       "expected": 9,
       "skipped": 0,
       "unexpected": 0,
@@ -54,9 +59,9 @@
     "fileSha256": {
       "src/features/designer/api.ts": "cc2ccdb402b99f703036ebd19deb1123807f6ce8c940c942479f13045341e04f",
       "src/features/designer/DesignActions.tsx": "3208b80bebd5aa147668ca4b57fea2b7603c5048f1d9b0c3d59d7f8dab727622",
-      "src/features/designer/DesignPreview.tsx": "5a46715290445c0ad3e95eaf23ce0a64ab145163aa1eb61d06ea4734e38c5c5d",
+      "src/features/designer/DesignPreview.tsx": "4210d21ca0fbdbca7da59765c143a9125f8e1fdb3cb9647c00386ef28dcd4407",
       "src/features/designer/DesignerWorkspace.tsx": "a0406a8de165f769e699752f528c8dc576cbe5ae06371cdfef0eec50fe92c6c3",
-      "src/test/designer/acceptance.test.tsx": "7095de9dc1e0ed349256f59648dc7a5644f7d971c65df6240ad6e979dfd5f865",
+      "src/test/designer/acceptance.test.tsx": "ba9911016ce5bea28d061002caa1f14d6ebb85cef9e5fa1479ea85681837c1df",
       "e2e/designer-local.spec.ts": "e876c4624b883ae847e96610d13692e122eec2d154aed0d8382b9f34e75a87ad"
     },
     "evidenceDirectory": "/Users/hawzhin/Hawdesign/.worktrees/hawzhin-app-integration/output/qualification/2026-10-03-site-acceptance",
@@ -68,7 +73,8 @@
     "limitations": [
       "Synthetic Auth/Core/browser transport; no live hosted Supabase, customer, Canva, native language or human-quality acceptance inferred.",
       "Existing coverage/performance/reviewed visual/dependency/live RLS/Linux gates remain open. No public generation, launcher activation, push or deployment."
-    ]
+    ],
+    "additionalControl": "Active downloads are aborted if acceptance is withheld without changing preview version; late bytes cannot create a download."
   },
   "fileSha256": {
     "apps/core/src/app.ts": "504106a65e3aa9db612295afa858ae2aa915a98d2c589c19215e18f11fba5321",
@@ -111,5 +117,12 @@
     "Independent acceptance retains office human_review/in_review and never fabricates staff approval, publication, delivery or taste promotion.",
     "Native timestamps have second precision; no absence-of-every-same-second-edit or atomic external editor lock claim.",
     "No deployment/public admission; generation off, launcher soon, migrations083-089 unreleased. Existing release and hosting/restore gates remain open."
-  ]
+  ],
+  "releaseSourceSealVerified": true,
+  "blueprint": {
+    "passed": 1953,
+    "failed": 0,
+    "warnings": 0
+  },
+  "status": "Locally qualified; public/hosted/native/human admission remains pending"
 }

@@ -218,3 +218,12 @@ are tracked in CUSTOMER_ACCEPTANCE_PROOF.json. Full sealed backend regression pe
 Public generation stays disabled, Designer launcher soon and083–089 unreleased.
 Existing release CI, hosting/HTTPS/restore, hosted two-user/native RTL/edit-save/
 reexport/restart/other-app and human quality gates remain open.
+
+
+Final ADR266 sealed3334b115:8128 passed/0 failed/67 skipped;98 focused and
+746 strict roots pass. Website a8fdd2e:863/0/0 and9/0/0/flaky0 synthetic
+Chromium controls. Release source seal and blueprint1953/0/0 verified. Acceptance
+and actual current-file downloads are now locally qualified. Cross-lane integration
+of Claude designint01b3e243 (ADR271/273/274/275), existing release gates,
+hosting/HTTPS/restore and hosted two-user/native RTL/edit-save/reexport/restart/
+other-app/human quality remain open; no deployment or public switch.
