@@ -115,3 +115,46 @@ The owner reviewed the montages and asked for three fixes on this branch.
 - *Fix:* both now end on a grid line. The pill grows to the next line, with its text centred. The composer also refuses a layout that fails `computeLayoutMetrics(...).alignmentScore`, so QA never sees one.
 
 **Proof.** 20 of 21 deterministic renders pass hard QA; the one exception is the Sorani three-line band, which does not compose. Tests: `kaae-poster-compositions.test.ts`, 23 tests (three new), and `request-copy-extraction.test.ts`, one new.
+
+## 8. Addendum (2026-10-02): the composer's defects (owner-approved item 6)
+
+The design audit (section 3 of `output/research/2026-10-02-design-and-app-ratings/DESIGN_PIPELINE_AUDIT.md`) and the blind panel (band 5.2, navy 6.0, cream 5.9) named the same faults: a template look with the sun as a crutch, empty white over the band, a cramped foot where card, pill, sun and rule collide, a muted blue call to action, and title-only posts that look unfinished. Six fixes, in `poster-grammar.ts` unless stated. The display face (heavy sans capitals) and office archive photos are left to later work; nothing here adds a serif assumption.
+
+**1. The brand element ran under cards and pills.**
+- *Problem:* the free-corner search tested only text, the logo's clear space and the band. In the workshop's cream poster the sun ran under the card's corner; in the Sorani workshop's band it sat under the card.
+- *Fix:* `placeBrandElement` tests every shape that carries or frames content (copy, cards, pills, the band, the bar, the foot rule) and keeps a clear gap of `FOOT_GAP_SHARE` (0.03 of the height) from each. The cover's gradient is a ground and carries the element. The cream block is a ground too, but the renderer draws elements under every shape except the cover's ground, so the sun stands on the block's edge and never runs onto it.
+
+**2. Navy and cream were one geometry in two colourways.** The three are now different compositions:
+- **navy:** a single field. The sunburst stands at the top right, beside the logo, and the title is lowered under it where the room allows. The details sit straight on the ground across the content width.
+- **cream:** the title at the top. A full-bleed Royal block closes the poster: edge to edge, from the foot to the canvas's lower edge, holding the details and the pill. A gold sun stands on the block's edge at the far side, like a sun on the horizon.
+- **band:** the band sits under the logo. The details are on a KAAE Blue card under the title's start, with the pill bridging the card's lower edge (the guideline's "a call-to-action tab straddling a card"). The triangle pattern rises from the foot.
+
+Each composition tries its element's own place first (`home`), and accepts a smaller title for it. Only when that fails does the element go to whichever corner is free. Room is spread so that no gap between blocks exceeds `MAX_GAP_SHARE` (0.18 of the height). The negative-space metric counts a gap over 0.22 as dead.
+
+**3. One face per details group.** The date was Crimson Pro (`g.stat.fontFamily`) and the place Inter. The details are now all in the body face: the date in bold and the first-line colour, the place regular. The group shares one leading, 1.25.
+
+**4. The band.**
+- The band sits directly under the logo's clear space. Before, there was 0.1 of the height of empty white over it with details, and 0.82 of the room without.
+- The band's element is no longer KAAE Blue at 0.16, which read as a grey blob. The new poster rule `band.pattern` (Ocean at 0.6) draws the guideline's triangle pattern rising from the foot when there is room. When there is not, the sunburst is used, now at 0.32. Both are palette colours.
+- The admission schema accepts the optional `pattern`.
+
+**5. The foot.**
+- Card, pill, element and rule keep at least 0.03 of the height between them. A bridging pill keeps 0.6 of that gap from the card's copy above it.
+- The call to action is the gold pill (#F7B500, Midnight text) in every composition. Before, cream's pill was a muted KAAE Blue (`kaae-reference.json`).
+
+**6. Title-only briefs** (a title and at most a lead) are composed as such.
+- The lead goes up one step of the scale (`strongLead`). It stays at least four steps under the title, so the title remains the one dominant moment.
+- Cream sets the lead, upright and bold in Sun, on its block.
+- The band's pattern fills the foot.
+- No gap is left dead, and no copy is added: one block per line of the brief.
+
+**Tests.** `kaae-poster-compositions.test.ts` has six new tests, one per fix, and all six fail on the base `e7aebad7`. Two tests were updated for the new cream and band compositions. The composition test measures where each poster's mass sits on a 12x15 grid and requires at least 12% of cells to differ between every pair. Before, navy and cream set every box of the peer call in the same place.
+
+**Proof.** The deterministic proof set was re-rendered with `output/design-retarget/after.ts`. Hard QA passes on 20 of 21 renders, all poster and page compositions that compose. The exception is the Sorani peer call's band, which did not compose before either (section 7). Before/after montages are in the session scratchpad (`posterbugs/montage_*.png`).
+
+**Open:**
+- The Sorani three-line band is still infeasible. The negative-space metric adds the band and its title as two areas.
+- Where the canvas is full (a three-line title), navy's title cannot be lowered. Navy and cream then differ by the block and the element, not by the title's place.
+- To give the sun its place on the horizon, the cream workshop title is 0.103 of the width (before 0.113).
+- The renderer draws elements under every shape except the cover's ground, so no element can sit on a card or block. That was left unchanged.
+- No gate threshold was changed.
