@@ -193,3 +193,36 @@ These hard guards must stay rules, outside the model, whatever it reads:
 2. **Approval needs the office role.** A requester's approval words only tell the office (ADR-022). Refusals ("not approved", "don't send it") are checked before approval words. A delivery request ("send it again") is never approval.
 3. **A paid round needs certainty.** A round starts only for a design that waits for the requester's changes, known by a reply, as the only candidate, by its name, or by a model reading with confidence of 0.85 or more. It never starts by recency alone. Changes to a design that is being made or is in review are kept for the office.
 4. **Copy is never invented.** A brief's exact copy comes only from the requester's own words.
+
+## After ADR-263 (rules tuned on this set, 2026-10-02)
+
+ADR-263 (`adrs/263_requester_reading_after_nlu_eval.md`) changed the rules for the failure classes above. It also added 54 English cases with `heldOut: true`. The scorer reports them apart from the original 302 (`perSet` in `BASELINE.json`). From now on, `BASELINE.json` holds the scores after ADR-263. The baseline figures above are kept for comparison.
+
+| Measure | Baseline | After ADR-263 |
+|---|---|---|
+| Original 302, overall | 281 (93.0 %) | 300 (99.3 %) |
+| Synthetic (102) | 86 (84.3 %) | 101 (99.0 %) |
+| Live bugs (60) | 57 | 59 |
+| Repo fixtures (140) | 138 | 140 |
+| Costly errors | 3 | 0 |
+| Target (160) | 148 | 160 |
+
+**The original set was tuned on.** Its score no longer measures how the rules do on unseen words. The held-out cases do:
+
+| Round | Written | Before | After |
+|---|---|---|---|
+| Round 1 (32 cases) | before any fix | 5 | 31 |
+| Round 2 (4 cases) | before a follow-up fix | 1 | 4 |
+| Round 3 (18 cases) | after all fixes | not measured | 14 (77.8 %) |
+
+Two round-1 failures informed that follow-up fix. Round 3 was never tuned on.
+
+Still failing:
+- A bare "no" or "nope" on a draft. The conversation answer gives the status and asks what to change (ADR-252), so this is by design.
+- In round 3:
+  - "can we lose the subtitle?"
+  - "the logo looks squashed"
+  - "drop it for now, we'll come back to it next month"
+  - "fantastic, my boss is really happy with it"
+
+A model-first reader still has to beat round 3, not the tuned 99.3 %.

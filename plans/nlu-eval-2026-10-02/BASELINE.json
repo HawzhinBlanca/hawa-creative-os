@@ -4,37 +4,83 @@
   "pipeline": "readIntentByRules -> planTurn (context) -> reconsiderNewBrief (ADR-250); no model call. Context \"none\" plans against an empty chat.",
   "scoring": "A case is right when the intent acted on is its expected intent or one of its alsoAccept intents. Plans map to intents: open=new_brief; revise/redo/note change=change; note/cancel-all=cancel; tell=approval/deadline/delivery_request; reply thanks=acknowledgement; reply status=status; forward question=conversation; ask with \"or a new design\", or a confirmation of a cancel that named nothing, =unclear; any other ask keeps its intent (it only asks which design).",
   "overall": {
-    "cases": 302,
-    "correct": 281,
-    "accuracy": 93
+    "cases": 356,
+    "correct": 349,
+    "accuracy": 98
+  },
+  "perSet": {
+    "original": {
+      "cases": 302,
+      "correct": 300,
+      "accuracy": 99.3,
+      "perSource": {
+        "live-bug": {
+          "cases": 60,
+          "correct": 59,
+          "accuracy": 98.3
+        },
+        "stress-fixture": {
+          "cases": 140,
+          "correct": 140,
+          "accuracy": 100
+        },
+        "synthetic": {
+          "cases": 102,
+          "correct": 101,
+          "accuracy": 99
+        }
+      },
+      "perLanguage": {
+        "ckb": {
+          "cases": 89,
+          "correct": 88,
+          "accuracy": 98.9
+        },
+        "en": {
+          "cases": 207,
+          "correct": 206,
+          "accuracy": 99.5
+        },
+        "mixed": {
+          "cases": 6,
+          "correct": 6,
+          "accuracy": 100
+        }
+      }
+    },
+    "heldOut": {
+      "cases": 54,
+      "correct": 49,
+      "accuracy": 90.7
+    }
   },
   "rulesReadingOnly": {
-    "cases": 302,
-    "correct": 273,
-    "accuracy": 90.4,
+    "cases": 356,
+    "correct": 340,
+    "accuracy": 95.5,
     "note": "readIntentByRules alone, without context or planning"
   },
   "perLanguage": {
     "ckb": {
       "cases": 89,
-      "correct": 84,
-      "accuracy": 94.4
+      "correct": 88,
+      "accuracy": 98.9
     },
     "en": {
-      "cases": 207,
-      "correct": 192,
-      "accuracy": 92.8
+      "cases": 261,
+      "correct": 255,
+      "accuracy": 97.7
     },
     "mixed": {
       "cases": 6,
-      "correct": 5,
-      "accuracy": 83.3
+      "correct": 6,
+      "accuracy": 100
     }
   },
   "perContext": {
     "awaiting_answer": {
-      "cases": 6,
-      "correct": 6,
+      "cases": 7,
+      "correct": 7,
       "accuracy": 100
     },
     "delivered": {
@@ -43,14 +89,14 @@
       "accuracy": 100
     },
     "designing": {
-      "cases": 75,
-      "correct": 70,
-      "accuracy": 93.3
+      "cases": 92,
+      "correct": 91,
+      "accuracy": 98.9
     },
     "in_review": {
-      "cases": 111,
-      "correct": 98,
-      "accuracy": 88.3
+      "cases": 138,
+      "correct": 132,
+      "accuracy": 95.7
     },
     "just_cancelled": {
       "cases": 12,
@@ -58,65 +104,65 @@
       "accuracy": 100
     },
     "none": {
-      "cases": 48,
-      "correct": 47,
-      "accuracy": 97.9
+      "cases": 54,
+      "correct": 54,
+      "accuracy": 100
     },
     "two_open": {
-      "cases": 16,
-      "correct": 14,
-      "accuracy": 87.5
+      "cases": 19,
+      "correct": 19,
+      "accuracy": 100
     }
   },
   "perSource": {
     "live-bug": {
       "cases": 60,
-      "correct": 57,
-      "accuracy": 95
+      "correct": 59,
+      "accuracy": 98.3
     },
     "stress-fixture": {
       "cases": 140,
-      "correct": 138,
-      "accuracy": 98.6
+      "correct": 140,
+      "accuracy": 100
     },
     "synthetic": {
-      "cases": 102,
-      "correct": 86,
-      "accuracy": 84.3
+      "cases": 156,
+      "correct": 150,
+      "accuracy": 96.2
     }
   },
   "perIntent": {
     "new_brief": {
-      "support": 47,
-      "predicted": 48,
-      "truePositives": 46,
-      "precision": 0.958,
-      "recall": 0.979,
-      "f1": 0.968
+      "support": 56,
+      "predicted": 56,
+      "truePositives": 56,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     "change": {
-      "support": 81,
-      "predicted": 75,
-      "truePositives": 74,
-      "precision": 0.987,
-      "recall": 0.914,
-      "f1": 0.949
+      "support": 103,
+      "predicted": 101,
+      "truePositives": 101,
+      "precision": 1,
+      "recall": 0.981,
+      "f1": 0.99
     },
     "cancel": {
-      "support": 34,
-      "predicted": 33,
-      "truePositives": 32,
-      "precision": 0.97,
-      "recall": 0.941,
-      "f1": 0.955
+      "support": 36,
+      "predicted": 36,
+      "truePositives": 36,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     "hold": {
-      "support": 8,
-      "predicted": 6,
-      "truePositives": 6,
+      "support": 12,
+      "predicted": 11,
+      "truePositives": 11,
       "precision": 1,
-      "recall": 0.75,
-      "f1": 0.857
+      "recall": 0.917,
+      "f1": 0.957
     },
     "approval": {
       "support": 14,
@@ -127,28 +173,28 @@
       "f1": 1
     },
     "acknowledgement": {
-      "support": 21,
-      "predicted": 20,
-      "truePositives": 20,
+      "support": 24,
+      "predicted": 23,
+      "truePositives": 23,
       "precision": 1,
-      "recall": 0.952,
-      "f1": 0.976
+      "recall": 0.958,
+      "f1": 0.979
     },
     "status": {
-      "support": 21,
-      "predicted": 20,
-      "truePositives": 20,
+      "support": 25,
+      "predicted": 25,
+      "truePositives": 25,
       "precision": 1,
-      "recall": 0.952,
-      "f1": 0.976
+      "recall": 1,
+      "f1": 1
     },
     "deadline": {
-      "support": 13,
-      "predicted": 12,
-      "truePositives": 12,
+      "support": 16,
+      "predicted": 16,
+      "truePositives": 16,
       "precision": 1,
-      "recall": 0.923,
-      "f1": 0.96
+      "recall": 1,
+      "f1": 1
     },
     "delivery_request": {
       "support": 13,
@@ -160,25 +206,25 @@
     },
     "conversation": {
       "support": 35,
-      "predicted": 42,
+      "predicted": 39,
       "truePositives": 35,
-      "precision": 0.833,
+      "precision": 0.897,
       "recall": 1,
-      "f1": 0.909
+      "f1": 0.946
     },
     "unclear": {
-      "support": 15,
-      "predicted": 19,
-      "truePositives": 9,
-      "precision": 0.474,
-      "recall": 0.6,
-      "f1": 0.529
+      "support": 22,
+      "predicted": 22,
+      "truePositives": 19,
+      "precision": 0.864,
+      "recall": 0.864,
+      "f1": 0.864
     }
   },
   "target": {
-    "cases": 160,
-    "correct": 148,
-    "accuracy": 92.5,
+    "cases": 191,
+    "correct": 188,
+    "accuracy": 98.4,
     "note": "Cases with an expected design: right when the intent is right and the plan acts on (or asks about) that design."
   },
   "confusion": {
@@ -186,37 +232,32 @@
     "columns": "got",
     "matrix": {
       "new_brief": {
-        "new_brief": 46,
-        "conversation": 1
+        "new_brief": 56
       },
       "change": {
-        "new_brief": 2,
-        "change": 74,
-        "unclear": 5
-      },
-      "cancel": {
-        "change": 1,
-        "cancel": 32,
+        "change": 101,
+        "conversation": 1,
         "unclear": 1
       },
+      "cancel": {
+        "cancel": 36
+      },
       "hold": {
-        "hold": 6,
-        "unclear": 2
+        "hold": 11,
+        "unclear": 1
       },
       "approval": {
         "approval": 14
       },
       "acknowledgement": {
-        "acknowledgement": 20,
+        "acknowledgement": 23,
         "unclear": 1
       },
       "status": {
-        "status": 20,
-        "conversation": 1
+        "status": 25
       },
       "deadline": {
-        "deadline": 12,
-        "unclear": 1
+        "deadline": 16
       },
       "delivery_request": {
         "delivery_request": 13
@@ -225,211 +266,20 @@
         "conversation": 35
       },
       "unclear": {
-        "cancel": 1,
-        "conversation": 5,
-        "unclear": 9
+        "conversation": 3,
+        "unclear": 19
       }
     }
   },
   "failureClasses": {
-    "change -> unclear": 5,
-    "unclear -> conversation": 5,
-    "change -> new_brief": 2,
-    "hold -> unclear": 2,
-    "new_brief -> conversation": 1,
-    "cancel -> change": 1,
-    "unclear -> cancel": 1,
-    "status -> conversation": 1,
-    "deadline -> unclear": 1,
-    "acknowledgement -> unclear": 1,
-    "cancel -> unclear": 1
+    "unclear -> conversation": 3,
+    "change -> conversation": 1,
+    "change -> unclear": 1,
+    "hold -> unclear": 1,
+    "acknowledgement -> unclear": 1
   },
-  "costlyErrors": [
-    {
-      "id": "en-change-39",
-      "lang": "en",
-      "context": "in_review",
-      "text": "the workshop is for university deans, not school principals",
-      "expected": "change",
-      "got": "new_brief",
-      "plan": "open"
-    },
-    {
-      "id": "en-cancel-29",
-      "lang": "en",
-      "context": "designing",
-      "text": "forget about it",
-      "expected": "unclear",
-      "got": "cancel",
-      "plan": "note:cancel -> A"
-    },
-    {
-      "id": "ckb-change-14",
-      "lang": "ckb",
-      "context": "in_review",
-      "text": "دیزاینێکی تر دروست بکە باشتر بێت",
-      "expected": "change | unclear",
-      "got": "new_brief",
-      "plan": "open"
-    }
-  ],
+  "costlyErrors": [],
   "failures": [
-    {
-      "id": "en-brief-19",
-      "lang": "en",
-      "context": "none",
-      "source": "live-bug",
-      "text": "Hey, we need something for the KAAE alumni meetup next month",
-      "expected": "new_brief",
-      "got": "conversation",
-      "rules": "conversation",
-      "reason": "Greeting or command detected",
-      "plan": "conversation",
-      "note": "LIVE L15 variant: \"Hey, we need something for…\" with no design noun."
-    },
-    {
-      "id": "en-change-08",
-      "lang": "en",
-      "context": "in_review",
-      "source": "synthetic",
-      "text": "take the phone number out",
-      "expected": "change",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "\"take X out\" removal."
-    },
-    {
-      "id": "en-change-22",
-      "lang": "en",
-      "context": "in_review",
-      "source": "synthetic",
-      "text": "no KAAE in the headline please",
-      "expected": "change",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "Removal phrased with \"no\"."
-    },
-    {
-      "id": "en-change-35",
-      "lang": "en",
-      "context": "in_review",
-      "source": "synthetic",
-      "text": "hmm the font is hard to read",
-      "expected": "change",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "Complaint that implies a change."
-    },
-    {
-      "id": "en-change-39",
-      "lang": "en",
-      "context": "in_review",
-      "source": "synthetic",
-      "text": "the workshop is for university deans, not school principals",
-      "expected": "change",
-      "got": "new_brief",
-      "rules": "new_brief",
-      "reason": "Carries copy or event detail",
-      "plan": "open",
-      "note": "Correction of the audience line."
-    },
-    {
-      "id": "en-change-42",
-      "lang": "en",
-      "context": "in_review",
-      "source": "synthetic",
-      "text": "please cancel the gold border",
-      "expected": "change",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "Cancel verb on a design part: a change, never a withdrawal."
-    },
-    {
-      "id": "en-change-43",
-      "lang": "en",
-      "context": "in_review",
-      "source": "synthetic",
-      "text": "stop using that font",
-      "expected": "change",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "\"stop\" with a design-part object."
-    },
-    {
-      "id": "en-cancel-16",
-      "lang": "en",
-      "context": "designing",
-      "source": "synthetic",
-      "text": "don't make it, we'll do it ourselves",
-      "expected": "cancel",
-      "got": "change",
-      "rules": "change",
-      "reason": "Asks for a change or a correction",
-      "plan": "note:change -> A",
-      "note": "Cancel with a reason."
-    },
-    {
-      "id": "en-cancel-29",
-      "lang": "en",
-      "context": "designing",
-      "source": "synthetic",
-      "text": "forget about it",
-      "expected": "unclear",
-      "got": "cancel",
-      "rules": "cancel",
-      "reason": "Asks to cancel or stop",
-      "plan": "note:cancel -> A",
-      "note": "May be about the last thing said: ask first."
-    },
-    {
-      "id": "en-hold-05",
-      "lang": "en",
-      "context": "designing",
-      "source": "synthetic",
-      "text": "don't continue with the design for now, we're waiting for the speaker list",
-      "expected": "hold",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "Pause, not cancel."
-    },
-    {
-      "id": "en-status-10",
-      "lang": "en",
-      "context": "two_open",
-      "source": "synthetic",
-      "text": "how's the workshop poster coming along?",
-      "expected": "status",
-      "got": "conversation",
-      "rules": "conversation",
-      "reason": "A question",
-      "plan": "forward:question",
-      "note": "Status of one named design."
-    },
-    {
-      "id": "en-deadline-07",
-      "lang": "en",
-      "context": "designing",
-      "source": "synthetic",
-      "text": "no rush, next week is fine",
-      "expected": "deadline",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "A relaxed deadline is still timing for the office."
-    },
     {
       "id": "en-unclear-01",
       "lang": "en",
@@ -442,84 +292,6 @@
       "reason": "Short message without design or event details",
       "plan": "conversation",
       "note": "HUNT2 friction 9: after a draft, \"no\" alone; ask what they mean."
-    },
-    {
-      "id": "en-unclear-03",
-      "lang": "en",
-      "context": "in_review",
-      "source": "synthetic",
-      "text": "for the deans",
-      "expected": "unclear",
-      "got": "conversation",
-      "rules": "conversation",
-      "reason": "Short message without design or event details",
-      "plan": "conversation",
-      "note": "A fragment: an audience correction or the start of a brief."
-    },
-    {
-      "id": "en-unclear-06",
-      "lang": "en",
-      "context": "in_review",
-      "source": "synthetic",
-      "text": "Nawroz",
-      "expected": "unclear",
-      "got": "conversation",
-      "rules": "conversation",
-      "reason": "Short message without design or event details",
-      "plan": "conversation",
-      "note": "One word."
-    },
-    {
-      "id": "ckb-change-14",
-      "lang": "ckb",
-      "context": "in_review",
-      "source": "stress-fixture",
-      "text": "دیزاینێکی تر دروست بکە باشتر بێت",
-      "expected": "change | unclear",
-      "got": "new_brief",
-      "rules": "new_brief",
-      "reason": "Asks for a new design",
-      "plan": "open",
-      "note": "telegram-classifier: \"Make another design, a better one\" (revision feedback on the draft); asking \"change or new?\" is acceptable, opening a second request is not."
-    },
-    {
-      "id": "ckb-approve-05",
-      "lang": "ckb",
-      "context": "in_review",
-      "source": "stress-fixture",
-      "text": "زۆر جوانە، کڕیارەکە حەزی لێ دەکات",
-      "expected": "acknowledgement | approval",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "telegram-classifier: \"Very beautiful, the client likes it\" (praise; approval words are also fine)."
-    },
-    {
-      "id": "ckb-cancel-10",
-      "lang": "mixed",
-      "context": "two_open",
-      "source": "live-bug",
-      "text": "پۆستەری Teacher Appreciation Day هەڵبوەشێنەوە، تەنها تاقیکردنەوە بوو",
-      "expected": "cancel",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> ask",
-      "note": "LIVE L17 in Sorani: \"Cancel the Teacher Appreciation Day poster, it was only a test\". Needs native review."
-    },
-    {
-      "id": "ckb-hold-03",
-      "lang": "ckb",
-      "context": "designing",
-      "source": "synthetic",
-      "text": "هێشتا دروستی مەکە، چاوەڕێی بەروارەکەین",
-      "expected": "hold",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "\"Don't make it yet, we are waiting for the date\". Needs native review."
     },
     {
       "id": "ckb-unclear-01",
@@ -535,17 +307,74 @@
       "note": "HUNT2 friction 9 in Sorani: \"No\" after a draft."
     },
     {
-      "id": "ckb-unclear-02",
-      "lang": "ckb",
+      "id": "ho-unclear-03",
+      "lang": "en",
       "context": "in_review",
       "source": "synthetic",
-      "text": "نەورۆز",
+      "heldOut": true,
+      "text": "nope",
       "expected": "unclear",
       "got": "conversation",
       "rules": "conversation",
       "reason": "Short message without design or event details",
       "plan": "conversation",
-      "note": "\"Nawroz\": one word."
+      "note": "Added after baseline (held out from tuning: written before the fix). Bare no on a draft: ask what it means."
+    },
+    {
+      "id": "ho3-change-01",
+      "lang": "en",
+      "context": "in_review",
+      "source": "synthetic",
+      "heldOut": true,
+      "text": "can we lose the subtitle?",
+      "expected": "change",
+      "got": "conversation",
+      "rules": "conversation",
+      "reason": "A question",
+      "plan": "forward:question",
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Removes a part."
+    },
+    {
+      "id": "ho3-change-02",
+      "lang": "en",
+      "context": "in_review",
+      "source": "synthetic",
+      "heldOut": true,
+      "text": "the logo looks squashed",
+      "expected": "change",
+      "got": "unclear",
+      "rules": "unclear",
+      "reason": "A short message that could be a new brief or a note about a current design",
+      "plan": "ask:unclear+new -> A",
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Complaint about a part."
+    },
+    {
+      "id": "ho3-hold-01",
+      "lang": "en",
+      "context": "designing",
+      "source": "synthetic",
+      "heldOut": true,
+      "text": "drop it for now, we'll come back to it next month",
+      "expected": "hold",
+      "got": "unclear",
+      "rules": "unclear",
+      "reason": "A short message that could be a new brief or a note about a current design",
+      "plan": "ask:unclear+new -> A",
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Temporary stop."
+    },
+    {
+      "id": "ho3-ack-01",
+      "lang": "en",
+      "context": "in_review",
+      "source": "synthetic",
+      "heldOut": true,
+      "text": "fantastic, my boss is really happy with it",
+      "expected": "acknowledgement | approval",
+      "got": "unclear",
+      "rules": "unclear",
+      "reason": "A short message that could be a new brief or a note about a current design",
+      "plan": "ask:unclear+new -> A",
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Praise; the office decides approval."
     }
   ],
   "targetMisses": [],
@@ -660,9 +489,9 @@
     },
     {
       "id": "en-brief-19",
-      "ok": false,
-      "got": "conversation",
-      "plan": "conversation"
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
     },
     {
       "id": "en-brief-20",
@@ -768,9 +597,9 @@
     },
     {
       "id": "en-change-08",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
     },
     {
       "id": "en-change-09",
@@ -852,9 +681,9 @@
     },
     {
       "id": "en-change-22",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
     },
     {
       "id": "en-change-23",
@@ -930,9 +759,9 @@
     },
     {
       "id": "en-change-35",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
     },
     {
       "id": "en-change-36",
@@ -954,9 +783,9 @@
     },
     {
       "id": "en-change-39",
-      "ok": false,
-      "got": "new_brief",
-      "plan": "open"
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
     },
     {
       "id": "en-change-40",
@@ -972,15 +801,15 @@
     },
     {
       "id": "en-change-42",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
     },
     {
       "id": "en-change-43",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
     },
     {
       "id": "en-change-44",
@@ -1134,9 +963,9 @@
     },
     {
       "id": "en-cancel-16",
-      "ok": false,
-      "got": "change",
-      "plan": "note:change -> A"
+      "ok": true,
+      "got": "cancel",
+      "plan": "note:cancel -> A"
     },
     {
       "id": "en-cancel-17",
@@ -1212,9 +1041,9 @@
     },
     {
       "id": "en-cancel-29",
-      "ok": false,
-      "got": "cancel",
-      "plan": "note:cancel -> A"
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:cancel -> A"
     },
     {
       "id": "en-hold-01",
@@ -1242,9 +1071,9 @@
     },
     {
       "id": "en-hold-05",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "hold",
+      "plan": "note:hold -> A"
     },
     {
       "id": "en-hold-06",
@@ -1512,9 +1341,9 @@
     },
     {
       "id": "en-status-10",
-      "ok": false,
-      "got": "conversation",
-      "plan": "forward:question"
+      "ok": true,
+      "got": "status",
+      "plan": "reply:status"
     },
     {
       "id": "en-status-11",
@@ -1584,9 +1413,9 @@
     },
     {
       "id": "en-deadline-07",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "deadline",
+      "plan": "tell:deadline -> A"
     },
     {
       "id": "en-files-01",
@@ -1734,9 +1563,9 @@
     },
     {
       "id": "en-unclear-03",
-      "ok": false,
-      "got": "conversation",
-      "plan": "conversation"
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
     },
     {
       "id": "en-unclear-04",
@@ -1752,9 +1581,9 @@
     },
     {
       "id": "en-unclear-06",
-      "ok": false,
-      "got": "conversation",
-      "plan": "conversation"
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
     },
     {
       "id": "en-answer-01",
@@ -1956,9 +1785,9 @@
     },
     {
       "id": "ckb-change-14",
-      "ok": false,
-      "got": "new_brief",
-      "plan": "open"
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
     },
     {
       "id": "ckb-change-15",
@@ -2022,9 +1851,9 @@
     },
     {
       "id": "ckb-approve-05",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "acknowledgement",
+      "plan": "reply:thanks"
     },
     {
       "id": "ckb-ack-01",
@@ -2202,9 +2031,9 @@
     },
     {
       "id": "ckb-cancel-10",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> ask"
+      "ok": true,
+      "got": "cancel",
+      "plan": "note:cancel -> B"
     },
     {
       "id": "ckb-cancel-11",
@@ -2232,9 +2061,9 @@
     },
     {
       "id": "ckb-hold-03",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "hold",
+      "plan": "note:hold -> A"
     },
     {
       "id": "ckb-undo-01",
@@ -2340,9 +2169,9 @@
     },
     {
       "id": "ckb-unclear-02",
-      "ok": false,
-      "got": "conversation",
-      "plan": "conversation"
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
     },
     {
       "id": "ckb-answer-01",
@@ -2361,6 +2190,330 @@
       "ok": true,
       "got": "change",
       "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-cancel-01",
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:cancel -> A"
+    },
+    {
+      "id": "ho-cancel-02",
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:cancel -> A"
+    },
+    {
+      "id": "ho-cancel-03",
+      "ok": true,
+      "got": "cancel",
+      "plan": "note:cancel -> A"
+    },
+    {
+      "id": "ho-change-01",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-02",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-03",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-04",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-05",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-06",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-07",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-08",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-09",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-10",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-11",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-12",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> B"
+    },
+    {
+      "id": "ho-hold-01",
+      "ok": true,
+      "got": "hold",
+      "plan": "note:hold -> A"
+    },
+    {
+      "id": "ho-hold-02",
+      "ok": true,
+      "got": "hold",
+      "plan": "note:hold -> A"
+    },
+    {
+      "id": "ho-deadline-01",
+      "ok": true,
+      "got": "deadline",
+      "plan": "tell:deadline -> A"
+    },
+    {
+      "id": "ho-deadline-02",
+      "ok": true,
+      "got": "deadline",
+      "plan": "tell:deadline -> A"
+    },
+    {
+      "id": "ho-ack-01",
+      "ok": true,
+      "got": "acknowledgement",
+      "plan": "reply:thanks"
+    },
+    {
+      "id": "ho-ack-02",
+      "ok": true,
+      "got": "acknowledgement",
+      "plan": "reply:thanks"
+    },
+    {
+      "id": "ho-status-01",
+      "ok": true,
+      "got": "status",
+      "plan": "reply:status"
+    },
+    {
+      "id": "ho-status-02",
+      "ok": true,
+      "got": "status",
+      "plan": "reply:status"
+    },
+    {
+      "id": "ho-status-03",
+      "ok": true,
+      "got": "status",
+      "plan": "reply:status"
+    },
+    {
+      "id": "ho-brief-01",
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
+    },
+    {
+      "id": "ho-brief-02",
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
+    },
+    {
+      "id": "ho-brief-03",
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
+    },
+    {
+      "id": "ho-brief-04",
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
+    },
+    {
+      "id": "ho-brief-05",
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
+    },
+    {
+      "id": "ho-unclear-01",
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
+    },
+    {
+      "id": "ho-unclear-02",
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
+    },
+    {
+      "id": "ho-unclear-03",
+      "ok": false,
+      "got": "conversation",
+      "plan": "conversation"
+    },
+    {
+      "id": "ho-change-13",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-change-14",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho-brief-06",
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
+    },
+    {
+      "id": "ho-brief-07",
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
+    },
+    {
+      "id": "ho3-change-01",
+      "ok": false,
+      "got": "conversation",
+      "plan": "forward:question"
+    },
+    {
+      "id": "ho3-change-02",
+      "ok": false,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
+    },
+    {
+      "id": "ho3-change-03",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho3-change-04",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho3-change-05",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho3-change-06",
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
+    },
+    {
+      "id": "ho3-change-07",
+      "ok": true,
+      "got": "change",
+      "plan": "revise -> A"
+    },
+    {
+      "id": "ho3-change-08",
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
+    },
+    {
+      "id": "ho3-cancel-01",
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
+    },
+    {
+      "id": "ho3-cancel-02",
+      "ok": true,
+      "got": "cancel",
+      "plan": "note:cancel -> A"
+    },
+    {
+      "id": "ho3-hold-01",
+      "ok": false,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
+    },
+    {
+      "id": "ho3-hold-02",
+      "ok": true,
+      "got": "hold",
+      "plan": "note:hold -> A"
+    },
+    {
+      "id": "ho3-deadline-01",
+      "ok": true,
+      "got": "deadline",
+      "plan": "tell:deadline -> A"
+    },
+    {
+      "id": "ho3-ack-01",
+      "ok": false,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
+    },
+    {
+      "id": "ho3-status-01",
+      "ok": true,
+      "got": "status",
+      "plan": "reply:status"
+    },
+    {
+      "id": "ho3-brief-01",
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
+    },
+    {
+      "id": "ho3-brief-02",
+      "ok": true,
+      "got": "new_brief",
+      "plan": "open"
+    },
+    {
+      "id": "ho3-unclear-01",
+      "ok": true,
+      "got": "unclear",
+      "plan": "ask:unclear+new -> A"
     }
   ]
 }

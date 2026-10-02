@@ -45,6 +45,8 @@ interface Case {
     multi?: boolean;
   };
   source: typeof SOURCES[number];
+  /** Added after the 2026-10-02 baseline and written before the rule fix it tests: held out from tuning. */
+  heldOut?: boolean;
   note: string;
 }
 
@@ -124,7 +126,7 @@ function planTarget(plan: TurnPlan): string | null {
 }
 
 interface Outcome {
-  id: string; text: string; lang: Case['lang']; context: Context; source: Case['source']; pendingAsk: string | null;
+  id: string; text: string; lang: Case['lang']; context: Context; source: Case['source']; heldOut: boolean; pendingAsk: string | null;
   expected: TurnIntent; accepted: TurnIntent[]; got: TurnIntent; correct: boolean;
   rulesIntent: TurnIntent; rulesCorrect: boolean; reason: string; plan: string;
   expectedTarget: string[] | null; gotTarget: string | null; targetCorrect: boolean | null; note: string;
@@ -144,7 +146,7 @@ function run(c: Case): Outcome {
   const expectedTarget = c.expected.target === undefined ? null : ([] as string[]).concat(c.expected.target);
   const gotTarget = planTarget(plan);
   return {
-    id: c.id, text: c.text, lang: c.lang, context: c.context, source: c.source, pendingAsk: c.pendingAsk ?? null,
+    id: c.id, text: c.text, lang: c.lang, context: c.context, source: c.source, heldOut: c.heldOut === true, pendingAsk: c.pendingAsk ?? null,
     expected: c.expected.intent, accepted, got, correct, rulesIntent, rulesCorrect: accepted.includes(rulesIntent),
     reason: reading.reason, plan: planSummary(plan),
     expectedTarget, gotTarget, targetCorrect: expectedTarget ? correct && gotTarget !== null && expectedTarget.includes(gotTarget) : null,
@@ -205,6 +207,13 @@ function report(rows: Outcome[]) {
     pipeline: 'readIntentByRules -> planTurn (context) -> reconsiderNewBrief (ADR-250); no model call. Context "none" plans against an empty chat.',
     scoring: 'A case is right when the intent acted on is its expected intent or one of its alsoAccept intents. Plans map to intents: open=new_brief; revise/redo/note change=change; note/cancel-all=cancel; tell=approval/deadline/delivery_request; reply thanks=acknowledgement; reply status=status; forward question=conversation; ask with "or a new design", or a confirmation of a cancel that named nothing, =unclear; any other ask keeps its intent (it only asks which design).',
     overall: accuracy(rows),
+    // The 302 cases of the 2026-10-02 baseline, and the cases added after it (each written before the fix it
+    // tests, so they are held out from tuning). Compare `original` with the baseline README.
+    perSet: {
+      original: { ...accuracy(rows.filter((r) => !r.heldOut)), perSource: groupBy(rows.filter((r) => !r.heldOut), (r) => r.source),
+        perLanguage: groupBy(rows.filter((r) => !r.heldOut), (r) => r.lang) },
+      heldOut: accuracy(rows.filter((r) => r.heldOut)),
+    },
     rulesReadingOnly: { ...accuracy(rows, 'rulesCorrect'), note: 'readIntentByRules alone, without context or planning' },
     perLanguage: groupBy(rows, (r) => r.lang),
     perContext: groupBy(rows, (r) => r.context),
@@ -219,7 +228,8 @@ function report(rows: Outcome[]) {
     // withdrawn, or approval words heard, when none of that was meant.
     costlyErrors: rows.filter((r) => !r.correct && ['new_brief', 'cancel', 'approval'].includes(r.got)).map((r) => ({ id: r.id, lang: r.lang,
       context: r.context, text: r.text, expected: r.accepted.join(' | '), got: r.got, plan: r.plan })),
-    failures: rows.filter((r) => !r.correct).map((r) => ({ id: r.id, lang: r.lang, context: r.context, source: r.source, text: r.text,
+    failures: rows.filter((r) => !r.correct).map((r) => ({ id: r.id, lang: r.lang, context: r.context, source: r.source,
+      ...(r.heldOut ? { heldOut: true } : {}), text: r.text,
       expected: r.accepted.join(' | '), got: r.got, rules: r.rulesIntent, reason: r.reason, plan: r.plan, note: r.note })),
     targetMisses: targeted.filter((r) => r.correct && !r.targetCorrect).map((r) => ({ id: r.id, lang: r.lang, context: r.context, text: r.text,
       expected: r.expectedTarget, got: r.gotTarget, plan: r.plan })),
@@ -249,6 +259,7 @@ describe('NLU evaluation set (measurement; accuracy is reported, not asserted)',
         if (t !== 'ask' && t !== 'both') expect(REQUESTS[c.context].map((r) => r.requestId), where).toContain(t);
       }
       if (c.pendingAsk) expect(Object.keys(ASKS), where).toContain(c.pendingAsk);
+      if (c.heldOut !== undefined) expect(c.heldOut === true && c.source === 'synthetic', where).toBe(true);
       expect(typeof c.note === 'string' && c.note.length > 0, where).toBe(true);
     }
     // Every intent of the planner's vocabulary is represented, in both languages for the main classes.
@@ -266,6 +277,7 @@ describe('NLU evaluation set (measurement; accuracy is reported, not asserted)',
     expect(out.overall.cases).toBe(cases.length);
     // The headline, for whoever runs it.
     console.log(`[nlu-eval] overall ${out.overall.correct}/${out.overall.cases} (${out.overall.accuracy}%); ` +
+      `original ${out.perSet.original.correct}/${out.perSet.original.cases}; held out ${out.perSet.heldOut.correct}/${out.perSet.heldOut.cases}; ` +
       Object.entries(out.perLanguage).map(([k, v]) => `${k} ${v?.accuracy}%`).join(', ') + `; report ${REPORT}`);
   });
 });

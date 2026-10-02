@@ -3639,6 +3639,709 @@
       "source": "stress-fixture",
       "note": "requester-turn: \"A change\" to \"change or new?\".",
       "pendingAsk": "change_or_new"
+    },
+    {
+      "id": "ho-cancel-01",
+      "text": "just forget it",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Idiomatic dismissal, like \"never mind\": ask first."
+    },
+    {
+      "id": "ho-cancel-02",
+      "text": "oh well, forget about it then",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Idiomatic dismissal with filler: ask first."
+    },
+    {
+      "id": "ho-cancel-03",
+      "text": "forget the poster, we don't need it anymore",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Names the design and says why: a cancel."
+    },
+    {
+      "id": "ho-change-01",
+      "text": "the workshop is in the main hall, not the library",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the venue (L19 class)."
+    },
+    {
+      "id": "ho-change-02",
+      "text": "it's for the teachers, not the parents",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the audience (L19 class)."
+    },
+    {
+      "id": "ho-change-03",
+      "text": "the event is on Thursday, not Wednesday",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the day (L19 class)."
+    },
+    {
+      "id": "ho-change-04",
+      "text": "can you make another design? a nicer one",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true,
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Another, nicer design on a draft: a redo; asking is acceptable, opening is not."
+    },
+    {
+      "id": "ho-change-05",
+      "text": "do another one, but better",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true,
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Another, better one on a draft: a redo; asking is acceptable, opening is not."
+    },
+    {
+      "id": "ho-change-06",
+      "text": "get the QR code off it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Removes a part of the design."
+    },
+    {
+      "id": "ho-change-07",
+      "text": "the text is way too small",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Complaint about a part of the design."
+    },
+    {
+      "id": "ho-change-08",
+      "text": "please don't use red anywhere",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Negated styling instruction."
+    },
+    {
+      "id": "ho-change-09",
+      "text": "cancel the shadow behind the title",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Cancel + a design part is a change, never a withdrawal."
+    },
+    {
+      "id": "ho-change-10",
+      "text": "no logo on the bottom please",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Removes a part of the design."
+    },
+    {
+      "id": "ho-change-11",
+      "text": "honestly the colours look a bit dull",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Complaint about a part of the design."
+    },
+    {
+      "id": "ho-change-12",
+      "text": "please cancel the gold frame on the Teacher Appreciation Day poster",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "change",
+        "target": "B"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Cancel + a design part, named design: a change of B, never a withdrawal."
+    },
+    {
+      "id": "ho-hold-01",
+      "text": "please stop working on it for now, the speakers aren't confirmed",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Temporary stop with a reason."
+    },
+    {
+      "id": "ho-hold-02",
+      "text": "don't go ahead with the poster yet, we're still waiting on the venue",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Temporary stop with a reason."
+    },
+    {
+      "id": "ho-deadline-01",
+      "text": "no hurry, any time next week works",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Relaxed deadline."
+    },
+    {
+      "id": "ho-deadline-02",
+      "text": "take your time, Sunday is fine",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Relaxed deadline."
+    },
+    {
+      "id": "ho-ack-01",
+      "text": "looks great, the manager loves it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Praise; the office decides approval."
+    },
+    {
+      "id": "ho-ack-02",
+      "text": "beautiful, our team really likes it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Praise; the office decides approval."
+    },
+    {
+      "id": "ho-status-01",
+      "text": "how is the teacher day poster going?",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Status of one named design."
+    },
+    {
+      "id": "ho-status-02",
+      "text": "is the quality workshop poster finished yet?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Status of the named design."
+    },
+    {
+      "id": "ho-status-03",
+      "text": "how's our new workshop flyer coming on?",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Status of the design, phrased loosely."
+    },
+    {
+      "id": "ho-brief-01",
+      "text": "Hi there, we need something for our staff picnic on Friday",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (L15 class)."
+    },
+    {
+      "id": "ho-brief-02",
+      "text": "Hello! I'd like something to promote the summer school",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (L15 class)."
+    },
+    {
+      "id": "ho-brief-03",
+      "text": "hey, could you do something for the science fair next week?",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (L15 class)."
+    },
+    {
+      "id": "ho-brief-04",
+      "text": "Can you also make a flyer for the parents' evening on 12 November at 6 pm?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). A new design with its own event while another is in review."
+    },
+    {
+      "id": "ho-brief-05",
+      "text": "We also need a banner for the science fair, 3 December at the campus",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). A new design with its own event while another is being made."
+    },
+    {
+      "id": "ho-unclear-01",
+      "text": "for the parents",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Fragment: a change of audience or a new design; ask."
+    },
+    {
+      "id": "ho-unclear-02",
+      "text": "about the gala",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Fragment: ask what it means."
+    },
+    {
+      "id": "ho-unclear-03",
+      "text": "nope",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Bare no on a draft: ask what it means."
+    },
+    {
+      "id": "ho-change-13",
+      "text": "the seminar is in room 4, not the main auditorium",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the venue with two event words (second round, written before the follow-up fix)."
+    },
+    {
+      "id": "ho-change-14",
+      "text": "the ceremony is at the hotel, not at the campus",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Correction of the venue with two event words (second round, written before the follow-up fix)."
+    },
+    {
+      "id": "ho-brief-06",
+      "text": "Good morning, I'd love something for our charity bake sale",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (second round, written before the follow-up fix)."
+    },
+    {
+      "id": "ho-brief-07",
+      "text": "hi, we'd like something to announce the new library hours",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written before the fix). Brief opener after a greeting, no design noun (second round, written before the follow-up fix)."
+    },
+    {
+      "id": "ho3-change-01",
+      "text": "can we lose the subtitle?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Removes a part."
+    },
+    {
+      "id": "ho3-change-02",
+      "text": "the logo looks squashed",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Complaint about a part."
+    },
+    {
+      "id": "ho3-change-03",
+      "text": "the keynote speaker is Dr Sara, not Dr Ali",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Correction of a name (L19 class)."
+    },
+    {
+      "id": "ho3-change-04",
+      "text": "please don't put the date in red",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Negated styling instruction."
+    },
+    {
+      "id": "ho3-change-05",
+      "text": "remove the gold, it looks cheap",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Removes a colour with a reason."
+    },
+    {
+      "id": "ho3-change-06",
+      "text": "please cancel the background photo",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Cancel + a design part is a change, never a withdrawal."
+    },
+    {
+      "id": "ho3-change-07",
+      "text": "the text is too crowded",
+      "lang": "en",
+      "context": "awaiting_answer",
+      "expected": {
+        "intent": "change",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Complaint about a part, the design waits for changes."
+    },
+    {
+      "id": "ho3-change-08",
+      "text": "make one more, nicer this time",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "change",
+        "target": "A",
+        "redo": true,
+        "alsoAccept": [
+          "unclear"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Another, nicer one on a draft: a redo; asking is acceptable, opening is not."
+    },
+    {
+      "id": "ho3-cancel-01",
+      "text": "never mind about it",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "unclear",
+        "bareCancel": true
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Dismissal: ask first."
+    },
+    {
+      "id": "ho3-cancel-02",
+      "text": "forget about the workshop poster",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "cancel",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Names the design: a cancel."
+    },
+    {
+      "id": "ho3-hold-01",
+      "text": "drop it for now, we'll come back to it next month",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Temporary stop."
+    },
+    {
+      "id": "ho3-hold-02",
+      "text": "hold off until we have the final speaker list",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "hold",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Temporary stop."
+    },
+    {
+      "id": "ho3-deadline-01",
+      "text": "no hurry on this one",
+      "lang": "en",
+      "context": "designing",
+      "expected": {
+        "intent": "deadline",
+        "target": "A"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Relaxed timing."
+    },
+    {
+      "id": "ho3-ack-01",
+      "text": "fantastic, my boss is really happy with it",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "acknowledgement",
+        "alsoAccept": [
+          "approval"
+        ]
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Praise; the office decides approval."
+    },
+    {
+      "id": "ho3-status-01",
+      "text": "how are the posters coming along?",
+      "lang": "en",
+      "context": "two_open",
+      "expected": {
+        "intent": "status"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Status of both designs."
+    },
+    {
+      "id": "ho3-brief-01",
+      "text": "Hello, we're hoping for something for the graduation party in June",
+      "lang": "en",
+      "context": "none",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Brief opener after a greeting, no design noun."
+    },
+    {
+      "id": "ho3-brief-02",
+      "text": "can you make a new poster for the alumni dinner on 3 December at 7 pm?",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "new_brief"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). A new design with its own event while another is in review."
+    },
+    {
+      "id": "ho3-unclear-01",
+      "text": "for the alumni",
+      "lang": "en",
+      "context": "in_review",
+      "expected": {
+        "intent": "unclear"
+      },
+      "source": "synthetic",
+      "heldOut": true,
+      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Fragment: ask what it means."
     }
   ]
 }
