@@ -24,6 +24,12 @@ paths:
     $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}"
   /v1/customer/jobs/{id}/actions:
     $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}~1actions"
+  /v1/customer/jobs/{id}/review/{captureId}:
+    $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}~1review~1{captureId}"
+  /v1/customer/jobs/{id}/preview/{captureId}:
+    $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}~1preview~1{captureId}"
+  /v1/customer/clients/{clientId}/photos:
+    $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1clients~1{clientId}~1photos"
   /v1/office/customer-accounts:
     $ref: "./customer-design.openapi.yaml#/paths/~1v1~1office~1customer-accounts"
   /v1/assets/upload:
@@ -1451,6 +1457,8 @@ paths:
         default: {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
+    WorkspaceMember:
+      $ref: "./customer-design.openapi.yaml#/components/securitySchemes/WorkspaceMember"
     availabilityMonitor:
       type: http
       scheme: bearer

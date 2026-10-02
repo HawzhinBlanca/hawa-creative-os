@@ -15,6 +15,7 @@ export const CUSTOMER_ORIGINS = new Set([
 ]);
 let activePhotoUploads=0;
 let activePreviewReads=0;
+let activeReviewChecks=0;
 const actionCopy=z.array(z.object({text:z.string().min(1).max(4000).refine(s=>Boolean(s.trim())),language:z.enum(['en','ckb','ar'])}).strict()).min(1).max(8);
 const actionVersion=z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const actionSchema=z.discriminatedUnion('kind',[
@@ -117,6 +118,16 @@ export function registerCustomerRoutes(
       return new Response(new Uint8Array(result.bytes),{headers:{'Content-Type':'image/png','Content-Length':String(result.size),
         'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
     } finally {activePreviewReads--;}
+  }));
+  app.get('/v1/customer/jobs/:id/review/:captureId',run(async(c,m)=>{
+    const id=c.req.param('id'),captureId=c.req.param('captureId'),version=c.req.query('version'),hash=c.req.query('sha256');
+    if(!z.string().uuid().safeParse(id).success || !z.string().uuid().safeParse(captureId).success ||
+      !version || !/^[1-9][0-9]{0,14}$/.test(version) || !hash || !/^[a-f0-9]{64}$/.test(hash))
+      return c.json({code:'DESIGN_REVIEW_STALE'},409);
+    if(activeReviewChecks>=2)return c.json({code:'DESIGN_REVIEW_BUSY'},503);
+    activeReviewChecks++;
+    try {return c.json(await requests.review(m,id!,{id:captureId!,version:Number(version),sha256:hash}));}
+    finally {activeReviewChecks--;}
   }));
   app.post('/v1/customer/clients/:clientId/photos',run(async(c,m)=>{
     // Same readiness switch as generation: an unreleased portal never accumulates public uploads.

@@ -477,8 +477,11 @@ export class CanvaConnectClient {
     return validateCanvaDesignResponse(await res.json());
   }
 
-  public async getDesign(designId: string): Promise<CanvaDesignResponse> {
-    const res = await this.readWithRetry(`${this.baseUrl}/designs/${encodeURIComponent(designId)}`);
+  public async getDesign(designId: string, options?: {singleAttempt?:boolean}): Promise<CanvaDesignResponse> {
+    const url=`${this.baseUrl}/designs/${encodeURIComponent(designId)}`;
+    const res = options?.singleAttempt
+      ? await this.fetcher(url,{method:'GET',headers:{Authorization:await this.getAuthHeader()}})
+      : await this.readWithRetry(url);
 
     if (!res.ok) {
       throw new CanvaHttpError(`Canva getDesign failed (HTTP ${res.status})`, res.status);

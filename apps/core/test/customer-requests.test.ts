@@ -1,3 +1,6 @@
+import {pptx as syntheticPptx,png as syntheticPng} from './fixtures/shipped-export.js';
+import {checkCanvaPptx} from '@hawa/qa';
+import {CanvaConnectService} from '../src/services/canva-connect-service.js';
 import {customerActionEvent,projectCustomerAction,acknowledgeCustomerAction} from '../src/customer/customer-actions.js';
 import { customerPhotoSelection } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
@@ -582,20 +585,21 @@ it('retains an uppercase UUID submission body while resolving its canonical sele
 
 const photoJpeg=readFileSync(new URL('./fixtures/telegram-photo-1280.jpg',import.meta.url));
 const photoHash=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
-async function previewFixture() {
- const f=await fixture(),receipt=await f.service.create(f.a.member,'preview_request',f.body);
+async function previewFixture(override?:Partial<CustomerDesignRequest>) {
+ const f=await fixture();Object.assign(f.body,override);
+ const receipt=await f.service.create(f.a.member,'preview_request',f.body);
  const event=await customerWebOpenEvent(db,f.tenantId,receipt.job.id);
  const projection=await projectLifecycleOpen(db,{requestId:receipt.job.id,tenantId:f.tenantId,expectedRev:0,rev:1,key:receipt.job.id+':1:open',draft:event.draft});
  const binding=randomUUID(),designId='Synthetic-'+randomUUID();
  await sql`INSERT INTO hawa.canva_bindings(id,tenant_id,task_id,client_id,canva_design_id,edit_url)
  VALUES(${binding}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,${designId},'https://www.canva.com/design/synthetic/edit')`.execute(owner);
  const png=execFileSync('ffmpeg',['-v','error','-f','image2pipe','-i','pipe:0','-vf','scale=32:32','-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],{input:photoJpeg,maxBuffer:65536});
- async function capture(bytes=png,format='png',native='v1') {
+ async function capture(bytes=png,format='png',native='v1',check?:Record<string,unknown>) {
   const operation=randomUUID(),id=randomUUID(),hash=photoHash(bytes);
   await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version,metadata)
-  VALUES(${operation}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,'synthetic-operator',${operation},${hash},'export','retrieved',${designId},1,${JSON.stringify({designUpdatedAt:native})}::jsonb)`.execute(owner);
-  await sql`INSERT INTO hawa.canva_export_bytes(id,tenant_id,task_id,client_id,operation_id,format,sha256,content)
-  VALUES(${id}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,${operation}::uuid,${format},${hash},${bytes})`.execute(owner);
+  VALUES(${operation}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,${check?f.adminId:'synthetic-operator'},${operation},${hash},'export','retrieved',${designId},1,${JSON.stringify({designUpdatedAt:native,...(check?{checkingPolicy:check.checkingPolicy}:{})})}::jsonb)`.execute(owner);
+  await sql`INSERT INTO hawa.canva_export_bytes(id,tenant_id,task_id,client_id,operation_id,format,sha256,content,content_check)
+  VALUES(${id}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,${operation}::uuid,${format},${hash},${bytes},${check?JSON.stringify(check):null}::jsonb)`.execute(owner);
   return {id,sha256:hash,version:1};
  }
  return {...f,receipt,projection,binding,designId,png,capture};
@@ -965,4 +969,136 @@ it('keeps action rows and events immutable with no raw worker or foreign custome
  }
  const grants=(await sql<{execute:boolean}>`SELECT has_function_privilege('hawa_worker','hawa.customer_action_basis(uuid)','EXECUTE') AS execute`.execute(owner)).rows[0];expect(grants.execute).toBe(false);
  await expect(f.service.detail(f.b.member,requestId)).rejects.toMatchObject({status:404});
+});
+
+async function nativeReviewFixture() {
+ const copy=['Verified announcement'],f=await previewFixture({variant:'portrait',exactCopy:[{text:copy[0],language:'en'}]}),
+  sourceId=randomUUID(),operation=randomUUID(),bytes=Buffer.from(syntheticPptx({x:10,y:15,w:88,h:20,color:'14253D'},null,copy));
+ const hash=photoHash(bytes),policy={version:1,kind:'imported_source',sourceId,copy,options:{fontsByIndex:['Cinzel'],directionsByIndex:['ltr' as const]}};
+ await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version)
+ VALUES(${operation}::uuid,${f.tenantId}::uuid,${f.projection.taskId}::uuid,${f.clientId}::uuid,${f.adminId},${operation},${hash},'create','retrieved',${f.designId},1)`.execute(owner);
+ await sql`INSERT INTO hawa.canva_editable_sources(id,tenant_id,task_id,client_id,actor_id,operation_id,sha256,content,manifest)
+ VALUES(${sourceId}::uuid,${f.tenantId}::uuid,${f.projection.taskId}::uuid,${f.clientId}::uuid,${f.adminId},${operation}::uuid,${hash},${bytes},${JSON.stringify({copy})}::jsonb)`.execute(owner);
+ f.png=Buffer.from(syntheticPng(1080,1350,'#FFFFFF'));
+ const contentCheck={...checkCanvaPptx(bytes,copy,policy.options),expectedCopy:copy,checkingPolicy:policy};
+ const png=await f.capture(f.png,'png','200'),exported=await f.capture(bytes,'pptx','200',contentCheck);
+ await projectLifecycleDesignOutcome(db,{requestId:f.receipt.job.id,tenantId:f.tenantId,taskId:f.projection.taskId,runId:'dr-'+f.projection.taskId,
+ expectedRev:1,rev:2,key:f.receipt.job.id+':2:outcome',report:{status:'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',designId:f.designId}});
+ const reader={observeCustomerDesign:vi.fn(async()=>({ok:true,observedVersion:'200'}))};
+ const service=new CustomerRequests(db,f.tenantId,reader),expected={...png,version:2};
+ return {...f,service,reader,sourceId,bytes,exported,expected};
+}
+it('checks actual current native files with an independent customer boundary and exposes no provider authority',async()=>{
+ const f=await nativeReviewFixture(),requestId=f.receipt.job.id;
+ const result=await f.service.review(f.a.member,requestId,f.expected);
+ expect(result).toMatchObject({status:'ready',requestVersion:2,previewId:f.expected.id,reasons:[],
+ files:[{id:f.expected.id,format:'png',sha256:f.expected.sha256},{id:f.exported.id,format:'pptx',sha256:f.exported.sha256}]});
+ expect(result.basisSha256).toMatch(/^[a-f0-9]{64}$/);
+ expect(f.reader.observeCustomerDesign).toHaveBeenCalledExactlyOnceWith({tenantId:f.tenantId,actorId:f.adminId,designId:f.designId,capturedVersion:'200'});
+ const encoded=JSON.stringify(result);for(const secret of [f.adminId,f.designId,'contentCheck','manifest','creation'])expect(encoded).not.toContain(secret);
+ expect((await sql`SELECT id FROM hawa.approvals WHERE tenant_id=${f.tenantId}::uuid`.execute(owner)).rows).toHaveLength(0);
+ await expect(f.service.review(f.b.member,requestId,f.expected)).rejects.toMatchObject({status:404});
+ expect(f.reader.observeCustomerDesign).toHaveBeenCalledTimes(1);
+});
+it('fails closed on unobserved native edits, connection failures and missing version reader',async()=>{
+ const f=await nativeReviewFixture(),id=f.receipt.job.id;
+ for(const outcome of [{ok:false,code:'CANVA_DESIGN_CHANGED'},{ok:false,code:'CANVA_DESIGN_CHECK_UNAVAILABLE'},{ok:true,observedVersion:'201'}]) {
+  f.reader.observeCustomerDesign.mockResolvedValueOnce(outcome as never);
+  expect(await f.service.review(f.a.member,id,f.expected)).toMatchObject({status:'blocked',files:[],reasons:[
+   outcome.code==='CANVA_DESIGN_CHANGED' ? 'NATIVE_DESIGN_CHANGED':'NATIVE_CHECK_UNAVAILABLE']});
+ }
+ expect(await new CustomerRequests(db,f.tenantId).review(f.a.member,id,f.expected)).toMatchObject({status:'blocked',reasons:['NATIVE_CHECK_UNAVAILABLE']});
+});
+it('reauthorizes after native observation and refuses changed evidence or revoked access',async()=>{
+ for(const change of ['rev','grant','capture','qc']) {
+  const f=await nativeReviewFixture();
+  f.reader.observeCustomerDesign.mockImplementationOnce(async()=>{
+   if(change==='rev')await sql`UPDATE hawa.requests SET rev=3 WHERE request_id=${f.receipt.job.id}::uuid`.execute(owner);
+   if(change==='grant')await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+   if(change==='capture')await f.capture(f.png,'png','201');
+   if(change==='qc')await sql`UPDATE hawa.qc_runs SET critical_pass=false WHERE tenant_id=${f.tenantId}::uuid`.execute(owner);
+   return {ok:true,observedVersion:'200'};
+  });
+  await expect(f.service.review(f.a.member,f.receipt.job.id,f.expected),change).rejects.toMatchObject({status:change==='grant'?404:409});
+ }
+});
+it('does not let stored passing QC waive altered export text or a pending RTL visual review',async()=>{
+ for(const mode of ['copy','rtl','failed']) {
+  const f=await nativeReviewFixture();
+  if(mode==='rtl')await sql`UPDATE hawa.qc_runs SET report=report||'{"rtlVisualReviewRequired":true}'::jsonb WHERE tenant_id=${f.tenantId}::uuid`.execute(owner);
+  if(mode==='failed')await sql`UPDATE hawa.qc_runs SET status='failed',critical_pass=false WHERE tenant_id=${f.tenantId}::uuid`.execute(owner);
+  if(mode==='copy') {
+   // The actual parser must reject the byte-changed copy even if a stored check says pass.
+   // Export bytes are immutable in production: test owner disables the trigger solely for fault injection.
+   const altered=Buffer.from(syntheticPptx({x:10,y:15,w:88,h:20},null,['Wrong announcement']));
+   await sql`ALTER TABLE hawa.canva_export_bytes DISABLE TRIGGER USER`.execute(owner);
+   try {await sql`UPDATE hawa.canva_export_bytes SET content=${altered},sha256=${photoHash(altered)} WHERE id=${f.exported.id}::uuid`.execute(owner);}
+   finally {await sql`ALTER TABLE hawa.canva_export_bytes ENABLE TRIGGER USER`.execute(owner);}
+  }
+  const result=await f.service.review(f.a.member,f.receipt.job.id,f.expected);
+  expect(result).toMatchObject({status:'blocked',files:[]});
+  expect(result.reasons).toContain(mode==='rtl'?'RTL_REVIEW_REQUIRED':'QUALITY_CHECK_FAILED');
+  expect(f.reader.observeCustomerDesign).not.toHaveBeenCalled();
+ }
+});
+it('keeps the native review function app-only and raw native tables closed to the customer',async()=>{
+ const f=await nativeReviewFixture();
+ const row=(await sql<{worker:boolean;public:boolean}>`SELECT has_function_privilege('hawa_worker','hawa.customer_native_review(uuid,uuid,bigint,text,boolean)','EXECUTE') AS worker,
+ EXISTS(SELECT 1 FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a WHERE p.oid='hawa.customer_native_review(uuid,uuid,bigint,text,boolean)'::regprocedure AND a.grantee=0 AND a.privilege_type='EXECUTE') AS public`.execute(owner)).rows[0];
+ expect(row).toEqual({worker:false,public:false});
+ await withRlsContext(db,{tenantId:f.tenantId,userId:f.a.userId,role:'requester'},async trx=>{
+  await sql`SELECT set_config('hawa.customer_id',${f.a.id},true),set_config('hawa.customer_subject',${f.a.member.subject},true)`.execute(trx);
+  for(const table of ['canva_export_bytes','canva_remote_operations','canva_editable_sources','qc_runs'])
+   expect((await sql`SELECT id FROM ${sql.table('hawa.'+table)}`.execute(trx)).rows).toHaveLength(0);
+  const metadata=(await sql<{png:Buffer|null;pptx:Buffer|null;source:Buffer|null}>`SELECT * FROM hawa.customer_native_review(${f.receipt.job.id}::uuid,${f.expected.id}::uuid,2,${f.expected.sha256},false)`.execute(trx)).rows[0];
+  expect(metadata).toMatchObject({png:null,pptx:null,source:null});
+ });
+});
+it('mounts authenticated exact-version review HTTP without approval or cacheable results',async()=>{
+ const f=await nativeReviewFixture(),app=new Hono();registerCustomerRoutes(app,f.service,async()=>f.a.member,false);
+ const url=`/v1/customer/jobs/${f.receipt.job.id}/review/${f.expected.id}?version=2&sha256=${f.expected.sha256}`;
+ const response=await app.request(url,{headers:{Origin:'https://hawzhin.app'}});
+ expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toBe('no-store');
+ expect(await response.json()).toMatchObject({status:'ready',files:[{format:'png'},{format:'pptx'}]});
+ expect((await app.request(url.replace('version=2','version=1'))).status).toBe(409);
+ expect((await app.request(url,{headers:{Origin:'https://attacker.example'}})).status).toBe(403);
+});
+it('bounds complete native checks and holds their slots until the server finishes',async()=>{
+ const f=await nativeReviewFixture(),app=new Hono();registerCustomerRoutes(app,f.service,async()=>f.a.member,false);
+ const pending:Array<(v:Awaited<ReturnType<CustomerRequests['review']>>)=>void>=[];
+ const spy=vi.spyOn(f.service,'review').mockImplementation(()=>new Promise(resolve=>pending.push(resolve)));
+ const url=`/v1/customer/jobs/${f.receipt.job.id}/review/${f.expected.id}?version=2&sha256=${f.expected.sha256}`;
+ const first=app.request(url),second=app.request(url);await vi.waitFor(()=>expect(pending).toHaveLength(2));
+ expect((await app.request(url)).status).toBe(503);
+ spy.mockRestore();const result=await f.service.review(f.a.member,f.receipt.job.id,f.expected);
+ pending.forEach(resolve=>resolve(result));expect((await Promise.all([first,second])).map(r=>r.status)).toEqual([200,200]);
+ expect((await app.request(url)).status).toBe(200);
+});
+it('reads the actual bound actor connection for customer native version observation',async()=>{
+ const f=await nativeReviewFixture(),canva=new CanvaConnectService(db);
+ const getDesign=vi.fn().mockResolvedValue({design:{id:f.designId,updated_at:200}});
+ vi.spyOn(canva,'authorizedClient').mockResolvedValue({getDesign} as never);
+ const input={tenantId:f.tenantId,actorId:f.adminId,designId:f.designId,capturedVersion:'200'};
+ expect(await canva.observeCustomerDesign(input)).toEqual({ok:true,observedVersion:'200'});
+ expect(getDesign).toHaveBeenCalledWith(f.designId,{singleAttempt:true});
+ getDesign.mockResolvedValueOnce({design:{id:f.designId,updated_at:201}});
+ expect(await canva.observeCustomerDesign(input)).toMatchObject({ok:false,code:'CANVA_DESIGN_CHANGED'});
+ getDesign.mockRejectedValueOnce(new Error('Synthetic provider failure'));
+ expect(await canva.observeCustomerDesign(input)).toMatchObject({ok:false,code:'CANVA_DESIGN_CHECK_UNAVAILABLE'});
+});
+
+it('invalidates the checking policy when the active brand revision changes',async()=>{
+ const f=await nativeReviewFixture();
+ await sql`UPDATE hawa.client_dna_versions SET status='superseded' WHERE tenant_id=${f.tenantId}::uuid`.execute(owner);
+ await sql`INSERT INTO hawa.client_dna_versions(tenant_id,client_id,version,status,dna,content_hash)
+ VALUES(${f.tenantId}::uuid,${f.clientId}::uuid,2,'active','{}',${randomUUID()})`.execute(owner);
+ expect(await f.service.review(f.a.member,f.receipt.job.id,f.expected)).toMatchObject({status:'blocked',reasons:['CAPTURE_POLICY_CHANGED']});
+ expect(f.reader.observeCustomerDesign).not.toHaveBeenCalled();
+});
+
+it('withholds readiness while an owned revision action awaits canonical acknowledgement',async()=>{
+ const f=await nativeReviewFixture();
+ await f.service.action(f.a.member,f.receipt.job.id,'review_pending_revision',{kind:'revise',expectedVersion:2,directive:'Improve the title hierarchy',category:'typography'});
+ await expect(f.service.review(f.a.member,f.receipt.job.id,f.expected)).rejects.toMatchObject({status:409,code:'DESIGN_REVIEW_NOT_READY'});
+ expect(f.reader.observeCustomerDesign).not.toHaveBeenCalled();
 });

@@ -75,8 +75,8 @@ export async function checkExportPictures(sourcePptx: Uint8Array, exportPptx: Ui
       return { i, e, here: samePlace(place, shareOf(e, exported)), d: mine && theirs ? hammingDistance(mine.dhash, theirs.dhash) : 64, theirs };
     }));
     const same = (c: { d: number }) => c.d <= MATCH_DISTANCE;
-    const hit = candidates.filter((c) => c.here && same(c)).sort((a, b) => a.d - b.d)[0];
-    const elsewhere = hit ? undefined : candidates.filter(same).sort((a, b) => a.d - b.d)[0];
+    const hit = candidates.filter((c) => !used.has(c.i) && c.here && same(c)).sort((a, b) => a.d - b.d)[0];
+    const elsewhere = hit ? undefined : candidates.filter((c) => !used.has(c.i) && same(c)).sort((a, b) => a.d - b.d)[0];
     const found = hit ?? elsewhere;
     if (found) { used.add(found.i); matched++; }
     if (!found) missing.push(pic.media);

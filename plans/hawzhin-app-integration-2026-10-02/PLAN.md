@@ -165,3 +165,20 @@ Next remains customer acceptance plus current native-version/critical-QA/hash-bo
 PNG/editable PPTX downloads, remaining release gates, hosting/HTTPS/coordinated
 restore and real two-user/Supabase/Canva/Arabic-Sorani/edit-save/re-export/restart/
 other-app/human quality acceptance. No public switch, push or deployment.
+
+
+## ADR265 customer native review check —2026-10-02
+
+Read-only current native file eligibility is implemented locally. A narrow owned
+bundle checks the exact preview and paired editable export/current QC/source/policy,
+active brand version and pending-action barrier. Core rehashes/parses real bytes,
+checks dimensions/copy/fonts/direction/source pictures and then reads Canva through
+the stored actor connection; live scope and canonical evidence are rechecked afterward.
+No staff approval or customer acceptance is issued. Native RTL visual review remains
+required. One exported picture cannot qualify two source objects.
+
+132 focused backend controls,746 strict roots,858 website tests and8 real Chromium
+synthetic Auth/customer checks pass. Full sealed engine regression pending.
+See CUSTOMER_REVIEW_PROOF.json for exact limitations and original failed attempts.
+Next: canonical customer acceptance and authorized hash/native/QA-bound downloads.
+Public generation stays disabled;083–088 are unreleased; no deploy or launch.

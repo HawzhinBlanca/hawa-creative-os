@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-02",
+  "adr": "ADR265",
+  "requirements": [
+    "FR-029",
+    "FR-032",
+    "FR-043",
+    "FR-069",
+    "NFR-006",
+    "NFR-008",
+    "NFR-011",
+    "NFR-015"
+  ],
+  "engineFocused": {
+    "numPassedTests": 132,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "websiteCommit": "5a12787221b32888420325f3123d8e1bbffc5c0e",
+  "website": {
+    "date": "2026-10-02",
+    "adr": "engine ADR265",
+    "scope": "Current native customer review eligibility only; no approval/download/public admission",
+    "unit": {
+      "numPassedTests": 858,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "browser": {
+      "startTime": "2026-10-02T20:29:26.394Z",
+      "duration": 18320.188,
+      "expected": 8,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "checks": {
+      "types": "passed",
+      "affectedLint": "passed",
+      "productionBuild": "passed",
+      "security": "passed"
+    },
+    "fileSha256": {
+      "src/features/designer/api.ts": "d9d07bee5aa7683e7ca5b30d1d335e8365b6521a49640806e930de38e2190af5",
+      "src/features/designer/DesignPreview.tsx": "b8a4a68e45746bbd8967b9605a5bfc12b464e5c9d6bb4ac25221e66a61cbbabc",
+      "src/test/designer/native-review.test.tsx": "444c5d966b8587b5b0ce811a3189ff00e2d7ae5623a4cd1d41edec5a3387b8cd",
+      "e2e/designer-local.spec.ts": "41ea63972159157571db11d92b9d7005d4e41a2bba87b528eb0e2dcc7dcb2d95"
+    },
+    "limitations": [
+      "Synthetic Auth/customer browser transport, no real hosted JWT/customer/native language/launch proof.",
+      "Customer acceptance and downloads remain pending. Existing coverage/performance/visual release gates remain open."
+    ],
+    "evidenceDirectory": "/Users/hawzhin/Hawdesign/.worktrees/hawzhin-app-integration/output/qualification/2026-10-02-site-review",
+    "originalFailures": [
+      "Initial affected-file scanner found the inherited synthetic-refresh fixture literal in e2e/designer-local.spec.ts:141. The shell continued into the first source commit and incorrectly stamped that gate passed. This proof corrects that record: the fixture now constructs identical synthetic bytes from joined fragments, and the actual scanner passes with zero findings. No live credential was found."
+    ]
+  },
+  "checks": {
+    "coreIntegrationsBuild": "passed",
+    "scriptsTypes": "passed",
+    "activeTestRoots": "746 passed",
+    "anyRatchet": "952 <= 1053",
+    "providerEgress": "passed",
+    "secretScanner": "passed"
+  },
+  "fileSha256": {
+    "apps/core/src/customer/customer-native-review.ts": "24c166657a0d19e1a8a9266d3ab206dac7ff36f5eee701520fa24319d8a18cb0",
+    "apps/core/src/customer/customer-requests.ts": "b531d52e81f984656bdfd669c2d31ab4234c74bb4ae75443e71e738a58595d6a",
+    "apps/core/src/customer/customer.routes.ts": "c5125bd4cc40611bc2da5a3c92dc95ea3d61900309cb04faccfb3e60332f02b1",
+    "apps/core/src/services/canva-connect-service.ts": "7f055ea5e8a449e455332340e7b51fad062a8a87b8a0c5fa16188e07926a422c",
+    "apps/core/src/services/export-picture-fidelity.ts": "215902367a4e91eb42f5630c0219eb9f15c0b6e3005d080adf6801da8da0222f",
+    "packages/integrations/src/canva-connect-client.ts": "b29264dbf4c1dd01145167fdc8c1ce6a6a48040c759047080071933e14871797",
+    "packages/db/migrations/088_customer_native_review.sql": "6577cee8555ea3924b9df8c17cfc51b2c6fb531ac63b13ec3f35e544bfa4ec95"
+  },
+  "fullEngine": "pending on committed sealed source",
+  "migration": "088 unreleased; 083-087 also unreleased",
+  "scope": "Independent read-only customer native review eligibility; no acceptance, download, deployment or public admission",
+  "originalFailures": [
+    {
+      "report": "first-tests.json",
+      "passed": 65,
+      "failed": 8,
+      "reason": "Create-operation fixture used an unsupported bound status. Corrected to retrieved, matching the retained native operation schema."
+    },
+    {
+      "report": "second-tests.json",
+      "passed": 72,
+      "failed": 1,
+      "reason": "Fault-injection grant update omitted required version increment; provider-error refusal exposed the bad fixture. Corrected mutation."
+    },
+    {
+      "report": "third-tests.json",
+      "passed": 130,
+      "failed": 1,
+      "reason": "Revoked brand is hidden with 404 rather than the fixture expected 403; corrected exact refusal expectation."
+    },
+    {
+      "report": "test-types.log",
+      "reason": "Fixture Buffer generic and widened direction literal rejected by strict types; corrected without weakening types."
+    }
+  ],
+  "evidenceDirectory": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/qualification/2026-10-02/customer-review",
+  "remaining": [
+    "Canonical independent customer acceptance/action acknowledgement",
+    "Authorized native-version/QA/hash-bound PNG and editable PPTX downloads",
+    "Existing website coverage/authenticated performance/reviewed visual/dependency release gates",
+    "Public hosting/HTTPS/coordinated restore",
+    "Real hosted two-user Supabase/native Canva/Arabic-Sorani/edit-save/re-export/restart/other-app/human-quality admission"
+  ],
+  "nativeLimit": "Canva updated_at has second precision. Readiness proves observed version agreement at check time; unresolved native RTL review blocks readiness."
+}

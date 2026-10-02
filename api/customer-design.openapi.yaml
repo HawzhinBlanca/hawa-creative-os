@@ -90,6 +90,22 @@ paths:
         '413': {description: Streamed JSON exceeds 49152 bytes}
         '429': {description: Daily customer generation or action limit reached}
         '503': {description: Generation not ready or dependency unavailable; retain exact key and body}
+  /v1/customer/jobs/{id}/review/{captureId}:
+    get:
+      security: [{WorkspaceMember: []}]
+      description: Read-only ADR265 check of the exact owned preview, paired editable PPTX, current QC, source/policy/brand revision and freshly observed native Canva version. Rehashes and parses actual bounded bytes, then rechecks live scope/evidence. No approval, publication, provider URL or office authority. Native version timestamps do not prove absence of same-second edits. At most two complete checks per Core process.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: captureId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: version, in: query, required: true, schema: {type: integer, minimum: 1, maximum: 999999999999999}}
+        - {name: sha256, in: query, required: true, schema: {type: string, pattern: '^[a-f0-9]{64}$'}}
+      responses:
+        '200': {description: Observed readiness or safe unresolved-check reasons; no-store, content: {application/json: {schema: {$ref: '#/components/schemas/NativeReview'}}}}
+        '401': {description: Workspace sign-in required}
+        '403': {description: Current customer admission denied}
+        '404': {description: Owned job unavailable}
+        '409': {description: Stale preview/revision or current review files not ready}
+        '503': {description: Check concurrency or service unavailable}
   /v1/customer/jobs/{id}/preview/{captureId}:
     get:
       security: [{WorkspaceMember: []}]
@@ -215,6 +231,37 @@ components:
         canCancel: {type: boolean}
         questionMessageId: {type: [string, 'null'], format: uuid}
         receipts: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/ActionReceipt'}}
+    NativeReview:
+      type: object
+      additionalProperties: false
+      required: [status, requestVersion, previewId, previewSha256, basisSha256, checkedAt, reasons, files]
+      properties:
+        status: {type: string, enum: [ready, blocked]}
+        requestVersion: {type: integer, minimum: 1}
+        previewId: {type: string, format: uuid}
+        previewSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        basisSha256: {type: string, pattern: '^[a-f0-9]{64}$', description: Canonical evidence fingerprint, not an authorization token or approval.}
+        checkedAt: {type: string, format: date-time}
+        reasons:
+          type: array
+          maxItems: 9
+          uniqueItems: true
+          items: {type: string, enum: [FILES_INVALID, DIMENSIONS_CHANGED, COPY_CHANGED, CAPTURE_POLICY_CHANGED, QUALITY_CHECK_FAILED, RTL_REVIEW_REQUIRED, ASSET_FIDELITY_FAILED, NATIVE_DESIGN_CHANGED, NATIVE_CHECK_UNAVAILABLE]}
+        files:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, sha256, size, format]
+            properties:
+              id: {type: string, format: uuid}
+              sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+              size: {type: integer, minimum: 32, maximum: 26214400}
+              format: {type: string, enum: [png, pptx]}
+      oneOf:
+        - properties: {status: {const: ready}, reasons: {maxItems: 0}, files: {minItems: 2, maxItems: 2}}
+        - properties: {status: {const: blocked}, reasons: {minItems: 1}, files: {maxItems: 0}}
     CapturedPreview:
       type: object
       additionalProperties: false

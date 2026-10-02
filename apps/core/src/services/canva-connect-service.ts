@@ -813,6 +813,16 @@ export class CanvaConnectService {
       WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid`.execute(db)).rows[0]);
     return row?.content ? Buffer.from(row.content) : null;
   }
+  /** Internal customer evidence reader. All identities come from the owned capture in Core. */
+  async observeCustomerDesign(input: {tenantId:string;actorId:string;designId:string;capturedVersion:string}) {
+    try {
+      const client=await this.authorizedClient({tenantId:input.tenantId,actorId:input.actorId});
+      const {design}=await client.getDesign(input.designId,{singleAttempt:true});
+      if(!input.capturedVersion || design.id!==input.designId || String(design.updated_at)!==input.capturedVersion)
+        return {ok:false as const,code:'CANVA_DESIGN_CHANGED' as const};
+      return {ok:true as const,observedVersion:String(design.updated_at)};
+    } catch {return {ok:false as const,code:'CANVA_DESIGN_CHECK_UNAVAILABLE' as const};}
+  }
   /**
    * A publication-time, read-only check of the working Canva design against the exact QC-linked
    * capture. It catches edits not yet exported into Hawa. Canva's REST updated_at has one-second

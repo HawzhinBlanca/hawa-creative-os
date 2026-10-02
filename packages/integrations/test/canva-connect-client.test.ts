@@ -275,3 +275,11 @@ describe('Canva OAuth admission', () => {
     expect(capturedAuthHeader).toBe('Bearer newly_refreshed_access_token_999');
   });
 });
+
+it('uses one bounded native-version read when a customer explicitly checks the current capture',async()=>{
+ const fetcher=vi.fn<typeof fetch>().mockResolvedValue(new Response('{}',{status:429}));
+ const client=new CanvaConnectClient({accessToken:['synthetic','customer','connection'].join('-'),customFetch:fetcher,readRetryDelaysMs:[0,0]});
+ await expect(client.getDesign('Synthetic-design',{singleAttempt:true})).rejects.toMatchObject({status:429});
+ expect(fetcher).toHaveBeenCalledTimes(1);
+ expect(fetcher.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+});

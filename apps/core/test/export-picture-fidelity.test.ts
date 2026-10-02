@@ -224,3 +224,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('the recorded QC run carries the
     expect(report.pictureFidelity).toMatchObject({ measured: false });
   });
 });
+
+// One exported object cannot prove two independently addressable source pictures.
+it('does not reuse one export picture for two same-position source pictures',async()=>{
+ const source=deck([{media:'one.png',box:[0,0,600,800]},{media:'two.png',box:[0,0,600,800]}],{'one.png':sky(),'two.png':sky()});
+ const exported=deck([{media:'export.png',box:[0,0,600,800]}],{'export.png':sky()});
+ const result=await checkExportPictures(source,exported);
+ expect(result).toMatchObject({pass:false,sourcePictures:2,matched:1,missing:['ppt/media/two.png']});
+});

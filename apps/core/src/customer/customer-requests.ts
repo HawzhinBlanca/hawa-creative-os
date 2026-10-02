@@ -1,3 +1,4 @@
+import {inspectCustomerNativeFiles,nativeReviewFingerprint,customerNativeReviewResult,type CustomerNativeBundle,type CustomerNativeVersionReader,type CustomerReviewReason} from './customer-native-review.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { parseAndValidatePng } from '@hawa/integrations';
 import {admitCustomerAction,customerActionReceipt} from './customer-actions.js';
@@ -76,6 +77,7 @@ export class CustomerRequests {
   constructor(
     private readonly db: Kysely<Database>,
     private readonly tenantId: string,
+    private readonly nativeVersionReader?:CustomerNativeVersionReader,
   ) {}
 
   private async scoped<T>(
@@ -203,6 +205,30 @@ export class CustomerRequests {
         canCancel:['designing','awaiting_answer','manual','in_review'].includes(current?.stage ?? ''),
         questionMessageId:current?.stage==='awaiting_answer' ? question?.id ?? null : null,receipts}};
     });
+  }
+  async review(member:WorkspaceMember,id:string,expected:{id:string;version:number;sha256:string}) {
+    const read=async(bytes:boolean)=>this.scoped(member,async(trx,account)=>{
+      if(!(await this.jobs(trx,account,id)).length)throw new CustomerRequestError(404,'DESIGN_JOB_NOT_FOUND');
+      const row=(await sql<CustomerNativeBundle>`SELECT * FROM hawa.customer_native_review(${id}::uuid,
+        ${expected.id}::uuid,${expected.version}::bigint,${expected.sha256}::text,${bytes})`.execute(trx)).rows[0];
+      if(!row)throw new CustomerRequestError(409,'DESIGN_REVIEW_NOT_READY');
+      return row;
+    });
+    const bundle=await read(true),reasons:CustomerReviewReason[]=await inspectCustomerNativeFiles(bundle);
+    if(!reasons.length) {
+      const b=bundle.basis;
+      try {
+        const observed=await this.nativeVersionReader?.observeCustomerDesign({tenantId:this.tenantId,actorId:b.actorId,
+          designId:b.designId,capturedVersion:b.nativeVersion});
+        if(!observed?.ok || observed.observedVersion!==b.nativeVersion)
+          reasons.push(observed?.code==='CANVA_DESIGN_CHANGED' ? 'NATIVE_DESIGN_CHANGED':'NATIVE_CHECK_UNAVAILABLE');
+      } catch {reasons.push('NATIVE_CHECK_UNAVAILABLE');}
+    }
+    // No transaction is held across Canva. Reauthorize and compare every evidence field afterward.
+    const current=await read(false);
+    if(nativeReviewFingerprint(current.basis)!==nativeReviewFingerprint(bundle.basis))
+      throw new CustomerRequestError(409,'DESIGN_REVIEW_STALE');
+    return customerNativeReviewResult(bundle.basis,reasons);
   }
   async action(member:WorkspaceMember,id:string,key:string,body:CustomerActionBody) {
     return this.scoped(member,(trx,account)=>admitCustomerAction(trx,this.tenantId,account,member,id,key,body));
