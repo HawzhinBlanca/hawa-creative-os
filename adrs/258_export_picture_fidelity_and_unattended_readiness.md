@@ -29,7 +29,10 @@ It also asks for a narrow contract the customer API can use.
 - `NATIVE_CANVA_IMPORT_RECEIPT.json` records two `400 Unsupported file format ZIP` answers, plus a retry "with Content-Disposition".
 - The response shape (an empty status object and a bare string body) is not the shape of a `/v1/imports` answer. That call was most likely an asset upload: asset uploads accept images and video, never PPTX. ^[inferred]
 - Production's own path imports the same kind of file unattended.
-- Not yet run: Codex's approved `hero_storyboard.pptx` (sha256 72dd1bdb…) through `POST /v1/imports`. That one supervised call settles it. It is the only structural difference left: that file is deflated, while production's transfers are stored.
+- **Verified 2026-10-02** (owner-authorised supervised call): Codex's approved `hero_storyboard.pptx` (sha256 72dd1bdb…, deflated) imported unattended through `POST /v1/imports`, creating design DAHW27HkZW0. PPTX and PNG exports were retrieved.
+  - All 5 pictures are at identical boxes, and the text is exact.
+  - In the photo area, 0.09% of pixels differ by more than 10% from the Studio render.
+  - Receipt: `output/handoffs/2026-10-02/CLAUDE_CANVA_IMPORT_PROBE_RECEIPT.json` (main checkout, gitignored output).
 
 **The export copy check is real, but nothing checks pictures.**
 - The export check (ADR-082) proves exact copy, declared fonts and paragraph direction.
@@ -82,7 +85,6 @@ Measured on task 5edca743: the stored source PPTX (blob `bd5b0e17…`) against t
   - The hash says "same picture", not "same resolution". `byteRatio` reports re-encoding but does not judge print quality.
   - The added-picture count says an effect was rasterised but does not judge whether that hurts editability.
 - **Not done here:**
-  - A live `POST /v1/imports` of Codex's hero_storyboard PPTX (supervised, one call).
   - Automatic PDF capture: PDF exists only through the office export route (`canva-connect-service.ts:580`), with hash.
   - A native-UI check of RTL joining in the exported design.
 
