@@ -1,0 +1,248 @@
+{
+  "date": "2026-10-02",
+  "scope": "Website reproducible build and truthful release gates; local qualification only",
+  "requirements": [
+    "FR-074",
+    "NFR-012",
+    "NFR-013",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "websiteBaseCommit": "223ff54a36ed18d418fb7350997d9a46d8f321bb",
+  "engineUnchangedRuntimeCommit": "79d33e763503f7b677a675a4a3bc2188785f076f",
+  "runtime": {
+    "node": "22.23.1",
+    "npm": "10.9.8",
+    "platform": "Darwin",
+    "architecture": "arm64"
+  },
+  "codeSha256": {
+    ".github/workflows/ci.yml": "255bbd0123f9b4eb7ce5b44a0ed68663c0dbe952538440171248a31bc43cd2b9",
+    ".github/workflows/nightly-bench.yml": "bbc35959e1890a4a3df4e5b6cd558b90864cb255b2cb3dd9585093552fd5e6cd",
+    ".github/workflows/nightly-metrics.yml": "53cc7b69eeff650c26a8a92aa02251b9e2b8aeff7f942346d3d6a3eb4fd07226",
+    ".github/workflows/pr-checks.yml": "8ea4b7047a67c72f7e7f97180f27d1e426b9b290fa575e0241f429ed5693c1d2",
+    ".github/workflows/production-smoke.yml": "2f4a42df9a3194c8218f02cfde6f7434bd2a3fa877dcc48fc1944702bacb8e40",
+    ".github/workflows/scorecard.yml": "f6475ba7d1b331c94dd0dfa6f22d7134285e660a8b1c7f1cc14c0d149c89a4da",
+    ".github/workflows/transcription-e2e.yml": "42e23162249464b5bc2f56bb1a23fda1cb5fe66441250a66ae3125db5287c27a",
+    ".npmrc": "3b88d1057add6f92ec23dc22dd017e312ded13a042deb0ba6f08bad85d936456",
+    ".nvmrc": "7d2df647f25529bd87500319c41564e032e2be642e565350fa6136d7a1ec4d10",
+    "e2e/performance.spec.ts": "8edc48f1e7cff2f141491366a930cd890eac73cf7a160492be3bbc3a46d8e875",
+    "e2e/visual-regression.spec.ts": "29b91aeef52a413c0629c949d38a7cafa7fb2ae75832afe63f79b94fd4e5069e",
+    "package-lock.json": "676702c955c4e8ef4c0ad7d45283efd24f685786021bfbc210f6f25be87d6cef",
+    "package.json": "f3f7f3d7d40080f14b2954e9d60546ef654fe6efed3b2e00659624b6ea214956",
+    "playwright.performance.config.ts": "f61260a3abfc450e8200d853cdb896e84b6b40c60c3691f2c2d064e33f1df62f",
+    "src/components/admin/AuditLogViewer.tsx": "e31d4c202638a03354cef7091ccdb9e32c573737cb41a19c29af2ce902a90db0",
+    "src/components/ui/calendar.tsx": "6431ef8416586ffca86ee5c814a7b95488f280983ab28cf886f2ea4d13eddd81",
+    "src/hooks/__tests__/useVirtualScroll.test.ts": "7da90c32ea175f65109548b938528b6cabfa2cacf0761d2fcb4a68a36886ee79",
+    "src/test/integration/runtime-compatibility.test.tsx": "bbe4ef06c64f9112e0e24da272550edf09672e0489c006b191471717a81b809d",
+    "src/test/security/anonReadResult.test.ts": "e7102cb6f1ebe767ef300a2198fab773c99464e176a210dd2f47d70f3b6ebf2a",
+    "src/test/security/anonReadResult.ts": "63ef7158d019bf3eac1ce11a2619139872ed9c8b8ab022612922d70dcb1ce244",
+    "src/test/security/rls-anon-fuzz.test.ts": "4c692cd464c10643880e460adabc7b5413b635755ec54c016118443c8660096c",
+    "tsconfig.node.json": "a387c835804a8604f7486cdfb872434c9bc753f0e6486bc84cfdcb6634e4af12",
+    "vitest.config.ts": "e2f7862308cedc0224d505de446a0de2cf6a1bbb7c339d8d7749e80f20e42fca",
+    "vitest.rls.config.ts": "415d8996b72a86cec3c15526e67438a5a3dec528fb4a895dfc1b6e7a800d8fd9"
+  },
+  "removedObsoleteLocks": [
+    "bun.lock",
+    "bun.lockb"
+  ],
+  "cleanInstall": {
+    "isolatedDirectoryWithoutPriorNodeModules": "PASS",
+    "normalNpmCi": "PASS",
+    "worktreeNpmCi": "PASS",
+    "forceOrLegacyPeers": false,
+    "dependencyGraph": "PASS",
+    "workflowYamlRuntimeAndScriptInventory": "PASS"
+  },
+  "unitCommand": {
+    "command": "npm run test:unit -- --reporter=json --outputFile <qualification>/FINAL_UNIT_TESTS.json",
+    "exitCode": 0,
+    "passed": 853,
+    "failed": 0,
+    "skipped": 0
+  },
+  "types": "PASS including Vite/Vitest/Playwright config roots",
+  "lint": {
+    "errors": 0,
+    "inheritedWarnings": 14
+  },
+  "productionPwaBuild": "PASS",
+  "browser": {
+    "scope": "Chromium with synthetic Auth/customer transport, never live JWT/provider acceptance",
+    "stats": {
+      "startTime": "2026-10-02T19:31:44.975Z",
+      "duration": 14200.776,
+      "expected": 7,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    }
+  },
+  "coverageGate": {
+    "exitCode": 1,
+    "status": "FAIL; thresholds preserved",
+    "actualPercent": {
+      "lines": 37.27,
+      "statements": 35.82,
+      "functions": 31.17,
+      "branches": 29.14
+    },
+    "thresholds": {
+      "lines": 80,
+      "statements": 80,
+      "functions": 80,
+      "branches": 75
+    }
+  },
+  "performanceGate": {
+    "exitCode": 1,
+    "stats": {
+      "startTime": "2026-10-02T19:41:08.674Z",
+      "duration": 25513.916999999998,
+      "expected": 3,
+      "skipped": 0,
+      "unexpected": 3,
+      "flaky": 0
+    },
+    "failedRoutes": [
+      "/",
+      "/history",
+      "/designer"
+    ],
+    "reason": "Protected pages redirect to /auth without the required authenticated fixture; sign-in and real nonempty JS/CSS measurements pass. Legacy metrics are lab evidence only."
+  },
+  "visualGate": {
+    "exitCode": 1,
+    "scope": "Two actual mobile Auth light/dark checks; full visual suite not qualified",
+    "stats": {
+      "startTime": "2026-10-02T19:41:29.675Z",
+      "duration": 4187.437999999999,
+      "expected": 0,
+      "skipped": 0,
+      "unexpected": 2,
+      "flaky": 0
+    },
+    "reason": "No reviewed platform-specific baselines in source. Explicit update required; candidates were not committed."
+  },
+  "liveRlsGate": {
+    "status": "NOT EXECUTED against live Supabase",
+    "missingConfigurationGuard": "Expected failure before any network call",
+    "classificationRegressions": 9,
+    "removedFalseAssurance": "15 live probes removed from synthetic unit suite; any network/credential/server error previously counted as a pass"
+  },
+  "security": {
+    "initial": {
+      "info": 0,
+      "low": 0,
+      "moderate": 8,
+      "high": 4,
+      "critical": 0,
+      "total": 12
+    },
+    "current": {
+      "info": 0,
+      "low": 0,
+      "moderate": 6,
+      "high": 0,
+      "critical": 0,
+      "total": 6
+    },
+    "remainingModeratePackages": [
+      "@esbuild-kit/core-utils",
+      "@esbuild-kit/esm-loader",
+      "drizzle-kit",
+      "esbuild",
+      "react-router",
+      "react-router-dom"
+    ],
+    "highThresholdAudit": "PASS",
+    "moderateThresholdAudit": "FAIL"
+  },
+  "originalFailuresRetained": [
+    "LOCK_RECONCILIATION.log",
+    "FRESH_LOCK_RECONCILIATION.log",
+    "COMPATIBLE_LOCK_RECONCILIATION.log",
+    "INITIAL_ENVIRONMENT_TESTS.json",
+    "COVERAGE_TIMING_FAILURE_TESTS.json",
+    "INITIAL_AUDIT.json",
+    "INITIAL_CHANGED_SOURCE_SECRET_SCAN.log"
+  ],
+  "qualificationReportSha256": {
+    "COVERAGE.log": "108a5d16038b0df0a5c82bf7bb1b984d8519f71359567faf2960f42dd818c5c5",
+    "COVERAGE_TESTS.json": "e78dd0d04fbe907f75682bbd6eb223b8fc2848a2d501a050ca5fea7fe95ceffd",
+    "FINAL_UNIT_TESTS.log": "bcd415ab4208f998673d26651119b6d139f504c6a58efec15480d61f6794a2bf",
+    "TYPES.log": "02e9a5a7a492611399e6a7589e37658583dc85c9fe752c1b5ca4996f6e026b1e",
+    "INITIAL_VISUAL_BASELINE_GATE_STDERR.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "DEPENDENCY_GRAPH.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "INITIAL_PERFORMANCE_STDERR.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "AUDIT.json": "e31e97db189aebec52b84f1261dbe53661fd1e6b5f65f15992c2abb4701e8211",
+    "LIVE_RLS_MISSING_CONFIG_GUARD.log": "062466590f14873f757d2d59016be899f6767183aa882b24c9f0e538ae2fbefd",
+    "QUALIFIED_TYPES.log": "02e9a5a7a492611399e6a7589e37658583dc85c9fe752c1b5ca4996f6e026b1e",
+    "ORIGINAL_PACKAGE_LOCK.json": "6f5d9e92ee152ca79a3890536de080fcd6d9910a2fe3d8c1e8fa154bd6d1eb13",
+    "COMPATIBLE_LOCK_RECONCILIATION.log": "3cbfa0339870d9383af94ae5fbf12ca187a3d34bd2f087af31d0e97fb52bb8c4",
+    "LINT.log": "a90a49c7bebd1ef9371e8b15e38cda595d5da95d9535ceb3611112990916cb4b",
+    "INITIAL_AUDIT.json": "e31e97db189aebec52b84f1261dbe53661fd1e6b5f65f15992c2abb4701e8211",
+    "INITIAL_PERFORMANCE_TESTS.log": "964cdcacd5678d3f0a3f14e05aba864214c38076cb825e1c2f27a2c0773ac526",
+    "QUALIFIED_COVERAGE_TESTS.json": "216a3d98af625b8af7a4dd1f5f4d163d2138977162bfe2a6940db442b8ae92f3",
+    "SECURITY_PATCH_LOCK.log": "ea455baefe76db427207b7dc29a9710d12c5fb3443a27dfefcb14ff2b3698adc",
+    "WORKTREE_INSTALL.log": "e749b8685806ee25821209fa9e878e3e85505c0ab94b3337d3e24014ed3311a8",
+    "VISUAL_RESULT.json": "0119446d1917d49b9606a038ce5ea95487b49282ce6898f79e7208071ebd711e",
+    "BROWSER_RESULT.json": "25c93b764dc815ffa0a01a90ade3a5b61f523f783a605f9227f21e922df7c9e3",
+    "PERFORMANCE_RESULT.json": "edc87cbf5b81ea4eff8896130be04e64b87888aa6901dbeb208c13d70cff387a",
+    "FINAL_TYPES.log": "02e9a5a7a492611399e6a7589e37658583dc85c9fe752c1b5ca4996f6e026b1e",
+    "FINAL_COVERAGE_TESTS.json": "22d23960bfeb1e4733c90f2b71d34db8b4486f1808d1e0b73118303bec9fc5a0",
+    "PERFORMANCE_STDERR.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "DEPENDENCY_GRAPH.json": "d30a682be5d9f0f629fd36399f65680dd26b450261a82d9f7d1729ce59f0bdbc",
+    "VISUAL_BASELINE_GATE_STDERR.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "FINAL_LINT.log": "a90a49c7bebd1ef9371e8b15e38cda595d5da95d9535ceb3611112990916cb4b",
+    "QUALIFIED_LINT.log": "a90a49c7bebd1ef9371e8b15e38cda595d5da95d9535ceb3611112990916cb4b",
+    "VISUAL_BASELINE_GATE.log": "5598d0ddcea2b0c18ec59cc383fe3c60ce3754229008746fae2470f5a871126b",
+    "AUDIT.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "FINAL_DEPENDENCY_GRAPH.json": "a642bd610936aa6d5adb6c8b239e93c4fb5fda71742093bf7b57be18f0215f1a",
+    "FINAL_BROWSER_TESTS.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "CLEAN_INSTALL.log": "78df26a0a941a9a468b9f6b19efc2ba83ed0348c07133bb98b305b4201bf2885",
+    "INITIAL_COMPATIBLE_LOCK.json": "8837be78374c888ff96ab8cd2daaf6308624faa15e897e6a850d185652abe741",
+    "PINNED_VITE_LOCK_RECONCILIATION.log": "2b2bbbf93489e72436a76087518c0ea9a2edc890ec71f668ed8bb2124f488c60",
+    "FINAL_COVERAGE.log": "f878bf5280dc6895260931714dfb947e605c3b383e307c8859e1f2ab80f93161",
+    "FINAL_BUILD.log": "1ffd491258d71330bbea402ddd3ed1b115b5a0e87db450f0b129feb53e81d8f3",
+    "FINAL_BROWSER_TESTS.json": "3eca916c250430b5a1901f32e20126b471bbdc016ce22238e8d54c6ef0c5931c",
+    "PERFORMANCE_MEASUREMENTS.json": "beb88fc3bc0cf2d7fb7e8ae2949344b701da80e70ede0a04e6525bc625de7000",
+    "PERFORMANCE_TESTS.log": "b6cd7a4338b6ad7234b9a5ae7fa87ea1cb4c1c3b989f956b9fa1713c5c90c97b",
+    "FRESH_LOCK_RECONCILIATION.log": "1a7634167c3d8c3982e4791c4de5e9e09a066903608d81f2f14db2b3fc5a5a25",
+    "INITIAL_VISUAL_BASELINE_GATE.log": "fdf6c3f7c4b75fdf329b9aad0d3470f1d1d01951e8c3dc1c0dd3ed878446fb1d",
+    "QUALIFIED_COVERAGE.log": "263ceeec5c0ac49e0c83a543ec88a19c643b8ed6c7620bd6ef5e6183ae1188ad",
+    "INSTALLED_BASELINE.json": "d41d88028b3089503dfdeb0b5a02c074cc5db6794430de5f62208191bde89b27",
+    "FINAL_UNIT_TESTS.json": "936e6535af7d2707190187c4de898acb3ea52652d494160250bca78ccfa79fc2",
+    "LOCK_RECONCILIATION.log": "518b0f07ad09cacd2683228ce890cf0fd16d21ca29a71549076f4a2f2bd4aeff",
+    "COVERAGE_SUMMARY.json": "39b8b375165056be8a9d5091a5aa4b6acbd46de6b4e65ff7fd8e9a451f9fe69c",
+    "FINAL_DEPENDENCY_GRAPH.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "FINAL_AUDIT.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "FINAL_CLEAN_INSTALL.log": "8f494a047455e54582b35cf51e41bd2707ebaa0c0ec190033ae9ae52c3c49403",
+    "COVERAGE_TIMING_FAILURE_TESTS.json": "22d23960bfeb1e4733c90f2b71d34db8b4486f1808d1e0b73118303bec9fc5a0",
+    "FINAL_AUDIT.json": "2a6cebf0551bc00607faf290ded68a3e8de0d247cfe118057c2a49bb42db938c",
+    "INITIAL_ENVIRONMENT_TESTS.json": "e78dd0d04fbe907f75682bbd6eb223b8fc2848a2d501a050ca5fea7fe95ceffd",
+    "BUILD.log": "eff12590d4ba756b49ed3092fd457f3c83e876b5fd711ff9b2debcff51495ad5",
+    "CHANGED_SOURCE_SECRET_SCAN.log": "f88e74afc98014d81965306c4247f7b68b4ef059eec4bfd6d8892a60b51c4eb9",
+    "INITIAL_CHANGED_SOURCE_SECRET_SCAN.log": "be719765d3a6b4c2b7c020fe3829333c771a11e090a651e39733bbc8ef342e98",
+    "CONFIG_RUNTIME_EQUALITY.log": "f55c5abd810e9a46d577565219da30e04b0ab20a79977eab6161ac2b10fba5cc",
+    "PERFORMANCE_CONFIG_READBACK.log": "bdc765a51dcb6cd1312f5a8aac4719687ff8d6de0cf07141de52652a3e74e8fd"
+  },
+  "publicAcceptance": "UNPROVEN",
+  "publicGenerationEnabled": false,
+  "deployed": false,
+  "published": false,
+  "githubCiExecuted": false,
+  "remaining": [
+    "Independent customer acceptance and native-version/current-QA/hash-bound downloads",
+    "Inherited coverage, protected performance fixtures and reviewed visual baselines",
+    "Live RLS and actual two-user Supabase/customer isolation",
+    "Always-on hosting/gateway/HTTPS/backup restore/cutover",
+    "Native Canva/Arabic-Sorani/edit-save/re-export/restart and other-app journey",
+    "Human design quality and governed taste validation"
+  ],
+  "changedSourceSecretScan": "PASS; initial synthetic literal hit retained, joined expression preserves exact tested input",
+  "configRuntimeReadback": "PASS; actual Playwright evaluation produces identical server inputs to tested run",
+  "websiteQualifiedCommit": "0dbab21b2917551f066f5e1ecc4094b4374a4b1a",
+  "websiteProofSha256": "21aaa21542a5e7c0a95c53d5518f468b37402db20b25fccb086291dd31a98458",
+  "engineRuntimeChanged": false
+}

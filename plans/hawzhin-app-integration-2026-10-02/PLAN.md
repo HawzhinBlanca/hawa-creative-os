@@ -141,3 +141,27 @@ First full action sourceab5f0a2e:8098 passed/2 failed/67 skipped, retained uncha
 
 
 Final ADR263 sealed65e6d024 qualification:8100 passed/0 failed/67 skipped;746 strict roots/Core/worker/scripts types, source manifest and blueprint1941/0/0 pass. Website223ff54:856/0/0 tests and7/0/0/flaky0 Chromium controls; types/build/affected lint pass. Original worker-policy failures remain unchanged in proof history; customer-specific policy now applies only to Core's app role. Actual isolated Restate owner handoff/projection/ack/cancel/replay passes; no native/public quality inference. Actions are implemented locally. Next: independent customer acceptance/current-QA/hash/native-version PNG/editable PPTX downloads, CI repair, hosting and real two-user/native/edit-save/re-export/restart acceptance. CI diagnosis confirms26 stale lock declarations,4 missing scripts, Node18/test-engine incompatibility, undeclared coverage provider and actual npm-ci peer resolution failure. Migrations083–087 stay unreleased; generation stays disabled and launcher soon.
+
+
+## ADR264 reproducible website rebuild —2026-10-02
+
+Website0dbab21 now passes normal isolated/worktree npm-ci with exact root pins,
+valid dependency graph, types including test/browser/build configs, lint0errors/
+14inherited warnings, production/PWA build,853 deterministic unit tests and7
+synthetic Chromium Designer controls. Required peer/runtime/script/coverage-tool
+repairs are qualified; original failures remain. Engine runtime and migrations
+are unchanged from the previously qualified ADR263 source.
+
+The old live anonymous RLS test accepted network/credential/server errors as
+success. It is now a separate explicit live gate, with actual permission/empty
+read classification controls; no live RLS pass is inferred. Global coverage fails
+unchanged thresholds (37.27lines/35.82statements/31.17functions/29.14branches).
+Production performance fails three missing protected-member fixtures; two checked
+Auth screenshots fail absent reviewed baselines. Audit has0high/critical and6
+moderate findings. Complete CI/Linux/native/customer admission remains open.
+See WEBSITE_CI_PROOF.json and ADR264 for commands, hashes and failure history.
+
+Next remains customer acceptance plus current native-version/critical-QA/hash-bound
+PNG/editable PPTX downloads, remaining release gates, hosting/HTTPS/coordinated
+restore and real two-user/Supabase/Canva/Arabic-Sorani/edit-save/re-export/restart/
+other-app/human quality acceptance. No public switch, push or deployment.
