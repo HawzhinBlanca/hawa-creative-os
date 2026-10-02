@@ -270,7 +270,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     // and the direction marks a Sorani keyboard puts before Latin copy are not part of the name (ADR-180).
     // ADR-231: request-title.ts, also without the format and verb before the subject ("an Instagram post
     // announcing our …") and with no direction mark at either edge.
-    const titleFor = (headline: string) => requestTitle({ headline, label: isKaae ? 'KAAE' : senderName, rawText });
+    const titleFor = (headline: string) => requestTitle({ headline, label: isKaae ? 'KAAE' : senderName, rawText, clientLabel: isKaae });
 
     if (input.isInstructionOnly) {
       headlineEn = undefined;

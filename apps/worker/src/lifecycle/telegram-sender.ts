@@ -209,7 +209,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * One attempt at one message: the body of the handler's `ctx.run('send')`. It answers, or throws an
  * error Restate retries (a RetryableError carrying Telegram's retry_after on a 429).
  */
-export async function sendAttempt(deps: TelegramSenderDeps, message: OutboundMessage): Promise<AttemptAnswer> {
+export async function sendAttempt(deps: TelegramSenderDeps, message: OutboundMessage,
+  /** ADR-253: the alert is a draft's photo alert whose picture Telegram refused; its words go now. */
+  refused: { picture?: true } = {}): Promise<AttemptAnswer> {
   // ADR-240: the canary's messages are recorded, never sent, before any mark or Telegram call.
   const sink = await canarySinkFor(deps, message);
   if (sink) return sinkAttempt(deps, message, sink);
@@ -221,8 +223,10 @@ export async function sendAttempt(deps: TelegramSenderDeps, message: OutboundMes
     if (!deps.db) throw new Error('DATABASE_NOT_CONFIGURED: a critical Telegram message is fenced by send marks in Postgres');
     return withRlsContext(deps.db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
   };
+  // ADR-253: a photo alert sent as its words is marked so: Core's Telegram approval needs the picture.
   const mark = (outcome: SendMarkOutcome, messageId?: string) =>
-    inTenant((trx) => writeSendMark(trx, tenantId, markId, SEND_STEP, stepKind(m), outcome, messageId, String(m.chatId)));
+    inTenant((trx) => writeSendMark(trx, tenantId, markId, SEND_STEP, stepKind(m), outcome, messageId, String(m.chatId),
+      outcome === 'sent' && m.kind === 'text' && (message.kind === 'photo' || refused.picture === true)));
 
   if (critical) {
     const prior = await inTenant((trx) => readSendMark(trx, tenantId, markId, SEND_STEP));
@@ -342,7 +346,7 @@ export async function sendAttempt(deps: TelegramSenderDeps, message: OutboundMes
   if (m.kind === 'photo') {
     if (failedRecorded) {
       log.warn(`[TelegramSender] Telegram refused the draft picture of ${m.key} (${error}); its alert is sent as text.`);
-      return sendAttempt(deps, photoAsText(m));
+      return sendAttempt(deps, photoAsText(m), { picture: true });
     }
     return { outcome: 'not_sent', error, retryAfterMs: NOT_SENT_RETRY_MS };
   }

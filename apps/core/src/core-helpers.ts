@@ -402,6 +402,22 @@ export function startsWithName(line: string, name: string): boolean {
 }
 
 /**
+ * ADR-253 (live 2026-10-02, L21): what follows a name said as a possessive at the start of a line
+ * ("KAAE's Quality Assurance Workshop", "KAAE’s …" → "Quality Assurance Workshop"), or null when the
+ * line does not start so or nothing with a letter or digit follows. Case and direction marks as in
+ * `startsWithName`; the rest is the line's own characters.
+ */
+export function afterPossessive(line: string, name: string): string | null {
+  const text = stripLeadingMarks(line);
+  const n = name.trim();
+  if (!n || text.slice(0, n.length).toLowerCase() !== n.toLowerCase()) return null;
+  const m = /^['’]s\s+/u.exec(text.slice(n.length));
+  if (!m) return null;
+  const rest = text.slice(n.length + m[0].length).trim();
+  return /[\p{L}\p{N}]/u.test(rest) ? rest : null;
+}
+
+/**
  * ADR-180: a title "<Client>: <line>" whose line already starts with the client's name or acronym,
  * without the repeat. The office's photo alert read "KAAE: \u200FKAAE K-12 Pilot Study…" (2026-09-30).
  * Any other title is returned as it is.

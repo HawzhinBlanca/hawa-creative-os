@@ -176,6 +176,12 @@ export async function writeSendMark(
    * chat, and an office member's reply to a draft's picture is matched to the request by chat and id.
    */
   chatId?: string,
+  /**
+   * ADR-253: a draft's photo alert that went as its plain words (the picture could not be read, or
+   * Telegram refused it). Core's Telegram approval needs the picture the member was sent; this says
+   * there was none.
+   */
+  pictureNotSent?: boolean,
 ): Promise<void> {
   if (messageId !== undefined && (outcome !== 'sent' || !validTelegramMessageId(messageId))) {
     throw new Error('A Telegram message ID must be positive and belong to a sent mark');
@@ -184,7 +190,7 @@ export async function writeSendMark(
   const chat = chatId !== undefined && /^-?[1-9][0-9]{0,19}$/.test(chatId) ? { chatId } : {};
   await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
     VALUES (${tenantId}::uuid, ${TELEGRAM_DELIVERY_SOURCE}, ${key}, ${`telegram_${kind}_${outcome}`},
-      ${JSON.stringify({ commandId, step, outcome, ...(messageId ? { messageId } : {}), ...chat })}::jsonb,
+      ${JSON.stringify({ commandId, step, outcome, ...(messageId ? { messageId } : {}), ...chat, ...(pictureNotSent ? { pictureNotSent: true } : {}) })}::jsonb,
       ${`${key}:${outcome}`}, true, clock_timestamp())`.execute(db);
 }
 

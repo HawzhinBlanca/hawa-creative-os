@@ -14,7 +14,7 @@
  */
 import { requestOperatingSubject } from '@hawa/domain';
 import { trimTitleMarks } from '@hawa/integrations';
-import { cutText, startsWithName } from '../core-helpers.js';
+import { afterPossessive, cutText, startsWithName } from '../core-helpers.js';
 
 const TITLE_NOUNS = 'poster|postr|flyer|banner|design|invitation|invite|card|post|story|brochure|certificate|announcement|graphic|cover|leaflet|infographic|thumbnail|ad|advert';
 const TITLE_GREETING = /^(?:(?:hi|hello|hey|dear\s+(?:team|all|colleagues|friends|sir|madam)|good\s+(?:morning|afternoon|evening)|salam|slaw|silav|سڵاو|بەڕێزان)(?=[\s,،!.:-]|$)[\s,،!.:-]*)+/iu;
@@ -80,13 +80,19 @@ export function spokenTitle(line: string): string {
  * A request's title from its headline (the first line that names it) and its label (the client's short
  * name, else the sender's): "<label>: <name>…", or "<name>…" when the name already starts with the
  * label ("KAAE K-12 Pilot Study…", never "KAAE: KAAE K-12 Pilot Study…"), with no direction mark at
- * either edge. `rawText` lets an operating subject ("a poster for the …") name a headline that is only a
+ * either edge. A name that starts with a client label as a possessive is titled without it (ADR-253).
+ * `rawText` lets an operating subject ("a poster for the …") name a headline that is only a
  * date or a role (`requestOperatingSubject`).
  */
-export function requestTitle(input: { headline: string; label: string; rawText?: string }): string {
+export function requestTitle(input: { headline: string; label: string; rawText?: string;
+  /** ADR-253: the label is the client's short name (not the sender's): its possessive is left out. */
+  clientLabel?: boolean }): string {
   const label = trimTitleMarks(input.label);
   const headline = input.rawText !== undefined ? requestOperatingSubject(input.rawText, input.headline) ?? input.headline : input.headline;
-  const line = trimTitleMarks(spokenTitle(trimTitleMarks(headline)));
+  const said = trimTitleMarks(spokenTitle(trimTitleMarks(headline)));
+  // ADR-253 (L21): "KAAE's Quality Assurance Workshop" is titled "KAAE: Quality Assurance Workshop…", the
+  // same form as any other title, never "KAAE's …" beside a sibling's "KAAE: …".
+  const line = (input.clientLabel && label && afterPossessive(said, label)) || said;
   if (!line) return `${label}: no copy sent`;
   const name = `${trimTitleMarks(cutText(line, 45))}…`;
   return label && !startsWithName(line, label) ? `${label}: ${name}` : name;

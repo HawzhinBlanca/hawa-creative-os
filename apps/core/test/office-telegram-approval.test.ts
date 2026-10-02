@@ -143,7 +143,9 @@ async function emptyQueue() {
  */
 async function draftInReview(title = 'Autumn workshop poster', options: { qcPassed?: boolean;
   /** When the office alerts reached the members, in minutes before now (default: now). */
-  alertedMinutesAgo?: number; photos?: number; exactCopy?: string[]; requesterChat?: string; requesterName?: string } = {}) {
+  alertedMinutesAgo?: number; photos?: number; exactCopy?: string[]; requesterChat?: string; requesterName?: string;
+  /** Who sent the request's source message (default: the requester chat's own person). */
+  requesterId?: number } = {}) {
   const requestId = randomUUID();
   const requesterChat = options.requesterChat ?? String(66_000_000 + Math.floor(Math.random() * 8_000_000));
   const opened = await projectLifecycleOpen(db, {
@@ -163,7 +165,7 @@ async function draftInReview(title = 'Autumn workshop poster', options: { qcPass
     if (options.requesterName) {
       // The request's source message, recorded at open: who sent it.
       const named = await sql`UPDATE hawa.inbox_events SET payload = payload ||
-          ${JSON.stringify({ message: { from: { id: Number(requesterChat), first_name: options.requesterName } } })}::jsonb
+          ${JSON.stringify({ message: { from: { id: options.requesterId ?? Number(requesterChat), first_name: options.requesterName } } })}::jsonb
         WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'telegram'
           AND source_event_id = ${`${requesterChat}:lc-${requestId}-r0`}`.execute(trx);
       expect(Number(named.numAffectedRows)).toBe(1);
@@ -238,6 +240,11 @@ describe('what an office member\'s words mean for a draft', () => {
     ['ok but make the title bigger', 'change'], ['looks good but change the date to 5 October', 'change'],
     ['make the logo smaller', 'change'], ['ڕەنگی باگراوندەکە بگۆڕە', 'change'],
     ['reject', 'reject'], ['rejected', 'reject'], ['no, cancel this', 'reject'], ['ڕەتی بکەرەوە', 'reject'],
+    // ADR-253 (live 2026-10-02, L20): cancelling words, asked politely or with a reason, reject the whole design.
+    ["could you please cancel the Quality Assurance Workshop poster, we don't need it anymore", 'reject'],
+    ['can you cancel it?', 'reject'], ['would you please drop it', 'reject'], ['drop it', 'reject'],
+    ["we don't need it anymore", 'reject'], ['could you cancel this one please', 'reject'],
+    ['could you please make the title bigger', 'change'],
     ['hmm', 'unclear'], ['who made this?', 'unclear'], ['ok', 'unclear'],
     // A new brief is never read as a change to a draft.
     ['Can you make a poster for our Nawroz party?', 'unclear'], ['سڵاو، پۆستەرێک بۆ نەورۆز دروست بکە', 'unclear'],
@@ -442,6 +449,27 @@ describe('an office member decides on a draft in Telegram (ADR-040 addendum)', (
     const answer = await intake(say(OFFICE_A, 'approved', replyTo(draft.messageIds[OFFICE_A])));
     expect(answer.chatAnswer.text).toContain("I can't approve <b>Menu board</b>: its automatic check did not pass.");
     expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('ADR-253: an alert that went as text (Telegram refused its picture) is not a picture to approve; words of change still work', async () => {
+    await emptyQueue();
+    const draft = await draftInReview('Picnic flyer');
+    // TelegramSender sent the alert's words instead of the photo, and marked it so.
+    const marked = await sql`UPDATE hawa.inbox_events SET payload = payload || '{"pictureNotSent": true}'::jsonb
+      WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'telegram_delivery'
+        AND source_event_id = ${`lc:${draft.requestId}:2:office-alert:send`}`.execute(owner);
+    expect(Number(marked.numAffectedRows)).toBe(1);
+    const { transport, calls } = gateway();
+    for (const update of [say(OFFICE_A, 'approved', replyTo(draft.messageIds[OFFICE_A])), say(OFFICE_A, 'approved')]) {
+      expect((await intake(update)).chatAnswer.text).toBe("I can't approve <b>Picnic flyer</b> from Telegram: the picture you were sent is " +
+        'not the checked file that would be delivered. Please approve it in Hawa Desk.');
+    }
+    expect(transport).not.toHaveBeenCalled();
+    expect((await rows(draft.requestId, draft.taskId)).approvals).toEqual([]);
+    // A reply to the text alert still names the draft: a change goes back as before.
+    await forgetOfficeTurns();
+    await intake(say(OFFICE_A, 'make the title bigger', replyTo(draft.messageIds[OFFICE_A])));
+    expect(calls.map((c) => c.kind)).toEqual(['revise']);
   });
 });
 
@@ -1262,7 +1290,7 @@ describe('one person who is both the requester and an office member (ADR-239, li
 
   it('the owner\'s exact words cancel their own draft as its requester: withdrawn and told so, never "Rejected"', async () => {
     await emptyQueue();
-    const draft = await draftInReview('KAAE: Quality Assurance Workshop', { requesterChat: String(OFFICE_A) });
+    const draft = await draftInReview('KAAE: Quality Assurance Workshop', { requesterChat: String(OFFICE_A), requesterName: 'Hawzhin' });
     const { calls } = gateway();
     const words = say(OFFICE_A, 'please cancel the Quality Assurance Workshop poster, it was only a test');
     const decided = await intake(words);
@@ -1285,7 +1313,7 @@ describe('one person who is both the requester and an office member (ADR-239, li
   it('"cancel this" in reply to the picture of their own draft withdraws it the same way', async () => {
     await emptyQueue();
     const other = await draftInReview('Clinic leaflet', { alertedMinutesAgo: 5 });
-    const own = await draftInReview('KAAE: Nawroz greeting', { requesterChat: String(OFFICE_A) });
+    const own = await draftInReview('KAAE: Nawroz greeting', { requesterChat: String(OFFICE_A), requesterName: 'Hawzhin' });
     const { calls } = gateway();
     const words = say(OFFICE_A, 'cancel this', replyTo(own.messageIds[OFFICE_A]));
     expect(await intake(words)).toMatchObject({ lifecycleAction: 'withdraw', requestId: own.requestId });
@@ -1295,9 +1323,64 @@ describe('one person who is both the requester and an office member (ADR-239, li
     expect(await rows(other.requestId, other.taskId)).toMatchObject({ request: { stage: 'in_review' }, approvals: [] });
   });
 
+  it('ADR-253 (live 2026-10-02, L20): "could you please cancel …, we don\'t need it anymore" about their own draft is never the office question', async () => {
+    await emptyQueue();
+    const draft = await draftInReview('KAAE: Quality Assurance Workshop', { requesterChat: String(OFFICE_A), requesterName: 'Hawzhin' });
+    const { calls } = gateway();
+    const live = "could you please cancel the Quality Assurance Workshop poster, we don't need it anymore";
+    // Live, KAAE has model reading on: the office model read the words as a rejection of the only draft.
+    // A model that would take the member's "yes" to intake's question for approval of the only draft.
+    const model: OfficeIntentModel = { read: async (input) => (input.text === live ? { kind: 'reject', draft: 1, change: '', confidence: 0.92 }
+      : input.text === 'yes' ? { kind: 'approve', draft: 1, change: '', confidence: 0.95 } : null) };
+    const chat = createApp({ db, deliverableStore: store, requesterIntentModel: null, officeIntentModel: model } as any);
+    const words = say(OFFICE_A, live);
+    const decided = await intake(words, chat);
+    // Live: "What should I do with <b>KAAE's Quality Assurance Workshop</b>: approve it and send it, send it back with
+    // changes, or reject it?" The words are the requester's: intake withdraws, or asks as it asks any requester.
+    expect(JSON.stringify(decided)).not.toMatch(/What should I do with|approve it and send it/);
+    expect(decided.officeTurn).toBeUndefined();
+    expect(calls).toHaveLength(0);
+    let update = words;
+    if (decided.lifecycleAction !== 'withdraw') {
+      expect(decided.chatAnswer.text).toBe('Do you want me to cancel <b>Quality Assurance Workshop</b>?');
+      // Their "yes" answers their own question as the requester: never the office's approval of the draft.
+      update = say(OFFICE_A, 'yes');
+      expect(await intake(update, chat)).toMatchObject({ lifecycleAction: 'withdraw', requestId: draft.requestId });
+    } else expect(decided).toMatchObject({ requestId: draft.requestId });
+    expect(calls).toHaveLength(0);
+    expect(await withdraw(draft.requestId, update)).toMatchObject({ accepted: true, stage: 'cancelled' });
+    expect(await rows(draft.requestId, draft.taskId)).toMatchObject({ request: { stage: 'cancelled' }, approvals: [] });
+  });
+
+  it('ADR-253 (R8): a request in the member\'s chat that someone else asked for stays the office\'s to reject', async () => {
+    await emptyQueue();
+    const draft = await draftInReview('KAAE: Library week poster', { requesterChat: String(OFFICE_A), requesterName: 'Sewa', requesterId: 93_100_777 });
+    const { calls } = gateway();
+    expect((await intake(say(OFFICE_A, 'cancel this', replyTo(draft.messageIds[OFFICE_A])))).chatAnswer.text)
+      .toBe('Rejected: <b>KAAE: Library week poster</b>. Nothing was sent to you.');
+    expect(calls.map((c) => c.kind)).toEqual(['reject']);
+    expect(await rows(draft.requestId, draft.taskId)).toMatchObject({ request: { stage: 'rejected' },
+      approvals: [{ decision: 'rejected', decision_payload: { rejectionCategory: 'task' } }] });
+  });
+
+  it('ADR-253: a member who did not ask for the draft and says "could you please cancel …, we don\'t need it anymore" rejects it without a question', async () => {
+    await emptyQueue();
+    const theirs = await draftInReview('Clinic open day poster', { requesterName: 'Sewa' });
+    const { calls } = gateway();
+    expect((await intake(say(OFFICE_A, "could you please cancel the Clinic open day poster, we don't need it anymore"))).chatAnswer.text)
+      .toBe('Rejected: <b>Clinic open day poster</b>. Nothing was sent to <b>Sewa</b>.');
+    expect(calls.map((c) => c.kind)).toEqual(['reject']);
+    expect((await rows(theirs.requestId, theirs.taskId)).request).toMatchObject({ stage: 'rejected' });
+    await emptyQueue();
+    const other = await draftInReview('Book fair banner', { requesterName: 'Sewa' });
+    gateway();
+    expect((await intake(say(OFFICE_B, 'drop it', replyTo(other.messageIds[OFFICE_B])))).chatAnswer.text)
+      .toBe('Rejected: <b>Book fair banner</b>. Nothing was sent to <b>Sewa</b>.');
+  });
+
   it('approval from the same person stays the office\'s approval; cancelling someone else\'s draft stays the office\'s rejection', async () => {
     await emptyQueue();
-    const own = await draftInReview('KAAE: Open day poster', { requesterChat: String(OFFICE_A) });
+    const own = await draftInReview('KAAE: Open day poster', { requesterChat: String(OFFICE_A), requesterName: 'Hawzhin' });
     gateway();
     expect((await intake(say(OFFICE_A, 'approved', replyTo(own.messageIds[OFFICE_A])))).chatAnswer.text)
       .toBe('Approved. Sending <b>KAAE: Open day poster</b> to you now.');
