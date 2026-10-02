@@ -22,13 +22,27 @@ export function trimTitleMarks(value: string | null | undefined): string {
   return client && name ? `${client}: ${name}` : (client || name);
 }
 
+/** The length a request title's name is cut at (Core's `requestTitle`); "…" marks a cut. */
+export const TITLE_CUT_LENGTH = 45;
+const ELLIPSIS_BEFORE_PART = /^([\s\S]+?)…(\s\(\d+\/\d+\))?$/u;
+
+/**
+ * ADR-255 (live 2026-10-02): titles stored before ADR-255 end in "…" even when nothing was cut, so a
+ * requester read "Harvest Fair… (1/2)". A name shorter than the cut is shown whole, without it; a
+ * "(1/2)" part number stays.
+ */
+export function withoutDecorativeEllipsis(name: string): string {
+  const m = ELLIPSIS_BEFORE_PART.exec(name);
+  return m && Array.from(m[1]).length < TITLE_CUT_LENGTH ? `${m[1].trimEnd()}${m[2] ?? ''}` : name;
+}
+
 /**
  * The name a requester reads: the office's "Client: " prefix dropped, no direction mark at its edges,
  * spaces collapsed, at most 60 characters. Empty for a request named neutrally ("New design request from
  * Sewa", ADR-200 addendum) or with no name: callers then say "your design".
  */
 export function requesterTitleName(value: unknown): string {
-  const name = trimTitleMarks(String(value ?? '')).replace(/^[^:]{1,40}:\s*/u, '').replace(EDGE_MARKS, '').replace(/\s+/g, ' ').trim();
+  const name = withoutDecorativeEllipsis(trimTitleMarks(String(value ?? '')).replace(/^[^:]{1,40}:\s*/u, '').replace(EDGE_MARKS, '').replace(/\s+/g, ' ').trim());
   if (!name || /^New design request from\s/.test(name)) return '';
   return Array.from(name).length > 60 ? `${Array.from(name).slice(0, 59).join('')}…` : name;
 }

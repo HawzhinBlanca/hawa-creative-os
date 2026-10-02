@@ -38,7 +38,7 @@ import { deferMessage, pendingHeldBrief, readDeferral, releaseDeferral, overdueD
   claimPhoto, holdPhoto, markPhotoAsked, pendingEditWords, readHeldPhoto, readMediaAnswer, recordMediaAnswer,
   waitingPhotos } from '../services/lifecycle-media-intake.js';
 import { createEditIntake } from '../services/lifecycle-edit-intake.js';
-import { CLIENT_QUESTION_MESSAGES, INBOX_MESSAGES, MEDIA_MESSAGES, ROUTING_MESSAGES, LIFECYCLE_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
+import { CLIENT_QUESTION_MESSAGES, INBOX_MESSAGES, INTAKE_LIMIT_MESSAGES, MEDIA_MESSAGES, ROUTING_MESSAGES, LIFECYCLE_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
   albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
@@ -59,7 +59,7 @@ import { parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-
 import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.js';
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
   type IntentReceipt } from '../services/requester-turn-store.js';
-import { askText, conflictOfficeAlert, forwardOfficeAlert, forwardText, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
+import { askText, conflictOfficeAlert, designName, forwardOfficeAlert, forwardText, hasLetters, langOf, noteText, nothingToChangeText, planTurn, questionOfficeAlert,
   opensForAPerson, readIntentByRules, readsAsBriefContinuation, redoText, requestLabel, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
   requesterName, spokenStage, whoWrote,
   tellText, thanksText, waitsForRequester,
@@ -68,6 +68,8 @@ import { briefPartSeconds, briefParts, joinBriefPart, joinedWords, readBriefPart
 import { officeChatFor, officeChatsFor, withOfficeAlerts } from '../services/office-chats.js';
 import { WITHDRAWABLE_STAGES, nothingToCancelText, projectLifecycleWithdraw, recordWithdrawnOutcome, withdrawTooLateText, type WithdrawActor } from '../services/lifecycle-withdraw.js';
 import { addPhotoMaterial, MATERIAL_STAGES, photoMaterialLine } from '../services/lifecycle-photo-material.js';
+// ADR-250: words read as a brief that edit a design on the way.
+import { reconsiderNewBrief } from '../services/brief-or-change.js';
 import { createRequesterIntentModel, type RequesterIntentModel } from '../services/requester-intent-model.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart, reconcileLifecycleChatOnlyDelivery } from '../services/lifecycle-delivery-projection.js';
@@ -96,6 +98,8 @@ export { acceptedServiceTokensOf, serviceTokenOf, workerSigningSecretOf } from '
 interface UpdateLike { update_id: number; [kind: string]: unknown }
 
 const byRequest = (requests: ChatRequestView[], id: string) => requests.find((r) => r.requestId === id);
+/** ADR-255: stages a cancel of several designs can still concern (a too-late one is told so, as any cancel is). */
+const OPEN_LIFECYCLE_STAGES: readonly string[] = ['designing', 'awaiting_answer', 'in_review', 'manual', 'approved', 'delivering'];
 
 /** A Telegram document that is an SVG file (by its declared type or its name). */
 function isSvgDocument(document: unknown): boolean {
@@ -337,7 +341,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         const target = open[0];
         const kept = await recordLate(u, { requestId: target.requestId, taskId: target.currentTaskId, requestRev: target.rev,
           requestStage: target.stage as LateChangeStage, text: words, kind: 'change', title: shortTitle(target.title),
-          answer: say(MEDIA_MESSAGES.svgPassedForDesign, lang, { title: bold(shortTitle(target.title)) }) });
+          answer: say(MEDIA_MESSAGES.svgPassedForDesign, lang, { title: designName(target.title, lang) }) });
         return handled(kept.status, kept.extra);
       }
       const office = officeChatFor(chatId);
@@ -1012,14 +1016,30 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   settle: { kind: 'brief', delayMs: briefPhotoWaitMs() } });
               }
               const {requestId,allocation,parts}=planLifecycleBriefDeliverables(briefText,{chatId,updateId:update.update_id,instructionOnly,acceptsLanguageSiblings});
-              if (allocation.kind === 'limit') return handled(422,{code:'DELIVERABLE_LIMIT',chatAnswer:{
-                text:`This message asks for ${allocation.count} designs. Send groups of at most ${MAX_REQUEST_DELIVERABLES} designs; none were opened.`,parseMode:'HTML'}});
-              if (parts.length > MAX_REQUEST_DELIVERABLES) return handled(422,{code:'DELIVERABLE_LIMIT',chatAnswer:{
-                text:`These formats and languages need ${parts.length} designs. Send groups of at most ${MAX_REQUEST_DELIVERABLES}; none were opened.`,parseMode:'HTML'}});
+              /**
+               * ADR-250 (friction 4): a brief the bot cannot start by itself (more designs than one request holds, a
+               * size the design path does not make) opens nothing. The requester hears so in their language, as a
+               * chat answer the worker sends (a bare 422 was never sent), and the office gets the words to follow up.
+               * They are never told to send it again in groups or to choose a size.
+               */
+              const cannotStart = (code: 'DELIVERABLE_LIMIT' | 'UNSUPPORTED_CANVAS', detail: { count: number } | { size: string }, why: string) => {
+                const office = officeChatFor(chatId);
+                const alerted = Boolean(office && office !== chatId);
+                const phrase = 'count' in detail ? (alerted ? INTAKE_LIMIT_MESSAGES.tooManyPassed : INTAKE_LIMIT_MESSAGES.tooManyKept)
+                  : (alerted ? INTAKE_LIMIT_MESSAGES.sizePassed : INTAKE_LIMIT_MESSAGES.sizeKept);
+                const alert = alerted ? { chatId: office!, text: [`${whoSent(update)} sent a brief the bot could not start by itself: ${why}. ` +
+                  'Nothing was opened; please follow up with them in their chat.', '', 'Their words:', Array.from(briefText).slice(0, 3000).join('')].join('\n') } : null;
+                return handled(422, { code, lifecycleAction: 'chat-answer', chatId,
+                  chatAnswer: { text: say(phrase, requesterLang(briefText), detail), parseMode: 'HTML' }, ...(alert ? { officeAlert: alert } : {}) });
+              };
+              if (allocation.kind === 'limit') return cannotStart('DELIVERABLE_LIMIT', { count: allocation.count },
+                `it asks for ${allocation.count} designs, and one request holds at most ${MAX_REQUEST_DELIVERABLES}`);
+              if (parts.length > MAX_REQUEST_DELIVERABLES) return cannotStart('DELIVERABLE_LIMIT', { count: parts.length },
+                `its formats and languages need ${parts.length} designs, and one request holds at most ${MAX_REQUEST_DELIVERABLES}`);
               if (parts.length > deliverableCapacity) return handled(503,{code:'LANGUAGE_SIBLINGS_UNSUPPORTED'});
               const unsupported=parts.find(p=>p.variant && (p.variant.width<640 || p.variant.width>2400 || p.variant.height<640 || p.variant.height>2400));
-              if (unsupported) return handled(422,{code:'UNSUPPORTED_CANVAS',chatAnswer:{
-                text:`The requested ${unsupported.variant!.width} × ${unsupported.variant!.height} canvas is outside the supported 640–2400 pixel range. The office needs to choose a supported production format; none of these designs were opened.`,parseMode:'HTML'}});
+              if (unsupported) return cannotStart('UNSUPPORTED_CANVAS', { size: `${unsupported.variant!.width} × ${unsupported.variant!.height}` },
+                `it asks for a ${unsupported.variant!.width} × ${unsupported.variant!.height} px canvas, outside the supported 640–2400 px range`);
               const prepare = async (part: (typeof parts)[number]) => {
                 const prepared=await createChatCampaignIntake(ctx).prepareChatCampaignDraft({
                   platform: 'telegram', sourceEventId: `lc-${part.requestId}-r0`, sourceChannelId: chatId,
@@ -1212,7 +1232,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
               const message = msg as Record<string, any>;
               // A photo with no words is answered in the chat's language (ADR-143's rule), words in their own.
-              const lang = photoWithoutWords
+              // ADR-251 (friction 11): so is a message with no letters ("👍", "?", "2").
+              const lang = photoWithoutWords || !hasLetters(text)
                 ? await withRlsContext(db, system, (trx) => mediaRoute.langFor(trx, chatId, message)) : langOf(text);
               const group = ['group', 'supergroup'].includes(String(message.chat?.type || ''));
               const botName = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').toLowerCase();
@@ -1321,14 +1342,32 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   foreignReply: Boolean(replyMessageId) && message.reply_to_message?.from?.is_bot === true &&
                     bindings.requestIds.length === 0 && !bindings.askUpdateId };
                 plan = planTurn(input);
+                // ADR-250 (L19): words read as a brief of their own that edit a design on the way ("take KAAE's
+                // out of the title") are a change to it, or asked about; never a second request and paid round.
+                const edit = mediaKind ? null : reconsiderNewBrief(input, plan);
+                if (edit) {
+                  reading = edit.reading;
+                  plan = edit.plan;
+                }
                 // What the rules cannot place is asked of the intake router once, within the office's
                 // budget; without it (no key, no consent, no allowance, no answer) the question stands.
                 // ADR-230 addendum (L17): cancel words the rules cannot place are asked as a cancel, and read the same way.
-                if (plan.kind === 'ask' && (plan.intent === 'unclear' || (plan.intent === 'cancel' && reading.cancelWords)) && intentModel) {
+                // ADR-255: a question that names every design the words named together ("Do you want me to cancel
+                // both …?") is already the one question; the router, which picks one design, is not asked.
+                if (plan.kind === 'ask' && !plan.every && (plan.intent === 'unclear' || (plan.intent === 'cancel' && reading.cancelWords)) && intentModel) {
                   const candidates = requests.filter((r) => plan.kind === 'ask' && plan.options.some((o) => o.requestId === r.requestId));
                   const modelReading = await intentModel.read({ tenantId: TENANT, updateId: update.update_id, chatId,
                     text, requests: candidates, lang });
-                  if (modelReading) {
+                  if (modelReading && reading.cancelWords && modelReading.intent !== 'cancel') {
+                    // ADR-250 (friction 6): the router has no "cancel"; it reads cancel words as a change (kept for
+                    // the office) or chatter (the greeting). It may only say which design the cancel is about:
+                    // the requester is then asked about that one by name, and nothing is withdrawn unasked.
+                    if (modelReading.intent === 'change' && modelReading.requestId) {
+                      reading = { ...reading, source: 'model', requestId: modelReading.requestId,
+                        ...(modelReading.confidence !== undefined ? { confidence: modelReading.confidence } : {}) };
+                      plan = planTurn({ ...input, reading, pendingAsk: null });
+                    }
+                  } else if (modelReading) {
                     // ADR-200 addendum: redo words the router reads as a change redo the design it names.
                     reading = { ...modelReading, instructionOnly: reading.instructionOnly, substantial: reading.substantial,
                       ...(reading.redo && modelReading.intent === 'change' ? { redo: reading.redo } : {}) };
@@ -1505,6 +1544,23 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   return await decided(200, chatAnswer(tellText(plan.note, target.title, lang, Boolean(alert)),
                     { requestId: target.requestId, note: plan.note, ...(alert ? { officeAlert: alert } : {}) }));
                 }
+                case 'cancel-all': {
+                  // ADR-255: several designs named together ("cancel both of them"). One decision names them all;
+                  // ChatInbox hands each to its own RequestLifecycle, which closes it (Core checks this decision)
+                  // and tells the requester, or, for one approved or sent meanwhile, keeps the cancel and says so.
+                  const targets = plan.requestIds.map(byId).filter((r): r is ChatRequestView => Boolean(r) && OPEN_LIFECYCLE_STAGES.includes(r!.stage));
+                  const withdrawable = targets.filter((r) => (WITHDRAWABLE_STAGES as readonly string[]).includes(r.stage));
+                  const resolves = plan.resolves ? { resolves: plan.resolves } : {};
+                  if (targets.length < 2 || !withdrawable.length) {
+                    // One left (or none that can still be withdrawn): a cancel of one design, as before.
+                    const one = withdrawable[0] ?? targets[0];
+                    return one ? carryOut({ kind: 'note', note: 'cancel', requestId: one.requestId, words: plan.words, ...resolves }, requests, retried)
+                      : await decided(200, chatAnswer(statusText([], lang)));
+                  }
+                  return await decided(200, { lifecycleAction: 'withdraw', chatId, requestId: withdrawable[0].requestId,
+                    requestIds: [withdrawable[0], ...targets.filter((r) => r !== withdrawable[0])].map((r) => r.requestId),
+                    requestStage: withdrawable[0].stage, intent: reading.intent });
+                }
                 case 'note': {
                   const target = byId(plan.requestId);
                   if (!target) return await decided(200, chatAnswer(statusText([], lang)));
@@ -1534,6 +1590,18 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     const held = await withRlsContext(db, system, (trx) => readHeldPhoto(trx, TENANT, plan.resolves!));
                     if (held && held.chatId === chatId && held.senderId === senderId) { image = held.image; heldFrom = held.updateId; }
                   }
+                  // ADR-250 (friction 3): a photo its sender sent with no words just before this change goes with
+                  // it, as it goes with a brief or a round (ADR-145): material while the design can use it, else
+                  // passed to the office with the words. It was dropped here, and later taken by unrelated words.
+                  let passedFrom: number | null = null;
+                  const sentJustBefore = plan.note === 'change' && !photoInput && !boundPhoto && !admittedAlbum && !plan.resolves
+                    ? senderScopeOf(update) : null;
+                  if (sentJustBefore) {
+                    const held = (await withRlsContext(db, system, async (trx) =>
+                      outsideBursts(trx, TENANT, await waitingPhotos(trx, TENANT, sentJustBefore)))).at(-1) ?? null;
+                    if (held && material) { image = held.image; heldFrom = held.updateId; }
+                    else if (held) passedFrom = held.updateId;
+                  }
                   const title = bold(shortTitle(target.title));
                   const stored = await withRlsContext(db, system, async (trx) => {
                     let used: 'added' | 'passed' | null = null;
@@ -1541,6 +1609,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                       // One photo is used once: words that took it first keep it.
                       const claim = await claimPhoto(trx, TENANT, heldFrom, { byUpdateId: update.update_id, how: 'joined', requestId: target.requestId });
                       if (claim.byUpdateId !== update.update_id) image = null;
+                    }
+                    let photoPassed = false;
+                    if (passedFrom !== null) {
+                      const claim = await claimPhoto(trx, TENANT, passedFrom, { byUpdateId: update.update_id, how: 'passed', requestId: target.requestId });
+                      photoPassed = claim.byUpdateId === update.update_id;
                     }
                     const into = { requestId: target.requestId, taskId: target.currentTaskId, stage: target.stage };
                     if (image) used = await addPhotoMaterial(trx, TENANT, into, image);
@@ -1559,6 +1632,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     }
                     const photoLine = used ? photoMaterialLine(used)
                       : photoInput ? '[The requester also sent a photo. It is in the Telegram chat.]'
+                        : photoPassed ? '[The requester sent a photo just before these words. It is in the Telegram chat.]'
                         : albumUsed === 'added' ? `[The requester sent ${admittedAlbum!.ref.images.length} photos with this. They were added to the design's files.]`
                           : admittedAlbum ? '[The requester also sent an album of photos with these words. They are in the Telegram chat.]' : '';
                     const words = photoLine ? `${photoWithoutWords ? '(no words)' : plan.words}\n${photoLine}` : plan.words;
@@ -1576,7 +1650,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                       { code: 'LATE_REQUESTER_CHANGE', chatId, payloadHash, late });
                     if (refusal.payloadHash !== payloadHash || refusal.chatId !== chatId ||
                         refusal.code !== 'LATE_REQUESTER_CHANGE' || !refusal.late) return null;
-                    const answer = { status: 409, extra: { ...lateChangeAnswer(chatId, refusal.late, update), intent: reading.intent } };
+                    // ADR-250 (friction 3): the requester hears where the photo they sent just before went.
+                    const photoNotice = heldFrom !== null && !plan.resolves && used
+                      ? say(used === 'added' ? MEDIA_MESSAGES.photoAdded : MEDIA_MESSAGES.photoPassed, lang, { title })
+                      : photoPassed ? say(MEDIA_MESSAGES.photoPassed, lang, { title }) : null;
+                    const answer = { status: 409, extra: { ...lateChangeAnswer(chatId, refusal.late, update), intent: reading.intent,
+                      ...(photoNotice ? { notice: { text: photoNotice, parseMode: 'HTML' } } : {}) } };
                     return { stored: await recordIntentReceipt(trx, TENANT, receipt(answer)), answer };
                   });
                   if (!stored || stored.stored.payloadHash !== payloadHash) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });

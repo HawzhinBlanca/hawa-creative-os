@@ -83,7 +83,7 @@ describe('redo words are about the requester\'s most recent design', () => {
     const asked = planTurn(turn('try again', [a, b]));
     expect(asked).toMatchObject({ kind: 'ask', redo: 'redo', allowNew: false, options: [{ requestId: a.requestId }, { requestId: b.requestId }] });
     expect(askText(asked as Extract<typeof asked, { kind: 'ask' }>, 'en'))
-      .toBe('Which one should I redo?\n1. <b>KAAE members evening…</b>\n2. <b>Staff football tournament…</b>');
+      .toBe('Which one should I redo?\n1. <b>KAAE members evening</b>\n2. <b>Staff football tournament</b>');
     const pending: PendingAsk = { updateId: 9, ...(asked as Omit<PendingAsk, 'updateId'>) };
     expect(planTurn(turn('the second one', [a, b], { pendingAsk: pending })))
       .toEqual({ kind: 'redo', requestId: b.requestId, directive: 'try again', resolves: 9 });
@@ -95,7 +95,7 @@ describe('redo words are about the requester\'s most recent design', () => {
     const k12 = request();
     const asked = planTurn(turn('do a better design for the conference', [k12]));
     expect(asked).toMatchObject({ kind: 'ask', redo: 'or-new', allowNew: true, options: [{ requestId: k12.requestId }] });
-    expect(askText(asked as Extract<typeof asked, { kind: 'ask' }>, 'en')).toBe('Do you mean redo <b>KAAE K-12 Pilot Study…</b>, or a new design?');
+    expect(askText(asked as Extract<typeof asked, { kind: 'ask' }>, 'en')).toBe('Do you mean redo <b>KAAE K-12 Pilot Study</b>, or a new design?');
     const pending: PendingAsk = { updateId: 11, ...(asked as Omit<PendingAsk, 'updateId'>) };
     expect(planTurn(turn('redo it', [k12], { pendingAsk: pending }))).toMatchObject({ kind: 'redo', requestId: k12.requestId, resolves: 11 });
     expect(planTurn(turn('a new one', [k12], { pendingAsk: pending }))).toMatchObject({ kind: 'open', text: 'do a better design for the conference' });
@@ -146,11 +146,11 @@ describe('redo words are about the requester\'s most recent design', () => {
   });
 
   it('the requester hears the design named, in English and Sorani', () => {
-    expect(redoText('delivered', 'KAAE: KAAE K-12 Pilot Study…', 'en', true)).toMatch(/^I'll redo <b>KAAE K-12 Pilot Study…<\/b> — /);
+    expect(redoText('delivered', 'KAAE: KAAE K-12 Pilot Study…', 'en', true)).toMatch(/^I'll redo <b>KAAE K-12 Pilot Study<\/b> — /);
     // ADR-231: kept words never promise a redo.
     expect(redoText('in_review', 'KAAE: KAAE K-12 Pilot Study…', 'en')).toMatch(/haven't started a new version\. I've passed what you said to them/);
     // "… is still being made, so I can't redo it yet"
-    expect(redoText('designing', 'KAAE: KAAE K-12 Pilot Study…', 'ckb')).toMatch(/^<b>KAAE K-12 Pilot Study…<\/b> هێشتا دروست دەکرێت/);
+    expect(redoText('designing', 'KAAE: KAAE K-12 Pilot Study…', 'ckb')).toMatch(/^<b>KAAE K-12 Pilot Study<\/b> هێشتا دروست دەکرێت/);
   });
 });
 
@@ -173,7 +173,7 @@ describe('a chat sentence never names a request', () => {
     expect(neutralRequestTitle('  ')).toBe('New design request from a requester');
     expect(isNeutralRequestTitle('New design request from Hawzhin')).toBe(true);
     expect(shortTitle('KAAE: New design request from Hawzhin')).toBe('your design');
-    expect(shortTitle('KAAE: KAAE K-12 Pilot Study…')).toBe('KAAE K-12 Pilot Study…');
+    expect(shortTitle('KAAE: KAAE K-12 Pilot Study…')).toBe('KAAE K-12 Pilot Study');
   });
 });
 

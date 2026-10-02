@@ -4,10 +4,14 @@
     python3 infra/ops/deploy_lock.py [--lock PATH] [--wait SECONDS] -- command [args...]
 
 Takes an exclusive flock on the lock file (HAWA_DEPLOY_LOCK, default ~/.hawa/deploy.lock), waiting up to
---wait seconds (default 0: try once), then runs the command holding it: the lock is the command's open
-file, so it ends with the command however the command ends (no stale PID file). The command sees
-HAWA_DEPLOY_LOCK_HELD=1, so a script that re-runs itself under the lock does not ask for it twice.
-Exit 75 when the lock stays busy for the whole wait; otherwise the command's own exit status.
+--wait seconds (default 0: try once), then runs the command while it holds it. The lock is this
+process's own open file, never passed on (ADR-254): exec'd into the command, every process the command
+started (a container daemon, a background helper outliving the deploy) inherited it and could hold the
+lock after the command ended, so the canary would skip night after night. This process waits for the
+command, passes SIGTERM and SIGHUP on to it, and lets go of the lock when it ends however it ends (no
+stale PID file). The command sees HAWA_DEPLOY_LOCK_HELD=1, so a script that re-runs itself under the
+lock does not ask for it twice. Exit 75 when the lock stays busy for the whole wait; otherwise the
+command's own exit status (128 + the signal when a signal ended it).
 
 deploy.sh --apply runs under it and waits for a canary in progress; the canary runner tries once and
 skips the night when a deploy holds it, so a canary never runs during a deploy.
@@ -17,6 +21,8 @@ from __future__ import annotations
 import argparse
 import fcntl
 import os
+import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -55,9 +61,21 @@ def main() -> int:
                 print(f'waiting for the deploy lock {path} (a deploy or the nightly canary is running)', file=sys.stderr)
                 told = True
             time.sleep(min(5.0, max(0.1, deadline - time.monotonic())))
-    os.set_inheritable(fd, True)
-    os.execvpe(command[0], command, {**os.environ, 'HAWA_DEPLOY_LOCK_HELD': '1'})
-    return 0  # not reached
+    os.set_inheritable(fd, False)
+    # Ctrl-C reaches the command from the terminal itself (same process group); this process only waits.
+    # A handler, not SIG_IGN: an ignored signal would stay ignored in the command, a handler does not.
+    signal.signal(signal.SIGINT, lambda _signum, _frame: None)
+    try:
+        child = subprocess.Popen(command, env={**os.environ, 'HAWA_DEPLOY_LOCK_HELD': '1'}, close_fds=True)
+    except OSError as exc:
+        print(f'deploy_lock.py could not start {command[0]}: {exc}', file=sys.stderr)
+        return 127
+    def forward(signum: int, _frame: object) -> None:
+        child.send_signal(signum)
+    signal.signal(signal.SIGTERM, forward)
+    signal.signal(signal.SIGHUP, forward)
+    rc = child.wait()
+    return 128 - rc if rc < 0 else rc
 
 
 if __name__ == '__main__':

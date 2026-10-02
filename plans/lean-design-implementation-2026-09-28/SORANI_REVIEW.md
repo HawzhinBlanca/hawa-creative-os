@@ -26,11 +26,11 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `sources.askClientVoice` | Thanks for the voice note! Which organisation is it for? | سوپاس بۆ دەنگەکە! بۆ کام دامەزراوەیە؟ | needs native review |
 | `sources.askClientPdf` | Thanks for the PDF! Which organisation is it for? | سوپاس بۆ PDFـەکە! بۆ کام دامەزراوەیە؟ | needs native review |
 | `sources.clientNotFound` | I couldn't find that organisation. Which organisation is it for? If it's a new one, the office can add it. | ئەو دامەزراوەیەم نەدۆزییەوە. بۆ کام دامەزراوەیە؟ ئەگەر نوێیە، ئۆفیسەکە دەتوانێت زیادی بکات. | needs native review |
-| `sources.askChangeOrNew` | Is this for a change to {title}, or for a new design? Just say “change” or “new”. | ئەمە بۆ گۆڕانکارییە لە {title}، یان بۆ دیزاینێکی نوێیە؟ تەنها بنووسە «گۆڕانکاری» یان «نوێ». | needs native review |
-| `sources.askWhichDesign` | Which design is this for?⏎{list}⏎⏎Answer with the number or the name. | ئەمە بۆ کام دیزاینە؟⏎{list}⏎⏎بە ژمارە یان ناو وەڵام بدەرەوە. | needs native review |
+| `sources.askChangeOrNew` | Is this for a change to {title}, or for a new design? | ئەمە بۆ گۆڕانکارییە لە {title}، یان بۆ دیزاینێکی نوێیە؟ | needs native review |
+| `sources.askWhichDesign` | Which design is this for?⏎{list} | ئەمە بۆ کام دیزاینە؟⏎{list} | needs native review |
 | `sources.newDesignOption` | A new design | دیزاینێکی نوێ | needs native review |
-| `sources.heard` | Here is what I heard:⏎⏎«{text}»⏎⏎Is this exactly the text for the design? Just say “yes”, or send me the corrected text. | ئەمە ئەوەیە کە بیستم:⏎⏎«{text}»⏎⏎ئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ تەنها بنووسە «بەڵێ»، یان دەقە ڕاستکراوەکەم بۆ بنێرە. | needs native review |
-| `sources.readPdf` | Here is the text I found in your PDF:⏎⏎«{text}»⏎⏎Is this exactly the text for the design? Just say “yes”, or send me the corrected text. | ئەمە ئەو دەقەیە کە لە PDFـەکەتدا دۆزیمەوە:⏎⏎«{text}»⏎⏎ئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ تەنها بنووسە «بەڵێ»، یان دەقە ڕاستکراوەکەم بۆ بنێرە. | needs native review |
+| `sources.heard` | Here is what I heard:⏎⏎«{text}»⏎⏎Is this exactly the text for the design? If not, send me the corrected text. | ئەمە ئەوەیە کە بیستم:⏎⏎«{text}»⏎⏎ئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ ئەگەر نا، دەقە ڕاستکراوەکەم بۆ بنێرە. | needs native review |
+| `sources.readPdf` | Here is the text I found in your PDF:⏎⏎«{text}»⏎⏎Is this exactly the text for the design? If not, send me the corrected text. | ئەمە ئەو دەقەیە کە لە PDFـەکەتدا دۆزیمەوە:⏎⏎«{text}»⏎⏎ئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ ئەگەر نا، دەقە ڕاستکراوەکەم بۆ بنێرە. | needs native review |
 | `sources.readPdfLong` | Thanks, I have read your PDF. It has a lot of text, so please send me the exact words that should go on the design. It starts:⏎⏎«{text}…» | سوپاس، PDFـەکەتم خوێندەوە. دەقێکی زۆری تێدایە، بۆیە تکایە ئەو وشانەم بۆ بنێرە کە دەبێت لەسەر دیزاینەکە بن. سەرەتاکەی ئەمەیە:⏎⏎«{text}…» | needs native review |
 | `sources.heardLong` | Thanks, I have listened to your voice note. It has a lot of words, so please send me the exact words that should go on the design. It starts:⏎⏎«{text}…» | سوپاس، گوێم لە دەنگەکەت گرت. وشەیەکی زۆری تێدایە، بۆیە تکایە ئەو وشانەم بۆ بنێرە کە دەبێت لەسەر دیزاینەکە بن. سەرەتاکەی ئەمەیە:⏎⏎«{text}…» | needs native review |
 | `sources.sendCorrected` | No problem. Please send me the text exactly as it should appear on the design. | کێشە نییە. تکایە دەقەکەم بۆ بنێرە، ڕێک وەک ئەوەی دەبێت لەسەر دیزاینەکە دەربکەوێت. | needs native review |
@@ -62,6 +62,7 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `media.fileUnsupported` | I couldn't open that file. Could you send it as a photo or a PDF, or paste the text here? | نەمتوانی ئەو فایلە بکەمەوە. دەتوانیت وەک وێنە یان PDF بینێریت، یان دەقەکە لێرە بنووسیت؟ | needs native review |
 | `media.editApplied` | I saw your edit, and I'll use the new words. | دەستکارییەکەتم بینی، و وشە نوێیەکان بەکاردەهێنم. | needs native review |
 | `media.editPassed` | I saw your edit to {title}. I've passed the new wording to the office so it's used. | دەستکارییەکەتم لە {title} بینی. دەقە نوێیەکەم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاری بهێنن. | needs native review |
+| `media.editPassedDelivered` | I saw your edit to {title}. It was already sent with the old wording, so I've passed the new wording to the office; they'll follow up here. | دەستکارییەکەتم لە {title} بینی. پێشتر بە دەقە کۆنەکەوە نێردرابوو، بۆیە دەقە نوێیەکەم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 | `media.editSeen` | I saw your edit. If anything should change, just tell me here. | دەستکارییەکەتم بینی. ئەگەر شتێک پێویستی بە گۆڕین هەیە، تەنها لێرە پێم بڵێ. | needs native review |
 | `media.editForwarded` | I saw your edit and passed it to the office; they'll follow up here. | دەستکارییەکەتم بینی و گەیاندمە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 
@@ -107,16 +108,22 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `routing.statusNothingOpen` | I don't have a design in progress in this chat right now. Tell me what you'd like designed. | ئێستا هیچ دیزاینێکم لەم چاتەدا لە دەستدا نییە. پێم بڵێ چیت دەوێت دیزاین بکرێت. | needs native review |
 | `routing.thanks` | 🙏 Thank you. | 🙏 سوپاس. | needs native review |
 | `routing.thanksOneWaiting` | 🙏 Thank you.⏎⏎Whenever you're ready, just tell me what to change on {title}. | 🙏 سوپاس.⏎⏎هەر کاتێک ئامادە بوویت، پێم بڵێ چی لە {title} بگۆڕم. | needs native review |
+| `routing.tellWhatToChange` | If you'd like anything changed, just tell me what. | ئەگەر دەتەوێت شتێک بگۆڕدرێت، تەنها پێم بڵێ چی. | needs native review |
+| `routing.unhappyPassed` | I'm sorry it isn't right. I've let the office know; tell me what you'd like changed and I'll pass it on. | ببورە کە وەک پێویست نییە. ئۆفیسەکەم ئاگادار کردەوە؛ پێم بڵێ چیت دەوێت بگۆڕدرێت و پێیانی دەگەیەنم. | needs native review |
+| `routing.unhappyAsk` | I'm sorry it isn't right. Tell me what you'd like changed and I'll pass it to the office. | ببورە کە وەک پێویست نییە. پێم بڵێ چیت دەوێت بگۆڕدرێت و دەیگەیەنمە ئۆفیسەکە. | needs native review |
+| `routing.undoPassed` | {title} had already been stopped, so I can't restart it myself. I've told the office you still want it; they'll follow up here. If you'd rather not wait, send me the request again. | {title} پێشتر ڕاگیرابوو، بۆیە خۆم ناتوانم دووبارە دەستی پێ بکەمەوە. بە ئۆفیسەکەم گوت کە هێشتا دەتەوێت؛ لێرە وەڵامت دەدەنەوە. ئەگەر ناتەوێت چاوەڕێ بکەیت، داواکارییەکە دووبارە بۆم بنێرەوە. | needs native review |
+| `routing.undoKept` | {title} had already been stopped, so I can't restart it myself. If you still need it, send me the request again. | {title} پێشتر ڕاگیرابوو، بۆیە خۆم ناتوانم دووبارە دەستی پێ بکەمەوە. ئەگەر هێشتا پێویستت پێیەتی، داواکارییەکە دووبارە بۆم بنێرەوە. | needs native review |
 | `routing.forwardedToOffice` | I've passed your message to the office; they'll follow up here. | پەیامەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 | `routing.keptForOffice` | I've kept your message for the office; they'll follow up here. | پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 | `routing.questionPassed` | I can't answer that myself, so I've passed your question to the office; they'll reply here. | ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
 | `routing.questionKept` | I can't answer that myself, so I've kept your question for the office; they'll reply here. | ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
 | `routing.nothingToChange` | I don't have a design in progress here to change. Tell me what you'd like designed, with the text that should go on it. | ئێستا هیچ دیزاینێکم لە دەستدا نییە بۆ گۆڕین. پێم بڵێ چیت دەوێت دیزاین بکرێت، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت. | needs native review |
-| `routing.askChangeOrNew` | Is this a change to {title}, or a new design? Just say “change” or “new”. | ئەمە گۆڕانکارییە لە {title}، یان دیزاینێکی نوێیە؟ تەنها بنووسە «گۆڕانکاری» یان «نوێ». | needs native review |
-| `routing.askCancel` | Do you want me to ask the office to cancel {title}? Just say “yes”. | دەتەوێت داوا لە ئۆفیسەکە بکەم {title} هەڵبوەشێنێتەوە؟ تەنها بنووسە «بەڵێ». | needs native review |
-| `routing.askIsThisOne` | Is this for {title}? Just say “yes”. | ئەمە بۆ {title}ە؟ تەنها بنووسە «بەڵێ». | needs native review |
-| `routing.askWhichDesign` | Which design is this for?⏎{list}⏎⏎Answer with the number or the name. | ئەمە بۆ کام دیزاینە؟⏎{list}⏎⏎بە ژمارە یان ناو وەڵام بدەرەوە. | needs native review |
+| `routing.askChangeOrNew` | Is this a change to {title}, or a new design? | ئەمە گۆڕانکارییە لە {title}، یان دیزاینێکی نوێیە؟ | needs native review |
+| `routing.askCancel` | Do you want me to ask the office to cancel {title}? | دەتەوێت داوا لە ئۆفیسەکە بکەم {title} هەڵبوەشێنێتەوە؟ | needs native review |
+| `routing.askIsThisOne` | Is this for {title}? | ئەمە بۆ {title}ە؟ | needs native review |
+| `routing.askWhichDesign` | Which design is this for?⏎{list} | ئەمە بۆ کام دیزاینە؟⏎{list} | needs native review |
 | `routing.aNewDesign` | A new design | دیزاینێکی نوێ | needs native review |
+| `routing.askOneAtATime` | I can only take this for one design at a time. Which one should it go to first?⏎{list}⏎After that, send it again for the other one. | لە یەک کاتدا تەنها دەتوانم ئەمە بۆ یەک دیزاین وەربگرم. سەرەتا بۆ کامیان بێت؟⏎{list}⏎دواتر، دووبارە بۆ ئەوی تر بینێرە. | needs native review (ADR-255, several designs named together, 2026-10-02) |
 | `routing.cancelAsked` | OK. I've asked the office to cancel {title}. | باشە. داوام لە ئۆفیسەکە کرد کە {title} هەڵبوەشێنێتەوە. | needs native review |
 | `routing.changeAddedWhileDesigning` | Got it. I've kept that with {title} for the office; they'll see it before the design is sent to you. | تێگەیشتم. ئەوەم لەگەڵ {title} بۆ ئۆفیسەکە هەڵگرت؛ پێش ناردنی دیزاینەکە دەیبینن. | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
 | `routing.changeAddedNextRound` | Got it. I'll add that to {title} once the current draft is done, or pass it to the office if I can't. | تێگەیشتم. کە ڕەشنووسەکەی ئێستا تەواو بوو، ئەوە بۆ {title} زیاد دەکەم، یان ئەگەر نەمتوانی دەیدەمە ئۆفیسەکە. | needs native review (ADR-239 follow-up, promises nothing before the next round is admitted, 2026-10-02; was ADR-230 section 6) |
@@ -297,6 +304,8 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `withdraw.withdrawn` | Cancelled {title}. Nothing more will be made for it. | {title} هەڵوەشێنرایەوە. هیچی تر بۆی دروست ناکرێت. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
 | `withdraw.withdrawnByOffice` | The office has cancelled {title}, so nothing more will be made for it. Tell me whenever you need a new design. | ئۆفیسەکە {title}ی هەڵوەشاندەوە، بۆیە هیچی تر بۆی دروست ناکرێت. هەر کاتێک دیزاینێکی نوێت پێویست بوو پێم بڵێ. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
 | `withdraw.askCancel` | Do you want me to cancel {title}? | دەتەوێت {title} هەڵبوەشێنمەوە؟ | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
+| `withdraw.askCancelBoth` | Do you want me to cancel both {first} and {second}? | دەتەوێت هەردووکیان هەڵبوەشێنمەوە، {first} و {second}؟ | needs native review (ADR-255, several designs named together, 2026-10-02) |
+| `withdraw.askCancelAll` | Do you want me to cancel all of these?⏎{list} | دەتەوێت هەموو ئەمانە هەڵبوەشێنمەوە؟⏎{list} | needs native review (ADR-255, several designs named together, 2026-10-02) |
 | `withdraw.tooLateApproved` | {title} was already approved, so I can't cancel it myself. I've told the office. | {title} پێشتر پەسەند کرابوو، بۆیە خۆم ناتوانم هەڵیبوەشێنمەوە. بە ئۆفیسەکەم ڕاگەیاند. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
 | `withdraw.tooLateDelivering` | {title} is already being sent to you, so I can't stop it. I've told the office. | {title} ئێستا بۆت دەنێردرێت، بۆیە ناتوانم ڕایبگرم. بە ئۆفیسەکەم ڕاگەیاند. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
 | `withdraw.tooLateDelivered` | {title} was already sent to you, so there is nothing left to cancel. I've told the office. | {title} پێشتر بۆت نێردرابوو، بۆیە هیچ نەماوە هەڵبوەشێنرێتەوە. بە ئۆفیسەکەم ڕاگەیاند. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
@@ -324,5 +333,15 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `clientQuestion.expiredToOffice` | It's been a while since I asked, so I've passed your request to the office to choose the organisation. | ماوەیەکە پرسیارەکەم کردووە، بۆیە داواکارییەکەت ناردم بۆ ئۆفیسەکە بۆ ئەوەی دامەزراوەکە هەڵبژێرن. | needs native review |
 | `clientQuestion.timedOutToOffice` | I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. | نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن. | needs native review |
 | `clientQuestion.clientNoted` | Thanks. I've told the office that {title} is for {client}. | سوپاس. بە ئۆفیسەکەم ڕاگەیاند کە {title} بۆ {client}ە. | needs native review |
+
+
+## intakeLimits (ADR-250)
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `intakeLimits.tooManyPassed` | This asks for {count} designs, more than I can start from one message, so I've passed it to the office. They'll follow up with you here. | ئەمە داوای {count} دیزاین دەکات، کە لەوە زیاترە لە یەک نامەدا دەستیان پێبکەم، بۆیە ناردم بۆ ئۆفیسەکە. لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
+| `intakeLimits.tooManyKept` | This asks for {count} designs, more than I can start from one message, so I've kept it for the office. They'll follow up with you here. | ئەمە داوای {count} دیزاین دەکات، کە لەوە زیاترە لە یەک نامەدا دەستیان پێبکەم، بۆیە بۆ ئۆفیسەکەم هەڵگرت. لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
+| `intakeLimits.sizePassed` | I can't make a design at {size} myself, so I've passed your message to the office. They'll find a size that works and follow up with you here. | خۆم ناتوانم دیزاینێک بە قەبارەی {size} دروست بکەم، بۆیە پەیامەکەتم گەیاندە ئۆفیسەکە. قەبارەیەکی گونجاو دەدۆزنەوە و لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
+| `intakeLimits.sizeKept` | I can't make a design at {size} myself, so I've kept your message for the office. They'll find a size that works and follow up with you here. | خۆم ناتوانم دیزاینێک بە قەبارەی {size} دروست بکەم، بۆیە پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت. قەبارەیەکی گونجاو دەدۆزنەوە و لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
 
 187 lines.

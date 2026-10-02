@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import { sql, type Database, type Kysely } from '@hawa/db';
 import { normalizeKurdishIncomingText } from '@hawa/integrations';
 import { matchRequestClient } from './client-packs.js';
-import { isAcknowledgement } from './telegram-classifier.js';
+import { isAcknowledgement, isNegativeReaction } from './telegram-classifier.js';
 import { readIntentByRules } from './requester-turn.js';
 
 type Tx = Kysely<Database>;
@@ -173,7 +173,8 @@ const QUESTION = /[?؟]\s*$|^(?:what|which|how|who|where|when|why|can|could|woul
  */
 export function plainClientAnswer(text: string): boolean {
   const t = text.trim();
-  if (!t || t.startsWith('/') || isAcknowledgement(t) || t.split(/\s+/).length > 6 || QUESTION.test(t)) return false;
+  // ADR-252: an unhappy emoji is no longer thanks, and it names no organisation either.
+  if (!t || t.startsWith('/') || isAcknowledgement(t) || isNegativeReaction(t) || t.split(/\s+/).length > 6 || QUESTION.test(t)) return false;
   const reading = readIntentByRules(t);
   return !['status', 'cancel', 'approval', 'deadline', 'delivery_request', 'change'].includes(reading.intent) && !reading.explicitNew;
 }

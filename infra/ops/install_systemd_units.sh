@@ -7,7 +7,7 @@
 #   hawa-backup-restore-drill  Sundays 04:00:                        infra/backup/backup_restore_drill.sh (schema parity)
 #   hawa-restore-drill         the 1st of each month, 05:00:         infra/backup/restore_drill.sh (data and files)
 #   hawa-offsite-copy          05:30:                                infra/backup/offsite_copy.sh (off until configured)
-#   hawa-live-canary           03:30 Asia/Baghdad:                   infra/ops/live_canary.sh (ADR-240; skipped until configured)
+#   hawa-live-canary           04:30 Asia/Baghdad:                   infra/ops/live_canary.sh (ADR-240/254; skipped until configured)
 #
 #   sudo bash infra/ops/install_systemd_units.sh [--user hawa]    # install or refresh; enable and start the timers
 #   sudo bash infra/ops/install_systemd_units.sh --uninstall      # stop, disable and remove them (settings are kept)

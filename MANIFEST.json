@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T00:42:30Z",
+  "generatedAt": "2026-10-02T08:50:29Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 870,
+  "fileCount": 876,
   "files": [
     {
       "path": ".dockerignore",
@@ -1174,8 +1174,8 @@
     },
     {
       "path": "adrs/240_nightly_live_canary.md",
-      "sha256": "99d941961ebbf74b646473ca23af3cc3156dc27713355e693942dbdd1ff312af",
-      "bytes": 16290
+      "sha256": "7729dcd2fec949fd4018d7f6ad46a1c9ff317f034183560681b951ea0011906e",
+      "bytes": 17014
     },
     {
       "path": "adrs/241_page_grammar_admission.md",
@@ -1186,6 +1186,36 @@
       "path": "adrs/242_kept_model_consent_audit_authority.md",
       "sha256": "0dd21e3eb98962fddf5cda8b9d2b1a29b66c074b7d757ca1f4f949d1f9f4e8fa",
       "bytes": 4245
+    },
+    {
+      "path": "adrs/250_requester_intake_routing_fixes.md",
+      "sha256": "b99f351e8ee0c86614f1a629707135196278c54548e684ffe8622eee1a7fc6f5",
+      "bytes": 6386
+    },
+    {
+      "path": "adrs/251_requester_turn_confirmations.md",
+      "sha256": "a7d1064c246e5a06a4517ef56ad9ca74e0cf353dfa906aa2c2f04b36ca36b82b",
+      "bytes": 4622
+    },
+    {
+      "path": "adrs/252_requester_reply_fixes.md",
+      "sha256": "d0cdf0cc60e91a43ed9efa6dd1e46edd302247ddf34f37a1d46089bb549987e8",
+      "bytes": 9661
+    },
+    {
+      "path": "adrs/253_double_role_cancel_and_client_possessive.md",
+      "sha256": "a5ba205143746f6f369bd078ef8f02a7ca23196db729972c9bb9a568d32f897f",
+      "bytes": 10421
+    },
+    {
+      "path": "adrs/254_canary_hardening_and_client.md",
+      "sha256": "6f4f05ae86da6f016873f7a17dfcd4c01472166f65cb6856da650acf549e1a0b",
+      "bytes": 8382
+    },
+    {
+      "path": "adrs/255_cancel_several_designs.md",
+      "sha256": "295d9f478a37007ad08dad9fb11401ada7dd5b607dd9af3453c14eb9caf7f488",
+      "bytes": 5726
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1294,8 +1324,8 @@
     },
     {
       "path": "db/seed.sql",
-      "sha256": "a7270afa44974ef143716fef126dc546aea0750d34b8d7c2d68a6156f371221b",
-      "bytes": 6273
+      "sha256": "d2a1d9e09cd486cfc2bea339d29622ff227d928d0a06a406769251cfcdf2dcc8",
+      "bytes": 6626
     },
     {
       "path": "db/test-fixtures.sql",
@@ -2424,8 +2454,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "3c9f55e4469694a2edc61391e6447bf5deffa21a0a267a260221ad404470deb8",
-      "bytes": 74492
+      "sha256": "9cadabd9871f7daa1ad1fb5fd1a0c92db87baaf5ba13dc7f6de90c9f12e84145",
+      "bytes": 79063
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -3384,8 +3414,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "9bbcb3c9217268614d0370ee24e849ed29d898171b1f013962e34de3ddf41ee2",
-      "bytes": 834156
+      "sha256": "65bb058b700bfb0a94b1dc7516ef9537b155d3e1f18b3ac0638f4a43d5422331",
+      "bytes": 837608
     },
     {
       "path": "plans/user-stories.csv",
@@ -3874,8 +3904,8 @@
     },
     {
       "path": "scripts/live_canary_lib.ts",
-      "sha256": "573ba59fc80f618a428a6a1b69099ab86acb9b0a29e7252043df406192a15eb6",
-      "bytes": 25839
+      "sha256": "ac534ffd34df50e34da652249f1c4685b3cc6a1d97596502071f33c9b8b9729f",
+      "bytes": 27081
     },
     {
       "path": "scripts/load/desk-tab.ts",
@@ -4239,8 +4269,8 @@
     },
     {
       "path": "scripts/test/live-canary.test.ts",
-      "sha256": "e999efe517822096f320769aeb7e9fe751e4f41e38e4759a4e7fc6b306e1f9e6",
-      "bytes": 13677
+      "sha256": "fd66790384d2e2e851ae274b7f7b965ddca3197c10453e1e63669b7d974fc738",
+      "bytes": 15469
     },
     {
       "path": "scripts/test/nginx-reload.test.ts",

@@ -46,7 +46,8 @@ describe('systemd units (Linux)', () => {
     expect(unit('hawa-backup-restore-drill.timer')).toMatch(/^OnCalendar=Sun \*-\*-\* 04:00:00 Asia\/Baghdad$/m);
     expect(unit('hawa-restore-drill.timer')).toMatch(/^OnCalendar=\*-\*-01 05:00:00 Asia\/Baghdad$/m);
     expect(unit('hawa-offsite-copy.timer')).toMatch(/^OnCalendar=\*-\*-\* 05:30:00 Asia\/Baghdad$/m);
-    expect(unit('hawa-live-canary.timer')).toMatch(/^OnCalendar=\*-\*-\* 03:30:00 Asia\/Baghdad$/m);
+    // ADR-254: an hour after the backup, not at the same minute.
+    expect(unit('hawa-live-canary.timer')).toMatch(/^OnCalendar=\*-\*-\* 04:30:00 Asia\/Baghdad$/m);
     expect(unit('hawa-live-canary.timer')).toMatch(/^Persistent=false$/m);
     const scripts: Record<string, string> = { 'hawa-watchdog': 'infra/ops/watchdog.sh', 'hawa-nightly-backup': 'infra/backup/nightly_backup.sh',
       'hawa-backup-restore-drill': 'infra/backup/backup_restore_drill.sh', 'hawa-restore-drill': 'infra/backup/restore_drill.sh',
@@ -121,10 +122,12 @@ describe.runIf(os.platform() === 'darwin')('launch agents (macOS)', () => {
     expect(fs.existsSync(launchctlCalls)).toBe(false);
   });
 
-  it('the live canary (ADR-240) runs infra/ops/live_canary.sh at 03:30, with no settings of its own', () => {
-    expect(read('design.hawa.live-canary')).toContain('<key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer>');
+  it('the live canary (ADR-240) runs infra/ops/live_canary.sh at 04:30 (ADR-254), with only the backup\'s archive destination', () => {
+    expect(read('design.hawa.live-canary')).toContain('<key>Hour</key><integer>4</integer><key>Minute</key><integer>30</integer>');
     expect(read('design.hawa.live-canary')).toContain(`<string>${repo}/infra/ops/live_canary.sh</string>`);
-    expect(Object.keys(envOf('design.hawa.live-canary')).sort()).toEqual(['HOME', 'PATH']);
+    // The archive destination lets it see the backup's archive lock; nothing else of the backup's is its business.
+    expect(envOf('design.hawa.live-canary')).toEqual({ HOME: path.join(tmp, 'home'), PATH: expect.any(String),
+      HAWA_BACKUP_ARCHIVE_DEST: '/Users/x/Library/Mobile Documents/com~apple~CloudDocs/HawaBackups' });
   });
 
   it('the off-site agent runs at 05:30 with the nightly job\'s archive settings and its own destination', () => {

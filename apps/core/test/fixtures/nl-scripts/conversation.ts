@@ -290,11 +290,16 @@ export const CONVERSATION_SCRIPTS: Script[] = [
   },
   {
     id: 'S081', title: '"no need anymore, thanks"', kinds: ['cancel'],
-    natural: 'Read as a cancellation, not as thanks.',
+    // ADR-251 (bug hunt 2, friction 1): a cancel that names nothing withdrew the design unasked. It is
+    // read as a cancellation, not as thanks, and asked about by name; "yes" withdraws it.
+    natural: 'Read as a cancellation, not as thanks; the bot asks before it withdraws, and "yes" withdraws it.',
     async play(p) {
       await p.say(KAAE_EVENING);
       const cancel = await p.say('no need anymore, thanks', { after: 60_000 });
-      expect(p.answer(cancel)).toMatch(/cancel|stop/i);
+      expect(p.answer(cancel)).toMatch(/^Do you want me to cancel <b>.+<\/b>\?$/);
+      expect(await p.h.taskState(p.request())).not.toMatchObject({ state: 'cancelled' });
+      const yes = await p.say('yes', { after: 30_000 });
+      expect(p.answer(yes)).toMatch(/^Cancelled <b>.+<\/b>\. Nothing more will be made for it\.$/);
       expect(await p.h.taskState(p.request())).toMatchObject({ state: 'cancelled' });
     },
   },
@@ -322,12 +327,17 @@ export const CONVERSATION_SCRIPTS: Script[] = [
   },
   {
     id: 'S084', title: '"stop" on its own', kinds: ['cancel'],
-    natural: 'Read as a cancellation of the one design.',
+    // ADR-251 (bug hunt 2, friction 1): "stop" withdrew the one design unasked.
+    natural: 'Asked about by name before anything is withdrawn; "no" keeps the design going, and nothing is cancelled.',
     async play(p) {
       await p.say(KAAE_EVENING);
       const stop = await p.say('stop', { after: 60_000 });
-      expect(p.answer(stop)).toMatch(/cancel|stop/i);
-      expect(await p.h.taskState(p.request())).toMatchObject({ state: 'cancelled' });
+      expect(p.answer(stop)).toMatch(/^Do you want me to cancel <b>.+<\/b>\?$/);
+      const no = await p.say('no', { after: 30_000 });
+      expect(p.answer(no)).not.toMatch(/cancel/i);
+      expect(p.answer(no)).toMatch(/<b>.+<\/b>/);
+      expect(p.kept).toHaveLength(0);
+      expect(await p.h.taskState(p.request())).not.toMatchObject({ state: 'cancelled' });
     },
   },
   {

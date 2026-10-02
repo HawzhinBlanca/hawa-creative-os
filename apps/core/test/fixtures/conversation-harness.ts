@@ -195,7 +195,9 @@ export class ConversationHarness {
         async dispatchOutboundPhoto(chatId, _photo, caption) { return self.telegram(String(chatId), caption ?? '', 'photo'); },
       }),
       readExportBytes: readStoredExportBytes,
-      readDraftImage: async (ref: any) => (ref?.id ? this.exports.get(ref.id)?.bytes ?? null : null),
+      // The sender reads a draft picture as (trx, ref). Read as (ref) it found nothing, so every photo alert here went as
+      // text, which ADR-253 now marks and Telegram approval refuses.
+      readDraftImage: async (_trx: unknown, ref: any) => (ref?.id ? this.exports.get(ref.id)?.bytes ?? null : null),
       officeChatIds: () => o.office.map((p) => String(p.id)),
       markRetryDelaysMs: [5],
       // ADR-240: the worker's own canary sink, configured as production configures it (HAWA_CANARY_CHAT_ID).

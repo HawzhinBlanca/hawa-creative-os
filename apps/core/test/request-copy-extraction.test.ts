@@ -8,6 +8,7 @@ import {
   copyExtractionRequestBody, copyTitle, createCopyExtractionModel, extractRequestCopy, groundLine, requestLead,
   type CopyExtractionModel, type ProposedCopy,
 } from '../src/services/request-copy-extraction.js';
+import { requestTitle } from '../src/services/request-title.js';
 import { COPY_UPDATE_OFFSET, OFFICE_UPDATE_OFFSET, ledgerUpdateId } from '../src/services/requester-intent-model.js';
 
 /**
@@ -170,6 +171,53 @@ describe('the copy of a request written as a sentence (ADR-232)', () => {
     expect(copyTitle('Assessment Literacy Workshop', 'KAAE')).toBe('KAAE: Assessment Literacy Workshop');
     expect(copyTitle('A very long headline that goes on and on about the annual assessment literacy gathering', 'Sewa'))
       .toMatch(/^Sewa: A very long headline that goes on and on about the…$/);
+  });
+
+  describe('ADR-253 (live 2026-10-02, L21): the client\'s possessive is not part of the headline', () => {
+    const QA = "Can you make a poster for KAAE's Quality Assurance Workshop for university deans. It's on 15 October 2026 at 9:30 AM in the Rotana Hotel, Erbil. Registration is free.";
+
+    it('the live brief by the rules: "KAAE\'s Quality Assurance Workshop" prints as "Quality Assurance Workshop"; the title is "KAAE: …"', async () => {
+      const draft = await extractRequestCopy(prepared(QA), ctx(null));
+      expect(texts(draft)[0]).toBe('Quality Assurance Workshop for university deans');
+      expect(draft.headlineEn).toBe('Quality Assurance Workshop for university deans');
+      expect(draft.title).toBe('KAAE: Quality Assurance Workshop for university deans');
+      expect(draft.copyExtraction).toMatchObject({ method: 'rules', headline: 'Quality Assurance Workshop for university deans', withoutClient: "KAAE's" });
+    });
+
+    it('the model\'s headline loses the possessive the same way, with a typographic apostrophe too; the rest is as typed', async () => {
+      for (const [brief, headline] of [[QA, "KAAE's Quality Assurance Workshop"], [QA.replace("KAAE's", 'KAAE’s'), 'KAAE’s Quality Assurance Workshop']]) {
+        const draft = await extractRequestCopy(prepared(brief), ctx(fixed({ headline, lines: ['for university deans', 'Registration is free'] })));
+        expect(draft.copyExtraction).toMatchObject({ method: 'model' });
+        expect(texts(draft)).toEqual(['Quality Assurance Workshop', 'For university deans', 'Registration is free']);
+        expect(draft.title).toBe('KAAE: Quality Assurance Workshop');
+      }
+    });
+
+    it('keeps everything else: another name\'s possessive, the client named without one, quoted words, and a headline that is only the client', async () => {
+      const sewa = await extractRequestCopy(prepared("Can you make a poster for Sewa's Book Fair on 3 May."), ctx(fixed({ headline: "Sewa's Book Fair", lines: [] })));
+      expect(texts(sewa)[0]).toBe("Sewa's Book Fair");
+      const named = await extractRequestCopy(prepared('Can you make a poster for the KAAE Quality Week on 3 May.'), ctx(fixed({ headline: 'KAAE Quality Week', lines: [] })));
+      expect(texts(named)[0]).toBe('KAAE Quality Week');
+      expect(named.title).toBe('KAAE Quality Week');
+      const quoted = await extractRequestCopy(prepared('Can you make a poster that says "KAAE\'s 20th Anniversary"?'), ctx(null));
+      expect(texts(quoted)[0]).toBe("KAAE's 20th Anniversary");
+      expect(quoted.title).toBe('KAAE: 20th Anniversary');
+      // A client with a pack: its English name and code are the client's too.
+      const zar = await extractRequestCopy(prepared("Can you make a poster for ZAR Podcast's Episode 40 night on 3 May.",
+        { clientId: 'c1000000-0000-4000-8000-000000000011' }), ctx(fixed({ headline: "ZAR Podcast's Episode 40 night", lines: [] })));
+      expect(texts(zar)[0]).toBe('Episode 40 night');
+    });
+
+    it('titles: one clean form, "<client>: <name>", whether the title comes from the copy or from the first line', () => {
+      expect(copyTitle("KAAE's Quality Assurance Workshop", 'KAAE', true)).toBe('KAAE: Quality Assurance Workshop');
+      expect(copyTitle('KAAE’s Quality Assurance Workshop', 'KAAE', true)).toBe('KAAE: Quality Assurance Workshop');
+      expect(copyTitle('Quality Assurance Workshop', 'KAAE', true)).toBe('KAAE: Quality Assurance Workshop');
+      expect(requestTitle({ headline: "KAAE's Quality Assurance Workshop", label: 'KAAE', clientLabel: true })).toBe('KAAE: Quality Assurance Workshop');
+      expect(requestTitle({ headline: 'KAAE K-12 Pilot Study', label: 'KAAE', clientLabel: true })).toBe('KAAE K-12 Pilot Study');
+      // A sender's name as the label is not the client's: "Sara's Bakery" keeps its words.
+      expect(copyTitle("Sara's Bakery opening", 'Sara')).toBe("Sara's Bakery opening");
+      expect(requestTitle({ headline: "Sara's Bakery opening", label: 'Sara' })).toBe("Sara's Bakery opening");
+    });
   });
 
   it('the paid request: the requester\'s words as data, a strict schema and a bounded output', () => {

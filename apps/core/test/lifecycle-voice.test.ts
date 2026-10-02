@@ -288,7 +288,7 @@ describe('voice notes in plain words (ADR-145)', () => {
     await sql`UPDATE hawa.tasks SET request_id=${requestId}::uuid WHERE id=${taskId}::uuid`.execute(owner);
     plain(f);
     const asked = await intake(f.update);
-    expect(asked.sourceMessage).toBe('Is this for a change to <b>Nawroz poster</b>, or for a new design? Just say “change” or “new”.');
+    expect(asked.sourceMessage).toBe('Is this for a change to <b>Nawroz poster</b>, or for a new design?');
     expect(asked.sourceMessage).not.toMatch(/\/new|reply to its/);
     const heard = await intake(text(f, 'change'));
     expect(heard.sourceMessage).toContain("couldn't turn it into text");

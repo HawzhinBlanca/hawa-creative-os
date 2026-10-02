@@ -38,7 +38,8 @@ import type { Database, Kysely } from '@hawa/db';
 import type { ChatIntake } from './chat-intake.js';
 import { isDesignerRemark } from './request-remarks.js';
 import { ledgerUpdateId, readOnce } from './requester-intent-model.js';
-import { startsWithName, stripLeadingMarks } from '../core-helpers.js';
+import { afterPossessive, startsWithName, stripLeadingMarks } from '../core-helpers.js';
+import { clientPackOf } from './client-packs.js';
 
 /** The copy the model proposes: data, checked word by word before any of it is used. */
 export interface ProposedCopy { headline: string; lines: string[] }
@@ -62,6 +63,8 @@ export interface CopyExtractionReceipt {
   ledgerUpdateId?: number;
   /** ADR-235 (owner: "Capitalize first letters"): lines whose first letter was made a capital, as the requester typed them. */
   capitalised?: string[];
+  /** ADR-253 (L21): the client's possessive left out at the start of the headline ("KAAE's"). */
+  withoutClient?: string;
 }
 
 const MAX_MODEL_TEXT = 1500;
@@ -382,9 +385,50 @@ export function capitalFirst(line: string): string {
 
 const isArabic = (text: string) => /[؀-ۿ]/.test(text);
 
-/** "KAAE: Assessment Literacy Workshop": the client's name once, the headline cut only when long. */
-export function copyTitle(headline: string, label: string): string {
-  const line = ws(stripLeadingMarks(headline));
+/**
+ * ADR-253: routing words in a client pack that are ordinary nouns, not the client's name ("university",
+ * "accreditation" route to KAAE): "University's Open Day" keeps its words.
+ */
+const NOT_A_NAME = new Set(['university', 'accreditation', 'education', 'school', 'college', 'ministry', 'news', 'podcast', 'edition', 'office']);
+
+/** The names the identified client goes by: its short label, its pack's code, names and aliases (ADR-253). */
+export function clientNamesFor(clientId: string | null | undefined, label: string | null): string[] {
+  const names = new Set<string>();
+  if (label) names.add(label);
+  const pack = clientId ? clientPackOf(clientId) : undefined;
+  if (pack) {
+    for (const name of [pack.code, pack.displayName, pack.displayName.replace(/\s*\(.*$/u, ''), pack.names.en, pack.names.ckb, pack.names.ar,
+      ...pack.routing.latinAliases, ...pack.routing.scriptAliases]) {
+      if (typeof name === 'string' && name.trim().length >= 2 && !NOT_A_NAME.has(name.trim().toLowerCase())) names.add(name.trim());
+    }
+  }
+  // The longest first: "ZAR Podcast's …" before "ZAR's …".
+  return [...names].sort((a, b) => b.length - a.length);
+}
+
+/**
+ * ADR-253 (live 2026-10-02, L21): "a poster for KAAE's Quality Assurance Workshop" printed "KAAE's
+ * Quality Assurance Workshop": the event's name is what follows the client's possessive (the logo names
+ * the client). A headline that starts with one of the client's names as a possessive keeps only the rest,
+ * which is still the requester's own characters, in their order. Null: nothing to leave out.
+ */
+export function withoutClientPossessive(headline: string, names: readonly string[]): { rest: string; dropped: string } | null {
+  const line = stripLeadingMarks(headline);
+  for (const name of names) {
+    const rest = afterPossessive(line, name);
+    if (rest && contentWords(rest)) return { rest, dropped: line.slice(0, line.length - rest.length).trim() };
+  }
+  return null;
+}
+
+/**
+ * "KAAE: Assessment Literacy Workshop": the client's name once, the headline cut only when long. When
+ * the label is the client's (`clientLabel`), a headline that starts with its possessive ("KAAE's …") is
+ * titled "KAAE: …" (ADR-253); a sender's name as the label is left as it was ("Sara's Bakery").
+ */
+export function copyTitle(headline: string, label: string, clientLabel = false): string {
+  const said = ws(stripLeadingMarks(headline));
+  const line = (clientLabel && label && afterPossessive(said, label)) || said;
   const cut = line.length <= 60 ? line : `${line.slice(0, 57).replace(/\s+\S*$/u, '') || line.slice(0, 57)}…`;
   return label && !startsWithName(line, label) ? `${label}: ${cut}` : cut;
 }
@@ -450,18 +494,22 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   }
   // Lines chosen from a request sentence (model or rules) start with a capital; quoted words stay as typed.
   const capitals = chosen.method === 'model' || chosen.method === 'rules';
-  const typed = [chosen.copy.headline, ...chosen.copy.lines];
+  const label = draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : ctx.senderName;
+  // ADR-253 (L21): the client's possessive is not the event's name; quoted words stay as the requester quoted them.
+  const unowned = capitals && draft.clientId ? withoutClientPossessive(chosen.copy.headline,
+    clientNamesFor(draft.clientId, draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : null)) : null;
+  const typed = [unowned && !asksTheBot(unowned.rest) ? unowned.rest : chosen.copy.headline, ...chosen.copy.lines];
   const all = typed.map((line) => (capitals ? capitalFirst(line) : line));
   const [headline, ...lines] = all;
   const capitalised = typed.filter((line, i) => line !== all[i]);
   const receipt: CopyExtractionReceipt = { ...base, method: chosen.method, why: chosen.why, headline, lines,
     ...(capitalised.length ? { capitalised } : {}),
+    ...(unowned && typed[0] === unowned.rest ? { withoutClient: unowned.dropped } : {}),
     ...(chosen.copy.refused.length || refused ? { refused: [...(refused ?? []), ...chosen.copy.refused].slice(0, 8) } : {}),
     ...(ledger !== undefined ? { ledgerUpdateId: ledger } : {}) };
-  const label = draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : ctx.senderName;
   return {
     ...kept,
-    title: copyTitle(headline, label),
+    title: copyTitle(headline, label, draft.clientId === KAAE_CLIENT_ID),
     ...(isArabic(headline) ? { headlineCkb: headline } : { headlineEn: headline }),
     copyEn: lines.filter((l) => !isArabic(l)).join('\n'),
     copyCkb: lines.filter(isArabic).join('\n'),

@@ -17,7 +17,7 @@
  */
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { MEDIA_MESSAGES, bold, requesterLang, say, escapeTelegramHtml } from '@hawa/integrations';
+import { LIFECYCLE_MESSAGES, MEDIA_MESSAGES, bold, requesterLang, say, escapeTelegramHtml } from '@hawa/integrations';
 import { createHash } from 'node:crypto';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { replyLanguage } from './lifecycle-album.js';
@@ -116,7 +116,11 @@ export function createEditIntake(ctx: Pick<CoreContext, 'db'>) {
               AND source_event_id = ${String(original.updateId)}`.execute(trx)).rows[0]);
           return opened?.ambiguous ? noteBundle(original.updateId) : opened ? note(opened.request_id) : forward();
         }
-        if (typeof plan.requestId === 'string' && ['revise', 'redo', 'note', 'tell'].includes(plan.kind)) return note(plan.requestId);
+        // ADR-252 (friction 13): approval, timing or file words passed to the office ('tell') changed
+        // nothing on the design. Kept as a change, their edit held Deliver until someone read it; they
+        // are read again as they now read ("approved" edited to "approved, but a bigger logo" is a change).
+        if (plan.kind === 'tell') return words ? reread() : forward();
+        if (typeof plan.requestId === 'string' && ['revise', 'redo', 'note'].includes(plan.kind)) return note(plan.requestId);
         // It opened nothing and changed nothing: read it again as it now reads.
         return words ? reread() : forward();
       }
@@ -165,10 +169,14 @@ export function createEditIntake(ctx: Pick<CoreContext, 'db'>) {
       // The open is decided but not yet projected: ChatInbox asks again in a moment (ADR-144's rule).
       if (!target) return { kind: 'answer', answer: { status: 503, extra: { code: 'REQUEST_OPENING', chatId } } };
       if (!LATE_STAGES.has(target.stage) || !words) return forward();
-      const title = shortTitle(target.title || 'your design');
+      const title = shortTitle(target.title || '');
+      // ADR-252 (friction 11): a design with no name of its own is named in the requester's language.
+      const named = title === 'your design' ? say(LIFECYCLE_MESSAGES.yourDesign, lang) : title;
+      // ADR-252 (friction 13): a delivered design keeps the words it was sent with; nothing says they are used.
+      const passed = target.stage === 'delivered' ? MEDIA_MESSAGES.editPassedDelivered : MEDIA_MESSAGES.editPassed;
       const late: LateRequesterChange = { requestId, taskId: target.task_id, requestRev: Number(target.rev),
         requestStage: target.stage as LateRequesterChange['requestStage'], text: `[The requester edited their message to:]\n${words}`,
-        title, answer: say(MEDIA_MESSAGES.editPassed, lang, { title: bold(title) }) };
+        title, answer: say(passed, lang, { title: bold(named) }) };
       const answer = await deps.recordLate(late);
       await tx((trx) => recordEditDecision(trx, DEFAULT_TENANT_ID, update.update_id, { kind: 'answered' }, payloadHash));
       return { kind: 'answer', answer };

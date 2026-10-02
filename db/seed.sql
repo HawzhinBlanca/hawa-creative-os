@@ -84,7 +84,10 @@ VALUES
   ('c1000000-0000-4000-8000-000000000011'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'zar-podcast', 'ZAR Podcast', 'en', 'active'),
   ('c1000000-0000-4000-8000-000000000012'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'halwest-news', 'Halwest News', 'en', 'active'),
   ('c1000000-0000-4000-8000-000000000013'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'kawa-ba-hawlery', 'Kawa ba Hawlery', 'en', 'active'),
-  ('c1000000-0000-4000-8000-000000000014'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'erbil-edition', 'Erbil Edition', 'en', 'active')
+  ('c1000000-0000-4000-8000-000000000014'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'erbil-edition', 'Erbil Edition', 'en', 'active'),
+  -- The nightly live canary's test client (ADR-240, ADR-254; packages/creative/assets/clients/canary-test.json): never designed for
+  -- automatically (an onboarding pack), no model consent, no Drive or Sheet.
+  ('c1000000-0000-4000-8000-000000000099'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'canary-test', 'Canary Test', 'en', 'active')
 ON CONFLICT (id) DO NOTHING;
 
 -- Client memberships

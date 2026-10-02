@@ -24,6 +24,19 @@ export const WITHDRAW_MESSAGES = {
     en: 'Do you want me to cancel {title}?',
     ckb: 'دەتەوێت {title} هەڵبوەشێنمەوە؟',
   },
+  /**
+   * ADR-255: a cancel that named two designs together in words the bot could not place for certain ("can
+   * you cancel both"): one question naming both; "yes" cancels both. `{first}`, `{second}`: their names.
+   */
+  askCancelBoth: {
+    en: 'Do you want me to cancel both {first} and {second}?',
+    ckb: 'دەتەوێت هەردووکیان هەڵبوەشێنمەوە، {first} و {second}؟',
+  },
+  /** The same about three or more designs (`{list}`: one numbered line each). */
+  askCancelAll: {
+    en: 'Do you want me to cancel all of these?\n{list}',
+    ckb: 'دەتەوێت هەموو ئەمانە هەڵبوەشێنمەوە؟\n{list}',
+  },
   // A cancel that came too late: the design was already approved or sent. The office was told.
   tooLateApproved: {
     en: "{title} was already approved, so I can't cancel it myself. I've told the office.",

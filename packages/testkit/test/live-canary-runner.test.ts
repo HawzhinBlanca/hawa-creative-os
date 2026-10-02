@@ -16,6 +16,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '../../..');
 const runner = path.join(repo, 'infra/ops/live_canary.sh');
 const lock = path.join(repo, 'infra/ops/deploy_lock.py');
+const archiveLock = path.join(repo, 'infra/backup/archive_lock.py');
 const BASH = fs.existsSync('/bin/bash') ? '/bin/bash' : 'bash';
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-live-canary-')));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -137,6 +138,67 @@ describe('the nightly canary runner (ADR-240)', () => {
     expect(s.read('curl')).toBe('');
     s.run('exit 0');
     expect(s.read('curl')).toContain('skipped two nights in a row');
+  });
+
+  it('waits while the nightly backup holds the archive lock, even when its process is not seen (ADR-254)', async () => {
+    const s = setup();
+    const archive = path.join(s.t, 'archive');
+    const holder = spawn('python3', [archiveLock, '--archive', archive, '--mode', 'exclusive', '--', '/bin/sleep', '8']);
+    await new Promise((r) => setTimeout(r, 700));
+    const res = s.run(`touch '${s.f('ran')}'`, { HAWA_BACKUP_ARCHIVE_DEST: archive, HAWA_CANARY_BACKUP_WAIT: '60' });
+    holder.kill();
+    expect(res.status, res.stderr).toBe(0);
+    expect(fs.existsSync(s.f('ran'))).toBe(false);
+    expect(s.latest()).toMatchObject({ status: 'skipped', reason: 'the nightly backup was still running after 60 s' });
+    // A restore drill holds it shared: that is no backup, and the night runs.
+    const drill = spawn('python3', [archiveLock, '--archive', archive, '--mode', 'shared', '--', '/bin/sleep', '8']);
+    await new Promise((r) => setTimeout(r, 700));
+    const ran = s.run(`touch '${s.f('ran')}'`, { HAWA_BACKUP_ARCHIVE_DEST: archive, HAWA_CANARY_BACKUP_WAIT: '60' });
+    drill.kill();
+    expect(ran.status, ran.stderr).toBe(0);
+    expect(fs.existsSync(s.f('ran'))).toBe(true);
+    // The probe let go: the backup can take its lock afterwards.
+    expect(spawnSync('python3', [archiveLock, '--archive', archive, '--mode', 'exclusive', '--', 'true']).status).toBe(0);
+  });
+
+  it('a quiet skip neither counts toward two nights in a row nor resets the count (ADR-254)', () => {
+    const s = setup({ configured: false, load: '15' });
+    s.run('exit 0');
+    expect(s.latest()).toMatchObject({ status: 'skipped', quiet: true, countedStatus: null });
+    // Configured the next day, on a loaded host: one counted skip after a quiet one is not two.
+    fs.appendFileSync(s.f('env.production'), `HAWA_CANARY_CHAT_ID=${CANARY}\n`);
+    s.run('exit 0');
+    expect(s.read('curl')).toBe('');
+    // A quiet night between two counted skips carries the count over it.
+    const content = fs.readFileSync(s.f('env.production'), 'utf8');
+    fs.writeFileSync(s.f('env.production'), content.replace(/^HAWA_CANARY_CHAT_ID=.*\n/m, ''));
+    s.run('exit 0');
+    expect(s.latest()).toMatchObject({ quiet: true, countedStatus: 'skipped' });
+    expect(s.read('curl')).toBe('');
+    fs.writeFileSync(s.f('env.production'), content);
+    s.run('exit 0');
+    expect(s.read('curl')).toContain('skipped two nights in a row');
+  });
+
+  it('reads settings as compose does: one pair of surrounding quotes is not part of the value (ADR-254)', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('env.production'), ['TELEGRAM_BOT_TOKEN=test-token', `HAWA_CANARY_CHAT_ID="${CANARY}"`,
+      "HAWA_CANARY_CLIENT_ID='c1000000-0000-4000-8000-000000000099'", 'HAWA_CANARY_CLIENT_NAME="Canary Test"', "HAWA_CANARY_MAX_USD=0.5\r", ''].join('\n'));
+    const res = s.run(`env | grep '^HAWA_CANARY_[CM]' | sort > '${s.f('seen')}'; exit 0`);
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+    expect(s.read('seen')).toBe([`HAWA_CANARY_CHAT_ID=${CANARY}`, 'HAWA_CANARY_CLIENT_ID=c1000000-0000-4000-8000-000000000099',
+      'HAWA_CANARY_CLIENT_NAME=Canary Test', 'HAWA_CANARY_MAX_USD=0.5', ''].join('\n'));
+  });
+
+  it('the deploy lock ends with its command, not with a process the command left running (ADR-254)', () => {
+    const lockFile = path.join(tmp, 'orphan.lock');
+    // The command starts a background process that outlives it, as a deploy's helpers can.
+    const started = spawnSync('python3', [lock, '--lock', lockFile, '--', BASH, '-c', '(/bin/sleep 6 &) ; exit 3'], { encoding: 'utf8' });
+    expect(started.status).toBe(3);
+    const next = spawnSync('python3', [lock, '--lock', lockFile, '--', 'true'], { encoding: 'utf8' });
+    expect(next.status, next.stderr).toBe(0);
+    // A command ended by a signal is reported as the shell does.
+    expect(spawnSync('python3', [lock, '--lock', lockFile, '--', BASH, '-c', 'kill -TERM $$']).status).toBe(143);
   });
 
   it('deploy.sh --apply runs under the same lock, after its host-role check and before any change', () => {

@@ -40,6 +40,9 @@ describe('requester message catalogue', () => {
       expect(text).not.toMatch(/وەڵامی\s+(?:ئەم\s+|ئەو\s+)?وێنە/u);
       // Exact formats: "Client: <code>", "Size: WxH", a divider line.
       expect(text).not.toMatch(/\bClient:|\bSize:|---/);
+      // ADR-252 (natural language only): a requester is never told which words to type ("Just say “yes”",
+      // "Just say “change” or “new”", "Answer with the number or the name"; Sorani "just write «yes»").
+      if (!office) expect(text).not.toMatch(/\bjust\s+say\b|\banswer\s+with\s+the\s+number\b|تەنها\s+بنووسە|بە\s+ژمارە\s+یان\s+ناو/iu);
       // The office's own words.
       expect(text).not.toMatch(office ? /Task ID|task id|request id|\brevision\b|lifecycle|https?:\/\//i
         : /Task ID|task id|request id|\brevision\b|lifecycle|Hawa Desk|\bDesk\b|Canva|https?:\/\//i);

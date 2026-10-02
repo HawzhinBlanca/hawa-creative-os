@@ -198,7 +198,9 @@ export async function recordIntentReceipt(trx: Kysely<Database>, tenantId: strin
 
 const toAsk = (updateId: number, plan: TurnPlan): PendingAsk | null =>
   plan.kind === 'ask' && Array.isArray(plan.options) && typeof plan.words === 'string'
-    ? { updateId, intent: plan.intent, words: plan.words, options: plan.options, allowNew: plan.allowNew === true }
+    ? { updateId, intent: plan.intent, words: plan.words, options: plan.options, allowNew: plan.allowNew === true,
+      // ADR-255: a question that named every design ("Do you want me to cancel both …?"): "yes" means them all.
+      ...(plan.every === 'both' || plan.every === 'all' ? { every: plan.every } : {}) }
     : null;
 
 /**
