@@ -1,11 +1,11 @@
 {
-  "recordedAt": "2026-10-02T15:43:40.220389+00:00",
+  "recordedAt": "2026-10-02T15:52:40.436612+00:00",
   "scope": "ADR261 ordered customer photo vertical slice; local only; app transfer remains incomplete",
   "websiteCommit": "3455659e0c6f8dc4cb7bcfec009d3d546938a8af",
   "publicGenerationEnabled": false,
   "deployed": false,
   "published": false,
-  "sourceState": "Implementation complete locally; release source seal and final full regression pending",
+  "sourceState": "Sealed committed source qualified locally. Subsequent checkpoint edits are evidence/docs only. App transfer remains incomplete.",
   "passingChecks": {
     "FINAL_PHOTO_TESTS.json": {
       "success": true,
@@ -43,23 +43,33 @@
       "skipped": 0,
       "unexpected": 0,
       "flaky": 0
-    }
-  },
-  "retainedFailures": {
+    },
     "FULL_ENGINE_TESTS.json": {
-      "success": false,
+      "success": true,
       "numTotalTests": 8140,
-      "numPassedTests": 8071,
-      "numFailedTests": 2,
+      "numPassedTests": 8073,
+      "numFailedTests": 0,
       "numPendingTests": 67
     },
+    "typechecks": "Core, worker, scripts and745/745 active test roots pass",
+    "anyRatchet": "952<=1053",
+    "providerEgress": "pass"
+  },
+  "retainedFailures": {
     "notes": [
       "Initial 5 failures: missing fixture encoder, wrong task source table query, grant version trigger and GC union cardinality; fixed fixtures, actual ffmpeg decode retained",
       "First focused 79/1 and follow-up 97/2 stale migration/GC inventory failures corrected; explicit GC view retains all original foreign-key roots",
       "Actual Restate assertion used draft at top level instead of ops[0].draft; corrected fixture and measured unchanged 6-photo SDK projection",
       "First website full841/1 undeclared photo headers; mirrored required header catalog corrected, final842/0",
       "First full engine8071/2/67: stale RELEASE_MANIFEST and untracked ADR in blueprint manifest; final source seal required, no test bypass"
-    ]
+    ],
+    "UNSEALED_FULL_FAILURE.json": {
+      "success": false,
+      "numTotalTests": 8140,
+      "numPassedTests": 8071,
+      "numFailedTests": 2,
+      "numPendingTests": 67
+    }
   },
   "remaining": [
     "Current captured preview",
@@ -75,5 +85,18 @@
     "Explicit web count/all are structured immutable Studio policy; models cannot reclassify source photos away. Maximum enforces exact count.",
     "Auto selection keeps content-aware one or multiple photos and user direction. Uploaded source bytes, exact copy and governed logo identity remain distinct.",
     "Upload failure blocks website submit until retry succeeds or owner removes failed photos. Same original bytes/filename/client recover the same upload key."
-  ]
+  ],
+  "testedEngineCommit": "4cb7bc51c338a8c24f2c55ee5486dd5fe4ea1cab",
+  "implementationCommit": "c04a94211ed79ec65008039d0508cd1595ba7620",
+  "sourceManifestVerified": true,
+  "blueprint": {
+    "passed": 1933,
+    "warnings": 0,
+    "failed": 0
+  },
+  "localFullWebsiteLint": {
+    "exitCode": 0,
+    "errors": 0,
+    "inheritedWarnings": 14
+  }
 }
