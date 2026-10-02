@@ -115,7 +115,7 @@ const runStages = (run: { stages?: unknown }): Record<string, any> => {
   if (Array.isArray(stages) && stages.length === 0) return {};
   return (stages as Record<string, any>) || {};
 };
-import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
+import { CanvaConnectService, CanvaFlowError, importedSourceCapitals } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
 import { savedDesignCopyLocales } from '../saved-design-copy.js';
 import { runsPipelineV3, PICTURE_ONLY_DIRECTIVE } from '../chat-intake.js';
@@ -2406,6 +2406,7 @@ export class DesignStudioService {
               {
                 documentKind: (ctx as any).documentKind || 'design_piece',
                 scriptFonts: { arabic: ctx.arabicFont || 'Noto Sans Arabic' },
+                uppercaseByIndex: importedSourceCapitals(transferResult.manifest),
               }
             );
 

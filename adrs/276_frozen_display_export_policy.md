@@ -40,3 +40,22 @@ source, source arriving after admission refused, human confirmation retained onl
 for exact indexed source copy, changed/reordered copy refused, and QC unable to
 weaken a policy through receipt-level fields. Native Canva and Sorani visual proof
 remain independent release gates.
+
+## Joint qualification finding — size-aware display style
+
+The first full merged qualification retained 8,272 passes, four failures and
+67 skips. ADR275's solver wiring gave even compact multi-photo titles display
+leading of 0.98, conflicting with the unchanged size-aware house rules. Applying
+the client display style must take the actual canvas width and clamp leading and
+tracking through the existing role/size ranges before measurement. Large display
+titles keep their tight leading; compact titles keep the same client face/weight/
+case with normal leading and label tracking. No hard-QA threshold changes.
+The old photo-report serif expectation must follow the owner's explicit ADR275
+poster face; document-page serif expectations remain intact. Remaining failures
+must be diagnosed and qualified rather than waived.
+
+The two album failures were traced to the pre-import transfer check: the deck
+correctly emitted live typed copy with `cap="all"`, but that local checker did
+not receive the generated manifest's indexed display policy. It must use the same
+explicit source allowances before import. It still rejects changes to factual
+wording and retains the existing copy check; no globally relaxed comparison.

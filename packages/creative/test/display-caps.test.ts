@@ -59,8 +59,8 @@ const context = (scripts: Array<'latin' | 'arabic'>, extra: Partial<LayoutValida
   logoAspect: 1, logoMinimumWidthPx: 80, logoClearSpaceShareOfHeight: 0.15 },
   ...extra,
 });
-const latinCaps = () => withPosterDisplayStyle(el(), posterDisplayStyle(G, 'latin'));
-const soraniTitle = (over: Partial<TextElement> = {}) => ({ ...withPosterDisplayStyle(el({ align: 'right', fontSize: 112, height: 400 }), posterDisplayStyle(G, 'arabic')), ...over });
+const latinCaps = () => withPosterDisplayStyle(el(), posterDisplayStyle(G, 'latin'), W);
+const soraniTitle = (over: Partial<TextElement> = {}) => ({ ...withPosterDisplayStyle(el({ align: 'right', fontSize: 112, height: 400 }), posterDisplayStyle(G, 'arabic'), W), ...over });
 
 describe('the text block: weight and capitals', () => {
   it('admits a weight 100..900 and the capitals transform, and nothing else', () => {
@@ -273,6 +273,13 @@ describe('the poster display policy (kaae-reference.json)', () => {
 });
 
 describe('preparation and requester edits', () => {
+  it('keeps compact titles within size-aware leading/tracking ranges without losing the client display face',()=>{
+    const small=withPosterDisplayStyle(el({fontSize:60}),posterDisplayStyle(G,'latin'),1920);
+    expect(small).toMatchObject({fontFamily:'Inter',fontWeight:800,textTransform:'uppercase',lineHeight:1.2,letterSpacing:0.05});
+    const arabic=withPosterDisplayStyle(el({fontSize:112}),posterDisplayStyle(G,'arabic'),1920);
+    expect(arabic).toMatchObject({fontFamily:'IBM Plex Sans Arabic',fontWeight:700,lineHeight:1.6,letterSpacing:0,rtl:true});
+    expect(latinCaps()).toMatchObject({lineHeight:0.98,letterSpacing:-0.01});
+  });
   it('keeps a styled display title\'s leading and still holds a model\'s title to the body range', () => {
     const copy = { text: { 0: 'Peer Review Week' } };
     const styled = conformToHouseRules(layoutOf([latinCaps()]), copy);

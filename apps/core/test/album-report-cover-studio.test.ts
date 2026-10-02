@@ -236,7 +236,7 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
         result = await service.resume(studioScope, taskId, run.id);
       }
       const final = (await sql<any>`SELECT status, diagnostic, budget, stages FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(owner)).rows[0];
-      expect({ status: final.status, diagnostic: final.diagnostic }).toEqual({ status: 'transferred', diagnostic: final.diagnostic });
+      expect({ status: final.status, diagnostic: final.diagnostic },final.diagnostic).toEqual({ status: 'transferred', diagnostic: final.diagnostic });
       expect(final.diagnostic ?? '').not.toMatch(/BUDGET_EXHAUSTED/);
 
       const ledger = (await sql<{ stage: string; reserved: string; usd: string }>`SELECT stage, (reservation->>'usd') AS reserved, usd_estimate::text AS usd
@@ -326,7 +326,7 @@ describe('the owner\'s report cover is laid out within the run\'s limit (ADR-142
       for (let i = 0; i < 20 && !['transferred', 'failed', 'degraded'].includes(next.status); i++) {
         next = await retry.resume(studioScope, taskId, second.id);
       }
-      expect(next.status).toBe('transferred');
+      expect(next.status,next.diagnostic).toBe('transferred');
       const winner = (await sql<any>`SELECT layouts FROM hawa.design_studio_candidates WHERE run_id = ${second.id}::uuid AND status = 'winner'`.execute(owner)).rows[0];
       const layouts = typeof winner.layouts === 'string' ? JSON.parse(winner.layouts) : winner.layouts;
       // This mock proposes hero/texture recipes; ADR181 does not require that style globally.

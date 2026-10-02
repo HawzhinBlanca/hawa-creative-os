@@ -1,6 +1,6 @@
 {
   "date": "2026-10-03",
-  "status": "Focused qualification passed; sealed combined full-suite qualification pending",
+  "status": "Policy/customer/design focused qualification passed; corrected sealed combined full-suite qualification pending",
   "scope": "Claude client-specific poster/caps/metrics design lane and deployment/export support merged with ADR265/266 customer workflow; ADR276 immutable display export policy repair",
   "merges": [
     "6ff2fc60",
@@ -48,23 +48,26 @@
     "anyRatchet": "passed",
     "providerEgress": "passed",
     "securityScan": "passed",
-    "fullSuite": "pending",
-    "blueprint": "pending",
-    "releaseManifest": "pending"
+    "fullSuite": "pending corrected sealed run",
+    "blueprint": "initial seal passed 1975/0/0; updated seal pending",
+    "releaseManifest": "initial seal passed; updated seal pending"
   },
   "website": {
-    "commit": "a8fdd2eca50c33af7d85fbc21dbf7a648029cc05",
-    "unchangedThisSlice": true,
+    "commit": "56d9aaf",
+    "unchangedThisSlice": false,
     "previousUnitPassed": 863,
     "previousBrowserPassed": 9,
-    "browserScope": "Synthetic Auth/Core only, not hosted JWT/native proof"
+    "browserScope": "Synthetic Auth/Core only, not hosted JWT/native proof",
+    "productionUiUnchanged": true,
+    "memberPerformancePassed": 7,
+    "memberPerformanceScope": "Production-build Chromium with synthetic Auth/Core; ten history items; original numerical budgets and anonymous denial preserved; not hosted/JWT/field proof"
   },
   "sourceHashes": {
     "apps/core/src/core-helpers.ts": "e8f4d6d05de8fe2e8d68b67e8d68559b3e9ee11fe33363431fb2ca55b5e3bedf",
     "apps/core/src/logging.ts": "ebbb73165d9263f4331382f88ed35ac50470743eb8ef43ea980e147747a37fe1",
     "apps/core/src/services/canva-connect-service.ts": "e56af97adb9f70b23437bb567c7fcdc187ab546ef95a89213b00da05eb95b126",
     "apps/core/src/services/canva-task-outcome.ts": "f867373414f0e39aca5227e15976cbde9df4fabede83424a4a9b691c0296faa9",
-    "apps/core/src/services/design-studio/design-studio-service.ts": "8d710646b14230695696e5b4bc6255b8faba7bf25048352526a2ff57222bc97e",
+    "apps/core/src/services/design-studio/design-studio-service.ts": "e01bc0ccdd8014aa80f3ee98aec09d6a1e90fcf6da6275d48adae1524f758f6c",
     "apps/core/src/services/design-studio/edit-ops.ts": "fa240cc944da10a064975c7980fdfccaf099b2f60d0ebb7f0f501ac0e6de9243",
     "apps/core/src/services/design-studio/stages/edit.stage.ts": "61f120a7f9b802860d1ec177073d27db2a483323b21c07b431d07a9b4ef39fcf",
     "apps/core/src/services/design-studio/stages/layouts.stage.ts": "ad338db44a22192008f7f18027488b0f78b17683d82de4e97414ad4b6bcd76f0",
@@ -74,6 +77,7 @@
     "apps/core/src/services/lifecycle-projection.ts": "c75676314384ccf2495fc9ea62bc667c6ed24dc5df255d5955f7fb94e64f6404",
     "apps/core/src/services/lifecycle-stale-sweep.ts": "0fc6d16739605772e63f46a4657d19df0cdec88ec8e195bee44c8a85065afafd",
     "apps/core/src/services/request-copy-extraction.ts": "763c8375201fe9e4fa788683ae246e69cdc96eb4e761ecd4c243e98002bc8be6",
+    "apps/core/test/album-report-cover-studio.test.ts": "8b8be74bc778c12215ea62c43431eec5e88adc013f68b15d7a7fe3eaaa6c29ea",
     "apps/core/test/canva-blank-export-policy.test.ts": "b080dc0b4c876140ff034c7550fa8e61ba981e39913a6ad6a72bbe55ba5298d2",
     "apps/core/test/canva-export-qc.test.ts": "fa1ce160b9b01c9a608fb7e3bd158603d77fe7fb2c382ef3dfe0bf1475d1a86f",
     "apps/core/test/customer-requests.test.ts": "cdbe7ac182531604977c740c2cfe82f5c5550f8332f101f54774531fbdd97955",
@@ -81,7 +85,7 @@
     "apps/core/test/display-caps-core.test.ts": "e1db442332b6aeef2c2f2bebdc643816c879354c4b20982adb45a2fd8763ce49",
     "apps/core/test/export-picture-fidelity.test.ts": "39f1b974696ea1e2c2733f6491e9c4e1796e1a83b9b8bd4d6a8e11e83be77b17",
     "apps/core/test/judge-office-reference.test.ts": "689622f7cfe49aa71fe45b6c85eac0dae859fcc71a20c123670c1f8c59d143d7",
-    "apps/core/test/kaae-2025-guideline.test.ts": "9c99f881612a778c3c2f8afe019404e1979b3a97fce31a25534f4bcf14b9bda0",
+    "apps/core/test/kaae-2025-guideline.test.ts": "02e77e863e46065364675b246f3ce66cad220094144201a87ca0d0882209964e",
     "apps/core/test/manual-open-office-alert.test.ts": "1f50cac564be7566f9d2c6d54b706665ae8a00a370e64cd9e6865b978b65eb56",
     "apps/core/test/native-revision-handoff.test.ts": "6e92b7a2a28d5d457052ad152166060ae6d7222134858d93d362b81b4b986986",
     "apps/core/test/request-copy-extraction.test.ts": "f79e6db86933a83001edc13b9278c10cbf9912573686442d49ca55f16c65bef7",
@@ -99,7 +103,7 @@
     "packages/creative/src/index.ts": "a6f77dd33ec0d5ec9d9b3a1c272367a9bc4e3c0b94c4ccbd2cee908c51c28da2",
     "packages/creative/src/studio/art-direction/generate.ts": "676b1b4b941a9fe0fcc59faaccb7817a8db51cdbb43e5bb08e338cf574f7b5e3",
     "packages/creative/src/studio/art-direction/prior.ts": "0a2b5fc13d9b59637cdc1bec76733bce155dd14e7caac588f0ef432f6ef5d3a0",
-    "packages/creative/src/studio/art-direction/solver.ts": "61a4f84510465a7639cc63062689e9e7da69fe4353ce6f56bed8a80ef18f5bac",
+    "packages/creative/src/studio/art-direction/solver.ts": "f2829cc9ba9b967f96ae3b9b081b073707272e0f00ede3c6a00ccfcf9b9ba85c",
     "packages/creative/src/studio/design-metrics.ts": "2bc2d45a5ebe3d9ec6ca43d2ac7d6703eb79d93ae65b58901153c734f7253314",
     "packages/creative/src/studio/exemplar-retrieval.ts": "42c5bbf7b3f3dc76a8a3f19db4a3abe1175899ce67aa73c8c574ff7b464d0a96",
     "packages/creative/src/studio/export-text-lines.ts": "fa73f7267c0bccc7427d1a9bc5d8a7fa563a8340ea26630971029257dcdbc7b1",
@@ -113,14 +117,14 @@
     "packages/creative/src/studio/pairwise-judge-v3.ts": "a696d3e2258e9ff95fe347ebc0127980ac7b59dc67fa858b134d2e724d4557f1",
     "packages/creative/src/studio/pango-measurement.ts": "912b1c5c4307eac2f4af003c9c385c47fad170cd70c04c1f2ffa372e74088ded",
     "packages/creative/src/studio/pipeline-v3.ts": "d99149f1d3e23d5cd1fa6d2c9732a9f876af6f285d69dbbba9ac9ee010ace12a",
-    "packages/creative/src/studio/poster-display.ts": "daa17eda16a00f6476f1ebfaf05d4e3a729c90c03ea6559c27ca7d1470e998ba",
-    "packages/creative/src/studio/poster-grammar.ts": "f77b26c7560dad660568a1edc07d47e05c5f3160312a31447c728498ad252925",
+    "packages/creative/src/studio/poster-display.ts": "8c326239f11fc697a51ae00e4fa536d3bf77a6303897391a5c2e91174fe0ecbd",
+    "packages/creative/src/studio/poster-grammar.ts": "127fafb7bdcdadbce89d1920d2d3200b1958ca4ee4a512ee012afacf89e8502c",
     "packages/creative/src/studio/render-fonts.json": "c30a2243d348eecebd401ca3376c55a4052c4bf60733d5998ae192d4fa72f1bb",
     "packages/creative/src/studio/render-layout-v2.ts": "4878954ee768ce599bb6fcc6169eec8d198be4466743cb19adfff81ee56557db",
     "packages/creative/src/studio/style-spec.ts": "08ddc68bd756c42b88904f889bc4d7d12a0a8034cd55ec1b48ef0b851ee374aa",
     "packages/creative/src/studio/transfer-v2.ts": "aee9dc28189962fd74a51bb0845f3967437588e66e08dd300b0b78f4ed5cd0d8",
     "packages/creative/src/studio/validate-layout-v2.ts": "b30ed25cf37d2481e22f222fb3aaf200ad7cf7ac4830fc28d58e9aae2a6aef01",
-    "packages/creative/test/display-caps.test.ts": "81941a2d5410199633de09ad4012d3d0ae7eeb72de60b55299d290c20835c337",
+    "packages/creative/test/display-caps.test.ts": "da7b474f6382bb82b8c1e5760c1dec9072eab6d5ed1468b68c3ee6fdfdbcbb59",
     "packages/creative/test/fixtures/office-posts/README.md": "207967cccb2e01bf9e46228500d9527a79762a6d4d056f6556f6653e36c1d099",
     "packages/creative/test/fixtures/office-posts/gates.ts": "63f0b962cc328baab0a51f93deb768382a9dbceecdf953b23d20027a6cb7840d",
     "packages/creative/test/fixtures/office-posts/office-posts.ts": "db6aa83cd6a7c863499a69696f99b5451023bf85c90889c64c9278df6a5d4895",
@@ -142,12 +146,47 @@
     "packages/testkit/test/heartbeat.test.ts": "7e6943727e10102ff7d2d0639aa280fd1d7342d8364a405cdd86893286a70550",
     "packages/testkit/test/release-directories.test.ts": "4dfa488e483e6a5e407dff52f642734e520a1d349232b226930e1ca5a13a79a8",
     "scripts/experiments/judge-calibration.ts": "82d11924c469b83616474cc6d62e3fd1fa6183b747b3cc8859b8928a5e2d1478",
-    "scripts/proofs/display_caps_proof.ts": "9a2877e2b238515faf1d10a2a687262464886f00585ac5d1186fae23bd63f175"
+    "scripts/proofs/display_caps_proof.ts": "77654012f50cac47f8f7f80ad1a843d50b77b3bd362bd93e358c43fe3a5ae6f0"
   },
   "limitations": [
     "Not deployed or publicly activated.",
     "Real Canva caps/weighted-font export and native Sorani review remain open.",
-    "Website inherited coverage, protected-member performance, reviewed visual, deployed RLS/Linux gates remain open.",
+    "Website inherited coverage, reviewed visual, deployed RLS/Linux gates remain open. Protected-member production UI lab now passes; hosted performance remains independent.",
     "Public hosting/HTTPS/coordinated restore and real two-user upload/generation/revision/acceptance/download/restart/other-app/human quality proof remain open."
+  ],
+  "fullAttempts": [
+    {
+      "testedCommit": "664ee1d4524dda2bb795444e964f64ef3c17dc51",
+      "passed": 8272,
+      "failed": 4,
+      "skipped": 67,
+      "failedFiles": [
+        "apps/core/test/album-report-cover-studio.test.ts",
+        "apps/core/test/art-direction-e2e.test.ts",
+        "apps/core/test/kaae-2025-guideline.test.ts"
+      ],
+      "failures": [
+        "the owner's report cover is laid out within the run's limit (ADR-142) six photos and the owner's brief at production prices: the layout call is admitted and a draft placing the photos is transferred",
+        "the owner's report cover is laid out within the run's limit (ADR-142) a layout request larger than the run has left fails with its own diagnostic, sends nothing, and never claims QA refused a candidate",
+        "art direction end to end: the KAAE K-12 field visit report (ADR-170) produces a hero_fade_report that passes hard QA on its rendered pixels, from a mocked model answer",
+        "ADR-238 proofs: the guideline's pages through the real stage, render and hard QA (model mocked) the one-photo report: with no tone asked, every recipe sits on the white page, none is replaced by the guideline page (ADR-274), all pass hard QA"
+      ],
+      "cause": "Compact multi-photo title leading, local transfer check missing source capitals policy, and obsolete serif poster expectation. Four original failures retained; their corrected 48-case design suite now passes."
+    }
+  ],
+  "designFocused": {
+    "numPassedTests": 48,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "designAttempts": [
+    {
+      "results": {
+        "numPassedTests": 46,
+        "numFailedTests": 2,
+        "numPendingTests": 0
+      },
+      "cause": "Compact title leading fixed; remaining two failures exposed local transfer self-check missing source capitalization policy. Both repaired without weakening copy checking."
+    }
   ]
 }

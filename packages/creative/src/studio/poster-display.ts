@@ -1,7 +1,7 @@
 import type { FontWeight, TextElement } from './layout-v2.js';
 import type { PageGrammar, PosterDisplayFace } from './page-grammar.js';
 import { fontCoversText, loadRenderFontRegistry, type RenderLayoutOptions } from './render-layout-v2.js';
-import { HOUSE_RULES } from './house-rules.js';
+import { HOUSE_RULES, capsTrackingRange, lineHeightRange } from './house-rules.js';
 
 /**
  * ADR-275: how a poster's display title is set, read from the client's poster display policy
@@ -97,10 +97,14 @@ export function posterLabelStyle(grammar: Pick<PageGrammar, 'poster'>): { textTr
  * ADR-275: a title element with the display style applied. Only the type fields change; the box,
  * the size and the colour are the composer's.
  */
-export function withPosterDisplayStyle<T extends TextElement>(element: T, style: PosterDisplayStyle | undefined): T {
+export function withPosterDisplayStyle<T extends TextElement>(element: T, style: PosterDisplayStyle | undefined, canvasWidth: number): T {
   if (!style) return element;
+  const leading=lineHeightRange(style.rtl ? 'arabic':'latin',element,canvasWidth);
+  const tracking=capsTrackingRange(element,canvasWidth);
   const out: T = { ...element, fontFamily: style.fontFamily, fontWeight: style.fontWeight, bold: style.bold,
-    lineHeight: style.lineHeight, letterSpacing: style.letterSpacing };
+    lineHeight: Math.min(leading.max,Math.max(leading.min,style.lineHeight)),
+    letterSpacing: style.rtl ? 0 : style.textTransform==='uppercase'
+      ? Math.min(tracking.max,Math.max(tracking.min,style.letterSpacing)) : style.letterSpacing };
   if (style.textTransform) out.textTransform = style.textTransform;
   else delete out.textTransform;
   if (style.rtl) out.rtl = true;

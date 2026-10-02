@@ -609,7 +609,7 @@ class SolveContext {
         if (err instanceof PosterDisplayFaceError) throw new RecipeInfeasibleError(this.recipe, err.message);
         throw err;
       }
-      if (style) return withPosterDisplayStyle(el, b.arabic ? { ...style, lineHeight: Math.max(style.lineHeight, lh.min) } : style);
+      if (style) return withPosterDisplayStyle(el, b.arabic ? { ...style, lineHeight: Math.max(style.lineHeight, lh.min) } : style, this.W);
     }
     return el;
   }

@@ -70,7 +70,7 @@ const cases: Case[] = [];
 
 {
   const copy = ['K-12 | Higher Education', 'Peer Review Week', 'Join KAAE’s network of peer evaluators.'];
-  const titleBase = withPosterDisplayStyle(block(1, 'title', 400, 700, 200, { color: '#1E3A5F', accentColor: '#4770A3', accentText: 'Peer' }), latin);
+  const titleBase = withPosterDisplayStyle(block(1, 'title', 400, 700, 200, { color: '#1E3A5F', accentColor: '#4770A3', accentText: 'Peer' }), latin, W);
   const size = fitSize(titleBase, copy[1], Math.round(0.18 * W), Math.round(0.2 * W), 3);
   const title = { ...titleBase, fontSize: size, height: Math.ceil(3 * size * latin.lineHeight) + 40 };
   const eyebrow = { ...block(0, 'eyebrow', 340, 40, 30, { fontWeight: 700 as const, bold: true, color: '#4770A3' }), ...label };
@@ -79,14 +79,14 @@ const cases: Case[] = [];
 }
 {
   const copy = ['بانگەواز بۆ هەڵسەنگێنەرانی هاوتا', 'ببە بە بەشداربوو لە تۆڕی هەڵسەنگێنەرانی هاوتای KAAE.'];
-  const title = withPosterDisplayStyle(block(0, 'title', 360, 400, 112, { align: 'right', color: '#1E3A5F' }), arabic);
+  const title = withPosterDisplayStyle(block(0, 'title', 360, 400, 112, { align: 'right', color: '#1E3A5F' }), arabic, W);
   const body = block(1, 'body', 820, 140, 40, { align: 'right', fontFamily: 'Noto Sans Arabic', rtl: true, lineHeight: 1.7, color: '#0A1628' });
   cases.push({ id: 'ckb_display_title', copy, scripts: ['arabic', 'arabic'], layout: base([title, body]) });
 }
 {
   // Negative: the same Sorani title at a leading the ink check must refuse.
   const copy = ['بانگەواز بۆ هەڵسەنگێنەرانی هاوتا', 'ببە بە بەشداربوو لە تۆڕی هەڵسەنگێنەرانی هاوتای KAAE.'];
-  const title = { ...withPosterDisplayStyle(block(0, 'title', 360, 400, 112, { align: 'right', color: '#1E3A5F' }), arabic), lineHeight: 1.0 };
+  const title = { ...withPosterDisplayStyle(block(0, 'title', 360, 400, 112, { align: 'right', color: '#1E3A5F' }), arabic, W), lineHeight: 1.0 };
   const body = block(1, 'body', 820, 140, 40, { align: 'right', fontFamily: 'Noto Sans Arabic', rtl: true, lineHeight: 1.7, color: '#0A1628' });
   cases.push({ id: 'ckb_display_title_too_tight', copy, scripts: ['arabic', 'arabic'], layout: base([title, body]) });
 }

@@ -234,7 +234,7 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const labelStyle = posterLabelStyle(g);
   const el = (b: GrammarUnit['blocks'][number], kind: Kind, size: number, color: Hex, w: number, opts: { italic?: boolean; bold?: boolean } = {}): TextElement => {
     const base = plainEl(b, kind, size, color, w, opts);
-    if (kind === 'title') return withPosterDisplayStyle(base, displayStyle(b.arabic ? 'arabic' : 'latin'));
+    if (kind === 'title') return withPosterDisplayStyle(base, displayStyle(b.arabic ? 'arabic' : 'latin'), W);
     if (kind === 'label' && !b.arabic && labelStyle) return { ...base, ...labelStyle };
     return base;
   };
