@@ -145,4 +145,4 @@ Before the merge, I probed the rules for edges where a misreading opens, withdra
 
 **Tests:** both are pinned in `requester-turn-nlu-eval-fixes.test.ts`.
 
-**Left as found:** "stop working on it" asks "change or new?", as it did before this ADR. It should be asked about as a cancel. That is a follow-up.
+**"Stop working on it" is now "stop it".** It asked "change or new?" both before and after this ADR. It now withdraws the design it names, as "stop it" does, and with "for now" it pauses the design instead. Said of a part ("stop working on the logo"), it never withdraws.

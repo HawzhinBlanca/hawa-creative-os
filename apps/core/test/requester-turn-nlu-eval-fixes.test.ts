@@ -40,6 +40,14 @@ describe('costly errors: nothing opened or withdrawn unless meant', () => {
     expect(plan('we need something for the science fair next month', [])).toMatchObject({ kind: 'open' });
   });
 
+  // "stop working on it" asked "change or new?" before and after ADR-263: cancel words never offer a new design.
+  it('"stop working on it" is "stop it"; with "for now" it is a pause', () => {
+    expect(plan('stop working on it', [DESIGNING])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+    expect(plan('please stop working on the poster', [DESIGNING])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+    expect(plan('stop working on it for now', [DESIGNING])).toMatchObject({ kind: 'note', note: 'hold', requestId: 'A' });
+    expect(plan('stop working on the logo', [DESIGNING])).not.toMatchObject({ note: 'cancel' });
+  });
+
   // Before ADR-263 "don't go ahead yet" contained "go ahead" and told the office it was approved.
   it.each(["don't go ahead yet", "please don't proceed for now", "don't start yet"])('"%s" pauses the design', (words) => {
     expect(plan(words, [IN_REVIEW])).toMatchObject({ kind: 'note', note: 'hold', requestId: 'A' });
