@@ -759,4 +759,15 @@ describe('release_lib: a deployment keeps the live release', () => {
     expect(r.code).toBe(1);
     expect(r.err).toContain('is not in this repository');
   });
+
+  it('deploy.sh checks it under the deploy lock, before it prepares the release', () => {
+    const deploy = fs.readFileSync(path.join(repo, 'infra/docker/deploy.sh'), 'utf8');
+    const locked = deploy.indexOf('exec python3 "${ROOT_DIR}/infra/ops/deploy_lock.py"');
+    const keeps = deploy.indexOf('hawa_deploy_keeps_live "$ROOT_DIR" "$BUILD_COMMIT"');
+    expect(locked).toBeGreaterThan(0);
+    // Under the lock, a deploy that waited for another sees the release that one put live.
+    expect(keeps).toBeGreaterThan(locked);
+    expect(deploy.indexOf('hawa_release_prepare "$ROOT_DIR" "$BUILD_COMMIT"')).toBeGreaterThan(keeps);
+    expect(deploy.split('hawa_deploy_keeps_live "$ROOT_DIR"').length - 1).toBe(1);
+  });
 });

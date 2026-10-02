@@ -66,3 +66,14 @@ pings `HAWA_HEARTBEAT_URL` (https only; from the environment or .env.production)
 watchdog pass; the outside dead-man's-switch service alerts the owner when the pings stop. Unset: nothing
 is sent (today's state). Owner action: create the check (e.g. healthchecks.io, Better Stack), paste its URL
 into ~/.hawa/shared/infra/docker/.env.production. Test: packages/testkit/test/heartbeat.test.ts (4).
+
+## Addendum 3 (2026-10-02): the live-release check runs under the deploy lock
+
+`deploy.sh` first ran `hawa_deploy_keeps_live` straight after the build-stamp check. That placement had two problems:
+
+1. **It ran before the deploy lock (ADR-240).** A deploy that waited for another one judged the live release as it stood before that other deploy finished.
+2. **It sourced `release_lib.sh` early.** The canary-runner test requires that file to be sourced only after the lock, so the test failed. A trial merge onto Codex's integration branch caught it.
+
+**The fix:** the check now runs where `release_lib.sh` is sourced. That is after the host-role check and the lock, and before `hawa_release_prepare`.
+
+A test in `release-directories.test.ts` pins this order. Pre-flight still runs the check too, because it uses the same path, without the lock.
