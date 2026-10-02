@@ -181,6 +181,17 @@ describe('friction 7: taking back a cancel', () => {
     if (words !== 'undo the last change' && words !== 'bring back the old logo') expect(readsAsUndo(words)).toBe(false);
   });
 
+  // Live 2026-10-02 07:05Z (canary chat): the only design had just been cancelled, and "oops, bring it back"
+  // was read as a new brief and asked who the design was for.
+  it.each(['oops, bring it back', 'actually continue', 'ok undo that'])('"%s" when the only design was just cancelled is about that design, never a new brief', async (words) => {
+    const a = app();
+    const chat = chatId();
+    const cancelled = await seedRequest(chat, 'cancelled', { title: 'Nawroz poster', minutesAgo: 1 });
+    const said = await intake(a, message(chat, words));
+    expect(said).toMatchObject({ lifecycleAction: 'chat-answer', requestId: cancelled.requestId });
+    expect(said.chatAnswer.text).toBe(ROUTING_MESSAGES.undoPassed.en.replace('{title}', '<b>Nawroz poster</b>'));
+  });
+
   it.each(['actually continue', 'undo that', 'bring it back'])('"%s" just after a cancel is told the truth, and the office hears it', async (words) => {
     const a = app();
     const chat = chatId();

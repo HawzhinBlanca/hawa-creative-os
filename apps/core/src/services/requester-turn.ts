@@ -22,7 +22,7 @@
  */
 import { LIFECYCLE_MESSAGES, NAMING_MESSAGES, ROUTING_MESSAGES, WITHDRAW_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
   trimTitleMarks, type Phrase, type RequesterLang } from '@hawa/integrations';
-import { asksToUndoCancel, CHANGE_CUES, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
+import { asksToUndoCancel, CHANGE_CUES, readsAsUndo, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
 import { isIntroducerTitle, withoutMarks } from './draft-title.js';
 
@@ -419,9 +419,14 @@ export function readsAsChange(text: string): boolean {
   if (CORRECTION_EN.some((p) => p.test(t)) || any(t, CORRECTION_CKB)) return true;
   // The heuristics' own revision reading, as when a design is known to be active.
   if (classifyWithHeuristics(t, true, false).kind === 'feedback') return true;
+  if (t.length <= 200 && REMOVES_A_PART.test(t) && REMOVABLE_PART.test(t)) return true;
   return t.length <= 200 && CHANGE_CUES.some((cue) => containsKeyword(t, cue)) &&
     /\b(?:make|use|put|change|add|remove|move|replace|swap|fix|resize|instead)\b/i.test(t);
 }
+// Live 2026-10-02 (L19): "can you take KAAE's out of the title?", "leave the date off the poster", "drop the
+// subtitle", "get rid of the border": words that remove a named part of a design are a change of it.
+const REMOVES_A_PART = /\b(?:(?:take|leave|get)\s+(?:\S+\s+){0,4}?(?:out|off)|get\s+rid\s+of|drop|delete|erase|remove)\b/i;
+const REMOVABLE_PART = /\b(?:title|subtitle|heading|headline|date|time|venue|logo|line|text|words?|border|frame|photo|picture|image|background|colou?r|name|caption|tagline|slogan|icon|shape|banner)s?\b/i;
 
 function readsAsApproval(text: string, core: string): boolean {
   if (core.length > 160 || !any(core, APPROVAL_PHRASES) || refusesApproval(core)) return false;
@@ -637,6 +642,9 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   // ADR-252 (friction 7): "sorry I cancelled by mistake, please continue" takes back a cancel. It is the
   // conversation's to answer honestly (lifecycle-chat-answers.ts), never a change of another open design.
   if (asksToUndoCancel(core)) return rules('conversation', 'Takes back a cancel');
+  // Live 2026-10-02: "oops, bring it back" read to the heuristics as a short brief. Short words that may take
+  // back a cancel are the conversation's; it answers them about the withdrawal only right after one.
+  if (readsAsUndo(core)) return rules('conversation', 'Short words that may take back a cancel');
   // ADR-200 addendum: "do a better design", "not good, do it again", "try again" ask for the latest
   // design again. Read before a refusal ("not good") or a new brief ("a … design"); words sent with a
   // photo or an album are material, and are read as before (`redo: false`).

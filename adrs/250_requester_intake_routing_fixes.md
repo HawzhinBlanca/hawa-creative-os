@@ -47,3 +47,13 @@ Bug hunt 2 (`HUNT2_FINDINGS.md`, 2026-10-02) found, live and by reading:
   - Before the fix, run against the production route: 14 failed and 2 passed (the legit-brief and the pure-unit cases).
   - After the fix: 16 passed.
 - The related suites (intent routing, withdraw, natural media, ADR-156 friction, explicit deliverables, the requester catalogue) pass. See the commit message for the counts.
+
+## Addendum (2026-10-02, live retest on the canary chat)
+
+After deploy 92b14abf, the canary chat had a design with a designer. "can you take Spring out of the title? just Concert" no longer opened a request, but it asked "change or new design?". The words remove a named part of the design, so the requester rules (`readsAsChange`) now read them as a change.
+
+What counts:
+- removal wording: "take/leave/get … out/off", "get rid of", "drop", "delete", "erase", "remove";
+- together with a part of a design: title, subtitle, date, logo, line, border, photo and the like.
+
+`brief-or-change.ts` stays as the safety net for wordings the rules miss. Test: `apps/core/test/requester-turn-change-verbs.test.ts`.

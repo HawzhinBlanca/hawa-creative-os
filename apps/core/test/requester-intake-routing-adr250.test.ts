@@ -177,7 +177,10 @@ describe('L19: a change to a draft awaiting office approval is a change, never a
       group: false, addressed: true, pendingAsk: null, now: Date.now() };
     expect(reconsiderNewBrief({ ...input, requests: [] }, planTurn({ ...input, requests: [] }))).toBeNull();
     const inReview = { ...input, requests: [view('in_review')] };
-    expect(reconsiderNewBrief(inReview, planTurn(inReview))?.plan).toEqual({ kind: 'note', note: 'change', requestId: 'r-a', words: LIVE_CHANGE });
+    // Since the follow-up to ADR-250 the rules read the live words as a change themselves ("take … out of the
+    // title"); either way the plan is a change kept on the design in review.
+    const planned = planTurn(inReview);
+    expect(reconsiderNewBrief(inReview, planned)?.plan ?? planned).toEqual({ kind: 'note', note: 'change', requestId: 'r-a', words: LIVE_CHANGE });
     expect(editsADesignOnTheWay('Graduation ceremony for the class of 2026 at the Rotana Hotel, Erbil on 12 November at 6 pm.', [view('in_review')])).toBeNull();
   });
 });

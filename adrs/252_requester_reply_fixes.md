@@ -97,3 +97,15 @@ if (asksToUndoCancel(core)) return rules('conversation', 'Takes back a cancel');
 - **Updated tests.** Five existing tests encoded the instruction wording, and their expectations were updated: requester-intent-routing (2), truthful-chat-replies, lifecycle-voice and lifecycle-source.
 - **Full suite.** 7033 tests pass, 1 is an expected fail and 67 are skipped.
 - **Sorani review.** The new and changed Sorani lines are added to `SORANI_REVIEW.md` and need native review.
+
+## Addendum (2026-10-02, live retest on the canary chat)
+
+Two follow-ups on taking back a cancel:
+
+1. **Merge follow-up.** `readIntentByRules` now reads `asksToUndoCancel` words as conversation, before its refusal and change rules. The chat answer handles them before the heuristics, which read "sorry I cancelled by mistake, please continue" as feedback.
+
+2. **Live bug: "oops, bring it back" asked "Who is this design for?".**
+   - Situation: it was said just after the chat's only design was cancelled.
+   - Cause: the heuristics read the filler-led words as a short new brief, and with nothing open the route opened a brief.
+   - Fix: short undo words (`readsAsUndo`) are now conversation in the rules, and they reach the withdrawal answer. That answer still applies only within the 30-minute window, and only if nothing moved after the cancel.
+   - Test: `requester-reply-fixes.test.ts`, "when the only design was just cancelled".

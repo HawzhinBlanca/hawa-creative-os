@@ -377,7 +377,7 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
 
     // ADR-252 (friction 7): words that name the cancel ("I cancelled by mistake, please continue") read as
     // feedback to the heuristics; they are answered about the withdrawal, never as a brief or a change.
-    if (asksToUndoCancel(rawText)) {
+    if (asksToUndoCancel(rawText) || readsAsUndo(rawText)) {
       const said = await contextAnswer(chatId, updateId, msg, rawText, 'Takes back a cancel');
       if (said) return said;
     }
