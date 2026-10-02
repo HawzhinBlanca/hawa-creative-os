@@ -47,17 +47,20 @@ const judge = async (options: Record<string, unknown>, photoBrief = false) => {
 describe('other clients\' judge reads exactly what it read before ADR-274', () => {
   // sha256 of the system prompt and the user text at e7aebad7 (the base of this change), for the
   // same inputs: the typographic and the photo brief, with house rules, a client profile and a brief.
+  // The system prompts are those of e7aebad7. The user texts were re-pinned after ADR-273: its
+  // recalibrated metrics change the composite score quoted in the user text (0.926 -> 0.934 here);
+  // the wording is unchanged.
   it('keeps the typographic system prompt and user text byte-identical', async () => {
     const c = await judge({});
     expect(sha(system(c))).toBe('8f933bfc2a7689358462247a7116f718f5cdb708f80a75382a8f1e14833bd46b');
-    expect(sha(user(c))).toBe('7574dd62fd072b8df28ff995a2cccc4f80d019386e7f1b9f50c450f1810c0398');
+    expect(sha(user(c))).toBe('eaea88053cef45effb81e0c2ac416216874989b5347a09b13ff1faa4bc796113');
     expect(images(c)).toHaveLength(2);
   });
 
   it('keeps the photo-brief system prompt and user text byte-identical', async () => {
     const c = await judge({}, true);
     expect(sha(system(c))).toBe('5e685f2ce0bac0ff805afa7ee1a47138d0febbc180ee9534cf7b5452b5ffc3c7');
-    expect(sha(user(c))).toBe('43180ba8b7b0f51ed94b36ce6eb59f5e3d7a3b8d973f73d3534fe1781306dfa4');
+    expect(sha(user(c))).toBe('96bba5a76d5f4cb876eb46a02a8ddf625f4e0b3420a8696dbcfbef6be35b0ba2');
   });
 
   it('never attaches an office post without posterImpact', async () => {
