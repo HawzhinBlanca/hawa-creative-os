@@ -3,7 +3,7 @@
   "scope": "ADR260 canonical web entry and message slice; overall transfer incomplete; not deployed",
   "engine_parent_commit": "9bd9a7be0dfba4a0755defb1736a2f936eb688f8",
   "website_parent_commit": "9007c1633a60f9ad7518a1a1d081142b3e4978b0",
-  "source_state": "Implementation worktree before checkpoint commit. No public generation or full current-engine seal claimed.",
+  "source_state": "Final full regression passed on tested_engine_commit. Subsequent checkpoint changes are documentation/evidence only. Not deployed; public generation disabled; complete customer product journey pending.",
   "passing_runs": {
     "CASE_KEYSET_WEB_TESTS.json": {
       "success": true,
@@ -52,7 +52,16 @@
     "types": "PASS",
     "build": "PASS final production build",
     "focused_lint": "PASS final affected files",
-    "scope": "Existing workspace login and /designer route; registry remains soon. Request intake/history/owned message UI only."
+    "scope": "Existing workspace login and /designer route; registry remains soon. Request intake/history/owned message UI only.",
+    "actual_chromium_synthetic_transport": {
+      "startTime": "2026-10-02T14:35:37.695Z",
+      "duration": 5756.633,
+      "expected": 3,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "output_root": "../hawzhin-app-integration/output/qualification/2026-10-02-designer/"
   },
   "test_roots": 745,
   "test_typecheck": "PASS 745/745 active roots; scripts and Core/worker compile",
@@ -171,5 +180,14 @@
     "packages/db/migrations/083_customer_owned_requests.sql": "fcee7e3949883b0e243955adb84c649b361c3758fa78954fd3790f5969624b71",
     "packages/db/migrations/084_customer_web_lifecycle.sql": "ffb4d6ee6e60e21b5b4e4109367bf06c1c0fdfb4041cdeabd56d6ad5650d1045"
   },
-  "full_regression_correction": "8061 passed,1 failed,67 skipped: one route inventory snapshot omitted the two new private customer endpoints. Snapshot updated; 22 route inventory controls passed. Requalified final full suite pending."
+  "full_regression_correction": "One stale route inventory failure retained. Exact two-route correction passed22 inventory controls; final sealed full run8062 passed,0 failed,67 skipped.",
+  "final_full_regression": {
+    "success": true,
+    "numTotalTests": 8129,
+    "numPassedTests": 8062,
+    "numFailedTests": 0,
+    "numPendingTests": 67
+  },
+  "tested_engine_commit": "1fcc15bb8f08038abcd15efb6d435f9643166372",
+  "qualified_website_commit": "6d463701466f67a6bf7146ef97ee9b15da43016c"
 }
