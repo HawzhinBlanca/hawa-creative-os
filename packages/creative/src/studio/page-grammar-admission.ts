@@ -26,7 +26,7 @@ function grammarSchema(palette: ReadonlySet<string>) {
     lineHeight: z.number().finite().positive().max(5).optional(), letterSpacing: tracking.optional(),
   }).strict();
   const card = z.object({ fill: color, title: color, text: color, edge: color.optional(), edgeShare: dimension.optional() }).strict();
-  // ADR-262: a poster composition's colours.
+  // ADR-271: a poster composition's colours.
   const posterVariant = z.object({
     ground: color.optional(), title: color, lead: color, body: color, detail: color,
     panel: color.optional(), panelTitle: color.optional(), panelText: color.optional(),

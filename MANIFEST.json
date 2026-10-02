@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T15:10:07Z",
+  "generatedAt": "2026-10-02T18:47:07Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1164,7 +1164,7 @@
     },
     {
       "path": "adrs/238_kaae_2025_guideline.md",
-      "sha256": "d723f5623b107a44eb1d275ae0f027a39f2bc4f01b5178ff3e291d48aea77459",
+      "sha256": "8d6eddb618ce52b297b40735ebf68626273aa0ca4a122d07acc6bdba0e32ef63",
       "bytes": 23045
     },
     {
@@ -1233,8 +1233,8 @@
       "bytes": 3821
     },
     {
-      "path": "adrs/262_kaae_poster_composition.md",
-      "sha256": "dc4a09e24e7b45bfe9a496ce349a7c49aa9ee3f6ee973819e8f79c8ec9fcf91d",
+      "path": "adrs/271_kaae_poster_composition.md",
+      "sha256": "bb46ef6a84b8500a6463791e3281fd8a0560eddfde1b92ea75efa5e49b5dfa22",
       "bytes": 9911
     },
     {
@@ -3434,7 +3434,7 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "dc1e352f2e377bc5691501dd9c20ca075db603411548fe0fc565f2e1b460d3f9",
+      "sha256": "2fe0878f392d63c05365a812fc364083f130727f1ec9e6234eafa769bd331f0a",
       "bytes": 839228
     },
     {

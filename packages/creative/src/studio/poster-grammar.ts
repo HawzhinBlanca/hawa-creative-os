@@ -24,7 +24,7 @@ import {
 } from './page-grammar.js';
 
 /**
- * ADR-262: the client's poster compositions. The guideline (KAAE: the 2025 Excellence Edition) sets
+ * ADR-271: the client's poster compositions. The guideline (KAAE: the 2025 Excellence Edition) sets
  * the palette, the logo, the faces and the brand elements; the office's own published posts set how
  * a poster is composed: one dominant display title, a navy or cream ground or a full-width title
  * band, the details grouped at the foot, and a visible brand element. Every colour, face and

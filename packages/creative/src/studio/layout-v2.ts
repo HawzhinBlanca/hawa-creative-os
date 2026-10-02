@@ -98,7 +98,7 @@ export type OrnamentKind = (typeof ORNAMENT_KINDS)[number];
 
 /** ADR-238: a layout composed from a client's page grammar, which preparation leaves whole. */
 export interface CompositionRecord {
-  /** ADR-262: `poster`, one of the client's poster compositions (poster-grammar.ts). */
+  /** ADR-271: `poster`, one of the client's poster compositions (poster-grammar.ts). */
   grammar: 'page' | 'cover' | 'poster';
   /** Which of the composer's variants it is. */
   variant: string;

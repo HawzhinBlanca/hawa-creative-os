@@ -77,7 +77,7 @@ type Candidate = Pick<StudioLayoutV2, 'artDirection'>;
  * is preferred over one that is not. Between two that are not, the one with fewer departures from
  * the grammar (`deviations`, from page-grammar.ts guidelineDeviations) is preferred.
  *
- * ADR-262: it is a tie-break only. selectWinnerV3 consults it where the judge did not decide or failed
+ * ADR-271: it is a tie-break only. selectWinnerV3 consults it where the judge did not decide or failed
  * its canary; a reliable judge's pick stands. (It used to stand unless the judge chose the other by a
  * clear margin in both orders, GUIDELINE_CLEAR_MARGIN, which kept the restrained document page
  * against bolder posters.)
@@ -104,7 +104,7 @@ export function guidelinePrior(
 
 /**
  * The share of the judge's votes (weighted on a photo brief) a candidate needed in each presentation
- * order to overrule the guideline prior: four of five dimensions. ADR-262 retired that override
+ * order to overrule the guideline prior: four of five dimensions. ADR-271 retired that override
  * (the prior only breaks ties now); kept for reading selections recorded under ADR-238.
  */
 export const GUIDELINE_CLEAR_MARGIN = 0.75;

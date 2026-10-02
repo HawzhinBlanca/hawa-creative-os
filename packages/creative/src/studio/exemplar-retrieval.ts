@@ -92,7 +92,7 @@ export interface ExemplarBrief {
   /** Subject tags of the brief, e.g. report_release, meeting, event_forum. */
   subjects?: readonly string[];
   /**
-   * ADR-262: a text-only brief may also be shown the office's own published posts, for their
+   * ADR-271: a text-only brief may also be shown the office's own published posts, for their
    * composition (big display type, a navy or cream ground, a clear focal point), not their photos.
    * Absent or false: the typographic retrieval is exactly as before (owner-confirmed set only).
    */
@@ -275,7 +275,7 @@ export class ExemplarRetrievalIndex {
       if (coverageWarning) warnings.push(coverageWarning);
     }
     // A typographic brief sees only the owner-confirmed typographic set, ranked exactly as before
-    // photo exemplars existed: they take no part in its frequencies, order or selection. ADR-262: with
+    // photo exemplars existed: they take no part in its frequencies, order or selection. ADR-271: with
     // `officePosters`, the office's published posts join the pool, and at least one of them (in the
     // brief's script where one exists, never a language twin of another pick) is among the selection.
     const isOfficePoster = (d: LexicalDocument) => d.exemplar.status === 'office-published' && d.exemplar.photoCount > 0;

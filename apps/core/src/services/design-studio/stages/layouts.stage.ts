@@ -233,7 +233,7 @@ export async function runLayoutsStage(
     const logoConstraintsV3 = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number; clearSpaceShareOfHeight?: number } | undefined;
     const grammar = ctx.pageGrammar;
     // ADR-238: a design with no photo for a client with a page grammar is first set from the grammar
-    // itself, with no model call. ADR-262: with poster rules that is three different compositions,
+    // itself, with no model call. ADR-271: with poster rules that is three different compositions,
     // and the layout model is not called (its layouts were cut to make room for them).
     const composed = grammar && !artDirected ? composedGrammarCandidates(ctx, brief, grammar, copy, copyBlockSlots, logoConstraintsV3) : [];
     const composedSuffice = Boolean(grammar?.poster) && composed.length >= 3;
@@ -471,11 +471,11 @@ export async function runLayoutsStage(
   return candidates;
 }
 
-/** One composition the grammar can set: a poster (ADR-262), the guideline's page or its cover (ADR-238). */
+/** One composition the grammar can set: a poster (ADR-271), the guideline's page or its cover (ADR-238). */
 type GrammarChoice = { tone: 'poster'; variant: PosterVariant } | { tone: 'page' | 'cover'; variant: string };
 
 /**
- * ADR-262: the compositions to offer, in order, each a different one. With poster rules a text-only
+ * ADR-271: the compositions to offer, in order, each a different one. With poster rules a text-only
  * poster is offered the office's poster compositions first: a dark brief the navy cover poster and
  * the guideline's two covers; a requester who named white the banded white poster and the
  * guideline's page; one who named cream the cream poster first; otherwise the banded white poster,
@@ -497,7 +497,7 @@ export function grammarChoices(grammar: PageGrammar, dark: boolean, requested: s
 /**
  * ADR-238: the client's page grammar set whole: the guideline's page in two variants (details on a
  * KAAE Blue card, or on white cards), or its navy-gradient cover when the brief asks for a dark
- * ground (the requester's words, an evening or a cover). ADR-262: with poster rules, the office's
+ * ground (the requester's words, an evening or a cover). ADR-271: with poster rules, the office's
  * poster compositions first (grammarChoices); at most three, each a different composition. A
  * composition the copy cannot fill is skipped.
  */

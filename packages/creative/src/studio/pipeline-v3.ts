@@ -1892,7 +1892,7 @@ export async function selectWinnerV3(
     // carry the instructions and the exact copy.
     ...(options.judgeBrief ? { brief: { instructions: options.judgeBrief.instructions, copy: options.judgeBrief.copy } } : {}),
     ...(options.houseRules?.length ? { houseRules: options.houseRules } : {}),
-    // ADR-262: a client whose grammar carries poster rules is judged as a poster: impact and
+    // ADR-271: a client whose grammar carries poster rules is judged as a poster: impact and
     // hierarchy at a 300px thumbnail, a clear focal point, and fit to the request.
     ...(options.pageGrammar?.poster ? { posterImpact: true } : {}),
   };
@@ -1936,7 +1936,7 @@ export async function selectWinnerV3(
   const canaryPassed = canaryMatch.winnerId === 'chosen';
   const canary = { passed: canaryPassed, match: canaryMatch, subject: tentative };
 
-  // ADR-238, narrowed by ADR-262: for a client with a page grammar, the guideline prior breaks a tie.
+  // ADR-238, narrowed by ADR-271: for a client with a page grammar, the guideline prior breaks a tie.
   // The design it favours (composed from the grammar, else the one with fewer departures from it)
   // stands only where the judge did not decide (a split across the two orders) or failed its canary.
   // A reliable judge's pick stands: the prior used to overrule any pick short of a 0.75 vote share in

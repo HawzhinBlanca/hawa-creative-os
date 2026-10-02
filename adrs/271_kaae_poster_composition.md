@@ -1,4 +1,4 @@
-# ADR-262: KAAE Posters Are Composed Like the Office's Posts, Not Like the Guideline's Pages
+# ADR-271: KAAE Posters Are Composed Like the Office's Posts, Not Like the Guideline's Pages
 
 **Date:** 2026-10-02
 **Status:** Implemented on branch `claude/design-retarget` (from `claude/hawzhin-support`); not deployed. Needs the owner's visual sign-off (section 6).

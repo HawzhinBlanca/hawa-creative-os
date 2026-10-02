@@ -1291,7 +1291,7 @@ export class DesignStudioService {
           subjects: recordedBrief?.subjectTags ?? [],
           eligibleRecipes: eligibleRecipes(briefPhotoFacts(recordedBrief, runStages(run).cutoutsWanted === true)),
         } : {}),
-        // ADR-262: a text-only poster for a client with poster rules is also shown the office's own
+        // ADR-271: a text-only poster for a client with poster rules is also shown the office's own
         // published posts, for their composition.
         ...(photoCount === 0 && pageGrammarFromRaw(reference)?.poster ? { officePosters: true } : {}),
       };

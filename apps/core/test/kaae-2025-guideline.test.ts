@@ -284,7 +284,7 @@ describe('ADR-238: the requester\'s words set the ground; a cover and an evening
 });
 
 describe('ADR-238 proofs: the guideline\'s pages through the real stage, render and hard QA (model mocked)', () => {
-  it('ADR-262: the Quality Assurance Workshop is three different office poster compositions, bold, with no layout call, all passing hard QA', async () => {
+  it('ADR-271: the Quality Assurance Workshop is three different office poster compositions, bold, with no layout call, all passing hard QA', async () => {
     const { ranked, requests } = await typographicRun(QA_COPY, QA_ROLES, 'Design a poster for our Quality Assurance Workshop.', LIGHT_POSTER_ANSWER);
     // Three compositions were set from the grammar, so the layout model was not called.
     expect(requests).toHaveLength(0);
@@ -311,7 +311,7 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
     expect([...grounds].sort()).toEqual([CREAM, MIDNIGHT, WHITE].sort());
   }, 120000);
 
-  it('ADR-262: a requester who names white gets the banded white poster and the guideline\'s own two pages', async () => {
+  it('ADR-271: a requester who names white gets the banded white poster and the guideline\'s own two pages', async () => {
     const { ranked } = await typographicRun(QA_COPY, QA_ROLES, 'Design a poster for our Quality Assurance Workshop, on a white background.', LIGHT_POSTER_ANSWER);
     expect(ranked.map((r) => `${r.layout.composition?.grammar}/${r.layout.composition?.variant}`).sort()).toEqual(['page/brand_card', 'page/cards', 'poster/band']);
     for (const r of ranked) {
@@ -421,7 +421,7 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
   }, 240000);
 });
 
-describe('ADR-262: the judge decides between the compositions; the guideline prior only breaks a tie', () => {
+describe('ADR-271: the judge decides between the compositions; the guideline prior only breaks a tie', () => {
   /** Five votes, `votesA` of them to the design shown as A. */
   const verdict = (votesA: number) => ({
     dimensions: Object.fromEntries(JUDGE_DIMENSIONS.map((d, i) => [d, { winner: i < votesA ? 'A' : 'B', rationale: 'r' }])),

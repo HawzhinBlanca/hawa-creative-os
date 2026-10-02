@@ -92,7 +92,7 @@ describe('the guideline prior (ADR-170\'s prior, extended): the guideline\'s own
   });
 });
 
-describe('selection: the judge decides; a composed guideline design wins a tie (ADR-262)', () => {
+describe('selection: the judge decides; a composed guideline design wins a tie (ADR-271)', () => {
   const passedQa = { passed: true, defectCodes: [], messages: [], findings: [] } as any;
   const receipt = { model: 'gpt-4.1-mini', responseId: 'r', xRequestId: null, inputTokens: 1, outputTokens: 1, costUsd: 0, latencyMs: 1 };
   /** A verdict giving `votesA` of the five dimensions to the design shown as A. */
@@ -131,7 +131,7 @@ describe('selection: the judge decides; a composed guideline design wins a tie (
     expect([s.match!.candidate1Id, s.match!.candidate2Id]).toEqual(['candidate_0', 'candidate_2']);
   }, 60000);
 
-  it('ADR-262: a reliable judge that prefers the other by three votes of five in both orders decides; the guideline prior no longer overrules it', async () => {
+  it('ADR-271: a reliable judge that prefers the other by three votes of five in both orders decides; the guideline prior no longer overrules it', async () => {
     const s = await select(3);
     expect(s.decidedBy).toBe('judge');
     expect(s.winner.sourceIndex).toBe(0);
@@ -143,7 +143,7 @@ describe('selection: the judge decides; a composed guideline design wins a tie (
     expect(plain.winner.sourceIndex).toBe(0);
   }, 60000);
 
-  it('ADR-262: the guideline prior breaks a tie: a judge split across the two orders leaves the composed design', async () => {
+  it('ADR-271: the guideline prior breaks a tie: a judge split across the two orders leaves the composed design', async () => {
     const create = vi.fn()
       .mockResolvedValueOnce({ data: verdict(3), receipt })
       .mockResolvedValueOnce({ data: verdict(3), receipt })

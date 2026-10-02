@@ -193,14 +193,14 @@ export interface JudgeOptions {
    */
   photoBrief?: boolean;
   /**
-   * ADR-262: judge the designs as posters (a client whose grammar carries poster rules): hierarchy
+   * ADR-271: judge the designs as posters (a client whose grammar carries poster rules): hierarchy
    * includes impact at a 300px thumbnail, composition a clear focal point, brand fit the request.
    * Absent: the prompt is exactly as before.
    */
   posterImpact?: boolean;
 }
 
-/** ADR-262: the poster criteria, by dimension, added to the judge's definitions when `posterImpact` is set. */
+/** ADR-271: the poster criteria, by dimension, added to the judge's definitions when `posterImpact` is set. */
 export const POSTER_IMPACT_CRITERIA = {
   hierarchy: ' One dominant display moment: the title must still lead, and read, with the poster shrunk to a 300px-wide thumbnail in a feed.',
   composition: ' A clear focal point. A poster that leaves most of its canvas empty, or reads as a document page rather than a poster, is weak composition.',

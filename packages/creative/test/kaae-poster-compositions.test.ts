@@ -16,7 +16,7 @@ import { encodeStudioTransferV2 } from '../src/studio/transfer-v2.js';
 import { checkCanvaPptx } from '../../qa/src/canva-pptx-check.js';
 
 /**
- * ADR-262 (design review, 2026-10-02): KAAE's shipped text-only designs were the guideline's document
+ * ADR-271 (design review, 2026-10-02): KAAE's shipped text-only designs were the guideline's document
  * page at poster size: ~84% empty, a 64px title on a 1080 canvas, a 0.12 logo, every candidate the
  * same layout. The guideline keeps the palette, the logo, the faces and the elements; the office's
  * own published posts set the poster composition.

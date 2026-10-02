@@ -699,7 +699,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     process.env.DESIGN_PIPELINE_V3 = 'on';
 
     try {
-      // ADR-262: a title no poster composition can carry, so the layout model is still called (a
+      // ADR-271: a title no poster composition can carry, so the layout model is still called (a
       // KAAE text-only brief the poster compositions carry makes no layout call).
       const taskId = await createTask(`Keep title centered.\n---\n${'EXACT TITLE OF A VERY LONG ANNOUNCEMENT THAT RUNS ON AND ON '.repeat(4).trim()}\n\nExact body text line. Never rewrite it.`);
 
@@ -1068,7 +1068,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
 
       // No v2 concept call: v3 invents its own archetypes. And the v3 stages ran.
       expect(conceptCalls).toBe(0);
-      // ADR-262: KAAE's grammar carries poster rules, so a text-only run is three composed poster
+      // ADR-271: KAAE's grammar carries poster rules, so a text-only run is three composed poster
       // compositions and makes no layout call.
       expect(schemasSeen).not.toContain('layout_v3_candidates');
       expect(schemasSeen).toContain('DesignCritiqueReport');
@@ -1076,7 +1076,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
 
       const stages = typeof final.stages === 'string' ? JSON.parse(final.stages) : final.stages;
       expect(stages.tournament.pipeline).toBe('v3');
-      // A judge that picks by position (a tie across the two orders) decides nothing. ADR-262: both
+      // A judge that picks by position (a tie across the two orders) decides nothing. ADR-271: both
       // finalists are composed poster compositions, equally faithful to the guideline, so the
       // guideline prior has no preference either and the composite breaks the tie.
       expect(stages.tournament.decidedBy).toBe('composite_after_tie');
@@ -1102,7 +1102,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         await sql<any>`SELECT status, rank, concept FROM hawa.design_studio_candidates WHERE run_id=${run.id}::uuid ORDER BY ordinal`.execute(db)
       ).rows;
       const concepts = candidates.map((c: any) => (typeof c.concept === 'string' ? JSON.parse(c.concept) : c.concept));
-      // ADR-262: the office's three poster compositions, each a different one.
+      // ADR-271: the office's three poster compositions, each a different one.
       expect(concepts.map((c: any) => c.layoutIdea)).toEqual([
         'v3 monolith_centered',
         'v3 monolith_centered',

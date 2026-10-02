@@ -105,7 +105,7 @@ export function requiredContrast(fontSize: number, bold: boolean): number {
 
 /**
  * ADR-238: whether a layout's logo clear space is the client guideline's own (a cover composed from
- * its page grammar), rather than the stronger of it and the house's. ADR-262: a poster composed from
+ * its page grammar), rather than the stronger of it and the house's. ADR-271: a poster composed from
  * the grammar keeps the guideline's own too (KAAE: the height of the K, p.4).
  */
 export function usesGuidelineClearSpace(layout: { composition?: { grammar: 'page' | 'cover' | 'poster' } }): boolean {

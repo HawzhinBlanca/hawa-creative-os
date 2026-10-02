@@ -58,7 +58,7 @@ export interface GrammarCard {
   edgeShare?: number;
 }
 
-/** ADR-262: one poster composition's colours (all from the client's palette). */
+/** ADR-271: one poster composition's colours (all from the client's palette). */
 export interface PosterVariantSpec {
   /** The ground, where the composition has its own (cream). */
   ground?: Hex;
@@ -78,7 +78,7 @@ export interface PosterVariantSpec {
 }
 
 /**
- * ADR-262: how the client's posters are composed (KAAE: from the office's own published posts), as
+ * ADR-271: how the client's posters are composed (KAAE: from the office's own published posts), as
  * distinct from its guideline's document pages: the title's range as shares of the width, the logo's
  * width, the gold bar's width, the negative-space ceiling, and the three compositions' colours.
  */
@@ -133,7 +133,7 @@ export interface PageGrammar {
     sunburst: { color: Hex; opacityOnLight: number; colorOnDark: Hex; opacityOnDark: number; rays: number };
     trianglePattern: { color: Hex; opacityOnLight: number; colorOnDark: Hex; opacityOnDark: number };
   };
-  /** ADR-262: the poster compositions; a grammar without them composes pages and covers only. */
+  /** ADR-271: the poster compositions; a grammar without them composes pages and covers only. */
   poster?: PosterGrammar;
 }
 
@@ -337,7 +337,7 @@ export function composeGrammarLayout(input: ComposeGrammarInput): StudioLayoutV2
   const { width: W, height: H, grammar: g } = input;
   const units = grammarUnits(input);
   if (!units.some((u) => u.kind === 'title')) throw new GrammarInfeasibleError('no title');
-  // ADR-262: with poster rules the title is the poster's display moment: the largest step of the
+  // ADR-271: with poster rules the title is the poster's display moment: the largest step of the
   // scale within the poster's title range that fits, growing to fill its block. Without them, at most
   // the grammar's own sizes.
   // Every poster-sized title at every scale first; then the grammar's own title size (the only pass
@@ -370,7 +370,7 @@ function pageBodySize(input: ComposeGrammarInput, f: number): number {
 /**
  * The poster-sized title steps to try, largest first: every step of the scale whose size lies in the
  * poster's title range (at least the smallest step at or over its minimum). When none fits at any
- * scale, the composer falls back to the grammar's own title size, as before ADR-262.
+ * scale, the composer falls back to the grammar's own title size, as before ADR-271.
  */
 function titleSteps(input: ComposeGrammarInput, f: number): number[] {
   const P = input.grammar.poster;
@@ -433,7 +433,7 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   // ----- the logo and the header ----------------------------------------------------------------
   const aspect = input.logoAspect > 0 ? input.logoAspect : 1;
   const minLogo = Math.max(minLogoWidth(W), input.logoMinimumWidthPx ?? 0);
-  // ADR-262: with poster rules the header logo is the poster's (KAAE: 0.16 of the width, not the
+  // ADR-271: with poster rules the header logo is the poster's (KAAE: 0.16 of the width, not the
   // document page's 0.12), so it reads at a thumbnail.
   const headerLogoShare = Math.max(g.header.logoWidthShare, g.poster?.logoWidthShare ?? 0);
   let lw = Math.max(minLogo, r((centred ? g.cover.logoWidthShare : cover ? 1.6 * headerLogoShare : headerLogoShare) * W));
@@ -532,7 +532,7 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   // ----- the flow -------------------------------------------------------------------------------
   const footH = cover ? 0 : Math.max(3, r(g.footRule.heightShare * W));
   const footY = H - r(0.75 * m) - footH;
-  // ADR-262: a cover with the triangle band keeps the band's room when its title grows.
+  // ADR-271: a cover with the triangle band keeps the band's room when its title grows.
   const bandRoom = cover && fixedTitleStep !== undefined && (input.variant ?? 'pattern') === 'pattern' ? r(0.15 * H) : 0;
   const limit = cover ? safe.y + safe.height - bandRoom : Math.min(safe.y + safe.height, footY - r(0.03 * W));
   const pad = r(0.04 * W);
@@ -571,7 +571,7 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
       const p = place(t, b.text, contentX, contentW, y);
       const tm = measure({ ...t, width: contentW }, b.text);
       if (tm.lines > 3) return undefined;
-      // ADR-262: a title grown to the poster's range never runs a word past its box.
+      // ADR-271: a title grown to the poster's range never runs a word past its box.
       if (fixedTitleStep !== undefined && tm.lineWidth > contentW + 2) return undefined;
       texts.push(p.el);
       const bar = titleBarPrimitive(g, W, p.el, p.el.align);
@@ -968,7 +968,7 @@ export function guidelineDeviations(layout: StudioLayoutV2, g: PageGrammar, opti
       hexToLuminance(s.color) < 0.2 && s.width * s.height > 0.08 * area);
     if (flat.length && has('cover_ground')) out.push('a flat dark panel on the gradient cover');
   } else if (layout.composition?.grammar === 'poster') {
-    // ADR-262: a light poster (cream, or the white page with its title band) is composed as the
+    // ADR-271: a light poster (cream, or the white page with its title band) is composed as the
     // office's posters are, not as the guideline's document page: it keeps the gold bar.
     if (!has('title_bar')) out.push('no gold bar under the title');
   } else {
@@ -993,7 +993,7 @@ export function guidelineDeviations(layout: StudioLayoutV2, g: PageGrammar, opti
  */
 export function guidelineFidelityRule(g: PageGrammar): string {
   const faces = [...new Set([g.title.fontFamily, g.lead.fontFamily, g.body.fontFamily])].join(', ');
-  // ADR-262: a client with poster rules is told a poster needs only the bar, so the rule does not
+  // ADR-271: a client with poster rules is told a poster needs only the bar, so the rule does not
   // count the office's own poster compositions against themselves.
   const page = g.poster ? 'a document page lacking header rule, gold title bar or foot rule (a poster: the bar)'
     : 'a page without the header rule and gold segment, the gold title bar or the foot rule';
