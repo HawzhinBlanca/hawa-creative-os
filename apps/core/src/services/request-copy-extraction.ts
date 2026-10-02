@@ -494,7 +494,10 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   }
   // Lines chosen from a request sentence (model or rules) start with a capital; quoted words stay as typed.
   const capitals = chosen.method === 'model' || chosen.method === 'rules';
-  const label = draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : ctx.senderName;
+  // Live 2026-10-02: a packed client's request is labelled with the client ("Canary Test: Spring Concert"),
+  // never the sender's first name; the sender only when no client is known (as chat-campaign-intake.ts).
+  const clientName = draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : clientPackOf(draft.clientId)?.names.en;
+  const label = clientName ?? ctx.senderName;
   // ADR-253 (L21): the client's possessive is not the event's name; quoted words stay as the requester quoted them.
   const unowned = capitals && draft.clientId ? withoutClientPossessive(chosen.copy.headline,
     clientNamesFor(draft.clientId, draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : null)) : null;
@@ -509,7 +512,7 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
     ...(ledger !== undefined ? { ledgerUpdateId: ledger } : {}) };
   return {
     ...kept,
-    title: copyTitle(headline, label, draft.clientId === KAAE_CLIENT_ID),
+    title: copyTitle(headline, label, Boolean(clientName)),
     ...(isArabic(headline) ? { headlineCkb: headline } : { headlineEn: headline }),
     copyEn: lines.filter((l) => !isArabic(l)).join('\n'),
     copyCkb: lines.filter(isArabic).join('\n'),

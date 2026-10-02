@@ -114,6 +114,47 @@ function canonicalXmlCharacterReferences(xml: string): string {
   return chunks.length ? chunks.join('') + xml.slice(from) : xml;
 }
 
+/**
+ * ADR-257: the PPTX parts `keep` names, unzipped within the same import limits `checkCanvaPptx` applies
+ * (25 MB packed, 500 entries, 8 MB a part, 64 MB expanded, no path that leaves the archive). Used by
+ * `readPptxTextLayout` (canva-pptx-layout.ts) to measure the shipped export.
+ */
+export function unzipPptxParts(bytes: Uint8Array, keep: (name: string) => boolean): Record<string, Uint8Array> {
+  if (bytes.length > 25 * 1024 * 1024) throw new Error('PPTX exceeds import limit');
+  let total = 0, count = 0;
+  const seen = new Set<string>();
+  return unzipSync(bytes, {
+    filter: (file) => {
+      if (++count > 500 || seen.has(file.name) || file.name.includes('..') || file.name.startsWith('/')) {
+        throw new Error('Unsupported ZIP directory');
+      }
+      seen.add(file.name);
+      total += file.originalSize;
+      if (file.originalSize > 8 * 1024 * 1024 || total > 64 * 1024 * 1024) {
+        throw new Error('Expanded PPTX exceeds inspection limit');
+      }
+      return keep(file.name);
+    },
+  });
+}
+
+const layoutXmlParser = new XMLParser({
+  preserveOrder: true,
+  ignoreAttributes: false,
+  trimValues: false,
+  parseTagValue: false,
+  processEntities: true,
+  // @ts-expect-error 5.11.1 accepts an explicit entity map at runtime; its type declares only boolean.
+  htmlEntities: { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" },
+});
+
+/** ADR-257: one PPTX XML part, read as `checkCanvaPptx` reads it (ADR207 character references, no entities). */
+export function parsePptxXml(b: Uint8Array): any[] {
+  const text = strFromU8(b);
+  if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('XML entities are forbidden');
+  return layoutXmlParser.parse(canonicalXmlCharacterReferences(text));
+}
+
 export function checkCanvaPptx(
   bytes: Uint8Array,
   expectedCopy: string[],

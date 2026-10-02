@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T12:15:47Z",
+  "generatedAt": "2026-10-02T12:19:06Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 884,
+  "fileCount": 886,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "e947b08819ad7485a60ea6c4047cb29c3877687ed4f034cb60378ee74061c4bd",
-      "bytes": 3992
+      "sha256": "82f552aaf62a04659653e86bf68467f6ca52b6fac10817a42d44f655c3431e02",
+      "bytes": 3988
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -1221,6 +1221,16 @@
       "path": "adrs/256_hawzhin_workspace_customer_boundary.md",
       "sha256": "42c6a02f58d2947f209f79e28760568fa040c57f80af55116bf2d89bb76f10b4",
       "bytes": 3118
+    },
+    {
+      "path": "adrs/257_export_contrast_and_margins.md",
+      "sha256": "c136a31ed8e4da8d965de942f5f8d5e827dc9b6173dd3313ee598bed4754e311",
+      "bytes": 6294
+    },
+    {
+      "path": "adrs/258_export_picture_fidelity_and_unattended_readiness.md",
+      "sha256": "401fd1dc21118d92a4266babb163ce74133df693989992a86d717337ff263cce",
+      "bytes": 8238
     },
     {
       "path": "adrs/259_customer_owned_web_requests.md",

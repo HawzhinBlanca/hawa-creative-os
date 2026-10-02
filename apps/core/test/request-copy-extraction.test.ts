@@ -390,3 +390,19 @@ describe('the copy reading\'s paid call (ledger, consent, allowance, replay)', (
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+// Live 2026-10-02 (canary chat, deploy 9a2ca20a): the grounded title of a packed client's request still read
+// "Canary: Spring Concert" (the sender's first name). It names the client; the sender only with no client.
+describe('a grounded title names the client', () => {
+  const text = "Could you design a Canary Test poster for our Spring Concert? It's on 20 October 2026 at 6:00 PM in the Main Hall, Erbil.";
+  it('labels a packed client with its name', async () => {
+    const draft = await extractRequestCopy(prepared(text, { clientId: 'c1000000-0000-4000-8000-000000000099', title: 'Canary Test: Spring Concert' }),
+      ctx(fixed({ headline: 'Spring Concert', lines: ['20 October 2026 at 6:00 PM', 'Main Hall, Erbil'] })));
+    expect(draft.title).toMatch(/^Canary Test: Spring Concert/);
+  });
+  it('labels a request with no client by its sender', async () => {
+    const draft = await extractRequestCopy(prepared(text, { clientId: null as any, title: 'Requester: Spring Concert' }),
+      ctx(fixed({ headline: 'Spring Concert', lines: ['20 October 2026 at 6:00 PM', 'Main Hall, Erbil'] })));
+    expect(draft.title ?? 'Requester:').toMatch(/^Requester:/);
+  });
+});

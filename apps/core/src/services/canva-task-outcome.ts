@@ -17,6 +17,7 @@
  *    never dragged back by a late or repeated notification.
  */
 import crypto from 'node:crypto';
+import { checkExportPictures } from './export-picture-fidelity.js';
 import { sql, withRlsContext, TaskRepository, RevisionRepository, type Kysely, type Database, type TaskState, type CreateRevisionParams } from '@hawa/db';
 
 export const DRAFT_READY_STATUSES = new Set(['DRAFT_READY', 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW']);
@@ -137,7 +138,23 @@ export interface ExportRow {
   content: Buffer;
   content_check: unknown;
   capture_version: string | null;
+  /** ADR-257: the PNG capture of the same design, binding and saved version, when one was retrieved. */
+  preview_png?: Buffer | null;
+  preview_sha256?: string | null;
 }
+
+/**
+ * ADR-257: the PNG capture of the same saved Canva version as the PPTX row `b` (operation `o`): the
+ * picture approval pins with that PPTX (same design, binding version and `designUpdatedAt`), which is
+ * the one that ships. The export QC measures contrast and the safe area on it.
+ */
+const sameVersionPng = (column: 'content' | 'sha256') => sql`(SELECT p.${sql.raw(column)} FROM hawa.canva_export_bytes p
+    JOIN hawa.canva_remote_operations po ON po.id = p.operation_id AND po.tenant_id = p.tenant_id AND po.status = 'retrieved'
+    WHERE p.tenant_id = b.tenant_id AND p.task_id = b.task_id AND p.format = 'png'
+      AND po.design_id = o.design_id AND po.binding_version = o.binding_version
+      AND po.metadata->>'designUpdatedAt' = o.metadata->>'designUpdatedAt'
+    ORDER BY p.created_at DESC, p.id DESC LIMIT 1)`;
+export const PREVIEW_PNG_COLUMNS = sql`${sameVersionPng('content')} AS preview_png, ${sameVersionPng('sha256')} AS preview_sha256`;
 
 export interface CanvaQcEvaluation {
   sourceTextObjects?: import('@hawa/qa').PptxTextObject[] | null;
@@ -201,6 +218,41 @@ export type ExportQcResult =
  * "Request Revision" left the task unapprovable for good. A checked capture after approval is
  * likewise a new revision: approval of the prior bytes must not authorize this capture.
  */
+/**
+ * ADR-258: the source's pictures (photos and the official logo) checked in the export being recorded.
+ * The source is the editable PPTX the bound design was imported from; a design not imported from one
+ * (made in Canva by hand) has nothing to compare and says so. Advisory: recorded in the report, named in
+ * the office alert's warnings, never part of `passed` or `criticalPass`. A failure to measure is recorded
+ * as such and never blocks the recording.
+ */
+async function addPictureFidelity(trx: Kysely<Database>, p: { tenantId: string; taskId: string }, exportRow: ExportRow,
+  qc: CanvaQcEvaluation): Promise<void> {
+  if (!(exportRow.content instanceof Uint8Array) || !exportRow.content.length) return;
+  const source = (await sql<{ content: Uint8Array; manifest: { logo?: { x: number; y: number; width: number; height: number } } | null }>`
+    SELECT e.content, e.manifest FROM hawa.canva_editable_sources e
+    JOIN hawa.canva_remote_operations o ON o.id = e.operation_id AND o.tenant_id = e.tenant_id AND o.kind = 'create'
+    JOIN hawa.canva_bindings g ON g.tenant_id = o.tenant_id AND g.task_id = o.task_id AND g.status = 'bound' AND g.canva_design_id = o.design_id
+    WHERE e.tenant_id = ${p.tenantId}::uuid AND e.task_id = ${p.taskId}::uuid
+    ORDER BY e.created_at DESC LIMIT 1`.execute(trx)).rows[0];
+  const report = qc.qaReport as CanvaQcEvaluation['qaReport'] & { warnings?: string[]; pictureFidelity?: unknown;
+    checks: Array<{ name: string; passed: boolean | null; details?: unknown }> };
+  if (!source?.content?.length) {
+    report.pictureFidelity = { measured: false, reason: 'The design was not imported from an editable source; there is nothing to compare its pictures with.' };
+    return;
+  }
+  try {
+    const logo = source.manifest?.logo;
+    const fidelity = await checkExportPictures(source.content, exportRow.content,
+      logo && [logo.x, logo.y, logo.width, logo.height].every(Number.isFinite) ? { logoBoxPx: logo } : {});
+    report.pictureFidelity = fidelity;
+    report.checks.push({ name: 'pictureFidelity', passed: fidelity.pass, details: { logo: fidelity.logo, missing: fidelity.missing.length, moved: fidelity.moved.length } });
+    if (fidelity.warnings.length) report.warnings = [...(report.warnings ?? []), ...fidelity.warnings];
+  } catch (err) {
+    report.pictureFidelity = { measured: false, reason: `Not measured: ${err instanceof Error ? err.message : String(err)}` };
+    report.checks.push({ name: 'pictureFidelity', passed: null, details: 'not measured' });
+  }
+}
+
 export async function recordCheckedExportQc(
   trx: Kysely<Database>,
   evaluateQc: BridgeDeps['evaluateQc'],
@@ -225,7 +277,8 @@ export async function recordCheckedExportQc(
     throw new Error('An approved Canva task has no current revision approval; the capture cannot be accepted as the same revision');
   }
   const changedSince = reworkedSince || priorApproval?.created_at || null;
-  const exportRow = (await sql<ExportRow>`SELECT b.id, b.sha256, b.format, b.content, b.content_check, o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
+  const exportRow = (await sql<ExportRow>`SELECT b.id, b.sha256, b.format, b.content, b.content_check, o.metadata->>'designUpdatedAt' AS capture_version,
+    ${PREVIEW_PNG_COLUMNS} FROM hawa.canva_export_bytes b
     JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
     JOIN hawa.canva_bindings g ON g.tenant_id = b.tenant_id AND g.task_id = b.task_id AND g.status = 'bound'
       AND g.canva_design_id = o.design_id AND g.version = o.binding_version
@@ -238,6 +291,7 @@ export async function recordCheckedExportQc(
     WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND status NOT IN ('failed','abandoned')
     ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.copy;
   const qc = evaluateQc(exportRow, copy || p.fallbackCopy);
+  await addPictureFidelity(trx, p, exportRow, qc);
   qc.qaReport.exportArtifactId = exportRow.id;
   qc.qaReport.captureVersion = exportRow.capture_version;
   let transition: OutcomeTransition | undefined;
@@ -299,7 +353,8 @@ export async function bridgeCanvaDraftRevision(trx: Kysely<Database>, deps: Brid
   const manifest = (await sql<{ manifest: ({ nodes?: unknown[]; copy?: string[] } & Record<string, unknown>) | null }>`SELECT result->'manifest' AS manifest FROM hawa.canva_design_plans
     WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND status NOT IN ('failed','abandoned')
     ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.manifest;
-  const exportRow = (await sql<ExportRow>`SELECT b.id, b.sha256, b.format, b.content, b.content_check, o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
+  const exportRow = (await sql<ExportRow>`SELECT b.id, b.sha256, b.format, b.content, b.content_check, o.metadata->>'designUpdatedAt' AS capture_version,
+    ${PREVIEW_PNG_COLUMNS} FROM hawa.canva_export_bytes b
     JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
     JOIN hawa.canva_bindings g ON g.tenant_id = b.tenant_id AND g.task_id = b.task_id AND g.status = 'bound'
       AND g.canva_design_id = o.design_id AND g.version = o.binding_version
@@ -350,6 +405,7 @@ export async function bridgeCanvaDraftRevision(trx: Kysely<Database>, deps: Brid
   const profileId = await resolveQcProfileId(trx, p.tenantId);
   const qc = withWorkerCheckFailure(deps.evaluateQc(exportRow, manifest?.copy || p.fallbackCopy), p.status);
   if (exportRow) {
+    await addPictureFidelity(trx, p, exportRow, qc);
     qc.qaReport.exportArtifactId = exportRow.id;
     qc.qaReport.captureVersion = exportRow.capture_version;
   }

@@ -46,4 +46,20 @@ describe('intake routes by client pack', () => {
     const draft = await send('Poster about the zar exchange rate in Erbil\n\nToday only');
     expect(draft.clientId).toBeNull();
   });
+
+  // Live 2026-10-02 (canary chat): a packed client's request was labelled with the sender's first name
+  // ("Canary: Spring Concert"). The label is the client's short name, else the sender's.
+  it('labels a packed client\'s request with the client, never the sender', async () => {
+    const draft = await send('Could you design a Canary Test poster for our Spring Concert? It\'s on 20 October 2026 at 6:00 PM in the Main Hall, Erbil.');
+    expect(draft.clientId).toBe('c1000000-0000-4000-8000-000000000099');
+    expect(draft.title).toMatch(/^Canary Test: Spring Concert/);
+    const zar = await send('Thumbnail for ZAR Podcast episode 14\n\nGuest: Dr. Ahmed Karim\nWhy cities flood');
+    expect(zar.title).not.toMatch(/^Office: /);
+  });
+
+  it('keeps the sender as the label when no client is known', async () => {
+    const draft = await send('Poster about the zar exchange rate in Erbil\n\nToday only');
+    expect(draft.clientId).toBeNull();
+    expect(draft.title).toMatch(/^Office: /);
+  });
 });
