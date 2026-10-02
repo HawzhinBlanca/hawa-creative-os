@@ -1,7 +1,7 @@
 {
   "date": "2026-10-02",
   "adr": "ADR262",
-  "status": "LOCAL_CONNECTED_QUALIFIED_FULL_SOURCE_PENDING",
+  "status": "LOCAL_SOURCE_QUALIFIED_NOT_LAUNCHED",
   "branch": "codex/hawzhin-app-integration",
   "requirements": [
     "FR-029",
@@ -18,7 +18,25 @@
     "report": "output/qualification/2026-10-02/customer-previews/FINAL_CONNECTED_TESTS.json",
     "testRoots": 745,
     "migration": "086_customer_current_preview.sql",
-    "fullSuite": "PENDING"
+    "fullSuite": {
+      "passed": 8082,
+      "failed": 0,
+      "skipped": 67,
+      "total": 8149,
+      "report": "output/qualification/2026-10-02/customer-previews/FULL_ENGINE_TESTS.json"
+    },
+    "sourceCommit": "bc6f8932",
+    "testedSealedCommit": "1d8ccdd44872b1097ff27fe30d1bfc1e61e900ec",
+    "sourceManifest": "VERIFIED",
+    "blueprint": {
+      "pass": 1937,
+      "warn": 0,
+      "fail": 0
+    },
+    "coreTypes": "PASS",
+    "allTestTypes": "745/745 PASS",
+    "anyRatchet": "952 <= 1053 PASS",
+    "providerEgress": "PASS"
   },
   "website": {
     "tests": {
@@ -35,7 +53,8 @@
     "types": "PASS",
     "affectedLint": "PASS",
     "build": "PASS",
-    "reports": "../hawzhin-app-integration/output/qualification/2026-10-02-designer-previews/"
+    "reports": "../hawzhin-app-integration/output/qualification/2026-10-02-designer-previews/",
+    "sourceCommit": "e4e5492"
   },
   "controls": [
     "live workspace owner/account/client/request/current task",

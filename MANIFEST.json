@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T16:26:51Z",
+  "generatedAt": "2026-10-02T16:33:07Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -2259,8 +2259,8 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/CURRENT_PREVIEW_PROOF.json",
-      "sha256": "89b7ab4b05b05ba1934d447a7f499a1bda0d67a1800af0e8c7db929b9102bb56",
-      "bytes": 2358
+      "sha256": "dacb1b4055160eb59939cf94a5214e74d66da0ee2b275b48e7b4e7e81e8ed641",
+      "bytes": 2895
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/CUSTOMER_ADMISSION_PROOF.json",
@@ -2279,8 +2279,8 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/PLAN.md",
-      "sha256": "6c6a2885cc6cf2efe7ffd873bca3f330828d2d3d1d84be9524395e754b9afd0f",
-      "bytes": 13187
+      "sha256": "04ad8dfb3c8892583efef367618bef226e7afe10712dd1e5e5c93775f92f3696",
+      "bytes": 13641
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/WEB_LIFECYCLE_PROOF.json",
@@ -3494,8 +3494,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "cc131d942e867d5dfa2a7a2ac606372981943e5268c52c56d12c3c841cb52387",
-      "bytes": 860005
+      "sha256": "b5ea2e976930200a215118260c565e267e009d3270f9b651c161d4305a1ff867",
+      "bytes": 861129
     },
     {
       "path": "plans/user-stories.csv",
