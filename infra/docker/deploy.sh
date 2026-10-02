@@ -303,7 +303,7 @@ fi
 # start. HAWA_RELEASE_DIRS=off runs from this checkout as before (a host not yet switched over).
 source "${ROOT_DIR}/infra/ops/release_lib.sh"
 if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
-  # A deployment never drops a release someone else put live (hawa_deploy_keeps_live, ADR-261). Checked
+  # A deployment never drops a release someone else put live (hawa_deploy_keeps_live, ADR-270). Checked
   # here, under the deploy lock, so a deploy that waited for another sees the release it put live.
   hawa_deploy_keeps_live "$ROOT_DIR" "$BUILD_COMMIT" || exit 1
   python3 "${ROOT_DIR}/infra/ops/prepare_service_boundaries.py" --directory "$(hawa_shared_dir)/infra/docker" || exit 1

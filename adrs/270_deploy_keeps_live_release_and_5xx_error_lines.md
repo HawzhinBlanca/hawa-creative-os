@@ -1,4 +1,4 @@
-# ADR-261: A Deployment Keeps the Live Release; a 5xx Is an Error Line
+# ADR-270: A Deployment Keeps the Live Release; a 5xx Is an Error Line
 
 **Date:** 2026-10-02
 **Status:** Accepted (branch `claude/hawzhin-support`; not deployed — the next combined release carries it)
