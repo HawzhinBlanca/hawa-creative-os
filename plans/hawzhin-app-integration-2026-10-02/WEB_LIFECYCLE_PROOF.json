@@ -98,6 +98,13 @@
       "numPassedTests": 39,
       "numFailedTests": 6,
       "numPendingTests": 0
+    },
+    "WEB_CURRENT_FULL_TESTS.json": {
+      "success": false,
+      "numTotalTests": 8129,
+      "numPassedTests": 8061,
+      "numFailedTests": 1,
+      "numPendingTests": 67
     }
   },
   "repairs": [
@@ -163,5 +170,6 @@
     "packages/contracts/src/customer-command.ts": "2b8a9d6cf22e663aaeaaec90f85d122aaa357a079f62904cd11737ceae60ec0f",
     "packages/db/migrations/083_customer_owned_requests.sql": "fcee7e3949883b0e243955adb84c649b361c3758fa78954fd3790f5969624b71",
     "packages/db/migrations/084_customer_web_lifecycle.sql": "ffb4d6ee6e60e21b5b4e4109367bf06c1c0fdfb4041cdeabd56d6ad5650d1045"
-  }
+  },
+  "full_regression_correction": "8061 passed,1 failed,67 skipped: one route inventory snapshot omitted the two new private customer endpoints. Snapshot updated; four route/order controls passed. Requalified final full suite pending."
 }
