@@ -57,6 +57,19 @@ caught:
    On a native engine the stub now listens on the test network's gateway (the host's own address on that
    bridge) and nginx is given that address. Docker Desktop keeps the previous path.
 
+5. **`design-studio-orchestrator` test 5b gets 120 s instead of 25 s.** CI run 37074297042 (the first
+   with decisions 1–4) passed Gates A, B, Q and S and fixed all seven earlier test failures, but 5b timed
+   out and both 6b cases then chose a different winner. 5b briefs a title no poster composition can carry
+   (ADR-271), and proving that measures every candidate size with the text helper: 8 s on an M-series
+   Mac, 10.5 s in a native arm64 `ubuntu:24.04` container, about 90 s in an emulated amd64 one, and more
+   than 25 s on the 4-vCPU runner. A timed-out Vitest test is not stopped: 5b's body kept running with
+   `DESIGN_PIPELINE_V3=on` and its run active, which changed the pipeline the following tests ran. In the
+   emulated amd64 container this reproduced exactly (5b timed out, 5c and 6 failed); with 120 s all 20
+   tests passed there, natively in arm64 and on the Mac. The 6b assertions are unchanged.
+6. **Every change past a release seal needs a new seal.** `r11-release-gate` test 1 refuses a tree whose
+   files differ from `RELEASE_MANIFEST.json`'s build commit (run 37074297042 failed it for that reason, by
+   design). This branch therefore ends with a seal commit, as the integration branch does.
+
 No assertion was weakened or skipped. No test was gated off the hosted runner.
 
 ## Consequences
@@ -66,5 +79,7 @@ No assertion was weakened or skipped. No test was gated off the hosted runner.
   CI would report.
 - Gate S proves the topology with every profile, as `deploy.sh` would see it, rather than the default
   profile with the host files missing.
+- The cost of proving a title infeasible (decision 5) is a product-performance question for the design
+  pipeline's owners; this ADR only gives the test a budget that fits the runner.
 - The workflow pulls one public image (`nginx:1.27-alpine-slim`) and installs three more packages;
   both cost seconds, not minutes.
