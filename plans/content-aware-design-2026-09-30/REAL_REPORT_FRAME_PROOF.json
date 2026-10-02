@@ -81,11 +81,11 @@
     "Literal a:noFill-only probe found zero frames; inspection shows legal zero-alpha fill. Corrected semantic transparency check; source/output unchanged."
   ],
   "permissions": {
-    "productionDataMigration": "PENDING_EXPLICIT_LOCAL_COPY_AUTHORIZATION",
-    "canvaUpload": "REJECTED_BY_AUTOMATIC_REVIEW: sensitive client photos/copy payload requires explicit destination authorization; asked user after showing concrete draft",
+    "productionDataMigration": "APPROVED_BY_HUMAN_2026-10-02; executed; owned temporary copy deleted",
+    "canvaUpload": "APPROVED_BY_HUMAN_2026-10-02; exact PPTX native upload succeeded",
     "canvaSave": "Explicit approval required after actual native preview; not attempted"
   },
-  "canvaUploadOrSavePerformed": false,
+  "canvaUploadOrSavePerformed": true,
   "productionChanged": false,
   "fullEngineeringPreflight": {
     "status": "ENGINEERING_PREFLIGHT_PASSED_ADMISSION_OPEN",
@@ -156,7 +156,7 @@
     }
   },
   "externalGenerationCalls": 0,
-  "nativeConnectorScope": "Read metadata/text/pages, open and cancel an unmodified inspection transaction, request an unused upload URL. Actual upload rejected before execution.",
+  "nativeConnectorScope": "Read real imported design, inspected editable native elements, showed native thumbnail, cancelled an unmodified inspection transaction; native save approval not fabricated.",
   "environmentFailure": "Initial manifest/commit hook used system Python without PyYAML and refused; existing Homebrew runtime retry passed. No hook waived.",
   "independentPptxReadback": {
     "scope": "Independent OOXML inspection of local current-source transfer; not actual Canva/native rendering or human quality",
@@ -266,5 +266,54 @@
     },
     "ownedTemporaryContainersAndLockRemoved": true,
     "wholeProductAdmission": false
+  },
+  "approvalAndExecution": {
+    "approvedBy": "Direct human message: approve both",
+    "date": "2026-10-02",
+    "productionDataMigration": {
+      "status": "PASS",
+      "candidate": "4ab5db9dbbce13b1bcd91402e5abace2e61d40e3",
+      "newMigrationsApplied": 9,
+      "recordedMigrations": 73,
+      "scratchDatabasesRemaining": 0,
+      "temporaryCopy": "DELETED",
+      "scope": "Approved local production dump, isolated test server only; original backup unchanged. Current merged candidate has not yet passed full preflight.",
+      "receipt": "output/qualification/2026-10-02/real-report-acceptance/approved/PREDEPLOY_DUMP_CHECK.json"
+    },
+    "canvaImport": {
+      "status": "NATIVE_IMPORT_SUCCEEDED",
+      "pptxSha256": "72dd1bdb5d077864363b9c7f563ecb56b0a7b0ed2aa8664f03518ca2323cad50",
+      "designId": "DAHW2D_0ypk",
+      "separateAcceptanceDesign": true,
+      "nativeEditableTitleObjects": 2,
+      "nativeEditablePhotoObjects": 3,
+      "nativeEditableLogoAndBackingObjects": 2,
+      "dimensions": {
+        "width": 1080,
+        "height": 1350
+      },
+      "actualPreviewShownToOwner": true,
+      "inspectionTransaction": "CANCELLED_WITHOUT_CHANGES",
+      "uploadApiFailures": [
+        {
+          "status": 400,
+          "reason": "Unsupported file format ZIP"
+        },
+        {
+          "status": 400,
+          "reason": "Unsupported file format ZIP with Content-Disposition"
+        }
+      ],
+      "fallback": "Canva authenticated native upload interface imported the exact approved PPTX. No conversion to flattened image or public hosting.",
+      "scope": "Real source originals and exact title in current-source manually directed preview; native human-quality, multilingual corpus, save/reopen/export and whole-product admission remain open."
+    },
+    "currentProductionIntegration": {
+      "observedLiveCommit": "474cba4c50f567c3a58cc72943983814355bd460",
+      "mergeCommit": "63d937e98b34afa813050bb7e19d10a32cd138fa",
+      "candidateCommit": "9c22bc2a",
+      "status": "MERGED_PENDING_CURRENT_QUALIFICATION",
+      "resolvedConflicts": "Normative CSV fields preserved; both research insertions and live append-only evidence preserved. Generated manifests refreshed.",
+      "failedAttempt": "First resolver rejected FR-005 evidence insertion; subsequent commit hook refused conflict markers. Corrected CSV from three Git versions; no hook waived."
+    }
   }
 }
