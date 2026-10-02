@@ -27,7 +27,13 @@
     "workerTypes": "PASS",
     "scriptTypes": "PASS",
     "migration": "087_customer_workflow_actions.sql",
-    "fullSuite": "PENDING"
+    "fullSuite": "PENDING",
+    "workerPolicyRepair": {
+      "passed": 60,
+      "failed": 0,
+      "skipped": 0,
+      "report": "output/qualification/2026-10-02/customer-actions/WORKER_POLICY_REPAIR_TESTS.json"
+    }
   },
   "website": {
     "tests": {
@@ -45,7 +51,8 @@
     "types": "PASS",
     "build": "PASS",
     "affectedLint": "PASS",
-    "reports": "../hawzhin-app-integration/output/qualification/2026-10-02-designer-actions/"
+    "reports": "../hawzhin-app-integration/output/qualification/2026-10-02-designer-actions/",
+    "sourceCommit": "223ff54a36ed18d418fb7350997d9a46d8f321bb"
   },
   "durableTransport": {
     "timestamp": "2026-10-02T18:38:34.289Z",
@@ -89,7 +96,8 @@
     "cancel adopts existing withdrawal state; stable notice and no repeated design start",
     "browser exact retry payload/key restored for review; no auto-resubmit",
     "unsent feedback stays on reviewed version/question until explicit latest-version choice",
-    "receipt barrier prevents second action before terminal acknowledgement"
+    "receipt barrier prevents second action before terminal acknowledgement",
+    "customer-specific outbox policy restricted TO hawa_app; existing narrow worker enqueue/fallback survives without private action-table grants"
   ],
   "originalFailures": [
     {
@@ -119,6 +127,20 @@
     {
       "report": "../hawzhin-app-integration/output/qualification/2026-10-02-designer-actions/INITIAL_BROWSER_WRONG_ENV.json",
       "reason": "Initial browser server used an incorrect API environment variable; corrected to configured VITE_HAWA_CUSTOMER_API_ORIGIN. No production configuration changed."
+    },
+    {
+      "report": "output/qualification/2026-10-02/customer-actions/INITIAL_FULL_ENGINE_TESTS.json",
+      "passed": 8098,
+      "failed": 2,
+      "skipped": 67,
+      "testedSealedCommit": "ab5f0a2e63f2ff2b989f8ee7dc675bad3009c701",
+      "reason": "Customer outbox INSERT policy applied to hawa_worker and parsed a private-table reference. Scope the customer policy TO hawa_app; keep worker action-table privileges absent. Existing worker outbox/fallback controls and customer actions pass60 checks after repair."
+    },
+    {
+      "report": "output/qualification/2026-10-02/customer-actions/CANCELLED_DIRTY_SEAL_FULL.log",
+      "verificationRefusal": "output/qualification/2026-10-02/customer-actions/INITIAL_DIRTY_SEAL_REFUSAL.log",
+      "status": "CANCELLED_NOT_QUALIFIED",
+      "reason": "Source-seal commit initially refused stale blueprint hash. Partial full run intentionally interrupted after dirty-tree refusal; blueprint refreshed and clean source qualified before actual full run."
     }
   ],
   "remaining": [

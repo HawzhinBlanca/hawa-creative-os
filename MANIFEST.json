@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T18:48:57Z",
+  "generatedAt": "2026-10-02T18:57:01Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1254,8 +1254,8 @@
     },
     {
       "path": "adrs/263_customer_versioned_workflow_actions.md",
-      "sha256": "43a211fccfaddb0a62548ed69711a3b294c5c772194a680b3f92178a3e54c40e",
-      "bytes": 3397
+      "sha256": "95a693706bfeadad4f4470d0bef5116ea04859d10ff13db37587b073012b5d95",
+      "bytes": 4055
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2269,8 +2269,8 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/CUSTOMER_ACTIONS_PROOF.json",
-      "sha256": "acf8e70cf2145d597fcd73eba32d3cc6aa573f2ec75a8a0d5560509d6794b51e",
-      "bytes": 5527
+      "sha256": "d37dba33e99311801a94786e65fc653b84e2780a879b843110a58c66b9566427",
+      "bytes": 6943
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/CUSTOMER_ADMISSION_PROOF.json",
@@ -2289,8 +2289,8 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/PLAN.md",
-      "sha256": "48968d012830e8d06da4ea358dfd010567ab2c4e6068c22fa1157496d426b226",
-      "bytes": 15421
+      "sha256": "8ac93dce63235cea9b3a23ddfabf70bf43c48843f5031579bdee84319d767e69",
+      "bytes": 15872
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/WEB_LIFECYCLE_PROOF.json",

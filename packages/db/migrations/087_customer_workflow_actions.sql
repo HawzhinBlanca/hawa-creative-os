@@ -36,7 +36,7 @@ CREATE POLICY customer_action_event_create ON hawa.customer_web_action_events FO
  AND hawa.current_customer_id() IS NULL AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator','operator']::hawa.membership_role[]))
  AND EXISTS(SELECT 1 FROM hawa.customer_web_actions a WHERE a.tenant_id=customer_web_action_events.tenant_id AND a.id=action_id));
 GRANT SELECT,INSERT ON hawa.customer_web_actions,hawa.customer_web_action_events TO hawa_app;
-CREATE POLICY customer_action_outbox_create ON hawa.outbox_commands FOR INSERT WITH CHECK(tenant_id=hawa.current_tenant_id()
+CREATE POLICY customer_action_outbox_create ON hawa.outbox_commands FOR INSERT TO hawa_app WITH CHECK(tenant_id=hawa.current_tenant_id()
  AND command_type='customer.request.action' AND aggregate_type='request' AND state='pending'
  AND EXISTS(SELECT 1 FROM hawa.customer_web_actions a WHERE a.tenant_id=outbox_commands.tenant_id AND a.request_id=aggregate_id
  AND a.account_id=hawa.current_customer_id() AND payload=jsonb_build_object('v',1,'requestId',a.request_id::text,'accountId',a.account_id::text,'actionId',a.id::text)));
