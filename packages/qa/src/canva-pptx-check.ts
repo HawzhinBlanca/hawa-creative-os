@@ -55,6 +55,13 @@ export interface PptxCheckOptions {
    * the question is whether Canva kept each one, not whether they all match one brand font.
    */
   fontsByIndex?: string[];
+  /**
+   * ADR-275: the blocks set in capitals (`textTransform: 'uppercase'` in the imported plan), by copy
+   * index. Only these are compared without regard to case: Canva may hand the copy back as typed under
+   * `cap="all"` or with the capitals written into the text. Every other block is compared exactly, and
+   * fails when a `cap` run property would show it in capitals the requester did not type.
+   */
+  uppercaseByIndex?: boolean[];
 }
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -71,6 +78,8 @@ const VERIFIED_FONT_NAMES: Readonly<Record<string, readonly string[]>> = {
   'cairo': ['cairo regular'],
   'plus jakarta sans': ['plus jakarta sans medium', 'plus jakarta sans bold'],
   'vazirmatn': ['vazirmatn regular', 'vazirmatn bold'],
+  // ADR-275: Inter's weighted files name their family by weight (name ID 1, fontkit 2026-10-02).
+  'inter': ['inter regular', 'inter bold', 'inter medium', 'inter semibold', 'inter extrabold', 'inter black'],
 };
 
 function fontFamilyMatches(observed: string, expected: string, caseSensitive = false): boolean {
@@ -170,6 +179,11 @@ export function checkCanvaPptx(
     requiredFont = requiredFontOrOptions || 'Verdana';
     options = maybeOptions;
   }
+  if (options.uppercaseByIndex !== undefined && (!Array.isArray(options.uppercaseByIndex) ||
+      options.uppercaseByIndex.length !== expectedCopy.length ||
+      Array.from(options.uppercaseByIndex).some(value => typeof value !== 'boolean'))) {
+    throw new Error('Invalid captured capitals policy');
+  }
   if (options.directionsByIndex !== undefined && (!Array.isArray(options.directionsByIndex) ||
       options.directionsByIndex.length !== expectedCopy.length ||
       Array.from(options.directionsByIndex).some(direction => direction !== null && direction !== 'ltr' && direction !== 'rtl'))) {
@@ -252,6 +266,9 @@ export function checkCanvaPptx(
   find(doc, 'p:sp', shapes);
 
   const texts: string[] = [];
+  /** ADR-275: each object's text as drawn: runs under cap="all" or cap="small" in capitals. */
+  const shownTexts: string[] = [];
+  const capitalsByObject: boolean[] = [];
   const sourceTextObjects: PptxTextObject[] = [];
   const identities: Array<{ ':@'?: Record<string, unknown> }> = [];
   findOwners(doc, 'p:cNvPr', identities);
@@ -295,6 +312,31 @@ export function checkCanvaPptx(
     if (!text.trim()) continue;
     const textIdx = texts.length;
     texts.push(text.trim());
+    {
+      // ADR-275: the same text with every run whose cap property draws it in capitals uppercased.
+      let shown = '';
+      let anyCaps = false;
+      for (const paragraph of paragraphs) {
+        // Runs are the paragraph's own children, in document order.
+        for (const child of Array.isArray(paragraph) ? paragraph : [paragraph]) {
+          const runNode = child?.['a:r'] ?? child?.['a:fld'];
+          if (!runNode) continue;
+          const nodes: any[] = [];
+          find(runNode, 'a:t', nodes);
+          const runText = nodes.flatMap(node => Array.isArray(node) ? node : [node])
+            .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join('');
+          const props: any[] = [];
+          findOwners(runNode, 'a:rPr', props);
+          const cap = props.map(o => String(o?.[':@']?.['@_cap'] ?? '').trim()).find(Boolean) || 'none';
+          const drawnInCaps = cap === 'all' || cap === 'small';
+          if (drawnInCaps && runText !== runText.toUpperCase()) anyCaps = true;
+          shown += drawnInCaps ? runText.toUpperCase() : runText;
+        }
+        shown += '\n';
+      }
+      shownTexts.push(shown.trim());
+      capitalsByObject.push(anyCaps);
+    }
     const owners: Array<{ ':@'?: Record<string, unknown> }> = [];
     findOwners(shape, 'p:cNvPr', owners);
     const shapeId = String(owners[0]?.[':@']?.['@_id'] ?? '');
@@ -424,7 +466,14 @@ export function checkCanvaPptx(
 
   // Word joiners (U+2060) are invisible: the studio deck adds them so Canva keeps "K-12" on one line.
   const normalize = (s: string) => s.replace(/\u2060/g, '').replace(/\s+/g, ' ').trim();
-  const copyPass = texts.length === expectedCopy.length && texts.every((t, i) => normalize(t) === normalize(expectedCopy[i]));
+  // ADR-275: a block set in capitals matches its copy without regard to case, whether Canva kept the
+  // typed copy under cap="all" or wrote the capitals into the text. Any other block matches exactly
+  // and must not be drawn in capitals the requester did not type.
+  const caseFold = (s: string) => normalize(s).toUpperCase();
+  const copyMatches = (t: string, i: number) => options.uppercaseByIndex?.[i]
+    ? caseFold(t) === caseFold(expectedCopy[i])
+    : normalize(t) === normalize(expectedCopy[i]) && !capitalsByObject[i];
+  const copyPass = texts.length === expectedCopy.length && texts.every(copyMatches);
   const fontPass = !unresolvedFont && fonts.length > 0 && offendingObjects.length === 0;
   const hasDirectionMetadata = paragraphDirections.some(paragraph => paragraph.observed !== 'absent');
   const directionViolations = paragraphDirections.filter(paragraph => paragraph.observed === 'invalid' ||
@@ -442,7 +491,7 @@ export function checkCanvaPptx(
     : null;
 
   return {
-    checkVersion: 9,
+    checkVersion: 10,
     sourceTextObjects: unaddressableText ? null : sourceTextObjects,
     source: detectedSource,
     canvaDesignId,
@@ -459,6 +508,9 @@ export function checkCanvaPptx(
     requiredFont,
     scriptFonts: options.scriptFonts || null,
     fontsByIndex: options.fontsByIndex || null,
+    uppercaseByIndex: options.uppercaseByIndex || null,
+    /** ADR-275: each text object as drawn, capitals applied. */
+    shownTexts,
     allowedFontsByScript: options.allowedFontsByScript || null,
     admittedFonts: options.admittedFonts || DEFAULT_ADMITTED_FONTS,
     arabicTextObjectCount: arabicObjects,
@@ -467,7 +519,7 @@ export function checkCanvaPptx(
     textObjectCount: texts.length,
     expectedTextObjectCount: expectedCopy.length,
     offendingObjects,
-    comparisonPolicy: 'exact words and punctuation; layout whitespace folded',
+    comparisonPolicy: 'exact words and punctuation; layout whitespace folded; case folded only for blocks set in capitals',
     fullReleasePass: false,
     logoVerification: 'not_qualified',
     layoutVerification: 'visual_review_required',

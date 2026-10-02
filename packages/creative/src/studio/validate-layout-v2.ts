@@ -1,10 +1,11 @@
 import { backgroundFieldSchema } from './background-field.js';
-import type { StudioLayoutV2, Box } from './layout-v2.js';
+import type { StudioLayoutV2, Box, TextElement } from './layout-v2.js';
+import { measureLineInkClearance, lineInkClears, type LineInkClearance } from './render-layout-v2.js';
 import { photoRecipeOf } from './layout-v2.js';
 import { photosMayOverlap } from './photo-cutout.js';
 import { recipePhotoMinimum } from './photo-selection.js';
 import { carrierOf, shapePaintsOver } from './art-direction/surfaces.js';
-import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast, isStoryFormat, getSafeZoneBox, usesGuidelineClearSpace } from './house-rules.js';
+import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast, isStoryFormat, getSafeZoneBox, usesGuidelineClearSpace, lineHeightRange, capsTrackingRange } from './house-rules.js';
 
 export interface ValidationReference {
   rules: {
@@ -41,6 +42,15 @@ export interface LayoutValidationContext {
   reference: ValidationReference;
   draftFont?: string;
   contrastEvaluator?: (box: Box, fontSize: number, bold: boolean) => number;
+  /**
+   * ADR-275: the copy by copyIndex, so display leading under the body range can be checked on the
+   * measured ink of the block's lines (`measureLineInkClearance`). Without it (or an evaluator), a
+   * Sorani block under 1.6 fails: its marks' clearance is unproven.
+   */
+  copyText?: Record<number, string>;
+  textMeasurementOptions?: { fontsDir?: string };
+  /** ADR-275: replaces the measured line-ink check (tests). */
+  lineInkClearance?: (t: TextElement) => LineInkClearance | undefined;
 }
 
 export type ValidationErrorCode =
@@ -211,6 +221,8 @@ export function validateLayoutV2(
 
     if (script === 'arabic') {
       t.rtl = true;
+      // ADR-275: Arabic script has no case; a capitals transform on it is ignored, and dropped here.
+      if (t.textTransform) delete t.textTransform;
       if (!t.fontFamily || !admittedArabicFonts.has(t.fontFamily.toLowerCase())) {
         if (clientDisplay) return {
           ok: false, code: 'FONT_NOT_ADMITTED',
@@ -524,22 +536,46 @@ export function validateLayoutV2(
   }
 
   // 9. LINE_HEIGHT
+  // ADR-275: the range depends on the script, the role and the size (house-rules.ts lineHeightRange):
+  // display titles may be set tighter than body copy, and under the body minimum the lines' measured
+  // ink has to keep clear of each other (always proven for Arabic script; checked for Latin when the
+  // copy is at hand).
+  const inkOf = context.lineInkClearance ?? (context.copyText
+    ? (t: TextElement) => {
+        const copy = context.copyText![t.copyIndex];
+        return typeof copy === 'string' ? measureLineInkClearance(t, copy, context.textMeasurementOptions ?? {}) : undefined;
+      }
+    : undefined);
   for (const t of layout.text) {
     const script = context.copyScripts[t.copyIndex] || 'latin';
-    if (script === 'arabic') {
-      if (t.lineHeight < HOUSE_RULES.lineHeight.arabic.min || t.lineHeight > HOUSE_RULES.lineHeight.arabic.max) {
-        return {
-          ok: false,
-          code: 'LINE_HEIGHT',
-          message: `Arabic text lineHeight ${t.lineHeight} outside allowed range [1.6, 1.9]`,
-        };
+    const range = lineHeightRange(script === 'arabic' ? 'arabic' : 'latin', t, layout.width);
+    const label = script === 'arabic' ? 'Arabic' : 'Latin';
+    if (t.lineHeight < range.min || t.lineHeight > range.max) {
+      return {
+        ok: false,
+        code: 'LINE_HEIGHT',
+        message: `${label} ${range.display ? 'display ' : ''}text lineHeight ${t.lineHeight} outside allowed range [${range.min}, ${range.max}]`,
+      };
+    }
+    if (t.lineHeight < range.inkCheckedBelow) {
+      const ink = inkOf?.(t);
+      if (!ink) {
+        if (script === 'arabic') {
+          return {
+            ok: false,
+            code: 'LINE_HEIGHT',
+            message: `Arabic display lineHeight ${t.lineHeight} is under ${range.inkCheckedBelow} and the ink of its lines was not measured; the marks' clearance is unproven`,
+          };
+        }
+        continue;
       }
-    } else {
-      if (t.lineHeight < HOUSE_RULES.lineHeight.latin.min || t.lineHeight > HOUSE_RULES.lineHeight.latin.max) {
+      if (!lineInkClears(ink)) {
+        const need = HOUSE_RULES.displayLineHeight.inkClearanceEm * ink.fontSizePx;
         return {
           ok: false,
           code: 'LINE_HEIGHT',
-          message: `Latin text lineHeight ${t.lineHeight} outside allowed range [1.2, 1.5]`,
+          message: `${label} display lineHeight ${t.lineHeight}: the ink of lines ${(ink.tightestPair ?? 0) + 1} and ${(ink.tightestPair ?? 0) + 2} of block ${t.copyIndex} comes within ${ink.minGapPx.toFixed(1)}px (needs ${need.toFixed(1)}px); the lines collide`,
+          details: { copyIndex: t.copyIndex, clearance: ink },
         };
       }
     }
@@ -570,6 +606,18 @@ export function validateLayoutV2(
           code: 'LETTER_SPACING',
           message: `Body text must not have letterSpacing (found ${t.letterSpacing})`,
         };
+      }
+      // ADR-275: capitals are set solid or slightly tight at display size, opened up as a small label.
+      if (t.textTransform === 'uppercase') {
+        const caps = capsTrackingRange(t, layout.width);
+        const em = t.letterSpacing ?? 0;
+        if (em < caps.min - 1e-9 || em > caps.max + 1e-9) {
+          return {
+            ok: false,
+            code: 'LETTER_SPACING',
+            message: `Capitals ${caps.kind} tracking ${em}em outside [${caps.min}, ${caps.max}]`,
+          };
+        }
       }
     }
   }

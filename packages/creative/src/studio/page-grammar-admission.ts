@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { FONT_WEIGHTS, type FontWeight } from './layout-v2.js';
+import { HOUSE_RULES } from './house-rules.js';
 
 const share = z.number().finite().min(0).max(1);
 const dimension = z.number().finite().positive().max(1);
@@ -32,11 +34,29 @@ function grammarSchema(palette: ReadonlySet<string>) {
     panel: color.optional(), panelTitle: color.optional(), panelText: color.optional(),
     pill: color, pillText: color, sunburst: z.object({ color, opacity: share }).strict(),
   }).strict();
+  // ADR-275: the poster display policy. Leading within the house's display ranges; Arabic script
+  // takes no case transform and no tracking. Whether the face draws the script is checked where the
+  // font files are (posterDisplayStyle), as the face admission comment below says.
+  const weight = z.custom<FontWeight>(value => typeof value === 'number' && (FONT_WEIGHTS as readonly number[]).includes(value), 'A weight is 100..900 in steps of 100.');
+  const displayFace = (script: 'latin' | 'arabic') => z.object({
+    fontFamily: font, fontWeight: weight, textTransform: z.literal('uppercase').optional(),
+    lineHeight: z.number().finite().min(HOUSE_RULES.displayLineHeight[script].min).max(HOUSE_RULES.displayLineHeight[script].max),
+    letterSpacing: tracking.optional(),
+  }).strict();
+  const display = z.object({
+    source: note.optional(),
+    latin: displayFace('latin').refine(v => (v.letterSpacing ?? 0) >= -HOUSE_RULES.letterSpacingMaxEm && (v.letterSpacing ?? 0) <= HOUSE_RULES.letterSpacingMaxEm,
+      'Latin display tracking stays within the house limit.'),
+    arabic: displayFace('arabic').refine(v => v.textTransform === undefined && (v.letterSpacing ?? 0) === 0,
+      'Arabic script takes no case transform and no tracking.'),
+    labelLetterSpacing: tracking.optional(),
+  }).strict();
   const poster = z.object({
     source: note.optional(),
     titleSizeShare: z.object({ min: dimension, max: dimension }).strict().refine(v => v.min <= v.max, 'The title range must ascend.'),
     logoWidthShare: dimension, titleBarWidthShare: dimension, negativeSpaceMax: share,
     detailSizeShareMin: dimension.optional(),
+    display: display.optional(),
     navy: posterVariant, cream: posterVariant.refine(v => Boolean(v.ground && v.panel && v.panelTitle && v.panelText), 'The cream poster names its ground and card.'),
     band: posterVariant,
   }).strict();

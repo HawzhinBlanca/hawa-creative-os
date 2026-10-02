@@ -104,6 +104,21 @@ export function studioSentBlocks(manifest: any): Array<{ fontFamily: string; rol
   return blocks.every((t: any, index: number) => t.copyIndex === index) ? blocks : null;
 }
 
+/**
+ * ADR-275: which blocks of an imported source were set in capitals (`textTransform: 'uppercase'` in
+ * its plan), by copy index. Undefined when none were, so older receipts and checks are unchanged;
+ * only these blocks have their copy compared without regard to case.
+ */
+export function importedSourceCapitals(manifest: { copy?: unknown; plan?: { text?: unknown } } | null): boolean[] | undefined {
+  if (!Array.isArray(manifest?.copy) || !Array.isArray(manifest.plan?.text)) return undefined;
+  const blocks = manifest.plan.text as Array<{ copyIndex?: unknown; textTransform?: unknown }>;
+  if (blocks.length !== manifest.copy.length || blocks.some(block => !block || typeof block !== 'object')) return undefined;
+  const ordered = [...blocks].sort((a, b) => Number(a.copyIndex) - Number(b.copyIndex));
+  if (ordered.some((block, index) => block.copyIndex !== index)) return undefined;
+  const caps = ordered.map(block => block.textTransform === 'uppercase');
+  return caps.some(Boolean) ? caps : undefined;
+}
+
 /** Only explicit booleans on each uniquely indexed source block establish a direction. */
 export function importedSourceDirections(manifest: { copy?: unknown; plan?: { text?: unknown } } | null): Array<'ltr' | 'rtl' | null> | undefined {
   if (!Array.isArray(manifest?.copy) || !Array.isArray(manifest.plan?.text)) return undefined;
@@ -616,14 +631,15 @@ export class CanvaConnectService {
           } else if (source) {
             const manifest=source.manifest, blocks=studioSentBlocks(manifest);
             const directionsByIndex=importedSourceDirections(manifest);
+            const capitals=importedSourceCapitals(manifest), capsOption=capitals?{uppercaseByIndex:capitals}:{};
             if (manifest?.plan !== undefined && !blocks)
               fail(422,'SOURCE_REQUIRED','The imported source has an incomplete or ambiguous per-block font plan');
             if (!Array.isArray(manifest?.copy) || !manifest.copy.length || !manifest.copy.every((part:unknown)=>typeof part==='string') ||
                 (!blocks && !manifest.reference?.rules?.fontFamily))
               fail(422,'SOURCE_REQUIRED','The imported source has no complete saved copy and font policy');
             metadata.checkingPolicy={version:1,kind:'imported_source',sourceId:source.id,copy:manifest.copy,
-              ...(blocks ? {options:{fontsByIndex:blocks.map(t=>t.fontFamily),roles:blocks.map(t=>t.role||'body'),directionsByIndex}} :
-                {requiredFont:manifest.reference.rules.fontFamily,options:{scriptFonts:manifest.reference.rules.scriptFonts,directionsByIndex}})};
+              ...(blocks ? {options:{fontsByIndex:blocks.map(t=>t.fontFamily),roles:blocks.map(t=>t.role||'body'),directionsByIndex,...capsOption}} :
+                {requiredFont:manifest.reference.rules.fontFamily,options:{scriptFonts:manifest.reference.rules.scriptFonts,directionsByIndex,...capsOption}})};
           } else {
             const inaccessible = (await sql`SELECT e.id FROM hawa.canva_editable_sources e JOIN hawa.canva_remote_operations o
               ON o.id=e.operation_id AND o.tenant_id=e.tenant_id WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid
@@ -718,13 +734,14 @@ export class CanvaConnectService {
             const manifest=source?.manifest;
             const sentBlocks=studioSentBlocks(manifest);
             const directionsByIndex=importedSourceDirections(manifest);
+            const capitals=importedSourceCapitals(manifest), capsOption=capitals?{uppercaseByIndex:capitals}:{};
             if (manifest?.plan !== undefined && !sentBlocks)
               fail(422,'SOURCE_REQUIRED','The imported source has an incomplete or ambiguous per-block font plan');
             if(sentBlocks){
-              contentCheck={...checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body'),directionsByIndex}),expectedCopy:manifest.copy};
+              contentCheck={...checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body'),directionsByIndex,...capsOption}),expectedCopy:manifest.copy};
             }else{
               if(!manifest?.copy||!manifest.reference?.rules?.fontFamily)fail(422,'SOURCE_REQUIRED','No saved copy and brand font are available for this task');
-              contentCheck={...checkCanvaPptx(bytes,manifest.copy,manifest.reference.rules.fontFamily,{scriptFonts:manifest.reference.rules.scriptFonts,directionsByIndex}),expectedCopy:manifest.copy};
+              contentCheck={...checkCanvaPptx(bytes,manifest.copy,manifest.reference.rules.fontFamily,{scriptFonts:manifest.reference.rules.scriptFonts,directionsByIndex,...capsOption}),expectedCopy:manifest.copy};
             }
           }
         }else{
@@ -737,7 +754,8 @@ export class CanvaConnectService {
             try {
               const source=await this.editableSource(s,taskId,row.client_id,row.design_id);
               const copy=Array.isArray(source?.manifest?.copy)?source!.manifest.copy.filter((l: unknown): l is string=>typeof l==='string'):[];
-              contentCheck={...checkCanvaPdf(bytes,copy),expectedCopy:copy};
+              const capitals=importedSourceCapitals(source?.manifest ?? null);
+              contentCheck={...checkCanvaPdf(bytes,copy,capitals && capitals.length===copy.length?{uppercaseByIndex:capitals}:{}),expectedCopy:copy};
             } catch (err) {
               contentCheck={source:'canva_exported_pdf',pass:false,copyPass:null,errors:[`Not read: ${(err as Error)?.message || err}`]};
             }

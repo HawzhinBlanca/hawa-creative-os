@@ -31,6 +31,8 @@ export function measurementRuntimeIdentity():MeasurementRuntimeIdentity {
 
 export interface PangoMeasurementInput {
   text:string;family:string;size:number;width:number;spacingPx:number;rtl:boolean;bold:boolean;italic:boolean;fontsDir:string;
+  /** ADR-275: a CSS weight (100..900) to shape at, in place of bold/regular. */
+  weight?:number;
 }
 export interface PangoMeasuredLine {
   text:string;width:number;ink:{x:number;y:number;width:number;height:number};unknownGlyphs:number;
@@ -45,7 +47,8 @@ let cacheBytes=0;
 
 /** One process shapes all candidate wraps; copy travels on stdin, never in a shell command. */
 export function measurePangoText(input:PangoMeasurementInput):PangoMeasurement {
-  const {family,size,width,spacingPx,rtl,bold,italic,fontsDir}=input;
+  const {family,size,width,spacingPx,rtl,bold,italic,fontsDir,weight}=input;
+  if(weight!==undefined && (!Number.isInteger(weight) || weight<100 || weight>1000))throw new Error('PANGO_MEASUREMENT_INVALID_INPUT');
   if(!family || /[\r\n\0]/.test(family) || Buffer.byteLength(family)>256 || input.text.includes('\0') || Buffer.from(input.text).toString('utf8')!==input.text ||
       ![size,width,spacingPx].every(Number.isFinite) || size<1 || size>4096 || width<=0 || width>1000000 || Math.abs(spacingPx)>4096)
     throw new Error('PANGO_MEASUREMENT_INVALID_INPUT');
@@ -56,13 +59,14 @@ export function measurePangoText(input:PangoMeasurementInput):PangoMeasurement {
   const runtime=measurementRuntimeIdentity();
   const system=pinnedSystemFontFiles();
   const inventory=fontFileInventory(fontsDir,system);
-  const basis={method:'pango-wrap-v1' as const,text:input.text,family,size,width,spacingPx,rtl,bold,italic,inventory,runtime};
+  const basis={method:'pango-wrap-v1' as const,text:input.text,family,size,width,spacingPx,rtl,bold,italic,...(weight!==undefined?{weight}:{}),inventory,runtime};
   const inputSha256=digest(JSON.stringify(basis));
   // Include location in memory caching: two equal inventories must still use their own config.
   const key=`${path.resolve(fontsDir)}:${inputSha256}`;
   const existing=cache.get(key);if(existing)return structuredClone(existing.value);
   const config=pinnedFontconfigFile(fontsDir,system);
-  const raw=execFileSync(helper,[String(size),String(width),String(spacingPx),rtl?'1':'0',bold?'1':'0',italic?'1':'0'],
+  // The fifth argument is 0/1 for regular/bold, or (ADR-275) a CSS weight from 100.
+  const raw=execFileSync(helper,[String(size),String(width),String(spacingPx),rtl?'1':'0',weight!==undefined?String(weight):bold?'1':'0',italic?'1':'0'],
     {input:stdin,encoding:'utf8',env:rasteriserEnv(config),timeout:3000,maxBuffer:2*1024*1024});
   const parsed=outputSchema.parse(JSON.parse(raw));
   if(parsed.runtime!==runtime.runtime)throw new Error('PANGO_MEASUREMENT_RUNTIME_CHANGED');

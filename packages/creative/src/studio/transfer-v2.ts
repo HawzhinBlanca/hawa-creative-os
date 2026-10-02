@@ -8,7 +8,8 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { gradientOoxml } from './shape-gradient.js';
 import { ornamentSvgDocument } from './brand-elements.js';
 import { svgFileName } from './svg-files.js';
-import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fittedTextOf, fontFaceSupports, overlaySvg, svgToPngAsync } from './render-layout-v2.js';
+import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, elementFontFace, fittedTextOf, fontFaceSupports, overlaySvg, svgToPngAsync } from './render-layout-v2.js';
+import { uppercaseApplies, type TextElement } from './layout-v2.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
 import { coverCrop, imagePixelSize, photoZoomFactor, pngPixelSize, type CoverCropRect } from './photo-crop.js';
 import {
@@ -218,6 +219,53 @@ export function effectiveBold(t: { fontFamily: string; bold?: boolean; italic?: 
   return Boolean(t.bold);
 }
 
+/**
+ * ADR-275: the typeface a block is named by in the deck, and whether bold is set on it. A block that
+ * names no weight is sent as before. One that does is sent in the face of the file it was measured
+ * and drawn with: a regular or bold file by its family with bold set for the bold one, as the deck
+ * always did; any other weight by that file's own family name (name ID 1, "Inter ExtraBold"), which
+ * is how a PPTX names a weight beyond regular and bold, with bold off so nothing is synthesised over
+ * it. Canva keeps it live text; whether it keeps the weight is the Canva proof's question
+ * (plans/2026-10-02-canva-display-caps-proof.md).
+ */
+export function deckFontFace(t: Pick<TextElement, 'fontFamily' | 'bold' | 'italic' | 'fontWeight'>): { face: string; bold: boolean } {
+  if (t.fontWeight === undefined) return { face: t.fontFamily, bold: effectiveBold(t) };
+  const file = elementFontFace(t);
+  if (file.legacyFamilyName.toLowerCase() === t.fontFamily.toLowerCase()) return { face: t.fontFamily, bold: file.weight >= 600 };
+  return { face: file.legacyFamilyName, bold: false };
+}
+
+/** ADR-275: the deck name of a block set in capitals, which withCapitals finds it by. */
+export function capsTextObjectName(copyIndex: number): string {
+  return `Caps text ${copyIndex}`;
+}
+
+/**
+ * ADR-275: every run of each named text object set in capitals with `cap="all"`. The copy stays as
+ * the requester typed it, live and editable in Canva; only how it is drawn changes. Throws when a
+ * named object is missing, as withGradientFills does.
+ */
+export function withCapitals(pptx: Buffer, names: Set<string>): Buffer {
+  const files = unzipSync(new Uint8Array(pptx));
+  const found = new Set<string>();
+  for (const name of Object.keys(files)) {
+    if (!/^ppt\/slides\/slide\d+\.xml$/.test(name)) continue;
+    let xml = strFromU8(files[name]);
+    xml = xml.replace(/<p:sp>[\s\S]*?<\/p:sp>/g, (sp) => {
+      const nameAttr = sp.match(/<p:cNvPr [^>]*name="([^"]*)"/)?.[1];
+      const objectName = nameAttr ? unescapeXmlAttr(nameAttr) : undefined;
+      if (!objectName || !names.has(objectName)) return sp;
+      found.add(objectName);
+      return sp.replace(/<a:(rPr|endParaRPr)\b(?![^>]*\bcap=)/g, '<a:$1 cap="all"');
+    });
+    files[name] = strToU8(xml);
+  }
+  if (found.size !== names.size) {
+    throw new Error(`CAPITALS_UNWRITTEN: ${names.size - found.size} of ${names.size} capitals text object(s) not found in the deck`);
+  }
+  return Buffer.from(zipSync(files, { level: 6 }));
+}
+
 function effectiveRtl(t: { rtl?: boolean; fontFamily: string }): boolean {
   // An explicit LTR paragraph can legitimately contain Arabic-script text. Keep the family
   // fallback only for older layouts that did not record a direction.
@@ -255,9 +303,13 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       fontFamily: t.fontFamily,
       color: t.color,
       align: t.align,
-      bold: effectiveBold(t),
+      bold: deckFontFace(t).bold,
       italic: Boolean(t.italic),
       opacity: t.opacity,
+      // ADR-275: the weight the deck's face carries, and the capitals it is drawn in. The Canva
+      // export checks read them to compare this block's copy without regard to case.
+      ...(t.fontWeight !== undefined ? { fontWeight: elementFontFace(t).weight, fontFace: deckFontFace(t).face } : {}),
+      ...(t.textTransform === 'uppercase' && !effectiveRtl(t) ? { textTransform: 'uppercase' as const } : {}),
       // The tracking as drawn, in em, not the model's raw request: the plan is both the manifest's
       // record of the delivered design and an input the v1 encoder accepts, and a plan carrying a
       // value the renderer never used describes a design nobody ever saw.
@@ -654,6 +706,7 @@ export async function encodeStudioTransferV2(
 
   // 3. Text (sorted canonically by copyIndex so PPTX shape tree order matches expected copy order)
   const sortedText = [...layout.text].sort((a, b) => a.copyIndex - b.copyIndex);
+  const capitals = new Set<string>();
   for (const t of sortedText) {
     const isArabic = t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
     const isRtl = effectiveRtl(t);
@@ -694,12 +747,17 @@ export async function encodeStudioTransferV2(
             },
           }))
         : text;
+    // ADR-275: the weighted face, and capitals as a run property over the copy as typed.
+    const deckFace = deckFontFace(t);
+    const caps = uppercaseApplies(t, copy[t.copyIndex]) && !isArabic;
+    if (caps) capitals.add(capsTextObjectName(t.copyIndex));
     slide.addText(runs as any, {
       x: t.x / 96,
       y: t.y / 96,
       w: t.width / 96,
       h: t.height / 96,
-      fontFace: t.fontFamily,
+      ...(caps ? { objectName: capsTextObjectName(t.copyIndex) } : {}),
+      fontFace: deckFace.face,
       fontSize: fontSize * 0.75,
       color: hex(t.color),
       transparency: textTransparency,
@@ -708,7 +766,7 @@ export async function encodeStudioTransferV2(
       // was forced right, so a centred Kurdish title reached Canva flush right (task 8fb76534,
       // 2026-09-19). With rtl="1" the alignment is still absolute: "ctr" centres, "r" is right.
       align: t.align,
-      bold: effectiveBold(t),
+      bold: deckFace.bold,
       italic: Boolean(t.italic),
       margin: 0,
       lineSpacing: Math.round(fontSize * (t.lineHeight || (isArabic ? 1.7 : 1.3)) * 0.75 * 100) / 100,
@@ -733,7 +791,8 @@ export async function encodeStudioTransferV2(
   }
 
   const written = encodeNativeBackgroundField((await pptx.write({ outputType: 'nodebuffer' })) as Buffer, layout.background.field);
-  const bytes = gradientFills.size ? withGradientFills(written, gradientFills) : written;
+  const filled = gradientFills.size ? withGradientFills(written, gradientFills) : written;
+  const bytes = capitals.size ? withCapitals(filled, capitals) : filled;
   const sha256 = createHash('sha256').update(bytes).digest('hex');
 
   const plan = studioLayoutV2ToTransferPlan(layout);

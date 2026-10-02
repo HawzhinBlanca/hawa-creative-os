@@ -29,7 +29,7 @@ import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-
 import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
 import { computeLayoutMetrics } from './layout-metrics.js';
 import type { ClientReference } from './client-reference.js';
-import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
+import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast, lineHeightRange } from './house-rules.js';
 import { declaredColorContrastEvaluator, inkBoxOf, hexToLuminance } from './composite-contrast.js';
 import { coverCrop } from './photo-crop.js';
 import { normalizeHex } from './validate-layout-v2.js';
@@ -368,7 +368,11 @@ export function conformToHouseRules(
 
   for (const t of layout.text) {
     const script = scriptOf(copy, t.copyIndex);
-    const range = HOUSE_RULES.lineHeight[script];
+    // ADR-275: a block carrying the poster display style (a named weight or capitals, which only the
+    // composer's measured display policy sets) keeps its display leading within the role- and
+    // size-aware range; QA checks its lines' ink. A block the model drew keeps the body range.
+    const styled = t.fontWeight !== undefined || t.textTransform === 'uppercase';
+    const range = styled ? lineHeightRange(script, t, W) : HOUSE_RULES.lineHeight[script];
     t.lineHeight = Math.min(Math.max(t.lineHeight || range.min, range.min), range.max);
     if (script === 'arabic' || t.role === 'body') {
       t.letterSpacing = 0;

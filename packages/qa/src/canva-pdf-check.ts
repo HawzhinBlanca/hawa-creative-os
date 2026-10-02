@@ -79,7 +79,15 @@ function toUnicode(cmap: string): Map<number, string> {
   return map;
 }
 
-export function checkCanvaPdf(bytes: Uint8Array, expectedCopy: string[] = []): PdfExportCheck {
+export function checkCanvaPdf(
+  bytes: Uint8Array,
+  expectedCopy: string[] = [],
+  /**
+   * ADR-275: blocks set in capitals, by copy index. A PDF's text layer holds the capitals Canva drew,
+   * so these lines are found without regard to case; every other line is found exactly.
+   */
+  options: { uppercaseByIndex?: boolean[] } = {}
+): PdfExportCheck {
   const pdf = Buffer.from(bytes);
   const errors: string[] = [];
   if (pdf.length > 50 * 1024 * 1024) throw new Error('PDF exceeds inspection limit');
@@ -149,7 +157,14 @@ export function checkCanvaPdf(bytes: Uint8Array, expectedCopy: string[] = []): P
   const layer = fold(pieces.join(''));
   const squeezed = layer.replace(/\s+/g, '');
   const latin = expectedCopy.filter((line) => fold(line) && !ARABIC.test(line));
-  const missing = latin.filter((line) => !layer.includes(fold(line)) && !squeezed.includes(fold(line).replace(/\s+/g, '')));
+  const upperLayer = layer.toUpperCase();
+  const upperSqueezed = squeezed.toUpperCase();
+  const missing = expectedCopy.map((line, i) => ({ line, caps: options.uppercaseByIndex?.[i] === true }))
+    .filter(({ line }) => fold(line) && !ARABIC.test(line))
+    .filter(({ line, caps }) => caps
+      ? !upperLayer.includes(fold(line).toUpperCase()) && !upperSqueezed.includes(fold(line).replace(/\s+/g, '').toUpperCase())
+      : !layer.includes(fold(line)) && !squeezed.includes(fold(line).replace(/\s+/g, '')))
+    .map(({ line }) => line);
   const copy = { checked: latin.length, found: latin.length - missing.length, missing, visualOnly: expectedCopy.length - latin.length };
 
   if (pages.length !== 1) errors.push(`Expected one page, found ${pages.length}`);

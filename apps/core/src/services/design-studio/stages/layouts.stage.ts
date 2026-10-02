@@ -419,6 +419,8 @@ export async function runLayoutsStage(
         logoClearSpacePx: logoConstraints?.clearSpacePx,
       },
       draftFont: ctx.latinFont || 'Verdana',
+      // ADR-275: display leading under the body range is checked on its lines' measured ink.
+      copyText: Object.fromEntries(ctx.copyBlocks.map((b, i) => [i, b.text])),
     };
 
     // Hard validate layout

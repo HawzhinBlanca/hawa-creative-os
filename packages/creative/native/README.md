@@ -14,7 +14,8 @@ Pango/Cairo/Fontconfig installation and compiler. The production builder install
 headers/compiler; the runner uses runtime libraries already supplied with librsvg.
 
 Protocol version 1 is owned here. Six numeric arguments are size, width, spacing
-in px, RTL, bold, italic. Stdin is family + newline + normalized UTF-8 copy.
+in px, RTL, bold, italic. The bold argument is 0 or 1, or (ADR-275) a CSS weight
+from 100 to 1000 for a face named by weight (Inter ExtraBold is 800). Stdin is family + newline + normalized UTF-8 copy.
 The TypeScript adapter owns existing whitespace normalization and preserves the
 original copy/hash. The helper uses the same greedy word wrapping inside one
 process. Output includes actual run files/indices, unknown code points, advance

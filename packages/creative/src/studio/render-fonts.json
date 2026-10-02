@@ -83,8 +83,11 @@
         "regular": "assets/fonts/Inter-Regular.ttf",
         "semiBold": "assets/fonts/Inter-SemiBold.ttf",
         "bold": "assets/fonts/Inter-Bold.ttf",
+        "extraBold": "assets/fonts/Inter-ExtraBold.ttf",
+        "black": "assets/fonts/Inter-Black.ttf",
         "italic": "assets/fonts/Inter-Italic.otf"
-      }
+      },
+      "weightsNote": "ExtraBold (800) and Black (900) declared 2026-10-02 (ADR-275) for poster display titles in heavy sans capitals, as the office's own posts set them. Both Inter 4.0 static TTFs were already bundled: fontkit reads family 'Inter ExtraBold' / 'Inter Black' (name ID 1), usWeightClass 800 / 900; fc-scan lists them as family 'Inter' at weight 205 / 210, so a block drawn at font-weight 800 or 900 opens exactly the file it is measured with. The Canva deck names them by their name-ID-1 family."
     },
     "Cinzel": {
       "name": "Cinzel",

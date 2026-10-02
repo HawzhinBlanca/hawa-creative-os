@@ -23,7 +23,13 @@ export interface EditableTransferPlan {
     /** Line height multiple from the layout. Falls back to 1.4 when a caller does not supply it. */
     lineHeight?: number;
     /** Right-to-left block. Direction does not identify the copy's language. */
-    rtl?: boolean }>;
+    rtl?: boolean;
+    /** ADR-275: the weight of the face the block was measured, drawn and sent in (CSS numbering). */
+    fontWeight?: number;
+    /** ADR-275: the typeface the deck names for that weight ("Inter ExtraBold"), when it is not the family. */
+    fontFace?: string;
+    /** ADR-275: drawn in capitals; the copy is sent as typed with cap="all". */
+    textTransform?: 'uppercase' }>;
   /**
    * Shape geometry mirrors the raster renderer. Without `kind`, `opacity` and the stroke fields
    * every shape was emitted as an opaque filled rectangle, so a hairline frame, a translucent

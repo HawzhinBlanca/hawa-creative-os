@@ -198,7 +198,11 @@ export function applyStyleSpec(
   } else if (spec.typeface === 'serif' && title) {
     title.fontFamily = rtl(title) ? 'Amiri' : 'Playfair Display';
   }
-  if (title && spec.titleWeight !== 'as_generated') title.bold = spec.titleWeight === 'heavy';
+  if (title && spec.titleWeight !== 'as_generated') {
+    title.bold = spec.titleWeight === 'heavy';
+    // ADR-275: a named weight wins over bold; one lighter than the spec asks for is dropped.
+    if (title.fontWeight !== undefined && (!title.bold || title.fontWeight < 700)) delete title.fontWeight;
+  }
 
   // Alignment: each block reads from the same column edge. Its own measure is kept, because
   // stretching every box to the full column made all three candidates of a request identical

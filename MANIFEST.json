@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T18:47:07Z",
+  "generatedAt": "2026-10-02T20:20:00Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 880,
+  "fileCount": 883,
   "files": [
     {
       "path": ".dockerignore",
@@ -1238,6 +1238,11 @@
       "bytes": 9911
     },
     {
+      "path": "adrs/275_heavy_sans_display_caps.md",
+      "sha256": "06c3c8c1b888870b95c66f7a7aa84551942eb3bd1e5b2c3e5fc354dc24e31793",
+      "bytes": 12757
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1661,6 +1666,11 @@
       "path": "evals/visual_quality_rubric.md",
       "sha256": "374d0c059f694f4dde4c3362f204b94d4b0ac8343f151488550b7f4ce2f34bb6",
       "bytes": 1708
+    },
+    {
+      "path": "plans/2026-10-02-canva-display-caps-proof.md",
+      "sha256": "fad46d780bcae27952349b8bb2a76a73bf5ee0bc00e5e992c85e24c80d13f8f3",
+      "bytes": 6924
     },
     {
       "path": "plans/RACI.csv",
@@ -3434,8 +3444,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2fe0878f392d63c05365a812fc364083f130727f1ec9e6234eafa769bd331f0a",
-      "bytes": 839228
+      "sha256": "587e304579bf206cdd76db776c07fbf65c15eee7cd8d9d51390ce9917a2a3c01",
+      "bytes": 840539
     },
     {
       "path": "plans/user-stories.csv",
@@ -4031,6 +4041,11 @@
       "path": "scripts/proofs/content_topology_verify_native.mjs",
       "sha256": "157bb7c769a3adc2528ff1941d079c49686be3aa4281bd0439d8eb4e54280111",
       "bytes": 4002
+    },
+    {
+      "path": "scripts/proofs/display_caps_proof.ts",
+      "sha256": "9a2877e2b238515faf1d10a2a687262464886f00585ac5d1186fae23bd63f175",
+      "bytes": 9546
     },
     {
       "path": "scripts/proofs/gate-baseline.json",
