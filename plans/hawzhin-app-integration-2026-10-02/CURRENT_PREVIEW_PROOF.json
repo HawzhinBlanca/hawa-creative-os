@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-02",
+  "adr": "ADR262",
+  "status": "LOCAL_CONNECTED_QUALIFIED_FULL_SOURCE_PENDING",
+  "branch": "codex/hawzhin-app-integration",
+  "requirements": [
+    "FR-029",
+    "FR-043",
+    "FR-069",
+    "NFR-006"
+  ],
+  "engine": {
+    "tests": {
+      "passed": 99,
+      "failed": 0,
+      "skipped": 0
+    },
+    "report": "output/qualification/2026-10-02/customer-previews/FINAL_CONNECTED_TESTS.json",
+    "testRoots": 745,
+    "migration": "086_customer_current_preview.sql",
+    "fullSuite": "PENDING"
+  },
+  "website": {
+    "tests": {
+      "passed": 847,
+      "failed": 0,
+      "skipped": 0
+    },
+    "browser": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "flaky": 0
+    },
+    "types": "PASS",
+    "affectedLint": "PASS",
+    "build": "PASS",
+    "reports": "../hawzhin-app-integration/output/qualification/2026-10-02-designer-previews/"
+  },
+  "controls": [
+    "live workspace owner/account/client/request/current task",
+    "bound primary native design and current binding version",
+    "newer different observed native version invalidates PNG",
+    "expected request revision/capture/hash checked on binary read",
+    "stored bytes bounded and hash/strict native PNG validation",
+    "two complete native reads per Core process",
+    "no customer raw operational/native tables or worker/PUBLIC routine grant",
+    "no-store/nosniff/no redirects/provider URLs/ETag",
+    "bounded browser read plus SHA-256 and PNG signature",
+    "transient object URL disposal, late response ignored, read/revocation errors clear image"
+  ],
+  "originalFailures": [
+    {
+      "report": "output/qualification/2026-10-02/customer-previews/INITIAL_CORE_TESTS.json",
+      "passed": 35,
+      "failed": 5,
+      "reason": "New pure validator source export had not been built into @hawa/integrations dist. Package rebuilt; no assertions relaxed."
+    }
+  ],
+  "remaining": [
+    "owned revision/question/cancel actions",
+    "independent customer acceptance/current QA/hash/native-version download eligibility",
+    "website CI repair",
+    "public hosting/gateway/HTTPS/coordinated restore",
+    "real hosted two-user Supabase/customer/Canva/Sorani/Arabic/edit-save/re-export/restart journey"
+  ],
+  "deployed": false,
+  "published": false,
+  "publicGenerationEnabled": false,
+  "nativeVisualQualityAcceptance": "NOT_RUN"
+}

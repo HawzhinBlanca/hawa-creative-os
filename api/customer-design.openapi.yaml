@@ -61,11 +61,27 @@ paths:
       security: [{WorkspaceMember: []}]
       parameters: [{name: id, in: path, required: true, schema: {type: string, format: uuid}}]
       responses:
-        '200': {description: Owned stable request projection plus latest 100 durable web messages in chronological order; no provider refs or send/read claims, content: {application/json: {schema: {type: object, required: [job, messages], properties: {job: {$ref: '#/components/schemas/CustomerJob'}, messages: {type: array, maxItems: 100, items: {type: object, required: [id, kind, text, createdAt, question]}}}}}}}
+        '200': {description: Owned stable request projection plus latest 100 durable web messages in chronological order; no provider refs or send/read claims, content: {application/json: {schema: {type: object, required: [job, messages, preview], properties: {job: {$ref: '#/components/schemas/CustomerJob'}, preview: {anyOf: [{$ref: '#/components/schemas/CapturedPreview'}, {type: 'null'}]}, messages: {type: array, maxItems: 100, items: {type: object, required: [id, kind, text, createdAt, question]}}}}}}}
         '401': {description: Workspace sign-in required}
         '403': {description: Current customer admission denied}
         '404': {description: Job unavailable to this owner, including shared-brand foreign jobs}
         '503': {description: Dependency unavailable}
+  /v1/customer/jobs/{id}/preview/{captureId}:
+    get:
+      security: [{WorkspaceMember: []}]
+      description: No-store captured native PNG for the live owner/current task/binding/revision/capture/hash. Not approval, final-QA success, or proof of unobserved Canva edits.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: captureId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: version, in: query, required: true, schema: {type: integer, minimum: 1}}
+        - {name: sha256, in: query, required: true, schema: {type: string, pattern: '^[a-f0-9]{64}$'}}
+      responses:
+        '200': {description: Bounded verified native PNG, content: {image/png: {schema: {type: string, format: binary}}}}
+        '401': {description: Current workspace sign-in required}
+        '403': {description: Current admission or origin denied}
+        '404': {description: Request not owned or no longer visible}
+        '409': {description: Expected capture/revision/hash no longer current}
+        '503': {description: Capture integrity or dependency unavailable}
   /v1/customer/clients/{clientId}/photos:
     post:
       security: [{WorkspaceMember: []}]
@@ -128,6 +144,17 @@ components:
     WorkspaceMember: {type: http, scheme: bearer, bearerFormat: Supabase user JWT, description: Pinned workspace issuer and current has_app_access verified server-side on every request. Office keys and anonymous or service identities are refused.}
     NamedOfficeAdministrator: {type: http, scheme: bearer, bearerFormat: Hawa named Google OIDC session, description: Current persisted administrator and active session; shared office keys cannot provision customers.}
   schemas:
+    CapturedPreview:
+      type: object
+      additionalProperties: false
+      required: [id, requestVersion, bindingVersion, sha256, size, capturedAt]
+      properties:
+        id: {type: string, format: uuid}
+        requestVersion: {type: integer, minimum: 1}
+        bindingVersion: {type: integer, minimum: 1}
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        size: {type: integer, minimum: 33, maximum: 26214400}
+        capturedAt: {type: string, format: date-time}
     PhotoReceipt:
       type: object
       required: [photo, created]

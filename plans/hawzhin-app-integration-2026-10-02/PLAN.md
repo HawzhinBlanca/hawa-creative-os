@@ -118,3 +118,10 @@ Website uploads/reorder/automatic-all-count now implemented locally, with immuta
 Next coding slice is current captured previews, then owned actions and independent acceptance/downloads. Public hosting choice and real Supabase/customer/Canva/native RTL/restart verification remain pending. Unreleased migration085 adds photo receipts and retains all old blob GC roots.
 
 Final sealed source4cb7bc51 qualifies:8073 passed,0 failed,67 skipped; source-manifest verified, blueprint1933/0/0,745 active test roots plus Core/worker/scripts types pass. Website3455659:842 tests and5 real Chromium synthetic-transport checks pass; full lint0 errors/14 inherited warnings, types/build pass. Source and upload scope qualification remain local; paid native/customer/hosted acceptance is not inferred. See PHOTO_ADMISSION_PROOF.json. Photos are locally implemented; current captured preview is the next required slice.
+
+
+## ADR262 current captured native preview —2026-10-02
+
+Customer detail now carries bounded metadata for the current primary bound Canva PNG. A narrow owner/live-grant database routine preserves raw native-table isolation, refuses stale request/binding/capture/hash and observed native-version mismatch, and returns stored bytes only for an authenticated current read. Strict native PNG/hash validation and two-read concurrency bounds protect Core; no-store/no provider URL prevents browser authority leaking. Site hashes bounded authenticated bytes before a transient object URL, and clears it on capture/selection/access changes. Preview is explicitly a capture, not final QA, acceptance or editable-download proof.
+
+99 connected engine controls,847 website tests and6 actual Chromium synthetic-transport controls pass. See CURRENT_PREVIEW_PROOF.json; full sealed source qualification pending. Migrations083–086 remain unreleased, public generation disabled, Designer launcher soon. Next: owned revision/answer/cancel controls and independent acceptance/current-QA PNG/PPTX download. Hosting and real customer/provider/native language/recovery admission remain open.

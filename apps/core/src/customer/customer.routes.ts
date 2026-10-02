@@ -13,6 +13,7 @@ export const CUSTOMER_ORIGINS = new Set([
   'https://www.hawzhin.app',
 ]);
 let activePhotoUploads=0;
+let activePreviewReads=0;
 const schema = z
   .object({
     clientId: z.string().uuid(),
@@ -91,9 +92,23 @@ export function registerCustomerRoutes(
       const id = c.req.param('id');
       if (!id || !z.string().uuid().safeParse(id).success)
         return c.json({ code: 'DESIGN_JOB_NOT_FOUND' }, 404);
-      return c.json({ job: await requests.get(m, id), messages: await requests.messages(m,id) });
+      return c.json(await requests.detail(m,id));
     }),
   );
+  app.get('/v1/customer/jobs/:id/preview/:captureId',run(async(c,m)=>{
+    const id=c.req.param('id'),captureId=c.req.param('captureId'),version=c.req.query('version'),hash=c.req.query('sha256');
+    if(!z.string().uuid().safeParse(id).success || !z.string().uuid().safeParse(captureId).success ||
+      !version || !/^[1-9][0-9]{0,14}$/.test(version) || !hash || !/^[a-f0-9]{64}$/.test(hash))
+      return c.json({code:'DESIGN_PREVIEW_STALE'},409);
+    if(activePreviewReads>=2)return c.json({code:'DESIGN_PREVIEW_BUSY'},503);
+    activePreviewReads++;
+    try {
+      const result=await requests.preview(m,id!,{id:captureId!,version:Number(version),sha256:hash});
+      if(!result || !('bytes' in result))return c.json({code:'DESIGN_PREVIEW_STALE'},409);
+      return new Response(new Uint8Array(result.bytes),{headers:{'Content-Type':'image/png','Content-Length':String(result.size),
+        'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+    } finally {activePreviewReads--;}
+  }));
   app.post('/v1/customer/clients/:clientId/photos',run(async(c,m)=>{
     // Same readiness switch as generation: an unreleased portal never accumulates public uploads.
     if(!generationEnabled) return c.json({code:'DESIGN_GENERATION_NOT_READY'},503);

@@ -36,7 +36,7 @@ function crc32(buf: Buffer): number {
   return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
-function parseAndValidatePng(buffer: Buffer): { ok: true; width: number; height: number } | { ok: false; error: string } {
+export function parseAndValidatePng(buffer: Buffer): { ok: true; width: number; height: number } | { ok: false; error: string } {
   const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   if (buffer.length < 33 || buffer.subarray(0, 8).compare(pngSignature) !== 0) {
     return { ok: false, error: 'Invalid PNG signature or buffer too short' };

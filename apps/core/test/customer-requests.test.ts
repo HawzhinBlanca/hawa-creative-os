@@ -581,6 +581,120 @@ it('retains an uppercase UUID submission body while resolving its canonical sele
 
 const photoJpeg=readFileSync(new URL('./fixtures/telegram-photo-1280.jpg',import.meta.url));
 const photoHash=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
+async function previewFixture() {
+ const f=await fixture(),receipt=await f.service.create(f.a.member,'preview_request',f.body);
+ const event=await customerWebOpenEvent(db,f.tenantId,receipt.job.id);
+ const projection=await projectLifecycleOpen(db,{requestId:receipt.job.id,tenantId:f.tenantId,expectedRev:0,rev:1,key:receipt.job.id+':1:open',draft:event.draft});
+ const binding=randomUUID(),designId='Synthetic-'+randomUUID();
+ await sql`INSERT INTO hawa.canva_bindings(id,tenant_id,task_id,client_id,canva_design_id,edit_url)
+ VALUES(${binding}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,${designId},'https://www.canva.com/design/synthetic/edit')`.execute(owner);
+ const png=execFileSync('ffmpeg',['-v','error','-f','image2pipe','-i','pipe:0','-vf','scale=32:32','-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],{input:photoJpeg,maxBuffer:65536});
+ async function capture(bytes=png,format='png',native='v1') {
+  const operation=randomUUID(),id=randomUUID(),hash=photoHash(bytes);
+  await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version,metadata)
+  VALUES(${operation}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,'synthetic-operator',${operation},${hash},'export','retrieved',${designId},1,${JSON.stringify({designUpdatedAt:native})}::jsonb)`.execute(owner);
+  await sql`INSERT INTO hawa.canva_export_bytes(id,tenant_id,task_id,client_id,operation_id,format,sha256,content)
+  VALUES(${id}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,${operation}::uuid,${format},${hash},${bytes})`.execute(owner);
+  return {id,sha256:hash,version:1};
+ }
+ return {...f,receipt,projection,binding,designId,png,capture};
+}
+it('returns only captured native metadata and exact hashed PNG bytes for the current owner',async()=>{
+ const f=await previewFixture();expect(await f.service.preview(f.a.member,f.receipt.job.id)).toBeNull();
+ const capture=await f.capture(),detail=await f.service.detail(f.a.member,f.receipt.job.id);
+ expect(detail.preview).toMatchObject({id:capture.id,requestVersion:1,bindingVersion:1,sha256:capture.sha256,size:f.png.length});
+ expect(detail.preview).not.toHaveProperty('bytes');expect(JSON.stringify(detail)).not.toContain(f.designId);
+ const result=await f.service.preview(f.a.member,f.receipt.job.id,capture);
+ expect(result && 'bytes' in result && result.bytes.equals(f.png)).toBe(true);
+ await expect(f.service.preview(f.b.member,f.receipt.job.id,capture)).rejects.toMatchObject({status:404});
+ await expect(new CustomerRequests(db,randomUUID()).preview(f.a.member,f.receipt.job.id,capture)).rejects.toMatchObject({status:403});
+});
+it('rejects stale capture, request revision, hash and changed binding',async()=>{
+ const f=await previewFixture(),capture=await f.capture();
+ for(const changed of [{...capture,id:randomUUID()},{...capture,version:2},{...capture,sha256:'0'.repeat(64)}])
+  await expect(f.service.preview(f.a.member,f.receipt.job.id,changed)).rejects.toMatchObject({code:'DESIGN_PREVIEW_STALE',status:409});
+ const next=await f.capture();
+ await expect(f.service.preview(f.a.member,f.receipt.job.id,capture)).rejects.toMatchObject({status:409});
+ await expect(f.service.preview(f.a.member,f.receipt.job.id,next)).resolves.toMatchObject({id:next.id});
+ await sql`UPDATE hawa.requests SET rev=rev+1 WHERE request_id=${f.receipt.job.id}::uuid`.execute(owner);
+ await expect(f.service.preview(f.a.member,f.receipt.job.id,next)).rejects.toMatchObject({status:409});
+ await sql`UPDATE hawa.canva_bindings SET version=version+1 WHERE id=${f.binding}::uuid`.execute(owner);
+ expect(await f.service.preview(f.a.member,f.receipt.job.id)).toBeNull();
+});
+it('does not reuse an older PNG after a later native export observes a different design version',async()=>{
+ const f=await previewFixture(),capture=await f.capture();
+ await f.capture(Buffer.alloc(40,1),'pptx','v2');
+ expect(await f.service.preview(f.a.member,f.receipt.job.id)).toBeNull();
+ await expect(f.service.preview(f.a.member,f.receipt.job.id,capture)).rejects.toMatchObject({status:409});
+ const next=await f.capture(f.png,'png','v2');
+ await expect(f.service.preview(f.a.member,f.receipt.job.id,next)).resolves.toMatchObject({id:next.id});
+});
+it('rechecks revoked grant/account and disabled user instead of serving warm preview bytes',async()=>{
+ for(const revoke of ['grant','account','user']) {
+  const f=await previewFixture(),capture=await f.capture();
+  await f.service.preview(f.a.member,f.receipt.job.id,capture);
+  if(revoke==='grant')await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+  if(revoke==='account')await sql`UPDATE hawa.customer_accounts SET active=false,version=version+1 WHERE id=${f.a.id}::uuid`.execute(owner);
+  if(revoke==='user')await sql`UPDATE hawa.users SET disabled_at=now() WHERE id=${f.a.userId}::uuid`.execute(owner);
+  await expect(f.service.preview(f.a.member,f.receipt.job.id,capture)).rejects.toMatchObject({status:revoke==='grant'?404:403});
+ }
+});
+it('requires an observed native version and refuses a foreign current-task pointer',async()=>{
+ const f=await previewFixture(),capture=await f.capture(f.png,'png','');
+ expect(await f.service.preview(f.a.member,f.receipt.job.id)).toBeNull();
+ await expect(f.service.preview(f.a.member,f.receipt.job.id,capture)).rejects.toMatchObject({status:409});
+ await f.capture();
+ const foreign=await f.service.create(f.b.member,'foreign_preview',f.body),event=await customerWebOpenEvent(db,f.tenantId,foreign.job.id);
+ const projected=await projectLifecycleOpen(db,{requestId:foreign.job.id,tenantId:f.tenantId,expectedRev:0,rev:1,key:foreign.job.id+':1:open',draft:event.draft});
+ await sql`UPDATE hawa.requests SET current_task_id=${projected.taskId}::uuid WHERE request_id=${f.receipt.job.id}::uuid`.execute(owner);
+ expect(await f.service.preview(f.a.member,f.receipt.job.id)).toBeNull();
+});
+it('does not display revoked bindings or unconfirmed export operations',async()=>{
+ const f=await previewFixture();await f.capture();
+ await sql`UPDATE hawa.canva_remote_operations SET status='stale' WHERE task_id=${f.projection.taskId}::uuid`.execute(owner);
+ expect(await f.service.preview(f.a.member,f.receipt.job.id)).toBeNull();
+ await f.capture();
+ await sql`UPDATE hawa.canva_bindings SET status='revoked' WHERE id=${f.binding}::uuid`.execute(owner);
+ expect(await f.service.preview(f.a.member,f.receipt.job.id)).toBeNull();
+});
+it('refuses invalid hashed native PNG and never gives a public cache or provider URL',async()=>{
+ const f=await previewFixture(),capture=await f.capture(),app=new Hono();
+ registerCustomerRoutes(app,f.service,async()=>f.a.member,false);
+ const url=`/v1/customer/jobs/${f.receipt.job.id}/preview/${capture.id}?version=1&sha256=${capture.sha256}`;
+ const response=await app.request(url,{headers:{Origin:'https://hawzhin.app','If-None-Match':capture.sha256}});
+ expect(response.status).toBe(200);expect(response.headers.get('Cache-Control')).toBe('no-store');
+ expect(response.headers.get('Content-Type')).toBe('image/png');expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+ expect(response.headers.get('ETag')).toBeNull();expect(response.headers.get('Location')).toBeNull();
+ expect(Buffer.from(await response.arrayBuffer()).equals(f.png)).toBe(true);
+ expect((await app.request(url,{headers:{Origin:'https://evil.example'}})).status).toBe(403);
+ expect((await app.request(url.replace('version=1','version=2'))).status).toBe(409);
+ const bad=await f.capture(Buffer.alloc(40,2));
+ await expect(f.service.preview(f.a.member,f.receipt.job.id,bad)).rejects.toMatchObject({code:'DESIGN_PREVIEW_INVALID',status:503});
+});
+it('keeps raw native tables closed and grants no preview routine to the worker or public',async()=>{
+ const f=await previewFixture();await f.capture();
+ await withRlsContext(db,{tenantId:f.tenantId,userId:f.a.userId,role:'requester'},async trx=>{
+  await sql`SELECT set_config('hawa.customer_subject',${f.a.member.subject},true),set_config('hawa.customer_id',${f.a.id},true)`.execute(trx);
+  for(const table of ['canva_bindings','canva_remote_operations','canva_export_bytes'])
+   expect((await sql`SELECT * FROM ${sql.table('hawa.'+table)}`.execute(trx)).rows).toHaveLength(0);
+ });
+ const permissions=(await sql<{worker:boolean;public:boolean}>`SELECT has_function_privilege('hawa_worker','hawa.customer_current_preview(uuid,uuid,bigint,text)','EXECUTE') AS worker,
+ EXISTS(SELECT 1 FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a WHERE p.oid='hawa.customer_current_preview(uuid,uuid,bigint,text)'::regprocedure AND a.grantee=0 AND a.privilege_type='EXECUTE') AS public`.execute(owner)).rows[0];
+ expect(permissions).toEqual({worker:false,public:false});
+});
+it('bounds complete concurrent preview reads before retaining or decoding native bytes',async()=>{
+ const f=await fixture(),app=new Hono();registerCustomerRoutes(app,f.service,async()=>f.a.member,false);
+ const pending:Array<(value:null)=>void>=[];
+ const spy=vi.spyOn(f.service,'preview').mockImplementation(()=>new Promise(resolve=>pending.push(resolve)));
+ const url=`/v1/customer/jobs/${randomUUID()}/preview/${randomUUID()}?version=1&sha256=${'0'.repeat(64)}`;
+ const a=app.request(url),b=app.request(url);
+ try {
+  await vi.waitFor(()=>expect(pending).toHaveLength(2));
+  const busy=await app.request(url);expect(busy.status).toBe(503);expect(await busy.json()).toEqual({code:'DESIGN_PREVIEW_BUSY'});
+  expect(spy).toHaveBeenCalledTimes(2);
+ } finally {pending.forEach(resolve=>resolve(null));await Promise.all([a,b]);spy.mockRestore();}
+ expect((await app.request(url)).status).toBe(404);
+});
 async function upload(f:Awaited<ReturnType<typeof fixture>>,n=0,member=f.a.member) {
   const bytes=execFileSync('ffmpeg',['-v','error','-f','image2pipe','-i','pipe:0','-vf',`scale=32:32,hue=h=${n*37}`,
     '-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],{input:photoJpeg,maxBuffer:65536});

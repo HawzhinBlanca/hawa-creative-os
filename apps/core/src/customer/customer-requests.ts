@@ -1,7 +1,8 @@
 import { blobStoreFor } from '../services/blob-store-context.js';
+import { parseAndValidatePng } from '@hawa/integrations';
 import { CustomerPhotoError, customerPhotos, inspectCustomerPhoto, decodeCustomerPhoto, type CustomerPhoto } from './customer-photos.js';
 import { dailyDraftCap } from '../services/chat-intake.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { customerValueHash } from './customer-web-lifecycle.js';
 import { OutboxRepository } from '@hawa/db';
 import {
@@ -17,7 +18,7 @@ import {
 
 export class CustomerRequestError extends Error {
   constructor(
-    public readonly status: 403 | 404 | 409 | 429,
+    public readonly status: 403 | 404 | 409 | 429 | 503,
     public readonly code: string,
   ) {
     super(code);
@@ -154,6 +155,46 @@ export class CustomerRequests {
   async messages(member:WorkspaceMember,id:string) {
     return this.scoped(member,async (trx,account)=>{
       if(!(await this.jobs(trx,account,id)).length) throw new CustomerRequestError(404,'DESIGN_JOB_NOT_FOUND');
+      return this.readMessages(trx,account,id);
+    });
+  }
+  async preview(member:WorkspaceMember,id:string,expected?:{id:string;version:number;sha256:string}) {
+    return this.scoped(member,async(trx,account)=>{
+      if(!(await this.jobs(trx,account,id)).length) throw new CustomerRequestError(404,'DESIGN_JOB_NOT_FOUND');
+      return this.currentPreview(trx,id,expected);
+    });
+  }
+  private async currentPreview(trx:Kysely<Database>,id:string,expected?:{id:string;version:number;sha256:string}) {
+      const row=(await sql<{id:string;request_rev:string;binding_version:number;sha256:string;byte_size:number;captured_at:Date;content:Buffer|null}>`
+        SELECT * FROM hawa.customer_current_preview(${id}::uuid,${expected?.id ?? null}::uuid,
+          ${expected?.version ?? null}::bigint,${expected?.sha256 ?? null}::text)`.execute(trx)).rows[0];
+      if(!row) {
+        if(expected) throw new CustomerRequestError(409,'DESIGN_PREVIEW_STALE');
+        return null;
+      }
+      const preview={id:row.id,requestVersion:Number(row.request_rev),bindingVersion:Number(row.binding_version),
+        sha256:row.sha256,size:Number(row.byte_size),capturedAt:new Date(row.captured_at).toISOString()};
+      if(expected) {
+        const bytes=row.content;
+        if(!bytes || bytes.length!==preview.size || bytes.length>26214400 ||
+          createHash('sha256').update(bytes).digest('hex')!==preview.sha256 || !parseAndValidatePng(bytes).ok)
+          throw new CustomerRequestError(503,'DESIGN_PREVIEW_INVALID');
+        return {...preview,bytes};
+      }
+      return preview;
+  }
+  async detail(member:WorkspaceMember,id:string) {
+    return this.scoped(member,async(trx,account)=>{
+      if(!(await this.jobs(trx,account,id)).length)throw new CustomerRequestError(404,'DESIGN_JOB_NOT_FOUND');
+      // The preview routine holds the current request/task/binding while we read the projection.
+      const preview=await this.currentPreview(trx,id);
+      const rows=await this.jobs(trx,account,id);
+      if(!rows.length)throw new CustomerRequestError(404,'DESIGN_JOB_NOT_FOUND');
+      const messages=await this.readMessages(trx,account,id);
+      return {job:rows[0],preview,messages};
+    });
+  }
+  private async readMessages(trx:Kysely<Database>,account:Account,id:string) {
       // Select the requester read model explicitly; refs and internal routing never cross this API.
       return (await sql<{id:string;kind:string;text:string;created_at:Date;question:unknown}>`
         SELECT id,payload->>'kind' AS kind,COALESCE(payload->>'caption',payload->>'text','') AS text,
@@ -161,7 +202,6 @@ export class CustomerRequests {
         WHERE tenant_id=${this.tenantId}::uuid AND account_id=${account.id}::uuid AND request_id=${id}::uuid
         ORDER BY created_at DESC,id DESC LIMIT 100`.execute(trx)).rows.reverse().map(row=>({id:row.id,kind:row.kind,text:row.text,
           createdAt:new Date(row.created_at).toISOString(),question:row.question ?? null}));
-    });
   }
   async checkPhotoAccess(member:WorkspaceMember,clientId:string) {
     return this.scoped(member,async trx=>{await sql`SELECT hawa.lock_customer_request_access(${clientId}::uuid)`.execute(trx);});
