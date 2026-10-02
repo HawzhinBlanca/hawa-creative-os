@@ -97,6 +97,14 @@
     {
       "report": "test-types.log",
       "reason": "Fixture Buffer generic and widened direction literal rejected by strict types; corrected without weakening types."
+    },
+    {
+      "report": "full.json",
+      "testedCommit": "efbeca3ec95531d7158ec5dd28919f9cee6d62fd",
+      "passed": 8110,
+      "failed": 2,
+      "skipped": 67,
+      "reason": "Two normative migration inventories still declared 087. Both are updated by exactly 088_customer_native_review.sql; no runtime policy or test assertion removed. Final sealed requalification pending."
     }
   ],
   "evidenceDirectory": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/qualification/2026-10-02/customer-review",
@@ -107,5 +115,11 @@
     "Public hosting/HTTPS/coordinated restore",
     "Real hosted two-user Supabase/native Canva/Arabic-Sorani/edit-save/re-export/restart/other-app/human-quality admission"
   ],
-  "nativeLimit": "Canva updated_at has second precision. Readiness proves observed version agreement at check time; unresolved native RTL review blocks readiness."
+  "nativeLimit": "Canva updated_at has second precision. Readiness proves observed version agreement at check time; unresolved native RTL review blocks readiness.",
+  "migrationInventoryControls": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "report": "migration-controls.json"
+  }
 }

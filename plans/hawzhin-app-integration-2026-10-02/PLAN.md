@@ -182,3 +182,8 @@ synthetic Auth/customer checks pass. Full sealed engine regression pending.
 See CUSTOMER_REVIEW_PROOF.json for exact limitations and original failed attempts.
 Next: canonical customer acceptance and authorized hash/native/QA-bound downloads.
 Public generation stays disabled;083–088 are unreleased; no deploy or launch.
+
+First sealed ADR265 full runefbeca3e:8110passed/2failed/67skipped. Both failures
+are explicit migration inventories still ending at087. Startup LAST and the real
+concurrent-upgrade expected list now include exactly088. Original full report is
+retained; focused migration and final sealed qualification are required.

@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T20:33:26Z",
+  "generatedAt": "2026-10-02T20:44:11Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -2289,8 +2289,8 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/CUSTOMER_REVIEW_PROOF.json",
-      "sha256": "39cba7d8f34e0f3b35873090e7000b6e194bb00fddec19e1638bdda49d02d944",
-      "bytes": 5242
+      "sha256": "0a26a0ee3e0e863e3fb7023be5126131ffd917b4ce4975e8d63c6a7b5cb7dcf3",
+      "bytes": 5761
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/IDENTITY_PROOF.json",
@@ -2304,8 +2304,8 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/PLAN.md",
-      "sha256": "468f50b5d9eef9783ab4f831669b3fb44ceb32ec28592d78a2c071a1b101c736",
-      "bytes": 19348
+      "sha256": "0a28645b54f0212c7aed882bd5b5ad70cbf44944a1c366d5390bdb6c6b5fb55b",
+      "bytes": 19665
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/WEBSITE_CI_PROOF.json",
