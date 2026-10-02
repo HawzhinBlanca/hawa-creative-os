@@ -6,7 +6,8 @@
  */
 import crypto from 'node:crypto';
 import { sql, type Database, type Kysely, type PublicationRepository } from '@hawa/db';
-import { checkCanvaPptx } from '@hawa/qa';
+import { checkCanvaPptx, readPptxTextLayout } from '@hawa/qa';
+import { measureExportText } from '@hawa/creative';
 import type { TelegramActionTokenService, TelegramBridgeDaemon } from '@hawa/integrations';
 import type { CanvaConnectService, CanvaServiceOptions } from './services/canva-connect-service.js';
 import type { DesignStudioService, DesignStudioServiceOptions } from './services/design-studio/index.js';
@@ -185,10 +186,15 @@ export interface CanvaQcEvaluationResult {
     /** This evaluator does not measure rendered glyphs, fallback fonts or licenses. */
     fontCoverage: null;
     copyFidelity: boolean;
-    /** null = this evaluator did not measure it. It reads the exported PPTX, which carries no pixels or geometry verdict. */
+    /**
+     * ADR-256: measured on the PNG capture of the same Canva version, with the PPTX's text frames for
+     * the boxes. null = not measured (no such PNG, or nothing could be read). Never part of `passed`.
+     */
     contrastCompliant: boolean | null;
     safeMargins: boolean | null;
     errors: string[];
+    /** ADR-256: what a person should look at before approving (low contrast, text near the edge). Not errors. */
+    warnings?: string[];
     checks: Array<{ name: string; passed: boolean | null; details?: any; observedFonts?: string[] }>;
     exportSha256: string | null;
     exportFormat: string | null;
@@ -201,8 +207,65 @@ export interface CanvaQcEvaluationResult {
   status: 'passed' | 'failed';
 }
 
+/** A copy line as a warning names it: one line, at most 40 characters. */
+function warningLabel(text: string): string {
+  const line = text.replace(/\s+/g, ' ').trim();
+  return Array.from(line).length > 40 ? `${cutText(line, 39)}…` : line;
+}
+
+/** A ratio as the office reads it, rounded down so a shortfall never shows as the threshold. */
+const ratioText = (ratio: number) => (Math.floor(ratio * 10) / 10).toFixed(1);
+
+type QcCheck = CanvaQcEvaluationResult['qaReport']['checks'][number];
+
+/**
+ * ADR-256: contrast and the safe area of the export that ships, measured on its PNG capture (the
+ * same Canva version as the PPTX) with the PPTX's text frames for the boxes. Hard QA's safe area
+ * (`getSafeZoneBox`) and contrast bands (`requiredContrast`) are reused through `measureExportText`.
+ * Advisory only: the caller never folds these into `passed` or `criticalPass`.
+ */
+function measureShippedExport(pptx: Uint8Array, preview: unknown, previewSha256: unknown): {
+  contrastCompliant: boolean | null; safeMargins: boolean | null; warnings: string[]; checks: QcCheck[];
+} {
+  const unmeasured = (why: string) => ({ contrastCompliant: null, safeMargins: null, warnings: [],
+    checks: [{ name: 'safeMargins', passed: null, details: why }, { name: 'contrast', passed: null, details: why }] });
+  if (!(preview instanceof Uint8Array) || !preview.length) {
+    return { contrastCompliant: null, safeMargins: null, warnings: [], checks: [] };
+  }
+  if (typeof previewSha256 === 'string' && crypto.createHash('sha256').update(preview).digest('hex') !== previewSha256) {
+    return unmeasured('The PNG capture failed its integrity check; contrast and the safe area were not measured');
+  }
+  let measured: ReturnType<typeof measureExportText>;
+  let unplaced: Array<{ text: string; reason: string }>;
+  try {
+    const layout = readPptxTextLayout(pptx);
+    unplaced = layout.unplaced.map(({ text, reason }) => ({ text, reason }));
+    measured = measureExportText(Buffer.from(preview.buffer, preview.byteOffset, preview.byteLength), layout);
+  } catch (err) {
+    return unmeasured(`Not measured: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const outside = measured.margins.filter((m) => !m.inside);
+  const lowContrast = measured.contrast.filter((c) => !c.passed);
+  const safeMargins = outside.length ? false : measured.margins.length ? true : null;
+  const contrastCompliant = lowContrast.length ? false : measured.contrast.length ? true : null;
+  const warnings = [
+    ...lowContrast.map((c) => `low contrast on '${warningLabel(c.text)}' (${ratioText(c.ratio)}:1, needs ${c.required}:1)`),
+    ...[...new Set(outside.map((m) => warningLabel(m.text)))].map((text) => `text close to the edge: '${text}'`),
+  ];
+  return {
+    contrastCompliant, safeMargins, warnings,
+    checks: [
+      { name: 'safeMargins', passed: safeMargins, details: { canvas: measured.canvas, safeArea: measured.safeArea,
+        frames: measured.margins, outside, unplaced } },
+      { name: 'contrast', passed: contrastCompliant, details: { measured: measured.contrast, unmeasured: measured.unmeasured } },
+    ],
+  };
+}
+
 export function evaluateCanvaExportQc(
-  exportRow?: { sha256?: string; format?: string; content?: any; content_check?: any },
+  exportRow?: { sha256?: string; format?: string; content?: any; content_check?: any;
+    /** ADR-256: the PNG capture of the same Canva version (`designUpdatedAt`) as this PPTX, when there is one. */
+    preview_png?: Uint8Array | null; preview_sha256?: string | null },
   expectedCopy?: Array<string | { text: string }>,
   requiredFont?: string
 ): CanvaQcEvaluationResult {
@@ -349,6 +412,7 @@ export function evaluateCanvaExportQc(
     errors.push('RTL text direction violation detected in exported design');
   }
   if (!checkStatus) errors.push('The capture-time content check recorded a failure');
+  const shipped = measureShippedExport(bytes, exportRow.preview_png, exportRow.preview_sha256);
 
   return {
     status,
@@ -363,9 +427,10 @@ export function evaluateCanvaExportQc(
       fontFamilyPass: fontPass,
       fontCoverage: null,
       copyFidelity: copyPass,
-      contrastCompliant: null,
-      safeMargins: null,
+      contrastCompliant: shipped.contrastCompliant,
+      safeMargins: shipped.safeMargins,
       errors,
+      warnings: shipped.warnings,
       checks: [
         { name: 'exportRetrieved', passed: true },
         { name: 'copyPass', passed: copyPass, details: resolvedCheck.offendingObjects || [] },
@@ -373,6 +438,7 @@ export function evaluateCanvaExportQc(
         { name: 'paragraphDirectionMetadata', passed: resolvedCheck.rtlMetadataPass, details: resolvedCheck.paragraphDirections },
         { name: 'bidiIsolation', passed: rtlVisualReviewRequired ? null : rtlPass,
           details: rtlVisualReviewRequired ? 'Unmeasured in Canva PPTX; final image needs human visual review' : undefined },
+        ...shipped.checks,
       ],
       exportSha256: exportRow.sha256 || null,
       exportFormat: exportRow.format || null,

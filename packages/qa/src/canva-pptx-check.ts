@@ -59,6 +59,44 @@ export interface PptxCheckOptions {
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
+/**
+ * The PPTX parts `keep` names, unzipped within the import limits every reader of a captured export
+ * shares: 25 MB packed, 500 entries, 8 MB a part, 64 MB expanded, no path that leaves the archive.
+ */
+export function unzipPptxParts(bytes: Uint8Array, keep: (name: string) => boolean): Record<string, Uint8Array> {
+  if (bytes.length > 25 * 1024 * 1024) throw new Error('PPTX exceeds import limit');
+  let total = 0, count = 0;
+  const seen = new Set<string>();
+  return unzipSync(bytes, {
+    filter: (file) => {
+      if (++count > 500 || seen.has(file.name) || file.name.includes('..') || file.name.startsWith('/')) {
+        throw new Error('Unsupported ZIP directory');
+      }
+      seen.add(file.name);
+      total += file.originalSize;
+      if (file.originalSize > 8 * 1024 * 1024 || total > 64 * 1024 * 1024) {
+        throw new Error('Expanded PPTX exceeds inspection limit');
+      }
+      return keep(file.name);
+    },
+  });
+}
+
+const pptxXmlParser = new XMLParser({
+  preserveOrder: true,
+  ignoreAttributes: false,
+  trimValues: false,
+  parseTagValue: false,
+  processEntities: true,
+});
+
+/** One PPTX XML part, in document order (fast-xml-parser preserveOrder); entities are refused. */
+export function parsePptxXml(b: Uint8Array): any[] {
+  const text = strFromU8(b);
+  if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('XML entities are forbidden');
+  return pptxXmlParser.parse(text);
+}
+
 export function checkCanvaPptx(
   bytes: Uint8Array,
   expectedCopy: string[],
@@ -80,22 +118,8 @@ export function checkCanvaPptx(
     throw new Error('Invalid captured paragraph direction policy');
   }
 
-  if (bytes.length > 25 * 1024 * 1024) throw new Error('PPTX exceeds import limit');
-  let total = 0, count = 0;
-  const seen = new Set<string>();
-  const files = unzipSync(bytes, {
-    filter: (file) => {
-      if (++count > 500 || seen.has(file.name) || file.name.includes('..') || file.name.startsWith('/')) {
-        throw new Error('Unsupported ZIP directory');
-      }
-      seen.add(file.name);
-      total += file.originalSize;
-      if (file.originalSize > 8 * 1024 * 1024 || total > 64 * 1024 * 1024) {
-        throw new Error('Expanded PPTX exceeds inspection limit');
-      }
-      return /^ppt\/slides\/slide\d+\.xml$/.test(file.name) || file.name === 'ppt/presentation.xml' || file.name === 'docProps/core.xml';
-    },
-  });
+  const files = unzipPptxParts(bytes, (name) =>
+    /^ppt\/slides\/slide\d+\.xml$/.test(name) || name === 'ppt/presentation.xml' || name === 'docProps/core.xml');
 
   const names = Object.keys(files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
   if (names.length !== 1 || !files['ppt/presentation.xml']) {
@@ -115,19 +139,7 @@ export function checkCanvaPptx(
     }
   }
 
-  const parser = new XMLParser({
-    preserveOrder: true,
-    ignoreAttributes: false,
-    trimValues: false,
-    parseTagValue: false,
-    processEntities: true,
-  });
-
-  const parse = (b: Uint8Array) => {
-    const text = strFromU8(b);
-    if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('XML entities are forbidden');
-    return parser.parse(text);
-  };
+  const parse = parsePptxXml;
 
   const doc = parse(files[names[0]]);
   const shapes: any[] = [];

@@ -15,7 +15,7 @@ import { verifyAlbumSnapshot } from './lifecycle-album.js';
 import { DRAFT_READY_STATUSES, bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage, composeNoDraftOfficeAlert } from './canva-status-message.js';
-import { canvaEditUrl, composeOfficeDraftAlert, findDraftImage } from './office-draft-alert.js';
+import { canvaEditUrl, composeOfficeDraftAlert, draftQcWarnings, findDraftImage } from './office-draft-alert.js';
 import { isIntroducerTitle, storedCopy, withoutMarks } from './draft-title.js';
 import { REDO_WINDOW_DAYS, designName } from './requester-turn.js';
 import { namedOfficeReviewMode } from './google-oidc.js';
@@ -542,7 +542,9 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
         ? await storedCopy(trx, tenantId, request.root_task_id ?? taskId) : undefined;
       const alert = { title: requestTitle, copy, clientName: client?.name, requestedBy,
         revised: taskId !== request.root_task_id, canvaUrl: canvaEditUrl(report.designId!), reviewUrl,
-        ...(DRAFT_READY_STATUSES.has(status) ? {} : { check: `${status}${report.code ? ` (${report.code})` : ''}` }) };
+        ...(DRAFT_READY_STATUSES.has(status) ? {} : { check: `${status}${report.code ? ` (${report.code})` : ''}` }),
+        // ADR-256: low contrast or text near the edge, measured on the shipped PNG; advisory only.
+        warnings: await draftQcWarnings(trx, { tenantId, taskId }) };
       officeText = composeOfficeDraftAlert(alert);
       // ADR-180: the photo's caption says the member may reply to it (Telegram approval, ADR-040
       // addendum), except where decisions need a named reviewer signed in to the Desk (ADR-064).

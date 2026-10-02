@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { CanvaBindingRepository, createDb, sql, withRlsContext } from '@hawa/db';
+import { checkCanvaPptx } from '@hawa/qa';
 import { projectLifecycleDesignOutcome, projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
+import { capture, pptx } from './fixtures/shipped-export.js';
 
 /**
  * ADR-155 addendum (owner report 2026-09-30: "the designs are not sent to the telegram, neither the
@@ -21,7 +23,10 @@ const scope = { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 
 const OFFICE = ['91500001', '91500002'];
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
-async function designed(picture: 'export' | 'preview' | 'none', report: Record<string, unknown> = {}) {
+/** ADR-256: a checked PPTX and its PNG, captured from one saved Canva version, or from two. */
+interface Shipped { pptx: Uint8Array; png: Buffer; pngVersion?: string }
+
+async function designed(picture: 'export' | 'preview' | 'none', report: Record<string, unknown> = {}, shipped?: Shipped) {
   vi.stubEnv('TELEGRAM_ALLOWED_USERS', OFFICE.join(','));
   const chat = String(66_000_000 + Math.floor(Math.random() * 8_000_000));
   const requestId = randomUUID();
@@ -33,7 +38,7 @@ async function designed(picture: 'export' | 'preview' | 'none', report: Record<s
   });
   const taskId = opened.taskId;
   const designId = `DA${randomUUID().replaceAll('-', '').slice(0, 12)}`;
-  const png = Buffer.from(`png of ${taskId}`);
+  const png = shipped?.png ?? Buffer.from(`png of ${taskId}`);
   const pictureId = randomUUID();
   await withRlsContext(db, scope, async (trx) => {
     await new CanvaBindingRepository(trx).createBinding({ tenantId, taskId, clientId, canvaDesignId: designId,
@@ -42,12 +47,26 @@ async function designed(picture: 'export' | 'preview' | 'none', report: Record<s
       .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow();
     if (picture === 'export') {
       const operationId = randomUUID();
+      const version = '2026-10-02T09:00:00Z';
       await sql`INSERT INTO hawa.canva_remote_operations
         (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata)
         VALUES (${operationId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, 'test', ${`preview-${operationId}`},
-          ${sha(png)}, 'export', 'retrieved', ${binding.canva_design_id}, ${binding.version}, ${JSON.stringify({ format: 'png' })}::jsonb)`.execute(trx);
+          ${sha(png)}, 'export', 'retrieved', ${binding.canva_design_id}, ${binding.version},
+          ${JSON.stringify({ format: 'png', designUpdatedAt: shipped?.pngVersion ?? version })}::jsonb)`.execute(trx);
       await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content)
         VALUES (${pictureId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, ${operationId}::uuid, 'png', ${sha(png)}, ${png})`.execute(trx);
+      if (shipped) {
+        const deck = Buffer.from(shipped.pptx);
+        const deckOperation = randomUUID();
+        await sql`INSERT INTO hawa.canva_remote_operations
+          (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata)
+          VALUES (${deckOperation}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, 'test', ${`deck-${deckOperation}`},
+            ${sha(deck)}, 'export', 'retrieved', ${binding.canva_design_id}, ${binding.version},
+            ${JSON.stringify({ format: 'pptx', designUpdatedAt: version })}::jsonb)`.execute(trx);
+        await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check)
+          VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, ${deckOperation}::uuid, 'pptx', ${sha(deck)}, ${deck},
+            ${JSON.stringify(checkCanvaPptx(deck, ['Autumn workshop poster'], { fontsByIndex: ['Cinzel'] }))}::jsonb)`.execute(trx);
+      }
     } else if (picture === 'preview') {
       const runId = randomUUID();
       await sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status, stages)
@@ -119,6 +138,30 @@ describe('D5 addendum: the office sees the draft it is asked to review', () => {
     expect(result.officePhotoAlerts?.some((a) => a.chatId === chat)).toBe(false);
     expect(result.message?.text).not.toMatch(/canva\.com|office computer|Hawa Desk/);
     expect(Object.keys(result.message ?? {}).sort()).toEqual(['parseMode', 'text']);
+  });
+
+  it('ADR-256: low contrast and text near the edge of the shipped PNG are named in the alert; the QC run still passes', async () => {
+    const grey = { x: 2, y: 20, w: 84, h: 20, color: 'CCCCCC' };
+    const deck = pptx(grey, null, ['Autumn workshop poster']);
+    const { taskId, result } = await designed('export', {}, { pptx: deck, png: capture([{ ...grey, ink: '#CCCCCC' }]) });
+    const line = "Check before approving: low contrast on 'Autumn workshop poster' (1.6:1, needs 3:1); text close to the edge: 'Autumn workshop poster'";
+    expect(result.officePhotoAlerts?.[0].text.split('\n')).toContain(line);
+    expect(result.officeAlerts?.[0].text.split('\n')).toContain(line);
+    const run = await withRlsContext(db, scope, (trx) => trx.selectFrom('qc_runs').select(['status', 'critical_pass', 'report'])
+      .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow());
+    expect(run.status).toBe('passed');
+    expect(run.critical_pass).toBe(true);
+    expect(run.report).toMatchObject({ passed: true, contrastCompliant: false, safeMargins: false });
+  });
+
+  it('ADR-256: a PNG from another saved version is not measured, and the alert has no warning line', async () => {
+    const grey = { x: 2, y: 20, w: 84, h: 20, color: 'CCCCCC' };
+    const deck = pptx(grey, null, ['Autumn workshop poster']);
+    const { taskId, result } = await designed('export', {}, { pptx: deck, png: capture([{ ...grey, ink: '#CCCCCC' }]), pngVersion: '2026-10-02T08:00:00Z' });
+    expect(result.officePhotoAlerts?.[0].text).not.toContain('Check before approving');
+    const run = await withRlsContext(db, scope, (trx) => trx.selectFrom('qc_runs').select(['report'])
+      .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow());
+    expect(run.report).toMatchObject({ passed: true, contrastCompliant: null, safeMargins: null });
   });
 
   it('a draft with a failed check says so; a failure with no design stays text, with no picture', async () => {

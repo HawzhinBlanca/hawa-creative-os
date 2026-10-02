@@ -49,6 +49,36 @@ export async function findDraftImage(trx: Kysely<Database>, input: { tenantId: s
   return undefined;
 }
 
+/** At most this many warnings are named; the rest are counted (a caption holds 1024 characters). */
+const MAX_WARNINGS = 3;
+
+/** ADR-256: one line naming the export QC's warnings, or nothing. */
+function warningsLine(warnings: string[] | undefined): string {
+  if (!warnings?.length) return '';
+  const more = warnings.length - MAX_WARNINGS;
+  return `Check before approving: ${warnings.slice(0, MAX_WARNINGS).join('; ')}${more > 0 ? ` (and ${more} more)` : ''}`;
+}
+
+/**
+ * ADR-256: the warnings a stored QC report carries (`evaluateCanvaExportQc`). A report is read back
+ * from the database, so only short strings are taken.
+ */
+export function qcReportWarnings(report: unknown): string[] {
+  const warnings = (report as { warnings?: unknown } | null | undefined)?.warnings;
+  return Array.isArray(warnings) ? warnings.filter((w): w is string => typeof w === 'string' && w.length > 0 && w.length <= 200) : [];
+}
+
+/**
+ * ADR-256: the warnings of the task's latest QC run, for its office alert: the run the Desk shows
+ * (tasks.routes reads the latest by task), which the outcome's bridge has just written.
+ */
+export async function draftQcWarnings(trx: Kysely<Database>, input: { tenantId: string; taskId: string }): Promise<string[]> {
+  const row = await trx.selectFrom('qc_runs').select('report')
+    .where('tenant_id', '=', input.tenantId).where('task_id', '=', input.taskId)
+    .orderBy('started_at', 'desc').orderBy('attempt', 'desc').limit(1).executeTakeFirst();
+  return qcReportWarnings(row?.report);
+}
+
 export interface OfficeDraftAlertInput {
   /** The design by the name the requester knows it (the request's first task). */
   title: string;
@@ -63,6 +93,11 @@ export interface OfficeDraftAlertInput {
   reviewUrl?: string;
   /** The outcome, when the draft came with a failed automatic check (a copy or font mismatch). */
   check?: string;
+  /**
+   * ADR-256: what the export QC measured on the shipped PNG and a person should look at (low contrast,
+   * text close to the edge). Advisory: the draft can still be approved.
+   */
+  warnings?: string[];
   /**
    * ADR-180: the words go with the draft's picture, and office members may decide on it in Telegram
    * (ADR-040 addendum): the caption says how, in plain words (ADR-239: "just say “approved”", no reply
@@ -91,6 +126,7 @@ export function composeOfficeDraftAlert(input: OfficeDraftAlertInput): string {
     `${input.revised ? 'A revised draft' : 'A new draft'} is ready for office review: "${title}"`,
     who ? `${who.charAt(0).toUpperCase()}${who.slice(1)}.` : '',
     input.check ? `The automatic check reported ${input.check}: look closely before approving.` : '',
+    warningsLine(input.warnings),
     input.canvaUrl ? `Edit in Canva: ${input.canvaUrl}` : '',
     input.telegramDecision
       ? say(OFFICE_MESSAGES.draftAlertDecide, 'en', { requester: input.requestedBy?.trim() || say(OFFICE_MESSAGES.theRequester, 'en') }) +

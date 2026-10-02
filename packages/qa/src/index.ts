@@ -9,3 +9,4 @@ export * from './svg-font-inliner.js';
 export * from './vision-rubric.js';
 
 export * from './canva-pptx-check.js';
+export * from './canva-pptx-layout.js';

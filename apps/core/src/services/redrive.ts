@@ -277,7 +277,7 @@ export function createRedrive(deps: RedriveDeps) {
       if (revisionRepo && !currentTask?.current_design_revision_id) {
         const revisionId = crypto.randomUUID();
         const exportRow = (await sql<any>`SELECT b.id, b.sha256, b.format, b.content, b.content_check,
-            o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
+            o.metadata->>'designUpdatedAt' AS capture_version, ${redriveOutcome.PREVIEW_PNG_COLUMNS} FROM hawa.canva_export_bytes b
           JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
           JOIN hawa.canva_bindings g ON g.tenant_id = b.tenant_id AND g.task_id = b.task_id AND g.status = 'bound'
             AND g.canva_design_id = o.design_id AND g.version = o.binding_version
