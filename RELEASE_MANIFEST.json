@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-02T22:51:51+03:00",
+  "generatedAt": "2026-10-02T23:32:42+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "07770d17251f7df0e0961b823518038153547b68",
+    "commit": "4b1d50e555332a07c125f84910686ce20cb137a5",
     "treeClean": true,
-    "commitTimestamp": "2026-10-02T22:51:51+03:00",
+    "commitTimestamp": "2026-10-02T23:32:42+03:00",
     "branch": "codex/hawzhin-app-integration"
   },
   "migrations": {
-    "targetVersion": "087_customer_workflow_actions",
-    "latestMigrationFile": "087_customer_workflow_actions.sql",
-    "totalMigrations": 87
+    "targetVersion": "088_customer_native_review",
+    "latestMigrationFile": "088_customer_native_review.sql",
+    "totalMigrations": 88
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "dccf616902574fe0208f7d8da36935ac56e25ea44bb0cfbb0558259fffbc7685",
+        "apps/core/src/app.ts": "72f276e4fd95f43be7aea0f679f3283135e66d09543e9b79967070108d812f61",
         "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "4d27aff8d5a3f5495d5ba28ba743693714da757d9c85f0dab8727c746ede554a"
+  "sha256": "03105d75442c7947f474876fb466b8abbd960d8d8391ee917faa09d66ba19235"
 }
