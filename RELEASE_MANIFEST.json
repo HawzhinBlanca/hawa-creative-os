@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-02T17:51:14+03:00",
+  "generatedAt": "2026-10-02T18:43:40+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "5e602d8e9154146fff287c3965bad349bf2789a0",
+    "commit": "c04a94211ed79ec65008039d0508cd1595ba7620",
     "treeClean": true,
-    "commitTimestamp": "2026-10-02T17:51:14+03:00",
+    "commitTimestamp": "2026-10-02T18:43:40+03:00",
     "branch": "codex/hawzhin-app-integration"
   },
   "migrations": {
-    "targetVersion": "084_customer_web_lifecycle",
-    "latestMigrationFile": "084_customer_web_lifecycle.sql",
-    "totalMigrations": 84
+    "targetVersion": "085_customer_photo_receipts",
+    "latestMigrationFile": "085_customer_photo_receipts.sql",
+    "totalMigrations": 85
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "239e54f82698dc7e92dacf70bb03e16e1d4c4b007e93716b1027be25e7f8c2d7",
+        "apps/core/src/app.ts": "dccf616902574fe0208f7d8da36935ac56e25ea44bb0cfbb0558259fffbc7685",
         "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -73,7 +73,7 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "71f05ca0976478cb174f5fd4acba4a095da397a666527d0644e9e463e3528d10",
+      "apps/core/src/services/canva-design-planner.ts": "f913252c64ef050e57b84ceb79ff65fbbeb94d580eb47e541441728a2f000ed2",
       "packages/creative/src/studio/layout-generator-v3.ts": "b2fec55a85e5e1818bd8e16c33172c5c5092bdcd09d01b17d78ac6a632c8276a",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "583f3ed9f0fab9df7ff52dac59e1f5475dbb3f5b0c269159198282fc27074f6e",
       "packages/creative/src/studio/box-critique-v3.ts": "f6a643f5df5aaf69f355f12a6494b2479b942d2b6d702cc1cc42af8d24cb85e2"
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "81cd81644cd19d060dcb41be69a1c3d59e1caa1c57f5ecfe78790bd5f7a292a2"
+  "sha256": "a7817a974b77ffee9995f47bcd45f739e1ed9fa3ea885b3b6771333be4e59cbf"
 }
