@@ -1,3 +1,4 @@
+import {customerActionEvent,projectCustomerAction,acknowledgeCustomerAction} from '../src/customer/customer-actions.js';
 import { customerPhotoSelection } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { readFileSync } from 'node:fs';
@@ -8,7 +9,7 @@ import { inspectCustomerPhoto, decodeCustomerPhoto } from '../src/customer/custo
 import { orderedCustomerPhotos } from '@hawa/contracts';
 import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
 import { customerWebOpenEvent, recordCustomerWebMessage } from '../src/customer/customer-web-lifecycle.js';
-import { projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
+import { projectLifecycleDesignOutcome, projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
 import { afterAll, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
@@ -824,4 +825,144 @@ it('bounds concurrent streaming photo bodies before buffering and releases stall
     expect((await one).status).toBe(408);expect((await two).status).toBe(408);
   } finally {vi.useRealTimers();checked.mockRestore();}
   expect((await app.request(url,{method:'POST',headers,body:new Uint8Array(photoJpeg)})).status).toBe(201);
+});
+
+async function actionEvent(f:Awaited<ReturnType<typeof fixture>>,requestId:string,actionId:string) {
+ const cmd=(await sql<{id:string;idempotency_key:string}>`SELECT id,idempotency_key FROM hawa.outbox_commands
+ WHERE tenant_id=${f.tenantId}::uuid AND payload->>'actionId'=${actionId}`.execute(owner)).rows[0];
+ return customerActionEvent(db,{v:1,requestId,tenantId:f.tenantId,accountId:f.a.id,actionId,commandId:cmd.id,key:cmd.idempotency_key});
+}
+it('admits one owned cancellation action and exactly reconciles replay before or after owner projection',async()=>{
+ const f=await previewFixture(),requestId=f.receipt.job.id;
+ const body={kind:'cancel' as const,expectedVersion:1,reason:'Created by mistake'};
+ const [a,b]=await Promise.all([f.service.action(f.a.member,requestId,'cancel_key_001',body),f.service.action(f.a.member,requestId,'cancel_key_001',body)]);
+ expect(a.action.id).toBe(b.action.id);expect([a.created,b.created].sort()).toEqual([false,true]);
+ await expect(f.service.action(f.b.member,requestId,'foreign_action',body)).rejects.toMatchObject({status:404});
+ await expect(f.service.action(f.a.member,requestId,'cancel_key_001',{...body,reason:'Other'})).rejects.toMatchObject({code:'DESIGN_ACTION_KEY_CONFLICT'});
+ const event=await actionEvent(f,requestId,a.action.id),basis={taskId:f.projection.taskId,rev:1,stage:'designing',round:0};
+ const result=await projectCustomerAction(db,event,basis);expect(result).toMatchObject({accepted:true,stage:'cancelled',rev:2});
+ expect(await projectCustomerAction(db,event,basis)).toEqual(result);
+ await acknowledgeCustomerAction(db,event,result);
+ expect((await f.service.action(f.a.member,requestId,'cancel_key_001',body)).action.phase).toBe('applied');
+ expect((await f.service.get(f.a.member,requestId)).state).toBe('cancelled');
+});
+it('refuses changed basis and revocation before action projection without changing the task',async()=>{
+ for(const revoke of [false,true]) {
+  const f=await previewFixture(),requestId=f.receipt.job.id;
+  const receipt=await f.service.action(f.a.member,requestId,'cancel_key_001',{kind:'cancel',expectedVersion:1,reason:'Stop'});
+  const event=await actionEvent(f,requestId,receipt.action.id);
+  if(revoke)await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+  const result=await projectCustomerAction(db,event,{taskId:f.projection.taskId,rev:revoke?1:2,stage:'designing',round:0});
+  expect(result).toMatchObject({accepted:false,code:revoke?'DESIGN_ACCESS_DENIED':'DESIGN_ACTION_STALE'});
+  expect((await sql<{state:string}>`SELECT state FROM hawa.tasks WHERE id=${f.projection.taskId}::uuid`.execute(owner)).rows[0].state).toBe('received');
+ }
+});
+it('revises a web draft through existing intake and keeps customer scope and live copy separate from direction',async()=>{
+ const f=await previewFixture(),requestId=f.receipt.job.id;
+ await sql`UPDATE hawa.requests SET stage='in_review',rev=2 WHERE request_id=${requestId}::uuid`.execute(owner);
+ const receipt=await f.service.action(f.a.member,requestId,'revise_key_001',{kind:'revise',expectedVersion:2,directive:'Make the composition calmer',category:'layout'});
+ const event=await actionEvent(f,requestId,receipt.action.id);
+ const result=await projectCustomerAction(db,event,{taskId:f.projection.taskId,rev:2,stage:'in_review',round:0});
+ expect(result).toMatchObject({accepted:true,stage:'designing',rev:3,round:1});
+ const task=(await sql<{customer_account_id:string;requested_by:string;source:Record<string,unknown>}>`SELECT t.customer_account_id,t.requested_by,e.data AS source FROM hawa.tasks t JOIN hawa.task_events e ON e.task_id=t.id AND e.event_type='task.created' WHERE t.id=${result.taskId}::uuid`.execute(owner)).rows[0];
+ expect(task.customer_account_id).toBe(f.a.id);expect(task.requested_by).toBe(f.a.userId);
+ expect(task.source).toMatchObject({payload:{sourcePlatform:'hawzhin_web'}});
+ const payload=(await sql<{payload:Record<string,unknown>}>`SELECT payload FROM hawa.outbox_commands WHERE aggregate_id=${result.taskId}::uuid AND command_type='task.created'`.execute(owner)).rows[0].payload;
+ expect(savedDesignCopy(payload,'').copy).toEqual([f.body.exactCopy[0].text]);
+ expect(payload).toMatchObject({lifecycleOwner:'restate',sourcePlatform:'hawzhin_web'});
+});
+
+async function questionFixture() {
+ const f=await previewFixture(),requestId=f.receipt.job.id,questionId=randomUUID(),taskId=f.projection.taskId;
+ await sql`INSERT INTO hawa.design_studio_runs(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,tier,status,stages)
+ VALUES(${questionId}::uuid,${f.tenantId}::uuid,${taskId}::uuid,${f.clientId}::uuid,'test',${questionId},'fixture-hash','{}','standard','failed',
+ ${JSON.stringify({directed:{refused:'NEEDS_CLARIFICATION',clarify:{question:'Which date should be used?',options:['Today','Tomorrow']}}})}::jsonb)`.execute(owner);
+ const outcome=await projectLifecycleDesignOutcome(db,{requestId,tenantId:f.tenantId,taskId,runId:`dr-${taskId}`,expectedRev:1,rev:2,key:requestId+':2:outcome',
+ report:{status:'DESIGN_FAILED',code:'NEEDS_CLARIFICATION',runId:questionId}});
+ expect(outcome.question?.id).toBe(questionId);
+ const message=await recordCustomerWebMessage(db,f.tenantId,{v:1,key:requestId+':2:design-outcome',chatId:`web:${f.a.id}`,tenantId:f.tenantId,taskId,
+ kind:'text',class:'critical',text:outcome.message!.text,onSent:{kind:'question',requestId,taskId,requestRev:2,questionId}});
+ return {...f,questionId,messageId:message.receiptId,basis:{taskId,rev:2,stage:'awaiting_answer',round:0,questionId}};
+}
+it('retains a real web question without inferring seen, then explicitly records seen and answers with live replacement copy',async()=>{
+ const f=await questionFixture(),requestId=f.receipt.job.id;
+ expect((await f.service.detail(f.a.member,requestId)).actions).toMatchObject({canRevise:false,canCancel:true,questionMessageId:f.messageId});
+ expect((await sql<{asked:Date|null}>`SELECT question_asked_at AS asked FROM hawa.requests WHERE request_id=${requestId}::uuid`.execute(owner)).rows[0].asked).toBeNull();
+ await expect(f.service.action(f.a.member,requestId,'stale_question',{kind:'seen',expectedVersion:2,messageId:randomUUID()})).rejects.toMatchObject({code:'DESIGN_QUESTION_STALE'});
+ const seen=await f.service.action(f.a.member,requestId,'seen_question',{kind:'seen',expectedVersion:2,messageId:f.messageId}),seenEvent=await actionEvent(f,requestId,seen.action.id);
+ const result=await projectCustomerAction(db,seenEvent,f.basis);expect(result).toMatchObject({accepted:true,rev:2,questionId:f.questionId,messageId:f.messageId});
+ expect(result.seenAtMs).toBeGreaterThan(0);expect(await projectCustomerAction(db,seenEvent,f.basis)).toEqual(result);
+ await acknowledgeCustomerAction(db,seenEvent,result);
+ const exactCopy=[{text:'موعدنا غداً ٢٠٢٦',language:'ar' as const}],answer=await f.service.action(f.a.member,requestId,'answer_question',{kind:'answer',expectedVersion:2,messageId:f.messageId,directive:'Use tomorrow, with this exact date text',exactCopy});
+ const event=await actionEvent(f,requestId,answer.action.id),projected=await projectCustomerAction(db,event,f.basis);
+ expect(projected).toMatchObject({accepted:true,rev:3,round:1,stage:'designing'});
+ const payload=(await sql<{payload:Record<string,unknown>}>`SELECT payload FROM hawa.outbox_commands WHERE aggregate_id=${projected.taskId}::uuid AND command_type='task.created'`.execute(owner)).rows[0].payload;
+ expect(savedDesignCopy(payload,'').copy).toEqual([exactCopy[0].text]);expect(payload.studioOptions).toMatchObject({clarified:true,answers:f.projection.taskId});
+ expect(payload.studioOptions).not.toHaveProperty('parentTaskId');
+ expect((await sql<{state:string}>`SELECT state FROM hawa.tasks WHERE id=${f.projection.taskId}::uuid`.execute(owner)).rows[0].state).toBe('cancelled');
+ expect((await f.service.detail(f.a.member,requestId)).actions.questionMessageId).toBeNull();
+});
+it('rolls back a child task created during a permanently refused answer and retains a terminal action receipt',async()=>{
+ const f=await questionFixture(),requestId=f.receipt.job.id;
+ // Privileged corruption fixture: task no longer paused while request still asks the same question.
+ await sql`UPDATE hawa.tasks SET state='received' WHERE id=${f.projection.taskId}::uuid`.execute(owner);
+ const answer=await f.service.action(f.a.member,requestId,'answer_question',{kind:'answer',expectedVersion:2,messageId:f.messageId,directive:'Tomorrow'});
+ const event=await actionEvent(f,requestId,answer.action.id),result=await projectCustomerAction(db,event,f.basis);
+ expect(result).toMatchObject({accepted:false,code:'DESIGN_REVISION_UNAVAILABLE'});expect(await projectCustomerAction(db,event,f.basis)).toEqual(result);
+ expect((await sql`SELECT id FROM hawa.tasks WHERE request_id=${requestId}::uuid`.execute(owner)).rows).toHaveLength(1);
+ expect((await f.service.detail(f.a.member,requestId)).actions.receipts[0]).toMatchObject({phase:'refused',code:'DESIGN_REVISION_UNAVAILABLE'});
+ expect((await sql<{rev:string}>`SELECT rev FROM hawa.requests WHERE request_id=${requestId}::uuid`.execute(owner)).rows[0].rev).toBe('2');
+});
+it('preserves every ordered original and explicit use-all policy in a web revision',async()=>{
+ const f=await fixture(),photos=[];for(let i=0;i<3;i++)photos.push((await upload(f,i)).photo);
+ const receipt=await f.service.create(f.a.member,'photo_revision',{...f.body,photoIds:[...photos].reverse().map(p=>p.id),photoUsage:{mode:'all'}}),requestId=receipt.job.id;
+ const open=await customerWebOpenEvent(db,f.tenantId,requestId),projection=await projectLifecycleOpen(db,{requestId,tenantId:f.tenantId,expectedRev:0,rev:1,key:requestId+':1:open',draft:open.draft});
+ await sql`UPDATE hawa.requests SET stage='in_review',rev=2 WHERE request_id=${requestId}::uuid`.execute(owner);
+ const action=await f.service.action(f.a.member,requestId,'revise_photos',{kind:'revise',expectedVersion:2,directive:'Arrange the photos creatively',category:'imagery'}),event=await actionEvent(f,requestId,action.action.id);
+ const result=await projectCustomerAction(db,event,{taskId:projection.taskId,rev:2,stage:'in_review',round:0});expect(result.accepted).toBe(true);
+ const payload=(await sql<{payload:Record<string,unknown>}>`SELECT payload FROM hawa.outbox_commands WHERE aggregate_id=${result.taskId}::uuid AND command_type='task.created'`.execute(owner)).rows[0].payload;
+ const refs=(await sql<{sha256:string;media_type:string;size:string}>`SELECT f.sha256,b.media_type,b.size FROM hawa.task_files f JOIN hawa.blobs b ON b.sha256=f.sha256 WHERE f.task_id=${result.taskId}::uuid`.execute(owner)).rows;
+ expect(orderedCustomerPhotos(payload.customerWebPhotos,refs).map(p=>p.sha256)).toEqual([...photos].reverse().map(p=>p.sha256));expect(payload.designInstructions).toContain('use all photos');
+ expect(savedDesignCopy(payload,'').copy).toEqual([f.body.exactCopy[0].text]);
+});
+it('reconciles a committed projection after revocation while refusing changed command evidence or acknowledgement',async()=>{
+ const f=await previewFixture(),requestId=f.receipt.job.id,action=await f.service.action(f.a.member,requestId,'cancel_owned',{kind:'cancel',expectedVersion:1,reason:'Stop'}),event=await actionEvent(f,requestId,action.action.id),basis={taskId:f.projection.taskId,rev:1,stage:'designing',round:0};
+ await expect(projectCustomerAction(db,{...event,bodyHash:'0'.repeat(64)},basis)).rejects.toMatchObject({code:'DESIGN_ACTION_INVALID'});
+ await expect(customerActionEvent(db,{...event,commandId:randomUUID()})).rejects.toMatchObject({code:'DESIGN_ACTION_INVALID'});
+ const result=await projectCustomerAction(db,event,basis);
+ await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+ expect(await projectCustomerAction(db,event,basis)).toEqual(result);
+ await expect(acknowledgeCustomerAction(db,event,{...result,rev:3})).rejects.toMatchObject({code:'DESIGN_ACTION_INVALID'});
+ await acknowledgeCustomerAction(db,event,result);await acknowledgeCustomerAction(db,event,result);
+ expect((await sql<{phase:string}>`SELECT phase FROM hawa.customer_web_action_events WHERE action_id=${event.actionId}::uuid`.execute(owner)).rows.map(r=>r.phase).sort()).toEqual(['applied','projected']);
+});
+it('enforces pending-action and daily generation limits while allowing exact retries and cancellation',async()=>{
+ const f=await previewFixture(),requestId=f.receipt.job.id;
+ await sql`UPDATE hawa.customer_accounts SET daily_job_limit=1,version=version+1 WHERE id=${f.a.id}::uuid`.execute(owner);
+ await sql`UPDATE hawa.requests SET stage='in_review',rev=2 WHERE request_id=${requestId}::uuid`.execute(owner);
+ await expect(f.service.action(f.a.member,requestId,'over_limit',{kind:'revise',expectedVersion:2,directive:'More space',category:'layout'})).rejects.toMatchObject({status:429,code:'DESIGN_REQUEST_LIMIT'});
+ const body={kind:'cancel' as const,expectedVersion:2,reason:'Stop'},first=await f.service.action(f.a.member,requestId,'cancel_limit',body);
+ expect((await f.service.action(f.a.member,requestId,'cancel_limit',body)).action.id).toBe(first.action.id);
+ await expect(f.service.action(f.a.member,requestId,'cancel_second',body)).rejects.toMatchObject({code:'DESIGN_ACTION_PENDING'});
+});
+it('mounts strict customer action admission behind auth, readiness, owned basis and exact replay',async()=>{
+ const f=await previewFixture(),app=new Hono(),requestId=f.receipt.job.id;registerCustomerRoutes(app,f.service,async()=>f.a.member,true);
+ const url=`/v1/customer/jobs/${requestId}/actions`,body={kind:'cancel',expectedVersion:1,reason:'Stop'},headers={'Content-Type':'application/json','Idempotency-Key':'http_cancel'};
+ const first=await app.request(url,{method:'POST',headers,body:JSON.stringify(body)});expect(first.status).toBe(202);
+ expect((await app.request(url,{method:'POST',headers,body:JSON.stringify(body)})).status).toBe(200);
+ expect((await app.request(url,{method:'POST',headers,body:JSON.stringify({...body,actorId:f.adminId})})).status).toBe(400);
+ const disabled=new Hono();registerCustomerRoutes(disabled,f.service,async()=>f.a.member,false);
+ expect((await disabled.request(url,{method:'POST',headers,body:JSON.stringify(body)})).status).toBe(503);
+ const foreign=new Hono();registerCustomerRoutes(foreign,f.service,async()=>f.b.member,true);
+ expect((await foreign.request(url,{method:'POST',headers,body:JSON.stringify(body)})).status).toBe(404);
+});
+it('keeps action rows and events immutable with no raw worker or foreign customer authority',async()=>{
+ const f=await previewFixture(),requestId=f.receipt.job.id,action=await f.service.action(f.a.member,requestId,'immutable_cancel',{kind:'cancel',expectedVersion:1,reason:'Stop'});
+ await expect(sql`UPDATE hawa.customer_web_actions SET kind='seen' WHERE id=${action.action.id}::uuid`.execute(owner)).rejects.toThrow();
+ await expect(sql`DELETE FROM hawa.customer_web_actions WHERE id=${action.action.id}::uuid`.execute(owner)).rejects.toThrow();
+ for(const table of ['customer_web_actions','customer_web_action_events']) {
+  const grants=(await sql<{read:boolean;write:boolean}>`SELECT has_table_privilege('hawa_worker',${'hawa.'+table},'SELECT') AS read,has_table_privilege('hawa_worker',${'hawa.'+table},'INSERT') AS write`.execute(owner)).rows[0];expect(grants).toEqual({read:false,write:false});
+ }
+ const grants=(await sql<{execute:boolean}>`SELECT has_function_privilege('hawa_worker','hawa.customer_action_basis(uuid)','EXECUTE') AS execute`.execute(owner)).rows[0];expect(grants.execute).toBe(false);
+ await expect(f.service.detail(f.b.member,requestId)).rejects.toMatchObject({status:404});
 });

@@ -1,5 +1,8 @@
 import { isCustomerOpenCommand } from '@hawa/contracts';
 import { customerWebOpenEvent, recordCustomerWebMessage, WEB_CHANNEL } from '../customer/customer-web-lifecycle.js';
+import {customerActionEvent,projectCustomerAction,acknowledgeCustomerAction,CustomerActionError} from '../customer/customer-actions.js';
+import type {CustomerActionCommand,CustomerActionEvent,CustomerActionResult} from '@hawa/contracts';
+import {isCustomerActionCommand,isCustomerActionEvent} from '@hawa/contracts';
 /**
  * Core's internal API for the request lifecycle on Restate (architecture programme Phase 2, ADR-034,
  * PHASE2_DESIGN.md section 2.8). Slice 2.1 adds the two calls the worker's ChatInbox makes:
@@ -1845,6 +1848,35 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
   });
 
+  internal('/customer/actions/:actionId/:operation',async c=>{
+    if(!db)return problem(c,503,'Database Required');
+    const body=await readBody(c),operation=c.req.param('operation'),id=c.req.param('actionId');
+    const event=operation==='event' ? body : body?.event;
+    if(!isCustomerActionCommand(event) || event.tenantId!==DEFAULT_TENANT_ID || event.actionId!==id)
+      return c.json({code:'DESIGN_ACTION_INVALID'},403);
+    try {
+      if(operation==='event')return c.json(await customerActionEvent(db,event));
+      if(!isCustomerActionEvent(event))return c.json({code:'DESIGN_ACTION_INVALID'},403);
+      if(operation==='project') {
+        const basis=body?.basis as {taskId:string;rev:number;stage:string;round:number;questionId?:string}|undefined;
+        if(!basis || typeof basis.taskId!=='string' || !UUID.test(basis.taskId) || !Number.isSafeInteger(basis.rev) || basis.rev<0 ||
+          typeof basis.stage!=='string' || !Number.isSafeInteger(basis.round) || basis.round<0 || basis.round>10000 ||
+          (basis.questionId!==undefined && !UUID.test(basis.questionId)))return c.json({code:'DESIGN_ACTION_INVALID'},403);
+        return c.json(await projectCustomerAction(db,event,basis));
+      }
+      if(operation==='ack') {
+        const result=body?.result as CustomerActionResult|undefined;
+        if(!result || result.v!==1 || result.actionId!==event.actionId || result.requestId!==event.requestId || !result.accepted)
+          return c.json({code:'DESIGN_ACTION_INVALID'},403);
+        return c.json(await acknowledgeCustomerAction(db,event,result));
+      }
+      return c.json({code:'DESIGN_ACTION_INVALID'},404);
+    } catch(error) {
+      if(error instanceof CustomerActionError)return c.json({code:error.code},error.status);
+      if(error instanceof LifecycleProjectionConflict)return c.json({code:error.code},409);
+      return c.json({code:'DESIGN_SERVICE_UNAVAILABLE'},503);
+    }
+  });
   internal('/customer/:requestId/open-event', async c => {
     const id=c.req.param('requestId') ?? '';
     if(!UUID.test(id)) return problem(c,400,'Invalid customer request','A request UUID is required');

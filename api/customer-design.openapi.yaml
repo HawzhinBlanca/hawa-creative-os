@@ -61,11 +61,35 @@ paths:
       security: [{WorkspaceMember: []}]
       parameters: [{name: id, in: path, required: true, schema: {type: string, format: uuid}}]
       responses:
-        '200': {description: Owned stable request projection plus latest 100 durable web messages in chronological order; no provider refs or send/read claims, content: {application/json: {schema: {type: object, required: [job, messages, preview], properties: {job: {$ref: '#/components/schemas/CustomerJob'}, preview: {anyOf: [{$ref: '#/components/schemas/CapturedPreview'}, {type: 'null'}]}, messages: {type: array, maxItems: 100, items: {type: object, required: [id, kind, text, createdAt, question]}}}}}}}
+        '200': {description: Owned stable request projection plus latest 100 durable web messages in chronological order; no provider refs or send/read claims, content: {application/json: {schema: {type: object, required: [job, messages, preview, actions], properties: {actions: {$ref: '#/components/schemas/CustomerActions'}, job: {$ref: '#/components/schemas/CustomerJob'}, preview: {anyOf: [{$ref: '#/components/schemas/CapturedPreview'}, {type: 'null'}]}, messages: {type: array, maxItems: 100, items: {type: object, required: [id, kind, text, createdAt, question]}}}}}}}
         '401': {description: Workspace sign-in required}
         '403': {description: Current customer admission denied}
         '404': {description: Job unavailable to this owner, including shared-brand foreign jobs}
         '503': {description: Dependency unavailable}
+  /v1/customer/jobs/{id}/actions:
+    post:
+      security: [{WorkspaceMember: []}]
+      description: ADR263. One immutable customer action and outbox command on the current owned request revision. Same-key exact replay precedes stale checks. Serial application uses the existing private RequestLifecycle. Public admission remains disabled. An HTTP receipt is not proof of application or approval.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, pattern: '^[A-Za-z0-9_-]{8,100}$'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CustomerAction'}
+      responses:
+        '202': {description: New queued action, content: {application/json: {schema: {$ref: '#/components/schemas/ActionResponse'}}}}
+        '200': {description: Exact retained action replay, content: {application/json: {schema: {$ref: '#/components/schemas/ActionResponse'}}}}
+        '400': {description: Invalid or additional fields, missing stable key}
+        '401': {description: Workspace sign-in required}
+        '403': {description: Current customer or client admission denied}
+        '404': {description: Owned request unavailable}
+        '408': {description: Streamed JSON exceeds 10 seconds}
+        '409': {description: Stale basis or question, wrong stage, unresolved action, or different content for the same key}
+        '413': {description: Streamed JSON exceeds 49152 bytes}
+        '429': {description: Daily customer generation or action limit reached}
+        '503': {description: Generation not ready or dependency unavailable; retain exact key and body}
   /v1/customer/jobs/{id}/preview/{captureId}:
     get:
       security: [{WorkspaceMember: []}]
@@ -144,6 +168,53 @@ components:
     WorkspaceMember: {type: http, scheme: bearer, bearerFormat: Supabase user JWT, description: Pinned workspace issuer and current has_app_access verified server-side on every request. Office keys and anonymous or service identities are refused.}
     NamedOfficeAdministrator: {type: http, scheme: bearer, bearerFormat: Hawa named Google OIDC session, description: Current persisted administrator and active session; shared office keys cannot provision customers.}
   schemas:
+    ActionCopy:
+      type: array
+      minItems: 1
+      maxItems: 8
+      description: Explicit full replacement text only; at most 8000 characters combined. Omission preserves existing exact copy.
+      items: {type: object, additionalProperties: false, required: [text, language], properties: {text: {type: string, minLength: 1, maxLength: 4000}, language: {type: string, enum: [en, ar, ckb]}}}
+    CustomerAction:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, expectedVersion, reason]
+          properties: {kind: {const: cancel}, expectedVersion: {type: integer, minimum: 1}, reason: {type: string, minLength: 1, maxLength: 1000}}
+        - type: object
+          additionalProperties: false
+          required: [kind, expectedVersion, messageId]
+          properties: {kind: {const: seen}, expectedVersion: {type: integer, minimum: 1}, messageId: {type: string, format: uuid}}
+        - type: object
+          additionalProperties: false
+          required: [kind, expectedVersion, messageId, directive]
+          properties: {kind: {const: answer}, expectedVersion: {type: integer, minimum: 1}, messageId: {type: string, format: uuid}, directive: {type: string, minLength: 1, maxLength: 4000}, exactCopy: {$ref: '#/components/schemas/ActionCopy'}}
+        - type: object
+          additionalProperties: false
+          required: [kind, expectedVersion, directive, category]
+          properties: {kind: {const: revise}, expectedVersion: {type: integer, minimum: 1}, directive: {type: string, minLength: 1, maxLength: 4000}, category: {type: string, enum: [layout, imagery, typography, copy, other]}, exactCopy: {$ref: '#/components/schemas/ActionCopy'}}
+    ActionReceipt:
+      type: object
+      required: [id, requestId, kind, expectedVersion, phase, code, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        requestId: {type: string, format: uuid}
+        kind: {type: string, enum: [revise, answer, seen, cancel]}
+        expectedVersion: {type: integer, minimum: 1}
+        phase: {type: string, enum: [queued, projected, applied, refused]}
+        code: {type: [string, 'null']}
+        createdAt: {type: string, format: date-time}
+    ActionResponse:
+      type: object
+      required: [action, created]
+      properties: {action: {$ref: '#/components/schemas/ActionReceipt'}, created: {type: boolean}}
+    CustomerActions:
+      type: object
+      required: [canRevise, canCancel, questionMessageId, receipts]
+      properties:
+        canRevise: {type: boolean}
+        canCancel: {type: boolean}
+        questionMessageId: {type: [string, 'null'], format: uuid}
+        receipts: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/ActionReceipt'}}
     CapturedPreview:
       type: object
       additionalProperties: false

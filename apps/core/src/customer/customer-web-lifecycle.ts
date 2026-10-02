@@ -33,7 +33,7 @@ export function customerWebDraft(receipt:WebReceipt,photos?:CustomerPhotoManifes
 }
 
 /** Internal only. Resolve ownership from retained Core evidence, never from a worker's fields. */
-export async function authorizeCustomerWebOpen(trx:Kysely<Database>,tenantId:string,requestId:string) {
+export async function authorizeCustomerWebOpen(trx:Kysely<Database>,tenantId:string,requestId:string,checkBrief=true) {
   const receipt=(await sql<WebReceipt>`SELECT * FROM hawa.customer_web_requests
     WHERE tenant_id=${tenantId}::uuid AND request_id=${requestId}::uuid`.execute(trx)).rows[0];
   if(!receipt) throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR','No retained customer web brief');
@@ -52,9 +52,9 @@ export async function authorizeCustomerWebOpen(trx:Kysely<Database>,tenantId:str
     await sql`SELECT set_config('hawa.customer_id',${account.id},true),set_config('app.user_id',${account.user_id},true),
       set_config('hawa.current_user_id',${account.user_id},true)`.execute(trx);
     await sql`SELECT hawa.lock_customer_request_access(${receipt.client_id}::uuid)`.execute(trx);
-    const dna=(await sql<{version:number}>`SELECT hawa.pin_customer_dna(${receipt.client_id}::uuid) AS version`.execute(trx)).rows[0];
-    if(dna.version!==receipt.dna_version) throw new LifecycleProjectionConflict('EVIDENCE_CHANGED','The admitted brand version changed before projection');
-    const photos=await customerPhotos(trx,tenantId,account.id,receipt.client_id,receipt.body.photoIds);
+    const dna=checkBrief ? (await sql<{version:number}>`SELECT hawa.pin_customer_dna(${receipt.client_id}::uuid) AS version`.execute(trx)).rows[0] : {version:receipt.dna_version};
+    if(checkBrief && dna.version!==receipt.dna_version) throw new LifecycleProjectionConflict('EVIDENCE_CHANGED','The admitted brand version changed before projection');
+    const photos=checkBrief ? await customerPhotos(trx,tenantId,account.id,receipt.client_id,receipt.body.photoIds) : [];
     const manifest=photos.length ? {v:1 as const,images:photos.map(({sha256,mediaType,size})=>({sha256,mediaType,size}))} : undefined;
     return {receipt,draft:customerWebDraft(receipt,manifest),owner:{accountId:account.id,userId:account.user_id},dnaVersion:receipt.dna_version};
   } catch(error) {

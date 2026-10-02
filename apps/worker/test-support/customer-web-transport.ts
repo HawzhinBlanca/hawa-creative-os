@@ -5,6 +5,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 import * as restate from '@restatedev/restate-sdk';
 import { TaskWorkflowDispatcher } from '../src/workflow-dispatcher.js';
+import { signCustomerActionCommand } from '../src/lifecycle/customer-web-actions.js';
 import { signCustomerOpenCommand } from '../src/lifecycle/customer-web-entry.js';
 import type { OutboxCommandRecord } from '../src/outbox-consumer.js';
 
@@ -14,7 +15,8 @@ const secret=['synthetic','isolated','customer','gateway','secret'].join('-');
 process.env.HAWA_WORKER_TOKEN=secret;
 process.env.HAWA_CORE_INTERNAL_URL='http://127.0.0.1:50881';
 for(const key of ['OPENAI_API_KEY','ANTHROPIC_API_KEY','GEMINI_API_KEY','TELEGRAM_BOT_TOKEN']) process.env[key]='';
-const chatId=`web:${accountId}`;
+const chatId=`web:${accountId}`,actionId=randomUUID(),actions=process.argv.includes('--actions');
+let actionRefs:Record<string,unknown>|undefined;
 const photos=process.argv.includes('--photos') ? {v:1,images:Array.from({length:6},(_,i)=>({sha256:String(i+1).repeat(64),mediaType:'image/png',size:i+100}))} : undefined;
 const event={v:1,eventId:`open:${requestId}`,requestId,tenantId,chatId,
   draft:{platform:'hawzhin_web',sourceEventId:`lc-${requestId}-r0`,sourceChannelId:chatId,
@@ -26,6 +28,9 @@ const core=createServer(async(req,res)=>{
   const body:unknown=JSON.parse(raw);calls.push({path:req.url!,body});
   const value=req.url===`/v1/internal/customer/${requestId}/open-event` ? event :
     req.url===`/v1/internal/lifecycle/${requestId}/project` ? {v:1,taskId,stage:'manual',rev:1,autoGenerate:false} :
+    req.url===`/v1/internal/customer/actions/${actionId}/event` ? {...actionRefs,expectedRev:1,taskId,bodyHash:'1'.repeat(64),kind:'cancel'} :
+    req.url===`/v1/internal/customer/actions/${actionId}/project` ? {v:1,actionId,requestId,kind:'cancel',accepted:true,taskId,rev:2,stage:'cancelled',fromStage:'manual'} :
+    req.url===`/v1/internal/customer/actions/${actionId}/ack` ? {acknowledged:true} :
     req.url==='/v1/internal/customer/web-message' ? {outcome:'web_recorded',receiptId:randomUUID()} : null;
   res.writeHead(value?200:404,{'content-type':'application/json'}).end(JSON.stringify(value));
 });
@@ -60,11 +65,35 @@ try {
   assert.deepEqual((projection[0].body as {ops:Array<{draft:unknown}>}).ops[0].draft,event.draft);
   const tampered=await json(`${ingress}/ChatInbox/${chatId}/webOpen`,{...signCustomerOpenCommand(refs,secret),commandId:randomUUID()});
   assert.equal(tampered.status,403,JSON.stringify(tampered));assert.equal(calls.length,3);
+  let actionProof:unknown;
+  if(actions) {
+    const actionCmd:OutboxCommandRecord={...cmd,id:randomUUID(),command_type:'customer.request.action',
+      idempotency_key:`customer:${accountId}:action:transport_action_001`,payload:{v:1,requestId,accountId,actionId}};
+    const signedRefs={v:1 as const,requestId,tenantId,accountId,actionId,commandId:actionCmd.id,key:actionCmd.idempotency_key};
+    actionRefs=signedRefs;
+    const blocked=await json(`${ingress}/RequestLifecycle/${requestId}/customerAction/send`,{...signedRefs,expectedRev:1,taskId,bodyHash:'1'.repeat(64),kind:'cancel'});
+    assert.equal(blocked.status,400,JSON.stringify(blocked));
+    const accepted=await dispatcher.dispatchCustomer(actionCmd),replayed=await new TaskWorkflowDispatcher({restateIngressUrl:ingress,customerSigningSecret:secret}).dispatchCustomer(actionCmd);
+    assert.equal(accepted.receiptId,replayed.receiptId);
+    const completed=await json(`${ingress}/ChatInbox/${chatId}/webAction`,signCustomerActionCommand(signedRefs,secret),{'Idempotency-Key':actionCmd.idempotency_key});
+    assert.equal(completed.status,200,JSON.stringify(completed));
+    for(let i=0;i<100 && (!calls.some(c=>c.path.endsWith('/ack')) || calls.filter(c=>c.path.endsWith('/web-message')).length<2);i++)await new Promise(resolve=>setTimeout(resolve,100));
+    const actionCalls=calls.filter(c=>c.path.includes(`/customer/actions/${actionId}/`));
+    assert.deepEqual(actionCalls.map(c=>c.path.split('/').pop()),['event','project','ack']);
+    assert.deepEqual(actionCalls[0].body,signedRefs);
+    assert.deepEqual((actionCalls[1].body as {basis:unknown}).basis,{taskId,rev:1,stage:'manual',round:0});
+    const notices=calls.filter(c=>c.path.endsWith('/web-message'));assert.equal(notices.length,2);
+    assert.equal((notices[1].body as {text:string}).text,'Your design request was cancelled.');
+    const invalid=await json(`${ingress}/ChatInbox/${chatId}/webAction`,{...signCustomerActionCommand(signedRefs,secret),actionId:randomUUID()});
+    assert.equal(invalid.status,403,JSON.stringify(invalid));assert.equal(calls.length,7);
+    actionProof={privateHandlerStatus:blocked.status,gatewayStatus:completed.status,invocationReceipt:accepted.receiptId,replayedReceipt:replayed.receiptId,
+      evidenceReads:1,ownerProjections:1,appliedAcknowledgements:1,cancellationNotices:1,tamperedStatus:invalid.status};
+  }
   const output={timestamp:new Date().toISOString(),success:true,mode:'isolated-real-Restate-1.7.10-synthetic-Core',
     privateLifecycleHttpStatus:privateResult.status,invocationReceipt:first.receiptId,replayedReceipt:second.receiptId,
     gatewayHttpStatus:completion.status,tamperedHttpStatus:tampered.status,coreEvidenceReads:evidence.length,
-    lifecycleProjections:projection.length,durableWebMessages:messages.length,orderedPhotoReferences:photos?.images.length ?? 0,providersCalled:false,productionTouched:false};
-  const outputDir='output/qualification/2026-10-02/'+(photos ? 'customer-photos' : 'customer-boundary');
+    lifecycleProjections:projection.length,durableWebMessages:messages.length,orderedPhotoReferences:photos?.images.length ?? 0,providersCalled:false,productionTouched:false,...(actionProof ? {actionProof} : {})};
+  const outputDir='output/qualification/2026-10-02/'+(actions ? 'customer-actions' : photos ? 'customer-photos' : 'customer-boundary');
   mkdirSync(outputDir,{recursive:true});
   writeFileSync(outputDir+'/WEB_RESTATE_TRANSPORT.json',JSON.stringify(output,null,2)+'\n');
   console.log(JSON.stringify(output));

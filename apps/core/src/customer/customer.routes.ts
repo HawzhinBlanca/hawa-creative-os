@@ -3,6 +3,7 @@ import type { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { CustomerRequests, CustomerRequestError } from './customer-requests.js';
+import {CustomerActionError} from './customer-actions.js';
 import {
   WorkspaceAccessError,
   type WorkspaceMember,
@@ -14,6 +15,14 @@ export const CUSTOMER_ORIGINS = new Set([
 ]);
 let activePhotoUploads=0;
 let activePreviewReads=0;
+const actionCopy=z.array(z.object({text:z.string().min(1).max(4000).refine(s=>Boolean(s.trim())),language:z.enum(['en','ckb','ar'])}).strict()).min(1).max(8);
+const actionVersion=z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const actionSchema=z.discriminatedUnion('kind',[
+  z.object({kind:z.literal('cancel'),expectedVersion:actionVersion,reason:z.string().trim().min(1).max(1000)}).strict(),
+  z.object({kind:z.literal('seen'),expectedVersion:actionVersion,messageId:z.string().uuid()}).strict(),
+  z.object({kind:z.literal('answer'),expectedVersion:actionVersion,messageId:z.string().uuid(),directive:z.string().trim().min(1).max(4000),exactCopy:actionCopy.optional()}).strict(),
+  z.object({kind:z.literal('revise'),expectedVersion:actionVersion,directive:z.string().trim().min(1).max(4000),category:z.enum(['layout','imagery','typography','copy','other']),exactCopy:actionCopy.optional()}).strict(),
+]).refine(v=>!('exactCopy' in v) || !v.exactCopy || v.exactCopy.reduce((n,b)=>n+b.text.length,0)<=8000);
 const schema = z
   .object({
     clientId: z.string().uuid(),
@@ -67,7 +76,7 @@ export function registerCustomerRoutes(
       } catch (error) {
         if (
           error instanceof WorkspaceAccessError ||
-          error instanceof CustomerRequestError || error instanceof CustomerPhotoError
+          error instanceof CustomerRequestError || error instanceof CustomerPhotoError || error instanceof CustomerActionError
         )
           return c.json({ code: error.code }, error.status);
         if(error && typeof error==='object' && 'code' in error && error.code==='42501')
@@ -131,6 +140,21 @@ export function registerCustomerRoutes(
       if(error instanceof CustomerBodyError) return c.json({code:error.code},error.status);
       throw error;
     } finally {activePhotoUploads--;}
+  }));
+  app.post('/v1/customer/jobs/:id/actions',run(async(c,m)=>{
+    if(!generationEnabled)return c.json({code:'DESIGN_GENERATION_NOT_READY'},503);
+    const id=c.req.param('id'),key=c.req.header('Idempotency-Key');
+    if(!id || !z.string().uuid().safeParse(id).success)return c.json({code:'DESIGN_JOB_NOT_FOUND'},404);
+    if(!key || !/^[A-Za-z0-9_-]{8,100}$/.test(key))return c.json({code:'DESIGN_IDEMPOTENCY_REQUIRED'},400);
+    try {
+      const parsed=actionSchema.safeParse(JSON.parse((await readCustomerBody(c,49152,10000)).toString('utf8')));
+      if(!parsed.success)return c.json({code:'DESIGN_ACTION_INVALID'},400);
+      const result=await requests.action(m,id,key,parsed.data);return c.json(result,result.created ? 202:200);
+    } catch(error) {
+      if(error instanceof CustomerBodyError)return c.json({code:error.code},error.status);
+      if(error instanceof SyntaxError)return c.json({code:'DESIGN_ACTION_INVALID'},400);
+      throw error;
+    }
   }));
   app.post(
     '/v1/customer/jobs',

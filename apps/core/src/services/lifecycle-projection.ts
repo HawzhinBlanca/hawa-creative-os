@@ -28,6 +28,7 @@ import { pauseRequesterDesign } from './requester-hold.js';
 import { officeChatsFor } from './office-chats.js';
 import { startPendingChangeRound, type PendingRound } from './lifecycle-pending-round.js';
 import { freshDirectionLine } from './fresh-round-copy.js';
+import {authorizeCustomerAction} from '../customer/customer-actions.js';
 
 /** First projection of a request; later transitions must advance the same revision ledger. */
 export interface OpenLifecycleProjection {
@@ -762,6 +763,8 @@ export async function projectLifecycleRequesterRevision(
 
 /** Input for the combined lifecycle intake + requester-revision projection (Q/A loop). */
 export interface RequesterRevisionWithIntakeProjection {
+  /** ADR263: retained authenticated web action, never a synthetic messaging update. */
+  customerWebActionId?: string;
   requestId: string;
   tenantId: string;
   /** The task the request is currently on (must match request.current_task_id). */
@@ -826,7 +829,7 @@ export async function projectLifecycleRequesterRevisionWithIntake(
 ): Promise<RequesterRevisionWithIntakeResult> {
   const { requestId, tenantId, priorTaskId, round, directive, sourceEventId, sourceChannelId, rawText, clientId, key } = input;
   const { expectedRev, rev } = input;
-  if (!Number.isInteger(expectedRev) || expectedRev < (input.questionId ? 2 : 3) ||
+  if (!Number.isInteger(expectedRev) || expectedRev < (input.questionId || input.customerWebActionId ? 2 : 3) ||
       !Number.isInteger(rev) || rev !== expectedRev + 1 ||
       !Number.isInteger(round) || round < 1 || typeof directive !== 'string' || !directive.trim()) {
     throw new LifecycleProjectionConflict('STALE_REVISION', 'Invalid revision pair or round for lifecycle requester revision with intake');
@@ -892,14 +895,26 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       return receipt.result as unknown as RequesterRevisionWithIntakeResult;
     }
     // Validate the request is in the expected state.
+    const customerAction=input.customerWebActionId ? await authorizeCustomerAction(trx,tenantId,input.customerWebActionId) : undefined;
+    if(customerAction && (customerAction.action.request_id!==requestId || customerAction.action.task_id!==priorTaskId ||
+      Number(customerAction.action.expected_rev)!==expectedRev || customerAction.action.client_id!==clientId ||
+      !['revise','answer'].includes(customerAction.action.kind) || !('directive' in customerAction.action.body) ||
+      customerAction.action.body.directive!==directive || sourceChannelId!==`web:${customerAction.action.account_id}` ||
+      canonical(input.sourceUpdate)!==canonical({customerActionId:customerAction.action.id,body:customerAction.action.body})))
+      throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR','Web revision differs from retained requester action');
     const request = await trx.selectFrom('requests').selectAll()
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
     if (!request || Number(request.rev) !== expectedRev) {
       throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision ${expectedRev}`);
     }
+    if(customerAction) {
+      const opening=await trx.selectFrom('lifecycle_projections').select('result').where('tenant_id','=',tenantId).where('request_id','=',requestId).where('rev','=',1).executeTakeFirst();
+      if(opening?.result.autoGenerate!==true)throw new LifecycleProjectionConflict('WRONG_STAGE','A manual-origin request has no automatic design owner');
+    }
     const answering = input.questionId !== undefined;
     const reopening = input.reopenDelivered === true;
-    if (request.owner !== 'restate' || request.stage !== (reopening ? 'delivered' : answering ? 'awaiting_answer' : 'manual')) {
+    if (request.owner !== 'restate' || (customerAction && !answering ? !['manual','in_review'].includes(request.stage) :
+      request.stage !== (reopening ? 'delivered' : answering ? 'awaiting_answer' : 'manual'))) {
       throw new LifecycleProjectionConflict('WRONG_STAGE', 'The request is not waiting for this kind of requester reply');
     }
     if (reopening) {
@@ -993,16 +1008,16 @@ export async function projectLifecycleRequesterRevisionWithIntake(
         .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
         .where('rev', '=', expectedRev).executeTakeFirst();
       question = (last?.result as unknown as DesignOutcomeResult | undefined)?.question;
-      if (!question || question.id !== input.questionId ||
+      if (!question || question.id !== input.questionId || (!customerAction && (
           typeof parentOptions.parentTaskId !== 'string' ||
-          typeof parentOptions.revisionDirective !== 'string' || !parentOptions.revisionDirective.trim()) {
+          typeof parentOptions.revisionDirective !== 'string' || !parentOptions.revisionDirective.trim()))) {
         throw new LifecycleProjectionConflict('WRONG_STAGE', 'The current question or its parent design is missing');
       }
     }
     const inheritedOptions = Object.fromEntries(['tier', 'imagery', 'previews', 'holdForSelection']
       .filter((name) => parentOptions[name] !== undefined).map((name) => [name, parentOptions[name]]));
     const answerText = answering ? directive.trim().replace(/\s+/g, ' ').slice(0, 500) : '';
-    const revisionDirective = question
+    const revisionDirective = question && typeof parentOptions.revisionDirective==='string'
       ? `${parentOptions.revisionDirective}\nAsked "${question.text}", the requester answered: ${answerText}`
       : directive.trim();
     // ADR-233: redo words (a reopened delivered design, or a redo of one sent back for changes) start a
@@ -1012,12 +1027,13 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     const freshDirective = directive.trim().slice(0, 2000);
     // Persist the new task via chat-intake with lifecycleOwner: 'restate'.
     const draft: ChatIntake = {
-      platform: 'telegram', sourceEventId, sourceChannelId,
+      platform: customerAction ? 'hawzhin_web' : 'telegram', sourceEventId, sourceChannelId,
       rawText, rawJson: input.sourceUpdate, title: directive.trim().slice(0, 200),
       ...(input.lifecycleAlbum ? { lifecycleAlbum: input.lifecycleAlbum } : {}),
       designInstructions: `${parentPayload.designInstructions}\n${question
         ? `Answer to "${question.text}": ${answerText}` : fresh ? freshDirectionLine('redo', freshDirective) : `Revision: ${directive.trim()}`}`,
-      exactCopy: parentPayload.exactCopy,
+      exactCopy: customerAction && 'exactCopy' in customerAction.action.body && customerAction.action.body.exactCopy ? customerAction.action.body.exactCopy : parentPayload.exactCopy,
+      ...(customerAction?.web.draft.customerWebPhotos ? {customerWebPhotos:customerAction.web.draft.customerWebPhotos} : {}),
       clientId, autoGenerate: true,
       ...(typeof parentPayload.headlineEn === 'string' ? { headlineEn: parentPayload.headlineEn } : {}),
       ...(typeof parentPayload.headlineCkb === 'string' ? { headlineCkb: parentPayload.headlineCkb } : {}),
@@ -1029,7 +1045,8 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       studioOptions: (fresh
         ? { ...inheritedOptions, revisionRound: round, freshFrom: { parentTaskId: priorTaskId, kind: 'redo', directive: freshDirective } }
         : { ...inheritedOptions,
-          parentTaskId: question ? parentOptions.parentTaskId as string : priorTaskId,
+          ...(customerAction && question && typeof parentOptions.parentTaskId!=='string' ? {} :
+            {parentTaskId: question ? parentOptions.parentTaskId as string : priorTaskId}),
           revisionRound: round, revisionDirective,
           ...(question ? { clarified: true, answers: priorTaskId } : {}) }) as ChatIntake['studioOptions'],
     };
@@ -1046,7 +1063,9 @@ export async function projectLifecycleRequesterRevisionWithIntake(
           designInstructions: `${String(parentPayload.designInstructions)}\n${reviewed.upload.instructions}`,
           studioOptions: { ...draft.studioOptions,
             revisionDirective: 'Replace the design copy with exactly the confirmed source copy. Preserve the other design requirements.' } } : {}),
-      }, { outboxState: 'recorded' });
+      }, { outboxState: 'recorded',...(customerAction ? {customer:{...customerAction.web.owner,dnaVersion:customerAction.web.dnaVersion,
+        body:{...customerAction.web.receipt.body,exactCopy:('exactCopy' in customerAction.action.body && customerAction.action.body.exactCopy) ||
+          (parentPayload.exactCopy as Array<{text:string;language:'en'|'ar'|'ckb'}>)}}} : {}) });
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
         throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The source event already belongs to a different executor');
@@ -1059,6 +1078,13 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     }
     const newTaskId = String(persisted.task.id);
     const runId = `dr-${newTaskId}`;
+    if(customerAction && draft.customerWebPhotos) {
+      if(!sourceStore)throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN','Customer originals are unavailable');
+      for(const ref of draft.customerWebPhotos.images) {
+        await sourceStore.read(ref,{verify:true});
+        await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role) VALUES(${tenantId}::uuid,${newTaskId}::uuid,${ref.sha256},'reference_image') ON CONFLICT DO NOTHING`.execute(trx);
+      }
+    }
     // Claim the new task and advance the request.
     const claimed = await trx.updateTable('tasks').set({ request_id: requestId })
       .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).where('request_id', 'is', null)

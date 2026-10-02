@@ -24,6 +24,7 @@
  */
 import * as restate from '@restatedev/restate-sdk';
 import { openCustomerWebRequest, type SignedCustomerOpenCommand } from './customer-web-entry.js';
+import {forwardCustomerAction,type SignedCustomerActionCommand} from './customer-web-actions.js';
 import { coreInternalFromEnv } from './delivery.js';
 import type { OutboundMessage } from '@hawa/contracts';
 import { withInvocationLogContext, log } from '../logging.js';
@@ -539,6 +540,12 @@ export const chatInbox = restate.object({
   name: 'ChatInbox',
   handlers: {
     /** References authenticated at ingress; the private lifecycle is reached only through the SDK. */
+    webAction:restate.handlers.object.exclusive(
+      {idempotencyRetention:{days:7},journalRetention:{days:7}},
+      async(ctx:restate.ObjectContext,input:SignedCustomerActionCommand)=>forwardCustomerAction({key:ctx.key,run:(name,fn)=>ctx.run(name,fn),
+        send:async(requestId,event)=>{const {RequestLifecycleApi}=await import('./request-lifecycle.js');
+          ctx.objectSendClient(RequestLifecycleApi,requestId).customerAction(event,restate.rpc.sendOpts({idempotencyKey:`customer-action:${event.actionId}`}));}},coreInternalFromEnv(),input)
+    ),
     webOpen: restate.handlers.object.exclusive(
       { idempotencyRetention: { days: 7 }, journalRetention: { days: 1 } },
       async (ctx:restate.ObjectContext,input:SignedCustomerOpenCommand) => openCustomerWebRequest({

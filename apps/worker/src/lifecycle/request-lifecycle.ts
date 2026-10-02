@@ -5,6 +5,8 @@
  * Once bound, the service name stays in every worker build for blue/green drain compatibility.
  */
 import { createHash } from 'node:crypto';
+import {recordCustomerAction} from './customer-web-actions.js';
+import type {CustomerActionEvent} from '@hawa/contracts';
 import * as restate from '@restatedev/restate-sdk';
 import type { BlobRef, DeliveryInput, DeliveryOutcome, DraftImageRef, OutboundMessage } from '@hawa/contracts';
 import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
@@ -114,8 +116,8 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
     /** ADR-155 addendum: the same alerts with the draft's picture, sent in their place when Core gives them. */
     officePhotoAlerts?: OfficePhotoAlert[] };
   question?: { id: string; text: string; options: string[]; taskId: string; rev: number;
-    /** Derived from the confirmed Telegram send mark, never from outcome projection time. */
-    sentAtMs?: number; messageId?: string };
+    /** Derived from a confirmed Telegram send or explicit web acknowledgement, never from outcome projection time. */
+    sentAtMs?: number; messageId?: string;webMessageId?:string };
   officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string;
     kind?: 'revise' | 'approve' | 'reject' };
   /** Filled when the requester submits a revision directive after the office marks "revise". */
@@ -1451,6 +1453,16 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             // ADR-230 addendum: only the round Core started for the requester's pending changes.
             startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
           }, core, event)),
+      ),
+      customerAction:restate.handlers.object.exclusive(
+        {idempotencyRetention:{days:7},journalRetention:{days:7}},
+        async(ctx:restate.ObjectContext,event:CustomerActionEvent)=>recordCustomerAction({key:ctx.key,now:()=>ctx.date.now(),get:name=>ctx.get<LifecycleState>(name),
+          run:(name,fn)=>ctx.run(name,fn,PROJECT_RETRY),set:(name,value)=>ctx.set(name,value),
+          send:message=>ctx.objectSendClient(TelegramSenderApi,message.chatId).send(message,restate.rpc.sendOpts({idempotencyKey:message.key})),
+          startDesign:input=>ctx.workflowSendClient(DesignRunApi,input.lifecycle.runId).run(input),
+          scheduleQuestionReminder:(requestId,rev,questionId,day,delayMs)=>ctx.objectSendClient(RequestLifecycleApi,requestId).reminderTick(
+            {v:1,requestId,expectedRev:rev,kind:'question',questionId,day},restate.rpc.sendOpts({idempotencyKey:`lifecycle:question-reminder:${requestId}:${rev}:${day}`,delay:delayMs})),
+        },core,event)
       ),
       questionSent: restate.handlers.object.exclusive(
         { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },

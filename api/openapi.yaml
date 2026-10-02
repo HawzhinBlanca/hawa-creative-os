@@ -22,6 +22,8 @@ paths:
     $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs"
   /v1/customer/jobs/{id}:
     $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}"
+  /v1/customer/jobs/{id}/actions:
+    $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}~1actions"
   /v1/office/customer-accounts:
     $ref: "./customer-design.openapi.yaml#/paths/~1v1~1office~1customer-accounts"
   /v1/assets/upload:

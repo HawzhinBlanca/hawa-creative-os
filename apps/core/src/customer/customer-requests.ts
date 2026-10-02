@@ -1,5 +1,7 @@
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { parseAndValidatePng } from '@hawa/integrations';
+import {admitCustomerAction,customerActionReceipt} from './customer-actions.js';
+import type {CustomerActionBody} from '@hawa/contracts';
 import { CustomerPhotoError, customerPhotos, inspectCustomerPhoto, decodeCustomerPhoto, type CustomerPhoto } from './customer-photos.js';
 import { dailyDraftCap } from '../services/chat-intake.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -191,8 +193,19 @@ export class CustomerRequests {
       const rows=await this.jobs(trx,account,id);
       if(!rows.length)throw new CustomerRequestError(404,'DESIGN_JOB_NOT_FOUND');
       const messages=await this.readMessages(trx,account,id);
-      return {job:rows[0],preview,messages};
+      const current=(await sql<{stage:string;task_id:string;automatic:boolean}>`SELECT * FROM hawa.customer_action_basis(${id}::uuid)`.execute(trx)).rows[0];
+      const question=[...messages].reverse().find(m=>m.question && typeof m.question==='object' && 'requestRev' in m.question &&
+        m.question.requestRev===rows[0].version && 'taskId' in m.question && m.question.taskId===current?.task_id);
+      const actionIds=(await sql<{id:string}>`SELECT id FROM hawa.customer_web_actions WHERE tenant_id=${this.tenantId}::uuid
+        AND request_id=${id}::uuid AND account_id=${account.id}::uuid ORDER BY created_at DESC,id DESC LIMIT 10`.execute(trx)).rows;
+      const receipts=[];for(const a of actionIds)receipts.push(await customerActionReceipt(trx,a.id));
+      return {job:rows[0],preview,messages,actions:{canRevise:current?.automatic===true && ['manual','in_review'].includes(current?.stage ?? ''),
+        canCancel:['designing','awaiting_answer','manual','in_review'].includes(current?.stage ?? ''),
+        questionMessageId:current?.stage==='awaiting_answer' ? question?.id ?? null : null,receipts}};
     });
+  }
+  async action(member:WorkspaceMember,id:string,key:string,body:CustomerActionBody) {
+    return this.scoped(member,(trx,account)=>admitCustomerAction(trx,this.tenantId,account,member,id,key,body));
   }
   private async readMessages(trx:Kysely<Database>,account:Account,id:string) {
       // Select the requester read model explicitly; refs and internal routing never cross this API.

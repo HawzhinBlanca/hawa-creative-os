@@ -385,6 +385,7 @@ export class OutboxConsumer {
   }
 
   private registerDefaultHandlers() {
+    if(!this.handlers.has('customer.request.action'))this.handlers.set('customer.request.action',async cmd=>{await this.dispatcher.dispatchCustomer(cmd);});
     if(!this.handlers.has('customer.request.open')) this.handlers.set('customer.request.open',async cmd=>{
       await this.dispatcher.dispatchCustomer(cmd);
     });

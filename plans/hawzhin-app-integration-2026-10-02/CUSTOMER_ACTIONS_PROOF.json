@@ -1,0 +1,136 @@
+{
+  "date": "2026-10-02",
+  "adr": "ADR263",
+  "status": "CONNECTED_QUALIFIED_FULL_SOURCE_PENDING_NOT_LAUNCHED",
+  "branch": "codex/hawzhin-app-integration",
+  "requirements": [
+    "FR-029",
+    "FR-032",
+    "FR-042",
+    "FR-052",
+    "FR-061",
+    "FR-069",
+    "NFR-006",
+    "NFR-011",
+    "NFR-015"
+  ],
+  "engine": {
+    "connected": {
+      "passed": 182,
+      "failed": 0,
+      "skipped": 0,
+      "report": "output/qualification/2026-10-02/customer-actions/FINAL_QUALIFIED_CONNECTED_TESTS.json"
+    },
+    "testRoots": 746,
+    "testTypes": "PASS",
+    "coreTypes": "PASS",
+    "workerTypes": "PASS",
+    "scriptTypes": "PASS",
+    "migration": "087_customer_workflow_actions.sql",
+    "fullSuite": "PENDING"
+  },
+  "website": {
+    "tests": {
+      "passed": 856,
+      "failed": 0,
+      "skipped": 0
+    },
+    "browser": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "flaky": 0
+    },
+    "verificationScope": "actual Chromium with synthetic Supabase/customer transport; not live hosted/native quality",
+    "types": "PASS",
+    "build": "PASS",
+    "affectedLint": "PASS",
+    "reports": "../hawzhin-app-integration/output/qualification/2026-10-02-designer-actions/"
+  },
+  "durableTransport": {
+    "timestamp": "2026-10-02T18:38:34.289Z",
+    "success": true,
+    "mode": "isolated-real-Restate-1.7.10-synthetic-Core",
+    "privateLifecycleHttpStatus": 400,
+    "invocationReceipt": "inv_1bi29fNdVEFN1Zmurdmj16jgtLnxsHP9Sm",
+    "replayedReceipt": "inv_1bi29fNdVEFN1Zmurdmj16jgtLnxsHP9Sm",
+    "gatewayHttpStatus": 200,
+    "tamperedHttpStatus": 403,
+    "coreEvidenceReads": 1,
+    "lifecycleProjections": 1,
+    "durableWebMessages": 1,
+    "orderedPhotoReferences": 0,
+    "providersCalled": false,
+    "productionTouched": false,
+    "actionProof": {
+      "privateHandlerStatus": 400,
+      "gatewayStatus": 200,
+      "invocationReceipt": "inv_1bi29fNdVEFN638Qftn0dGM7UAjR3DkpFV",
+      "replayedReceipt": "inv_1bi29fNdVEFN638Qftn0dGM7UAjR3DkpFV",
+      "evidenceReads": 1,
+      "ownerProjections": 1,
+      "appliedAcknowledgements": 1,
+      "cancellationNotices": 1,
+      "tamperedStatus": 403
+    }
+  },
+  "controls": [
+    "immutable verified requester/body/hash/revision and one retained outbox",
+    "concurrent exact-key replay and changed-key content conflict",
+    "one unresolved action per request and daily generation/action limits",
+    "live scope and current stage/question recheck inside serialized projection",
+    "permanent revision refusal rolls back new child/outbox and records refused receipt",
+    "committed projection reconciles after revocation without fresh work",
+    "exact copy preserved unless explicitly replaced; all ordered originals and explicit photo policy retained",
+    "same private RequestLifecycle serializes actions with design outcomes",
+    "gateway awaits asynchronous private SDK send before success",
+    "explicit seen binds actual current web message UUID, not Telegram send identity or page-load reading",
+    "office-hour reminders anchored to retained seen time",
+    "cancel adopts existing withdrawal state; stable notice and no repeated design start",
+    "browser exact retry payload/key restored for review; no auto-resubmit",
+    "unsent feedback stays on reviewed version/question until explicit latest-version choice",
+    "receipt barrier prevents second action before terminal acknowledgement"
+  ],
+  "originalFailures": [
+    {
+      "report": "output/qualification/2026-10-02/customer-actions/INITIAL_ACTION_TESTS.json",
+      "passed": 45,
+      "failed": 1,
+      "reason": "Test selected nonexistent task.source; corrected to the actual immutable task.created event."
+    },
+    {
+      "report": "output/qualification/2026-10-02/customer-actions/CONNECTED_ACTION_TESTS.json",
+      "passed": 92,
+      "failed": 1,
+      "reason": "Quota fixture omitted mandatory access version increment; fixed fixture with existing guard intact."
+    },
+    {
+      "report": "output/qualification/2026-10-02/customer-actions/INITIAL_WEB_RESTATE_TRANSPORT.log",
+      "reason": "Actual SDK handoff was not awaited; one evidence read but no owner projection. Fixed awaited send; repeat proves private projection, ack and notice."
+    },
+    {
+      "reports": [
+        "output/qualification/2026-10-02/customer-actions/INITIAL_TEST_TYPES.log",
+        "output/qualification/2026-10-02/customer-actions/SECOND_TEST_TYPES.log",
+        "output/qualification/2026-10-02/customer-actions/THIRD_TEST_TYPES.log"
+      ],
+      "reason": "New harness fixture omitted or mislocated required lifecycle/design fields; strict typing repaired, no casts or suppressions."
+    },
+    {
+      "report": "../hawzhin-app-integration/output/qualification/2026-10-02-designer-actions/INITIAL_BROWSER_WRONG_ENV.json",
+      "reason": "Initial browser server used an incorrect API environment variable; corrected to configured VITE_HAWA_CUSTOMER_API_ORIGIN. No production configuration changed."
+    }
+  ],
+  "remaining": [
+    "full source seal/regression qualification",
+    "independent customer acceptance/current QA/native-version/hash-bound PNG/editable PPTX downloads",
+    "website CI repair",
+    "public hosting/gateway/HTTPS/coordinated restore",
+    "real hosted two-user Supabase/Canva/Sorani/Arabic/edit-save/re-export/restart/customer journey",
+    "human quality/taste evaluation across clients"
+  ],
+  "deployed": false,
+  "published": false,
+  "publicGenerationEnabled": false,
+  "nativeVisualQualityAcceptance": "NOT_RUN"
+}

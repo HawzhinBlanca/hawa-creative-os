@@ -779,6 +779,7 @@ POST /v1/ingress/unified
 POST /v1/integrations/canva/authorize
 POST /v1/integrations/canva/disconnect
 POST /v1/internal/customer/:requestId/open-event
+POST /v1/internal/customer/actions/:actionId/:operation
 POST /v1/internal/customer/web-message
 POST /v1/internal/lifecycle/:requestId/deliveries/:approvalId/prepare
 POST /v1/internal/lifecycle/:requestId/delivery-finished

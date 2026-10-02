@@ -30,3 +30,4 @@ export * from './canary.js';
 export * from './customer-command.js';
 
 export * from './customer-photos.js';
+export * from './customer-actions.js';

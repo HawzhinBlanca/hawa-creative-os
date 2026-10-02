@@ -1,4 +1,5 @@
 import { signCustomerOpenCommand } from './lifecycle/customer-web-entry.js';
+import {signCustomerActionCommand} from './lifecycle/customer-web-actions.js';
 /**
  * Hawa Creative OS — Durable Task Workflow Dispatcher
  * Requirements: FR-004, FR-060, FR-061, FR-062, NFR-001, NFR-003, NFR-014
@@ -41,14 +42,16 @@ export class TaskWorkflowDispatcher {
 
   /** Virtual-object commands use an actual ingress receipt and a retained action key. */
   async dispatchCustomer(cmd:OutboxCommandRecord):Promise<WorkflowSubmissionReceipt> {
-    if(cmd.command_type!=='customer.request.open' || cmd.aggregate_type!=='request' ||
+    if(!['customer.request.open','customer.request.action'].includes(cmd.command_type) || cmd.aggregate_type!=='request' ||
       !/^[0-9a-f-]{36}$/i.test(cmd.aggregate_id) || cmd.payload?.v!==1 || cmd.payload.requestId!==cmd.aggregate_id)
       throw new Error('INVALID_CUSTOMER_OPEN_COMMAND');
     if(!this.options.restateIngressUrl) throw new Error('CUSTOMER_LIFECYCLE_INGRESS_NOT_CONFIGURED');
-    const signed=signCustomerOpenCommand({v:1,requestId:cmd.aggregate_id,tenantId:cmd.tenant_id,
+    const action=cmd.command_type==='customer.request.action';
+    const refs={v:1 as const,requestId:cmd.aggregate_id,tenantId:cmd.tenant_id,
       accountId:cmd.payload.accountId,commandId:cmd.id,key:cmd.idempotency_key},
-      this.options.customerSigningSecret ?? process.env.HAWA_WORKER_TOKEN ?? '');
-    const response=await (this.options.fetcher ?? fetch)(`${this.options.restateIngressUrl}/ChatInbox/web:${signed.accountId}/webOpen/send`,{
+      secret=this.options.customerSigningSecret ?? process.env.HAWA_WORKER_TOKEN ?? '';
+    const signed=action ? signCustomerActionCommand({...refs,actionId:cmd.payload.actionId},secret) : signCustomerOpenCommand(refs,secret);
+    const response=await (this.options.fetcher ?? fetch)(`${this.options.restateIngressUrl}/ChatInbox/web:${signed.accountId}/${action ? 'webAction':'webOpen'}/send`,{
       method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':cmd.idempotency_key,...requestIdHeaders()},
       signal:AbortSignal.timeout(10000),body:JSON.stringify(signed)});
     if(!response.ok) throw new Error(`CUSTOMER_LIFECYCLE_SUBMISSION_FAILED: HTTP ${response.status}`);
