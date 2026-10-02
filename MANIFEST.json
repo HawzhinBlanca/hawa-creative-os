@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T22:24:05Z",
+  "generatedAt": "2026-10-02T22:26:11Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 911,
+  "fileCount": 914,
   "files": [
     {
       "path": ".dockerignore",
@@ -1281,6 +1281,11 @@
       "path": "adrs/271_kaae_poster_composition.md",
       "sha256": "225296daa72ef368b55adec7e30b5c064b35e09d4d9ac7f3a51a651777383689",
       "bytes": 16153
+    },
+    {
+      "path": "adrs/272_requester_reading_after_nlu_eval.md",
+      "sha256": "6cb6fdc6b99ba6eed69d9e40e06af255502a84a8e0572ac847bea6da103abaeb",
+      "bytes": 12974
     },
     {
       "path": "adrs/273_gates_calibrated_on_office_posts.md",
@@ -3068,6 +3073,16 @@
       "bytes": 2120
     },
     {
+      "path": "plans/nlu-eval-2026-10-02/BASELINE.json",
+      "sha256": "5816093418d1403a835e0be5cee6568ff6bb07ba8fb5f8e7ae3c98863a2bcdeb",
+      "bytes": 50335
+    },
+    {
+      "path": "plans/nlu-eval-2026-10-02/README.md",
+      "sha256": "d811e569e3193f48dddc37b38164ba0f635d33e6c05cfdcb0fb157670b529f53",
+      "bytes": 11938
+    },
+    {
       "path": "plans/reliability-2026-09-30/LOCAL_PROOF.json",
       "sha256": "620db236add13a770f1f3667dc4049985b578fd84e117ab4efa664c6ae9b5f67",
       "bytes": 11267
@@ -3579,8 +3594,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2ccc5155c884d913e26ee1e35e9362c77970e598ae56c6c72071281b8ca31e0f",
-      "bytes": 896773
+      "sha256": "c9b6738e0c2c1bcc34cb8173707a2d09acd54e38d21c9201a5a3ae9825a04d3f",
+      "bytes": 897744
     },
     {
       "path": "plans/user-stories.csv",
