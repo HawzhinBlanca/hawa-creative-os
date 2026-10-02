@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import type { DraftImageRef, OutboundMessage } from '@hawa/contracts';
-import { createDb } from '@hawa/db';
+import { createDb, sql, withRlsContext } from '@hawa/db';
 import { coreInternalFromEnv } from '../src/lifecycle/delivery.js';
 import {
   recordDesignFinished, type AutomaticLifecycleState, type AutomaticOpenContext, type LifecycleState,
@@ -119,9 +119,15 @@ describe('TelegramSender: a draft photo alert', () => {
     return { deps, ctx, calls, message };
   }
 
+  /** ADR-253: the payload of the message's sent mark (Core reads `pictureNotSent` before a Telegram approval). */
+  const sentMark = async (key: string) => (await withRlsContext(db, { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' },
+    (trx) => sql<{ payload: Record<string, unknown> }>`SELECT payload FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
+      AND source_account_id = 'telegram_delivery' AND source_event_id = ${`lc:${key}:send`} AND event_kind = 'telegram_message_sent'`.execute(trx))).rows[0]?.payload;
+
   it('sends the picture it read, checked against its hash, with the caption, and never twice', async () => {
     const h = harness(new Uint8Array(png));
     expect(await handleSend(h.ctx, h.deps, h.message)).toEqual({ outcome: 'sent', messageId: '501' });
+    expect(await sentMark(h.message.key)).not.toHaveProperty('pictureNotSent');
     expect(h.calls).toEqual([{ kind: 'photo', chatId: OFFICE[0], body: CAPTION, bytes: png }]);
     // Asked again (a replay, or another build): the send mark answers, nothing is sent.
     expect(await handleSend(h.ctx, h.deps, h.message)).toEqual({ outcome: 'sent', messageId: '501' });
@@ -132,6 +138,8 @@ describe('TelegramSender: a draft photo alert', () => {
     const h = harness(null);
     expect(await handleSend(h.ctx, h.deps, h.message)).toMatchObject({ outcome: 'sent' });
     expect(h.calls).toEqual([{ kind: 'text', chatId: OFFICE[0], body: CAPTION }]);
+    // ADR-253: marked, so the member's "approved" is not taken as approval of a picture they never saw.
+    expect(await sentMark(h.message.key)).toMatchObject({ outcome: 'sent', pictureNotSent: true });
   });
 
   it('a picture that no longer matches its hash is not sent: the text is', async () => {
@@ -144,6 +152,7 @@ describe('TelegramSender: a draft photo alert', () => {
     const h = harness(new Uint8Array(png), { success: false, error: 'TELEGRAM_PHOTO_FAILED_400' });
     expect(await handleSend(h.ctx, h.deps, h.message)).toMatchObject({ outcome: 'sent' });
     expect(h.calls.map((c) => c.kind)).toEqual(['photo', 'text']);
+    expect(await sentMark(h.message.key)).toMatchObject({ outcome: 'sent', pictureNotSent: true });
     await handleSend(h.ctx, h.deps, h.message);
     expect(h.calls).toHaveLength(2);
   });

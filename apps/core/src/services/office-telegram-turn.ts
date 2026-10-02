@@ -53,6 +53,7 @@ import { decideRequestOwned, startRequestOwnedDelivery, type OfficeActionAnswer 
 import type { DeliverableStore } from './pinned-deliverables.js';
 import { cleanDraftTitle } from './draft-title.js';
 import type { OfficeIntentModel, OfficeModelDecision, OfficeModelLine } from './office-intent-model.js';
+import { activeChatRequests } from './requester-turn-store.js';
 import { REDO_WINDOW_DAYS, asksForNewDesign, corePhrase, parseChoice, readIntentByRules, readsAsChange, readsAsRedo, refusesApproval,
   saysMoreThanRefusal, titleMatch } from './requester-turn.js';
 
@@ -71,6 +72,21 @@ const OFFICE_APPROVE = /^(?:(?:ok(?:ay)?|yes|yep|yeah|good|great|perfect|fine|ni
 const OFFICE_REJECT = /^(?:no[\s,،!.]+)?(?:reject(?:ed|\s+(?:it|this|that))?|decline(?:d)?|not\s+approved)\b|(?:ڕەتی\s+بکەرەوە|ڕەتکرایەوە|ڕەتدەکرێتەوە|ڕەت\s+کرایەوە|ڕەتی\s+دەکەمەوە)/iu;
 /** "no, cancel this", "cancel it": a rejection of the whole design (category `task`). */
 const OFFICE_CANCEL = /^(?:no[\s,،!.]+)?(?:cancel|scrap|drop|forget)(?:\s+(?:it|this|that|the\s+design))?[\s!.]*$/iu;
+/**
+ * ADR-253 (live 2026-10-02, L20): a polite request around cancelling words: "could you please cancel …",
+ * "can you drop it?", "would you kindly cancel this". The requester rules strip a leading "please", not
+ * "could you please", so "could you please cancel the Quality Assurance Workshop poster, we don't need it
+ * anymore" read as nothing, the model's rejection was refused for want of rejecting words, and the owner
+ * was asked "What should I do with …?". Read for cancelling only: what remains must cancel by itself.
+ */
+const POLITE_ASK = /^(?:(?:could|can|would|will)\s+(?:you|u)(?:\s+(?:please|pls|kindly|just))*\s+|(?:i|we)(?:'d|\s+would)\s+like\s+(?:you\s+)?to\s+|(?:please|pls|kindly)\s+)+/iu;
+function cancelsPolitely(core: string): boolean {
+  const asked = core.replace(POLITE_ASK, '');
+  if (asked === core || !asked) return false;
+  const rest = asked.replace(/[\s?؟]+$/u, '');
+  return OFFICE_CANCEL.test(rest) || readIntentByRules(rest).intent === 'cancel';
+}
+
 /**
  * Approval words that refuse it ("the design is not approved", "don't send it", "I can't approve this")
  * are found by the requester rules' refusal reading (requester-turn.ts `refusesApproval`). The owner's
@@ -112,7 +128,7 @@ export function readOfficeIntent(text: string): { intent: OfficeIntent; rejectio
   const t = String(text ?? '').trim();
   if (!t || t.startsWith('/')) return { intent: 'unclear' };
   const core = corePhrase(t);
-  if (OFFICE_CANCEL.test(core) || OFFICE_CANCEL.test(t)) return { intent: 'reject', rejectionCategory: 'task' };
+  if (OFFICE_CANCEL.test(core) || OFFICE_CANCEL.test(t) || cancelsPolitely(core)) return { intent: 'reject', rejectionCategory: 'task' };
   // A refusal is never approval. With anything said about the draft it is what to change ("not approved,
   // the photos are cropped badly"); "not approved" alone rejects; "not good", "don't send it" alone are
   // asked about.
@@ -263,7 +279,11 @@ export async function officeAlertFor(trx: Kysely<Database>, tenantId: string, ch
   return null;
 }
 
-/** Whether this member was sent the office alert of a request's revision (their sent mark). */
+/**
+ * The message id of the draft picture this member was sent for a request's revision (their sent mark),
+ * or null. ADR-253: an alert whose picture could not be sent went as its words (the worker marks it
+ * `pictureNotSent`): the member saw no picture, so it is not one.
+ */
 async function alertSentTo(trx: Kysely<Database>, tenantId: string, chatId: string, requestId: string,
   rev: number): Promise<string | null> {
   const rows = (await sql<{ source_event_id: string; payload: Record<string, unknown> }>`SELECT source_event_id, payload
@@ -275,7 +295,7 @@ async function alertSentTo(trx: Kysely<Database>, tenantId: string, chatId: stri
   for (const row of rows) {
     const m = ALERT_MARK.exec(row.source_event_id);
     const chat = typeof row.payload?.chatId === 'string' ? row.payload.chatId : m?.[3] ?? first;
-    if (m && chat === chatId && typeof row.payload?.messageId === 'string') return row.payload.messageId;
+    if (m && chat === chatId && typeof row.payload?.messageId === 'string') return row.payload.pictureNotSent === true ? null : row.payload.messageId;
   }
   return null;
 }
@@ -613,9 +633,37 @@ export async function officeTelegramTurn(deps: OfficeTurnDeps, update: Record<st
  */
 async function ownRequestCancelled(trx: Kysely<Database>, tenantId: string, m: OfficeMessage, plan: OfficePlan): Promise<string | null> {
   if (plan.kind !== 'decide' || plan.intent !== 'reject' || plan.rejectionCategory !== 'task' || plan.words !== m.text) return null;
-  const row = (await sql<{ chat_id: string | null }>`SELECT chat_id FROM hawa.requests WHERE tenant_id = ${tenantId}::uuid
-    AND request_id = ${plan.requestId}::uuid AND owner = 'restate'`.execute(trx)).rows[0];
-  return row?.chat_id === m.chatId ? plan.requestId : null;
+  // ADR-253 (R8): the member asked for it themselves: the request is in this chat AND its requester (the
+  // sender of its source message, or the sender its opening decision was recorded for, as intake reads
+  // it) is this member. A request in the chat that someone else asked for, or whose requester is not
+  // known, stays the office's to reject.
+  const request = (await activeChatRequests(trx, tenantId, m.chatId)).find((r) => r.requestId === plan.requestId);
+  return request && request.requesterId === m.chatId ? plan.requestId : null;
+}
+
+/**
+ * ADR-253: the member's own latest message was answered by intake with a question (as any requester's:
+ * "Do you want me to cancel …?", "Which design is this for?"), within `PENDING_ASK_MS`, no office alert
+ * reached them since, and these words answer it plainly: yes, no, a number or a name it listed. The
+ * answer is intake's. Before, a double-role member's "yes" to "Do you want me to cancel <their own
+ * draft>?" was read by the office turn, and a model could take it for approval of that very draft.
+ */
+async function answersIntakeQuestion(trx: Kysely<Database>, tenantId: string, m: OfficeMessage, queue: readonly QueuedDraft[],
+  now: number): Promise<boolean> {
+  const row = (await sql<{ source_account_id: string; payload: { plan?: { kind?: unknown; options?: unknown; allowNew?: unknown } };
+    received_at: Date | string }>`SELECT source_account_id, payload, received_at FROM hawa.inbox_events
+    WHERE tenant_id = ${tenantId}::uuid AND source_account_id IN (${TURN_ACCOUNT}, ${INTENT_ACCOUNT})
+      AND payload->>'chatId' = ${m.chatId} AND source_event_id <> ${String(m.updateId)} AND received_at > now() - interval '1 day'
+    ORDER BY received_at DESC, id DESC LIMIT 1`.execute(trx)).rows[0];
+  if (row?.source_account_id !== INTENT_ACCOUNT || row.payload?.plan?.kind !== 'ask') return false;
+  const askedAt = new Date(row.received_at).getTime();
+  if (!(now - askedAt >= 0 && now - askedAt <= PENDING_ASK_MS)) return false;
+  if (queue.some((q) => q.alerted && q.sentAt && Date.parse(q.sentAt) > askedAt)) return false;
+  const options = Array.isArray(row.payload.plan.options)
+    ? (row.payload.plan.options as Array<{ requestId?: unknown; title?: unknown }>).filter((o) => typeof o?.title === 'string')
+      .map((o) => ({ requestId: String(o.requestId ?? ''), title: String(o.title) })) : [];
+  return plainYes(m.text) || PLAIN_NO.test(corePhrase(m.text)) ||
+    (options.length > 0 && parseChoice(m.text, { options, allowNew: row.payload.plan.allowNew === true }) !== null);
 }
 
 /** ADR-200: what the model is asked with, and what the rules alone would do when no reading comes. */
@@ -686,6 +734,7 @@ async function planOf(trx: Kysely<Database>, tenantId: string, m: OfficeMessage,
   if (!replied && reading.intent === 'unclear' && certainlyNotOffice) return null;
   if (!replied && reading.intent === 'change' && asksForNewDesign(m.text)) return null;
   const queue = await officeQueue(trx, tenantId, m.chatId);
+  if (!replied && await answersIntakeQuestion(trx, tenantId, m, queue, now)) return null;
   const inQueue = (id: string | null | undefined) => (id && queue.some((q) => q.requestId === id) ? id : null);
   // ADR-200: the draft the bot was just talking about with this member (its last question or answer).
   const discussion = inQueue(repliedAsk && 'requestId' in repliedAsk ? repliedAsk.requestId : discussed(turns, now));
