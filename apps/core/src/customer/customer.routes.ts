@@ -16,9 +16,13 @@ export const CUSTOMER_ORIGINS = new Set([
 let activePhotoUploads=0;
 let activePreviewReads=0;
 let activeReviewChecks=0;
+let activeDownloads=0;
 const actionCopy=z.array(z.object({text:z.string().min(1).max(4000).refine(s=>Boolean(s.trim())),language:z.enum(['en','ckb','ar'])}).strict()).min(1).max(8);
 const actionVersion=z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const acceptanceFile=z.object({id:z.string().uuid(),sha256:z.string().regex(/^[a-f0-9]{64}$/),size:z.number().int().min(32).max(26214400),format:z.enum(['png','pptx'])}).strict();
 const actionSchema=z.discriminatedUnion('kind',[
+  z.object({kind:z.literal('accept'),expectedVersion:actionVersion,previewId:z.string().uuid(),previewSha256:z.string().regex(/^[a-f0-9]{64}$/),
+    basisSha256:z.string().regex(/^[a-f0-9]{64}$/),files:z.array(acceptanceFile).length(2)}).strict(),
   z.object({kind:z.literal('cancel'),expectedVersion:actionVersion,reason:z.string().trim().min(1).max(1000)}).strict(),
   z.object({kind:z.literal('seen'),expectedVersion:actionVersion,messageId:z.string().uuid()}).strict(),
   z.object({kind:z.literal('answer'),expectedVersion:actionVersion,messageId:z.string().uuid(),directive:z.string().trim().min(1).max(4000),exactCopy:actionCopy.optional()}).strict(),
@@ -128,6 +132,22 @@ export function registerCustomerRoutes(
     activeReviewChecks++;
     try {return c.json(await requests.review(m,id!,{id:captureId!,version:Number(version),sha256:hash}));}
     finally {activeReviewChecks--;}
+  }));
+  app.get('/v1/customer/jobs/:id/download/:acceptanceId/:format',run(async(c,m)=>{
+    const id=c.req.param('id'),acceptanceId=c.req.param('acceptanceId'),format=c.req.param('format'),
+      version=c.req.query('version'),fileId=c.req.query('id'),hash=c.req.query('sha256');
+    if(!z.string().uuid().safeParse(id).success || !z.string().uuid().safeParse(acceptanceId).success ||
+      !z.string().uuid().safeParse(fileId).success || (format!=='png' && format!=='pptx') ||
+      !version || !/^[1-9][0-9]{0,14}$/.test(version) || !hash || !/^[a-f0-9]{64}$/.test(hash))
+      return c.json({code:'DESIGN_DOWNLOAD_STALE'},409);
+    if(activeDownloads>=2)return c.json({code:'DESIGN_DOWNLOAD_BUSY'},503);
+    activeDownloads++;
+    try {
+      const result=await requests.download(m,id!,{acceptanceId:acceptanceId!,version:Number(version),format,fileId:fileId!,sha256:hash});
+      return new Response(new Uint8Array(result.bytes),{headers:{'Content-Type':result.mediaType,'Content-Length':String(result.size),
+        'Content-Disposition':`attachment; filename="${result.filename}"`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+        'X-Content-SHA256':result.sha256}});
+    } finally {activeDownloads--;}
   }));
   app.post('/v1/customer/clients/:clientId/photos',run(async(c,m)=>{
     // Same readiness switch as generation: an unreleased portal never accumulates public uploads.

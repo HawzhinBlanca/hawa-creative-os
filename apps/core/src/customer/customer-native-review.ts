@@ -88,3 +88,12 @@ export function customerNativeReviewResult(basis:CustomerNativeBasis,reasons:Cus
  previewSha256:basis.preview.sha256,basisSha256:nativeReviewFingerprint(basis),checkedAt:new Date().toISOString(),reasons,
  files:reasons.length ? []:[{...basis.preview,format:'png'},{id:basis.export.id,sha256:basis.export.sha256,size:basis.export.size,format:'pptx'}]};
 }
+
+/** One bounded metadata observation. It never promotes stored QA or a staff approval. */
+export async function observeCustomerNativeVersion(reader:CustomerNativeVersionReader|undefined,tenantId:string,b:CustomerNativeBasis):Promise<CustomerReviewReason|null> {
+ try {
+  const observed=await reader?.observeCustomerDesign({tenantId,actorId:b.actorId,designId:b.designId,capturedVersion:b.nativeVersion});
+  return observed?.ok && observed.observedVersion===b.nativeVersion ? null :
+   observed?.code==='CANVA_DESIGN_CHANGED' ? 'NATIVE_DESIGN_CHANGED':'NATIVE_CHECK_UNAVAILABLE';
+ } catch {return 'NATIVE_CHECK_UNAVAILABLE';}
+}

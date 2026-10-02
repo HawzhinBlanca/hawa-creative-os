@@ -1102,3 +1102,179 @@ it('withholds readiness while an owned revision action awaits canonical acknowle
  await expect(f.service.review(f.a.member,f.receipt.job.id,f.expected)).rejects.toMatchObject({status:409,code:'DESIGN_REVIEW_NOT_READY'});
  expect(f.reader.observeCustomerDesign).not.toHaveBeenCalled();
 });
+
+async function acceptanceFixture() {
+ const f=await nativeReviewFixture(),review=await f.service.review(f.a.member,f.receipt.job.id,f.expected);
+ expect(review.status).toBe('ready');
+ const body={kind:'accept' as const,expectedVersion:review.requestVersion,previewId:review.previewId,
+  previewSha256:review.previewSha256,basisSha256:review.basisSha256,files:review.files};
+ const admitted=await f.service.action(f.a.member,f.receipt.job.id,'accept_key_001',body);
+ const event=await actionEvent(f,f.receipt.job.id,admitted.action.id),basis={taskId:f.projection.taskId,rev:2,stage:'in_review',round:0};
+ return {...f,review,body,admitted,event,basis};
+}
+async function applyAcceptance(f:Awaited<ReturnType<typeof acceptanceFixture>>) {
+ const result=await projectCustomerAction(db,f.event,f.basis,f.reader);expect(result).toMatchObject({kind:'accept',accepted:true,rev:3,stage:'in_review',taskId:f.projection.taskId});
+ expect((await f.service.detail(f.a.member,f.receipt.job.id)).acceptance).toBeNull();
+ await acknowledgeCustomerAction(db,f.event,result);return result;
+}
+function downloadExpected(f:Awaited<ReturnType<typeof acceptanceFixture>>,format:'png'|'pptx'='png') {
+ const file=f.review.files.find(a=>a.format===format)!;
+ return {acceptanceId:f.admitted.action.id,version:3,format,fileId:file.id,sha256:file.sha256};
+}
+it('records one independent customer acceptance, waits for durable acknowledgement and downloads exact owned files',async()=>{
+ const f=await acceptanceFixture(),id=f.receipt.job.id;
+ await expect(f.service.download(f.a.member,id,downloadExpected(f))).rejects.toMatchObject({status:409});
+ expect((await f.service.action(f.a.member,id,'accept_key_001',f.body)).created).toBe(false);
+ const result=await applyAcceptance(f);
+ const detail=await f.service.detail(f.a.member,id);expect(detail).toMatchObject({job:{version:3,state:'customer_approved'},acceptance:{id:f.admitted.action.id,requestVersion:3,files:f.review.files}});
+ expect(JSON.stringify(detail.acceptance)).not.toContain(f.designId);
+ for(const format of ['png','pptx'] as const) {
+  const download=await f.service.download(f.a.member,id,downloadExpected(f,format));
+  expect(download.bytes.equals(format==='png' ? f.png:f.bytes)).toBe(true);expect(photoHash(download.bytes)).toBe(download.sha256);
+ }
+ const calls=f.reader.observeCustomerDesign.mock.calls.length;
+ expect(await projectCustomerAction(db,f.event,f.basis,f.reader)).toEqual(result);
+ expect(f.reader.observeCustomerDesign).toHaveBeenCalledTimes(calls);
+ await acknowledgeCustomerAction(db,f.event,result);
+ const rows=(await sql<{n:string}>`SELECT count(*) AS n FROM hawa.customer_acceptances WHERE tenant_id=${f.tenantId}::uuid AND action_id=${f.admitted.action.id}::uuid`.execute(owner)).rows[0];expect(Number(rows.n)).toBe(1);
+ expect((await sql<{state:string}>`SELECT state FROM hawa.tasks WHERE id=${f.projection.taskId}::uuid`.execute(owner)).rows[0].state).toBe('human_review');
+});
+it('refuses forged reviewed identities and foreign customer approval without touching Canva',async()=>{
+ const f=await nativeReviewFixture(),review=await f.service.review(f.a.member,f.receipt.job.id,f.expected);
+ const body={kind:'accept' as const,expectedVersion:2,previewId:review.previewId,previewSha256:review.previewSha256,basisSha256:review.basisSha256,files:review.files};
+ f.reader.observeCustomerDesign.mockClear();
+ for(const altered of [{...body,basisSha256:'0'.repeat(64)},{...body,files:[body.files[0],{...body.files[1],id:randomUUID()}]},
+  {...body,files:[body.files[1],body.files[0]]},{...body,expectedVersion:1}])
+  await expect(f.service.action(f.a.member,f.receipt.job.id,randomUUID(),altered)).rejects.toMatchObject({status:409});
+ await expect(f.service.action(f.b.member,f.receipt.job.id,randomUUID(),body)).rejects.toMatchObject({status:404});
+ expect(f.reader.observeCustomerDesign).not.toHaveBeenCalled();
+});
+it('refuses native edits or unavailable observations at approval and reconciles that refusal',async()=>{
+ for(const mode of ['changed','unavailable','missing']) {
+  const f=await acceptanceFixture();f.reader.observeCustomerDesign.mockClear();
+  f.reader.observeCustomerDesign.mockResolvedValue(mode==='changed' ? {ok:false,code:'CANVA_DESIGN_CHANGED'} as never:{ok:false} as never);
+  const result=await projectCustomerAction(db,f.event,f.basis,mode==='missing'?undefined:f.reader);
+  expect(result).toMatchObject({accepted:false,code:mode==='changed'?'DESIGN_ACCEPTANCE_STALE':'DESIGN_NATIVE_CHECK_UNAVAILABLE'});
+  expect(await projectCustomerAction(db,f.event,f.basis,f.reader)).toEqual(result);
+  expect((await f.service.get(f.a.member,f.receipt.job.id)).version).toBe(2);
+ }
+});
+it('reauthorizes acceptance after the provider returns and never inherits changed evidence',async()=>{
+ for(const change of ['grant','revision','qc']) {
+  const f=await acceptanceFixture();f.reader.observeCustomerDesign.mockImplementation(async()=>{
+   if(change==='grant')await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+   if(change==='revision')await sql`UPDATE hawa.requests SET rev=3 WHERE request_id=${f.receipt.job.id}::uuid`.execute(owner);
+   if(change==='qc')await sql`UPDATE hawa.qc_runs SET status='failed',critical_pass=false WHERE tenant_id=${f.tenantId}::uuid`.execute(owner);
+   return {ok:true,observedVersion:'200'};
+  });
+  const result=await projectCustomerAction(db,f.event,f.basis,f.reader);expect(result.accepted).toBe(false);
+  expect((await sql<{n:string}>`SELECT count(*) AS n FROM hawa.customer_acceptances WHERE action_id=${f.admitted.action.id}::uuid`.execute(owner)).rows[0].n).toBe('0');
+ }
+});
+it('reconciles committed acceptance before revoked grants or an unavailable provider',async()=>{
+ const f=await acceptanceFixture(),result=await applyAcceptance(f);f.reader.observeCustomerDesign.mockClear();
+ await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+ expect(await projectCustomerAction(db,f.event,f.basis,f.reader)).toEqual(result);expect(f.reader.observeCustomerDesign).not.toHaveBeenCalled();
+ await expect(f.service.download(f.a.member,f.receipt.job.id,downloadExpected(f))).rejects.toMatchObject({status:404});
+});
+it('invalidates customer downloads for native edits, changed QA, new captures, revisions or pending actions',async()=>{
+ for(const change of ['native','qc','capture','revision','pending']) {
+  const f=await acceptanceFixture();await applyAcceptance(f);
+  if(change==='native')f.reader.observeCustomerDesign.mockResolvedValue({ok:false,code:'CANVA_DESIGN_CHANGED'} as never);
+  if(change==='qc')await sql`UPDATE hawa.qc_runs SET critical_pass=false WHERE tenant_id=${f.tenantId}::uuid`.execute(owner);
+  if(change==='capture')await f.capture(f.png,'png','201');
+  if(change==='revision')await sql`UPDATE hawa.requests SET rev=4 WHERE request_id=${f.receipt.job.id}::uuid`.execute(owner);
+  if(change==='pending')await f.service.action(f.a.member,f.receipt.job.id,'cancel_after_approval',{kind:'cancel',expectedVersion:3,reason:'Changed brief'});
+  await expect(f.service.download(f.a.member,f.receipt.job.id,downloadExpected(f))).rejects.toMatchObject({status:409});
+ }
+});
+it('reauthorizes a download after observation and hides foreign and stale artifact requests',async()=>{
+ const f=await acceptanceFixture();await applyAcceptance(f);const expected=downloadExpected(f);
+ f.reader.observeCustomerDesign.mockClear();
+ await expect(f.service.download(f.b.member,f.receipt.job.id,expected)).rejects.toMatchObject({status:404});
+ for(const bad of [{...expected,version:2},{...expected,fileId:randomUUID()},{...expected,sha256:'0'.repeat(64)},{...expected,acceptanceId:randomUUID()}])
+  await expect(f.service.download(f.a.member,f.receipt.job.id,bad)).rejects.toMatchObject({status:409});
+ expect(f.reader.observeCustomerDesign).not.toHaveBeenCalled();
+ f.reader.observeCustomerDesign.mockImplementation(async()=>{
+  await sql`UPDATE hawa.customer_client_grants SET active=false,version=version+1 WHERE account_id=${f.a.id}::uuid`.execute(owner);
+  return {ok:true,observedVersion:'200'};
+ });
+ await expect(f.service.download(f.a.member,f.receipt.job.id,expected)).rejects.toMatchObject({status:404});
+});
+it('releases an applied accepted request slot and reserves it again for an admitted revision',async()=>{
+ const f=await acceptanceFixture();await applyAcceptance(f);
+ await sql`UPDATE hawa.customer_accounts SET concurrent_job_limit=1,version=version+1 WHERE id=${f.a.id}::uuid`.execute(owner);
+ await f.service.create(f.a.member,'next_request_001', {clientId:f.clientId,title:'Next design',exactCopy:[{text:'New copy',language:'en'}],designInstructions:'',variant:'square'});
+ await expect(f.service.action(f.a.member,f.receipt.job.id,'revision_slot_001',{kind:'revise',expectedVersion:3,directive:'Calmer imagery',category:'imagery'})).rejects.toMatchObject({status:429,code:'DESIGN_CONCURRENCY_LIMIT'});
+});
+it('serves exact approved attachments with no-store and a complete two-request concurrency bound',async()=>{
+ const f=await acceptanceFixture();await applyAcceptance(f);const app=new Hono();registerCustomerRoutes(app,f.service,async()=>f.a.member,false);
+ const e=downloadExpected(f),url=`/v1/customer/jobs/${f.receipt.job.id}/download/${e.acceptanceId}/png?version=${e.version}&id=${e.fileId}&sha256=${e.sha256}`;
+ const response=await app.request(url);expect(response.status).toBe(200);expect(Buffer.from(await response.arrayBuffer()).equals(f.png)).toBe(true);
+ expect(response.headers.get('Cache-Control')).toBe('no-store');expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+ expect(response.headers.get('Content-Disposition')).toBe(`attachment; filename="design-${f.receipt.job.id}-3.png"`);
+ expect((await app.request(url.replace('/png?','/pdf?'))).status).toBe(409);
+ let resolve!:()=>void;const wait=new Promise<void>(r=>{resolve=r;});
+ f.reader.observeCustomerDesign.mockImplementation(async()=>{await wait;return {ok:true,observedVersion:'200'};});
+ f.reader.observeCustomerDesign.mockClear();const one=app.request(url),two=app.request(url);
+ await vi.waitFor(()=>expect(f.reader.observeCustomerDesign).toHaveBeenCalledTimes(2));
+ expect((await app.request(url)).status).toBe(503);resolve();expect((await one).status).toBe(200);expect((await two).status).toBe(200);
+});
+it('keeps customer acceptance receipts immutable and their elevated routines unavailable to the worker',async()=>{
+ const f=await acceptanceFixture();await applyAcceptance(f);
+ const privilege=(await sql<{worker:boolean}>`SELECT has_function_privilege('hawa_worker','hawa.customer_native_review_for_action(uuid,uuid,bigint,text,boolean,uuid)','EXECUTE') OR
+ has_function_privilege('hawa_worker','hawa.customer_current_acceptance(uuid)','EXECUTE') AS worker`.execute(owner)).rows[0];expect(privilege.worker).toBe(false);
+ await expect(sql`UPDATE hawa.customer_acceptances SET basis_hash=${'0'.repeat(64)} WHERE action_id=${f.admitted.action.id}::uuid`.execute(owner)).rejects.toThrow();
+});
+it('rejects corrupted actual bytes at acceptance and download despite unchanged stored identities',async()=>{
+ for(const phase of ['accept','download']) {
+  const f=await acceptanceFixture();if(phase==='download')await applyAcceptance(f);
+  const altered=Buffer.from(f.png);altered[altered.length-1]^=1;
+  // Isolated test-owner fault injection only: bypass the SQL hash constraint, then restore it and bytes.
+  await sql`ALTER TABLE hawa.canva_export_bytes DISABLE TRIGGER USER`.execute(owner);
+  await sql`ALTER TABLE hawa.canva_export_bytes DROP CONSTRAINT canva_export_bytes_check`.execute(owner);
+  try {
+   await sql`UPDATE hawa.canva_export_bytes SET content=${altered} WHERE id=${f.expected.id}::uuid`.execute(owner);
+   f.reader.observeCustomerDesign.mockClear();
+   if(phase==='accept')expect(await projectCustomerAction(db,f.event,f.basis,f.reader)).toMatchObject({accepted:false,code:'DESIGN_ACCEPTANCE_BLOCKED'});
+   else await expect(f.service.download(f.a.member,f.receipt.job.id,downloadExpected(f))).rejects.toMatchObject({status:409,code:'DESIGN_DOWNLOAD_BLOCKED'});
+   expect(f.reader.observeCustomerDesign).not.toHaveBeenCalled();
+  } finally {
+   await sql`UPDATE hawa.canva_export_bytes SET content=${f.png} WHERE id=${f.expected.id}::uuid`.execute(owner);
+   await sql`ALTER TABLE hawa.canva_export_bytes ADD CONSTRAINT canva_export_bytes_check CHECK(sha256=encode(digest(content,'sha256'),'hex'))`.execute(owner);
+   await sql`ALTER TABLE hawa.canva_export_bytes ENABLE TRIGGER USER`.execute(owner);
+  }
+ }
+});
+it('counts an accepted request with a pending revision as active before starting the new task',async()=>{
+ const f=await acceptanceFixture();await applyAcceptance(f);
+ await sql`UPDATE hawa.customer_accounts SET concurrent_job_limit=1,version=version+1 WHERE id=${f.a.id}::uuid`.execute(owner);
+ const revision=await f.service.action(f.a.member,f.receipt.job.id,'revision_reservation_001',{kind:'revise',expectedVersion:3,directive:'Quieter imagery',category:'imagery'});
+ expect(revision.created).toBe(true);
+ await expect(f.service.create(f.a.member,'no_spare_slot_001',{clientId:f.clientId,title:'New design',exactCopy:[{text:'New copy',language:'en'}],designInstructions:'',variant:'square'})).rejects.toMatchObject({status:429,code:'DESIGN_CONCURRENCY_LIMIT'});
+});
+it('refuses a new approval key for already accepted current files without advancing the owner',async()=>{
+ const f=await acceptanceFixture();await applyAcceptance(f);
+ const current=await f.service.review(f.a.member,f.receipt.job.id,{...f.expected,version:3});
+ await expect(f.service.action(f.a.member,f.receipt.job.id,'duplicate_new_key',{...f.body,expectedVersion:3,basisSha256:current.basisSha256})).rejects.toMatchObject({status:409,code:'DESIGN_ALREADY_APPROVED'});
+ expect((await f.service.get(f.a.member,f.receipt.job.id)).version).toBe(3);
+});
+it('bounds complete concurrent acceptance checks until owner projection commits',async()=>{
+ const [a,b,c]=await Promise.all([acceptanceFixture(),acceptanceFixture(),acceptanceFixture()]);
+ let finish!:()=>void;const wait=new Promise<void>(r=>{finish=r;});
+ for(const f of [a,b]){f.reader.observeCustomerDesign.mockClear();f.reader.observeCustomerDesign.mockImplementation(async()=>{await wait;return {ok:true,observedVersion:'200'};});}
+ const one=projectCustomerAction(db,a.event,a.basis,a.reader),two=projectCustomerAction(db,b.event,b.basis,b.reader);
+ await vi.waitFor(()=>{expect(a.reader.observeCustomerDesign).toHaveBeenCalledTimes(1);expect(b.reader.observeCustomerDesign).toHaveBeenCalledTimes(1);});
+ await expect(projectCustomerAction(db,c.event,c.basis,c.reader)).rejects.toMatchObject({status:503,code:'DESIGN_ACCEPTANCE_BUSY'});
+ finish();expect((await one).accepted).toBe(true);expect((await two).accepted).toBe(true);
+ expect((await projectCustomerAction(db,c.event,c.basis,c.reader)).accepted).toBe(true);
+});
+it('exposes the approved file checksum through the real customer CORS middleware',async()=>{
+ const {createApp}=await import('../src/app.js');
+ const app=createApp({requesterIntentModel:null,skipTelegramProbe:true,skipPaidModelProbe:true});
+ const response=await app.request('/v1/customer/session',{headers:{Origin:'https://hawzhin.app'}});
+ expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://hawzhin.app');
+ expect(response.headers.get('Access-Control-Expose-Headers')).toBe('X-Content-SHA256');
+ const denied=await app.request('/v1/customer/session',{headers:{Origin:'https://foreign.example'}});
+ expect(denied.headers.get('Access-Control-Allow-Origin')).toBeNull();
+});

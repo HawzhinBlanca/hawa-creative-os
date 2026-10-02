@@ -197,3 +197,24 @@ migration inventory and synthetic scanner failures are retained. Next is canonic
 independent customer acceptance/current native/QA/hash-bound downloads. Existing
 website release gates, hosting/HTTPS/restore and real two-user/native language/
 edit-save/re-export/restart/other-app/human quality still block public launch.
+
+## ADR266 independent customer acceptance/downloads — 2026-10-03
+
+Implemented through the existing immutable actions/outbox/private RequestLifecycle.
+Acceptance pins reviewed PNG/PPTX and the full native evidence fingerprint,
+repeats actual-file and native checks, reauthorizes at commit, advances the owner
+revision once, and waits for durable acknowledgement before download eligibility.
+It retains the current task in office human review. Each authenticated download
+rechecks actual bytes/native state and live current evidence. Changed native state,
+QA, captures, source/policy, scope, revisions or pending actions block downloads.
+Retries reconcile committed outcomes before provider or current grant access.
+Current accepted requests release their quota slot; an admitted revision reserves it
+again. Core exposes the download checksum through CORS; the browser verifies it,
+length, content type and actual hash before creating a download.
+
+98 focused backend checks, including actual restricted-role migration/HTTP controls,
+and all746 strict test roots pass. Website acceptance journey and unit qualification
+are tracked in CUSTOMER_ACCEPTANCE_PROOF.json. Full sealed backend regression pending.
+Public generation stays disabled, Designer launcher soon and083–089 unreleased.
+Existing release CI, hosting/HTTPS/restore, hosted two-user/native RTL/edit-save/
+reexport/restart/other-app and human quality gates remain open.

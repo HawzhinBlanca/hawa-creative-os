@@ -45,6 +45,12 @@ export async function recordCustomerAction(ctx:AutomaticOpenContext & {now?():Pr
     actor:'requester',rev:result.rev,fromStage:prior.stage,officeAlerts:[]}});
    ctx.send({v:1,key:`${event.requestId}:${result.rev}:customer-cancel:${event.actionId}`,chatId:prior.chatId,kind:'text',text:'Your design request was cancelled.',
      class:'critical',tenantId:prior.tenantId,taskId:prior.taskId});
+  } else if(event.kind==='accept') {
+   if(prior.stage!=='in_review' || result.stage!=='in_review' || result.rev!==prior.rev+1 || result.taskId!==prior.taskId)
+    throw new restate.TerminalError('Invalid customer acceptance projection',{errorCode:409});
+   ctx.set('lc',{...prior,rev:result.rev});
+   ctx.send({v:1,key:`${event.requestId}:${result.rev}:customer-accept:${event.actionId}`,chatId:prior.chatId,kind:'text',
+    text:'Your design approval was recorded. Download the approved files in your workspace.',class:'critical',tenantId:prior.tenantId,taskId:prior.taskId});
   } else if(event.kind==='seen') {
    if(!('question' in prior) || !prior.question || result.rev!==prior.rev || result.questionId!==prior.question.id ||
     !result.messageId || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(result.messageId) || !Number.isSafeInteger(result.seenAtMs) || !result.seenAtMs || result.seenAtMs<0 || result.stage!=='awaiting_answer')throw new restate.TerminalError('Invalid question acknowledgement',{errorCode:409});

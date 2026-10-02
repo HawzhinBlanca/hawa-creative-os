@@ -164,6 +164,7 @@ export function createApp(options?: CreateAppOptions) {
     origin: (origin, c) => c.req.path.startsWith('/v1/customer/')
       ? (CUSTOMER_ORIGINS.has(origin) ? origin : '')
       : officeAccess.mode === 'trusted_office' ? officeAccess.origin! : '*',
+    exposeHeaders: ['X-Content-SHA256'],
     allowHeaders: [
       'Content-Type',
       'X-Hawa-Office-Request',

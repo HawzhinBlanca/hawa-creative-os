@@ -108,3 +108,10 @@ it('does not report gateway completion until its asynchronous private send is aw
  await vi.waitFor(()=>expect(send).toHaveBeenCalledTimes(1));expect(finished).toBe(false);release();await completion;expect(finished).toBe(true);
  await expect(forwardCustomerAction({...ctx,send:async()=>{throw new Error('private send failed');}},coreInternalFixture(e),signCustomerActionCommand(refs,secret),[secret])).rejects.toThrow('private send failed');
 });
+it('adopts customer acceptance once, keeps office review intact and reconciles lost acknowledgement',async()=>{
+ const f=fixture('accept'),result:CustomerActionResult={v:1,actionId:f.event.actionId,requestId:f.event.requestId,kind:'accept',accepted:true,taskId:f.old.taskId,rev:3,stage:'in_review'};
+ const core=coreInternalFixture(result);core.postSpy.mockImplementationOnce(async()=>result).mockImplementationOnce(async()=>{throw new Error('lost ack');});
+ await expect(recordCustomerAction(f.ctx,core,f.event)).rejects.toThrow('lost ack');
+ expect(f.get()).toMatchObject({taskId:f.old.taskId,rev:3,stage:'in_review',outcome:f.old.outcome});expect(f.started).toHaveLength(0);expect(f.sent).toHaveLength(1);
+ await recordCustomerAction(f.ctx,coreInternalFixture(result),f.event);expect(f.sent).toHaveLength(1);expect(f.started).toHaveLength(0);
+});

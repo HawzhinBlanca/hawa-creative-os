@@ -1862,7 +1862,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         if(!basis || typeof basis.taskId!=='string' || !UUID.test(basis.taskId) || !Number.isSafeInteger(basis.rev) || basis.rev<0 ||
           typeof basis.stage!=='string' || !Number.isSafeInteger(basis.round) || basis.round<0 || basis.round>10000 ||
           (basis.questionId!==undefined && !UUID.test(basis.questionId)))return c.json({code:'DESIGN_ACTION_INVALID'},403);
-        return c.json(await projectCustomerAction(db,event,basis));
+        return c.json(await projectCustomerAction(db,event,basis,ctx.canvaConnectService ?? undefined));
       }
       if(operation==='ack') {
         const result=body?.result as CustomerActionResult|undefined;

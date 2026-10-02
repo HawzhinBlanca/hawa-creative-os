@@ -24,6 +24,8 @@ paths:
     $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}"
   /v1/customer/jobs/{id}/actions:
     $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}~1actions"
+  /v1/customer/jobs/{id}/download/{acceptanceId}/{format}:
+    $ref: './customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}~1download~1{acceptanceId}~1{format}'
   /v1/customer/jobs/{id}/review/{captureId}:
     $ref: "./customer-design.openapi.yaml#/paths/~1v1~1customer~1jobs~1{id}~1review~1{captureId}"
   /v1/customer/jobs/{id}/preview/{captureId}:

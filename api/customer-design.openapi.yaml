@@ -61,7 +61,7 @@ paths:
       security: [{WorkspaceMember: []}]
       parameters: [{name: id, in: path, required: true, schema: {type: string, format: uuid}}]
       responses:
-        '200': {description: Owned stable request projection plus latest 100 durable web messages in chronological order; no provider refs or send/read claims, content: {application/json: {schema: {type: object, required: [job, messages, preview, actions], properties: {actions: {$ref: '#/components/schemas/CustomerActions'}, job: {$ref: '#/components/schemas/CustomerJob'}, preview: {anyOf: [{$ref: '#/components/schemas/CapturedPreview'}, {type: 'null'}]}, messages: {type: array, maxItems: 100, items: {type: object, required: [id, kind, text, createdAt, question]}}}}}}}
+        '200': {description: Owned stable request projection plus latest 100 durable web messages in chronological order; no provider refs or send/read claims, content: {application/json: {schema: {type: object, required: [job, messages, preview, actions, acceptance], properties: {acceptance: {anyOf: [{$ref: '#/components/schemas/CustomerAcceptance'}, {type: 'null'}]}, actions: {$ref: '#/components/schemas/CustomerActions'}, job: {$ref: '#/components/schemas/CustomerJob'}, preview: {anyOf: [{$ref: '#/components/schemas/CapturedPreview'}, {type: 'null'}]}, messages: {type: array, maxItems: 100, items: {type: object, required: [id, kind, text, createdAt, question]}}}}}}}
         '401': {description: Workspace sign-in required}
         '403': {description: Current customer admission denied}
         '404': {description: Job unavailable to this owner, including shared-brand foreign jobs}
@@ -90,6 +90,24 @@ paths:
         '413': {description: Streamed JSON exceeds 49152 bytes}
         '429': {description: Daily customer generation or action limit reached}
         '503': {description: Generation not ready or dependency unavailable; retain exact key and body}
+  /v1/customer/jobs/{id}/download/{acceptanceId}/{format}:
+    get:
+      security: [{WorkspaceMember: []}]
+      description: Own applied current acceptance only. Reparse and rehash actual files, observe native version and reauthorize after observation. No-store, nosniff, server-generated attachment filename. No staff approval or publication.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: acceptanceId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: format, in: path, required: true, schema: {type: string, enum: [png, pptx]}}
+        - {name: version, in: query, required: true, schema: {type: integer, minimum: 1}}
+        - {name: id, in: query, required: true, schema: {type: string, format: uuid}}
+        - {name: sha256, in: query, required: true, schema: {type: string, pattern: '^[a-f0-9]{64}$'}}
+      responses:
+        '200': {description: Exact approved PNG or editable PowerPoint bytes up to 25 MiB, content: {image/png: {schema: {type: string, format: binary}}, application/vnd.openxmlformats-officedocument.presentationml.presentation: {schema: {type: string, format: binary}}}}
+        '401': {description: Workspace sign-in required}
+        '403': {description: Current customer admission denied}
+        '404': {description: Job unavailable to this owner}
+        '409': {description: Acceptance, artifact, native version or required QA is no longer current}
+        '503': {description: Native observation unavailable or two complete downloads already active}
   /v1/customer/jobs/{id}/review/{captureId}:
     get:
       security: [{WorkspaceMember: []}]
@@ -194,6 +212,16 @@ components:
       oneOf:
         - type: object
           additionalProperties: false
+          required: [kind, expectedVersion, previewId, previewSha256, basisSha256, files]
+          properties:
+            kind: {const: accept}
+            expectedVersion: {type: integer, minimum: 1}
+            previewId: {type: string, format: uuid}
+            previewSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+            basisSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+            files: {$ref: '#/components/schemas/AcceptedFiles'}
+        - type: object
+          additionalProperties: false
           required: [kind, expectedVersion, reason]
           properties: {kind: {const: cancel}, expectedVersion: {type: integer, minimum: 1}, reason: {type: string, minLength: 1, maxLength: 1000}}
         - type: object
@@ -214,7 +242,7 @@ components:
       properties:
         id: {type: string, format: uuid}
         requestId: {type: string, format: uuid}
-        kind: {type: string, enum: [revise, answer, seen, cancel]}
+        kind: {type: string, enum: [revise, answer, seen, cancel, accept]}
         expectedVersion: {type: integer, minimum: 1}
         phase: {type: string, enum: [queued, projected, applied, refused]}
         code: {type: [string, 'null']}
@@ -231,6 +259,33 @@ components:
         canCancel: {type: boolean}
         questionMessageId: {type: [string, 'null'], format: uuid}
         receipts: {type: array, maxItems: 10, items: {$ref: '#/components/schemas/ActionReceipt'}}
+    AcceptedFile:
+      type: object
+      additionalProperties: false
+      required: [id, sha256, size, format]
+      properties:
+        id: {type: string, format: uuid}
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        size: {type: integer, minimum: 32, maximum: 26214400}
+        format: {type: string, enum: [png, pptx]}
+    AcceptedFiles:
+      type: array
+      minItems: 2
+      maxItems: 2
+      description: Exact ordered PNG and PPTX identities, distinct IDs. PNG ID/hash matches reviewed preview.
+      items: {$ref: '#/components/schemas/AcceptedFile'}
+    CustomerAcceptance:
+      type: object
+      additionalProperties: false
+      required: [id, requestVersion, acceptedAt, previewId, previewSha256, basisSha256, files]
+      properties:
+        id: {type: string, format: uuid}
+        requestVersion: {type: integer, minimum: 2}
+        acceptedAt: {type: string, format: date-time}
+        previewId: {type: string, format: uuid}
+        previewSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        basisSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        files: {$ref: '#/components/schemas/AcceptedFiles'}
     NativeReview:
       type: object
       additionalProperties: false
@@ -317,7 +372,7 @@ components:
         id: {type: string, format: uuid}
         clientId: {type: string, format: uuid}
         title: {type: string}
-        state: {type: string, description: Hawa task_state vocabulary.}
+        state: {type: string, description: Hawa task_state vocabulary plus customer_approved for an applied current independent customer acceptance; never staff delivery.}
         version: {type: integer, minimum: 1}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}

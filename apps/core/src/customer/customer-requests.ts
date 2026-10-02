@@ -1,4 +1,4 @@
-import {inspectCustomerNativeFiles,nativeReviewFingerprint,customerNativeReviewResult,type CustomerNativeBundle,type CustomerNativeVersionReader,type CustomerReviewReason} from './customer-native-review.js';
+import {inspectCustomerNativeFiles,nativeReviewFingerprint,customerNativeReviewResult,observeCustomerNativeVersion,type CustomerNativeBundle,type CustomerNativeVersionReader,type CustomerReviewReason} from './customer-native-review.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { parseAndValidatePng } from '@hawa/integrations';
 import {admitCustomerAction,customerActionReceipt} from './customer-actions.js';
@@ -36,6 +36,7 @@ export interface CustomerDesignRequest {
   photoIds?: string[];
   photoUsage?: { mode: 'auto' | 'all' } | { mode: 'count'; count: number };
 }
+export interface CustomerAcceptance {id:string;requestVersion:number;acceptedAt:string;previewId:string;previewSha256:string;basisSha256:string;files:Array<{id:string;sha256:string;size:number;format:'png'|'pptx'}>}
 interface Account {
   id: string;
   user_id: string;
@@ -137,7 +138,7 @@ export class CustomerRequests {
 
   private async jobs(trx:Kysely<Database>,account:Account,id?:string) {
     return (await sql<{id:string;client_id:string;title:string;state:string;version:number;created_at:Date;updated_at:Date}>`
-      SELECT w.request_id AS id,w.client_id,w.body->>'title' AS title,COALESCE(t.state::text,'received') AS state,
+      SELECT w.request_id AS id,w.client_id,w.body->>'title' AS title,CASE WHEN hawa.customer_current_acceptance(w.request_id) IS NOT NULL THEN 'customer_approved' ELSE COALESCE(t.state::text,'received') END AS state,
         COALESCE(r.rev,1) AS version,w.created_at,COALESCE(r.updated_at,w.created_at) AS updated_at
       FROM hawa.customer_web_requests w
       LEFT JOIN hawa.requests r ON r.tenant_id=w.tenant_id AND r.request_id=w.request_id
@@ -201,7 +202,8 @@ export class CustomerRequests {
       const actionIds=(await sql<{id:string}>`SELECT id FROM hawa.customer_web_actions WHERE tenant_id=${this.tenantId}::uuid
         AND request_id=${id}::uuid AND account_id=${account.id}::uuid ORDER BY created_at DESC,id DESC LIMIT 10`.execute(trx)).rows;
       const receipts=[];for(const a of actionIds)receipts.push(await customerActionReceipt(trx,a.id));
-      return {job:rows[0],preview,messages,actions:{canRevise:current?.automatic===true && ['manual','in_review'].includes(current?.stage ?? ''),
+      const acceptance=(await sql<{value:CustomerAcceptance|null}>`SELECT hawa.customer_current_acceptance(${id}::uuid) AS value`.execute(trx)).rows[0]?.value ?? null;
+      return {job:rows[0],preview,messages,acceptance,actions:{canRevise:current?.automatic===true && ['manual','in_review'].includes(current?.stage ?? ''),
         canCancel:['designing','awaiting_answer','manual','in_review'].includes(current?.stage ?? ''),
         questionMessageId:current?.stage==='awaiting_answer' ? question?.id ?? null : null,receipts}};
     });
@@ -216,19 +218,41 @@ export class CustomerRequests {
     });
     const bundle=await read(true),reasons:CustomerReviewReason[]=await inspectCustomerNativeFiles(bundle);
     if(!reasons.length) {
-      const b=bundle.basis;
-      try {
-        const observed=await this.nativeVersionReader?.observeCustomerDesign({tenantId:this.tenantId,actorId:b.actorId,
-          designId:b.designId,capturedVersion:b.nativeVersion});
-        if(!observed?.ok || observed.observedVersion!==b.nativeVersion)
-          reasons.push(observed?.code==='CANVA_DESIGN_CHANGED' ? 'NATIVE_DESIGN_CHANGED':'NATIVE_CHECK_UNAVAILABLE');
-      } catch {reasons.push('NATIVE_CHECK_UNAVAILABLE');}
+      const observed=await observeCustomerNativeVersion(this.nativeVersionReader,this.tenantId,bundle.basis);
+      if(observed)reasons.push(observed);
     }
     // No transaction is held across Canva. Reauthorize and compare every evidence field afterward.
     const current=await read(false);
     if(nativeReviewFingerprint(current.basis)!==nativeReviewFingerprint(bundle.basis))
       throw new CustomerRequestError(409,'DESIGN_REVIEW_STALE');
     return customerNativeReviewResult(bundle.basis,reasons);
+  }
+  async download(member:WorkspaceMember,id:string,expected:{acceptanceId:string;version:number;format:'png'|'pptx';fileId:string;sha256:string}) {
+    const read=async(bytes:boolean)=>this.scoped(member,async(trx,account)=>{
+      if(!(await this.jobs(trx,account,id)).length)throw new CustomerRequestError(404,'DESIGN_JOB_NOT_FOUND');
+      const a=(await sql<{value:CustomerAcceptance|null}>`SELECT hawa.customer_current_acceptance(${id}::uuid) AS value`.execute(trx)).rows[0]?.value;
+      const file=a?.files.find(f=>f.format===expected.format);
+      if(!a || a.id!==expected.acceptanceId || a.requestVersion!==expected.version || !file ||
+        file.id!==expected.fileId || file.sha256!==expected.sha256)throw new CustomerRequestError(409,'DESIGN_DOWNLOAD_STALE');
+      const bundle=(await sql<CustomerNativeBundle>`SELECT * FROM hawa.customer_native_review(${id}::uuid,${a.previewId}::uuid,
+        ${a.requestVersion}::bigint,${a.previewSha256},${bytes})`.execute(trx)).rows[0];
+      if(!bundle)throw new CustomerRequestError(409,'DESIGN_DOWNLOAD_STALE');
+      return {acceptance:a,bundle,file};
+    });
+    const first=await read(true);
+    if((await inspectCustomerNativeFiles(first.bundle)).length)throw new CustomerRequestError(409,'DESIGN_DOWNLOAD_BLOCKED');
+    const observed=await observeCustomerNativeVersion(this.nativeVersionReader,this.tenantId,first.bundle.basis);
+    if(observed)throw new CustomerRequestError(observed==='NATIVE_DESIGN_CHANGED' ? 409:503,
+      observed==='NATIVE_DESIGN_CHANGED' ? 'DESIGN_DOWNLOAD_STALE':'DESIGN_NATIVE_CHECK_UNAVAILABLE');
+    const last=await read(false);
+    if(customerValueHash(first.acceptance)!==customerValueHash(last.acceptance) ||
+      nativeReviewFingerprint(first.bundle.basis)!==nativeReviewFingerprint(last.bundle.basis))
+      throw new CustomerRequestError(409,'DESIGN_DOWNLOAD_STALE');
+    const bytes=expected.format==='png' ? first.bundle.png : first.bundle.pptx;
+    if(!bytes)throw new CustomerRequestError(409,'DESIGN_DOWNLOAD_BLOCKED');
+    return {bytes,size:first.file.size,sha256:first.file.sha256,
+      mediaType:expected.format==='png' ? 'image/png':'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      filename:`design-${id}-${expected.version}.${expected.format}`};
   }
   async action(member:WorkspaceMember,id:string,key:string,body:CustomerActionBody) {
     return this.scoped(member,(trx,account)=>admitCustomerAction(trx,this.tenantId,account,member,id,key,body));
@@ -291,8 +315,8 @@ export class CustomerRequests {
         WHERE id=${account.id}::uuid`.execute(trx)).rows[0];
       if(!current) throw new CustomerRequestError(403,'DESIGN_ACCESS_DENIED');
       const counts=(await sql<{daily:number;concurrent:number}>`SELECT * FROM hawa.customer_job_counts()`.execute(trx)).rows[0];
-      if(counts.daily>=current.daily_job_limit || counts.concurrent>=current.concurrent_job_limit)
-        throw new CustomerRequestError(429,'DESIGN_REQUEST_LIMIT');
+      if(counts.daily>=current.daily_job_limit)throw new CustomerRequestError(429,'DESIGN_REQUEST_LIMIT');
+      if(counts.concurrent>=current.concurrent_job_limit)throw new CustomerRequestError(429,'DESIGN_CONCURRENCY_LIMIT');
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`auto-draft-admission:${this.tenantId}`},0))`.execute(trx);
       const global=(await sql<{n:string}>`SELECT hawa.customer_global_job_count() AS n`.execute(trx)).rows[0];
       if(Number(global.n)>=dailyDraftCap('AUTO_GENERATE_DAILY_CAP_GLOBAL',200))

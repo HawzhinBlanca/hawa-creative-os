@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-03",
+  "adr": "ADR266",
+  "requirements": [
+    "FR-029",
+    "FR-032",
+    "FR-043",
+    "FR-069",
+    "NFR-006",
+    "NFR-008",
+    "NFR-011",
+    "NFR-015"
+  ],
+  "scope": "Independent canonical customer acceptance/current approved PNG and editable PPTX downloads; local qualification, hosted admission pending",
+  "engineFocused": {
+    "numPassedTests": 98,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "engineFull": null,
+  "strictTestRoots": 746,
+  "checks": {
+    "coreWorkerContractsTypes": "passed",
+    "strictTestTypes": "passed",
+    "scriptsTypes": "passed",
+    "anyRatchet": "952 <=1053",
+    "providerEgress": "passed",
+    "security": "passed"
+  },
+  "websiteCommit": "d041ed3db9675d637a6d56b7f98be38b9e32054d",
+  "website": {
+    "date": "2026-10-03",
+    "adr": "engine ADR266",
+    "scope": "Independent canonical customer acceptance and current approved PNG/editable PPTX downloads, qualified locally",
+    "unit": {
+      "numPassedTests": 862,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "browser": {
+      "startTime": "2026-10-02T21:25:32.707Z",
+      "duration": 26723.547,
+      "expected": 9,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "checks": {
+      "types": "passed",
+      "affectedLint": "passed",
+      "productionBuild": "passed",
+      "security": "passed"
+    },
+    "fileSha256": {
+      "src/features/designer/api.ts": "cc2ccdb402b99f703036ebd19deb1123807f6ce8c940c942479f13045341e04f",
+      "src/features/designer/DesignActions.tsx": "3208b80bebd5aa147668ca4b57fea2b7603c5048f1d9b0c3d59d7f8dab727622",
+      "src/features/designer/DesignPreview.tsx": "5a46715290445c0ad3e95eaf23ce0a64ab145163aa1eb61d06ea4734e38c5c5d",
+      "src/features/designer/DesignerWorkspace.tsx": "a0406a8de165f769e699752f528c8dc576cbe5ae06371cdfef0eec50fe92c6c3",
+      "src/test/designer/acceptance.test.tsx": "7095de9dc1e0ed349256f59648dc7a5644f7d971c65df6240ad6e979dfd5f865",
+      "e2e/designer-local.spec.ts": "e876c4624b883ae847e96610d13692e122eec2d154aed0d8382b9f34e75a87ad"
+    },
+    "evidenceDirectory": "/Users/hawzhin/Hawdesign/.worktrees/hawzhin-app-integration/output/qualification/2026-10-03-site-acceptance",
+    "originalFailures": [
+      "First browser run: 8 pass, 1 fail; cross-origin checksum header not exposed. Core middleware now exposes X-Content-SHA256, and real middleware regression plus browser fixture verify it.",
+      "First repair: broad img locator also matched startup SVGs; narrowed to the captured-design accessible name. Final 9/0/0/flaky0 rerun retains checksum requirements.",
+      "Initial scanner wrapper treated (hits,allowed) tuple length as findings; failed safely. Correct unpacking reports zero findings; no credential finding or bypass."
+    ],
+    "limitations": [
+      "Synthetic Auth/Core/browser transport; no live hosted Supabase, customer, Canva, native language or human-quality acceptance inferred.",
+      "Existing coverage/performance/reviewed visual/dependency/live RLS/Linux gates remain open. No public generation, launcher activation, push or deployment."
+    ]
+  },
+  "fileSha256": {
+    "apps/core/src/app.ts": "504106a65e3aa9db612295afa858ae2aa915a98d2c589c19215e18f11fba5321",
+    "apps/core/src/customer/customer-actions.ts": "66c0f1a1fc178c5f02b4081b67a02e309fd88bac2be263b9eb5edf48f567daaa",
+    "apps/core/src/customer/customer-native-review.ts": "a1eaead59a69fb732023b392656a8db33c9a441fa8529c3ade776066d2c51702",
+    "apps/core/src/customer/customer-requests.ts": "e3577b5b8858a0118ea6a72f8ca772966189dcae75ce25284f49fb83cc31f6d2",
+    "apps/core/src/customer/customer.routes.ts": "6c08c9c853413a2fb4aa5f9f5b0e053192698a9dff0895cfb5abff752c6962db",
+    "apps/core/src/routes/lifecycle-internal.routes.ts": "6a2553f490404950fe5c9828e3217a9f043a69fcc1d0061cff267525b74ac68a",
+    "apps/core/test/customer-requests.test.ts": "e291b1ad122e5a4169ceacd788c94bd7b028ff4fcf0439aeb96d81ed4ab066e2",
+    "apps/core/test/startup-schema-check.test.ts": "85313cfe09ac3d05776005f7c5ac75271b2b58c6a38cb8a8e2ad5c0c112d727e",
+    "apps/worker/src/lifecycle/customer-web-actions.ts": "8d4a18cbc87fa70847ec52b2fcadd6236f4ec7b2bda1e0540bb928c84b01d3cf",
+    "apps/worker/test/customer-web-actions.test.ts": "e47acc0602231d4bdcb98eeade97facbca764e51236e3140f755e37f450bcb72",
+    "packages/contracts/src/customer-actions.ts": "4d12b550e5e9bda1a4082c60d22b4a46ca8ab6c9b5a971f06a529bcb0fe1932a",
+    "packages/db/test/schema-upgrade.test.ts": "70f305000625aac38c564832bbecb4a59e7fe6fc9d164665540f0a08051539b5",
+    "packages/db/migrations/089_customer_acceptance_downloads.sql": "4758c2937483a514eff75095c11f09dc37ea23e22986c0f0ccf6263530404dd9"
+  },
+  "evidenceDirectory": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/qualification/2026-10-03/customer-acceptance",
+  "originalFailures": [
+    {
+      "report": "focused-1.json",
+      "passed": 74,
+      "failed": 19,
+      "reason": "SQL parameter expected_rev shadowed the action column; renamed internal argument wanted_rev, preserving wrapper API."
+    },
+    {
+      "report": "focused-2.json",
+      "passed": 92,
+      "failed": 1,
+      "reason": "Quota fixture changed account limit without advancing immutable access version; corrected fixture."
+    },
+    {
+      "report": "focused-3.json",
+      "passed": 93,
+      "failed": 2,
+      "reason": "SQL hash constraint correctly refused byte corruption; isolated owner fault injection now temporarily bypasses/restores it to exercise independent byte guard. Generation concurrency refusal now has distinct safe DESIGN_CONCURRENCY_LIMIT code."
+    }
+  ],
+  "limitations": [
+    "Synthetic browser/Auth/native observations; real hosted Supabase/Canva/customer/native RTL/human quality not inferred.",
+    "Independent acceptance retains office human_review/in_review and never fabricates staff approval, publication, delivery or taste promotion.",
+    "Native timestamps have second precision; no absence-of-every-same-second-edit or atomic external editor lock claim.",
+    "No deployment/public admission; generation off, launcher soon, migrations083-089 unreleased. Existing release and hosting/restore gates remain open."
+  ]
+}

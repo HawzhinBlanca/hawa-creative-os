@@ -1,4 +1,6 @@
+export interface CustomerAcceptedFile {id:string;sha256:string;size:number;format:'png'|'pptx'}
 export type CustomerActionBody=
+ | {kind:'accept';expectedVersion:number;previewId:string;previewSha256:string;basisSha256:string;files:CustomerAcceptedFile[]}
  | {kind:'cancel';expectedVersion:number;reason:string}
  | {kind:'seen';expectedVersion:number;messageId:string}
  | {kind:'answer';expectedVersion:number;messageId:string;directive:string;exactCopy?:CustomerActionCopy[]}
@@ -22,5 +24,5 @@ export function isCustomerActionEvent(value:unknown):value is CustomerActionEven
  if(!isCustomerActionCommand(value))return false;
  const e=value as unknown as Record<string,unknown>;
  return typeof e.taskId==='string' && UUID.test(e.taskId) && Number.isSafeInteger(e.expectedRev) && Number(e.expectedRev)>0 &&
-  typeof e.bodyHash==='string' && /^[a-f0-9]{64}$/.test(e.bodyHash) && ['revise','answer','seen','cancel'].includes(String(e.kind));
+  typeof e.bodyHash==='string' && /^[a-f0-9]{64}$/.test(e.bodyHash) && ['revise','answer','seen','cancel','accept'].includes(String(e.kind));
 }

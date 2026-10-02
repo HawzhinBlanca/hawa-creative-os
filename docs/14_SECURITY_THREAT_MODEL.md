@@ -249,3 +249,16 @@ roles and broad tenant roles retain their existing scope. Disabling an account
 or withdrawing membership affects subsequent resource statements; this does not
 claim instantaneous session sign-out across Core instances or revoke a download
 whose bytes were already authorized and sent.
+
+### Independent customer acceptance and downloads (ADR266, 2026-10-03)
+
+Customer acceptance is an immutable verified-owner action in the existing private
+RequestLifecycle. It records exact reviewed native evidence and advances its owner
+revision once, retaining the office task in human review. It creates no staff
+approval, delivery, publication or taste promotion. A projected receipt is unavailable
+for downloads until durable owner acknowledgement. Every download reparses and
+rehashes actual PNG/PPTX bytes, observes the stored Canva actor's native version,
+then rechecks live admission and all evidence. Only its own verified pending accept
+action can be exempted during projection; other pending actions block. Changes to
+revision/task/binding/capture/QA/source/brand/grants invalidate eligibility. Native
+second-resolution timestamps are observed evidence, never an atomic remote lock.
