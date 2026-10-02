@@ -41,7 +41,11 @@ export function requestLogContext(): MiddlewareHandler {
       // A handler may return a Response whose headers cannot be changed (a proxied fetch).
       try { c.res.headers.set(REQUEST_ID_HEADER, requestId); } catch { /* immutable headers */ }
       const line = { method: c.req.method, path: c.req.path, status: c.res.status, ms: Math.round(performance.now() - started) };
-      if (QUIET_PATHS.has(c.req.path)) log.debug(line, 'request');
+      // A 5xx is an error line whatever answered it (2026-10-02 review: Core logged no error-level line in two
+      // days, though routes answer 500 themselves after catching), so a count of error lines counts failures.
+      // The message stays 'request' (load-stats and request_logs read every request by it).
+      if (c.res.status >= 500) log.error(line, 'request');
+      else if (QUIET_PATHS.has(c.req.path)) log.debug(line, 'request');
       else log.info(line, 'request');
     });
   };

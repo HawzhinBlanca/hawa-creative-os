@@ -319,6 +319,8 @@ if [[ ${#problems[@]} -eq 0 && "$disk_full" -eq 0 ]]; then
   if [[ "$alerted" == 1 ]]; then
     notify "✅ Hawa is back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
   fi
+  # The outside service alerts when these pings stop (host_lib.sh, hawa_heartbeat).
+  hawa_heartbeat "$PROD" || say "the outside heartbeat could not be reached"
   last_msg=""; alerted=0; alerted_other=""; alert_key=""; disk_was_full=0; save healthy; exit 0
 fi
 

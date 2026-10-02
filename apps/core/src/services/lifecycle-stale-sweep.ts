@@ -17,14 +17,21 @@ const HOUR_MS = 60 * 60_000;
 
 /** How long each stage may wait before the office hears of it. */
 export const STALE_AFTER_MS = {
-  /** A draft waiting for its office review: a working day. */
-  in_review: 24 * HOUR_MS,
+  /**
+   * A draft waiting for its office review. The office is alerted when the draft is ready; this is the one
+   * reminder. It was a working day (24 h) until 2026-10-02: the only delivered design waited 15 h overnight
+   * for approval while its draft took 2 minutes.
+   */
+  in_review: 2 * HOUR_MS,
   /** Approved and not sent: the requester waits for a design the office has already accepted. */
   approved: 4 * HOUR_MS,
   /** A delivery that has not reported: the Delivery workflow takes minutes. */
   delivering: 2 * HOUR_MS,
-  /** A design that ended without a draft and was handed to the office. */
-  manual: 24 * HOUR_MS,
+  /**
+   * A request for a designer (or a design that ended without a draft). Since 2026-10-02 the office is
+   * alerted when it opens; this reminder follows after a working morning, not a day.
+   */
+  manual: 8 * HOUR_MS,
   /** The requester's question: reminded on days 1 and 5, then the office hears of it on day 6. */
   awaiting_answer: 6 * 24 * HOUR_MS,
 } as const;

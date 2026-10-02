@@ -276,3 +276,34 @@ hawa_release_check_worker_identity() { # release
       echo 'ERROR: this release predates independent worker identities; rollback requires a compatible forward release' >&2; return 1;
     }
 }
+
+# 2026-10-02: two agents deploy to this host, and one nearly replaced a release the other had just put live
+# (23c28392, which held work the newer candidate lacked). A deployment must contain the live release: its
+# commit is an ancestor of the candidate. Allowed otherwise: the same commit, the previous release (the
+# rollback, ADR-158), or HAWA_DEPLOY_ALLOW_NON_DESCENDANT=1 set on purpose. No live release (a first deploy)
+# passes. A live commit this repository does not have is refused: fetch it first.
+hawa_deploy_keeps_live() { # checkout, candidate commit
+  local checkout="$1" candidate="$2" live previous
+  live="$(basename "$(readlink "$(hawa_current_link)" 2>/dev/null)" 2>/dev/null || true)"
+  [[ "$live" =~ ^[0-9a-f]{40}$ ]] || return 0
+  [[ "$live" == "$candidate" ]] && return 0
+  previous="$(basename "$(readlink "$(hawa_previous_link)" 2>/dev/null)" 2>/dev/null || true)"
+  if [[ "$candidate" == "$previous" ]]; then
+    echo "NOTE: deploying the previous release ${previous:0:12} (a rollback); the live ${live:0:12} is not in it." >&2
+    return 0
+  fi
+  if [[ "${HAWA_DEPLOY_ALLOW_NON_DESCENDANT:-}" == 1 ]]; then
+    echo "WARNING: HAWA_DEPLOY_ALLOW_NON_DESCENDANT=1: deploying ${candidate:0:12}, which may not contain the live ${live:0:12}." >&2
+    return 0
+  fi
+  if ! git -C "$checkout" cat-file -e "${live}^{commit}" 2>/dev/null; then
+    echo "ERROR: the live release ${live} is not in this repository; fetch it and merge it before deploying." >&2
+    return 1
+  fi
+  if ! git -C "$checkout" merge-base --is-ancestor "$live" "$candidate" 2>/dev/null; then
+    echo "ERROR: ${candidate:0:12} does not contain the live release ${live:0:12} (another deploy may have happened since you branched)." >&2
+    echo "       Merge ${live:0:12} first; or roll back to the previous release; or set HAWA_DEPLOY_ALLOW_NON_DESCENDANT=1 on purpose." >&2
+    return 1
+  fi
+  return 0
+}
