@@ -1,4 +1,4 @@
-# ADR-261: A Deployment Keeps the Live Release; a 5xx Is an Error Line
+# ADR-270: A Deployment Keeps the Live Release; a 5xx Is an Error Line
 
 **Date:** 2026-10-02
 **Status:** Accepted (branch `claude/hawzhin-support`; not deployed — the next combined release carries it)
@@ -57,3 +57,23 @@ The same reality check found two waits nobody was told about:
 Queue cleanup (data, not code): the 52 RECEIVED and 4 AWAITING_APPROVAL Desk tasks from the 2026-09-11..20
 test, pilot and audit runs were closed with the office cancel control and a stated reason; receipts in
 output/handoffs/2026-10-02/CLAUDE_STALE_DESK_TASK_CLEANUP_RECEIPT.json.
+
+## Addendum 2 (2026-10-02): an outside heartbeat
+
+Alerts were sent through Telegram from the host they watched; a host that is off, asleep, locked at
+FileVault after an automatic update, or offline said nothing. `hawa_heartbeat` (infra/ops/host_lib.sh)
+pings `HAWA_HEARTBEAT_URL` (https only; from the environment or .env.production) on every healthy
+watchdog pass; the outside dead-man's-switch service alerts the owner when the pings stop. Unset: nothing
+is sent (today's state). Owner action: create the check (e.g. healthchecks.io, Better Stack), paste its URL
+into ~/.hawa/shared/infra/docker/.env.production. Test: packages/testkit/test/heartbeat.test.ts (4).
+
+## Addendum 3 (2026-10-02): the live-release check runs under the deploy lock
+
+`deploy.sh` first ran `hawa_deploy_keeps_live` straight after the build-stamp check. That placement had two problems:
+
+1. **It ran before the deploy lock (ADR-240).** A deploy that waited for another one judged the live release as it stood before that other deploy finished.
+2. **It sourced `release_lib.sh` early.** The canary-runner test requires that file to be sourced only after the lock, so the test failed. A trial merge onto Codex's integration branch caught it.
+
+**The fix:** the check now runs where `release_lib.sh` is sourced. That is after the host-role check and the lock, and before `hawa_release_prepare`.
+
+A test in `release-directories.test.ts` pins this order. Pre-flight still runs the check too, because it uses the same path, without the lock.

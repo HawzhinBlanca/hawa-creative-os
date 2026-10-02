@@ -257,11 +257,6 @@ if [[ ! "$BUILD_COMMIT" =~ ^[0-9a-f]{40}$ || "$BUILD_COMMIT" != "$CHECKOUT_COMMI
   exit 1
 fi
 export HAWA_BUILD_COMMIT="$BUILD_COMMIT"
-# A deployment never drops a release someone else put live (release_lib.sh, hawa_deploy_keeps_live).
-if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
-  source "${ROOT_DIR}/infra/ops/release_lib.sh"
-  hawa_deploy_keeps_live "$ROOT_DIR" "$BUILD_COMMIT" || exit 1
-fi
 
 # Compose tags are mutable. Inspect the just-built image itself before starting Core/Desk or
 # switching Restate to a new worker. The deployment receipt will later record these image IDs.
@@ -308,6 +303,9 @@ fi
 # start. HAWA_RELEASE_DIRS=off runs from this checkout as before (a host not yet switched over).
 source "${ROOT_DIR}/infra/ops/release_lib.sh"
 if [[ "${HAWA_RELEASE_DIRS:-on}" != off ]]; then
+  # A deployment never drops a release someone else put live (hawa_deploy_keeps_live, ADR-270). Checked
+  # here, under the deploy lock, so a deploy that waited for another sees the release it put live.
+  hawa_deploy_keeps_live "$ROOT_DIR" "$BUILD_COMMIT" || exit 1
   python3 "${ROOT_DIR}/infra/ops/prepare_service_boundaries.py" --directory "$(hawa_shared_dir)/infra/docker" || exit 1
   RUNTIME_SHARED="$(hawa_shared_dir)"
   RELEASE_DIR="$(hawa_release_prepare "$ROOT_DIR" "$BUILD_COMMIT")" || exit 1

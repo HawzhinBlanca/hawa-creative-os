@@ -154,3 +154,21 @@ Read on real exports, with no new design made:
 - `packages/qa/test/canva-pdf-check.test.ts`: 6 tests on a synthetic PDF built as Canva writes one. It covers literal and hex strings, escaped parentheses and backslash, a missing line, Arabic visual-only, two pages, a font not embedded, no live text, image bytes that contain text operators, and not a PDF.
 - Regression: 192 files, 2425 passed, 3 skipped.
 - **Real provider calls:** four PDF exports through the office route, on existing designs only (3 retrieved and hashed; one refused by the handoff guard before any call), plus the earlier supervised import.
+
+## Addendum (2026-10-02): the customer download contract, as code
+
+Codex's customer download (ADR-260) must bind an export to critical QC, "including the photo/logo fidelity". `pictureDownloadVerdict(qaReport.pictureFidelity)` (`apps/core/src/services/export-picture-fidelity.ts`) is that contract. It has no side effects and returns `{ status, blocks, reasons }`.
+
+| Status | When | Blocks the download |
+|---|---|---|
+| `block` | The logo is missing or lost its transparency, a photo is missing, or a picture lost its transparency | Yes |
+| `block` | The check could not run, or is not on record (fails closed) | Yes, until a later export is measured |
+| `warn` | A picture moved. A person editing in Canva may move one; the office alert still names it. | No |
+| `not_applicable` | The design was not imported from an editable source | No |
+| `pass` | Every picture is in place | No |
+
+Text wrapping (`textLines`) stays advisory and never blocks.
+
+A not-measured record now carries `code: 'no_editable_source' | 'error'`. Records written before the code existed are read by their reason text.
+
+The staff verdict (`passed`, `criticalPass`) is unchanged; ADR-257's rule holds.
