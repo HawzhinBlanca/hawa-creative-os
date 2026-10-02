@@ -257,6 +257,9 @@
         "titleBarWidthShare": 0.16,
         "negativeSpaceMax": 0.65,
         "detailSizeShareMin": 0.04,
+        "displayFonts": [
+          "Inter"
+        ],
         "navy": {
           "title": "#FFFFFF",
           "lead": "#FFD700",
@@ -305,7 +308,7 @@
     },
     "artDirection": [
       "With photos: choose the composition that best communicates the subject: one hero or several photos with distinct roles. Use a diptych, sequence, mosaic or hero with supporting views when the content benefits. Only use every photo or a fixed count when the requester explicitly asks; never force a collage by default.",
-      "With photos: on a white page the hero sits in a rounded card with a soft shadow under the header, title, gold bar and lead; full-bleed, it fills 60-100% of the canvas off two edges, with a quiet region for any title over it.",
+      "With photos: the hero is big: full-bleed, filling 60-100% of the canvas off two edges with a quiet region for any title over it, or fading into the white page under a navy title band; not a small photo in a card on a document page.",
       "Text always sits on something: the white page, a rounded white, KAAE Blue or cream card, or a fade to white or to navy over 35-50% of the height. Never bare text on a busy photo.",
       "Elements bridge edges: a call-to-action tab straddling a card, a portrait breaking over a panel.",
       "With a photo of a person: cut out, placed bottom-left or left, bleeding off the edge, with the sunburst or triangle pattern behind. No circle masks.",

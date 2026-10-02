@@ -1476,10 +1476,14 @@ class SolveContext {
    *
    * ADR-236: on white paper (the brand guideline's own pages) the plate becomes the guideline's
    * header: a navy band across the top of the page holding the logo and the title.
+   *
+   * ADR-238 diverted a light concept on white to the guideline's document page (`grammarPage`).
+   * ADR-274: not for a client whose grammar carries poster rules: the photo fades into the white
+   * page under the band, as on the office's Call for Peer Evaluators post.
    */
   fadeToPaper(): StudioLayoutV2 {
     const hero = this.hero();
-    if (this.input.grammar && this.isLight() && this.input.choice.params?.paper !== 'cream' && !this.wide) return this.grammarPage(hero);
+    if (this.input.grammar && !this.input.grammar.poster && this.isLight() && this.input.choice.params?.paper !== 'cream' && !this.wide) return this.grammarPage(hero);
     const cream = surfacePalette(this.tones, 'cream');
     const navy = surfacePalette(this.tones, 'navy');
     const logo = this.logoAt('top-start');

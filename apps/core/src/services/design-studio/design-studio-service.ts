@@ -2883,10 +2883,11 @@ export class DesignStudioService {
     const idFor = (judgeId: string | number) =>
       ranked.find((x) => `candidate_${x.sourceIndex}` === String(judgeId))?.candidate.id;
 
-    if (selection.match) {
+    // ADR-274: a round robin records every match it played, both orders each.
+    for (const pair of selection.matches ?? (selection.match ? [selection.match] : [])) {
       const orders = [
-        [selection.match.orderAB, false],
-        [selection.match.orderBA, true],
+        [pair.orderAB, false],
+        [pair.orderBA, true],
       ] as const;
       for (const [order, swapped] of orders) {
         await this.repo.insertJudgment({
@@ -2991,7 +2992,10 @@ export class DesignStudioService {
       pipeline: 'v3',
       winnerId: winner.id,
       decidedBy: selection.decidedBy,
-      judgeWinner: selection.match ? idFor(selection.match.winnerId) ?? selection.match.winnerId
+      // ADR-274: after a round robin the judge's pick is its standings' sole leader, or none.
+      judgeWinner: selection.roundRobin
+        ? selection.roundRobin.pickSourceIndex === null ? null : idFor(`candidate_${selection.roundRobin.pickSourceIndex}`) ?? null
+        : selection.match ? idFor(selection.match.winnerId) ?? selection.match.winnerId
         : selection.briefBound && selection.briefBound.match.winnerId !== 'UNCERTAIN'
           ? idFor(selection.briefBound.match.winnerId) ?? null : null,
       consistent: selection.match?.isConsistent ?? (selection.briefBound ? !selection.briefBound.match.decision.uncertain : null),
@@ -3000,6 +3004,11 @@ export class DesignStudioService {
       excludedCandidates: excludedEvidence(ranked),
       // ADR-170: why the house prior chose, when the judge left the pair undecided.
       ...(selection.prior ? { prior: selection.prior } : {}),
+      // ADR-274: the round robin's standings, by candidate.
+      ...(selection.roundRobin ? { roundRobin: {
+        standings: selection.roundRobin.standings.map((r) => ({ candidateId: idFor(`candidate_${r.sourceIndex}`) ?? null, score: r.score })),
+        matches: selection.matches?.length ?? 0,
+      } } : {}),
     };
     stages.canary = { passed: selection.canary?.passed ?? selection.briefBound?.canaryPassed ?? null,
       ...(selection.briefBound?.canaryUnavailable ? { unavailable: selection.briefBound.canaryUnavailable } : {}) };

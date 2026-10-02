@@ -425,7 +425,9 @@ describe('the judge reads posters as posters; other clients\' prompts are unchan
   it('the guideline-fidelity rule does not count a poster\'s missing document header against it', () => {
     const rule = guidelineFidelityRule(G);
     expect(rule.length).toBeLessThanOrEqual(MAX_JUDGE_HOUSE_RULE_CHARS);
-    expect(rule).toMatch(/a poster: the bar/);
+    // ADR-274: nor its missing gold bar or its dark title tab (the office's own techniques).
+    expect(rule).toMatch(/document page lacking header rule/);
+    expect(rule).toMatch(/dark title tab or missing bar is fine/);
   });
 });
 

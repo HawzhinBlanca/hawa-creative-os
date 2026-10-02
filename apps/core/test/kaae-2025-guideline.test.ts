@@ -380,14 +380,14 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
     return ranked as Array<(typeof ranked)[number] & { candidate: CandidateState }>;
   }
 
-  it('the one-photo report: with no tone asked, every recipe sits on the white page, one is the guideline page, all pass hard QA', async () => {
+  it('the one-photo report: with no tone asked, every recipe sits on the white page, none is replaced by the guideline page (ADR-274), all pass hard QA', async () => {
     // The model still asks for navy out of habit: the photo is bright and nothing in the brief calls for dark.
     const ranked = await photoRun('Design a report post for KAAE using this photo and the text.', 'navy');
     expect(ranked.length).toBeGreaterThanOrEqual(2);
-    const page = ranked.find((r) => r.layout.composition?.grammar === 'page');
-    expect(page, ranked.map((r) => r.layout.artDirection?.recipe).join(',')).toBeDefined();
-    expect(page!.layout.artDirection?.recipe).toBe('fade_to_paper');
-    expect(page!.layout.shapes.map((s) => s.primitive)).toEqual(expect.arrayContaining(['header_rule', 'header_accent', 'title_bar', 'card', 'foot_rule']));
+    // ADR-274: KAAE's grammar carries poster rules, so no photo concept becomes the guideline's
+    // document page (ADR-238 did that, and the page then won every split judge by default).
+    expect(ranked.some((r) => r.layout.composition), ranked.map((r) => r.layout.artDirection?.recipe).join(',')).toBe(false);
+    expect(ranked.every((r) => r.layout.artDirection?.recipe)).toBe(true);
     for (const r of ranked) {
       const recipe = r.layout.artDirection?.recipe;
       expect(r.layout.background.color, `${recipe} ground`).toBe(WHITE);
@@ -435,13 +435,13 @@ describe('ADR-271: the judge decides between the compositions; the guideline pri
     expect(houseRulesFor({})).toEqual({});
   });
 
-  it('a judge that prefers one composition by three votes of five in both orders, and passes its canary, decides; it reads the poster criteria', async () => {
+  it('ADR-274: the judge sees all three compositions in a round robin; the third by composite can win; it reads the poster criteria', async () => {
     const { ctx, ranked } = await typographicRun(GALA_COPY, GALA_ROLES, 'An evening invitation for the gala dinner, dark navy.', GALA_ANSWER);
     const eligible = ranked.filter((r) => r.hardQa?.passed);
-    expect(eligible.length).toBeGreaterThanOrEqual(2);
+    expect(eligible).toHaveLength(3);
     expect(eligible.every((r) => r.layout.composition)).toBe(true);
-    // The judge prefers the design it is shown second 3-2 in both orders, then passes its canary.
-    const plan = [verdict(2), verdict(3), verdict(5), verdict(0)];
+    // Pairs (1st,2nd) split; the 3rd wins both of its pairs 3-2 in both orders; then the canary.
+    const plan = [verdict(3), verdict(3), verdict(2), verdict(3), verdict(2), verdict(3), verdict(5), verdict(0)];
     const requests: any[] = [];
     const judge = { createStructuredCompletion: async (req: any) => {
       requests.push(req);
@@ -449,11 +449,17 @@ describe('ADR-271: the judge decides between the compositions; the guideline pri
       return { data, rawText: JSON.stringify(data), receipt: { ...RECEIPT, model: 'gpt-4.1-mini' } };
     } };
     const { selection } = await runJudgeStageV3({ ...ctx, client: judge as any }, ranked.map((r) => r.candidate));
-    expect(requests).toHaveLength(4);
+    expect(requests).toHaveLength(8);
     const system = requests[0].messages[0].content as string;
     expect(system).toContain(JSON.stringify(guidelineFidelityRule(GRAMMAR)));
     expect(system).toContain(POSTER_IMPACT_CRITERIA.hierarchy.trim());
     expect(system).toContain(POSTER_IMPACT_CRITERIA.composition.trim());
+    expect(system).not.toMatch(/You must take them into account/);
+    // The office reference is off by default: two images a call.
+    expect(requests.every((r) => r.messages[1].content.filter((p: any) => p.type === 'image_url').length === 2)).toBe(true);
+    expect(selection.matches).toHaveLength(3);
+    expect(selection.winner.sourceIndex).toBe(eligible[2].sourceIndex);
+    expect(selection.roundRobin!.pickSourceIndex).toBe(eligible[2].sourceIndex);
     expect(selection.decidedBy).toBe('judge');
     expect(selection.prior).toBeUndefined();
     expect(selection.humanChoiceRecommended).toBe(false);

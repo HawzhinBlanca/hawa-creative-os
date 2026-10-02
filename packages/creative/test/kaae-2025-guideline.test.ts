@@ -35,6 +35,8 @@ const RAW = JSON.parse(readFileSync(new URL('../assets/kaae-reference.json', imp
 const REF = studioReferenceFromRaw(RAW);
 const PALETTE = REF.palette;
 const G = pageGrammarFromRaw(RAW)!;
+/** ADR-274: the same grammar without poster rules, for the behaviour a client without them keeps. */
+const G_PAGES = { ...G, poster: undefined };
 const [WHITE, CREAM, BLUE, GOLD, MIDNIGHT, ROYAL, OCEAN, SKY, SUN] = ['#FFFFFF', '#FDF8F3', '#4770A3', '#F7B500', '#0A1628', '#1E3A5F', '#2C5282', '#4A90E2', '#FFD700'];
 const LOGO = readFileSync(new URL('../assets/logos/kaae-official-logo.png', import.meta.url));
 const OWNER = { 0: 'KAAE K-12 Pilot Study', 1: 'Field Visit Report', 2: 'Insights from KAAE school field visits and next steps toward education quality improvement.' };
@@ -50,10 +52,10 @@ const context = (copyCount = 3, photoCount = 1): LayoutValidationContext => ({
   photoSelection: { mode: 'choose', minimum: 1 },
   reference: { rules: { fontFamily: 'Inter', palette: PALETTE, admittedDisplayFonts: KAAE_FONTS }, logoAspect: 1, logoMinimumWidthPx: 80, logoClearSpaceShareOfHeight: 0.15 },
 });
-const solve = (recipe: ArtDirectionChoice['recipe'], params: ArtDirectionChoice['params'], p = photo(0.8), grammar = false) => solveRecipe({
+const solve = (recipe: ArtDirectionChoice['recipe'], params: ArtDirectionChoice['params'], p = photo(0.8), grammar: boolean | typeof G = false) => solveRecipe({
   width: 1080, height: 1350, copy: { text: OWNER }, photos: [p], palette: PALETTE, logoAspect: 1,
   choice: { recipe, heroPhotoIndex: 0, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: SLOTS, params },
-  ...(grammar ? { grammar: G, logoClearSpaceShare: 0.15, logoMinimumWidthPx: 80 } : {}),
+  ...(grammar ? { grammar: grammar === true ? G : grammar, logoClearSpaceShare: 0.15, logoMinimumWidthPx: 80 } : {}),
 });
 const contrast = (a: string, b: string) => calculateLuminanceContrastRatio(hexToLuminance(a), hexToLuminance(b));
 it('a guideline alternative preserves content-aware multiple-photo compositions through render, QA and editable transfer', async () => {
@@ -492,8 +494,8 @@ describe('light first (ADR-236 logic, re-pointed at the 2025 palette)', () => {
     expect(artDirectionPrior(light, dark, ['report_release'])).toMatchObject({ winner: null });
   });
 
-  it('fade_to_paper on white with the grammar is the guideline page: the photo in a rounded card under the header, title, bar and lead', () => {
-    const page = solve('fade_to_paper', { surfaceTone: 'cream', paper: 'white', align: 'start' }, photo(0.8), true);
+  it('fade_to_paper on white with a grammar without poster rules is the guideline page: the photo in a rounded card under the header, title, bar and lead', () => {
+    const page = solve('fade_to_paper', { surfaceTone: 'cream', paper: 'white', align: 'start' }, photo(0.8), G_PAGES);
     expect(page.composition).toMatchObject({ grammar: 'page' });
     expect(page.artDirection).toMatchObject({ recipe: 'fade_to_paper', heroPhotoIndex: 0 });
     const kinds = page.shapes.map((s) => s.primitive);
@@ -505,12 +507,37 @@ describe('light first (ADR-236 logic, re-pointed at the 2025 palette)', () => {
     expect(validateLayoutV2(page, context())).toMatchObject({ ok: true });
   });
 
-  it('solveConcepts with the grammar makes one light concept the guideline page', () => {
+  it('ADR-274: with poster rules (KAAE), fade_to_paper on white fades the photo into the white page under the title band, not the guideline page', () => {
+    const fade = solve('fade_to_paper', { surfaceTone: 'cream', paper: 'white', align: 'start' }, photo(0.8), G);
+    expect(fade.composition).toBeUndefined();
+    expect(fade.background.color).toBe(WHITE);
+    expect(fade.artDirection).toMatchObject({ recipe: 'fade_to_paper', heroPhotoIndex: 0 });
+    const ph = fade.photos![0];
+    expect(ph.fade).toMatchObject({ edge: 'top' });
+    expect(ph).toMatchObject({ x: 0, width: 1080 });
+    expect(ph.y + ph.height).toBe(1350);
+    expect(fade.shapes.some((s) => s.primitive === 'card')).toBe(false);
+    expect(fade.shapes.some((s) => s.surface === 'plate' && s.x === 0 && s.width === 1080)).toBe(true);
+    expect(validateLayoutV2(fade, context())).toMatchObject({ ok: true });
+    // Production's hard QA, on the composite with the photo drawn.
+    const files = [{ bytes: syntheticPhoto(2048, 1536, 3), mediaType: 'image/png' as const }];
+    const render = renderLayoutV2(fade, { copyText: OWNER, logoDataUri: `data:image/png;base64,${LOGO.toString('base64')}`, photoFiles: files });
+    const qa = evaluateHardQa(fade, { ...qaContext(Object.values(OWNER)), photoCount: 1, photoSelection: { mode: 'choose', minimum: 1 }, renderedComposite: render.noTextPng });
+    expect(qa.passed, qa.messages.join(' | ')).toBe(true);
+  });
+
+  it('solveConcepts with a grammar without poster rules makes one light concept the guideline page; with poster rules the concepts stand (ADR-274)', () => {
     const copyBlocks = [0, 1, 2].map((index) => ({ index, text: OWNER[index as 0 | 1 | 2], script: 'latin' as const, role: index === 0 ? 'title' : index === 1 ? 'subtitle' : 'body' }));
     const choice = (recipe: ArtDirectionChoice['recipe']): ArtDirectionChoice => ({ recipe, heroPhotoIndex: 0, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: SLOTS, params: { frame: 'inset', align: 'start' } });
-    const opts = { brief: '', copyBlocks: copyBlocks as any, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: [photo(0.8)] as any, logoAspect: 1, grammar: G, logoClearSpaceShare: 0.15 };
+    const opts = { brief: '', copyBlocks: copyBlocks as any, palette: PALETTE, canvasWidth: 1080, canvasHeight: 1350, photos: [photo(0.8)] as any, logoAspect: 1, grammar: G_PAGES, logoClearSpaceShare: 0.15 };
     const solved = solveConcepts([choice('hero_fade_report'), choice('scrim_caption'), choice('hero_plate')], opts);
     expect(solved.layouts.map((l) => l.artDirection?.recipe)).toContain('fade_to_paper');
+    expect(solved.replaced.map((r) => r.reason)).toEqual(expect.arrayContaining([expect.stringMatching(/^GUIDELINE_PAGE/)]));
+    // ADR-274: with poster rules no photo concept is replaced by the guideline's document page.
+    const poster = solveConcepts([choice('hero_fade_report'), choice('scrim_caption'), choice('hero_plate')], { ...opts, grammar: G });
+    expect(poster.layouts.map((l) => l.artDirection?.recipe)).toEqual(['hero_fade_report', 'scrim_caption', 'hero_plate']);
+    expect(poster.layouts.some((l) => l.composition)).toBe(false);
+    expect(poster.replaced.some((r) => r.reason.startsWith('GUIDELINE_PAGE'))).toBe(false);
     // Without the grammar (a client with none) nothing is replaced.
     const plain = solveConcepts([choice('hero_fade_report'), choice('scrim_caption')], { ...opts, grammar: undefined });
     expect(plain.layouts.map((l) => l.artDirection?.recipe)).not.toContain('fade_to_paper');
