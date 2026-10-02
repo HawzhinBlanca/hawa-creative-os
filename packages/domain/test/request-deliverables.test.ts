@@ -117,3 +117,19 @@ describe('explicit request deliverables', () => {
     for(const id of ['0','123:other-task','-1','123:00000000-0000-4000-8000-000000000011:extra',123]) expect(isLateChangeReceiptId(id)).toBe(false);
   });
 });
+
+// Live 2026-10-02 (canary chat): a client's name between the article and the format kept two designs as one.
+describe('a client name before the format', () => {
+  it('splits "a Canary Test poster for …, and also a flyer for …" and keeps each piece\'s words', () => {
+    const plan = planRequestDeliverables('Hi, could you please make a Canary Test poster for the Autumn Fair on 1 November 2026 at 10 AM in the Main Hall, Erbil, and also a flyer for the Book Club on 5 November 2026 at 5 PM in the Library, Erbil.');
+    expect(plan).toMatchObject({ kind: 'multiple', count: 2, parts: [
+      { text: 'a Canary Test poster for the Autumn Fair on 1 November 2026 at 10 AM in the Main Hall, Erbil' },
+      { text: 'a flyer for the Book Club on 5 November 2026 at 5 PM in the Library, Erbil.' }] });
+  });
+  it('splits "a KAAE poster for … and a story for …"', () => {
+    expect(planRequestDeliverables('Can you make a KAAE poster for the Graduation Day and a story for the Open Day?')).toMatchObject({ kind: 'multiple', count: 2 });
+  });
+  it('never reads lower-case words as a name ("put the poster date in red" is one request)', () => {
+    expect(planRequestDeliverables('make a poster for the fair, put the poster date in red')).toEqual({ kind: 'single' });
+  });
+});

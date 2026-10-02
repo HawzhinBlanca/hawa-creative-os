@@ -109,3 +109,18 @@ Two follow-ups on taking back a cancel:
    - Cause: the heuristics read the filler-led words as a short new brief, and with nothing open the route opened a brief.
    - Fix: short undo words (`readsAsUndo`) are now conversation in the rules, and they reach the withdrawal answer. That answer still applies only within the 30-minute window, and only if nothing moved after the cancel.
    - Test: `requester-reply-fixes.test.ts`, "when the only design was just cancelled".
+
+## Addendum 2 (2026-10-02, canary chat): a client name before the format
+
+The canary chat sent "Hi, could you please make a Canary Test poster for the Autumn Fair on 1 November 2026 …, and also a flyer for the Book Club on 5 November 2026 …". Two things went wrong:
+- it stayed **one** request;
+- it was titled "Canary Test poster for the Autumn Fair on 1 N…".
+
+**Cause:** in both places, a client's name between the article and the format ("a Canary Test poster", "a KAAE poster") hid the format.
+
+**Fix:**
+- The splitter (`request-deliverables.ts`) and the title (`request-title.ts`) set such a name aside to read the format, with a case-sensitive pattern. Under `iu`, `\p{Lu}` matches any letter, so a broad pattern would also have split "put the poster date in red".
+- Each piece keeps its own words, so the client is still named.
+- The title now also reads "for the <Capitalised Name>" as a lead-in. A name stops before a number ("Autumn Fair on 1 November" → "Autumn Fair"). A lower-case subject keeps its words ("Poster for the graduation ceremony").
+
+**Tests:** `packages/domain/test/request-deliverables.test.ts`, `apps/core/test/request-title-names.test.ts`.

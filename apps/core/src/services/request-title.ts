@@ -34,6 +34,14 @@ const TITLE_FORMAT_LEAD = new RegExp('^(?:(?:a|an|the|one)\\s+)?' +
   `(?:${TITLE_NOUNS})s?\\s+` +
   '(?:announcing|advertising|promoting|introducing|celebrating|about|(?:to\\s+)?(?:announce|promote|advertise|celebrate|introduce)|' +
   'inviting\\s+(?:\\p{L}+\\s+){0,2}to|for(?=\\s+(?:our|my)\\b))\\s+(?:(?:our|my|the|this|a|an)\\s+)?', 'iu');
+/**
+ * Live 2026-10-02 (canary chat): "a Canary Test poster for the Autumn Fair on 1 November …" was titled
+ * "Canary Test poster for the Autumn Fair on 1 N…". A client's or brand's name before the format, and
+ * "for the" before a capitalised name, are lead-ins too. Both are case-sensitive (no `i` flag: under
+ * `iu`, \p{Lu} matches any letter), so "poster for the graduation ceremony" keeps its words.
+ */
+const NAME_BEFORE_FORMAT = new RegExp(`^(?:\\p{Lu}[\\p{L}\\p{N}&'’-]*\\s+){1,3}(?=(?:${TITLE_NOUNS})s?\\s)`, 'u');
+const FORMAT_FOR_THE_NAME = new RegExp(`^(?:${TITLE_NOUNS})s?\\s+for\\s+the\\s+(?=\\p{Lu})`, 'u');
 /** Small words inside a name ("Festival of Lights", "Art & Music Week"): kept between capitalised words. */
 const NAME_JOINERS = /^(?:of|and|&|for|in|on|the|to|at|de|al|el)$/iu;
 
@@ -49,7 +57,8 @@ function subjectName(rest: string): string {
     const word = words[i];
     const capital = /^[\p{Lu}\d]/u.test(word);
     if (capital) { named.push(word); continue; }
-    if (named.length && NAME_JOINERS.test(word) && words[i + 1] && /^[\p{Lu}\d]/u.test(words[i + 1])) { named.push(word); continue; }
+    // "Autumn Fair on 1 November": a joiner before a number starts the date, not more of the name.
+    if (named.length && NAME_JOINERS.test(word) && words[i + 1] && /^\p{Lu}/u.test(words[i + 1])) { named.push(word); continue; }
     break;
   }
   return named.length >= 2 ? named.join(' ').replace(/[\s,:;،'’-]+$/u, '') : sentence;
@@ -66,9 +75,10 @@ function subjectName(rest: string): string {
  */
 export function spokenTitle(line: string): string {
   const lead = line.replace(TITLE_GREETING, '').replace(TITLE_REQUEST, '').replace(TITLE_NOUN_PLEASE, '');
-  const format = TITLE_FORMAT_LEAD.exec(lead);
+  const unnamed = lead.replace(NAME_BEFORE_FORMAT, '');
+  const format = TITLE_FORMAT_LEAD.exec(lead) ?? TITLE_FORMAT_LEAD.exec(unnamed) ?? FORMAT_FOR_THE_NAME.exec(unnamed);
   if (format) {
-    const subject = subjectName(lead.slice(format[0].length));
+    const subject = subjectName((format.input === lead ? lead : unnamed).slice(format[0].length));
     if (subject.split(/\s+/).filter(Boolean).length >= 2) return subject.replace(/^[a-z]/, (c) => c.toUpperCase());
   }
   if (lead === line) return line;

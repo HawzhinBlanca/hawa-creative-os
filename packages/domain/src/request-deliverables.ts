@@ -39,6 +39,15 @@ export function requestedDeliverableVariant(text:string):RequestDeliverable['var
 const GREETING=/^(?:(?:hi|hello|hey|hiya|dear\s+(?:team|all|office)|good\s+(?:morning|afternoon|evening|day)|salam|salaam|سڵاو|بەیانی\s+باش|ئێوارە\s+باش|ڕۆژباش)(?:\s+(?:there|team|all|everyone|guys))?\s*[,!.،:;-]*\s+)+/iu;
 const POLITE='(?:(?:please|kindly|pls)\\s+)?(?:(?:can|could|would|will)\\s+you\\s+(?:please\\s+|kindly\\s+)?|(?:we|i)\\s+would\\s+like\\s+(?:you\\s+)?to\\s+|(?:we|i)\\s+(?:want|need)\\s+you\\s+to\\s+)?';
 
+/**
+ * Live 2026-10-02 (canary chat): "make a Canary Test poster for the Autumn Fair …, and also a flyer for the
+ * Book Club …" stayed one request: a client's name stood between the article and the format. The name is
+ * set aside only to read the format; the piece keeps its words. Case-sensitive on purpose: under `iu`,
+ * \p{Lu} matches any letter ("put the poster" is not a name).
+ */
+const NAME_AFTER_ARTICLE=/^((?:an?|the)\s+)(?:\p{Lu}[\p{L}\p{N}&'’-]*\s+){1,3}(?=(?:(?:instagram|facebook|square|landscape)\s+)?(?:poster|story|post|flyer|banner|invitation|thumbnail)(?![\p{L}\p{N}_]))/u;
+const unnamed=(piece:string)=>piece.replace(NAME_AFTER_ARTICLE,'$1');
+
 export function planRequestDeliverables(raw:string):RequestDeliverables {
   const source=String(raw||'').trim();
   const lead=GREETING.exec(source)?.[0] ?? '';
@@ -53,17 +62,17 @@ export function planRequestDeliverables(raw:string):RequestDeliverables {
     if (copyMarker.test(body)) return {kind:'single'};
     // ADR-252: ", and also a flyer …" and "; also a story …" separate deliverables as "and" does.
     const pieces=body.split(new RegExp(`(?:,?\\s+(?:and|&)\\s+(?:also\\s+)?|[,;]\\s*(?:also\\s+)?)(?=${ROLE})`,'giu')).map(p=>p.trim());
-    if (pieces.length<2 || !pieces.every(p=>new RegExp(`^${ROLE}`,'iu').test(p))) return {kind:'single'};
+    if (pieces.length<2 || !pieces.every(p=>new RegExp(`^${ROLE}`,'iu').test(unnamed(p)))) return {kind:'single'};
     // "… for the open day, the flyer we sent last week had the wrong date" names an earlier design, not
     // another one asked for.
-    if (pieces.slice(1).some(p=>new RegExp(`^the\\s+${ROLE}`,'iu').test(p) && !new RegExp(`^${ROLE}\\s+(?:for|about)\\s+\\S`,'iu').test(p)))
+    if (pieces.slice(1).some(p=>new RegExp(`^the\\s+${ROLE}`,'iu').test(unnamed(p)) && !new RegExp(`^${ROLE}\\s+(?:for|about)\\s+\\S`,'iu').test(unnamed(p))))
       return {kind:'single'};
     if (pieces.length>MAX_REQUEST_DELIVERABLES) return {kind:'limit',count:pieces.length};
     const roleOnly=new RegExp(`^${ROLE}$`,'iu');
     const commonFormats=pieces.slice(0,-1).every(p=>roleOnly.test(p));
-    const lastRole=new RegExp(`^${ROLE}`,'iu').exec(pieces.at(-1)!)![0];
-    const suffix=pieces.at(-1)!.slice(lastRole.length);
-    const explicitSubjects=pieces.every(p=>new RegExp(`^${ROLE}\\s+(?:for|about)\\s+\\S`,'iu').test(p));
+    const lastRole=new RegExp(`^${ROLE}`,'iu').exec(unnamed(pieces.at(-1)!))![0];
+    const suffix=unnamed(pieces.at(-1)!).slice(lastRole.length);
+    const explicitSubjects=pieces.every(p=>new RegExp(`^${ROLE}\\s+(?:for|about)\\s+\\S`,'iu').test(unnamed(p)));
     return {kind:'multiple',count:pieces.length,shared:(lead+command[0]).trim(),parts:pieces.map((p,i)=>({
       text:commonFormats && i<pieces.length-1 ? p+suffix : p,variant:requestedDeliverableVariant(p),
       ...(!commonFormats && !explicitSubjects ? {detailsRequired:true as const} : {})}))};
