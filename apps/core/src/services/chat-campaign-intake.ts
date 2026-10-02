@@ -270,7 +270,10 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     // and the direction marks a Sorani keyboard puts before Latin copy are not part of the name (ADR-180).
     // ADR-231: request-title.ts, also without the format and verb before the subject ("an Instagram post
     // announcing our …") and with no direction mark at either edge.
-    const titleFor = (headline: string) => requestTitle({ headline, label: isKaae ? 'KAAE' : senderName, rawText, clientLabel: isKaae });
+    // Live 2026-10-02: a packed client's request was labelled with the sender's first name ("Canary: Spring
+    // Concert" for the Canary Test client). The label is the client's short name, else the sender's.
+    const clientName = isKaae ? 'KAAE' : clientPackOf(clientId)?.names.en;
+    const titleFor = (headline: string) => requestTitle({ headline, label: clientName ?? senderName, rawText, clientLabel: Boolean(clientName) });
 
     if (input.isInstructionOnly) {
       headlineEn = undefined;
@@ -285,7 +288,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       const lines = rawText.split('\n').map((line) => line.trim()).filter(Boolean);
       const named = lines.find((line) => !isWeakBriefLine(line));
       const neutral = neutralRequestTitle(senderName);
-      title = named !== undefined || !lines.length ? titleFor(named ?? '') : isKaae ? `KAAE: ${neutral}` : neutral;
+      title = named !== undefined || !lines.length ? titleFor(named ?? '') : clientName ? `${clientName}: ${neutral}` : neutral;
       // A directive stays RECEIVED, as the database records it; isInstructionOnly marks it. It was
       // CLARIFICATION_REQUIRED here, a word no other layer had, until the database row overwrote it.
     } else if (primaryLanguage === 'en') {
