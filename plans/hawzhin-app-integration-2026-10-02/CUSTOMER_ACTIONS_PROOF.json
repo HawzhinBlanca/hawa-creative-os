@@ -1,7 +1,7 @@
 {
   "date": "2026-10-02",
   "adr": "ADR263",
-  "status": "CONNECTED_QUALIFIED_FULL_SOURCE_PENDING_NOT_LAUNCHED",
+  "status": "LOCAL_SOURCE_QUALIFIED_NOT_LAUNCHED",
   "branch": "codex/hawzhin-app-integration",
   "requirements": [
     "FR-029",
@@ -27,32 +27,60 @@
     "workerTypes": "PASS",
     "scriptTypes": "PASS",
     "migration": "087_customer_workflow_actions.sql",
-    "fullSuite": "PENDING",
+    "fullSuite": {
+      "passed": 8100,
+      "failed": 0,
+      "skipped": 67,
+      "total": 8167,
+      "report": "output/qualification/2026-10-02/customer-actions/FINAL_FULL_ENGINE_TESTS.json"
+    },
     "workerPolicyRepair": {
       "passed": 60,
       "failed": 0,
       "skipped": 0,
       "report": "output/qualification/2026-10-02/customer-actions/WORKER_POLICY_REPAIR_TESTS.json"
-    }
+    },
+    "sourceCommit": "8d72c6d5",
+    "workerPolicyRepairCommit": "20cd1dbd",
+    "testedSealedCommit": "65e6d024952d0cfe178596e88a1702aebbd1cfe5",
+    "sourceManifest": "VERIFIED",
+    "blueprint": {
+      "passed": 1941,
+      "failed": 0,
+      "warnings": 0
+    },
+    "anyRatchet": "952 <= 1053 PASS",
+    "providerEgress": "PASS"
   },
   "website": {
     "tests": {
       "passed": 856,
       "failed": 0,
-      "skipped": 0
+      "skipped": 0,
+      "report": "output/qualification/2026-10-02-designer-actions/FINAL_FULL_TESTS.json"
     },
     "browser": {
       "passed": 7,
       "failed": 0,
       "skipped": 0,
-      "flaky": 0
+      "flaky": 0,
+      "report": "output/qualification/2026-10-02-designer-actions/FINAL_BROWSER_TESTS.json"
     },
     "verificationScope": "actual Chromium with synthetic Supabase/customer transport; not live hosted/native quality",
     "types": "PASS",
     "build": "PASS",
     "affectedLint": "PASS",
     "reports": "../hawzhin-app-integration/output/qualification/2026-10-02-designer-actions/",
-    "sourceCommit": "223ff54a36ed18d418fb7350997d9a46d8f321bb"
+    "sourceCommit": "223ff54a36ed18d418fb7350997d9a46d8f321bb",
+    "ci": {
+      "status": "NOT_QUALIFIED",
+      "rootLockMismatches": 26,
+      "missingScripts": 4,
+      "mainNode": 18,
+      "observedPeerInstallFailure": true,
+      "coverageProviderDeclared": false,
+      "report": "output/qualification/2026-10-02-designer-actions/CI_DIAGNOSIS.json"
+    }
   },
   "durableTransport": {
     "timestamp": "2026-10-02T18:38:34.289Z",
@@ -144,7 +172,6 @@
     }
   ],
   "remaining": [
-    "full source seal/regression qualification",
     "independent customer acceptance/current QA/native-version/hash-bound PNG/editable PPTX downloads",
     "website CI repair",
     "public hosting/gateway/HTTPS/coordinated restore",
