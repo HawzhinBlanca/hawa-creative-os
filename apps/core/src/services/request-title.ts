@@ -41,7 +41,7 @@ const TITLE_FORMAT_LEAD = new RegExp('^(?:(?:a|an|the|one)\\s+)?' +
  * `iu`, \p{Lu} matches any letter), so "poster for the graduation ceremony" keeps its words.
  */
 const NAME_BEFORE_FORMAT = new RegExp(`^(?:\\p{Lu}[\\p{L}\\p{N}&'’-]*\\s+){1,3}(?=(?:${TITLE_NOUNS})s?\\s)`, 'u');
-const FORMAT_FOR_THE_NAME = new RegExp(`^(?:${TITLE_NOUNS})s?\\s+for\\s+the\\s+(?=\\p{Lu})`, 'u');
+const FORMAT_FOR_THE_NAME = new RegExp(`^(?:${TITLE_NOUNS})s?\\s+for\\s+(?:the\\s+)?(?=\\p{Lu})`, 'u');
 /** Small words inside a name ("Festival of Lights", "Art & Music Week"): kept between capitalised words. */
 const NAME_JOINERS = /^(?:of|and|&|for|in|on|the|to|at|de|al|el)$/iu;
 

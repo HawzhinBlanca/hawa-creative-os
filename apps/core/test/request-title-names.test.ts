@@ -7,6 +7,7 @@ describe('a design named after a client name and "for the"', () => {
   it.each([
     ['Hi, could you please make a Canary Test poster for the Autumn Fair on 1 November 2026 at 10 AM in the Main Hall, Erbil', 'Autumn Fair'],
     ['a KAAE poster for the Graduation Day', 'Graduation Day'],
+    ['Please make a Canary Test poster for Science Week on 3 November 2026 at 9 AM in the Main Hall, Erbil. Size: 3508x4961', 'Science Week'],
     ['Can you make a poster for the Quality Assurance Workshop on 15 October 2026 at 9:30 AM?', 'Quality Assurance Workshop'],
   ])('"%s" → "%s"', (line, name) => {
     expect(spokenTitle(line)).toBe(name);
