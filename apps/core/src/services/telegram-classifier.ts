@@ -147,6 +147,9 @@ const ACKNOWLEDGEMENT_PHRASES = [
   'perfect', 'nice', 'good', 'cool', 'looks good', 'looks great', 'looks perfect', 'looks nice', 'all good', 'got it', 'received',
   'noted', 'done', 'super', 'excellent', 'wonderful', 'amazing', 'love it', 'approved', 'appreciated', 'much appreciated',
   'with thanks', 'with many thanks',
+  // ADR-252 (friction 9): liking a draft is thanks, never the new-design greeting.
+  'i love it', 'we love it', 'like it', 'i like it', 'we like it', 'i really like it', 'we really like it', 'really like it',
+  'lovely', 'beautiful',
   'سوپاس', 'زۆر سوپاس', 'سوپاس بۆ تۆ', 'سوپاست دەکەم', 'زۆر سوپاست دەکەم', 'سپاس', 'مەمنون', 'باشە', 'زۆر باشە',
   'دەستت خۆش', 'دەستت خۆش بێت', 'دەستخۆش', 'دەستخۆشی', 'ناوازەیە', 'جوانە', 'زۆر جوانە',
   'شکرا', 'شكرا', 'شکراً', 'شكراً',
@@ -181,14 +184,74 @@ const ACKNOWLEDGEMENT = new RegExp(
 );
 
 /**
+ * ADR-252 (friction 8): emoji that say the requester is not happy (thumbs down, anger, a cross, a
+ * frown, tears). "👎", "😡" and "❌" were read as thanks, as every pictograph was, and answered
+ * "🙏 Thank you."
+ */
+const NEGATIVE_EMOJI = /[\u{1F44E}\u{1F621}\u{1F620}\u{1F92C}\u{274C}\u{274E}\u{2716}\u{1F6AB}\u{26D4}\u{1F61E}\u{1F61F}\u{1F622}\u{1F62D}\u{1F629}\u{1F62B}\u{1F612}\u{1F624}\u{1F615}\u{1F641}\u{2639}\u{1F616}\u{1F623}\u{1F92E}\u{1F922}\u{1F4A9}\u{1F494}\u{1F644}]/u;
+const ONLY_EMOJI = /^(?:[\p{Extended_Pictographic}\u200d\u20e3]+[\s!.،,؛:;?؟]*)+$/u;
+const withoutModifiers = (text: string) => text.replace(/[\u{1F3FB}-\u{1F3FF}\uFE0F]/gu, '').trim();
+
+/**
+ * Emoji alone, at least one of which is not happy ("👎", "😡😡", "👍❌"): unhappiness the office
+ * should hear, never thanks.
+ */
+export function isNegativeReaction(text: string): boolean {
+  const t = withoutModifiers(text);
+  return t.length > 0 && t.length <= 60 && ONLY_EMOJI.test(t) && NEGATIVE_EMOJI.test(t);
+}
+
+/**
  * Short enough to rule out backtracking on a long message, and nothing but thanks, an OK or a
  * receipt. Skin tones (U+1F3FB–1F3FF) and the emoji presentation selector are not pictographs
- * themselves, so "👍🏻" failed until they were dropped.
+ * themselves, so "👍🏻" failed until they were dropped. An unhappy emoji is never thanks (ADR-252).
  */
 export function isAcknowledgement(text: string): boolean {
-  const t = text.replace(/[\u{1F3FB}-\u{1F3FF}\uFE0F]/gu, '').trim();
-  return t.length > 0 && t.length <= 100 && ACKNOWLEDGEMENT.test(t);
+  const t = withoutModifiers(text);
+  return t.length > 0 && t.length <= 100 && !NEGATIVE_EMOJI.test(t) && ACKNOWLEDGEMENT.test(t);
 }
+
+/**
+ * ADR-252 (friction 7): words that take back a cancel the requester just made. Explicit ones name
+ * the cancel ("sorry I cancelled by mistake, please continue", "I didn't mean to cancel it", "don't
+ * cancel it after all"); they are never a change to some other open design.
+ */
+const UNDO_CANCEL_EN = [
+  // "I cancelled it by mistake", "we just stopped it accidentally" (a past cancel; "cancel it, I sent it
+  // by mistake" is a cancel with its reason, ADR-239, and is not one).
+  /\b(?:i|we)(?:\s+(?:have|had|just|accidentally|mistakenly))*\s+(?:cancell?ed|stopped|withdrew)\b[^.!?\n]{0,30}\b(?:by\s+(?:mistake|accident)|accidentally|mistakenly|in\s+error|wrongly)\b/i,
+  /\b(?:cancell?ed|stopped|withdrawn)\s+(?:it\s+|that\s+|this\s+)?(?:by\s+(?:mistake|accident)|accidentally|in\s+error)\b/i,
+  /\bcancel(?:l?ation)?\s+was\s+(?:a\s+)?mistake\b/i,
+  /\b(?:did\s*n[o']?t|never)\s+(?:mean|want)\s+(?:to\s+)?(?:cancel|stop|withdraw)\b/i,
+  /\b(?:do\s*n[o']?t|please\s+don'?t)\s+cancel\s+(?:it|that|this)\b(?![^.!?\n]*\bcancel\b)/i,
+  /\bun-?cancel\b|\b(?:undo|reverse|take\s+back)\s+(?:the\s+|my\s+|that\s+)?(?:cancel(?:l?ation)?|withdrawal)\b/i,
+];
+// Sorani: "I cancelled it by mistake" (بە هەڵە … هەڵوەشاند, the past stem only), "don't cancel it" (هەڵی مەوەشێنەوە).
+const UNDO_CANCEL_CKB = [
+  /بە\s*هەڵە[^.!؟\n]{0,40}هەڵ\s*(?:م|مان)?\s*(?:ی\s*)?وەشاند/u,
+  /هەڵ\s*(?:ی\s*)?مەوەشێن/u,
+];
+export function asksToUndoCancel(text: string): boolean {
+  const t = withoutModifiers(text);
+  if (!t || t.length > 300) return false;
+  return UNDO_CANCEL_EN.some((p) => p.test(t)) || UNDO_CANCEL_CKB.some((p) => p.test(t));
+}
+
+/**
+ * Short words that, said just after a cancel, take it back: "undo that", "bring it back", "actually
+ * continue", "carry on". Alone they mean nothing certain, so they count only right after a withdrawal
+ * (lifecycle-chat-answers.ts); with any other words they are read as any message is.
+ */
+const UNDO_FILLER = /^(?:(?:ok(?:ay)?|sorry|actually|please|pls|no|wait|oh|oops|hmm+|well|ah|ببورە|تکایە|باشە|نا|نەخێر)[\s,،!.:-]*)*/iu;
+const UNDO_WORDS = /^(?:undo(?:\s+(?:that|it|this))?|bring\s+(?:it|that|this|the\s+(?:design|poster|request))\s+back|restore\s+(?:it|that)|(?:please\s+)?continue(?:\s+(?:it|with\s+it|please|the\s+(?:design|poster)))?|keep\s+going|carry\s+on(?:\s+with\s+it)?|resume(?:\s+it)?|بەردەوام\s*(?:بە|بن|بکە|بکەن)|بیگەڕێنەوە|بیگێڕەوە|بگەڕێنەوە)$/iu;
+export function readsAsUndo(text: string): boolean {
+  if (asksToUndoCancel(text)) return true;
+  const t = withoutModifiers(text).replace(UNDO_FILLER, '').replace(/[\s!.،,؛:;]+$/u, '').replace(/\s+(?:please|pls|thanks?|thank\s+you|تکایە|سوپاس)$/iu, '').trim();
+  return t.length > 0 && t.length <= 60 && UNDO_WORDS.test(t);
+}
+
+/** The reason a lone unhappy emoji is read with (ADR-252). */
+export const NEGATIVE_REACTION_REASON = 'An emoji that says the requester is not happy';
 
 function acknowledgement(documentKind: DocumentKind): MessageClassification {
   return { kind: 'other', intent: 'question_or_other', confidence: 0.9, isInstructionOnly: false, reason: 'Acknowledgement', documentKind };
@@ -269,6 +332,13 @@ export function classifyWithHeuristics(
   // A thank-you or an OK is not a change request, reply or not: "thanks" in reply to a draft
   // started a paid redesign of it.
   if (isAcknowledgement(trimmed)) return acknowledgement(documentKind);
+  // ADR-252: "👎", "😡" say the requester is not happy. They are never thanks, and never a change by
+  // themselves (one replying to a design waiting for changes would start a paid round on "👎"): the
+  // chat answer passes them to the office (lifecycle-chat-answers.ts).
+  if (isNegativeReaction(trimmed)) {
+    return { kind: 'other', intent: 'question_or_other', confidence: 0.9, isInstructionOnly: false,
+      reason: NEGATIVE_REACTION_REASON, documentKind };
+  }
 
   // A lasting preference ("from now on", "always", لەمەودوا, with an instruction verb) that
   // carries no copy is a standing rule, whether or not it answers a draft.
@@ -470,7 +540,7 @@ export async function classifyInboundTelegramMessage(
   // Thanks and OKs are answered without a paid model call.
   if (isAcknowledgement(messageText)) return acknowledgement(detectDocumentKind(messageText.trim()));
   const sparseReading = classifyWithHeuristics(messageText, Boolean(recentTask), Boolean(hasReplyTo));
-  if (sparseReading.reason === 'Short message without design or event details') return sparseReading;
+  if (sparseReading.reason === 'Short message without design or event details' || sparseReading.reason === NEGATIVE_REACTION_REASON) return sparseReading;
   // A sender with no earlier design who opens an explicit copy section is starting a task. The
   // section can be empty: intake will ask for the missing copy. A model call used to occasionally
   // label the same message "instruction only" and erase that task's empty-copy fields.

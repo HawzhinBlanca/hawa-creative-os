@@ -18,13 +18,13 @@ export const SOURCE_MESSAGES = {
   },
   /** One design waits for the requester's changes: this recording or file may be about it. */
   askChangeOrNew: {
-    en: 'Is this for a change to {title}, or for a new design? Just say “change” or “new”.',
-    ckb: 'ئەمە بۆ گۆڕانکارییە لە {title}، یان بۆ دیزاینێکی نوێیە؟ تەنها بنووسە «گۆڕانکاری» یان «نوێ».',
+    en: 'Is this for a change to {title}, or for a new design?',
+    ckb: 'ئەمە بۆ گۆڕانکارییە لە {title}، یان بۆ دیزاینێکی نوێیە؟',
   },
   /** Several designs wait: which one, or a new one. `{list}` is numbered, one per line. */
   askWhichDesign: {
-    en: 'Which design is this for?\n{list}\n\nAnswer with the number or the name.',
-    ckb: 'ئەمە بۆ کام دیزاینە؟\n{list}\n\nبە ژمارە یان ناو وەڵام بدەرەوە.',
+    en: 'Which design is this for?\n{list}',
+    ckb: 'ئەمە بۆ کام دیزاینە؟\n{list}',
   },
   newDesignOption: {
     en: 'A new design',
@@ -32,13 +32,13 @@ export const SOURCE_MESSAGES = {
   },
   /** A voice note turned into text: the requester confirms it or corrects it. */
   heard: {
-    en: 'Here is what I heard:\n\n«{text}»\n\nIs this exactly the text for the design? Just say “yes”, or send me the corrected text.',
-    ckb: 'ئەمە ئەوەیە کە بیستم:\n\n«{text}»\n\nئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ تەنها بنووسە «بەڵێ»، یان دەقە ڕاستکراوەکەم بۆ بنێرە.',
+    en: 'Here is what I heard:\n\n«{text}»\n\nIs this exactly the text for the design? If not, send me the corrected text.',
+    ckb: 'ئەمە ئەوەیە کە بیستم:\n\n«{text}»\n\nئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ ئەگەر نا، دەقە ڕاستکراوەکەم بۆ بنێرە.',
   },
   /** A PDF whose text is short enough to confirm as it is. */
   readPdf: {
-    en: 'Here is the text I found in your PDF:\n\n«{text}»\n\nIs this exactly the text for the design? Just say “yes”, or send me the corrected text.',
-    ckb: 'ئەمە ئەو دەقەیە کە لە PDFـەکەتدا دۆزیمەوە:\n\n«{text}»\n\nئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ تەنها بنووسە «بەڵێ»، یان دەقە ڕاستکراوەکەم بۆ بنێرە.',
+    en: 'Here is the text I found in your PDF:\n\n«{text}»\n\nIs this exactly the text for the design? If not, send me the corrected text.',
+    ckb: 'ئەمە ئەو دەقەیە کە لە PDFـەکەتدا دۆزیمەوە:\n\n«{text}»\n\nئایا ئەمە ڕێک دەقی دیزاینەکەیە؟ ئەگەر نا، دەقە ڕاستکراوەکەم بۆ بنێرە.',
   },
   /** A PDF with more text than one design takes: the requester sends the words to use. */
   readPdfLong: {
