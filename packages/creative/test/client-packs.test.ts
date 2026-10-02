@@ -25,9 +25,24 @@ const kaae = findClientPack('kaae')!;
 const doc = (pack: object, file?: string) => ({ source: `clients/${file ?? (pack as ClientPack).code}.json`, json: structuredClone(pack) });
 
 describe('the client packs that ship', () => {
-  it('are KAAE and the four clients being set up', () => {
-    expect(packs.map((p) => p.code)).toEqual(['erbil-edition', 'halwest-news', 'kaae', 'kawa-ba-hawlery', 'zar-podcast']);
+  it('are KAAE, the four clients being set up and the nightly canary\'s test client', () => {
+    expect(packs.map((p) => p.code)).toEqual(['canary-test', 'erbil-edition', 'halwest-news', 'kaae', 'kawa-ba-hawlery', 'zar-podcast']);
     expect(packs.filter((p) => p.status === 'live').map((p) => p.code)).toEqual(['kaae']);
+  });
+
+  it('keep the canary\'s test client (ADR-254) on its fixed row, never drafted automatically, and named only as "Canary Test"', () => {
+    const canary = findClientPack('canary-test')!;
+    expect(canary.id).toBe('c1000000-0000-4000-8000-000000000099');
+    expect(canary.displayName).toBe('Canary Test');
+    // An onboarding pack: Core never starts an automatic (paid) draft for it (autoDraftAllowedFor).
+    expect(canary.status).toBe('onboarding');
+    expect(canary.onboarding.missing).toEqual(expect.arrayContaining(['client-dna', 'logo']));
+    expect(canary.exemplars).toBeNull();
+    // No chat is bound to it: the canary's third brief must still be asked "who is this for?".
+    expect(canary.routing).toEqual({ telegramChatIds: [], latinAliases: ['canary test'], scriptAliases: [], phrases: [] });
+    // Its row is in the seed with the same id and code, as the other packs' are.
+    const seed = readFileSync(new URL('../../../db/seed.sql', import.meta.url), 'utf8');
+    expect(seed).toContain("('c1000000-0000-4000-8000-000000000099'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'canary-test', 'Canary Test', 'en', 'active')");
   });
 
   it('keep KAAE on its existing row and 4:5 canvas', () => {
@@ -107,6 +122,16 @@ describe('which client a request belongs to', () => {
     // "zar" alone and "Erbil" alone are ordinary words, not clients.
     expect(match('the zar exchange rate')).toBe('none');
     expect(match('events in Erbil this week')).toBe('none');
+  });
+
+  it('names the canary\'s test client only by its two words, as the canary writes them (ADR-254)', () => {
+    expect(match('Could you design a Canary Test poster for our Amber Reading Workshop? It\'s on 16 November 2026 at 10:00 AM in the Main Hall, Erbil.')).toBe('named:canary-test');
+    expect(match("it's for Canary Test")).toBe('named:canary-test');
+    expect(match("it's for CANARY TEST")).toBe('named:canary-test');
+    // "canary" alone is a colour and a bird, never the client.
+    expect(match('a canary yellow background please')).toBe('none');
+    expect(match('it\'s for canary')).toBe('none');
+    expect(match('canary testing day')).toBe('none');
   });
 
   it('routes nowhere when a message names two clients', () => {

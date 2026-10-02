@@ -230,6 +230,18 @@ export async function isCanaryTask(db: Kysely<Database>, tenantId: string, taskI
 }
 
 /**
+ * ADR-254: the chats a task's intake came from: the sourceChannelId of each of its `task.created`
+ * commands (none for a Desk task), or undefined when the task has no `task.created` command (yet). The
+ * command is written with the task and never changes, so a found answer stays true.
+ */
+export async function taskIntakeChats(db: Kysely<Database>, tenantId: string, taskId: string): Promise<string[] | undefined> {
+  if (!UUID.test(tenantId) || !UUID.test(taskId)) return undefined;
+  const rows = (await sql<{ chat: string | null }>`SELECT payload->>'sourceChannelId' AS chat FROM hawa.outbox_commands
+    WHERE tenant_id = ${tenantId}::uuid AND aggregate_id = ${taskId}::uuid AND command_type = 'task.created'`.execute(db)).rows;
+  return rows.length ? rows.flatMap((r) => (r.chat ? [r.chat] : [])) : undefined;
+}
+
+/**
  * A design's name as a requester reads it: the office's "Client: " prefix dropped, at most 60 characters.
  * ADR-231: no direction mark at its edges (the caption read "\u200FKAAE K-12 Pilot Study…, final"), and
  * a neutral name ("New design request from Sewa") is no name.

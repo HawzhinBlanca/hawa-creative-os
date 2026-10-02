@@ -16,6 +16,7 @@ import { ConversationHarness, KAAE, type Person } from './fixtures/conversation-
 import { runCanary, type BotMessage, type CanaryConfig, type CanaryWorld } from '../../../scripts/live_canary_lib.js';
 import { canaryAutomaticDesignsPerWeek } from '../src/services/chat-intake.js';
 import { parkTelegramUpdate } from '../src/services/polled-update-dispatch.js';
+import { knownClientNames } from '../src/services/lifecycle-client-question.js';
 
 const db = createDb(process.env.TEST_DATABASE_URL!);
 const owner = createDb(process.env.TEST_DATABASE_OWNER_URL!);
@@ -25,7 +26,14 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 afterAll(async () => { await db.destroy(); await owner.destroy(); });
 
 let seed = 4_503_599_700_000_000 + Math.floor(Math.random() * 90_000) * 10;
-const config = (chatId: string): CanaryConfig => ({ chatId, clientId: KAAE, clientName: 'KAAE', maxUsd: 0.5,
+/**
+ * ADR-254: the canary's own client, shipped as a client pack (packages/creative/assets/clients/canary-test.json)
+ * and in the seed, configured as production configures it (HAWA_CANARY_CLIENT_NAME="Canary Test"). A paid
+ * night needs a client with an approved DNA that may be drafted automatically, which that onboarding pack
+ * never is, so the paid night is played with KAAE standing in for a canary client gone live.
+ */
+const CANARY_TEST = { id: 'c1000000-0000-4000-8000-000000000099', name: 'Canary Test' };
+const config = (chatId: string, client = CANARY_TEST): CanaryConfig => ({ chatId, clientId: client.id, clientName: client.name, maxUsd: 0.5,
   replyTimeoutMs: 30_000, quietMs: 3000, draftTimeoutMs: 10 * 60_000 });
 
 /** The harness as the canary's world. Virtual time; a started design gets its draft a minute later. */
@@ -124,7 +132,7 @@ describe('the nightly live canary through the real Telegram path (ADR-240)', () 
     vi.stubEnv('HAWA_CANARY_CHAT_ID', chat);
     vi.stubEnv('HAWA_CANARY_AUTOMATIC_DESIGNS_PER_WEEK', '1');
     await h.emptyOfficeQueue();
-    const result = await runCanary(world, config(chat));
+    const result = await runCanary(world, config(chat, { id: KAAE, name: 'KAAE' }));
     const failed = result.checks.filter((c) => !c.ok);
     expect(failed, JSON.stringify(failed, null, 2)).toEqual([]);
     expect(result).toMatchObject({ status: 'passed', mode: 'paid', spentUsd: 0.07 });
@@ -134,6 +142,23 @@ describe('the nightly live canary through the real Telegram path (ADR-240)', () 
     expect(h.t.designs[0].requestId).toBe(first.requestId);
     expect(sent()).toEqual([]);
     expect((await h.requests(chatId)).every((r) => r.stage === 'cancelled')).toBe(true);
+  });
+
+  it('the shipped canary client is never designed for automatically, even with a weekly allowance (ADR-254)', async () => {
+    const chat = String(seed + 9);
+    const { h, chatId, world, sent } = setUp(chat);
+    vi.stubEnv('HAWA_CANARY_CHAT_ID', chat);
+    vi.stubEnv('HAWA_CANARY_AUTOMATIC_DESIGNS_PER_WEEK', '1');
+    await h.emptyOfficeQueue();
+    const result = await runCanary(world, config(chat));
+    const failed = result.checks.filter((c) => !c.ok);
+    expect(failed, JSON.stringify(failed, null, 2)).toEqual([]);
+    expect(result).toMatchObject({ status: 'passed', mode: 'stub', spentUsd: null });
+    expect(h.t.designs).toEqual([]);
+    expect(sent()).toEqual([]);
+    const clients = (await sql<{ client_id: string }>`SELECT t.client_id::text FROM hawa.requests r JOIN hawa.tasks t ON t.id = r.root_task_id
+      WHERE r.chat_id = ${chatId}`.execute(owner)).rows.map((r) => r.client_id);
+    expect(clients).toEqual([CANARY_TEST.id, CANARY_TEST.id, CANARY_TEST.id]);
   });
 
   it('without the sink configured, the canary stops after "hi" and opens nothing', async () => {
@@ -158,6 +183,15 @@ describe('the nightly live canary through the real Telegram path (ADR-240)', () 
 });
 
 describe('the canary\'s allowance and its office alerts in Core (ADR-240)', () => {
+  it('the canary\'s client has its row from the seed, and is never offered to an office member as an organisation (ADR-254)', async () => {
+    const row = (await sql<{ code: string; name: string; status: string }>`SELECT code, name, status FROM hawa.clients
+      WHERE id = ${CANARY_TEST.id}::uuid AND tenant_id = ${KAAE_TENANT}::uuid`.execute(owner)).rows[0];
+    expect(row).toEqual({ code: 'canary-test', name: 'Canary Test', status: 'active' });
+    const offered = await knownClientNames(owner, KAAE_TENANT);
+    expect(offered.length).toBeGreaterThan(0);
+    expect(offered.join(' ')).not.toMatch(/canary/i);
+  });
+
   it('HAWA_CANARY_AUTOMATIC_DESIGNS_PER_WEEK is a whole number from 0 to 7; anything else is 0 (no paid round)', () => {
     expect(canaryAutomaticDesignsPerWeek({})).toBe(0);
     expect(canaryAutomaticDesignsPerWeek({ HAWA_CANARY_AUTOMATIC_DESIGNS_PER_WEEK: '' })).toBe(0);

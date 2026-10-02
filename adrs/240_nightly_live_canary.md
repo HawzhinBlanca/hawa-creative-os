@@ -134,7 +134,7 @@ It judges the stage and key phrases, never whole strings. The conversation, with
 
 The result goes to `~/.hawa/logs/canary/<stamp>.json` and `.txt`, and to `latest.*`. Exit codes: 0 passed, 1 failed, 2 could not run.
 
-**`infra/ops/live_canary.sh`**, launch agent `design.hawa.live-canary` at 03:30 (systemd `hawa-live-canary.timer` on Linux):
+**`infra/ops/live_canary.sh`**, launch agent `design.hawa.live-canary` at 03:30 (04:30 since ADR-254) (systemd `hawa-live-canary.timer` on Linux):
 
 - It runs on the production host only.
 - **The deploy lock.** `infra/ops/deploy_lock.py` is an flock on `~/.hawa/deploy.lock`, released with the process.
@@ -169,14 +169,15 @@ The result goes to `~/.hawa/logs/canary/<stamp>.json` and `.txt`, and to `latest
 
 ## 4. Setup for the lead (not done here)
 
-1. Create the canary client in the Desk. Suggested: named "Canary Test" with short code `CANARY`, no model consent, no Drive or Sheet. Give it an approved DNA before allowing a paid night.
-2. Set its daily limit to $0.50 in Settings → Spending.
+**Superseded in part by ADR-254 (2026-10-02).** Nothing could create a client (no route, no Desk form), so step 1 below could not be done. The canary's client now ships: the client pack `packages/creative/assets/clients/canary-test.json` ("Canary Test", code `canary-test`, id `c1000000-0000-4000-8000-000000000099`) and its row in `db/seed.sql`. Core adds the row at start-up. It is an onboarding pack, so it is never designed for automatically: every night is unpaid, and steps 1 and 2 are only needed to allow paid nights later. Setup is now step 3 (the chat id and the allowlist only) and steps 4–6. The runner now starts at 04:30, not 03:30 (ADR-254).
+
+1. ~~Create the canary client in the Desk.~~ It ships (ADR-254). For a paid night it would need an approved DNA, and its pack would need to go `live`.
+2. Before any paid night: set its daily limit to $0.50 in Settings → Spending.
 3. `.env.production` (shared; read by Core, the worker's allowlist and the runner):
    - `HAWA_CANARY_CHAT_ID=4503599627370501` (any id in [2^52, 2^53));
    - append it to `TELEGRAM_INTAKE_ALLOWED_USERS`;
-   - `HAWA_CANARY_CLIENT_ID=<client uuid>`;
-   - `HAWA_CANARY_CLIENT_NAME=CANARY`;
-   - `HAWA_CANARY_AUTOMATIC_DESIGNS_PER_WEEK=0` until the client has a DNA, then `1`.
+   - `HAWA_CANARY_CLIENT_ID` and `HAWA_CANARY_CLIENT_NAME` may stay empty: the script then uses the shipped client, `c1000000-0000-4000-8000-000000000099`, named "Canary Test";
+   - `HAWA_CANARY_AUTOMATIC_DESIGNS_PER_WEEK=0`.
 4. Deploy (`deploy.sh --apply` regenerates `.env.worker`).
 5. Run once by hand: `bash ~/.hawa/current/infra/ops/live_canary.sh`.
 6. Install the agent: `bash ~/.hawa/current/infra/ops/install_launch_agents.sh`.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CANARY_UPDATE_BASE, canaryConfigFromEnv, copyExtractionProblems, internalCodeProblems, leakProblems, nightPlan, nightUpdateBase, runCanary,
+  CANARY_UPDATE_BASE, canaryConfigFromEnv, copyExtractionProblems, internalCodeProblems, leakProblems, nightPlan, runCanary, runMessageId, runUpdateBase,
   summaryText, type BotMessage, type CanaryConfig, type CanaryWorld, type RequestView,
 } from '../live_canary_lib.js';
 import { journalStrings, senderJournal } from '../live_canary.js';
@@ -16,11 +16,13 @@ const CLIENT = '5e1f0000-0000-4000-8000-0000000000aa';
 const config: CanaryConfig = { chatId: CHAT, clientId: CLIENT, clientName: 'CANARY', maxUsd: 0.5, replyTimeoutMs: 20_000, quietMs: 2000, draftTimeoutMs: 60_000 };
 const NOW = Date.UTC(2026, 9, 2, 0, 30);
 
-interface Faults { sink?: BotMessage['outcome']; leak?: boolean; code?: boolean; stuckCancel?: boolean; leftover?: RequestView; paid?: boolean; spend?: number }
+interface Faults { sink?: BotMessage['outcome']; leak?: boolean; code?: boolean; stuckCancel?: boolean; leftover?: RequestView; paid?: boolean; spend?: number;
+  /** Restate's idempotency keys (`tg-<id>`, kept 7 days), shared by the runs given the same set, and the run's start. */
+  seen?: Set<number>; start?: number }
 
 /** A bot that answers the canary's lines roughly as production does (the real one is in apps/core's test). */
 function scriptedBot(faults: Faults = {}) {
-  let now = NOW, seq = 0, pendingBrief: string | null = null;
+  let now = faults.start ?? NOW, seq = 0, pendingBrief: string | null = null;
   const messages: BotMessage[] = [];
   const requests = new Map<string, RequestView & { event: string; brief: string; designingUntil?: number }>();
   if (faults.leftover) requests.set(faults.leftover.requestId, { ...faults.leftover, event: faults.leftover.title ?? '', brief: '' });
@@ -44,8 +46,10 @@ function scriptedBot(faults: Faults = {}) {
       for (const r of requests.values()) if (r.designingUntil && now >= r.designingUntil && r.stage === 'designing') { r.stage = 'in_review'; say(`Your draft of <b>${r.event}</b> is with the office.`); }
     },
     health: async () => null,
-    send: async (_u, _m, text) => {
+    send: async (updateId, _m, text) => {
       now += 500;
+      // A replayed key is answered from Restate's journal: the bot says nothing new.
+      if (faults.seen) { if (faults.seen.has(updateId)) return; faults.seen.add(updateId); }
       if (text === 'hi') return void say('👋 Hi! What would you like designed?');
       if (/^Could you design a CANARY/.test(text)) return open(text);
       if (/^Could you design a poster/.test(text)) { pendingBrief = text; return void say("Who is this design for? Tell me the organisation's name."); }
@@ -127,6 +131,15 @@ describe('the canary\'s conversation, judged (ADR-240)', () => {
     expect(result.requests.every((r) => r.stage === 'manual' && r.openedThisRun)).toBe(true);
   });
 
+  it('a second run on the same day is not a replay of the first (ADR-254)', async () => {
+    const seen = new Set<number>();
+    const first = await runCanary(scriptedBot({ seen }).world, config);
+    expect(first.status).toBe('passed');
+    const again = await runCanary(scriptedBot({ seen, start: NOW + 20 * 60_000 }).world, config);
+    expect(again.checks.filter((c) => !c.ok)).toEqual([]);
+    expect(again.status).toBe('passed');
+  });
+
   it('cleanup: an earlier night\'s open request is withdrawn first', async () => {
     const leftover: RequestView = { requestId: '00000000-0000-4000-8000-0000000000ff', chatId: CHAT, stage: 'manual', rev: 1,
       taskId: '00000000-0000-4000-9000-0000000000ff', title: 'Old Reading Workshop' };
@@ -142,18 +155,29 @@ describe('the canary\'s pieces', () => {
   it('reads its configuration, and refuses a chat that is not in the reserved range', () => {
     expect(canaryConfigFromEnv({ HAWA_CANARY_CHAT_ID: CHAT, HAWA_CANARY_CLIENT_ID: CLIENT, HAWA_CANARY_CLIENT_NAME: 'CANARY' }).config)
       .toMatchObject({ chatId: CHAT, clientId: CLIENT, clientName: 'CANARY', maxUsd: 0.5 });
-    const bad = canaryConfigFromEnv({ HAWA_CANARY_CHAT_ID: '7191500129', HAWA_CANARY_CLIENT_ID: 'x', HAWA_CANARY_MAX_USD: '-1' });
+    const bad = canaryConfigFromEnv({ HAWA_CANARY_CHAT_ID: '7191500129', HAWA_CANARY_CLIENT_ID: 'x', HAWA_CANARY_CLIENT_NAME: 'x'.repeat(61), HAWA_CANARY_MAX_USD: '-1' });
     expect(bad.config).toBeNull();
     expect(bad.problems).toHaveLength(4);
+    // ADR-254: unset (or set empty, as the runner passes it), the client is the shipped Canary Test pack.
+    expect(canaryConfigFromEnv({ HAWA_CANARY_CHAT_ID: CHAT, HAWA_CANARY_CLIENT_ID: '', HAWA_CANARY_CLIENT_NAME: '' }).config)
+      .toMatchObject({ clientId: 'c1000000-0000-4000-8000-000000000099', clientName: 'Canary Test' });
   });
 
-  it('numbers each night\'s updates apart from real ones, the owner\'s manual tests and the copy reader\'s range', () => {
-    const base = nightUpdateBase(NOW);
+  it('numbers each run\'s updates apart from real ones, the owner\'s manual tests, the copy reader\'s range and every other run', () => {
+    const base = runUpdateBase(NOW);
     expect(base).toBeGreaterThan(8_000_000_000 + 1_000_000);
     expect(base + 999).toBeLessThan(2 ** 51);
-    expect(nightUpdateBase(NOW + 86_400_000) - base).toBe(1000);
+    expect(runUpdateBase(Date.UTC(2100, 0, 1)) + 999).toBeLessThan(2 ** 51);
     expect(base % 1000).toBe(0);
-    expect(base - CANARY_UPDATE_BASE).toBeLessThan(2 ** 31);
+    // ADR-254: a second run the same day (a minute, or a second, later) gets ids no earlier run had.
+    expect(runUpdateBase(NOW + 60_000) - base).toBe(60_000);
+    expect(runUpdateBase(NOW + 1000) - (base + 999)).toBe(1);
+    // ADR-240's ids by the day: a run today never reuses one.
+    expect(base).toBeGreaterThan(CANARY_UPDATE_BASE + Math.floor(Date.UTC(2200, 0, 1) / 86_400_000) * 1000);
+    // The same start, the same ids (a re-read of one run).
+    expect(runUpdateBase(NOW + 999 - (NOW % 1000))).toBe(base);
+    expect(runMessageId(base + 7)).toBeLessThan(2 ** 31);
+    expect(runMessageId(base + 7)).toBeGreaterThan(0);
   });
 
   it('plans briefs whose third names no organisation, with a word of the night in every event', () => {

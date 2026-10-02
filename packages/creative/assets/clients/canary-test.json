@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "c1000000-0000-4000-8000-000000000099",
+  "code": "canary-test",
+  "status": "onboarding",
+  "kind": "institution",
+  "displayName": "Canary Test",
+  "profile": "Canary Test. Not an organisation: the test client of Hawa's nightly live canary (ADR-240, ADR-254), which plays a fixed conversation through the Telegram request path every night and withdraws every request it opens. Nothing is ever designed for it automatically or delivered. Its tone, palette and type are not set and never will be.",
+  "names": {
+    "en": "Canary Test"
+  },
+  "languages": [
+    "en"
+  ],
+  "routing": {
+    "telegramChatIds": [],
+    "latinAliases": [
+      "canary test"
+    ],
+    "scriptAliases": [],
+    "phrases": []
+  },
+  "formats": [
+    "social-portrait"
+  ],
+  "defaultFormat": "social-portrait",
+  "playbook": "institutional-announcement",
+  "exemplars": null,
+  "onboarding": {
+    "missing": [
+      "logo",
+      "palette",
+      "fonts",
+      "client-dna",
+      "exemplars",
+      "proof-set"
+    ]
+  }
+}

@@ -7,7 +7,7 @@
  * The bot is judged semantically: the request object's stage after each turn, and key phrases in what
  * it said (never whole strings), so a wording change does not fail the night but a wrong reading does.
  */
-import { isReservedCanaryChatId } from '../packages/contracts/src/canary.js';
+import { CANARY_TEST_CLIENT_ID, isReservedCanaryChatId } from '../packages/contracts/src/canary.js';
 
 export interface CanaryConfig {
   chatId: string;
@@ -23,11 +23,18 @@ export interface CanaryConfig {
   draftTimeoutMs: number;
 }
 
+/**
+ * ADR-254: the canary's own client, shipped as a client pack (packages/creative/assets/clients/
+ * canary-test.json) whose row Core adds at start-up. It is the client unless HAWA_CANARY_CLIENT_ID and
+ * HAWA_CANARY_CLIENT_NAME name another; the name is what the briefs say, and only it routes to the client.
+ */
+export const CANARY_TEST_CLIENT = { id: CANARY_TEST_CLIENT_ID, name: 'Canary Test' } as const;
+
 export function canaryConfigFromEnv(env: Record<string, string | undefined>): { config: CanaryConfig | null; problems: string[] } {
   const problems: string[] = [];
   const chatId = env.HAWA_CANARY_CHAT_ID?.trim() || '';
-  const clientId = env.HAWA_CANARY_CLIENT_ID?.trim() || '';
-  const clientName = env.HAWA_CANARY_CLIENT_NAME?.trim() || '';
+  const clientId = env.HAWA_CANARY_CLIENT_ID?.trim() || CANARY_TEST_CLIENT.id;
+  const clientName = env.HAWA_CANARY_CLIENT_NAME?.trim() || CANARY_TEST_CLIENT.name;
   if (!isReservedCanaryChatId(chatId)) problems.push('HAWA_CANARY_CHAT_ID is not set to an id from 4503599627370496 to 9007199254740991');
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)) problems.push('HAWA_CANARY_CLIENT_ID is not a client id');
   if (!clientName || clientName.length > 60 || /[\n\r]/.test(clientName)) problems.push('HAWA_CANARY_CLIENT_NAME is not set');
@@ -120,13 +127,22 @@ export const CLOSED_STAGES = new Set(['cancelled', 'delivered', 'rejected', 'exp
 export const WITHDRAWABLE_STAGES = new Set(['manual', 'designing', 'awaiting_answer', 'in_review']);
 
 /**
- * Update ids for one night: 9,000,000,000,000 + the day's number × 1000 + the turn. Far above real
- * update ids (about 6.4e8), below the copy reader's 2^51 offset, never the owner's manual tests'
- * 8,000,000,000 + n, and new every night (Restate keeps `tg-<id>` idempotency keys for 7 days).
+ * Update ids for one run: 9,000,000,000,000 + the run's start second × 1000 + the turn (ADR-254). Far
+ * above real update ids (about 6.4e8), below the copy reader's 2^51 offset until the year 2100, never
+ * the owner's manual tests' 8,000,000,000 + n. Restate keeps `tg-<id>` idempotency keys for 7 days, so
+ * a run must never reuse an earlier run's ids: ids by the day (ADR-240) made a second run on the same
+ * day a replay that always failed. Runs hold the deploy lock, so no two start in the same second, and
+ * a run has fewer than 1000 turns, so two runs' ranges never meet. Within a run the ids are fixed by its
+ * start, the same on every read.
  */
 export const CANARY_UPDATE_BASE = 9_000_000_000_000;
-export function nightUpdateBase(nowMs: number): number {
-  return CANARY_UPDATE_BASE + Math.floor(nowMs / 86_400_000) * 1000;
+export const CANARY_TURNS_PER_RUN = 1000;
+export function runUpdateBase(startedMs: number): number {
+  return CANARY_UPDATE_BASE + Math.floor(startedMs / 1000) * CANARY_TURNS_PER_RUN;
+}
+/** The Telegram message id of a turn: below 2^31, as Telegram's are, and unique for about 23 days of runs. */
+export function runMessageId(updateId: number): number {
+  return (updateId - CANARY_UPDATE_BASE) % 2_000_000_000;
 }
 
 const NONCES = ['Amber', 'Birch', 'Cedar', 'Coral', 'Dahlia', 'Ember', 'Fennel', 'Garnet', 'Hazel', 'Indigo', 'Jasper', 'Juniper',
@@ -247,7 +263,7 @@ export async function runCanary(world: CanaryWorld, config: CanaryConfig): Promi
   const startedMs = world.now();
   const startedAt = new Date(startedMs).toISOString();
   const plan = nightPlan(startedMs, config.clientName);
-  const base = nightUpdateBase(startedMs);
+  const base = runUpdateBase(startedMs);
   const checks: Check[] = [];
   let step = 'preflight';
   let turn = 0;
@@ -273,9 +289,10 @@ export async function runCanary(world: CanaryWorld, config: CanaryConfig): Promi
   /** Sends one line and returns what the bot said after it, once ChatInbox is done and the bot is quiet. */
   const say = async (text: string): Promise<BotMessage[]> => {
     turn += 1;
+    if (turn >= CANARY_TURNS_PER_RUN) throw new CanaryAbort(`${step}: more than ${CANARY_TURNS_PER_RUN - 1} turns in one run`);
     const updateId = base + turn;
     const sentAt = world.now();
-    await world.send(updateId, updateId - CANARY_UPDATE_BASE, text);
+    await world.send(updateId, runMessageId(updateId), text);
     const done = await waitFor(() => world.inboxDone(updateId, sentAt), Boolean, config.replyTimeoutMs);
     check(`"${text.slice(0, 40)}" was taken by ChatInbox`, done, `ChatInbox had not finished update ${updateId} after ${config.replyTimeoutMs / 1000} s`);
     const deadline = world.now() + config.replyTimeoutMs;

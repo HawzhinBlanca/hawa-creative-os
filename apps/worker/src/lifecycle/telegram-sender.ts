@@ -43,7 +43,7 @@ import {
   composeMessageUncertainAlert,
   canarySinkMessageId,
   draftImageReader,
-  isCanaryTask,
+  taskIntakeChats,
   readSendMark,
   readStoredExportBytes,
   sha256Hex,
@@ -83,7 +83,10 @@ export interface TelegramSenderDeps {
    * (canaryChatIdFromEnv); null or absent records nothing instead of sending.
    */
   canaryChatId?(): string | null;
-  /** ADR-240: whether a task is one of the canary chat's requests; isCanaryTask when absent. */
+  /**
+   * ADR-240: whether a task is one of the canary chat's requests (tests). Absent, the task's intake
+   * chats are read (taskIntakeChats) once per task (ADR-254).
+   */
   isCanaryTask?(db: Kysely<Database>, tenantId: string, taskId: string, canaryChatId: string): Promise<boolean>;
 }
 
@@ -179,11 +182,31 @@ export async function canarySinkFor(deps: TelegramSenderDeps, m: OutboundMessage
   if (String(m.chatId) === canary) return 'canary_chat';
   const tenantId = tenantOf(m);
   if (!m.taskId || !UUID.test(m.taskId) || !deps.db) return null;
-  const check = deps.isCanaryTask ?? isCanaryTask;
   // Read before anything is sent; a database that cannot answer fails the attempt, and Restate asks again.
-  const canaryTask = await withRlsContext(deps.db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-    (trx) => check(trx, tenantId, m.taskId!, canary));
-  return canaryTask ? 'canary_request' : null;
+  const inTenant = <T>(fn: (trx: Kysely<Database>) => Promise<T>) =>
+    withRlsContext(deps.db!, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
+  if (deps.isCanaryTask) return (await inTenant((trx) => deps.isCanaryTask!(trx, tenantId, m.taskId!, canary))) ? 'canary_request' : null;
+  // ADR-254: a task's intake chats never change once its task.created is written, so they are read once
+  // per task, not before every message about it. A task with none written yet is read again next time.
+  const chats = await cachedIntakeChats(`${tenantId}|${m.taskId}`, () => inTenant((trx) => taskIntakeChats(trx, tenantId, m.taskId!)));
+  return chats?.includes(canary) ? 'canary_request' : null;
+}
+
+const INTAKE_CACHE_MAX = 5000;
+const intakeChatCache = new Map<string, string[]>();
+/**
+ * ADR-254: a task's intake chats, kept once found (the oldest let go past 5000 tasks). An unfound
+ * answer (no task.created yet) and a failed read are never kept, so the sink still fails closed.
+ */
+export async function cachedIntakeChats(key: string, read: () => Promise<string[] | undefined>): Promise<string[] | undefined> {
+  const known = intakeChatCache.get(key);
+  if (known) return known;
+  const chats = await read();
+  if (chats !== undefined) {
+    if (intakeChatCache.size >= INTAKE_CACHE_MAX) intakeChatCache.delete(intakeChatCache.keys().next().value!);
+    intakeChatCache.set(key, chats);
+  }
+  return chats;
 }
 
 /**

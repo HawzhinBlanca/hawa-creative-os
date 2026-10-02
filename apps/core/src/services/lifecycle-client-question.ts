@@ -24,7 +24,7 @@
  */
 import { createHash } from 'node:crypto';
 import { sql, type Database, type Kysely } from '@hawa/db';
-import type { BlobRef } from '@hawa/contracts';
+import { CANARY_TEST_CLIENT_ID, type BlobRef } from '@hawa/contracts';
 import { plainClientAnswer, resolveSourceClient } from './lifecycle-source-natural.js';
 
 type Tx = Kysely<Database>;
@@ -127,10 +127,11 @@ export const saysDontKnow = (text: string) => text.trim().split(/\s+/).length <=
 /**
  * The organisations an office member is offered by name (active clients, at most twelve), with the short
  * code people use when the name does not carry it: "Kurdistan Accrediting Association for Education (KAAE)".
+ * The nightly canary's test client is never offered (ADR-254): it is no organisation the office works for.
  */
 export async function knownClientNames(trx: Tx, tenantId: string): Promise<string[]> {
   return (await sql<{ name: string; code: string }>`SELECT name, code FROM hawa.clients WHERE tenant_id = ${tenantId}::uuid
-    AND status = 'active' ORDER BY name LIMIT 12`.execute(trx)).rows
+    AND status = 'active' AND id <> ${CANARY_TEST_CLIENT_ID}::uuid ORDER BY name LIMIT 12`.execute(trx)).rows
     .filter((r) => typeof r.name === 'string' && r.name.trim())
     .map((r) => {
       const code = String(r.code ?? '').trim();
