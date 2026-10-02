@@ -1,14 +1,16 @@
 {
   "date": "2026-10-03",
-  "status": "Policy/customer/design focused qualification passed; corrected sealed combined full-suite qualification pending",
+  "status": "Latest Claude CTA merge passed77 affected controls; final sealed joint full-suite qualification pending",
   "scope": "Claude client-specific poster/caps/metrics design lane and deployment/export support merged with ADR265/266 customer workflow; ADR276 immutable display export policy repair",
   "merges": [
     "6ff2fc60",
-    "4aaed09f"
+    "4aaed09f",
+    "4a61a21e"
   ],
   "mergedHeads": [
     "01b3e243333a5cdd00545b171f3bfbb19e35162c",
-    "605466de"
+    "605466de",
+    "a7beb4348bea25e5aaba7f5c4497eebc0e853492"
   ],
   "policyFocused": {
     "numPassedTests": 100,
@@ -118,7 +120,7 @@
     "packages/creative/src/studio/pango-measurement.ts": "912b1c5c4307eac2f4af003c9c385c47fad170cd70c04c1f2ffa372e74088ded",
     "packages/creative/src/studio/pipeline-v3.ts": "d99149f1d3e23d5cd1fa6d2c9732a9f876af6f285d69dbbba9ac9ee010ace12a",
     "packages/creative/src/studio/poster-display.ts": "8c326239f11fc697a51ae00e4fa536d3bf77a6303897391a5c2e91174fe0ecbd",
-    "packages/creative/src/studio/poster-grammar.ts": "127fafb7bdcdadbce89d1920d2d3200b1958ca4ee4a512ee012afacf89e8502c",
+    "packages/creative/src/studio/poster-grammar.ts": "b770bf815d6f1c20657ad374960c4da17d3d1c21d9e5d5d8ddc05403d6c50d7c",
     "packages/creative/src/studio/render-fonts.json": "c30a2243d348eecebd401ca3376c55a4052c4bf60733d5998ae192d4fa72f1bb",
     "packages/creative/src/studio/render-layout-v2.ts": "4878954ee768ce599bb6fcc6169eec8d198be4466743cb19adfff81ee56557db",
     "packages/creative/src/studio/style-spec.ts": "08ddc68bd756c42b88904f889bc4d7d12a0a8034cd55ec1b48ef0b851ee374aa",
@@ -132,7 +134,7 @@
     "packages/creative/test/judge-calibration-harness.test.ts": "598dca606b25be8851db6634ebbd56195eded955a043b6eb3f6e5d1a8f43266f",
     "packages/creative/test/kaae-2025-guideline-selection.test.ts": "0e49edef8524d315bc80257cc0bb5e2fd49cef27f44814dccdd9bae1642ff7db",
     "packages/creative/test/kaae-2025-guideline.test.ts": "934caa78e6b767a51f506c964c0d2145c3e4dc3dc3778800865a2ae4525f5c32",
-    "packages/creative/test/kaae-poster-compositions.test.ts": "926b95436436c675fa9a39f3cffa95ac0f22e8def178dab47d2dec1507ad4d83",
+    "packages/creative/test/kaae-poster-compositions.test.ts": "db806749da384e749d8e1e78c7d08518929f7d43deb648a1cb2dd402e6f6a2a8",
     "packages/creative/test/negative-space-policy.test.ts": "14f57d1ff1b6d2a3cbe61a41b2bf3841abbb008605e91e5d282e2d549213b903",
     "packages/creative/test/office-posts-gates.test.ts": "2a6a41b53774bc08c960298ee9a817d4d5ae8818ec93a3cae87076fa8e7bdbd9",
     "packages/creative/test/selection-without-document-default.test.ts": "07621cfffe8051672df8dcafde4a438c6a5e6e14f605c740f9f98a5b96076e8a",
@@ -172,6 +174,14 @@
         "ADR-238 proofs: the guideline's pages through the real stage, render and hard QA (model mocked) the one-photo report: with no tone asked, every recipe sits on the white page, none is replaced by the guideline page (ADR-274), all pass hard QA"
       ],
       "cause": "Compact multi-photo title leading, local transfer check missing source capitals policy, and obsolete serif poster expectation. Four original failures retained; their corrected 48-case design suite now passes."
+    },
+    {
+      "testedCommit": "106ca0011ce02729b114072c3ccb3ade029a9c97",
+      "passed": 8277,
+      "failed": 0,
+      "skipped": 67,
+      "testFiles": 756,
+      "scope": "Corrected joint candidate before newer CTA merge"
     }
   ],
   "designFocused": {
@@ -188,5 +198,11 @@
       },
       "cause": "Compact title leading fixed; remaining two failures exposed local transfer self-check missing source capitalization policy. Both repaired without weakening copy checking."
     }
-  ]
+  ],
+  "ctaFocused": {
+    "numPassedTests": 77,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "mergeResolution": "Preserved ADR276 manifest-derived transfer allowances and indexed frozen export policy. Shared display helper uses actual canvas width at every measured scale; CTA containment and geometric controls adopted. No hard-QA threshold change."
 }

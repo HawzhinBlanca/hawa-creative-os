@@ -59,3 +59,13 @@ correctly emitted live typed copy with `cap="all"`, but that local checker did
 not receive the generated manifest's indexed display policy. It must use the same
 explicit source allowances before import. It still rejects changes to factual
 wording and retains the existing copy check; no globally relaxed comparison.
+
+## Latest design-lane integration
+
+Merged Claude a7beb434 CTA containment and geometric controls after the corrected
+106ca001 full checkpoint passed8,277/0/67. Kept the shared size-aware helper: the
+recipe fitter reconstructs each text element for each measured scale, so its
+current canvas share can retain tight display leading safely at large sizes.
+Kept manifest-derived transfer policy rather than duplicating layout flags.
+The CTA and surrounding copy remain independently editable.77 affected controls
+pass; the final sealed combined full qualification is pending.
