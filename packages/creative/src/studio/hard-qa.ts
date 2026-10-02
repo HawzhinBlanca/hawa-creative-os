@@ -8,7 +8,7 @@ import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast, measuredInkContrast } from './composite-contrast.js';
 import { checkCopyCompleteness, instructionLanguageFindings, type CopyOrigin, type ReviewFinding } from './copy-completeness.js';
 import { omittedPhotoIndices, recipePhotoMinimum, type PhotoSelection } from './photo-selection.js';
-import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions, type FontFidelityVerdict } from './render-layout-v2.js';
+import { measureTextGeometry, fontFidelityKey, type TextMeasurement, type RenderLayoutOptions, type FontFidelityVerdict } from './render-layout-v2.js';
 import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
 import { photoRegionViolations, type PhotoRegionEvidence } from './protected-regions.js';
@@ -133,6 +133,9 @@ export function evaluateHardQa(
     draftFont: ctx.latinFont || 'Verdana',
     photoCount: ctx.photoCount ?? 0,
     ...(ctx.photoSelection ? { photoSelection: ctx.photoSelection } : {}),
+    // ADR-275: display leading under the body range is checked on the measured ink of its lines.
+    ...(ctx.copyText ? { copyText: ctx.copyText } : {}),
+    ...(ctx.textMeasurementOptions ? { textMeasurementOptions: ctx.textMeasurementOptions } : {}),
   };
 
   // Explicit check for unreadable font sizes: fail QA, do NOT mutatively rewrite font sizes
@@ -515,13 +518,15 @@ export function reviewFindings(
   // A face the renderer cannot draw is replaced by a declared stand-in, so the preview the judge
   // scored is not set in the face the design names, and the Canva deck (which names it) will differ.
   // It used to be only a console warning.
-  for (const family of new Set(layout.text.map((t) => t.fontFamily))) {
+  // ADR-275: a block in a named weight is judged by its own face's verdict ("Inter 800").
+  const faceKey = (t: (typeof layout.text)[number]) => fontFidelityKey(t);
+  for (const family of new Set(layout.text.map(faceKey))) {
     // Preliminary geometry checks may have no render manifest. Supplied evidence must name
     // every used family; a missing or unknown entry is not proof of exact rendering (ADR202).
     if (!ctx.fontFidelity) continue;
     const verdict = ctx.fontFidelity[family];
     if (verdict === 'exact') continue;
-    const blocks = layout.text.filter((t) => t.fontFamily === family).map((t) => t.copyIndex);
+    const blocks = layout.text.filter((t) => faceKey(t) === family).map((t) => t.copyIndex);
     const blockLabel = `block${blocks.length === 1 ? '' : 's'} ${blocks.join(', ')}`;
     if (verdict !== 'stand-in') {
       const uncovered = verdict === 'uncovered';

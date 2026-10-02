@@ -79,3 +79,14 @@ describe('checkCanvaPdf (ADR-258)', () => {
     expect(checkCanvaPdf(Buffer.from('PK\u0003\u0004 not a pdf'), []).errors).toContain('Not a PDF');
   });
 });
+
+describe('checkCanvaPdf, blocks set in capitals (ADR-275)', () => {
+  it('finds a capitals block\'s copy without regard to case, and only that block', () => {
+    const exported = pdf({ lines: [{ text: 'PEER REVIEW WEEK' }, { text: 'JOIN KAAE' }] });
+    expect(checkCanvaPdf(exported, ['Peer Review Week', 'Join KAAE'], { uppercaseByIndex: [true, false] }))
+      .toMatchObject({ copyPass: false, copy: { missing: ['Join KAAE'] } });
+    expect(checkCanvaPdf(exported, ['Peer Review Week', 'JOIN KAAE'], { uppercaseByIndex: [true, false] }))
+      .toMatchObject({ copyPass: true, copy: { missing: [] } });
+    expect(checkCanvaPdf(exported, ['Peer Review Week'])).toMatchObject({ copyPass: false, copy: { missing: ['Peer Review Week'] } });
+  });
+});

@@ -1,6 +1,7 @@
 import type {
   Box,
   CompositionRecord,
+  FontWeight,
   Hex,
   OrnamentElement,
   PhotoElement,
@@ -103,9 +104,38 @@ export interface PosterGrammar {
    * Absent: only the guideline's faces, as before.
    */
   displayFonts?: string[];
+  /**
+   * ADR-275: how a poster's display title is set, per script (KAAE: the office's heavy sans capitals,
+   * owner's decision of 2026-10-02). The guideline's `title` face stays for document pages. Read
+   * through `posterDisplayStyle` (poster-display.ts), which also refuses a face that cannot draw the
+   * script.
+   */
+  display?: PosterDisplayPolicy;
   navy: PosterVariantSpec;
   cream: PosterVariantSpec;
   band: PosterVariantSpec;
+}
+
+/** ADR-275: one script's poster display face. */
+export interface PosterDisplayFace {
+  fontFamily: string;
+  /** CSS weight; the renderer draws the nearest weight the family ships. */
+  fontWeight: FontWeight;
+  /** Latin only: the title drawn in capitals, the copy stored as typed. */
+  textTransform?: 'uppercase';
+  /** Display leading (house-rules.ts displayLineHeight: Latin >= 0.95, Arabic script >= 1.3 with a measured ink check). */
+  lineHeight: number;
+  /** Tracking in em; capitals at display size are set solid to slightly tight. Arabic script takes none. */
+  letterSpacing?: number;
+}
+
+/** ADR-275: the poster display policy. */
+export interface PosterDisplayPolicy {
+  source?: string;
+  latin: PosterDisplayFace;
+  arabic: PosterDisplayFace;
+  /** Tracking (em) for a small Latin capitals label (an eyebrow or a tab) beside the title. */
+  labelLetterSpacing?: number;
 }
 
 export interface PageGrammar {

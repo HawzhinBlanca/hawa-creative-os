@@ -152,7 +152,12 @@ export function applyOp(
     case 'font_weight_or_style': {
       const t = textOf(layout, p);
       if (!t || (typeof p.bold !== 'boolean' && typeof p.italic !== 'boolean')) return fail('which text, or which weight, is not clear');
-      if (typeof p.bold === 'boolean') t.bold = p.bold;
+      if (typeof p.bold === 'boolean') {
+        t.bold = p.bold;
+        // ADR-275: a named weight wins over bold, so the request is honoured by dropping a weight
+        // that contradicts it (a heavier weight still answers "bold").
+        if (t.fontWeight !== undefined && (!p.bold || t.fontWeight < 700)) delete t.fontWeight;
+      }
       if (typeof p.italic === 'boolean') t.italic = p.italic;
       return OK;
     }

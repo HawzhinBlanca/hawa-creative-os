@@ -260,6 +260,22 @@
         "displayFonts": [
           "Inter"
         ],
+        "display": {
+          "source": "Owner's decision of 2026-10-02 (ADR-275): a poster's display title is set like the office's own published posts (assets/exemplars photo01-photo12): a heavy geometric sans in capitals with tight leading, the Sorani twin in a bold sans at about 1.35. Inter ExtraBold (bundled, OFL) is the admitted face closest to the office's display face; IBM Plex Sans Arabic Bold draws every Sorani letter (Cairo does not). The guideline's serif title above stays for document pages.",
+          "latin": {
+            "fontFamily": "Inter",
+            "fontWeight": 800,
+            "textTransform": "uppercase",
+            "lineHeight": 0.98,
+            "letterSpacing": -0.01
+          },
+          "arabic": {
+            "fontFamily": "IBM Plex Sans Arabic",
+            "fontWeight": 700,
+            "lineHeight": 1.35
+          },
+          "labelLetterSpacing": 0.08
+        },
         "navy": {
           "title": "#FFFFFF",
           "lead": "#FFD700",
