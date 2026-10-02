@@ -195,6 +195,8 @@ export interface CanvaQcEvaluationResult {
     errors: string[];
     /** ADR-257: what a person should look at before approving (low contrast, text near the edge). Not errors. */
     warnings?: string[];
+    /** ADR-258: the source's pictures (photos, logo) found in the export. Advisory, never part of `passed`. */
+    pictureFidelity?: import('./services/export-picture-fidelity.js').PictureFidelity | { measured: false; reason: string };
     checks: Array<{ name: string; passed: boolean | null; details?: any; observedFonts?: string[] }>;
     exportSha256: string | null;
     exportFormat: string | null;

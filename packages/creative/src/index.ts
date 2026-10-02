@@ -30,6 +30,7 @@ export * from './studio/renderer-identity.js';
 export * from './studio/placement-map.js';
 export * from './studio/composite-contrast.js';
 export * from './studio/export-text-measure.js';
+export * from './studio/export-image-fidelity.js';
 export * from './studio/motifs.js';
 export * from './studio/color-science.js';
 export * from './studio/png-export.js';

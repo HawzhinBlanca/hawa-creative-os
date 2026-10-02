@@ -205,3 +205,84 @@ export function readPptxTextLayout(bytes: Uint8Array): PptxTextLayout {
   walk(tree, IDENTITY, 1, 0);
   return layout;
 }
+
+export interface PptxPicture {
+  /** `p:pic`, or a shape (`p:sp`) whose fill is a picture: Canva exports photos and logos as the latter. */
+  kind: 'pic' | 'filled-shape';
+  shapeId: string;
+  /** Axis-aligned bounds on the slide, in EMU. */
+  box: PptxBox;
+  /** The media part the picture draws, e.g. `ppt/media/image1.jpeg`. */
+  media: string;
+}
+
+export interface PptxPictures {
+  slideWidth: number;
+  slideHeight: number;
+  pictures: PptxPicture[];
+  /** Every media part of the package with its bytes, whether or not the slide draws it. */
+  media: Array<{ name: string; bytes: Uint8Array }>;
+}
+
+/**
+ * ADR-258: every picture the one slide draws, where it sits and which media part it draws, and the
+ * media parts themselves. Counting `p:pic` alone reads a Canva export as having no photos (its photos
+ * and logo are image-filled shapes); both are read here, through groups, with the same transforms as
+ * the text layout.
+ */
+export function readPptxPictures(bytes: Uint8Array): PptxPictures {
+  const files = unzipPptxParts(bytes, (name) => /^ppt\/slides\/slide\d+\.xml$/.test(name) ||
+    /^ppt\/slides\/_rels\/slide\d+\.xml\.rels$/.test(name) || name === 'ppt/presentation.xml' ||
+    (name.startsWith('ppt/media/') && !name.endsWith('/')));
+  const slides = Object.keys(files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name));
+  if (slides.length !== 1 || !files['ppt/presentation.xml']) throw new Error('Only one-page PPTX is admitted');
+  const presentation = parsePptxXml(files['ppt/presentation.xml']).find((n: Node) => tagOf(n) === 'p:presentation');
+  const size = child(presentation, 'p:sldSz');
+  const slideWidth = num(size, 'cx'), slideHeight = num(size, 'cy');
+  if (!(slideWidth > 0 && slideHeight > 0)) throw new Error('The PPTX declares no slide size');
+  const relsName = slides[0].replace('ppt/slides/', 'ppt/slides/_rels/') + '.rels';
+  const targets = new Map<string, string>();
+  if (files[relsName]) {
+    const rels = parsePptxXml(files[relsName]).find((n: Node) => tagOf(n) === 'Relationships');
+    for (const rel of kids(rels)) {
+      const id = attr(rel, 'Id'), target = attr(rel, 'Target');
+      if (!id || !target || attr(rel, 'TargetMode') === 'External') continue;
+      // Targets are relative to ppt/slides/ ("../media/image1.png"); nothing may leave the package.
+      const parts: string[] = [];
+      for (const piece of `ppt/slides/${target}`.split('/')) {
+        if (piece === '..') { if (!parts.length) throw new Error('Relationship target leaves the package'); parts.pop(); } else if (piece && piece !== '.') parts.push(piece);
+      }
+      targets.set(id, parts.join('/'));
+    }
+  }
+  const slide = parsePptxXml(files[slides[0]]).find((n: Node) => tagOf(n) === 'p:sld');
+  const tree = path(slide, 'p:cSld', 'p:spTree');
+  const pictures: PptxPicture[] = [];
+  const picture = (node: Node, kind: PptxPicture['kind'], matrix: Matrix) => {
+    const props = child(node, kind === 'pic' ? 'p:spPr' : 'p:spPr');
+    const fill = kind === 'pic' ? child(node, 'p:blipFill') : child(props, 'a:blipFill');
+    const embed = attr(child(fill, 'a:blip'), 'r:embed');
+    const f = readXfrm(props);
+    const media = embed ? targets.get(embed) : undefined;
+    if (!f || !media) return;
+    const nv = child(node, kind === 'pic' ? 'p:nvPicPr' : 'p:nvSpPr');
+    pictures.push({ kind, shapeId: attr(child(nv, 'p:cNvPr'), 'id') ?? '', box: boundsOf(multiply(matrix, aboutCentre(f)), f), media });
+  };
+  const walk = (container: Node | undefined, matrix: Matrix, depth: number) => {
+    if (depth > 32) throw new Error('Groups nested too deep');
+    for (const node of kids(container)) {
+      const tag = tagOf(node);
+      if (tag === 'p:pic') picture(node, 'pic', matrix);
+      else if (tag === 'p:sp' && child(child(node, 'p:spPr'), 'a:blipFill')) picture(node, 'filled-shape', matrix);
+      else if (tag === 'p:grpSp') {
+        const f = readXfrm(child(node, 'p:grpSpPr'));
+        if (!f) { walk(node, matrix, depth + 1); continue; }
+        const sx = f.chCx > 0 ? f.cx / f.chCx : 1, sy = f.chCy > 0 ? f.cy / f.chCy : 1;
+        walk(node, multiply(matrix, multiply(aboutCentre(f), multiply(translate(f.x, f.y), multiply([sx, 0, 0, sy, 0, 0], translate(-f.chX, -f.chY))))), depth + 1);
+      }
+    }
+  };
+  walk(tree, IDENTITY, 0);
+  const media = Object.keys(files).filter((name) => name.startsWith('ppt/media/')).sort().map((name) => ({ name, bytes: files[name] }));
+  return { slideWidth, slideHeight, pictures, media };
+}
