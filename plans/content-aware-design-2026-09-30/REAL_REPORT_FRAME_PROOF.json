@@ -1,0 +1,110 @@
+{
+  "date": "2026-10-02",
+  "status": "FOCUSED_SOURCE_REPAIR_PASSED_NATIVE_AND_HUMAN_OPEN",
+  "requirements": [
+    "FR-017",
+    "FR-023",
+    "FR-038"
+  ],
+  "parentPublication": "5ecfddecf16982e3b309677242dd437ba59f4394",
+  "reason": "Actual requester asked for a thin frame. Current storyboard and mosaic accepted explicit frame choices but returned no frame. Four red controls reproduced omission.",
+  "sourceChanges": [
+    "Pure solver finishing carries explicitly selected outer/inset frame as existing editable brand overlay when recipe has none; omitted/none remains unframed, existing frame not duplicated."
+  ],
+  "red": {
+    "passed": 123,
+    "failed": 4,
+    "receipt": "output/qualification/2026-10-02/real-report-acceptance/FRAME_RED.log"
+  },
+  "connected": {
+    "files": 5,
+    "passed": 168,
+    "failed": 0,
+    "skipped": 0,
+    "receipt": "output/qualification/2026-10-02/real-report-acceptance/FRAME_CONNECTED.log"
+  },
+  "typecheck": {
+    "status": "PASS",
+    "testRoots": 733,
+    "receipt": "output/qualification/2026-10-02/real-report-acceptance/FRAME_TYPECHECK.log"
+  },
+  "actualNativeObservation": {
+    "designId": "DAHWsS0Gv3Y",
+    "actualRequesterTask": true,
+    "sourcePhotoCount": 6,
+    "nativeTextObjects": 2,
+    "independentPhotoObjects": 3,
+    "logoImageObjects": 1,
+    "transaction": "cancelled_without_changes",
+    "scope": "Historical real completed design; not current-source native save/export or multilingual/human admission"
+  },
+  "localCurrentSourcePreviews": {
+    "manualArtDirection": true,
+    "policyVersion": 6,
+    "productionTaskDnaVersion": 5,
+    "subjectRegions": "UNKNOWN; no subject/crop safety admission",
+    "scope": "Real original request/photos, manually chosen directions through current solver/preparation/logo-ground/render/PPTX; no new model run or Canva import",
+    "outcomes": [
+      {
+        "recipe": "hero_storyboard",
+        "usedPhotoIndices": [
+          5,
+          0,
+          1
+        ],
+        "copyAndOriginalMediaIdentity": true,
+        "hardQaPassed": true,
+        "explicitFrameCount": 1,
+        "logoGroundTreatment": "scrim",
+        "previewSha256": "7741be9c7416ceb16ea765b628fb67f35c454b6e519adc434ef8e982fac99807",
+        "pptxSha256": "72dd1bdb5d077864363b9c7f563ecb56b0a7b0ed2aa8664f03518ca2323cad50"
+      },
+      {
+        "recipe": "photo_mosaic",
+        "usedPhotoIndices": [
+          5,
+          0,
+          1
+        ],
+        "copyAndOriginalMediaIdentity": true,
+        "hardQaPassed": true,
+        "explicitFrameCount": 1,
+        "logoGroundTreatment": "none",
+        "previewSha256": "3a7d9f61cf8d652bef292ea4d04564f651fa1a65a5bf7d99d7c33e1d12da52cc",
+        "pptxSha256": "fd5bd0b09f7e2aba2523897b9db5c7882ac39a3070e480037bee03364716ce8d"
+      }
+    ]
+  },
+  "probeCorrections": [
+    "Initial literal XML contains check omitted the existing compound word-joiner encoding. Corrected with keepCompoundsWhole and immutable copy manifest hash. Original JPEG hashes were preserved; suspected conversion was not observed.",
+    "Direct solver render lacked the actual production preparation/settleLogoGround steps and refused busy logo. Added those actual local stages; no threshold changed."
+  ],
+  "permissions": {
+    "productionDataMigration": "PENDING_EXPLICIT_LOCAL_COPY_AUTHORIZATION",
+    "canvaUpload": "REJECTED_BY_AUTOMATIC_REVIEW: sensitive client photos/copy payload requires explicit destination authorization; asked user after showing concrete draft",
+    "canvaSave": "Explicit approval required after actual native preview; not attempted"
+  },
+  "externalProviderCalls": 0,
+  "canvaUploadOrSavePerformed": false,
+  "productionChanged": false,
+  "fullEngineeringPreflight": "NOT_RUN_ON_THIS_REPAIR",
+  "wholeProductAdmission": false,
+  "logs": {
+    "FRAME_RED.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/FRAME_RED.log",
+      "sha256": "99c1d7b9732ccb4f93edc29a23cf7012f262caace862e85b5087c0085f1f5d32"
+    },
+    "FRAME_CONNECTED.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/FRAME_CONNECTED.log",
+      "sha256": "3df7e84c1e7ee43dcd41f3fbf1480f54ebc20786c1e4443ccb5cbe8bd67d2508"
+    },
+    "FRAME_TYPECHECK.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/FRAME_TYPECHECK.log",
+      "sha256": "bafd04bc28f1c2f9994c42f81d54ea4ac7ca67f8e66b31bff0c79c48f1462e9b"
+    },
+    "CURRENT_SOURCE_PREVIEW.log": {
+      "path": "output/qualification/2026-10-02/real-report-acceptance/CURRENT_SOURCE_PREVIEW.log",
+      "sha256": "3c9f8ed098d5b2d9d9885a33ea87de3f251af886b8d8989474aa8fdcb4baf65f"
+    }
+  }
+}

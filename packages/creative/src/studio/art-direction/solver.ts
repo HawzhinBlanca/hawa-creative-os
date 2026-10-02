@@ -812,6 +812,11 @@ class SolveContext {
     art?: StudioLayoutV2['art'];
   }): StudioLayoutV2 {
     const used = new Set(this.photos.map((p) => p.photoIndex));
+    // Some photo recipes do not reserve a frame in their geometry. Carry an explicitly
+    // selected frame as its own thin overlay, using the existing brand/stroke rules.
+    // Missing/none remains unframed; recipes that already drew it keep one frame.
+    const frame = this.input.choice.params?.frame;
+    if ((frame === 'outer' || frame === 'inset') && !this.shapes.some(s => s.role === 'frame')) this.frame(frame);
     // ADR-180: the logo is set bare. Whether its ground needs a scrim or a thin tab is read from the
     // rendered pixels afterwards (settleLogoGround), not assumed from the geometry: a cream tab on
     // every logo that touched a photo was a box the office does not draw on a calm wall or sky.
