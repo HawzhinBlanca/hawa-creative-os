@@ -4,6 +4,7 @@ import { measureTextGeometry, measureWrappedLines } from './render-layout-v2.js'
 import { hexToLuminance } from './composite-contrast.js';
 import { sunburstRadius } from './brand-elements.js';
 import { computeNegativeSpace } from './design-metrics.js';
+import { computeLayoutMetrics } from './layout-metrics.js';
 import { negativeSpacePassingInterval } from './negative-space-policy.js';
 import {
   GrammarInfeasibleError,
@@ -45,18 +46,36 @@ export type PosterVariant = (typeof POSTER_VARIANTS)[number];
 
 const r = (v: number) => Math.round(v);
 const TYPE_RATIO = 1.25;
+/** Hard QA's alignment threshold (`POOR_GRID_ALIGNMENT`). */
+const ALIGNMENT_PASS = 0.7;
 
 function intBox(b: Box): Box {
   const x = Math.max(0, Math.round(b.x));
   const y = Math.max(0, Math.round(b.y));
   return { x, y, width: Math.max(1, Math.round(b.x + b.width) - x), height: Math.max(1, Math.round(b.y + b.height) - y) };
 }
+/** The x of the layout grid's lines, as hard QA's alignment check reads them (`computeLayoutMetrics`). */
+function gridLinesX(W: number, margin: number, gutter: number, columns = 12): number[] {
+  const col = (W - 2 * margin - (columns - 1) * gutter) / columns;
+  const lines = [margin, W - margin, Math.round(W / 2)];
+  for (let c = 0; c < columns; c++) lines.push(Math.round(margin + c * (col + gutter)), Math.round(margin + c * (col + gutter) + col));
+  return lines.sort((a, b) => a - b);
+}
+/** The grid line nearest x, or, with a direction, the nearest at or past it that way (x when none is within reach). */
+function snapX(lines: number[], x: number, reach: number, way: 'nearest' | 'up' | 'down' = 'nearest'): number {
+  const ok = lines.filter((g) => Math.abs(g - x) <= reach && (way === 'nearest' || (way === 'up' ? g >= x : g <= x)));
+  return ok.length ? ok.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a)) : x;
+}
 const hit = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 
 interface PosterSizes { title: number; titleStep: number; lead: number; meta: number; body: number; footer: number; label: number }
 
-/** The type sizes for a title size: a body on the major-third scale under it, as near the grammar's body as the poster allows. */
-function posterSizes(g: PageGrammar, W: number, title: number): PosterSizes | undefined {
+/**
+ * The type sizes for a title size: a body on the major-third scale under it, as near the grammar's body
+ * as the poster allows. The details (the lead, the date and place) take the first step over the body at
+ * or above the poster's smallest detail size, so they still read under a poster-sized title.
+ */
+function posterSizes(g: PageGrammar, W: number, title: number, detailMin = 0): PosterSizes | undefined {
   const minBody = Math.max(Math.ceil(HOUSE_RULES.minBodyShareOfWidth * W), r(0.85 * g.body.sizeShare * W));
   const maxBody = r(1.2 * g.body.sizeShare * W);
   const want = g.body.sizeShare * W;
@@ -68,8 +87,10 @@ function posterSizes(g: PageGrammar, W: number, title: number): PosterSizes | un
   }
   if (!best) return undefined;
   const step = (k: number) => r(best!.body * Math.pow(TYPE_RATIO, k));
+  let detail = 1;
+  while (detail < best.n - 2 && step(detail) < detailMin * W) detail++;
   return {
-    title: step(best.n), titleStep: best.n, lead: step(1), meta: step(1), body: best.body,
+    title: step(best.n), titleStep: best.n, lead: step(detail), meta: step(detail), body: best.body,
     footer: Math.max(HOUSE_RULES.minFontPx, step(-1)), label: Math.max(HOUSE_RULES.minFontPx, best.body),
   };
 }
@@ -90,21 +111,25 @@ export function composePosterLayout(input: ComposeGrammarInput & { variant: Post
   const lo = r(P.titleSizeShare.min * W);
   let fallback: StudioLayoutV2 | undefined;
   const floor = negativeSpacePassingInterval('measured_lines').min + 0.04;
-  for (let size = hi; size >= lo; size -= 2) {
-    const sizes = posterSizes(g, W, size);
-    if (!sizes || sizes.title > hi + 1 || sizes.title < lo) continue;
-    // The details in their column beside the brand element, else across the content width.
-    for (const fullWidth of [false, true]) {
-      const layout = attemptPoster(input, units, sizes, P, fullWidth);
-      if (!layout) continue;
-      // The poster fills its canvas: the largest title that fits with its negative space between the
-      // studio's floor (a crowded poster fails the same metric) and the poster's ceiling.
-      const ns = negativeSpaceOf(layout, input);
-      if (ns <= P.negativeSpaceMax && ns >= floor) return layout;
-      if (ns >= floor) fallback ??= layout;
+  // The details at the poster's smallest detail size first; a composition that cannot hold them there
+  // (a band under a long Sorani title) keeps the scale's first step over the body rather than dropping out.
+  for (const detailMin of [...new Set([P.detailSizeShareMin ?? 0, 0])]) {
+    for (let size = hi; size >= lo; size -= 2) {
+      const sizes = posterSizes(g, W, size, detailMin);
+      if (!sizes || sizes.title > hi + 1 || sizes.title < lo) continue;
+      // The details in their column beside the brand element, else across the content width.
+      for (const fullWidth of [false, true]) {
+        const layout = attemptPoster(input, units, sizes, P, fullWidth);
+        if (!layout) continue;
+        // The poster fills its canvas: the largest title that fits with its negative space between the
+        // studio's floor (a crowded poster fails the same metric) and the poster's ceiling.
+        const ns = negativeSpaceOf(layout, input);
+        if (ns <= P.negativeSpaceMax && ns >= floor) return layout;
+        if (ns >= floor) fallback ??= layout;
+      }
     }
+    if (fallback) return fallback;
   }
-  if (fallback) return fallback;
   throw new GrammarInfeasibleError(`the copy does not fit a ${input.variant} poster at ${W}x${input.height} with a title of at least ${lo}px`);
 }
 
@@ -128,6 +153,8 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const arabicDisplay = input.fonts?.arabicDisplay || 'Noto Sans Arabic';
   const arabicBody = input.fonts?.arabicBody || 'Noto Sans Arabic';
   const wide = W / H > 1.25;
+  const gutter = r(0.02 * s);
+  const grid = gridLinesX(W, m, gutter);
 
   // ----- the ground --------------------------------------------------------------------------
   const shapes: ShapeElement[] = [];
@@ -225,8 +252,10 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
       if (!p) return undefined;
       if (p.lines > (b.arabic ? 3 : 4)) return undefined;
       titleBox = p.el;
-      const barX = align === 'right' ? contentX + contentW - bar.width : contentX;
-      const barShape: ShapeElement = { kind: 'roundRect', role: 'accent', primitive: 'title_bar', x: barX, y: p.el.y + p.el.height + bar.gap, width: bar.width, height: bar.height,
+      // The bar's free end on a grid line, so it lines up with the page as its start does.
+      const barW = align === 'right' ? contentX + contentW - snapX(grid, contentX + contentW - bar.width, 0.05 * W) : snapX(grid, contentX + bar.width, 0.05 * W) - contentX;
+      const barX = align === 'right' ? contentX + contentW - barW : contentX;
+      const barShape: ShapeElement = { kind: 'roundRect', role: 'accent', primitive: 'title_bar', x: barX, y: p.el.y + p.el.height + bar.gap, width: barW, height: bar.height,
         radius: r(bar.height / 2), color: middle(g.titleBar.stops), gradient: gradientOf(g.titleBar.stops, 0) };
       headItems.push({ el: p.el, shapes: [], top: p.el.y, bottom: p.el.y + p.el.height });
       y = p.el.y + p.el.height;
@@ -273,7 +302,7 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   if (details.length) {
     const inner = panel ? colW - 2 * pad : colW;
     const ix = panel ? colX + pad : colX;
-    const lines: Array<{ t: TextElement; copy: string }> = [];
+    const lines: Array<{ t: TextElement; copy: string; meta: boolean }> = [];
     let firstMeta = true;
     for (const u of details) {
       for (const b of u.blocks) {
@@ -281,7 +310,7 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
         if (u.kind === 'meta') firstMeta = false;
         const colour = u.kind === 'meta' && (metaFirst || b.role === 'date') ? (panel ? panelTitle : spec.detail) : panel ? panelText : spec.body;
         const kind: Kind = u.kind === 'meta' ? (metaFirst ? 'metaFirst' : 'meta') : 'body';
-        lines.push({ t: el(b, kind, u.kind === 'meta' ? sizes.meta : sizes.body, colour, inner), copy: b.text });
+        lines.push({ t: el(b, kind, u.kind === 'meta' ? sizes.meta : sizes.body, colour, inner), copy: b.text, meta: u.kind === 'meta' });
       }
     }
     const gap = r(0.35 * sizes.meta);
@@ -291,6 +320,8 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
       if (i) ly += gap;
       const p = set(l.t, l.copy, ix, inner, ly);
       if (!p) return undefined;
+      // A date or a place is not broken over two lines while the details could take the content width.
+      if (l.meta && p.lines > 1 && !fullWidth) return undefined;
       placed.push(p.el);
       ly = p.el.y + p.el.height;
     }
@@ -318,11 +349,13 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
         fy = p.el.y + p.el.height + r(0.02 * H);
         continue;
       }
-      const pw = mm.lineWidth + 2 * padX + 2;
+      // The pill grows to the next grid line, so its free end lines up with the page.
+      const natural = mm.lineWidth + 2 * padX + 2;
+      const pw = Math.min(colW, rtl ? colX + colW - snapX(grid, colX + colW - natural, 0.08 * W, 'down') : snapX(grid, colX + natural, 0.08 * W, 'up') - colX);
       const px = rtl ? colX + colW - pw : colX;
       const pill: ShapeElement = { kind: 'roundRect', role: 'panel', surface: 'card', x: px, y: fy, width: pw, height: mm.height + 2 * padY,
         radius: r((mm.height + 2 * padY) / 2), color: spec.pill };
-      const tx: TextElement = { ...t, ...intBox({ x: px + padX - 1, y: fy + padY, width: mm.lineWidth + 4, height: mm.height }), align: b.arabic ? 'right' : 'left' };
+      const tx: TextElement = { ...t, ...intBox({ x: px + Math.round((pw - mm.lineWidth - 4) / 2), y: fy + padY, width: mm.lineWidth + 4, height: mm.height }), align: b.arabic ? 'right' : 'left' };
       footItems.push({ el: tx, shapes: [pill], top: fy, bottom: fy + pill.height });
       fy += pill.height + r(0.02 * H);
     } else {
@@ -341,15 +374,19 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
 
   // ----- the room left over: some above the head, the rest between head and foot ---------------
   // With no details the head is set a little above the middle of its room, as a cover's title stands.
-  const gapAbove = footH ? r(Math.min(room * 0.3, 0.1 * H)) : r(room * 0.42);
+  // A band poster with no details sets its head low, so the room is above the band, where the brand
+  // element stands, not an empty foot under a short lead.
+  const gapAbove = footH ? r(Math.min(room * 0.3, 0.1 * H)) : band ? r(room * 0.82) : r(room * 0.42);
   const footTop = footH ? limit - footH : 0;
   const shift = (i: Item, dy: number): Item => ({ ...i, top: i.top + dy, bottom: i.bottom + dy, ...(i.el ? { el: { ...i.el, y: i.el.y + dy } } : {}), shapes: i.shapes.map((sh) => ({ ...sh, y: sh.y + dy })) });
   const headPlaced = headItems.map((i) => shift(i, gapAbove));
   const footPlaced = footItems.map((i) => shift(i, footTop));
+  let bandShape: ShapeElement | undefined;
   if (band) {
     const bandTop = top + gapAbove;
-    shapes.push({ kind: 'rect', role: 'panel', x: 0, y: bandTop, width: W, height: bandBottom + gapAbove - bandTop,
-      color: g.cover.stops[g.cover.stops.length - 1].color, gradient: gradientOf(g.cover.stops, 0) });
+    bandShape = { kind: 'rect', role: 'panel', x: 0, y: bandTop, width: W, height: bandBottom + gapAbove - bandTop,
+      color: g.cover.stops[g.cover.stops.length - 1].color, gradient: gradientOf(g.cover.stops, 0) };
+    shapes.push(bandShape);
   }
   for (const i of [...headPlaced, ...footPlaced]) {
     shapes.push(...i.shapes);
@@ -380,7 +417,7 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
 
   // ----- the visible brand element: the sunburst in the largest free corner --------------------
   const sun = spec.sunburst;
-  const blocked = (b: Box) => text.some((t) => hit(t, b)) || hit(b, clear);
+  const blocked = (b: Box) => text.some((t) => hit(t, b)) || hit(b, clear) || (bandShape !== undefined && hit(bandShape, b));
   const cornerBox = (corner: OrnamentElement['corner'], size: number): Box => {
     const right = corner!.endsWith('right');
     const bottom = corner!.startsWith('bottom');
@@ -409,7 +446,7 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const composition: CompositionRecord = { grammar: 'poster', variant };
   const layout: StudioLayoutV2 = {
     version: 2, width: W, height: H,
-    grid: { margin: m, columns: 12, gutter: r(0.02 * s), baseline: 8 },
+    grid: { margin: m, columns: 12, gutter, baseline: 8 },
     typeScale: { base: sizes.body, ratio: TYPE_RATIO },
     background: { color: background },
     shapes,
@@ -419,6 +456,10 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     composition,
   };
   balanceGrammarLines(layout, input);
+  if (bandShape) trimBand(bandShape, layout, titleBox.copyIndex, m, rtl);
+  // The composer promises hard QA's alignment check (a Sorani navy poster measured 0.688 against 0.70:
+  // its pill's and gold bar's free edges lined up with nothing).
+  if (computeLayoutMetrics(layout).alignmentScore < ALIGNMENT_PASS) return undefined;
   try {
     checkGrammarLayout(layout, clear);
   } catch (err) {
@@ -426,6 +467,22 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     throw err;
   }
   return layout;
+}
+
+/**
+ * The band runs from the edge the title starts at to a margin past its longest line, as the office's
+ * title tabs do, unless that leaves only a sliver of the page beside it. A full-width band under a
+ * short Sorani title made the poster too dense to pass the studio's negative-space floor.
+ */
+function trimBand(band: ShapeElement, layout: StudioLayoutV2, titleIndex: number, margin: number, rtl: boolean): void {
+  const title = layout.text.find((t) => t.copyIndex === titleIndex);
+  if (!title) return;
+  const W = layout.width;
+  const end = rtl ? title.x - margin : title.x + title.width + margin;
+  const width = rtl ? W - Math.max(0, end) : Math.min(W, end);
+  if (W - width < 0.15 * W) return;
+  band.x = rtl ? W - width : 0;
+  band.width = width;
 }
 
 function middle(stops: Array<{ at: number; color: Hex }>): Hex {

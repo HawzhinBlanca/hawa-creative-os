@@ -25,7 +25,8 @@
  *  4. when nothing safe remains, the request opens for a designer (as a request without copy does).
  *
  * The grounding guard (`groundLine`) is enforced here and never trusted from the model: every line is
- * rebuilt from the requester's own text, as one span of it or spans in their order joined by " · ",
+ * rebuilt from the requester's own text, as one span of it or spans in their order joined by " · "
+ * (by the Arabic comma in an Arabic-script line, `joinerFor`),
  * where only glue words ("it's on", "our", "in the") may be left out between spans, and no span may
  * touch the request words or an instruction to the designer. Casing, digits, dates, times and names
  * are therefore exactly as typed (owner: "Keep exactly as typed"). A line the guard refuses is dropped;
@@ -271,9 +272,18 @@ function placeParts(source: string, lower: string, parts: string[], from: number
 }
 
 /**
+ * The mark set between spans of a line. A middle dot reads as the zero of the Eastern Arabic digits
+ * ("٢٠٢٦ · ٩:٣٠" reads as one number), so a line in Arabic script, or with those digits, takes the
+ * Arabic comma that Sorani writes between a date and a time; any other line takes " · ".
+ */
+export function joinerFor(text: string): string {
+  return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/u.test(text) ? '، ' : ' · ';
+}
+
+/**
  * A proposed line rebuilt from the requester's own text, or why it is refused. The source is the
  * request with its whitespace collapsed; `forbidden` are the request words and instructions in it.
- * A line is one span of the source, or up to four spans in their order (joined with " · ") with only
+ * A line is one span of the source, or up to four spans in their order (joined by `joinerFor`) with only
  * glue words left out between them; the result is always the source's own characters.
  */
 export function groundLine(source: string, proposed: string, forbidden: Span[] = []):
@@ -291,7 +301,8 @@ export function groundLine(source: string, proposed: string, forbidden: Span[] =
     spans = placeParts(source, lower, parts, 0, forbidden, true);
   }
   if (!spans) return { ok: false, why: 'not the requester\'s own words in their order' };
-  const text = spans.map(([s, e]) => source.slice(s, e)).join(' · ');
+  const pieces = spans.map(([s, e]) => source.slice(s, e));
+  const text = pieces.join(joinerFor(pieces.join('')));
   if (!contentWords(text)) return { ok: false, why: 'only joining words' };
   if (requestLead(text) || readsAsInstruction(text)) return { ok: false, why: 'part of the request, not copy' };
   return { ok: true, text, spans };

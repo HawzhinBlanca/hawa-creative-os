@@ -6,6 +6,7 @@ import { composeGrammarLayout, guidelineDeviations, guidelineFidelityRule, pageG
 import { admitPageGrammarFromReference } from '../src/studio/page-grammar-admission.js';
 import { composePosterLayout, negativeSpaceOf, POSTER_VARIANTS, type PosterVariant } from '../src/studio/poster-grammar.js';
 import { renderLayoutV2 } from '../src/studio/render-layout-v2.js';
+import { computeLayoutMetrics } from '../src/studio/layout-metrics.js';
 import { buildPairwiseJudgeSystemPrompt, MAX_JUDGE_HOUSE_RULE_CHARS, POSTER_IMPACT_CRITERIA } from '../src/studio/pairwise-judge-v3.js';
 import { ExemplarRetrievalIndex } from '../src/studio/exemplar-retrieval.js';
 import { measureDesignV3 } from '../src/studio/pipeline-v3.js';
@@ -103,7 +104,10 @@ describe('the three poster compositions, composed with no model call', () => {
         expect(l.logo.width / 1080).toBeGreaterThanOrEqual(0.16);
         expect(l.logo.x).toBe(76);
         const ns = negativeSpaceOf(l, { copy: { text: copyOf(b.lines) } });
-        expect(ns, `${variant} negative space`).toBeLessThanOrEqual(0.65);
+        // The ceiling is a target: when no step of the type scale lands under it with the details at
+        // their poster size, the nearest over it is kept (a Sorani navy poster, 0.653) rather than
+        // smaller details.
+        expect(ns, `${variant} negative space`).toBeLessThanOrEqual(0.66);
         expect(ns, `${variant} negative space`).toBeGreaterThanOrEqual(0.36);
         expect(guidelineDeviations(l, G, { arabicFonts: KAAE_FONTS.arabic })).toEqual([]);
         expect(validateLayoutV2(l, validation(b.lines)), variant).toMatchObject({ ok: true });
@@ -121,7 +125,8 @@ describe('the three poster compositions, composed with no model call', () => {
     const l = poster(b.lines, b.roles, 'navy');
     expect(l.shapes[0]).toMatchObject({ primitive: 'cover_ground', gradient: { angle: 45 } });
     expect(l.text.find((t) => t.role === 'title')!.color).toBe('#FFFFFF');
-    expect(l.shapes.find((s) => s.primitive === 'title_bar')!.width).toBe(Math.round(0.16 * 1080));
+    // 16% of the width, its free end on the nearest grid line (hard QA's alignment reads it).
+    expect(Math.abs(l.shapes.find((s) => s.primitive === 'title_bar')!.width - Math.round(0.16 * 1080))).toBeLessThanOrEqual(0.05 * 1080);
     expect(l.ornaments?.[0]).toMatchObject({ kind: 'sunburst', color: '#4A90E2', opacity: 0.35 });
     expect(l.ornaments![0].width).toBeGreaterThanOrEqual(Math.round(0.33 * 1080));
     // The call to action on a gold pill, in Midnight.
@@ -140,13 +145,14 @@ describe('the three poster compositions, composed with no model call', () => {
     expect(l.ornaments?.[0]).toMatchObject({ kind: 'sunburst', color: '#F7B500' });
   });
 
-  it('band: the white page with a full-width gradient band holding the title, the bar bridging its edge, the foot rule', () => {
+  it('band: the white page with a gradient band holding the title from its starting edge, the bar bridging its edge, the foot rule', () => {
     const [b] = BRIEFS;
     const l = poster(b.lines, b.roles, 'band');
     expect(l.background.color).toBe('#FFFFFF');
     const title = l.text.find((t) => t.role === 'title')!;
-    const band = l.shapes.find((s) => s.role === 'panel' && s.width === 1080 && s.gradient)!;
+    const band = l.shapes.find((s) => s.role === 'panel' && s.kind === 'rect' && s.gradient)!;
     expect(band.x).toBe(0);
+    expect(band.x + band.width).toBeGreaterThanOrEqual(title.x + title.width);
     expect(title.y).toBeGreaterThanOrEqual(band.y);
     expect(title.y + title.height).toBeLessThanOrEqual(band.y + band.height);
     const bar = l.shapes.find((s) => s.primitive === 'title_bar')!;
@@ -154,6 +160,55 @@ describe('the three poster compositions, composed with no model call', () => {
     expect(bar.y + bar.height).toBeGreaterThan(band.y + band.height);
     expect(l.shapes.some((s) => s.primitive === 'foot_rule')).toBe(true);
   });
+
+  it('the details read under a poster title: at least 4% of the width, and a date or a place on one line', () => {
+    for (const b of BRIEFS) {
+      for (const variant of POSTER_VARIANTS) {
+        const l = tryPoster(b.lines, b.roles, variant);
+        if (!l) continue;
+        const details = l.text.filter((t) => t.role !== 'title' && t.role !== 'cta');
+        // A band under a long Sorani title cannot hold them at that size; it keeps the scale's step instead.
+        const min = variant === 'band' && ARABIC.test(b.lines[0]) ? 0.033 : 0.04;
+        for (const t of details) expect(t.fontSize / 1080, `${b.id} ${variant} ${t.role}`).toBeGreaterThanOrEqual(min);
+        for (const t of l.text.filter((x) => x.role === 'date' || x.role === 'venue')) {
+          expect(t.height, `${b.id} ${variant} ${t.role} on one line`).toBeLessThan(2 * t.fontSize * t.lineHeight);
+        }
+      }
+    }
+    // Before (2026-10-02): 38-40px details under a 122-191px title, 0.035-0.037 of the width.
+    const navy = poster(BRIEFS[0].lines, BRIEFS[0].roles, 'navy');
+    expect(navy.text.find((t) => t.role === 'date')!.fontSize).toBeGreaterThanOrEqual(44);
+  }, 60000);
+
+  it('band with short copy: the band ends past the title, the copy sits low and the room above holds the sunburst', () => {
+    const b = BRIEFS[1];
+    const l = poster(b.lines, b.roles, 'band');
+    const band = l.shapes.find((s) => s.role === 'panel' && s.kind === 'rect' && s.gradient)!;
+    const lead = l.text.find((t) => t.role === 'subtitle')!;
+    // Before: the band at 451px and the lead ending at 1060px, a 230px empty foot over the rule.
+    expect(band.y + band.height / 2).toBeGreaterThan(1350 / 2);
+    const rule = l.shapes.find((s) => s.primitive === 'foot_rule')!;
+    expect(rule.y - (lead.y + lead.height)).toBeLessThan(0.1 * 1350);
+    expect(l.ornaments?.[0]).toMatchObject({ kind: 'sunburst' });
+    expect(l.ornaments![0].y + l.ornaments![0].height).toBeLessThanOrEqual(band.y);
+    // A Sorani band runs from the right edge, as the office's Sorani title tab does.
+    const ckb = BRIEFS[3];
+    const sl = poster(ckb.lines, ckb.roles, 'band');
+    const sband = sl.shapes.find((s) => s.role === 'panel' && s.kind === 'rect' && s.gradient)!;
+    const stitle = sl.text.find((t) => t.role === 'title')!;
+    expect(sband.x + sband.width).toBe(1080);
+    expect(sband.x).toBeLessThanOrEqual(stitle.x);
+    expect(sband.width).toBeLessThan(1080);
+  });
+
+  it('every composition passes hard QA\'s alignment check (a Sorani navy poster measured 0.688 against 0.70)', () => {
+    const b = BRIEFS[3];
+    const dated = b.lines.map((t, i) => (b.roles[i] === 'date' ? '١٥ی تشرینی یەکەمی ٢٠٢٦، ٩:٣٠ی بەیانی' : t));
+    for (const variant of POSTER_VARIANTS) {
+      const l = tryPoster(dated, b.roles, variant);
+      if (l) expect(computeLayoutMetrics(l).alignmentScore, variant).toBeGreaterThanOrEqual(0.7);
+    }
+  }, 60000);
 
   it('the three compositions are different designs, not one layout three times', () => {
     const [b] = BRIEFS;

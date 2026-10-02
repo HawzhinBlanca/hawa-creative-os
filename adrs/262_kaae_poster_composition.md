@@ -85,3 +85,33 @@ The new selection test fails on the base (the prior overruled a 3-2 judge).
 - The Sorani band is infeasible for short two-block copy (its band is too full for the floor). The stage offers the next composition instead.
 - There is no photo or illustration for a text-only brief. The office's posts carry a photo; ours carry the sunburst.
 - No live run was made.
+
+## 7. Addendum (2026-10-02): the owner's review, fixes 1-3
+
+The owner reviewed the montages and asked for three fixes on this branch.
+
+**1. The details were small under a poster title.**
+- *Problem:* the date, the place and the lead were 38-40px under a 122-191px title (0.035-0.037 of the width). At thumbnail size they nearly disappeared.
+- *Fix:* the poster rules gain `detailSizeShareMin` (KAAE 0.04, about 16 points on a phone). The details take the first step of the type scale at or above it, now 44-50px.
+- *Fallbacks:*
+  - A composition that cannot hold them there keeps the old step rather than dropping out. Today that is the band under a long Sorani title, at 36px.
+  - When no title step lands under the 0.65 negative-space ceiling with the larger details, the nearest one over it is kept (a Sorani navy poster, 0.653).
+- *Wrapping:* a date or a place is never broken over two lines while the details card can take the content width.
+
+**2. The band left an empty foot, and the Sorani band rarely fit.**
+- *Short copy:* with no details, the band's head is set low, and the room above holds the sunburst. Before, the lead ended at 1060px of 1350, over 230px of empty page.
+- *Band width:* the band now runs from the edge the title starts at to a margin past its longest line, as the office's title tabs do (from the right in Sorani). It stays full width when only a sliver would remain beside it.
+- *Sorani:* the two-block Sorani workshop now fits.
+- *Still open:* a three-line Sorani title fills the width, and the full band stays too dense for the studio's floor. The negative-space metric adds a band and the title on it as two areas, and that metric was left unchanged. That brief gets navy and cream.
+
+**3. In Sorani, the middle dot read as a zero.**
+- *Problem:* between Eastern Arabic digits, " · " reads as their zero, so "2026 · 9:30" in those digits read as one number.
+- *Fix:* `groundLine` (`request-copy-extraction.ts`) joins the spans of an Arabic-script line, or of a line with those digits, with the Arabic comma, through `joinerFor`. Latin lines keep " · ".
+- The requester's own characters are unchanged; only the joining mark the system adds changes.
+- The native Sorani review should confirm the comma.
+
+**Alignment guard.**
+- *Problem:* while fixing 1, one Sorani navy poster measured 0.688 on hard QA's alignment check (limit 0.70). Its gold bar's and pill's free ends lined up with nothing.
+- *Fix:* both now end on a grid line. The pill grows to the next line, with its text centred. The composer also refuses a layout that fails `computeLayoutMetrics(...).alignmentScore`, so QA never sees one.
+
+**Proof.** 20 of 21 deterministic renders pass hard QA; the one exception is the Sorani three-line band, which does not compose. Tests: `kaae-poster-compositions.test.ts`, 23 tests (three new), and `request-copy-extraction.test.ts`, one new.

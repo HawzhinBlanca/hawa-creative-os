@@ -88,6 +88,12 @@ export interface PosterGrammar {
   logoWidthShare: number;
   titleBarWidthShare: number;
   negativeSpaceMax: number;
+  /**
+   * The smallest size of the details (the date, the place, the lead) as a share of the width. A post
+   * is seen about 390 points wide on a phone, so 0.04 sets them at about 16 points there; the type
+   * scale's first step over the body was 0.035, and the details read small under a poster title.
+   */
+  detailSizeShareMin?: number;
   navy: PosterVariantSpec;
   cream: PosterVariantSpec;
   band: PosterVariantSpec;

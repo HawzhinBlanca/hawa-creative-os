@@ -256,6 +256,7 @@
         "logoWidthShare": 0.16,
         "titleBarWidthShare": 0.16,
         "negativeSpaceMax": 0.65,
+        "detailSizeShareMin": 0.04,
         "navy": {
           "title": "#FFFFFF",
           "lead": "#FFD700",

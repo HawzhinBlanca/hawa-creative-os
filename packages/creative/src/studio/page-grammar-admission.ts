@@ -36,6 +36,7 @@ function grammarSchema(palette: ReadonlySet<string>) {
     source: note.optional(),
     titleSizeShare: z.object({ min: dimension, max: dimension }).strict().refine(v => v.min <= v.max, 'The title range must ascend.'),
     logoWidthShare: dimension, titleBarWidthShare: dimension, negativeSpaceMax: share,
+    detailSizeShareMin: dimension.optional(),
     navy: posterVariant, cream: posterVariant.refine(v => Boolean(v.ground && v.panel && v.panelTitle && v.panelText), 'The cream poster names its ground and card.'),
     band: posterVariant,
   }).strict();

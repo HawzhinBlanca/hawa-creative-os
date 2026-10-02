@@ -5,7 +5,7 @@ import { resolveModel } from '@hawa/domain';
 import { createApp } from '../src/app.js';
 import type { ChatIntake } from '../src/services/chat-intake.js';
 import {
-  copyExtractionRequestBody, copyTitle, createCopyExtractionModel, extractRequestCopy, groundLine, requestLead,
+  copyExtractionRequestBody, copyTitle, createCopyExtractionModel, extractRequestCopy, groundLine, joinerFor, requestLead,
   type CopyExtractionModel, type ProposedCopy,
 } from '../src/services/request-copy-extraction.js';
 import { requestTitle } from '../src/services/request-title.js';
@@ -46,6 +46,17 @@ describe('the grounding guard: only the requester\'s own words, in their order',
     // The model capitalised a line: the requester's casing is used ("Keep exactly as typed").
     expect(groundLine(source, 'For School Principals', request)).toMatchObject({ ok: true, text: 'for school principals' });
     expect(groundLine(source, 'Registration is free.', request)).toMatchObject({ ok: true, text: 'Registration is free' });
+  });
+
+  it('joins the spans of an Arabic-script line with the Arabic comma, never a dot beside Eastern Arabic digits', () => {
+    // A middle dot between "٢٠٢٦" and "١٠:٠٠" reads as their zero: the line looked like one long number.
+    const ckb = SORANI.replace(/\s+/g, ' ');
+    const grounded = groundLine(ckb, '١٥ی تشرینی یەکەمی ٢٠٢٦ · کاتژمێر ١٠:٠٠');
+    expect(grounded).toMatchObject({ ok: true, text: '١٥ی تشرینی یەکەمی ٢٠٢٦، کاتژمێر ١٠:٠٠' });
+    // Grounding its own output again gives the same line.
+    expect(groundLine(ckb, (grounded as { text: string }).text)).toMatchObject({ ok: true, text: '١٥ی تشرینی یەکەمی ٢٠٢٦، کاتژمێر ١٠:٠٠' });
+    expect(joinerFor('15 October 2026')).toBe(' · ');
+    expect(joinerFor('١٥ 10:00')).toBe('، ');
   });
 
   it.each([
@@ -152,8 +163,11 @@ describe('the copy of a request written as a sentence (ADR-232)', () => {
     const proposal = { headline: 'وۆرکشۆپی هەڵسەنگاندن', lines: ['بۆ بەڕێوەبەرانی قوتابخانەکان', '١٥ی تشرینی یەکەمی ٢٠٢٦ · کاتژمێر ١٠:٠٠', 'هۆڵی KAAE، هەولێر', 'تۆمارکردن بەخۆڕاییە'] };
     const ckb = (text: string) => prepared(text, { exactCopy: [{ text, language: 'ckb', direction: 'rtl' }] });
     const draft = await extractRequestCopy(ckb(SORANI), ctx(fixed(proposal)));
-    expect(texts(draft)).toEqual([proposal.headline, ...proposal.lines]);
-    expect(draft).toMatchObject({ headlineCkb: proposal.headline, copyCkb: proposal.lines.join('\n'), copyEn: '',
+    // The model's " · " between the date and the time is the Arabic comma once grounded: a middle dot
+    // reads as the Eastern Arabic zero beside those digits.
+    const grounded = proposal.lines.map((l) => l.replace(' · ', '، '));
+    expect(texts(draft)).toEqual([proposal.headline, ...grounded]);
+    expect(draft).toMatchObject({ headlineCkb: proposal.headline, copyCkb: grounded.join('\n'), copyEn: '',
       title: `KAAE: ${proposal.headline}`, copyExtraction: { method: 'model', request: 'تکایە پۆستێکی ئینستاگرام دروست بکە بۆ' } });
     expect(draft).not.toHaveProperty('headlineEn');
     expect(draft.exactCopy[0]).toMatchObject({ language: 'ckb', direction: 'rtl' });
