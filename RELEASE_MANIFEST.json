@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-02T10:58:42+03:00",
+  "generatedAt": "2026-10-02T12:31:03+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,10 +20,10 @@
     ]
   },
   "build": {
-    "commit": "346b59c06e711f49dd88ba26929b6a57ba7bc872",
+    "commit": "6abe57fa74e66922dcc781042355fe3f430850d4",
     "treeClean": true,
-    "commitTimestamp": "2026-10-02T10:58:42+03:00",
-    "branch": "claude/hunt3-cancel-many"
+    "commitTimestamp": "2026-10-02T12:31:03+03:00",
+    "branch": "claude/hunt4-qa-titles"
   },
   "migrations": {
     "targetVersion": "073_restricted_worker_database",
@@ -84,11 +84,11 @@
     "sourceHashes": {
       "packages/qa/src/engine.ts": "454d81402825a4ccfdf00445b556afeb3282b01957585ba6689eec4436ab79c5",
       "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
-      "packages/qa/src/canva-pptx-check.ts": "173c08698334aff0c69cad6e2be24e66a0c1cfaebd52fb64db6566d56d36bd7c",
+      "packages/qa/src/canva-pptx-check.ts": "5fb3387b45f0f4d7e88d49b035653019ffeae6614a742484887ba146010787c6",
       "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
       "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "194ab8ee34fa8496470d369c30eeefff656e2e3eda7b589116091825bb528f22"
+  "sha256": "e71f784631bdba2877b976fd08e70a0c922f1153ffbcc9d419bf5bccd496d02b"
 }
