@@ -17,7 +17,9 @@ import {
   photoSelectionFromInstructions,
   imagePixelSize,
   guidelineFidelityRule,
+  ExemplarRetrievalIndex,
 } from '@hawa/creative';
+import { packagedReferenceExemplarManifest } from '../../client-packs.js';
 import type { StageContext, CandidateState, Concept, Archetype, MotifKind, CreativeBrief } from '../types.js';
 import { candidateRenderOptions } from './asset-inputs.js';
 // ADR-237: the visual review and its controlled refinement (kept as their own imports for merging).
@@ -408,7 +410,39 @@ export function houseRulesFor(ctx: Pick<StageContext, 'artDirectionRules' | 'pag
   return rules.length ? { houseRules: rules } : {};
 }
 
-/** P07: the judge and its canary choose between the top two candidates. */
+/** ADR-274: the switch for showing a poster client's judge one of its published posts. Default off. */
+export function judgeOfficeReferenceEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return ['1', 'on', 'true'].includes(String(env.HAWA_JUDGE_OFFICE_REFERENCE ?? '').trim().toLowerCase());
+}
+
+/**
+ * ADR-274: the office post a poster client's judge is shown as the standard, not to copy: the first
+ * exemplar this run retrieved and pinned (ADR-271 `officePosters`) whose bytes are an office-published
+ * post in the client's own exemplar manifest. Only with the switch on, a grammar with poster rules and
+ * no requester reference (which keeps the judge's one image slot); otherwise none. It adds one image
+ * to every judge call, about $0.003-0.004 each on the production judge.
+ */
+export function officeReferenceForJudge(
+  ctx: Pick<StageContext, 'clientId' | 'pageGrammar' | 'reference' | 'exemplars'>,
+  env: Record<string, string | undefined> = process.env
+): { dataUrl: string; label: string } | undefined {
+  if (!judgeOfficeReferenceEnabled(env) || !ctx.pageGrammar?.poster || ctx.reference) return undefined;
+  let office: Set<string>;
+  try {
+    const index = new ExemplarRetrievalIndex({ manifestPath: packagedReferenceExemplarManifest(ctx.clientId) });
+    office = new Set(index.getConfirmedExemplars().filter((e) => e.status === 'office-published' && e.sha256).map((e) => e.sha256!));
+  } catch {
+    return undefined;
+  }
+  const post = (ctx.exemplars ?? []).find((e) => e.bytes && e.sha256 && office.has(e.sha256));
+  if (!post?.bytes) return undefined;
+  return { dataUrl: `data:${post.mimeType || 'image/jpeg'};base64,${post.bytes.toString('base64')}`, label: post.label };
+}
+
+/**
+ * P07: the judge and its canary choose between the top two candidates; for a client with poster rules,
+ * among up to three in a round robin (ADR-274).
+ */
 export async function runJudgeStageV3(
   ctx: StageContext,
   candidates: CandidateState[],
@@ -437,8 +471,10 @@ export async function runJudgeStageV3(
       policySha256: ctx.exemplarPolicySha256, loadedIds: ctx.exemplarRetrieval.loadedIds,
       matches: ctx.exemplarRetrieval.matches,
     } } : {}),
-    // ADR-238: a client with a page grammar: its composed design stands unless the judge clearly prefers another.
+    // ADR-238: a client with a page grammar; ADR-274: with poster rules, a round robin and no composed default.
     ...(ctx.pageGrammar ? { pageGrammar: ctx.pageGrammar } : {}),
+    // ADR-274: behind HAWA_JUDGE_OFFICE_REFERENCE (default off), one office post as the standard.
+    ...(() => { const office = officeReferenceForJudge(ctx); return office ? { officeReference: office } : {}; })(),
   });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;

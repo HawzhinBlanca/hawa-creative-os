@@ -111,10 +111,19 @@ export interface PipelineV3CallOptions {
   /**
    * ADR-238: the client's page grammar. When set, the incumbent judge compares the best design
    * composed from the grammar (one that passed hard QA) against the best one that was not, and the
-   * guideline prior keeps the composed one unless the judge prefers the other by a clear margin in
-   * both presentation orders and passes its canary.
+   * guideline prior breaks a tie the judge leaves (ADR-271).
+   *
+   * ADR-274: a grammar with poster rules is not paired that way. Up to three eligible candidates are
+   * judged in a round robin (`POSTER_ROUND_ROBIN_MAX`), two are judged as ranked, and the guideline
+   * prior counts only departures from the guideline, never "composed from the grammar".
    */
   pageGrammar?: PageGrammar;
+  /**
+   * ADR-274: one of the client's published posts for a poster client's judge, as the standard, not a
+   * design to copy (`JudgeOptions.officeReference`). Core passes it only behind
+   * HAWA_JUDGE_OFFICE_REFERENCE; absent, the judge sees the two candidates (and any requester reference).
+   */
+  officeReference?: { dataUrl: string; label: string };
 }
 
 /**
@@ -1815,8 +1824,19 @@ export interface WinnerSelectionV3 {
     /** ADR-238 `judge_without_clear_margin`: the judge preferred the other, but not clearly in both orders. */
     instead: 'composite_after_tie' | 'composite_judge_unreliable' | 'judge_without_clear_margin';
   };
-  /** The incumbent's match. Null when the challenger judged or no judge ran. */
+  /**
+   * The incumbent's match. Null when the challenger judged or no judge ran. After a round robin
+   * (ADR-274) it is the match of the two leaders, which may be a discarded pair.
+   */
   match: PairwiseMatchResult | null;
+  /** ADR-274: every match of a round robin, in the order played. Absent when one pair was judged. */
+  matches?: PairwiseMatchResult[];
+  /**
+   * ADR-274: the round robin's standings, best first (wins minus losses over the matches, a discarded
+   * pair counting for neither; equal scores keep the rank order), and the judge's pick: the one
+   * candidate with the best score, or null when two or more share it.
+   */
+  roundRobin?: { standings: Array<{ sourceIndex: number; score: number }>; pickSourceIndex: number | null };
   /** The incumbent's canary run on `subject` — its pick, or the higher composite after a tie. */
   canary: { passed: boolean; match: PairwiseMatchResult; subject: RankedCandidateV3 } | null;
   /** Whether the judge beat the degraded canary in both orders. Null when no judge ran. */
@@ -1838,9 +1858,55 @@ export interface WinnerSelectionV3 {
 }
 
 /**
+ * ADR-274: the most candidates a client with poster rules has judged against each other. Three is
+ * what the layouts stage keeps, so every composed poster is seen: three pairs in both orders, six
+ * calls, where the top two by a deterministic composite that separated them by 0.001-0.013 was one
+ * pair and two calls. With the canary's two, eight judge calls a design instead of four.
+ */
+export const POSTER_ROUND_ROBIN_MAX = 3;
+
+/**
+ * ADR-274: a round robin among `judged`, each pair in both presentation orders. A pair the judge
+ * decides in both orders counts one win and one loss; a pair it splits counts for neither (a tie).
+ * The pick is the one candidate with the best score; with two or more sharing it, there is none.
+ */
+async function judgeRoundRobin(
+  judged: RankedCandidateV3[],
+  asJudgeInput: (c: RankedCandidateV3, id: string) => CandidateJudgeInput,
+  judgeOptions: Parameters<typeof comparePairWithOrderSwap>[2]
+): Promise<{
+  matches: PairwiseMatchResult[]; pick: RankedCandidateV3 | null; leaders: [RankedCandidateV3, RankedCandidateV3];
+  match: PairwiseMatchResult; standings: Array<{ sourceIndex: number; score: number }>;
+}> {
+  const idOf = (c: RankedCandidateV3) => `candidate_${c.sourceIndex}`;
+  const score = new Map<RankedCandidateV3, number>(judged.map((c) => [c, 0]));
+  const matches: PairwiseMatchResult[] = [];
+  for (let i = 0; i < judged.length; i++) {
+    for (let j = i + 1; j < judged.length; j++) {
+      const [p, q] = [judged[i], judged[j]];
+      const m = await comparePairWithOrderSwap(asJudgeInput(p, idOf(p)), asJudgeInput(q, idOf(q)), judgeOptions);
+      matches.push(m);
+      const winner = m.winnerId === idOf(p) ? p : m.winnerId === idOf(q) ? q : null;
+      if (!winner) continue;
+      const loser = winner === p ? q : p;
+      score.set(winner, score.get(winner)! + 1);
+      score.set(loser, score.get(loser)! - 1);
+    }
+  }
+  // Stable: equal scores keep the rank order.
+  const order = [...judged].sort((p, q) => score.get(q)! - score.get(p)!);
+  const best = score.get(order[0])!;
+  const pick = order.filter((c) => score.get(c) === best).length === 1 ? order[0] : null;
+  const leaders: [RankedCandidateV3, RankedCandidateV3] = [order[0], order[1]];
+  const pairOf = (m: PairwiseMatchResult) => [String(m.candidate1Id), String(m.candidate2Id)];
+  const match = matches.find((m) => pairOf(m).includes(idOf(leaders[0])) && pairOf(m).includes(idOf(leaders[1])))!;
+  return { matches, pick, leaders, match, standings: order.map((c) => ({ sourceIndex: c.sourceIndex, score: score.get(c)! })) };
+}
+
+/**
  * ADR-238: the pair the judge sees for a client with a page grammar: the best-ranked design composed
  * from the grammar against the best-ranked one that was not, in rank order. Without one of each, the
- * top two as before.
+ * top two as before. ADR-274: not for a grammar with poster rules (see `selectWinnerV3`).
  */
 function guidelinePair(ranked: RankedCandidateV3[]): [RankedCandidateV3, RankedCandidateV3] {
   const composed = ranked.find((c) => c.layout.composition);
@@ -1895,6 +1961,7 @@ export async function selectWinnerV3(
     // ADR-271: a client whose grammar carries poster rules is judged as a poster: impact and
     // hierarchy at a 300px thumbnail, a clear focal point, and fit to the request.
     ...(options.pageGrammar?.poster ? { posterImpact: true } : {}),
+    ...(options.pageGrammar?.poster && options.officeReference ? { officeReference: options.officeReference } : {}),
   };
   const renderOptionsFor = (candidate: RankedCandidateV3): RenderLayoutOptions => ({
     ...options.renderOptions, ...options.renderOptionsForCandidate?.(candidate), copyText: copy.text,
@@ -1907,12 +1974,27 @@ export async function selectWinnerV3(
     ...(isPlainBaseline(c.layout) ? { baseline: true } : {}),
   });
 
-  const [first, second] = options.pageGrammar ? guidelinePair(ranked) : ranked;
-  const firstId = `candidate_${first.sourceIndex}`;
-  const secondId = `candidate_${second.sourceIndex}`;
-  const match = await comparePairWithOrderSwap(asJudgeInput(first, firstId), asJudgeInput(second, secondId), judgeOptions);
-
-  const judgePick = match.winnerId === firstId ? first : match.winnerId === secondId ? second : null;
+  // ADR-274: a client with poster rules has up to three eligible candidates judged in a round robin,
+  // and a pair judged as ranked; the composed guideline page is no longer forced into the pair.
+  const posterRules = Boolean(options.pageGrammar?.poster);
+  let first: RankedCandidateV3;
+  let second: RankedCandidateV3;
+  let match: PairwiseMatchResult;
+  let judgePick: RankedCandidateV3 | null;
+  let robin: Pick<WinnerSelectionV3, 'matches' | 'roundRobin'> = {};
+  if (posterRules && ranked.length >= 3) {
+    const rr = await judgeRoundRobin(ranked.slice(0, POSTER_ROUND_ROBIN_MAX), asJudgeInput, judgeOptions);
+    [first, second] = rr.leaders;
+    match = rr.match;
+    judgePick = rr.pick;
+    robin = { matches: rr.matches, roundRobin: { standings: rr.standings, pickSourceIndex: rr.pick?.sourceIndex ?? null } };
+  } else {
+    [first, second] = options.pageGrammar && !posterRules ? guidelinePair(ranked) : ranked;
+    const firstId = `candidate_${first.sourceIndex}`;
+    const secondId = `candidate_${second.sourceIndex}`;
+    match = await comparePairWithOrderSwap(asJudgeInput(first, firstId), asJudgeInput(second, secondId), judgeOptions);
+    judgePick = match.winnerId === firstId ? first : match.winnerId === secondId ? second : null;
+  }
   const tentative = judgePick ?? first;
 
   // Both sides use the tentative winner's identical asset bundle; only the layout is degraded.
@@ -1941,16 +2023,18 @@ export async function selectWinnerV3(
   // stands only where the judge did not decide (a split across the two orders) or failed its canary.
   // A reliable judge's pick stands: the prior used to overrule any pick short of a 0.75 vote share in
   // both orders, which kept the restrained document page against bolder posters (review 2026-10-02).
+  // ADR-274: with poster rules the prior counts only departures from the guideline; two
+  // guideline-legal designs go on to the art-direction prior, then the findings and the composite.
   if (options.pageGrammar && (!judgePick || !canaryPassed)) {
     const grammar = options.pageGrammar;
     const decision = guidelinePrior(first.layout, second.layout, {
       a: guidelineDeviations(first.layout, grammar), b: guidelineDeviations(second.layout, grammar),
-    });
+    }, { posterRules });
     if (decision.winner) {
       const favoured = decision.winner === 'a' ? first : second;
       const other = favoured === first ? second : first;
       const instead = !judgePick ? 'composite_after_tie' : 'composite_judge_unreliable';
-      return { winner: favoured, runnerUp: other, decidedBy: 'art_direction_prior', match, canary,
+      return { winner: favoured, runnerUp: other, decidedBy: 'art_direction_prior', match, ...robin, canary,
         judgeReliable: judgePick ? false : canaryPassed, protocol, humanChoiceRecommended: true,
         prior: { basis: 'guideline', reason: decision.reason, instead } };
     }
@@ -1964,17 +2048,17 @@ export async function selectWinnerV3(
     const decision = artDirectionPrior(first.layout, second.layout, options.subjects, options.recipePreferences);
     if (decision.winner) {
       const winner = decision.winner === 'a' ? first : second;
-      return { winner, runnerUp: winner === first ? second : first, decidedBy: 'art_direction_prior', match, canary,
+      return { winner, runnerUp: winner === first ? second : first, decidedBy: 'art_direction_prior', match, ...robin, canary,
         judgeReliable: judgePick ? false : canaryPassed, protocol, humanChoiceRecommended: true,
         prior: { basis: decision.basis!, reason: decision.reason, instead: judgePick ? 'composite_judge_unreliable' : 'composite_after_tie' } };
     }
   }
   if (!judgePick) {
-    return { winner: lead, runnerUp: next, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed,
+    return { winner: lead, runnerUp: next, decidedBy: 'composite_after_tie', match, ...robin, canary, judgeReliable: canaryPassed,
       protocol, humanChoiceRecommended: true };
   }
   if (!canaryPassed) {
-    return { winner: lead, runnerUp: next, decidedBy: 'composite_judge_unreliable', match, canary, judgeReliable: false,
+    return { winner: lead, runnerUp: next, decidedBy: 'composite_judge_unreliable', match, ...robin, canary, judgeReliable: false,
       protocol, humanChoiceRecommended: true };
   }
   return {
@@ -1982,6 +2066,7 @@ export async function selectWinnerV3(
     runnerUp: judgePick === first ? second : first,
     decidedBy: 'judge',
     match,
+    ...robin,
     canary,
     judgeReliable: true,
     protocol,

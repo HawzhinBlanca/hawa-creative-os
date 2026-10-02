@@ -1072,7 +1072,10 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       // compositions and makes no layout call.
       expect(schemasSeen).not.toContain('layout_v3_candidates');
       expect(schemasSeen).toContain('DesignCritiqueReport');
-      expect(schemasSeen.filter((x) => x === 'PairwiseDimensionVerdict')).toHaveLength(4);
+      // ADR-274: KAAE's grammar carries poster rules, so the three composed posters are judged in a
+      // round robin (three pairs, both orders: six calls) and the canary takes two: eight, each one
+      // admitted through the run's ledger reservation like any other call.
+      expect(schemasSeen.filter((x) => x === 'PairwiseDimensionVerdict')).toHaveLength(8);
 
       const stages = typeof final.stages === 'string' ? JSON.parse(final.stages) : final.stages;
       expect(stages.tournament.pipeline).toBe('v3');
@@ -1082,6 +1085,10 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       expect(stages.tournament.decidedBy).toBe('composite_after_tie');
       expect(stages.tournament.prior).toBeUndefined();
       expect(stages.tournament.humanChoiceRecommended).toBe(true);
+      // ADR-274: every pair split, so no candidate leads the round robin and the judge picked none.
+      expect(stages.tournament.roundRobin.matches).toBe(3);
+      expect(stages.tournament.roundRobin.standings.map((r: any) => r.score)).toEqual([0, 0, 0]);
+      expect(stages.tournament.judgeWinner).toBeNull();
       expect(stages.revise.pipeline).toBe('v3');
       // A judge that picks by position cannot pass a two-order canary.
       expect(final.judge_status).toBe('UNRELIABLE');
@@ -1090,7 +1097,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         await sql<any>`SELECT kind, order_swapped, candidate_a, candidate_b, verdict FROM hawa.design_studio_judgments WHERE run_id=${run.id}::uuid`.execute(db)
       ).rows;
       const kinds = judgments.map((j: any) => `${j.kind}${j.kind === 'pairwise' ? (j.order_swapped ? ':BA' : ':AB') : ''}`).sort();
-      expect(kinds).toEqual(['canary', 'critique', 'pairwise:AB', 'pairwise:BA']);
+      expect(kinds).toEqual(['canary', 'critique', 'pairwise:AB', 'pairwise:AB', 'pairwise:AB', 'pairwise:BA', 'pairwise:BA', 'pairwise:BA']);
       for (const j of judgments) {
         const verdict = typeof j.verdict === 'string' ? JSON.parse(j.verdict) : j.verdict;
         expect(verdict.pipeline).toBe('v3');

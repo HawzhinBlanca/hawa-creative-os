@@ -94,6 +94,13 @@ export interface PosterGrammar {
    * scale's first step over the body was 0.035, and the details read small under a poster title.
    */
   detailSizeShareMin?: number;
+  /**
+   * ADR-274: the faces the office's own posters set their display lines in (KAAE: the heavy sans of
+   * every published post, owner decision 2026-10-02). The guideline-fidelity rule and
+   * `guidelineDeviations` accept them on a poster's display blocks, beside the guideline's own faces.
+   * Absent: only the guideline's faces, as before.
+   */
+  displayFonts?: string[];
   navy: PosterVariantSpec;
   cream: PosterVariantSpec;
   band: PosterVariantSpec;
@@ -948,6 +955,9 @@ export function conformMarksToPageGrammar(layout: StudioLayoutV2, g: PageGrammar
   return layout;
 }
 
+/** ADR-274: the blocks a poster sets in its display face (the office's posts: title, tab, lead, button). */
+export const POSTER_DISPLAY_ROLES: ReadonlyArray<StudioLayoutV2['text'][number]['role']> = ['eyebrow', 'title', 'subtitle', 'cta'];
+
 /**
  * ADR-238: where a design departs from the client's page grammar, in words: what the judge's and the
  * visual review's guideline-fidelity rule names, and what the guideline prior counts.
@@ -956,28 +966,39 @@ export function conformMarksToPageGrammar(layout: StudioLayoutV2, g: PageGrammar
  * - a light page without the header rule and its gold segment, the gold bar under its title, or the
  *   gradient rule at its foot;
  * - a Latin block outside the guideline's faces, or a Sorani block outside the admitted ones.
+ *
+ * ADR-274: for a client whose grammar carries poster rules, the office's own poster techniques are
+ * not departures. A dark title tab or panel on the gradient is the office's title tab; only the
+ * guideline's document page (`composition.grammar === 'page'`) is held to the header rule, the bar
+ * and the foot rule, so a poster without a gold bar is not counted; and the faces the reference
+ * declares for poster display (`poster.displayFonts`) are accepted on display blocks. A grammar
+ * without poster rules is read exactly as before.
  */
 export function guidelineDeviations(layout: StudioLayoutV2, g: PageGrammar, options: { arabicFonts?: string[] } = {}): string[] {
   const out: string[] = [];
   const has = (p: string) => layout.shapes.some((s) => s.primitive === p);
   const area = layout.width * layout.height;
+  const posterRules = Boolean(g.poster);
   const dark = hexToLuminance(layout.background.color) < 0.2 || has('cover_ground');
   if (dark) {
     if (!has('cover_ground')) out.push('a dark design without the guideline cover\'s gradient ground');
     const flat = layout.shapes.filter((s) => s.role === 'panel' && s.primitive !== 'cover_ground' && s.fill !== 'none' && !s.gradient &&
       hexToLuminance(s.color) < 0.2 && s.width * s.height > 0.08 * area);
-    if (flat.length && has('cover_ground')) out.push('a flat dark panel on the gradient cover');
+    if (flat.length && has('cover_ground') && !posterRules) out.push('a flat dark panel on the gradient cover');
+  } else if (posterRules) {
+    // ADR-274: only the guideline's own document page is held to its header, bar and foot rule.
+    if (layout.composition?.grammar === 'page') documentPageMarks(has, out);
   } else if (layout.composition?.grammar === 'poster') {
     // ADR-271: a light poster (cream, or the white page with its title band) is composed as the
     // office's posters are, not as the guideline's document page: it keeps the gold bar.
     if (!has('title_bar')) out.push('no gold bar under the title');
   } else {
-    if (!has('header_rule') || !has('header_accent')) out.push('no header rule with its gold segment');
-    if (!has('title_bar')) out.push('no gold bar under the title');
-    if (!has('foot_rule')) out.push('no gradient rule at the foot');
+    documentPageMarks(has, out);
   }
   const latinFaces = new Set([g.title.fontFamily, g.lead.fontFamily, g.body.fontFamily, g.header.label.fontFamily, g.stat.fontFamily, g.cover.subtitle.fontFamily]);
-  const offLatin = [...new Set(layout.text.filter((t) => !t.rtl && !latinFaces.has(t.fontFamily)).map((t) => t.fontFamily))];
+  const posterDisplay = new Set(g.poster?.displayFonts ?? []);
+  const allowed = (t: StudioLayoutV2['text'][number]) => latinFaces.has(t.fontFamily) || (posterDisplay.has(t.fontFamily) && POSTER_DISPLAY_ROLES.includes(t.role));
+  const offLatin = [...new Set(layout.text.filter((t) => !t.rtl && !allowed(t)).map((t) => t.fontFamily))];
   if (offLatin.length) out.push(`a typeface outside the guideline (${offLatin.join(', ')})`);
   if (options.arabicFonts?.length) {
     const offArabic = [...new Set(layout.text.filter((t) => t.rtl && !options.arabicFonts!.includes(t.fontFamily)).map((t) => t.fontFamily))];
@@ -986,18 +1007,29 @@ export function guidelineDeviations(layout: StudioLayoutV2, g: PageGrammar, opti
   return out;
 }
 
+/** The guideline document page's marks: the header rule and its gold segment, the title bar, the foot rule. */
+function documentPageMarks(has: (p: string) => boolean, out: string[]): void {
+  if (!has('header_rule') || !has('header_accent')) out.push('no header rule with its gold segment');
+  if (!has('title_bar')) out.push('no gold bar under the title');
+  if (!has('foot_rule')) out.push('no gradient rule at the foot');
+}
+
 /**
  * ADR-238: the guideline-fidelity rule the judge and the visual review read with the client's house
  * rules, from its page grammar: a design that departs from the guideline counts against it. Within
  * the judge's 240-character limit for one rule (MAX_JUDGE_HOUSE_RULE_CHARS).
+ *
+ * ADR-274: a client with poster rules is told only what `guidelineDeviations` counts for it: the
+ * document page's marks and a face outside the guideline's and the declared poster display faces.
+ * The office's title tab, its display face and a poster without the gold bar are named as allowed,
+ * so the rule no longer counts the office's own techniques against a poster.
  */
 export function guidelineFidelityRule(g: PageGrammar): string {
-  const faces = [...new Set([g.title.fontFamily, g.lead.fontFamily, g.body.fontFamily])].join(', ');
-  // ADR-271: a client with poster rules is told a poster needs only the bar, so the rule does not
-  // count the office's own poster compositions against themselves.
-  const page = g.poster ? 'a document page lacking header rule, gold title bar or foot rule (a poster: the bar)'
-    : 'a page without the header rule and gold segment, the gold title bar or the foot rule';
-  return `Guideline fidelity (brand fit): count against a design a flat dark panel on the gradient cover; ${page}; a face other than ${faces} or the Sorani sans.`;
+  const faces = [...new Set([g.title.fontFamily, g.lead.fontFamily, g.body.fontFamily, ...(g.poster?.displayFonts ?? [])])].join(', ');
+  if (g.poster) {
+    return `Guideline fidelity (brand fit): count against a design a document page lacking header rule, title bar or foot rule; a face other than ${faces} or the Sorani sans. A poster's dark title tab or missing bar is fine.`;
+  }
+  return `Guideline fidelity (brand fit): count against a design a flat dark panel on the gradient cover; a page without the header rule and gold segment, the gold title bar or the foot rule; a face other than ${faces} or the Sorani sans.`;
 }
 
 /** The grammar in words, for the layout model's request (the system prompt names no client). */

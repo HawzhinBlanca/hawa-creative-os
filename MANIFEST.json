@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T18:47:07Z",
+  "generatedAt": "2026-10-02T20:16:01Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 880,
+  "fileCount": 883,
   "files": [
     {
       "path": ".dockerignore",
@@ -1238,6 +1238,11 @@
       "bytes": 9911
     },
     {
+      "path": "adrs/274_selection_without_the_document_default.md",
+      "sha256": "5b921b4860c313788ee598e786c405135996abfb9beccc4ec57b4c0c56d6be91",
+      "bytes": 13652
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -2236,6 +2241,11 @@
       "path": "plans/hosting/PRODUCTION_HOSTING_PLAN.md",
       "sha256": "3afb30ad563bb0beaad62886feb329565ab10967be45e1e7610e8a9757d1dcbb",
       "bytes": 47459
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/frozen-set.json",
+      "sha256": "c913caf4ed345e4d5d4f68192592c5932b9fd2eb4d79616d385dd994a901676a",
+      "bytes": 8040
     },
     {
       "path": "plans/kaae-2025-guideline/CODEX_MERGE_NOTE.md",
@@ -3434,8 +3444,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2fe0878f392d63c05365a812fc364083f130727f1ec9e6234eafa769bd331f0a",
-      "bytes": 839228
+      "sha256": "bcada09358ecb71b48598677d90d1b377c5dad769b5835c80a727385725fc03d",
+      "bytes": 840829
     },
     {
       "path": "plans/user-stories.csv",
@@ -3766,6 +3776,11 @@
       "path": "scripts/enforce_release_gate.sh",
       "sha256": "6a47577d9919d8c97426baa6a1ca3b296917dc13bd645466a7bc57a7b9dba4fc",
       "bytes": 20508
+    },
+    {
+      "path": "scripts/experiments/judge-calibration.ts",
+      "sha256": "82d11924c469b83616474cc6d62e3fd1fa6183b747b3cc8859b8928a5e2d1478",
+      "bytes": 13633
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",
