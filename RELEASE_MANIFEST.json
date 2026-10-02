@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-02T12:31:03+03:00",
+  "generatedAt": "2026-10-02T12:39:32+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "6abe57fa74e66922dcc781042355fe3f430850d4",
+    "commit": "14346ec83c55f0212d8c2ad908dccdac3b59a088",
     "treeClean": true,
-    "commitTimestamp": "2026-10-02T12:31:03+03:00",
+    "commitTimestamp": "2026-10-02T12:39:32+03:00",
     "branch": "claude/hunt4-qa-titles"
   },
   "migrations": {
-    "targetVersion": "073_restricted_worker_database",
-    "latestMigrationFile": "073_restricted_worker_database.sql",
-    "totalMigrations": 73
+    "targetVersion": "082_kept_model_consent_audit_authority",
+    "latestMigrationFile": "082_kept_model_consent_audit_authority.sql",
+    "totalMigrations": 82
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "01f0a470278ce013a26d0c9be8cf19c50efa00e78ac0450b121c35b0078f984b",
+        "apps/core/src/app.ts": "dd7e1ebd5fd03eef8e686cb48a9b38668223c890d2691c0115d57155abed8778",
         "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -84,11 +84,11 @@
     "sourceHashes": {
       "packages/qa/src/engine.ts": "454d81402825a4ccfdf00445b556afeb3282b01957585ba6689eec4436ab79c5",
       "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
-      "packages/qa/src/canva-pptx-check.ts": "5fb3387b45f0f4d7e88d49b035653019ffeae6614a742484887ba146010787c6",
+      "packages/qa/src/canva-pptx-check.ts": "979d89aae302dcaa6ee848c7da86cbf204aa58f21c249673137bf48c91c6ccb1",
       "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
       "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "e71f784631bdba2877b976fd08e70a0c922f1153ffbcc9d419bf5bccd496d02b"
+  "sha256": "c721a2446834b5f98a6e226a77d52ae9de79b7736bd303fa1bffd8ee8fdbcf15"
 }
