@@ -145,6 +145,14 @@ export const ROUTING_MESSAGES = {
     en: 'Which one should I redo?\n{list}',
     ckb: 'کامیان دووبارە بکەمەوە؟\n{list}',
   },
+  /**
+   * ADR-255: "both" (or "all of them") said to "Which design is this for?" about a change, a pause or words
+   * for the office, which go to one design at a time. `{list}`: one numbered line per design.
+   */
+  askOneAtATime: {
+    en: 'I can only take this for one design at a time. Which one should it go to first?\n{list}\nAfter that, send it again for the other one.',
+    ckb: 'لە یەک کاتدا تەنها دەتوانم ئەمە بۆ یەک دیزاین وەربگرم. سەرەتا بۆ کامیان بێت؟\n{list}\nدواتر، دووبارە بۆ ئەوی تر بینێرە.',
+  },
   /** The last line of the "which design?" list when the message may be a new brief. */
   aNewDesign: {
     en: 'A new design',

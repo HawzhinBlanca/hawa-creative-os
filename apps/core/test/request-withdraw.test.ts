@@ -339,8 +339,8 @@ describe('the office\'s Cancel in the Desk withdraws a request-owned task (ADR-2
       told.push(...object.sent.filter((m) => m.chatId === String(chat)).map((m) => String(m.text)));
     }
     expect(told).toHaveLength(2);
-    expect(told[0]).toBe('The office has cancelled <b>KAAE K-12 Pilot Study…</b> (asked for just now), so nothing more will be made for it. Tell me whenever you need a new design.');
-    expect(told[1]).toMatch(/^The office has cancelled <b>KAAE K-12 Pilot Study…<\/b> \(asked for (?:today|yesterday) at \d\d:\d\d\), so nothing more will be made for it\./);
+    expect(told[0]).toBe('The office has cancelled <b>KAAE K-12 Pilot Study</b> (asked for just now), so nothing more will be made for it. Tell me whenever you need a new design.');
+    expect(told[1]).toMatch(/^The office has cancelled <b>KAAE K-12 Pilot Study<\/b> \(asked for (?:today|yesterday) at \d\d:\d\d\), so nothing more will be made for it\./);
     expect(new Set(told).size).toBe(2);
   });
 

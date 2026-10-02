@@ -93,7 +93,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
       }
       const body = (await res.json().catch(() => ({}))) as {
         intakeStatus?: number; code?: string; duplicate?: boolean; title?: string;
-        lifecycleAction?: string; requestId?: string; newTaskId?: string;
+        lifecycleAction?: string; requestId?: string; requestIds?: unknown; newTaskId?: string;
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
         chatId?: string; questionId?: string; draft?: unknown; reason?: string; siblings?: unknown;deliverableCount?:unknown;
         albumMessage?: string; albumNoticeKey?: string; settle?: unknown;
@@ -235,11 +235,15 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore & {
           }
           // ADR-230: the requester's cancel withdraws this request; RequestLifecycle answers once it is closed.
           if (body.lifecycleAction === 'withdraw') {
-            if (!body.chatId || typeof body.requestId !== 'string' ||
-                !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId)) {
+            const isId = (id: unknown): id is string => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+            // ADR-255: a cancel of several designs names them all, its first request first, each once.
+            const ids = body.requestIds;
+            if (!body.chatId || !isId(body.requestId) || (ids !== undefined && (!Array.isArray(ids) || ids.length < 2 || ids.length > 20 ||
+                !ids.every(isId) || ids[0] !== body.requestId || new Set(ids).size !== ids.length))) {
               throw new Error(`Core returned an invalid withdraw for update ${update.update_id}`);
             }
-            return { ...base, lifecycleAction: 'withdraw', chatId: body.chatId, requestId: body.requestId };
+            return { ...base, lifecycleAction: 'withdraw', chatId: body.chatId, requestId: body.requestId,
+              ...(ids !== undefined ? { requestIds: [...ids] as string[] } : {}) };
           }
           if (body.lifecycleAction === 'request-choice-required' && body.chatId &&
               (body.code === 'AMBIGUOUS_REQUEST' || body.code === 'STALE_REQUEST_REPLY')) {

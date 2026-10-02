@@ -130,7 +130,10 @@ async function recordedWithdraw(trx: Kysely<Database>, tenantId: string, updateI
   const extra = row?.payload?.answer?.extra;
   if (!row || extra?.lifecycleAction !== 'withdraw' || typeof extra.requestId !== 'string') return null;
   const plan = row.payload.plan as { words?: unknown } | undefined;
-  return { requestId: extra.requestId as string, chatId: String(row.payload.chatId ?? ''), payloadHash: row.payload_hash,
+  // ADR-255: one decision may withdraw several requests the requester named together ("cancel both of them").
+  const requestIds = Array.isArray(extra.requestIds) && extra.requestIds.every((id: unknown) => typeof id === 'string')
+    ? extra.requestIds as string[] : [extra.requestId as string];
+  return { requestId: extra.requestId as string, requestIds, chatId: String(row.payload.chatId ?? ''), payloadHash: row.payload_hash,
     words: typeof plan?.words === 'string' ? plan.words : '',
     senderName: typeof row.payload.senderName === 'string' ? row.payload.senderName as string : null };
 }
@@ -162,7 +165,7 @@ export async function projectLifecycleWithdraw(db: Kysely<Database>, input: With
     if (!request || request.owner !== 'restate') throw new LifecycleProjectionConflict('WRONG_STAGE', 'No request-owned request has this id');
     // The requester's cancel must be the one Core's intake decided for that update, in that chat.
     const decided = actor.kind === 'requester' ? await recordedWithdraw(trx, tenantId, actor.updateId) : null;
-    if (actor.kind === 'requester' && (!decided || decided.requestId !== requestId || decided.chatId !== request.chat_id)) {
+    if (actor.kind === 'requester' && (!decided || !decided.requestIds.includes(requestId) || decided.chatId !== request.chat_id)) {
       throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR', 'No recorded requester decision withdraws this request');
     }
     if (Number(request.rev) !== expectedRev) {
@@ -195,8 +198,10 @@ export async function projectLifecycleWithdraw(db: Kysely<Database>, input: With
       const late: LateRequesterChange = { requestId, taskId, requestRev: expectedRev, requestStage: stage,
         text: decided!.words || '(cancel)', kind: 'cancel', title: shortTitle(title),
         answer: withdrawTooLateText(request.stage, title, lang, office.length > 0, label) };
+      // ADR-255: a decision that withdraws several requests keeps each late cancel under its own key.
+      const keptAs = decided!.requestIds.length > 1 ? `${actor.updateId}:${requestId}` : actor.updateId;
       const kept = chatId
-        ? (await recordRoutingRefusal(trx, tenantId, actor.updateId, { code: 'LATE_REQUESTER_CHANGE', chatId,
+        ? (await recordRoutingRefusal(trx, tenantId, keptAs, { code: 'LATE_REQUESTER_CHANGE', chatId,
           payloadHash: decided!.payloadHash, late })).late ?? late : late;
       const alert = chatId ? lateChangeOfficeAlert(kept, chatId, office[0]) : null;
       return { withdrawn: false, requestId, taskId, rev: expectedRev, stage: request.stage, actor: 'requester',

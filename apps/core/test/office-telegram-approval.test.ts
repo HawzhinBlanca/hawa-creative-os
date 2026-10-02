@@ -588,7 +588,7 @@ describe('which draft, when several wait (ADR-040 addendum, 2026-10-01)', () => 
       expect(await rows(draft.requestId, draft.taskId)).toMatchObject({ request: { stage: 'in_review', rev: '2' }, approvals: [] });
     }
     expect(answer.chatAnswer.text).toContain('Which design is this for?');
-    expect(answer.chatAnswer.text).toContain('<b>KAAE K-12 Pilot Study…</b>');
+    expect(answer.chatAnswer.text).toContain('<b>KAAE K-12 Pilot Study</b>');
     expect(answer.chatAnswer.text).not.toContain(RLM);
   });
 });

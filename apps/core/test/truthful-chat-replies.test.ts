@@ -76,15 +76,15 @@ describe('L2: redo words are about a design the requester has seen', () => {
 
 describe('L4: the requester hears what really happens', () => {
   it('"I\'ll redo" only when a round starts; kept words say they went to the office, and why', () => {
-    expect(redoText('delivered', K12, 'en', true)).toMatch(/^I'll redo <b>KAAE K-12 Pilot Study…<\/b>/);
+    expect(redoText('delivered', K12, 'en', true)).toMatch(/^I'll redo <b>KAAE K-12 Pilot Study<\/b>/);
     const kept: Array<[string, RegExp]> = [
       ['designing', /still being made, so I can't start it again yet\. I've kept what you said with it for the office/],
       ['awaiting_answer', /still being made/],
       ['in_review', /is with the office for a final check, so I haven't started a new version/],
       ['approved', /is already approved, so I haven't started a new version\. I've passed what you said to the office/],
       ['delivering', /is already approved, so I haven't started a new version/],
-      ['delivered', /^I can't start a new version of <b>KAAE K-12 Pilot Study…<\/b> by myself, so I've passed what you said to the office/],
-      ['manual', /^A designer at the office is working on <b>KAAE K-12 Pilot Study…<\/b>, so I've passed what you said to them/],
+      ['delivered', /^I can't start a new version of <b>KAAE K-12 Pilot Study<\/b> by myself, so I've passed what you said to the office/],
+      ['manual', /^A designer at the office is working on <b>KAAE K-12 Pilot Study<\/b>, so I've passed what you said to them/],
     ];
     for (const [stage, words] of kept) {
       expect(redoText(stage, K12, 'en')).toMatch(words);
@@ -101,7 +101,7 @@ describe('L4: the requester hears what really happens', () => {
   // before the day's allowance or the round limit was known; now it says the office gets it if it can't be added.
   it('a change kept while the draft is being made is added when that draft is done, as the office is told', () => {
     expect(noteText('change', 'designing', K12, 'en')).toBe(
-      "Got it. I'll add that to <b>KAAE K-12 Pilot Study…</b> once the current draft is done, or pass it to the office if I can't.");
+      "Got it. I'll add that to <b>KAAE K-12 Pilot Study</b> once the current draft is done, or pass it to the office if I can't.");
     const alert = lateChangeOfficeAlert({ requestId: randomUUID(), taskId: randomUUID(), requestRev: 1, requestStage: 'designing',
       text: 'also please add that seats are limited', title: 'KAAE K-12 Pilot Study…' }, ME, '93000001', 'Hawzhin Blanca')!.text;
     expect(alert).toMatch(/It will be added automatically in a new round when the current draft finishes; if a round can't start, the draft alert will list it\./);
@@ -111,7 +111,7 @@ describe('L4: the requester hears what really happens', () => {
   it('a change kept while a designer has it, or while it waits for an answer, is still "kept for the office"', () => {
     for (const stage of ['manual', 'awaiting_answer'] as const) {
       expect(noteText('change', stage, K12, 'en')).toBe(
-        "Got it. I've kept that with <b>KAAE K-12 Pilot Study…</b> for the office; they'll see it before the design is sent to you.");
+        "Got it. I've kept that with <b>KAAE K-12 Pilot Study</b> for the office; they'll see it before the design is sent to you.");
       const alert = lateChangeOfficeAlert({ requestId: randomUUID(), taskId: randomUUID(), requestRev: 1, requestStage: stage,
         text: 'also please add that seats are limited', title: 'KAAE K-12 Pilot Study…' }, ME, '93000001', 'Hawzhin Blanca')!.text;
       expect(alert).toMatch(/It is not in the draft being made; add it in the next round or at review/);
@@ -122,21 +122,21 @@ describe('L4: the requester hears what really happens', () => {
 describe('L5: every status line is true for its stage', () => {
   it('a delivery confirmed in the chat is "delivered", never "being sent to you now"', () => {
     const { k12 } = liveChat('delivering');
-    expect(statusText([k12], 'en', new Set(), NOW)).toBe('<b>KAAE K-12 Pilot Study…</b> has been delivered.');
-    expect(statusText([{ ...k12, sentToChat: false }], 'en', new Set(), NOW)).toBe('<b>KAAE K-12 Pilot Study…</b> is being sent to you now.');
+    expect(statusText([k12], 'en', new Set(), NOW)).toBe('<b>KAAE K-12 Pilot Study</b> has been delivered.');
+    expect(statusText([{ ...k12, sentToChat: false }], 'en', new Set(), NOW)).toBe('<b>KAAE K-12 Pilot Study</b> is being sent to you now.');
   });
 
   it('two designs with one name are told apart by when each was asked for, or by their order', () => {
     const morning = view({ stage: 'in_review', rev: 2, createdAt: '2026-10-01T05:44:00Z' });
     const yesterday = view({ stage: 'delivered', createdAt: '2026-09-30T12:18:00Z' });
     const text = statusText([yesterday, morning], 'en', new Set(), NOW);
-    expect(text).toBe('<b>KAAE K-12 Pilot Study…</b> (asked for yesterday at 15:18) has been delivered.\n\n' +
-      '<b>KAAE K-12 Pilot Study…</b> (asked for today at 08:44) is with the office for a final check. It will be sent here once they approve it.');
+    expect(text).toBe('<b>KAAE K-12 Pilot Study</b> (asked for yesterday at 15:18) has been delivered.\n\n' +
+      '<b>KAAE K-12 Pilot Study</b> (asked for today at 08:44) is with the office for a final check. It will be sent here once they approve it.');
     // Sorani: "asked for yesterday at 15:18"
     expect(statusText([yesterday, morning], 'ckb', new Set(), NOW)).toContain('(دوێنێ کاتژمێر 15:18 داواکرا)');
     const sameMinute = [view({ createdAt: '2026-10-01T05:44:10Z' }), view({ createdAt: '2026-10-01T05:44:40Z' })];
     expect([...distinctNames(sameMinute.map((r) => ({ ...r, askedAt: r.createdAt })), 'en', NOW).values()])
-      .toEqual(['<b>KAAE K-12 Pilot Study…</b> (version 1)', '<b>KAAE K-12 Pilot Study…</b> (version 2)']);
+      .toEqual(['<b>KAAE K-12 Pilot Study</b> (version 1)', '<b>KAAE K-12 Pilot Study</b> (version 2)']);
   });
 
   it('the "which design?" choice tells them apart too', () => {
@@ -145,7 +145,7 @@ describe('L5: every status line is true for its stage', () => {
     const asked = planTurn(turn('the date should be 14 October', [a, b]));
     expect(asked).toMatchObject({ kind: 'ask' });
     expect(askText(asked as Extract<ReturnType<typeof planTurn>, { kind: 'ask' }>, 'en', NOW)).toBe('Which design is this for?\n' +
-      '1. <b>KAAE K-12 Pilot Study…</b> (asked for yesterday at 00:58)\n2. <b>KAAE K-12 Pilot Study…</b> (asked for today at 08:44)');
+      '1. <b>KAAE K-12 Pilot Study</b> (asked for yesterday at 00:58)\n2. <b>KAAE K-12 Pilot Study</b> (asked for today at 08:44)');
   });
 
   // ADR-230 addendum (L16, changed deliberately): a request named by its sentence is no longer "your design"
@@ -163,7 +163,7 @@ describe('L6: a design\'s name, made and shown', () => {
 
   it('the 13:58Z words are named by their subject, not the instruction', () => {
     expect(spokenTitle(LIVE_BRIEF)).toBe('Assessment Literacy Workshop');
-    expect(requestTitle({ headline: LIVE_BRIEF, label: 'KAAE', rawText: LIVE_BRIEF })).toBe('KAAE: Assessment Literacy Workshop…');
+    expect(requestTitle({ headline: LIVE_BRIEF, label: 'KAAE', rawText: LIVE_BRIEF })).toBe('KAAE: Assessment Literacy Workshop');
     expect(spokenTitle('Please design a flyer promoting our Spring Book Fair at the library')).toBe('Spring Book Fair');
     expect(spokenTitle('a poster about the new parking rules for staff')).toBe('New parking rules for staff');
     // As before: a subject after "for the" keeps its words; a line with no request keeps them all.
@@ -173,21 +173,21 @@ describe('L6: a design\'s name, made and shown', () => {
   });
 
   it('no direction mark at either edge, and the client named once', () => {
-    expect(requestTitle({ headline: `${RLM}KAAE K-12 Pilot Study`, label: 'KAAE' })).toBe('KAAE K-12 Pilot Study…');
-    expect(requestTitle({ headline: `Nawroz poster${RLM}`, label: `${RLM}KAAE` })).toBe('KAAE: Nawroz poster…');
+    expect(requestTitle({ headline: `${RLM}KAAE K-12 Pilot Study`, label: 'KAAE' })).toBe('KAAE K-12 Pilot Study');
+    expect(requestTitle({ headline: `Nawroz poster${RLM}`, label: `${RLM}KAAE` })).toBe('KAAE: Nawroz poster');
     expect(trimTitleMarks(`KAAE: ${RLM}KAAE K-12 Pilot Study…${RLM}`)).toBe('KAAE: KAAE K-12 Pilot Study…');
-    expect(requesterTitleName(`KAAE: ${RLM}KAAE K-12 Pilot Study…`)).toBe('KAAE K-12 Pilot Study…');
+    expect(requesterTitleName(`KAAE: ${RLM}KAAE K-12 Pilot Study…`)).toBe('KAAE K-12 Pilot Study');
     expect(requesterTitleName('KAAE: New design request from Sewa')).toBe('');
   });
 
   it('the delivered files\' caption and notice name the design without the mark (live caption "‏KAAE K-12 Pilot Study…, final")', () => {
-    expect(composeDeliveredCaption(K12, 'k12.png', 'en')).toBe('KAAE K-12 Pilot Study…, final');
+    expect(composeDeliveredCaption(K12, 'k12.png', 'en')).toBe('KAAE K-12 Pilot Study, final');
     expect(composeDeliveredMessage({ title: K12 }, { filesSent: 2, lang: 'en' })).not.toContain(RLM);
   });
 
   it('a title stored from words with no copy is shown as "your design"', () => {
     expect(shortTitle(ACCIDENT_TITLE)).toBe('your design');
-    expect(shortTitle(K12)).toBe('KAAE K-12 Pilot Study…');
+    expect(shortTitle(K12)).toBe('KAAE K-12 Pilot Study');
   });
 });
 
@@ -329,9 +329,9 @@ describe('the live sequences through intake', () => {
     const { k12, accident } = await liveState(chat);
     const answer = await intake(app, says(chat, LIVE_REDO));
     expect(answer).toMatchObject({ code: 'LATE_REQUESTER_CHANGE', requestId: k12.requestId });
-    expect(answer.chatAnswer.text).toBe("I can't start a new version of <b>KAAE K-12 Pilot Study…</b> by myself, so I've passed what you said to the office; they'll follow up here.");
+    expect(answer.chatAnswer.text).toBe("I can't start a new version of <b>KAAE K-12 Pilot Study</b> by myself, so I've passed what you said to the office; they'll follow up here.");
     expect(answer.officeAlert).toEqual({ chatId: String(OFFICE), text: [
-      'Hawzhin Blanca wrote about the design "KAAE K-12 Pilot Study…" after it was being delivered. Nothing was changed; please read their words and answer them in the chat.',
+      'Hawzhin Blanca wrote about the design "KAAE K-12 Pilot Study" after it was being delivered. Nothing was changed; please read their words and answer them in the chat.',
       'It was already approved and being sent to them; the sending was not stopped.',
       '', 'Their words:', LIVE_REDO, '', `Desk search: ${k12.taskId.slice(0, 8)}`].join('\n') });
     expect(await lateChanges(k12.requestId)).toBe('1');
@@ -356,14 +356,14 @@ describe('the live sequences through intake', () => {
     const k12 = await seed(chat, { stage: 'delivered', rev: 6, title: K12, createdAgo: 7 * 60, activeAgo: 4.5 * 60 });
     await seed(chat, { stage: 'manual', rev: 1, title: ACCIDENT_TITLE, createdAgo: 37, activeAgo: 37 });
     const answer = await intake(app, says(chat, LIVE_REDO));
-    expect(answer.chatAnswer.text).toBe("I can't start a new version of <b>KAAE K-12 Pilot Study…</b> by myself, so I've passed what you said to the office; they'll follow up here.");
-    expect(answer.officeAlert.text).toMatch(/^Hawzhin Blanca wrote about the design "KAAE K-12 Pilot Study…" after it was delivered\. Nothing was changed/);
+    expect(answer.chatAnswer.text).toBe("I can't start a new version of <b>KAAE K-12 Pilot Study</b> by myself, so I've passed what you said to the office; they'll follow up here.");
+    expect(answer.officeAlert.text).toMatch(/^Hawzhin Blanca wrote about the design "KAAE K-12 Pilot Study" after it was delivered\. Nothing was changed/);
     expect(await lateChanges(k12.requestId)).toBe('1');
     // Before ADR-231 this answered IDEMPOTENCY_CONFLICT (the redo plan's receipt had no answer), and the
     // requester heard nothing. A replay of the same update answers the same words.
     const update = says(chat, 'try again');
     const first = await intake(app, update);
-    expect(first.chatAnswer.text).toMatch(/^I can't start a new version of <b>KAAE K-12 Pilot Study…<\/b> by myself/);
+    expect(first.chatAnswer.text).toMatch(/^I can't start a new version of <b>KAAE K-12 Pilot Study<\/b> by myself/);
     expect((await intake(app, update)).chatAnswer).toEqual(first.chatAnswer);
   });
 

@@ -21,7 +21,7 @@
  *  - only a new brief opens a request; a message that could be either asks one short question.
  */
 import { LIFECYCLE_MESSAGES, NAMING_MESSAGES, ROUTING_MESSAGES, WITHDRAW_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
-  trimTitleMarks, type Phrase, type RequesterLang } from '@hawa/integrations';
+  trimTitleMarks, withoutDecorativeEllipsis, type Phrase, type RequesterLang } from '@hawa/integrations';
 import { asksToUndoCancel, CHANGE_CUES, readsAsUndo, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
 import { isIntroducerTitle, withoutMarks } from './draft-title.js';
@@ -67,6 +67,12 @@ export interface IntentReading {
    * asked "Do you want me to cancel …?" first; it never withdraws on its own.
    */
   bareCancel?: true;
+  /**
+   * ADR-255 (bug hunt 3, live 2026-10-02 07:34Z): the cancel names every design it means ("cancel both of
+   * them", "all of them", "the two posters"; Sorani "both of them", "all of them"). `both`: two designs;
+   * `all`: every one the requester may cancel.
+   */
+  every?: 'both' | 'all';
 }
 
 export type Lang = RequesterLang;
@@ -121,6 +127,8 @@ export interface PendingAsk {
    * question's own update (`lifecycle_photo_held`), and the answer carries it to the design it names.
    */
   photo?: boolean;
+  /** ADR-255: a cancel asked about every design it names ("Do you want me to cancel both …?"); "yes" cancels them all. */
+  every?: 'both' | 'all';
 }
 
 /** What a `tell` passes to the office: approval words, a deadline, or a request about the files (ADR-156). */
@@ -131,6 +139,12 @@ export type TurnPlan =
   /** `redo`: redo words (ADR-200 addendum); the requester hears "I'll redo …". */
   | { kind: 'revise'; requestId: string; directive: string; resolves?: number; redo?: true }
   | { kind: 'note'; note: 'change' | 'cancel' | 'hold'; requestId: string; words: string; resolves?: number; redo?: true }
+  /**
+   * ADR-255: a cancel of several designs the requester named together ("cancel both of them", "all of
+   * them", or "both" said to "which design?"). Each is withdrawn by its own request object, under this
+   * update's decision; one already approved or sent is told too late, as any cancel is.
+   */
+  | { kind: 'cancel-all'; requestIds: string[]; words: string; resolves?: number }
   /** ADR-200 addendum: redo words about a design delivered within `REDO_WINDOW_MS`: a new round of it. */
   | { kind: 'redo'; requestId: string; directive: string; resolves?: number }
   | { kind: 'tell'; note: TellNote; requestId: string; words: string; resolves?: number }
@@ -141,8 +155,12 @@ export type TurnPlan =
    * answer (`question`, ADR-182): passed to the office.
    */
   | { kind: 'forward'; words: string; question?: true }
-  /** `redo`: a question about redo words, worded so ("Which one should I redo: …?"). */
-  | ({ kind: 'ask'; redo?: 'redo' | 'or-new' } & Omit<PendingAsk, 'updateId'>)
+  /**
+   * `redo`: a question about redo words, worded so ("Which one should I redo: …?"). `oneAtATime` (ADR-255):
+   * "both" said to "which design?" about words that change, pause or tell one design at a time; the
+   * requester is asked which comes first.
+   */
+  | ({ kind: 'ask'; redo?: 'redo' | 'or-new'; oneAtATime?: true } & Omit<PendingAsk, 'updateId'>)
   | { kind: 'passive'; reason: string }
   | { kind: 'conversation' };
 
@@ -258,10 +276,23 @@ const CANCEL_VERB = '(?:cancel|stop|scrap|drop|abort|withdraw|forget(?:\\s+about
   "don'?t\\s+(?:do|make|bother\\s+with|continue(?:\\s+with)?|proceed(?:\\s+with)?)|no\\s+need\\s+(?:for|to\\s+(?:do|make))|no\\s+need|" +
   "(?:we|i)\\s+(?:don'?t|do\\s+not|no\\s+longer)\\s+need|(?:we|i)\\s+(?:want|would\\s+like)\\s+to\\s+cancel|" +
   "(?:it'?s|it\\s+is)\\s+(?:cancel+ed|not\\s+needed)|not\\s+needed|no\\s+longer\\s+needed)";
+const CANCEL_JOBS = '(?:request|order|job|design|poster|flyer|banner|invitation|card|post|story|work|one|thing)';
+/**
+ * ADR-255 (live 2026-10-02 07:34Z): a cancel that names several designs together: "both (of them)", "the
+ * two (of them)", "them all", "all of these", "each of them", "both posters", "all the designs", "all my
+ * requests". "Please cancel both of them" was asked "Which design is this for? … A new design".
+ */
+const CANCEL_SET = '(?:both(?:\\s+of\\s+(?:them|these|those))?|the\\s+two(?:\\s+of\\s+them)?|(?:them|these|those)\\s+(?:both|all)|' +
+  'all\\s+of\\s+(?:these|those)|each\\s+of\\s+them|every\\s*one(?:\\s+of\\s+them)?|' +
+  `(?:both|all)\\s+(?:of\\s+)?(?:(?:the|my|our|these|those)\\s+)?(?:[\\p{L}\\d'-]+\\s+){0,3}?${CANCEL_JOBS}s)`;
 /** What a cancel may name: the whole request (a pronoun, or a noun for a job), never a part of a design. */
-const CANCEL_OBJECT = '(?:it|that|this|them|these|everything|all(?:\\s+of\\s+(?:it|them))?|' +
-  '(?:the|my|our|this|that)\\s+(?:[\\p{L}\\d\'-]+\\s+){0,3}?(?:request|order|job|design|poster|flyer|banner|invitation|card|post|story|work|one|thing)s?)';
-const CANCEL_POLITE = '(?:\\s+(?:any\\s?more|now|for\\s+now|then|please|thanks?|thank\\s+you))*[\\s!.]*$';
+const CANCEL_OBJECT = `(?:${CANCEL_SET}|it|that|this|them|these|everything|all(?:\\s+of\\s+(?:it|them))?|` +
+  `(?:the|my|our|this|that)\\s+(?:[\\p{L}\\d'-]+\\s+){0,3}?${CANCEL_JOBS}s?)`;
+/**
+ * ADR-255: "too", "as well", "also" after a cancel ("and cancel the Chess Club flyer too") add it to what
+ * was said before; they never make a named cancel uncertain.
+ */
+const CANCEL_POLITE = '(?:\\s+(?:any\\s?more|now|for\\s+now|then|please|thanks?|thank\\s+you|too|as\\s+well|also))*[\\s!.]*$';
 const CANCEL_EN = new RegExp(`^(?:(?:just|kindly)\\s+)?${CANCEL_VERB}(?:\\s+${CANCEL_OBJECT})?${CANCEL_POLITE}`, 'iu');
 /**
  * ADR-230 addendum (live 2026-10-01 15:08Z, L12): "also cancel the other one I opened by mistake this
@@ -274,8 +305,11 @@ const CANCEL_WHICH = '(?:\\s+(?:(?:that|which)\\s+)?(?:i|we)\\s+(?:just\\s+)?(?:
   `(?:\\s+(?:it|you|by\\s+(?:mistake|accident)|in\\s+error|${CANCEL_WHEN}|here|earlier))*` +
   `|\\s+(?:from|of)\\s+${CANCEL_WHEN}|\\s+${CANCEL_WHEN}|\\s+(?:opened|sent|made)\\s+by\\s+(?:mistake|accident)|\\s+by\\s+(?:mistake|accident))`;
 const CANCEL_DESCRIBED = new RegExp(`^(?:(?:just|kindly)\\s+)?${CANCEL_VERB}\\s+${CANCEL_OBJECT}(?:${CANCEL_WHICH})+${CANCEL_POLITE}`, 'iu');
-/** A cancel verb and a whole-request noun in words the patterns above do not place (the router reads them). */
-const CANCEL_SOMEWHERE = new RegExp(`\\b(?:cancel|withdraw|scrap|abort)\\b.*\\b(?:request|order|job|design|poster|flyer|banner|invitation|card|one)s?\\b`, 'iu');
+/**
+ * A cancel verb and a whole-request noun in words the patterns above do not place (the router reads them).
+ * ADR-255: or the designs named together ("can you cancel both", "cancel the two of them as we discussed").
+ */
+const CANCEL_SOMEWHERE = new RegExp(`\\b(?:cancel|withdraw|scrap|abort)\\b.*(?:\\b${CANCEL_JOBS}s?\\b|\\bboth\\b|\\ball\\s+of\\s+them\\b|\\bthe\\s+two\\b|\\beverything\\b)`, 'iu');
 /** Sorani: cancel it, stop it, not needed, we don't need it, don't make it, leave it, give it up. */
 const CANCEL_CKB = ['هەڵیوەشێنەوە', 'هەڵبوەشێنەوە', 'هەڵوەشێنەوە', 'هەڵیبوەشێنەوە', 'ڕایبگرە', 'بیوەستێنە',
   'ڕاوەستە', 'پێویست ناکات', 'پێویستمان نییە', 'پێویستم نییە', 'مەیکە', 'لێی گەڕێ', 'وازی لێ بێنە'];
@@ -289,6 +323,21 @@ const CANCEL_SAID_OF_IT = /^(?:(?:just|kindly)\s+)?(?:it'?s|it\s+is)\s/iu;
 /** Sorani: stop, no need. */
 const CANCEL_CKB_BARE = ['ڕاوەستە', 'پێویست ناکات'];
 const CANCEL_CKB_NAMED = CANCEL_CKB.filter((p) => !CANCEL_CKB_BARE.includes(p));
+
+/**
+ * ADR-255: the designs a cancel names together. `both`: "both", "the two", "these two"; Sorani "both"
+ * ("هەردوو…": both, both of them, both designs). `all`: "all of them", "them all", "everything", "every one",
+ * "each of them", "all the designs"; Sorani "all" ("هەموو…": all of them, all the designs). "All of it" is one.
+ */
+const EVERY_BOTH = /\b(?:both|(?:the|these|those|my|our)\s+two)\b|هەردوو/iu;
+const EVERY_ALL = /\b(?:all(?!\s+of\s+it\b)|everything|every\s*one|each\s+of\s+them)\b|هەموو/iu;
+/** Which designs a cancel names together, read in its cancelling words only (not in a reason said beside them). */
+export function cancelNamesEvery(core: string): 'both' | 'all' | null {
+  const said = cancelsClause(core) ? [core] : cancelClauses(core).filter(cancelsClause);
+  const words = (said.length ? said : [core]).join(' ');
+  if (EVERY_BOTH.test(words)) return 'both';
+  return EVERY_ALL.test(words) ? 'all' : null;
+}
 
 /** A temporary stop of the design, never a quoted instruction or a pause of a design element. */
 export function readsAsHold(text: string): boolean {
@@ -664,12 +713,16 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   if (ASKS_FOR_A_MOMENT.test(core)) return rules('acknowledgement', 'Asks for a moment; nothing is paused');
   if (readsAsHold(core)) return rules('hold', 'Asks to pause the current design');
   if (readsAsCancel(core)) {
-    return rules('cancel', 'Asks to cancel or stop', cancelNamesNothing(core) ? { bareCancel: true } : {});
+    const every = cancelNamesNothing(core) ? null : cancelNamesEvery(core);
+    return rules('cancel', 'Asks to cancel or stop', every ? { every } : cancelNamesNothing(core) ? { bareCancel: true } : {});
   }
   // ADR-230 addendum (L12): cancel words about a whole request that the patterns cannot place are never
   // read as a certain change of the latest design; they are unclear, and the intake router reads them
   // (ADR-144's one call per update, within the allowance) before anything is kept or asked.
-  if (core.length <= 160 && CANCEL_SOMEWHERE.test(core) && !readsAsHold(core)) return rules('unclear', 'Cancel words the rules cannot place', { instructionOnly: true, cancelWords: true });
+  if (core.length <= 160 && CANCEL_SOMEWHERE.test(core) && !readsAsHold(core)) {
+    const every = cancelNamesEvery(core);
+    return rules('unclear', 'Cancel words the rules cannot place', { instructionOnly: true, cancelWords: true, ...(every ? { every } : {}) });
+  }
   if (readsAsStatus(core)) return rules('status', 'Asks how a design is going');
   if (readsAsDeadline(t, core)) return rules('deadline', 'Gives a deadline or urgency');
 
@@ -812,6 +865,19 @@ const LEADING_NO = /^(?:no|nope|nah|نەخێر|نا)(?![\p{L}\p{N}])[\s,،.!:;-]
 const KEEPS_IT = /^(?:no+|nope|nah|not\s+really|(?:no[\s,]+)?(?:don'?t|do\s+not)(?:\s+cancel(?:\s+(?:it|that|this))?)?|(?:no[\s,]+)?(?:keep\s+(?:it|going|that|this)|continue|carry\s+on|go\s+on|go\s+ahead\s+with\s+it)|نەخێر|نا|(?:نا[\s،,]+)?بەردەوام\s+بە)[\s!.]*$/iu;
 export const keepsIt = (text: string): boolean => KEEPS_IT.test(corePhrase(text).toLowerCase());
 const SAYS_LAST = /^(?:(?:the\s+)?(?:last|latest|newest|most\s+recent)(?:\s+one)?|کۆتایی|دوایین|دواییان)$/iu;
+/**
+ * ADR-255 (live 2026-10-02 07:34Z): "both" said to "Which design is this for?" got a status line about one
+ * design. Every design asked about, said as an answer: "both", "both of them", "the two of them", "both
+ * designs", "yes, both"; "all", "all of them", "them all", "every one", "each of them", "all the designs".
+ * Sorani: "both" / "both of them" / "both designs"; "all of them" / "all" / "all the designs".
+ */
+const ANSWER_LEAD = '(?:(?:yes|yeah|yep|ok(?:ay)?|sure|بەڵێ|بەلێ|باشە)[\\s,،!.]+)?';
+const SAYS_BOTH = new RegExp(`^${ANSWER_LEAD}(?:(?:both|the\\s+two|them\\s+both)(?:\\s+of\\s+them)?(?:\\s+(?:designs?|posters?|flyers?|ones?|requests?))?|` +
+  'هەردووکیان|هەردووک|هەردووکی|هەردوو\\s+(?:دیزاین|پۆستەر|فلایەر|داواکاری)\\S*)[\\s!.]*$', 'iu');
+const SAYS_ALL = new RegExp(`^${ANSWER_LEAD}(?:all(?:\\s+of\\s+them)?|them\\s+all|every\\s*one(?:\\s+of\\s+them)?|each\\s+of\\s+them|everything|` +
+  'all\\s+(?:of\\s+)?(?:the\\s+|my\\s+|our\\s+)?(?:designs|posters|flyers|ones|requests)|هەموویان|هەمووی|هەموو(?:\\s+(?:دیزاین|پۆستەر|فلایەر|داواکاری)\\S*)?)[\\s!.]*$', 'iu');
+/** "Yes" to "Do you want me to cancel both …?" (ADR-255): every design it named. */
+const SAYS_YES = /^(?:yes|yeah|yep|sure|ok(?:ay)?|please\s+do|go\s+ahead|do\s+it|بەڵێ|بەلێ|باشە)(?![\p{L}\p{N}])/iu;
 
 const tokens = (text: string) => new Set(clean(text).toLowerCase().normalize('NFKC')
   .split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= (isSoraniText(w) ? 3 : 4) && !STOP.has(w)));
@@ -833,11 +899,16 @@ export function titleMatch(text: string, options: Array<{ title: string }>): num
  * An answer to an open question, or null when the message is not one (it is then read on its own).
  * `adds`: a new design chosen with words of its own ("no, it's for Nawroz"), which go with its brief.
  */
-export function parseChoice(text: string, ask: Pick<PendingAsk, 'options' | 'allowNew'>): { option: number } | { new: true; adds?: string } | null {
+export function parseChoice(text: string, ask: Pick<PendingAsk, 'options' | 'allowNew' | 'every'>):
+  { option: number } | { new: true; adds?: string } | { every: true } | null {
   const said = corePhrase(text);
   const t = said.replace(/[٠-٩۰-۹]/g, (d) => DIGITS[d] ?? d).toLowerCase();
   if (!t || t.length > 80) return null;
   const n = ask.options.length;
+  // ADR-255: every design asked about ("both" of two, "all of them" of two or more), or "yes" to a question
+  // that named them all.
+  if (n >= 2 && ((n === 2 && SAYS_BOTH.test(t)) || SAYS_ALL.test(t))) return { every: true };
+  if (n >= 2 && ask.every && t.split(/\s+/).length <= 4 && SAYS_YES.test(t) && !LEADING_NO.test(t)) return { every: true };
   // ADR-251 (friction 2): a "no" that leads other words is read by the rest of them ("no, it's a change",
   // "no, the old one", "no it's for Nawroz"). To a question with no "new design" in it ("Do you want me to
   // cancel …?", "Is this for …?") it never picks the design asked about.
@@ -1022,6 +1093,24 @@ function planCancel(input: TurnInput, open: ChatRequestView[], changeable: ChatR
   return ask('cancel', [...described].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), false);
 }
 
+/**
+ * ADR-255 (live 2026-10-02 07:34Z): a cancel that names its designs together ("please cancel both of them,
+ * we don't need them", "all of them"). "Both" is the chat's two open designs (or its two that can still be
+ * withdrawn); "all" every open one. With at least one of them withdrawable, each is withdrawn (one approved
+ * or sent meanwhile is told too late, as any cancel is). `confirm`: words the rules could not place for
+ * certain ask one question naming them all ("Do you want me to cancel both …?"). Null: the words name no
+ * such set here (one design, or "both" of three), and the cancel is read as before.
+ */
+function planCancelAll(open: ChatRequestView[], words: string, reading: IntentReading, confirm: boolean): TurnPlan | null {
+  const byCreated = (list: ChatRequestView[]) => [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const withdrawable = open.filter((r) => WITHDRAWABLE.includes(r.stage));
+  const set = reading.every === 'all' || open.length === 2 ? open : withdrawable.length === 2 ? withdrawable : [];
+  if (set.length < 2 || !set.some((r) => WITHDRAWABLE.includes(r.stage))) return null;
+  const named = byCreated(set);
+  if (confirm) return { kind: 'ask', intent: 'cancel', words, options: options(named), allowNew: false, every: reading.every };
+  return { kind: 'cancel-all', requestIds: named.map((r) => r.requestId), words };
+}
+
 const options = (requests: ChatRequestView[]) => requests.map((r) => ({ requestId: r.requestId, title: r.title, askedAt: r.createdAt,
   ...(r.words ? { words: r.words.slice(0, 120) } : {}) }));
 
@@ -1052,7 +1141,19 @@ function changeOrRefusal(reading: Pick<IntentReading, 'refusalOnly'>, request: C
  * again by the current rules (ADR-040 addendum, 2026-10-01): words kept as approval that now refuse
  * ("the design is not approved, ...") are the requester not being happy, never happiness.
  */
+/**
+ * ADR-255: a question asked about cancel words. One asked before ADR-255 may hold them as `unclear` (the
+ * live "Which design is this for? … A new design" of 2026-10-02); its answer still cancels.
+ */
+function asksToCancel(ask: Pick<PendingAsk, 'intent' | 'words' | 'photo'>): boolean {
+  if (ask.intent === 'cancel') return true;
+  if (ask.intent !== 'unclear' || ask.photo) return false;
+  const again = readIntentByRules(ask.words);
+  return (again.intent === 'cancel' && !again.bareCancel) || again.cancelWords === true;
+}
+
 function answerPlan(ask: PendingAsk, chosen: ChatRequestView): TurnPlan | null {
+  if (ask.intent !== 'cancel' && asksToCancel(ask)) return applyTo('cancel', chosen, ask.words, 'named', undefined, ask.updateId);
   // ADR-200 addendum: "which one should I redo?" or "redo it, or a new design?" answered with a design.
   if (!ask.photo && readIntentByRules(ask.words).redo) return redoFor(chosen, ask.words, ask.updateId);
   if (ask.intent === 'approval' || ask.intent === 'change') {
@@ -1194,6 +1295,27 @@ export function planTurn(full: TurnInput): TurnPlan {
     const choice = parseChoice(words, input.pendingAsk);
     if (choice) {
       const ask = input.pendingAsk;
+      if ('every' in choice) {
+        // ADR-255: "both", "all of them" (or "yes" to a question that named them all) means every design asked about.
+        const chosen = ask.options.map((o) => requests.find((r) => r.requestId === o.requestId))
+          .filter((r): r is ChatRequestView => Boolean(r) && mayAct(r!));
+        if (asksToCancel(ask)) {
+          const open = chosen.filter((r) => OPEN_STAGES.includes(r.stage));
+          if (open.length >= 2 && open.some((r) => WITHDRAWABLE.includes(r.stage))) {
+            return { kind: 'cancel-all', requestIds: open.map((r) => r.requestId), words: ask.words, resolves: ask.updateId };
+          }
+          const one = open.find((r) => WITHDRAWABLE.includes(r.stage)) ?? open[0];
+          if (one) return { kind: 'note', note: 'cancel', requestId: one.requestId, words: ask.words, resolves: ask.updateId };
+          return { kind: 'reply', what: 'nothing-to-cancel', requestIds: [...requests].sort(byActivity).slice(0, 3).map((r) => r.requestId) };
+        }
+        // A change, a pause or words for the office go to one design at a time: the requester is asked which comes first.
+        if (chosen.length >= 2) return { kind: 'ask', intent: ask.intent, words: ask.words, options: options(chosen), allowNew: false, oneAtATime: true };
+        if (chosen.length === 1) {
+          const plan = answerPlan(ask, chosen[0]);
+          if (plan) return plan;
+        }
+        return { kind: 'reply', what: 'nothing-to-change', requestIds: [] };
+      }
       if ('new' in choice) {
         // ADR-251 (friction 2): "no, it's for Nawroz" about another design. A design of the chat that the
         // added words name is asked about; otherwise a new design opens with them under its words.
@@ -1237,8 +1359,9 @@ export function planTurn(full: TurnInput): TurnPlan {
 
   const changeable = requests.filter((r) => CHANGEABLE.includes(r.stage) && mayAct(r));
   const open = requests.filter((r) => OPEN_STAGES.includes(r.stage) && mayAct(r));
+  // ADR-255: a question asked because of cancel words never offers "a new design".
   const ask = (intent: PendingAsk['intent'], among: ChatRequestView[], allowNew: boolean): TurnPlan =>
-    ({ kind: 'ask', intent, words, options: options(among), allowNew });
+    ({ kind: 'ask', intent, words, options: options(among), allowNew: allowNew && intent !== 'cancel' && !reading.cancelWords });
 
   // 3. A reply to a bot message about no current request: thanks, a status question, chatter and a
   // brief of its own are read as usual; anything else is about another design, so the requester is
@@ -1272,6 +1395,11 @@ export function planTurn(full: TurnInput): TurnPlan {
       // ADR-182: a question the bot cannot answer is the office's, not a prompt for a brief.
       return reading.question ? { kind: 'forward', words, question: true } : { kind: 'conversation' };
     case 'cancel':
+      // ADR-255: "cancel both of them", "all of them": every design the words name together, even in a reply.
+      if (reading.every) {
+        const all = planCancelAll(open, words, reading, false);
+        if (all) return all;
+      }
       // ADR-230 addendum (L12): a cancel withdraws, so it looks only at requests that can be withdrawn.
       // ADR-251 (friction 1): one that names nothing ("never mind", "stop") is asked about first.
       if (!input.bound.length) return planCancel(input, open, changeable, words, reading, ask, reading.bareCancel === true);
@@ -1335,6 +1463,10 @@ export function planTurn(full: TurnInput): TurnPlan {
     case 'unclear': {
       // ADR-230 addendum (L17): words that cancel in a way the rules cannot place are asked about among
       // the requests that can be withdrawn, by name, never with "a new design" and never withdrawn unasked.
+      if (reading.cancelWords && reading.every) {
+        const all = planCancelAll(open, words, reading, true);
+        if (all) return all;
+      }
       if (reading.cancelWords && !input.bound.length) return planCancel(input, open, changeable, words, reading, ask, true);
       const bound = changeable.filter((r) => input.bound.includes(r.requestId));
       if (bound.length === 1) return changeFor(bound[0], words, 'reply', undefined) ?? ask('unclear', bound, true);
@@ -1372,7 +1504,8 @@ const sentenceTitle = (name: string) => {
 export function shortTitle(value: string): string {
   // ADR-040 addendum (2026-10-01): a title stored before ADR-180 or ADR-142 is shown as a new one would
   // be: no direction mark ("KAAE: \u200FKAAE K-12…"), and no introducer line as the design's name.
-  const name = withoutMarks(String(value || '').replace(/^[^:]{1,40}:\s*/, ''));
+  // ADR-255: a "…" after a name shorter than the cut (titles stored before ADR-255) cut nothing; "(1/2)" stays.
+  const name = withoutDecorativeEllipsis(withoutMarks(String(value || '').replace(/^[^:]{1,40}:\s*/, '')));
   // ADR-231: a title stored before ADR-200's title rule from words that name no design ("do a better
   // design thats similar to earlier o…") is "your design", as a new one would be.
   const t = name && !isIntroducerTitle(name) && !isNeutralRequestTitle(name) && !sentenceTitle(name) ? name : 'your design';
@@ -1610,12 +1743,23 @@ export function askText(plan: Extract<TurnPlan, { kind: 'ask' }>, lang: Lang, no
   if (plan.redo === 'redo' && plan.options.length > 1) {
     return say(ROUTING_MESSAGES.askWhichRedo, lang, { list: plan.options.map((o, i) => `${i + 1}. ${named(o)}`).join('\n') });
   }
-  if (plan.options.length === 1 && plan.allowNew) return say(ROUTING_MESSAGES.askChangeOrNew, lang, { title: named(plan.options[0]) });
+  // ADR-255: a cancel never offers "a new design"; one that named its designs together asks about them all at once.
+  const allowNew = plan.allowNew && plan.intent !== 'cancel';
+  if (plan.intent === 'cancel' && plan.every && plan.options.length === 2) {
+    return say(WITHDRAW_MESSAGES.askCancelBoth, lang, { first: named(plan.options[0]), second: named(plan.options[1]) });
+  }
+  if (plan.intent === 'cancel' && plan.every && plan.options.length > 2) {
+    return say(WITHDRAW_MESSAGES.askCancelAll, lang, { list: plan.options.map((o, i) => `${i + 1}. ${named(o)}`).join('\n') });
+  }
+  if (plan.oneAtATime && plan.options.length > 1) {
+    return say(ROUTING_MESSAGES.askOneAtATime, lang, { list: plan.options.map((o, i) => `${i + 1}. ${named(o)}`).join('\n') });
+  }
+  if (plan.options.length === 1 && allowNew) return say(ROUTING_MESSAGES.askChangeOrNew, lang, { title: named(plan.options[0]) });
   if (plan.options.length === 1) {
     return say(plan.intent === 'cancel' ? WITHDRAW_MESSAGES.askCancel : ROUTING_MESSAGES.askIsThisOne, lang, { title: named(plan.options[0]) });
   }
   const list = plan.options.map((o, i) => `${i + 1}. ${named(o)}`);
-  if (plan.allowNew) list.push(`${plan.options.length + 1}. ${say(ROUTING_MESSAGES.aNewDesign, lang)}`);
+  if (allowNew) list.push(`${plan.options.length + 1}. ${say(ROUTING_MESSAGES.aNewDesign, lang)}`);
   return say(ROUTING_MESSAGES.askWhichDesign, lang, { list: list.join('\n') });
 }
 

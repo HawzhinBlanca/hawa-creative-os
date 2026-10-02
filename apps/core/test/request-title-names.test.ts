@@ -17,6 +17,6 @@ describe('a design named after a client name and "for the"', () => {
   });
   it('the request title carries the client label once', () => {
     expect(requestTitle({ headline: 'Hi, could you please make a Canary Test poster for the Autumn Fair on 1 November 2026 at 10 AM', label: 'Canary', clientLabel: true }))
-      .toBe('Canary: Autumn Fair…');
+      .toBe('Canary: Autumn Fair');
   });
 });

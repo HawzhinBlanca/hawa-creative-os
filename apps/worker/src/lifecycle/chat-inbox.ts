@@ -82,6 +82,8 @@ export type IntakeAnswer =
       /** open-request: the other requests the same update opens, one per language (ADR-139). */
       siblings?: Array<{ requestId: string; draft: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'] }>;
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
+      /** withdraw (ADR-255): every request the requester's cancel named together, `requestId` first. */
+      requestIds?: string[];
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
       code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
         'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' | 'LIFECYCLE_MEDIA_NOT_ADMITTED' | 'LATE_REQUESTER_CHANGE' |
@@ -369,8 +371,12 @@ async function applyAnswer(ctx: InboxContext, update: TelegramUpdateLike, done: 
       // event key is the update: a replay of this handler sends it once.
       if (!done.requestId || !done.chatId) throw new Error('Core returned an incomplete withdraw');
       if (!ctx.sendLifecycleWithdraw) throw new Error('This ChatInbox cannot reach RequestLifecycle.withdraw');
-      await ctx.sendLifecycleWithdraw(done.requestId, { v: 1, kind: 'withdraw', eventId: `chatinbox:withdraw:${update.update_id}`,
-        requestId: done.requestId, updateId: update.update_id });
+      // ADR-255: a cancel that named several designs ("cancel both of them") withdraws each through its own
+      // object, under the same update's event (each object keys it by its own request).
+      for (const requestId of done.requestIds?.length ? done.requestIds : [done.requestId]) {
+        await ctx.sendLifecycleWithdraw(requestId, { v: 1, kind: 'withdraw', eventId: `chatinbox:withdraw:${update.update_id}`,
+          requestId, updateId: update.update_id });
+      }
     }
     if (done.lifecycleAction === 'request-choice-required' && done.chatId &&
         (done.code === 'AMBIGUOUS_REQUEST' || done.code === 'STALE_REQUEST_REPLY')) {

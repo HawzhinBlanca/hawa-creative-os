@@ -212,11 +212,11 @@ describe('the copy of a request written as a sentence (ADR-232)', () => {
       expect(copyTitle("KAAE's Quality Assurance Workshop", 'KAAE', true)).toBe('KAAE: Quality Assurance Workshop');
       expect(copyTitle('KAAE’s Quality Assurance Workshop', 'KAAE', true)).toBe('KAAE: Quality Assurance Workshop');
       expect(copyTitle('Quality Assurance Workshop', 'KAAE', true)).toBe('KAAE: Quality Assurance Workshop');
-      expect(requestTitle({ headline: "KAAE's Quality Assurance Workshop", label: 'KAAE', clientLabel: true })).toBe('KAAE: Quality Assurance Workshop…');
-      expect(requestTitle({ headline: 'KAAE K-12 Pilot Study', label: 'KAAE', clientLabel: true })).toBe('KAAE K-12 Pilot Study…');
+      expect(requestTitle({ headline: "KAAE's Quality Assurance Workshop", label: 'KAAE', clientLabel: true })).toBe('KAAE: Quality Assurance Workshop');
+      expect(requestTitle({ headline: 'KAAE K-12 Pilot Study', label: 'KAAE', clientLabel: true })).toBe('KAAE K-12 Pilot Study');
       // A sender's name as the label is not the client's: "Sara's Bakery" keeps its words.
       expect(copyTitle("Sara's Bakery opening", 'Sara')).toBe("Sara's Bakery opening");
-      expect(requestTitle({ headline: "Sara's Bakery opening", label: 'Sara' })).toBe("Sara's Bakery opening…");
+      expect(requestTitle({ headline: "Sara's Bakery opening", label: 'Sara' })).toBe("Sara's Bakery opening");
     });
   });
 

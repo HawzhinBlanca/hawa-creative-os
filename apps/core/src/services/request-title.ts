@@ -13,7 +13,7 @@
  * headline names the design.
  */
 import { requestOperatingSubject } from '@hawa/domain';
-import { trimTitleMarks } from '@hawa/integrations';
+import { TITLE_CUT_LENGTH, trimTitleMarks } from '@hawa/integrations';
 import { afterPossessive, cutText, startsWithName } from '../core-helpers.js';
 
 const TITLE_NOUNS = 'poster|postr|flyer|banner|design|invitation|invite|card|post|story|brochure|certificate|announcement|graphic|cover|leaflet|infographic|thumbnail|ad|advert';
@@ -104,6 +104,8 @@ export function requestTitle(input: { headline: string; label: string; rawText?:
   // same form as any other title, never "KAAE's …" beside a sibling's "KAAE: …".
   const line = (input.clientLabel && label && afterPossessive(said, label)) || said;
   if (!line) return `${label}: no copy sent`;
-  const name = `${trimTitleMarks(cutText(line, 45))}…`;
+  // ADR-255 (live 2026-10-02): "…" says the name was cut; a whole name ("Harvest Fair") ends as it is.
+  const cut = cutText(line, TITLE_CUT_LENGTH);
+  const name = cut === line ? line : `${trimTitleMarks(cut)}…`;
   return label && !startsWithName(line, label) ? `${label}: ${name}` : name;
 }

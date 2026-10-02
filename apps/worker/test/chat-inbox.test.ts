@@ -115,6 +115,39 @@ describe('ChatInbox and a requester\'s cancel (ADR-230)', () => {
     await expect(answer({ lifecycleAction: 'withdraw', requestId: 'not-a-uuid', chatId: '555' }).intake(update, 'lifecycle'))
       .rejects.toThrow(/invalid withdraw/);
   });
+
+  // ADR-255 (live 2026-10-02): "please cancel both of them, we don't need them".
+  const second = '3a4c6ac4-1111-4222-8333-944455557777';
+  it('a cancel of several designs hands each to its own RequestLifecycle under the update\'s key, once each', async () => {
+    const ctx = new FakeContext() as FakeContext & { withdraws: Array<{ requestId: string; event: unknown }>; sendLifecycleWithdraw(r: string, e: unknown): Promise<void> };
+    ctx.withdraws = [];
+    let failOnSecond = true;
+    ctx.sendLifecycleWithdraw = async (requestId, event) => {
+      if (requestId === second && failOnSecond) { failOnSecond = false; throw new Error('withdraw dispatch interrupted'); }
+      ctx.withdraws.push({ requestId, event });
+    };
+    const requestId = '3a4c6ac4-1111-4222-8333-944455556666';
+    const c = core([async () => ({ kind: 'done', intakeStatus: 200, lifecycleAction: 'withdraw', requestId, requestIds: [requestId, second], chatId: '555' })]);
+    expect(await untilSettled(ctx, () => handleUpdate(ctx, input, c))).toMatchObject({ outcome: 'handled' });
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    const event = (id: string) => ({ v: 1, kind: 'withdraw', eventId: 'chatinbox:withdraw:4242', requestId: id, updateId: 4242 });
+    // The first is sent again after the interruption, under the same key: its object records it once.
+    expect(ctx.withdraws).toEqual([{ requestId, event: event(requestId) }, { requestId, event: event(requestId) },
+      { requestId: second, event: event(second) }]);
+    expect(ctx.notices).toEqual([]);
+  });
+
+  it('Core\'s list of several requests is read whole, and a malformed one waits', async () => {
+    const requestId = '3a4c6ac4-1111-4222-8333-944455556666';
+    const answer = (body: unknown) => createCoreClient({ baseUrl: 'http://core', token: 't',
+      fetch: (async () => new Response(JSON.stringify({ intakeStatus: 200, ...body as object }), { status: 200 })) as unknown as typeof fetch });
+    expect(await answer({ lifecycleAction: 'withdraw', requestId, requestIds: [requestId, second], chatId: '555' }).intake(update, 'lifecycle'))
+      .toMatchObject({ kind: 'done', lifecycleAction: 'withdraw', requestId, requestIds: [requestId, second] });
+    for (const requestIds of [[second, requestId], [requestId, requestId], [requestId, 'not-a-uuid'], [requestId], 'x']) {
+      await expect(answer({ lifecycleAction: 'withdraw', requestId, requestIds, chatId: '555' }).intake(update, 'lifecycle'))
+        .rejects.toThrow(/invalid withdraw/);
+    }
+  });
 });
 
 describe('ChatInbox.handleUpdate', () => {

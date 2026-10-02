@@ -25,19 +25,19 @@ function prepare(text: string, senderName = 'Office') {
 describe('a task title names the client once (ADR-180)', () => {
   it('does not prefix a first line that already starts with the client, even behind a right-to-left mark', async () => {
     const draft = await prepare(`Please design a KAAE report cover.\n\nHere is the text:\n${RLM}KAAE K-12 Pilot Study\nField Visit Report`);
-    expect(draft.title).toBe('KAAE K-12 Pilot Study…');
+    expect(draft.title).toBe('KAAE K-12 Pilot Study');
     expect(draft.title).not.toContain(RLM);
     // The copy itself is never changed: the mark stays in the block as the requester typed it.
     expect((draft.exactCopy as Array<{ text: string }>)[0].text).toBe(`${RLM}KAAE K-12 Pilot Study`);
     // The requester's name of the design is the same.
-    expect(shortTitle(draft.title)).toBe('KAAE K-12 Pilot Study…');
+    expect(shortTitle(draft.title)).toBe('KAAE K-12 Pilot Study');
   });
 
   it('keeps the prefix when the first line does not start with the client as a word', async () => {
     const other = await prepare('Please design a KAAE poster.\n\nHere is the text:\nNational Accreditation Forum\nErbil');
-    expect(other.title).toBe('KAAE: National Accreditation Forum…');
+    expect(other.title).toBe('KAAE: National Accreditation Forum');
     const joined = await prepare('Please design a KAAE poster.\n\nHere is the text:\nKAAESTRA Forum\nErbil');
-    expect(joined.title).toBe('KAAE: KAAESTRA Forum…');
+    expect(joined.title).toBe('KAAE: KAAESTRA Forum');
   });
 
   it('reads names as whole words, case aside, behind direction marks', () => {
@@ -103,7 +103,7 @@ describe('stored titles are shown cleaned (ADR-040 addendum, 2026-10-01)', () =>
   });
 
   it('the requester hears no introducer and no direction mark', () => {
-    expect(shortTitle(`KAAE: ${RLM}KAAE K-12 Pilot Study…`)).toBe('KAAE K-12 Pilot Study…');
+    expect(shortTitle(`KAAE: ${RLM}KAAE K-12 Pilot Study…`)).toBe('KAAE K-12 Pilot Study');
     expect(shortTitle(INTRO)).toBe('your design');
     expect(shortTitle('KAAE: Standards launch')).toBe('Standards launch');
   });

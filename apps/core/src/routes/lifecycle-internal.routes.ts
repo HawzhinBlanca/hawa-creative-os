@@ -98,6 +98,8 @@ export { acceptedServiceTokensOf, serviceTokenOf, workerSigningSecretOf } from '
 interface UpdateLike { update_id: number; [kind: string]: unknown }
 
 const byRequest = (requests: ChatRequestView[], id: string) => requests.find((r) => r.requestId === id);
+/** ADR-255: stages a cancel of several designs can still concern (a too-late one is told so, as any cancel is). */
+const OPEN_LIFECYCLE_STAGES: readonly string[] = ['designing', 'awaiting_answer', 'in_review', 'manual', 'approved', 'delivering'];
 
 /** A Telegram document that is an SVG file (by its declared type or its name). */
 function isSvgDocument(document: unknown): boolean {
@@ -1344,7 +1346,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 // What the rules cannot place is asked of the intake router once, within the office's
                 // budget; without it (no key, no consent, no allowance, no answer) the question stands.
                 // ADR-230 addendum (L17): cancel words the rules cannot place are asked as a cancel, and read the same way.
-                if (plan.kind === 'ask' && (plan.intent === 'unclear' || (plan.intent === 'cancel' && reading.cancelWords)) && intentModel) {
+                // ADR-255: a question that names every design the words named together ("Do you want me to cancel
+                // both …?") is already the one question; the router, which picks one design, is not asked.
+                if (plan.kind === 'ask' && !plan.every && (plan.intent === 'unclear' || (plan.intent === 'cancel' && reading.cancelWords)) && intentModel) {
                   const candidates = requests.filter((r) => plan.kind === 'ask' && plan.options.some((o) => o.requestId === r.requestId));
                   const modelReading = await intentModel.read({ tenantId: TENANT, updateId: update.update_id, chatId,
                     text, requests: candidates, lang });
@@ -1533,6 +1537,23 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     stage: target.stage }) } : null;
                   return await decided(200, chatAnswer(tellText(plan.note, target.title, lang, Boolean(alert)),
                     { requestId: target.requestId, note: plan.note, ...(alert ? { officeAlert: alert } : {}) }));
+                }
+                case 'cancel-all': {
+                  // ADR-255: several designs named together ("cancel both of them"). One decision names them all;
+                  // ChatInbox hands each to its own RequestLifecycle, which closes it (Core checks this decision)
+                  // and tells the requester, or, for one approved or sent meanwhile, keeps the cancel and says so.
+                  const targets = plan.requestIds.map(byId).filter((r): r is ChatRequestView => Boolean(r) && OPEN_LIFECYCLE_STAGES.includes(r!.stage));
+                  const withdrawable = targets.filter((r) => (WITHDRAWABLE_STAGES as readonly string[]).includes(r.stage));
+                  const resolves = plan.resolves ? { resolves: plan.resolves } : {};
+                  if (targets.length < 2 || !withdrawable.length) {
+                    // One left (or none that can still be withdrawn): a cancel of one design, as before.
+                    const one = withdrawable[0] ?? targets[0];
+                    return one ? carryOut({ kind: 'note', note: 'cancel', requestId: one.requestId, words: plan.words, ...resolves }, requests, retried)
+                      : await decided(200, chatAnswer(statusText([], lang)));
+                  }
+                  return await decided(200, { lifecycleAction: 'withdraw', chatId, requestId: withdrawable[0].requestId,
+                    requestIds: [withdrawable[0], ...targets.filter((r) => r !== withdrawable[0])].map((r) => r.requestId),
+                    requestStage: withdrawable[0].stage, intent: reading.intent });
                 }
                 case 'note': {
                   const target = byId(plan.requestId);
