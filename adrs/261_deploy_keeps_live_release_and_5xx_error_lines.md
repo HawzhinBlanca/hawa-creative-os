@@ -39,3 +39,21 @@ routes answer 500 themselves after catching (12 such sites); a count of error li
   is refused.
 - apps/core/test/request-log-context.test.ts: +1 (5xx error, 4xx/2xx info, message unchanged); with the
   log-dependent suites (request-logs, access-log-judge-token, load export-chaos-logs) 16 passed.
+
+## Addendum (2026-10-02): the office hears requests that wait for a person sooner
+
+The same reality check found two waits nobody was told about:
+
+- **A request opened for a designer** (auto-drafting off for the client, no client named, or a daily cap)
+  told the requester "A designer will make …" and alerted no office member; it sat in the Desk until the
+  24-hour stale sweep. `projectLifecycleOpen` now adds an office alert to every office member at once:
+  the design's title, the client, and why nothing was drafted (`manualOpenAlert`). Holds and unallocated
+  deliverables keep their own alerts. Test: apps/core/test/manual-open-office-alert.test.ts (3 + 1; they
+  fail on the code before this change).
+- **Reminders:** a draft in office review is now re-announced after 2 hours (was 24; the one delivered
+  design waited 15 h overnight while its draft took 2 minutes), and a request for a designer after 8 hours
+  (was 24). Still once per request per stage entry.
+
+Queue cleanup (data, not code): the 52 RECEIVED and 4 AWAITING_APPROVAL Desk tasks from the 2026-09-11..20
+test, pilot and audit runs were closed with the office cancel control and a stated reason; receipts in
+output/handoffs/2026-10-02/CLAUDE_STALE_DESK_TASK_CLEANUP_RECEIPT.json.
