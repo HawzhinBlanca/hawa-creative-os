@@ -2,7 +2,7 @@ import { applyContentBackground } from './background-planning.js';
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { photoRecipeOf, HERO_SOFT_UPSCALE } from './layout-v2.js';
-import { type RecipePreferenceContext, artDirectionPrior, guidelinePrior, judgeClearMargin } from './art-direction/prior.js';
+import { type RecipePreferenceContext, artDirectionPrior, guidelinePrior } from './art-direction/prior.js';
 import { brandTones } from './art-direction/solver.js';
 import { conformMarksToPageGrammar, conformTypeToPageGrammar, guidelineDeviations, type PageGrammar } from './page-grammar.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
@@ -1892,6 +1892,9 @@ export async function selectWinnerV3(
     // carry the instructions and the exact copy.
     ...(options.judgeBrief ? { brief: { instructions: options.judgeBrief.instructions, copy: options.judgeBrief.copy } } : {}),
     ...(options.houseRules?.length ? { houseRules: options.houseRules } : {}),
+    // ADR-262: a client whose grammar carries poster rules is judged as a poster: impact and
+    // hierarchy at a 300px thumbnail, a clear focal point, and fit to the request.
+    ...(options.pageGrammar?.poster ? { posterImpact: true } : {}),
   };
   const renderOptionsFor = (candidate: RankedCandidateV3): RenderLayoutOptions => ({
     ...options.renderOptions, ...options.renderOptionsForCandidate?.(candidate), copyText: copy.text,
@@ -1933,10 +1936,12 @@ export async function selectWinnerV3(
   const canaryPassed = canaryMatch.winnerId === 'chosen';
   const canary = { passed: canaryPassed, match: canaryMatch, subject: tentative };
 
-  // ADR-238: for a client with a page grammar, the guideline prior goes first. The design it favours
-  // (composed from the grammar, else the one with fewer departures from it) stands unless the judge
-  // chose the other by a clear margin in both orders and then passed its canary.
-  if (options.pageGrammar) {
+  // ADR-238, narrowed by ADR-262: for a client with a page grammar, the guideline prior breaks a tie.
+  // The design it favours (composed from the grammar, else the one with fewer departures from it)
+  // stands only where the judge did not decide (a split across the two orders) or failed its canary.
+  // A reliable judge's pick stands: the prior used to overrule any pick short of a 0.75 vote share in
+  // both orders, which kept the restrained document page against bolder posters (review 2026-10-02).
+  if (options.pageGrammar && (!judgePick || !canaryPassed)) {
     const grammar = options.pageGrammar;
     const decision = guidelinePrior(first.layout, second.layout, {
       a: guidelineDeviations(first.layout, grammar), b: guidelineDeviations(second.layout, grammar),
@@ -1944,17 +1949,10 @@ export async function selectWinnerV3(
     if (decision.winner) {
       const favoured = decision.winner === 'a' ? first : second;
       const other = favoured === first ? second : first;
-      const otherId = other === first ? firstId : secondId;
-      const overruled = judgePick === other && canaryPassed && judgeClearMargin(match, otherId);
-      if (!overruled && !(judgePick === favoured && canaryPassed)) {
-        const instead = !judgePick ? 'composite_after_tie' : !canaryPassed ? 'composite_judge_unreliable' : 'judge_without_clear_margin';
-        return { winner: favoured, runnerUp: other, decidedBy: 'art_direction_prior', match, canary,
-          judgeReliable: canaryPassed, protocol,
-          // The guideline decided against a judge that leaned the other way without a clear margin:
-          // that is the client's rule, not an uncertainty for a person to settle.
-          humanChoiceRecommended: instead !== 'judge_without_clear_margin',
-          prior: { basis: 'guideline', reason: decision.reason, instead } };
-      }
+      const instead = !judgePick ? 'composite_after_tie' : 'composite_judge_unreliable';
+      return { winner: favoured, runnerUp: other, decidedBy: 'art_direction_prior', match, canary,
+        judgeReliable: judgePick ? false : canaryPassed, protocol, humanChoiceRecommended: true,
+        prior: { basis: 'guideline', reason: decision.reason, instead } };
     }
   }
   // Where the judge did not decide, the review findings break the tie (ADR-157): a design a person

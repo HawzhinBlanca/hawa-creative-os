@@ -92,7 +92,7 @@ describe('the guideline prior (ADR-170\'s prior, extended): the guideline\'s own
   });
 });
 
-describe('selection: a composed guideline design that passed hard QA wins unless the judge clearly prefers another', () => {
+describe('selection: the judge decides; a composed guideline design wins a tie (ADR-262)', () => {
   const passedQa = { passed: true, defectCodes: [], messages: [], findings: [] } as any;
   const receipt = { model: 'gpt-4.1-mini', responseId: 'r', xRequestId: null, inputTokens: 1, outputTokens: 1, costUsd: 0, latencyMs: 1 };
   /** A verdict giving `votesA` of the five dimensions to the design shown as A. */
@@ -131,17 +131,31 @@ describe('selection: a composed guideline design that passed hard QA wins unless
     expect([s.match!.candidate1Id, s.match!.candidate2Id]).toEqual(['candidate_0', 'candidate_2']);
   }, 60000);
 
-  it('a judge that prefers the other by three votes of five in both orders does not overrule the guideline', async () => {
+  it('ADR-262: a reliable judge that prefers the other by three votes of five in both orders decides; the guideline prior no longer overrules it', async () => {
     const s = await select(3);
-    expect(s.winner.sourceIndex).toBe(2);
-    expect(s.decidedBy).toBe('art_direction_prior');
-    expect(s.prior).toMatchObject({ basis: 'guideline', instead: 'judge_without_clear_margin', reason: expect.stringMatching(/guideline's own cover/) });
+    expect(s.decidedBy).toBe('judge');
+    expect(s.winner.sourceIndex).toBe(0);
+    expect(s.prior).toBeUndefined();
     expect(s.judgeReliable).toBe(true);
-    expect(s.humanChoiceRecommended).toBe(false);
     // Without a page grammar the same judge decides, as before.
     const plain = await select(3, false);
     expect(plain.decidedBy).toBe('judge');
     expect(plain.winner.sourceIndex).toBe(0);
+  }, 60000);
+
+  it('ADR-262: the guideline prior breaks a tie: a judge split across the two orders leaves the composed design', async () => {
+    const create = vi.fn()
+      .mockResolvedValueOnce({ data: verdict(3), receipt })
+      .mockResolvedValueOnce({ data: verdict(3), receipt })
+      .mockResolvedValueOnce({ data: verdict(5), receipt })
+      .mockResolvedValueOnce({ data: verdict(0), receipt });
+    const s = await selectWinnerV3(ranked(), { text: copyOf(COVER) }, {
+      client: { createStructuredCompletion: create } as any, model: 'gpt-4.1-mini', renderOptions: { logoDataUri: KAAE_TEST_LOGO }, pageGrammar: G,
+    });
+    expect(s.winner.sourceIndex).toBe(2);
+    expect(s.decidedBy).toBe('art_direction_prior');
+    expect(s.prior).toMatchObject({ basis: 'guideline', instead: 'composite_after_tie', reason: expect.stringMatching(/guideline's own cover/) });
+    expect(s.humanChoiceRecommended).toBe(true);
   }, 60000);
 
   it('a judge that prefers the other by a clear margin in both orders, and passes its canary, decides', async () => {

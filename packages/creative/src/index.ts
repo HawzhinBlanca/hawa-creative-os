@@ -59,6 +59,7 @@ export * from './studio/studio-normalize.js';
 export * from './studio/hard-qa.js';
 export * from './studio/page-grammar-admission.js';
 export * from './studio/page-grammar.js';
+export * from './studio/poster-grammar.js';
 export * from './studio/brand-elements.js';
 export * from './studio/shape-gradient.js';
 export * from './studio/client-reference.js';

@@ -15,6 +15,8 @@ import {
   faceBoxesOf,
   generateArtDirectedCandidatesV3,
   composeGrammarLayout,
+  composePosterLayout,
+  type PosterVariant,
   GrammarInfeasibleError,
   pageGrammarPrompt,
   hexToLuminance,
@@ -230,7 +232,13 @@ export async function runLayoutsStage(
     const photoFacts = artDirected ? await photoFactsFor(ctx) : [];
     const logoConstraintsV3 = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number; clearSpaceShareOfHeight?: number } | undefined;
     const grammar = ctx.pageGrammar;
-    const v3Result = artDirected ? await inStudioSubstep('layout/set', () => generateArtDirectedCandidatesV3({
+    // ADR-238: a design with no photo for a client with a page grammar is first set from the grammar
+    // itself, with no model call. ADR-262: with poster rules that is three different compositions,
+    // and the layout model is not called (its layouts were cut to make room for them).
+    const composed = grammar && !artDirected ? composedGrammarCandidates(ctx, brief, grammar, copy, copyBlockSlots, logoConstraintsV3) : [];
+    const composedSuffice = Boolean(grammar?.poster) && composed.length >= 3;
+    const v3Result = composedSuffice ? { layouts: [] as StudioLayoutV2[], rawCandidates: [] as Array<Parameters<typeof conceptFromV3Candidate>[0]> }
+      : artDirected ? await inStudioSubstep('layout/set', () => generateArtDirectedCandidatesV3({
       client: ctx.client as any,
       brief: briefSummary,
       copyBlocks: copyBlockSlots,
@@ -312,12 +320,9 @@ export async function runLayoutsStage(
         candidate.layouts = [settled];
       }
     }
-    // ADR-238: a design with no photo for a client with a page grammar is first set from the grammar
-    // itself: two variants of the guideline's page (or of its cover, for a dark brief), composed and
-    // measured with no model call, ahead of the model's best layout restyled to the grammar. The run
-    // keeps three candidates, so the critique and judge calls per design do not grow.
+    // ADR-238: the composed designs go ahead of the model's best layouts restyled to the grammar. The
+    // run keeps three candidates, so the critique and judge calls per design do not grow.
     if (grammar && !artDirected) {
-      const composed = composedGrammarCandidates(ctx, brief, grammar, copy, copyBlockSlots, logoConstraintsV3);
       if (composed.length) {
         const merged = [...composed, ...prepared].slice(0, Math.max(3, composed.length));
         merged.forEach((candidate, i) => {
@@ -466,10 +471,35 @@ export async function runLayoutsStage(
   return candidates;
 }
 
+/** One composition the grammar can set: a poster (ADR-262), the guideline's page or its cover (ADR-238). */
+type GrammarChoice = { tone: 'poster'; variant: PosterVariant } | { tone: 'page' | 'cover'; variant: string };
+
+/**
+ * ADR-262: the compositions to offer, in order, each a different one. With poster rules a text-only
+ * poster is offered the office's poster compositions first: a dark brief the navy cover poster and
+ * the guideline's two covers; a requester who named white the banded white poster and the
+ * guideline's page; one who named cream the cream poster first; otherwise the banded white poster,
+ * the cream poster, the navy cover poster and the guideline's page (light first, then navy). Without
+ * poster rules, ADR-238's two pages or two covers.
+ */
+export function grammarChoices(grammar: PageGrammar, dark: boolean, requested: string | undefined): GrammarChoice[] {
+  const covers: GrammarChoice[] = [{ tone: 'cover', variant: 'pattern' }, { tone: 'cover', variant: 'sunburst' }];
+  const pages: GrammarChoice[] = [{ tone: 'page', variant: 'brand_card' }, { tone: 'page', variant: 'cards' }];
+  if (!grammar.poster) return dark ? covers : pages;
+  const poster = (variant: PosterVariant): GrammarChoice => ({ tone: 'poster', variant });
+  if (dark) return [poster('navy'), ...covers];
+  const named = requested?.toUpperCase();
+  if (named && named === grammar.poster.cream.ground?.toUpperCase()) return [poster('cream'), poster('band'), ...pages];
+  if (named) return [poster('band'), ...pages];
+  return [poster('band'), poster('cream'), poster('navy'), ...pages];
+}
+
 /**
  * ADR-238: the client's page grammar set whole: the guideline's page in two variants (details on a
  * KAAE Blue card, or on white cards), or its navy-gradient cover when the brief asks for a dark
- * ground (the requester's words, an evening or a cover). A variant the copy cannot fill is skipped.
+ * ground (the requester's words, an evening or a cover). ADR-262: with poster rules, the office's
+ * poster compositions first (grammarChoices); at most three, each a different composition. A
+ * composition the copy cannot fill is skipped.
  */
 export function composedGrammarCandidates(
   ctx: StageContext,
@@ -481,15 +511,17 @@ export function composedGrammarCandidates(
 ): CandidateState[] {
   const requested = ctx.requestedBackground;
   const dark = brief.tonePreference?.tone === 'dark' || (requested ? hexToLuminance(requested) < 0.2 : false);
-  const tone = dark ? 'cover' as const : 'page' as const;
-  const variants = tone === 'cover' ? ['pattern', 'sunburst'] : ['brand_card', 'cards'];
+  const choices = grammarChoices(grammar, dark, requested && !dark ? requested : undefined);
   const roles = Object.fromEntries(slots.map((b) => [b.index, b.role]));
   const arabicDisplay = ctx.referencePack.admittedDisplayFonts?.arabic?.find((f) => f !== ctx.arabicFont) ?? ctx.arabicFont;
   const out: CandidateState[] = [];
-  for (const variant of variants) {
+  const limit = grammar.poster ? 3 : choices.length;
+  for (const choice of choices) {
+    if (out.length >= limit) break;
+    const { tone, variant } = choice;
     let layout: StudioLayoutV2;
     try {
-      layout = composeGrammarLayout({
+      const common = {
         width: ctx.width,
         height: ctx.height,
         grammar,
@@ -499,11 +531,12 @@ export function composedGrammarCandidates(
         logoMinimumWidthPx: logo?.minimumWidthPx,
         logoClearSpacePx: logo?.clearSpacePx,
         logoClearSpaceShare: logo?.clearSpaceShareOfHeight,
-        tone,
-        variant,
         fonts: { arabicDisplay, arabicBody: ctx.arabicFont },
         ...(requested && !dark ? { pageBackground: requested } : {}),
-      });
+      };
+      layout = choice.tone === 'poster'
+        ? composePosterLayout({ ...common, tone: 'page', variant: choice.variant })
+        : composeGrammarLayout({ ...common, tone: choice.tone, variant });
     } catch (err) {
       if (err instanceof GrammarInfeasibleError) {
         log.warn(`[LayoutsStage] page grammar ${tone}/${variant} skipped: ${err.message}`);
@@ -512,14 +545,15 @@ export function composedGrammarCandidates(
       throw err;
     }
     const prepared = prepareGeneratedLayoutV3(layout, copy, { width: ctx.width, height: ctx.height, logoAspect: ctx.logoAspect, palette: ctx.referencePack.palette });
-    const name = tone === 'cover' ? `Guideline cover (${variant === 'pattern' ? 'navy gradient, centred, triangle pattern' : 'navy gradient, sunburst'})`
-      : `Guideline page (${variant === 'cards' ? 'details on white cards' : 'details on a KAAE Blue card'})`;
-    const raw = { id: `grammar-${tone}-${variant}`, conceptTitle: name, compositionArchetype: tone === 'cover' ? 'monolith_centered' : 'hero_statement_grid',
+    const name = tone === 'poster' ? `Office poster (${variant === 'navy' ? 'navy gradient, display title, sunburst' : variant === 'cream' ? 'cream ground, display title, details card' : 'white page, full-width title band'})`
+      : tone === 'cover' ? `Guideline cover (${variant === 'pattern' ? 'navy gradient, centred, triangle pattern' : 'navy gradient, sunburst'})`
+        : `Guideline page (${variant === 'cards' ? 'details on white cards' : 'details on a KAAE Blue card'})`;
+    const raw = { id: `grammar-${tone}-${variant}`, conceptTitle: name, compositionArchetype: tone === 'page' ? 'hero_statement_grid' : 'monolith_centered',
       typeScale: { base: 16, ratio: 1.333 }, art: null } as unknown as Parameters<typeof conceptFromV3Candidate>[0];
     out.push({
       id: randomUUID(),
       ordinal: out.length,
-      concept: { ...conceptFromV3Candidate(raw, prepared, out.length, variants.length), whyDifferent: `Composed from the client's page grammar (${variant})` },
+      concept: { ...conceptFromV3Candidate(raw, prepared, out.length, Math.min(limit, choices.length)), whyDifferent: `Composed from the client's ${tone === 'poster' ? 'poster compositions' : 'page grammar'} (${variant})` },
       layouts: [prepared],
       currentLayout: prepared,
       critiques: [],

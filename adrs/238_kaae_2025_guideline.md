@@ -4,6 +4,7 @@
 **Status:** Implemented on branch `claude/kaae-2025-guideline` (from production `baffce10`, which carries ADR-236 and ADR-237); not deployed. The production DNA row is a separate step for the lead after deploy (section 9).
 **Requirements:** FR-017 (versioned authoritative brand identity), FR-013 (the design brief carries the requester's requirements), FR-023 (a design plan cites the rules it used), FR-038 (hard QA gates what ships).
 **Changes a foundation:** no. No migration and no new dependency. Font files are added as assets: Crimson Pro (OFL) and Inter Italic (OFL). No paid call is added per design: the composed pages are set with no model call, and a typographic run still judges three candidates.
+**Amended by:** ADR-262 (2026-10-02): poster composition from the office's published posts; the guideline prior only breaks ties.
 **Supersedes:** ADR-236's palette, fonts and rules. ADR-236's light-first logic is kept: the tone words, the lightest fallback ground, ground snapping, the light and dark recipe variants, and the dark exception. ADR-236 is marked "Superseded by ADR-238".
 **Number:** 238, assigned by the lead.
 
