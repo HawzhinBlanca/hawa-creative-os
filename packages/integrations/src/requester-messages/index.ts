@@ -30,6 +30,8 @@ import { PENDING_ROUND_MESSAGES } from './pending-round.js';
 import { NAMING_MESSAGES } from './naming.js';
 // ADR-235: who a design is for.
 import { CLIENT_QUESTION_MESSAGES } from './client-question.js';
+// ADR-250: a brief the bot cannot start by itself.
+import { INTAKE_LIMIT_MESSAGES } from './intake-limits.js';
 
 import type { Phrase, PhraseBook, RequesterLang } from './types.js';
 
@@ -106,8 +108,10 @@ export const REQUESTER_CATALOGUE = {
   naming: NAMING_MESSAGES,
   /** ADR-235: who a design is for, asked when nothing names the organisation. */
   clientQuestion: CLIENT_QUESTION_MESSAGES,
+  /** ADR-250: a brief the bot cannot start by itself (too many designs, an unsupported size). */
+  intakeLimits: INTAKE_LIMIT_MESSAGES,
 } as const satisfies Record<string, PhraseBook>;
 
 export { SOURCE_MESSAGES, MEDIA_MESSAGES, INBOX_MESSAGES, ACCESS_MESSAGES, ROUTING_MESSAGES, CONVERSATION_MESSAGES,
   LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ALBUM_MESSAGES, OFFICE_MESSAGES };
-export { WITHDRAW_MESSAGES, PENDING_ROUND_MESSAGES, NAMING_MESSAGES, CLIENT_QUESTION_MESSAGES };
+export { WITHDRAW_MESSAGES, PENDING_ROUND_MESSAGES, NAMING_MESSAGES, CLIENT_QUESTION_MESSAGES, INTAKE_LIMIT_MESSAGES };
