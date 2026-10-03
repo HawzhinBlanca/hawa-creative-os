@@ -42,8 +42,8 @@ describe('costly errors: nothing opened or withdrawn unless meant', () => {
 
   // "stop working on it" asked "change or new?" before and after ADR-272: cancel words never offer a new design.
   it('"stop working on it" is "stop it"; with "for now" it is a pause', () => {
-    expect(plan('stop working on it', [DESIGNING])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
-    expect(plan('please stop working on the poster', [DESIGNING])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+    expect(plan('stop working on it', [DESIGNING])).toMatchObject({ kind: 'ask', intent: 'cancel', options: [{ requestId: 'A' }] });
+    expect(plan('please stop working on the poster', [DESIGNING])).toMatchObject({ kind: 'ask', intent: 'cancel', options: [{ requestId: 'A' }] });
     expect(plan('stop working on it for now', [DESIGNING])).toMatchObject({ kind: 'note', note: 'hold', requestId: 'A' });
     expect(plan('stop working on the logo', [DESIGNING])).not.toMatchObject({ note: 'cancel' });
   });
@@ -60,8 +60,8 @@ describe('costly errors: nothing opened or withdrawn unless meant', () => {
     });
 
   it.each(['forget the poster', "forget it, we don't need it anymore", 'forget about the workshop poster'])(
-    '"%s" names the design and withdraws it', (words) => {
-      expect(plan(words, [DESIGNING])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+    '"%s" names the design, and is asked about before it is withdrawn (conversation fuzz, J2)', (words) => {
+      expect(plan(words, [DESIGNING])).toMatchObject({ kind: 'ask', intent: 'cancel', options: [{ requestId: 'A' }] });
     });
 
   it.each([
@@ -115,7 +115,7 @@ describe('edit words about the design on the way are a change, not "change or ne
       .toMatchObject({ kind: 'note', note: 'change', requestId: 'B' });
     // A design's own name that holds a part's word is still the design.
     expect(readIntentByRules('cancel the date night poster').intent).toBe('cancel');
-    expect(plan('cancel the Teacher Appreciation Day poster', TWO_OPEN)).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'B' });
+    expect(plan('cancel the Teacher Appreciation Day poster', TWO_OPEN)).toMatchObject({ kind: 'ask', intent: 'cancel', options: [{ requestId: 'B' }] });
   });
 
   it('a change to a design that waits for changes starts its round only as the only candidate', () => {
@@ -133,11 +133,11 @@ describe('edit words about the design on the way are a change, not "change or ne
 });
 
 describe('cancel words never offer a new design', () => {
-  it('a Sorani named cancel with its reason withdraws the design it names (L17 shape)', () => {
+  it('a Sorani named cancel with its reason asks about the design it names (L17 shape; J2)', () => {
     // "cancel the Teacher Appreciation Day poster, it was only a test"
     const words = 'پۆستەری Teacher Appreciation Day هەڵبوەشێنەوە، تەنها تاقیکردنەوە بوو';
     expect(readIntentByRules(words).intent).toBe('cancel');
-    expect(plan(words, TWO_OPEN)).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'B' });
+    expect(plan(words, TWO_OPEN)).toMatchObject({ kind: 'ask', intent: 'cancel', options: [{ requestId: 'B' }] });
   });
 
   it('Sorani cancel words the rules cannot place are asked about as a cancel', () => {
@@ -157,8 +157,8 @@ describe('cancel words never offer a new design', () => {
     }
   });
 
-  it('"don\'t make it, we\'ll do it ourselves" withdraws the design it names', () => {
-    expect(plan("don't make it, we'll do it ourselves", [DESIGNING])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+  it('"don\'t make it, we\'ll do it ourselves" asks about the design it names (J2)', () => {
+    expect(plan("don't make it, we'll do it ourselves", [DESIGNING])).toMatchObject({ kind: 'ask', intent: 'cancel', options: [{ requestId: 'A' }] });
   });
 });
 

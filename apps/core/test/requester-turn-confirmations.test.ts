@@ -41,9 +41,13 @@ describe('friction 1: a cancel word with nothing named asks before it withdraws'
     "forget it, we don't need it anymore", "it's not needed",
     // "cancel it" (Sorani)
     'هەڵیبوەشێنەوە',
-  ])('"%s" names the design, and withdraws the only one as before', (words) => {
+  ])('"%s" names the design, and is asked about too; only "yes" withdraws it (conversation fuzz, J2)', (words) => {
     expect(readIntentByRules(words).bareCancel).toBeUndefined();
-    expect(planTurn(input(words, [NAWROZ]))).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+    // Before the conversation fuzz (2026-10-03) a cancel that named its design withdrew it at once (ADR-251).
+    expect(planTurn(input(words, [NAWROZ]))).toMatchObject({ kind: 'ask', intent: 'cancel', allowNew: false, options: [{ requestId: 'A' }] });
+    const askedNow: PendingAsk = { updateId: 8, intent: 'cancel', words, options: [{ requestId: 'A', title: NAWROZ.title }], allowNew: false };
+    expect(planTurn(input('yes', [NAWROZ], { pendingAsk: askedNow }))).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A', resolves: 8 });
+    expect(planTurn(input('no', [NAWROZ], { pendingAsk: askedNow }))).toEqual({ kind: 'reply', what: 'status', requestIds: ['A'] });
   });
 
   it('the question names the design in natural words, in both languages', () => {

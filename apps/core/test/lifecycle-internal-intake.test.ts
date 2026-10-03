@@ -349,7 +349,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(other)).toHaveLength(0);
   });
 
-  it('admits a styling-only message as manual and does not promote a greeting to a lifecycle request', async () => {
+  it('passes a styling-only message to the office and does not promote it or a greeting to a lifecycle request', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
@@ -357,8 +357,10 @@ describe('POST /v1/internal/telegram/intake', () => {
     const manual = brief(updateId(), chat);
     manual.message.text = 'Please change the background to navy';
     const planned = await intake(app, manual);
-    expect(planned.body).toMatchObject({ lifecycleAction: 'open-request',
-      draft: { autoGenerate: false, isInstructionOnly: true, exactCopy: [] } });
+    // Conversation fuzz (2026-10-03, J1/J3): a change with nothing on the way opened a request for a designer, named by
+    // the change. It is no brief: its words go to the office, and nothing is opened.
+    expect(planned.body.lifecycleAction).toBe('chat-answer');
+    expect(planned.body.chatAnswer.text).toMatch(/(?:passed|kept) your message (?:to|for) the office/);
     expect(await tasksInChat(chat)).toHaveLength(0);
     const greeting = brief(updateId(), chat);
     greeting.message.text = 'hello';

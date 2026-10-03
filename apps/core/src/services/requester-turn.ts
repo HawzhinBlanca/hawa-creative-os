@@ -22,7 +22,8 @@
  */
 import { LIFECYCLE_MESSAGES, NAMING_MESSAGES, ROUTING_MESSAGES, WITHDRAW_MESSAGES, bold, escapeTelegramHtml, isNeutralRequestTitle, requesterLang, say as sayPhrase,
   trimTitleMarks, withoutDecorativeEllipsis, type Phrase, type RequesterLang } from '@hawa/integrations';
-import { asksToUndoCancel, CHANGE_CUES, readsAsUndo, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText } from './telegram-classifier.js';
+import { asksToUndoCancel, CHANGE_CUES, readsAsUndo, classifyWithHeuristics, containsKeyword, isAcknowledgement, isSoraniText,
+  isUnhappyOpinion } from './telegram-classifier.js';
 import { isCopyIntroducer } from './request-remarks.js';
 import { isIntroducerTitle, withoutMarks } from './draft-title.js';
 
@@ -73,6 +74,12 @@ export interface IntentReading {
    * `all`: every one the requester may cancel.
    */
   every?: 'both' | 'all';
+  /**
+   * conversation (conversation fuzz, 2026-10-03): the words only say the requester is not happy ("I don't like it",
+   * "the poster looks cheap"). The office hears them, as an unhappy emoji (ADR-252); a designer making the only design
+   * before any draft hears them on it (ADR-284 addendum F4).
+   */
+  unhappy?: true;
 }
 
 export type Lang = RequesterLang;
@@ -540,13 +547,19 @@ export function readsAsChange(text: string): boolean {
   // The heuristics' own revision reading, as when a design is known to be active.
   if (classifyWithHeuristics(t, true, false).kind === 'feedback') return true;
   if (t.length <= 200 && REMOVES_A_PART.test(t) && REMOVABLE_PART.test(t)) return true;
+  // Conversation fuzz (2026-10-03, J3): "less text please", "fewer words", "more space" were read as chat and answered
+  // with the design's status; the words were lost.
+  if (t.length <= 120 && LESS_OR_MORE.test(t)) return true;
   if (t.length <= 200 && editsAPart(t)) return true;
   return t.length <= 200 && CHANGE_CUES.some((cue) => containsKeyword(t, cue)) &&
     /\b(?:make|use|put|change|add|remove|move|replace|swap|fix|resize|instead)\b/i.test(t);
 }
 // Live 2026-10-02 (L19): "can you take KAAE's out of the title?", "leave the date off the poster", "drop the
 // subtitle", "get rid of the border": words that remove a named part of a design are a change of it.
-const REMOVES_A_PART = /\b(?:(?:take|leave|get)\s+(?:\S+\s+){0,4}?(?:out|off)|get\s+rid\s+of|drop|delete|erase|remove)\b/i;
+// Conversation fuzz (2026-10-03): "can we lose the subtitle" asks for the subtitle to go, too.
+const REMOVES_A_PART = /\b(?:(?:take|leave|get)\s+(?:\S+\s+){0,4}?(?:out|off)|get\s+rid\s+of|drop|delete|erase|remove|lose)\b/i;
+const LESS_OR_MORE = new RegExp(`^(?:(?:and|also|maybe|just|please|pls)\\s+)*(?:(?:a\\s+(?:bit|little|lot)|much|way|slightly)\\s+)?` +
+  `(?:(?:less|fewer)\\s+\\p{L}|more\\s+(?:${PART_NOUNS}|space|white\\s*space|room|colou?rs?|contrast|images?|photos?|pictures?)s?\\b)`, 'iu');
 const REMOVABLE_PART = new RegExp(`\\b(?:${PART_NOUNS}|banner)s?\\b`, 'i');
 const A_PART = A_PART_HEAD +
   '(?=\\s*$|\\s*[,.!?;:]|\\s+(?:on|in|of|from|behind|around|under|over|above|below|at|near|next|beside|inside|please|too|as\\s+well|and|for|anywhere|everywhere|completely|entirely)\\b)';
@@ -611,7 +624,9 @@ const LIKES_CKB = /حەز\s*(?:ی|یان|مان|م)?\s*(?:لێ\s*(?:دەکات|�
 function praisesOnly(core: string): boolean {
   if (!core || core.length > 140) return false;
   const clauses = core.split(/\s*[,،;.!:–—]+\s*|\s+-\s+/u).map((c) => c.trim()).filter(Boolean);
-  if (clauses.length < 2) return false;
+  // Conversation fuzz (2026-10-03): "my boss is happy with it", "the client loves it" said alone were asked "Is this
+  // a change to …, or a new design?". The English pattern names who and the design whole, so one clause is enough.
+  if (clauses.length < 2) return clauses.length === 1 && LIKES_EN.test(clauses[0]);
   const likes = (c: string) => LIKES_EN.test(c) || (isSoraniText(c) && c.split(/\s+/).length <= 5 && LIKES_CKB.test(c));
   return clauses.some(likes) && clauses.every((c) => likes(c) || isAcknowledgement(c));
 }
@@ -670,6 +685,12 @@ const cancelClauses = (core: string) =>
  * longer name ("پۆستەری Teacher Appreciation Day هەڵبوەشێنەوە", cancel the Teacher Appreciation Day poster)
  * is a clause of up to eight words that ends with a cancel verb that carries its object.
  */
+/**
+ * Conversation fuzz (2026-10-03, J2): Arabic "cancel" (ألغِ, إلغاء) and "we don't need it" (لا نحتاجه) were asked "Is
+ * this a change to …, or a new design?". They are cancel words the rules do not place: asked about, never withdrawn
+ * unasked. Needs a native speaker's review.
+ */
+const ARABIC_CANCEL = /(?:^|\s)(?:ألغ|الغ|إلغ)\S*|(?:^|\s)(?:إلغاء|الغاء)|(?:^|\s)(?:لا|ما)\s+(?:نحتاج|نريد|أحتاج|احتاج)\S*/u;
 const SORANI_CANCEL_VERB = /هەڵ\s*(?:ی\s*)?(?:ب)?وەشێنەوە/u;
 const SORANI_NAMED_CANCEL_LAST = new RegExp(`(?:${['هەڵیوەشێنەوە', 'هەڵبوەشێنەوە', 'هەڵوەشێنەوە', 'هەڵیبوەشێنەوە'].join('|')})[\\s!.]*$`, 'u');
 /** Hunt 3: "please" before a clause's cancel ("unfortunately the training was called off, please cancel the poster"). */
@@ -919,6 +940,10 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   const redo = options.redo === false ? null : readsAsRedo(t, core);
   if (redo === 'redo') return rules('change', 'Asks to redo the most recent design', { redo });
   if (redo === 'or-new') return rules('unclear', 'Asks to redo a design, or for a new one', { redo, instructionOnly: true });
+  // Conversation fuzz (2026-10-03): words that only say the requester is not happy ("I don't like it", "looks cheap",
+  // "not quite") name nothing to change. The chat's answer passes them to the office and asks what to change, as for
+  // an unhappy emoji (ADR-252); never "a change or a new design?", never thanks, never a change a paid round applies.
+  if (isUnhappyOpinion(t)) return rules('conversation', 'Says they are not happy, and names nothing to change', { unhappy: true });
   // ADR-040 addendum (2026-10-01): "not approved", "don't send it" are never happiness, nor a request
   // for the files ("don't send it again"): the requester is not happy, and what else they say is the change.
   if (refusesApproval(core) && !asksForNewDesign(t)) {
@@ -949,7 +974,8 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   const cancelBeside = core.length <= 300 && !EXPLICIT_NEW.test(t) && !asksForNewDesign(t) &&
     (cancelClauses(core).some((c) => cancelsClause(c) && !TEMPORARY.test(c)) || cancelClauses(core).every((c) => EVENT_CALLED_OFF.test(c) || CANCEL_FILLER.test(c) || CANCEL_REASON.test(c)) &&
       cancelClauses(core).some((c) => EVENT_CALLED_OFF.test(c)));
-  if ((cancelBeside || (core.length <= 160 && (CANCEL_SOMEWHERE.test(core) || (isSoraniText(core) && SORANI_CANCEL_VERB.test(core))))) &&
+  if ((cancelBeside || (core.length <= 160 && (CANCEL_SOMEWHERE.test(core) || (isSoraniText(core) && SORANI_CANCEL_VERB.test(core)) ||
+      ARABIC_CANCEL.test(core)))) &&
       !readsAsHold(core) && !cancelsAPart(core)) {
     const every = cancelNamesEvery(core);
     return rules('unclear', 'Cancel words the rules cannot place', { instructionOnly: true, cancelWords: true, ...(every ? { every } : {}) });
@@ -1445,6 +1471,10 @@ function changeFor(request: ChatRequestView, words: string, how: string, confide
 function changeOrRefusal(reading: Pick<IntentReading, 'refusalOnly'>, request: ChatRequestView, words: string, how: string,
   confidence: number | undefined, resolves?: number): TurnPlan | null {
   if (reading.refusalOnly && waitsForRequester(request)) return { kind: 'forward', words };
+  // Conversation fuzz (2026-10-03, J1): "not approved" said while the design is still being made was kept as a change,
+  // and the round that starts when the draft finishes (ADR-230 section 6) was paid for with "not approved" as its only
+  // instruction. A refusal names nothing to apply: the office hears it, and no round is started for it.
+  if (reading.refusalOnly && request.stage === 'designing') return { kind: 'forward', words };
   return changeFor(request, words, how, confidence, resolves);
 }
 
@@ -1606,9 +1636,33 @@ function withoutModelAction(plan: TurnPlan, input: TurnInput): TurnPlan {
   return { kind: 'ask', intent: 'unclear', words, options: options([request]), allowNew, ...(redo && allowNew ? { redo: 'or-new' as const } : {}) };
 }
 
+/**
+ * Conversation fuzz (2026-10-03, J2): nothing is withdrawn on the words that asked for it. ADR-251 asked first only
+ * when a cancel named nothing; a cancel that named its design ("cancel it", "we don't need it anymore", a Sorani
+ * "cancel it", a reply to the design's message, a model's sure reading) withdrew it at once, and "cancel both of
+ * them" withdrew both. Now every such cancel asks "Do you want me to cancel …?" (naming them all when it named them
+ * together), and only the answer to that question (`resolves`: "yes", or the design chosen) withdraws. A cancel
+ * of a design too late to withdraw is told so, as before.
+ */
+function askBeforeWithdrawing(plan: TurnPlan, input: TurnInput): TurnPlan {
+  if (plan.kind === 'note' && plan.note === 'cancel' && !plan.resolves) {
+    const request = input.requests.find((r) => r.requestId === plan.requestId);
+    if (request && WITHDRAWABLE.includes(request.stage)) return { kind: 'ask', intent: 'cancel', words: plan.words, options: options([request]), allowNew: false };
+    return plan;
+  }
+  if (plan.kind === 'cancel-all' && !plan.resolves) {
+    const named = plan.requestIds.map((id) => input.requests.find((r) => r.requestId === id))
+      .filter((r): r is ChatRequestView => Boolean(r)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    if (named.length < 2) return named[0] ? askBeforeWithdrawing({ kind: 'note', note: 'cancel', requestId: named[0].requestId, words: plan.words }, input) : plan;
+    return { kind: 'ask', intent: 'cancel', words: plan.words, options: options(named), allowNew: false,
+      every: input.reading.every ?? (named.length === 2 ? 'both' : 'all') };
+  }
+  return plan;
+}
+
 /** What to do with this message. Pure: the route records the plan once per update and carries it out. */
 export function planTurn(full: TurnInput): TurnPlan {
-  return withoutModelAction(planByReading(full), full);
+  return askBeforeWithdrawing(withoutModelAction(planByReading(full), full), full);
 }
 
 function planByReading(full: TurnInput): TurnPlan {
@@ -1733,9 +1787,13 @@ function planByReading(full: TurnInput): TurnPlan {
       const shown = (bound.length ? bound : requests).slice().sort(byActivity).slice(0, 3);
       return { kind: 'reply', what: 'status', requestIds: shown.map((r) => r.requestId) };
     }
-    case 'conversation':
+    case 'conversation': {
       // ADR-182: a question the bot cannot answer is the office's, not a prompt for a brief.
-      return reading.question ? { kind: 'forward', words, question: true } : { kind: 'conversation' };
+      if (reading.question) return { kind: 'forward', words, question: true };
+      // ADR-284 addendum F4: an unhappy opinion of the only design, with a designer and no draft yet, goes to them on it.
+      const feedback = reading.unhappy ? feedbackBeforeAnyDraft(changeable, words) : null;
+      return feedback ?? { kind: 'conversation' };
+    }
     case 'cancel':
       // ADR-255: "cancel both of them", "all of them": every design the words name together, even in a reply.
       if (reading.every) {
@@ -1791,7 +1849,15 @@ function planByReading(full: TurnInput): TurnPlan {
         // takes it (named neutrally, intake's title rule), as it did before redo words were read.
         if (reading.redo && asksForNewDesign(words)) return { kind: 'open', text: words, instructionOnly: true };
         const h = classifyWithHeuristics(words, false, false);
-        if (h.kind === 'new_brief') return { kind: 'open', text: words, instructionOnly: true };
+        // Conversation fuzz (2026-10-03, J1/J3): a change with nothing on the way ("make the text bold" just after the
+        // chat's design was cancelled, "use blue instead" while the bot waits to hear who a brief is for) opened a new
+        // request for a designer, named by the change ("A designer will make make the text bold"; "change the date to 5
+        // November" titled "Change the Date to"). A change is no brief: its words go to the office, as words the rules
+        // cannot place do (hunt 3, `unplacedWithNothingOnTheWay`). Only one with a subject of its own and that subject's
+        // copy ("use these for the science fair poster, 12 October 2026 at the Erbil hall", with an album) opens, as before.
+        const core = corePhrase(words);
+        if (h.kind === 'new_brief' && carriesBriefCopy(core) && (OWN_SUBJECT_EN.test(core) || OWN_SUBJECT_CKB.test(core))) return { kind: 'open', text: words, instructionOnly: true };
+        if (h.kind === 'new_brief') return { kind: 'forward', words };
         // ADR-182: "can you make videos?" reads like a change but asks the office a question.
         return isPlainQuestion(words) ? { kind: 'forward', words, question: true } : { kind: 'conversation' };
       }

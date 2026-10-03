@@ -201,9 +201,9 @@ describe('hunt 3 / K1: a cancel with its reason never opens a new request', () =
   const QA = 'KAAE: Quality Assurance Workshop';
   it.each(["ok so the workshop got cancelled, we don't need that poster anymore, sorry for the trouble",
     "we don't need the poster anymore because the seminar was postponed, thanks anyway",
-    'unfortunately the training was called off, please cancel the poster'])('"%s" withdraws the design it names', (words) => {
+    'unfortunately the training was called off, please cancel the poster'])('"%s" asks about the design it names (conversation fuzz, J2)', (words) => {
     for (const stage of ['designing', 'in_review'] as const) {
-      expect(plan(words, [view('A', stage, QA)]), stage).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+      expect(plan(words, [view('A', stage, QA)]), stage).toMatchObject({ kind: 'ask', intent: 'cancel', allowNew: false, options: [{ requestId: 'A' }] });
     }
     expect(plan(words)).not.toMatchObject({ kind: 'open' });
   });
@@ -256,9 +256,9 @@ describe('hunt 3 / S1: an event word in a long sentence is no brief by itself', 
 describe('hunt 3 / K2: Sorani cancels with their reason, and a Sorani wait (needs native review)', () => {
   const QA = 'KAAE: Quality Assurance Workshop';
   // "The party was cancelled, we don't need the poster": it was asked "a change, or a new design?".
-  it('"the event was cancelled, we do not need the poster" withdraws the design', () => {
+  it('"the event was cancelled, we do not need the poster" asks about the design (J2)', () => {
     const words = 'ئاهەنگەکە هەڵوەشایەوە، پێویستمان بە پۆستەرەکە نییە';
-    expect(plan(words, [view('A', 'designing', QA)])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+    expect(plan(words, [view('A', 'designing', QA)])).toMatchObject({ kind: 'ask', intent: 'cancel', options: [{ requestId: 'A' }] });
   });
   // "Please wait until we set the place": a pause, never a new request.
   it('"please wait until we set the place" pauses the design', () => {

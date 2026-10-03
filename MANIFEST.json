@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T15:21:38Z",
+  "generatedAt": "2026-10-03T15:53:35Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1324,8 +1324,8 @@
     },
     {
       "path": "adrs/284_requester_intake_hunt3.md",
-      "sha256": "29734bd298726e4ee13ac771908217cfbdd11535f6e09765c573a59022e195e3",
-      "bytes": 41731
+      "sha256": "ec4f20b55100186aa445497d32fbea47506d73f63ecc7890c8adbaa85100fd30",
+      "bytes": 51833
     },
     {
       "path": "adrs/285_office_boundaries_after_bug_hunt_3.md",
@@ -3189,8 +3189,8 @@
     },
     {
       "path": "plans/nlu-eval-2026-10-02/BASELINE.json",
-      "sha256": "2edbab16a0118e86322abe0bbdff298f9e55a611ee9aea1f9fd6160f4da69228",
-      "bytes": 50298
+      "sha256": "c5cd88075944d6f97179a036fc7994a8574536b7b9aac6f2177841b800234192",
+      "bytes": 50973
     },
     {
       "path": "plans/nlu-eval-2026-10-02/MODEL_FIRST_RESULTS.md",
@@ -3719,8 +3719,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "cfec884c708beeaf61ce389954961d04d2edc8332c076168d306f24a046fad26",
-      "bytes": 921874
+      "sha256": "8766b6752a39b676b5f608534fba70f1264452277e43a8a4a3dcef92309e6800",
+      "bytes": 922997
     },
     {
       "path": "plans/user-stories.csv",

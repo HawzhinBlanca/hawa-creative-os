@@ -121,10 +121,14 @@ export function undoOfficeAlert(who: string, withdrawn: RecentWithdrawal, words:
     '', 'Their words:', words.length > 1500 ? `${words.slice(0, 1500)}…` : words, '', deskSearchLine([withdrawn.taskId])].join('\n');
 }
 
-/** The office's alert for an unhappy emoji on its own (ADR-252, friction 8). */
+/**
+ * The office's alert for an unhappy emoji on its own (ADR-252, friction 8), or words that only say the requester is
+ * not happy ("I don't like it", conversation fuzz 2026-10-03).
+ */
 export function unhappyOfficeAlert(who: string, latest: ChatRequestView | null, words: string): string {
-  return [latest ? `${who} sent an emoji that says they are not happy, after "${shortTitle(latest.title)}". Nothing was changed; please ask them in the chat what is wrong.`
-    : `${who} sent an emoji that says they are not happy, with no design open in the chat. Nothing was changed; please ask them in the chat what is wrong.`,
+  const said = /\p{L}/u.test(words) ? 'wrote that they are not happy' : 'sent an emoji that says they are not happy';
+  return [latest ? `${who} ${said}, after "${shortTitle(latest.title)}". Nothing was changed; please ask them in the chat what is wrong.`
+    : `${who} ${said}, with no design open in the chat. Nothing was changed; please ask them in the chat what is wrong.`,
   '', 'Their message:', words, ...(latest ? ['', deskSearchLine([latest.currentTaskId])] : [])].join('\n');
 }
 

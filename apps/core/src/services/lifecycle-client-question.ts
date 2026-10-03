@@ -60,7 +60,8 @@ export interface ClientQuestion {
   sourceUpdate?: unknown;
 }
 
-export type ClientAnswerOutcome = 'client' | 'office' | 'unmatched' | 'expired' | 'timeout';
+/** `withdrawn` (conversation fuzz, 2026-10-03): the requester cancelled the kept brief, asked first; it never opens. */
+export type ClientAnswerOutcome = 'client' | 'office' | 'unmatched' | 'expired' | 'timeout' | 'withdrawn';
 export interface ClientResolution { byUpdateId: number; outcome: ClientAnswerOutcome; clientId?: string }
 
 async function readRow<T>(trx: Tx, tenantId: string, kind: string, id: string): Promise<T | null> {
@@ -119,7 +120,10 @@ export async function answeredUpdateOf(trx: Tx, tenantId: string, replyMessageId
 }
 
 /** "I don't know", "not sure", "just make it", in English or Sorani: the office chooses. */
-const DONT_KNOW = /^(?:(?:i|we)\s+)?(?:(?:don'?t|do\s+not|dont)\s+know|not\s+sure|no\s+idea|no\s+clue|unsure)\b|^(?:just\s+(?:make|do|design)\s+it|(?:it\s+)?doesn'?t\s+matter|whatever|any(?:one)?|skip\s+it)\b|نازانم|نازانین|دڵنیا\s*نیم|گرنگ\s+نییە|(?:تەنها|هەر)\s+دروستی\s+بکە/iu;
+// Conversation fuzz (2026-10-03): "any update?" and "any news on the poster?" began with "any", were read as "anyone"
+// (the office chooses), and opened the kept brief for the office. "Any" answers alone; "anyone", "whatever" as before,
+// but never before "update", "news" or "progress".
+const DONT_KNOW = /^(?:(?:i|we)\s+)?(?:(?:don'?t|do\s+not|dont)\s+know|not\s+sure|no\s+idea|no\s+clue|unsure)\b|^(?:just\s+(?:make|do|design)\s+it|(?:it\s+)?doesn'?t\s+matter|skip\s+it)\b|^(?:whatever|any\s*one)\b(?!\s+(?:update|news|progress|word|idea)s?\b)|^any[\s.!]*$|نازانم|نازانین|دڵنیا\s*نیم|گرنگ\s+نییە|(?:تەنها|هەر)\s+دروستی\s+بکە/iu;
 /** Words that ask for a design (a design noun, a date or a number): a brief, not an answer. */
 const NAMES_A_DESIGN = /\b(?:poster|flyer|banner|design|invitation|invite|card|post|story|brochure|certificate|announcement|graphic|cover|leaflet|thumbnail|advert)s?\b|پۆستەر|پۆست|دیزاین|بانگهێشت|\p{N}/iu;
 export const saysDontKnow = (text: string) => text.trim().split(/\s+/).length <= 8 && DONT_KNOW.test(text.trim());

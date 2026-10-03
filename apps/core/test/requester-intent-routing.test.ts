@@ -232,11 +232,15 @@ describe('a message while designs are open', () => {
   // ADR-230 (changed deliberately): a cancel used to be a note for the office that closed nothing. While
   // nothing is approved, intake now decides a withdraw (RequestLifecycle closes the request, after Core
   // checks this decision); once approved, the cancel is kept for the office and the requester is told the truth.
-  it('"cancel the poster" in review is decided as a withdraw; once approved it is kept for the office, told truthfully', async () => {
+  it('"cancel the poster" in review is asked about, and "yes" decides a withdraw; once approved it is kept for the office, told truthfully', async () => {
     const chat = chatId();
     const request = await seed(chat, 'in_review', 2, { title: 'Nawroz poster' });
-    const answer = await intake(app(), message(chat, 'please cancel the poster'));
-    expect(answer).toMatchObject({ lifecycleAction: 'withdraw', requestId: request.requestId, requestStage: 'in_review', intent: 'cancel' });
+    // Conversation fuzz (2026-10-03, J2): a cancel that names its design is asked about first, as one that names nothing.
+    const asked = await intake(app(), message(chat, 'please cancel the poster'));
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true, chatAnswer: { text: 'Do you want me to cancel <b>Nawroz poster</b>?' } });
+    expect(await requestRow(request.requestId)).toMatchObject({ stage: 'in_review' });
+    const answer = await intake(app(), message(chat, 'yes'));
+    expect(answer).toMatchObject({ lifecycleAction: 'withdraw', requestId: request.requestId, requestStage: 'in_review' });
     expect(answer.chatAnswer).toBeUndefined();
     expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, request.requestId))).toHaveLength(0);
     // Intake decides; the request object closes it.

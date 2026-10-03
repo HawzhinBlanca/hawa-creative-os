@@ -299,10 +299,14 @@ describe('F10: status questions and cancellations while a design is being made',
     const chat = chatId();
     await seedRequest(chat, 'designing', 2);
     const answer = await intake(app(), message(chat, { text: 'cancel that' }));
-    // ADR-230 (changed deliberately): the cancel withdraws the request. Intake decides it; RequestLifecycle
-    // closes the request and says "Cancelled …" (request-withdraw.test.ts), so Core itself says nothing here.
-    expect(answer.body).toMatchObject({ lifecycleAction: 'withdraw', intent: 'cancel' });
-    expect(saidTo(chat, sent, answer.body)).not.toMatch(/hello|what would you like/i);
+    // Conversation fuzz (2026-10-03, J2): asked first ("Do you want me to cancel …?"); only "yes" withdraws it. Intake
+    // decides the withdraw; RequestLifecycle closes the request and says "Cancelled …" (request-withdraw.test.ts).
+    expect(answer.body).toMatchObject({ lifecycleAction: 'chat-answer', intent: 'cancel', choiceRequired: true });
+    expect(saidTo(chat, sent, answer.body)).toMatch(/Do you want me to cancel/);
+    const yes = message(chat, { text: 'yes' });
+    const confirmed = await intake(app(), yes);
+    expect(confirmed.body).toMatchObject({ lifecycleAction: 'withdraw' });
+    expect(saidTo(chat, sent, confirmed.body)).not.toMatch(/hello|what would you like/i);
   });
 });
 

@@ -44,7 +44,7 @@ import { deferMessage, pendingHeldBrief, readDeferral, releaseDeferral, overdueD
   claimPhoto, holdPhoto, markPhotoAsked, pendingEditWords, readHeldPhoto, readMediaAnswer, recordMediaAnswer,
   waitingPhotos } from '../services/lifecycle-media-intake.js';
 import { createEditIntake } from '../services/lifecycle-edit-intake.js';
-import { CLIENT_QUESTION_MESSAGES, INBOX_MESSAGES, INTAKE_LIMIT_MESSAGES, MEDIA_MESSAGES, ROUTING_MESSAGES, LIFECYCLE_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
+import { CLIENT_QUESTION_MESSAGES, INBOX_MESSAGES, INTAKE_LIMIT_MESSAGES, MEDIA_MESSAGES, ROUTING_MESSAGES, LIFECYCLE_MESSAGES, WITHDRAW_MESSAGES, bold, requesterLang, say } from '@hawa/integrations';
 import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot, type AlbumOutcome,
   albumSettleMs, bindTextToAlbum, briefPhotoWaitMs, heldBriefReplay, holdBrief, isHeldBrief, overdueSettles, settleAlbum,
@@ -69,7 +69,8 @@ import { askText, conflictOfficeAlert, designName, forwardOfficeAlert, forwardTe
   opensForAPerson, readIntentByRules, readsAsBriefContinuation, redoText, requestLabel, shortTitle, slowDesignOfficeAlert, slowDesigns, statusText, tellOfficeAlert,
   requesterName, spokenStage, whoWrote,
   tellText, thanksText, waitsForRequester,
-  withoutBotMentions, type ChatRequestView, type IntentReading, type TurnPlan } from '../services/requester-turn.js';
+  withoutBotMentions, keepsIt, parseChoice, type ChatRequestView, type IntentReading, type PendingAsk, type TurnPlan } from '../services/requester-turn.js';
+import { spokenTitle } from '../services/request-title.js';
 import { briefPartSeconds, briefParts, joinBriefPart, joinedWords, readBriefPart } from '../services/lifecycle-brief-parts.js';
 import { officeChatFor, officeChatsFor, withOfficeAlerts } from '../services/office-chats.js';
 import { WITHDRAWABLE_STAGES, nothingToCancelText, projectLifecycleWithdraw, recordWithdrawnOutcome, withdrawTooLateText, type WithdrawActor } from '../services/lifecycle-withdraw.js';
@@ -168,6 +169,18 @@ function revisionBlockedAlert(chatId: string, code: string, update: UpdateLike):
     '', 'Their words:', (words.length > 1500 ? `${words.slice(0, 1500)}…` : words) || '(a photo or file, in the chat)'].join('\n') };
 }
 
+
+/**
+ * Conversation fuzz (2026-10-03): the name of a brief kept for the "who is it for?" answer, as the requester would say
+ * it: its event ("Nawroz Celebration") in English, else "your design" in their language (`title`: at a sentence's start).
+ */
+function keptBriefName(words: string, lang: 'en' | 'ckb', title = false): string {
+  const line = String(words).split(/\n/).find((l) => l.trim()) ?? '';
+  const name = lang === 'en' ? spokenTitle(line).trim() : '';
+  if (name && Array.from(name).length <= 60 && !/[?!]/.test(name)) return name;
+  const yours = say(LIFECYCLE_MESSAGES.yourDesign, lang);
+  return title && lang === 'en' ? yours.charAt(0).toUpperCase() + yours.slice(1) : yours;
+}
 
 export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   const { app, db, problem, verifyRequestAuth, channelKillSwitches } = ctx;
@@ -1220,6 +1233,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               }));
               // ADR-235: the answer to "who is this design for?" opens the kept brief, for the organisation named or
               // for the office to choose. Words that do not answer it are read as any message is.
+              // Conversation fuzz (2026-10-03): with the brief still waiting for that answer (`waiting`).
+              const waiting: { question: ClientQuestion | null } = { question: null };
               if (!priorIntent && !newCommand && !groupCommand && !mediaKind) {
                 const scope = senderScopeOf(update);
                 const kept = scope && await withRlsContext(db, system, async (trx) => {
@@ -1228,7 +1243,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   if (pending.resolution) return { question: pending.question, resolution: pending.resolution };
                   const repliedToQuestion = (await answeredUpdateOf(trx, TENANT, replyMessageId)) === pending.question.briefUpdateId;
                   const answer = await readClientAnswer(trx, TENANT, { question: pending.question, text, repliedToQuestion });
-                  if (!answer) return null;
+                  if (!answer) {
+                    waiting.question = pending.question;
+                    return null;
+                  }
                   const resolution = await resolveClientQuestion(trx, TENANT, pending.question.briefUpdateId, { byUpdateId: update.update_id, ...answer });
                   return resolution.byUpdateId === update.update_id ? { question: pending.question, resolution } : null;
                 });
@@ -1251,6 +1269,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     ...(office ? { officeAlert: { chatId: office, text: `The requester says "${title}" is for ${late.client}. ` +
                       'It was passed to you because they had not said who it was for; please assign it in the Desk.' } } : {}) });
                 }
+                // A kept brief the requester withdrew (below) never opens; this update said so already.
+                if (kept && kept.resolution.outcome === 'withdrawn') {
+                  const lang = requesterLang(text, requesterLang(kept.question.words));
+                  return handled(200, { lifecycleAction: 'chat-answer', chatId, duplicate: true,
+                    chatAnswer: { text: say(WITHDRAW_MESSAGES.withdrawn, lang, { title: bold(keptBriefName(kept.question.words, lang)) }), parseMode: 'HTML' } });
+                }
                 if (kept) {
                   const { question, resolution } = kept;
                   // Answered in the language of the answer (an English brief may be answered in Sorani).
@@ -1268,6 +1292,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               }
               let reading: IntentReading;
               let plan: TurnPlan;
+              let askedAboutBrief: PendingAsk | null = null;
               if (priorIntent) {
                 reading = priorIntent.reading;
                 plan = priorIntent.plan;
@@ -1295,8 +1320,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     !(reading.intent === 'new_brief' && reading.explicitNew)) {
                   return handled(503, { code: 'REQUEST_OPENING', chatId });
                 }
-                const pendingAsk = await withRlsContext(db, system, (trx) =>
+                const asked = await withRlsContext(db, system, (trx) =>
                   pendingAskFor(trx, TENANT, chatId, senderId, update.update_id, bindings.askUpdateId));
+                // Conversation fuzz: "Do you want me to cancel …?" about a kept brief names no request; the planner never sees it.
+                askedAboutBrief = asked?.intent === 'cancel' && asked.options.length === 1 && asked.options[0].requestId.startsWith('brief:') ? asked : null;
+                const pendingAsk = askedAboutBrief ? null : asked;
                 const input = { text, reading, requests, bound: bindings.requestIds,
                   unboundReply: Boolean(replyMessageId) && bindings.requestIds.length === 0 && !bindings.askUpdateId,
                   senderId, officeIds: ctx.telegramAllowedUsers, group, addressed, pendingAsk, now: Date.now(),
@@ -1382,6 +1410,41 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               };
               const chatAnswer = (words: string, extra: Record<string, unknown> = {}) =>
                 ({ lifecycleAction: 'chat-answer', chatId, chatAnswer: { text: words, parseMode: 'HTML' }, intent: reading.intent, ...extra });
+              /**
+               * Conversation fuzz (2026-10-03): a brief kept while the bot waits to hear who it is for (ADR-235) is not a
+               * request yet, so the planner cannot see it. "Is it ready?" was told "I don't have a design in progress"; a
+               * cancel was told "There's nothing open for me to cancel", and the brief still opened for the office when
+               * the question timed out. Now a status question hears the brief waits for that answer; a cancel is asked
+               * about ("Do you want me to cancel …?") and only "yes" withdraws the kept brief, which then never opens.
+               */
+              if (!priorIntent && !mediaKind && (waiting.question || askedAboutBrief)) {
+                const brief = waiting.question;
+                const option = brief ? `brief:${brief.briefUpdateId}` : null;
+                const name = (title: boolean) => bold(keptBriefName(brief?.words ?? '', lang, title));
+                if (askedAboutBrief && brief && askedAboutBrief.options[0].requestId === option) {
+                  if (keepsIt(text)) {
+                    plan = { kind: 'reply', what: 'status', requestIds: [] };
+                    return await decided(200, chatAnswer(say(ROUTING_MESSAGES.statusAwaitingAnswer, lang, { title: name(true), question: brief.text })));
+                  }
+                  const choice = parseChoice(text, askedAboutBrief);
+                  if (choice && 'option' in choice && choice.option === 0) {
+                    const won = await withRlsContext(db, system, (trx) =>
+                      resolveClientQuestion(trx, TENANT, brief.briefUpdateId, { byUpdateId: update.update_id, outcome: 'withdrawn' }));
+                    if (won.byUpdateId === update.update_id) {
+                      plan = { kind: 'reply', what: 'nothing-to-cancel', requestIds: [] };
+                      return await decided(200, chatAnswer(say(WITHDRAW_MESSAGES.withdrawn, lang, { title: name(false) }), { withdrawnBrief: brief.briefUpdateId }));
+                    }
+                  }
+                }
+                // Words that answer neither question are read as usual; these two are about the waiting brief.
+                if (brief && plan.kind === 'reply' && plan.what === 'status' && !plan.requestIds.length) {
+                  return await decided(200, chatAnswer(say(ROUTING_MESSAGES.statusAwaitingAnswer, lang, { title: name(true), question: brief.text })));
+                }
+                if (brief && option && plan.kind === 'reply' && plan.what === 'nothing-to-cancel') {
+                  plan = { kind: 'ask', intent: 'cancel', words: text, options: [{ requestId: option, title: keptBriefName(brief.words, lang, false) }], allowNew: false };
+                  return await decided(200, chatAnswer(say(WITHDRAW_MESSAGES.askCancel, lang, { title: name(false) }), { choiceRequired: true }));
+                }
+              }
               if (!priorIntent && (plan.kind === 'open' || plan.kind === 'revise' || plan.kind === 'redo' || plan.kind === 'conversation')) {
                 // The side effect has its own receipt; this one keeps the reading for the next replay.
                 const stored = await withRlsContext(db, system, (trx) => recordIntentReceipt(trx, TENANT, receipt()));
