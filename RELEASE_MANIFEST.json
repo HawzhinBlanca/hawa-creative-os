@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-03T15:48:48+03:00",
+  "generatedAt": "2026-10-03T16:50:03+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,10 +20,10 @@
     ]
   },
   "build": {
-    "commit": "d0ceba4674018f29a4eb266d48b5bd51939d6132",
+    "commit": "fd1f389e8ab8a3b18add711deebe5f24130886d4",
     "treeClean": true,
-    "commitTimestamp": "2026-10-03T15:48:48+03:00",
-    "branch": "claude/release-2"
+    "commitTimestamp": "2026-10-03T16:50:03+03:00",
+    "branch": "claude/release-3"
   },
   "migrations": {
     "targetVersion": "089_customer_acceptance_downloads",
@@ -39,8 +39,8 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "7870fe7a11fbf60032f45a0800c17be1e814182a029aa4ad1c2fd82e7eb5f86d",
-        "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
+        "apps/core/src/app.ts": "38fead102c569854a46409e8819e770227b2067377b79dbd621c6ea64f386c4c",
+        "apps/core/src/index.ts": "41f4bebe0173880eb3cb889982ae8e9f52bb89601e2440b4657e173f3fc5e32f",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
     },
@@ -48,7 +48,7 @@
       "service": "desk",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/desk/src/App.tsx": "70f13e5ed68268922f6d68dceb62d5bddd74d7eb8b0d72535496ec0d0de3507f",
+        "apps/desk/src/App.tsx": "9da0c9cc217911eab90c01ef9a6973855cd88ee2f4e125b9eedabc17d2660d5e",
         "apps/desk/src/main.tsx": "ee234aa0846b3baa9aed56ba633e50ff95f0d039343d052a8a7d7860feffa8c8"
       }
     },
@@ -56,7 +56,7 @@
       "service": "worker",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "b0e6a32e1b5e410979fca6a08a0af00c6f6bdb9b9d2461c134fda57dc2c51947"
+        "apps/worker/src/index.ts": "0b2764a51b5f5e92022dfdef88a49eacfb9cc60b67bdd3bb963000372b580654"
       }
     }
   },
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "72d38a698d3c5667853a0c9d3fb9447b7e02e225fd6dc01434bbd6b74ade26bd"
+  "sha256": "8fcc01d74e30ca3d5da4bfa1647913dcf5d366587fdc191ae73c4d08280dd7f0"
 }
