@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T08:34:00Z",
+  "generatedAt": "2026-10-03T08:50:02Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 912,
+  "fileCount": 913,
   "files": [
     {
       "path": ".dockerignore",
@@ -1304,8 +1304,8 @@
     },
     {
       "path": "adrs/277_native_workspace_invalid_token_errors.md",
-      "sha256": "9de44f2af4d6cf4336f1f6accdf060b5bdb0dbb6dc781bd31f8c4ce5d793ab5a",
-      "bytes": 1928
+      "sha256": "ed748659232bf7a87ff9b6e976ab3c18b6f23737f6815a2875ed4b0c0a9e6b35",
+      "bytes": 2332
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2353,14 +2353,19 @@
       "bytes": 16078
     },
     {
+      "path": "plans/hawzhin-app-integration-2026-10-02/NATIVE_CUSTOMER_CORE_PROOF.json",
+      "sha256": "df3faf7db71da4f33b65794fadf6bbabd700d1710a840c935d4e04f152de15ee",
+      "bytes": 4087
+    },
+    {
       "path": "plans/hawzhin-app-integration-2026-10-02/PHOTO_ADMISSION_PROOF.json",
       "sha256": "3605b82334e9375937fd6dea6bd2fd64220de0dd93bbec4b47de0f3b966cce2e",
       "bytes": 4235
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/PLAN.md",
-      "sha256": "69552b9541b0cd5d4621ce798200b988a41d5f49b359dfaa0f2c4cf43843ae26",
-      "bytes": 22274
+      "sha256": "b66200622ed8223f022ce362b567117bade0a0f77adfa94c4cf6c1f8346b1f77",
+      "bytes": 23504
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/WEBSITE_CI_PROOF.json",
@@ -3584,8 +3589,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "6de4091429114db8851c9abb46d05c3e586cfba70008664bfa56cb47a07eca70",
-      "bytes": 904069
+      "sha256": "20b83183e8c29b7890f13ccf7db5dd6e2af789f32a09ba3aef6d52cf8b1f0635",
+      "bytes": 904845
     },
     {
       "path": "plans/user-stories.csv",

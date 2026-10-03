@@ -227,3 +227,23 @@ and actual current-file downloads are now locally qualified. Cross-lane integrat
 of Claude designint01b3e243 (ADR271/273/274/275), existing release gates,
 hosting/HTTPS/restore and hosted two-user/native RTL/edit-save/reexport/restart/
 other-app/human quality remain open; no deployment or public switch.
+
+
+## ADR277 real managed identity/Core boundary — 2026-10-03
+
+Website ADR0019 provisions a fresh owned vendor fixture automatically:126 website
+migrations and25 actual Auth/REST/private Storage checks pass. An independent
+engine DB applies89 upgrades through the production runner. Actual Auth-issued
+tokens traverse production createApp HTTP/native access RPC and restricted
+hawa_app RLS.20 controls pass: two accounts/brands, request read isolation,
+workspace/account revocation, office-key refusal, CORS and the closed generation/
+upload guard. Direct repository receipt seeding is not public generation/design.
+
+Native19/1 exposed invalid signature Auth403 bad_jwt misclassified as503. ADR277
+maps only that bounded identity error to401. Contract red33/1 then113/0 and757
+strict roots/types/lint/egress/ratchet pass. Prior full8,277/0/67 is not rerun.
+All owned Core/DB/roles/vendor resources/private files are removed; ten prior
+container IDs/states unchanged. NATIVE_CUSTOMER_CORE_PROOF.json records scope.
+No production write, push, deployment or paid call. Hosted TLS/DNS/browser login/
+upload, generation/worker/native Canva/quality, coverage/remote CI/restore/hosting/
+cutover remain open. Full app goal stays active.

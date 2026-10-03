@@ -1,6 +1,6 @@
 # ADR277 — Native workspace invalid-token errors
 
-Date: 2026-10-03. Status: selected; qualification in progress.
+Date: 2026-10-03. Status: locally qualified; public customer release open.
 Requirements: NFR-006/012/024/025, FR-069. Sources: MASTER_SPEC.md;
 docs/14_SECURITY_THREAT_MODEL.md; ADR256/259/260; current workspace verifier.
 
@@ -28,3 +28,9 @@ not qualify hosted TLS/DNS, browser login/upload, customer generation, the worke
 design pipeline, native Canva or human design quality. Direct repository receipt
 seeding is only read-isolation evidence. Keep the production factory's ADR260
 generation/upload guard closed. No public release or authentication relaxation.
+
+Measured: native baseline19pass/1fail, repaired20pass/0fail on sourcefebe647c;
+contract red33pass/1fail then113pass/0fail across workspace/customer contracts.
+All757 strict roots and production/script types pass; lint/egress and ratchet
+957<=1053 pass. Prior full8,277/0/67 is retained, not rerun here. See
+plans/hawzhin-app-integration-2026-10-02/NATIVE_CUSTOMER_CORE_PROOF.json for scope.

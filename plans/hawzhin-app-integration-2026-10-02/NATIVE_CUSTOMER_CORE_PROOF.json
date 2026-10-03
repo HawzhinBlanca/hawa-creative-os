@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-03",
+  "status": "NATIVE_AUTH_CORE_BOUNDARY_LOCALLY_QUALIFIED_FULL_APP_OPEN",
+  "testedEngineCommit": "febe647c",
+  "parentEngineCommit": "1a4a6c54",
+  "requirements": [
+    "NFR-006",
+    "NFR-012",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "qualification": {
+    "nativeCore": {
+      "passed": 20,
+      "failed": 0,
+      "baselinePassed": 19,
+      "baselineFailed": 1,
+      "engineMigrations": 89
+    },
+    "contracts": {
+      "passed": 113,
+      "failed": 0,
+      "skipped": 0,
+      "redPassed": 33,
+      "redFailed": 1
+    },
+    "types": {
+      "exitCode": 0,
+      "strictTestRoots": 757
+    },
+    "lint": {
+      "exitCode": 0,
+      "any": 957,
+      "ceiling": 1053,
+      "providerEgress": "PASS"
+    }
+  },
+  "repair": "Only bounded Auth403 error_code=bad_jwt becomes401; unknown/RPC/oversized/outage errors stay503. Pinned issuer and generation guard unchanged.",
+  "scope": [
+    "Actual vendor Auth-issued JWT/native access RPC",
+    "Current production createApp native HTTP",
+    "Restricted hawa_app without SUPERUSER/BYPASSRLS",
+    "Separate member accounts/brands and request read isolation",
+    "Current workspace and Core account revocation",
+    "Office-key and foreign-origin refusal"
+  ],
+  "limits": [
+    "Test-only exact-origin projection to native owned Kong, not hosted TLS/DNS",
+    "Direct repository receipt seeding, not browser create/generation/design",
+    "New Core instance, not full process/worker/provider restart",
+    "Cached pinned native runtime with rebuilt current JS, not new production image qualification",
+    "Full previous8277/0/67 retained, not rerun",
+    "Website coverage fails; full hosted Designer/Canva/RTL/quality/CI/restore/hosting/cutover open"
+  ],
+  "cleanup": {
+    "ownedContainersRemoved": 6,
+    "ownedNetworksRemoved": 2,
+    "allCoreAttemptsRemoved": true,
+    "priorContainerStatesUnchanged": 10,
+    "privateFilesRemoved": [
+      "customer-core-private.log",
+      "customer-core-attempt-6-customer-core-private.log",
+      "customer-core-attempt-3-customer-core-private.log",
+      "customer-core-attempt-4-customer-core-private.log",
+      "customer-core-attempt-5-customer-core-private.log",
+      "customer-core-attempt-4-customer-core-error-private.log",
+      "local-private.json"
+    ]
+  },
+  "rollout": {
+    "productionWrites": false,
+    "push": false,
+    "deploy": false,
+    "paidCalls": false,
+    "customerGeneration": false,
+    "goal": "active"
+  },
+  "sourceHashes": {
+    "apps/core/src/customer/supabase-member.ts": "d5eb3a190dcc1f4a5b0a48510b6532eeb30501a13e24da53b570dc02dc3faadd",
+    "apps/core/test/workspace-member.test.ts": "7b7e0c0816b90ba15f2a89c41cc6f11b1dfbfc742f1f050502e2974d39d529e4",
+    "apps/core/src/app.ts": "504106a65e3aa9db612295afa858ae2aa915a98d2c589c19215e18f11fba5321",
+    "adrs/277_native_workspace_invalid_token_errors.md": "ed748659232bf7a87ff9b6e976ab3c18b6f23737f6815a2875ed4b0c0a9e6b35",
+    "plans/hawzhin-app-integration-2026-10-02/PLAN.md": "b66200622ed8223f022ce362b567117bade0a0f77adfa94c4cf6c1f8346b1f77",
+    "plans/traceability.csv": "20b83183e8c29b7890f13ccf7db5dd6e2af789f32a09ba3aef6d52cf8b1f0635"
+  },
+  "reportHashes": {
+    "output/qualification/2026-10-03-customer-core/contracts-green.json": "1903df641f087e36e7c96a3c8596b265619eb44002e17fff1170cd2ebca7748a",
+    "output/qualification/2026-10-03-customer-core/native-auth-bad-jwt.json": "884f421ff626bb865acba1456201cbc880e7a3974dd9a07c922718fc1dc3a769",
+    "output/qualification/2026-10-03-customer-core/customer-core-result.json": "cfa21a53c118965c2e88d4b2bf871ce2dfe1a4214a8cbbe2659edbfad91949bf",
+    "output/qualification/2026-10-03-customer-core/workspace-red.json": "6e908536228ec91805cb8f596de440cec2cfd6d32710d38f12f3868439eb4ffa",
+    "output/qualification/2026-10-03-customer-core/customer-core-cleanup.json": "ffd8a1b3e002d72e43e50aa4b02da2894477e76fd14157289f66367e20f11618",
+    "output/qualification/2026-10-03-customer-core/customer-core-attempt-5-customer-core-result.json": "6d2b835136ca08cb6255820a3005c6e6e4e482a9fa3f1f73c7ee57955f1de73e"
+  }
+}
