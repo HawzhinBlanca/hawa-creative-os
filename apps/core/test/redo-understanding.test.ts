@@ -101,11 +101,12 @@ describe('redo words are about the requester\'s most recent design', () => {
     expect(planTurn(turn('a new one', [k12], { pendingAsk: pending }))).toMatchObject({ kind: 'open', text: 'do a better design for the conference' });
   });
 
-  it('a sure intake-router reading names the design; an unsure one is asked about', () => {
+  it('an intake-router reading names the design to ask about; sure or not, it never redoes it by itself (ADR-286)', () => {
     const k12 = request();
     const model = (confidence: number) => ({ intent: 'change' as const, reason: 'router', source: 'model' as const,
       requestId: k12.requestId, confidence, redo: 'or-new' as const });
-    expect(planTurn(turn('do a better design for the conference', [k12], { reading: model(0.9) }))).toMatchObject({ kind: 'redo' });
+    expect(planTurn(turn('do a better design for the conference', [k12], { reading: model(0.9) })))
+      .toMatchObject({ kind: 'ask', redo: 'or-new', options: [{ requestId: k12.requestId }] });
     expect(planTurn(turn('do a better design for the conference', [k12], { reading: model(0.7) }))).toMatchObject({ kind: 'ask', redo: 'or-new' });
   });
 

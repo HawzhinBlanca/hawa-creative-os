@@ -44,8 +44,20 @@ export interface KurdishWebFontPackage {
  * Includes explicit unicode-range subsetting and diacritic metric overrides to eliminate
  * clipping of vertical diacritics (ێ, ڵ, ڕ, ۆ).
  */
+/**
+ * A font family name the stylesheet can carry as is: letters (any script), marks, digits, space,
+ * underscore, dot and hyphen, at most 64 characters. Nothing in it can close a CSS comment or string
+ * (bug hunt 3: a name holding `*\/` added rules to a year-cached stylesheet).
+ */
+export function isSafeFontFamilyName(name: string): boolean {
+  return /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} _.-]{0,63}$/u.test(name);
+}
+const cssFamily = (name: string) => name.normalize('NFC').replace(/[^\p{L}\p{M}\p{N} _.-]/gu, '').trim().slice(0, 64);
+const cssUrl = (url: string) => url.replace(/['"()\\\s]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase());
+
 export function generateKurdishFontFaceCss(options: KurdishFontFaceOptions): string {
-  const family = options.fontFamily.trim().replace(/['"]/g, '');
+  // Defence in depth: the route refuses unsafe names; whatever reaches here is reduced to safe characters.
+  const family = cssFamily(options.fontFamily);
   const weight = options.weight ?? '400 700';
   const style = options.style ?? 'normal';
   const display = options.display ?? 'swap';
@@ -53,7 +65,7 @@ export function generateKurdishFontFaceCss(options: KurdishFontFaceOptions): str
 
   const srcParts: string[] = [];
   if (options.fontUrl) {
-    srcParts.push(`url('${options.fontUrl}') format('${format}')`);
+    srcParts.push(`url('${cssUrl(options.fontUrl)}') format('${format}')`);
   }
   srcParts.push(`local('${family}')`);
   if (options.includeFallbacks !== false) {

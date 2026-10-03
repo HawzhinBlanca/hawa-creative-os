@@ -134,6 +134,23 @@ describe('which client a request belongs to', () => {
     expect(match('canary testing day')).toBe('none');
   });
 
+  it('names a client by its own full name, as a whole name (brief phrasing fuzz, 2026-10-03, class 8)', () => {
+    expect(match('It is for the Kurdistan Accrediting Association for Education.')).toBe('named:kaae');
+    expect(match('a flyer for Kurdistan Accrediting Association for Education')).toBe('named:kaae');
+    expect(match('kurdistan accrediting\nassociation for education')).toBe('named:kaae');
+    expect(match('the Kurdistan-Accrediting Association for Education conference')).toBe('named:kaae');
+    expect(match("the Kurdistan Accrediting Association's annual conference")).toBe('named:kaae');
+    // Part of the name is not the name; nor is a name with another word inside it.
+    expect(match('the Kurdistan Association of Engineers dinner')).toBe('none');
+    expect(match('Kurdistan Association for Education')).toBe('none');
+    expect(match('Kurdistan Accrediting body')).toBe('none');
+    // Every pack's name routes, not only KAAE's: a name the aliases leave out still names its client.
+    const zar = packs.find((p) => p.code === 'zar-podcast')!;
+    const renamed = packs.map((p) => (p === zar ? { ...p, names: { en: 'Zar Talks Weekly' }, routing: { ...p.routing, latinAliases: ['zarpodcast'] } } : p));
+    expect(match('thumbnail for zar talks weekly episode 4', undefined, renamed)).toBe('named:zar-podcast');
+    expect(match('thumbnail for zar talks', undefined, renamed)).toBe('none');
+  });
+
   it('routes nowhere when a message names two clients', () => {
     expect(match('KAAE interview on Erbil Edition')).toBe('ambiguous:erbil-edition,kaae');
   });
@@ -171,6 +188,11 @@ describe('a pack that breaks the rules is refused at load', () => {
   it('when two packs claim the same word', () => {
     const clash = { ...zar, routing: { ...zar.routing, latinAliases: ['kaae'] } };
     expect(() => parseClientPacks([doc(kaae), doc(clash)])).toThrow(/alias "kaae" is claimed by both/);
+  });
+
+  it('when one pack\'s full name is another\'s alias', () => {
+    const clash = { ...zar, routing: { ...zar.routing, latinAliases: ['kurdistan accrediting association for education'] } };
+    expect(() => parseClientPacks([doc(kaae), doc(clash)])).toThrow(/is claimed by both/);
   });
 
   it('when two packs claim the same chat or id', () => {

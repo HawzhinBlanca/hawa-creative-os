@@ -5,8 +5,10 @@ export function orderedCustomerPhotos<T extends {sha256:string;media_type:string
   if(value===undefined) return refs;
   if(!value || typeof value!=='object' || Array.isArray(value)) throw new Error('Invalid customer photo manifest');
   const manifest=value as Record<string,unknown>;
-  if(manifest.v!==1 || !Array.isArray(manifest.images) || manifest.images.length<1 || manifest.images.length>20 || manifest.images.length!==refs.length)
+  if(manifest.v!==1 || !Array.isArray(manifest.images) || manifest.images.length>20 || manifest.images.length!==refs.length)
     throw new Error('Incomplete customer photo manifest');
+  // An empty manifest is a website request without photos; it binds that no request photo exists.
+  if(manifest.images.length===0) return [];
   const images=manifest.images.map(parseBlobRef);
   if(images.some(i=>!i || !['image/png','image/jpeg','image/webp'].includes(i.mediaType)) ||
     new Set(images.map(i=>i?.sha256)).size!==images.length || new Set(refs.map(r=>r.sha256)).size!==refs.length)

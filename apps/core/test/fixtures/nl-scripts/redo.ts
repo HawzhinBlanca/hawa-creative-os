@@ -114,7 +114,8 @@ export const REDO_SCRIPTS: Script[] = [
       await p.delivered(0);
       await p.delivered(1);
       const asked = await p.say('try again', { after: 30 * 60_000 });
-      expect(p.answer(asked)).toMatch(/^Which one should I redo\?\n1\. <b>KAAE members evening.*\n2\. <b>.*football/s);
+      expect(p.answer(asked)).toMatch(/^Which one should I redo\?\n1\. <b>KAAE members evening.*\n2\. <b>.*football/is);
+      // ADR-284 addendum: the football poster is now titled "KAAE Staff Football Tournament" (no date in the name).
       expect(p.revisions).toHaveLength(0);
       await p.say('the second one', { after: 30_000 });
       expect(p.revisions.map((r) => r.requestId)).toEqual([p.request(1)]);

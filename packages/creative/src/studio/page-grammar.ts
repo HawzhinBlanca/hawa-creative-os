@@ -12,10 +12,11 @@ import type {
 } from './layout-v2.js';
 import { HOUSE_RULES, getSafeZoneBox, logoClearZone, minLogoWidth, requiredContrast } from './house-rules.js';
 import { balancedBoxWidths, measureTextGeometry } from './render-layout-v2.js';
-import { calculateLuminanceContrastRatio, hexToLuminance } from './composite-contrast.js';
+import { calculateLuminanceContrastRatio, declaredTextContrast, hexToLuminance } from './composite-contrast.js';
 import { fillColoursUnder } from './shape-gradient.js';
 import { sunburstRadius } from './brand-elements.js';
 import { admitPageGrammarFromReference } from './page-grammar-admission.js';
+import { ALIGNMENT_POLICY, computeLayoutMetrics } from './layout-metrics.js';
 
 /**
  * ADR-238: a client's page grammar, read from its reference pack (`rules.pageGrammar`), and the
@@ -477,7 +478,10 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   const headerLogoShare = Math.max(g.header.logoWidthShare, g.poster?.logoWidthShare ?? 0);
   let lw = Math.max(minLogo, r((centred ? g.cover.logoWidthShare : cover ? 1.6 * headerLogoShare : headerLogoShare) * W));
   let lh = r(lw / aspect);
-  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < minLogo + 40) {
+  // Keep the official aspect within the 1% the validator allows after rounding (searched up from the
+  // header's own width: from the minimum, a header-sized wide logo never searched and failed LOGO).
+  const lw0 = lw;
+  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < lw0 + 40) {
     lw += 1;
     lh = r(lw / aspect);
   }
@@ -558,8 +562,10 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
       const colW = contentX + contentW - x0;
       const t = el(b, 'label', sizes.label, g.header.label.color, colW, b.arabic ? 'right' : 'right');
       const mm = measure(t, b.text);
-      if (mm.lines === 1 && colW > 0) {
-        const y = r(logo.y + logo.height / 2 - mm.height / 2);
+      // Centred on the logo's line, never above the safe margin nor over the header rule (a label
+      // taller than a wide, short logo's clear space is set in the flow instead).
+      const y = Math.max(safe.y, r(logo.y + logo.height / 2 - mm.height / 2));
+      if (mm.lines === 1 && colW > 0 && y + mm.height < ruleY) {
         text.push({ ...t, ...intBox({ x: x0, y, width: colW, height: mm.height }) });
         unitsToFlow.shift();
       }
@@ -730,6 +736,9 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   }
   const contentBottom = placed.length ? placed[placed.length - 1].bottom : flowTop;
   if (contentBottom > limit) return undefined;
+  // No block runs a word past its box (a long word, a URL): this scale cannot carry the copy, and hard
+  // QA's COPY_OVERFLOW would refuse the design.
+  for (const p of placed) for (const t of p.texts) if (measure(t, input.copy.text[t.copyIndex] ?? '').lineWidth > t.width + 2) return undefined;
   if (input.photo && !photoPlaced) return undefined;
   if (!finish) return {} as StudioLayoutV2;
 
@@ -803,6 +812,10 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   };
   balanceGrammarLines(layout, input);
   checkGrammarLayout(layout, clear);
+  // The composer promises hard QA's alignment check, as the poster composer does: a title-only
+  // sunburst cover's logo and gold bar ended on no line (0.667 against 0.70).
+  const alignment = computeLayoutMetrics(layout).alignmentScore;
+  if (alignment < ALIGNMENT_POLICY.passScore) throw new GrammarInfeasibleError(`alignment ${alignment} is under hard QA's ${ALIGNMENT_POLICY.passScore}`);
   return layout;
 }
 
@@ -838,7 +851,9 @@ export function checkGrammarLayout(layout: StudioLayoutV2, clear: Box): void {
     if (hit(t, clear)) throw new GrammarInfeasibleError(`copy block ${t.copyIndex} is in the logo's clear space`);
     for (const u of layout.text) if (u !== t && hit(t, u)) throw new GrammarInfeasibleError(`copy blocks ${t.copyIndex} and ${u.copyIndex} overlap`);
     const under = surfaceColoursUnder(layout, t);
-    const worst = Math.min(...under.map((c) => calculateLuminanceContrastRatio(hexToLuminance(t.color), hexToLuminance(c))));
+    // Hard QA's own declared check too (CONTRAST): it bounds a gradient by its channel envelope, which
+    // can read a little lower than the colours sampled under the box.
+    const worst = Math.min(declaredTextContrast(layout, t), ...under.map((c) => calculateLuminanceContrastRatio(hexToLuminance(t.color), hexToLuminance(c))));
     if (worst < requiredContrast(t.fontSize, Boolean(t.bold))) {
       throw new GrammarInfeasibleError(`copy block ${t.copyIndex} is ${worst.toFixed(2)}:1 on its surface`);
     }

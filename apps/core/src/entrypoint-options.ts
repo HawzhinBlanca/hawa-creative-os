@@ -34,6 +34,8 @@ export function productionAppOptions(env: Record<string, string | undefined> = p
     // Paid verification has a real recurring cost, so the operator opts in explicitly.
     enableBillingProbeSchedule: env.HAWA_BILLING_PROBE_ENABLED === 'on',
     enableCanvaSweeper: true,
+    // ADR-288: a free GET /users/me every ten minutes; HAWA_CANVA_READINESS_PROBE=off stops it.
+    enableCanvaReadinessProbe: env.HAWA_CANVA_READINESS_PROBE !== 'off',
     enableUncertainCallExpiry: true,
     enablePublicationInspections: env.HAWA_PUBLICATION_INSPECTIONS !== 'off',
   };

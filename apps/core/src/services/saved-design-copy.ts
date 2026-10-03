@@ -13,7 +13,8 @@ export function savedDesignCopyLocales(payload: unknown, copy: readonly string[]
   const p = object(outer.payload || outer);
   const body = object(p.body || p);
   const unknown = () => copy.map(() => 'und');
-  if (object(p.reviewedSource).confirmation === 'request_copy_reviewed') {
+  // ADR-287 addendum: a Desk PDF request's reviewed copy is its labelled Desk fields (below).
+  if (object(p.reviewedSource).confirmation === 'request_copy_reviewed' && !deskSeparatedCopy(body)) {
     const source = object(p.reviewedSource);
     if (source.origin !== 'customer_exact_copy' || source.localesConfirmedByRequester !== true || !Array.isArray(body.exactCopy)) return unknown();
     const blocks = body.exactCopy.map(object);
@@ -22,11 +23,20 @@ export function savedDesignCopyLocales(payload: unknown, copy: readonly string[]
   }
   const fields = object(p.sourceDocument).confirmation === 'request_copy_reviewed'
     ? ['copyEn', 'copyCkb']
-    : body.workflow === 'canva_manual' ? ['headlineEn', 'copyEn', 'headlineCkb', 'copyCkb'] : [];
+    : deskSeparatedCopy(body) ? ['headlineEn', 'copyEn', 'headlineCkb', 'copyCkb'] : [];
   const labelled = fields.filter(key => typeof body[key] === 'string' && (body[key] as string).trim())
     .map(key => ({ text: body[key], locale: key.endsWith('Ckb') ? 'ckb' : 'en' }));
   if (labelled.length !== copy.length || labelled.some((block, i) => block.text !== copy[i])) return unknown();
   return labelled.map(block => block.locale);
+}
+
+/**
+ * A request whose copy the Desk form separated from its instructions at entry: a designer-owned Desk
+ * task (`canva_manual`) or, since ADR-287, a Desk "New task" or reviewed-PDF request opened on
+ * RequestLifecycle (`office_request`).
+ */
+export function deskSeparatedCopy(body: Record<string, unknown>): boolean {
+  return body.workflow === 'canva_manual' || body.workflow === 'office_request';
 }
 
 const ENVELOPE_CLOSE:Record<string,string>={'(':')','[':']','{':'}','"':'"','\u201C':'\u201D','\u00AB':'\u00BB'};
@@ -67,7 +77,9 @@ export function savedDesignCopy(payload:any,description:string):{copy:string[];i
   // ADR-071: server-confirmed Desk copy is already separated from source evidence/instructions.
   // Do not apply the legacy chat divider/remark/emoji cleanup to explicitly reviewed strings.
   const p=payload?.payload||payload||{},body=p.body||p;
-  if(p.reviewedSource?.confirmation==='request_copy_reviewed'){
+  // ADR-287 addendum: a Desk PDF request (office_request with a reviewed source) keeps its labelled Desk
+  // fields as the reviewed copy, read verbatim by the Desk branch below.
+  if(p.reviewedSource?.confirmation==='request_copy_reviewed'&&!deskSeparatedCopy(body)){
     const copy=(body.exactCopy as Array<{text?:unknown}>|undefined)?.map(block=>block.text)
       .filter((text):text is string=>typeof text==='string'&&Boolean(text.trim())) || [];
     if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','The reviewed source request has no exact copy.');
@@ -78,7 +90,7 @@ export function savedDesignCopy(payload:any,description:string):{copy:string[];i
     if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','The reviewed PDF request has no exact copy.');
     return {copy,instructions:typeof body.designInstructions==='string'?body.designInstructions:''};
   }
-  if(body.workflow==='canva_manual'){
+  if(deskSeparatedCopy(body)){
     // Desk separates copy from instructions at entry. A queue title is metadata, not a headline.
     // Preserve both current copy fields and explicit headlines on older saved Desk requests.
     const fields=[body.headlineEn,body.copyEn,body.headlineCkb,body.copyCkb];

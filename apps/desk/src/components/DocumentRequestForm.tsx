@@ -48,7 +48,7 @@ export function DocumentRequestForm({ source }: { source: SavedDocumentInspectio
   };
   return <section aria-label="Reviewed PDF request">
     <h4>Create a request from this PDF</h4>
-    <p>Enter only the copy this design should contain. Review every page of the original for omitted text, images and tables. Saving a request does not approve a design or brand knowledge.</p>
+    <p>Enter only the copy this design should contain. Review every page of the original for omitted text, images and tables. Saving opens the request: the first draft uses exactly this copy, or a designer makes it when automatic drafts are off. Saving does not approve a design or brand knowledge.</p>
     <OriginalDocument receipt={source.receipt} />
     {recoveryError && <p role="alert">{recoveryError}</p>}
     {pending && !own && <p role="alert">Another PDF request has an unconfirmed result. Reopen its saved document and retry it before submitting a different request.</p>}
@@ -62,6 +62,6 @@ export function DocumentRequestForm({ source }: { source: SavedDocumentInspectio
       {busy ? 'Saving request…' : own ? 'Retry saved PDF request' : 'Save reviewed request'}
     </button>
     {error && <p role="alert">{error}</p>}
-    {taskId && <p role="status">Request saved. Open Work to continue: {taskId}</p>}
+    {taskId && <p role="status">Request saved. Follow its draft in Work: {taskId}</p>}
   </section>;
 }

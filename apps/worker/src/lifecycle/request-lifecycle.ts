@@ -13,11 +13,11 @@ import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProo
 import { log, withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, outcomeReportCore, type CoreInternal } from './delivery.js';
 import { officeAlertKey, officeAlertRoute, officeChatIdsFromEnv } from './office-chats.js';
-import { TelegramSenderApi } from './telegram-sender.js';
+import { TelegramSenderApi, isDeskChannel } from './telegram-sender.js';
 import { DesignRunApi, validStartNotice, type DesignRunInput, type DesignStartNotice } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
-import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, requesterTitleName, say, type Phrase, type RequesterLang } from '@hawa/integrations';
+import { CLIENT_QUESTION_MESSAGES, INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, requesterTitleName, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -40,7 +40,8 @@ export interface OpenManualEvent {
   tenantId: string;
   chatId: string;
   draft: {
-    platform: 'telegram'|'hawzhin_web';
+    /** hawa_desk (ADR-287): a Desk "New task", opened by Core and forwarded by OfficeDecisionGateway.openDeskRequest. */
+    platform: 'telegram'|'hawzhin_web'|'hawa_desk';
     sourceEventId: string;
     sourceChannelId: string;
     rawText: string;
@@ -57,9 +58,17 @@ export interface OpenManualEvent {
   };
 }
 
+/** ADR-284 addendum: how "who is this design for?" ended when the office chooses, and the answer's language. */
+export interface InitialClientChoice { outcome: 'office' | 'unmatched' | 'expired' | 'timeout'; lang: RequesterLang }
+
 export interface ManualLifecycleState {
   initialRequesterHold?: {officeAlerts:Array<{chatId:string;text:string}>};
   initialOfficeAlerts?:Array<{chatId:string;text:string}>;
+  /**
+   * ADR-284 addendum (live canary 2026-10-03): the brief was kept to ask who it is for (ADR-235) and opened for the
+   * office to choose. The acknowledgement then says both ("…passed it to the office… A designer will make …").
+   */
+  initialClientChoice?: InitialClientChoice;
   v: 1;
   requestId: string;
   tenantId: string;
@@ -298,6 +307,14 @@ function canonical(value: unknown): string {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
 }
 
+/** The open's chat is its platform's: a Telegram chat id, a web account's channel or a Desk member's (ADR-287). */
+function openChannelMatches(event: Pick<OpenManualEvent, 'chatId'> & { draft?: { platform?: string } }): boolean {
+  const platform = event.draft?.platform;
+  return platform === 'hawzhin_web' ? /^web:[0-9a-f-]{36}$/i.test(event.chatId)
+    : platform === 'hawa_desk' ? isDeskChannel(event.chatId)
+    : platform === 'telegram' && /^-?\d{1,20}$/.test(event.chatId);
+}
+
 const hashOf = (event: unknown) => createHash('sha256').update(canonical(event)).digest('hex');
 const invalid = (reason: string) => new restate.TerminalError(`LIFECYCLE_OPEN_REFUSED: ${reason}`, { errorCode: 409 });
 
@@ -327,11 +344,33 @@ const requesterFields = (draft: { rawText: string; title: string }): Pick<Manual
   ...(typeof draft.title === 'string' && draft.title.trim() ? { title: draft.title.trim().slice(0, 200) } : {}),
 });
 
+const CLIENT_CHOICE_ACK: Record<InitialClientChoice['outcome'], Phrase> = {
+  office: CLIENT_QUESTION_MESSAGES.passedToOfficeDesigner,
+  unmatched: CLIENT_QUESTION_MESSAGES.notMatchedToOfficeDesigner,
+  expired: CLIENT_QUESTION_MESSAGES.expiredToOfficeDesigner,
+  timeout: CLIENT_QUESTION_MESSAGES.timedOutToOfficeDesigner,
+};
+/** Core's `clientChoice` on the first projection, when it is one this worker knows. */
+const clientChoiceOf = (value: unknown): Pick<ManualLifecycleState, 'initialClientChoice'> => {
+  const v = value as Partial<InitialClientChoice> | null | undefined;
+  return v && typeof v === 'object' && typeof v.outcome === 'string' && Object.prototype.hasOwnProperty.call(CLIENT_CHOICE_ACK, v.outcome) &&
+    (v.lang === 'en' || v.lang === 'ckb') ? { initialClientChoice: { outcome: v.outcome, lang: v.lang } } : {};
+};
+
+/** The request's first answer to a brief a designer makes; one message, whatever led to it. */
+function acknowledgementText(state: Pick<ManualLifecycleState, 'lang' | 'title' | 'initialRequesterHold' | 'initialClientChoice'>): string {
+  if (state.initialRequesterHold) return requesterText(state, ROUTING_MESSAGES.statusHeld);
+  const choice = state.initialClientChoice;
+  // In the language of the answer to "who is this design for?" (an English brief may be answered in Sorani).
+  return choice ? requesterText({ ...state, lang: choice.lang }, CLIENT_CHOICE_ACK[choice.outcome])
+    : requesterText(state, LIFECYCLE_MESSAGES.receivedForDesigner);
+}
+
 function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
-  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title' | 'initialRequesterHold' | 'initialOfficeAlerts'>): void {
+  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title' | 'initialRequesterHold' | 'initialOfficeAlerts' | 'initialClientChoice'>): void {
   ctx.send({
     v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
-    text: requesterText(state, state.initialRequesterHold ? ROUTING_MESSAGES.statusHeld : LIFECYCLE_MESSAGES.receivedForDesigner), parseMode: 'HTML', class: 'critical',
+    text: acknowledgementText(state), parseMode: 'HTML', class: 'critical',
     tenantId: state.tenantId, taskId: state.taskId,
   });
   sendInitialHoldAlerts(ctx,state);
@@ -417,7 +456,7 @@ const openFailure = (event: OpenManualEvent | OpenAutomaticEvent): TerminalFailu
 export async function openManualRequest(ctx: OpenContext, core: CoreInternal, event: OpenManualEvent): Promise<OpenManualResult> {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       event.eventId !== `open:${event.requestId}` || event.tenantId !== DEFAULT_TENANT_ID ||
-      !(event.draft?.platform==='hawzhin_web' ? /^web:[0-9a-f-]{36}$/i.test(event.chatId) : event.draft?.platform==='telegram' && /^-?\d{1,20}$/.test(event.chatId)) ||
+      !openChannelMatches(event) ||
       event.draft?.sourceEventId !== `lc-${event.requestId}-r0` ||
       event.draft?.sourceChannelId !== event.chatId || event.draft?.autoGenerate !== false) {
     throw invalid('this handler accepts only a versioned manual round-zero request under its own key');
@@ -432,7 +471,7 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
     return { accepted: true, taskId: prior.taskId, stage: 'manual', rev: 1 };
   }
   const projected = await reportedIfRefused(ctx, () => ctx.run('project:1', () => core.post<{ v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean;
-    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}> }>(
+    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}>;clientChoice?:unknown }>(
     `/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
     { v: 1, expectedRev: 0, rev: 1, key: `${event.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: event.draft }] },
   )), openFailure(event));
@@ -445,6 +484,7 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
     openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
     ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
     ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
+    ...clientChoiceOf(projected.clientChoice),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);
@@ -463,7 +503,7 @@ function sendAutomaticAcknowledgement(ctx: AutomaticOpenContext, state: Automati
 export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: CoreInternal, event: OpenAutomaticEvent) {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       event.eventId !== `open:${event.requestId}` || event.tenantId !== DEFAULT_TENANT_ID ||
-      !(event.draft?.platform==='hawzhin_web' ? /^web:[0-9a-f-]{36}$/i.test(event.chatId) : event.draft?.platform==='telegram' && /^-?\d{1,20}$/.test(event.chatId)) ||
+      !openChannelMatches(event) ||
       event.draft?.sourceEventId !== `lc-${event.requestId}-r0` ||
       event.draft?.sourceChannelId !== event.chatId || event.draft?.autoGenerate !== true ||
       !event.draft.clientId || !UUID.test(event.draft.clientId)) {
@@ -486,7 +526,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
   }
   const projected = await reportedIfRefused(ctx, () => ctx.run('project:1', () => core.post<{
     v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean;
-    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}>;
+    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}>;clientChoice?:unknown;
     design?: { clientId: string; rawText: string; sourcePlatform: string;
       variant?: { width: number; height: number }; designStudio: boolean; studioOptions?: DesignRunInput['studioOptions'] };
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
@@ -502,6 +542,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
       openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
       ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
     ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
+    ...clientChoiceOf(projected.clientChoice),
     };
     ctx.set('lc', manual);
     ctx.setChatMode?.(event.chatId, event.requestId);
@@ -528,6 +569,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
     openEventId: event.eventId, openSha256: fingerprint, runId, designInput, ...requesterFields(event.draft),
     ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
     ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
+    ...clientChoiceOf(projected.clientChoice),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);
@@ -1426,7 +1468,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
               startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
-              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:')) return; return ctx.objectSendClient(chatInbox, chatId)
+              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:') || isDeskChannel(chatId)) return; return ctx.objectSendClient(chatInbox, chatId)
                 .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })); },
             }, core, event as OpenAutomaticEvent) : openManualRequest({
               key: ctx.key,
@@ -1435,7 +1477,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               set: (name, value) => ctx.set(name, value),
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
-              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:')) return; return ctx.objectSendClient(chatInbox, chatId)
+              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:') || isDeskChannel(chatId)) return; return ctx.objectSendClient(chatInbox, chatId)
                 .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })); },
             }, core, event as OpenManualEvent)),
       ),

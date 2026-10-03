@@ -145,6 +145,22 @@ export function candidateRuleFromCore(rule: any): CandidateRule {
   };
 }
 
+/**
+ * ADR-291: what a DNA layout rule does to the next design, from Core's rule-effect report (returned
+ * with the candidate rules). Every rule here used to carry a fixed pill calling it a QA invariant: no rule
+ * in this list is checked by QA, and for a client that designs from its packaged reference (KAAE) the
+ * list is not read at all unless the rule was promoted from feedback.
+ */
+export function ruleEffectBadge(effect: any, rule: string): { label: string; tone: 'ok' | 'warn' | 'bad' | 'blue'; note: string } {
+  const rows: any[] = Array.isArray(effect?.rules) ? effect.rules : [];
+  const row = rows.find((r) => r?.text === rule && (r?.source === 'dna_layout_rule' || r?.source === 'learned_rule'));
+  if (!row) return { label: 'Effect not read', tone: 'blue', note: 'Core did not report what this rule does to a design.' };
+  const note = String(row.note ?? '');
+  if (row.status === 'applied_deterministically') return { label: 'Applied by code', tone: 'ok', note };
+  if (row.status === 'prompt_only') return { label: 'Read by the models only', tone: 'warn', note };
+  return { label: 'Not used in designs', tone: 'bad', note };
+}
+
 /** What Core's font inspector (packages/qa font-inspector.ts) reports about an uploaded font. */
 export interface FontInspectionResult {
   fontFamily: string;
@@ -248,6 +264,8 @@ const DnaClientScreen: React.FC<{
 
   // Candidate rules from governed learning loop
   const [candidateRules, setCandidateRules] = useState<CandidateRule[]>([]);
+  // ADR-291: Core's report of what each active rule does to the next design; null when not read.
+  const [ruleEffect, setRuleEffect] = useState<any>(null);
 
   // Kurdish WebFont Ingestion & Diacritic Clearance Inspector State (Horizon 4)
   const [inspectedFont, setInspectedFont] = useState<FontInspectionResult | null>(null);
@@ -296,6 +314,7 @@ const DnaClientScreen: React.FC<{
 
     const rules = rulesRes.state === 'known' ? rulesRes.value?.candidateRules : undefined;
     setCandidateRules(Array.isArray(rules) ? rules.map(candidateRuleFromCore) : []);
+    setRuleEffect(rulesRes.state === 'known' && rulesRes.value?.ruleEffect?.clientId === clientId ? rulesRes.value.ruleEffect : null);
     markRead('rules', rulesRes.state === 'unknown' ? rulesRes.reason : undefined);
 
     setLoading(false);
@@ -360,7 +379,8 @@ const DnaClientScreen: React.FC<{
       ...currentDna,
       colors: [...currentDna.colors, newColor],
     };
-    await saveDnaChanges(updated, `Added color swatch "${newColor.name}" (${newColor.hex})`);
+    // A refused save keeps what was typed (saveDnaChanges shows why).
+    if (!(await saveDnaChanges(updated, `Added color swatch "${newColor.name}" (${newColor.hex})`))) return;
     setNewSwatchName('');
     setShowAddSwatch(false);
   };
@@ -408,7 +428,7 @@ const DnaClientScreen: React.FC<{
         ...newColors,
       ],
     };
-    await saveDnaChanges(updated, 'Auto-extracted and applied brand palette from logo');
+    if (!(await saveDnaChanges(updated, 'Auto-extracted and applied brand palette from logo'))) return;
     setShowLogoDropzone(false);
     setExtractedPaletteData(null);
   };
@@ -428,7 +448,7 @@ const DnaClientScreen: React.FC<{
         prohibitedPhrases: [...currentDna.guidelines.prohibitedPhrases, phrase],
       },
     };
-    await saveDnaChanges(updated, `Added prohibited phrase "${phrase}" to deterministic QA filters`);
+    if (!(await saveDnaChanges(updated, `Added prohibited phrase "${phrase}" to deterministic QA filters`))) return;
     setNewPhrase('');
   };
 
@@ -456,7 +476,7 @@ const DnaClientScreen: React.FC<{
         requiredDisclaimers: [...(currentDna.guidelines.requiredDisclaimers || []), disclaimer],
       },
     };
-    await saveDnaChanges(updated, 'Registered required disclaimer (Invariant #5 protected)');
+    if (!(await saveDnaChanges(updated, 'Registered required disclaimer (Invariant #5 protected)'))) return;
     setNewDisclaimer('');
   };
 
@@ -471,7 +491,7 @@ const DnaClientScreen: React.FC<{
         layoutRules: [...currentDna.guidelines.layoutRules, rule],
       },
     };
-    await saveDnaChanges(updated, 'Added layout principle to deterministic QA engine');
+    if (!(await saveDnaChanges(updated, 'Added layout principle to deterministic QA engine'))) return;
     setNewRule('');
   };
 
@@ -493,7 +513,7 @@ const DnaClientScreen: React.FC<{
   // Dismiss candidate rule
   const handleDismissCandidate = async (ruleId: string) => {
     try {
-      const res = await apiClient.clients.dismissCandidate(selectedClientId, ruleId, 'Dismissed by art director');
+      const res = await apiClient.clients.dismissCandidate(selectedClientId, ruleId, 'Dismissed in Hawa Desk');
       // Core answers 200 with dismissed: false when it has no such rule.
       if (res?.dismissed !== true) {
         setErrorNotice(`Core has no candidate rule ${ruleId} to dismiss, so it stays open.`);
@@ -1473,9 +1493,10 @@ const DnaClientScreen: React.FC<{
                     className="pill bad"
                     style={{ fontSize: 12, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6 }}
                   >
-                    <span>{phrase}</span>
+                    <span dir="auto">{phrase}</span>
                     <button
                       onClick={() => handleRemoveProhibitedPhrase(phrase)}
+                      aria-label={`Remove prohibited phrase ${phrase}`}
                       style={{
                         background: 'transparent',
                         border: 'none',
@@ -1526,7 +1547,10 @@ const DnaClientScreen: React.FC<{
                       <b>Principle #{idx + 1}</b>
                       <p style={{ margin: '2px 0 0', fontSize: 13 }}>{rule}</p>
                     </div>
-                    <span className="pill ok" style={{ fontSize: 10 }}>Hard QA Invariant</span>
+                    {(() => {
+                      const badge = ruleEffectBadge(ruleEffect, rule);
+                      return <span className={`pill ${badge.tone}`} style={{ fontSize: 10 }} title={badge.note}>{badge.label}</span>;
+                    })()}
                   </div>
                 ))}
               </div>
@@ -1716,6 +1740,7 @@ const DnaClientScreen: React.FC<{
               </div>
               <button
                 onClick={() => setShowSnapshotModal(false)}
+                aria-label="Close"
                 style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}
               >
                 ✕
@@ -1813,6 +1838,7 @@ const DnaClientScreen: React.FC<{
               </div>
               <button
                 onClick={() => setInspectingSnapshot(null)}
+                aria-label="Close"
                 style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}
               >
                 ✕

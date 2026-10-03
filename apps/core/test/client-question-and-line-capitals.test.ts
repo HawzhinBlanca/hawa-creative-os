@@ -87,6 +87,26 @@ const sentAnswer = (updateId: number, messageId: number) => withRlsContext(db, s
     ${JSON.stringify({ messageId: String(messageId) })}::jsonb, ${`client-question-${updateId}`}, true)`.execute(trx));
 const replyTo = (messageId: number) => ({ reply_to_message: { message_id: messageId, from: { id: 7000001, is_bot: true, first_name: 'Hawa' } } });
 const ASK_EN = "Who is this design for? Tell me the organisation's name.";
+/**
+ * ADR-284 addendum (live canary 2026-10-03): when the office chooses the organisation, Core says nothing beside the
+ * open; RequestLifecycle's first answer says it, with "a designer will make …", in one message. Core's first
+ * projection of the request tells it how the question ended (`clientChoice`).
+ */
+const clientChoiceOf = async (open: Record<string, any>) => {
+  const res = await app().request(`/v1/internal/lifecycle/${open.requestId}/project`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WORKER}` },
+    body: JSON.stringify({ v: 1, expectedRev: 0, rev: 1, key: `${open.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: open.draft }] }) });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { clientChoice?: unknown }).clientChoice;
+};
+/** The projection's whole answer: its client choice and the office alerts it asks the worker to send. */
+const projectionOf = async (open: Record<string, any>) => {
+  const res = await app().request(`/v1/internal/lifecycle/${open.requestId}/project`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WORKER}` },
+    body: JSON.stringify({ v: 1, expectedRev: 0, rev: 1, key: `${open.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: open.draft }] }) });
+  expect(res.status).toBe(200);
+  return (await res.json()) as { clientChoice?: unknown; officeAlerts?: Array<{ chatId: string; text: string }> };
+};
 
 describe('a brief that names no organisation asks who it is for (ADR-235)', () => {
   it('the live sentence in the owner\'s office chat: kept, asked with the names; "KAAE" opens it for KAAE, once', async () => {
@@ -130,21 +150,44 @@ describe('a brief that names no organisation asks who it is for (ADR-235)', () =
   });
 
   it('"not sure", or an organisation nobody knows, opens it for the office to choose, and says so', async () => {
-    for (const [words, says] of [['not sure', "I've passed it to the office, and they'll choose the organisation."],
-      ['نازانم', 'ناردم بۆ ئۆفیسەکە']] as const) {
+    for (const [words, lang] of [['not sure', 'en'], ['نازانم', 'ckb']] as const) {
       const chat = outsiderChat();
       await intake(message(chat, OUTSIDER, TEACHER));
       const opened = await intake(message(chat, OUTSIDER, words));
       expect(opened, words).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null, autoGenerate: false, rawText: TEACHER } });
-      expect(opened.notice.text).toContain(says);
+      expect(opened, words).not.toHaveProperty('notice');
+      expect(await clientChoiceOf(opened), words).toEqual({ outcome: 'office', lang });
     }
     const chat = outsiderChat();
     const brief = message(chat, OUTSIDER, TEACHER);
     await intake(brief);
     await sentAnswer(brief.update_id, 4402);
     const unknown = await intake(message(chat, OUTSIDER, 'The Erbil Teachers Union', replyTo(4402)));
-    expect(unknown).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null, autoGenerate: false },
-      notice: { text: expect.stringContaining("couldn't match that to an organisation") } });
+    expect(unknown).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null, autoGenerate: false } });
+    expect(await clientChoiceOf(unknown)).toEqual({ outcome: 'unmatched', lang: 'en', named: 'The Erbil Teachers Union' });
+  });
+
+  it('live 2026-10-03: an organisation nobody knows, named without a reply, still answers the question', async () => {
+    // The canary answered "It's for the Erbil Chess Club" without replying; it was taken as words about an
+    // old design and passed to the office, and the brief was never opened.
+    for (const words of ["It's for the Erbil Chess Club", 'Erbil Chess Club', 'Sulaimani Rotary', 'for my company', 'the UNDP office']) {
+      const chat = outsiderChat();
+      await intake(message(chat, OUTSIDER, TEACHER));
+      const opened = await intake(message(chat, OUTSIDER, words));
+      expect(opened, words).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null, autoGenerate: false, rawText: TEACHER } });
+      // The office hears the name the requester gave, never "no organisation was named".
+      const projected = await projectionOf(opened);
+      expect(projected.clientChoice, words).toEqual({ outcome: 'unmatched', lang: 'en', named: words });
+      expect(projected.officeAlerts?.[0]?.text, words).toContain(`The requester said it is for: ${words}.`);
+      expect(projected.officeAlerts?.[0]?.text, words).not.toContain('no organisation was named');
+    }
+    // Small talk is no organisation's name: the question stays open and the brief is not opened.
+    for (const words of ['hello', 'Great', 'Good Morning', 'wait', 'Thank You', 'its for us']) {
+      const chat = outsiderChat();
+      await intake(message(chat, OUTSIDER, TEACHER));
+      const read = await intake(message(chat, OUTSIDER, words));
+      expect(read.lifecycleAction, words).not.toBe('open-request');
+    }
   });
 
   it('an answer after thirty minutes opens the kept brief for the office, and says it was a while', async () => {
@@ -153,8 +196,9 @@ describe('a brief that names no organisation asks who it is for (ADR-235)', () =
     const later = Date.now() + 31 * 60_000;
     vi.spyOn(Date, 'now').mockReturnValue(later);
     const opened = await intake(message(chat, OUTSIDER, 'KAAE'));
-    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null, autoGenerate: false, rawText: TEACHER },
-      notice: { text: expect.stringContaining("It's been a while since I asked") } });
+    expect(opened).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null, autoGenerate: false, rawText: TEACHER } });
+    expect(opened).not.toHaveProperty('notice');
+    expect(await clientChoiceOf(opened)).toEqual({ outcome: 'expired', lang: 'en' });
   });
 
   it('a new brief sent instead is read as a new brief, and the answer then goes to the newest question', async () => {
@@ -196,12 +240,14 @@ describe('a question nobody answers times out and the brief opens for the office
     expect((await sweep()).map((d) => d.update.update_id)).toContain(brief.update_id);
     const opened = await settleOf(brief);
     expect(opened).toMatchObject({ lifecycleAction: 'open-request', duplicate: false,
-      draft: { clientId: null, autoGenerate: false, rawText: TEACHER },
-      notice: { text: "I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation." },
-      noticeKey: `client-question:${brief.update_id}` });
-    // Replays (the delayed call and the sweep's) give the same open and the same keyed notice: said once.
+      draft: { clientId: null, autoGenerate: false, rawText: TEACHER } });
+    // Said once, by the request's first answer (keyed by the request), with "a designer will make …".
+    expect(opened).not.toHaveProperty('notice');
+    expect(await clientChoiceOf(opened)).toEqual({ outcome: 'timeout', lang: 'en' });
+    // Replays (the delayed call and the sweep's) give the same open and say nothing beside it.
     const again = await settleOf(brief);
-    expect(again).toMatchObject({ duplicate: true, requestId: opened.requestId, noticeKey: `client-question:${brief.update_id}` });
+    expect(again).toMatchObject({ duplicate: true, requestId: opened.requestId });
+    expect(again).not.toHaveProperty('notice');
     expect((await sweep()).map((d) => d.update.update_id)).not.toContain(brief.update_id);
     // The brief replayed opens the same request.
     expect(await intake(brief)).toMatchObject({ duplicate: true, requestId: opened.requestId });

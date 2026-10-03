@@ -7,7 +7,6 @@ import { OutboxRepository } from '../src/repositories/outbox.repository.js';
 import { TaskRepository } from '../src/repositories/task.repository.js';
 import { PostgresTelegramPollState, readTelegramKillSwitch } from '../src/telegram-poll-state.js';
 import { provisionWorkerDatabase } from '../src/provision-worker-role.js';
-import { outcomeRecorder } from '../../../apps/worker/src/outcome-without-core.js';
 import { isCanaryTask, readSendMarks, writeCanarySinkMark, writeSendMark } from '../../../apps/worker/src/delivery-notification.js';
 
 const ownerUrl=process.env.TEST_DATABASE_OWNER_URL!;
@@ -78,13 +77,6 @@ it('advances the actual poll cursor monotonically but cannot release the office 
   expect(changed.rows).toHaveLength(0); expect(await readTelegramKillSwitch(worker,scope)).toBe(true);
   await expect(withRlsContext(worker,scope,tx=>sql`INSERT INTO hawa.integrations(tenant_id,kind,name,config_public)
     VALUES(${tenantId}::uuid,'model_provider','worker-escalation','{}')`.execute(tx))).rejects.toMatchObject({code:'42501'});
-});
-it('records fallback outcomes idempotently using real task/event reads and outbox writes while Core is unavailable',async()=>{
-  const record=outcomeRecorder(worker,{userId,officeChatId:'synthetic-office'});
-  const request={tenantId,taskId,report:{status:'DRAFT_READY',designId:'synthetic_design'}};
-  const first=await record(request), second=await record(request);
-  expect(first).toMatchObject({report:'written',officeAlert:'written'});
-  expect(second).toMatchObject({report:'already_written',officeAlert:'already_written'});
 });
 it('ADR-240: can record a canary sink mark and read whether a task is the canary chat\'s',async()=>{
   const canary=String(2**52+11), key=`lc:canary-role-${randomUUID()}`;

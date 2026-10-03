@@ -59,7 +59,8 @@ describe('reviewed PDF request UI', () => {
     await click(view.container.querySelector('input[type=checkbox]'));
     await click(byText(view.container, 'button', 'Save reviewed request'));
     const init = fetch.mock.calls[0][1], body = JSON.parse(init.body);
-    expect(body).toMatchObject({ clientId, workflow: 'canva_manual', copyEn: 'Exact selected price 123.45', copyCkb: 'نرخ ١٢٣',
+    // ADR-287 addendum: a reviewed PDF request opens on the request lifecycle, naming its reviewed receipt.
+    expect(body).toMatchObject({ clientId, workflow: 'office_request', copyEn: 'Exact selected price 123.45', copyCkb: 'نرخ ١٢٣',
       sourceDocument: { id: answer.receipt.id, sourceSha256: answer.receipt.sourceSha256, extractionSha256: answer.receipt.extractionSha256, confirmed: true } });
     expect(init.body).not.toContain('UNTRUSTED'); expect(init.headers['Idempotency-Key']).toBeTruthy();
     expect(view.text()).toContain('Request saved.'); expect(getPendingDocumentDraft()).toBeNull(); expect(getPendingManualDraft()).toBeNull();
@@ -112,5 +113,32 @@ describe('reviewed PDF request UI', () => {
     const copy = view.container.querySelector('[aria-label="PDF exact copy English"]') as HTMLTextAreaElement;
     expect(copy.value).toBe('Confirmed price 123.45'); expect(copy.disabled).toBe(false);
   });
-
+  it('shows the natural reason when the reviewed evidence changed or the copy is missing, and keeps the copy editable', async () => {
+    for (const [status, detail] of [[409, 'Source evidence changed. Reopen the saved PDF and review it again.'],
+      [422, 'Review the original PDF and explicitly confirm the request copy.']] as const) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail }), { status })));
+      view = await mount(React.createElement(DocumentRequestForm, { source: answer }));
+      await fill(); await click(view.container.querySelector('input[type=checkbox]'));
+      await click(byText(view.container, 'button', 'Save reviewed request'));
+      expect(view.text()).toContain(detail);
+      expect(getPendingDocumentDraft()).toBeNull();
+      expect((view.container.querySelector('[aria-label="PDF exact copy English"]') as HTMLTextAreaElement).disabled).toBe(false);
+      await view.unmount(); view = undefined;
+    }
+  });
+  it('retries a request frozen by the earlier Desk (canva_manual) exactly as it was sent, under its key', async () => {
+    const draft = { clientId, title: 'Reviewed source', copy: 'Confirmed price 123.45', copyCkb: 'نرخ ١٢٣',
+      designInstructions: 'Preserve editable price', sourceDocument: { id: answer.receipt.id, sourceSha256: answer.receipt.sourceSha256,
+        extractionSha256: answer.receipt.extractionSha256, confirmed: true as const } };
+    const frozen = JSON.stringify({ clientId, title: draft.title, priority: 'routine', description: `${draft.copy}\n\n${draft.copyCkb}`,
+      copyEn: draft.copy, copyCkb: draft.copyCkb, designInstructions: draft.designInstructions, referenceAssets: '',
+      workflow: 'canva_manual', sourceDocument: draft.sourceDocument, source: { platform: 'hawa_desk', externalId: 'operator-desk' } });
+    localStorage.setItem('hawa_desk_pending_document_intake_v1', JSON.stringify({ key: 'frozen-key', body: frozen, draft }));
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'frozen-task' }))); vi.stubGlobal('fetch', fetch);
+    view = await mount(React.createElement(DocumentRequestForm, { source: answer }));
+    await click(byText(view.container, 'button', 'Retry saved PDF request'));
+    expect(fetch.mock.calls[0][1].body).toBe(frozen);
+    expect(fetch.mock.calls[0][1].headers['Idempotency-Key']).toBe('frozen-key');
+    expect(view.text()).toContain('frozen-task');
+  });
 });

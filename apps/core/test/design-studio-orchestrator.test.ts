@@ -751,7 +751,11 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     } finally {
       process.env.DESIGN_PIPELINE_V3 = originalEnv;
     }
-  }, 25000);
+    // ADR-281: proving that no poster composition can carry this title measures every candidate size
+    // with the text helper: about 8 s on an M-series Mac, over 30 s on a 4-vCPU CI runner under the
+    // suite's load. At 25 s it timed out there, and its body kept running with DESIGN_PIPELINE_V3=on
+    // into the next tests (6b then chose a different winner).
+  }, 120_000);
 
   it('5c. a pilot chat runs v3 while the global flag is off; a chat off the list does not', async () => {
     const originalFlag = process.env.DESIGN_PIPELINE_V3;
@@ -1032,8 +1036,10 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       if (schema === 'DesignCritiqueReport') return reply({ overallAssessment: 'Balanced and legible.', comments: [] });
       if (schema === 'PairwiseDimensionVerdict') {
         // A judge that only ever prefers the first position: every pair it sees is a discarded tie.
-        const dims = ['hierarchy', 'composition', 'typographic_craft', 'brand_fit', 'legibility'];
+        // It answers the five votes and, for a poster client, the poster vote and its gate.
+        const dims = ['hierarchy', 'composition', 'typographic_craft', 'brand_fit', 'legibility', 'impact', 'imagery'];
         return reply({
+          legibilityGate: { A: { illegible: false, reason: 'readable' }, B: { illegible: false, reason: 'readable' } },
           dimensions: Object.fromEntries(dims.map((d) => [d, { winner: 'A', rationale: 'position' }])),
           majorityWinner: 'A',
           summary: 'A',

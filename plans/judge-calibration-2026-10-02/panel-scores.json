@@ -1,0 +1,2126 @@
+{
+ "about": "Blind-panel scores behind the frozen set. The panel is three AI judges (Claude subagents), not people; round 1 scored d01-d33 on 2026-10-02, round 2 re-scored the same image bytes (matched by sha256) among 49 designs on 2026-10-03. Scores of 10 per dimension; one row per judge. Human votes are being collected separately.",
+ "dimensions": [
+  "hierarchy",
+  "typography",
+  "composition",
+  "imagery",
+  "brand_polish",
+  "impact",
+  "overall"
+ ],
+ "images": {
+  "d01": {
+   "group": "office",
+   "file": "photo03_why_accreditation_card_en.jpg",
+   "sha256": "42b9f6363092c3565e48c586e63782d747b26f4ccaae8aac4d023ce04f0f25ba",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 8,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e48",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 7,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 6
+    }
+   ]
+  },
+  "d02": {
+   "group": "office",
+   "file": "photo06_global_partnership_plate_ckb.jpg",
+   "sha256": "cb78c17b3048f8d037f620f2eb9990ddf3964056cfe9a0c187237a58ecace959",
+   "round1": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 6,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e12",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 6,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 6,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d03": {
+   "group": "ours_new",
+   "file": "en_workshop__poster_navy.png",
+   "sha256": "e1fef26a22fdbad4f623a8298eb9dba34493037fc558930dd9851791feaa9800",
+   "round1": [
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e08",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 7,
+     "overall": 7
+    },
+    {
+     "hierarchy": 8,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 7,
+     "overall": 7
+    }
+   ]
+  },
+  "d04": {
+   "group": "ours_new",
+   "file": "en_peer_call__poster_band.png",
+   "sha256": "907a64e6963ddf8607ba3950a941a7b23eb45f26455cf59cfe84513659b7e549",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 4,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 7,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    }
+   ],
+   "round2Id": "e14",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d05": {
+   "group": "ours_shipped",
+   "file": "en_workshop__page_brand_card.png",
+   "sha256": "f7ca2c313948b2b5b244cf3203616e389a3d010c47f127e7ee5cf70d097608f6",
+   "round1": [
+    {
+     "hierarchy": 4,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 1,
+     "brand_polish": 4,
+     "impact": 2,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 1,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    }
+   ],
+   "round2Id": "e07",
+   "round2": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    }
+   ]
+  },
+  "d06": {
+   "group": "ours_new",
+   "file": "en_peer_call__poster_navy.png",
+   "sha256": "6227cbad4224767ffd40d662c022bfef5ce5b45adbd90f98b37d4ca41ebd5d28",
+   "round1": [
+    {
+     "hierarchy": 8,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e32",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ]
+  },
+  "d07": {
+   "group": "ours_shipped",
+   "file": "en_peer_call__page_brand_card.png",
+   "sha256": "f0ecc2e13fa97c93b128d97146f0d6e265ed922491096da5eb9974b0a01950ba",
+   "round1": [
+    {
+     "hierarchy": 4,
+     "typography": 5,
+     "composition": 2,
+     "imagery": 1,
+     "brand_polish": 3,
+     "impact": 2,
+     "overall": 3
+    },
+    {
+     "hierarchy": 4,
+     "typography": 5,
+     "composition": 2,
+     "imagery": 2,
+     "brand_polish": 4,
+     "impact": 2,
+     "overall": 3
+    },
+    {
+     "hierarchy": 4,
+     "typography": 6,
+     "composition": 2,
+     "imagery": 1,
+     "brand_polish": 4,
+     "impact": 2,
+     "overall": 3
+    }
+   ],
+   "round2Id": "e42",
+   "round2": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 3,
+     "imagery": 2,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 4,
+     "typography": 6,
+     "composition": 3,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 2,
+     "overall": 4
+    },
+    {
+     "hierarchy": 4,
+     "typography": 6,
+     "composition": 3,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    }
+   ]
+  },
+  "d08": {
+   "group": "office",
+   "file": "KAAE_Standards_Higher_Ed_1080x1350.png",
+   "sha256": "be81289320e6bb522c05f1a4991bc4ae42c1fd8e16c37f5543bbce7f1cbf2d58",
+   "round1": [
+    {
+     "hierarchy": 2,
+     "typography": 3,
+     "composition": 1,
+     "imagery": 2,
+     "brand_polish": 1,
+     "impact": 2,
+     "overall": 2
+    },
+    {
+     "hierarchy": 1,
+     "typography": 2,
+     "composition": 1,
+     "imagery": 1,
+     "brand_polish": 1,
+     "impact": 1,
+     "overall": 1
+    },
+    {
+     "hierarchy": 2,
+     "typography": 3,
+     "composition": 1,
+     "imagery": 1,
+     "brand_polish": 2,
+     "impact": 2,
+     "overall": 2
+    }
+   ],
+   "round2Id": "e40",
+   "round2": [
+    {
+     "hierarchy": 2,
+     "typography": 3,
+     "composition": 2,
+     "imagery": 2,
+     "brand_polish": 2,
+     "impact": 2,
+     "overall": 2
+    },
+    {
+     "hierarchy": 2,
+     "typography": 3,
+     "composition": 1,
+     "imagery": 1,
+     "brand_polish": 1,
+     "impact": 2,
+     "overall": 2
+    },
+    {
+     "hierarchy": 1,
+     "typography": 2,
+     "composition": 1,
+     "imagery": 1,
+     "brand_polish": 1,
+     "impact": 1,
+     "overall": 2
+    }
+   ]
+  },
+  "d09": {
+   "group": "office",
+   "file": "photo05_global_partnership_plate_en.jpg",
+   "sha256": "30cde603c03b85e13af59dfc627e6d52e2933483104ffc3dd9257b72b8b1f3c5",
+   "round1": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 6,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e38",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 6,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 6,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d10": {
+   "group": "ours_new",
+   "file": "ckb_peer_call__poster_navy.png",
+   "sha256": "5f97c4f501081ed6b24bd3a62f96acc1b89bfd7169392f760a97b99d19c71481",
+   "round1": [
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e49",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ]
+  },
+  "d11": {
+   "group": "office",
+   "file": "photo11_peer_evaluators_call_en.jpg",
+   "sha256": "64bb38abfa18b8961c4132730fdb582df73207bd892a346b362686d5f62f7e10",
+   "round1": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 5,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 8,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 5,
+     "brand_polish": 7,
+     "impact": 7,
+     "overall": 7
+    },
+    {
+     "hierarchy": 8,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 6,
+     "brand_polish": 7,
+     "impact": 8,
+     "overall": 7
+    }
+   ],
+   "round2Id": "e17",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 5,
+     "brand_polish": 5,
+     "impact": 7,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 5,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 5,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ]
+  },
+  "d12": {
+   "group": "ours_new",
+   "file": "en_peer_call__poster_cream.png",
+   "sha256": "f1221cfffb9926756a15c463b42f456508b31af51499ca15cf6e95e13c6395e3",
+   "round1": [
+    {
+     "hierarchy": 8,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 5,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 5
+    }
+   ],
+   "round2Id": "e41",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 7,
+     "impact": 7,
+     "overall": 6
+    }
+   ]
+  },
+  "d13": {
+   "group": "ours_new",
+   "file": "ckb_workshop__poster_navy.png",
+   "sha256": "241f300b7c4bdf7132dfcf22ad3c166df22b1532dd7cb016b23277e22a4551c3",
+   "round1": [
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e28",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d14": {
+   "group": "ours_new",
+   "file": "ckb_workshop__poster_cream.png",
+   "sha256": "b586a1544939cf90e0dc6843ab7200854c20cd0d33700962e14b11c895c75d24",
+   "round1": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e36",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d15": {
+   "group": "office",
+   "file": "photo04_why_accreditation_card_ckb.jpg",
+   "sha256": "bfeff3276a6ecf6f14149a2487829b05c3db623aca69b5c3ce67d899c69454e3",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 8,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e02",
+   "round2": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 7,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 6
+    }
+   ]
+  },
+  "d16": {
+   "group": "ours_shipped",
+   "file": "ckb_peer_call__page_brand_card.png",
+   "sha256": "4169e3b90d1a137b5bbf6b4bd95a92d137faf7363705c70bc13042e2f6020893",
+   "round1": [
+    {
+     "hierarchy": 4,
+     "typography": 5,
+     "composition": 2,
+     "imagery": 1,
+     "brand_polish": 3,
+     "impact": 2,
+     "overall": 3
+    },
+    {
+     "hierarchy": 4,
+     "typography": 5,
+     "composition": 2,
+     "imagery": 2,
+     "brand_polish": 4,
+     "impact": 2,
+     "overall": 3
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 3,
+     "imagery": 1,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    }
+   ],
+   "round2Id": "e44",
+   "round2": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 3,
+     "imagery": 2,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 4,
+     "typography": 5,
+     "composition": 3,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 2,
+     "overall": 4
+    },
+    {
+     "hierarchy": 4,
+     "typography": 5,
+     "composition": 3,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    }
+   ]
+  },
+  "d17": {
+   "group": "ours_new",
+   "file": "ckb_peer_call__poster_cream.png",
+   "sha256": "409103866e913d27360f4259189eb754f7ed8c802595ac83707e5600fc3ba7e6",
+   "round1": [
+    {
+     "hierarchy": 8,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 5,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 5
+    }
+   ],
+   "round2Id": "e47",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ]
+  },
+  "d18": {
+   "group": "ours_shipped",
+   "file": "en_photo_report__page_photo.png",
+   "sha256": "7c809265a3c6392877f4ddf1d7cc99763d3c7193f55aaf04db999a8f48617a14",
+   "round1": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 4,
+     "overall": 4
+    }
+   ],
+   "round2Id": "e26",
+   "round2": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 4,
+     "brand_polish": 5,
+     "impact": 4,
+     "overall": 5
+    }
+   ]
+  },
+  "d19": {
+   "group": "office",
+   "file": "photo01_k12_field_visit_report_en.jpg",
+   "sha256": "793860a9e535f9b65fde803d39a65e7ae6f0b5038f3e8ac1a62dfdb5fffa3c59",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 5,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 5,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 5,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 5
+    }
+   ],
+   "round2Id": "e01",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 6,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 6,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 6,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d20": {
+   "group": "ours_new",
+   "file": "en_symposium__poster_band.png",
+   "sha256": "45f52cb19759a9911f4f151e3b13785d2ee6452e2d21af907e5e9a06412589d1",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 4,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 7,
+     "composition": 5,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 5
+    }
+   ],
+   "round2Id": "e10",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d21": {
+   "group": "office",
+   "file": "post2_standards_higher_ed.png",
+   "sha256": "a4c2e366fc511ac8ab0f5929418d03003b2667b7f7d9f00bd0bcf2ec81ce277c",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 3,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 3,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 7,
+     "impact": 3,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e35",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 3,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 7,
+     "impact": 4,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 7,
+     "impact": 4,
+     "overall": 6
+    }
+   ]
+  },
+  "d22": {
+   "group": "ours_shipped",
+   "file": "ckb_workshop__page_brand_card.png",
+   "sha256": "d73f90ac1ddb60208aa9b4a671c5912655564cb952af9e655002a52df2ed1fd3",
+   "round1": [
+    {
+     "hierarchy": 4,
+     "typography": 3,
+     "composition": 4,
+     "imagery": 1,
+     "brand_polish": 3,
+     "impact": 2,
+     "overall": 3
+    },
+    {
+     "hierarchy": 4,
+     "typography": 4,
+     "composition": 3,
+     "imagery": 2,
+     "brand_polish": 3,
+     "impact": 2,
+     "overall": 3
+    },
+    {
+     "hierarchy": 4,
+     "typography": 4,
+     "composition": 4,
+     "imagery": 1,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    }
+   ],
+   "round2Id": "e29",
+   "round2": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 2,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 2,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 4,
+     "typography": 4,
+     "composition": 4,
+     "imagery": 2,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 3
+    }
+   ]
+  },
+  "d23": {
+   "group": "ours_new",
+   "file": "en_photo_report__page_photo.png",
+   "sha256": "97543cbbba576cbb6d309177ab9a2c2258ca9e21f57f60bd35241a245450a96b",
+   "round1": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 4,
+     "overall": 4
+    }
+   ],
+   "round2Id": "e06",
+   "round2": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 3,
+     "brand_polish": 4,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 4,
+     "brand_polish": 5,
+     "impact": 4,
+     "overall": 5
+    }
+   ]
+  },
+  "d24": {
+   "group": "ours_new",
+   "file": "ckb_workshop__poster_band.png",
+   "sha256": "2729868c6596da3bb494f5c55cfba915f02f51a5555fedbf0b0ce19ca79c77d4",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    }
+   ],
+   "round2Id": "e11",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 5
+    }
+   ]
+  },
+  "d25": {
+   "group": "office",
+   "file": "KAAE_Commences_2026_Cycle_1080x1350.png",
+   "sha256": "bd76c5591d0b7353e7fe7c30824c34ec4e4304eea2ce02dc09a063039b2b66a8",
+   "round1": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 5,
+     "impact": 4,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 4,
+     "impact": 5,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e13",
+   "round2": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 4,
+     "brand_polish": 5,
+     "impact": 4,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 5
+    }
+   ]
+  },
+  "d26": {
+   "group": "office",
+   "file": "photo02_k12_field_visit_report_ckb.jpg",
+   "sha256": "8f5f56fadefb32fff7ed3620bb6e67aeec1635c008764648ee4a8414d1b65ef6",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 5,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 5,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 5,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 5
+    }
+   ],
+   "round2Id": "e33",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 6,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 6,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 5
+    },
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 5,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    }
+   ]
+  },
+  "d27": {
+   "group": "ours_new",
+   "file": "en_workshop__poster_cream.png",
+   "sha256": "a3e1955f73def71a036124dd52ee569fa40a3730af06f885cbc8f0ff89401bb8",
+   "round1": [
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e09",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 6,
+     "overall": 7
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d28": {
+   "group": "ours_new",
+   "file": "en_workshop__poster_band.png",
+   "sha256": "64de3befc2b4de499f38e01f53363f6a26d4dae95203ad28f60867fa978c391a",
+   "round1": [
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e03",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d29": {
+   "group": "ours_shipped",
+   "file": "en_symposium__page_brand_card.png",
+   "sha256": "468c79b327cbc51e336faa7e89d9c7612212e7866a9a5d66c2394a63cff2e503",
+   "round1": [
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 3,
+     "imagery": 2,
+     "brand_polish": 4,
+     "impact": 2,
+     "overall": 4
+    },
+    {
+     "hierarchy": 4,
+     "typography": 5,
+     "composition": 3,
+     "imagery": 2,
+     "brand_polish": 4,
+     "impact": 2,
+     "overall": 3
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 3,
+     "imagery": 1,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    }
+   ],
+   "round2Id": "e24",
+   "round2": [
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 4,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 4,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    },
+    {
+     "hierarchy": 5,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 2,
+     "brand_polish": 5,
+     "impact": 3,
+     "overall": 4
+    }
+   ]
+  },
+  "d30": {
+   "group": "office",
+   "file": "photo12_peer_evaluators_call_ckb.jpg",
+   "sha256": "8d06327baaf1de0d9f85658f6ffdd55b5b4f1e88e66aa06fb2298c569694fb4c",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 6,
+     "composition": 5,
+     "imagery": 5,
+     "brand_polish": 6,
+     "impact": 5,
+     "overall": 6
+    },
+    {
+     "hierarchy": 8,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 5,
+     "brand_polish": 7,
+     "impact": 7,
+     "overall": 7
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 6,
+     "imagery": 5,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e23",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 5,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 4,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 5,
+     "imagery": 4,
+     "brand_polish": 5,
+     "impact": 5,
+     "overall": 5
+    }
+   ]
+  },
+  "d31": {
+   "group": "office",
+   "file": "photo09_eid_al_adha_sky_title.jpg",
+   "sha256": "20177301b5556329c1d064dfd5f8df4d0342b6bb943dce1d3c6e543739bc7848",
+   "round1": [
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 5,
+     "impact": 7,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 6,
+     "composition": 7,
+     "imagery": 9,
+     "brand_polish": 6,
+     "impact": 8,
+     "overall": 7
+    }
+   ],
+   "round2Id": "e22",
+   "round2": [
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 7,
+     "imagery": 8,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 7
+    },
+    {
+     "hierarchy": 6,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 8,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    },
+    {
+     "hierarchy": 5,
+     "typography": 5,
+     "composition": 6,
+     "imagery": 7,
+     "brand_polish": 5,
+     "impact": 6,
+     "overall": 6
+    }
+   ]
+  },
+  "d32": {
+   "group": "ours_new",
+   "file": "en_symposium__poster_cream.png",
+   "sha256": "d5f02b6234fcb8b086f6e79d6b9739f6320354d59ee6d38dbd03eaa3c385a9e9",
+   "round1": [
+    {
+     "hierarchy": 8,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e45",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 4,
+     "brand_polish": 7,
+     "impact": 7,
+     "overall": 7
+    }
+   ]
+  },
+  "d33": {
+   "group": "ours_new",
+   "file": "en_symposium__poster_navy.png",
+   "sha256": "3e18a6c82f686c7b2756f0c875c58ab72ace7041b69111fd03349a73c175b467",
+   "round1": [
+    {
+     "hierarchy": 8,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 4,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 2,
+     "brand_polish": 6,
+     "impact": 7,
+     "overall": 6
+    }
+   ],
+   "round2Id": "e16",
+   "round2": [
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 6,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 6,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 6,
+     "overall": 6
+    },
+    {
+     "hierarchy": 7,
+     "typography": 7,
+     "composition": 7,
+     "imagery": 3,
+     "brand_polish": 7,
+     "impact": 7,
+     "overall": 7
+    }
+   ]
+  }
+ }
+}

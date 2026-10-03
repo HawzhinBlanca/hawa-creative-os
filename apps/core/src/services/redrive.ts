@@ -1,5 +1,4 @@
 import { taskGenerationBlocker } from '@hawa/contracts';
-import { assertTaskGenerationAllowed } from './task-generation-guard.js';
 /**
  * Re-driving a task whose automatic design failed, and the sweep that re-drives every such task.
  * Moved unchanged from app.ts (architecture programme 1.3, SPLIT_PLAN.md G6): the controls routes
@@ -20,7 +19,6 @@ export type RedriveDeps = Pick<
   CoreContext,
   | 'db'
   | 'taskRepo'
-  | 'outboxRepo'
   | 'revisionRepo'
   | 'canvaConnectService'
   | 'telegramBridge'
@@ -34,7 +32,7 @@ export type Redrive = ReturnType<typeof createRedrive>;
 
 export function createRedrive(deps: RedriveDeps) {
   const {
-    db, taskRepo, outboxRepo, revisionRepo, canvaConnectService, telegramBridge, telegramAllowedUsers,
+    db, taskRepo, revisionRepo, canvaConnectService, telegramBridge, telegramAllowedUsers,
     broadcastEvent: broadcast, broadcastTransition, probeModelProvider,
   } = deps;
 
@@ -160,66 +158,15 @@ export function createRedrive(deps: RedriveDeps) {
       };
     }
 
-    // A task from a v3 chat (or any task the studio designed) is re-driven through the studio, never
-    // the older single-shot planner below: v3 runs refuse that planner even as a fallback, and /redo
-    // used to hand a v3 request to it. The studio run is durable and long, so it is not run here:
-    // an outbox `task.dispatch` with the attempt number reaches the worker, which starts a new studio
-    // run under new keys and reports the outcome through the Canva status route like any other run.
+    // A task from a v3 chat (or any task the studio designed) was re-driven through the studio by an
+    // outbox `task.dispatch` to the worker's task workflow. ADR-287 retired that workflow: a request is
+    // designed only by its RequestLifecycle, and a task outside it (made before the lifecycle owned every
+    // chat) gets no new automatic design. Nothing is queued and nobody is messaged; the office asks the
+    // requester to send the request again, which opens a lifecycle request.
     const { runsPipelineV3 } = await import('./chat-intake.js');
     if (runsPipelineV3(String(taskData.payload?.sourceChannelId || channelId)) || taskData.payload?.designStudio === true) {
-      if (!outboxRepo) throw new Error('Durable outbox required for a studio re-drive');
-      const queued = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-        const currentTask = (await sql<{state:string}>`SELECT state FROM hawa.tasks WHERE tenant_id=${tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(trx)).rows[0];
-        assertTaskGenerationAllowed(currentTask?.state);
-        // `stale`: not live by the Desk's own rule (LIVE_RUN), 30 minutes without progress.
-        const unfinishedRun = (await sql<any>`SELECT id, status, updated_at <= now() - interval '30 minutes' AS stale FROM hawa.design_studio_runs
-          WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
-            AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned')
-          LIMIT 1`.execute(trx)).rows[0];
-        const redrives = (await sql<any>`SELECT state FROM hawa.outbox_commands
-          WHERE tenant_id = ${tenantId}::uuid AND aggregate_id = ${taskId}::uuid
-            AND command_type = 'task.dispatch' AND payload->>'redriveAttempt' IS NOT NULL`.execute(trx)).rows;
-        if ((unfinishedRun && !unfinishedRun.stale) || redrives.some((r: any) => r.state === 'pending' || r.state === 'leased')) return null;
-        // A run nothing has advanced for 30 minutes was given up on (the worker stopped following it,
-        // or a restart cut it off mid-stage): it is abandoned, as the studio's abandon does, and a new
-        // one queued. Until 2026-09-24 such a run counted as in progress for ever, and /redo answered
-        // "still being made" for a design that would never arrive.
-        if (unfinishedRun) {
-          await sql`UPDATE hawa.design_studio_runs
-            SET status = 'abandoned', diagnostic = ${`Abandoned by ${actorId}: no progress at '${unfinishedRun.status}' for 30 minutes; re-driven`}, updated_at = now()
-            WHERE tenant_id = ${tenantId}::uuid AND id = ${unfinishedRun.id}::uuid
-              AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned') AND updated_at <= now() - interval '30 minutes'`.execute(trx);
-        }
-        const attempt = redrives.length + 1;
-        await outboxRepo.enqueue({
-          tenantId,
-          aggregateType: 'task',
-          aggregateId: taskId,
-          commandType: 'task.dispatch',
-          idempotencyKey: `redrive:${taskId}:${attempt}`,
-          payload: {
-            ...(taskData.payload || {}),
-            workflow: 'canva',
-            autoGenerate: true,
-            designStudio: true,
-            clientId: taskData.client_id,
-            redriveAttempt: attempt,
-            redriveRequestedBy: actorId,
-          },
-        }, trx);
-        return { attempt };
-      });
-      if (channelId && channelId !== 'tg_default') {
-        await telegramBridge?.dispatchOutboundMessage(channelId, {
-          text: queued
-            ? `🔄 <b>A new automatic design has been started</b> for task <code>${taskId}</code>.\n<i>You will receive the Canva link here when it is ready, or an explanation if it cannot be made.</i>`
-            : `⏳ <b>A design for task</b> <code>${taskId}</code> <b>is still being made</b>, so no second one was started.\n<i>You will receive the result here.</i>`,
-          parse_mode: 'HTML',
-        });
-      }
-      return queued
-        ? { ok: true, taskId, status: 'STUDIO_RUN_QUEUED', redriveAttempt: queued.attempt }
-        : { ok: true, taskId, status: 'STUDIO_RUN_IN_PROGRESS' };
+      return { ok: false, code: 'LEGACY_WORKFLOW_RETIRED',
+        message: `Task ${taskId} is outside RequestLifecycle, and the task workflow that re-drove it was retired (ADR-287). Ask the requester to send the request again.` };
     }
     const redriveOutcome = await import('./canva-task-outcome.js');
 

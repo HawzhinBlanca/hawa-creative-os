@@ -180,7 +180,7 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
     const snapRes = await app.request(`/v1/clients/${drusteeClientId}/snapshots`, {
       method: 'POST',
       headers: authHeaders,
-      body: JSON.stringify({ commitMessage: 'Subsequent update' }),
+      body: JSON.stringify({ commitMessage: 'Subsequent update', expectedVersion: pinnedVersion }),
     });
     expect(snapRes.status).toBe(201);
     const snapData = await snapRes.json();
@@ -215,6 +215,7 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
         targetVersion,
         reason: 'Regression detected in candidate typography rule',
         role: 'creative_director',
+        expectedVersion: (await (await app.request(`/v1/clients/${drusteeClientId}/dna`, { headers: authHeaders })).json()).version,
       }),
     });
 

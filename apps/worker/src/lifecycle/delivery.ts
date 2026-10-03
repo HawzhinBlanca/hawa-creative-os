@@ -32,7 +32,7 @@ import { chaosPoint } from '@hawa/observability';
 import { verifyLifecycleDeliveryClaim } from '@hawa/integrations';
 import { composeDeliveredCaption, composeDeliveredMessage, composeDeliveryFailedAlert } from '../delivery-notification.js';
 import { requestIdHeaders, withInvocationLogContext } from '../logging.js';
-import { TelegramSenderApi } from './telegram-sender.js';
+import { TelegramSenderApi, isDeskChannel } from './telegram-sender.js';
 import { RequestLifecycleApi } from './request-lifecycle.js';
 import { acceptedWorkerSecrets } from './worker-secrets.js';
 import { officeAlertKey, officeAlertRoute, officeChatIdsFromEnv, officeRecipients } from './office-chats.js';
@@ -172,10 +172,13 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
   }
 
   const chatId = prepared?.chatId || input.chatId;
+  // ADR-287: a Desk request's office member takes the files from the Desk; nothing is sent to its
+  // channel, and Core confirms the delivery from the archive and Sheet receipts alone.
+  const deskOnly = isDeskChannel(chatId);
   let filesSent = 0;
   const uncertain: string[] = [];
   const refused: string[] = [];
-  if (prepared && chatId) {
+  if (prepared && chatId && !deskOnly) {
     for (const [i, file] of prepared.files.entries()) {
       // The chaos suite kills a process here: some files sent, the others not yet.
       if (i > 0) await chaosPoint('worker.delivery.between-files', { deliveryId: input.deliveryId, taskId: input.taskId, file: i });
@@ -196,7 +199,7 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
       if (sent.outcome === 'sent') filesSent++;
       else if (sent.outcome === 'uncertain') uncertain.push(file.filename);
       // ADR-240: a file recorded for the canary never reached anyone, so it is not delivered.
-      else refused.push(`${file.filename} (${sent.outcome === 'canary_sink' ? 'CANARY_SINK: recorded for the canary, not sent' : sent.outcome === 'web_recorded' ? 'WEB_RECORDED: no customer download receipt' : sent.error})`);
+      else refused.push(`${file.filename} (${sent.outcome === 'canary_sink' ? 'CANARY_SINK: recorded for the canary, not sent' : sent.outcome === 'web_recorded' ? 'WEB_RECORDED: no customer download receipt' : sent.outcome === 'desk_only' ? 'DESK_ONLY: not sent' : sent.error})`);
     }
     // The notice says what is known. A refused file leaves the delivery failed and the notice unsent,
     // as Core's own delivery did: the office follows up.

@@ -46,9 +46,18 @@ describe('manual Canva intake', () => {
     await submitManualTask(draft);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher.mock.calls[0][0]).toBe('/v1/tasks');
-    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ copyEn: draft.copy,
+    // ADR-287: "New task" opens a request on the request lifecycle.
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ copyEn: draft.copy, workflow: 'office_request',
       designInstructions: draft.designInstructions, referenceAssets: draft.referenceAssets, clientId: draft.clientId });
     expect(getPendingManualDraft()).toBeNull();
+  });
+  it('shows Core\'s reason for a first refusal of a new request and keeps the draft (ADR-287)', async () => {
+    draftStore.saveActiveDraft(draft);
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ detail: 'Type the exact words for the design (English or Kurdish) before saving' }, { status: 422 }));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(submitManualTask(draft)).rejects.toThrow('Type the exact words for the design');
+    expect(getPendingManualDraft()).toBeNull();
+    expect(draftStore.getActiveDraft()).toMatchObject({ title: draft.title, copy: draft.copy });
   });
   it('reuses the exact key and body after a lost response, including after draft recovery', async () => {
     const fetcher = vi.fn().mockRejectedValueOnce(new Error('lost')).mockResolvedValueOnce(new Response('{"id":"task-1"}'));
@@ -97,5 +106,21 @@ describe('definitive client refusal versus uncertain recovery', () => {
     await expect(submitManualTask(draft)).rejects.toThrow('unconfirmed');
     await expect(submitManualTask(draft)).rejects.toThrow('403');
     expect(getPendingManualDraft()).toEqual(draft);
+  });
+});
+
+describe('a Google (cookie) session (hunt-3)', () => {
+  it('sends the CSRF proof Core requires of a cookie-session write, so the request is not refused with 403', async () => {
+    vi.stubGlobal('document', { cookie: 'hawa_csrf=proof-123' });
+    const storage = { getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) };
+    vi.stubGlobal('window', { localStorage: storage, sessionStorage: storage });
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'task-1' }), { status: 201 }));
+    vi.stubGlobal('fetch', fetcher);
+    await submitManualTask(draft);
+    const headers = fetcher.mock.calls[0][1].headers;
+    expect(headers['x-hawa-csrf']).toBe('proof-123');
+    expect(headers.Authorization).toBeUndefined();
+    expect(fetcher.mock.calls[0][1].credentials).toBe('same-origin');
   });
 });

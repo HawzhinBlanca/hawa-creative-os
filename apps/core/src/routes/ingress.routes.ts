@@ -6,6 +6,30 @@ import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { taskFromRows } from '../services/task-reader.js';
 import { compareAndSetKillSwitch, KillSwitchRevisionConflict, mayChangeKillSwitch, refreshKillSwitches, setKillSwitch } from '../services/channel-kill-switches.js';
+import { MAX_ATTACHMENT_SIZE_BYTES, type IngressAttachmentInput } from '@hawa/integrations';
+
+/** Who may relay a channel message through POST /ingress/unified (bug hunt 3). */
+export const UNIFIED_INGRESS_ROLES = ['administrator', 'operator'] as const;
+export const MAX_INGRESS_ATTACHMENTS = 10;
+export const MAX_INGRESS_ATTACHMENT_TOTAL_BYTES = 100 * 1024 * 1024;
+
+/** The relayed attachment descriptions, bounded; a string says why they were refused. */
+function boundedAttachments(value: unknown): { status: 400 | 413; detail: string } | IngressAttachmentInput[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) return { status: 400, detail: 'attachments must be a list' };
+  if (value.length > MAX_INGRESS_ATTACHMENTS) return { status: 413, detail: `At most ${MAX_INGRESS_ATTACHMENTS} attachments may be relayed at once` };
+  let total = 0;
+  for (const a of value) {
+    if (!a || typeof a !== 'object' || Array.isArray(a) || typeof a.filename !== 'string' || !a.filename || a.filename.length > 255 ||
+        typeof a.mimeType !== 'string' || !a.mimeType || a.mimeType.length > 255 || !Number.isSafeInteger(a.byteSize) || a.byteSize < 0) {
+      return { status: 400, detail: 'Each attachment needs a filename, a mimeType and a non-negative integer byteSize' };
+    }
+    if (a.byteSize > MAX_ATTACHMENT_SIZE_BYTES) return { status: 413, detail: `An attachment may be at most ${MAX_ATTACHMENT_SIZE_BYTES} bytes` };
+    total += a.byteSize;
+  }
+  if (total > MAX_INGRESS_ATTACHMENT_TOTAL_BYTES) return { status: 413, detail: `The attachments may total at most ${MAX_INGRESS_ATTACHMENT_TOTAL_BYTES} bytes` };
+  return value as IngressAttachmentInput[];
+}
 
 export function registerIngressRoutes(ctx: RouteContext) {
   const { registerRoute, unifiedIngress, channelKillSwitches, problem } = ctx;
@@ -81,6 +105,10 @@ export function registerIngressRoutes(ctx: RouteContext) {
     // Only an authenticated adapter or operator may declare a verified inbound message.
     const ingressAuth = verifyRequestAuth(c);
     if (!ingressAuth.authenticated) return problem(c, 401, 'Unauthorized', 'Authentication required for unified ingress');
+    // The same office roles that run intake; the channel adapters reach the service, not this route.
+    if (!(UNIFIED_INGRESS_ROLES as readonly string[]).includes(ingressAuth.role || '')) {
+      return problem(c, 403, 'Forbidden', 'Only an office operator or administrator may relay a channel message');
+    }
     let body: any;
     try {
       body = await c.req.json();
@@ -95,6 +123,10 @@ export function registerIngressRoutes(ctx: RouteContext) {
         'Missing Required Ingress Fields',
         'channel, sourceAccountId, sourceEventId, and sourceMessageId are required'
       );
+    }
+    const attachments = boundedAttachments(body.attachments);
+    if (!Array.isArray(attachments)) {
+      return problem(c, attachments.status, attachments.status === 413 ? 'Too Many Attachments' : 'Invalid Attachments', attachments.detail);
     }
 
     // The tenant comes from the credential. Only an administrator may address another tenant
@@ -116,11 +148,13 @@ export function registerIngressRoutes(ctx: RouteContext) {
       senderDisplayName: body.senderDisplayName,
       text: body.text || '',
       rawPayload: body.rawPayload || body,
-      verified: true,
-      verificationMethod: 'api_token',
+      // The credential authenticates the relaying office, not the channel the message names: nothing
+      // here checked a channel signature, so the message is recorded unverified (bug hunt 3).
+      verified: false,
+      verificationMethod: 'office_api_relay',
       occurredAt: body.occurredAt,
       receivedAt: body.receivedAt,
-      attachments: body.attachments || [],
+      attachments,
       explicitClientId: body.explicitClientId,
       isTaskSubmission: body.isTaskSubmission,
       replyContext: body.replyContext,
@@ -149,8 +183,16 @@ export function registerIngressRoutes(ctx: RouteContext) {
       return problem(c, 400, 'Missing Field', 'messageEventId is required');
     }
 
-    const tenantId = (body.tenantId && isValidUuid(body.tenantId)) ? body.tenantId : (auth.tenantId || defaultTenantId);
-    const userId = (body.userId && isValidUuid(body.userId)) ? body.userId : (auth.userId || operatorUserId);
+    // The task is written as the caller, in the caller's tenant: row-level security keys on both. As at
+    // /ingress/unified, only an administrator may name another tenant or user (office bootstrap and
+    // fixtures); any other role naming one was creating tasks in another tenant, or as another person.
+    const namedTenant = typeof body.tenantId === 'string' && isValidUuid(body.tenantId) ? body.tenantId : null;
+    const namedUser = typeof body.userId === 'string' && isValidUuid(body.userId) ? body.userId : null;
+    if (auth.role !== 'administrator' && ((namedTenant && namedTenant !== auth.tenantId) || (namedUser && namedUser !== auth.userId))) {
+      return problem(c, 403, 'Forbidden', 'A task is promoted as the signed-in user, in their own tenant.');
+    }
+    const tenantId = (auth.role === 'administrator' && namedTenant) || auth.tenantId || defaultTenantId;
+    const userId = (auth.role === 'administrator' && namedUser) || auth.userId || operatorUserId;
 
     if (db && taskRepo) {
       try {
@@ -176,7 +218,8 @@ export function registerIngressRoutes(ctx: RouteContext) {
         );
         return c.json({ ok: true, promoted: true, task: taskAggregate.task }, 201);
       } catch (err: any) {
-        return problem(c, 500, 'Promotion Failed', err.message);
+        log.error('[core:ingress:promote] promotion failed:', err?.message || err);
+        return problem(c, 500, 'Promotion Failed', 'The message could not be promoted to a task.');
       }
     }
 

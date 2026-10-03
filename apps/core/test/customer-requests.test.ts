@@ -4,7 +4,9 @@ import {CanvaConnectService} from '../src/services/canva-connect-service.js';
 import {customerActionEvent,projectCustomerAction,acknowledgeCustomerAction} from '../src/customer/customer-actions.js';
 import { customerPhotoSelection } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { blobStoreFor } from '../src/services/blob-store-context.js';
@@ -565,9 +567,9 @@ it('preserves six admitted website photos across mounted internal HTTP and refus
  const singleConnection=createDb(process.env.TEST_DATABASE_URL!,{max:1});
  try {
   const app=createApp({db:singleConnection,skipTelegramProbe:true,skipPaidModelProbe:true,requesterIntentModel:null});
-  const send=async(draft:unknown)=>app.request(`/v1/internal/lifecycle/${open.requestId}/project`,{
+  const send=async(draft:unknown,requestId=open.requestId)=>app.request(`/v1/internal/lifecycle/${requestId}/project`,{
    method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-   body:JSON.stringify({v:1,expectedRev:0,rev:1,key:`${open.requestId}:1:open`,ops:[{kind:'createRequest',draft}]})});
+   body:JSON.stringify({v:1,expectedRev:0,rev:1,key:`${requestId}:1:open`,ops:[{kind:'createRequest',draft}]})});
   const changed=structuredClone(open.draft);changed.customerWebPhotos!.images.reverse();
   const refusal=await send(changed);expect(refusal.status).toBe(409);expect(await refusal.json()).toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
   const first=await send(open.draft);expect(first.status).toBe(200);const receipt=await first.json();
@@ -578,12 +580,23 @@ it('preserves six admitted website photos across mounted internal HTTP and refus
   expect((await sql<{sha256:string}>`SELECT sha256 FROM hawa.task_files WHERE task_id=${task[0].id}::uuid`.execute(owner)).rows.map(r=>r.sha256).sort()).toEqual(photos.map(p=>p.sha256).sort());
   const omitted={...open.draft};delete omitted.customerWebPhotos;
   expect((await send(omitted)).status).toBe(409);
-  for(const manifest of [{v:2,images:open.draft.customerWebPhotos!.images},{v:1,images:[]},
+  const emptyChanged=await send({...open.draft,customerWebPhotos:{v:1,images:[]}});
+  expect(emptyChanged.status).toBe(409);expect(await emptyChanged.json()).toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
+  for(const manifest of [{v:2,images:open.draft.customerWebPhotos!.images},
     {v:1,images:[...open.draft.customerWebPhotos!.images,open.draft.customerWebPhotos!.images[0]]},
     {v:1,images:open.draft.customerWebPhotos!.images,owner:'forged'},
     {v:1,images:[{...open.draft.customerWebPhotos!.images[0],size:10485761}]}])
    expect((await send({...open.draft,customerWebPhotos:manifest})).status).toBe(400);
   expect((await send({...open.draft,platform:'telegram',sourceChannelId:'12345'})).status).toBe(400);
+  const zero=await service.create(member,'mounted_zero_photos',{clientId,title:'No supplied photos',
+   exactCopy:[{text:'Exact zero-photo copy',language:'en'}],designInstructions:'Compose for this content.',variant:'story'});
+  const zeroOpen=await customerWebOpenEvent(db,tenantId,zero.job.id);
+  expect(zeroOpen.draft.customerWebPhotos).toEqual({v:1,images:[]});
+  const zeroProjected=await send(zeroOpen.draft,zeroOpen.requestId);expect(zeroProjected.status).toBe(200);
+  const zeroReceipt=await zeroProjected.json();
+  const zeroPayload=(await sql<{data:{payload:{customerWebPhotos:unknown}}}>`SELECT data FROM hawa.task_events
+    WHERE task_id=${zeroReceipt.taskId}::uuid AND event_type='task.created'`.execute(owner)).rows[0].data.payload;
+  expect(zeroPayload.customerWebPhotos).toEqual({v:1,images:[]});
  } finally {
   await singleConnection.destroy();
   if(saved===undefined)delete process.env.HAWA_WORKER_TOKEN;else process.env.HAWA_WORKER_TOKEN=saved;
@@ -665,6 +678,17 @@ it('retains an uppercase UUID submission body while resolving its canonical sele
 });
 
 const photoJpeg=readFileSync(new URL('./fixtures/telegram-photo-1280.jpg',import.meta.url));
+// A small PNG decoded from the JPEG fixture. ffmpeg reads the fixture from a file, never stdin: fed through
+// execFileSync's stdin it sometimes idled on an open pipe under the full suite's load, hanging the
+// release gate for two hours (2026-10-03); the timeout turns any other stall into a failure in seconds.
+const fixturePng=(filters:string)=>{
+ const dir=mkdtempSync(join(tmpdir(),'hawa-photo-'));
+ try {
+  const input=join(dir,'photo.jpg');writeFileSync(input,photoJpeg);
+  return execFileSync('ffmpeg',['-v','error','-nostdin','-i',input,'-vf',filters,'-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],
+   {maxBuffer:65536,timeout:30000,killSignal:'SIGKILL',stdio:['ignore','pipe','pipe']});
+ } finally {rmSync(dir,{recursive:true,force:true});}
+};
 const photoHash=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
 async function previewFixture(override?:Partial<CustomerDesignRequest>) {
  const f=await fixture();Object.assign(f.body,override);
@@ -674,7 +698,7 @@ async function previewFixture(override?:Partial<CustomerDesignRequest>) {
  const binding=randomUUID(),designId='Synthetic-'+randomUUID();
  await sql`INSERT INTO hawa.canva_bindings(id,tenant_id,task_id,client_id,canva_design_id,edit_url)
  VALUES(${binding}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,${designId},'https://www.canva.com/design/synthetic/edit')`.execute(owner);
- const png=execFileSync('ffmpeg',['-v','error','-f','image2pipe','-i','pipe:0','-vf','scale=32:32','-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],{input:photoJpeg,maxBuffer:65536});
+ const png=fixturePng('scale=32:32');
  async function capture(bytes=png,format='png',native='v1',check?:Record<string,unknown>) {
   const operation=randomUUID(),id=randomUUID(),hash=photoHash(bytes);
   await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version,metadata)
@@ -782,8 +806,7 @@ it('bounds complete concurrent preview reads before retaining or decoding native
  expect((await app.request(url)).status).toBe(404);
 });
 async function upload(f:Awaited<ReturnType<typeof fixture>>,n=0,member=f.a.member) {
-  const bytes=execFileSync('ffmpeg',['-v','error','-f','image2pipe','-i','pipe:0','-vf',`scale=32:32,hue=h=${n*37}`,
-    '-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],{input:photoJpeg,maxBuffer:65536});
+  const bytes=fixturePng(`scale=32:32,hue=h=${n*37}`);
   return f.service.uploadPhoto(member,f.clientId,'photo_key_'+n,`photo${n}.png`,'image/png',bytes,photoHash(bytes));
 }
 it('decodes actual JPEG/PNG/WebP originals and refuses malformed headers, hash mismatch, traversal and pixel bombs',async()=>{
@@ -827,6 +850,33 @@ it('retains six originals in requester order through the actual canonical projec
 
   await expect(projectLifecycleOpen(db,{requestId:open.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:open.draft,key:'open:'+open.requestId})).resolves.toEqual(projected);
   for(const p of photos)expect((await blobStoreFor(db)!.read(p.sha256,{verify:true})).length).toBe(p.size);
+});
+it('marks a zero-photo web request explicitly with an empty manifest so no office archive photo can join it',async()=>{
+  const f=await fixture();
+  const admitted=await f.service.create(f.a.member,'zero_photos',f.body);
+  const open=await customerWebOpenEvent(db,f.tenantId,admitted.job.id);
+  // A website request is always marked as one, even without a photo (bug hunt 3): the office photo library
+  // reads the absence of this manifest as "an office request".
+  expect(open.draft.customerWebPhotos).toEqual({v:1,images:[]});
+  await projectLifecycleOpen(db,{requestId:open.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:open.draft,key:'open:'+open.requestId});
+  const task=(await sql<{id:string;source:Record<string,unknown>}>`SELECT t.id,e.data AS source FROM hawa.tasks t JOIN hawa.task_events e ON e.task_id=t.id AND e.event_type='task.created' WHERE t.request_id=${open.requestId}::uuid`.execute(owner)).rows[0];
+  const payload=task.source.payload as Record<string,unknown>;
+  expect(payload.customerWebPhotos).toEqual({v:1,images:[]});
+  expect(orderedCustomerPhotos(payload.customerWebPhotos,[])).toEqual([]);
+  const studio=new DesignStudioService(db,undefined,{blobStore:blobStoreFor(db)});
+  const readImages=(studio as unknown as {requestImages:(scope:{tenantId:string;actorId:string},taskId:string)=>Promise<string[]>}).requestImages.bind(studio);
+  expect(await readImages({tenantId:f.tenantId,actorId:CHANNEL_INGRESS_USER_ID},task.id)).toEqual([]);
+  // A zero-photo open journalled by a worker before this change (no manifest) still projects.
+  const legacy=await f.service.create(f.a.member,'zero_photos_legacy',{...f.body,title:'Legacy in-flight'});
+  const legacyOpen=await customerWebOpenEvent(db,f.tenantId,legacy.job.id);
+  const {customerWebPhotos:_omitted,...legacyDraft}=legacyOpen.draft;
+  await expect(projectLifecycleOpen(db,{requestId:legacyOpen.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:legacyDraft,key:'open:'+legacyOpen.requestId})).resolves.toBeTruthy();
+  // ...but a worker may not drop the manifest of a request that has photos.
+  const photo=(await upload(f,3,f.b.member)).photo;
+  const withPhoto=await f.service.create(f.b.member,'one_photo_dropped',{...f.body,photoIds:[photo.id]});
+  const photoOpen=await customerWebOpenEvent(db,f.tenantId,withPhoto.job.id);
+  const {customerWebPhotos:_dropped,...dropped}=photoOpen.draft;
+  await expect(projectLifecycleOpen(db,{requestId:photoOpen.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:dropped,key:'open:'+photoOpen.requestId})).rejects.toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
 });
 it('never forces all photos automatically and bounds an explicit count',async()=>{
   const f=await fixture();const a=(await upload(f,1)).photo,b=(await upload(f,2)).photo;

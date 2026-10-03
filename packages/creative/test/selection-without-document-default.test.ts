@@ -5,8 +5,13 @@ import {
   evaluatePairOrder,
   JUDGE_DIMENSIONS,
   PHOTO_JUDGE_DIMENSIONS,
-  POSTER_IMPACT_CRITERIA,
+  POSTER_DIMENSION_CRITERIA,
+  POSTER_JUDGE_DIMENSIONS,
+  POSTER_JUDGE_WEIGHTS,
+  POSTER_LEGIBILITY_GATE,
   POSTER_METRICS_RULE,
+  tallyJudgeVotes,
+  judgeVoteSpec,
   type AnyJudgeDimension,
 } from '../src/studio/pairwise-judge-v3.js';
 import { SIX_CONFIRMED_EXEMPLARS } from './fixtures/design-metrics-fixtures.js';
@@ -23,7 +28,8 @@ const verdict = (dims: AnyJudgeDimension[]) => ({
   ...(dims.length > 5 ? { artDirection: Object.fromEntries(['A', 'B'].map((k) => [k, {
     heroFitsSubject: true, photoBoldAndDominant: true, textOnPlateCardOrFade: true, conceptConnection: true, photosTiledInGrid: false, houseRulesBroken: [],
   }])) } : {}),
-  dimensions: Object.fromEntries(dims.map((d) => [d, { winner: 'A', rationale: 'r' }])),
+  legibilityGate: { A: { illegible: false, reason: 'r' }, B: { illegible: false, reason: 'r' } },
+  dimensions: Object.fromEntries([...dims, ...POSTER_JUDGE_DIMENSIONS].map((d) => [d, { winner: 'A', rationale: 'r' }])),
   majorityWinner: 'A', summary: 's',
 });
 const client = (dims: AnyJudgeDimension[] = JUDGE_DIMENSIONS) =>
@@ -76,27 +82,24 @@ describe('a poster client\'s judge (ADR-274)', () => {
       const prompt = buildPairwiseJudgeSystemPrompt({ photoBrief, posterImpact: true });
       expect(prompt).toContain(POSTER_METRICS_RULE);
       expect(prompt).not.toMatch(/You must take them into account/);
-      expect(prompt).toContain(POSTER_IMPACT_CRITERIA.composition);
-      expect(prompt).toContain(POSTER_IMPACT_CRITERIA.hierarchy);
-      expect(prompt).toContain(POSTER_IMPACT_CRITERIA.brand_fit);
     }
   });
 
   it('no longer counts negative space as a virtue of a poster\'s composition', () => {
     const poster = buildPairwiseJudgeSystemPrompt({ photoBrief: false, posterImpact: true });
-    expect(poster).toMatch(/2\. composition: balance, grid discipline, alignment, framing\. A clear focal point/);
+    expect(poster).toContain(`3. composition (weight 2): ${POSTER_DIMENSION_CRITERIA.composition}`);
     expect(poster).not.toMatch(/negative space/);
-    expect(POSTER_IMPACT_CRITERIA.composition).toMatch(/Empty canvas is not a virtue/);
+    expect(POSTER_DIMENSION_CRITERIA.composition).toMatch(/Empty canvas is not a virtue/);
     expect(buildPairwiseJudgeSystemPrompt({ photoBrief: false })).toMatch(/alignment, negative space, framing/);
   });
 
   it('is strengthened: impact at feed size, the focal point and imagery, the client\'s own posts and the brief', () => {
-    expect(POSTER_IMPACT_CRITERIA.hierarchy).toMatch(/300px-wide thumbnail/);
-    expect(POSTER_IMPACT_CRITERIA.hierarchy).toMatch(/Impact at feed size/);
-    expect(POSTER_IMPACT_CRITERIA.composition).toMatch(/focal point/);
-    expect(POSTER_IMPACT_CRITERIA.composition).toMatch(/photograph/);
-    expect(POSTER_IMPACT_CRITERIA.brand_fit).toMatch(/requester's instructions/);
-    expect(POSTER_IMPACT_CRITERIA.brand_fit).toMatch(/own published posts/);
+    expect(POSTER_DIMENSION_CRITERIA.impact).toMatch(/300px-wide thumbnail/);
+    expect(POSTER_DIMENSION_CRITERIA.impact).toMatch(/Impact at feed size/);
+    expect(POSTER_DIMENSION_CRITERIA.composition).toMatch(/focal point/);
+    expect(POSTER_DIMENSION_CRITERIA.imagery).toMatch(/photograph/);
+    expect(POSTER_DIMENSION_CRITERIA.brand_fit).toMatch(/requester's instructions/);
+    expect(POSTER_DIMENSION_CRITERIA.brand_fit).toMatch(/own published posts/);
   });
 
   it('is shown the legibility facts only; the composite, balance, regularity and alignment are withheld', async () => {
@@ -108,7 +111,7 @@ describe('a poster client\'s judge (ADR-274)', () => {
     expect(text).not.toMatch(/Composite Score|Balance:|Regularity:|Alignment:|GROUND TRUTH/);
     expect(text).toMatch(/withheld/);
     expect(text).toContain('Keep it formal');
-    expect(text).toContain('across all 5 dimensions');
+    expect(text).toContain('across all 4 dimensions');
     const photo = await judge({ posterImpact: true }, true);
     expect(user(photo)).toMatch(/PHOTOS PLACED/);
     expect(user(photo)).not.toMatch(/Composite Score/);
@@ -129,5 +132,75 @@ describe('a poster client\'s judge (ADR-274)', () => {
     expect(user(withRef)).not.toMatch(/published posts/);
     // No office post given: two images.
     expect(images(await judge({ posterImpact: true }))).toHaveLength(2);
+  });
+});
+
+describe('the poster vote (ADR-274 addendum): impact and imagery vote; text is a gate', () => {
+  const reply = (winners: Partial<Record<string, 'A' | 'B'>>, gate: { A: boolean; B: boolean } = { A: false, B: false }) => ({
+    legibilityGate: { A: { illegible: gate.A, reason: 'r' }, B: { illegible: gate.B, reason: 'r' } },
+    dimensions: Object.fromEntries(POSTER_JUDGE_DIMENSIONS.map((d) => [d, { winner: winners[d] ?? 'A', rationale: 'r' }])),
+  }) as any;
+  const spec = judgeVoteSpec(false, true);
+
+  it('votes on impact, imagery, composition and brand fit, weighted 2-2-2-1, in both prompts and schemas', () => {
+    expect(POSTER_JUDGE_DIMENSIONS).toEqual(['impact', 'imagery', 'composition', 'brand_fit']);
+    expect(POSTER_JUDGE_WEIGHTS).toEqual({ impact: 2, imagery: 2, composition: 2, brand_fit: 1 });
+    for (const photoBrief of [false, true]) {
+      const prompt = buildPairwiseJudgeSystemPrompt({ photoBrief, posterImpact: true, houseRules });
+      expect(prompt).toContain(POSTER_LEGIBILITY_GATE);
+      expect(prompt).toContain(`1. impact (weight 2): ${POSTER_DIMENSION_CRITERIA.impact}`);
+      expect(prompt).toContain(`2. imagery (weight 2): ${POSTER_DIMENSION_CRITERIA.imagery}`);
+      expect(prompt).toContain(`4. brand_fit (weight 1): ${POSTER_DIMENSION_CRITERIA.brand_fit}`);
+      expect(prompt).toMatch(/at least 4 of 7/);
+      expect(prompt).not.toMatch(/typographic_craft|^\d\. legibility:|^\d\. hierarchy:/m);
+      const s = judgeVoteSpec(photoBrief, true);
+      const props = (s.schema as any).properties;
+      expect(Object.keys(props.dimensions.properties)).toEqual(['impact', 'imagery', 'composition', 'brand_fit']);
+      expect(props.legibilityGate.required).toEqual(['A', 'B']);
+      expect(Boolean(props.artDirection)).toBe(photoBrief);
+      if (photoBrief) expect(prompt).toMatch(/one clear hero photograph/);
+    }
+  });
+
+  it('impact and imagery together outvote composition and brand fit; the text has no vote', () => {
+    const t = tallyJudgeVotes(reply({ impact: 'B', imagery: 'B', composition: 'A', brand_fit: 'A' }), spec);
+    expect([t.weightedA, t.weightedB, t.majorityWinner]).toEqual([3, 4, 'B']);
+    expect(t.legibilityVeto).toBeNull();
+    // Composition and brand fit with one of the two still win.
+    expect(tallyJudgeVotes(reply({ impact: 'B', imagery: 'A', composition: 'A', brand_fit: 'A' }), spec).majorityWinner).toBe('A');
+  });
+
+  it('the gate vetoes only a candidate that cannot be read, and only when the other can', () => {
+    const vetoed = tallyJudgeVotes(reply({}, { A: true, B: false }), spec);
+    expect([vetoed.majorityWinner, vetoed.legibilityVeto]).toEqual(['B', 'A']);
+    expect(tallyJudgeVotes(reply({}, { A: true, B: true }), spec).majorityWinner).toBe('A');
+    expect(tallyJudgeVotes(reply({ impact: 'B', imagery: 'B', composition: 'B', brand_fit: 'B' }, { A: false, B: true }), spec).majorityWinner).toBe('A');
+  });
+
+  it('refuses a reply without the gate or a dimension, as any missing answer', () => {
+    const noGate = reply({});
+    delete noGate.legibilityGate;
+    expect(() => tallyJudgeVotes(noGate, spec)).toThrow(/legibilityGate/);
+    const noImagery = reply({});
+    delete noImagery.dimensions.imagery;
+    expect(() => tallyJudgeVotes(noImagery, spec)).toThrow(/imagery/);
+  });
+
+  it('records the poster vote on the order: weights, totals, the gate and any veto; the call count is unchanged', async () => {
+    const c = client();
+    const r = await evaluatePairOrder({ id: 'a', layout: A, renderedPng: png }, { id: 'b', layout: B, renderedPng: png }, 'AB',
+      { client: c, model: 'gpt-4.1-mini', brief, houseRules, posterImpact: true });
+    expect(c.createStructuredCompletion).toHaveBeenCalledTimes(1);
+    expect(r.posterVote).toBe(true);
+    expect(r.weights).toEqual(POSTER_JUDGE_WEIGHTS);
+    expect([r.weightedVotesA, r.weightedVotesB]).toEqual([7, 0]);
+    expect(r.legibilityVeto).toBeNull();
+    expect(Object.keys(r.votes)).toEqual(['impact', 'imagery', 'composition', 'brand_fit']);
+    expect(call(c).jsonSchema.schema).toBe(judgeVoteSpec(false, true).schema);
+    // Another client: the five votes and no poster fields.
+    const other = await evaluatePairOrder({ id: 'a', layout: A, renderedPng: png }, { id: 'b', layout: B, renderedPng: png }, 'AB',
+      { client: client(), model: 'gpt-4.1-mini', brief, houseRules });
+    expect(other.posterVote).toBeUndefined();
+    expect(Object.keys(other.votes)).toEqual(JUDGE_DIMENSIONS);
   });
 });

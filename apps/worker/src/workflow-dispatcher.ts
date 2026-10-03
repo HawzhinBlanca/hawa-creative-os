@@ -1,21 +1,21 @@
 import { signCustomerOpenCommand } from './lifecycle/customer-web-entry.js';
 import {signCustomerActionCommand} from './lifecycle/customer-web-actions.js';
 /**
- * Hawa Creative OS — Durable Task Workflow Dispatcher
- * Requirements: FR-004, FR-060, FR-061, FR-062, NFR-001, NFR-003, NFR-014
+ * Hawa Creative OS — request-owner dispatch from the outbox.
+ * Requirements: FR-004, FR-060, NFR-001, NFR-003
  *
- * Dispatches outbox commands to the durable workflow engine (Restate or embedded durable runner)
- * requiring confirmed submission receipts, enforcing duplicate-dispatch idempotency,
- * and performing ambiguous-success reconciliation.
+ * Hands an outbox command to its RequestLifecycle through Restate's public ingress and returns the
+ * engine's real invocation receipt: a website request (customer.request.open / .action, through
+ * ChatInbox) and, since ADR-287, a Desk "New task" (office.request.open, through
+ * OfficeDecisionGateway). A repeat after a consumer stopped mid-command is sent under the same
+ * idempotency key. The task workflow dispatch (task.created / task.dispatch to TaskWorkflow, with an
+ * embedded runner without Restate) was retired by ADR-287: no request is designed outside
+ * RequestLifecycle.
  */
 
-import crypto from 'node:crypto';
-import type { Database, Kysely } from '@hawa/db';
-import { chaosPoint } from '@hawa/observability';
-import { TaskWorkflowRunner, type WorkflowInput, type WorkflowOutput } from './workflow.js';
-import { DurableStepJournal } from './durable-context.js';
-import type { OutboxCommandRecord } from './outbox-consumer.js';
 import { requestIdHeaders } from './logging.js';
+import { signLifecycleOfficeEvent } from '@hawa/integrations';
+import type { OutboxCommandRecord } from './outbox-consumer.js';
 
 export interface WorkflowSubmissionReceipt {
   workflowId: string;
@@ -29,15 +29,11 @@ export interface WorkflowSubmissionReceipt {
 
 export interface TaskWorkflowDispatcherOptions {
   restateIngressUrl?: string;
-  runner?: TaskWorkflowRunner;
   customerSigningSecret?:string;
   fetcher?:typeof fetch;
-  db?: Kysely<Database>;
 }
 
 export class TaskWorkflowDispatcher {
-  private readonly inFlightSubmissions = new Map<string, WorkflowSubmissionReceipt>();
-
   constructor(private readonly options: TaskWorkflowDispatcherOptions = {}) {}
 
   /** Virtual-object commands use an actual ingress receipt and a retained action key. */
@@ -63,153 +59,28 @@ export class TaskWorkflowDispatcher {
   }
 
   /**
-   * Dispatches an outbox command to the durable workflow engine with confirmed submission.
-   *
-   * The outbox calls this with no transaction open (the submission is a network call of up to 10 s),
-   * and `trx` is unused: never pass one. A command reclaimed after a consumer stopped mid-dispatch is
-   * submitted again under the same workflow key, which Restate answers with 409, so no run starts
-   * twice. The command reaches here without the request's pictures (OutboxRepository.claimDue): the
-   * studio reads them from the task's own event, so they no longer ride into Restate's journal.
+   * ADR-287: a Desk "New task" Core opened (outbox `office.request.open`, aggregate the request). The
+   * open event Core wrote is signed with the worker credential and handed to OfficeDecisionGateway, which
+   * forwards it to the request's private RequestLifecycle object under `open:<requestId>`. A repeat after
+   * a consumer stopped mid-command is answered by Restate under the same idempotency key.
    */
-  async dispatch(
-    cmd: OutboxCommandRecord,
-    trx?: Kysely<Database>
-  ): Promise<WorkflowSubmissionReceipt> {
-    // A Restate workflow runs once per key. A re-drive (Core enqueues `task.dispatch` with
-    // redriveAttempt) is a new run of the same task, so it gets its own key; the first run's key
-    // would answer 409 and nothing would run.
-    const redriveAttempt = Number.isInteger(cmd.payload?.redriveAttempt) && cmd.payload.redriveAttempt > 0
-      ? Number(cmd.payload.redriveAttempt)
-      : undefined;
-    const workflowId = `task-wf-${cmd.aggregate_id}${redriveAttempt ? `-redrive-${redriveAttempt}` : ''}`;
-    const idempotencyKey = cmd.idempotency_key;
-    // Every Telegram intake path that saves a task without an automatic draft tells the requester so
-    // in its acknowledgement (daily cap, no client, instruction only, reference image). The worker
-    // still reports the outcome for the task's state; this keeps Core from sending a second message.
-    const requesterToldAtIntake = cmd.payload?.autoGenerate !== true;
-    // The request that wrote the command, also in the input for a handler whose headers lack it.
-    const requestId = typeof cmd.payload?.requestId === 'string' ? cmd.payload.requestId : undefined;
-
-    // 1. Idempotency / Duplicate-Dispatch Check:
-    // If already dispatched in this runtime session with confirmed receipt, return immediately.
-    if (this.inFlightSubmissions.has(idempotencyKey)) {
-      const existing = this.inFlightSubmissions.get(idempotencyKey)!;
-      return {
-        ...existing,
-        reconciled: true,
-      };
-    }
-
-    // Task state is not a Restate submission receipt. Reconcile using the stable
-    // workflow identity and the engine's real invocation ID below.
-    // 3. Submission to Restate Ingress endpoint if configured
-    if (this.options.restateIngressUrl) {
-      const url = `${this.options.restateIngressUrl}/TaskWorkflow/${workflowId}/run/send`;
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // Restate workflows are idempotent by their workflow key; this
-            // endpoint rejects an additional idempotency-key header.
-            // Restate hands the invocation the headers it was started with: the handler logs under
-            // the request id Core wrote with the command (logging.ts).
-            ...requestIdHeaders(),
-          },
-          signal: AbortSignal.timeout(10000),
-          body: JSON.stringify({
-            taskId: cmd.aggregate_id,
-            tenantId: cmd.tenant_id,
-            rawText: cmd.payload?.rawRequestText || cmd.payload?.rawText || cmd.payload?.title || '',
-            canvaAutoGenerate: cmd.payload?.workflow==='canva' && cmd.payload?.autoGenerate===true,
-            canvaVariant: cmd.payload?.variant,
-            designStudio: cmd.payload?.designStudio === true,
-            studioOptions: cmd.payload?.studioOptions,
-            sourcePlatform: cmd.payload?.sourcePlatform || 'inbox',
-            clientId: cmd.payload?.clientId,
-            idempotencyKey,
-            ...(redriveAttempt ? { redriveAttempt } : {}),
-            requesterToldAtIntake,
-            ...(requestId ? { requestId } : {}),
-          }),
-        });
-
-        // The chaos suite kills the worker here: the workflow has started, the outbox command is not done.
-        if (res.ok || res.status === 409) await chaosPoint('worker.dispatch.after-submit', { workflowId, taskId: cmd.aggregate_id });
-
-        if (res.status === 409) {
-          const receipt: WorkflowSubmissionReceipt = {
-            workflowId,
-            aggregateId: cmd.aggregate_id,
-            status: 'submitted',
-            idempotencyKey,
-            submittedAt: new Date().toISOString(),
-            receiptId: `inv_conflict_reconciled_${cmd.aggregate_id.slice(0, 8)}`,
-            reconciled: true,
-          };
-          this.inFlightSubmissions.set(idempotencyKey, receipt);
-          return receipt;
-        }
-
-        if (!res.ok) {
-          const detail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
-          throw new Error(`Restate ingress rejected submission: ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''}`);
-        }
-
-        const accepted=await res.json().catch(()=>({})) as any;
-        const invocationId=accepted.invocationId||res.headers.get('x-restate-id');
-        if(!/^inv_[A-Za-z0-9_-]+$/.test(invocationId||''))throw new Error('Restate did not return an invocation receipt');
-        const receipt: WorkflowSubmissionReceipt = {
-          workflowId,
-          aggregateId: cmd.aggregate_id,
-          status: 'submitted',
-          idempotencyKey,
-          submittedAt: new Date().toISOString(),
-          receiptId: invocationId,
-        };
-        this.inFlightSubmissions.set(idempotencyKey, receipt);
-        return receipt;
-      } catch (err: any) {
-        throw new Error(`Failed to submit task to Restate workflow: ${err.message}`);
-      }
-    }
-
-    // 4. Embedded Durable Workflow Runner
-    const runner = this.options.runner || new TaskWorkflowRunner({ db: this.options.db });
-    const journal = new DurableStepJournal(workflowId);
-
-    const input: WorkflowInput = {
-      taskId: cmd.aggregate_id,
-      tenantId: cmd.tenant_id,
-      clientId: cmd.payload?.clientId,
-      rawText: cmd.payload?.rawRequestText || cmd.payload?.rawText || cmd.payload?.title || '',
-      canvaAutoGenerate: cmd.payload?.workflow==='canva' && cmd.payload?.autoGenerate===true,
-      canvaVariant: cmd.payload?.variant,
-      designStudio: cmd.payload?.designStudio === true,
-      studioOptions: cmd.payload?.studioOptions,
-      sourcePlatform: cmd.payload?.sourcePlatform || 'inbox',
-      idempotencyKey,
-      ...(redriveAttempt ? { redriveAttempt } : {}),
-      requesterToldAtIntake,
-      ...(requestId ? { requestId } : {}),
-    };
-
-    const output: WorkflowOutput = await runner.run(input, journal);
-
-    if (!output || !output.status) {
-      throw new Error(`Workflow execution returned invalid output for task ${cmd.aggregate_id}`);
-    }
-
-    const receipt: WorkflowSubmissionReceipt = {
-      workflowId,
-      aggregateId: cmd.aggregate_id,
-      status: 'completed',
-      idempotencyKey,
-      submittedAt: new Date().toISOString(),
-      receiptId: `rcpt_embedded_${crypto.randomUUID().slice(0, 8)}`,
-    };
-
-    this.inFlightSubmissions.set(idempotencyKey, receipt);
-    return receipt;
+  async dispatchDeskOpen(cmd: OutboxCommandRecord): Promise<WorkflowSubmissionReceipt> {
+    const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
+    const event = payload?.event;
+    if (cmd.command_type !== 'office.request.open' || cmd.aggregate_type !== 'request' ||
+        !/^[0-9a-f-]{36}$/i.test(cmd.aggregate_id) || payload?.v !== 1 || payload.requestId !== cmd.aggregate_id ||
+        !event || event.requestId !== cmd.aggregate_id || event.tenantId !== cmd.tenant_id)
+      throw new Error('INVALID_DESK_OPEN_COMMAND');
+    if (!this.options.restateIngressUrl) throw new Error('DESK_LIFECYCLE_INGRESS_NOT_CONFIGURED');
+    const secret = this.options.customerSigningSecret ?? process.env.HAWA_WORKER_TOKEN ?? '';
+    const response = await (this.options.fetcher ?? fetch)(`${this.options.restateIngressUrl}/OfficeDecisionGateway/openDeskRequest/send`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': cmd.idempotency_key, ...requestIdHeaders() },
+      signal: AbortSignal.timeout(10000), body: JSON.stringify({ v: 1, event, signature: signLifecycleOfficeEvent(secret, event) }) });
+    if (!response.ok) throw new Error(`DESK_LIFECYCLE_SUBMISSION_FAILED: HTTP ${response.status}`);
+    const answer = await response.json().catch(() => null) as { invocationId?: string } | null;
+    const receiptId = answer?.invocationId ?? response.headers.get('x-restate-id');
+    if (!/^inv_[A-Za-z0-9_-]+$/.test(receiptId ?? '')) throw new Error('DESK_LIFECYCLE_RECEIPT_MISSING');
+    return { workflowId: cmd.aggregate_id, aggregateId: cmd.aggregate_id, status: 'submitted', idempotencyKey: cmd.idempotency_key,
+      submittedAt: new Date().toISOString(), receiptId: receiptId! };
   }
 }

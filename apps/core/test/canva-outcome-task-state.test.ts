@@ -203,7 +203,7 @@ describe('a Canva outcome moves the task truthfully and tells the requester plai
       withRlsContext(db, scope, async (trx) =>
         (await sql<any>`SELECT * FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid AND aggregate_id = ${taskId}::uuid AND command_type = 'task.dispatch' ORDER BY created_at`.execute(trx)).rows);
 
-    it('re-drives a v3 chat task through the studio worker path, never the single-shot planner', async () => {
+    it('starts nothing for a v3 chat task outside RequestLifecycle: the task workflow is retired (ADR-287)', async () => {
       const chat = channel();
       vi.stubEnv('DESIGN_PIPELINE_V3_CHATS', chat);
       const taskId = await telegramTask(chat);
@@ -211,19 +211,13 @@ describe('a Canva outcome moves the task truthfully and tells the requester plai
       const app = createApp({ db, telegramBridge } as any);
 
       const res = await redrive(app, taskId);
-      expect(res.status).toBe(200);
-      expect(await res.json()).toMatchObject({ ok: true, status: 'STUDIO_RUN_QUEUED', redriveAttempt: 1 });
-      const [cmd] = await dispatches(taskId);
-      expect(cmd.idempotency_key).toBe(`redrive:${taskId}:1`);
-      expect(cmd.payload).toMatchObject({ workflow: 'canva', autoGenerate: true, designStudio: true, redriveAttempt: 1, clientId: kaaeClientId });
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ title: 'LEGACY_WORKFLOW_RETIRED' });
+      expect(await dispatches(taskId)).toHaveLength(0);
       const plans = await withRlsContext(db, scope, async (trx) =>
         (await sql<any>`SELECT id FROM hawa.canva_design_plans WHERE task_id = ${taskId}::uuid`.execute(trx)).rows);
       expect(plans).toHaveLength(0);
-      expect(sent.at(-1)!.message.text).toContain('A new automatic design has been started');
-
-      // A second request while the first is still queued starts nothing new.
-      expect(await (await redrive(app, taskId)).json()).toMatchObject({ status: 'STUDIO_RUN_IN_PROGRESS' });
-      expect(await dispatches(taskId)).toHaveLength(1);
+      expect(sent).toHaveLength(0);
     });
 
     it('says honestly that a design already exists instead of announcing it as a new draft', async () => {

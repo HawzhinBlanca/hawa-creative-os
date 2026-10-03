@@ -7,7 +7,7 @@ import { runCanvaDraft } from '../src/canva-draft-workflow.js';
 import { withInvocationLogContext } from '../src/logging.js';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
 import { TaskWorkflowDispatcher } from '../src/workflow-dispatcher.js';
-import type { WorkflowInput } from '../src/workflow.js';
+import type { WorkflowInput } from '../src/design-input.js';
 
 /**
  * Architecture programme 1.4: one request id follows a design from Core through the outbox, Restate
@@ -94,24 +94,28 @@ describe('an outbox command carries the id of the request that wrote it to Resta
   beforeAll(() => { db = createDb(process.env.TEST_DATABASE_URL!); });
   afterAll(async () => { await db?.destroy(); });
 
-  it('Core writes it into the payload; the dispatcher sends it to Restate as a header and in the input', async () => {
+  it('a Desk request\'s open carries its request id to Restate as a header (ADR-287)', async () => {
     const asTenant = <T>(fn: (trx: Kysely<Database>) => Promise<T>) => withRlsContext(db, scope, fn);
     await asTenant((trx) => trx.deleteFrom('outbox_commands').where('tenant_id', '=', tenantId).execute());
-    // What Core does inside a request: the repository takes the id from the log context.
-    const aggregateId = randomUUID();
+    // The Desk intake names the lifecycle request in the payload; the repository keeps an explicit id.
+    const aggregateId = randomUUID(), chatId = `desk:${randomUUID()}`;
+    const event = { v: 1, eventId: `open:${aggregateId}`, requestId: aggregateId, tenantId, chatId,
+      draft: { platform: 'hawa_desk', sourceEventId: `lc-${aggregateId}-r0`, sourceChannelId: chatId, rawText: 'Copy', title: 'Title',
+        designInstructions: '', exactCopy: [], clientId: randomUUID(), autoGenerate: true } };
     const row = await runWithLogContext({ requestId: 'req-core-outbox-1' }, () =>
       asTenant((trx) => new OutboxRepository(db).enqueue({
-        tenantId, aggregateType: 'task', aggregateId, commandType: 'task.dispatch',
-        idempotencyKey: `log-test-${randomUUID()}`, payload: { sourcePlatform: 'telegram', sourceChannelId: '4242' },
+        tenantId, aggregateType: 'request', aggregateId, commandType: 'office.request.open',
+        idempotencyKey: `log-test-${randomUUID()}`, payload: { v: 1, requestId: aggregateId, event },
       }, trx))
     );
-    expect((row.payload as Record<string, unknown>).requestId).toBe('req-core-outbox-1');
+    expect((row.payload as Record<string, unknown>).requestId).toBe(aggregateId);
 
     const ingress = vi.fn(async () => Response.json({ invocationId: 'inv_logtest1' }, { status: 202 }));
     vi.stubGlobal('fetch', ingress);
+    vi.stubEnv('HAWA_WORKER_TOKEN', 'log-test-worker-token');
     const consumer = new OutboxConsumer(db, {
       tenantIds: [tenantId],
-      dispatcher: new TaskWorkflowDispatcher({ restateIngressUrl: 'http://restate.test:8080', db }),
+      dispatcher: new TaskWorkflowDispatcher({ restateIngressUrl: 'http://restate.test:8080' }),
       telegramBotToken: null,
     });
     const summary = await consumer.processBatch(5);
@@ -119,9 +123,8 @@ describe('an outbox command carries the id of the request that wrote it to Resta
 
     expect(ingress).toHaveBeenCalledTimes(1);
     const [url, init] = ingress.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toContain(`/TaskWorkflow/task-wf-${aggregateId}/run/send`);
-    expect((init.headers as Record<string, string>)['x-request-id']).toBe('req-core-outbox-1');
-    expect(JSON.parse(String(init.body)).requestId).toBe('req-core-outbox-1');
+    expect(url).toContain('/OfficeDecisionGateway/openDeskRequest/send');
+    expect((init.headers as Record<string, string>)['x-request-id']).toBe(aggregateId);
   });
 
   it('a workflow outcome sent to Core again from the outbox carries the id it was written under', async () => {

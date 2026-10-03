@@ -1,6 +1,6 @@
 import type { Box, CompositionRecord, Hex, OrnamentElement, ShapeElement, StudioLayoutV2, TextElement } from './layout-v2.js';
 import { HOUSE_RULES, getSafeZoneBox, logoClearZone, minLogoWidth } from './house-rules.js';
-import { lineInkClears, measureLineInkClearance, measureTextGeometry, measureWrappedLines } from './render-layout-v2.js';
+import { lineInkClears, measureLineInkClearance, measureTextGeometry, measureWrappedLines, type LineInkClearance, type TextMeasurement } from './render-layout-v2.js';
 import { PosterDisplayFaceError, posterDisplayStyle, posterLabelStyle, withPosterDisplayStyle, type PosterDisplayStyle } from './poster-display.js';
 import { hexToLuminance } from './composite-contrast.js';
 import { sunburstRadius } from './brand-elements.js';
@@ -130,6 +130,11 @@ export function composePosterLayout(input: ComposeGrammarInput & { variant: Post
   const lo = r(P.titleSizeShare.min * W);
   let fallback: StudioLayoutV2 | undefined;
   const floor = negativeSpacePassingInterval('measured_lines').min + 0.04;
+  // The search below visits the same composition many times (the two brand-element passes, the two
+  // detail sizes when they land on the same scale step), so each (sizes, column) attempt is composed
+  // once and each block measured once; the order of the search and every result are unchanged.
+  const memo = compositionMemo(input);
+  const attempts = new Map<string, PosterAttempt | undefined>();
   // The details at the poster's smallest detail size first; a composition that cannot hold them there
   // (a band under a long Sorani title) keeps the scale's first step over the body rather than dropping out.
   for (const detailMin of [...new Set([P.detailSizeShareMin ?? 0, 0])]) {
@@ -142,11 +147,15 @@ export function composePosterLayout(input: ComposeGrammarInput & { variant: Post
         if (!sizes || sizes.title > hi + 1 || sizes.title < lo) continue;
         // The details in their column beside the brand element, else across the content width.
         for (const fullWidth of [false, true]) {
-          const layout = attemptPoster(input, units, sizes, P, fullWidth, home);
+          const key = `${fullWidth ? 'full' : 'column'} ${JSON.stringify(sizes)}`;
+          if (!attempts.has(key)) attempts.set(key, attemptPoster(input, units, sizes, P, fullWidth, memo));
+          const attempt = attempts.get(key);
+          if (!attempt || (home && !attempt.home)) continue;
+          const layout = attempt.finish();
           if (!layout) continue;
           // The poster fills its canvas: the largest title that fits with its negative space between the
           // studio's floor (a crowded poster fails the same metric) and the poster's ceiling.
-          const ns = negativeSpaceOf(layout, input);
+          const ns = (attempt.negativeSpace ??= negativeSpaceOf(layout, input));
           if (ns <= P.negativeSpaceMax && ns >= floor) return layout;
           if (ns >= floor) fallback ??= layout;
         }
@@ -164,7 +173,61 @@ export function negativeSpaceOf(layout: StudioLayoutV2, input: Pick<ComposeGramm
   return typeof fraction === 'number' ? fraction : 1;
 }
 
-function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, units: GrammarUnit[], sizes: PosterSizes, P: PosterGrammar, fullWidth: boolean, home = false): StudioLayoutV2 | undefined {
+/**
+ * One composition's measurements, kept for the length of one `composePosterLayout` call. Each is a
+ * pure function of the block it is given (keyed by the whole element and its copy), so a repeat
+ * returns what measuring again would.
+ */
+interface CompositionMemo {
+  geometry(el: TextElement, copy: string): TextMeasurement | undefined;
+  inkClearance(el: TextElement, copy: string): LineInkClearance | undefined;
+  displayStyle(script: 'latin' | 'arabic'): PosterDisplayStyle | undefined;
+}
+function compositionMemo(input: ComposeGrammarInput): CompositionMemo {
+  const options = input.fontsDir ? { fontsDir: input.fontsDir } : {};
+  const geometry = new Map<string, TextMeasurement | undefined>();
+  const ink = new Map<string, LineInkClearance | undefined>();
+  const styles = new Map<'latin' | 'arabic', PosterDisplayStyle | undefined>();
+  const keyOf = (el: TextElement, copy: string) => `${JSON.stringify(el)}\u0000${copy}`;
+  return {
+    geometry(el, copy) {
+      const key = keyOf(el, copy);
+      if (!geometry.has(key)) geometry.set(key, measureTextGeometry({ text: [el] } as StudioLayoutV2, { [el.copyIndex]: copy }, options)[0]);
+      return geometry.get(key);
+    },
+    inkClearance(el, copy) {
+      const key = keyOf(el, copy);
+      if (!ink.has(key)) ink.set(key, measureLineInkClearance(el, copy, options));
+      return ink.get(key);
+    },
+    // ADR-275: the poster's display title (KAAE: the office's heavy sans capitals), per script, from the
+    // reference; undefined keeps the grammar's title face. A face that cannot draw the script makes the
+    // composition infeasible rather than drawing half the title in another face.
+    displayStyle(script) {
+      if (!styles.has(script)) {
+        try {
+          styles.set(script, posterDisplayStyle(input.grammar, script, options));
+        } catch (err) {
+          if (err instanceof PosterDisplayFaceError) throw new GrammarInfeasibleError(err.message);
+          throw err;
+        }
+      }
+      return styles.get(script);
+    },
+  };
+}
+
+/**
+ * One poster composed at one set of sizes and one details column, up to its brand element. `home` says
+ * whether the element stands in its composition's own place; `finish` runs the finished checks (once).
+ */
+interface PosterAttempt {
+  home: boolean;
+  finish(): StudioLayoutV2 | undefined;
+  negativeSpace?: number;
+}
+
+function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, units: GrammarUnit[], sizes: PosterSizes, P: PosterGrammar, fullWidth: boolean, memo: CompositionMemo): PosterAttempt | undefined {
   const { width: W, height: H, grammar: g, variant } = input;
   const spec: PosterVariantSpec = P[variant];
   const s = Math.min(W, H);
@@ -201,7 +264,10 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const minLogo = Math.max(minLogoWidth(W), input.logoMinimumWidthPx ?? 0);
   let lw = Math.max(minLogo, r(P.logoWidthShare * Math.min(W, 1.25 * H)));
   let lh = r(lw / aspect);
-  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < minLogo + 40) {
+  // Keep the official aspect within the 1% the validator allows after rounding (searched up from the
+  // poster's own width: from the minimum, a poster-sized wide logo never searched and failed LOGO).
+  const lw0 = lw;
+  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < lw0 + 40) {
     lw += 1;
     lh = r(lw / aspect);
   }
@@ -211,30 +277,15 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const clear = logoClearZone(logo, clearPx, { clientOnly: true });
 
   const measure = (el: TextElement, copy: string) => {
-    const [mm] = measureTextGeometry({ text: [el] } as StudioLayoutV2, { [el.copyIndex]: copy }, input.fontsDir ? { fontsDir: input.fontsDir } : {});
+    const mm = memo.geometry(el, copy);
     if (!mm || mm.status !== 'measured') throw new GrammarInfeasibleError(`copy block ${el.copyIndex} cannot be measured (${mm && mm.status === 'unmeasured' ? mm.reason : 'no measurement'})`);
     return { height: mm.requiredHeightPx + 1, lineWidth: mm.maxLineWidthPx, lines: mm.lineCount };
   };
   type Kind = 'title' | 'lead' | 'label' | 'meta' | 'metaFirst' | 'body' | 'cta' | 'footer';
-  // ADR-275: the poster's display title (KAAE: the office's heavy sans capitals), per script, from the
-  // reference; undefined keeps the grammar's title face. A face that cannot draw the script makes the
-  // composition infeasible rather than drawing half the title in another face.
-  const displayStyles = new Map<'latin' | 'arabic', PosterDisplayStyle | undefined>();
-  const displayStyle = (script: 'latin' | 'arabic') => {
-    if (!displayStyles.has(script)) {
-      try {
-        displayStyles.set(script, posterDisplayStyle(g, script, input.fontsDir ? { fontsDir: input.fontsDir } : {}));
-      } catch (err) {
-        if (err instanceof PosterDisplayFaceError) throw new GrammarInfeasibleError(err.message);
-        throw err;
-      }
-    }
-    return displayStyles.get(script);
-  };
   const labelStyle = posterLabelStyle(g);
   const el = (b: GrammarUnit['blocks'][number], kind: Kind, size: number, color: Hex, w: number, opts: { italic?: boolean; bold?: boolean } = {}): TextElement => {
     const base = plainEl(b, kind, size, color, w, opts);
-    if (kind === 'title') return withPosterDisplayStyle(base, displayStyle(b.arabic ? 'arabic' : 'latin'), W);
+    if (kind === 'title') return withPosterDisplayStyle(base, memo.displayStyle(b.arabic ? 'arabic' : 'latin'), W);
     if (kind === 'label' && !b.arabic && labelStyle) return { ...base, ...labelStyle };
     return base;
   };
@@ -274,8 +325,11 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     const colour = variant === 'navy' ? spec.lead : g.header.label.color;
     const t = el(b, 'label', sizes.label, colour, colW);
     const p = colW > 0 ? set({ ...t, align: 'right' }, b.text, x0, colW, 0) : undefined;
-    if (p && p.lines === 1) {
-      text.push({ ...p.el, y: r(logo.y + logo.height / 2 - p.el.height / 2) });
+    // Centred on the logo's line, never above the safe margin; a label taller than the logo's clear
+    // space (beside a wide, short logo) is set in the flow instead.
+    const ly = p ? Math.max(safe.y, r(logo.y + logo.height / 2 - p.el.height / 2)) : 0;
+    if (p && p.lines === 1 && ly + p.el.height <= Math.ceil(clear.y + clear.height)) {
+      text.push({ ...p.el, y: ly });
       flow.shift();
     }
   }
@@ -310,7 +364,7 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
       // A Sorani display title under the body leading keeps its marks clear of the next line, measured
       // (ADR-275): the leading steps up until the ink clears, at most to the body range.
       while (p && b.arabic && titleEl.lineHeight < HOUSE_RULES.lineHeight.arabic.min) {
-        const clearance = measureLineInkClearance(p.el, b.text, input.fontsDir ? { fontsDir: input.fontsDir } : {});
+        const clearance = memo.inkClearance(p.el, b.text);
         if (!clearance || lineInkClears(clearance)) break;
         titleEl = { ...titleEl, lineHeight: Math.min(HOUSE_RULES.lineHeight.arabic.min, Math.round((titleEl.lineHeight + 0.05) * 100) / 100) };
         p = set(titleEl, b.text, contentX, contentW, y);
@@ -550,8 +604,17 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   balanceGrammarLines(layout, input);
   if (bandShape) trimBand(bandShape, layout, titleBox.copyIndex, m, rtl);
   const placedElement = placeBrandElement(layout, { variant, spec, clear, rtl, gapMin, footY: band ? footY : H });
-  if (home && !placedElement?.home) return undefined;
-  if (placedElement) layout.ornaments = [placedElement.element];
+  let finished: { layout: StudioLayoutV2 | undefined } | undefined;
+  return {
+    // The brand-element pass asks for the element in its composition's own place.
+    home: Boolean(placedElement?.home),
+    finish: () => (finished ??= { layout: finishPoster(layout, placedElement?.element, clear) }).layout,
+  };
+}
+
+/** The finished poster: its brand element set, and the checks the composer promises passed. */
+function finishPoster(layout: StudioLayoutV2, element: OrnamentElement | undefined, clear: Box): StudioLayoutV2 | undefined {
+  if (element) layout.ornaments = [element];
   // The composer promises hard QA's alignment check (a Sorani navy poster measured 0.688 against 0.70:
   // its pill's and gold bar's free edges lined up with nothing).
   if (computeLayoutMetrics(layout).alignmentScore < ALIGNMENT_PASS) return undefined;

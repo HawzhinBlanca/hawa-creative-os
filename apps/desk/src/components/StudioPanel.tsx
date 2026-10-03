@@ -9,6 +9,7 @@ import { StudioRecoveryPanel } from './StudioRecoveryPanel.js';
 import { StudioBudgetSummary, type StudioBudgetUsage } from './StudioBudgetSummary.js';
 import { StudioFeedbackForm } from './StudioFeedbackForm.js';
 import { StudioJudgeNotice } from './StudioJudgeNotice.js';
+import { OfficeLibraryPhotos } from './OfficeLibraryPhotos.js';
 
 interface CritiqueDetail {
   overall?: number;
@@ -129,6 +130,8 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  // The failed run a design retry replaces, until the retry's own run exists (bug hunt 3).
+  const [retryingFrom, setRetryingFrom] = useState<string | null>(null);
 
   // View modes
   const [activeTab, setActiveTab] = useState<'preview' | 'art' | 'critique' | 'metrics'>('preview');
@@ -202,6 +205,30 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
     }, 4000);
     return () => clearInterval(timer);
   }, [taskId, runId, run?.status]);
+
+  // A design retry starts its run asynchronously: follow the task's latest run once it is not the
+  // failed one. The panel re-read the failed run before, and kept showing it.
+  const followRetry = async (failedRunId: string) => {
+    try {
+      const latest = await apiClient.studio.latest(taskId);
+      if (activeTask.current !== taskId || !latest.runId || latest.runId === failedRunId) return;
+      setRetryingFrom(null);
+      setSelectedCandidateId(null);
+      setRunId(latest.runId);
+    } catch {
+      /* Read again at the next tick; the retry itself is recorded. */
+    }
+  };
+
+  useEffect(() => {
+    if (!retryingFrom) return;
+    const timer = setInterval(() => {
+      if (!document.hidden) void followRetry(retryingFrom);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [taskId, retryingFrom]);
+
+  useEffect(() => { setRetryingFrom(null); }, [taskId]);
 
   const handleStart = async () => {
     setBusy(true);
@@ -366,6 +393,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
       {startBlocker && <p role="status">{startBlocker}</p>}
       {run && <DesignReviewFindings findings={run.stages?.qa?.findings} />}
       {run && <StudioJudgeNotice tournament={run.stages?.tournament} />}
+      {run && <OfficeLibraryPhotos record={run.stages?.officePhotoLibrary} />}
       {run&&<StudioRecoveryPanel key={`${taskId}:${run.id}`} taskId={taskId} runId={run.id} status={run.status}/>}
       {!historyLoaded && <button className="btn" disabled={busy} onClick={() => void refresh()}>Refresh Studio history</button>}
       {calls.length > 0 && <details><summary>Recorded model calls</summary>
@@ -572,13 +600,15 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
               {['failed', 'abandoned'].includes(run.status) && (
                 <button
                   className="btn"
-                  disabled={busy || Boolean(startBlocker)}
+                  disabled={busy || Boolean(startBlocker) || retryingFrom === run.id}
                   onClick={async () => {
                     setBusy(true);
+                    const failedRunId = run.id;
                     try {
                       await apiClient.tasks.redrive(taskId);
-                      setMessage('Design retry recorded. Follow its progress below.');
-                      await refresh();
+                      setMessage('Design retry recorded. Waiting for the new run; this attempt is kept below until it starts.');
+                      setRetryingFrom(failedRunId);
+                      await followRetry(failedRunId);
                     } catch (err: any) {
                       setMessage(err.message || 'Design retry could not start');
                     } finally {

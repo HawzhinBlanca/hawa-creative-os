@@ -133,3 +133,26 @@ describe('a client name before the format', () => {
     expect(planRequestDeliverables('make a poster for the fair, put the poster date in red')).toEqual({ kind: 'single' });
   });
 });
+
+// Bug hunt 3 (2026-10-03): a later design that names the earlier one's subject by "it" or "the same" was opened on
+// its own words ("a story for it"): the event, its date and its place were lost from it, and the request words
+// became its copy.
+describe('a later design for the same subject ("and a story for it")', () => {
+  it.each([
+    ['Can you make a poster for the open day on 20 October and a story for it', 'a story for the open day on 20 October'],
+    ['We need a poster for the Book Fair on 9 November and a flyer for it too', 'a flyer for the Book Fair on 9 November'],
+    ['Can you make a poster for the open day on 20 October and a story for the same event', 'a story for the open day on 20 October'],
+    ['Can you make a poster for the open day on 20 October, and a story about it', 'a story for the open day on 20 October'],
+  ])('%s', (raw, second) => {
+    const plan = planRequestDeliverables(raw);
+    expect(plan).toMatchObject({ kind: 'multiple', count: 2 });
+    const parts = (plan as Extract<ReturnType<typeof planRequestDeliverables>, { kind: 'multiple' }>).parts;
+    expect(parts[1]).toMatchObject({ text: second });
+    expect(parts.some((p) => p.detailsRequired)).toBe(false);
+  });
+
+  it('a later design with a subject of its own keeps its words', () => {
+    expect(planRequestDeliverables('Make a poster for Nawroz, and a banner for the graduation on 12 October')).toMatchObject({ kind: 'multiple',
+      parts: [{ text: 'a poster for Nawroz' }, { text: 'a banner for the graduation on 12 October' }] });
+  });
+});

@@ -6,7 +6,7 @@ import { CanvaFlowError } from '../services/canva-flow-error.js';
 
 export function registerCallCostRoutes(ctx: RouteContext) {
   const service=ctx.db ? new CallCostAccountingService(ctx.db) : null;
-  const handle=(operation:'list'|'get'|'record')=>async(c:Context)=>{
+  const handle=(operation:'list'|'get'|'record'|'summary')=>async(c:Context)=>{
     c.header('Cache-Control','no-store');
     const auth=ctx.verifyRequestAuth(c),token=ctx.bearerTokenOf?.(c);
     if(!auth.authenticated||!auth.tenantId||!auth.userId) return ctx.problem(c,401,'Authentication Required');
@@ -15,7 +15,8 @@ export function registerCallCostRoutes(ctx: RouteContext) {
     const scope={tenantId:auth.tenantId,userId:auth.userId,role:auth.role,
       trustedOffice:auth.authMethod==='trusted_office',sessionHash:auth.authMethod==='google_oidc'&&token?createHash('sha256').update(token).digest('hex'):undefined};
     try {
-      return c.json(operation==='list' ? await service.list(scope,c.req.query('cursor')) : operation==='get'
+      return c.json(operation==='summary' ? await service.summary(scope,c.req.query('days'))
+        : operation==='list' ? await service.list(scope,c.req.query('cursor')) : operation==='get'
         ? await service.get(scope,c.req.param('kind')??'',c.req.param('callId')??'')
         : await service.record(scope,c.req.param('kind')??'',c.req.param('callId')??'',c.req.header('Idempotency-Key'),await c.req.json().catch(()=>null)));
     }catch(error){
@@ -24,6 +25,8 @@ export function registerCallCostRoutes(ctx: RouteContext) {
     }
   };
   ctx.registerRoute('get','/spending/calls',handle('list'));
+  // ADR-289: every paid call by office day and budget role, intake readings included.
+  ctx.registerRoute('get','/spending/summary',handle('summary'));
   ctx.registerRoute('get','/spending/calls/:kind/:callId',handle('get'));
   ctx.registerRoute('post','/spending/calls/:kind/:callId/evidence',handle('record'));
 }

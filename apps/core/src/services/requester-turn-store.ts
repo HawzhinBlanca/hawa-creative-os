@@ -77,13 +77,20 @@ export async function activeChatRequests(trx: Kysely<Database>, tenantId: string
  * Requests this chat's intake decided to open in the last ten minutes that RequestLifecycle has not
  * projected yet (ChatInbox sends the open without waiting for it). A follow-up read before the
  * projection lands would miss the request it is about.
+ *
+ * ADR-282: the open decided for `exceptUpdateId` itself is left out. An update is never a follow-up to
+ * the request it opens: a second call of the same update (a settle delivered twice, a retry while the
+ * first call still runs) that read "no decision yet" before the first call stored it goes on to the
+ * same keyed open (`recordNewBriefDecision`, ON CONFLICT) instead of waiting for its own request.
  */
-export async function openingChatRequests(trx: Kysely<Database>, tenantId: string, chatId: string): Promise<string[]> {
+export async function openingChatRequests(trx: Kysely<Database>, tenantId: string, chatId: string,
+  exceptUpdateId?: number): Promise<string[]> {
   return (await sql<{ request_id: string }>`SELECT child.request_id FROM hawa.inbox_events e
     CROSS JOIN LATERAL (SELECT e.payload->>'requestId' AS request_id UNION ALL
       SELECT s->>'requestId' FROM jsonb_array_elements(coalesce(e.payload->'siblings','[]'::jsonb)) s) child
     WHERE e.tenant_id = ${tenantId}::uuid AND e.source_account_id = 'lifecycle_chat_open'
       AND e.payload->>'chatId' = ${chatId} AND e.received_at > now() - interval '10 minutes'
+      AND (${exceptUpdateId === undefined}::boolean OR e.source_event_id <> ${String(exceptUpdateId ?? '')})
       AND NOT EXISTS (SELECT 1 FROM hawa.requests r WHERE r.tenant_id = e.tenant_id
         AND r.request_id::text = child.request_id)`.execute(trx)).rows.map((row) => row.request_id);
 }

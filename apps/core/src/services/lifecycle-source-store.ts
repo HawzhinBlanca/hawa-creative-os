@@ -1,7 +1,7 @@
 /** Immutable source evidence in the existing inbox ledger. Never trusts worker-supplied extraction. */
 import { createHash } from 'node:crypto';
 import { sql, type Database, type Kysely, type BlobStore } from '@hawa/db';
-import { parseBlobRef, type BlobRef, type LifecycleSourceRef, type ReviewedSourceEvidence } from '@hawa/contracts';
+import { parseBlobRef, type BlobRef, type LifecycleSourceRef, type TelegramReviewedSourceEvidence } from '@hawa/contracts';
 import { inspectVoiceAudio, type TelegramSourceEnvelope, type VoiceAudioInspection } from '@hawa/domain';
 import type { DocumentRow } from './client-documents.js';
 
@@ -115,7 +115,7 @@ export async function sourceByReply(trx: Kysely<Database>, tenantId: string,
 /** Metadata and byte verification use this transaction's reference; no second pool checkout. */
 export async function verifyReviewedSource(trx: Kysely<Database>, store: BlobStore | null, input: {
   tenantId: string; clientId: string; chatId: string; requestId: string; ref: LifecycleSourceRef; copy: string;
-}): Promise<{ evidence: ReviewedSourceEvidence; upload: SourceUpload; confirmation: SourceConfirmation }> {
+}): Promise<{ evidence: TelegramReviewedSourceEvidence; upload: SourceUpload; confirmation: SourceConfirmation }> {
   const upload = await readSourceUpload(trx, input.tenantId, input.ref.sourceUpdateId);
   const extraction = await readSourceExtraction(trx, input.tenantId, input.ref.sourceUpdateId);
   const confirmation = await readSourceConfirmation(trx, input.tenantId, input.ref.sourceUpdateId);

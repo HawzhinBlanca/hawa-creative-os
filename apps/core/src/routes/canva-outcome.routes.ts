@@ -81,6 +81,11 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
   const canvaStatusHandler = async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated || !auth.tenantId) return problem(c, 401, 'Authentication Required');
+    // The design worker reports here as an operator (app.ts, ADR-163). Any other signed-in role could
+    // set a task's outcome and send its requester a Canva link of their choosing.
+    if (auth.role !== 'operator' && auth.role !== 'administrator') {
+      return problem(c, 403, 'Forbidden', 'Only the design worker or an office operator reports a Canva outcome.');
+    }
     // The outbox is not optional here: a terminal notification that is not written down is the
     // paid design run's only link, and losing it is the failure this route exists to prevent.
     if (!db || !taskRepo || !outboxRepo) return problem(c, 503, 'Database Required');

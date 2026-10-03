@@ -490,6 +490,18 @@ export class CanvaConnectClient {
     return validateCanvaDesignResponse(await res.json());
   }
 
+  /**
+   * ADR-288: the connection check. GET /users/me (the user and team ids of the token's account) is
+   * free, reads nothing of the office's designs and changes nothing; one attempt, so a check is one
+   * request. Canva answers 401 to a token it no longer honours. Returns the HTTP status.
+   */
+  public async probeCurrentUser():Promise<{status:number}> {
+    const res=await this.fetcher(`${this.baseUrl}/users/me`,{method:'GET',headers:{Authorization:await this.getAuthHeader()}});
+    // The body is read and dropped: only whether Canva honoured the token matters here.
+    await res.text().catch(()=>undefined);
+    return {status:res.status};
+  }
+
   /** Account observation is distinct from operation qualification or a subscription inference. */
   public async getCapabilities():Promise<CanvaCapabilitiesResponse> {
     const res=await this.readWithRetry(`${this.baseUrl}/users/me/capabilities`);

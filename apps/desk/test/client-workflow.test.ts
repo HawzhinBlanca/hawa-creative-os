@@ -2,6 +2,10 @@
 import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.js';
+// Loaded lazily by App on first open (kept out of the entry chunk); loaded here first so they open at once.
+import '../src/components/CommandPalette.js';
+import '../src/components/GuidedTour.js';
+import '../src/screens/ClientsScreen.js';
 import { DnaScreen } from '../src/screens/DnaScreen.js';
 import { DeskProviders, createDeskRuntime, type DeskRuntime } from '../src/DeskProviders.js';
 import { setAuthToken, clearAuthToken } from '../src/services/auth.js';

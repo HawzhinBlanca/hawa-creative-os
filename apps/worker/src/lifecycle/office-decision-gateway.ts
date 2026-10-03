@@ -4,7 +4,8 @@ import { parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionC
 import { withInvocationLogContext } from '../logging.js';
 import { acceptedWorkerSecrets } from './worker-secrets.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
-import { RequestLifecycleApi, OFFICE_RETRY_ROLES, OFFICE_WITHDRAW_ROLES, type DeliveryReconcileEvent, type DeliveryReconcileReply,
+import { isDeskChannel } from './telegram-sender.js';
+import { RequestLifecycleApi, OFFICE_RETRY_ROLES, OFFICE_WITHDRAW_ROLES, type DeliveryReconcileEvent, type DeliveryReconcileReply, type OpenAutomaticEvent, type OpenManualEvent,
   type OfficeDeliveryStartEvent, type OfficeDeliveryStartReply, type OfficeRetryEvent, type OfficeRetryReply,
   type OfficeRevisionEvent, type OfficeRevisionReply, type WithdrawEvent, type WithdrawReply } from './request-lifecycle.js';
 
@@ -99,10 +100,39 @@ export function checkSignedDeliveryReconcile(input: { v: 1; event: DeliveryRecon
   return signedWithAny(secret, (value) => verifyLifecycleOfficeEvent(value, e, input.signature)) ? 'ok' : 'unauthorized';
 }
 
+/**
+ * ADR-287: a Desk "New task" Core opened, forwarded by the worker's outbox (command
+ * `office.request.open`, signed with the worker credential). Only the open's shape is checked here;
+ * Core's first projection, made when the office member saved the request, is the authority: the
+ * request object's own projection call replays it and refuses a brief with other content.
+ */
+export function checkSignedDeskOpen(input: { v: 1; event: OpenAutomaticEvent | OpenManualEvent; signature: string }, secret: string | readonly string[]): 'ok' | 'invalid' | 'unauthorized' {
+  const e = input?.event;
+  if (input?.v !== 1 || !e || typeof e !== 'object' || Array.isArray(e) || e.v !== 1 ||
+      Object.keys(e).some((key) => !['v', 'eventId', 'requestId', 'tenantId', 'chatId', 'draft'].includes(key)) ||
+      !UUID.test(e.requestId) || e.eventId !== `open:${e.requestId}` || e.tenantId !== DESK_TENANT_ID ||
+      !isDeskChannel(e.chatId) || !e.draft || typeof e.draft !== 'object' || Array.isArray(e.draft) ||
+      e.draft.platform !== 'hawa_desk' || e.draft.sourceChannelId !== e.chatId ||
+      e.draft.sourceEventId !== `lc-${e.requestId}-r0` || typeof e.draft.autoGenerate !== 'boolean' ||
+      Buffer.byteLength(JSON.stringify(e)) > 256 * 1024) return 'invalid';
+  return signedWithAny(secret, (value) => verifyLifecycleOfficeEvent(value, e, input.signature)) ? 'ok' : 'unauthorized';
+}
+const DESK_TENANT_ID = '00000000-0000-4000-a000-000000000001';
+
 export function createOfficeDecisionGateway(secret: string | readonly string[] = acceptedWorkerSecrets()) {
   return restate.service({
     name: 'OfficeDecisionGateway',
     handlers: {
+      openDeskRequest: async (ctx: restate.Context, input: { v: 1; event: OpenAutomaticEvent | OpenManualEvent; signature: string }): Promise<{ requestId: string; forwarded: true }> =>
+        withInvocationLogContext(ctx, { requestId: input?.event?.requestId }, async () => {
+          const verdict = await ctx.run('authenticate', async () => checkSignedDeskOpen(input, secret));
+          if (verdict !== 'ok') throw new restate.TerminalError(
+            verdict === 'invalid' ? 'INVALID_DESK_OPEN' : 'UNAUTHORIZED_DESK_OPEN',
+            { errorCode: verdict === 'invalid' ? 400 : 401 });
+          ctx.objectSendClient(RequestLifecycleApi, input.event.requestId)
+            .open(input.event, restate.rpc.sendOpts({ idempotencyKey: input.event.eventId }));
+          return { requestId: input.event.requestId, forwarded: true as const };
+        }),
       nativeReview: async (ctx: restate.Context,input: {v:1;event:NativeReviewSubmission;signature:string}):Promise<NativeReviewReply>=>{
         const verdict=await ctx.run('authenticate',async()=>checkSignedNativeReview(input,secret));
         if (verdict !== 'ok') throw new restate.TerminalError('INVALID_NATIVE_REVIEW',{errorCode:verdict==='invalid'?400:401});

@@ -126,6 +126,7 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ isOpen, onClose, onNavig
           </div>
           <button
             onClick={onClose}
+            aria-label="Close the tour"
             style={{
               background: 'transparent',
               border: 'none',

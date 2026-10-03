@@ -586,6 +586,26 @@ describe('release_lib: the prune keeps any release a container may still bind', 
     expect(left(badTime)).toEqual([c('a'), c('b'), c('d')]);
   });
 
+  // Hunt 3: current and previous are compared as physical paths (pwd -P) and the releases directory was
+  // not, so a home or ~/.hawa reached through a symbolic link (a moved home, ~/.hawa on another disk)
+  // removed the live release and the rollback with it.
+  it('never removes current or previous when the releases directory is reached through a symbolic link', () => {
+    const s = history([['2026-09-30T10:00:00Z', c('a')], ['2026-09-30T11:00:00Z', c('b')], ['2026-09-30T12:00:00Z', c('d')]]);
+    fs.symlinkSync(path.join(s.releases, c('b')), path.join(s.home, '.hawa', 'previous'));
+    const linkedHome = path.join(s.t, 'linked-home');
+    fs.symlinkSync(s.home, linkedHome);
+    const r = sh({ home: linkedHome }, 'hawa_release_prune 0', { PATH: fakeDocker(s.t, []) });
+    expect(r.code, r.err).toBe(0);
+    expect(left(s)).toEqual([c('b'), c('d')]);
+    expect(r.out).toBe(`removed release ${c('a')}`);
+    // The same through HAWA_RELEASES_DIR spelled through a link.
+    const t = history([['2026-09-30T10:00:00Z', c('a')], ['2026-09-30T11:00:00Z', c('d')]]);
+    const linkedReleases = path.join(t.t, 'linked-releases');
+    fs.symlinkSync(t.releases, linkedReleases);
+    expect(sh(t, 'hawa_release_prune 0', { PATH: fakeDocker(t.t, []), HAWA_RELEASES_DIR: linkedReleases }).code).toBe(0);
+    expect(left(t)).toEqual([c('d')]);
+  });
+
   it('with no container binding a release, prunes as before', () => {
     const s = history([['2026-09-30T10:00:00Z', c('a')], ['2026-09-30T11:00:00Z', c('b')], ['2026-09-30T12:00:00Z', c('d')]]);
     const docker = fakeDocker(s.t, [container('runtime-only', '2026-09-30T12:00:05Z', [`${s.home}/.hawa/runtime/infra/docker/nginx.conf`, '/var/run/docker.sock'])]);

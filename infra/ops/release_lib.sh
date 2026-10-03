@@ -172,6 +172,9 @@ hawa_release_mounted() {
 hawa_release_prune() { # [keep]
   local keep="${1:-${HAWA_RELEASES_KEEP:-5}}" dir name current previous order kept=0 common mounted
   dir="$(hawa_releases_dir)"; [[ -d "$dir" ]] || return 0
+  # Physical, like current and previous: a home or ~/.hawa reached through a symbolic link otherwise
+  # matched neither, and the live release and the rollback were removed with the rest (hunt 3).
+  dir="$(hawa_physical "$dir")" && [[ -n "$dir" ]] || { echo "WARNING: could not resolve $(hawa_releases_dir); no release was removed" >&2; return 0; }
   current="$(hawa_physical "$(hawa_current_link)" || true)"; previous="$(hawa_physical "$(hawa_previous_link)" || true)"
   mounted="$(hawa_release_mounted)" || { echo "WARNING: could not tell which releases containers still bind; no release was removed" >&2; return 0; }
   # Newest first: activations (latest occurrence of each), then directories never activated, newest first.
@@ -244,6 +247,7 @@ hawa_release_prune_unsafe() { # checkout, security foundation commit
   [[ "$floor" =~ ^[0-9a-f]{40}$ ]] && git -C "$checkout" cat-file -e "$floor^{commit}" 2>/dev/null \
     || { echo 'ERROR: invalid release security foundation' >&2; return 1; }
   dir="$(hawa_releases_dir)"; [[ -d "$dir" ]] || return 0
+  dir="$(hawa_physical "$dir")" && [[ -n "$dir" ]] || { echo 'ERROR: the releases directory cannot be resolved' >&2; return 1; }
   current="$(hawa_physical "$(hawa_current_link)" || true)"; previous="$(hawa_physical "$(hawa_previous_link)" || true)"
   common="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir)" || return 1
   # ADR-158 addendum 3: a release a container may still bind is never removed here either (this removed

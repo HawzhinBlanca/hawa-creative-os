@@ -30,7 +30,7 @@ Requirements: FR-006 (Desk intake), FR-063 (actionable operational state), FR-06
 
 ## Browser artifacts
 
-See [current-run report](../../output/audits/2026-09-29-product-flow-fixes/REPORT.md). Local UI and isolated-database qualification only; not deployed. Live sign-in and full release/office qualification remain open.
+The current-run report is `output/audits/2026-09-29-product-flow-fixes/REPORT.md`: local evidence, not in git (the directory is git-ignored, so a clean checkout does not have it). Local UI and isolated-database qualification only; not deployed. Live sign-in and full release/office qualification remain open.
 
 ## Release follow-up — 29 September 2026
 

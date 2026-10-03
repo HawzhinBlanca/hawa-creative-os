@@ -30,18 +30,36 @@
  *       [--set plans/judge-calibration-2026-10-02/frozen-set.json] [--limit 47] [--out <report.json>]
  *
  * `--images` holds the blinded panel images as <id>.jpg or <id>.png (d01 ... d33), or each image under
- * its own file name; office posts fall back to packages/creative/assets/exemplars.
+ * its own file name; office posts fall back to packages/creative/assets/exemplars. A missing image
+ * stops the run before anything is sent.
+ *
+ * The vote (ADR-274 addendum, 2026-10-03). The harness asks for and counts the votes with the
+ * production judge's own `judgeVoteSpec` and `tallyJudgeVotes`, for a poster client. The first run
+ * (results.json) used the five equal votes; the poster vote since then is impact, imagery,
+ * composition and brand fit, weighted, with legibility as a gate.
+ *
+ * Caching and the cap (2026-10-03, first paid run). Every call's verdict and receipt is stored under
+ * the sha256 of its exact request (model, system prompt, user text, image bytes, detail, output
+ * allowance), in `--cache` (default plans/judge-calibration-2026-10-02/call-cache.json), after each
+ * call. A rerun over the same images and prompt sends nothing and costs nothing; a changed prompt or
+ * image misses the cache and is paid for. `--max-usd` (default 2.50) stops the run before a call that
+ * could take the run's spend past the cap. The first failed call (refusal, truncation, HTTP error)
+ * stops the run, as on the live service; the partial report is written and a rerun resumes from the
+ * cache. The report is rewritten after every pair.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   buildPairwiseJudgeSystemPrompt,
   judgeImageDetail,
   judgeMaxTokens,
-  JUDGE_DIMENSIONS,
-  PAIRWISE_DIMENSION_JSON_SCHEMA,
-  type JudgeDimension,
+  judgeVoteSpec,
+  tallyJudgeVotes,
+  type AnyJudgeDimension,
+  type DimensionEvaluationOutput,
+  type LegibilityGateEntry,
 } from '../../packages/creative/src/studio/pairwise-judge-v3.js';
 import { guidelineFidelityRule, pageGrammarFromRaw } from '../../packages/creative/src/studio/page-grammar.js';
 import { OpenAiStudioClient } from '../../packages/creative/src/studio/openai-studio-client.js';
@@ -57,6 +75,25 @@ export type Preference = 'a' | 'b' | 'tie';
 export const JUDGE_CALL_USD = { low: 0.0143, high: 0.0198 } as const;
 /** One more 864-1080 px image at high detail on gpt-6.1-sol: about 1,500-1,800 input tokens at $2 per million. */
 export const OFFICE_REFERENCE_USD_PER_CALL = { low: 0.003, high: 0.0036 } as const;
+
+/** The cap a run stops under unless `--max-usd` says otherwise (the owner's approval of 2026-10-03). */
+export const DEFAULT_MAX_USD = 2.5;
+
+/**
+ * Whether one more paid call may be sent: the run's spend so far plus a reserve for the next call
+ * (1.5 times the dearest call seen, and never under the measured high of a call plus its third image).
+ */
+export function mayDispatch(spentUsd: number, dearestCallUsd: number, maxUsd: number): boolean {
+  const reserve = Math.max(1.5 * dearestCallUsd, JUDGE_CALL_USD.high + OFFICE_REFERENCE_USD_PER_CALL.high);
+  return spentUsd + reserve <= maxUsd;
+}
+
+/** The cache key of one judge call: the exact request, images by their bytes' hash. */
+export function callCacheKey(parts: { model: string; system: string; text: string; images: string[]; detail: string; maxTokens: number }): string {
+  const h = createHash('sha256');
+  h.update(JSON.stringify({ ...parts, images: parts.images.map((u) => createHash('sha256').update(u).digest('hex')) }));
+  return h.digest('hex');
+}
 
 /** The panel's preference for a pair: the higher mean overall score, or a tie inside the margin. */
 export function panelLabel(set: FrozenSet, pair: FrozenPair): Preference {
@@ -88,8 +125,27 @@ export interface JudgedPair {
   winnerBFirst: 'a' | 'b';
   /** The consistent winner, or a tie when the two orders disagree (the production rule). */
   verdict: Preference;
-  votes: { aFirst: Record<JudgeDimension, 'A' | 'B'>; bFirst: Record<JudgeDimension, 'A' | 'B'> };
+  votes: { aFirst: Votes; bFirst: Votes };
   costUsd: number;
+  /** Each order's call: its receipt and rationales, and whether it came from the cache (cost 0 this run). */
+  calls?: { aFirst: CallRecord; bFirst: CallRecord };
+}
+
+export type Votes = Partial<Record<AnyJudgeDimension, 'A' | 'B'>>;
+
+/** One judge call as stored in the cache and the report (no key, no request body). */
+export interface CallRecord {
+  key: string;
+  winner: 'A' | 'B';
+  votes: Votes;
+  rationales: Partial<Record<AnyJudgeDimension, string>>;
+  /** The poster vote (ADR-274 addendum): weighted totals, the legibility gate and any veto. */
+  weighted?: { A: number; B: number };
+  legibilityGate?: { A: LegibilityGateEntry; B: LegibilityGateEntry };
+  legibilityVeto?: 'A' | 'B' | null;
+  receipt: { responseId: string; servedModel: string | null; inputTokens: number; outputTokens: number; reasoningTokens: number;
+    costUsd: number; costBasis: string; latencyMs: number };
+  cached?: boolean;
 }
 
 export function verdictOf(winnerAFirst: 'a' | 'b', winnerBFirst: 'a' | 'b'): Preference {
@@ -119,8 +175,13 @@ export function summarizeCalibration(results: JudgedPair[]) {
       if (r.label === r.verdict) k.agreeDecided++;
     }
   }
+  const calls = results.flatMap((r) => [r.winnerAFirst === 'a', r.winnerBFirst === 'b']);
   return {
     pairs: n,
+    /** The share of calls the design shown first won: 0.5 when order does not matter. */
+    firstPositionWinRate: calls.length ? round(calls.filter(Boolean).length / calls.length) : null,
+    judgeTies: count(results.map((r) => r.verdict), 'tie'),
+    panelTies: count(results.map((r) => r.label), 'tie'),
     positionConsistency: n ? round(results.filter((r) => r.winnerAFirst === r.winnerBFirst).length / n) : 0,
     decided: { pairs: decided.length, agree: agreeDecided, rate: decided.length ? round(agreeDecided / decided.length) : null },
     threeWay: { agree: exact, rate: n ? round(observed) : null },
@@ -160,10 +221,15 @@ function dataUrl(path: string): string {
 export const CALIBRATION_FACTS =
   'LEGIBILITY FACTS: not available for this comparison (one of the images may be a published post with no layout record). Judge both candidates by eye.';
 
+type Cache = Record<string, CallRecord>;
+
 async function judgeOrder(
-  client: OpenAiStudioClient, model: string, system: string, first: string, second: string, office?: string
-): Promise<{ winner: 'A' | 'B'; votes: Record<JudgeDimension, 'A' | 'B'>; costUsd: number }> {
+  client: OpenAiStudioClient, model: string, system: string, first: string, second: string, office: string | undefined,
+  cache: Cache, guard: () => void, posterImpact: boolean
+): Promise<CallRecord> {
   const detail = judgeImageDetail(model);
+  // The production judge's own dimensions, weights, schema and count (judgeVoteSpec, tallyJudgeVotes).
+  const spec = judgeVoteSpec(false, posterImpact);
   const text = `${CALIBRATION_FACTS}
 
 Attached are two images rendered at detail '${detail}':
@@ -171,9 +237,13 @@ Attached are two images rendered at detail '${detail}':
 - Image 2: Candidate B
 
 TASK:
-Examine Candidate A and Candidate B visually and evaluate them independently across all ${JUDGE_DIMENSIONS.length} dimensions.${office
+Examine Candidate A and Candidate B visually and evaluate them independently across all ${spec.dimensions.length} dimensions.${office
     ? '\n\nImage 3 is one of the client\'s own published posts, shown as the standard of impact and brand fit the client sets: the standard, not a design to copy.' : ''}`;
-  const res = await client.createStructuredCompletion<{ dimensions: Record<JudgeDimension, { winner: 'A' | 'B' }> }>({
+  const maxTokens = judgeMaxTokens(model);
+  const key = callCacheKey({ model, system, text, images: [first, second, ...(office ? [office] : [])], detail, maxTokens });
+  if (cache[key]) return { ...cache[key], cached: true };
+  guard();
+  const res = await client.createStructuredCompletion<DimensionEvaluationOutput>({
     model,
     messages: [
       { role: 'system', content: system },
@@ -184,19 +254,28 @@ Examine Candidate A and Candidate B visually and evaluate them independently acr
         ...(office ? [{ type: 'image_url' as const, image_url: { url: office, detail } }] : []),
       ] },
     ],
-    jsonSchema: { name: 'PairwiseDimensionVerdict', schema: PAIRWISE_DIMENSION_JSON_SCHEMA, strict: true },
+    jsonSchema: { name: 'PairwiseDimensionVerdict', schema: spec.schema, strict: true },
     reasoningEffort: 'low',
-    maxTokens: judgeMaxTokens(model),
+    maxTokens,
   });
-  const votes = {} as Record<JudgeDimension, 'A' | 'B'>;
-  for (const d of JUDGE_DIMENSIONS) {
-    const w = res.data.dimensions?.[d]?.winner;
-    if (w !== 'A' && w !== 'B') throw new Error(`The judge returned no vote for ${d}; the run stops rather than count a missing answer.`);
-    votes[d] = w;
+  let t: ReturnType<typeof tallyJudgeVotes>;
+  try {
+    t = tallyJudgeVotes(res.data, spec, model);
+  } catch (err) {
+    throw Object.assign(err instanceof Error ? err : new Error(String(err)), { costUsd: res.receipt.costUsd });
   }
-  const a = JUDGE_DIMENSIONS.filter((d) => votes[d] === 'A').length;
-  return { winner: a >= 3 ? 'A' : 'B', votes, costUsd: res.receipt.costUsd };
+  const r = res.receipt;
+  const record: CallRecord = { key, winner: t.majorityWinner, votes: t.votes, rationales: t.rationales,
+    ...(spec.posterVote ? { weighted: { A: t.weightedA, B: t.weightedB }, legibilityGate: t.legibilityGate, legibilityVeto: t.legibilityVeto ?? null } : {}),
+    receipt: {
+    responseId: String(r.responseId ?? ""), servedModel: r.servedModel ?? null, inputTokens: r.inputTokens, outputTokens: r.outputTokens,
+    reasoningTokens: r.reasoningTokens, costUsd: r.costUsd, costBasis: String(r.costBasis ?? ""), latencyMs: r.latencyMs } };
+  cache[key] = record;
+  return record;
 }
+
+/** Thrown to stop a run at the cap; the partial report is still written. */
+class SpendCapReached extends Error {}
 
 async function main(): Promise<void> {
   const setPath = resolve(ROOT, arg('set') ?? 'plans/judge-calibration-2026-10-02/frozen-set.json');
@@ -214,6 +293,9 @@ async function main(): Promise<void> {
     return;
   }
   const dir = resolve(arg('images') ?? '.');
+  // Every image must resolve before a cent is spent.
+  const paths = new Map(set.images.map((i) => [i.id, imagePath(dir, i)]));
+  const imageHashes = Object.fromEntries([...paths].map(([id, p]) => [id, { file: p, sha256: createHash('sha256').update(readFileSync(p)).digest('hex') }]));
   const raw = JSON.parse(readFileSync(join(ROOT, 'packages/creative/assets/kaae-reference.json'), 'utf8'));
   const system = buildPairwiseJudgeSystemPrompt({
     photoBrief: false, posterImpact: true, houseRules: [guidelineFidelityRule(pageGrammarFromRaw(raw)!)],
@@ -222,22 +304,66 @@ async function main(): Promise<void> {
   });
   const office = officeReference ? dataUrl(join(ROOT, 'packages/creative/assets/exemplars/photo11_peer_evaluators_call_en.jpg')) : undefined;
   const client = new OpenAiStudioClient({ primaryModel: model });
+  const maxUsd = arg('max-usd') ? Number(arg('max-usd')) : DEFAULT_MAX_USD;
+  if (!Number.isFinite(maxUsd) || maxUsd <= 0) throw new Error('--max-usd must be a positive number.');
+  const cachePath = resolve(ROOT, arg('cache') ?? 'plans/judge-calibration-2026-10-02/call-cache.json');
+  const cache: Cache = existsSync(cachePath) ? JSON.parse(readFileSync(cachePath, 'utf8')) : {};
+  const saveCache = () => { mkdirSync(dirname(cachePath), { recursive: true }); writeFileSync(cachePath, `${JSON.stringify(cache, null, 1)}\n`); };
+  let spent = 0;
+  let dearest = 0;
+  let paidCalls = 0;
+  let cachedCalls = 0;
+  const guard = () => {
+    if (!mayDispatch(spent, dearest, maxUsd)) throw new SpendCapReached(`Stopped before a call: $${spent.toFixed(4)} spent, the next call could pass the $${maxUsd} cap.`);
+  };
   const results: JudgedPair[] = [];
-  for (const pair of plan.pairs) {
-    const image = (id: string) => dataUrl(imagePath(dir, set.images.find((i) => i.id === id)!));
-    const [a, b] = [image(pair.a), image(pair.b)];
-    const aFirst = await judgeOrder(client, model, system, a, b, office);
-    const bFirst = await judgeOrder(client, model, system, b, a, office);
-    const winnerAFirst = aFirst.winner === 'A' ? 'a' : 'b';
-    const winnerBFirst = bFirst.winner === 'A' ? 'b' : 'a';
-    results.push({ pair, label: panelLabel(set, pair), winnerAFirst, winnerBFirst, verdict: verdictOf(winnerAFirst, winnerBFirst),
-      votes: { aFirst: aFirst.votes, bFirst: bFirst.votes }, costUsd: aFirst.costUsd + bFirst.costUsd });
-    console.log(`${pair.a} vs ${pair.b}: panel ${results.at(-1)!.label}, judge ${results.at(-1)!.verdict}`);
-  }
-  const report = { model, approval, set: setPath, ranAt: new Date().toISOString(), officeReference, summary: summarizeCalibration(results), results };
   const out = arg('out');
-  if (out) writeFileSync(resolve(out), JSON.stringify(report, null, 2));
-  console.log(JSON.stringify(report.summary, null, 2));
+  let stopped: string | null = null;
+  const voteSpec = judgeVoteSpec(false, true);
+  const report = () => ({ model, approval, set: setPath, ranAt: new Date().toISOString(), officeReference, maxUsd,
+    vote: { dimensions: voteSpec.dimensions, weights: voteSpec.weights, legibilityGate: voteSpec.posterVote },
+    run: { paidCalls, cachedCalls, spentUsd: round(spent), stopped, cache: cachePath }, images: imageHashes,
+    summary: summarizeCalibration(results), results });
+  const write = () => { if (out) writeFileSync(resolve(out), `${JSON.stringify(report(), null, 2)}\n`); };
+  const call = async (first: string, second: string) => {
+    try {
+      const rec = await judgeOrder(client, model, system, first, second, office, cache, guard, true);
+      if (rec.cached) cachedCalls++;
+      else {
+        paidCalls++;
+        spent += rec.receipt.costUsd;
+        dearest = Math.max(dearest, rec.receipt.costUsd);
+        saveCache();
+      }
+      return rec;
+    } catch (err) {
+      const cost = (err as { costUsd?: number }).costUsd;
+      if (typeof cost === 'number') { paidCalls++; spent += cost; }
+      throw err;
+    }
+  };
+  try {
+    for (const pair of plan.pairs) {
+      const image = (id: string) => dataUrl(paths.get(id)!);
+      const [a, b] = [image(pair.a), image(pair.b)];
+      const aFirst = await call(a, b);
+      const bFirst = await call(b, a);
+      const winnerAFirst = aFirst.winner === 'A' ? 'a' : 'b';
+      const winnerBFirst = bFirst.winner === 'A' ? 'b' : 'a';
+      const fresh = (r: CallRecord) => (r.cached ? 0 : r.receipt.costUsd);
+      results.push({ pair, label: panelLabel(set, pair), winnerAFirst, winnerBFirst, verdict: verdictOf(winnerAFirst, winnerBFirst),
+        votes: { aFirst: aFirst.votes, bFirst: bFirst.votes }, costUsd: fresh(aFirst) + fresh(bFirst), calls: { aFirst, bFirst } });
+      console.log(`${pair.a} vs ${pair.b}: panel ${results.at(-1)!.label}, judge ${results.at(-1)!.verdict} (spent $${spent.toFixed(4)})`);
+      write();
+    }
+  } catch (err) {
+    // A provider error can quote part of a key; nothing key-shaped reaches the report or the log.
+    stopped = (err instanceof Error ? `${err.name}: ${err.message}` : String(err)).replace(/\bsk-[A-Za-z0-9_*.-]+/g, 'sk-[redacted]').slice(0, 600);
+    console.error(`Run stopped: ${stopped}`);
+    process.exitCode = 1;
+  }
+  write();
+  console.log(JSON.stringify({ run: report().run, summary: report().summary }, null, 2));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

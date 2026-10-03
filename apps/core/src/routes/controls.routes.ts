@@ -7,7 +7,7 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { createRedrive } from '../services/redrive.js';
 import { rejectLegacyTaskDesignWrite } from './lifecycle-design-proof.js';
-import { requestLifecycleDesignRetry } from '../services/lifecycle-office-retry.js';
+import { OFFICE_RETRY_ROLES, requestLifecycleDesignRetry } from '../services/lifecycle-office-retry.js';
 import { requestLifecycleWithdraw } from '../services/lifecycle-withdraw.js';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { withRlsContext } from '@hawa/db';
@@ -112,6 +112,11 @@ export function registerControlsRoutes(ctx: RouteContext): void {
   registerRoute('post', '/tasks/:taskId/redrive', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    // A re-drive pays for the design again. The request-owned retry checks these roles in its service;
+    // the legacy re-drive below took any signed-in role.
+    if (!(OFFICE_RETRY_ROLES as readonly string[]).includes(auth.role || '')) {
+      return problem(c, 403, 'Forbidden', 'An office operator or art director is required to design a task again.');
+    }
     // A request-owned task is designed again by its request's own object (ADR-142), so the Desk's
     // "Re-drive Generation" works for it; the legacy re-drive below would refuse it (LIFECYCLE_OWNED).
     const ownedBy = await lifecycleRequestOf(auth, c.req.param('taskId')).catch(() => null);
@@ -125,12 +130,15 @@ export function registerControlsRoutes(ctx: RouteContext): void {
       const result = await redriveTask(taskId, undefined, { id: auth.userId || 'operator', role: auth.role || 'operator' });
       if (!result.ok && (result as any).code === 'TASK_GENERATION_BLOCKED') return problem(c, 409, 'TASK_GENERATION_BLOCKED', (result as any).message || '');
       if (!result.ok && (result as any).code === 'LIFECYCLE_OWNED') return problem(c, 409, 'LIFECYCLE_OWNED', (result as any).message || '');
+      // ADR-287: the task workflow that re-drove a studio task outside RequestLifecycle is retired.
+      if (!result.ok && result.code === 'LEGACY_WORKFLOW_RETIRED') return problem(c, 409, 'LEGACY_WORKFLOW_RETIRED', result.message || '');
       if (!result.ok && (result as any).code === 'CLIENT_REQUIRED') return problem(c, 422, 'CLIENT_REQUIRED', (result as any).message || '');
       if (!result.ok && (result as any).code === 'TASK_NOT_FOUND') return problem(c, 404, 'TASK_NOT_FOUND', (result as any).message || '');
       return c.json(result, result.ok ? 200 : 500);
     } catch (err: any) {
       if (err instanceof CanvaFlowError) return problem(c, err.status, err.code, err.message);
-      return problem(c, 500, 'REDRIVE_FAILED', err.message || 'Task redrive failed');
+      log.error('[core:redrive] failed:', err?.message || err);
+      return problem(c, 500, 'REDRIVE_FAILED', 'The task could not be re-driven; try again');
     }
   });
 
@@ -144,7 +152,8 @@ export function registerControlsRoutes(ctx: RouteContext): void {
       const result = await sweepFailedTasks(tenantId);
       return c.json(result, 200);
     } catch (err: any) {
-      return problem(c, 500, 'SWEEP_FAILED', err.message || 'Failed tasks sweep failed');
+      log.error('[core:sweep-failed] failed:', err?.message || err);
+      return problem(c, 500, 'SWEEP_FAILED', 'The sweep of failed tasks did not complete; try again');
     }
   });
 

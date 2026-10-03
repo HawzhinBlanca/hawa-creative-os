@@ -7,6 +7,7 @@ import { CanvaFlowError } from '../services/canva-connect-service.js';
 import { authorizedLearningClient, explicitLearningInstruction, moderateLearningRule, moderationInput,
   negativeLearningInput, recordLearningRejection } from '../services/learning-governance.js';
 import {instructionActionId,recordLearningInstruction,recoverClientLearning} from '../services/learning-recovery.js';
+import { clientRuleEffect } from '../services/rule-effect.js';
 
 /**
  * What the office learns about a client: generation budgets, candidate rules mined from feedback and
@@ -65,7 +66,10 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
       const auth=verifyRequestAuth(c);
       const clientId=await authorizedLearningClient(ctx,auth,c.req.param('clientId'));
       const state=await recoverClientLearning(ctx,auth,clientId);
-      return c.json({candidateRules:state.rules,count:state.rules.length,excludedLegacySourceIds:state.excludedLegacySourceIds},200);
+      // ADR-291: per active rule, whether code applies it, only a model reads it, or no design reads it.
+      // Null without a database or when the read fails; the candidate list does not depend on it.
+      const ruleEffect=db ? await clientRuleEffect(db,{tenantId:auth.tenantId!,userId:auth.userId!,role:auth.role!},clientId).catch((error)=>{log.warn(`[learning] rule effect for ${clientId} could not be read: ${error instanceof Error ? error.message : String(error)}`);return null;}) : null;
+      return c.json({candidateRules:state.rules,count:state.rules.length,excludedLegacySourceIds:state.excludedLegacySourceIds,ruleEffect},200);
     } catch(error) {return learningFailure(c,error);}
   });
 

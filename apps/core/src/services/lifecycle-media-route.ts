@@ -69,10 +69,13 @@ export function createMediaRoute(ctx: Pick<CoreContext, 'db' | 'telegramBridge' 
   const system = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
   const tx = <T>(fn: (trx: Tx) => Promise<T>) => withRlsContext(db!, system, fn);
 
-  /** The language for words about a photo or a file: its own words, else the chat's (ADR-143's rule). */
+  /**
+   * The language for words about a photo or a file: its own words, else the chat's (ADR-143's rule). Hunt 3: words
+   * with no letter ("👍", "?", "2") tell no language; they were answered in English in a Sorani chat (ADR-251).
+   */
   const langFor = async (trx: Tx, chatId: string, message: Json | null): Promise<RequesterLang> => {
     const own = wordsOf(message).trim();
-    if (own) return requesterLang(own);
+    if (own && /\p{L}/u.test(own)) return requesterLang(own);
     return replyLanguage(trx, DEFAULT_TENANT_ID, chatId, [], record(message?.from)?.language_code);
   };
 

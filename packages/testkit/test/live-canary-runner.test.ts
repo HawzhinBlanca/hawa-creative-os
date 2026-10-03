@@ -72,6 +72,16 @@ describe('the nightly canary runner (ADR-240)', () => {
     expect(curl).toContain('a cancel with a reason withdraws the design');
   });
 
+  // Hunt 3: watchdog.sh --notify exited 0 whatever Telegram answered, so this line never appeared.
+  it('says so in its log when the operator could not be alerted', () => {
+    const s = setup();
+    fs.writeFileSync(path.join(s.t, 'bin', 'curl'), `#!/bin/bash\nprintf '%s\\n' "$*" >> '${s.f('curl')}'\nexit 7\n`, { mode: 0o755 });
+    const res = s.run('exit 1');
+    expect(res.status).toBe(1);
+    expect(s.read('curl')).toContain('Hawa nightly canary failed');
+    expect(res.stdout).toContain('the operator could not be alerted');
+  });
+
   it('a run that ends without a result is a failed night too', () => {
     const s = setup();
     const res = s.run('exit 2');
@@ -88,6 +98,17 @@ describe('the nightly canary runner (ADR-240)', () => {
     expect(res.status, res.stderr).toBe(0);
     expect(fs.existsSync(s.f('ran'))).toBe(false);
     expect(s.latest()).toMatchObject({ status: 'skipped', reason: 'a deploy holds the deploy lock' });
+  });
+
+  it('names a late nightly backup, not a deploy, when the backup holds the deploy lock', async () => {
+    const s = setup();
+    const holder = spawn('python3', [lock, '--lock', s.f('deploy.lock'), '--', 'bash', '-c', 'echo held; exec /bin/sleep 5', 'infra/backup/nightly_backup.sh']);
+    await new Promise((r) => holder.stdout.once('data', r));
+    const res = s.run(`touch '${s.f('ran')}'`);
+    holder.kill();
+    expect(res.status, res.stderr).toBe(0);
+    expect(fs.existsSync(s.f('ran'))).toBe(false);
+    expect(s.latest()).toMatchObject({ status: 'skipped', reason: 'the nightly backup holds the deploy lock (it started late)' });
   });
 
   it('holds the deploy lock while it runs, so a deploy that starts meanwhile waits for it', async () => {

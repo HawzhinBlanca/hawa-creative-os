@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { readPptxPictures } from '@hawa/qa';
+import { closeSharedTextShapingPool } from '@hawa/creative';
 import { checkExportPictures, checkTextLines, pictureDownloadVerdict } from '../src/services/export-picture-fidelity.js';
 import { png, u8, zipSync } from './fixtures/shipped-export.js';
 
@@ -45,8 +48,8 @@ const effect = () => rgbaPng(100, 20, (x) => [Math.round(x * 2.5), Math.round(x 
 
 const PX = 9525;
 const SLIDE = { cx: 1080 * PX, cy: 1350 * PX };
-interface Pic { media: string; box: [number, number, number, number]; as?: 'pic' | 'filled' }
-const xfrm = ([x, y, w, h]: Pic['box']) => `<a:xfrm><a:off x="${x * PX}" y="${y * PX}"/><a:ext cx="${w * PX}" cy="${h * PX}"/></a:xfrm>`;
+interface Pic { media: string; box: [number, number, number, number]; as?: 'pic' | 'filled'; xfrmAttrs?: string; blip?: string }
+const xfrm = ([x, y, w, h]: Pic['box'], attrs = '') => `<a:xfrm${attrs}><a:off x="${x * PX}" y="${y * PX}"/><a:ext cx="${w * PX}" cy="${h * PX}"/></a:xfrm>`;
 
 /** A one-page PPTX drawing `pics` (source: `p:pic`; Canva export: image-filled `p:sp`) over `media`. */
 function deck(pics: Pic[], media: Record<string, Uint8Array>, height = SLIDE.cy, title?: string): Uint8Array {
@@ -55,7 +58,7 @@ function deck(pics: Pic[], media: Record<string, Uint8Array>, height = SLIDE.cy,
   const shapes = pics.map((p, i) => {
     const rid = `rId${names.indexOf(p.media) + 2}`;
     return p.as === 'filled'
-      ? `<p:sp><p:nvSpPr><p:cNvPr id="${i + 2}" name="s${i}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(p.box)}<a:custGeom/><a:blipFill><a:blip r:embed="${rid}"/><a:stretch/></a:blipFill></p:spPr></p:sp>`
+      ? `<p:sp><p:nvSpPr><p:cNvPr id="${i + 2}" name="s${i}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(p.box, p.xfrmAttrs)}<a:custGeom/><a:blipFill><a:blip r:embed="${rid}"${p.blip ? `>${p.blip}</a:blip>` : '/>'}<a:stretch/></a:blipFill></p:spPr></p:sp>`
       : `<p:pic><p:nvPicPr><p:cNvPr id="${i + 2}" name="p${i}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rid}"/><a:stretch/></p:blipFill><p:spPr>${xfrm(p.box)}<a:prstGeom prst="rect"/></p:spPr></p:pic>`;
   }).join('');
   const ns = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
@@ -188,6 +191,56 @@ describe('pictureDownloadVerdict: the customer download contract (ADR-258)', () 
   });
 });
 
+describe('a picture the export does not draw as the source did (hunt 3, 2026-10-03)', () => {
+  /** The export with the logo drawn under the transform attributes `attrs` (rotation, flips), in its own box. */
+  const transformed = (attrs: string, blip?: string, more: Pic[] = []) => deck([
+    { media: 'image1.png', box: [0, 0, 670, 1067], as: 'filled' },
+    { media: 'image2.png', box: [685, 0, 395, 526], as: 'filled' },
+    { media: 'image3.png', box: [76, 76, 108, 108], as: 'filled', xfrmAttrs: attrs, blip },
+    ...more,
+  ], { 'image1.png': sky(0.5, 2), 'image2.png': blocks(0.6, 3), 'image3.png': logo(), 'image4.png': effect() }, SLIDE.cy - 6350);
+
+  it('a logo moved off the page is missing, and blocks the download', async () => {
+    for (const box of [[1100, 76, 108, 108], [76, 1400, 108, 108], [-200, 76, 108, 108]] as Pic['box'][]) {
+      const r = await checkExportPictures(SOURCE, exported({}, { logo: box }), { logoBoxPx: LOGO_BOX });
+      expect(r, String(box)).toMatchObject({ pass: false, logo: 'missing', missing: ['ppt/media/image-1-3.png'] });
+      expect(pictureDownloadVerdict(r).status).toBe('block');
+    }
+    // Partly on the page it is drawn, and only moved.
+    const edge = await checkExportPictures(SOURCE, exported({}, { logo: [1020, 76, 108, 108] }), { logoBoxPx: LOGO_BOX });
+    expect(edge).toMatchObject({ logo: 'moved' });
+  });
+
+  it('a logo mirrored or turned in its own box is not the logo the source placed', async () => {
+    const mirrored = await checkExportPictures(SOURCE, transformed(' flipH="1"'), { logoBoxPx: LOGO_BOX });
+    expect(mirrored).toMatchObject({ pass: false, logo: 'moved' });
+    const upsideDown = await checkExportPictures(SOURCE, transformed(' rot="10800000"'), { logoBoxPx: LOGO_BOX });
+    expect(upsideDown).toMatchObject({ pass: false, logo: 'moved' });
+    // Canva's own near-zero angles and explicit false flips are the source's orientation.
+    const canva = await checkExportPictures(SOURCE, transformed(' rot="3300" flipH="false" flipV="false"'), { logoBoxPx: LOGO_BOX });
+    expect(canva).toMatchObject({ pass: true, logo: 'preserved' });
+  });
+
+  it('a logo Canva draws fully transparent is missing; a faded one is not in place', async () => {
+    // Canva writes a picture's transparency as alphaModFix: amt="0" draws nothing.
+    const invisible = await checkExportPictures(SOURCE, transformed('', '<a:alphaModFix amt="0"/>'), { logoBoxPx: LOGO_BOX });
+    expect(invisible).toMatchObject({ pass: false, logo: 'missing' });
+    expect(pictureDownloadVerdict(invisible).status).toBe('block');
+    const faded = await checkExportPictures(SOURCE, transformed('', '<a:alphaModFix amt="10000"/>'), { logoBoxPx: LOGO_BOX });
+    expect(faded).toMatchObject({ pass: false, logo: 'moved' });
+    expect(await checkExportPictures(SOURCE, transformed('', '<a:alphaModFix amt="100000"/>'), { logoBoxPx: LOGO_BOX }))
+      .toMatchObject({ pass: true, logo: 'preserved' });
+  });
+
+  it('the invisible fills Canva puts under its text boxes are not pictures it added', async () => {
+    // Every real Canva export on record (2026-09-16, 2026-09-27) has 4 to 10 of them, all amt="0".
+    const fills: Pic[] = [{ media: 'image4.png', box: [76, 600, 900, 120], as: 'filled', blip: '<a:alphaModFix amt="0"/>' },
+      { media: 'image4.png', box: [76, 760, 900, 120], as: 'filled', blip: '<a:alphaModFix amt="0"/>' }];
+    expect(await checkExportPictures(SOURCE, transformed('', undefined, fills), { logoBoxPx: LOGO_BOX }))
+      .toMatchObject({ pass: true, logo: 'preserved', addedByProvider: 0 });
+  });
+});
+
 describe('checkTextLines: does Canva wrap each text frame as the design did? (ADR-258)', () => {
   it('a title the design set on 3 lines and Canva on 2 is named, with both counts', () => {
     const r = checkTextLines(
@@ -205,6 +258,17 @@ describe('checkTextLines: does Canva wrap each text frame as the design did? (AD
     expect(same).toMatchObject({ pass: true, warnings: [], unmeasured: [] });
     const dropped = checkTextLines(studio, studio, textDeck([HEAD, BODY]), textDeck([HEAD]));
     expect(dropped).toMatchObject({ pass: true, unmeasured: ['One line of body text'] });
+  });
+
+  it('pairs a capitals title Canva wrote in capitals with its typed source frame (ADR-275)', () => {
+    const title: TextFrame = { text: 'Peer Review Week', box: [86, 387, 907, 265], color: 'F7B500', sz: 2900 };
+    const r = checkTextLines(
+      render([{ box: title.box, ink: '#F7B500', lines: 2, fontPx: HEAD_PX }]),
+      render([{ box: title.box, ink: '#F7B500', lines: 1, fontPx: HEAD_PX }]),
+      textDeck([title]), textDeck([{ ...title, text: 'PEER REVIEW WEEK' }], SLIDE.cy - 6350));
+    expect(r.unmeasured).toEqual([]);
+    expect(r.frames).toEqual([{ text: 'Peer Review Week', studio: 2, canva: 1 }]);
+    expect(r.pass).toBe(false);
   });
 });
 
@@ -225,7 +289,7 @@ const OFFICE = ['91500011', '91500012'];
 const TITLE = 'Autumn workshop poster';
 const hash = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 
-async function imported(exportDeck: Uint8Array, source: Uint8Array | null, pictures?: { studio: Buffer; canva: Buffer }) {
+async function imported(exportDeck: Uint8Array, source: Uint8Array | null, pictures?: { studio: Buffer; canva: Buffer }, manifest: object = { copy: [TITLE], logo: LOGO_BOX }) {
   vi.stubEnv('TELEGRAM_ALLOWED_USERS', OFFICE.join(','));
   const requestId = randomUUID();
   const { taskId } = await projectLifecycleOpen(db, {
@@ -244,7 +308,7 @@ async function imported(exportDeck: Uint8Array, source: Uint8Array | null, pictu
           '{"method":"pptx_import"}'::jsonb)`.execute(trx);
       await sql`INSERT INTO hawa.canva_editable_sources (id, tenant_id, task_id, client_id, actor_id, operation_id, sha256, content, manifest)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, 'test', ${create}::uuid, ${hash(source)}, ${Buffer.from(source)},
-          ${JSON.stringify({ copy: [TITLE], logo: LOGO_BOX })}::jsonb)`.execute(trx);
+          ${JSON.stringify(manifest)}::jsonb)`.execute(trx);
     }
     if (pictures) {
       const runId = randomUUID();
@@ -277,6 +341,8 @@ async function imported(exportDeck: Uint8Array, source: Uint8Array | null, pictu
     WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid ORDER BY started_at DESC LIMIT 1`.execute(trx))).rows[0]?.report;
   return { result, report };
 }
+
+afterAll(() => closeSharedTextShapingPool());
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)('the recorded QC run carries the picture check (ADR-258)', () => {
   it('an import whose pictures all survive records pass, logo preserved; the verdict is the copy check\'s', async () => {
@@ -316,6 +382,54 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('the recorded QC run carries the
       { media: 'image-1-1.png', box: [0, 0, 670, 1067] }, { media: 'image-1-2.png', box: [685, 0, 395, 526] }, { media: 'image-1-3.png', box: [76, 76, 108, 108] },
     ], { 'image-1-1.png': sky(), 'image-1-2.png': blocks(), 'image-1-3.png': logo() }, SLIDE.cy, TITLE));
     expect(report.textLines).toMatchObject({ measured: false, reason: 'No PNG of the same Canva version was retrieved.' });
+  });
+
+  // ADR-290: a real Canva export on record (golden sheet 1) and the plan it was imported from.
+  const golden = (() => {
+    const root = resolve(__dirname, '../../../output/acceptance/2026-09-27-canva-multilingual');
+    const group = JSON.parse(readFileSync(`${root}/fixtures.json`, 'utf8')).groups.find((g: { id: string }) => g.id === 'group-1');
+    return { manifest: group.manifest, png: readFileSync(`${root}/group-1-round-2-canva.png`), source: new Uint8Array(readFileSync(`${root}/group-1-input.pptx`)) };
+  })();
+
+  it('records the Kurdish shaping check on the same-version PNG, advisory (ADR-290)', async () => {
+    const { report, result } = await imported(exported({}, {}, false, TITLE), golden.source, { studio: golden.png, canva: golden.png }, golden.manifest);
+    expect(report.textShaping).toMatchObject({ pass: true, warnings: [] });
+    expect(report.textShaping.blocks.length).toBeGreaterThanOrEqual(9);
+    expect(report.checks).toContainEqual(expect.objectContaining({ name: 'textShaping', passed: true }));
+    expect(result.officePhotoAlerts?.[0].text ?? result.officeAlerts?.[0].text).not.toContain('in the wrong direction');
+  });
+
+  it('a block Canva drew other than designed is named in the office alert, without changing the verdict (ADR-290)', async () => {
+    const swapped = { ...golden.manifest, copy: [golden.manifest.copy[1], golden.manifest.copy[0], ...golden.manifest.copy.slice(2)] };
+    const { report, result } = await imported(exported({}, {}, false, TITLE), golden.source, { studio: golden.png, canva: golden.png }, swapped);
+    expect(report.textShaping.pass).toBe(false);
+    expect(report.checks).toContainEqual(expect.objectContaining({ name: 'textShaping', passed: false }));
+    expect(report.passed).toBe(true);
+    const alert = result.officePhotoAlerts?.[0].text ?? result.officeAlerts?.[0].text;
+    expect(alert).toContain('in Canva');
+    expect(report.warnings.filter((w: string) => w.endsWith('in Canva') && !w.includes('wraps differently')).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a shaping check past its deadline is recorded as not measured and the QC run is still recorded (ADR-290 addendum)', async () => {
+    // The check runs on the process's worker pool; a pool whose deadline no check meets.
+    await closeSharedTextShapingPool();
+    process.env.HAWA_TEXT_SHAPING_TIMEOUT_MS = '100';
+    try {
+      const { report } = await imported(exported({}, {}, false, TITLE), golden.source, { studio: golden.png, canva: golden.png }, golden.manifest);
+      expect(report.textShaping).toEqual({ measured: false, reason: 'timeout' });
+      expect(report.checks).toContainEqual({ name: 'textShaping', passed: null, details: 'not measured' });
+      expect(report.passed).toBe(true);
+    } finally {
+      delete process.env.HAWA_TEXT_SHAPING_TIMEOUT_MS;
+      await closeSharedTextShapingPool();
+    }
+  });
+
+  it('without a transfer plan or a same-version PNG, the shaping check says why it measured nothing (ADR-290)', async () => {
+    const noPng = await imported(exported({}, {}, false, TITLE), deck([], {}, SLIDE.cy, TITLE));
+    expect(noPng.report.textShaping).toEqual({ measured: false, reason: 'No PNG of the same Canva version was retrieved.' });
+    const noPlan = await imported(exported({}, {}, false, TITLE), golden.source, { studio: golden.png, canva: golden.png });
+    expect(noPlan.report.textShaping).toEqual({ measured: false, reason: 'The editable source records no transfer plan to draw the copy from.' });
   });
 
   it('a design not imported from an editable source says there is nothing to compare', async () => {

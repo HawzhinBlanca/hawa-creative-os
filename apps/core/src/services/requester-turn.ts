@@ -138,7 +138,11 @@ export type TurnPlan =
   | { kind: 'open'; text: string; instructionOnly: boolean; resolves?: number }
   /** `redo`: redo words (ADR-200 addendum); the requester hears "I'll redo …". */
   | { kind: 'revise'; requestId: string; directive: string; resolves?: number; redo?: true }
-  | { kind: 'note'; note: 'change' | 'cancel' | 'hold'; requestId: string; words: string; resolves?: number; redo?: true }
+  /**
+   * `feedback` (ADR-284 addendum, live canary 2026-10-03): an opinion about the only design the sender has
+   * on the way, said before any draft of it exists ("the poster looks cheap"); the designer making it hears it.
+   */
+  | { kind: 'note'; note: 'change' | 'cancel' | 'hold'; requestId: string; words: string; resolves?: number; redo?: true; feedback?: true }
   /**
    * ADR-255: a cancel of several designs the requester named together ("cancel both of them", "all of
    * them", or "both" said to "which design?"). Each is withdrawn by its own request object, under this
@@ -272,7 +276,8 @@ function readsAsDeliveryRequest(text: string, core: string): boolean {
   return DELIVERY_FORMAT_EN.some((p) => p.test(core)) || (isSoraniText(core) && /\b(?:pdf|png|jpe?g|svg)\b/i.test(core));
 }
 
-const CANCEL_VERB = '(?:cancel|stop|scrap|drop|abort|withdraw|forget(?:\\s+about)?|never\\s?mind|nvm|' +
+// ADR-272 review: "stop working on it" is "stop it" (it asked "change or new?", offering a new design for a stop).
+const CANCEL_VERB = '(?:cancel|stop\\s+(?:working|work)\\s+on|stop|scrap|drop|abort|withdraw|forget(?:\\s+about)?|never\\s?mind|nvm|' +
   "don'?t\\s+(?:do|make|bother\\s+with|continue(?:\\s+with)?|proceed(?:\\s+with)?)|no\\s+need\\s+(?:for|to\\s+(?:do|make))|no\\s+need|" +
   "(?:we|i)\\s+(?:don'?t|do\\s+not|no\\s+longer)\\s+need|(?:we|i)\\s+(?:want|would\\s+like)\\s+to\\s+cancel|" +
   "(?:it'?s|it\\s+is)\\s+(?:cancel+ed|not\\s+needed)|not\\s+needed|no\\s+longer\\s+needed)";
@@ -339,18 +344,34 @@ export function cancelNamesEvery(core: string): 'both' | 'all' | null {
   return EVERY_ALL.test(words) ? 'all' : null;
 }
 
+/** What a pause stops: the whole design ("it", "the poster", "our design"), never a part of it. */
+const HOLD_OBJECT = `(?:it|them|this|that|(?:the|these|those|this|that|my|our)\\s+(?:[\\p{L}'’-]+\\s+){0,2}?(?:design|poster|draft|flyer|banner|invitation|card|post|story|request|order|job|work)s?)`;
+/** For how long: "yet", "for now", "for the moment", "for a few days", "until …", "till …". */
+const HOLD_WHILE = '(?:yet|for\\s+now|for\\s+the\\s+(?:moment|time\\s+being)|for\\s+a\\s+(?:bit|while|few\\s+days|day\\s+or\\s+two)|until|till|til)\\b';
 /** A temporary stop of the design, never a quoted instruction or a pause of a design element. */
 export function readsAsHold(text: string): boolean {
-  const t = corePhrase(text);
+  // Hunt 3: "can you hold the workshop poster until we confirm the venue": the polite ask is no part of the pause.
+  const t = corePhrase(text).replace(/^(?:(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+|kindly\s+)?)/iu, '');
   if (!t || t.length > 500) return false;
   // Pronouns must name the whole job, not a design element ("hold this button", "pause it animation").
   const wholeJobTail = '(?=$|[\\s,.!:-]+(?:please\\b|for\\s+now\\b|until\\b|while\\b|because\\b|we\\b|i\\b)|[,.!:-])';
-  return /^(?:(?:wait|hold\s+on|hang\s+on)[\s,.!:-]+)?(?:don['’]?t|do\s+not)\s+(?:make|start|continue|proceed\s+with)\s+(?:it|them|this|that|(?:the|these|those)\s+(?:designs?|posters?|drafts?))\s+(?:yet|for\s+now)\b/i.test(t) ||
+  // ADR-272: "don't continue with the design for now", "don't go ahead with the poster yet", "please stop working
+  // on it for now", "hold off on it until …": a stop said with "yet", "for now" or "until" is a pause.
+  return new RegExp(`^(?:(?:wait|hold\\s+on|hang\\s+on)[\\s,.!:-]+)?(?:don['’]?t|do\\s+not)\\s+(?:make|start|continue(?:\\s+with)?|proceed(?:\\s+with)?|go\\s+ahead\\s+with|go\\s+on\\s+with|carry\\s+on\\s+with|work\\s+on|finish)\\s+${HOLD_OBJECT}\\s+${HOLD_WHILE}`, 'iu').test(t) ||
+    new RegExp(`^(?:stop|pause|halt|freeze|hold(?:\\s+off)?)(?:\\s+(?:working|work))?(?:\\s+on)?(?:\\s+${HOLD_OBJECT})?\\s+${HOLD_WHILE}`, 'iu').test(t) ||
+    // Hunt 3: "please wait until we confirm the time": the design waits for the requester.
+    /^(?:please\s+)?wait\s+(?:until|till|til)\s+(?:we|i|they|you\s+(?:hear|get))\b/iu.test(t) ||
+    // "don't go ahead yet", "don't start yet", "do not proceed for now": the design is understood.
+    new RegExp(`^(?:(?:wait|hold\\s+on|hang\\s+on)[\\s,.!:-]+)?(?:please\\s+)?(?:don['’]?t|do\\s+not)\\s+(?:start|continue|proceed|go\\s+ahead|go\\s+on|carry\\s+on|finish)\\s+${HOLD_WHILE}`, 'iu').test(t) ||
+    // Sorani: "don't make it yet" (هێشتا … مەکە): "yet" with a "don't" verb. Needs native review.
+    /(?:^|\s)هێشتا\s+(?:\S+\s+){0,2}?(?:مەکە|مەیکە|مەکەن|مەیکەن)(?=[\s،,.!]|$)/u.test(t) ||
     new RegExp('^(?:hold|pause)\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))' + wholeJobTail, 'i').test(t) ||
     new RegExp('^put\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))\\s+on\\s+hold' + wholeJobTail, 'i').test(t) ||
     // ADR-251 (friction 10): a bare "wait" / "hold on" asks for a moment and pauses nothing (`ASKS_FOR_A_MOMENT`);
     // a bare Sorani "stop" is a cancel that names nothing, and is asked about.
-    /^ڕایبگرە(?:[\s،,.!]|$)/u.test(t) || /^ڕاوەستە[\s،,]+[^\s،,.!]/u.test(t);
+    /^ڕایبگرە(?:[\s،,.!]|$)/u.test(t) || /^ڕاوەستە[\s،,]+[^\s،,.!]/u.test(t) ||
+    // Hunt 3: Sorani "(please) wait until we …" (چاوەڕێ بکە تا …). Needs native review.
+    /^(?:تکایە\s+)?چاوەڕێ\s*(?:بکە|بکەن)\s+(?:تا|هەتا)\s+\S/u.test(t);
 }
 
 /**
@@ -366,9 +387,12 @@ const STATUS_EN: RegExp[] = [
   /^(?:any|some)\s+(?:update|news|progress|word)s?\b/i,
   /^(?:what'?s|what\s+is)\s+(?:the\s+)?(?:status|update|progress|eta|news)\b/i,
   /^(?:status|eta|update)\s*\??$/i,
-  /^(?:is|are)\s+(?:it|they|the\s+\p{L}+(?:\s+\p{L}+)?|my\s+\p{L}+|our\s+\p{L}+)\s+(?:ready|done|finished|complete|coming|on\s+(?:its|the)\s+way|sent)(?:\s+yet)?\b/iu,
-  /^how'?s\s+(?:it|the\s+\p{L}+|my\s+\p{L}+|our\s+\p{L}+)(?:\s+(?:going|coming(?:\s+along)?))?\s*\??$/iu,
-  /^how\s+is\s+(?:it|the\s+\p{L}+|my\s+\p{L}+|our\s+\p{L}+)\s+(?:going|coming(?:\s+along)?)\b/iu,
+  // ADR-272 (NLU eval, en-status-10): a design named by up to four words ("the workshop poster", "our new
+  // workshop flyer"), and "coming along", "coming on", "getting on", "progressing".
+  // Hunt 3: "is the poster for the graduation ceremony ready yet?": a name of up to six words.
+  /^(?:is|are)\s+(?:it|they|(?:the|my|our)\s+\p{L}+(?:\s+\p{L}+){0,5})\s+(?:ready|done|finished|complete|coming|on\s+(?:its|the)\s+way|sent)(?:\s+yet)?\b/iu,
+  /^how'?s\s+(?:it|(?:the|my|our)\s+\p{L}+(?:\s+\p{L}+){0,3}?)(?:\s+(?:going|coming(?:\s+(?:along|on))?|getting\s+on|progressing))?\s*\??$/iu,
+  /^how\s+(?:is|are)\s+(?:it|things|(?:the|my|our)\s+\p{L}+(?:\s+\p{L}+){0,3}?)\s+(?:going|coming(?:\s+(?:along|on))?|getting\s+on|progressing)\b/iu,
   /^(?:where\s+is|where'?s)\s+(?:it|my|our|the)\b/i,
   /^(?:(?:i'?m|we'?re|we\s+are|i\s+am)\s+)?still\s+waiting\b/i,
   /^(?:did|have)\s+you\s+(?:start(?:ed)?|finish(?:ed)?|made|done)\b/i,
@@ -393,6 +417,13 @@ const STATUS_CKB = ['هیچ هەواڵێک', 'چی بوو', 'گەیشتە کوێ
 const DEADLINE_WHEN = /\b(?:by|before|until|no\s+later\s+than|for)\s+(?:tomorrow|tonight|today|this\s+(?:morning|afternoon|evening|week(?:end)?)|next\s+(?:week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:mon|tues|wednes|thurs|fri|satur|sun)day|noon|midday|midnight|the\s+(?:morning|afternoon|evening|weekend|end\s+of\s+(?:the\s+)?(?:day|week))|\d{1,2}(?::\d{2})?\s*(?:am|pm|o'?clock)|\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\p{L}*)\b/iu;
 const DEADLINE_NEED = /\b(?:need(?:ed|s)?|want(?:ed)?|must|has\s+to|have\s+to|should|required|due|deadline|ready|done|urgent|(?:have|get)\s+(?:it|them))\b/i;
 const URGENT = /^(?:(?:it'?s|this\s+is|very|quite|really|super)\s+)*(?:urgent(?:ly)?|asap|as\s+soon\s+as\s+possible|high\s+priority|a\s+rush(?:\s+job)?|rush(?:\s+(?:it|job))?|we\s+are\s+in\s+a\s+hurry|hurry(?:\s+up)?)(?:\s+please)?[\s!.]*$/i;
+/**
+ * ADR-272 (NLU eval, en-deadline-07): timing said as no hurry ("no rush, next week is fine", "take your time",
+ * "not urgent", "whenever you can"), or a day that is fine ("Sunday is fine", "next week works"). The office hears
+ * it as timing; nothing is changed.
+ */
+const RELAXED = /^(?:(?:there'?s|there\s+is)\s+)?no\s+(?:rush|hurry|pressure)\b|^take\s+your\s+time\b|^(?:it'?s\s+|it\s+is\s+)?not\s+(?:urgent|in\s+a\s+hurry)\b|^(?:whenever|any\s*time)\s+(?:you\s+(?:can|are\s+ready|have\s+time)|is\s+(?:fine|ok(?:ay)?|good))\b/i;
+const RELAXED_WHEN = /^(?:(?:any\s*time|sometime|some\s+time)\s+)?(?:(?:by|before|on|in)\s+)?(?:next\s+(?:week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|tomorrow|(?:mon|tues|wednes|thurs|fri|satur|sun)day|the\s+weekend|this\s+week(?:end)?|end\s+of\s+(?:the\s+)?(?:week|month))\s+(?:is|would\s+be|will\s+be)?\s*(?:fine|ok(?:ay)?|good|enough)\b|^(?:(?:any\s*time|sometime)\s+)?(?:next\s+week|tomorrow|(?:mon|tues|wednes|thurs|fri|satur|sun)day|the\s+weekend)\s+works\b/i;
 /** Sorani: by tomorrow, by today, before tomorrow, by the evening, urgent, it is urgent, we are in a hurry. */
 const DEADLINE_CKB = ['تا سبەی', 'تا ئەمڕۆ', 'پێش سبەی', 'تا ئێوارە', 'بەپەلە', 'پەلەیە', 'زۆر پەلەمانە'];
 /**
@@ -430,7 +461,7 @@ const DESIGN_NOUNS = 'poster|flyer|banner|design|invitation|invite|card|post|sto
 const NEW_DESIGN_EN = new RegExp(
   `\\b(?:a|an|another|new|one\\s+more|two|three|some|\\d+)\\s+(?:[\\p{L}\\d'-]+\\s+){0,3}?(?:${DESIGN_NOUNS})s?\\b`, 'iu');
 const OPENS_WITH_DESIGN = new RegExp(`^(?:${DESIGN_NOUNS})s?\\s+(?:for|about|of|announcing|to\\s+announce)\\b`, 'i');
-const ASKS_TO_MAKE_EN = /\b(?:can|could|would|will)\s+(?:you|u|we)\b|\b(?:make|create|design|prepare|produce|draw|do)\b|\b(?:i|we)\s+(?:need|want|would\s+like|'d\s+like)\b|\bneed\s+(?:a|an)\b|\bplease\b/i;
+const ASKS_TO_MAKE_EN = /\b(?:can|could|would|will)\s+(?:you|u|we)\b|\b(?:make|create|design|prepare|produce|draw|do)\b|\b(?:i|we)(?:\s+(?:need|want|would\s+like)|'d\s+like)\b|\bneed\s+(?:a|an)\b|\bplease\b/i;
 /** Sorani design nouns with the indefinite ending "-ێک" (a …) or "نوێ" (new). */
 const NEW_DESIGN_CKB = /(?:پۆستەر|دیزاین|بانەر|فلایەر|بانگهێشت|کارت|پۆست|بڕوانامە|ستۆری)(?:ێک|ی\s+نوێ|\s+نوێ|ێکی\s+نوێ)/u;
 /** Sorani: make, make (plural), prepare, design, we want, I want, we need, make for us. */
@@ -449,10 +480,48 @@ function asksAboutPrice(t: string): boolean {
   return /[?؟]\s*$/.test(t) && (PRICE_EN.test(t) || PRICE_CKB.test(t)) && !MAKE_EN.test(t) && !any(t, MAKE_CKB);
 }
 
+/**
+ * The parts of a design a requester names when they edit it (ADR-272): its words, its details, its pictures
+ * and its look. Never a whole design ("poster", "flyer", "banner"): cancelling one of those withdraws it.
+ */
+const PART_NOUNS = 'title|sub-?title|heading|sub-?heading|headline|tagline|slogan|text|wording|words?|lines?|sentence|caption|paragraph|' +
+  'quote|logo|date|time|venue|location|address|phone(?:\\s+number)?|numbers?|e-?mail|website|link|url|qr(?:\\s+code)?|hashtag|' +
+  'sponsors?|footer|header|colou?rs?|background|gradient|photo|picture|image|illustration|icon|shape|pattern|border|frame|outline|' +
+  'shadow|glow|effect|font|typeface|lettering|spacing|layout|margins?|name|stickers?|emojis?';
+/**
+ * ADR-272: a part named as the object of the words ("the gold border", "that font", "the phone number"): a
+ * part that is the head of what is named, not a word inside a design's name ("the Teacher Day poster").
+ */
+const A_PART_HEAD = `(?:the|this|that|these|those|its|your|our|my|any|all\\s+the)\\s+(?:[\\p{L}\\d'’-]+\\s+){0,2}?(?:${PART_NOUNS})s?`;
+/**
+ * ADR-272 (NLU eval, en-brief-19, L15 class): a design asked for without naming its kind: "we need something for
+ * the KAAE alumni meetup next month", "I'd like something to promote the summer school", "could you do something
+ * for the science fair?". The subject is no part of a design ("something for the title" asks for a change).
+ */
+/**
+ * A time after "something for" is when, not what: "we need something for tomorrow" said while a design is being
+ * made is a deadline (it was read as one before ADR-272), never a new request.
+ */
+const SOMETIME = '(?:tomorrow|today|tonight|(?:this|next|the)\\s+(?:morning|afternoon|evening|night|week(?:end)?|month|day|monday|tuesday|wednesday|thursday|friday|saturday|sunday|end\\s+of)|' +
+  '(?:mon|tues|wednes|thurs|fri|satur|sun)day|noon|midday|midnight|\\d)';
+const SOMETHING_FOR = new RegExp(`\\b(?:(?:i|we)(?:\\s+(?:also|really|will|would|might))?(?:\\s+(?:need|want|would\\s+like)|'d\\s+like)|` +
+  `(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+)?(?:make|design|create|do|prepare)|(?:please\\s+)?(?:make|design|create|prepare)\\s+(?:us|me))\\s+` +
+  `(?:something|anything)\\s+(?:(?:nice|new|simple|quick|small|special|creative)\\s+)?` +
+  `(?:for\\s+(?!(?:me|us|it|this|that|now|them|you)\\b)(?!${A_PART_HEAD}\\b)(?!${SOMETIME}\\b)(?:(?:the|our|my|a|an|this|that)\\s+)?\\p{L}|to\\s+(?:promote|announce|advertise|celebrate|invite\\s+\\p{L}+\\s+to|mark)\\s+\\p{L})`, 'iu');
+/**
+ * Hunt 3 (2026-10-03): a design asked for as "one", "another" or "the same" for a subject of its own: "can you also
+ * make one for the Book Fair on 9 November", "make one more for the graduation", "please make another for the Book
+ * Fair", "can you make the same for the Science Fair". They read as a change of the design on the way, and one sent
+ * back for changes started a paid round with them as its directive.
+ */
+const ONE_FOR = new RegExp(`\\b(?:make|design|create|do|prepare)\\s+(?:us\\s+|me\\s+)?(?:one(?:\\s+more)?|another(?:\\s+one)?|the\\s+same(?:\\s+one)?)` +
+  `(?:\\s+(?:too|as\\s+well|also))?\\s+(?:for|about)\\s+(?!(?:me|us|it|this|that|them|you|now|print(?:ing)?|instagram|facebook|social\\s+media)\\b)` +
+  `(?!${A_PART_HEAD}\\b)(?!${SOMETIME}\\b)(?:(?:the|our|my|a|an)\\s+)?\\p{L}`, 'iu');
 /** A request for a new design ("Can you make a poster for Nawroz?"), greeting or not. */
 export function asksForNewDesign(text: string): boolean {
   const t = clean(text);
   if (asksAboutPrice(t)) return false;
+  if (SOMETHING_FOR.test(t) || ONE_FOR.test(t)) return true;
   if (NEW_DESIGN_CKB.test(t) && (any(t, ASKS_TO_MAKE_CKB) || t.length <= 200)) return true;
   if (OPENS_WITH_DESIGN.test(corePhrase(t))) return true;
   return NEW_DESIGN_EN.test(t) && ASKS_TO_MAKE_EN.test(t);
@@ -462,27 +531,89 @@ export function asksForNewDesign(text: string): boolean {
 export function readsAsChange(text: string): boolean {
   const t = corePhrase(text);
   if (!t) return false;
-  // "What fonts can you use?" asks about the office, not for a change.
-  if (/^(?:what|which|how|who|where|when|why)\b[^\n]*\?\s*$/i.test(t) &&
+  // "What fonts can you use?" asks about the office, not for a change. Hunt 3: so does a yes-or-no question about the
+  // design ("did you put the date?"): it started a paid round on a design sent back for changes. "Is it possible to …",
+  // "are you able to …" and "do you mind …" ask for the change.
+  if (/^(?:what|which|how|who|where|when|why|(?:did|do|does|have|has|was|were|are|is)(?:n'?t)?\b(?!\s+(?:it\s+possible|you\s+able|you\s+mind)\b))\b[^\n]*\?\s*$/i.test(t) &&
       !/\b(?:wrong|typo|mistake|incorrect|should\s+be)\b/i.test(t)) return false;
   if (CORRECTION_EN.some((p) => p.test(t)) || any(t, CORRECTION_CKB)) return true;
   // The heuristics' own revision reading, as when a design is known to be active.
   if (classifyWithHeuristics(t, true, false).kind === 'feedback') return true;
   if (t.length <= 200 && REMOVES_A_PART.test(t) && REMOVABLE_PART.test(t)) return true;
+  if (t.length <= 200 && editsAPart(t)) return true;
   return t.length <= 200 && CHANGE_CUES.some((cue) => containsKeyword(t, cue)) &&
     /\b(?:make|use|put|change|add|remove|move|replace|swap|fix|resize|instead)\b/i.test(t);
 }
 // Live 2026-10-02 (L19): "can you take KAAE's out of the title?", "leave the date off the poster", "drop the
 // subtitle", "get rid of the border": words that remove a named part of a design are a change of it.
 const REMOVES_A_PART = /\b(?:(?:take|leave|get)\s+(?:\S+\s+){0,4}?(?:out|off)|get\s+rid\s+of|drop|delete|erase|remove)\b/i;
-const REMOVABLE_PART = /\b(?:title|subtitle|heading|headline|date|time|venue|logo|line|text|words?|border|frame|photo|picture|image|background|colou?r|name|caption|tagline|slogan|icon|shape|banner)s?\b/i;
+const REMOVABLE_PART = new RegExp(`\\b(?:${PART_NOUNS}|banner)s?\\b`, 'i');
+const A_PART = A_PART_HEAD +
+  '(?=\\s*$|\\s*[,.!?;:]|\\s+(?:on|in|of|from|behind|around|under|over|above|below|at|near|next|beside|inside|please|too|as\\s+well|and|for|anywhere|everywhere|completely|entirely)\\b)';
+/**
+ * ADR-272 (NLU eval, failure class 1): plain words that edit a part of the design on the way, which the rules
+ * read as a short brief and asked "a change, or a new design?":
+ *  - a cancel or a stop said of a part, not of a design ("please cancel the gold border", "drop that shadow");
+ *  - "stop using that font", "don't use red anywhere": a styling instruction said in the negative;
+ *  - "no KAAE in the headline", "no logo on the bottom": a part left out;
+ *  - "the font is hard to read", "the colours look a bit dull": a part found wanting;
+ *  - "the workshop is for university deans, not school principals": a correction ("X, not Y") of what the
+ *    design says, said of it ("the …", "it's …"), with no event copy of its own (that is a brief, ADR-250).
+ */
+const CANCELS_A_PART = new RegExp(`^(?:(?:just|kindly|please|and|also|then)\\s+)*(?:can\\s+you\\s+|could\\s+you\\s+|please\\s+)*` +
+  `(?:cancel|scrap|ditch|lose|kill|drop|skip|forget(?:\\s+about)?|stop)\\s+${A_PART}`, 'iu');
+const NEGATED_STYLING = /\b(?:don'?t|do\s+not|never|stop|quit|no\s+more)\s+(?:use|using|put|putting|add|adding|write|writing|show|showing|include|including|repeat|repeating|bold(?:ing)?|capitali[sz]e|capitali[sz]ing|underline|underlining|italici[sz]e)\b/i;
+const LEAVES_A_PART_OUT = new RegExp(`^no\\s+(?:more\\s+)?(?:(?:[\\p{L}\\d'’&-]+\\s+){0,3}?(?:in|on|at|from|inside|under|over|near)\\s+` +
+  `(?:the|its|this|that|our)\\s+(?:[\\p{L}'’-]+\\s+){0,2}?(?:${PART_NOUNS}|top|bottom|corner|side|left|right|middle|cent(?:re|er)|edge)s?\\b|` +
+  `(?:[\\p{L}'’-]+\\s+){0,2}?(?:${PART_NOUNS})s?(?=\\s*$|\\s*[,.!]|\\s+(?:in|on|at|anywhere|please|at\\s+all)\\b))`, 'iu');
+const FINDS_A_PART_WANTING = new RegExp(`\\b${A_PART_HEAD}(?:'s|\\s+(?:is|are|looks?|seems?|feels?|reads?))\\s+` +
+  '(?:(?:a\\s+(?:bit|little)|bit|little|way|much|far|kind\\s+of|kinda|sort\\s+of|very|really|so|quite|rather|pretty|still|also|just)\\s+)*' +
+  '(?:too\\s+\\p{L}+|not\\s+(?:very\\s+|really\\s+)?(?:clear|readable|legible|visible|right|correct|aligned|centred|centered|straight|consistent|matching)|' +
+  '(?:hard|difficult|impossible)\\s+to\\s+(?:read|see|make\\s+out)|unreadable|illegible|ugly|boring|dull|plain|bland|blurry|blurred|pixelated|grainy|' +
+  'faint|crowded|cluttered|busy|messy|off|weird|strange|odd|missing|cut\\s+off|cropped|hidden|invisible|tiny|old-?fashioned|childish|cheap|outdated)\\b', 'iu');
+const CONTRASTS = /^(?:(?:the|this|that|its|our|my|your)\s+[^,.!?\n]{1,40}?\s+(?:is|are|was|were|will\s+be|should\s+be)|it'?s|it\s+is|this\s+is|that'?s|that\s+is|they'?re|they\s+are)\s+[^.!?\n]{1,60}?,?\s+not\s+(?!(?:yet|ready|good|great|nice|sure|clear|right|ok(?:ay)?|now|needed|approved|done|finished|bad|what|that|it|this|only|just|really|quite|too|so|very|much|exactly|perfect|at\s+all|a\s+(?:problem|big\s+deal|worry)|an\s+issue)\b)(?:(?:the|a|an|for|in|at|on|by|to|our|their)\s+)?[\p{L}\d]/iu;
+/** Cancel words said of a part of a design ("cancel the gold border"): a change, never a withdrawal. */
+export const cancelsAPart = (core: string): boolean => CANCELS_A_PART.test(core);
+function editsAPart(t: string): boolean {
+  return CANCELS_A_PART.test(t) || NEGATED_STYLING.test(t) || LEAVES_A_PART_OUT.test(t) || FINDS_A_PART_WANTING.test(t) ||
+    (CONTRASTS.test(t) && !DATE_OR_TIME.test(t));
+}
 
+/**
+ * ADR-272 (held-out NLU case): "don't go ahead with the poster yet" holds a design; it contains "go ahead" and
+ * read as approval words. An approval phrase said in the negative is never approval.
+ */
+const NEGATED_APPROVAL = /\b(?:don'?t|do\s+not|not|never|no\s+need\s+to|can'?t|cannot|won'?t|shouldn'?t)\s+(?:yet\s+)?(?:go\s+ahead|proceed|finali[sz]e)\b/i;
+/**
+ * Hunt 3 (2026-10-03): where the first approval phrase starts. A brief laid out first and closed with "send it to me
+ * by Thursday", "no changes needed to the logo" or "Go ahead!" was read as approval words: with nothing on the way it
+ * was answered "Thank you." and nothing opened. Event copy before the approval words is a brief.
+ */
+const APPROVAL_AT = new RegExp(`(?<![\\p{L}\\p{N}])(?:${APPROVAL_PHRASES.map((p) => p.replace(/\s+/g, '\\s+')).join('|')})(?![\\p{L}\\p{N}])`, 'iu');
 function readsAsApproval(text: string, core: string): boolean {
-  if (core.length > 160 || !any(core, APPROVAL_PHRASES) || refusesApproval(core)) return false;
+  if (core.length > 160 || !any(core, APPROVAL_PHRASES) || refusesApproval(core) || NEGATED_APPROVAL.test(core)) return false;
+  const at = APPROVAL_AT.exec(core)?.index ?? 0;
+  if (at > 0 && carriesBriefCopy(core.slice(0, at))) return false;
   let rest = core;
   for (const phrase of APPROVAL_PHRASES) rest = rest.replace(new RegExp(phrase.replace(/\s+/g, '\\s+'), 'giu'), ' ');
   rest = rest.replace(PRAISE, ' ').replace(/[\s,،!.:;-]+/g, ' ').trim();
   return !readsAsChange(rest) && !asksForNewDesign(text);
+}
+
+/**
+ * ADR-272 (NLU eval, ckb-approve-05): praise with who likes it ("looks great, the manager loves it", "beautiful,
+ * our team really likes it"; Sorani "very beautiful, the client likes it"). Every clause is thanks or praise,
+ * or says someone likes the design; none asks for anything. Heard as thanks: approval stays the office's.
+ */
+const LIKES_EN = /^(?:(?:and|but|also|so)\s+)?(?:(?:the|our|my|your)\s+)?(?:client|customer|boss|manager|director|team|dean|principal|head|everyone|everybody|people|they|he|she|we|i)(?:\s+(?:all|really|also|too|already|absolutely))*\s+(?:likes?|loves?|liked|loved|(?:is|are|was|were)\s+(?:very\s+|really\s+|so\s+)?happy\s+with)\s+(?:it|this|that|them|the\s+(?:design|poster|draft|flyer|banner|post))(?:\s+(?:a\s+lot|very\s+much|so\s+much|too|already))*[\s!.]*$/iu;
+/** Sorani: "likes it" (حەزی لێ دەکات), "we like it" (حەزمان لێیە), said of someone. Needs native review. */
+const LIKES_CKB = /حەز\s*(?:ی|یان|مان|م)?\s*(?:لێ\s*(?:دەکات|دەکەن|دەکەین|دەکەم|کرد|کردووە)|لێیە|لێیەتی)/u;
+function praisesOnly(core: string): boolean {
+  if (!core || core.length > 140) return false;
+  const clauses = core.split(/\s*[,،;.!:–—]+\s*|\s+-\s+/u).map((c) => c.trim()).filter(Boolean);
+  if (clauses.length < 2) return false;
+  const likes = (c: string) => LIKES_EN.test(c) || (isSoraniText(c) && c.split(/\s+/).length <= 5 && LIKES_CKB.test(c));
+  return clauses.some(likes) && clauses.every((c) => likes(c) || isAcknowledgement(c));
 }
 
 /**
@@ -496,22 +627,56 @@ const CANCEL_FILLER = /^(?:ok(?:ay)?|no|nope|sorry|thanks?|thank\s+you|please|ac
  * off, plans changed, not needed any more. A closed list: a clause that asks for a change is not one.
  * ADR-239 follow-up: "it was by mistake" and "I sent it by mistake" are mistakes too.
  */
-const CANCEL_REASON = new RegExp('^(?:(?:because|since|cause|cos)\\s+)?(?:sorry\\s+)?(?:' + [
+/** Hunt 3: what an event is called when the requester says it was called off ("the workshop got cancelled"). */
+const EVENT_NOUN = '(?:event|meeting|ceremony|party|conference|celebration|day|workshop|seminar|training|course|lecture|session|fair|concert|' +
+  'festival|exhibition|tournament|launch|graduation|programme|program|trip|competition|forum|summit|gala|dinner|visit|class)';
+/** Hunt 3: "the workshop got cancelled", "the event was called off", "so the seminar is cancelled": the event is off. */
+const EVENT_CALLED_OFF = new RegExp(`^(?:(?:ok(?:ay)?|so|well|unfortunately|sadly|actually|because|since|as)[\\s,]+)*(?:(?:the|our|this|that)\\s+)?` +
+  `(?:[\\p{L}'’-]+\\s+){0,2}?${EVENT_NOUN}\\s+(?:was|is|has\\s+been|got|have\\s+been)\\s+(?:cancel+ed|called\\s+off)(?:\\s+(?:now|today|unfortunately))?[\\s!.]*$`, 'iu');
+const CANCEL_REASON = new RegExp('^(?:(?:because|since|cause|cos|ok(?:ay)?\\s+so|so|well|unfortunately|sadly|as)\\s+)*(?:sorry\\s+)?(?:' + [
   "(?:it|this|that)(?:'s|\\s+(?:was|is))\\s+(?:only\\s+|just\\s+)?(?:a\\s+)?(?:test|trial|mistake|an?\\s+error|error|the\\s+wrong\\s+one|wrong)",
   // ADR-239 follow-up (canary 2026-10-02): "it was by mistake", "I sent it by mistake", "it was sent by accident".
   "(?:(?:it|this|that)(?:'s|\\s+(?:was|is))\\s+|(?:i|we)\\s+)?(?:(?:sent|opened|made|ordered|asked\\s+for)\\s+(?:(?:it|this|that)\\s+)?)?by\\s+(?:mistake|accident)",
   'my\\s+(?:mistake|bad|fault)',
   '(?:only\\s+|just\\s+)?(?:a\\s+)?test(?:ing)?', 'wrong\\s+one',
   "(?:we|i|they)(?:'ve|\\s+have)?\\s+(?:postponed|cancel+ed|moved|delayed|changed|called\\s+off)\\s+(?:it|the\\s+(?:event|date|plans?|meeting|ceremony|party|conference|day))",
-  '(?:the\\s+)?(?:event|meeting|ceremony|party|conference|celebration|day)\\s+(?:was|is|has\\s+been|got)\\s+(?:cancel+ed|postponed|called\\s+off|moved|delayed)',
+  `(?:(?:the|our|this|that)\\s+)?(?:[\\p{L}'’-]+\\s+){0,2}?${EVENT_NOUN}\\s+(?:was|is|has\\s+been|got|have\\s+been)\\s+(?:cancel+ed|postponed|called\\s+off|moved|delayed|rescheduled)`,
+  // Hunt 3: "sorry for the trouble", "thanks anyway" said after a cancel.
+  '(?:sorry|apologies)\\s+(?:for|about)\\s+(?:the\\s+|any\\s+|all\\s+the\\s+)?(?:trouble|inconvenience|confusion|bother|that)',
+  '(?:thanks?|thank\\s+you)\\s+(?:anyway|anyways|for\\s+(?:your|the)\\s+(?:time|help|work|effort))',
   '(?:the\\s+)?plans?\\s+(?:have\\s+|has\\s+)?changed', "(?:we|i)(?:'ve|\\s+have)?\\s+changed\\s+(?:our|my)\\s+minds?",
   "(?:we|i)\\s+(?:don'?t|do\\s+not|no\\s+longer)\\s+need\\s+(?:it|this|that|them)(?:\\s+any\\s?more)?", "(?:it'?s|it\\s+is)\\s+no\\s+longer\\s+needed",
   'not\\s+needed(?:\\s+any\\s?more)?', 'no\\s+longer\\s+needed',
+  // ADR-272: someone else makes it ("we'll do it ourselves", "we found another designer", "someone else is doing it").
+  "(?:we|i)(?:'ll|\\s+will|'re\\s+going\\s+to|\\s+are\\s+going\\s+to|\\s+am\\s+going\\s+to|'m\\s+going\\s+to|\\s+can)\\s+(?:do|make|handle|design|sort)\\s+(?:it|this|that|them)(?:\\s+out)?\\s+(?:ourselves|myself|in-?house|internally)",
+  "(?:we|i)(?:'ve|\\s+have)?\\s+(?:found|got|hired|chosen)\\s+(?:another|a\\s+different|a\\s+new|an\\s+other)\\s+(?:designer|agency|company|studio|person)",
+  '(?:someone|somebody)\\s+else\\s+(?:will\\s+do|is\\s+doing|did|made|has\\s+done|will\\s+make|is\\s+making)\\s+(?:it|this|that|them)',
 ].join('|') + ')(?:\\s+(?:any\\s?more|sorry|thanks?|thank\\s+you))*$', 'iu');
 
+/**
+ * ADR-272: Sorani reasons said after a cancel: "it was only a test" (تەنها تاقیکردنەوە بوو), "it was by mistake"
+ * (بە هەڵە بوو), "I / we sent it by mistake" (بە هەڵە ناردم / ناردمان). Needs native review.
+ */
+const CANCEL_REASON_CKB = /^(?:(?:تەنها|تەنیا)\s+)?(?:تاقیکردنەوە|تاقیکاری)(?:یەک)?\s*بوو[\s!.]*$|^بە\s*هەڵە\s+(?:بوو|ناردم|ناردمان|نێردرا)[\s!.]*$|^\S+(?:ەکە|ەکەمان)\s+(?:هەڵوەشایەوە|هەڵوەشێنرایەوە|هەڵوەشێندرایەوە|دواخرا)[\s!.]*$/u;
+/**
+ * Hunt 3: Sorani "we don't need the poster" (پێویستمان بە پۆستەرەکە نییە): the need said of the design by name. With
+ * "the party was cancelled" (ئاهەنگەکە هەڵوەشایەوە) beside it, it was asked "a change, or a new design?". Needs native review.
+ */
+const SORANI_NOT_NEEDED = /^پێویست(?:مان|م|یان)\s+بە\s+(?:\S+\s+){0,3}?\S+(?:ەکە|ەکان)(?:ە)?\s+نییە[\s!.]*$/u;
 const cancelClauses = (core: string) =>
   core.split(/\s*[,،;.!:–—]+\s*|\s+-\s+|\s+(?=(?:because|since)\s)/iu).map((c) => c.trim()).filter(Boolean);
-const cancelsClause = (c: string) => CANCEL_EN.test(c) || CANCEL_DESCRIBED.test(c) || (isSoraniText(c) && c.split(/\s+/).length <= 4 && any(c, CANCEL_CKB));
+/**
+ * ADR-272 (NLU eval, L17 shape in Sorani): Sorani puts the verb last, so a cancel that names its design by a
+ * longer name ("پۆستەری Teacher Appreciation Day هەڵبوەشێنەوە", cancel the Teacher Appreciation Day poster)
+ * is a clause of up to eight words that ends with a cancel verb that carries its object.
+ */
+const SORANI_CANCEL_VERB = /هەڵ\s*(?:ی\s*)?(?:ب)?وەشێنەوە/u;
+const SORANI_NAMED_CANCEL_LAST = new RegExp(`(?:${['هەڵیوەشێنەوە', 'هەڵبوەشێنەوە', 'هەڵوەشێنەوە', 'هەڵیبوەشێنەوە'].join('|')})[\\s!.]*$`, 'u');
+/** Hunt 3: "please" before a clause's cancel ("unfortunately the training was called off, please cancel the poster"). */
+const unpolite = (c: string) => c.replace(/^(?:please|pls|plz)\s+/iu, '');
+const cancelsClause = (said: string) => { const c = unpolite(said); return !CANCELS_A_PART.test(c) && (CANCEL_EN.test(c) || CANCEL_DESCRIBED.test(c) ||
+  (isSoraniText(c) && c.split(/\s+/).length <= 4 && any(c, CANCEL_CKB)) ||
+  (isSoraniText(c) && c.split(/\s+/).length <= 8 && SORANI_NAMED_CANCEL_LAST.test(c)) || SORANI_NOT_NEEDED.test(c)); };
 
 function readsAsCancel(core: string): boolean {
   if (!core || core.length > 160) return false;
@@ -519,7 +684,8 @@ function readsAsCancel(core: string): boolean {
   // Several clauses: one of them cancels, and the rest only surround it, or say why (ADR-230 addendum, L17).
   const clauses = cancelClauses(core);
   if (clauses.length < 2) return false;
-  return clauses.some(cancelsClause) && clauses.every((c) => cancelsClause(c) || CANCEL_FILLER.test(c) || CANCEL_REASON.test(c));
+  return clauses.some(cancelsClause) && clauses.every((c) => cancelsClause(c) || CANCEL_FILLER.test(c) || CANCEL_REASON.test(c) ||
+    CANCEL_REASON_CKB.test(c));
 }
 
 /**
@@ -528,10 +694,17 @@ function readsAsCancel(core: string): boolean {
  * "no need"). Such words withdrew the chat's only design unasked; they are asked about first.
  */
 export function cancelNamesNothing(core: string): boolean {
-  const names = (c: string) => CANCEL_DESCRIBED.test(c) || CANCEL_EN_NAMED.test(c) || (CANCEL_SAID_OF_IT.test(c) && CANCEL_EN.test(c)) ||
-    (isSoraniText(c) && any(c, CANCEL_CKB_NAMED));
+  const names = (said: string) => { const c = unpolite(said); return !DISMISSAL.test(c) && (CANCEL_DESCRIBED.test(c) || CANCEL_EN_NAMED.test(c) || (CANCEL_SAID_OF_IT.test(c) && CANCEL_EN.test(c))) ||
+    (isSoraniText(c) && (any(c, CANCEL_CKB_NAMED) || SORANI_NOT_NEEDED.test(c))); };
   return ![core, ...cancelClauses(core)].some(names);
 }
+
+/**
+ * ADR-272 (NLU eval, en-cancel-29): "forget it", "forget about it", "just forget that" are a dismissal, like
+ * "never mind": they may be about the last thing said rather than the design, so they name nothing and are
+ * asked about. "Forget the poster" and "forget it, we don't need it anymore" still name what they cancel.
+ */
+const DISMISSAL = /^(?:(?:just|oh|well|ah|so|ok(?:ay)?)[\s,]+)*forget(?:\s+about)?\s+(?:it|that|this|everything|all\s+of\s+it)(?:\s+(?:then|now|please|anyway|for\s+now))*[\s!.]*$/iu;
 
 function readsAsStatus(core: string): boolean {
   if (!core || core.length > 140) return false;
@@ -556,7 +729,7 @@ const DATE_OR_TIME = { test: (text: string) => DATE_OR_TIME_EN.test(text) || DAT
  * Words that name an event or its details, in English and Sorani (day, time, place, hall, invitation,
  * seminar, conference, celebration, festival; ADR-182: graduation, hotel, park, meeting, exhibition).
  */
-const EVENT_WORDS = /\b(?:date|time|venue|location|hall|auditorium|hotel|stadium|campus|rsvp|cordially|invitation|ceremony|conference|seminar|workshop|party|dinner|meeting|graduation|wedding|festival|celebration|exhibition|fair|concert|launch|tournament|forum|summit|symposium|lecture|open\s+day)\b|(?:ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس|ئاهەنگ|فێستیڤاڵ|دەرچوون|هۆتێل|پارک|کۆبوونەوە|پێشانگا|نەورۆز)/giu;
+const EVENT_WORDS = /\b(?:date|time|venue|location|hall|auditorium|hotel|stadium|campus|rsvp|cordially|invitation|ceremony|conference|seminar|workshop|party|dinner|meeting|graduation|wedding|festival|celebration|exhibition|fair|concert|launch|tournament|forum|summit|symposium|lecture|open\s+day|nawroz|newroz|nowruz)\b|(?:ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس|ئاهەنگ|فێستیڤاڵ|دەرچوون|هۆتێل|پارک|کۆبوونەوە|پێشانگا|نەورۆز)/giu;
 
 /**
  * ADR-156 (audit #15): a deadline said beside the event's own copy ("Invitation card for the graduation
@@ -573,9 +746,44 @@ export function carriesBriefCopy(core: string): boolean {
   return events >= 2 && words >= 10;
 }
 
+/**
+ * Brief phrasing fuzz (2026-10-03, class 5): dates people write that `DATE_OR_TIME` does not read: a numeric date
+ * ("15/10/2026", "15.10.2026"), a month cut short with a period ("Oct. 20", "Nov. 5"), a day said from today ("next
+ * Thursday", "this Friday"; "tomorrow" is a deadline more often than a date), and a year ("Erbil, 2026", Sorani digits too). Read only where the words
+ * already ask for a design (`readIntentByRules`'s request branch), never for a change, a cancel or a status.
+ */
+const LOOSE_DATE = new RegExp([
+  '\\b\\d{1,2}\\s*[/.-]\\s*\\d{1,2}\\s*[/.-]\\s*\\d{2,4}\\b', '\\b\\d{1,2}\\s*/\\s*\\d{1,2}\\b',
+  '\\b(?:jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\\.\\s*\\d{1,2}\\b', '\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\\.',
+  '\\b(?:this|next|coming)\\s+(?:mon|tues|wednes|thurs|fri|satur|sun)day\\b', '\\b(?:on\\s+)(?:mon|tues|wednes|thurs|fri|satur|sun)day\\b',
+  '\\b20\\d{2}\\b', '(?<![\\d٠-٩۰-۹])[٢۲][٠۰][٠-٩۰-۹]{2}(?![\\d٠-٩۰-۹])',
+].join('|'), 'iu');
+/** Sorani design nouns, the request's own word for what to make (English ones are `DESIGN_NOUNS`). */
+const DESIGN_NOUN_CKB = /(?:پۆستەر|دیزاین|بانەر|فلایەر|بانگهێشت|کارت|پۆست|بڕوانامە|ستۆری)/u;
+/**
+ * Class 5: a request that names its event with a date `carriesBriefCopy` does not read ("pls make a post for the Book
+ * Fair next Thursday", "a KAAE flyer for the Parents Meeting Oct. 20"). A year with only a design noun needs eight
+ * words or more, so "can you make a poster for 2026?" stays for a designer.
+ */
+export function carriesLooseBriefCopy(core: string, words: number): boolean {
+  // As `carriesBriefCopy`: a deadline ("by next Thursday") is not the event's date.
+  const rest = core.replace(DEADLINE_WHEN, ' ');
+  if (!LOOSE_DATE.test(rest)) return false;
+  if ((rest.match(EVENT_WORDS)?.length ?? 0) > 0) return true;
+  return words >= 8 && (new RegExp(`\\b(?:${DESIGN_NOUNS})s?\\b`, 'i').test(rest) || DESIGN_NOUN_CKB.test(rest));
+}
+
+/**
+ * Hunt 3 (2026-10-03): "can you make it by tomorrow?", "could you finish it by Thursday?": asking for the design by a
+ * time is timing, not a change ("make it" read as one, and a design sent back for changes started a paid round).
+ */
+const DO_IT_BY = /^(?:(?:can|could|will|would)\s+(?:you|u)\s+)?(?:please\s+)?(?:make|do|finish|complete|deliver|have|get|prepare)\s+(?:it|them|this|that)(?:\s+(?:ready|done))?\s+(?=(?:by|before|until|no\s+later\s+than)\b)/i;
 function readsAsDeadline(text: string, core: string): boolean {
   if (!core || core.length > 160 || asksForNewDesign(text) || carriesBriefCopy(core)) return false;
   if (URGENT.test(core)) return true;
+  const doIt = DO_IT_BY.exec(core);
+  if (doIt && core.slice(doIt[0].length).replace(DEADLINE_WHEN, '').replace(/^[\s?.!]*(?:please)?[\s?.!]*$/iu, '') === '') return true;
+  if (RELAXED.test(core) || RELAXED_WHEN.test(core)) return true;
   if (DEADLINE_WHEN.test(core) && DEADLINE_NEED.test(core)) return true;
   if (/^(?:by|before)\s+/i.test(core) && DEADLINE_WHEN.test(core)) return true;
   if (!isSoraniText(core) || core.length > 100) return false;
@@ -640,6 +848,14 @@ const REDO_CKB: RegExp[] = [
   /(?:هەوڵێکی|جارێکی)\s+(?:تر|دیکە)\s+(?:بدە|بدەرەوە|هەوڵ\s*بدە|دروستی?\s*بکە|بیکە|بکەرەوە)/u,
   /لە\s*سەرەتاوە\s+(?:دەست\s*پێ\s*بکەرەوە|دروستی\s*بکەرەوە)/u,
 ];
+/** ADR-272: "another one / design / version / poster"; Sorani "another design / poster" (…ێکی تر / دیکە). */
+const ANOTHER_EN = new RegExp(`\\banother\\s+(?:one|version|option|go|(?:${DESIGN_NOUNS}))\\b|\\b(?:one|design)\\s+more\\b`, 'i');
+const ANOTHER_CKB = /(?:دیزاینێکی|پۆستەرێکی|دانەیەکی|وەشانێکی)\s+(?:تر|دیکە)/u;
+/** What should be better: "better", "nicer", "more professional", "prettier", "improved". */
+const BETTER_EN = /\b(?:better|nicer|prettier|improved|more\s+(?:beautiful|professional|attractive|appealing|elegant|modern|creative|colou?rful|eye-?catching))\b/i;
+const QUALITY_BETTER_CKB = /(?:باشتر|جوانتر)/u;
+/** Said as new ("a new poster", "a new design"), as against "another". */
+const SAYS_NEW_DESIGN = /\bnew\s+(?:poster|design|flyer|banner|brief|invitation|one|request)\b|(?:دیزاینێکی\s+نوێ|پۆستەری\s+نوێ|داواکارییەکی\s+نوێ)/iu;
 /** "similar to the earlier ones", "like the previous designs", "like before"; Sorani "like the previous ones". */
 const SIMILAR_EN = /\b(?:similar\s+to|(?<!\b(?:i|we|you|they|really|do|don'?t|did|didn'?t)\s)like|same\s+(?:style|look|feel)\s+as|in\s+the\s+(?:same\s+)?style\s+of|matching)\s+(?:the\s+|my\s+|our\s+|your\s+)?(?:earlier|previous|past|older|old|last|other|before)(?:\s+(?:ones?|designs?|posters?|works?|times?))?\b|(?<!\b(?:i|we|you|they|really|do|don'?t|did|didn'?t)\s)\blike\s+(?:before|last\s+time|you\s+did\s+before)\b/i;
 const SIMILAR_CKB = /(?:وەک|هاوشێوەی|لە\s+شێوەی|بە\s+شێوەی)\s+(?:ئەوانەی\s+|ئەوەی\s+|دیزاینەکانی\s+)?(?:پێشوو|پێشتر|جاران|کۆن)/u;
@@ -663,10 +879,13 @@ export function readsAsRedo(text: string, core = corePhrase(text)): 'redo' | 'or
   if (NOT_REDO.test(core) || NOT_REDO_CKB.test(core)) return null;
   if (carriesBriefCopy(core) || DATE_OR_TIME.test(core)) return null;
   if (readsAsStatus(core) || readsAsCancel(core) || readsAsHold(core) || readsAsDeliveryRequest(text, core)) return null;
-  const redo = REDO_EN.some((p) => p.test(core)) || REDO_CKB.some((p) => p.test(core));
+  // ADR-272 (NLU eval, ckb-change-14): "make another design, a better one", "do another one, but better": another
+  // one said with what should be better is the design again, better; "another" alone is no subject of its own.
+  const anotherBetter = (ANOTHER_EN.test(core) && BETTER_EN.test(core)) || (ANOTHER_CKB.test(core) && QUALITY_BETTER_CKB.test(core));
+  const redo = anotherBetter || REDO_EN.some((p) => p.test(core)) || REDO_CKB.some((p) => p.test(core));
   const similar = SIMILAR_EN.test(core) || SIMILAR_CKB.test(core);
   if (!redo && !similar) return null;
-  const ownSubject = OWN_SUBJECT_EN.test(core) || OWN_SUBJECT_CKB.test(core) || EXPLICIT_NEW.test(core) ||
+  const ownSubject = OWN_SUBJECT_EN.test(core) || OWN_SUBJECT_CKB.test(core) || (EXPLICIT_NEW.test(core) && !(anotherBetter && !SAYS_NEW_DESIGN.test(core))) ||
     (core.match(EVENT_WORDS)?.length ?? 0) > 0;
   if (redo) return ownSubject ? 'or-new' : 'redo';
   // "Similar to the earlier ones" alone is the latest design again, in that style; a design asked for
@@ -709,6 +928,7 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   if (readsAsDeliveryRequest(t, core)) return rules('delivery_request', 'Asks the office about the files (again, a format, an email, a resolution)');
   if (readsAsApproval(t, core)) return rules('approval', 'Approval words; the office decides');
   if (isAcknowledgement(t) || (core && isAcknowledgement(core) && core.length <= 60)) return rules('acknowledgement', 'Thanks, an OK or a receipt');
+  if (praisesOnly(core)) return rules('acknowledgement', 'Praise, and someone likes it (ADR-272)');
   // ADR-251 (friction 10): "wait", "hold on" alone ask for a moment; nothing is paused.
   if (ASKS_FOR_A_MOMENT.test(core)) return rules('acknowledgement', 'Asks for a moment; nothing is paused');
   if (readsAsHold(core)) return rules('hold', 'Asks to pause the current design');
@@ -719,7 +939,18 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   // ADR-230 addendum (L12): cancel words about a whole request that the patterns cannot place are never
   // read as a certain change of the latest design; they are unclear, and the intake router reads them
   // (ADR-144's one call per update, within the allowance) before anything is kept or asked.
-  if (core.length <= 160 && CANCEL_SOMEWHERE.test(core) && !readsAsHold(core)) {
+  // ADR-272: cancel words said of a part of a design ("cancel the gold frame on the … poster") are a change.
+  // Sorani cancel verbs the patterns cannot place are cancel words too: never "a new design" (ADR-255).
+  // A stop said for a while ("drop it for now", "until …") is a pause, never cancel words (ADR-272 2.4).
+  const TEMPORARY = /\b(?:for\s+now|for\s+the\s+(?:moment|time\s+being)|until|till|yet)\b/iu;
+  // Hunt 3: a cancel said beside words the rules cannot place ("we don't need that poster anymore, the boss decided to
+  // go with the old one"), or the event said to be called off on its own ("the workshop got cancelled"), read as a
+  // substantial brief and opened a new request that drafted by itself. They are cancel words, asked about.
+  const cancelBeside = core.length <= 300 && !EXPLICIT_NEW.test(t) && !asksForNewDesign(t) &&
+    (cancelClauses(core).some((c) => cancelsClause(c) && !TEMPORARY.test(c)) || cancelClauses(core).every((c) => EVENT_CALLED_OFF.test(c) || CANCEL_FILLER.test(c) || CANCEL_REASON.test(c)) &&
+      cancelClauses(core).some((c) => EVENT_CALLED_OFF.test(c)));
+  if ((cancelBeside || (core.length <= 160 && (CANCEL_SOMEWHERE.test(core) || (isSoraniText(core) && SORANI_CANCEL_VERB.test(core))))) &&
+      !readsAsHold(core) && !cancelsAPart(core)) {
     const every = cancelNamesEvery(core);
     return rules('unclear', 'Cancel words the rules cannot place', { instructionOnly: true, cancelWords: true, ...(every ? { every } : {}) });
   }
@@ -733,17 +964,29 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   const fullBrief = heuristics.kind === 'new_brief' && heuristics.reason === FULL_BRIEF_REASON;
   const eventWords = /\b(date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|ceremony|conference|seminar|workshop|party|dinner|meeting)\b/i.test(t) ||
     /(ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس)/u.test(t);
-  const substantial = fullBrief || words >= 20 || (eventWords && words >= 8) || t.split(/\n\s*\n/).length >= 2;
+  // Hunt 3 (2026-10-03): an event word in eight words or more ("I showed it to my manager at the meeting and she liked
+  // it", "the conference went really well, thanks for the poster"), or twenty words of chat, was a substantial brief and
+  // opened a request that drafted by itself, in every context. A brief of that kind carries the event's details: a
+  // date or a time, or several details (`carriesBriefCopy`), or, at twenty words, a name, a number or an event.
+  const longWithCopy = words >= 20 && (carriesBriefCopy(core) || DATE_OR_TIME.test(t) || (t.match(EVENT_WORDS)?.length ?? 0) > 0 ||
+    /(?<![.!?]\s)(?<!^)\b\p{Lu}\p{Ll}+|\b\p{Lu}{2,}\b|\d|["“«:]/u.test(t));
+  const substantial = fullBrief || longWithCopy || (eventWords && words >= 8 && carriesBriefCopy(core)) || t.split(/\n\s*\n/).length >= 2;
   const designRequest = asksForNewDesign(t);
   const explicitNew = EXPLICIT_NEW.test(t) || designRequest;
   if (explicitNew) {
     // ADR-182: a short request that names the event with its date or time ("Another poster please: KAAE
     // staff football tournament, 14 November 2026 at 4 pm, Franso Hariri stadium") carries its copy,
     // and is drafted as a longer one is, instead of going to a designer by hand.
-    const complete = substantial || (words >= 6 && carriesBriefCopy(core));
+    // Brief phrasing fuzz (2026-10-03, class 5): a request asked for with a date the stricter reading does not know
+    // ("15/10/2026", "next Thursday", "Oct. 20", a last line of a city and a year) carries its copy too
+    // (`carriesLooseBriefCopy`), only here, where the words already ask for a design.
+    const complete = substantial || (words >= 6 && (carriesBriefCopy(core) || carriesLooseBriefCopy(core, words)));
+    // Class 5: the heuristics read "Hi pls make …", "Hello We'd like …" (a greeting with under twelve words) and a brief
+    // ending in "?" as a greeting or a question, and the brief opened for a designer with no copy. When the request
+    // carries its copy, their reading is not what it is; with no copy it still opens for a designer.
     return rules('new_brief', designRequest ? 'Asks for a new design' : 'Said to be a new design', {
       explicitNew: true, substantial: complete,
-      instructionOnly: heuristics.kind !== 'new_brief' || heuristics.isInstructionOnly === true || (!complete && !fullBrief),
+      instructionOnly: (heuristics.kind !== 'new_brief' && !complete) || heuristics.isInstructionOnly === true || (!complete && !fullBrief),
     });
   }
   // ADR-231 (live 2026-10-01 14:03Z): "can you also make videos?" asks what the office makes. It is the
@@ -763,8 +1006,68 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   if (substantial && carriesBriefCopy(core)) {
     return rules('new_brief', 'Carries event copy and a date', { substantial: true, instructionOnly: false });
   }
+  // ADR-272 (NLU eval, failure class 3): a fragment that only names a subject or an event ("for the deans",
+  // "about the gala", "Nawroz") may be a change of the design on the way or a new one: the requester is asked, as
+  // for any short brief. With nothing on the way it is read as before (planTurn).
+  if (namesOnlyASubject(core)) return rules('unclear', 'A fragment that names a subject or an event', { instructionOnly: true });
   return rules('conversation', heuristics.reason,
     heuristics.kind === 'question' || isPlainQuestion(core) ? { question: true } : {});
+}
+
+const FRAGMENT_SUBJECT = /^(?:for|about)\s+(?:(?:the|our|my|a|an|all\s+the)\s+)?(?!(?:me|us|it|this|that|them|now|today|tomorrow|tonight|sure|real|free|once|you)\b)\p{L}[\p{L}\p{M}'’ -]*$/iu;
+const FRAGMENT_EVENT_CKB = /^(?:نەورۆز|سیمینار|کۆنفرانس|ئاهەنگ|فێستیڤاڵ|پێشانگا|کۆبوونەوە)(?:ەکە|ی)?$/u;
+/** A fragment of up to four words, no question, that only names a subject ("for the deans") or an event ("Nawroz"). */
+function namesOnlyASubject(core: string): boolean {
+  if (!core || core.length > 40 || /[?؟\d]/u.test(core) || core.split(/\s+/).length > 4) return false;
+  if (FRAGMENT_SUBJECT.test(core) || FRAGMENT_EVENT_CKB.test(core)) return true;
+  return core.split(/\s+/).length <= 3 && /^[\p{Script=Latin}'’ -]+$/u.test(core) && (core.match(EVENT_WORDS)?.length ?? 0) > 0;
+}
+
+/**
+ * Hunt 3 (2026-10-03): words about a design already made, not a new one: "the poster looks cheap", "send me the
+ * poster", "I don't like it", "this design", Sorani "the design" (دیزاینەکە). With nothing on the way they are
+ * about an older design, and the office reads them.
+ */
+const ABOUT_A_DESIGN = new RegExp(`\\b(?:the|this|that|these|those|your|its|my|our)\\s+(?:[\\p{L}\\d'’-]+\\s+){0,2}?` +
+  `(?:${DESIGN_NOUNS}|draft|version|options?|${PART_NOUNS})s?\\b|\\b(?:it|this|that|them)\\b|` +
+  '(?:دیزاین|پۆستەر|پۆست|ڕەشنووس|لۆگۆ|ناونیشان|ڕەنگ|وێنە)(?:ەکە|ەکان)', 'iu');
+/** Something a design could be about: an event, a subject ("for the deans"), a name, a date or a time. */
+function namesItsOwnSubject(core: string): boolean {
+  return DATE_OR_TIME.test(core) || (core.match(EVENT_WORDS)?.length ?? 0) > 0 || OWN_SUBJECT_EN.test(core) ||
+    OWN_SUBJECT_CKB.test(core) || A_NAME.test(core);
+}
+/**
+ * Hunt 3 (2026-10-03): what words the rules cannot place mean in a chat with nothing on the way. They were opened
+ * whenever the heuristics called them a brief, as one that drafts by itself: "the event was cancelled", "the poster
+ * looks cheap", "not bad", "I don't like it" (said days after a delivery) each opened a request, and a paid draft
+ * printed the words as its copy. Only words with brief copy of their own (an event with its date or time) still
+ * open as before; words with a subject but no copy open for a person, as any short brief does
+ * (`readIntentByRules`); anything else, said about an earlier design or about nothing, goes to the office.
+ */
+function unplacedWithNothingOnTheWay(words: string): TurnPlan {
+  const h = classifyWithHeuristics(words, false, false);
+  if (h.kind !== 'new_brief') return { kind: 'conversation' };
+  const core = corePhrase(words);
+  if (carriesBriefCopy(core)) return { kind: 'open', text: words, instructionOnly: h.isInstructionOnly === true };
+  if (namesItsOwnSubject(core) && !ABOUT_A_DESIGN.test(core) && !readsAsChange(core)) return { kind: 'open', text: words, instructionOnly: true };
+  return { kind: 'forward', words };
+}
+
+/**
+ * ADR-284 addendum (live canary 2026-10-03): with one request on the way, opened for a designer and with no draft
+ * yet ("manual" before any draft: revision 1 or 2), "the poster looks cheap" was asked "Is this a change to …, or
+ * a new design?". Nothing has been drafted that the words could be a change of, and they are not a new brief: they
+ * are the requester's opinion of the design being made. The designer hears them (the office's usual note alert),
+ * and the requester is told so; no question, no paid round. Words that name a subject of their own, carry brief
+ * copy or ask for a design are left to the question, as is any chat with a draft or with several requests.
+ */
+function feedbackBeforeAnyDraft(changeable: ChatRequestView[], words: string): TurnPlan | null {
+  if (changeable.length !== 1) return null;
+  const [only] = changeable;
+  if (only.stage !== 'manual' || waitsForRequester(only)) return null;
+  const core = corePhrase(words);
+  if (!ABOUT_A_DESIGN.test(core) || carriesBriefCopy(core) || namesItsOwnSubject(core) || asksForNewDesign(words)) return null;
+  return { kind: 'note', note: 'change', requestId: only.requestId, words, feedback: true };
 }
 
 /**
@@ -905,6 +1208,12 @@ export function parseChoice(text: string, ask: Pick<PendingAsk, 'options' | 'all
   const t = said.replace(/[٠-٩۰-۹]/g, (d) => DIGITS[d] ?? d).toLowerCase();
   if (!t || t.length > 80) return null;
   const n = ask.options.length;
+  // Hunt 3: "yes, the second", "yeah the teacher one": a yes before the choice says nothing more (several designs asked).
+  const yesLead = /^(?:yes|yeah|yep|sure|ok(?:ay)?)[\s,]+(?=\S)/iu.exec(said);
+  if (n >= 2 && yesLead && !SAYS_ALL.test(t) && !SAYS_BOTH.test(t)) {
+    const inner = parseChoice(said.slice(yesLead[0].length), ask);
+    if (inner) return inner;
+  }
   // ADR-255: every design asked about ("both" of two, "all of them" of two or more), or "yes" to a question
   // that named them all.
   if (n >= 2 && ((n === 2 && SAYS_BOTH.test(t)) || SAYS_ALL.test(t))) return { every: true };
@@ -1024,6 +1333,8 @@ function pickRequest(input: TurnInput, candidates: ChatRequestView[], recency: b
   return { ambiguous: [...pool].sort((a, b) => a.createdAt.localeCompare(b.createdAt)) };
 }
 
+/** A cancel verb anywhere in the words (ADR-272): English "cancel", "withdraw", "scrap", "abort"; the Sorani cancel verbs. */
+const SAYS_CANCEL = /\b(?:cancel|withdraw|scrap|abort)\b|هەڵ\s*(?:ی\s*)?(?:ب)?وەشێنەوە/iu;
 /** Stages a request can be withdrawn from (ADR-230): nothing has been approved for it. */
 const WITHDRAWABLE: RequestStage[] = ['designing', 'awaiting_answer', 'manual', 'in_review'];
 const BAGHDAD_MS = 3 * 60 * 60_000;
@@ -1118,7 +1429,8 @@ const options = (requests: ChatRequestView[]) => requests.map((r) => ({ requestI
 function changeFor(request: ChatRequestView, words: string, how: string, confidence: number | undefined,
   resolves?: number): TurnPlan | null {
   if (waitsForRequester(request)) {
-    // Recency never starts a paid round, and a model's pick only when it is sure.
+    // Recency never starts a paid round, and a model's pick never does: below 0.85 it is asked here, and
+    // above it `withoutModelAction` asks (ADR-286).
     if (how === 'recent' || (how === 'model' && (confidence ?? 0) < 0.85)) return null;
     return { kind: 'revise', requestId: request.requestId, directive: words, ...(resolves ? { resolves } : {}) };
   }
@@ -1256,7 +1568,8 @@ function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) 
   const drafted = recent.filter(hasDraft);
   const pool = bound.length > 1 ? bound : drafted.length ? drafted : recent;
   if (!pool.length) return null;
-  // The intake router's pick (asked when the rules could not tell), when it is sure enough to start a round.
+  // The intake router's pick (asked when the rules could not tell) names the design; ADR-286: it is asked
+  // about ("redo it, or a new design?", `withoutModelAction`), never redone on the model's word.
   if (reading.source === 'model' && reading.requestId && (reading.confidence ?? 0) >= 0.85) {
     const named = pool.find((r) => r.requestId === reading.requestId);
     if (named) return redoFor(named, words);
@@ -1270,8 +1583,35 @@ function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) 
   return clear ? redoFor(latest, words) : askRedo(oldestFirst, false);
 }
 
+/**
+ * ADR-286 (NLU model-first experiment, 2026-10-03): a model's reading never acts on a design by itself. The
+ * intake router is asked only about words the rules could not place, and on the labelled set its "change"
+ * readings were wrong five times in six (fragments such as "for the deans" kept as changes) and started a paid
+ * redo of a delivered design for "do a better design for the conference". So whatever its confidence, a plan
+ * that a model reading alone would turn into a paid round (`revise`, `redo`) or a change kept for the office
+ * (a `note` of a change) is the rules' own question instead: "a change to …, or a new design?" (or "redo it, or
+ * a new design?" for redo words), about the design the model named. The requester's answer then acts, as any
+ * answer does. A plan that answers the bot's question (`resolves`) is the requester's choice, not the model's.
+ * This supersedes the "model reading with confidence of 0.85 or more" path of ADR-144/ADR-200 for paid rounds.
+ */
+function withoutModelAction(plan: TurnPlan, input: TurnInput): TurnPlan {
+  if (input.reading.source !== 'model') return plan;
+  if (!(plan.kind === 'revise' || plan.kind === 'redo' || (plan.kind === 'note' && plan.note === 'change'))) return plan;
+  if (plan.resolves) return plan;
+  const request = input.requests.find((r) => r.requestId === plan.requestId);
+  if (!request) return { kind: 'forward', words: input.text.trim() };
+  const words = input.text.trim();
+  const redo = plan.kind === 'redo' || plan.redo === true;
+  const allowNew = !input.reading.cancelWords && !SAYS_CANCEL.test(words);
+  return { kind: 'ask', intent: 'unclear', words, options: options([request]), allowNew, ...(redo && allowNew ? { redo: 'or-new' as const } : {}) };
+}
+
 /** What to do with this message. Pure: the route records the plan once per update and carries it out. */
 export function planTurn(full: TurnInput): TurnPlan {
+  return withoutModelAction(planByReading(full), full);
+}
+
+function planByReading(full: TurnInput): TurnPlan {
   // Delivered designs older than DELIVERED_LIVE_MS concern redo words only (ADR-200 addendum).
   // ADR-230 addendum (L17): a closed request (withdrawn, rejected, expired) is never offered or acted on.
   full = { ...full, requests: full.requests.filter((r) => CHANGEABLE.includes(r.stage)) };
@@ -1360,8 +1700,10 @@ export function planTurn(full: TurnInput): TurnPlan {
   const changeable = requests.filter((r) => CHANGEABLE.includes(r.stage) && mayAct(r));
   const open = requests.filter((r) => OPEN_STAGES.includes(r.stage) && mayAct(r));
   // ADR-255: a question asked because of cancel words never offers "a new design".
+  // ADR-272: nor because of words with a cancel verb in them ("cancel the gold border", a Sorani cancel the rules
+  // cannot place): whatever they mean, they never mean a new design.
   const ask = (intent: PendingAsk['intent'], among: ChatRequestView[], allowNew: boolean): TurnPlan =>
-    ({ kind: 'ask', intent, words, options: options(among), allowNew: allowNew && intent !== 'cancel' && !reading.cancelWords });
+    ({ kind: 'ask', intent, words, options: options(among), allowNew: allowNew && intent !== 'cancel' && !reading.cancelWords && !SAYS_CANCEL.test(words) });
 
   // 3. A reply to a bot message about no current request: thanks, a status question, chatter and a
   // brief of its own are read as usual; anything else is about another design, so the requester is
@@ -1470,10 +1812,9 @@ export function planTurn(full: TurnInput): TurnPlan {
       if (reading.cancelWords && !input.bound.length) return planCancel(input, open, changeable, words, reading, ask, true);
       const bound = changeable.filter((r) => input.bound.includes(r.requestId));
       if (bound.length === 1) return changeFor(bound[0], words, 'reply', undefined) ?? ask('unclear', bound, true);
-      if (!changeable.length) {
-        const h = classifyWithHeuristics(words, false, false);
-        return h.kind === 'new_brief' ? { kind: 'open', text: words, instructionOnly: h.isInstructionOnly === true } : { kind: 'conversation' };
-      }
+      if (!changeable.length) return unplacedWithNothingOnTheWay(words);
+      const feedback = feedbackBeforeAnyDraft(changeable, words);
+      if (feedback) return feedback;
       return ask('unclear', [...(bound.length ? bound : changeable)].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), true);
     }
   }
@@ -1715,9 +2056,12 @@ export function questionOfficeAlert(who: string, words: string): string {
     '', 'Their question:', quotedWords(words)].join('\n');
 }
 
-/** The office's alert for words about a design this bot cannot link to a current request. */
+/**
+ * The office's alert for words about a design this bot cannot link to a current request: a reply to an older
+ * message, or words about an earlier design said with nothing open (hunt 3).
+ */
 export function forwardOfficeAlert(who: string, words: string): string {
-  return [`${who} replied to an older message from the bot, about a design that is no longer open in their chat. Nothing was changed; please answer them in the chat.`,
+  return [`${who} wrote about a design that is no longer open in their chat. Nothing was changed; please answer them in the chat.`,
     '', 'Their words:', quotedWords(words)].join('\n');
 }
 
@@ -1781,9 +2125,12 @@ export function redoText(stage: string, requestTitle: string, lang: Lang, starte
 }
 
 /** The requester's answer to a note kept on a request (a change or a cancel). */
-export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requestTitle: string, lang: Lang, held = false, redo = false): string {
+export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requestTitle: string, lang: Lang, held = false, redo = false,
+  feedback = false): string {
   if (redo && note === 'change') return redoText(stage, requestTitle, lang);
   const t = { title: title({ title: requestTitle }, lang) };
+  // ADR-284 addendum (live canary 2026-10-03): an opinion said before any draft: the designer still making it hears it.
+  if (feedback && note === 'change' && stage === 'manual') return say(ROUTING_MESSAGES.redoPassedDesigner, lang, t);
   if (note === 'cancel') return say(ROUTING_MESSAGES.cancelAsked, lang, t);
   if (note === 'hold') return say(held ? ROUTING_MESSAGES.holdConfirmed : ROUTING_MESSAGES.holdAsked, lang, t);
   // ADR-230 section 6: a change kept while a draft is being made is applied in a new round when it finishes.

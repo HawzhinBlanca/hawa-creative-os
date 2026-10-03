@@ -5,7 +5,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { createDb, OutboxRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
 import { DurableStepJournal, withStepChaosPoints } from '../src/durable-context.js';
-import { TaskWorkflowDispatcher } from '../src/workflow-dispatcher.js';
 import type { TelegramSender } from '../src/delivery-notification.js';
 
 /**
@@ -108,22 +107,5 @@ describe('worker chaos points', () => {
     // Replayed from the journal: the action does not run, so neither does its point.
     await ctx.run('canva-create-draft', async () => ({ planId: 'never' }));
     expect(reached).toHaveLength(1);
-  });
-
-  it('dispatch: worker.dispatch.after-submit is reached once Restate accepted the workflow', async () => {
-    armControl();
-    const restate = http.createServer((_req, res) => {
-      res.writeHead(202, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ invocationId: 'inv_chaos1', status: 'Accepted' }));
-    });
-    await new Promise<void>((r) => restate.listen(0, '127.0.0.1', r));
-    try {
-      const dispatcher = new TaskWorkflowDispatcher({ restateIngressUrl: `http://127.0.0.1:${(restate.address() as AddressInfo).port}` });
-      const taskId = randomUUID();
-      await dispatcher.dispatch({ id: randomUUID(), tenant_id: tenantId, aggregate_type: 'task', aggregate_id: taskId, command_type: 'task.created', idempotency_key: 'k', payload: {}, state: 'leased', attempts: 0 });
-      expect(reached.map((r) => [r.point, r.detail])).toEqual([['worker.dispatch.after-submit', { workflowId: `task-wf-${taskId}`, taskId }]]);
-    } finally {
-      restate.close();
-    }
   });
 });

@@ -43,7 +43,12 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string;revision?:
     if(latestPng)void apiClient.canva.download(taskId,latestPng.id).then(blob=>{if(cancelled)return;objectUrl=URL.createObjectURL(blob);setPreview({url:objectUrl,artifactId:latestPng.id,taskId});}).catch(()=>{});
     return()=>{cancelled=true;if(objectUrl)URL.revokeObjectURL(objectUrl);};
   },[taskId,latestPng?.id]);
-  const run=async(fn:()=>Promise<void>)=>{setBusy(true);setMessage('');try{await fn();await refresh();}catch(e:any){setMessage(e.message);await refresh().catch(()=>{});}finally{setBusy(false);}};
+  // The action and the read after it fail separately: a done action whose follow-up read failed kept
+  // only the read's error, and the office pressed the action again (hunt-3).
+  const run=async(fn:()=>Promise<void>)=>{setBusy(true);setMessage('');
+    try{await fn();}catch(e:any){setMessage(e.message);await refresh().catch(()=>{});setBusy(false);return;}
+    try{await refresh();}catch(e:any){setMessage((done:string)=>`${done?`${done} `:''}(The panel could not be refreshed: ${e?.message||'unknown error'}. Reload it before acting again.)`);}
+    finally{setBusy(false);}};
   const requestKey=(name:string)=>keys.current[name]||(keys.current[name]=crypto.randomUUID());
   const finishExportRequest=(r:any)=>{
     const request=exportRequests.current[r.operationId];

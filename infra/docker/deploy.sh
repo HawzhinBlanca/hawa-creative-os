@@ -450,6 +450,19 @@ check_worker_token_rotation
 ensure_blob_store "$BLOBS_DIR" || exit 1
 echo "✓ file store ready at ${BLOBS_DIR}"
 
+# Postgres answering, for at most HAWA_POSTGRES_READY_SECONDS (300). The wait was unbounded: a Postgres
+# that never came back (a crash loop, a full Docker disk) hung the deploy forever under the deploy lock,
+# and the nightly canary skipped every night it held it (hunt 3).
+wait_for_postgres() {
+  local limit="${HAWA_POSTGRES_READY_SECONDS:-300}" i
+  for (( i = 0; i < limit; i++ )); do
+    docker exec hawa-production-postgres-1 pg_isready -U hawa_owner -d hawa >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  echo "ERROR: Postgres did not answer pg_isready within ${limit} s; nothing was changed (see docker logs hawa-production-postgres-1)"
+  return 1
+}
+
 # 5. Backup before anything changes
 POSTGRES_PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' "$INTERP_FILE" | cut -d= -f2-)"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -465,7 +478,7 @@ BACKUP_DIR="${ROOT_DIR}/infra/backup/snapshots"; mkdir -p "$BACKUP_DIR"; chmod 7
 hawa_runtime_sync "$ROOT_DIR" "$HAWA_RUNTIME_DIR" "$RUNTIME_SHARED" missing >/dev/null \
   || { echo "ERROR: could not seed ${HAWA_RUNTIME_DIR} with the files compose binds; nothing was started"; exit 1; }
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-recreate postgres
-until docker exec hawa-production-postgres-1 pg_isready -U hawa_owner -d hawa >/dev/null 2>&1; do sleep 1; done
+wait_for_postgres || exit 1
 # Custom format with zstd's long-distance matching: a dump repeats the same images many times, so it
 # is about 40 MB instead of 550 MB of plain SQL, in a second instead of thirteen. Restore it with
 # pg_restore (docs/25_OPERATIONS_RUNBOOK.md, Backups). disk_cleanup.sh keeps the newest ten.

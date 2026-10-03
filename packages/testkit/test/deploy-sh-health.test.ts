@@ -89,3 +89,48 @@ describe('deploy.sh step 8: Core health after the switch', () => {
     expect(res.stdout).toMatch(/core health did not answer within 60 s/);
   });
 });
+
+/**
+ * Hunt 3: step 5 waited for Postgres with `until docker exec … pg_isready; do sleep 1; done`. A Postgres
+ * that never came back (a crash loop, a full Docker disk) hung the deploy forever while it held the deploy
+ * lock, so the nightly canary skipped night after night and the next deploy waited out its 30 minutes.
+ */
+describe('deploy.sh step 5: waiting for Postgres is bounded', () => {
+  function wait(readyAfter: number | null, seconds = 5) {
+    const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'deploy-pg-wait-'));
+    const script = [
+      'set -Eeuo pipefail',
+      `N=${JSON.stringify(path.join(dir, 'n'))}; echo 0 > "$N"`,
+      `docker() { local n; n=$(cat "$N"); echo $((n+1)) > "$N"; ${readyAfter === null ? 'return 1' : `(( n >= ${readyAfter} ))`}; }`,
+      'sleep() { :; }',
+      `HAWA_POSTGRES_READY_SECONDS=${seconds}`,
+      fn('wait_for_postgres'),
+      'wait_for_postgres; echo "after"',
+    ].join('\n');
+    const res = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { PATH: process.env.PATH || '' }, timeout: 10_000 });
+    const asked = Number(fs.readFileSync(path.join(dir, 'n'), 'utf8'));
+    fs.rmSync(dir, { recursive: true, force: true });
+    return { code: res.status, out: res.stdout, asked, timedOut: res.error !== undefined };
+  }
+
+  it('goes on once pg_isready answers', () => {
+    const r = wait(2);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('after');
+    expect(r.asked).toBe(3);
+  });
+
+  it('stops the deploy with a reason once the wait is over, instead of hanging under the deploy lock', () => {
+    const r = wait(null, 5);
+    expect(r.timedOut).toBe(false);
+    expect(r.code).toBe(1);
+    expect(r.out).not.toContain('after');
+    expect(r.out).toMatch(/ERROR: Postgres did not answer pg_isready within 5 s; nothing was changed/);
+    expect(r.asked).toBe(5);
+  });
+
+  it('the backup step uses it', () => {
+    expect(deploySh).not.toMatch(/until docker exec hawa-production-postgres-1 pg_isready/);
+    expect(deploySh).toMatch(/up -d --no-recreate postgres\nwait_for_postgres \|\| exit 1\n/);
+  });
+});

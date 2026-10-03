@@ -61,6 +61,7 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleDeleteWebhook = async () => {
+    if (!window.confirm('Delete the Telegram webhook? Telegram then delivers new messages only to the worker\'s poller. Messages already waiting are kept.')) return;
     setRegisteringWebhook(true);
     setRegisterWebhookResult(null);
     try {
@@ -348,7 +349,7 @@ export const SettingsScreen: React.FC = () => {
           <div className="panel" style={{ width: 560, maxWidth: 'calc(100vw - 32px)', boxSizing: 'border-box', padding: 24, boxShadow: '0 24px 48px rgba(0,0,0,0.25)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h2 style={{ margin: 0, fontSize: 18 }}>Provider configuration</h2>
-              <button className="btn" style={{ fontSize: 11 }} onClick={() => setActiveModal(null)}>✕</button>
+              <button className="btn" style={{ fontSize: 11 }} onClick={() => setActiveModal(null)} aria-label="Close">✕</button>
             </div>
             <p>Provider credentials are managed on the production host. A verified deployment activates matching settings for the app and design worker and keeps them across restarts.</p>
             <p>The host operator can update credentials with <code>bash ~/.hawa/current/infra/docker/rotate_external_secrets.sh</code>. The update is verified and recorded without storing keys in the browser.</p>

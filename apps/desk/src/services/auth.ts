@@ -78,7 +78,13 @@ export function clearAuthToken(): void {
   }
 }
 
+/**
+ * Headers for a call made outside apiClient. A cookie (Google) session has no bearer token, and Core
+ * refuses its writes without the CSRF proof (app.ts registerRoute), so it is sent here as apiClient does.
+ */
 export function getAuthHeaders(): Record<string, string> {
   const token = getAuthToken();
-  return { 'X-Hawa-Office-Request': '1', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  if (token) return { 'X-Hawa-Office-Request': '1', Authorization: `Bearer ${token}` };
+  const csrf = getCsrfToken();
+  return { 'X-Hawa-Office-Request': '1', ...(csrf ? { 'x-hawa-csrf': csrf } : {}) };
 }

@@ -50,3 +50,20 @@ schema's unconditional all-photo description also contradicted automatic/count
 policy; bind it to the admitted photo-selection directive instead. The prompt
 version changes to2026-10-03.2 so retained calls cannot silently adopt new wording.
 Three genuine red controls record the missing repair geometry, units and policy.
+
+## Combine with Claude release-3b — 2026-10-03
+
+The repaired real-model repeat produces one locally checked winner and an editable
+PPTX: two exact live-copy blocks, all six original photo hashes and ordered placements,
+seven independent pictures. Native Canva delivery remains unqualified because the
+isolated fixture has no grant. Keep that terminal failure and saved source visible.
+
+Merge pinned Claude release-3b b56020bf under its existing ADR285/287 foundations.
+Its shared openDraft helper must carry ADR279's bounded website-only photo manifest.
+ADR285 always marks website requests, including `{v:1,images:[]}` when no photos
+were supplied. Preserve that empty marker through HTTP; stored owner receipts still
+refuse an empty manifest for a request that actually has photos. A mounted real
+HTTP/one-connection regression fails409 without the preservation,81 other checks
+pass after rebuilding the new package exports. No role/source/ownership guard or
+office intake may be removed to resolve the source move. Merge both traceability
+histories and regenerate release metadata after the source commit.

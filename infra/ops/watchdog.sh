@@ -44,18 +44,26 @@ save() {
   printf 'last_status=%q\nlast_alert=%q\nlast_disk_alert=%q\nlast_cleanup=%q\nlast_msg=%q\nalerted=%q\nalerted_other=%q\ndisk_was_full=%q\nalert_key=%q\nlast_pass=%q\n' \
     "$1" "$last_alert" "$last_disk_alert" "$last_cleanup" "$last_msg" "$alerted" "$alerted_other" "$disk_was_full" "$alert_key" "$NOW" > "$STATE"
 }
+# Succeeds only when Telegram took the message (an HTTP 2xx answer). Any answer, or none, used to count
+# as sent: a refused token, a rate limit, or Telegram or this host's connection being down (the 2026-10-02
+# outage) marked the alert sent, the 30-minute cooldown held back the next try, and the log said nothing.
+# Now the pass logs "ALERT NOT SENT" and its caller does not start the cooldown, so the next pass tries
+# again; the problem still counts as alerted, so its recovery is announced once Telegram takes messages.
+# The token is never printed: curl's own messages are discarded, only its exit status is kept.
 notify() {
   # `|| true`: under set -e and pipefail a missing file or line ended the whole pass here (exit 2), as
   # nightly_backup.sh's notify already guards against.
-  local token chat; token="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$PROD" 2>/dev/null | cut -d= -f2- || true)"; chat="$(grep -E '^TELEGRAM_ALLOWED_USERS=' "$PROD" 2>/dev/null | cut -d= -f2- | cut -d, -f1 || true)"
-  [[ -n "$token" && -n "$chat" ]] || return 0
-  curl -s -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" || true
+  local token chat rc=0; token="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$PROD" 2>/dev/null | cut -d= -f2- || true)"; chat="$(grep -E '^TELEGRAM_ALLOWED_USERS=' "$PROD" 2>/dev/null | cut -d= -f2- | cut -d, -f1 || true)"
+  if [[ -z "$token" || -z "$chat" ]]; then say "ALERT NOT SENT: no TELEGRAM_BOT_TOKEN or TELEGRAM_ALLOWED_USERS in ${PROD}"; return 1; fi
+  curl -fsS -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" >/dev/null 2>&1 || rc=$?
+  if [[ "$rc" != 0 ]]; then say "ALERT NOT SENT: Telegram did not take it (curl exit ${rc}); the next pass tries again"; return 1; fi
 }
 # ADR-240: `--notify <text>` sends one message to the operator through this same path and does nothing
 # else; the nightly live canary (infra/ops/live_canary.sh) reports a failed night with it.
 if [[ "$MODE" == "--notify" ]]; then
   [[ -n "${2:-}" ]] || { echo "watchdog.sh --notify needs the message" >&2; exit 64; }
-  notify "$2"; say "notified the operator"; exit 0
+  notify "$2" || exit 1
+  say "notified the operator"; exit 0
 fi
 # What a problem list is, without its numbers: "only 5/6 stack containers" and "only 4/6" are the same
 # problem, "core degraded" and "Postgres crashed" are not.
@@ -71,7 +79,7 @@ HOST_ROLE_RC=0; HOST_ROLE="$(hawa_host_role)" || HOST_ROLE_RC=$?
 if [[ "$HOST_ROLE_RC" != 0 || "$HOST_ROLE" != production ]]; then
   where="$(hawa_host_role_source)"
   if [[ "$MODE" == "--announce" ]]; then
-    notify "🟢 Hawa watchdog on $(hostname -s): this host is ${HOST_ROLE} (${where}). It never starts production here, and reports production containers running here."
+    notify "🟢 Hawa watchdog on $(hostname -s): this host is ${HOST_ROLE} (${where}). It never starts production here, and reports production containers running here." || exit 1
     say "announced"; exit 0
   fi
   role_problems=()
@@ -84,19 +92,40 @@ if [[ "$HOST_ROLE_RC" != 0 || "$HOST_ROLE" != production ]]; then
   if [[ ${#role_problems[@]} -eq 0 ]]; then
     say "${HOST_ROLE} host (${where}): production runs elsewhere; nothing was started"
     [[ "$MODE" == "--status" ]] && exit 0
-    [[ "$alerted" != 1 ]] || notify "✅ Hawa ($(hostname -s), ${HOST_ROLE} host): back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
+    if [[ "$alerted" == 1 ]] && ! notify "✅ Hawa ($(hostname -s), ${HOST_ROLE} host): back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"; then
+      save healthy; exit 0   # the recovery notice is tried again at the next pass
+    fi
     last_msg=""; alerted=0; alerted_other=""; alert_key=""; save healthy; exit 0
   fi
   msg="$(printf '%s; ' "${role_problems[@]}")"; say "PROBLEM: ${msg%; }"
   [[ "$MODE" == "--status" ]] && exit 1
   last_msg="${msg%; }"
   if alert_due "${msg%; }"; then
-    notify "🔴 Hawa ($(hostname -s), ${HOST_ROLE} host) needs attention ($(date '+%H:%M')): ${msg%; }."; last_alert="$NOW"; alerted=1; alerted_other="${msg%; }"
-    alert_key="$(problem_key "${msg%; }")"
+    if notify "🔴 Hawa ($(hostname -s), ${HOST_ROLE} host) needs attention ($(date '+%H:%M')): ${msg%; }."; then
+      last_alert="$NOW"; alert_key="$(problem_key "${msg%; }")"
+    fi
+    alerted=1; alerted_other="${msg%; }"
   fi
   save problem; exit 1
 fi
-if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login or boot, nightly backup 03:30."; say "announced"; exit 0; fi
+if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login or boot, nightly backup 03:30." || exit 1; say "announced"; exit 0; fi
+
+# Its own gap. A Mac asleep, shut down or waiting at FileVault after an update runs no pass at all, and the
+# first pass afterwards finds everything healthy and says nothing: on 2026-10-02 production was unreachable
+# for 70 minutes and nobody was told (hunt 3). Every pass (the ones a running backup skips too) records
+# when it ran; a pass more than HAWA_WATCHDOG_GAP_SECONDS (900) after the one before says so, once. The
+# outside heartbeat (hawa_heartbeat) is what tells anyone while the host is still down.
+LAST_RUN_FILE="$STATE_DIR/last_run"; GAP_SECONDS="${HAWA_WATCHDOG_GAP_SECONDS:-900}"
+if [[ "$MODE" != "--status" ]]; then
+  previous_run="$(tr -dc '0-9' < "$LAST_RUN_FILE" 2>/dev/null || true)"
+  printf '%s\n' "$NOW" > "$LAST_RUN_FILE" || true
+  if [[ "$previous_run" =~ ^[0-9]+$ && "$GAP_SECONDS" =~ ^[0-9]+$ ]] && (( previous_run < NOW && NOW - previous_run > GAP_SECONDS )); then
+    gap_min=$(( (NOW - previous_run) / 60 ))
+    gap_from="$(python3 -c 'import sys,time; print(time.strftime("%H:%M", time.localtime(int(sys.argv[1]))))' "$previous_run" 2>/dev/null || echo '?')"
+    say "the watchdog did not run for ${gap_min} min (since ${gap_from}): this host was asleep, shut down, locked or stalled"
+    notify "🟠 The Hawa watchdog did not run for ${gap_min} min (${gap_from} to $(date '+%H:%M')): this Mac was asleep, shut down, waiting at FileVault or stalled. Nothing was watched meanwhile, and client messages may have waited. It is running again now." || true
+  fi
+fi
 
 # The worker Telegram poller (Phase 2.1). With HAWA_TELEGRAM_POLLER=worker Core does not poll, and a
 # colour whose poller was off, never started or failing left every check green while no client message
@@ -149,7 +178,7 @@ else
   rb_out="$(python3 "$DEPLOY_ROOT/infra/backup/restate_nightly.py" --recover 2>&1)" || rb_rc=$?
   if [[ $rb_rc == 0 && "$rb_out" == recovered:* ]]; then
     say "the nightly Restate backup was cut off; ${rb_out}"
-    notify "🟠 The nightly Restate backup was cut off before it finished; the watchdog put back: ${rb_out#recovered: }."
+    notify "🟠 The nightly Restate backup was cut off before it finished; the watchdog put back: ${rb_out#recovered: }." || true
   fi
 fi
 if [[ $rb_rc == 75 ]]; then say "the nightly Restate backup is running; this pass is skipped"; exit 0; fi
@@ -192,13 +221,27 @@ fi
 #    colour; a colour it removed must stay removed.
 running_names() { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; }
 source "$ROOT/infra/ops/stack_containers.sh"
+# A deploy holding the deploy lock (infra/ops/deploy_lock.py, ADR-240) recreates containers itself.
+# Starting the one it is replacing ran a second compose beside its `up -d`: two runs creating the same
+# container, a name conflict that stops the deploy half-way, or containers left "Created" (2026-09-18).
+# Only a deploy counts: the canary and the nightly backup hold the same lock and change no container.
+deploy_applying() {
+  local holder
+  holder="$(python3 "$ROOT/infra/ops/deploy_lock.py" --holder 2>/dev/null)" || return 1
+  [[ "$holder" == *deploy.sh* ]]
+}
 # Step 2 depends only on Docker. A Restate backup that could not be put back is reported (below) but
 # no longer stops the restart: it used to be counted before this step, and a record the office must
 # release by hand then kept every stopped container down, unreported, until it cleared.
 if [[ "$docker_up" == 1 ]]; then
   running="$(count_stack)"; workers="$(count_workers)"
   if [[ "$running" -lt "$STACK_SIZE" || "$workers" -lt 1 ]] || ! vector_running; then
-    if [[ "$MODE" != "--status" ]]; then
+    if [[ "$MODE" != "--status" ]] && deploy_applying; then
+      # Left to the deploy; what is still missing once it had time to finish is reported as usual.
+      say "a deploy holds the deploy lock: its containers are left to it this pass"
+      sleep 30
+      running="$(count_stack)"; workers="$(count_workers)"
+    elif [[ "$MODE" != "--status" ]]; then
       # The deployed release's commit (ADR-158), not whatever branch a checkout happens to be on.
       export HAWA_BUILD_COMMIT="$(git -C "$DEPLOY_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
       # Existing containers first, exactly as they were deployed. `up` then only creates what is
@@ -316,11 +359,15 @@ backup_problem="$(python3 "$ROOT/infra/backup/backup_status.py" --snapshots "$DE
 if [[ ${#problems[@]} -eq 0 && "$disk_full" -eq 0 ]]; then
   say "healthy"
   [[ "$MODE" == "--status" ]] && exit 0
-  if [[ "$alerted" == 1 ]]; then
-    notify "✅ Hawa is back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
-  fi
   # The outside service alerts when these pings stop (host_lib.sh, hawa_heartbeat).
-  hawa_heartbeat "$PROD" || say "the outside heartbeat could not be reached"
+  hb=0; hawa_heartbeat "$PROD" || hb=$?
+  case "$hb" in
+    1) say "the outside heartbeat could not be reached" ;;
+    2) say "HAWA_HEARTBEAT_URL is set but is not an https URL: no outside heartbeat is sent (fix it in ${PROD})" ;;
+  esac
+  if [[ "$alerted" == 1 ]] && ! notify "✅ Hawa is back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"; then
+    disk_was_full=0; save healthy; exit 0   # the recovery notice is tried again at the next pass
+  fi
   last_msg=""; alerted=0; alerted_other=""; alert_key=""; disk_was_full=0; save healthy; exit 0
 fi
 
@@ -343,12 +390,12 @@ if [[ ${#problems[@]} -eq 0 ]]; then
   [[ "$MODE" == "--status" ]] && exit 1
   if [[ -n "$alerted_other" ]]; then
     # What the last red alert named has cleared; without this the next word would be hours away.
-    notify "✅ Back to normal apart from the disk ($(date '+%H:%M')). It was: ${alerted_other}. The disk still has only ${free} free."; alerted_other=""; alert_key=""
+    if notify "✅ Back to normal apart from the disk ($(date '+%H:%M')). It was: ${alerted_other}. The disk still has only ${free} free."; then alerted_other=""; alert_key=""; fi
   fi
   last_msg="disk ${free_gib} GiB free"; disk_was_full=1
   every=21600; [[ "$free_gib" -ge "$DISK_URGENT_GIB" ]] || every=3600
   if (( NOW - last_disk_alert >= every )); then
-    notify "💾 ${disk_msg} Next reminder in $(( every / 3600 )) h."; last_disk_alert="$NOW"; alerted=1
+    notify "💾 ${disk_msg} Next reminder in $(( every / 3600 )) h." && last_disk_alert="$NOW"; alerted=1
   fi
   save problem; exit 1
 fi
@@ -356,8 +403,10 @@ msg="$(printf '%s; ' "${problems[@]}")"; say "PROBLEM: $msg"
 [[ "$MODE" == "--status" ]] && exit 1
 last_msg="${msg%; }${disk_msg:+; disk ${free_gib} GiB free}"; disk_was_full="$disk_full"
 if alert_due "${msg%; }"; then
-  notify "🔴 Hawa needs attention ($(date '+%H:%M')): ${msg%; }.${disk_msg:+ Also: ${disk_msg}}"; last_alert="$NOW"
-  alerted=1; alerted_other="${msg%; }"; alert_key="$(problem_key "${msg%; }")"
-  [[ -z "${disk_msg:-}" ]] || last_disk_alert="$NOW"
+  if notify "🔴 Hawa needs attention ($(date '+%H:%M')): ${msg%; }.${disk_msg:+ Also: ${disk_msg}}"; then
+    last_alert="$NOW"; alert_key="$(problem_key "${msg%; }")"
+    [[ -z "${disk_msg:-}" ]] || last_disk_alert="$NOW"
+  fi
+  alerted=1; alerted_other="${msg%; }"
 fi
 save problem; exit 1

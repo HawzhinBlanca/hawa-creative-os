@@ -1,5 +1,6 @@
 import type { StageContext, CandidateState, HardQAResult } from '../types.js';
-import { evaluateHardQa, layoutPlacements, renderLayoutV2Async, renderLogoTemplate, photoRecipeOf, type ArtRegionPlan } from '@hawa/creative';
+import { evaluateHardQa, layoutPlacements, renderLayoutV2Async, renderLogoTemplate, photoRecipeOf, sharedTextShapingPool,
+  type ArtRegionPlan, type RenderLayoutV2Result, type ReviewFinding, type StudioLayoutV2, type TextShapingFidelity, type TextShapingPool } from '@hawa/creative';
 import { hardQaContextFor, copyForStageV3 } from './v3.stage.js';
 import { candidateRenderOptions } from './asset-inputs.js';
 import { log } from '../../../logging.js';
@@ -17,7 +18,8 @@ export async function runQAStage(
   // art stage leaves CONTRAST to it for v3, so text on art was never measured anywhere.
   // A render that fails (it needs the client's logo, for one) falls back to the candidate's stored
   // composite; with neither, the outcome carries CONTRAST_UNMEASURED rather than passing in silence.
-  const render = await renderLayoutV2Async(winner.currentLayout, { ...candidateRenderOptions(ctx, winner), copyText: copyForStageV3(ctx).text })
+  const rendered = winner.currentLayout;
+  const render = await renderLayoutV2Async(rendered, { ...candidateRenderOptions(ctx, winner), copyText: copyForStageV3(ctx).text })
     .catch((err: unknown) => {
       log.warn(`[qa.stage] the winner could not be rendered for measured contrast (${err instanceof Error ? err.message : String(err)}).`);
       return undefined;
@@ -48,6 +50,8 @@ export async function runQAStage(
   }
   winner.currentLayout = outcome.layout;
   winner.metrics = outcome.metrics;
+  const textShaping = await shapingOfRender(rendered, copyForStageV3(ctx).text, render);
+  if (!('measured' in textShaping)) outcome.findings.push(...shapingFindings(textShaping));
   return {
     passed: outcome.passed,
     defectCodes: outcome.defectCodes,
@@ -58,7 +62,38 @@ export async function runQAStage(
     findings: outcome.findings,
     ...(outcome.measuredContrast ? { measuredContrast: outcome.measuredContrast } : {}),
     ...(outcome.omittedPhotos.length ? { omittedPhotos: outcome.omittedPhotos } : {}),
+    textShaping,
   };
+}
+
+/**
+ * ADR-290: the render that ships, read against its own text-free render: is every Kurdish and Arabic
+ * line drawn joined, ordered and wrapped as the face it was measured with sets it? Advisory: findings
+ * for the office, never a reason the design failed. The layout checked is the one rendered.
+ */
+export async function shapingOfRender(layout: StudioLayoutV2, copyText: Record<number, string>, render: Pick<RenderLayoutV2Result, 'png' | 'noTextPng'> | undefined,
+  pool: TextShapingPool = sharedTextShapingPool((e) => log.warn(`[qa.stage] text shaping check: ${e.kind}${e.detail ? ` (${e.detail})` : ''}`))):
+  Promise<TextShapingFidelity | { measured: false; reason: string }> {
+  if (!render) return { measured: false, reason: 'The design could not be rendered for QA.' };
+  // On a worker thread (ADR-290 addendum), blocks and check both: up to a second of CPU that used to hold
+  // Core's event loop. A check that did not run (timed out, its worker died, it threw) is not measured.
+  const run = await pool.run({ picture: render.png, background: render.noTextPng, layout: { text: layout.text }, copyText });
+  return run.ran ? run.result : { measured: false, reason: run.reason };
+}
+
+const SHAPING_WORDS: Record<string, string> = {
+  'wrapped-differently': 'is set on other lines than its measurement',
+  'shaping-mismatch': 'is drawn with other letter forms than its face (unjoined letters or a substituted typeface)',
+  'missing-glyphs': 'shows boxes where letters are missing',
+  'wrong-direction': 'is drawn in the wrong direction',
+};
+
+function shapingFindings(shaping: TextShapingFidelity): ReviewFinding[] {
+  return shaping.blocks.filter((b) => b.verdict !== 'ok').map((b) => {
+    const copyIndex = Number(b.id.replace('text-copy-', ''));
+    return { code: 'TEXT_SHAPING_MISMATCH', severity: 'warning', copyIndex,
+      message: `TEXT_SHAPING_MISMATCH: copy block ${copyIndex + 1} ${SHAPING_WORDS[b.verdict]} in the render (${b.lines.filter((l) => l.verdict !== 'ok').length} of ${b.lines.length} line(s)).` };
+  });
 }
 
 /**

@@ -329,10 +329,11 @@ describe('CV-06: Unified Ingress PostgreSQL Production Integration Tests', () =>
     expect(ingRes.actionTaken).toBe('message_only');
     const messageEventId = ingRes.messageEventId;
 
-    // 2. Explicitly promote via operator API
+    // 2. Explicitly promote. Tenant 007 is not the operator credential's tenant: only an administrator
+    // may name another tenant and user (hunt-3).
     const promoteRes = await app.request('/api/ingress/promote', {
       method: 'POST',
-      headers: authHeaders,
+      headers: { ...authHeaders, Authorization: `Bearer ${process.env.HAWA_ADMIN_KEY}` },
       body: JSON.stringify({
         tenantId,
         userId,

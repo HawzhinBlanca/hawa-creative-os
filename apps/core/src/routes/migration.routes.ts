@@ -1,5 +1,9 @@
 import type { RouteContext } from './types.js';
 
+/** Bug hunt 3: the ledger is changed by office operators and administrators, and read by them and auditors. */
+export const MIGRATION_WRITE_ROLES = ['administrator', 'operator'] as const;
+export const MIGRATION_READ_ROLES = ['administrator', 'operator', 'auditor'] as const;
+
 /**
  * The historical design migration ledger and its sample checks. Moved out of app.ts by group G1
  * (leaves) of the split (architecture programme 1.3, SPLIT_PLAN.md section 2).
@@ -14,8 +18,18 @@ export function registerMigrationRoutes(ctx: RouteContext): void {
     broadcastEvent: broadcast,
   } = ctx;
 
+  /** The refusal for a role outside `roles`, or null; unauthenticated reads are refused before this. */
+  const refused = (c: any, roles: readonly string[]) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) return problem(c, 401, 'Unauthorized', 'Authentication required for the migration ledger');
+    return roles.includes(auth.role || '') ? null
+      : problem(c, 403, 'Forbidden', `Only ${roles.join(', ')} may ${roles === MIGRATION_READ_ROLES ? 'read' : 'change'} the migration ledger`);
+  };
+
   // --- Historical Design Migration & Archive Subsystem (CV-19, FR-028, FR-029, FR-032, FR-070, FR-075, FR-077, FR-080) ---
   registerRoute('get', '/migration/ledger', (c: any) => {
+    const no = refused(c, MIGRATION_READ_ROLES);
+    if (no) return no;
     const format = c.req.query('format');
     if (format === 'csv') {
       return c.text(globalHistoricalMigrator.generateMigrationLedgerCsv(), 200, {
@@ -30,6 +44,8 @@ export function registerMigrationRoutes(ctx: RouteContext): void {
   });
 
   registerRoute('get', '/migration/reconciliation', (c: any) => {
+    const no = refused(c, MIGRATION_READ_ROLES);
+    if (no) return no;
     const summary = globalHistoricalMigrator.generateReconciliationSummary();
     return c.json(summary, 200);
   });
@@ -39,6 +55,8 @@ export function registerMigrationRoutes(ctx: RouteContext): void {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to archive historical document');
     }
+    const no = refused(c, MIGRATION_WRITE_ROLES);
+    if (no) return no;
     const body = await c.req.json().catch(() => ({}));
     if (!body.documentId || !body.taskId || !body.clientId || !body.sourceFormat) {
       return c.json({ error: 'Missing required document fields (documentId, taskId, clientId, sourceFormat)' }, 400);
@@ -52,6 +70,8 @@ export function registerMigrationRoutes(ctx: RouteContext): void {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to migrate historical document');
     }
+    const no = refused(c, MIGRATION_WRITE_ROLES);
+    if (no) return no;
     const body = await c.req.json().catch(() => ({}));
     if (!body.documentId || !body.taskId || !body.clientId || !body.sourceFormat) {
       return c.json({ error: 'Missing required document fields (documentId, taskId, clientId, sourceFormat)' }, 400);
@@ -70,6 +90,8 @@ export function registerMigrationRoutes(ctx: RouteContext): void {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to test reopen sample');
     }
+    const no = refused(c, MIGRATION_WRITE_ROLES);
+    if (no) return no;
     const body = await c.req.json().catch(() => ({}));
     const { canvaDesignId, targetRole, updatedText } = body;
     if (!canvaDesignId || !targetRole || !updatedText) {
@@ -88,6 +110,8 @@ export function registerMigrationRoutes(ctx: RouteContext): void {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to test rollback sample');
     }
+    const no = refused(c, MIGRATION_WRITE_ROLES);
+    if (no) return no;
     const body = await c.req.json().catch(() => ({}));
     const { documentId } = body;
     if (!documentId) {

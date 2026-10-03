@@ -7,7 +7,7 @@ import { admitPageGrammarFromReference } from '../src/studio/page-grammar-admiss
 import { composePosterLayout, FOOT_GAP_SHARE, negativeSpaceOf, POSTER_VARIANTS, type PosterVariant } from '../src/studio/poster-grammar.js';
 import { renderLayoutV2 } from '../src/studio/render-layout-v2.js';
 import { computeLayoutMetrics } from '../src/studio/layout-metrics.js';
-import { buildPairwiseJudgeSystemPrompt, MAX_JUDGE_HOUSE_RULE_CHARS, POSTER_IMPACT_CRITERIA } from '../src/studio/pairwise-judge-v3.js';
+import { buildPairwiseJudgeSystemPrompt, MAX_JUDGE_HOUSE_RULE_CHARS, POSTER_DIMENSION_CRITERIA } from '../src/studio/pairwise-judge-v3.js';
 import { ExemplarRetrievalIndex } from '../src/studio/exemplar-retrieval.js';
 import { measureDesignV3 } from '../src/studio/pipeline-v3.js';
 import type { StudioLayoutV2 } from '../src/studio/layout-v2.js';
@@ -439,9 +439,10 @@ describe('the judge reads posters as posters; other clients\' prompts are unchan
       const posterPrompt = buildPairwiseJudgeSystemPrompt({ photoBrief, houseRules: ['R'], posterImpact: true });
       expect(buildPairwiseJudgeSystemPrompt({ photoBrief, houseRules: ['R'], posterImpact: false })).toBe(plain);
       expect(plain).not.toMatch(/300px/);
-      expect(posterPrompt).toContain(POSTER_IMPACT_CRITERIA.hierarchy);
-      expect(posterPrompt).toContain(POSTER_IMPACT_CRITERIA.brand_fit);
-      if (!photoBrief) expect(posterPrompt).toContain(POSTER_IMPACT_CRITERIA.composition);
+      // ADR-274 addendum: the poster vote's own dimensions carry these criteria.
+      expect(posterPrompt).toContain(POSTER_DIMENSION_CRITERIA.impact);
+      expect(posterPrompt).toContain(POSTER_DIMENSION_CRITERIA.brand_fit);
+      expect(posterPrompt).toContain(POSTER_DIMENSION_CRITERIA.composition);
     }
   });
 

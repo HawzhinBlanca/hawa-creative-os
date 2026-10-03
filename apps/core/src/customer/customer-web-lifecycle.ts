@@ -55,7 +55,9 @@ export async function authorizeCustomerWebOpen(trx:Kysely<Database>,tenantId:str
     const dna=checkBrief ? (await sql<{version:number}>`SELECT hawa.pin_customer_dna(${receipt.client_id}::uuid) AS version`.execute(trx)).rows[0] : {version:receipt.dna_version};
     if(checkBrief && dna.version!==receipt.dna_version) throw new LifecycleProjectionConflict('EVIDENCE_CHANGED','The admitted brand version changed before projection');
     const photos=checkBrief ? await customerPhotos(trx,tenantId,account.id,receipt.client_id,receipt.body.photoIds) : [];
-    const manifest=photos.length ? {v:1 as const,images:photos.map(({sha256,mediaType,size})=>({sha256,mediaType,size}))} : undefined;
+    // Always a manifest when the brief is checked, empty for a request without photos: it is what marks the
+    // task as a website request downstream (office photo library, photo policy), not the presence of photos.
+    const manifest=checkBrief ? {v:1 as const,images:photos.map(({sha256,mediaType,size})=>({sha256,mediaType,size}))} : undefined;
     return {receipt,draft:customerWebDraft(receipt,manifest),owner:{accountId:account.id,userId:account.user_id},dnaVersion:receipt.dna_version};
   } catch(error) {
     failed=true;

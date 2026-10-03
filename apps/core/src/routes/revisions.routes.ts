@@ -54,6 +54,12 @@ const commentFromRow = (row: CommentRow) => ({
  * GET /tasks/:taskId/revisions/diff is registered before GET /tasks/:taskId/revisions/:revisionId,
  * which would otherwise take "diff" for a revision id.
  */
+const FEEDBACK_POLARITIES = ['positive', 'negative', 'neutral'] as const;
+/** The categories client learning reads as its sources (migration 076); only their own services write them. */
+const LEARNING_SOURCE_CATEGORIES = ['design_refinement', 'design_rejection', 'client_rule_instruction'] as const;
+const isFeedbackCategory = (v: unknown): v is string =>
+  typeof v === 'string' && /^[a-z][a-z_]{1,39}$/.test(v) && !(LEARNING_SOURCE_CATEGORIES as readonly string[]).includes(v);
+
 export function registerRevisionsRoutes(ctx: RouteContext): void {
   const {
     registerRoute,
@@ -337,7 +343,7 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       } catch (err: any) {
         if (err instanceof LifecycleOwnedRevisionConflict) return problem(c, 409, 'LIFECYCLE_OWNED');
         log.error('[core:revisions:create] DB revision error:', err);
-        return problem(c, 503, 'Durable Storage Unavailable', `Failed to persist revision: ${err.message}`);
+        return problem(c, 503, 'Durable Storage Unavailable', 'The revision could not be saved; try again');
       }
     }
 
@@ -571,12 +577,25 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     const stored = await withRlsContext(db, scope, (trx) => taskRepo.findById(taskId, scope.tenantId, trx));
     if (!stored) return problem(c, 404, 'Task Not Found');
     if (!stored.client_id) return problem(c, 422, 'Client Required', 'Feedback is recorded against the task\'s client, and this task has none');
-    const revisionId = [body.revisionId, stored.current_design_revision_id].find((id) => isValidUuid(id)) ?? null;
-    const polarity = body.polarity || 'neutral';
-    const category = body.category || 'layout';
-    const rawFeedbackText = body.rawFeedbackText || body.comment || '';
-    // Who gave it is the signed-in caller; the body no longer names the user.
-    const attributedActor = { userId: auth.userId, displayName: body.displayName || auth.displayName || 'Operator' };
+    // hawa.feedback_events is what client learning reads: the learning-source categories
+    // (client_rule_instruction, design_refinement, design_rejection) are written by their own services with
+    // their own evidence, never named by a caller here.
+    const polarity = body.polarity ?? 'neutral';
+    const category = body.category ?? 'layout';
+    const rawFeedbackText = body.rawFeedbackText ?? body.comment ?? '';
+    if (!(FEEDBACK_POLARITIES as readonly unknown[]).includes(polarity) || !isFeedbackCategory(category) ||
+        typeof rawFeedbackText !== 'string' || rawFeedbackText.length > 4000) {
+      return problem(c, 422, 'Invalid Feedback', `polarity is one of ${FEEDBACK_POLARITIES.join(', ')}; category a lowercase word (not a learning-source category); the comment at most 4000 characters`);
+    }
+    // The revision named must be this task's (as for a review comment); otherwise the task's current one.
+    let revisionId: string | null = isValidUuid(stored.current_design_revision_id) ? stored.current_design_revision_id : null;
+    if (body.revisionId !== undefined && body.revisionId !== null) {
+      const found = isValidUuid(body.revisionId) ? (await readRevisions(auth, [body.revisionId])).get(body.revisionId) : undefined;
+      if (!found || found.taskId !== taskId) return problem(c, 404, 'Revision Not Found', 'That revision is not a revision of this task');
+      revisionId = body.revisionId;
+    }
+    // Who gave it is the signed-in caller; the body names neither the user nor their name.
+    const attributedActor = { userId: auth.userId, displayName: auth.displayName || 'Operator' };
 
     let row: Awaited<ReturnType<FeedbackRepository['recordFeedback']>>;
     try {
@@ -602,7 +621,8 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       clientId: row.client_id,
       designRevisionId: revisionId ?? '',
       polarity,
-      category,
+      // Stored categories are wider than the domain's seven (callers record 'logo'); the answer echoes what was stored.
+      category: category as FeedbackEvent['category'],
       rawFeedbackText,
       attributedActor,
       governance: {

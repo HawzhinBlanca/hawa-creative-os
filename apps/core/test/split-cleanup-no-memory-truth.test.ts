@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import { deskReviewTarget } from '@hawa/contracts/desk-navigation';
+import { activeDnaVersion } from './fixtures/persisted-client-dna.js';
 
 /**
  * The cleanup step of the app.ts split (architecture programme 1.3, SPLIT_PLAN.md section 7): with a
@@ -150,7 +151,7 @@ describe('with a database, client DNA and assets are read from Postgres', () => 
     const saved = await core().request(`/v1/clients/${KAAE}/dna`, {
       method: 'POST',
       headers: artDirector,
-      body: JSON.stringify({ ...kaaeClientDNA, clientId: KAAE, name, commitMessage: 'Cleanup: renamed elsewhere' }),
+      body: JSON.stringify({ ...kaaeClientDNA, clientId: KAAE, name, commitMessage: 'Cleanup: renamed elsewhere', expectedVersion: await activeDnaVersion(b, KAAE, artDirector) }),
     });
     expect(saved.status).toBe(201);
     const listed = (await (await b.request('/v1/clients')).json()) as Array<{ clientId: string; name: string }>;

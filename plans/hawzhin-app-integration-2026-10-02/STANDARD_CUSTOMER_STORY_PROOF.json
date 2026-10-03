@@ -1,6 +1,6 @@
 {
   "date": "2026-10-03",
-  "status": "SEALED_STORY_BOUNDS_PASS_REAL_MODEL_LOGO_FAILURE_CONTEXT_REPAIR_NATIVE_REPEAT_PENDING",
+  "status": "LOCAL_EDITABLE_CUSTOMER_SOURCE_QUALIFIED_CLAUDE_RELEASE3B_MERGE_SOURCE_GATES_PASS_SEAL_FULL_PENDING",
   "adr": "ADR292",
   "baseEngineCommit": "8bf2f8b8",
   "websiteProofCommit": "1263be2",
@@ -53,7 +53,7 @@
   "sourceHashes": [
     {
       "path": "adrs/292_standard_customer_story_constraints.md",
-      "sha256": "727373e64ee934d52b0d8efc4bf4c6b13d4950f0051f3c7f0d3509ce618b13b8"
+      "sha256": "9cc192e71d52e3dab2b3575fa41f24a323c93eaa6442a855a72d6a08cd23c769"
     },
     {
       "path": "apps/core/src/services/design-studio/prompts.ts",
@@ -86,6 +86,18 @@
     {
       "path": "packages/creative/test/studio-story-safe-zone.test.ts",
       "sha256": "38275e35f917665eaa73a6ab91f72999780325a353ed110d562d48e8085218fe"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-open-draft.ts",
+      "sha256": "e12ceb0e7e35e15fb141a3094b63cf5b35964148580a507fb03be1f29e54b151"
+    },
+    {
+      "path": "apps/core/src/routes/lifecycle-internal.routes.ts",
+      "sha256": "62dc50dc0c09b3b32813741796bc2124229f4fb95fe3e20972928008233fb65d"
+    },
+    {
+      "path": "apps/core/test/customer-requests.test.ts",
+      "sha256": "39156afdf575f0586cce921bd5dd6811eba675423aa11ffca361f0bd2a4d2952"
     }
   ],
   "logs": [
@@ -148,6 +160,38 @@
     {
       "path": "output/qualification/2026-10-03/standard-story/sealed-full.log",
       "sha256": "9bda5cbcc1c7388c9f9bc5e3ce3185f8d47c8f12d042ef2aba79c2261b764c3d"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/merged-focused.log",
+      "sha256": "f8a58196dd9423d4df1591406f663623f06807d37425d76ef29e4b3a28e8c971"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/merged-install.log",
+      "sha256": "060efa2c4dd1543d7945d6c88c878492f71a129fc98c64ccc0bbceb56f10fc85"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/merged-lint.log",
+      "sha256": "7944a420e5ac6393f6ed54967db1b8f467eed89900d282490eb24960d796e479"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/merged-types.log",
+      "sha256": "a1aa8df43a4b7cfa52d10d8cefaed8f2dfa0a660c528c28f8e11df4d6dc443fe"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/repair-context-manifest.log",
+      "sha256": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/repair-context-release-gate.log",
+      "sha256": "911c16c2a7acc93decc9f14d40128eb250b1cd7d870b65f94623687f01c6be16"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/shared-parser-rebuilt-red.log",
+      "sha256": "6a54b6fcbb72c954369c77f2306e3995b82c12e4e600afb0a59c3ba3a949ab22"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/shared-parser-red.log",
+      "sha256": "0a51bf66564c229542954e0fbd29c8a93957fff51a458b2d75aab5a112ed6c35"
     }
   ],
   "remaining": [
@@ -228,5 +272,103 @@
     "strictRoots": 759,
     "lint": "PASS",
     "nativeRepeat": "PENDING"
+  },
+  "nativeRepairContextRepeat": {
+    "engineCommit": "be34b755",
+    "nativeControls": {
+      "customer-core-result.json": {
+        "passed": 24,
+        "failed": 0
+      },
+      "customer-browser-result.json": {
+        "passed": 13,
+        "failed": 0
+      },
+      "customer-worker-result.json": {
+        "passed": 10,
+        "failed": 0
+      },
+      "customer-browser-worker-result.json": {
+        "passed": 9,
+        "failed": 0
+      }
+    },
+    "sourceInspection": {
+      "editableSourceSha256": "34a823c4cf21bd6a876e9b34deea903e5769b257c0358953f99eb4372f8b4c01",
+      "liveCopyExact": true,
+      "expectedCopyBlocks": 2,
+      "pictureShapes": 7,
+      "originalPhotoHashesPresent": true,
+      "originalPhotoCount": 6,
+      "placedPhotoIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nativeCanvaQualified": false,
+      "humanApproval": false,
+      "providerHttpRequests": 32,
+      "providerChargedCalls": 13,
+      "usdAtPinnedRates": 0.2094244,
+      "coreRoundedUsd": 0.209424
+    },
+    "terminalDesignStatus": "failed",
+    "terminalDiagnostic": "Studio failed (Configure and authorize Canva in Settings) and Rung 4 fallback failed (A different generation already exists. Inspect the saved plan.).",
+    "syntheticPhotoContents": true,
+    "nativeCanvaDesignId": null,
+    "humanApproval": false,
+    "cleanup": {
+      "vendorContainersRemoved": 6,
+      "ownedNetworksRemoved": 2,
+      "privateFilesRemoved": [
+        "worker-runtime-private.log",
+        "customer-worker-launch-private.log",
+        "customer-core-private.log",
+        "customer-browser-error-private.log",
+        "local-private.json",
+        "restate-runtime-private.log",
+        "provider-runtime-private.log",
+        "customer-browser-worker-error-private.log"
+      ],
+      "priorContainersUnchanged": 10,
+      "coreDatabaseRemoved": true,
+      "browserWorkerAndRestateContainersAbsent": true
+    }
+  },
+  "merge": {
+    "claudeCommit": "b56020bffa5f08a1e854d3c6329617144f7023c4",
+    "status": "SOURCE_RESOLVED_PENDING_MERGE_COMMIT",
+    "preserved": [
+      "shared lifecycle openDraft from ADR287 with bounded web manifest from ADR279",
+      "empty website manifest from ADR285; nonempty-owner empty tampering remains409",
+      "both complete traceability histories",
+      "existing prompt/photo/safe zone fixes"
+    ],
+    "initialTest": {
+      "passed": 55,
+      "failed": 27,
+      "cause": "new package exports not rebuilt"
+    },
+    "rebuiltRed": {
+      "passed": 81,
+      "failed": 1,
+      "cause": "moved parser omitted six-photo manifest; mounted HTTP409"
+    },
+    "focused": {
+      "passed": 107,
+      "failed": 0
+    },
+    "strictRoots": 813,
+    "lint": "PASS",
+    "full": "PENDING after clean seal",
+    "nativeMergedSourceRepeat": "PENDING",
+    "initialDiffCheck": {
+      "failed": 2,
+      "cause": "new extra blank lines at EOF in imported ADR287 and rule-effect test",
+      "repaired": "removed only extra EOF blank lines"
+    }
   }
 }

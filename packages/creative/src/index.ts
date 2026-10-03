@@ -32,6 +32,9 @@ export * from './studio/composite-contrast.js';
 export * from './studio/export-text-measure.js';
 export * from './studio/export-image-fidelity.js';
 export * from './studio/export-text-lines.js';
+export * from './studio/export-text-shaping.js';
+export * from './studio/text-shaping-job.js';
+export * from './studio/text-shaping-pool.js';
 export * from './studio/motifs.js';
 export * from './studio/color-science.js';
 export * from './studio/png-export.js';
@@ -70,6 +73,7 @@ export * from './studio/reference-manager.js';
 export * from './studio/asset-paths.js';
 
 export * from './studio/spending-reservation.js';
+export { listPriceTextUsd, listTextRates, loadListPricing, priceTextUsage, type ListTextRates, type ListTextUsage } from './studio/list-price.js';
 export * from './studio/price-review.js';
 export * from './clients/client-pack.js';
 export * from './studio/thumbnail-rules.js';
@@ -79,3 +83,5 @@ export * from './studio/background-planning.js';
 
 export * from './rule-moderation.js';
 export * from './uploaded-asset-inspection.js';
+export * from './studio/office-photo-library.js';
+export * from './studio/office-photo-library-store.js';

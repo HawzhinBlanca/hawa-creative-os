@@ -1,5 +1,5 @@
 import { isCustomerOpenCommand } from '@hawa/contracts';
-import { customerWebOpenEvent, recordCustomerWebMessage, WEB_CHANNEL } from '../customer/customer-web-lifecycle.js';
+import { customerWebOpenEvent, recordCustomerWebMessage } from '../customer/customer-web-lifecycle.js';
 import {customerActionEvent,projectCustomerAction,acknowledgeCustomerAction,CustomerActionError} from '../customer/customer-actions.js';
 import type {CustomerActionCommand,CustomerActionEvent,CustomerActionResult} from '@hawa/contracts';
 import {isCustomerActionCommand,isCustomerActionEvent} from '@hawa/contracts';
@@ -29,10 +29,11 @@ import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, parseBlobRef, parseLifecycleAlbumRef, parseLifecycleSourceRef, type BlobRef, type DeliveryOutcome } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, type BlobRef, type DeliveryOutcome } from '@hawa/contracts';
 import { createLifecycleSourceIntake } from '../services/lifecycle-source-intake.js';
+import { openDraft } from '../services/lifecycle-open-draft.js';
 import { assertSourceIdentity, SourceConflict } from '../services/lifecycle-source-store.js';
-import { MAX_REQUEST_DELIVERABLES, chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, parseStudioImagery, parseStudioTier } from '@hawa/domain';
+import { MAX_REQUEST_DELIVERABLES, chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
 import { planLifecycleBriefDeliverables } from '../services/lifecycle-brief-deliverables.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
@@ -59,7 +60,7 @@ import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readN
   readRevisionPhotoDecision, recordRevisionPhotoDecision,
   readRoutingRefusal, recordRoutingRefusal,
   revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests,
-  type LateChangeStage, type LateRequesterChange, type WaitingLifecycleRequest } from '../services/lifecycle-chat-target.js';
+  type ClientChoice, type LateChangeStage, type LateRequesterChange, type WaitingLifecycleRequest } from '../services/lifecycle-chat-target.js';
 import { parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
 import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.js';
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
@@ -167,83 +168,6 @@ function revisionBlockedAlert(chatId: string, code: string, update: UpdateLike):
     '', 'Their words:', (words.length > 1500 ? `${words.slice(0, 1500)}…` : words) || '(a photo or file, in the chat)'].join('\n') };
 }
 
-
-function openDraft(value: unknown, requestId: string): ChatIntake | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const d = value as Record<string, unknown>;
-  if (!['telegram','hawzhin_web'].includes(String(d.platform)) || d.sourceEventId !== `lc-${requestId}-r0` ||
-      typeof d.sourceChannelId !== 'string' || !(d.platform==='hawzhin_web' ? WEB_CHANNEL.test(d.sourceChannelId) : /^-?\d{1,20}$/.test(d.sourceChannelId)) ||
-      typeof d.rawText !== 'string' || !d.rawText.trim() || d.rawText.length > 100_000 ||
-      typeof d.title !== 'string' || !d.title.trim() || d.title.length > 500 ||
-      typeof d.designInstructions !== 'string' || d.designInstructions.length > 100_000 ||
-      !Array.isArray(d.exactCopy) || d.exactCopy.length > 500 || JSON.stringify(d.exactCopy).length > 100_000 ||
-      !(d.clientId === null || (typeof d.clientId === 'string' && UUID.test(d.clientId))) ||
-      (d.autoGenerate !== undefined && typeof d.autoGenerate !== 'boolean') ||
-      (d.isInstructionOnly !== undefined && typeof d.isInstructionOnly !== 'boolean')) return null;
-  const variant = d.variant;
-  if (variant !== undefined && (!variant || typeof variant !== 'object' ||
-      !Number.isInteger((variant as any).width) || !Number.isInteger((variant as any).height) ||
-      (variant as any).width < 640 || (variant as any).width > 2400 ||
-      (variant as any).height < 640 || (variant as any).height > 2400)) return null;
-  if (d.designStudio !== undefined && typeof d.designStudio !== 'boolean') return null;
-  // ADR-232: copy taken from a request sentence, and its receipt (server-authored at intake).
-  const copyFields = (['headlineEn', 'headlineCkb', 'copyEn', 'copyCkb'] as const).filter((key) => d[key] !== undefined);
-  if (copyFields.some((key) => typeof d[key] !== 'string' || (d[key] as string).length > 100_000)) return null;
-  const receipt = d.copyExtraction;
-  if (receipt !== undefined && (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) ||
-      (receipt as { v?: unknown }).v !== 1 || JSON.stringify(receipt).length > 20_000)) return null;
-  const options = d.studioOptions;
-  if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options) ||
-      JSON.stringify(options).length > 2000 ||
-      (Object.keys(options).some((key) => !['tier', 'imagery', 'previews', 'holdForSelection'].includes(key))) ||
-      parseStudioTier((options as { tier?: unknown }).tier) === null ||
-      parseStudioImagery((options as { imagery?: unknown }).imagery) === null ||
-      ((options as any).previews !== undefined && (!Number.isInteger((options as any).previews) || (options as any).previews < 1 || (options as any).previews > 4)) ||
-      ((options as any).holdForSelection !== undefined && typeof (options as any).holdForSelection !== 'boolean'))) return null;
-  const image = d.lifecycleImage;
-  const source = d.lifecycleSource === undefined ? undefined : parseLifecycleSourceRef(d.lifecycleSource);
-  if (d.lifecycleSource !== undefined && (!source || image || d.lifecycleAlbum)) return null;
-  const album = d.lifecycleAlbum === undefined ? undefined : parseLifecycleAlbumRef(d.lifecycleAlbum);
-  if ((d.lifecycleAlbum !== undefined && !album) || (image && album)) return null;
-  const imageRef = image === undefined ? undefined : parseBlobRef(image);
-  if (image !== undefined && (!imageRef || !Number.isSafeInteger((image as any).updateId) ||
-      (image as any).updateId <= 0 ||
-      !['image/png', 'image/jpeg', 'image/webp'].includes(imageRef.mediaType) ||
-      imageRef.size > 20 * 1024 * 1024)) return null;
-  // ADR279: preserve the server-authored web manifest through HTTP. Projection
-  // still compares it with the owner's retained receipts before trusting it.
-  let webPhotos: ChatIntake['customerWebPhotos'];
-  if (d.customerWebPhotos !== undefined) {
-    const manifest=d.customerWebPhotos;
-    if(d.platform!=='hawzhin_web' || image || album || source || !manifest || typeof manifest!=='object' || Array.isArray(manifest)) return null;
-    const m=manifest as Record<string,unknown>;
-    if(Object.keys(m).some(k=>!['v','images'].includes(k)) || m.v!==1 || !Array.isArray(m.images) || m.images.length<1 || m.images.length>20) return null;
-    const images=m.images.map(parseBlobRef);
-    if(m.images.some(ref=>!ref || typeof ref!=='object' || Array.isArray(ref) || Object.keys(ref).some(k=>!['sha256','mediaType','size'].includes(k))) ||
-      images.some(ref=>!ref || !['image/png','image/jpeg','image/webp'].includes(ref.mediaType) || ref.size>10*1024*1024) ||
-      new Set(images.map(ref=>ref?.sha256)).size!==images.length) return null;
-    webPhotos={v:1,images:images as NonNullable<ChatIntake['customerWebPhotos']>['images']};
-  }
-  // Select the contract explicitly. A worker payload cannot choose the database principal, tenant,
-  // outbox owner or a second source through spare JSON fields.
-  return {
-    platform: d.platform as 'telegram'|'hawzhin_web', sourceEventId: d.sourceEventId as string, sourceChannelId: d.sourceChannelId as string,
-    rawText: d.rawText as string, title: d.title as string,
-    designInstructions: d.designInstructions as string, exactCopy: d.exactCopy as unknown[],
-    clientId: d.clientId as string | null,
-    ...(d.autoGenerate !== undefined ? { autoGenerate: d.autoGenerate as boolean } : {}),
-    ...(d.isInstructionOnly !== undefined ? { isInstructionOnly: d.isInstructionOnly as boolean } : {}),
-    ...(variant ? { variant: variant as { width: number; height: number } } : {}),
-    ...(d.designStudio !== undefined ? { designStudio: d.designStudio as boolean } : {}),
-    ...Object.fromEntries(copyFields.map((key) => [key, d[key] as string])),
-    ...(receipt !== undefined ? { copyExtraction: receipt as ChatIntake['copyExtraction'] } : {}),
-    ...(options ? { studioOptions: options as ChatIntake['studioOptions'] } : {}),
-    ...(imageRef ? { lifecycleImage: { ...imageRef, updateId: (image as { updateId: number }).updateId } } : {}),
-    ...(album ? { lifecycleAlbum: album } : {}),
-    ...(source ? { lifecycleSource: source } : {}),
-    ...(webPhotos ? {customerWebPhotos:webPhotos} : {}),
-  };
-}
 
 export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   const { app, db, problem, verifyRequestAuth, channelKillSwitches } = ctx;
@@ -437,8 +361,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         clientTimeout = due.question;
         settle = false;
         releasedDeferral = true;
-        beside = { text: say(CLIENT_QUESTION_MESSAGES.timedOutToOffice, requesterLang(due.question.words)), parseMode: 'HTML' };
-        besideKey = `client-question:${due.question.briefUpdateId}`;
+        // ADR-284 addendum (live canary 2026-10-03): once the kept brief has opened, its request's first answer said
+        // it (with "a designer will make …"); the notice stays only for a brief that does not open after all.
+        const openedAlready = await withRlsContext(db, SYSTEM_SCOPE, (trx) => readNewBriefDecision(trx, DEFAULT_TENANT_ID, preparedUpdate.update_id));
+        if (!openedAlready) {
+          beside = { text: say(CLIENT_QUESTION_MESSAGES.timedOutToOffice, requesterLang(due.question.words)), parseMode: 'HTML' };
+          besideKey = `client-question:${due.question.briefUpdateId}`;
+        }
       }
     }
     // ADR-145: the settle of a message set behind its sender's held brief. While that brief is still
@@ -1009,13 +938,18 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             /** Opens a lifecycle request for a brief (ADR-135), one per language (ADR-139). */
             const openBrief = async (briefText: string, instructionOnly: boolean, takeHeldPhoto = true,
               /** ADR-235: the organisation the sender named for a kept brief, or the office to choose it; and its photo. */
-              opts: { clientId?: string; forOffice?: boolean; keptImage?: ClientQuestion['image'] } = {}): Promise<Response> => {
+              opts: { clientId?: string; forOffice?: boolean; keptImage?: ClientQuestion['image']; clientChoice?: ClientChoice } = {}): Promise<Response> => {
               // ADR-235: the kept brief whose question timed out opens, as it was kept, for the office to choose.
               if (clientTimeout && clientTimeout.briefUpdateId === update.update_id) {
                 briefText = clientTimeout.words;
                 instructionOnly = clientTimeout.instructionOnly;
                 takeHeldPhoto = false;
-                opts = { forOffice: true, ...(clientTimeout.image ? { keptImage: clientTimeout.image } : {}) };
+                opts = { forOffice: true, ...(clientTimeout.image ? { keptImage: clientTimeout.image } : {}),
+                  clientChoice: { outcome: 'timeout', lang: requesterLang(clientTimeout.words) } };
+                // ADR-284 addendum (live canary 2026-10-03): the request's first answer says it, with "a designer will
+                // make …", in one message; the notice is said only if the brief does not open after all.
+                beside = null;
+                besideKey = null;
               }
               // What was to be said beside the answer before this brief was read (a video's words were used).
               const besideOnEntry = beside;
@@ -1100,7 +1034,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               }
               // ADR-235: nothing names the organisation (the chat is bound to none, the words name none): the
               // brief is kept and its sender asked. Never guessed; a split brief or an album opens as before.
-              if (!opts.clientId && !opts.forOffice && parts.length === 1 && !instructionOnly && !parts[0].detailsRequired &&
+              // Brief phrasing fuzz (2026-10-03, class 5): a request for a design with no copy of its own ("could you
+              // make a poster for us?") is asked too; it opens for a designer once answered. Other words opened for a
+              // designer (a change, redo words or a subject with nothing on the way) open as before.
+              if (!opts.clientId && !opts.forOffice && parts.length === 1 && (!instructionOnly || readIntentByRules(briefText).intent === 'new_brief') &&
+                  !parts[0].detailsRequired &&
                   prepared.clientId === null && !admittedAlbum && !boundPhoto && scope) {
                 // A held photo is not used yet (the answer's brief takes it): its notice is not said.
                 beside = besideOnEntry;
@@ -1130,7 +1068,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     ...((lifecycleImage || admittedAlbum || allocation.kind==='multiple') ? { sourceUpdate: update } : {}),
                     ...(allocation.kind==='multiple' ? {deliverableCount:parts.length,
                       deliverableDetailsRequired:parts.filter(p=>p.detailsRequired).map(p=>p.requestId)} : {}),
-                    ...(siblings.length ? { siblings } : {}) });
+                    ...(siblings.length ? { siblings } : {}),
+                    ...(opts.clientChoice ? { clientChoice: opts.clientChoice } : {}) });
               });
               if (!stored) {
                 beside = null;
@@ -1277,7 +1216,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 requests: await activeChatRequests(trx, TENANT, chatId, 7),
                 bindings: replyMessageId ? await replyBindings(trx, TENANT, chatId, replyMessageId)
                   : { requestIds: [] as string[], askUpdateId: null as number | null },
-                opening: priorIntent ? [] : await openingChatRequests(trx, TENANT, chatId),
+                opening: priorIntent ? [] : await openingChatRequests(trx, TENANT, chatId, update.update_id),
               }));
               // ADR-235: the answer to "who is this design for?" opens the kept brief, for the organisation named or
               // for the office to choose. Words that do not answer it are read as any message is.
@@ -1317,10 +1256,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   // Answered in the language of the answer (an English brief may be answered in Sorani).
                   const lang = requesterLang(text, requesterLang(question.words));
                   mayHoldBrief = false;
-                  beside = resolution.outcome === 'client' ? null : { text: say(resolution.outcome === 'office' ? CLIENT_QUESTION_MESSAGES.passedToOffice
-                    : resolution.outcome === 'unmatched' ? CLIENT_QUESTION_MESSAGES.notMatchedToOffice : CLIENT_QUESTION_MESSAGES.expiredToOffice, lang), parseMode: 'HTML' };
+                  // ADR-284 addendum (live canary 2026-10-03): "No problem. I've passed it to the office…" and "Got it. A
+                  // designer will make …" came back to back. The request's first answer says both, in the answer's language.
+                  const officeChooses = resolution.outcome === 'office' || resolution.outcome === 'unmatched' || resolution.outcome === 'expired'
+                    ? { outcome: resolution.outcome, lang, ...(resolution.outcome === 'unmatched' && text.trim() ? { named: text.trim().slice(0, 120) } : {}) } as ClientChoice : null;
                   return await openBrief(question.words, question.instructionOnly, true, {
                     ...(resolution.outcome === 'client' && resolution.clientId ? { clientId: resolution.clientId } : { forOffice: true }),
+                    ...(officeChooses ? { clientChoice: officeChooses } : {}),
                     ...(question.image ? { keptImage: question.image } : {}) });
                 }
               }
@@ -1662,7 +1604,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                       // ADR-230: a cancel kept as a note came too late; the requester hears that, truthfully.
                       : plan.note === 'cancel' ? withdrawTooLateText(target.stage, target.title, lang, Boolean(officeChatFor(chatId)),
                         requestLabel({ title: target.title, askedAt: target.createdAt, words: target.words }, lang))
-                      : noteText(plan.note, spokenStage(target), target.title, lang, held, plan.redo === true);
+                      : noteText(plan.note, spokenStage(target), target.title, lang, held, plan.redo === true,
+                        plan.feedback === true);
                     const late: LateRequesterChange = { requestId: target.requestId, taskId: target.currentTaskId,
                       requestRev: target.rev, requestStage: target.stage as LateChangeStage, text: words,
                       kind: plan.note, ...(plan.note === 'hold' ? {held} : {}), title: shortTitle(target.title), answer: said };

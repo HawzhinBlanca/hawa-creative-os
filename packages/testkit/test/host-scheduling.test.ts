@@ -147,3 +147,52 @@ describe.runIf(os.platform() === 'darwin')('launch agents (macOS)', () => {
     expect(read('design.hawa.nightly-backup')).toContain('<key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer>');
   });
 });
+
+/**
+ * Hunt 3: install_launch_agents.sh boots every agent out, then bootstraps each again. launchd finishes a
+ * bootout after the command returns, and a bootstrap straight after it often fails ("Bootstrap failed: 5:
+ * Input/output error"). Under set -e the script then stopped at that agent, leaving it and every agent
+ * after it unloaded: no watchdog, no backup, nothing said beyond launchctl's own line. A failed
+ * bootstrap is now retried, every other agent is still loaded, and the script ends in error naming the
+ * ones that did not load. launchctl is a stub: these tests never reach the real one.
+ */
+describe('installing the launch agents (the launchctl race)', () => {
+  function install(failFirst: number, alwaysFail = '') {
+    const t = fs.mkdtempSync(path.join(tmp, 'install-'));
+    const bin = path.join(t, 'bin'); fs.mkdirSync(bin);
+    const calls = path.join(t, 'calls');
+    // bootstrap fails the first <failFirst> times for each label, and always for <alwaysFail>.
+    fs.writeFileSync(path.join(bin, 'launchctl'), `#!/bin/bash
+echo "launchctl $*" >> '${calls}'
+case "$1" in
+  bootstrap) label="$(basename "$3" .plist)"; n="$(grep -c "^launchctl bootstrap .*/$label.plist" '${calls}')"
+    [[ "$label" == '${alwaysFail}' ]] && { echo "Bootstrap failed: 5: Input/output error" >&2; exit 5; }
+    (( n > ${failFirst} )) || { echo "Bootstrap failed: 5: Input/output error" >&2; exit 5; }
+    touch '${t}'/"loaded-$label" ;;
+  print) [[ -e '${t}'/"loaded-$(basename "$2")" ]] ;;
+esac
+`, { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
+    const res = spawnSync(BASH, [path.join(repo, 'infra/ops/install_launch_agents.sh')], {
+      encoding: 'utf8', env: { PATH: `${bin}:/usr/bin:/bin`, HOME: path.join(t, 'home'), HAWA_LAUNCH_AGENTS_DIR: path.join(t, 'agents'),
+        HAWA_CURRENT_LINK: path.join(t, 'no-release') },
+    });
+    const loaded = fs.readdirSync(t).filter((n) => n.startsWith('loaded-')).map((n) => n.slice('loaded-'.length)).sort();
+    return { code: res.status, out: `${res.stdout}\n${res.stderr}`, loaded };
+  }
+  const ALL = ['design.hawa.backup-restore-drill', 'design.hawa.live-canary', 'design.hawa.nightly-backup', 'design.hawa.offsite-copy',
+    'design.hawa.restore-drill', 'design.hawa.watchdog'];
+
+  it('retries a bootstrap that loses the race with the bootout, and loads every agent', () => {
+    const r = install(2);
+    expect(r.code, r.out).toBe(0);
+    expect(r.loaded).toEqual(ALL);
+  });
+
+  it('an agent that will not load does not leave the others unloaded, and the script fails naming it', () => {
+    const r = install(0, 'design.hawa.nightly-backup');
+    expect(r.code).toBe(1);
+    expect(r.loaded).toEqual(ALL.filter((l) => l !== 'design.hawa.nightly-backup'));
+    expect(r.out).toMatch(/ERROR: not loaded: design\.hawa\.nightly-backup/);
+  });
+});

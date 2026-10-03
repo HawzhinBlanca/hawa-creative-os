@@ -119,6 +119,48 @@ function placementsFor(layout: StudioLayoutV2, options: RenderLayoutOptions): La
 // In-memory cache for loaded fontkit Font objects
 const fontCache = new Map<string, { fingerprint: string; sha256: string; font: any }>();
 
+/**
+ * Ink boxes are read from a second parse of the same bytes, never from the font that shapes (ADR-290).
+ * fontkit caches a glyph object by id with the code points it was first created with, and its Arabic
+ * shaper reads joining types from those code points. Reading a composite glyph's box or outline creates
+ * its components with none: in IBM Plex Sans Arabic Bold the final U+06D5 is built on the heh glyph, so
+ * once a line with U+06D5 had its ink read before any heh was shaped, every later U+0647 shaped as
+ * non-joining and a title measured 4-7% off what Pango draws, decided by what the process drew first.
+ */
+const fontBytes = new WeakMap<object, Buffer>();
+const outlineTwins = new WeakMap<object, any>();
+function outlinesOf(font: any): any {
+  let twin = outlineTwins.get(font);
+  if (!twin) {
+    const bytes = fontBytes.get(font);
+    if (!bytes) throw new Error('Font outlines need the bytes the font was parsed from');
+    twin = fk.create(bytes);
+    outlineTwins.set(font, twin);
+  }
+  return twin;
+}
+type InkBox = { minX: number; minY: number; maxX: number; maxY: number };
+/** One shaped glyph's ink box, in font units. */
+function glyphInkBox(font: any, glyphId: number): InkBox {
+  return outlinesOf(font).getGlyph(glyphId).bbox;
+}
+/** The ink box of a shaped run, in font units: fontkit's GlyphRun.bbox, read from the outline twin. */
+function runInkBox(font: any, run: { glyphs: Array<{ id: number }>; positions: Array<{ xAdvance?: number; yAdvance?: number; xOffset?: number; yOffset?: number }> }): InkBox {
+  const box: InkBox = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  let x = 0, y = 0;
+  run.glyphs.forEach((glyph, i) => {
+    const p = run.positions[i] || {};
+    const b = glyphInkBox(font, glyph.id);
+    box.minX = Math.min(box.minX, b.minX + x + (p.xOffset || 0));
+    box.minY = Math.min(box.minY, b.minY + y + (p.yOffset || 0));
+    box.maxX = Math.max(box.maxX, b.maxX + x + (p.xOffset || 0));
+    box.maxY = Math.max(box.maxY, b.maxY + y + (p.yOffset || 0));
+    x += p.xAdvance || 0;
+    y += p.yAdvance || 0;
+  });
+  return box;
+}
+
 /** Families whose script joins cursively, where letter-spacing is always wrong. */
 export const ARABIC_SCRIPT_FAMILIES = new Set([
   'Noto Sans Arabic',
@@ -356,7 +398,7 @@ const sentinelHashCache = new Map<string, string>();
 /** The part of a fontkit font the ink check reads. */
 interface InkFont {
   unitsPerEm: number;
-  layout(text: string): { advanceWidth: number; bbox: { minX: number; maxX: number }; glyphs: Array<{ id: number }> };
+  layout(text: string): { advanceWidth: number; glyphs: Array<{ id: number }>; positions: Array<{ xAdvance?: number; yAdvance?: number; xOffset?: number; yOffset?: number }> };
 }
 
 /**
@@ -473,7 +515,8 @@ export function probeFontInkWidth(
   const run = font.layout(sample);
   const scale = sizePx / font.unitsPerEm;
   const expectedAdvancePx = run.advanceWidth * scale;
-  const expectedInkPx = (run.bbox.maxX - run.bbox.minX) * scale;
+  const ink = runInkBox(font, run);
+  const expectedInkPx = (ink.maxX - ink.minX) * scale;
   const png = rasteriseProbe(inkProbeSvg(family, sample, sizePx, options.fontWeight), rsvg, fontconfigFile);
   if (!png) return unmeasured('no-rasteriser', 'the rasteriser is unavailable', sample, script);
 
@@ -979,6 +1022,7 @@ function loadFontPathEntry(fontPath: string) {
   if (fingerprint() !== before) throw new Error(`Font changed while loading: ${fontPath}`);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const font = cached?.sha256 === sha256 ? cached.font : fk.create(bytes);
+  if (!fontBytes.has(font)) fontBytes.set(font, bytes);
   if (fontCache.size >= 128 && !fontCache.has(fontPath)) fontCache.delete(fontCache.keys().next().value!);
   const entry = { fingerprint: before, sha256, font };
   fontCache.set(fontPath, entry);
@@ -1139,11 +1183,11 @@ export function balancedBoxWidths(
       if (lines.length < 2) continue;
       const last = lines[lines.length - 1];
       const widest = Math.max(...lines.map(widthOf));
-      const widow = !/\s/.test(last.trim()) && widthOf(last) < 0.5 * widest;
+      const widow = !BREAKABLE_SPACE.test(last.trim()) && widthOf(last) < 0.5 * widest;
       if (!widow) continue;
 
       // Tightest width that keeps the line count. Narrower than the longest word can never work.
-      const longestWord = Math.max(...copy.trim().split(/\s+/).map(widthOf));
+      const longestWord = Math.max(...copy.trim().split(BREAKABLE_SPACE).map(widthOf));
       let lo = Math.ceil(longestWord);
       let hi = Math.floor(t.width);
       if (lo >= hi || wrap(lo).length < lines.length) continue;
@@ -1157,7 +1201,7 @@ export function balancedBoxWidths(
       if (balanced.length !== lines.length) continue;
       const balancedLast = balanced[balanced.length - 1];
       // Only worth a change if the last line is no longer a stranded word.
-      if (!/\s/.test(balancedLast.trim()) && widthOf(balancedLast) < 0.5 * Math.max(...balanced.map(widthOf))) continue;
+      if (!BREAKABLE_SPACE.test(balancedLast.trim()) && widthOf(balancedLast) < 0.5 * Math.max(...balanced.map(widthOf))) continue;
 
       // Widest width that still gives exactly these breaks.
       const same = (w: number) => {
@@ -1521,16 +1565,45 @@ export function admittedFontFace(font: string, options: AdmittedFontFaceQuery): 
  */
 export function measureTextWidth(text: string, font: any, fontSize: number, letterSpacing = 0): number {
   if (!text) return 0;
-  const run = font.layout(text);
+  const run = shapedAdvance(font, text);
   const scale = fontSize / font.unitsPerEm;
   const baseWidth = run.advanceWidth * scale;
-  const extraSpacing = letterSpacing ? (run.glyphs.length - 1) * (letterSpacing * fontSize) : 0;
+  const extraSpacing = letterSpacing ? (run.glyphCount - 1) * (letterSpacing * fontSize) : 0;
   return baseWidth + extraSpacing;
+}
+
+/**
+ * A string's shaped advance (font units) and glyph count, per font object. Shaping is independent of
+ * the size and the tracking, and is nearly all of the time a composer spends searching its sizes
+ * (the greedy wrap measures the same word prefixes at every title size), so it is shaped once. The
+ * values are fontkit's own, so every width computed from them is the same number as before. A font
+ * file that changes is loaded as a new font object (loadFontPathEntry), which starts a new cache.
+ */
+const shapedAdvances = new WeakMap<object, Map<string, { advanceWidth: number; glyphCount: number }>>();
+const SHAPED_ADVANCES_PER_FONT = 20000;
+function shapedAdvance(font: any, text: string): { advanceWidth: number; glyphCount: number } {
+  let perFont = shapedAdvances.get(font);
+  if (!perFont) shapedAdvances.set(font, (perFont = new Map()));
+  let hit = perFont.get(text);
+  if (!hit) {
+    const run = font.layout(text);
+    hit = { advanceWidth: run.advanceWidth, glyphCount: run.glyphs.length };
+    if (perFont.size >= SHAPED_ADVANCES_PER_FONT) perFont.delete(perFont.keys().next().value!);
+    perFont.set(text, hit);
+  }
+  return hit;
 }
 
 /**
  * Greedily wraps text into lines fitting within maxWidth px based on exact font metrics.
  */
+/**
+ * The spaces a line may break at: every white space but the no-break ones (U+00A0, U+2007, U+202F,
+ * U+FEFF), which pango, PowerPoint and Canva keep whole. Splitting on /\s+/ broke "Quality\u00A0
+ * Assurance" here while the deck kept it on one line, past the box this measured.
+ */
+const BREAKABLE_SPACE = /[\t\n\v\f\r \u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]+/;
+
 export function wrapTextWithFontkit(
   text: string,
   maxWidth: number,
@@ -1548,7 +1621,7 @@ export function wrapTextWithFontkit(
       allLines.push('');
       continue;
     }
-    const words = trimmed.split(/\s+/).filter(Boolean);
+    const words = trimmed.split(BREAKABLE_SPACE).filter(Boolean);
     if (words.length === 0) {
       allLines.push('');
       continue;
@@ -1795,7 +1868,7 @@ export function measureLineInkClearance(
       let pen = 0;
       run.glyphs.forEach((glyph: any, i: number) => {
         const pos = run.positions[i] || { xAdvance: 0, xOffset: 0, yOffset: 0 };
-        const bb = glyph.bbox;
+        const bb = glyphInkBox(font, glyph.id);
         if (bb && Number.isFinite(bb.minX) && bb.maxX > bb.minX && bb.maxY > bb.minY) {
           const gx = start + (pen + (pos.xOffset || 0)) * scale + i * spacingPx;
           boxes.push({
@@ -1904,7 +1977,7 @@ function renderTextElementToSvg(
   for (const line of shaped ? [] : lines) {
     if (!line) continue;
     try {
-      const bbox = font.layout(line).bbox;
+      const bbox = runInkBox(font, font.layout(line));
       if (bbox && Number.isFinite(bbox.maxY)) inkAbove = Math.max(inkAbove, bbox.maxY * scale);
       if (bbox && Number.isFinite(bbox.minY)) inkBelow = Math.max(inkBelow, -bbox.minY * scale);
     } catch {

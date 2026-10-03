@@ -32,7 +32,9 @@ describe('HUNT: /redo on a task whose studio run died mid-stage', () => {
   });
   afterEach(() => { vi.unstubAllEnvs(); });
 
-  it('re-drives instead of promising a result from a run that stopped two days ago', async () => {
+  // ADR-287: the studio re-drive of a task outside RequestLifecycle went through the retired task
+  // workflow. It now starts nothing, promises nothing and leaves the dead run as it is.
+  it('promises nothing for a run that stopped two days ago: the re-drive is retired (ADR-287)', async () => {
     const chat = String(9_000_000_000 + Math.floor(Math.random() * 999_999_999));
     vi.stubEnv('DESIGN_PIPELINE_V3_CHATS', chat);
     const taskId = (
@@ -66,7 +68,9 @@ describe('HUNT: /redo on a task whose studio run died mid-stage', () => {
     const res = await createApp({ db, telegramBridge } as any).request(`/v1/tasks/${taskId}/redrive`, { method: 'POST', headers, body: '{}' });
     const body = await res.json();
 
-    expect({ status: body.status, told: String(sent.at(-1)?.message?.text || '').replace(/<[^>]+>/g, '').slice(0, 60) })
-      .toEqual({ status: 'STUDIO_RUN_QUEUED', told: expect.stringContaining('A new automatic design has been started') });
+    expect({ status: res.status, title: body.title, sent }).toEqual({ status: 409, title: 'LEGACY_WORKFLOW_RETIRED', sent: [] });
+    const queued = await withRlsContext(db, scope, (trx) => sql`SELECT id FROM hawa.outbox_commands
+      WHERE aggregate_id = ${taskId}::uuid AND command_type = 'task.dispatch'`.execute(trx));
+    expect(queued.rows).toEqual([]);
   });
 });

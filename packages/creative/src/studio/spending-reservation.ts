@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { studioUsdMicros, type StudioCallReservation } from '@hawa/domain';
 import { dataUriPixelSize } from './photo-crop.js';
+import { listPriceTextUsd } from './list-price.js';
 
 /**
  * Versioned conservative policy, researched 2026-09-27; see ADR-091 for assumptions. v3 (ADR-142,
@@ -59,20 +60,27 @@ export function studioTextModelMatches(requested:string,served:string|null):bool
   try {const admitted=family(served);return requested===served||requested===admitted;} catch{return false;}
 }
 
-/** Complete native usage priced at the same conservative rates as admission, never an invoice. */
+/**
+ * Complete native usage, priced at LIST price (ADR-289 addendum: list-price.ts, the source Studio
+ * receipts use) on uncached input, cached input and output. The conservative rates above bound only
+ * the reservation held before the call settles; they are never a call's counted cost.
+ */
 export function studioTextUsage(requested: string, served: string | null, raw: unknown): {
-  inputTokens: number; outputTokens: number; estimatedCostUsd: number; modelMatches: boolean;
+  inputTokens: number; outputTokens: number; cachedInputTokens: number; estimatedCostUsd: number; modelMatches: boolean;
 } | null {
   if (!served || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const usage = raw as Record<string, unknown>;
   const count = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
   const input = usage.prompt_tokens, output = usage.completion_tokens;
   if (!count(input) || !count(output) || !count(usage.total_tokens) || usage.total_tokens !== input + output) return null;
+  const details = usage.prompt_tokens_details;
+  const cachedRaw = details && typeof details === 'object' && !Array.isArray(details) ? (details as Record<string, unknown>).cached_tokens ?? 0 : 0;
+  if (!count(cachedRaw) || cachedRaw > input) return null;
   try {
-    const model = family(served);
-    const [inputRate, outputRate] = textRates(model, input);
-    return { inputTokens: input, outputTokens: output,
-      estimatedCostUsd: studioUsdMicros((input * inputRate + output * outputRate) / 1_000_000) / 1_000_000,
+    family(served); // only reviewed families (and their dated snapshots) are accounted
+    const cost = listPriceTextUsd(served, { inputTokens: input, cachedInputTokens: cachedRaw, outputTokens: output });
+    if (cost === null) return null;
+    return { inputTokens: input, outputTokens: output, cachedInputTokens: cachedRaw, estimatedCostUsd: cost,
       modelMatches: studioTextModelMatches(requested,served) };
   } catch { return null; }
 }

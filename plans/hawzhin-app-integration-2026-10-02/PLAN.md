@@ -343,3 +343,10 @@ Evidence: STANDARD_CUSTOMER_STORY_PROOF.json and website REAL_PROVIDER_CUSTOMER_
 ### 2026-10-03 — Story repeat and bounded repair context
 
 Sealed06ed25a8 full8297/0/67 passes. Fresh actual Auth/browser/Core/worker/Restate/Sol transport56/0 passes; real design still fails on logo/title collisions,8 calls/$0.131076 at pinned rates,0 preview/source/Canva/human approval. All owned resources/private files removed; ten previous containers unchanged. Repair now receives the normalized rejected layout as untrusted JSON, pixel units and expanded logo clear space explicitly, and schema coverage follows admitted automatic/all/count policy. Red1/3 -> focused106/0,759 strict roots/lint PASS. Native repeat and Claude release merge remain pending. Do not claim design or customer completion.
+
+
+### 2026-10-03 — Real editable source and Claude release-3b integration
+
+Actual enginebe34b755/website runtime1263be2 produces one local PNG/PPTX winner through13 paid Sol calls/$0.2094244 at pinned rates. Inspection verifies two exact live-text blocks, all six original hashes/ordered placements and seven independent pictures. Native design still FAILED because this isolated fixture has no Canva grant; no delivered customer or human quality approval. All owned resources/private inputs removed; ten prior containers unchanged. Website evidence52fba87.
+
+Pinned Claude release-3b b56020bf brings lifecycle Desk intake, true operations health, all paid spend reporting, Sorani raster shaping and canary/intake fixes. Shared moved parser preserves strict web photo manifests, including empty website marker; empty substitution for actual photos remains409. Rebuilt mounted HTTP regression81/1 ->107 focused/813 strict roots/lint PASS. Retain stale-export27-failure lane. Both full traceability histories retained. Commit/seal/combined full and native repeat remain pending; do not deploy an older office release. Native Canva specific-file upload permission, customer/human/hosted/coverage/recovery/cutover remain open.

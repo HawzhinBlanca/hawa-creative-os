@@ -154,3 +154,111 @@ The orchestrator test `6b` runs both the dev and the production tier through the
 - The paid calibration run: 94 calls, about $1.34-1.86 at the measured rate. Run it with `HAWA_JUDGE_CALIBRATION_APPROVED` set to the owner's approval.
 - Whether to turn on `HAWA_JUDGE_OFFICE_REFERENCE`. Doing so before calibration would change two things at once.
 - **KAAE's client-pack profile.** It tells the judge that KAAE's designs use "generous space ... restrained use of its navy and gold". That profile still pulls brand fit toward the document look. It is the owner's text, so it is left unchanged here.
+
+## Addendum (2026-10-03): the calibration, and the poster vote
+
+**Status:** Implemented on branch `claude/judge-calibration` (from `claude/hunt3-fixes` @ `87f1a981`). Not deployed.
+**Owner approval:** the paid calibration (cap US$2.50), then the poster vote and its re-run within the same cap.
+**Spent:** $2.18 in all:
+- $1.02 for the first run (94 calls);
+- $1.07 for the poster-vote run (94 calls);
+- $0.09 for the canary check (6 calls).
+
+**Results:** `plans/judge-calibration-2026-10-02/RESULTS.md`.
+
+### A1. What the calibration found
+
+The calibration ran section 2 item 6 with the five equal votes. The "blind panel" is three Claude judges, not people. Human votes are being collected separately.
+
+On the frozen labels:
+- decided agreement was 17/29 and kappa 0.21;
+- shipped document page vs poster was 5/5;
+- our render vs an office post was 12/24, which is chance.
+
+The judge favoured our type-led renders over the office's photo posts 31-6, where the panel favoured the office posts 21-6.
+
+The cause is the vote count:
+- Three of the five votes (legibility, typographic craft, hierarchy) are about text.
+- None is about imagery or impact, which is what separated the designs most on the panel (imagery: office 5.3, our posters 3.0).
+- The judge itself preferred the office post's composition 64 times in 84 calls, and was outvoted 3-2.
+
+### A2. Decision: a poster client is judged on the poster vote
+
+For a client whose page grammar carries poster rules (`posterImpact`, KAAE today), the pairwise judge (`pairwise-judge-v3.ts`) votes on four dimensions.
+
+| Dimension | Weight | What it judges |
+|---|---|---|
+| `impact` | 2 | The poster at a 300px feed thumbnail: one dominant moment, and the order from it. It absorbs hierarchy. |
+| `imagery` | 2 | The visual idea: a relevant photograph, illustration or graphic idea used big. Template ornaments are not one. On a photo brief, ADR-170's art-direction criteria are judged here, and the checklist is still recorded. |
+| `composition` | 2 | The whole canvas, with the type craft inside it. Empty canvas is not a virtue. |
+| `brand_fit` | 1 | The request, and the client's own published posts. |
+
+**The count.**
+- The weights total 7, so there is never a tie, and 4 win.
+- Impact and imagery together decide a pair.
+- Text has no vote of its own.
+
+**Legibility is a gate, not a vote** (`POSTER_LEGIBILITY_GATE`, `legibilityGate` in the schema, placed first):
+- For each candidate the judge states whether essential copy (title, date, place, call to action) cannot be read at full size: too small, too faint, cut off, overlapped, garbled, or on a busy photo with no plate.
+- A candidate found illegible loses to one that is not, whatever the votes.
+- If both or neither are illegible, the votes decide.
+- A reply without the gate is refused like a missing dimension.
+
+**Implementation.**
+- `judgeVoteSpec` gives each call its dimensions, weights and schema, and `tallyJudgeVotes` counts the reply. Production and the calibration harness share both.
+- `POSTER_IMPACT_CRITERIA` is replaced by `POSTER_DIMENSION_CRITERIA`.
+- Each order records `posterVote`, `weights`, the weighted totals, `legibilityGate` and `legibilityVeto`, and Core stores them with the judgment.
+- `votes` and `rationales` are now `Partial<Record<AnyJudgeDimension, ...>>`.
+
+**Unchanged.**
+- **Other clients:** their system prompts, user text and schema are byte-identical. The sha256 pins at `e7aebad7` and `051d5606` still pass, and the five equal votes and the photo brief's six weighted votes are as before.
+- **The call count:** a KAAE design is still 8 judge calls with three candidates and 4 with two. The output allowance is the same.
+- **The cost per call:**
+  - On the calibration images it rose from $0.0108 to $0.0114: the prompt is longer and the gate's two reasons are added.
+  - In production format (1080 PNGs, legibility facts) it was $0.0151-0.0158 on the canary check, inside ADR-237's $0.0143-0.0198.
+
+### A3. The re-run (same frozen set, same images)
+
+| | Five votes | Poster vote |
+|---|---|---|
+| Decided agreement, round 1 (the frozen labels) | 17/29 (58.6%) | **27/30 (90.0%)** |
+| Decided agreement, round 2 | 23/31 (74.2%) | 24/31 (77.4%) |
+| Decided agreement, all six panel scores | 19/30 (63.3%) | 27/32 (84.4%) |
+| Three-way agreement, round 1 | 19/47 | 28/47 |
+| Kappa: round 1 / round 2 / all six | 0.21 / 0.32 / 0.24 | 0.22 / 0.17 / 0.28 |
+| Our render vs office post, decided, round 1 | 12/24 (50%) | **22/25 (88%)** |
+| Our render vs office post, decided, all six | 14/25 | 22/27 (81.5%) |
+| Document page vs poster | 5/5 | 5/5 |
+| Pairs where the verdict flips with order | 5/47 | **3/47** |
+| Design shown first wins | 44/94 | 48/94 |
+| Clear pairs (a full panel point apart), decided | 15/20 | 21/21 |
+| Judge verdicts, our render vs office: ours / office / tie | 31 / 6 / 5 | 6 / 33 / 3 |
+
+**Dimension agreement.** On pairs the panel separates on that dimension, each poster dimension agrees with the panel's matching score:
+- imagery 89/90;
+- impact 68/74;
+- composition 53/66;
+- brand fit 43/78. Brand fit still sides with our renders 53 times in 84 calls; the KAAE profile and the guideline rule pull it.
+
+**The gate.** It fired 8 times, every time on the broken office post d08 (a panel covering its title). The votes agreed every time.
+
+**Canary.** Three composed KAAE posters (navy, cream and band, English and Sorani) each beat their degraded canary 7-0 in both orders (`scripts/experiments/poster-vote-canary.ts`, `canary-poster-vote.json`). The judge would therefore not be marked unreliable on every pick.
+
+### A4. Reading it honestly, and the recommendation
+
+By the bar set for this change, agreement on our render vs an office post rose clearly above 50%: 88% decided, against 50%. Order flips fell and the canary still fails. So the poster vote is kept, not reverted.
+
+Three caveats stop this short of a calibrated judge:
+1. **Kappa did not improve** (0.22 vs 0.21 on round 1). The judge now decides 14 of the 15 panel ties, 13 of them for the office post.
+2. **It roughly matches a constant rule.** "The office post always wins" gets 21/27 of the round-1 decided pairs; the poster vote gets 22/27. Without the broken post d08, the constant rule gets 21/23 and the poster vote 18/23. The change removed a structural bias toward type and replaced it with the panel's group-level preference for a used photograph. It does not show fine discrimination between near-equal designs.
+3. **The selection that matters in production is not measured.** That selection is between our own candidates for one brief, all text-only or all photo. The frozen set holds only five such pairs, and they are gross.
+
+Two caveats from the first run still hold:
+- The ground truth is an AI panel that agrees with itself on 32 of 47 labels.
+- Human votes are the real test.
+
+**Next:**
+1. Rescore against the human votes when they arrive. The cache makes both runs free to replay.
+2. Build a frozen set of pairs within our own candidates, such as the poster variants for one brief, before relying on the round robin's pick between close designs.
+3. Keep `humanChoiceRecommended` on ties.
+4. Keep `HAWA_JUDGE_OFFICE_REFERENCE` off: it was not tested.

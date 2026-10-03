@@ -335,41 +335,6 @@ export function composeDeliveryFailedAlert(taskId: string, chatId: string | null
 }
 
 /**
- * The requester's notice when their workflow finished but Core, which records the outcome and
- * composes the usual message, did not answer (outcome-without-core.ts). It says only what the worker
- * knows, in plain words and the requester's language (ADR-145: no service names, no reference number;
- * the office's alert names the task). Plain text, no formatting.
- */
-export function composeOutcomeUnrecordedMessage(input: { taskId: string; title?: string | null; draftMade: boolean; officeAlerted: boolean;
-  lang?: RequesterLang }): string {
-  const lang = deliveryLang(input.title, input.lang);
-  const title = requesterDesignTitle(input.title) || say(LIFECYCLE_MESSAGES.yourDesign, lang);
-  return say(input.draftMade ? OUTCOME_MESSAGES.draftMadeNotSaved : OUTCOME_MESSAGES.couldNotFinish, lang, { title });
-}
-
-/** The office's alert for the same outcome. Plain text, no formatting. */
-export function composeOutcomeUnrecordedAlert(input: {
-  taskId: string;
-  status: string;
-  code?: string;
-  designId?: string;
-  requesterChat: string | null;
-  requesterTold: boolean;
-}): string {
-  return [
-    'Hawa alert: a design workflow finished while Core was not answering, so its outcome is not recorded on the task yet.',
-    `Task: ${input.taskId}`,
-    `Outcome: ${input.status}${input.code ? ` (${input.code})` : ''}`,
-    ...(input.designId ? [`Canva design: ${input.designId}`] : []),
-    `Requesting chat: ${input.requesterChat || 'unknown'}`,
-    input.requesterTold
-      ? 'The requester has been told that the office will follow up.'
-      : 'The requester has not been told.',
-    'The outcome is sent to Core again until Core takes it. Check the task in the Desk once Core is back.',
-  ].join('\n');
-}
-
-/**
  * The office's alert when Telegram did not confirm that an approved file or the delivery notice
  * reached the requester. It is not resent, so it cannot arrive twice; a person has to look. Plain
  * text, no formatting.

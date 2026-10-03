@@ -133,8 +133,9 @@ describe('CV-17: Lean Hawa Work Desk Architecture & Contract Tests', () => {
     expect(entry).toBeDefined();
 
     const jsStat = fs.statSync(path.join(deskDist, entry!));
-    // Size must be less than 500 KB (previously ~2,000 KB)
-    expect(jsStat.size).toBeLessThan(500 * 1024);
+    // Size must be at most 430 KB (previously ~2,000 KB; 497 KB before the task panels, the command
+    // palette, the tour and the SVG sanitizer were split out on first use, bug hunt 3).
+    expect(jsStat.size).toBeLessThanOrEqual(430 * 1024);
     expect(jsStat.size).toBeGreaterThan(100 * 1024);
 
     // No lazily loaded chunk may exceed the budget either.

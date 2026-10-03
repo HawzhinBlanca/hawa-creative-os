@@ -1,6 +1,8 @@
 import { DocumentIntakeError, prepareDocumentIntake } from '../services/client-documents.js';
 import { chaosPoint } from '@hawa/observability';
 import { ManualIntakeScopeError, prepareManualIntake } from '../services/manual-intake-scope.js';
+import { DeskRequestRefused, OFFICE_REQUEST_WORKFLOW, openDeskRequest } from '../services/office-desk-request.js';
+import { LifecycleProjectionConflict } from '../services/lifecycle-projection.js';
 import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
 import { log } from '../logging.js';
@@ -8,6 +10,7 @@ import crypto from 'node:crypto';
 import { type UUID, isTaskApiStatus, isTaskDbState, isSha256Hex, parseBlobRef, publicationAwareTaskStatus } from '@hawa/contracts';
 import { withRlsContext, IdempotencyConflictError, toDbTaskState, toApiTaskStatus, listTaskPage, decodeTaskCursor, dbStatesForApiStatuses, TASK_PAGE_DEFAULT_LIMIT, TASK_PAGE_MAX_LIMIT, sql, type Database, type TaskState } from '@hawa/db';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
+import { isValidUuid } from '../core-helpers.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
 import { canvaFontEvidence } from '../services/canva-font-evidence.js';
@@ -200,7 +203,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
         return c.json({ items, total: page.total, limit: page.limit, ...(cursor ? {} : { offset }), nextCursor: page.nextCursor });
       } catch (err: any) {
         log.error('[core:tasks:list] DB list query error:', err);
-        return problem(c, 500, 'Database Error', `Failed to query tasks from database: ${err.message}`);
+        return problem(c, 500, 'Database Error', 'The task list could not be read from the database; try again');
       }
     }
 
@@ -220,6 +223,43 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     const paginated = list.slice(offset, offset + limit);
     return c.json({ items: paginated, total, limit, offset, nextCursor: null });
   });
+
+  /**
+   * A Desk "New task" or reviewed-PDF request (ADR-287 and its addendum): opened on RequestLifecycle by
+   * services/office-desk-request.ts. The answer is the request's task, as the manual intake answered its
+   * own: 201 when it was opened now, 200 for the same request saved again under the same key.
+   */
+  async function createDeskRequest(c: any, auth: ReturnType<typeof verifyRequestAuth>, body: Record<string, unknown>) {
+    if (!db) return problem(c, 503, 'Database Unavailable', 'A Desk request needs PostgreSQL: it is opened on the request lifecycle.');
+    if (!auth.userId || auth.role === 'service' || auth.role === 'adapter')
+      return problem(c, 403, 'Office Member Required', 'A Desk request is made by a signed-in office member.');
+    const idempotencyKey = c.req.header('Idempotency-Key') || '';
+    try {
+      const opened = await openDeskRequest(db, blobStore, { tenantId: auth.tenantId || defaultTenantId, userId: auth.userId,
+        role: auth.role || 'operator' }, idempotencyKey, body);
+      const t = opened.task;
+      const iso = (value: unknown) => value instanceof Date ? value.toISOString() : String(value ?? new Date().toISOString());
+      const task = {
+        id: t.id, tenantId: t.tenant_id, clientId: t.client_id, projectId: t.project_id, requestId: opened.requestId,
+        status: toApiTaskStatus(t.state), state: t.state, priority: t.priority, title: t.title, description: t.description,
+        headlineEn: (typeof body.headlineEn === 'string' && body.headlineEn) || t.title, headlineCkb: body.headlineCkb || null,
+        copyEn: typeof body.copyEn === 'string' ? body.copyEn : '', copyCkb: typeof body.copyCkb === 'string' ? body.copyCkb : '',
+        sourcePlatform: 'hawa_desk', sourceEventId: t.id, sourceChannelId: 'hawa_desk', idempotencyKey,
+        clientScopeLocked: true, clientDnaVersion: opened.clientDnaVersion, version: Number(t.version),
+        createdAt: iso(t.created_at), updatedAt: iso(t.updated_at),
+      };
+      if (opened.created) broadcast('task:created', task);
+      return c.json(task, opened.created ? 201 : 200);
+    } catch (err: any) {
+      if (err instanceof DeskRequestRefused) return problem(c, err.status, 'Desk Request Refused', err.message);
+      if (err instanceof DocumentIntakeError) return problem(c, err.status, 'Document Request Refused', err.message);
+      if (err instanceof ManualIntakeScopeError) return problem(c, 403, 'Client Scope Unavailable', err.message);
+      if (err instanceof IdempotencyConflictError) return problem(c, 409, 'Idempotency Conflict', 'Idempotency conflict: key already used with differing payload');
+      if (err instanceof LifecycleProjectionConflict) return problem(c, 409, 'Request Not Opened', err.message);
+      log.error('[core:tasks:create] Desk request was not opened:', err);
+      return problem(c, 503, 'Durable Storage Unavailable', 'The request was not saved; retry it unchanged.');
+    }
+  }
 
   // Create Task
   registerRoute('post', '/tasks', async (c: any) => {
@@ -243,6 +283,9 @@ export function registerTasksRoutes(ctx: RouteContext): void {
         'Production task intake strictly requires connected PostgreSQL database storage'
       );
     }
+
+    // ADR-287: the Desk's "New task" opens a RequestLifecycle request, as a Telegram brief does.
+    if (body.workflow === OFFICE_REQUEST_WORKFLOW) return createDeskRequest(c, auth, body);
 
     const manualIntake = body.workflow === 'canva_manual';
     const documentIntake = body.sourceDocument !== undefined;
@@ -456,6 +499,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     }
     const taskId = c.req.param('taskId');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
+    // Postgres refuses a non-UUID id with a cast error, which was answered as "Database Unavailable".
+    if (taskRepo && db && !isValidUuid(taskId)) return problem(c, 404, 'Task Not Found', 'No task has that id');
 
     // With a database the task, its copy, preview, QC, approval, Canva design and delivery are all
     // read from Postgres. This process's copy of the task used to fill whatever Postgres lacked, so
@@ -764,6 +809,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
+    if (taskRepo && db && !isValidUuid(taskId)) return problem(c, 404, 'Task Not Found', 'No task has that id');
 
     if (taskRepo && db) {
       try {

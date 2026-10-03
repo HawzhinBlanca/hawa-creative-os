@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runCanvaDraft } from '../src/canva-draft-workflow.js';
-import type { WorkflowInput } from '../src/workflow.js';
+import type { WorkflowInput } from '../src/design-input.js';
 
 const input:WorkflowInput={taskId:'00000000-0000-4000-c000-000000000002',tenantId:'tenant',clientId:'client',
   rawText:'Synthetic held design',sourcePlatform:'telegram',idempotencyKey:'key',canvaAutoGenerate:true,designStudio:true};

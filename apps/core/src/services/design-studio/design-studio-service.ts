@@ -2,6 +2,7 @@ import { customerPhotoSelection } from '@hawa/creative';
 import { orderedCustomerPhotos } from '@hawa/contracts';
 import { StudioVisualInputsRepository, StudioVisualInputsError } from '@hawa/db';
 import { authorityPolicySha256, captureVisualInputs, restoreVisualInputs } from './visual-inputs.js';
+import { attachOfficeLibraryPhotos, restoreOfficeLibrarySelection } from './office-photo-library.js';
 import { captureRenderFontInputs, reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
 import { freshRoundIntent, StudioSubstepReplay, studioBindingText, studioSubstepKey, studioUsdMicros, type RecordedStudioAttempt, type StudioCallReservation } from '@hawa/domain';
 import { currentStudioSubstep, inStudioSubstep, substepBindsAuthority, substepBindsRenderer } from './substeps.js';
@@ -21,7 +22,6 @@ import {
   type Kysely,
   DesignStudioRepository,
   ClientRulesRepository,
-  formatClientRulesForPrompt,
   type DesignStudioStatus,
   type DesignStudioTier,
   type DesignStudioJudgeStatus,
@@ -61,6 +61,7 @@ export function packagedAdmittedDisplayFonts(reference: Record<string, any>): { 
   const arabic = names.filter((f: string) => fontFamilyScript(f) === 'arabic');
   return latin.length && arabic.length ? { latin, arabic } : undefined;
 }
+import { contextWithClientRules, listLearnedRulesInForceAt, mergeRulesByTime, readsPackagedReference } from '../rule-effect.js';
 import { briefPhotoFacts } from './art-direction.js';
 import { recordedPhotoSelection, studioCopyBlocks } from './design-quality.js';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
@@ -494,6 +495,16 @@ export class DesignStudioService {
       await new Promise((r) => setTimeout(r, Math.min(1000, Math.max(100, deadline - Date.now()))));
       row = (await read()) || row;
     }
+  }
+
+  /** A task made from a website (customer) request: owned by a customer account, or created by the web channel. */
+  private async isWebsiteTask(s: Scope, taskId: string): Promise<boolean> {
+    const row = await this.tx(s, async (db) => (await sql<{ customer: string | null; platform: string | null }>`SELECT t.customer_account_id AS customer,
+      (SELECT e.data->'payload'->>'sourcePlatform' FROM hawa.task_events e WHERE e.task_id=t.id AND e.tenant_id=t.tenant_id AND e.event_type='task.created'
+        ORDER BY e.aggregate_version LIMIT 1) AS platform
+      FROM hawa.tasks t WHERE t.tenant_id=${s.tenantId}::uuid AND t.id=${taskId}::uuid`.execute(db)).rows[0]);
+    if (!row) throw new Error('The task could not be read');
+    return Boolean(row.customer) || row.platform === 'hawzhin_web';
   }
 
   /** The image the brief reads as a reference: the latest one the request carries, or undefined. */
@@ -952,10 +963,12 @@ export class DesignStudioService {
   }
 
   /**
-   * Adds the office's standing rules for this client, said in chat or read from its guidelines.
-   * Every stage reads promotedRules in its system prompt, so they reach the brief, the layouts, the
-   * critique and the judge alike. A read failure stops the run: designing without rules the office
-   * set is the silent failure this replaced.
+   * Adds the office's standing rules for this client, said in chat or read from its guidelines, and
+   * for a packaged-reference client the rules governed learning promoted (ADR-291). The v2 stages
+   * read promotedRules in their system prompts; in v3 the brief, the layout model (when one is
+   * called) and the visual review read them, and the v3 judge does not (ADR-291 section 3). Only
+   * models read them: no code reads a rule's words. A read failure stops the run: designing without
+   * rules the office set is the silent failure this replaced.
    */
   private async withClientRules(s: Scope, ctx: StageContext, runStartedAt?: Date | string): Promise<StageContext> {
     // No database (a unit harness) means no rules to read; with one, a failed read stops the run.
@@ -963,17 +976,17 @@ export class DesignStudioService {
     // The rules as they stood when the run started: every stage re-read the current ones, so a rule
     // sent mid-run changed the critique and the judge but not the brief (audit 2026-09-27 #16).
     const startedAt = runStartedAt ? new Date(runStartedAt) : undefined;
-    const rules = await this.tx(s, (db) => {
+    const frozen = startedAt && !Number.isNaN(startedAt.getTime()) ? startedAt : undefined;
+    const rules = await this.tx(s, async (db) => {
       const repo = new ClientRulesRepository(db);
-      return startedAt && !Number.isNaN(startedAt.getTime())
-        ? repo.listInForceAt(s.tenantId, ctx.clientId, startedAt)
-        : repo.listActive(s.tenantId, ctx.clientId);
+      const standing = frozen ? await repo.listInForceAt(s.tenantId, ctx.clientId, frozen) : await repo.listActive(s.tenantId, ctx.clientId);
+      // ADR-291: governed learning promotes a rule into the DNA row, which a packaged reference
+      // (KAAE) never reads; a promoted KAAE rule reached no design. Its promotion record is read
+      // instead, as it stood when the run started. A DNA client already has it in its reference.
+      const learned = readsPackagedReference(ctx.referencePack) ? await listLearnedRulesInForceAt(db, s.tenantId, ctx.clientId, frozen) : [];
+      return mergeRulesByTime(standing, learned);
     });
-    const text = formatClientRulesForPrompt(rules);
-    if (!text) return ctx;
-    ctx.clientRules = text;
-    ctx.promotedRules = `${ctx.promotedRules}\n\n${text}`;
-    return ctx;
+    return contextWithClientRules(ctx, rules);
   }
 
   /**
@@ -1519,7 +1532,7 @@ export class DesignStudioService {
     // exception from them (the image re-brief's model call, a picture that would not decode) used
     // to leave the run at its stage for the worker to poll until it gave up on it as stuck.
     try {
-      if (pinnedVisualInputs) restoreVisualInputs(ctx, stages, pinnedVisualInputs);
+      if (pinnedVisualInputs) { restoreVisualInputs(ctx, stages, pinnedVisualInputs); restoreOfficeLibrarySelection(ctx, stages); }
       else {
         // An image the requester attached reaches the brief, which says what it is; a style reference
         // then reaches the layout generator, the critique and the judge. It was saved with every
@@ -1598,6 +1611,11 @@ export class DesignStudioService {
           ctx.photos=images.map((url,index)=>({...contentPhotoFromDataUrl(url),notes:rolesNow?.find(r=>r.index===index)?.notes ?? ''}));
         }
         ctx.photoSelection = ctx.webPhotoPolicy ? customerPhotoSelection(ctx.webPhotoPolicy,ctx.instructions,ctx.photos?.length ?? 0) : recordedPhotoSelection(stages.brief, ctx.photos?.length ?? 0); // ADR-157
+        // ADR-280: a request with no picture at all may get the office's own archive photos (flag, default off).
+        await attachOfficeLibraryPhotos(ctx, stages, { status: run.status, requesterImages: images.length, request: run.request,
+          websiteRequest: () => this.isWebsiteTask(s, run.task_id),
+          parentRecord: async (parentTaskId) => { const parent = await this.parentWinner(s, parentTaskId).catch(() => undefined);
+            return parent ? runStages((await this.repo.getRunById(parent.runId, s.tenantId).catch(() => undefined)) ?? {}).officePhotoLibrary : undefined; } });
 
         // People cut out of their photos (ADR-032), when the request, the brief's reading of the
         // reference, or the design being changed calls for them. They are made once, at the layout
@@ -2919,6 +2937,9 @@ export class DesignStudioService {
             receipt: order.receipt,
             // ADR-170: a photo brief's weighted totals, its art-direction checklist and the baseline named.
             ...(order.photoBrief ? { photoBrief: true, weights: order.weights, weightedVotesA: order.weightedVotesA, weightedVotesB: order.weightedVotesB } : {}),
+            // ADR-274 addendum: a poster client's vote: its weights, totals, legibility gate and any veto.
+            ...(order.posterVote ? { posterVote: true, weights: order.weights, weightedVotesA: order.weightedVotesA, weightedVotesB: order.weightedVotesB,
+              legibilityGate: order.legibilityGate, legibilityVeto: order.legibilityVeto ?? null } : {}),
             ...(order.artDirection ? { artDirection: order.artDirection } : {}),
             ...(order.baselineCandidateId !== undefined ? { baselineCandidateId: idFor(order.baselineCandidateId) ?? null } : {}),
           } as any,

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { runCanvaDraft } from '../src/canva-draft-workflow.js';
 import { runOwnedDesign, type DesignRunInput } from '../src/lifecycle/design-run.js';
 import { lifecycleDesignProofHeaders } from '../src/lifecycle/design-proof.js';
-import type { WorkflowInput } from '../src/workflow.js';
+import type { WorkflowInput } from '../src/design-input.js';
 
 /**
  * Core plans a bounded number of designs at a time and answers the others 429 PLANNING_BUSY with a

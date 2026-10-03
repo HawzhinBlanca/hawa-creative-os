@@ -4,6 +4,9 @@ import type { AuthContext, RouteContext } from './types.js';
 import { isValidUuid } from '../core-helpers.js';
 import { log } from '../logging.js';
 
+/** The longest reason a dead letter may be retired with (bug hunt 3). */
+export const MAX_RETIRE_REASON_CHARS = 1000;
+
 /**
  * A task's outbox commands, and what an operator may do with one that failed (architecture programme
  * 1.3, group G5, moved from app.ts): list, redrive, the dead letters and retire. The outbox is only
@@ -200,14 +203,24 @@ export function registerOutboxRoutes(ctx: RouteContext): void {
     const body = await c.req.json().catch(() => ({}));
     const reason = typeof body?.reason === 'string' ? body.reason.trim() : '';
     if (!reason) return problem(c, 422, 'Reason Required', 'Say why this command will never be delivered.');
+    // The reason is prepended to last_error, which the dead-letter list and health show (bug hunt 3).
+    if (reason.length > MAX_RETIRE_REASON_CHARS) {
+      return problem(c, 422, 'Reason Too Long', `Say why in at most ${MAX_RETIRE_REASON_CHARS} characters.`);
+    }
     if (!db || !outboxRepo || !isValidUuid(commandId)) return problem(c, 404, 'Command Not Found', `No outbox command ${commandId}`);
-    const result = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async (trx) => {
-      const cmd = await outboxRepo.findById(auth.tenantId, commandId, trx);
-      if (!cmd || cmd.aggregate_id !== taskId) return { status: 404 as const };
-      if (cmd.state !== 'failed') return { status: 409 as const, state: cmd.state };
-      const retired = await outboxRepo.retire(auth.tenantId, commandId, reason, String(auth.userId || auth.actorId || 'operator'), trx);
-      return retired ? { status: 200 as const, retired } : { status: 409 as const, state: 'changed' };
-    });
+    let result: { status: 404 } | { status: 409; state: string } | { status: 200; retired: any };
+    try {
+      result = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async (trx) => {
+        const cmd = await outboxRepo.findById(auth.tenantId, commandId, trx);
+        if (!cmd || cmd.aggregate_id !== taskId) return { status: 404 as const };
+        if (cmd.state !== 'failed') return { status: 409 as const, state: cmd.state };
+        const retired = await outboxRepo.retire(auth.tenantId, commandId, reason, String(auth.userId || auth.actorId || 'operator'), trx);
+        return retired ? { status: 200 as const, retired } : { status: 409 as const, state: 'changed' };
+      });
+    } catch (err) {
+      log.error('[core:outbox:retire] the command could not be retired:', err instanceof Error ? err.message : err);
+      return problem(c, 503, 'Database Unavailable', 'The command was not retired; try again');
+    }
     if (result.status === 404) return problem(c, 404, 'Command Not Found', `Outbox command ${commandId} was not found for task ${taskId}`);
     if (result.status === 409) {
       return problem(c, 409, 'Command Not Failed', `Command ${commandId} is in '${result.state}' state. Only failed commands can be retired.`);

@@ -9,11 +9,13 @@ import { type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
 import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml, neutralRequestTitle } from '@hawa/integrations';
 import { isWeakBriefLine } from './requester-turn.js';
+import { clientNamesFor, closingStart, copyBesideRequest, namesTheClientOnly, requestSpans, speaksToTheDesigner } from './request-copy-extraction.js';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
 import { autoDraftAllowedFor, clientPackOf, matchRequestClient, positiveClientWords } from './client-packs.js';
 import { defaultCanvasFor } from '@hawa/creative';
 import { isValidUuid, inlineTemplateCopyMissing } from '../core-helpers.js';
 import { requestTitle } from './request-title.js';
+import { isGreetingOnly } from './greetings.js';
 import { DEFAULT_TENANT_ID, DEFAULT_CLIENT_ID } from '../core-context.js';
 import type { CoreContext } from '../core-context.js';
 
@@ -32,6 +34,59 @@ export function createChatCampaignIntake(ctx: CoreContext): ChatCampaignIntake {
 }
 
 export { isCopyIntroducer };
+
+/**
+ * Hunt 3 (2026-10-03): the closing words of a laid-out brief that speak to the designer: a last paragraph ("Regards,
+ * Ahmed", "Don't forget the logo, and please send it to me by Thursday."), a last line ("Keep it simple."), or a
+ * last sentence ("… Family Mall. Thanks!"). They were printed as the design's copy (only remarks about attachments
+ * were known). Closing words to the event's audience ("Join us!") stay; the brief's first line always stays.
+ *
+ * Live 2026-10-03 (deploy 1e6881ac, canary chat): the sentence that asks for the design is never peeled. It
+ * speaks to the designer too, so "Hi! Could you make a poster for Peer Review Week on 20 October … ? Don't
+ * forget the logo. Thanks" lost its request sentence, event and all, and was titled and printed "Hi!". The
+ * request sentence stays for the copy extraction, which takes the request words and the greeting out of it.
+ *
+ * ADR-284 addendum (brief phrasing fuzz, classes 1 and 2): the closing at the end with the sender's name on the next
+ * line ("Best regards,⏎Ahmed"), "Many thanks!", a closing glued to the last line ("… 5 November Thanks"), and a last
+ * line that only says whom the design is for ("It's for KAAE.", "For KAAE please.", the client's full name) are
+ * peeled too. "Many thanks to our sponsors" and "For KAAE members" are the audience's words, and stay.
+ */
+export function peelClosingInstructions(text: string, clientNames: readonly string[] = []): { copy: string; remarks: string } {
+  let copy = text.trim();
+  const remarks: string[] = [];
+  const asksForTheDesign = (said: string) => requestSpans(said.replace(/\s*\n\s*/g, ' ')).length > 0;
+  const peel = (kept: string, said: string) => { remarks.unshift(said.trim()); copy = kept.trim(); };
+  for (let guard = 0; guard < 20; guard++) {
+    const closing = closingStart(copy);
+    if (closing < copy.trimEnd().length && copy.slice(0, closing).trim() && !asksForTheDesign(copy.slice(closing))) {
+      peel(copy.slice(0, closing), copy.slice(closing));
+      continue;
+    }
+    const paragraphs = copy.split(/\n\s*\n/);
+    if (paragraphs.length > 1 && speaksToTheDesigner(paragraphs.at(-1)!.replace(/\s*\n\s*/g, ' ')) && !asksForTheDesign(paragraphs.at(-1)!)) {
+      peel(paragraphs.slice(0, -1).join('\n\n'), paragraphs.at(-1)!);
+      continue;
+    }
+    const lines = copy.split('\n');
+    if (lines.length > 1 && lines.at(-1)!.trim() && speaksToTheDesigner(lines.at(-1)!) && !asksForTheDesign(lines.at(-1)!)) {
+      peel(lines.slice(0, -1).join('\n'), lines.at(-1)!);
+      continue;
+    }
+    if (lines.length > 1 && namesTheClientOnly(lines.at(-1)!, clientNames)) {
+      peel(lines.slice(0, -1).join('\n'), lines.at(-1)!);
+      continue;
+    }
+    const last = lines.at(-1)!;
+    const sentences = last.split(/(?<=[.!?؟])\s+(?=\S)/u);
+    if (sentences.length > 1 && (speaksToTheDesigner(sentences.at(-1)!) || namesTheClientOnly(sentences.at(-1)!, clientNames)) &&
+        !asksForTheDesign(sentences.at(-1)!)) {
+      peel([...lines.slice(0, -1), sentences.slice(0, -1).join(' ')].join('\n'), sentences.at(-1)!);
+      continue;
+    }
+    break;
+  }
+  return { copy, remarks: remarks.join('\n') };
+}
 
 /**
  * The first line that introduces the copy, with the instructions above it and the copy below it.
@@ -177,6 +232,14 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     // 3. Construct Brief with Strict Language Canon & Directive Separation
     let clientInstructions = '';
     let payloadText = rawText.trim();
+    // ADR-284 addendum (follow-up, 2026-10-03): a first line that is only a greeting ("Hello", Sorani "hello
+    // brother", "good morning", Arabic "peace be upon you") above the brief is not its headline. It was printed as
+    // the design's headline and named it, and it hid a request line under it from the openings below. It is kept
+    // with the instructions (nothing the requester wrote is lost); a greeting that is the whole message stays.
+    const greetingLine = /^([^\n]*)\n+/u.exec(payloadText);
+    const greeting = greetingLine && isGreetingOnly(greetingLine[1]) && payloadText.slice(greetingLine[0].length).trim()
+      ? greetingLine[1].trim() : '';
+    if (greeting) payloadText = payloadText.slice(greetingLine![0].length).trim();
 
     // Set when a line introduces the copy ("Here is the text and the photos:"): each line after it
     // is then one copy block, in the order written (see isCopyIntroducer, 2026-09-29).
@@ -209,18 +272,26 @@ function buildChatCampaignIntake(ctx: CoreContext) {
         // request that opened with "تکایە ..." kept that line as copy, and the instruction became
         // the headline of the design.
         const conversationalParagraph = payloadText.match(/^(?:i need|i want|we need|we want|please (?:create|make|design|prepare|do)|can you (?:design|make|create|prepare)|could you (?:design|make|create|prepare)|design request|here is|design an?|make an?|create an?|prepare an?|kindly (?:design|make|create|prepare)|تکایە|دیزاینێک|دیزاینێکم دەوێت|پۆستەرێک|دەمانەوێت|دەمەوێت|پێویستمان بە|بۆمان دروست بکە|دروست بکە|ئامادە بکە)(?![\p{L}\p{N}\p{M}_])[\s\S]*?(?=\n\s*\n)/iu);
-        if (conversationalParagraph && payloadText.length > conversationalParagraph[0].length + 20) {
+        // ADR-284 addendum (follow-up): below a greeting line the opening is read as it always was, except a request
+        // that carries the event's name ("Good morning everyone / Could you design a poster for our Annual
+        // Accreditation Conference?"): the greeting kept such a line for the copy reader, which keeps the name. Only a
+        // request that carries nothing to print (or only the client's name) is set aside as instructions.
+        const requestOnly = (said: string) => !greeting || copyBesideRequest(said.replace(/\s*\n\s*/g, ' '),
+          clientNamesFor(clientId, clientId === KAAE_CLIENT_ID ? 'KAAE' : null)).length === 0;
+        if (conversationalParagraph && payloadText.length > conversationalParagraph[0].length + 20 && requestOnly(conversationalParagraph[0])) {
           clientInstructions = conversationalParagraph[0].trim();
           payloadText = payloadText.slice(conversationalParagraph[0].length).trim();
         } else {
           const conversationalMatch = payloadText.match(/^(?:i need|i want|we need|we want|please (?:create|make|design|prepare|do)|can you (?:design|make|create|prepare)|could you (?:design|make|create|prepare)|design request|here is|design an?|make an?|create an?|prepare an?|kindly (?:design|make|create|prepare)|تکایە|دیزاینێک|دیزاینێکم دەوێت|پۆستەرێک|دەمانەوێت|دەمەوێت|پێویستمان بە|بۆمان دروست بکە|دروست بکە|ئامادە بکە)(?![\p{L}\p{N}\p{M}_])[^\n]*\n+/iu);
-          if (conversationalMatch && payloadText.length > conversationalMatch[0].length + 20) {
+          if (conversationalMatch && payloadText.length > conversationalMatch[0].length + 20 && requestOnly(conversationalMatch[0])) {
             clientInstructions = conversationalMatch[0].trim();
             payloadText = payloadText.slice(conversationalMatch[0].length).trim();
           }
         }
       }
     }
+
+    if (greeting) clientInstructions = [greeting, clientInstructions].filter(Boolean).join('\n');
 
     // "KAAE poster:" on a line of its own names the job; it is not the headline.
     if (!clientInstructions) {
@@ -243,6 +314,23 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     if (peeled.remarks) {
       payloadText = peeled.copy;
       clientInstructions = [clientInstructions, peeled.remarks].filter(Boolean).join('\n');
+    }
+    // "Keep it simple.", "Regards, Ahmed", "… Thanks!" closing a laid-out brief are said to the designer (hunt 3).
+    const closing = peelClosingInstructions(payloadText, clientNamesFor(clientId, clientId === KAAE_CLIENT_ID ? 'KAAE' : null));
+    if (closing.remarks) {
+      payloadText = closing.copy;
+      clientInstructions = [clientInstructions, closing.remarks].filter(Boolean).join('\n');
+    }
+
+    // ADR-284 addendum (brief phrasing fuzz, class 3): a list the requester typed, two or more lines opening with the
+    // same mark ("- ", "* ", "• "). The marks were printed and named the design ("KAAE: - Research Day"); each item
+    // is one copy line, in order, without its mark (as under a line that introduces the copy).
+    const listMark = (line: string) => /^\s*([-*•])\s+(?=\S)/u.exec(line)?.[1];
+    const marks = payloadText.split('\n').map(listMark).filter(Boolean);
+    const mark = marks.find((m) => marks.filter((x) => x === m).length >= 2);
+    if (mark) {
+      payloadText = payloadText.split('\n').map((line) => (listMark(line) === mark ? line.replace(/^\s*[-*•]\s+/u, '') : line)).join('\n');
+      copyIsIntroduced = true;
     }
 
     const payloadLines = payloadText.split('\n').map((l) => l.trim()).filter(Boolean);

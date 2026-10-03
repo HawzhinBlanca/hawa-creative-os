@@ -77,3 +77,23 @@ it('clears stale list and selected accounting evidence when refreshing fails',as
  expect(view.text()).toContain('Call costs unavailable');expect(view.text()).not.toContain('Original recorded cost');
  expect(view.container.querySelector('table')).toBeNull();await view.unmount();
 });
+
+it('ADR-289: shows spend by role and day, and an intake reading as a read-only charge',async()=>{
+  const intake={...detail,kind:'intake_router' as const,model:'gpt-4.1-mini',status:'response_received',costBasis:'usage',originalCostUsd:.000216,
+    reservedUsd:.01,accountedCostUsd:.000216,requiresCostEvidence:false,reader:'copy' as const,canRecord:false};
+  const role=(r:string,calls:number,usd:number,awaiting=0,held=0)=>({role:r,calls,accountedUsd:usd,awaitingEvidence:awaiting,heldUsd:held});
+  const summary={timezone:'Asia/Baghdad',from:'2026-09-20',to:'2026-10-03',calls:3,accountedUsd:.100216,
+    roles:[role('visual_judge',1,.1,1,.4),role('intake_router',1,.000216),role('voice_transcriber',1,0,1,.006)],
+    days:[{day:'2026-10-03',calls:3,accountedUsd:.100216,roles:[role('visual_judge',1,.1,1,.4),role('intake_router',1,.000216),role('voice_transcriber',1,0,1,.006)]}]};
+  const calls=stubCore(c=>json(c.path==='/v1/spending/summary'?summary:c.path==='/v1/spending/calls'?{items:[intake],nextCursor:null}:intake));
+  const view=await mount(React.createElement(CallCostAccountingPanel));await open(view);
+  expect(calls.some(c=>c.path==='/v1/spending/summary'&&c.search.get('days')==='14')).toBe(true);
+  const table=view.container.querySelector('[aria-label="Spend by role and day"]')!.textContent!;
+  expect(table).toContain('Reading requester messages');expect(table).toContain('$0.000216');
+  expect(table).toContain('Voice transcription');expect(table).toContain('$0.006000');
+  expect(table).toContain('2026-09-20 to 2026-10-03');
+  expect(view.text()).toContain('intake reading (copy) call');
+  expect(view.text()).toContain('takes no cost evidence');
+  expect(view.container.querySelector('form')).toBeNull();
+  await view.unmount();
+});

@@ -41,6 +41,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
         body: JSON.stringify({
           ...originalDna,
           name: updatedName,
+          expectedVersion: originalDna.version,
         }),
       });
       expect(updateRes.status).toBe(201);
@@ -73,6 +74,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
           ...originalDna,
           name: 'Drustee Anti-Spoofing Test',
           createdBy: forgedAuthor,
+          expectedVersion: originalDna.version,
         }),
       });
       expect(postRes.status).toBe(201);
@@ -150,6 +152,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
         body: JSON.stringify({
           ...originalDna,
           name: 'This Mutation Must Fail',
+          expectedVersion: originalDna.version,
         }),
       });
 

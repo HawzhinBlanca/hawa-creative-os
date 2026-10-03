@@ -69,7 +69,14 @@ HOST_ROLE_RC=0; HOST_ROLE="$(hawa_host_role)" || HOST_ROLE_RC=$?
 # 2. Never during a deploy: the rest runs under the deploy lock, or the night is skipped.
 if [[ "${HAWA_DEPLOY_LOCK_HELD:-}" != 1 ]]; then
   rc=0; python3 "$ROOT/infra/ops/deploy_lock.py" --wait 0 -- bash "${BASH_SOURCE[0]}" "$@" || rc=$?
-  [[ "$rc" != 75 ]] || skip "a deploy holds the deploy lock"
+  if [[ "$rc" == 75 ]]; then
+    # The nightly backup holds the same lock (ADR-240 addendum of 2026-10-03); one that started late
+    # (a sleeping Mac catching up) is named as such, not as a deploy.
+    case "$(python3 "$ROOT/infra/ops/deploy_lock.py" --holder 2>/dev/null || true)" in
+      *nightly_backup.sh*) skip "the nightly backup holds the deploy lock (it started late)" ;;
+      *) skip "a deploy holds the deploy lock" ;;
+    esac
+  fi
   exit "$rc"
 fi
 

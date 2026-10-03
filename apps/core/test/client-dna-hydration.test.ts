@@ -34,7 +34,7 @@ describe('client DNA survives a restart', () => {
     const first = createAppWithClientFixtures({ db });
     await (first as any).clientDnaHydrated;
     const current = await (await first.request(`/v1/clients/${kaaeId}/dna`, { headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` } })).json();
-    const edited = { ...current, destinations: { ...(current.destinations || {}), productionFolderId: folderId } };
+    const edited = { ...current, expectedVersion: current.version, destinations: { ...(current.destinations || {}), productionFolderId: folderId } };
     const saved = await first.request(`/v1/clients/${kaaeId}/dna`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}`, 'content-type': 'application/json' },

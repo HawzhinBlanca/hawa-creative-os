@@ -227,6 +227,10 @@ export function artGateMetricsV3(layout: StudioLayoutV2, renderOptions?: RenderL
 
 /**
  * Generates an art layer conditioned on the layout architecture with gpt-image-2.5-sunburst.
+ *
+ * ADR-289: a paid image call that writes no ledger row. Only scripts/generate-p04-proof.ts uses it;
+ * Studio art goes through gemini-image-provider.ts with Core's ledgered requestImage. The egress lint
+ * refuses a production caller.
  */
 export async function generateConditionedArtLayer(
   layout: StudioLayoutV2,
