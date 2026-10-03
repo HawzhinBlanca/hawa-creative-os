@@ -226,3 +226,7 @@ Still failing:
   - "fantastic, my boss is really happy with it"
 
 A model-first reader still has to beat round 3, not the tuned 99.3 %.
+
+## Model-first experiment (2026-10-03)
+
+`MODEL_FIRST_RESULTS.md` runs these cases through the production intake router, a model-first reader with the hard guards above, and a hybrid, using `scripts/experiments/nlu-model-first.ts`. None of them beats the rules on the gates above, so the recommendation is to keep the rules. The model-first reader on Sol does get 16 of 18 round-3 cases right, against 14 for the rules. The router production already has scores 344, against 349 without it, and starts a paid redo on redo-or-new words.

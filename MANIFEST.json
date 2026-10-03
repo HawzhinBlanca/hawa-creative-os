@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T06:29:31Z",
+  "generatedAt": "2026-10-03T09:38:41Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 920,
+  "fileCount": 922,
   "files": [
     {
       "path": ".dockerignore",
@@ -3098,9 +3098,14 @@
       "bytes": 50298
     },
     {
+      "path": "plans/nlu-eval-2026-10-02/MODEL_FIRST_RESULTS.md",
+      "sha256": "dccc6b6e4f4bf8f8b2a4baeb61f92da1cd52c4121805369f08401000701c7711",
+      "bytes": 23565
+    },
+    {
       "path": "plans/nlu-eval-2026-10-02/README.md",
-      "sha256": "d811e569e3193f48dddc37b38164ba0f635d33e6c05cfdcb0fb157670b529f53",
-      "bytes": 11938
+      "sha256": "bbcbdb38fcb5acd561de1218d2d870f6084fa2aab4b816b33f00b0afe0c83061",
+      "bytes": 12473
     },
     {
       "path": "plans/reliability-2026-09-30/LOCAL_PROOF.json",
@@ -3961,6 +3966,11 @@
       "path": "scripts/experiments/layout-reasoning-effort.ts",
       "sha256": "8ab730b959d123fd3851bf0798c9e5d3c978c27cd4106d744f1467fce0edac5f",
       "bytes": 7272
+    },
+    {
+      "path": "scripts/experiments/nlu-model-first.ts",
+      "sha256": "6a60ea13fd544168129dd7a6be8ef132c6a15764c8f4d40b0f45267cefd4f632",
+      "bytes": 39329
     },
     {
       "path": "scripts/experiments/prompt-cache-probe.ts",
