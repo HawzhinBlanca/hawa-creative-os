@@ -294,8 +294,15 @@ export function registerSearchRoutes(ctx: RouteContext): void {
 
     // A client named by its code is searched by its Postgres id, which is what the items carry.
     const clientId = requestedClientId ? state.aliases.get(requestedClientId) || requestedClientId : requestedClientId;
-    const limit = parseInt(c.req.query('limit') || '25', 10);
-    const offset = parseInt(c.req.query('offset') || '0', 10);
+    // Whole numbers only: limit=x reached the engine as NaN, and every hit was sliced away while the
+    // total still counted them.
+    const limitText = c.req.query('limit') ?? '25';
+    const offsetText = c.req.query('offset') ?? '0';
+    if (!/^\d{1,6}$/.test(limitText) || !/^\d{1,6}$/.test(offsetText) || Number(limitText) < 1 || Number(limitText) > 200) {
+      return problem(c, 400, 'Invalid Paging', 'limit is a whole number from 1 to 200; offset a whole number from 0');
+    }
+    const limit = Number(limitText);
+    const offset = Number(offsetText);
 
     const engine = buildSearchEngine(state);
     const searchRes = engine.search({

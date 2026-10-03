@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import { type UUID, isTaskApiStatus, isTaskDbState, isSha256Hex, parseBlobRef, publicationAwareTaskStatus } from '@hawa/contracts';
 import { withRlsContext, IdempotencyConflictError, toDbTaskState, toApiTaskStatus, listTaskPage, decodeTaskCursor, dbStatesForApiStatuses, TASK_PAGE_DEFAULT_LIMIT, TASK_PAGE_MAX_LIMIT, sql, type Database, type TaskState } from '@hawa/db';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
+import { isValidUuid } from '../core-helpers.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
 import { canvaFontEvidence } from '../services/canva-font-evidence.js';
@@ -456,6 +457,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     }
     const taskId = c.req.param('taskId');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
+    // Postgres refuses a non-UUID id with a cast error, which was answered as "Database Unavailable".
+    if (taskRepo && db && !isValidUuid(taskId)) return problem(c, 404, 'Task Not Found', 'No task has that id');
 
     // With a database the task, its copy, preview, QC, approval, Canva design and delivery are all
     // read from Postgres. This process's copy of the task used to fill whatever Postgres lacked, so
@@ -764,6 +767,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
+    if (taskRepo && db && !isValidUuid(taskId)) return problem(c, 404, 'Task Not Found', 'No task has that id');
 
     if (taskRepo && db) {
       try {
