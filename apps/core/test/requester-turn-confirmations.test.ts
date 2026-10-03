@@ -21,6 +21,8 @@ const NAWROZ = view('A', 'in_review', 'KAAE: Nawroz Poster');
 
 describe('friction 1: a cancel word with nothing named asks before it withdraws', () => {
   it.each(['never mind', 'ok never mind', 'stop', 'no need', 'no, stop', 'cancel', 'not needed', 'nvm',
+    // ADR-272: "forget it" is a dismissal like "never mind"; it names nothing for certain.
+    'forget it', 'forget about it', 'just forget it',
     // "stop" (Sorani)
     'ڕاوەستە',
     // "no need" (Sorani)
@@ -35,8 +37,8 @@ describe('friction 1: a cancel word with nothing named asks before it withdraws'
     expect(planTurn(input(words, [NAWROZ], { bound: ['A'] }))).toMatchObject({ kind: 'ask', intent: 'cancel' });
   });
 
-  it.each(['cancel it', 'cancel the poster', 'never mind, cancel it', "we don't need it anymore", 'stop it', 'forget it',
-    "it's not needed",
+  it.each(['cancel it', 'cancel the poster', 'never mind, cancel it', "we don't need it anymore", 'stop it', 'forget the poster',
+    "forget it, we don't need it anymore", "it's not needed",
     // "cancel it" (Sorani)
     'هەڵیبوەشێنەوە',
   ])('"%s" names the design, and withdraws the only one as before', (words) => {
