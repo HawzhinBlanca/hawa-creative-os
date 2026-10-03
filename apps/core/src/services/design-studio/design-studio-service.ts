@@ -2,6 +2,7 @@ import { customerPhotoSelection } from '@hawa/creative';
 import { orderedCustomerPhotos } from '@hawa/contracts';
 import { StudioVisualInputsRepository, StudioVisualInputsError } from '@hawa/db';
 import { authorityPolicySha256, captureVisualInputs, restoreVisualInputs } from './visual-inputs.js';
+import { attachOfficeLibraryPhotos, restoreOfficeLibrarySelection } from './office-photo-library.js';
 import { captureRenderFontInputs, reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
 import { freshRoundIntent, StudioSubstepReplay, studioBindingText, studioSubstepKey, studioUsdMicros, type RecordedStudioAttempt, type StudioCallReservation } from '@hawa/domain';
 import { currentStudioSubstep, inStudioSubstep, substepBindsAuthority, substepBindsRenderer } from './substeps.js';
@@ -1519,7 +1520,7 @@ export class DesignStudioService {
     // exception from them (the image re-brief's model call, a picture that would not decode) used
     // to leave the run at its stage for the worker to poll until it gave up on it as stuck.
     try {
-      if (pinnedVisualInputs) restoreVisualInputs(ctx, stages, pinnedVisualInputs);
+      if (pinnedVisualInputs) { restoreVisualInputs(ctx, stages, pinnedVisualInputs); restoreOfficeLibrarySelection(ctx, stages); }
       else {
         // An image the requester attached reaches the brief, which says what it is; a style reference
         // then reaches the layout generator, the critique and the judge. It was saved with every
@@ -1598,6 +1599,10 @@ export class DesignStudioService {
           ctx.photos=images.map((url,index)=>({...contentPhotoFromDataUrl(url),notes:rolesNow?.find(r=>r.index===index)?.notes ?? ''}));
         }
         ctx.photoSelection = ctx.webPhotoPolicy ? customerPhotoSelection(ctx.webPhotoPolicy,ctx.instructions,ctx.photos?.length ?? 0) : recordedPhotoSelection(stages.brief, ctx.photos?.length ?? 0); // ADR-157
+        // ADR-280: a request with no picture at all may get the office's own archive photos (flag, default off).
+        await attachOfficeLibraryPhotos(ctx, stages, { status: run.status, requesterImages: images.length, request: run.request,
+          parentRecord: async (parentTaskId) => { const parent = await this.parentWinner(s, parentTaskId).catch(() => undefined);
+            return parent ? runStages((await this.repo.getRunById(parent.runId, s.tenantId).catch(() => undefined)) ?? {}).officePhotoLibrary : undefined; } });
 
         // People cut out of their photos (ADR-032), when the request, the brief's reading of the
         // reference, or the design being changed calls for them. They are made once, at the layout

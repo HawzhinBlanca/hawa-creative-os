@@ -175,14 +175,18 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
     else if (cutCount > 0 && cutCount === placed) notes.push(`Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design, the people cut out of their backgrounds.`);
     else notes.push(`Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design.`);
   }
+  // ADR-280: photos from the office's own archive are said to be that, never "your photo", and the
+  // notes below that speak of the requester's photos (as you sent it, send a larger one) are not given.
+  const library = stages.officePhotoLibrary?.provenance === 'office_library' && stages.officePhotoLibrary.status === 'attached' && placed > 0;
+  if (library) notes.push(`The ${placed === 1 ? 'photo on this draft is' : 'photos on this draft are'} from the office photo archive, not ${placed === 1 ? 'one' : 'ones'} you sent.`);
   // A cut-out that failed its checks leaves its photo framed: the requester is told which, and why.
-  const cutouts: Array<{ photoIndex?: unknown; passed?: unknown; reason?: unknown } | null> = Array.isArray(stages.cutouts) ? stages.cutouts : [];
+  const cutouts: Array<{ photoIndex?: unknown; passed?: unknown; reason?: unknown } | null> = Array.isArray(stages.cutouts) && !library ? stages.cutouts : [];
   for (const o of cutouts) {
     if (!o || o.passed !== false || typeof o.photoIndex !== 'number') continue;
     if (shippedPhotos.some((p) => p?.photoIndex === o.photoIndex && p?.treatment === 'cutout')) continue;
     notes.push(`⚠️ Photo ${o.photoIndex + 1} could not be cut out cleanly (${plain(o.reason) || 'it did not pass the checks'}), so it is shown as you sent it.`);
   }
-  notes.push(...softPhotoNotes(shippedPhotos, stages.photoSizes));
+  if (!library) notes.push(...softPhotoNotes(shippedPhotos, stages.photoSizes));
   const roles: Array<{ role?: unknown; notes?: unknown } | null> = Array.isArray(stages.brief?.imageRoles) ? stages.brief.imageRoles : [];
   // ADR-171: individual reports preserve source order even when only a subset is placed.
   let contentIndex = 0;
