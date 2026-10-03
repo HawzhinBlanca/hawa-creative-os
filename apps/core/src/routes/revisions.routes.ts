@@ -54,6 +54,9 @@ const commentFromRow = (row: CommentRow) => ({
  * GET /tasks/:taskId/revisions/diff is registered before GET /tasks/:taskId/revisions/:revisionId,
  * which would otherwise take "diff" for a revision id.
  */
+const FEEDBACK_POLARITIES = ['positive', 'negative', 'neutral'] as const;
+const FEEDBACK_CATEGORIES = ['typography', 'color', 'layout', 'brand_voice', 'cultural', 'image_subject', 'other'] as const;
+
 export function registerRevisionsRoutes(ctx: RouteContext): void {
   const {
     registerRoute,
@@ -571,12 +574,25 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     const stored = await withRlsContext(db, scope, (trx) => taskRepo.findById(taskId, scope.tenantId, trx));
     if (!stored) return problem(c, 404, 'Task Not Found');
     if (!stored.client_id) return problem(c, 422, 'Client Required', 'Feedback is recorded against the task\'s client, and this task has none');
-    const revisionId = [body.revisionId, stored.current_design_revision_id].find((id) => isValidUuid(id)) ?? null;
-    const polarity = body.polarity || 'neutral';
-    const category = body.category || 'layout';
-    const rawFeedbackText = body.rawFeedbackText || body.comment || '';
-    // Who gave it is the signed-in caller; the body no longer names the user.
-    const attributedActor = { userId: auth.userId, displayName: body.displayName || auth.displayName || 'Operator' };
+    // hawa.feedback_events is what client learning reads, so only the feedback categories are taken: the
+    // learning-source categories (client_rule_instruction, design_refinement, ...) are written by their own
+    // services with their own evidence, never named by a caller here.
+    const polarity = body.polarity ?? 'neutral';
+    const category = body.category ?? 'layout';
+    const rawFeedbackText = body.rawFeedbackText ?? body.comment ?? '';
+    if (!(FEEDBACK_POLARITIES as readonly unknown[]).includes(polarity) || !(FEEDBACK_CATEGORIES as readonly unknown[]).includes(category) ||
+        typeof rawFeedbackText !== 'string' || rawFeedbackText.length > 4000) {
+      return problem(c, 422, 'Invalid Feedback', `polarity is one of ${FEEDBACK_POLARITIES.join(', ')}; category one of ${FEEDBACK_CATEGORIES.join(', ')}; the comment at most 4000 characters`);
+    }
+    // The revision named must be this task's (as for a review comment); otherwise the task's current one.
+    let revisionId: string | null = isValidUuid(stored.current_design_revision_id) ? stored.current_design_revision_id : null;
+    if (body.revisionId !== undefined && body.revisionId !== null) {
+      const found = isValidUuid(body.revisionId) ? (await readRevisions(auth, [body.revisionId])).get(body.revisionId) : undefined;
+      if (!found || found.taskId !== taskId) return problem(c, 404, 'Revision Not Found', 'That revision is not a revision of this task');
+      revisionId = body.revisionId;
+    }
+    // Who gave it is the signed-in caller; the body names neither the user nor their name.
+    const attributedActor = { userId: auth.userId, displayName: auth.displayName || 'Operator' };
 
     let row: Awaited<ReturnType<FeedbackRepository['recordFeedback']>>;
     try {
