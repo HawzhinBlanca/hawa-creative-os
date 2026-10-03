@@ -1036,8 +1036,10 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       if (schema === 'DesignCritiqueReport') return reply({ overallAssessment: 'Balanced and legible.', comments: [] });
       if (schema === 'PairwiseDimensionVerdict') {
         // A judge that only ever prefers the first position: every pair it sees is a discarded tie.
-        const dims = ['hierarchy', 'composition', 'typographic_craft', 'brand_fit', 'legibility'];
+        // It answers the five votes and, for a poster client, the poster vote and its gate.
+        const dims = ['hierarchy', 'composition', 'typographic_craft', 'brand_fit', 'legibility', 'impact', 'imagery'];
         return reply({
+          legibilityGate: { A: { illegible: false, reason: 'readable' }, B: { illegible: false, reason: 'readable' } },
           dimensions: Object.fromEntries(dims.map((d) => [d, { winner: 'A', rationale: 'position' }])),
           majorityWinner: 'A',
           summary: 'A',

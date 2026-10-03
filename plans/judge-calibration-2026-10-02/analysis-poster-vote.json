@@ -1,0 +1,419 @@
+{
+ "main_round1_frozenLabels": {
+  "pairs": 47,
+  "panelLabels": {
+   "tie": 15,
+   "a": 6,
+   "b": 26
+  },
+  "judgeVerdicts": {
+   "tie": 3,
+   "b": 38,
+   "a": 6
+  },
+  "decidedBoth": {
+   "pairs": 30,
+   "agree": 27,
+   "rate": 0.9
+  },
+  "panelDecided": {
+   "pairs": 32,
+   "judgeRight": 27,
+   "judgeTie": 2,
+   "judgeWrong": 3
+  },
+  "threeWay": {
+   "agree": 28,
+   "rate": 0.596
+  },
+  "kappa": 0.217
+ },
+ "round2Labels": {
+  "pairs": 47,
+  "panelLabels": {
+   "a": 13,
+   "b": 21,
+   "tie": 13
+  },
+  "judgeVerdicts": {
+   "tie": 3,
+   "b": 38,
+   "a": 6
+  },
+  "decidedBoth": {
+   "pairs": 31,
+   "agree": 24,
+   "rate": 0.774
+  },
+  "panelDecided": {
+   "pairs": 34,
+   "judgeRight": 24,
+   "judgeTie": 3,
+   "judgeWrong": 7
+  },
+  "threeWay": {
+   "agree": 24,
+   "rate": 0.511
+  },
+  "kappa": 0.165
+ },
+ "allSixPanelJudges": {
+  "pairs": 47,
+  "panelLabels": {
+   "tie": 14,
+   "a": 8,
+   "b": 25
+  },
+  "judgeVerdicts": {
+   "tie": 3,
+   "b": 38,
+   "a": 6
+  },
+  "decidedBoth": {
+   "pairs": 32,
+   "agree": 27,
+   "rate": 0.844
+  },
+  "panelDecided": {
+   "pairs": 33,
+   "judgeRight": 27,
+   "judgeTie": 1,
+   "judgeWrong": 5
+  },
+  "threeWay": {
+   "agree": 29,
+   "rate": 0.617
+  },
+  "kappa": 0.276
+ },
+ "byKind_round1": {
+  "document_page_vs_poster": {
+   "pairs": 5,
+   "panelLabels": {
+    "b": 5
+   },
+   "judgeVerdicts": {
+    "b": 5
+   },
+   "decidedBoth": {
+    "pairs": 5,
+    "agree": 5,
+    "rate": 1.0
+   },
+   "panelDecided": {
+    "pairs": 5,
+    "judgeRight": 5,
+    "judgeTie": 0,
+    "judgeWrong": 0
+   },
+   "threeWay": {
+    "agree": 5,
+    "rate": 1.0
+   },
+   "kappa": null
+  },
+  "ours_vs_office": {
+   "pairs": 42,
+   "panelLabels": {
+    "tie": 15,
+    "a": 6,
+    "b": 21
+   },
+   "judgeVerdicts": {
+    "tie": 3,
+    "b": 33,
+    "a": 6
+   },
+   "decidedBoth": {
+    "pairs": 25,
+    "agree": 22,
+    "rate": 0.88
+   },
+   "panelDecided": {
+    "pairs": 27,
+    "judgeRight": 22,
+    "judgeTie": 2,
+    "judgeWrong": 3
+   },
+   "threeWay": {
+    "agree": 23,
+    "rate": 0.548
+   },
+   "kappa": 0.194
+  }
+ },
+ "byKind_allSix": {
+  "document_page_vs_poster": {
+   "pairs": 5,
+   "panelLabels": {
+    "b": 5
+   },
+   "judgeVerdicts": {
+    "b": 5
+   },
+   "decidedBoth": {
+    "pairs": 5,
+    "agree": 5,
+    "rate": 1.0
+   },
+   "panelDecided": {
+    "pairs": 5,
+    "judgeRight": 5,
+    "judgeTie": 0,
+    "judgeWrong": 0
+   },
+   "threeWay": {
+    "agree": 5,
+    "rate": 1.0
+   },
+   "kappa": null
+  },
+  "ours_vs_office": {
+   "pairs": 42,
+   "panelLabels": {
+    "tie": 14,
+    "a": 8,
+    "b": 20
+   },
+   "judgeVerdicts": {
+    "tie": 3,
+    "b": 33,
+    "a": 6
+   },
+   "decidedBoth": {
+    "pairs": 27,
+    "agree": 22,
+    "rate": 0.815
+   },
+   "panelDecided": {
+    "pairs": 28,
+    "judgeRight": 22,
+    "judgeTie": 1,
+    "judgeWrong": 5
+   },
+   "threeWay": {
+    "agree": 24,
+    "rate": 0.571
+   },
+   "kappa": 0.254
+  }
+ },
+ "position": {
+  "pairs": 47,
+  "flips": 3,
+  "flipRate": 0.064,
+  "calls": 94,
+  "firstShownWins": 48,
+  "firstShownWinRate": 0.511
+ },
+ "positionByKind": {
+  "document_page_vs_poster": {
+   "pairs": 5,
+   "flips": 0,
+   "flipRate": 0.0,
+   "calls": 10,
+   "firstShownWins": 5,
+   "firstShownWinRate": 0.5
+  },
+  "ours_vs_office": {
+   "pairs": 42,
+   "flips": 3,
+   "flipRate": 0.071,
+   "calls": 84,
+   "firstShownWins": 43,
+   "firstShownWinRate": 0.512
+  }
+ },
+ "panelRound1VsRound2": {
+  "sameLabel": 32,
+  "pairs": 47,
+  "kappa": 0.493,
+  "decidedBothSame": 25,
+  "decidedBoth": 26,
+  "opposite": 1
+ },
+ "clearPairs_allSix_1pt": {
+  "pairs": 22,
+  "panelLabels": {
+   "a": 4,
+   "b": 18
+  },
+  "judgeVerdicts": {
+   "a": 4,
+   "b": 17,
+   "tie": 1
+  },
+  "decidedBoth": {
+   "pairs": 21,
+   "agree": 21,
+   "rate": 1.0
+  },
+  "panelDecided": {
+   "pairs": 22,
+   "judgeRight": 21,
+   "judgeTie": 1,
+   "judgeWrong": 0
+  },
+  "threeWay": {
+   "agree": 21,
+   "rate": 0.955
+  },
+  "kappa": 0.864
+ },
+ "oursVsOffice": {
+  "pairs": 42,
+  "judgeVerdict": {
+   "tie": 3,
+   "office": 33,
+   "ours": 6
+  },
+  "panelRound1": {
+   "tie": 15,
+   "ours": 6,
+   "office": 21
+  },
+  "panelAllSix": {
+   "tie": 14,
+   "ours": 8,
+   "office": 20
+  },
+  "callsOursWins": 15,
+  "calls": 84
+ },
+ "perOfficePost": {
+  "d01": {
+   "file": "photo03_why_accreditation_card_en.jpg",
+   "panelRound1": 6,
+   "panelAllSix": 6,
+   "officeWins": 3,
+   "oursWins": 0,
+   "ties": 1
+  },
+  "d02": {
+   "file": "photo06_global_partnership_plate_ckb.jpg",
+   "panelRound1": 6,
+   "panelAllSix": 6,
+   "officeWins": 4,
+   "oursWins": 0,
+   "ties": 0
+  },
+  "d08": {
+   "file": "KAAE_Standards_Higher_Ed_1080x1350.png",
+   "panelRound1": 1.67,
+   "panelAllSix": 1.83,
+   "officeWins": 0,
+   "oursWins": 4,
+   "ties": 0
+  },
+  "d09": {
+   "file": "photo05_global_partnership_plate_en.jpg",
+   "panelRound1": 6,
+   "panelAllSix": 6,
+   "officeWins": 4,
+   "oursWins": 0,
+   "ties": 0
+  },
+  "d11": {
+   "file": "photo11_peer_evaluators_call_en.jpg",
+   "panelRound1": 6.67,
+   "panelAllSix": 6.33,
+   "officeWins": 4,
+   "oursWins": 0,
+   "ties": 0
+  },
+  "d15": {
+   "file": "photo04_why_accreditation_card_ckb.jpg",
+   "panelRound1": 6,
+   "panelAllSix": 5.83,
+   "officeWins": 4,
+   "oursWins": 0,
+   "ties": 0
+  },
+  "d19": {
+   "file": "photo01_k12_field_visit_report_en.jpg",
+   "panelRound1": 5.33,
+   "panelAllSix": 5.67,
+   "officeWins": 3,
+   "oursWins": 0,
+   "ties": 0
+  },
+  "d21": {
+   "file": "post2_standards_higher_ed.png",
+   "panelRound1": 5.67,
+   "panelAllSix": 5.67,
+   "officeWins": 0,
+   "oursWins": 2,
+   "ties": 1
+  },
+  "d25": {
+   "file": "KAAE_Commences_2026_Cycle_1080x1350.png",
+   "panelRound1": 5.67,
+   "panelAllSix": 5.33,
+   "officeWins": 3,
+   "oursWins": 0,
+   "ties": 0
+  },
+  "d26": {
+   "file": "photo02_k12_field_visit_report_ckb.jpg",
+   "panelRound1": 5.33,
+   "panelAllSix": 5.33,
+   "officeWins": 3,
+   "oursWins": 0,
+   "ties": 0
+  },
+  "d30": {
+   "file": "photo12_peer_evaluators_call_ckb.jpg",
+   "panelRound1": 6.33,
+   "panelAllSix": 5.67,
+   "officeWins": 2,
+   "oursWins": 0,
+   "ties": 1
+  },
+  "d31": {
+   "file": "photo09_eid_al_adha_sky_title.jpg",
+   "panelRound1": 6.33,
+   "panelAllSix": 6.33,
+   "officeWins": 3,
+   "oursWins": 0,
+   "ties": 0
+  }
+ },
+ "dimensionVsPanelDimension_allSix": {
+  "impact": {
+   "panelDimension": "impact",
+   "calls": 74,
+   "agree": 68,
+   "rate": 0.919
+  },
+  "imagery": {
+   "panelDimension": "imagery",
+   "calls": 90,
+   "agree": 89,
+   "rate": 0.989
+  },
+  "composition": {
+   "panelDimension": "composition",
+   "calls": 66,
+   "agree": 53,
+   "rate": 0.803
+  },
+  "brand_fit": {
+   "panelDimension": "brand_polish",
+   "calls": 78,
+   "agree": 43,
+   "rate": 0.551
+  }
+ },
+ "cost": {
+  "spentUsd": 1.005,
+  "paidCalls": 88,
+  "cachedCalls": 6
+ },
+ "oursVsOfficeByDimension": {
+  "impact": 28,
+  "imagery": 12,
+  "composition": 14,
+  "brand_fit": 53
+ },
+ "legibilityVetoes": 8
+}

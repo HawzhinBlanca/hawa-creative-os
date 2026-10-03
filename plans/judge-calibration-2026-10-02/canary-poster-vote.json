@@ -1,0 +1,208 @@
+{
+  "model": "gpt-6.1-sol",
+  "approval": "owner 2026-10-03: poster-vote recalibration within the remaining cap (total <= US$2.50)",
+  "ranAt": "2026-10-03T10:18:32.368Z",
+  "spentUsd": 0.0921,
+  "passed": 3,
+  "pairs": 3,
+  "rows": [
+    {
+      "brief": "workshop",
+      "variant": "navy",
+      "canaryPassed": true,
+      "winnerId": "chosen",
+      "orderAB": {
+        "candidateA": "chosen",
+        "winner": "chosen",
+        "votes": {
+          "impact": "A",
+          "imagery": "A",
+          "composition": "A",
+          "brand_fit": "A"
+        },
+        "weighted": [
+          7,
+          0
+        ],
+        "legibilityGate": {
+          "A": {
+            "illegible": false,
+            "reason": "The title, audience, date, time, venue and registration message are readable against solid or gradient grounds."
+          },
+          "B": {
+            "illegible": false,
+            "reason": "The logo intrudes into the title area, but the title remains decipherable; all essential event details and the registration message are readable."
+          }
+        },
+        "legibilityVeto": null,
+        "responseId": "chatcmpl-EUr5qqwYjEiYdQOe8Ed7oa6tO6C1M",
+        "costUsd": 0.015364
+      },
+      "orderBA": {
+        "candidateA": "degraded_canary",
+        "winner": "chosen",
+        "votes": {
+          "impact": "B",
+          "imagery": "B",
+          "composition": "B",
+          "brand_fit": "B"
+        },
+        "weighted": [
+          0,
+          7
+        ],
+        "legibilityGate": {
+          "A": {
+            "illegible": false,
+            "reason": "The title, date, time, venue and registration message are readable at full size. The logo intrudes into the title area, but does not prevent reading the essential copy."
+          },
+          "B": {
+            "illegible": false,
+            "reason": "All essential copy is readable at full size, with strong contrast on the navy gradient and gold registration tab."
+          }
+        },
+        "legibilityVeto": null,
+        "responseId": "chatcmpl-EUr62aSVuNCVaBXPMm6uEWwouExSa",
+        "costUsd": 0.015224
+      },
+      "rationalesAB": {
+        "impact": "At feed size, A's expansive title forms a dominant central moment and leads directly into the event information. B concentrates its headline at the top and leaves a large inactive gap before the details, weakening that progression.",
+        "imagery": "Neither offers a subject-specific image or visual idea beyond the institutional logo and decorative sunburst. A wins narrowly through the cleaner presentation of that shared brand graphic: the seal stands independently rather than colliding with the headline as in B.",
+        "composition": "A uses a consistent left alignment and a substantial title block to connect the header, gold accent and lower information stack. B's headline departs from the lower stack's margin, crowds the logo and leaves a disconnected expanse in the middle.",
+        "brand_fit": "Both use the permitted navy-gradient announcement treatment, institutional logo and confident capitalised sans title. A better supports KAAE's authoritative hierarchy by giving the seal its own space and maintaining a deliberate alignment. Both are less restrained than the rulebook in their extensive gold audience text and registration pill."
+      }
+    },
+    {
+      "brief": "peer call",
+      "variant": "cream",
+      "canaryPassed": true,
+      "winnerId": "chosen",
+      "orderAB": {
+        "candidateA": "chosen",
+        "winner": "chosen",
+        "votes": {
+          "impact": "A",
+          "imagery": "A",
+          "composition": "A",
+          "brand_fit": "A"
+        },
+        "weighted": [
+          7,
+          0
+        ],
+        "legibilityGate": {
+          "A": {
+            "illegible": false,
+            "reason": "The call for peer evaluators and education-sector qualifier are readable at full size, with strong contrast and no clipping or overlap."
+          },
+          "B": {
+            "illegible": false,
+            "reason": "The essential copy remains readable at full size. The title's narrow left margin does not cut off its letters."
+          }
+        },
+        "legibilityVeto": null,
+        "responseId": "chatcmpl-EUr6ED0Gf428CEgW6JMUp4VPs7P9s",
+        "costUsd": 0.015454
+      },
+      "orderBA": {
+        "candidateA": "degraded_canary",
+        "winner": "chosen",
+        "votes": {
+          "impact": "B",
+          "imagery": "B",
+          "composition": "B",
+          "brand_fit": "B"
+        },
+        "weighted": [
+          0,
+          7
+        ],
+        "legibilityGate": {
+          "A": {
+            "illegible": false,
+            "reason": "The recruitment title and education-sector line are readable at full size, with strong contrast and no clipping or overlap."
+          },
+          "B": {
+            "illegible": false,
+            "reason": "The recruitment title and education-sector line are readable at full size on solid backgrounds, without clipping or overlap."
+          }
+        },
+        "legibilityVeto": null,
+        "responseId": "chatcmpl-EUr6PBOGXIs8bAyg3YGTsUwIt5YUP",
+        "costUsd": 0.015174
+      },
+      "rationalesAB": {
+        "impact": "A's substantial three-line title creates a dominant central moment at thumbnail size, followed by the navy sector band. B concentrates its headline near the top and leaves a large inactive middle, weakening its feed presence.",
+        "imagery": "Neither candidate offers a subject-specific photograph or illustration; both rely on the same logo and decorative sun motif. A has the slight advantage in graphic treatment because its gold stroke connects directly to the headline, whereas B leaves that stroke isolated in empty space. Neither establishes a strong visual idea.",
+        "composition": "A aligns the headline, gold accent and lower-band copy on a shared left axis and uses the middle of the canvas purposefully. B's headline departs from that axis, crowds the left edge and separates from its accent across a broad empty field.",
+        "brand_fit": "Both retain KAAE's logo, light ground, navy and gold, and heavy capitalised display type. A better expresses the client's confident institutional hierarchy and places the gold accent beneath the title; B's detached accent and top-heavy arrangement feel less deliberate. Both use gold sector copy on navy more extensively than the restrained rulebook suggests."
+      }
+    },
+    {
+      "brief": "Sorani workshop",
+      "variant": "band",
+      "canaryPassed": true,
+      "winnerId": "chosen",
+      "orderAB": {
+        "candidateA": "chosen",
+        "winner": "chosen",
+        "votes": {
+          "impact": "A",
+          "imagery": "A",
+          "composition": "A",
+          "brand_fit": "A"
+        },
+        "weighted": [
+          7,
+          0
+        ],
+        "legibilityGate": {
+          "A": {
+            "illegible": false,
+            "reason": "The complete title, date, venue and registration call to action are readable on solid backgrounds."
+          },
+          "B": {
+            "illegible": true,
+            "reason": "The essential title is incomplete: only a single word remains at the top of the navy band, with the workshop identification missing."
+          }
+        },
+        "legibilityVeto": "B",
+        "responseId": "chatcmpl-EUr6eJTc2NUlTweHljEqJB6athj1m",
+        "costUsd": 0.015054
+      },
+      "orderBA": {
+        "candidateA": "degraded_canary",
+        "winner": "chosen",
+        "votes": {
+          "impact": "B",
+          "imagery": "B",
+          "composition": "B",
+          "brand_fit": "B"
+        },
+        "weighted": [
+          0,
+          7
+        ],
+        "legibilityGate": {
+          "A": {
+            "illegible": true,
+            "reason": "The essential title is truncated: only the final title fragment appears at the top of the navy band, rather than the complete workshop heading. The date, venue and call to action remain readable."
+          },
+          "B": {
+            "illegible": false,
+            "reason": "The complete title, date, venue and call to action are readable at full size, with solid backgrounds and adequate contrast."
+          }
+        },
+        "legibilityVeto": "A",
+        "responseId": "chatcmpl-EUr6qVP3d8sf9V5ELdXsmj7mbfpZt",
+        "costUsd": 0.015844
+      },
+      "rationalesAB": {
+        "impact": "A's substantial two-line title creates a dominant visual moment at thumbnail size, followed by the information card and gold button. B's mostly vacant navy band dissipates that focal energy.",
+        "imagery": "Neither candidate offers subject-specific photography or illustration; both share the same logo and generic corner ornament. A wins narrowly because its integrated typographic centerpiece gives the announcement a stronger graphic idea, whereas B leaves essentially an unactivated gradient.",
+        "composition": "A balances the upper logo area, substantial title block and lower information card into a deliberate poster hierarchy. B concentrates a small title fragment at the upper edge of an otherwise empty band, breaking the canvas's balance and focal structure.",
+        "brand_fit": "Both retain KAAE's light ground, blue-and-gold palette, logo and foot rule. A better expresses the client's authoritative announcement style through a confident display treatment and right-aligned Sorani title with a gold accent beneath its right end."
+      }
+    }
+  ]
+}

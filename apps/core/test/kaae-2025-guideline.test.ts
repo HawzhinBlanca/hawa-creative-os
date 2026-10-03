@@ -23,7 +23,8 @@ import {
   PNG,
   logoClearZone,
   negativeSpaceOf,
-  POSTER_IMPACT_CRITERIA,
+  POSTER_DIMENSION_CRITERIA,
+  POSTER_JUDGE_DIMENSIONS,
   type StudioLayoutV2,
 } from '@hawa/creative';
 import { kaaeClientDNA } from '@hawa/domain';
@@ -424,8 +425,14 @@ describe('ADR-238 proofs: the guideline\'s pages through the real stage, render 
 
 describe('ADR-271: the judge decides between the compositions; the guideline prior only breaks a tie', () => {
   /** Five votes, `votesA` of them to the design shown as A. */
+  // KAAE is judged on the poster vote (ADR-274 addendum): A wins impact, imagery and composition
+  // when it would have won three of five, both legible.
   const verdict = (votesA: number) => ({
-    dimensions: Object.fromEntries(JUDGE_DIMENSIONS.map((d, i) => [d, { winner: i < votesA ? 'A' : 'B', rationale: 'r' }])),
+    legibilityGate: { A: { illegible: false, reason: 'r' }, B: { illegible: false, reason: 'r' } },
+    dimensions: {
+      ...Object.fromEntries(JUDGE_DIMENSIONS.map((d, i) => [d, { winner: i < votesA ? 'A' : 'B', rationale: 'r' }])),
+      ...Object.fromEntries(POSTER_JUDGE_DIMENSIONS.map((d) => [d, { winner: votesA >= 3 ? 'A' : 'B', rationale: 'r' }])),
+    },
     majorityWinner: votesA >= 3 ? 'A' : 'B', summary: 's',
   });
 
@@ -453,8 +460,8 @@ describe('ADR-271: the judge decides between the compositions; the guideline pri
     expect(requests).toHaveLength(8);
     const system = requests[0].messages[0].content as string;
     expect(system).toContain(JSON.stringify(guidelineFidelityRule(GRAMMAR)));
-    expect(system).toContain(POSTER_IMPACT_CRITERIA.hierarchy.trim());
-    expect(system).toContain(POSTER_IMPACT_CRITERIA.composition.trim());
+    expect(system).toContain(POSTER_DIMENSION_CRITERIA.impact);
+    expect(system).toContain(POSTER_DIMENSION_CRITERIA.imagery);
     expect(system).not.toMatch(/You must take them into account/);
     // The office reference is off by default: two images a call.
     expect(requests.every((r) => r.messages[1].content.filter((p: any) => p.type === 'image_url').length === 2)).toBe(true);

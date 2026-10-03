@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  callCacheKey,
   calibrationPlan,
+  DEFAULT_MAX_USD,
+  mayDispatch,
   JUDGE_CALL_USD,
   panelLabel,
   summarizeCalibration,
@@ -83,5 +86,24 @@ describe('agreement with the panel', () => {
     expect(s.costUsd).toBeCloseTo(0.15, 6);
     expect(s.kappa).not.toBeNull();
     expect(summarizeCalibration([]).decided.rate).toBeNull();
+  });
+});
+
+describe('the paid run\'s cap and cache', () => {
+  it('stops before a call that could take the run past the cap', () => {
+    expect(DEFAULT_MAX_USD).toBe(2.5);
+    expect(mayDispatch(0, 0, 2.5)).toBe(true);
+    expect(mayDispatch(2.48, 0.02, 2.5)).toBe(false);
+    // The reserve follows the dearest call seen.
+    expect(mayDispatch(2.3, 0.1, 2.5)).toBe(true);
+    expect(mayDispatch(2.36, 0.1, 2.5)).toBe(false);
+  });
+
+  it('keys a call by its exact request, so only an identical request is free', () => {
+    const base = { model: 'gpt-6.1-sol', system: 's', text: 't', images: ['data:a', 'data:b'], detail: 'high', maxTokens: 6000 };
+    expect(callCacheKey(base)).toBe(callCacheKey({ ...base }));
+    expect(callCacheKey(base)).not.toBe(callCacheKey({ ...base, images: ['data:b', 'data:a'] }));
+    expect(callCacheKey(base)).not.toBe(callCacheKey({ ...base, system: 's2' }));
+    expect(callCacheKey(base)).not.toBe(callCacheKey({ ...base, model: 'gpt-4.1-mini' }));
   });
 });

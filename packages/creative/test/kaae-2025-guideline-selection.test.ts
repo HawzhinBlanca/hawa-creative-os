@@ -4,7 +4,7 @@ import { validateLayoutV2, type LayoutValidationContext } from '../src/studio/va
 import { logoRuleDefects, studioReferenceFromRaw } from '../src/studio/hard-qa.js';
 import { guidelinePrior, judgeClearMargin, GUIDELINE_CLEAR_MARGIN } from '../src/studio/art-direction/prior.js';
 import { measureDesignV3, selectWinnerV3, type RankedCandidateV3 } from '../src/studio/pipeline-v3.js';
-import { JUDGE_DIMENSIONS, MAX_JUDGE_HOUSE_RULE_CHARS, buildPairwiseJudgeSystemPrompt } from '../src/studio/pairwise-judge-v3.js';
+import { JUDGE_DIMENSIONS, MAX_JUDGE_HOUSE_RULE_CHARS, POSTER_JUDGE_DIMENSIONS, buildPairwiseJudgeSystemPrompt } from '../src/studio/pairwise-judge-v3.js';
 import { reviewCandidateVisuallyV3 } from '../src/studio/visual-review-v3.js';
 import { renderLayoutV2 } from '../src/studio/render-layout-v2.js';
 import { composeGrammarLayout, guidelineDeviations, guidelineFidelityRule, pageGrammarFromRaw } from '../src/studio/page-grammar.js';
@@ -219,10 +219,22 @@ describe('selection: the judge decides; a composed guideline design wins a tie (
 describe('ADR-274: a poster client\'s judge sees every composed poster, and no composed default', () => {
   const passedQa = { passed: true, defectCodes: [], messages: [], findings: [] } as any;
   const receipt = { model: 'gpt-4.1-mini', responseId: 'r', xRequestId: null, inputTokens: 1, outputTokens: 1, costUsd: 0.0171, latencyMs: 1 };
-  const verdict = (votesA: number) => ({
-    dimensions: Object.fromEntries(JUDGE_DIMENSIONS.map((d, i) => [d, { winner: i < votesA ? 'A' : 'B', rationale: 'r' }])),
-    majorityWinner: votesA >= 3 ? 'A' : 'B', summary: 's',
-  });
+  /**
+   * `votesA` of the five typographic votes for A. A poster client is judged on the poster vote
+   * (ADR-274 addendum): the same reply carries it, A winning impact, imagery and composition when it
+   * would have won three of five, and both candidates legible.
+   */
+  const verdict = (votesA: number) => {
+    const posterWinner = votesA >= 3 ? 'A' : 'B';
+    return {
+      legibilityGate: { A: { illegible: false, reason: 'r' }, B: { illegible: false, reason: 'r' } },
+      dimensions: {
+        ...Object.fromEntries(JUDGE_DIMENSIONS.map((d, i) => [d, { winner: i < votesA ? 'A' : 'B', rationale: 'r' }])),
+        ...Object.fromEntries(POSTER_JUDGE_DIMENSIONS.map((d) => [d, { winner: posterWinner, rationale: 'r' }])),
+      },
+      majorityWinner: posterWinner, summary: 's',
+    };
+  };
   /** A judge answering, in call order, with these votes for the design shown as A. */
   const scripted = (votes: number[]) => {
     const create = vi.fn();
