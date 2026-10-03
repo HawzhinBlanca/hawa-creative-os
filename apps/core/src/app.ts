@@ -1013,7 +1013,7 @@ export function createApp(options?: CreateAppOptions) {
     if (!db || officeAccess.mode === 'trusted_office')
       throw new Error('Customer API requires durable storage and required office authentication');
     registerCustomerRoutes(app, new CustomerRequests(db, DEFAULT_TENANT_ID, canvaConnectService ?? undefined),
-      createWorkspaceMemberVerifier(options.customerApi), false); // ADR260: full customer journey admission remains pending.
+      createWorkspaceMemberVerifier(options.customerApi), options.customerApi.generationEnabled === true); // ADR278: explicit startup opt-in; default/public rollout stays off pending admission.
   }
   registerCustomerAdminRoutes(routeContext);
   registerSystemRoutes(routeContext);

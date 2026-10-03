@@ -14,7 +14,13 @@ import type { CreateAppOptions } from './core-helpers.js';
  * polls (ADR-129, Phase 4 operations finding 3).
  */
 export function productionAppOptions(env: Record<string, string | undefined> = process.env): CreateAppOptions {
+  for (const [name, label] of [['HAWA_CUSTOMER_API_ENABLED', 'customer API'], ['HAWA_CUSTOMER_GENERATION_ENABLED', 'customer generation']] as const) {
+    if (env[name] !== undefined && env[name] !== '' && !['on', 'off'].includes(env[name]!))
+      throw new Error(`Invalid ${label} switch; use on or off`);
+  }
   const customerEnabled = env.HAWA_CUSTOMER_API_ENABLED === 'on';
+  if (env.HAWA_CUSTOMER_GENERATION_ENABLED === 'on' && !customerEnabled)
+    throw new Error('Customer generation requires the customer API to be explicitly enabled');
   if (customerEnabled && !env.HAWA_CUSTOMER_AUTH_PUBLISHABLE_KEY)
     throw new Error('Customer API requires the workspace publishable authentication key');
   return {

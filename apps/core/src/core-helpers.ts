@@ -61,7 +61,7 @@ export class TaskStoreUnavailableError extends Error {
 }
 
 export interface CreateAppOptions {
-  /** ADR259: dedicated customer API, absent/off until explicitly configured. */
+  /** ADR259/278: dedicated customer API; generation requires literal true at startup and defaults off. */
   customerApi?: { publishableKey: string; generationEnabled?: boolean; fetcher?: typeof fetch };
   evaluationGateway?: import('@hawa/contracts').ModelGateway;
   /** ADR-144: the intake router for messages the rules cannot place; tests pass their own. */

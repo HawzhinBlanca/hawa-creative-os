@@ -495,10 +495,10 @@ it('administrator admission creates only a dedicated requester, replays exactly 
   ).toHaveLength(2);
 });
 
-it('mounted Core keeps generation disabled, pins customer CORS and refuses workspace JWTs on office routes',async()=>{
+it('mounted Core defaults generation off, pins customer CORS and refuses workspace JWTs on office routes',async()=>{
  const {createApp}=await import('../src/app.js');
  const token='Bearer untrusted.claims.signature';
- const app=createApp({db,skipTelegramProbe:true,skipPaidModelProbe:true,customerApi:{publishableKey:'sb_publishable_testfixture12',generationEnabled:true,
+ const app=createApp({db,skipTelegramProbe:true,skipPaidModelProbe:true,customerApi:{publishableKey:'sb_publishable_testfixture12',
   fetcher:async url=>new Response(JSON.stringify(String(url).endsWith('/auth/v1/user')?{id:randomUUID(),role:'authenticated',aud:'authenticated'}:true))}});
  const response=await app.request('/v1/customer/jobs',{method:'POST',headers:{Authorization:token,Origin:'https://hawzhin.app'}});
  expect(response.status).toBe(503);expect(await response.json()).toMatchObject({code:'DESIGN_GENERATION_NOT_READY'});
@@ -507,6 +507,36 @@ it('mounted Core keeps generation disabled, pins customer CORS and refuses works
  const foreign=await app.request('/v1/customer/jobs',{headers:{Authorization:token,Origin:'https://evil.example'}});
  expect(foreign.status).toBe(403);expect(foreign.headers.get('access-control-allow-origin')).toBeNull();
  expect((await app.request('/v1/office/customer-accounts',{method:'PUT',headers:{Authorization:'Bearer test_admin_key'},body:'{}'})).status).toBe(403);
+});
+
+it('mounted Core explicit generation opt-in commits one canonical customer request, exact copy and command',async()=>{
+ const {createApp}=await import('../src/app.js');
+ const {provisionCustomer}=await import('../src/customer/customer-provisioning.js');
+ const tenantId='00000000-0000-4000-a000-000000000001',adminId='00000000-0000-4000-b000-000000000002';
+ const clientId=randomUUID(),subject=randomUUID();
+ await sql`INSERT INTO hawa.clients(id,tenant_id,code,name,status) VALUES(${clientId}::uuid,${tenantId}::uuid,${clientId},'Private intake fixture','active')`.execute(owner);
+ await sql`INSERT INTO hawa.client_dna_versions(tenant_id,client_id,version,status,dna,content_hash)
+   VALUES(${tenantId}::uuid,${clientId}::uuid,1,'active','{}',${randomUUID()})`.execute(owner);
+ const account=await provisionCustomer(db,{tenantId,userId:adminId},randomUUID(),{subject,clientIds:[clientId],active:true,
+   expectedVersion:0,dailyJobs:8,concurrentJobs:3,reason:'Private production factory intake qualification'});
+ const app=createApp({db,skipTelegramProbe:true,skipPaidModelProbe:true,requesterIntentModel:null,customerApi:{publishableKey:'sb_publishable_testfixture12',generationEnabled:true,
+   fetcher:async url=>new Response(JSON.stringify(String(url).endsWith('/auth/v1/user')?{id:subject,role:'authenticated',aud:'authenticated'}:true))}});
+ const body={clientId,title:'Actual Core intake',exactCopy:[{text:'سڵاو — ٢٠٢٦\n(Exact copy)',language:'ckb'}],designInstructions:'Content-aware composition.',variant:'story'};
+ const init={method:'POST',headers:{Authorization:'Bearer untrusted.claims.signature',Origin:'https://hawzhin.app','Content-Type':'application/json','Idempotency-Key':'factory_intake_001'},body:JSON.stringify(body)};
+ const responses=await Promise.all([app.request('/v1/customer/jobs',init),app.request('/v1/customer/jobs',init)]);
+ expect(responses.map(r=>r.status).sort()).toEqual([200,201]);
+ const results=await Promise.all(responses.map(r=>r.json()));
+ expect(results[0].job.id).toBe(results[1].job.id);
+ const id=results[0].job.id;
+ expect((await sql`SELECT account_id,body FROM hawa.customer_web_requests WHERE request_id=${id}::uuid`.execute(owner)).rows)
+   .toEqual([{account_id:account.accountId,body}]);
+ expect((await sql`SELECT command_type FROM hawa.outbox_commands WHERE aggregate_id=${id}::uuid`.execute(owner)).rows)
+   .toEqual([{command_type:'customer.request.open'}]);
+ const session=await app.request('/v1/customer/session',{headers:init.headers});
+ expect(await session.json()).toMatchObject({accountId:account.accountId,generationEnabled:true});
+ const foreign=await app.request('/v1/customer/jobs',{...init,headers:{...init.headers,Origin:'https://foreign.example'}});
+ expect(foreign.status).toBe(403);
+ expect((await app.request('/v1/tasks',{headers:init.headers})).status).toBe(401);
 });
 
 it('refuses a forged web draft and revocation before projection without a task',async()=>{

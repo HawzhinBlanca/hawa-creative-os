@@ -37,3 +37,14 @@ it('customer API is explicit opt-in, requires its own public Auth configuration 
  expect(() => productionAppOptions({ HAWA_CUSTOMER_API_ENABLED: 'on' })).toThrow(/publishable/);
  expect(productionAppOptions({ HAWA_CUSTOMER_API_ENABLED:'on', HAWA_CUSTOMER_AUTH_PUBLISHABLE_KEY:'sb_publishable_testfixture12' }).customerApi).toMatchObject({ generationEnabled:false });
 });
+
+it('generation is an explicit startup opt-in and malformed customer switches fail closed', () => {
+ const enabled={HAWA_CUSTOMER_API_ENABLED:'on',HAWA_CUSTOMER_AUTH_PUBLISHABLE_KEY:'sb_publishable_testfixture12'};
+ expect(productionAppOptions({...enabled,HAWA_CUSTOMER_GENERATION_ENABLED:'on'}).customerApi).toMatchObject({generationEnabled:true});
+ expect(productionAppOptions({...enabled,HAWA_CUSTOMER_GENERATION_ENABLED:'off'}).customerApi).toMatchObject({generationEnabled:false});
+ expect(() => productionAppOptions({HAWA_CUSTOMER_GENERATION_ENABLED:'on'})).toThrow(/customer API/i);
+ for (const value of ['true','1','ON',' on ']) {
+   expect(() => productionAppOptions({...enabled,HAWA_CUSTOMER_GENERATION_ENABLED:value})).toThrow(/generation/i);
+   expect(() => productionAppOptions({...enabled,HAWA_CUSTOMER_API_ENABLED:value})).toThrow(/customer API/i);
+ }
+});
