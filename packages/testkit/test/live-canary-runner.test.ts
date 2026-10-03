@@ -72,6 +72,16 @@ describe('the nightly canary runner (ADR-240)', () => {
     expect(curl).toContain('a cancel with a reason withdraws the design');
   });
 
+  // Hunt 3: watchdog.sh --notify exited 0 whatever Telegram answered, so this line never appeared.
+  it('says so in its log when the operator could not be alerted', () => {
+    const s = setup();
+    fs.writeFileSync(path.join(s.t, 'bin', 'curl'), `#!/bin/bash\nprintf '%s\\n' "$*" >> '${s.f('curl')}'\nexit 7\n`, { mode: 0o755 });
+    const res = s.run('exit 1');
+    expect(res.status).toBe(1);
+    expect(s.read('curl')).toContain('Hawa nightly canary failed');
+    expect(res.stdout).toContain('the operator could not be alerted');
+  });
+
   it('a run that ends without a result is a failed night too', () => {
     const s = setup();
     const res = s.run('exit 2');

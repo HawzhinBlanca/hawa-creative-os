@@ -44,18 +44,26 @@ save() {
   printf 'last_status=%q\nlast_alert=%q\nlast_disk_alert=%q\nlast_cleanup=%q\nlast_msg=%q\nalerted=%q\nalerted_other=%q\ndisk_was_full=%q\nalert_key=%q\nlast_pass=%q\n' \
     "$1" "$last_alert" "$last_disk_alert" "$last_cleanup" "$last_msg" "$alerted" "$alerted_other" "$disk_was_full" "$alert_key" "$NOW" > "$STATE"
 }
+# Succeeds only when Telegram took the message (an HTTP 2xx answer). Any answer, or none, used to count
+# as sent: a refused token, a rate limit, or Telegram or this host's connection being down (the 2026-10-02
+# outage) marked the alert sent, the 30-minute cooldown held back the next try, and the log said nothing.
+# Now the pass logs "ALERT NOT SENT" and its caller does not start the cooldown, so the next pass tries
+# again; the problem still counts as alerted, so its recovery is announced once Telegram takes messages.
+# The token is never printed: curl's own messages are discarded, only its exit status is kept.
 notify() {
   # `|| true`: under set -e and pipefail a missing file or line ended the whole pass here (exit 2), as
   # nightly_backup.sh's notify already guards against.
-  local token chat; token="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$PROD" 2>/dev/null | cut -d= -f2- || true)"; chat="$(grep -E '^TELEGRAM_ALLOWED_USERS=' "$PROD" 2>/dev/null | cut -d= -f2- | cut -d, -f1 || true)"
-  [[ -n "$token" && -n "$chat" ]] || return 0
-  curl -s -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" || true
+  local token chat rc=0; token="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$PROD" 2>/dev/null | cut -d= -f2- || true)"; chat="$(grep -E '^TELEGRAM_ALLOWED_USERS=' "$PROD" 2>/dev/null | cut -d= -f2- | cut -d, -f1 || true)"
+  if [[ -z "$token" || -z "$chat" ]]; then say "ALERT NOT SENT: no TELEGRAM_BOT_TOKEN or TELEGRAM_ALLOWED_USERS in ${PROD}"; return 1; fi
+  curl -fsS -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" >/dev/null 2>&1 || rc=$?
+  if [[ "$rc" != 0 ]]; then say "ALERT NOT SENT: Telegram did not take it (curl exit ${rc}); the next pass tries again"; return 1; fi
 }
 # ADR-240: `--notify <text>` sends one message to the operator through this same path and does nothing
 # else; the nightly live canary (infra/ops/live_canary.sh) reports a failed night with it.
 if [[ "$MODE" == "--notify" ]]; then
   [[ -n "${2:-}" ]] || { echo "watchdog.sh --notify needs the message" >&2; exit 64; }
-  notify "$2"; say "notified the operator"; exit 0
+  notify "$2" || exit 1
+  say "notified the operator"; exit 0
 fi
 # What a problem list is, without its numbers: "only 5/6 stack containers" and "only 4/6" are the same
 # problem, "core degraded" and "Postgres crashed" are not.
@@ -71,7 +79,7 @@ HOST_ROLE_RC=0; HOST_ROLE="$(hawa_host_role)" || HOST_ROLE_RC=$?
 if [[ "$HOST_ROLE_RC" != 0 || "$HOST_ROLE" != production ]]; then
   where="$(hawa_host_role_source)"
   if [[ "$MODE" == "--announce" ]]; then
-    notify "🟢 Hawa watchdog on $(hostname -s): this host is ${HOST_ROLE} (${where}). It never starts production here, and reports production containers running here."
+    notify "🟢 Hawa watchdog on $(hostname -s): this host is ${HOST_ROLE} (${where}). It never starts production here, and reports production containers running here." || exit 1
     say "announced"; exit 0
   fi
   role_problems=()
@@ -84,19 +92,23 @@ if [[ "$HOST_ROLE_RC" != 0 || "$HOST_ROLE" != production ]]; then
   if [[ ${#role_problems[@]} -eq 0 ]]; then
     say "${HOST_ROLE} host (${where}): production runs elsewhere; nothing was started"
     [[ "$MODE" == "--status" ]] && exit 0
-    [[ "$alerted" != 1 ]] || notify "✅ Hawa ($(hostname -s), ${HOST_ROLE} host): back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
+    if [[ "$alerted" == 1 ]] && ! notify "✅ Hawa ($(hostname -s), ${HOST_ROLE} host): back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"; then
+      save healthy; exit 0   # the recovery notice is tried again at the next pass
+    fi
     last_msg=""; alerted=0; alerted_other=""; alert_key=""; save healthy; exit 0
   fi
   msg="$(printf '%s; ' "${role_problems[@]}")"; say "PROBLEM: ${msg%; }"
   [[ "$MODE" == "--status" ]] && exit 1
   last_msg="${msg%; }"
   if alert_due "${msg%; }"; then
-    notify "🔴 Hawa ($(hostname -s), ${HOST_ROLE} host) needs attention ($(date '+%H:%M')): ${msg%; }."; last_alert="$NOW"; alerted=1; alerted_other="${msg%; }"
-    alert_key="$(problem_key "${msg%; }")"
+    if notify "🔴 Hawa ($(hostname -s), ${HOST_ROLE} host) needs attention ($(date '+%H:%M')): ${msg%; }."; then
+      last_alert="$NOW"; alert_key="$(problem_key "${msg%; }")"
+    fi
+    alerted=1; alerted_other="${msg%; }"
   fi
   save problem; exit 1
 fi
-if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login or boot, nightly backup 03:30."; say "announced"; exit 0; fi
+if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login or boot, nightly backup 03:30." || exit 1; say "announced"; exit 0; fi
 
 # The worker Telegram poller (Phase 2.1). With HAWA_TELEGRAM_POLLER=worker Core does not poll, and a
 # colour whose poller was off, never started or failing left every check green while no client message
@@ -149,7 +161,7 @@ else
   rb_out="$(python3 "$DEPLOY_ROOT/infra/backup/restate_nightly.py" --recover 2>&1)" || rb_rc=$?
   if [[ $rb_rc == 0 && "$rb_out" == recovered:* ]]; then
     say "the nightly Restate backup was cut off; ${rb_out}"
-    notify "🟠 The nightly Restate backup was cut off before it finished; the watchdog put back: ${rb_out#recovered: }."
+    notify "🟠 The nightly Restate backup was cut off before it finished; the watchdog put back: ${rb_out#recovered: }." || true
   fi
 fi
 if [[ $rb_rc == 75 ]]; then say "the nightly Restate backup is running; this pass is skipped"; exit 0; fi
@@ -316,11 +328,11 @@ backup_problem="$(python3 "$ROOT/infra/backup/backup_status.py" --snapshots "$DE
 if [[ ${#problems[@]} -eq 0 && "$disk_full" -eq 0 ]]; then
   say "healthy"
   [[ "$MODE" == "--status" ]] && exit 0
-  if [[ "$alerted" == 1 ]]; then
-    notify "✅ Hawa is back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
-  fi
   # The outside service alerts when these pings stop (host_lib.sh, hawa_heartbeat).
   hawa_heartbeat "$PROD" || say "the outside heartbeat could not be reached"
+  if [[ "$alerted" == 1 ]] && ! notify "✅ Hawa is back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"; then
+    disk_was_full=0; save healthy; exit 0   # the recovery notice is tried again at the next pass
+  fi
   last_msg=""; alerted=0; alerted_other=""; alert_key=""; disk_was_full=0; save healthy; exit 0
 fi
 
@@ -343,12 +355,12 @@ if [[ ${#problems[@]} -eq 0 ]]; then
   [[ "$MODE" == "--status" ]] && exit 1
   if [[ -n "$alerted_other" ]]; then
     # What the last red alert named has cleared; without this the next word would be hours away.
-    notify "✅ Back to normal apart from the disk ($(date '+%H:%M')). It was: ${alerted_other}. The disk still has only ${free} free."; alerted_other=""; alert_key=""
+    if notify "✅ Back to normal apart from the disk ($(date '+%H:%M')). It was: ${alerted_other}. The disk still has only ${free} free."; then alerted_other=""; alert_key=""; fi
   fi
   last_msg="disk ${free_gib} GiB free"; disk_was_full=1
   every=21600; [[ "$free_gib" -ge "$DISK_URGENT_GIB" ]] || every=3600
   if (( NOW - last_disk_alert >= every )); then
-    notify "💾 ${disk_msg} Next reminder in $(( every / 3600 )) h."; last_disk_alert="$NOW"; alerted=1
+    notify "💾 ${disk_msg} Next reminder in $(( every / 3600 )) h." && last_disk_alert="$NOW"; alerted=1
   fi
   save problem; exit 1
 fi
@@ -356,8 +368,10 @@ msg="$(printf '%s; ' "${problems[@]}")"; say "PROBLEM: $msg"
 [[ "$MODE" == "--status" ]] && exit 1
 last_msg="${msg%; }${disk_msg:+; disk ${free_gib} GiB free}"; disk_was_full="$disk_full"
 if alert_due "${msg%; }"; then
-  notify "🔴 Hawa needs attention ($(date '+%H:%M')): ${msg%; }.${disk_msg:+ Also: ${disk_msg}}"; last_alert="$NOW"
-  alerted=1; alerted_other="${msg%; }"; alert_key="$(problem_key "${msg%; }")"
-  [[ -z "${disk_msg:-}" ]] || last_disk_alert="$NOW"
+  if notify "🔴 Hawa needs attention ($(date '+%H:%M')): ${msg%; }.${disk_msg:+ Also: ${disk_msg}}"; then
+    last_alert="$NOW"; alert_key="$(problem_key "${msg%; }")"
+    [[ -z "${disk_msg:-}" ]] || last_disk_alert="$NOW"
+  fi
+  alerted=1; alerted_other="${msg%; }"
 fi
 save problem; exit 1

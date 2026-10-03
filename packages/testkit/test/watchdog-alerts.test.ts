@@ -73,7 +73,8 @@ exit 0
   fs.writeFileSync(path.join(bin, 'curl'), `#!/bin/bash
 case "$*" in
   *"/v1/health"*) cat '${f('health')}' ;;
-  *sendMessage*) for a in "$@"; do [[ "$a" == text=* ]] && printf '%s\\n' "ALERT \${a#text=}" >> '${f('calls')}'; done ;;
+  *sendMessage*) [[ -f '${f('telegram-down')}' ]] && { echo "curl: (22) The requested URL returned error: 502" >&2; exit 22; }
+    for a in "$@"; do [[ "$a" == text=* ]] && printf '%s\\n' "ALERT \${a#text=}" >> '${f('calls')}'; done ;;
 esac
 exit 0
 `, { mode: 0o755 });
@@ -186,6 +187,70 @@ describe('the watchdog\'s alerts', () => {
     const commit = execFileSync('git', ['-C', s.release, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
     expect(s.calls()).toContain(`docker compose -f ${s.release}/infra/docker/docker-compose.prod.yml -f ${s.release}/infra/docker/canva-release.override.yml --env-file ${s.release}/infra/docker/.env start stamp=${commit}`);
     expect(s.calls()).not.toContain(`-f ${repo}/infra/docker`);
+  });
+
+  // Hunt 3 (the 2026-10-02 Telegram outage nobody was told about): notify() counted any answer, or none,
+  // as sent. A refused token, a rate limit or Telegram being unreachable from this host marked the alert
+  // sent, so the 30-minute cooldown held back the next try, and nothing in the log said it was lost.
+  it('an alert Telegram did not take is logged, not counted as sent, and tried again at the next pass', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('telegram-down'), '');
+    fs.writeFileSync(s.f('health'), health({ parkedClientMessages: 1 }, 'degraded'));
+    const r = s.run();
+    expect(r.code).toBe(1);
+    expect(s.alerts()).toEqual([]);
+    expect(r.stdout).toMatch(/Z ALERT NOT SENT: Telegram did not take it \(curl exit 22\)/);
+    expect(s.state()).toMatch(/^alert_key=''$/m);
+    expect(r.out).not.toContain('stub:alerts');
+    // Telegram answers again five minutes later: the same problem goes out now, not after the cooldown.
+    fs.rmSync(s.f('telegram-down'));
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+    expect(s.alerts()[0]).toContain('parkedClientMessages');
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+  });
+
+  it('a problem whose every alert was lost is still announced as over once Telegram takes messages again', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('telegram-down'), '');
+    fs.writeFileSync(s.f('health'), health({ telegramApi: 'unreachable' }, 'degraded'));
+    s.run(); s.run();
+    expect(s.alerts()).toEqual([]);
+    fs.rmSync(s.f('telegram-down'));
+    fs.writeFileSync(s.f('health'), health());
+    expect(s.run().code).toBe(0);
+    expect(s.alerts()).toHaveLength(1);
+    expect(s.alerts()[0]).toMatch(/^ALERT ✅ Hawa is back to normal .*telegramApi/);
+  });
+
+  it('a recovery notice Telegram did not take is sent at the next healthy pass', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('health'), health({ parkedClientMessages: 1 }, 'degraded'));
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+    fs.writeFileSync(s.f('health'), health());
+    fs.writeFileSync(s.f('telegram-down'), '');
+    expect(s.run().code).toBe(0);
+    expect(s.alerts()).toHaveLength(1);
+    fs.rmSync(s.f('telegram-down'));
+    expect(s.run().code).toBe(0);
+    expect(s.alerts()).toHaveLength(2);
+    expect(s.alerts()[1]).toMatch(/^ALERT ✅ Hawa is back to normal .*parkedClientMessages/);
+    s.run();
+    expect(s.alerts()).toHaveLength(2);
+  });
+
+  it('--notify and --announce fail when the message was not delivered (the canary then says it could not alert)', () => {
+    const s = setup();
+    expect(s.run(['--notify', 'canary failed']).code).toBe(0);
+    expect(s.alerts()).toEqual(['ALERT canary failed']);
+    fs.writeFileSync(s.f('telegram-down'), '');
+    const notify = s.run(['--notify', 'canary failed again']);
+    expect(notify.code).toBe(1);
+    expect(notify.stdout).toMatch(/ALERT NOT SENT/);
+    expect(s.run(['--announce']).code).toBe(1);
+    expect(s.alerts()).toHaveLength(1);
   });
 
   it('judges the disk by free space: 97% used with 30 GiB free is fine, 20 GiB free is reported', () => {
