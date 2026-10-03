@@ -72,6 +72,12 @@ export interface OfficeLibraryHookInput {
   requesterImages: number;
   /** The run's request, for a revision's parent. */
   request: unknown;
+  /**
+   * Whether the request came from the website (a customer's own request). A website request that sent
+   * no photo carries no webPhotoPolicy, so the context alone cannot tell; this asks the task's origin.
+   * A failed answer counts as a website request: the archive is then not used.
+   */
+  websiteRequest?: () => Promise<boolean>;
   /** The office-library record of a revision's parent run, if any. */
   parentRecord?: (parentTaskId: string) => Promise<unknown>;
   env?: Record<string, string | undefined>;
@@ -128,6 +134,7 @@ export async function attachOfficeLibraryPhotos(ctx: StageContext, stages: Recor
   if (ctx.webPhotoPolicy) return;
   if (input.status === 'briefing') return;
   if (input.requesterImages > 0 || ctx.photos?.length || ctx.attachedImage || ctx.reference) return;
+  if (input.websiteRequest && await input.websiteRequest().catch(() => true)) return;
 
   let clientDir: string;
   try { clientDir = officePhotoClientDir(officePhotoLibraryRoot(env, input.cwd), ctx.clientId); } catch { return; }

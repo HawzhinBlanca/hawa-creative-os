@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDb, sql } from '@hawa/db';
+import { HAWZHIN_AUTH_ORIGIN } from '../src/customer/supabase-member.js';
 import { ingestOfficePhotoFolder, parseOfficePhotoTagSheet } from '@hawa/creative';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
@@ -44,6 +45,19 @@ beforeAll(async () => {
     'signing.png,Partnership signing at the ministry,ministry,signing,agreement,event_or_stage,yes,granted,yes',
   ].join('\n'), 'csv') });
 });
+
+/** A synthetic website customer account of the KAAE client (no real person). */
+async function customerAccount() {
+  const accountId = randomUUID(), customerUser = randomUUID(), subject = randomUUID();
+  await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${customerUser}::uuid,${customerUser + '@example.test'},'Synthetic customer')`.execute(owner);
+  await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${tenantId}::uuid,${customerUser}::uuid,'requester')`.execute(owner);
+  await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role) VALUES(${tenantId}::uuid,${clientId}::uuid,${customerUser}::uuid,'requester')`.execute(owner);
+  await sql`INSERT INTO hawa.customer_accounts(id,tenant_id,issuer,subject,user_id,provisioned_by,reason,concurrent_job_limit)
+    VALUES(${accountId}::uuid,${tenantId}::uuid,${HAWZHIN_AUTH_ORIGIN},${subject}::uuid,${customerUser}::uuid,${userId}::uuid,'Synthetic office-library check',2)`.execute(owner);
+  await sql`INSERT INTO hawa.customer_client_grants(tenant_id,account_id,client_id,provisioned_by,reason)
+    VALUES(${tenantId}::uuid,${accountId}::uuid,${clientId}::uuid,${userId}::uuid,'Synthetic office-library check')`.execute(owner);
+  return { accountId, userId: customerUser, subject };
+}
 
 const COPY = 'KAAE K-12 Pilot Study\n\nField Visit Report\n\nInsights from KAAE school field visits and next steps';
 
@@ -84,16 +98,30 @@ function fakeProvider(calls: Array<{ schema: string; images: number }>) {
   });
 }
 
-async function runTextOnlyRequest(env: Record<string, string | undefined>) {
+async function runTextOnlyRequest(env: Record<string, string | undefined>, options: { website?: boolean } = {}) {
   vi.stubEnv('DESIGN_PIPELINE_V3', 'on');
   vi.stubEnv('HAWA_STUDIO_VISUAL_REVIEW_ROUNDS', '0');
   vi.stubEnv('HAWA_MODEL_JUDGE', 'gpt-4.1-mini');
   for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v as string);
+  // A website (customer) request with no photo carries no customerWebPhotos manifest at all, so no
+  // webPhotoPolicy reaches its run (customer-web-lifecycle.ts sends the manifest only when photos exist).
+  const customer = options.website ? await customerAccount() : undefined;
   const taskId = (await persistChatIntake(db, {
-    platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: `olp-${randomUUID().slice(0, 8)}`, clientId,
+    platform: customer ? 'hawzhin_web' : 'telegram', sourceEventId: randomUUID(),
+    sourceChannelId: customer ? `web:${customer.accountId}` : `olp-${randomUUID().slice(0, 8)}`, clientId,
     title: 'KAAE: field visit report', rawText: `Make a post for the report.\n---\n${COPY}`,
     designInstructions: 'Make a post for the report.', exactCopy: [], designStudio: true,
-  })).task.id as string;
+  }, customer ? { customer: { accountId: customer.accountId, userId: customer.userId, dnaVersion: 1,
+    body: { clientId, title: 'KAAE: field visit report', exactCopy: [{ text: COPY, language: 'en' }], designInstructions: 'Make a post for the report.', variant: 'portrait' } as never } } : {})).task.id as string;
+  // The retained website brief the customer generation lock checks (customer-requests.test.ts covers the lifecycle).
+  if (customer) {
+    const requestId = randomUUID();
+    await sql`INSERT INTO hawa.customer_web_requests(request_id,tenant_id,account_id,client_id,subject,action_key,body_hash,body,dna_version)
+      VALUES(${requestId}::uuid,${tenantId}::uuid,${customer.accountId}::uuid,${clientId}::uuid,${customer.subject}::uuid,${randomUUID()},${'0'.repeat(64)},'{}'::jsonb,1)`.execute(owner);
+    await sql`INSERT INTO hawa.requests(request_id,tenant_id,root_task_id,current_task_id,parent_request_id,owner,stage,rev,chat_id)
+      VALUES(${requestId}::uuid,${tenantId}::uuid,${taskId}::uuid,${taskId}::uuid,NULL,'restate','designing',1,${`web:${customer.accountId}`})`.execute(owner);
+    await sql`UPDATE hawa.tasks SET request_id = ${requestId}::uuid WHERE id = ${taskId}::uuid`.execute(owner);
+  }
   const calls: Array<{ schema: string; images: number }> = [];
   const canva = { importEditableDesign: vi.fn().mockResolvedValue({ operationId: randomUUID(), status: 'submitted', designId: `DAF${randomUUID().slice(0, 6)}` }) } as unknown as CanvaConnectService;
   const service = new DesignStudioService(db, canva, { apiKey: 'test-key', fetcher: fakeProvider(calls) as any, defaultTier: 'standard' });
@@ -130,6 +158,16 @@ describe('a text-only KAAE request and the office photo library (ADR-280)', () =
       writeFileSync(path.join(process.env.HAWA_PROOF_DIR, 'office_library_studio_run.png'), preview);
       writeFileSync(path.join(process.env.HAWA_PROOF_DIR, 'office_library_studio_run.json'), `${JSON.stringify({ officePhotoLibrary: stages.officePhotoLibrary, recipe: shipped.artDirection?.recipe, qa: { passed: stages.qa.passed, defectCodes: stages.qa.defectCodes }, calls }, null, 2)}\n`);
     }
+  }, 180_000);
+
+  it('flag on: a website request that sent no photo is never given the office archive (hunt-3)', async () => {
+    const { final, stages, shipped } = await runTextOnlyRequest({ HAWA_OFFICE_PHOTO_LIBRARY: 'on', HAWA_OFFICE_PHOTO_LIBRARY_DIR: libraryRoot }, { website: true });
+    // The run reached the layout stage, where the hook acts (the fake provider writes no customer
+    // typographic layout, so it stops there); the archive was never attached or recorded.
+    expect(stages.brief).toBeDefined();
+    expect(final.status === 'transferred' || /stage laying_out/.test(String(final.diagnostic))).toBe(true);
+    expect(stages.officePhotoLibrary).toBeUndefined();
+    expect(shipped?.photos ?? []).toEqual([]);
   }, 180_000);
 
   it('flag off with the library on disk: the same calls, stage keys and photo-less design as a run with no library at all', async () => {
