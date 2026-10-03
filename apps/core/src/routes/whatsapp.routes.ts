@@ -100,7 +100,7 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
   });
 
   // WAHA Session Health Probe (CV-08, FR-072)
-  registerRoute('get', '/waha/health', async (c: any) => {
+  const wahaHealth = async (c: any) => {
     const isKillSwitchActive = process.env.WAHA_KILL_SWITCH === 'true' || channelKillSwitches.waha;
     const allowedGroupsEnv = process.env.WAHA_ALLOWED_GROUPS;
     const allowedGroups = allowedGroupsEnv ? allowedGroupsEnv.split(',').map((s) => s.trim()).filter(Boolean) : [];
@@ -199,6 +199,18 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
         },
       });
     }
+  };
+  // The route is public, for the uptime check. A caller who is not signed in gets the state and what to
+  // do, never the office's group ids, its session, the connected account (WAHA's `me`, the office phone
+  // number) or the raw connection error, which names the internal WAHA address.
+  registerRoute('get', '/waha/health', async (c: any) => {
+    const answer: Response = await wahaHealth(c);
+    if (verifyRequestAuth(c).authenticated) return answer;
+    const body = await answer.json().catch(() => ({})) as { ok?: unknown; state?: unknown; detail?: Record<string, unknown> };
+    const d = body.detail ?? {};
+    const detail = Object.fromEntries(Object.entries({ killSwitchActive: d.killSwitchActive, sessionState: d.sessionState, qrRequired: d.qrRequired,
+      fallbackChannel: d.fallbackChannel, fallbackInstructions: d.fallbackInstructions }).filter(([, v]) => v !== undefined));
+    return c.json({ ok: body.ok, state: body.state, detail }, answer.status);
   });
 
   // WAHA Kill Switch Management Endpoint (CV-08, FR-072)

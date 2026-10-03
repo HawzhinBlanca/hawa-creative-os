@@ -79,3 +79,40 @@ describe('the Canva outcome notification is the worker\'s (hunt-3)', () => {
     expect(res.status).not.toBe(403);
   });
 });
+
+describe('the public WhatsApp health probe (hunt-3)', () => {
+  // GET /waha/health is public (app.ts PUBLIC_READ_PATHS) for the uptime check; it answered every
+  // anonymous caller with the office's WhatsApp group ids, its session name, the connected account
+  // (WAHA's `me`: the office phone number) and the raw connection error.
+  const GROUP = '120363000000000001@g.us';
+  const ME = '9647500000000@c.us';
+  async function probe(headers: Record<string, string>, fetchAnswer: () => Promise<Response>) {
+    const saved = { groups: process.env.WAHA_ALLOWED_GROUPS, session: process.env.WAHA_OFFICE_SESSION, kill: process.env.WAHA_KILL_SWITCH };
+    process.env.WAHA_ALLOWED_GROUPS = GROUP;
+    process.env.WAHA_OFFICE_SESSION = 'office_session_name';
+    process.env.WAHA_KILL_SWITCH = 'false';
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: any, init?: any) => String(input).includes('/api/sessions/') ? fetchAnswer() : realFetch(input, init)) as typeof fetch;
+    try {
+      const res = await app.request('/v1/waha/health', { headers: { 'x-enforce-auth': 'true', ...headers } });
+      return { status: res.status, text: await res.text() };
+    } finally {
+      globalThis.fetch = realFetch;
+      for (const [k, v] of [['WAHA_ALLOWED_GROUPS', saved.groups], ['WAHA_OFFICE_SESSION', saved.session], ['WAHA_KILL_SWITCH', saved.kill]] as const) {
+        if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      }
+    }
+  }
+  it('an anonymous caller gets the state, without group ids, the session, the account or the error', async () => {
+    const working = await probe({}, async () => Response.json({ name: 'office_session_name', status: 'WORKING', me: { id: ME, pushName: 'Office' } }));
+    expect(working.status).toBe(200);
+    expect(JSON.parse(working.text).state).toBe('healthy');
+    expect(working.text).not.toContain(GROUP);
+    expect(working.text).not.toContain(ME);
+    expect(working.text).not.toContain('office_session_name');
+    const down = await probe({}, async () => { throw new Error('connect ECONNREFUSED http://waha.internal:3000'); });
+    expect(JSON.parse(down.text).state).toBe('unavailable');
+    expect(down.text).not.toMatch(/waha\.internal|ECONNREFUSED/);
+    expect(down.text).not.toContain(GROUP);
+  });
+});
