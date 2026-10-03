@@ -338,3 +338,8 @@ are retained. Rebuilt182 connected checks/759 strict roots/lint pass; initial fu
 repeat and the Claude release-3 merge (including its new bidi-js dependency) remain
 pending. No deployment or human/quality/Canva/source-success claim.
 Evidence: STANDARD_CUSTOMER_STORY_PROOF.json and website REAL_PROVIDER_CUSTOMER_PROOF.json.
+
+
+### 2026-10-03 — Story repeat and bounded repair context
+
+Sealed06ed25a8 full8297/0/67 passes. Fresh actual Auth/browser/Core/worker/Restate/Sol transport56/0 passes; real design still fails on logo/title collisions,8 calls/$0.131076 at pinned rates,0 preview/source/Canva/human approval. All owned resources/private files removed; ten previous containers unchanged. Repair now receives the normalized rejected layout as untrusted JSON, pixel units and expanded logo clear space explicitly, and schema coverage follows admitted automatic/all/count policy. Red1/3 -> focused106/0,759 strict roots/lint PASS. Native repeat and Claude release merge remain pending. Do not claim design or customer completion.

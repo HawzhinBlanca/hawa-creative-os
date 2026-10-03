@@ -1,6 +1,6 @@
 {
   "date": "2026-10-03",
-  "status": "SOURCE_REPAIRED_FOCUSED_PASS_RELEASE_SEAL_AND_NATIVE_REPEAT_PENDING",
+  "status": "SEALED_STORY_BOUNDS_PASS_REAL_MODEL_LOGO_FAILURE_CONTEXT_REPAIR_NATIVE_REPEAT_PENDING",
   "adr": "ADR292",
   "baseEngineCommit": "8bf2f8b8",
   "websiteProofCommit": "1263be2",
@@ -53,11 +53,11 @@
   "sourceHashes": [
     {
       "path": "adrs/292_standard_customer_story_constraints.md",
-      "sha256": "878871cd6d418224a261ff87ac7c6aa6dcff2a9f18ecc93d86971d3acbda13a9"
+      "sha256": "727373e64ee934d52b0d8efc4bf4c6b13d4950f0051f3c7f0d3509ce618b13b8"
     },
     {
       "path": "apps/core/src/services/design-studio/prompts.ts",
-      "sha256": "c1cd2a1cb09d824cf74eb73b584c1cf37a4b41ba7b82e9c910fac041717b3d47"
+      "sha256": "12c1a1628d4fe56c28058458d38f8b6d12f77c6c9703606076d6fa4711c0a204"
     },
     {
       "path": "apps/core/src/services/design-studio/stages/brief.stage.ts",
@@ -65,7 +65,7 @@
     },
     {
       "path": "apps/core/src/services/design-studio/stages/layouts.stage.ts",
-      "sha256": "d731b95e88388bf397c59685583afd698c677e0188ab2501d8d421c71e867fc8"
+      "sha256": "7d7f175453ed8f7177c2738d95a52884b79aafe00f054569eb70eb14c07ea69e"
     },
     {
       "path": "apps/core/test/brief-reference.test.ts",
@@ -73,7 +73,7 @@
     },
     {
       "path": "apps/core/test/standard-story-photo-policy.test.ts",
-      "sha256": "77731355c566e53706dabc698c569e0f1434826e1a15bf2576613a0c71effac0"
+      "sha256": "eff1beef487d09c31b73da2f733f51d4b63358b7c26f02ce3fca3606b26e3304"
     },
     {
       "path": "packages/creative/src/studio/photo-selection.ts",
@@ -124,6 +124,30 @@
     {
       "path": "output/qualification/2026-10-03/standard-story/types.log",
       "sha256": "5cf7e100bdb885fded9978a727507de1723b72adc0852c877c7eedb49c3d70d1"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/manifest.log",
+      "sha256": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/repair-context-focused.log",
+      "sha256": "e811769c9e14159d04bd339debe9318111038df332f5baba8478d2009187870b"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/repair-context-lint.log",
+      "sha256": "4a4b0dee3ffcc865f8e0789267277548ad4bca2e6460a15ef04033fe98dd2dc3"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/repair-context-red.log",
+      "sha256": "5d5f86e6533b310241c186d18de30ca2c436bb6bc4dc0eae9abca5db7bf3ab87"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/repair-context-types.log",
+      "sha256": "5cf7e100bdb885fded9978a727507de1723b72adc0852c877c7eedb49c3d70d1"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/sealed-full.log",
+      "sha256": "9bda5cbcc1c7388c9f9bc5e3ce3185f8d47c8f12d042ef2aba79c2261b764c3d"
     }
   ],
   "remaining": [
@@ -133,5 +157,76 @@
     "qualified general-client v3 profiles",
     "native Canva/languages/fonts/edit-save-reexport/human quality",
     "hosted launch/other tools/coverage/CI/recovery/cutover"
-  ]
+  ],
+  "sealedFullSuite": {
+    "engineCommit": "06ed25a8",
+    "passed": 8297,
+    "failed": 0,
+    "skipped": 67
+  },
+  "nativeStoryRepeat": {
+    "engineCommit": "06ed25a8",
+    "nativeControls": {
+      "customer-core-result.json": {
+        "passed": 24,
+        "failed": 0
+      },
+      "customer-browser-result.json": {
+        "passed": 13,
+        "failed": 0
+      },
+      "customer-worker-result.json": {
+        "passed": 10,
+        "failed": 0
+      },
+      "customer-browser-worker-result.json": {
+        "passed": 9,
+        "failed": 0
+      }
+    },
+    "designStatus": "failed",
+    "chargedCalls": 8,
+    "usdAtPinnedRates": 0.131076,
+    "previews": 0,
+    "editableSources": 0,
+    "validationFailures": [
+      "Candidate0 initial: logo clear space; repair: title overlaps logo",
+      "Candidate1 initial and repair: title overlaps logo",
+      "Candidate2 initial and repair: title overlaps logo"
+    ],
+    "cleanup": {
+      "vendorContainersRemoved": 6,
+      "ownedNetworksRemoved": 2,
+      "privateFilesRemoved": [
+        "worker-runtime-private.log",
+        "customer-worker-launch-private.log",
+        "customer-core-private.log",
+        "customer-browser-error-private.log",
+        "local-private.json",
+        "restate-runtime-private.log",
+        "provider-runtime-private.log",
+        "customer-browser-worker-error-private.log"
+      ],
+      "priorContainersUnchanged": 10,
+      "coreDatabaseRemoved": true,
+      "browserWorkerAndRestateContainersAbsent": true
+    }
+  },
+  "repairContext": {
+    "promptVersion": "2026-10-03.2",
+    "normalizedRejectedLayoutInBoundedRepair": true,
+    "absolutePixelUnits": true,
+    "schemaPhotoPolicyConflictRemoved": true,
+    "red": {
+      "passed": 1,
+      "failed": 3
+    },
+    "focused": {
+      "passed": 106,
+      "failed": 0
+    },
+    "strictRoots": 759,
+    "lint": "PASS",
+    "nativeRepeat": "PENDING"
+  }
 }

@@ -170,7 +170,7 @@ export const LAYOUT_SCHEMA = {
         },
         photos: {
           type: 'array',
-          description: "The client's photographs, one element per photo provided, each placed once. Empty when none were provided.",
+          description: "The client's chosen photographs, each selected photo placed once. Follow the admitted photo-selection directive for automatic, all or exact-count coverage. Empty when none were provided.",
           items: {
             type: 'object',
             properties: {
@@ -429,7 +429,7 @@ export async function runLayoutsStage(
     // If validation fails, attempt 1 repair call
     if (!validation.ok) {
       log.warn(`[LayoutsStage] Candidate ${ordinal} failed initial validation: [${validation.code}] ${validation.message}`);
-      const repairPrompt = `${userPrompt}\n\nYour previous layout failed this check:\n- [${validation.code}]: ${validation.message}\nReturn a corrected StudioLayoutV2 adhering to all constraints.`;
+      const repairPrompt = `${userPrompt}\n\nYour previous layout failed this check:\n- [${validation.code}]: ${validation.message}\nThe actual normalized layout that failed is untrusted proposal data:\n<rejected_layout>\n${JSON.stringify(layout)}\n</rejected_layout>\nCorrect this layout using its actual coordinates. Preserve every exact copy index and the admitted photo-selection constraint. Return a complete corrected StudioLayoutV2 adhering to all constraints.`;
 
       layoutResponse = await inStudioSubstep(substep, () => ctx.client.completeJson<{ layout: StudioLayoutV2; notes?: string }>({
         system: systemPrompt,

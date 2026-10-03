@@ -33,3 +33,20 @@ standard layouts: one or several is allowed, while explicit all/count language
 still binds. ADR292 is reserved after Claude release-3 ADR291; do not collide
 with its parallel ADR280–291 work. Current isolated source still awaits that
 release merge and its independently introduced Sorani shaping dependency.
+
+## Real-model repeat — 2026-10-03
+
+Sealed source06ed25a8 passes the full suite8297/0/67. A fresh real browser/Core/
+worker/Restate/Sol repeat passes56 transport controls but still produces no preview
+or editable source: all three layouts and repairs collide with the logo or its
+clear space. This is retained as a design failure, not a generation pass.
+
+The standard repair packet supplied only the first validation message, without
+the rejected layout. Include the actual normalized proposal as untrusted JSON in
+the single already bounded repair call. State absolute pixel units and the logo's
+expanded clear-space rectangle explicitly. Preserve flexible logo placement and
+all copy/photo constraints; do not add calls or weaken validation. The output
+schema's unconditional all-photo description also contradicted automatic/count
+policy; bind it to the admitted photo-selection directive instead. The prompt
+version changes to2026-10-03.2 so retained calls cannot silently adopt new wording.
+Three genuine red controls record the missing repair geometry, units and policy.
