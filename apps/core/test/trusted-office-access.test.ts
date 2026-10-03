@@ -54,6 +54,19 @@ it('refuses another host, cross-site reads, and writes without the office reques
   expect((await proxiedRequest(app, origin + '/v1/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status).toBe(401);
 });
 
+it('refuses trusted-office access to a request that came through a public listener (ADR-294)', async () => {
+  const app = createApp({ db });
+  const publicHeaders = { 'X-Hawa-Public-Gateway': 'desk' };
+  expect((await proxiedRequest(app, origin + '/v1/auth/session', { headers: publicHeaders })).status).toBe(401);
+  expect((await proxiedRequest(app, origin + '/v1/clients', { headers: publicHeaders })).status).toBe(401);
+  expect((await (await proxiedRequest(app, origin + '/v1/auth/providers', { headers: publicHeaders })).json()).trustedOffice).toBe(false);
+  expect((await proxiedRequest(app, origin + '/v1/system/outbox/requeue', {
+    method:'POST', headers:{ ...publicHeaders, 'Content-Type':'application/json','X-Hawa-Office-Request':'1' }, body:'{}',
+  })).status).toBe(401);
+  // The office listener's own requests are unaffected.
+  expect((await proxiedRequest(app, origin + '/v1/auth/session')).status).toBe(200);
+});
+
 it('keeps worker routes credentialed and keeps worker credentials out of office access', async () => {
   vi.stubEnv('HAWA_WORKER_TOKEN','test_office_worker_credential');
   const app = createApp({ db });

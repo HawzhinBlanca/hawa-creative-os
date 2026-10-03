@@ -1,0 +1,38 @@
+# cloudflared configuration for the office Mac (ADR-294, runbooks/GO_LIVE_WEBSITE.md).
+# infra/cloudflared/install.sh renders this into ~/.cloudflared/config.yml; edit the template, not the
+# rendered file. Its placeholders are TUNNEL_ID, CREDENTIALS_FILE, CUSTOMER_PORT and DESK_PORT, each
+# between double underscores.
+#
+# Cloudflare terminates TLS for both names and sends each request through this outbound-only tunnel to
+# nginx's public listeners, which compose publishes on the Mac's loopback only (infra/docker/nginx.conf):
+#   design-api.hawzhin.app  -> 127.0.0.1:8081  the customer API, /v1/customer/* only
+#   desk.hawzhin.app        -> 127.0.0.1:8082  the Desk and its office API (HAWA_DESK_AUTH_MODE=required)
+# The office listener (127.0.0.1:8080) is never routed here.
+#
+# No httpHostHeader: nginx answers only the real host names (any other Host gets 404), so the browser's
+# Host must arrive unchanged. No noTLSVerify or originServerName: the origin is plain HTTP on loopback.
+tunnel: __TUNNEL_ID__
+credentials-file: __CREDENTIALS_FILE__
+
+originRequest:
+  # The origin is on this Mac: a connection that takes more than a few seconds will not come, and the
+  # website gives up after 25 s, so fail fast with a 502 the browser can show rather than hang.
+  connectTimeout: 5s
+  tlsTimeout: 5s
+  tcpKeepAlive: 30s
+  noHappyEyeballs: true
+  keepAliveConnections: 32
+  keepAliveTimeout: 90s
+  # Uploads (customer photos up to 10 MB) are streamed through; nginx buffers and limits them (12 MB).
+  disableChunkedEncoding: false
+
+ingress:
+  # Only the customer API's own paths; anything else on this name is refused at the tunnel as well as
+  # by nginx. cloudflared matches `path` as a regular expression on the path (no query string).
+  - hostname: design-api.hawzhin.app
+    path: ^/v1/customer/
+    service: http://127.0.0.1:__CUSTOMER_PORT__
+  - hostname: desk.hawzhin.app
+    service: http://127.0.0.1:__DESK_PORT__
+  # Everything else, including other names in the zone and design-api paths outside /v1/customer/.
+  - service: http_status:404

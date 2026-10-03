@@ -1,6 +1,14 @@
 import { timingSafeEqual } from 'node:crypto';
 
 /** ADR-146/163: private origin plus proof from the office reverse proxy. */
+
+/**
+ * ADR-294: the header nginx sets on every request it proxies from a public listener (the customer API
+ * and the Desk at desk.hawzhin.app, reached through the Cloudflare tunnel). Its presence, with any
+ * value, means the request came from the internet, so trusted-office access never applies to it, even
+ * if that listener were ever misconfigured to send the office proof. The office listener never sets it.
+ */
+export const PUBLIC_GATEWAY_HEADER = 'X-Hawa-Public-Gateway';
 export interface OfficeAccessPolicy { mode: 'required' | 'trusted_office'; origin?: string; proxyProof?: string }
 
 export function officeAccessPolicy(env: NodeJS.ProcessEnv): OfficeAccessPolicy {
@@ -29,6 +37,7 @@ export function permitsOfficeRequest(policy: OfficeAccessPolicy, request: {
   url: string; method: string; header(name: string): string | undefined;
 }): boolean {
   if (policy.mode !== 'trusted_office' || !policy.origin || !policy.proxyProof) return false;
+  if (request.header(PUBLIC_GATEWAY_HEADER) !== undefined) return false;
   const proof = request.header('X-Hawa-Office-Proof') || '';
   if (Buffer.byteLength(proof) !== Buffer.byteLength(policy.proxyProof) ||
       !timingSafeEqual(Buffer.from(proof), Buffer.from(policy.proxyProof))) return false;

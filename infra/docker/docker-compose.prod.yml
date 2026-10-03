@@ -67,6 +67,12 @@ services:
     logging: *logging
     ports:
       - "${HAWA_BIND_IP:-127.0.0.1}:${HAWA_PORT:-8080}:80"
+      # The public listeners (ADR-294): the customer API (design-api.hawzhin.app) and the Desk
+      # (desk.hawzhin.app). Always on the host's loopback, whatever HAWA_BIND_IP says: only cloudflared,
+      # running on the same Mac, connects to them. Nothing is public until the tunnel is installed
+      # (infra/cloudflared/install.sh, runbooks/GO_LIVE_WEBSITE.md).
+      - "127.0.0.1:${HAWA_CUSTOMER_GATEWAY_PORT:-8081}:8081"
+      - "127.0.0.1:${HAWA_DESK_GATEWAY_PORT:-8082}:8082"
     volumes:
       # Files are bound from ~/.hawa/runtime (ADR-158, addendum 3): a real directory, never a link and
       # never pruned, that deploy.sh rewrites in place from the release (and the office proof from

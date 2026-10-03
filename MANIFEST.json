@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T18:53:47Z",
+  "generatedAt": "2026-10-03T19:19:24Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 949,
+  "fileCount": 953,
   "files": [
     {
       "path": ".dockerignore",
@@ -1369,8 +1369,8 @@
     },
     {
       "path": "adrs/294_public_gateway_through_cloudflare_tunnel.md",
-      "sha256": "b46ea2b2cddc86ca80cfd5cbd3172a9e3ef360f248a12986f65b13f0bf64d23f",
-      "bytes": 251
+      "sha256": "acfcfe91c8e5cbf90216722dfdb321301c57b509e455953a1dba4f93da49e268",
+      "bytes": 13288
     },
     {
       "path": "adrs/NUMBER_BLOCKS.json",
@@ -3724,8 +3724,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "8766b6752a39b676b5f608534fba70f1264452277e43a8a4a3dcef92309e6800",
-      "bytes": 922997
+      "sha256": "a4d6be0a51c29d87e15f9aea3c1eb66bcb78c9d3442310fac753f2e94b0e7e8b",
+      "bytes": 924040
     },
     {
       "path": "plans/user-stories.csv",
@@ -3871,6 +3871,11 @@
       "path": "runbooks/GOOGLE_SHEET_ROW_IDENTITY.md",
       "sha256": "2b94b705d69e0ff4f0f074f42fadb16e73b252fc6539f60de1967737594c2947",
       "bytes": 4347
+    },
+    {
+      "path": "runbooks/GO_LIVE_WEBSITE.md",
+      "sha256": "bcc3b1d89e5569865bc7ea0d4a1e5c37d97ab423c291022ce5d5366098024c27",
+      "bytes": 15748
     },
     {
       "path": "runbooks/LIVE_PILOT.md",
@@ -4623,6 +4628,11 @@
       "bytes": 6249
     },
     {
+      "path": "scripts/test/cloudflared-install.test.ts",
+      "sha256": "43e77eacb41815e413244802f83d39a52519e8a8f9a6fd517a0f80c8a8fbb16c",
+      "bytes": 10731
+    },
+    {
       "path": "scripts/test/lint-provider-egress.test.ts",
       "sha256": "08c355843989f1972068a23bc2853a5541be62e554583a4065b943b3c248c25f",
       "bytes": 3293
@@ -4654,8 +4664,8 @@
     },
     {
       "path": "scripts/test/service-boundaries.test.ts",
-      "sha256": "9456640c5bac90ca2e2a8d272a1ebc6fd701ac2574d3f1ee763ccf5fe9698d65",
-      "bytes": 9495
+      "sha256": "1a7f6af2a5e5cfcd357801a91af3d9575565a235dbd7fc556386774b470af1f7",
+      "bytes": 10112
     },
     {
       "path": "scripts/test/suite-stability-report.test.ts",
@@ -4666,6 +4676,11 @@
       "path": "scripts/test/typecheck-tests.test.ts",
       "sha256": "5ad5c32f75442dd9030b1399dd04a560d42e2f287273bd8b4e101487e2d0d24c",
       "bytes": 3007
+    },
+    {
+      "path": "scripts/test/verify-public-gateway.test.ts",
+      "sha256": "22b4d163f72ec04b22353f025aef2d4638d9f6f12b48f5757c19cc24fe062e1a",
+      "bytes": 10296
     },
     {
       "path": "scripts/test_gateway_models.ts",
@@ -4716,6 +4731,11 @@
       "path": "scripts/verify_live_h01_h03.ts",
       "sha256": "2eeef4b5962c5e178f04447532af5aa0b9f10040ba1af932d8a05542050a975a",
       "bytes": 10084
+    },
+    {
+      "path": "scripts/verify_public_gateway.ts",
+      "sha256": "f3086fd23906cba00269d5e62bc86e49df7b405bee501541bf2b6db76777d873",
+      "bytes": 14088
     },
     {
       "path": "scripts/verify_release_manifest.ts",

@@ -45,9 +45,17 @@ it('excludes planted Core secrets, preserves service identity, and regenerates w
 
 it('overwrites caller proof in every nginx Core proxy location and keeps Desk free of the secret', () => {
   const nginx = readFileSync(resolve('infra/docker/nginx.conf'),'utf8');
-  const coreLocations = nginx.split(/location\s/).filter(section=>section.includes('proxy_pass http://core_api;'));
+  // The office listener (port 80): every Core location sends the server-only proof. The public
+  // listeners after it (ADR-294, 8081 and 8082) never do, and mark every request as public instead.
+  const publicStart = nginx.indexOf('listen 8081');
+  expect(publicStart).toBeGreaterThan(0);
+  const office = nginx.slice(0, publicStart), publicServers = nginx.slice(publicStart);
+  const coreLocations = office.split(/location\s/).filter(section=>section.includes('proxy_pass http://core_api;'));
   expect(coreLocations.length).toBeGreaterThan(0);
   for (const location of coreLocations) expect(location).toContain('include /etc/nginx/hawa-office-proof.conf;');
+  expect(publicServers).toContain('proxy_pass http://core_api;');
+  expect(publicServers).not.toContain('hawa-office-proof');
+  expect(publicServers.match(/proxy_set_header X-Hawa-Public-Gateway "(?:customer|desk)";/g)).toHaveLength(2);
   const compose = readFileSync(resolve('infra/docker/docker-compose.prod.yml'),'utf8');
   expect(compose.slice(compose.indexOf('x-worker:'),compose.indexOf('services:'))).not.toContain('- .env.production');
 });
