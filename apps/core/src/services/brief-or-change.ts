@@ -35,6 +35,17 @@ const EDITS_EN = /\b(?:take|get|leave|cut|keep|strip)\s+(?:\S+\s+){0,5}?(?:out|o
 const ARRANGES_EN = /\b(?:make|put|add|move|use|write|spell|enlarge|increase|decrease)\b/iu;
 const EDITS_CKB = /(?:لاببە|لابە|لابدە|لابەرە|لاببەن|بسڕەوە|بسڕنەوە|دەربهێنە|دەریبهێنە|بگۆڕە|بیگۆڕە|بگۆڕن|چاک\s*بکە|ڕاست\s*بکەرەوە|لە\s+جیاتی)/u;
 
+/**
+ * Hunt 3 (2026-10-03): event copy said as an update of an event already known, not as a brief of its own: an apology
+ * or a correction first ("sorry the workshop date is 16 October 2026"), a definite subject said to be somewhere or
+ * at some time ("it's at the Divan hotel now, …", "the seminar is on 16 October …"), or a move ("we moved the
+ * workshop to …", "postponed", "now", "instead"). Each opened a second request that drafted by itself while the
+ * design it updated was on the way. The requester is asked "a change to it, or a new design?".
+ */
+const UPDATES_EN = /^(?:(?:sorry|actually|oh|oops|correction|update|small\s+change)\b|(?:it'?s|it\s+is|it\s+will\s+be|it'?ll\s+be|the\s+[\p{L}'’-]+(?:\s+[\p{L}'’-]+)?\s+(?:is|are|will\s+be|was|has\s+been|got)\b))|\b(?:now|instead|any\s?more|moved|postponed|rescheduled|delayed|brought\s+forward|changed)\b/iu;
+/** Sorani: sorry, now, was postponed, was changed. Needs native review. */
+const UPDATES_CKB = /^(?:ببورە|ئێستا)(?![\p{L}\p{M}])|(?:دواخرا|دواخراوە|گۆڕدرا|گۆڕا)(?![\p{L}\p{M}])/u;
+
 /** Words that name an event: a brief may name its own; an edit names the design's. */
 const NAMES_EVENT = /\b(?:workshop|seminar|conference|ceremony|party|dinner|meeting|graduation|wedding|festival|celebration|exhibition|fair|concert|launch|tournament|forum|summit|symposium|lecture|open\s+day|training|course|competition|campaign)\b|(?:سیمینار|کۆنفرانس|ئاهەنگ|فێستیڤاڵ|کۆبوونەوە|پێشانگا|وۆرکشۆپ|خول)/iu;
 
@@ -70,7 +81,7 @@ export function editsADesignOnTheWay(text: string, requests: ChatRequestView[]):
   const repeats = repeatsName(core, requests);
   // An event with its date or time, or several event details: copy of its own, a brief. With the name of
   // a design on the way it may be that design's corrected copy, or a new edition: the requester is asked.
-  if (carriesBriefCopy(core)) return repeats ? 'unclear' : null;
+  if (carriesBriefCopy(core)) return repeats || UPDATES_EN.test(core) || UPDATES_CKB.test(core) ? 'unclear' : null;
   const part = DEFINITE_PART_EN.test(core) || DEFINITE_PART_CKB.test(core);
   if (part && (EDITS_EN.test(core) || EDITS_CKB.test(core))) {
     // "Remove the logo from the poster for our graduation ceremony" may be a brief that names its own event:
@@ -87,7 +98,11 @@ export function editsADesignOnTheWay(text: string, requests: ChatRequestView[]):
  */
 export function reconsiderNewBrief(input: TurnInput, plan: TurnPlan): { reading: IntentReading; plan: TurnPlan } | null {
   const { reading } = input;
-  if (reading.intent !== 'new_brief' || reading.explicitNew || reading.source !== 'rules') return null;
+  // Hunt 3: words short of a brief of their own (an event named without its date) are read as unclear, and asked
+  // "a change to it, or a new design?"; when they certainly edit a part of the design on the way ("the title should
+  // just be Quality Assurance Workshop for university deans") they are its change, as when they read as a brief.
+  const unclear = reading.intent === 'unclear' && !reading.cancelWords && !reading.redo;
+  if ((reading.intent !== 'new_brief' && !unclear) || reading.explicitNew || reading.source !== 'rules') return null;
   // A brief planTurn opens, or asks about ("a change to it, or a new design?") because it repeats a design's words.
   const asked = plan.kind === 'ask' && plan.allowNew && !plan.redo && !plan.photo;
   if (!(plan.kind === 'open' && !plan.resolves) && !asked) return null;

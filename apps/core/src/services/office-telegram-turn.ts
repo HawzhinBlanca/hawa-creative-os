@@ -70,8 +70,11 @@ export type OfficeIntent = 'approve' | 'change' | 'reject' | 'unclear';
 const OFFICE_APPROVE = /^(?:(?:ok(?:ay)?|yes|yep|yeah|good|great|perfect|fine|nice|excellent|lgtm|looks?\s+(?:good|great|fine|perfect)|all\s+good|approved?|go(?:\s+ahead)?|👍|✅|باشە|زۆر\s+باشە|جوانە|پەسەندە|پەسەند|ڕێکە)[\s,،!.:-]*)*(?:(?:please\s+)?(?:send(?:\s+(?:it|them))?(?:\s+(?:now|over|out|to\s+(?:them|him|her|the\s+client)))?|ship\s+it|approved?|go(?:\s+ahead)?|بینێرە|بنێرە|بینێرن|پەسەند\s+کرا|پەسەندە|پەسەند)[\s,،!.]*)+$/iu;
 /** Rejection in the office's words: "reject", "rejected", "no, cancel this", Sorani "reject it", "rejected". */
 const OFFICE_REJECT = /^(?:no[\s,،!.]+)?(?:reject(?:ed|\s+(?:it|this|that))?|decline(?:d)?|not\s+approved)\b|(?:ڕەتی\s+بکەرەوە|ڕەتکرایەوە|ڕەتدەکرێتەوە|ڕەت\s+کرایەوە|ڕەتی\s+دەکەمەوە)/iu;
-/** "no, cancel this", "cancel it": a rejection of the whole design (category `task`). */
-const OFFICE_CANCEL = /^(?:no[\s,،!.]+)?(?:cancel|scrap|drop|forget)(?:\s+(?:it|this|that|the\s+design))?[\s!.]*$/iu;
+/**
+ * "no, cancel this", "cancel it": a rejection of the whole design (category `task`). Hunt 3 (2026-10-03): "forget it"
+ * is a dismissal like "never mind" (ADR-272), not a rejection; "forget the design" names what it rejects.
+ */
+const OFFICE_CANCEL = /^(?:no[\s,،!.]+)?(?:(?:cancel|scrap|drop)(?:\s+(?:it|this|that|the\s+design))?|forget\s+(?:about\s+)?the\s+design)[\s!.]*$/iu;
 /**
  * ADR-253 (live 2026-10-02, L20): a polite request around cancelling words: "could you please cancel …",
  * "can you drop it?", "would you kindly cancel this". The requester rules strip a leading "please", not
@@ -84,7 +87,8 @@ function cancelsPolitely(core: string): boolean {
   const asked = core.replace(POLITE_ASK, '');
   if (asked === core || !asked) return false;
   const rest = asked.replace(/[\s?؟]+$/u, '');
-  return OFFICE_CANCEL.test(rest) || readIntentByRules(rest).intent === 'cancel';
+  const reading = readIntentByRules(rest);
+  return OFFICE_CANCEL.test(rest) || (reading.intent === 'cancel' && !reading.bareCancel);
 }
 
 /**
@@ -141,7 +145,10 @@ export function readOfficeIntent(text: string): { intent: OfficeIntent; rejectio
   const reading = readIntentByRules(t);
   if (reading.intent === 'new_brief') return { intent: 'unclear' };
   if (reading.intent === 'change' || readsAsChange(t)) return { intent: 'change' };
-  if (reading.intent === 'cancel') return { intent: 'reject', rejectionCategory: 'task' };
+  // Hunt 3 (2026-10-03): a cancel that names nothing ("never mind", "stop", "no need", "forget it") may be about the
+  // last thing said, as a requester's is (ADR-251): it rejected the only waiting draft with no question. It is
+  // unclear: with a reply the member is asked what to do; without one, intake reads it.
+  if (reading.intent === 'cancel' && !reading.bareCancel) return { intent: 'reject', rejectionCategory: 'task' };
   const approves = reading.intent === 'approval' || OFFICE_APPROVE.test(core) || OFFICE_APPROVE.test(t.replace(/\s+/g, ' '));
   // "approved?", "is it approved?" ask; they approve nothing.
   if (approves && !/[?؟]\s*$/u.test(t)) return { intent: 'approve' };

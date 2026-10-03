@@ -97,11 +97,16 @@ const LEAD_IN = /^(?:(?:hi|hello|hey|dear|team|all|everyone|guys|so|also|and|ok(
 const EN_ASK = '(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+|kindly\\s+|also\\s+)?(?:make|create|design|prepare|produce|do|draw|put\\s+together|whip\\s+up|get\\s+(?:us|me)|help\\s+(?:us\\s+|me\\s+)?with)' +
   '|(?:please|pls|plz|kindly)\\s+(?:make|create|design|prepare|produce|do|draw)' +
   "|(?:we|i)\\s*(?:'d|’d|\\s+would)\\s+(?:like|love)|(?:we|i)\\s+(?:need|want)|(?:we|i)\\s*(?:'re|’re|'m|’m|\\s+are|\\s+am)\\s+looking\\s+for)";
-const EN_OPENER = new RegExp(`(?<![\\p{L}\\p{N}'’])${EN_ASK}(?:\\s+(?:us|me))?\\s+(?=${words(4)}(?:${NOUN}|something|anything))`, 'giu');
+/**
+ * Hunt 3: a design asked for as "one" ("we need a new one for the science fair", "can you make one for the Book Fair",
+ * "another one for …"): the request was not found, and the whole sentence was printed as the copy.
+ */
+const ONE = "(?:(?:a\\s+)?new\\s+one|another(?:\\s+one)?(?=\\s+(?:for|about)\\b)|one(?:\\s+more)?(?=\\s+(?:for|about)\\b))";
+const EN_OPENER = new RegExp(`(?<![\\p{L}\\p{N}'’])${EN_ASK}(?:\\s+(?:us|me))?\\s+(?=${words(4)}(?:${NOUN}|something|anything)|${ONE})`, 'giu');
 /** An order at the start of a sentence: "Design a simple KAAE banner", "Make us two posters". */
 const EN_IMPERATIVE = new RegExp(`^(?:please\\s+)?(?:make|create|design|prepare|produce|draw)\\s+(?:us\\s+|me\\s+)?(?=(?:a|an|the|another|one|two|three|some|\\d+)\\s+${words(4)}${NOUN})`, 'iu');
 /** The design named after an ask, and what it is for: "a KAAE poster for our", "an Instagram story and a poster announcing the". */
-const EN_DESIGN = new RegExp(`${words(4)}(?:${NOUN}|something|anything)` +
+const EN_DESIGN = new RegExp(`(?:${ONE}|${words(4)}(?:${NOUN}|something|anything))` +
   `(?:\\s+${NOUN})*(?:\\s+(?:and|or|&)\\s+${words(3)}${NOUN}(?:\\s+${NOUN})*)*` +
   '(?:\\s+(?:please|pls|plz))?' +
   '(?:\\s*:|\\s+(?:to\\s+(?:announce|promote|advertise|celebrate|invite\\s+(?:people\\s+)?to)|announcing|promoting|advertising|celebrating|inviting\\s+(?:people\\s+)?to|for|about|on|of|regarding|that\\s+(?:says|reads|announces)))?' +
@@ -138,6 +143,45 @@ const EN_INSTRUCTION = new RegExp('^(?:' + [
   'it\\s+should\\b', '(?:in|with)\\s+(?:our\\s+)?(?:brand|blue|red|green|yellow|black|white|gold)\\s+colou?rs?\\b', 'no\\s+need\\b',
   '(?:the\\s+)?(?:photos?|pictures?|images?|logo)\\s+(?:are|is|should|must)\\b', '(?:these|those)\\s+(?:photos?|pictures?|images?)\\b',
 ].join('|') + ')', 'iu');
+/**
+ * Hunt 3 (2026-10-03): more sentences addressed to the designer, which the rules printed as the design's copy
+ * ("Don't forget the logo.", "Send it to me by Thursday.", "Keep it simple.", "Avoid red.", "Regards, Ahmed"). Each
+ * speaks of the design or its making, never to the event's audience: "Don't miss it!", "Please bring your ID",
+ * "Use code SAVE10", "Send your CV to …" and "Join us" stay copy.
+ */
+const COLOURS = 'red|blue|green|yellow|black|white|gold(?:en)?|silver|orange|purple|pink|gr[ae]y|brown|navy|maroon|beige|teal|dark|bright|neon|pastel';
+const EN_DESIGNER = new RegExp('^(?:(?:please|pls|plz|kindly|also|and|but|oh|ok(?:ay)?)[\\s,]+)*(?:' + [
+  // "Don't forget the logo", "Do not include prices", "Don't put any photos", "never use red"
+  "(?:don'?t|do\\s+not|never)\\s+(?:forget\\s+(?:the|our|my|a|an|to\\s+(?:add|include|put|use|mention|write|show|place))\\b|" +
+    `(?:include|put|add|show|write|mention|place|print|change|remove)\\b|use\\s+(?:any\\s+|the\\s+|our\\s+|my\\s+|too\\s+much\\s+)?(?:photos?|pictures?|images?|logos?|colou?rs?|fonts?|emojis?|${COLOURS})\\b)`,
+  'remember\\s+to\\s+(?:add|include|put|use|mention|write|show|place)\\b',
+  // "Keep it simple", "Put it in Kurdish too", "Write it in English", "Send it to me by Thursday"
+  '(?:keep|put|write|translate|send|set|print)\\s+(?:it|them|this|the\\s+(?:design|poster|post|flyer|banner|text|title|card|story))\\b',
+  `avoid\\s+(?:using\\s+)?(?:the\\s+)?(?:colou?rs?\\s+)?(?:${COLOURS}|photos?|pictures?|images?|emojis?|clip\\s*art|stock)\\b`,
+  'mention\\b(?!\\s+this\\b)',
+  // "with 3 photos of the campus", "using the attached pictures"
+  '(?:with|using)\\s+(?:(?:the|these|those|our|my|some|a\\s+few|attached|\\d+|two|three|four|five|six)\\s+)*(?:photos?|pictures?|images?|pics?|logos?)\\b',
+  // Sign-offs: "Regards, Ahmed", "Best regards", "Sincerely", "Thanks, Sara"
+  '(?:(?:best|kind|warm|many)\\s+)?regards\\b', 'sincerely\\b', 'yours\\s+(?:truly|faithfully|sincerely)\\b',
+  "(?:thanks?|thank\\s+you|cheers)\\s*,\\s*\\p{L}+(?:\\s+\\p{L}+)?[\\s!.]*$",
+  // "ASAP please", "Urgent!", "Please hurry"
+  "(?:asap|urgent(?:ly)?|it'?s\\s+urgent|very\\s+urgent|hurry(?:\\s+up)?|as\\s+soon\\s+as\\s+possible)(?:\\s+please)?[\\s!.]*$",
+  // "Also in Kurdish please", "With our logo please", "A4 size please", "Bigger title please"
+  '(?:in|into)\\s+(?:kurdish|english|arabic|sorani|both\\s+languages)\\b',
+  '(?:with|in)\\s+(?:our|the|my)\\s+(?:logo|colou?rs?|brand(?:ing)?|template|style|font)s?\\b(?:\\s+please)?[\\s!.]*$',
+  '(?:a[0-6]|square|portrait|landscape|story|vertical|horizontal|instagram|print)\\s+(?:size|format)\\b',
+  '(?:bigger|smaller|larger|bolder|brighter|darker)\\s+(?:title|text|font|logo|photo|picture|letters)\\b',
+  // Style: "Same style as last time", "Something modern", "Nothing too fancy", "Blue and gold colours"
+  '(?:the\\s+)?same\\s+(?:style|design|look|colou?rs?|layout|template)\\s+as\\b',
+  '(?:something|nothing)\\s+(?:too\\s+|very\\s+|more\\s+|really\\s+|a\\s+bit\\s+)?(?:modern|simple|fancy|elegant|colou?rful|bright|clean|minimal(?:ist)?|professional|classic|formal|fun|creative|bold|cute|nice|beautiful|plain|flashy)\\b',
+  `(?:(?:${COLOURS})\\s*(?:,|and|&)\\s*)*(?:${COLOURS})\\s+colou?rs?(?:\\s+please)?[\\s!.]*$`,
+  // To the bot: "Let me know if …", "I'll send the photos later", "Ignore the old one"
+  'let\\s+(?:me|us)\\s+know\\b', "(?:i|we)(?:'ll|\\s+will)\\s+(?:send|share|forward|add|give|bring)\\b", 'ignore\\s+(?:the|my|our|that|this)\\b',
+].join('|') + ')', 'iu');
+/** "PS:", "Note:", "NB:" before words to the designer ("Note: the logo must be on top", "PS: use our colours"). */
+const ASIDE = /^(?:p\.?\s?s\.?|n\.?\s?b\.?|note)\s*[:.\-–]\s*/iu;
+/** Sorani: "don't forget" (لەبیر مەکە, لەبیرت نەچێت), "urgent" said alone (بەپەلە, پەلەیە). Needs native review. */
+const CKB_DESIGNER = /(?:لەبیر\s*مەکە|لەبیرت\s*نەچێت)|^(?:زۆر\s+)?(?:بەپەلە|پەلەیە)[\s!.]*$/u;
 const CKB_INSTRUCTION = /^(?:تکایە|سوپاس|ئەم\s+وێنانە|وێنەکان|لۆگۆکە|ڕەنگی)|(?:بەکاربهێنە|بەکاربێنە|دابنێ|زیاد\s*بکە)[.!؟?]*$/u;
 
 const ws = (text: string) => text.replace(/\s+/g, ' ').trim();
@@ -227,7 +271,21 @@ export function requestLead(text: string): { end: number; words: string } | null
 /** A sentence to the designer, not copy. */
 export function readsAsInstruction(sentence: string): boolean {
   const s = sentence.trim();
-  return EN_INSTRUCTION.test(s) || CKB_INSTRUCTION.test(s) || isDesignerRemark(s);
+  const aside = ASIDE.exec(s);
+  if (aside && aside[0].length < s.length) return readsAsInstruction(s.slice(aside[0].length));
+  return EN_INSTRUCTION.test(s) || EN_DESIGNER.test(s) || CKB_INSTRUCTION.test(s) || CKB_DESIGNER.test(s) || isDesignerRemark(s);
+}
+
+/**
+ * Hunt 3 (2026-10-03): closing words a laid-out brief says to the designer (chat-campaign-intake.ts). Narrower than
+ * `readsAsInstruction` for Sorani: a closing line that starts with "please" or "thanks" may be the event's own
+ * ("سوپاس بۆ ئامادەبوونتان", thank you for attending), so only Sorani "don't forget", "urgent" and thanks said alone count.
+ */
+export function speaksToTheDesigner(sentence: string): boolean {
+  const s = sentence.trim();
+  const aside = ASIDE.exec(s);
+  if (aside && aside[0].length < s.length) return speaksToTheDesigner(s.slice(aside[0].length));
+  return EN_INSTRUCTION.test(s) || EN_DESIGNER.test(s) || CKB_DESIGNER.test(s) || /^(?:زۆر\s+)?سوپاس[\s!.🙏]*$/u.test(s) || isDesignerRemark(s);
 }
 
 // --- the grounding guard -------------------------------------------------------------------------------
@@ -310,10 +368,28 @@ export function groundLine(source: string, proposed: string, forbidden: Span[] =
 
 // --- extraction ----------------------------------------------------------------------------------------
 
+const QUOTED = /["“„«]([^"“”„«»\n]{2,200})["”»]/gu;
 /** Words in quotation marks inside a request: the requester marked them as the text. */
 function quotedCopy(source: string): ProposedCopy | null {
-  const found = [...source.matchAll(/["“„«]([^"“”„«»\n]{2,200})["”»]/gu)].map((m) => m[1].trim()).filter((t) => contentWords(t) > 0);
+  const found = [...source.matchAll(QUOTED)].map((m) => m[1].trim()).filter((t) => contentWords(t) > 0);
   return found.length ? { headline: found[0], lines: found.slice(1) } : null;
+}
+
+/** Joining words at the start of a stretch said beside quoted words ("and it is on", "on", "at"). */
+const DETAIL_GLUE = /^(?:(?:and|or|but|so|also|it|it's|it’s|its|is|are|will|be|held|on|at|in|which|that|this)\s+)+/iu;
+/**
+ * Hunt 3 (2026-10-03): the date, time and place said beside quoted words. "Can you make a poster for "Teacher
+ * Appreciation Day" on 20 October 2026 at 2 pm in the KAAE hall?" printed only the quoted name: the quotes mark the
+ * name, not all the text. The rest of the request is read by the rules as an unquoted request is, and a stretch
+ * with a number in it (a date, a time, a price, a room) is kept as a line; the guard rebuilds it from the
+ * requester's own words, as any line.
+ */
+function unquotedDetails(source: string): string[] {
+  const rest = source.replace(QUOTED, '\n');
+  const rules = ruleCopy(rest, requestSpans(rest));
+  if (!rules) return [];
+  return [rules.headline, ...rules.lines].map((line) => line.replace(DETAIL_GLUE, '').trim())
+    .filter((line) => /\p{N}/u.test(line) && contentWords(line) > 0 && !readsAsInstruction(line));
 }
 
 const GLUE_START = /^(?:(?:it|this|that)(?:'s|’s|\s+is|\s+will\s+be)|it'll\s+be)\s+(?:(?:on|at|in|held\s+(?:on|at|in)|taking\s+place\s+(?:on|at|in))\s+)?(?:the\s+)?/iu;
@@ -323,10 +399,37 @@ const GLUE_START = /^(?:(?:it|this|that)(?:'s|’s|\s+is|\s+will\s+be)|it'll\s+b
  * before and after a request in its sentence kept ("For our Teacher Appreciation Day, could you design
  * a poster?" keeps "Teacher Appreciation Day"), leading glue dropped.
  */
+/**
+ * Hunt 3 (2026-10-03): chat before a request ("Thanks for the last one!", "Great job on the workshop poster.", "hello
+ * hope you are well, I wanted to say thanks …, and now …") and a question to the bot inside it ("… can you make the
+ * title bigger and also …") were printed as the design's headline. Before the first request, a clause of chat is
+ * left out from the start of a piece, and a piece that asks the bot something is left out whole; words to the
+ * designer are left out from the end of any piece ("…, please use the same style").
+ */
+const CHAT_CLAUSE = new RegExp('^(?:' + [
+  '(?:hi|hello|hey|dear\\s+\\p{L}+|good\\s+(?:morning|afternoon|evening)|salam|slaw)(?:\\s+(?:there|team|all|everyone))?(?:\\s+(?:i\\s+)?hope\\s+.*)?',
+  "(?:i\\s+)?hope\\s+(?:you\\s+are|you'?re|all\\s+is|everything\\s+is)\\s+(?:well|good|fine).*", 'how\\s+are\\s+you.*',
+  "(?:i\\s+)?(?:just\\s+)?(?:wanted\\s+to\\s+)?(?:say\\s+)?(?:thanks?|thank\\s+you)(?:\\s+(?:so\\s+much|a\\s+lot|again))?(?:\\s+for\\s+.*)?",
+  '(?:great|good|nice|amazing|excellent|lovely)\\s+(?:job|work)\\b.*', 'well\\s+done\\b.*',
+  '(?:it|that|this)\\s+(?:was|looked|looks|is)\\s+(?:really\\s+|so\\s+|very\\s+)?(?:great|good|amazing|perfect|beautiful|lovely)\\b.*',
+  '(?:and\\s+|so\\s+)?(?:now|also|then|next|so|ok(?:ay)?|anyway)',
+].join('|') + ')$', 'iu');
+const ASKS_THE_BOT_INSIDE = /\b(?:can|could|would|will)\s+(?:you|u)\b/iu;
+function withoutChat(piece: string, beforeAsk: boolean): string {
+  let clauses = piece.split(/(?<=[,،;])\s*/u);
+  if (beforeAsk) {
+    while (clauses.length && CHAT_CLAUSE.test(clauses[0].replace(/[\s,،;.!?]+$/u, '').trim())) clauses = clauses.slice(1);
+    if (clauses.some((c) => ASKS_THE_BOT_INSIDE.test(c))) return '';
+  }
+  while (clauses.length > 1 && readsAsInstruction(clauses.at(-1)!.replace(/[\s,،;.!?]+$/u, ''))) clauses = clauses.slice(0, -1);
+  return clauses.join(' ').replace(/\s+/g, ' ');
+}
+
 function ruleCopy(source: string, asks: Span[]): ProposedCopy | null {
   const kept: string[] = [];
-  const clean = (piece: string, beforeAsk: boolean) => {
-    let t = piece.replace(/^[\s,،:;!.-]+|[\s,،:;.?؟!-]+$/gu, '').replace(CKB_TRAILING_VERB, '').replace(/[\s,،]+$/u, '');
+  const firstAsk = asks.length ? Math.min(...asks.map(([a]) => a)) : Infinity;
+  const clean = (piece: string, beforeAsk: boolean, beforeFirst = false) => {
+    let t = withoutChat(piece, beforeFirst).replace(/^[\s,،:;!.-]+|[\s,،:;.?؟!-]+$/gu, '').replace(CKB_TRAILING_VERB, '').replace(/[\s,،]+$/u, '');
     if (beforeAsk) t = t.replace(/^(?:(?:for|about)\s+(?:our|the|this|my|their)|بۆ)\s+/iu, '');
     t = t.replace(GLUE_START, '').replace(/^(?:(?:ئەوە|ئەمە)\s+)?(?:لە)\s+/u, '').trim();
     if (t && contentWords(t)) kept.push(t);
@@ -336,9 +439,9 @@ function ruleCopy(source: string, asks: Span[]): ProposedCopy | null {
     const inside = asks.filter(([a, b]) => a >= start && b <= end);
     // A sentence with a request in it is taken apart around the request ("Could you design … for our X?").
     if (!inside.length && (readsAsInstruction(s) || GREETING_ONLY.test(s))) continue;
-    if (!inside.length) { clean(s, false); continue; }
+    if (!inside.length) { clean(s, false, end <= firstAsk); continue; }
     let from = start;
-    for (const [a, b] of inside) { clean(source.slice(from, a), true); from = b; }
+    for (const [a, b] of inside) { clean(source.slice(from, a), true, a <= firstAsk); from = b; }
     clean(source.slice(from, end), false);
   }
   return kept.length ? { headline: kept[0], lines: kept.slice(1) } : null;
@@ -477,9 +580,12 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   let refused: CopyExtractionReceipt['refused'];
   let ledger: number | undefined;
   const quoted = quotedCopy(source);
-  const fromQuotes = quoted && grounded(flat, quoted, forbidden);
+  const details = quoted ? unquotedDetails(source) : [];
+  const fromQuotes = quoted && grounded(flat, { headline: quoted.headline, lines: [...quoted.lines, ...details] }, forbidden);
   if (fromQuotes) {
-    chosen = { method: 'quoted', why: 'The request quoted its text; the quoted words are the copy, exactly as typed.', copy: fromQuotes };
+    chosen = { method: 'quoted', why: details.length ? 'The request quoted its text; the quoted words are the copy, exactly as typed, ' +
+      'and the date, time or place said beside them was kept from the requester\'s own words.'
+      : 'The request quoted its text; the quoted words are the copy, exactly as typed.', copy: fromQuotes };
   } else if (ctx.model && ctx.updateId !== null && draft.clientId && source.length <= MAX_MODEL_TEXT) {
     const proposal = await ctx.model.read({ tenantId: ctx.tenantId, updateId: ctx.updateId, chatId: draft.sourceChannelId,
       clientId: draft.clientId, text: source });
@@ -505,6 +611,7 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   }
   // Lines chosen from a request sentence (model or rules) start with a capital; quoted words stay as typed.
   const capitals = chosen.method === 'model' || chosen.method === 'rules';
+  const asQuoted = new Set(chosen.method === 'quoted' && quoted ? [quoted.headline, ...quoted.lines] : []);
   // Live 2026-10-02: a packed client's request is labelled with the client ("Canary Test: Spring Concert"),
   // never the sender's first name; the sender only when no client is known (as chat-campaign-intake.ts).
   const clientName = draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : clientPackOf(draft.clientId)?.names.en;
@@ -513,7 +620,7 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   const unowned = capitals && draft.clientId ? withoutClientPossessive(chosen.copy.headline,
     clientNamesFor(draft.clientId, draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : null)) : null;
   const typed = [unowned && !asksTheBot(unowned.rest) ? unowned.rest : chosen.copy.headline, ...chosen.copy.lines];
-  const all = typed.map((line) => (capitals ? capitalFirst(line) : line));
+  const all = typed.map((line) => (capitals || (chosen!.method === 'quoted' && !asQuoted.has(line)) ? capitalFirst(line) : line));
   const [headline, ...lines] = all;
   const capitalised = typed.filter((line, i) => line !== all[i]);
   const receipt: CopyExtractionReceipt = { ...base, method: chosen.method, why: chosen.why, headline, lines,

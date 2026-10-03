@@ -68,6 +68,18 @@ export function planRequestDeliverables(raw:string):RequestDeliverables {
     if (pieces.slice(1).some(p=>new RegExp(`^the\\s+${ROLE}`,'iu').test(unnamed(p)) && !new RegExp(`^${ROLE}\\s+(?:for|about)\\s+\\S`,'iu').test(unnamed(p))))
       return {kind:'single'};
     if (pieces.length>MAX_REQUEST_DELIVERABLES) return {kind:'limit',count:pieces.length};
+    // Bug hunt 3 (2026-10-03): "… and a story for it", "… a flyer for it too", "… for the same event": a later design
+    // whose subject only points back takes the earlier one's subject. It was opened on its own words ("a story for
+    // it"), without the event, its date or its place.
+    const firstRole=new RegExp(`^${ROLE}`,'iu').exec(unnamed(pieces[0]))?.[0];
+    const firstSubject=firstRole ? unnamed(pieces[0]).slice(firstRole.length) : '';
+    const pointsBack=new RegExp(`^(${ROLE})\\s+(?:for|about|of)\\s+(?:it|them|that|this|the\\s+same(?:\\s+(?:event|one|thing|day|occasion))?)(?:\\s+(?:too|as\\s+well|also))?[\\s.!?]*$`,'iu');
+    if (/^\s+(?:for|about)\s+\S/iu.test(firstSubject)) {
+      for (let i=1;i<pieces.length;i++) {
+        const back=pointsBack.exec(unnamed(pieces[i]));
+        if (back) pieces[i]=`${back[1]}${firstSubject}`.trim();
+      }
+    }
     const roleOnly=new RegExp(`^${ROLE}$`,'iu');
     const commonFormats=pieces.slice(0,-1).every(p=>roleOnly.test(p));
     const lastRole=new RegExp(`^${ROLE}`,'iu').exec(unnamed(pieces.at(-1)!))![0];
