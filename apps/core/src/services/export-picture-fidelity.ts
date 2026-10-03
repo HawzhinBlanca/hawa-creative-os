@@ -163,8 +163,11 @@ export interface TextLineFidelity {
   warnings: string[];
 }
 
-/** A frame's text without direction marks, joiners or spacing, for pairing a source frame with Canva's. */
-const plain = (text: string) => text.replace(/[‎‏‪-‮⁦-⁩⁠​-‍\s]+/gu, '');
+/**
+ * A frame's text without direction marks, joiners or spacing, for pairing a source frame with Canva's. In
+ * capitals: a title sent as typed under cap="all" may come back with the capitals written in (ADR-275).
+ */
+const plain = (text: string) => text.replace(/[‎‏‪-‮⁦-⁩⁠​-‍\s]+/gu, '').toUpperCase();
 const excerpt = (text: string) => { const t = text.replace(/[‎‏⁦-⁩⁠]/gu, '').trim(); return Array.from(t).length > 30 ? `${Array.from(t).slice(0, 29).join('')}…` : t; };
 
 /**

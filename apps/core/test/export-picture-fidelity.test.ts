@@ -236,6 +236,17 @@ describe('checkTextLines: does Canva wrap each text frame as the design did? (AD
     const dropped = checkTextLines(studio, studio, textDeck([HEAD, BODY]), textDeck([HEAD]));
     expect(dropped).toMatchObject({ pass: true, unmeasured: ['One line of body text'] });
   });
+
+  it('pairs a capitals title Canva wrote in capitals with its typed source frame (ADR-275)', () => {
+    const title: TextFrame = { text: 'Peer Review Week', box: [86, 387, 907, 265], color: 'F7B500', sz: 2900 };
+    const r = checkTextLines(
+      render([{ box: title.box, ink: '#F7B500', lines: 2, fontPx: HEAD_PX }]),
+      render([{ box: title.box, ink: '#F7B500', lines: 1, fontPx: HEAD_PX }]),
+      textDeck([title]), textDeck([{ ...title, text: 'PEER REVIEW WEEK' }], SLIDE.cy - 6350));
+    expect(r.unmeasured).toEqual([]);
+    expect(r.frames).toEqual([{ text: 'Peer Review Week', studio: 2, canva: 1 }]);
+    expect(r.pass).toBe(false);
+  });
 });
 
 // The recorded QC run and the office alert, through the lifecycle's own outcome path on the test database.
