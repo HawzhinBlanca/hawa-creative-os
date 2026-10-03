@@ -480,6 +480,22 @@ export function checkCanvaPptx(
     }
   }
 
+  // Text in a graphic frame (a table's cells) is drawn on the slide but is no shape: it was never read,
+  // so a table of words nobody approved passed the copy check. Each such frame counts as a text object
+  // the copy does not have, with no addressable source identity.
+  const frames: any[] = [];
+  find(doc, 'p:graphicFrame', frames);
+  for (const frame of frames) {
+    const nodes: any[] = [];
+    find(frame, 'a:t', nodes);
+    const frameText = nodes.flatMap(node => Array.isArray(node) ? node : [node])
+      .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join(' ').trim();
+    if (!frameText) continue;
+    texts.push(frameText);
+    shownTexts.push(frameText);
+    unaddressableText = true;
+  }
+
   // Word joiners (U+2060) are invisible: the studio deck adds them so Canva keeps "K-12" on one line.
   const normalize = (s: string) => s.replace(/\u2060/g, '').replace(/\s+/g, ' ').trim();
   // ADR-275: a block set in capitals passes when its text, or its text drawn under cap, equals the copy

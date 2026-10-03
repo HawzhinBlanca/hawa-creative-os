@@ -80,4 +80,15 @@ describe('soft line breaks and text outside shapes', () => {
     });
     expect(readPptxTextLayout(bytes).frames[0].text).toBe('PEER\nWEEK');
   });
+
+  it('fails text Canva or an editor put in a table, which the shape walk does not see', () => {
+    const table = `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="9" name="Table 9"/></p:nvGraphicFramePr><a:graphic><a:graphicData><a:tbl><a:tr><a:tc><a:txBody><a:bodyPr/><a:p>${run('Free entry for everyone', 'Inter')}</a:p></a:txBody></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+    const r = checkCanvaPptx(deck(shape(2, p(run('PEER REVIEW WEEK', 'Inter'))), shape(3, p(run('Join us.', 'Inter'))), table), COPY, POLICY);
+    expect(r.copyPass).toBe(false);
+    expect(r.textObjectCount).toBe(3);
+    expect(r.sourceTextObjects).toBeNull();
+    // An empty table adds nothing.
+    const empty = table.replace(run('Free entry for everyone', 'Inter'), '');
+    expect(checkCanvaPptx(deck(shape(2, p(run('PEER REVIEW WEEK', 'Inter'))), shape(3, p(run('Join us.', 'Inter'))), empty), COPY, POLICY).copyPass).toBe(true);
+  });
 });
