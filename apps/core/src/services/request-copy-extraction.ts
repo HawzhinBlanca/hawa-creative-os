@@ -154,6 +154,8 @@ const EN_DESIGNER = new RegExp('^(?:(?:please|pls|plz|kindly|also|and|but|oh|ok(
   '(?:keep|put|write|translate|send|set|print)\\s+(?:it|them|this|the\\s+(?:design|poster|post|flyer|banner|text|title|card|story))\\b',
   `avoid\\s+(?:using\\s+)?(?:the\\s+)?(?:colou?rs?\\s+)?(?:${COLOURS}|photos?|pictures?|images?|emojis?|clip\\s*art|stock)\\b`,
   'mention\\b(?!\\s+this\\b)',
+  // "with 3 photos of the campus", "using the attached pictures"
+  '(?:with|using)\\s+(?:(?:the|these|those|our|my|some|a\\s+few|attached|\\d+|two|three|four|five|six)\\s+)*(?:photos?|pictures?|images?|pics?|logos?)\\b',
   // Sign-offs: "Regards, Ahmed", "Best regards", "Sincerely", "Thanks, Sara"
   '(?:(?:best|kind|warm|many)\\s+)?regards\\b', 'sincerely\\b', 'yours\\s+(?:truly|faithfully|sincerely)\\b',
   "(?:thanks?|thank\\s+you|cheers)\\s*,\\s*\\p{L}+(?:\\s+\\p{L}+)?[\\s!.]*$",
@@ -349,10 +351,28 @@ export function groundLine(source: string, proposed: string, forbidden: Span[] =
 
 // --- extraction ----------------------------------------------------------------------------------------
 
+const QUOTED = /["“„«]([^"“”„«»\n]{2,200})["”»]/gu;
 /** Words in quotation marks inside a request: the requester marked them as the text. */
 function quotedCopy(source: string): ProposedCopy | null {
-  const found = [...source.matchAll(/["“„«]([^"“”„«»\n]{2,200})["”»]/gu)].map((m) => m[1].trim()).filter((t) => contentWords(t) > 0);
+  const found = [...source.matchAll(QUOTED)].map((m) => m[1].trim()).filter((t) => contentWords(t) > 0);
   return found.length ? { headline: found[0], lines: found.slice(1) } : null;
+}
+
+/** Joining words at the start of a stretch said beside quoted words ("and it is on", "on", "at"). */
+const DETAIL_GLUE = /^(?:(?:and|or|but|so|also|it|it's|it’s|its|is|are|will|be|held|on|at|in|which|that|this)\s+)+/iu;
+/**
+ * Hunt 3 (2026-10-03): the date, time and place said beside quoted words. "Can you make a poster for "Teacher
+ * Appreciation Day" on 20 October 2026 at 2 pm in the KAAE hall?" printed only the quoted name: the quotes mark the
+ * name, not all the text. The rest of the request is read by the rules as an unquoted request is, and a stretch
+ * with a number in it (a date, a time, a price, a room) is kept as a line; the guard rebuilds it from the
+ * requester's own words, as any line.
+ */
+function unquotedDetails(source: string): string[] {
+  const rest = source.replace(QUOTED, '\n');
+  const rules = ruleCopy(rest, requestSpans(rest));
+  if (!rules) return [];
+  return [rules.headline, ...rules.lines].map((line) => line.replace(DETAIL_GLUE, '').trim())
+    .filter((line) => /\p{N}/u.test(line) && contentWords(line) > 0 && !readsAsInstruction(line));
 }
 
 const GLUE_START = /^(?:(?:it|this|that)(?:'s|’s|\s+is|\s+will\s+be)|it'll\s+be)\s+(?:(?:on|at|in|held\s+(?:on|at|in)|taking\s+place\s+(?:on|at|in))\s+)?(?:the\s+)?/iu;
@@ -516,9 +536,12 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   let refused: CopyExtractionReceipt['refused'];
   let ledger: number | undefined;
   const quoted = quotedCopy(source);
-  const fromQuotes = quoted && grounded(flat, quoted, forbidden);
+  const details = quoted ? unquotedDetails(source) : [];
+  const fromQuotes = quoted && grounded(flat, { headline: quoted.headline, lines: [...quoted.lines, ...details] }, forbidden);
   if (fromQuotes) {
-    chosen = { method: 'quoted', why: 'The request quoted its text; the quoted words are the copy, exactly as typed.', copy: fromQuotes };
+    chosen = { method: 'quoted', why: details.length ? 'The request quoted its text; the quoted words are the copy, exactly as typed, ' +
+      'and the date, time or place said beside them was kept from the requester\'s own words.'
+      : 'The request quoted its text; the quoted words are the copy, exactly as typed.', copy: fromQuotes };
   } else if (ctx.model && ctx.updateId !== null && draft.clientId && source.length <= MAX_MODEL_TEXT) {
     const proposal = await ctx.model.read({ tenantId: ctx.tenantId, updateId: ctx.updateId, chatId: draft.sourceChannelId,
       clientId: draft.clientId, text: source });
@@ -544,6 +567,7 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   }
   // Lines chosen from a request sentence (model or rules) start with a capital; quoted words stay as typed.
   const capitals = chosen.method === 'model' || chosen.method === 'rules';
+  const asQuoted = new Set(chosen.method === 'quoted' && quoted ? [quoted.headline, ...quoted.lines] : []);
   // Live 2026-10-02: a packed client's request is labelled with the client ("Canary Test: Spring Concert"),
   // never the sender's first name; the sender only when no client is known (as chat-campaign-intake.ts).
   const clientName = draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : clientPackOf(draft.clientId)?.names.en;
@@ -552,7 +576,7 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   const unowned = capitals && draft.clientId ? withoutClientPossessive(chosen.copy.headline,
     clientNamesFor(draft.clientId, draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : null)) : null;
   const typed = [unowned && !asksTheBot(unowned.rest) ? unowned.rest : chosen.copy.headline, ...chosen.copy.lines];
-  const all = typed.map((line) => (capitals ? capitalFirst(line) : line));
+  const all = typed.map((line) => (capitals || (chosen!.method === 'quoted' && !asQuoted.has(line)) ? capitalFirst(line) : line));
   const [headline, ...lines] = all;
   const capitalised = typed.filter((line, i) => line !== all[i]);
   const receipt: CopyExtractionReceipt = { ...base, method: chosen.method, why: chosen.why, headline, lines,
