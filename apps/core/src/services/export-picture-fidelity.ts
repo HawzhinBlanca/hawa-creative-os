@@ -46,8 +46,13 @@ const samePlace = (a: Share, b: Share) => Math.abs(a.x - b.x) <= 0.005 && Math.a
 /** Turned the same way: mirrored alike, and the angle within a degree (Canva writes near-zero angles). */
 const sameTurn = (a: PptxPicture, b: PptxPicture) => a.orientation.mirrored === b.orientation.mirrored &&
   Math.min(Math.abs(a.orientation.rotation - b.orientation.rotation), 360 - Math.abs(a.orientation.rotation - b.orientation.rotation)) <= 1;
-/** Drawn on the page: a picture whose box lies wholly off the page, or has no area, shows nothing. */
-const onPage = (p: PptxPicture, doc: PptxPictures) => p.box.width > 0 && p.box.height > 0 &&
+/** Drawn alike: the same opacity within a tenth (a logo faded in Canva is not the logo the source placed). */
+const sameOpacity = (a: PptxPicture, b: PptxPicture) => Math.abs(a.opacity - b.opacity) <= 0.1;
+/**
+ * Drawn on the page: a picture whose box lies wholly off the page, has no area, or is fully transparent
+ * shows nothing. Canva puts invisible image fills (alphaModFix amt="0") under its text boxes.
+ */
+const onPage = (p: PptxPicture, doc: PptxPictures) => p.opacity > 0 && p.box.width > 0 && p.box.height > 0 &&
   p.box.x < doc.slideWidth && p.box.x + p.box.width > 0 && p.box.y < doc.slideHeight && p.box.y + p.box.height > 0;
 
 /**
@@ -81,8 +86,8 @@ export async function checkExportPictures(sourcePptx: Uint8Array, exportPptx: Ui
     const mine = await printOf(source, pic.media, 'source');
     const candidates = await Promise.all(drawn.map(async (e, i) => {
       const theirs = await printOf(exported, e.media, 'export');
-      // In its place means where the source put it and turned as the source turned it.
-      return { i, e, here: samePlace(place, shareOf(e, exported)) && sameTurn(pic, e), d: mine && theirs ? hammingDistance(mine.dhash, theirs.dhash) : 64, theirs };
+      // In its place means where the source put it, turned and drawn as the source drew it.
+      return { i, e, here: samePlace(place, shareOf(e, exported)) && sameTurn(pic, e) && sameOpacity(pic, e), d: mine && theirs ? hammingDistance(mine.dhash, theirs.dhash) : 64, theirs };
     }));
     const same = (c: { d: number }) => c.d <= MATCH_DISTANCE;
     const hit = candidates.filter((c) => !used.has(c.i) && c.here && same(c)).sort((a, b) => a.d - b.d)[0];
