@@ -542,7 +542,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       return problem(c, 401, 'Unauthorized', 'Authentication required for review desk');
     }
 
-    const task = await resolveTaskWithFallback(taskId);
+    // Read as the caller: read as the system operator, a task the caller may not see was answered with
+    // its title and client.
+    const task = await resolveTaskWithFallback(taskId, { identity: { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId, role: auth.role } });
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const requestedRevisionId = c.req.query('revisionId');
