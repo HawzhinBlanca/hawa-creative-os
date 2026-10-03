@@ -30,8 +30,11 @@ import { isGreetingOnly } from '../src/services/greetings.js';
  */
 
 // --- the ratchet ---------------------------------------------------------------------------------------------
-/** Pinned on 2026-10-03 (claude/briefuzz on release 3, b7541da6). Lower these when a fix lands; never raise them. */
-const BASELINE = { total: 490, I1: 0, I2: 232, I3: 185, I4: 32, I5: 41 };
+/**
+ * Pinned on 2026-10-03 (claude/briefuzz on release 3, b7541da6: total 490, I2 232, I3 185, I4 32); lowered the same day by
+ * the copy-class fixes (ADR-284 addendum "brief phrasing fuzz: copy classes"). Lower these when a fix lands; never raise them.
+ */
+const BASELINE = { total: 101, I1: 0, I2: 0, I3: 30, I4: 30, I5: 41 };
 
 // --- deterministic generation --------------------------------------------------------------------------------
 const SEED = 20261003;
