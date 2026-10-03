@@ -44,6 +44,31 @@ describe('ADR256 existing workspace membership boundary', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it('classifies native Auth 403 bad_jwt as sign-in required without checking membership', async () => {
+    const { verify, fetcher } = verifier(json({ code: 403, error_code: 'bad_jwt', msg: 'untrusted provider detail' }, 403));
+    await expect(verify(token)).rejects.toMatchObject({ status: 401, code: 'WORKSPACE_SIGN_IN_REQUIRED' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    json({ error_code: 'unknown', msg: 'bad_jwt' }, 403),
+    json({ message: 'bad_jwt' }, 403),
+    json(['bad_jwt'], 403),
+    new Response('bad_jwt', { status: 403 }),
+    json({ error_code: 'bad_jwt', padding: 'x'.repeat(32_768) }, 403),
+    json({ error_code: 'bad_jwt' }, 500),
+  ])('keeps unknown or invalid Auth errors as dependency failures', async response => {
+    const { verify, fetcher } = verifier(response);
+    await expect(verify(token)).rejects.toMatchObject({ status: 503, code: 'WORKSPACE_ACCESS_UNAVAILABLE' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not classify a membership RPC bad_jwt response as an Auth token refusal', async () => {
+    const { verify, fetcher } = verifier(json(member), json({ error_code: 'bad_jwt' }, 403));
+    await expect(verify(token)).rejects.toMatchObject({ status: 503, code: 'WORKSPACE_ACCESS_UNAVAILABLE' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     { ...member, role: 'service_role' }, { ...member, aud: 'another-app' },
     { ...member, id: 'claimed-customer' }, { ...member, is_anonymous: true },

@@ -79,6 +79,17 @@ export function createWorkspaceMemberVerifier(options: {
           await response.body?.cancel();
           throw new WorkspaceAccessError(401, 'WORKSPACE_SIGN_IN_REQUIRED');
         }
+        // Native Auth returns 403 bad_jwt for a rejected signature (ADR277).
+        // Only this exact bounded machine code at the identity endpoint means
+        // sign in again; an RPC/unknown/provider failure remains unavailable.
+        if (path === '/auth/v1/user' && response.status === 403) {
+          const refusal = await boundedJson(response);
+          if (refusal && typeof refusal === 'object' && !Array.isArray(refusal) &&
+            (refusal as Record<string, unknown>).error_code === 'bad_jwt') {
+            throw new WorkspaceAccessError(401, 'WORKSPACE_SIGN_IN_REQUIRED');
+          }
+          throw unavailable();
+        }
         if (!response.ok) {
           await response.body?.cancel();
           throw unavailable();
