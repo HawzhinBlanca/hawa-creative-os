@@ -50,7 +50,13 @@ function objects(pdf: Buffer): Map<number, Obj> {
   }
   return out;
 }
-function streamOf(body: Buffer): Buffer | null {
+/** Inflated bytes one stream, and all streams together, may reach: a deflate bomb must not exhaust memory. */
+const STREAM_LIMIT = 32 * 1024 * 1024;
+const TOTAL_STREAM_LIMIT = 256 * 1024 * 1024;
+/** ToUnicode entries one map may declare: a CID font has at most 65,536 codes. */
+const CMAP_ENTRY_LIMIT = 1 << 20;
+
+function streamOf(body: Buffer, budget: { left: number }): Buffer | null {
   const t = body.toString('latin1');
   const start = /stream\r?\n/.exec(t);
   if (!start) return null;
@@ -60,20 +66,45 @@ function streamOf(body: Buffer): Buffer | null {
   let data = body.subarray(from, to);
   if (data[data.length - 1] === 0x0a) data = data.subarray(0, data.length - (data[data.length - 2] === 0x0d ? 2 : 1));
   if (/\/FlateDecode/.test(t.slice(0, start.index))) {
-    try { return inflateSync(data); } catch { return null; }
+    let inflated: Buffer;
+    try {
+      inflated = inflateSync(data, { maxOutputLength: Math.max(1, Math.min(STREAM_LIMIT, budget.left)) });
+    } catch (err) {
+      if ((err as { code?: string })?.code === 'ERR_BUFFER_TOO_LARGE') throw new Error('PDF stream exceeds inspection limit');
+      return null;
+    }
+    budget.left -= inflated.length;
+    return inflated;
   }
   return data;
 }
+/**
+ * A ToUnicode CMap (PDF 32000-1 9.10.3). A destination is UTF-16BE and may hold several code units (a
+ * ligature, or a surrogate pair); a range's destination increments its last code unit, or is an array
+ * giving each code its own string.
+ */
 function toUnicode(cmap: string): Map<number, string> {
   const map = new Map<number, string>();
-  const utf16 = (hex: string) => Buffer.from(hex, 'hex').swap16().toString('utf16le');
+  let entries = 0;
+  const count = (n: number) => { if ((entries += n) > CMAP_ENTRY_LIMIT) throw new Error('ToUnicode map exceeds inspection limit'); };
+  const utf16 = (hex: string) => Buffer.from(hex.length % 4 ? hex.padEnd(hex.length + 4 - (hex.length % 4), '0') : hex, 'hex')
+    .swap16().toString('utf16le');
   for (const block of cmap.match(/beginbfchar([\s\S]*?)endbfchar/g) ?? []) {
-    for (const [, code, uni] of block.matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) map.set(parseInt(code, 16), utf16(uni));
+    for (const [, code, uni] of block.matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) { count(1); map.set(parseInt(code, 16), utf16(uni)); }
   }
   for (const block of cmap.match(/beginbfrange([\s\S]*?)endbfrange/g) ?? []) {
-    for (const [, a, z, uni] of block.matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
-      const from = parseInt(a, 16), to = parseInt(z, 16), base = parseInt(uni, 16);
-      for (let c = from; c <= to && c - from < 65536; c++) map.set(c, String.fromCodePoint(base + c - from));
+    for (const [, a, z, uni, list] of block.matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*(?:<([0-9A-Fa-f]+)>|\[([^\]]*)\])/g)) {
+      const from = parseInt(a, 16), to = Math.min(parseInt(z, 16), from + 65535);
+      if (!(to >= from)) continue;
+      count(to - from + 1);
+      if (list !== undefined) {
+        const items = [...list.matchAll(/<([0-9A-Fa-f]+)>/g)].map((m) => utf16(m[1]));
+        items.slice(0, to - from + 1).forEach((item, i) => map.set(from + i, item));
+        continue;
+      }
+      const base = utf16(uni!);
+      const head = base.slice(0, -1), last = base.charCodeAt(base.length - 1);
+      for (let c = from; c <= to; c++) map.set(c, head + String.fromCharCode((last + c - from) & 0xffff));
     }
   }
   return map;
@@ -93,6 +124,7 @@ export function checkCanvaPdf(
   if (pdf.length > 50 * 1024 * 1024) throw new Error('PDF exceeds inspection limit');
   if (pdf.subarray(0, 5).toString('latin1') !== '%PDF-') errors.push('Not a PDF');
   const objs = objects(pdf);
+  const budget = { left: TOTAL_STREAM_LIMIT };
   const bodies = [...objs.values()].map((o) => o.body.toString('latin1'));
   const pages = bodies.filter((b) => /\/Type\s*\/Page(?![s\w])/.test(b));
   const box = pages[0] && /\/MediaBox\s*\[\s*([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s*\]/.exec(pages[0]);
@@ -108,7 +140,7 @@ export function checkCanvaPdf(
     const b = o.body.toString('latin1');
     const ref = /\/Type\s*\/Font\b/.test(b) && /\/ToUnicode\s+(\d+)\s+0\s+R/.exec(b);
     const cmap = ref && objs.get(Number(ref[1]));
-    const data = cmap && streamOf(cmap.body);
+    const data = cmap && streamOf(cmap.body, budget);
     if (data) maps.set(n, toUnicode(data.toString('latin1')));
   }
   const names = new Map<string, number>();
@@ -139,18 +171,29 @@ export function checkCanvaPdf(
     const head = o.body.toString('latin1', 0, Math.min(o.body.length, 4096));
     // Pictures are never text, whatever their bytes happen to contain.
     if (/\/Subtype\s*\/Image\b/.test(head) || !/stream\r?\n/.test(head)) continue;
-    const data = streamOf(o.body);
+    const data = streamOf(o.body, budget);
     if (!data) continue;
     const ops = data.toString('latin1');
     if (!/\bBT\b/.test(ops) || !/T[jJ]\b|'|"/.test(ops)) continue;
     let font: Map<number, string> | undefined;
     let any = false;
-    // Font selections, hex strings, literal strings (with escaped parentheses), and line or block ends.
-    for (const tok of ops.matchAll(/\/([\w.-]+)\s+[-\d.]+\s+Tf|<([0-9A-Fa-f\s]+)>|\(((?:\\[\s\S]|[^\\()])*)\)|\bET\b|\bT\*|\bTd\b|\bTD\b/g)) {
+    // Font selections, hex strings, literal strings, and line or block ends. A literal string may hold
+    // balanced parentheses unescaped (PDF 32000-1 7.3.4.2), so it is read to its matching ")" by hand.
+    const tokens = /\/([\w.-]+)\s+[-\d.]+\s+Tf|<([0-9A-Fa-f\s]+)>|(\()|\bET\b|\bT\*|\bTd\b|\bTD\b/g;
+    for (let tok = tokens.exec(ops); tok; tok = tokens.exec(ops)) {
       if (tok[1]) font = maps.get(names.get(tok[1]) ?? -1);
-      else if (tok[2] !== undefined && font) { pieces.push(decode(Buffer.from(tok[2].replace(/\s+/g, ''), 'hex'), font)); any = true; }
-      else if (tok[3] !== undefined && font) { pieces.push(decode(literal(tok[3]), font)); any = true; }
-      else if (tok[1] === undefined && tok[2] === undefined && tok[3] === undefined) pieces.push(' ');
+      else if (tok[2] !== undefined) { if (font) { pieces.push(decode(Buffer.from(tok[2].replace(/\s+/g, ''), 'hex'), font)); any = true; } }
+      else if (tok[3] !== undefined) {
+        let depth = 1, i = tokens.lastIndex;
+        for (; i < ops.length && depth; i++) {
+          if (ops[i] === '\\') i++;
+          else if (ops[i] === '(') depth++;
+          else if (ops[i] === ')') depth--;
+        }
+        if (depth) break;
+        if (font) { pieces.push(decode(literal(ops.slice(tokens.lastIndex, i - 1)), font)); any = true; }
+        tokens.lastIndex = i;
+      } else pieces.push(' ');
     }
     if (any) liveText = true;
   }
