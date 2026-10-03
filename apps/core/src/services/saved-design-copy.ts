@@ -22,11 +22,19 @@ export function savedDesignCopyLocales(payload: unknown, copy: readonly string[]
   }
   const fields = object(p.sourceDocument).confirmation === 'request_copy_reviewed'
     ? ['copyEn', 'copyCkb']
-    : body.workflow === 'canva_manual' ? ['headlineEn', 'copyEn', 'headlineCkb', 'copyCkb'] : [];
+    : deskSeparatedCopy(body) ? ['headlineEn', 'copyEn', 'headlineCkb', 'copyCkb'] : [];
   const labelled = fields.filter(key => typeof body[key] === 'string' && (body[key] as string).trim())
     .map(key => ({ text: body[key], locale: key.endsWith('Ckb') ? 'ckb' : 'en' }));
   if (labelled.length !== copy.length || labelled.some((block, i) => block.text !== copy[i])) return unknown();
   return labelled.map(block => block.locale);
+}
+
+/**
+ * A request whose copy the Desk form separated from its instructions at entry: a designer-owned Desk
+ * task (`canva_manual`) or, since ADR-287, a Desk "New task" opened on RequestLifecycle (`office_request`).
+ */
+export function deskSeparatedCopy(body: Record<string, unknown>): boolean {
+  return body.workflow === 'canva_manual' || body.workflow === 'office_request';
 }
 
 const ENVELOPE_CLOSE:Record<string,string>={'(':')','[':']','{':'}','"':'"','\u201C':'\u201D','\u00AB':'\u00BB'};
@@ -78,7 +86,7 @@ export function savedDesignCopy(payload:any,description:string):{copy:string[];i
     if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','The reviewed PDF request has no exact copy.');
     return {copy,instructions:typeof body.designInstructions==='string'?body.designInstructions:''};
   }
-  if(body.workflow==='canva_manual'){
+  if(deskSeparatedCopy(body)){
     // Desk separates copy from instructions at entry. A queue title is metadata, not a headline.
     // Preserve both current copy fields and explicit headlines on older saved Desk requests.
     const fields=[body.headlineEn,body.copyEn,body.headlineCkb,body.copyCkb];

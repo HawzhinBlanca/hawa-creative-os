@@ -1,6 +1,5 @@
 import type { WorkflowDurableContext } from './durable-context.js';
-import type { WorkflowInput, WorkflowOutput } from './workflow.js';
-import type { OutcomeRecorder } from './outcome-without-core.js';
+import type { WorkflowInput, WorkflowOutput } from './design-input.js';
 import { log, requestIdHeaders } from './logging.js';
 import { lifecycleDesignProofHeaders } from './lifecycle/design-proof.js';
 
@@ -333,34 +332,15 @@ const detailOf = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() ? value.trim().slice(0, 500) : undefined;
 
 /**
- * A dispatch the runner refuses (no Canva job: daily cap, no client, instruction only, a reference
- * image) is reported to Core before the refusal is thrown, so the task leaves RECEIVED for an
- * operator. Core messages the requester only if intake did not already tell them. Best effort: a
- * failure here is logged and never replaces the refusal itself.
- */
-export async function reportNotRunnable(input: WorkflowInput, ctx: WorkflowDurableContext, fetcher: typeof fetch = fetch): Promise<void> {
-  try {
-    const call = coreClient(input, fetcher);
-    await reportOutcome(ctx, call, 'canva-notify-not-runnable', {
-      status: input.clientId ? 'MANUAL_DESIGN_REQUIRED' : 'CLIENT_REQUIRED',
-      notifyRequester: !input.requesterToldAtIntake,
-      detail: 'Dispatched without an automatic Canva job; nothing was generated or spent.',
-    });
-  } catch (err) {
-    log.warn(`[worker] Task ${input.taskId}: the refusal could not be reported to Core: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-/**
- * Restate orchestrates retries; Core journals model charges and Canva side effects. `recordOutcome`
- * writes an outcome Core would not take to the outbox instead (outcome-without-core.ts); without it
- * such an outcome is only logged.
+ * Restate orchestrates retries; Core journals model charges and Canva side effects. In production the
+ * only caller is DesignRun, which passes `lifecycle`: the outcome goes to RequestLifecycle. Without it
+ * the outcome is posted to Core's task status route, as the retired task workflow did (ADR-287); that
+ * branch is kept only as the seam these steps' own tests drive.
  */
 export async function runCanvaDraft(
   input: WorkflowInput,
   ctx: WorkflowDurableContext,
   fetcher: typeof fetch = fetch,
-  recordOutcome?: OutcomeRecorder,
   lifecycle?: LifecycleOutcomeReporter
 ): Promise<WorkflowOutput> {
   const output = (status: string, documentId?: string): WorkflowOutput =>
@@ -402,28 +382,6 @@ export async function runCanvaDraft(
     }
   };
 
-  /**
-   * The report Core would not take, past the report step's own hour. The finished work used to end
-   * there with nothing written anywhere, the task `received` and the requester waiting for good
-   * (2026-09-24). The worker has the database: the requester's message, an office alert and the
-   * report itself (sent again until Core takes it) go to the outbox, under keys per task and outcome.
-   */
-  const recordWithoutCore = async (status: string, report: Record<string, unknown>) => {
-    if (!recordOutcome) {
-      log.error(`[worker] Task ${input.taskId}: outcome ${status} could not be reported to Core, and there is no database to record it in.`);
-      return;
-    }
-    try {
-      const recorded = await ctx.run('canva-outcome-without-core-' + status.toLowerCase(), () =>
-        recordOutcome({ tenantId: input.tenantId, taskId: input.taskId, report })
-      );
-      log.error(`[worker] Task ${input.taskId}: Core did not take outcome ${status}; recorded in the outbox instead: ${JSON.stringify(recorded)}`);
-    } catch (err) {
-      if (!stepGaveUp(err)) throw err;
-      log.error(`[worker] Task ${input.taskId}: outcome ${status} was recorded neither by Core nor in the outbox: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
-
   // Every terminal outcome is reported to the requester through Core. A failed chat message
   // must never fail (or retry) the workflow, so the notification swallows its own errors.
   const finish = async (
@@ -450,7 +408,7 @@ export async function runCanvaDraft(
         await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), report);
       } catch (error) {
         if (!stepGaveUp(error)) throw error;
-        await recordWithoutCore(status, report);
+        log.error(`[worker] Task ${input.taskId}: outcome ${status} could not be reported to Core.`);
       }
     }
     return output(status, designId);

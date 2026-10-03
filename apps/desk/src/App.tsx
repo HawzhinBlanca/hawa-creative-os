@@ -168,7 +168,9 @@ export const App: React.FC = () => {
     enabled: showNewTaskModal && sessionState.status === 'signed_in', staleTime: 0 });
   const availableClients = clientDirectory.data || [];
   const clientAvailable = availableClients.some(client => client.clientId === selectedClientId);
-  const canSaveRequest = sessionState.status === 'signed_in' && !draftReadBlocked && Boolean(taskTitle.trim()) && !isSubmitting &&
+  // ADR-287: a request is designed from its exact words, so at least one copy field is needed.
+  const canSaveRequest = sessionState.status === 'signed_in' && !draftReadBlocked && Boolean(taskTitle.trim()) &&
+    Boolean(taskCopyEn.trim() || taskCopyCkb.trim()) && !isSubmitting &&
     (pendingManualRetry || (clientDirectory.isSuccess && !clientDirectory.isFetching && clientAvailable));
 
   const handleSearchClientChange = React.useCallback((id: string | undefined, name?: string) => { setSearchClientId(id); setSearchClientName(name); }, []);

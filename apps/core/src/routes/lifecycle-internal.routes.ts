@@ -1,5 +1,5 @@
 import { isCustomerOpenCommand } from '@hawa/contracts';
-import { customerWebOpenEvent, recordCustomerWebMessage, WEB_CHANNEL } from '../customer/customer-web-lifecycle.js';
+import { customerWebOpenEvent, recordCustomerWebMessage } from '../customer/customer-web-lifecycle.js';
 import {customerActionEvent,projectCustomerAction,acknowledgeCustomerAction,CustomerActionError} from '../customer/customer-actions.js';
 import type {CustomerActionCommand,CustomerActionEvent,CustomerActionResult} from '@hawa/contracts';
 import {isCustomerActionCommand,isCustomerActionEvent} from '@hawa/contracts';
@@ -29,10 +29,11 @@ import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, parseBlobRef, parseLifecycleAlbumRef, parseLifecycleSourceRef, type BlobRef, type DeliveryOutcome } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, type BlobRef, type DeliveryOutcome } from '@hawa/contracts';
 import { createLifecycleSourceIntake } from '../services/lifecycle-source-intake.js';
+import { openDraft } from '../services/lifecycle-open-draft.js';
 import { assertSourceIdentity, SourceConflict } from '../services/lifecycle-source-store.js';
-import { MAX_REQUEST_DELIVERABLES, chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, parseStudioImagery, parseStudioTier } from '@hawa/domain';
+import { MAX_REQUEST_DELIVERABLES, chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
 import { planLifecycleBriefDeliverables } from '../services/lifecycle-brief-deliverables.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
@@ -167,68 +168,6 @@ function revisionBlockedAlert(chatId: string, code: string, update: UpdateLike):
     '', 'Their words:', (words.length > 1500 ? `${words.slice(0, 1500)}…` : words) || '(a photo or file, in the chat)'].join('\n') };
 }
 
-
-function openDraft(value: unknown, requestId: string): ChatIntake | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const d = value as Record<string, unknown>;
-  if (!['telegram','hawzhin_web'].includes(String(d.platform)) || d.sourceEventId !== `lc-${requestId}-r0` ||
-      typeof d.sourceChannelId !== 'string' || !(d.platform==='hawzhin_web' ? WEB_CHANNEL.test(d.sourceChannelId) : /^-?\d{1,20}$/.test(d.sourceChannelId)) ||
-      typeof d.rawText !== 'string' || !d.rawText.trim() || d.rawText.length > 100_000 ||
-      typeof d.title !== 'string' || !d.title.trim() || d.title.length > 500 ||
-      typeof d.designInstructions !== 'string' || d.designInstructions.length > 100_000 ||
-      !Array.isArray(d.exactCopy) || d.exactCopy.length > 500 || JSON.stringify(d.exactCopy).length > 100_000 ||
-      !(d.clientId === null || (typeof d.clientId === 'string' && UUID.test(d.clientId))) ||
-      (d.autoGenerate !== undefined && typeof d.autoGenerate !== 'boolean') ||
-      (d.isInstructionOnly !== undefined && typeof d.isInstructionOnly !== 'boolean')) return null;
-  const variant = d.variant;
-  if (variant !== undefined && (!variant || typeof variant !== 'object' ||
-      !Number.isInteger((variant as any).width) || !Number.isInteger((variant as any).height) ||
-      (variant as any).width < 640 || (variant as any).width > 2400 ||
-      (variant as any).height < 640 || (variant as any).height > 2400)) return null;
-  if (d.designStudio !== undefined && typeof d.designStudio !== 'boolean') return null;
-  // ADR-232: copy taken from a request sentence, and its receipt (server-authored at intake).
-  const copyFields = (['headlineEn', 'headlineCkb', 'copyEn', 'copyCkb'] as const).filter((key) => d[key] !== undefined);
-  if (copyFields.some((key) => typeof d[key] !== 'string' || (d[key] as string).length > 100_000)) return null;
-  const receipt = d.copyExtraction;
-  if (receipt !== undefined && (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) ||
-      (receipt as { v?: unknown }).v !== 1 || JSON.stringify(receipt).length > 20_000)) return null;
-  const options = d.studioOptions;
-  if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options) ||
-      JSON.stringify(options).length > 2000 ||
-      (Object.keys(options).some((key) => !['tier', 'imagery', 'previews', 'holdForSelection'].includes(key))) ||
-      parseStudioTier((options as { tier?: unknown }).tier) === null ||
-      parseStudioImagery((options as { imagery?: unknown }).imagery) === null ||
-      ((options as any).previews !== undefined && (!Number.isInteger((options as any).previews) || (options as any).previews < 1 || (options as any).previews > 4)) ||
-      ((options as any).holdForSelection !== undefined && typeof (options as any).holdForSelection !== 'boolean'))) return null;
-  const image = d.lifecycleImage;
-  const source = d.lifecycleSource === undefined ? undefined : parseLifecycleSourceRef(d.lifecycleSource);
-  if (d.lifecycleSource !== undefined && (!source || image || d.lifecycleAlbum)) return null;
-  const album = d.lifecycleAlbum === undefined ? undefined : parseLifecycleAlbumRef(d.lifecycleAlbum);
-  if ((d.lifecycleAlbum !== undefined && !album) || (image && album)) return null;
-  const imageRef = image === undefined ? undefined : parseBlobRef(image);
-  if (image !== undefined && (!imageRef || !Number.isSafeInteger((image as any).updateId) ||
-      (image as any).updateId <= 0 ||
-      !['image/png', 'image/jpeg', 'image/webp'].includes(imageRef.mediaType) ||
-      imageRef.size > 20 * 1024 * 1024)) return null;
-  // Select the contract explicitly. A worker payload cannot choose the database principal, tenant,
-  // outbox owner or a second source through spare JSON fields.
-  return {
-    platform: d.platform as 'telegram'|'hawzhin_web', sourceEventId: d.sourceEventId as string, sourceChannelId: d.sourceChannelId as string,
-    rawText: d.rawText as string, title: d.title as string,
-    designInstructions: d.designInstructions as string, exactCopy: d.exactCopy as unknown[],
-    clientId: d.clientId as string | null,
-    ...(d.autoGenerate !== undefined ? { autoGenerate: d.autoGenerate as boolean } : {}),
-    ...(d.isInstructionOnly !== undefined ? { isInstructionOnly: d.isInstructionOnly as boolean } : {}),
-    ...(variant ? { variant: variant as { width: number; height: number } } : {}),
-    ...(d.designStudio !== undefined ? { designStudio: d.designStudio as boolean } : {}),
-    ...Object.fromEntries(copyFields.map((key) => [key, d[key] as string])),
-    ...(receipt !== undefined ? { copyExtraction: receipt as ChatIntake['copyExtraction'] } : {}),
-    ...(options ? { studioOptions: options as ChatIntake['studioOptions'] } : {}),
-    ...(imageRef ? { lifecycleImage: { ...imageRef, updateId: (image as { updateId: number }).updateId } } : {}),
-    ...(album ? { lifecycleAlbum: album } : {}),
-    ...(source ? { lifecycleSource: source } : {}),
-  };
-}
 
 export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   const { app, db, problem, verifyRequestAuth, channelKillSwitches } = ctx;

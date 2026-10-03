@@ -132,11 +132,12 @@ describe('Task 3: Elimination of Duplicate Paths', () => {
     expect(approveRes.status).not.toBe(202);
   });
 
-  it('proves Restate TaskWorkflow in apps/worker/src/index.ts directly runs runCanvaDraft', () => {
-    const workerIndexPath = path.resolve(rootDir, 'apps/worker/src/index.ts');
-    const workerIndexContent = fs.readFileSync(workerIndexPath, 'utf8');
-
-    // The TaskWorkflow handler in Restate index.ts must reference runCanvaDraft
-    expect(workerIndexContent).toContain('runCanvaDraft');
+  it('designs only through DesignRun: TaskWorkflow and TaskService are bound refusing shims (ADR-287)', () => {
+    const workerIndexContent = fs.readFileSync(path.resolve(rootDir, 'apps/worker/src/index.ts'), 'utf8');
+    const designRunContent = fs.readFileSync(path.resolve(rootDir, 'apps/worker/src/lifecycle/design-run.ts'), 'utf8');
+    expect(workerIndexContent).not.toContain('runCanvaDraft');
+    expect(workerIndexContent).toContain('LEGACY_WORKFLOW_RETIRED');
+    expect(designRunContent).toContain('runCanvaDraft(');
+    expect(fs.existsSync(path.resolve(rootDir, 'apps/worker/src/workflow.ts'))).toBe(false);
   });
 });

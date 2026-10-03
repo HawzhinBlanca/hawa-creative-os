@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runCanvaDraft, reportNotRunnable } from '../src/canva-draft-workflow.js';
+import { runCanvaDraft } from '../src/canva-draft-workflow.js';
 import { DurableStepJournal } from '../src/durable-context.js';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
-import type { WorkflowInput } from '../src/workflow.js';
+import type { WorkflowInput } from '../src/design-input.js';
 
 /**
  * N4, the worker's half of the canva-status contract (architecture programme 1.3). Core's half is
@@ -68,14 +68,6 @@ describe('the bodies the worker sends to canva-status', () => {
     const { fetcher, reports } = core([]);
     await runCanvaDraft({ ...input, canvaAutoGenerate: false, requesterToldAtIntake: true }, new DurableStepJournal(), fetcher);
     expect(reports).toEqual([contract.requests.manualDesignToldAtIntake]);
-  });
-
-  it('a dispatch the runner refuses', async () => {
-    vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
-    const { fetcher, reports } = core([]);
-    await reportNotRunnable({ ...input, canvaAutoGenerate: false }, new DurableStepJournal(), fetcher);
-    expect(reports).toEqual([contract.requests.notRunnable]);
-    reports.forEach(sendsOnly);
   });
 
   it('a task that belongs to another client', async () => {

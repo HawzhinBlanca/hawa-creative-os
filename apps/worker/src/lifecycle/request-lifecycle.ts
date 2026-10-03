@@ -13,7 +13,7 @@ import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProo
 import { log, withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, outcomeReportCore, type CoreInternal } from './delivery.js';
 import { officeAlertKey, officeAlertRoute, officeChatIdsFromEnv } from './office-chats.js';
-import { TelegramSenderApi } from './telegram-sender.js';
+import { TelegramSenderApi, isDeskChannel } from './telegram-sender.js';
 import { DesignRunApi, validStartNotice, type DesignRunInput, type DesignStartNotice } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
@@ -40,7 +40,8 @@ export interface OpenManualEvent {
   tenantId: string;
   chatId: string;
   draft: {
-    platform: 'telegram'|'hawzhin_web';
+    /** hawa_desk (ADR-287): a Desk "New task", opened by Core and forwarded by OfficeDecisionGateway.openDeskRequest. */
+    platform: 'telegram'|'hawzhin_web'|'hawa_desk';
     sourceEventId: string;
     sourceChannelId: string;
     rawText: string;
@@ -298,6 +299,14 @@ function canonical(value: unknown): string {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
 }
 
+/** The open's chat is its platform's: a Telegram chat id, a web account's channel or a Desk member's (ADR-287). */
+function openChannelMatches(event: Pick<OpenManualEvent, 'chatId'> & { draft?: { platform?: string } }): boolean {
+  const platform = event.draft?.platform;
+  return platform === 'hawzhin_web' ? /^web:[0-9a-f-]{36}$/i.test(event.chatId)
+    : platform === 'hawa_desk' ? isDeskChannel(event.chatId)
+    : platform === 'telegram' && /^-?\d{1,20}$/.test(event.chatId);
+}
+
 const hashOf = (event: unknown) => createHash('sha256').update(canonical(event)).digest('hex');
 const invalid = (reason: string) => new restate.TerminalError(`LIFECYCLE_OPEN_REFUSED: ${reason}`, { errorCode: 409 });
 
@@ -417,7 +426,7 @@ const openFailure = (event: OpenManualEvent | OpenAutomaticEvent): TerminalFailu
 export async function openManualRequest(ctx: OpenContext, core: CoreInternal, event: OpenManualEvent): Promise<OpenManualResult> {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       event.eventId !== `open:${event.requestId}` || event.tenantId !== DEFAULT_TENANT_ID ||
-      !(event.draft?.platform==='hawzhin_web' ? /^web:[0-9a-f-]{36}$/i.test(event.chatId) : event.draft?.platform==='telegram' && /^-?\d{1,20}$/.test(event.chatId)) ||
+      !openChannelMatches(event) ||
       event.draft?.sourceEventId !== `lc-${event.requestId}-r0` ||
       event.draft?.sourceChannelId !== event.chatId || event.draft?.autoGenerate !== false) {
     throw invalid('this handler accepts only a versioned manual round-zero request under its own key');
@@ -463,7 +472,7 @@ function sendAutomaticAcknowledgement(ctx: AutomaticOpenContext, state: Automati
 export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: CoreInternal, event: OpenAutomaticEvent) {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       event.eventId !== `open:${event.requestId}` || event.tenantId !== DEFAULT_TENANT_ID ||
-      !(event.draft?.platform==='hawzhin_web' ? /^web:[0-9a-f-]{36}$/i.test(event.chatId) : event.draft?.platform==='telegram' && /^-?\d{1,20}$/.test(event.chatId)) ||
+      !openChannelMatches(event) ||
       event.draft?.sourceEventId !== `lc-${event.requestId}-r0` ||
       event.draft?.sourceChannelId !== event.chatId || event.draft?.autoGenerate !== true ||
       !event.draft.clientId || !UUID.test(event.draft.clientId)) {
@@ -1426,7 +1435,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
               startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
-              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:')) return; return ctx.objectSendClient(chatInbox, chatId)
+              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:') || isDeskChannel(chatId)) return; return ctx.objectSendClient(chatInbox, chatId)
                 .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })); },
             }, core, event as OpenAutomaticEvent) : openManualRequest({
               key: ctx.key,
@@ -1435,7 +1444,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               set: (name, value) => ctx.set(name, value),
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
-              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:')) return; return ctx.objectSendClient(chatInbox, chatId)
+              setChatMode: (chatId, requestId) => { if(chatId.startsWith('web:') || isDeskChannel(chatId)) return; return ctx.objectSendClient(chatInbox, chatId)
                 .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })); },
             }, core, event as OpenManualEvent)),
       ),

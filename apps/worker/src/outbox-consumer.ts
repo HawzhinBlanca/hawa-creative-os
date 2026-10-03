@@ -167,7 +167,7 @@ export class OutboxConsumer {
     private readonly options: OutboxConsumerOptions = {}
   ) {
     this.outboxRepo = new OutboxRepository(db);
-    this.dispatcher = options.dispatcher || new TaskWorkflowDispatcher({ db });
+    this.dispatcher = options.dispatcher || new TaskWorkflowDispatcher();
 
     // Register custom handlers if provided
     if (options.handlers) {
@@ -365,7 +365,7 @@ export class OutboxConsumer {
     throw new Error(error);
   }
 
-  /** A redriven command cannot start the legacy workflow for a Restate-owned task. */
+  /** A command for a Restate-owned task is already done: its RequestLifecycle runs the work. */
   private async lifecycleOwnsTask(cmd: OutboxCommandRecord, scope: OutboxHandlerScope): Promise<boolean> {
     const row = await scope.inTenant(async (trx) =>
       (await sql<{ request_id: string | null }>`SELECT request_id FROM hawa.tasks
@@ -389,31 +389,22 @@ export class OutboxConsumer {
     if(!this.handlers.has('customer.request.open')) this.handlers.set('customer.request.open',async cmd=>{
       await this.dispatcher.dispatchCustomer(cmd);
     });
-    // A Restate workflow runs once per key (workflow-dispatcher.ts), so a dispatch repeated after a
-    // consumer stopped mid-command answers 409 and starts nothing twice.
-    if (!this.handlers.has('task.created')) {
-      this.handlers.set('task.created', async (cmd, _db, scope) => {
+    // ADR-287: a Desk "New task" opened on RequestLifecycle by Core.
+    if (!this.handlers.has('office.request.open')) this.handlers.set('office.request.open', async (cmd) => {
+      await this.dispatcher.dispatchDeskOpen(cmd);
+    });
+    // ADR-287: the task workflow is retired. A request-owned task's `task.created` is written already
+    // delivered; one left pending (a message promoted by an API caller, a WhatsApp task, an old re-drive)
+    // names a task outside RequestLifecycle, which no automatic design is made for any more. It is
+    // refused for good, visibly, before any effect: no Restate submission, no design, no paid call.
+    for (const commandType of ['task.created', 'task.dispatch']) {
+      if (this.handlers.has(commandType)) continue;
+      this.handlers.set(commandType, async (cmd, _db, scope) => {
         if (await this.lifecycleOwnsTask(cmd, scope)) return;
-        // Confirmed submission to durable workflow engine (Restate or embedded runner)
-        const receipt = await this.dispatcher.dispatch(cmd);
-        if (!receipt || !receipt.workflowId) {
-          throw new Error(
-            `[OutboxConsumer] Confirmed submission failed for task ${cmd.aggregate_id}`
-          );
-        }
-      });
-    }
-
-    if (!this.handlers.has('task.dispatch')) {
-      this.handlers.set('task.dispatch', async (cmd, _db, scope) => {
-        if (await this.lifecycleOwnsTask(cmd, scope)) return;
-        // Confirmed submission to durable workflow engine
-        const receipt = await this.dispatcher.dispatch(cmd);
-        if (!receipt || !receipt.workflowId) {
-          throw new Error(
-            `[OutboxConsumer] Confirmed submission failed for task ${cmd.aggregate_id}`
-          );
-        }
+        throw new OutboxDeliveryError(
+          `LEGACY_WORKFLOW_RETIRED: ${cmd.command_type} ${cmd.id} names task ${cmd.aggregate_id}, which RequestLifecycle does not own; the task workflow was retired by ADR-287 and nothing was started`,
+          'permanent', 'LEGACY_WORKFLOW_RETIRED',
+        );
       });
     }
 
@@ -459,8 +450,8 @@ export class OutboxConsumer {
 
     if (!this.handlers.has('task.outcome')) {
       this.handlers.set('task.outcome', async (cmd) => {
-        // A workflow's outcome Core did not take while it was down (outcome-without-core.ts), sent
-        // again until it is: Core records it on the task as the workflow's own report would have. The
+        // A task workflow's outcome Core did not take while it was down, sent again until it is. Nothing
+        // writes these since ADR-287 retired that workflow and its recorder; rows written before drain here: Core records it on the task as the workflow's own report would have. The
         // requester's message was written under Core's key, so Core does not send a second one, and
         // an outcome sent twice (a consumer stopped before recording the first) is recorded once.
         const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;

@@ -34,7 +34,9 @@ export async function submitManualTask(draft: Omit<ActiveDraft, 'savedAt'>, pend
     description: [draft.copy, draft.copyCkb].filter(Boolean).join('\n\n'),
     copyEn: draft.copy, copyCkb: draft.copyCkb || '',
     designInstructions: draft.designInstructions || '', referenceAssets: draft.referenceAssets || '',
-    workflow: 'canva_manual',
+    // ADR-287: "New task" opens a request on the request lifecycle (drafts, review, approval, delivery);
+    // a reviewed PDF request stays a designer-owned task.
+    workflow: draft.sourceDocument ? 'canva_manual' : 'office_request',
     ...(draft.sourceDocument ? { sourceDocument: draft.sourceDocument } : {}),
     source: { platform: 'hawa_desk', externalId: 'operator-desk' },
   });
@@ -55,7 +57,7 @@ export async function submitManualTask(draft: Omit<ActiveDraft, 'savedAt'>, pend
     // identity even if a later auth/scope check refuses it; its original commit is still unknown.
     if (!saved && [400, 401, 403, 404, 422].includes(response.status)) {
       localStorage.removeItem(pendingKey);
-      if (draft.sourceDocument && response.status === 403) {
+      if (draft.sourceDocument ? response.status === 403 : [403, 422].includes(response.status)) {
         const problem = await response.json().catch(() => null);
         if (typeof problem?.detail === 'string') throw new Error(problem.detail.slice(0, 500));
       }

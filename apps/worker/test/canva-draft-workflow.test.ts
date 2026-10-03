@@ -1,7 +1,6 @@
 import { describe,it,expect,vi,afterEach,assert } from 'vitest';
 import { runCanvaDraft, resolveCanvaVariant } from '../src/canva-draft-workflow.js';
 import { DurableStepJournal } from '../src/durable-context.js';
-import { TaskWorkflowDispatcher } from '../src/workflow-dispatcher.js';
 const input={taskId:'00000000-0000-4000-c000-000000000001',tenantId:'tenant',clientId:'client',rawText:'',sourcePlatform:'telegram',idempotencyKey:'key',canvaAutoGenerate:true};
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
 describe('native Canva workflow',()=>{
@@ -132,27 +131,6 @@ describe('native Canva workflow',()=>{
     const result=await runCanvaDraft({...input,clientId:undefined},new DurableStepJournal(),remote);
     expect(result.status).toBe('CLIENT_REQUIRED');expect(remote).toHaveBeenCalledTimes(1);
     expect(String(remote.mock.calls[0][0])).toContain('/notifications/canva-status');
-  });
-  it('requires an engine invocation receipt, not just HTTP success',async()=>{
-    vi.stubGlobal('fetch',vi.fn(async()=>Response.json({ok:true})));
-    const dispatcher=new TaskWorkflowDispatcher({restateIngressUrl:'http://restate.test'});
-    await expect(dispatcher.dispatch({aggregate_id:input.taskId,tenant_id:'tenant',idempotency_key:'key',payload:{}} as any)).rejects.toThrow('invocation receipt');
-  });
-  it('uses workflow-key idempotency without the header rejected by the live Restate server',async()=>{
-    const remote=vi.fn<typeof fetch>(async()=>Response.json({invocationId:'inv_test123',status:'Accepted'}));vi.stubGlobal('fetch',remote);
-    const dispatcher=new TaskWorkflowDispatcher({restateIngressUrl:'http://restate.test'});
-    const receipt=await dispatcher.dispatch({aggregate_id:input.taskId,tenant_id:'tenant',idempotency_key:'key',payload:{workflow:'canva',autoGenerate:true}} as any);
-    expect(receipt.receiptId).toBe('inv_test123');expect(remote.mock.calls[0][1]?.headers).not.toHaveProperty('idempotency-key');
-    expect(JSON.parse(String(remote.mock.calls[0][1]?.body)).canvaAutoGenerate).toBe(true);
-  });
-  it('reconciles 409 Conflict when workflow is already running in Restate without throwing', async () => {
-    const remote = vi.fn<typeof fetch>(async () => new Response('Workflow execution already started', { status: 409, statusText: 'Conflict' }));
-    vi.stubGlobal('fetch', remote);
-    const dispatcher = new TaskWorkflowDispatcher({ restateIngressUrl: 'http://restate.test' });
-    const receipt = await dispatcher.dispatch({ aggregate_id: input.taskId, tenant_id: 'tenant', idempotency_key: 'conflict-key', payload: {} } as any);
-    expect(receipt.status).toBe('submitted');
-    expect(receipt.reconciled).toBe(true);
-    expect(receipt.receiptId).toContain('inv_conflict_reconciled_');
   });
   it('passes updated binding version to pptx check after preview recovery bumps version', async () => {
     vi.stubEnv('HAWA_DESIGN_WORKER_TOKEN', 'test-only');
@@ -366,57 +344,6 @@ describe('native Canva workflow',()=>{
     expect(studioResult.status).toBe('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW');
     expect(studioRemote.mock.calls.some((c) => String(c[0]).includes('/canva/studio'))).toBe(true);
     expect(studioRemote.mock.calls.some((c) => String(c[0]).includes('/canva/generate'))).toBe(false);
-  });
-
-  it('forwards designStudio and studioOptions through TaskWorkflowDispatcher', async () => {
-    const remote = vi.fn<typeof fetch>(async () => Response.json({ invocationId: 'inv_studio_test', status: 'Accepted' }));
-    vi.stubGlobal('fetch', remote);
-    const dispatcher = new TaskWorkflowDispatcher({ restateIngressUrl: 'http://restate.test' });
-    const receipt = await dispatcher.dispatch({
-      aggregate_id: input.taskId,
-      tenant_id: 'tenant',
-      idempotency_key: 'studio-key',
-      payload: {
-        workflow: 'canva',
-        autoGenerate: true,
-        designStudio: true,
-        studioOptions: { tier: 'quality', previews: 2 },
-      },
-    } as any);
-
-    expect(receipt.receiptId).toBe('inv_studio_test');
-    const sentBody = JSON.parse(String(remote.mock.calls[0][1]?.body));
-    expect(sentBody.designStudio).toBe(true);
-    expect(sentBody.studioOptions).toEqual({ tier: 'quality', previews: 2 });
-    expect(sentBody.requesterToldAtIntake).toBe(false);
-  });
-
-  it('dispatches a re-drive as its own Restate workflow, carrying the attempt', async () => {
-    const remote = vi.fn<typeof fetch>(async () => Response.json({ invocationId: 'inv_redrive_test', status: 'Accepted' }));
-    vi.stubGlobal('fetch', remote);
-    const dispatcher = new TaskWorkflowDispatcher({ restateIngressUrl: 'http://restate.test' });
-    const receipt = await dispatcher.dispatch({
-      aggregate_id: input.taskId,
-      tenant_id: 'tenant',
-      idempotency_key: `redrive:${input.taskId}:2`,
-      payload: { workflow: 'canva', autoGenerate: true, designStudio: true, clientId: 'client', redriveAttempt: 2 },
-    } as any);
-    // The first run's key would answer 409 ("reconciled") and nothing would run.
-    expect(String(remote.mock.calls[0][0])).toBe(`http://restate.test/TaskWorkflow/task-wf-${input.taskId}-redrive-2/run/send`);
-    expect(receipt.workflowId).toBe(`task-wf-${input.taskId}-redrive-2`);
-    expect(JSON.parse(String(remote.mock.calls[0][1]?.body))).toMatchObject({ redriveAttempt: 2, designStudio: true, canvaAutoGenerate: true });
-  });
-
-  it('marks a dispatch without an automatic draft as already explained at intake', async () => {
-    const remote = vi.fn<typeof fetch>(async () => Response.json({ invocationId: 'inv_manual_test', status: 'Accepted' }));
-    vi.stubGlobal('fetch', remote);
-    await new TaskWorkflowDispatcher({ restateIngressUrl: 'http://restate.test' }).dispatch({
-      aggregate_id: input.taskId,
-      tenant_id: 'tenant',
-      idempotency_key: 'manual-key',
-      payload: { workflow: 'canva', autoGenerateDeclined: 'SENDER_DAILY_CAP', sourcePlatform: 'telegram' },
-    } as any);
-    expect(JSON.parse(String(remote.mock.calls[0][1]?.body))).toMatchObject({ canvaAutoGenerate: false, requesterToldAtIntake: true });
   });
 
   it('ends a BINDING_MISMATCH as a reported outcome, without a design link, instead of retrying forever', async () => {

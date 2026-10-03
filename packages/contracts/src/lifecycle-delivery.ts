@@ -82,7 +82,12 @@ export type SendResult =
   | { outcome: 'uncertain'; error: string }
   | { outcome: 'refused'; error: string }
   | { outcome: 'canary_sink'; messageId: string }
-  | { outcome: 'web_recorded'; receiptId: string };
+  | { outcome: 'web_recorded'; receiptId: string }
+  /**
+   * ADR-287: the message was for a Desk request's channel (`desk:<user id>`). Nothing is sent: the
+   * requester is the office member, who follows the request in the Desk. Never a requester's receipt.
+   */
+  | { outcome: 'desk_only' };
 
 /** The Delivery workflow's input. Its key is `deliveryId`. */
 export interface DeliveryInput {

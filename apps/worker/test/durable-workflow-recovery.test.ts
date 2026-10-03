@@ -7,7 +7,7 @@
  * 1. Restart/resume traces across external side-effect boundaries.
  * 2. Stable workflow and effect IDs.
  * 3. Ambiguous-success reconciliation.
- * 4. Duplicate-dispatch negative tests.
+ * 4. Task commands outside RequestLifecycle are refused for good (ADR-287 retired the task workflow).
  * 5. Unknown command visible failure rejection (no no-op completion).
  */
 
@@ -21,8 +21,6 @@ import {
   withRlsContext,
 } from '@hawa/db';
 import type { DesignStudioAdapter, RequestContext } from '@hawa/contracts';
-import { TaskWorkflowRunner, type WorkflowInput } from '../src/workflow.js';
-import { DurableStepJournal } from '../src/durable-context.js';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
 import { TaskWorkflowDispatcher } from '../src/workflow-dispatcher.js';
 
@@ -116,202 +114,26 @@ describe('CV-05: Durable Workflow Ownership & Crash-Recovery Suite', () => {
     expect(record?.last_error).toContain("Unknown command_type 'unknown.unsupported.action'");
   });
 
-  it('proves outbox dispatcher requires confirmed submission and marks delivered only upon receipt', async () => {
+  it('refuses a task command outside RequestLifecycle for good, before any submission (ADR-287)', async () => {
     const taskId = crypto.randomUUID();
-    const idempotencyKey = `idem-confirmed-${crypto.randomUUID()}`;
-
-    // 1. Enqueue real task.dispatch command
-    await withRlsContext(
-      db,
-      { tenantId: testTenantId, userId: adminUserId, role: 'administrator' },
-      async (trx) => {
-        await outboxRepo.enqueue(
-          {
-            tenantId: testTenantId,
-            aggregateType: 'task',
-            aggregateId: taskId,
-            commandType: 'task.dispatch',
-            idempotencyKey,
-            payload: {
-              rawText: 'دیزاینی پۆست بۆ کۆمپانیا',
-              clientId: 'client-office-1',
-              sourcePlatform: 'desk',
-            },
-          },
-          trx
-        );
-      }
-    );
-
-    let dispatchCalled = false;
-    let confirmedWorkflowId = '';
-
-    const dispatcher = new TaskWorkflowDispatcher({
-      runner: {
-        run: async (input: WorkflowInput) => {
-          dispatchCalled = true;
-          return {
-            taskId: input.taskId,
-            status: 'AWAITING_APPROVAL',
-            briefId: 'brief_mock_1',
-            documentId: 'doc_mock_1',
-            qcPassed: true,
-            auditEventsCount: 5,
-            executedSteps: ['step1'],
-            replayedSteps: [],
-          };
-        },
-      } as any,
+    const idempotencyKey = `idem-retired-${crypto.randomUUID()}`;
+    await withRlsContext(db, { tenantId: testTenantId, userId: adminUserId, role: 'administrator' }, async (trx) => {
+      await trx.insertInto('tasks').values({ id: taskId, tenant_id: testTenantId, client_id: testClientId,
+        title: 'Task outside the lifecycle', state: 'received', priority: 3, version: 1 }).execute();
+      await outboxRepo.enqueue({ tenantId: testTenantId, aggregateType: 'task', aggregateId: taskId,
+        commandType: 'task.dispatch', idempotencyKey, payload: { rawText: 'Retired', workflow: 'canva', autoGenerate: true } }, trx);
     });
-
-    const consumer = new OutboxConsumer(db, {
-      tenantId: testTenantId,
-      userId: adminUserId,
-      dispatcher,
-      batchSize: 5,
-    });
-
-    // 2. Process batch
+    const dispatcher = { dispatchCustomer: vi.fn(), dispatchDeskOpen: vi.fn() } as unknown as TaskWorkflowDispatcher;
+    const consumer = new OutboxConsumer(db, { tenantId: testTenantId, userId: adminUserId, dispatcher, batchSize: 5,
+      telegramBotToken: null, officeAlertChatId: null });
     const summary = await consumer.processBatch(1);
-
-    expect(dispatchCalled).toBe(true);
-    expect(summary.leased).toBe(1);
-    expect(summary.succeeded).toBe(1);
-    expect(summary.errors.length).toBe(0);
-
-    // 3. Verify in PostgreSQL: marked delivered with timestamp
-    const record = await withRlsContext(
-      db,
-      { tenantId: testTenantId, userId: adminUserId, role: 'administrator' },
-      async (trx) => {
-        return await outboxRepo.findByIdempotencyKey(testTenantId, idempotencyKey, trx);
-      }
-    );
-
-    expect(record).toBeDefined();
-    expect(record?.state).toBe('delivered');
-    expect(record?.delivered_at).toBeDefined();
-  });
-
-  it('proves duplicate-dispatch negative protection: re-dispatching same command returns existing receipt without re-running', async () => {
-    const taskId = crypto.randomUUID();
-    const idempotencyKey = `idem-dup-${crypto.randomUUID()}`;
-
-    let executionCount = 0;
-    const dispatcher = new TaskWorkflowDispatcher({
-      runner: {
-        run: async (input: WorkflowInput) => {
-          executionCount++;
-          return {
-            taskId: input.taskId,
-            status: 'AWAITING_APPROVAL',
-            qcPassed: true,
-            auditEventsCount: 4,
-            executedSteps: ['compose'],
-            replayedSteps: [],
-          };
-        },
-      } as any,
-    });
-
-    const cmd: any = {
-      id: crypto.randomUUID(),
-      tenant_id: testTenantId,
-      aggregate_type: 'task',
-      aggregate_id: taskId,
-      command_type: 'task.dispatch',
-      idempotency_key: idempotencyKey,
-      payload: { rawText: 'Duplicate test' },
-    };
-
-    // First dispatch
-    const receipt1 = await dispatcher.dispatch(cmd);
-    expect(receipt1.status).toBe('completed');
-    expect(receipt1.workflowId).toBe(`task-wf-${taskId}`);
-    expect(receipt1.reconciled).toBeFalsy();
-    expect(executionCount).toBe(1);
-
-    // Duplicate dispatch with same idempotency key
-    const receipt2 = await dispatcher.dispatch(cmd);
-    expect(receipt2.workflowId).toBe(receipt1.workflowId);
-    expect(receipt2.status).toBe('completed');
-    expect(receipt2.reconciled).toBe(true); // Reconciled without re-executing!
-    expect(executionCount).toBe(1); // Still 1! Proves zero duplicate execution!
-  });
-
-  it('does not treat a progressed task as proof of workflow submission', async () => {
-    const taskId = crypto.randomUUID();
-    const idempotencyKey = `idem-ambig-${crypto.randomUUID()}`;
-
-    // 1. Create task in PostgreSQL in 'human_review' state (simulating that the workflow already ran
-    // and transitioned the task, but connection dropped before outbox record was marked delivered)
-    await withRlsContext(
-      db,
-      { tenantId: testTenantId, userId: adminUserId, role: 'administrator' },
-      async (trx) => {
-        await trx
-          .insertInto('tasks')
-          .values({
-            id: taskId,
-            tenant_id: testTenantId,
-            client_id: testClientId,
-            title: 'Ambiguous Success Task',
-            state: 'human_review',
-            priority: 3,
-            version: 2,
-          })
-          .execute();
-
-        await outboxRepo.enqueue(
-          {
-            tenantId: testTenantId,
-            aggregateType: 'task',
-            aggregateId: taskId,
-            commandType: 'task.dispatch',
-            idempotencyKey,
-            payload: { rawText: 'Ambiguous test' },
-          },
-          trx
-        );
-      }
-    );
-
-    let runnerCalled = false;
-    const dispatcher = new TaskWorkflowDispatcher({
-      db,
-      runner: {
-        run: async () => {
-          runnerCalled = true;
-          return {} as any;
-        },
-      } as any,
-    });
-
-    const consumer = new OutboxConsumer(db, {
-      tenantId: testTenantId,
-      userId: adminUserId,
-      dispatcher,
-      batchSize: 5,
-    });
-
-    // 2. The runner must supply evidence; task state alone cannot acknowledge delivery.
-    const summary = await consumer.processBatch(1);
-
-    expect(runnerCalled).toBe(true);
-    expect(summary.succeeded).toBe(0);
-    expect(summary.retried).toBe(1);
-
-    // 3. Verify in PostgreSQL that outbox row was safely reconciled and marked delivered
-    const record = await withRlsContext(
-      db,
-      { tenantId: testTenantId, userId: adminUserId, role: 'administrator' },
-      async (trx) => {
-        return await outboxRepo.findByIdempotencyKey(testTenantId, idempotencyKey, trx);
-      }
-    );
-
-    expect(record).toBeDefined();
-    expect(record?.state).toBe('pending');
+    expect(summary).toMatchObject({ leased: 1, succeeded: 0, retried: 0, deadLettered: 1 });
+    expect(summary.errors[0].error).toContain('LEGACY_WORKFLOW_RETIRED');
+    const record = await withRlsContext(db, { tenantId: testTenantId, userId: adminUserId, role: 'administrator' },
+      (trx) => outboxRepo.findByIdempotencyKey(testTenantId, idempotencyKey, trx));
+    expect(record?.state).not.toBe('delivered');
+    expect(record?.last_error).toContain('LEGACY_WORKFLOW_RETIRED');
+    expect(Object.values(dispatcher).every((fn) => (fn as ReturnType<typeof vi.fn>).mock.calls.length === 0)).toBe(true);
   });
 
 });
