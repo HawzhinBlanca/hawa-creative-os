@@ -539,6 +539,55 @@ it('mounted Core explicit generation opt-in commits one canonical customer reque
  expect((await app.request('/v1/tasks',{headers:init.headers})).status).toBe(401);
 });
 
+it('preserves six admitted website photos across mounted internal HTTP and refuses changed manifests',async()=>{
+ const {createApp}=await import('../src/app.js');
+ const {provisionCustomer}=await import('../src/customer/customer-provisioning.js');
+ const tenantId='00000000-0000-4000-a000-000000000001',adminId='00000000-0000-4000-b000-000000000002';
+ const clientId=randomUUID(),subject=randomUUID();
+ await sql`INSERT INTO hawa.clients(id,tenant_id,code,name,status) VALUES(${clientId}::uuid,${tenantId}::uuid,${clientId},'Mounted photo fixture','active')`.execute(owner);
+ await sql`INSERT INTO hawa.client_dna_versions(tenant_id,client_id,version,status,dna,content_hash)
+   VALUES(${tenantId}::uuid,${clientId}::uuid,1,'active','{}',${randomUUID()})`.execute(owner);
+ await provisionCustomer(db,{tenantId,userId:adminId},randomUUID(),{subject,clientIds:[clientId],active:true,
+   expectedVersion:0,dailyJobs:8,concurrentJobs:3,reason:'Mounted six-photo projection regression'});
+ const service=new CustomerRequests(db,tenantId),member:WorkspaceMember={kind:'workspace_member',issuer:HAWZHIN_AUTH_ORIGIN,subject};
+ const photos=[];
+ for(let i=0;i<6;i++) {
+  const bytes=execFileSync('ffmpeg',['-v','error','-f','image2pipe','-i','pipe:0','-vf',`scale=32:32,hue=h=${i*37}`,
+    '-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],{input:photoJpeg,maxBuffer:65536});
+  photos.push((await service.uploadPhoto(member,clientId,'mounted_photo_'+i,`source${i}.png`,'image/png',bytes,photoHash(bytes))).photo);
+ }
+ const admitted=await service.create(member,'mounted_six_photos',{clientId,title:'Mounted six originals',
+  exactCopy:[{text:'Use all six originals — ٢٠٢٦',language:'en'}],designInstructions:'Use a content-aware composition.',
+  variant:'story',photoIds:[...photos].reverse().map(p=>p.id),photoUsage:{mode:'all'}});
+ const open=await customerWebOpenEvent(db,tenantId,admitted.job.id);
+ const saved=process.env.HAWA_WORKER_TOKEN,token=['test','customer','photo','projection','worker'].join('_');
+ process.env.HAWA_WORKER_TOKEN=token;
+ try {
+  const app=createApp({db,skipTelegramProbe:true,skipPaidModelProbe:true,requesterIntentModel:null});
+  const send=async(draft:unknown)=>app.request(`/v1/internal/lifecycle/${open.requestId}/project`,{
+   method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+   body:JSON.stringify({v:1,expectedRev:0,rev:1,key:`${open.requestId}:1:open`,ops:[{kind:'createRequest',draft}]})});
+  const changed=structuredClone(open.draft);changed.customerWebPhotos!.images.reverse();
+  const refusal=await send(changed);expect(refusal.status).toBe(409);expect(await refusal.json()).toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
+  const first=await send(open.draft);expect(first.status).toBe(200);const receipt=await first.json();
+  const replay=await send(open.draft);expect(replay.status).toBe(200);expect(await replay.json()).toEqual(receipt);
+  const task=(await sql<{id:string;source:Record<string,unknown>}>`SELECT t.id,e.data->'payload' AS source FROM hawa.tasks t JOIN hawa.task_events e ON e.task_id=t.id
+   WHERE t.request_id=${open.requestId}::uuid AND e.event_type='task.created'`.execute(owner)).rows;
+  expect(task).toHaveLength(1);expect(task[0].source).toMatchObject({customerWebPhotos:open.draft.customerWebPhotos,body:{photoUsage:{mode:'all'}}});
+  expect((await sql<{sha256:string}>`SELECT sha256 FROM hawa.task_files WHERE task_id=${task[0].id}::uuid`.execute(owner)).rows.map(r=>r.sha256).sort()).toEqual(photos.map(p=>p.sha256).sort());
+  const omitted={...open.draft};delete omitted.customerWebPhotos;
+  expect((await send(omitted)).status).toBe(409);
+  for(const manifest of [{v:2,images:open.draft.customerWebPhotos!.images},{v:1,images:[]},
+    {v:1,images:[...open.draft.customerWebPhotos!.images,open.draft.customerWebPhotos!.images[0]]},
+    {v:1,images:open.draft.customerWebPhotos!.images,owner:'forged'},
+    {v:1,images:[{...open.draft.customerWebPhotos!.images[0],size:10485761}]}])
+   expect((await send({...open.draft,customerWebPhotos:manifest})).status).toBe(400);
+  expect((await send({...open.draft,platform:'telegram',sourceChannelId:'12345'})).status).toBe(400);
+ } finally {
+  if(saved===undefined)delete process.env.HAWA_WORKER_TOKEN;else process.env.HAWA_WORKER_TOKEN=saved;
+ }
+});
+
 it('refuses a forged web draft and revocation before projection without a task',async()=>{
   const f=await fixture(),r=await f.service.create(f.a.member,'request_001',f.body);
   const event=await customerWebOpenEvent(db,f.tenantId,r.job.id);

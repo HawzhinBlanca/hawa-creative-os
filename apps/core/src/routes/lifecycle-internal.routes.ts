@@ -210,6 +210,20 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
       (image as any).updateId <= 0 ||
       !['image/png', 'image/jpeg', 'image/webp'].includes(imageRef.mediaType) ||
       imageRef.size > 20 * 1024 * 1024)) return null;
+  // ADR279: preserve the server-authored web manifest through HTTP. Projection
+  // still compares it with the owner's retained receipts before trusting it.
+  let webPhotos: ChatIntake['customerWebPhotos'];
+  if (d.customerWebPhotos !== undefined) {
+    const manifest=d.customerWebPhotos;
+    if(d.platform!=='hawzhin_web' || image || album || source || !manifest || typeof manifest!=='object' || Array.isArray(manifest)) return null;
+    const m=manifest as Record<string,unknown>;
+    if(Object.keys(m).some(k=>!['v','images'].includes(k)) || m.v!==1 || !Array.isArray(m.images) || m.images.length<1 || m.images.length>20) return null;
+    const images=m.images.map(parseBlobRef);
+    if(m.images.some(ref=>!ref || typeof ref!=='object' || Array.isArray(ref) || Object.keys(ref).some(k=>!['sha256','mediaType','size'].includes(k))) ||
+      images.some(ref=>!ref || !['image/png','image/jpeg','image/webp'].includes(ref.mediaType) || ref.size>10*1024*1024) ||
+      new Set(images.map(ref=>ref?.sha256)).size!==images.length) return null;
+    webPhotos={v:1,images:images as NonNullable<ChatIntake['customerWebPhotos']>['images']};
+  }
   // Select the contract explicitly. A worker payload cannot choose the database principal, tenant,
   // outbox owner or a second source through spare JSON fields.
   return {
@@ -227,6 +241,7 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
     ...(imageRef ? { lifecycleImage: { ...imageRef, updateId: (image as { updateId: number }).updateId } } : {}),
     ...(album ? { lifecycleAlbum: album } : {}),
     ...(source ? { lifecycleSource: source } : {}),
+    ...(webPhotos ? {customerWebPhotos:webPhotos} : {}),
   };
 }
 

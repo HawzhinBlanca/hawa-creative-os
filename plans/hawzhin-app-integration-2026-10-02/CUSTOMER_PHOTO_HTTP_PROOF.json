@@ -1,0 +1,88 @@
+{
+  "date": "2026-10-03",
+  "status": "HTTP_MANIFEST_REPAIR_FOCUSED_PASS_NATIVE_RERUN_PENDING",
+  "requirements": [
+    "FR-006",
+    "FR-018",
+    "FR-068",
+    "FR-069",
+    "NFR-006"
+  ],
+  "decision": "adrs/279_customer_photo_manifest_http_projection.md",
+  "rootCause": "Internal openDraft omitted customerWebPhotos; unmodified website photo request refused 409 before task creation.",
+  "initialNative": {
+    "fixture": "customer-six-photo-native",
+    "browser": {
+      "passed": 13,
+      "failed": 0
+    },
+    "worker": {
+      "passed": 4,
+      "failed": 6
+    },
+    "core": {
+      "passed": 23,
+      "failed": 1
+    },
+    "cleanup": {
+      "vendorContainersRemoved": 6,
+      "ownedNetworksRemoved": 2,
+      "privateFilesRemoved": [
+        "worker-runtime-private.log",
+        "customer-worker-launch-private.log",
+        "customer-core-private.log",
+        "customer-browser-error-private.log",
+        "local-private.json",
+        "restate-runtime-private.log"
+      ],
+      "priorContainersUnchanged": 10,
+      "coreDatabaseRemoved": true,
+      "browserWorkerAndRestateContainersAbsent": true
+    }
+  },
+  "mountedRegressionRed": {
+    "failed": 1,
+    "skipped": 80,
+    "expected": 200,
+    "actual": 409
+  },
+  "focused": {
+    "files": 2,
+    "passed": 86,
+    "failed": 0,
+    "skipped": 0
+  },
+  "types": {
+    "roots": 757,
+    "status": "PASS",
+    "initialFailure": "three missing SQL result annotations, repaired"
+  },
+  "lint": "PASS; any957<=1053; provider egress unchanged",
+  "nativeRerun": "PENDING",
+  "fullRegression": "PENDING",
+  "coverage": "prior FAIL, not rerun",
+  "deployed": false,
+  "publicGenerationEnabled": false,
+  "sourceHashes": {
+    "apps/core/src/routes/lifecycle-internal.routes.ts": "3107231085686c65ba2f78ab3fe87f1c1fb86804b938f76a0ef1572c3fbf708f",
+    "apps/core/test/customer-requests.test.ts": "005e6119f2d46fd52a5818930ca1c70b359b818ccc786adb5ca8fa4e617e9e0b",
+    "adrs/279_customer_photo_manifest_http_projection.md": "b1a3bead743b97de04d419cbb8a5f19897b4df6c7d434a08c42317d4c36319fb"
+  },
+  "reportHashes": {
+    "output/qualification/2026-10-03/customer-photo-http/focused.log": "512002ac81df539fe75c93c393df4af2b301bbe110bb5ecef5b0e6e3839ff9b7",
+    "output/qualification/2026-10-03/customer-photo-http/types-initial-failure.log": "e389a3bb026a17ab358c9bc50f0d590f863fd21ecce179c7d87fea03861c7d23",
+    "output/qualification/2026-10-03/customer-photo-http/types.log": "f6bde7d061c554074edd5245e88381194f0193be988dc2779831feee8dd29ef3",
+    "output/qualification/2026-10-03/customer-photo-http/lint.log": "4a4b0dee3ffcc865f8e0789267277548ad4bca2e6460a15ef04033fe98dd2dc3",
+    "output/qualification/2026-10-03/customer-photo-http/initial-failures.json": "b356df92a14e0a4c18051f42e3efbf39bb87189d860f3881ff68aec5bfd40737"
+  },
+  "remaining": [
+    "Real provider and native Canva complete customer journey",
+    "Creative photo composition and human quality",
+    "Hosted customer and other three apps",
+    "Interrupted state, backup/restore, CI/coverage, hosting/HTTPS/cutover"
+  ],
+  "initialVerificationErrors": [
+    "incorrect evidence column; use acceptance_evidence",
+    "commit scan refused a literal synthetic worker token; construct the same test value explicitly from fixture words"
+  ]
+}
