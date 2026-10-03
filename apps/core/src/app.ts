@@ -1144,6 +1144,14 @@ export function createApp(options?: CreateAppOptions) {
       } catch (err) {
         log.warn('[lifecycle-stale] pass failed:', (err as Error)?.message || err);
       }
+      // ADR-288: drafts past the office's approval target in working hours, named once per draft.
+      try {
+        const { sweepApprovalSla } = await import('./services/approval-sla.js');
+        const late = await sweepApprovalSla(staleDb, { tenantId: DEFAULT_TENANT_ID, officeChatIds: telegramAllowedUsers, nowMs: Date.now() });
+        if (late.length) log.info(`[approval-sla] named ${late.length} draft(s) past the approval target:`, JSON.stringify(late.map((l) => l.taskId)));
+      } catch (err) {
+        log.warn('[approval-sla] pass failed:', (err as Error)?.message || err);
+      }
     };
     setInterval(stalePass, 15 * 60_000).unref?.();
     setTimeout(stalePass, 180_000).unref?.();

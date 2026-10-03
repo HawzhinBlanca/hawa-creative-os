@@ -1,6 +1,7 @@
-import { CANARY_CHAT_ID_MAX, CANARY_CHAT_ID_MIN, CANARY_TEST_CLIENT_ID } from '@hawa/contracts';
+import { CANARY_TEST_CLIENT_ID } from '@hawa/contracts';
 import { sql, withRlsContext, type Kysely, type Database } from '@hawa/db';
 import { log } from '../logging.js';
+import { canaryChatSql } from './canary-sql.js';
 
 type Stage = 'briefToDraft' | 'draftToApproval' | 'approvalToDelivery';
 interface StageTiming { samples: number; p50Hours: number | null; p95Hours: number | null }
@@ -189,13 +190,6 @@ export function summarizeFunnel(units: FunnelUnit[], options: { nowMs: number; w
 }
 
 /**
- * Whether a chat id (text) is in the range no Telegram chat can have (ADR-240). The cast only ever sees
- * sixteen digits: Postgres does not promise to test the pattern first in a plain AND.
- */
-const canaryChat = (chat: ReturnType<typeof sql>) => sql`COALESCE(CASE WHEN (${chat}) ~ '^[1-9][0-9]{15}$'
-  THEN (${chat})::numeric BETWEEN ${String(CANARY_CHAT_ID_MIN)}::numeric AND ${String(CANARY_CHAT_ID_MAX)}::numeric END, false)`;
-
-/**
  * Every request touched in the last HORIZON_DAYS, one row each. Canary requests are marked, not dropped:
  * a request is the canary's when its chat or intake chat is in the range no Telegram chat can have
  * (ADR-240), or when it is for the canary's own client (ADR-254).
@@ -224,12 +218,12 @@ export async function readFunnelUnits(trx: Kysely<Database>, tenantId: string, h
         (SELECT e.data->'withdrawn'->>'actor' FROM hawa.task_events e WHERE e.tenant_id = t.tenant_id AND e.task_id = t.id
           AND e.event_type = 'task.state_changed' AND e.data ? 'withdrawn' ORDER BY e.occurred_at DESC LIMIT 1) AS withdrawn_by,
         EXISTS (SELECT 1 FROM hawa.outbox_commands o WHERE o.tenant_id = t.tenant_id AND o.aggregate_id = t.id
-          AND o.command_type = 'task.created' AND ${canaryChat(sql`o.payload->>'sourceChannelId'`)}) AS canary_intake
+          AND o.command_type = 'task.created' AND ${canaryChatSql(sql`o.payload->>'sourceChannelId'`)}) AS canary_intake
       FROM hawa.tasks t JOIN recent u ON u.unit_id = COALESCE(t.request_id, t.id)
       WHERE t.tenant_id = ${tenantId}::uuid AND t.deleted_at IS NULL
     )
     SELECT p.unit_id,
-      bool_or(p.canary_client OR p.canary_intake) OR COALESCE(bool_or(${canaryChat(sql`r.chat_id`)}), false) AS canary,
+      bool_or(p.canary_client OR p.canary_intake) OR COALESCE(bool_or(${canaryChatSql(sql`r.chat_id`)}), false) AS canary,
       LEAST(min(p.created_at), min(r.created_at)) AS brief_at,
       min(p.draft_at) AS draft_at,
       count(p.draft_at) AS drafted_tasks,
