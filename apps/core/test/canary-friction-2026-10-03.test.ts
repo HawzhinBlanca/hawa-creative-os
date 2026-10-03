@@ -153,10 +153,10 @@ const TITLES: Array<[string, string]> = [
   ['Poster for the KAAE staff football tournament, 14 November 2026 at 4 pm, Franso Hariri stadium. We need it by next Thursday.', 'KAAE Staff Football Tournament'],
   ['سڵاو، دەتوانن پۆستەرێکمان بۆ دروست بکەن بۆ ئاهەنگی نەورۆزی KAAE لە ٢٠ی ئازار لە پارکی سامی عەبدولڕەحمان؟', 'KAAE: ئاهەنگی نەورۆزی KAAE'],
   ['پۆستەرێک بەم وێنانە دروست بکە بۆ دەرچوونی KAAE، ١٢ی تشرینی یەکەم، هۆتێلی ڕۆتانا', 'KAAE: دەرچوونی KAAE'],
-  ['سڵاو، پۆستەرێکمان دەوێت بۆ ئاهەنگی دەرچوونی KAAE\nبەروار: ١٢/١٠/٢٠٢٦ کاتژمێر ٥ی ئێوارە\nشوێن: هۆتێلی ڕۆتانا', 'KAAE: پۆستەرێکمان دەوێت بۆ ئاهەنگی دەرچوونی KAAE'],
-  ['پۆستەرێکی نوێمان دەوێت بۆ خولی ڕاهێنانی مامۆستایان، ١٠ی تشرینی دووەم کاتژمێر ٩ی بەیانی لە هۆڵی KAAE', 'KAAE: پۆستەرێکی نوێمان دەوێت بۆ خولی ڕاهێنانی مامۆس…'],
-  ['Hi there, we need something for our staff picnic on Friday', 'Sewa: There, we need something for our staff picnic'],
-  ['hey, could you do something for the science fair next week?', 'Sewa: Could you do something for the science fair'],
+  ['سڵاو، پۆستەرێکمان دەوێت بۆ ئاهەنگی دەرچوونی KAAE\nبەروار: ١٢/١٠/٢٠٢٦ کاتژمێر ٥ی ئێوارە\nشوێن: هۆتێلی ڕۆتانا', 'KAAE: ئاهەنگی دەرچوونی KAAE'],
+  ['پۆستەرێکی نوێمان دەوێت بۆ خولی ڕاهێنانی مامۆستایان، ١٠ی تشرینی دووەم کاتژمێر ٩ی بەیانی لە هۆڵی KAAE', 'KAAE: خولی ڕاهێنانی مامۆستایان'],
+  ['Hi there, we need something for our staff picnic on Friday', 'Sewa: Staff Picnic'],
+  ['hey, could you do something for the science fair next week?', 'Sewa: Science Fair'],
 ];
 
 describe('F3: a title stops before the date, time and place said after the name', () => {
@@ -228,5 +228,95 @@ describe('F4: an opinion about the design, before any draft exists, goes to the 
     // A brief of its own, or a subject of its own, is not an opinion of this design.
     expect(plan('Book Fair poster, 9 November at 10 am', [view('a', 'manual', 1)])).not.toMatchObject({ feedback: true });
     expect(plan('the Nawroz one looks cheap', [view('a', 'manual', 1)])).not.toMatchObject({ feedback: true });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Greetings and openings are never the design's copy or its name (follow-up, 2026-10-03)
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * ADR-284 addendum (follow-up): a brief whose first line, or first words, are only a greeting ("hello", "hello
+ * brother", "dear all", "good morning"; in Sorani, English and Arabic) printed the greeting as the design's headline
+ * and named the design after it. English "Hi!" before a request sentence was fixed in d17bae2d; the Sorani greeting
+ * and its forms of address, a greeting line above laid-out copy, and the Sorani "we want a poster for …" were not.
+ * Openings the title did not know ("Hi there, we need something for …", "Could we get a flyer and …") named the
+ * design after the request. The copy stays the requester's words, verbatim; only what is not copy is left out.
+ */
+const texts = (draft: { exactCopy: unknown[] }) => (draft.exactCopy as Array<{ text: string }>).map((b) => b.text);
+const CONF = 'کۆنفرانسی ساڵانەی متمانەبەخشین';
+const CONF_WHEN = '٩ی ئەیلوولی ٢٠٢٦، هۆڵی سەعد عەبدوڵا';
+const ASK_KAAE = 'تکایە پۆستەرێک دروست بکە بۆ KAAE';
+
+describe('a greeting is never copy, and never the name', () => {
+  it.each([
+    // "hello brother" / "hello" / "hello sirs" / "good morning", a request line, then the copy lines.
+    [`سڵاو کاکە\n${ASK_KAAE}\n${CONF}\n${CONF_WHEN}`],
+    [`سڵاو\n${ASK_KAAE}\n${CONF}\n${CONF_WHEN}`],
+    [`سڵاو بەڕێزان\n\nتکایە پۆستەرێک بۆ KAAE دروست بکەن\n\n${CONF}\n${CONF_WHEN}`],
+    [`بەیانی باش\n${ASK_KAAE}\n${CONF}\n${CONF_WHEN}`],
+  ])('Sorani greeting line, request line, copy lines: %s', async (brief) => {
+    const { opened } = await openedFor('not sure', brief);
+    expect(opened.lifecycleAction).toBe('open-request');
+    // The copy as written: a paragraph is one block, as without the greeting.
+    expect(texts(opened.draft)).toEqual([`${CONF}\n${CONF_WHEN}`]);
+    expect(opened.draft.title).toBe(`KAAE: ${CONF}`);
+  });
+
+  it('a Sorani greeting and form of address before the request in one sentence', async () => {
+    const { opened } = await openedFor('not sure', 'سڵاو کاکە تکایە پۆستەرێکمان بۆ دروست بکەن بۆ سیمیناری ددان لە ٢٥ی مانگ لە هۆڵی سەعد عەبدوڵڵا');
+    expect(texts(opened.draft)).toEqual(['سیمیناری ددان لە ٢٥ی مانگ لە هۆڵی سەعد عەبدوڵڵا']);
+    expect(opened.draft.title).toBe('Sewa: سیمیناری ددان');
+  });
+
+  it('a Sorani "hello, we want a poster for …" brief: neither the greeting nor the request words are printed', async () => {
+    const brief = 'سڵاو، پۆستەرێکمان دەوێت بۆ ئاهەنگی دەرچوونی KAAE\nبەروار: ١٢/١٠/٢٠٢٦ کاتژمێر ٥ی ئێوارە\nشوێن: هۆتێلی ڕۆتانا';
+    const { opened } = await openedFor('not sure', brief);
+    expect(texts(opened.draft)).toEqual(['ئاهەنگی دەرچوونی KAAE', 'بەروار: ١٢/١٠/٢٠٢٦ کاتژمێر ٥ی ئێوارە', 'شوێن: هۆتێلی ڕۆتانا']);
+    expect(opened.draft.title).toBe('KAAE: ئاهەنگی دەرچوونی KAAE');
+  });
+
+  it.each([
+    [`سڵاو\n\n${CONF}\n\n${CONF_WHEN}`, [CONF, CONF_WHEN], `Sewa: ${CONF}`],
+    ['Hello\n\nAnnual Accreditation Conference\n\n9 September 2026, Saad Abdullah Hall',
+      ['Annual Accreditation Conference', '9 September 2026, Saad Abdullah Hall'], 'KAAE: Annual Accreditation Conference'],
+    ['السلام عليكم\n\nمؤتمر الاعتماد السنوي\n\n٩ أيلول ٢٠٢٦، قاعة سعد عبدالله', ['مؤتمر الاعتماد السنوي', '٩ أيلول ٢٠٢٦، قاعة سعد عبدالله'],
+      'Sewa: مؤتمر الاعتماد السنوي'],
+  ] as const)('a greeting line above laid-out copy (Sorani, English, Arabic): %s', async (brief, copy, title) => {
+    const { opened } = await openedFor('not sure', brief);
+    expect(texts(opened.draft)).toEqual(copy);
+    expect(opened.draft.title).toBe(title);
+  });
+
+  it('English: a greeting line, a request naming the client, then the copy', async () => {
+    const { opened } = await openedFor('not sure', 'Hi team,\nPlease make a poster for KAAE\nAnnual Accreditation Conference\n9 September 2026, Saad Abdullah Hall');
+    expect(texts(opened.draft)).toEqual(['Annual Accreditation Conference\n9 September 2026, Saad Abdullah Hall']);
+    expect(opened.draft.title).toBe('KAAE: Annual Accreditation Conference');
+  });
+
+  it('a greeting line above a request that carries the event\'s name: the name stays the headline', async () => {
+    const { opened } = await openedFor('not sure',
+      'Good morning everyone\nCould you design a poster for our Annual Accreditation Conference?\n9 September 2026, Saad Abdullah Hall');
+    expect(texts(opened.draft)).toEqual(['Annual Accreditation Conference', '9 September 2026, Saad Abdullah Hall']);
+    expect(opened.draft.title).toBe('KAAE: Annual Accreditation Conference');
+  });
+
+  it('a greeting that is part of the copy stays ("Hello Summer!")', async () => {
+    const { opened } = await openedFor('not sure', 'Hello Summer!\n\nKAAE summer school\n\n1 July 2026, KAAE hall');
+    expect(texts(opened.draft)[0]).toBe('Hello Summer!');
+  });
+});
+
+describe('openings the title did not know', () => {
+  it.each([
+    ['Hi there, we need something for our staff picnic on Friday', 'Sewa: Staff Picnic'],
+    ['hey, could you do something for the science fair next week?', 'Sewa: Science Fair'],
+    ['Hello, we\'re hoping for something for the graduation party in June', 'Sewa: Graduation Party'],
+    ['Hi! Could we get a flyer and an Instagram post for the Quality Week launch on 2 November 2026, 10 am, KAAE hall?', 'KAAE: Quality Week Launch'],
+  ])('%s → %s', async (brief, title) => {
+    const { opened } = await openedFor('not sure', brief);
+    expect(opened.draft.title).toBe(title);
+    // The request is never printed.
+    expect(texts(opened.draft).join(' ')).not.toMatch(/\b(?:Hi|Hello|hey|Could we get|we're hoping|we need|could you)\b/i);
   });
 });

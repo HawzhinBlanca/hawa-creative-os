@@ -42,6 +42,7 @@ import { ledgerUpdateId, readOnce } from './requester-intent-model.js';
 import { afterPossessive, startsWithName, stripLeadingMarks } from '../core-helpers.js';
 import { clientPackOf } from './client-packs.js';
 import { titleName } from './request-title.js';
+import { ADDRESS_WORDS, GREETING_ONLY, GREETING_WORDS } from './greetings.js';
 
 /** The copy the model proposes: data, checked word by word before any of it is used. */
 export interface ProposedCopy { headline: string; lines: string[] }
@@ -84,11 +85,10 @@ const NOUN = `(?:${DESIGN_NOUNS})s?(?![\\p{L}])`;
  * sentence break.
  */
 const words = (n: number) => `(?:(?!to\\s)[\\p{L}\\p{N}'’&-]+\\s+){0,${n}}?`;
-const GREETING = /^(?:(?:hi|hello|hey|dear\s+(?:team|all|colleagues|friends|sir|madam)|good\s+(?:morning|afternoon|evening)|salam|slaw|silav|سڵاو|بەڕێزان)(?=[\s,،!.:-]|$)[\s,،!.:-]*)+/iu;
-/** A sentence that is only a greeting ("Hi team!", "Good morning everyone,"). */
-const GREETING_ONLY = /^(?:hi|hello|hey|dear|good\s+(?:morning|afternoon|evening)|salam|slaw|silav|سڵاو|بەڕێزان)(?:[\s,]+(?:team|all|everyone|guys|friends|there|colleagues|sir|madam|هاوڕێیان|برادەران))*[\s,!.،:]*$/iu;
-/** Words that may stand before an opener and belong to it ("so", "also", "hi team,"). */
-const LEAD_IN = /^(?:(?:hi|hello|hey|dear|team|all|everyone|guys|so|also|and|ok(?:ay)?|well|good\s+(?:morning|afternoon|evening)|سڵاو|بەڕێزان)[\s,،!.:-]*)*$/iu;
+/** Greetings before a request ("Hi team,", Sorani "hello brother", Arabic "hello"): never copy (greetings.ts). */
+const GREETING = new RegExp(`^(?:(?:${GREETING_WORDS}|dear\\s+(?:${ADDRESS_WORDS}|colleagues|friends))(?:[\\s,،]+(?:${ADDRESS_WORDS}))*(?=[\\s,،!.:-]|$)[\\s,،!.:-]*)+`, 'iu');
+/** Words that may stand before an opener and belong to it ("so", "also", "hi team,", Sorani "hello brother"). */
+const LEAD_IN = new RegExp(`^(?:(?:${GREETING_WORDS}|${ADDRESS_WORDS}|dear|so|also|and|ok(?:ay)?|well)(?=[\\s,،!.:-]|$)[\\s,،!.:-]*)*$`, 'iu');
 
 /**
  * The asks a requester opens with, anywhere in a sentence: "could/can/would you (please) design|make|
@@ -97,7 +97,9 @@ const LEAD_IN = /^(?:(?:hi|hello|hey|dear|team|all|everyone|guys|so|also|and|ok(
  */
 const EN_ASK = '(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+|kindly\\s+|also\\s+)?(?:make|create|design|prepare|produce|do|draw|put\\s+together|whip\\s+up|get\\s+(?:us|me)|help\\s+(?:us\\s+|me\\s+)?with)' +
   '|(?:please|pls|plz|kindly)\\s+(?:make|create|design|prepare|produce|do|draw)' +
-  "|(?:we|i)\\s*(?:'d|’d|\\s+would)\\s+(?:like|love)|(?:we|i)\\s+(?:need|want)|(?:we|i)\\s*(?:'re|’re|'m|’m|\\s+are|\\s+am)\\s+looking\\s+for)";
+  "|(?:we|i)\\s*(?:'d|’d|\\s+would)\\s+(?:like|love)|(?:we|i)\\s+(?:need|want)|(?:we|i)\\s*(?:'re|’re|'m|’m|\\s+are|\\s+am)\\s+(?:looking|hoping)\\s+for" +
+  // ADR-284 addendum (follow-up): "Could we get a flyer and …", "can I have a poster …" were printed whole as the copy.
+  "|(?:can|could|may)\\s+(?:we|i)\\s+(?:please\\s+)?(?:get|have))";
 /**
  * Hunt 3: a design asked for as "one" ("we need a new one for the science fair", "can you make one for the Book Fair",
  * "another one for …"): the request was not found, and the whole sentence was printed as the copy.
@@ -124,7 +126,9 @@ const CKB_ASK_WORD = '(?:تکایە|تکایه|بێزەحمەت|دەتوانیت
 const CKB_FOR = '(?:بۆ|دەربارەی|لەسەر|سەبارەت\\s+بە)';
 /** A Sorani ask: "please / can you / we want …" with a design noun or "make" within five words, or "<a design> … make". */
 const CKB_OPENER = new RegExp(`(?<![\\p{L}\\p{M}])(?:${CKB_ASK_WORD}(?=(?:[\\s،,]+\\S+){0,5}?[\\s،,]+(?:${CKB_NOUN}|دروست|ئامادە))` +
-  `|${CKB_NOUN}(?=[\\p{L}\\p{M}]*(?:\\s+\\S+){0,10}?\\s+(?:بۆمان\\s+|بۆم\\s+)?${CKB_VERB}))`, 'gu');
+  `|${CKB_NOUN}(?=[\\p{L}\\p{M}]*(?:\\s+\\S+){0,10}?\\s+(?:بۆمان\\s+|بۆم\\s+)?${CKB_VERB})` +
+  // ADR-284 addendum (follow-up): "<a poster>-we want for …" (پۆستەرێکمان دەوێت بۆ), said without "make": printed whole.
+  `|${CKB_NOUN}(?=[\\p{L}\\p{M}]*(?:\\s+\\S+){0,2}?\\s+(?:دەوێت|ئەوێت|پێویستە)(?![\\p{L}\\p{M}])))`, 'gu');
 /** From the ask to what the design is for: "تکایە پۆستەرێکی جوانی KAAE بۆ" (please a nice KAAE poster for). */
 const CKB_DESIGN = new RegExp(`(?:${CKB_ASK_WORD}[\\s،,]+)?(?:\\S+\\s+){0,3}?${CKB_NOUN}[\\p{L}\\p{M}]*(?:\\s+\\S+){0,3}?` +
   `(?:\\s+(?:بۆمان|بۆم)?\\s*${CKB_VERB})?\\s+${CKB_FOR}(?:\\s+(?:بۆمان|بۆم)?\\s*${CKB_VERB}\\s+${CKB_FOR})?(?![\\p{L}\\p{M}])\\s*`, 'uy');
@@ -408,7 +412,7 @@ const GLUE_START = /^(?:(?:it|this|that)(?:'s|’s|\s+is|\s+will\s+be)|it'll\s+b
  * designer are left out from the end of any piece ("…, please use the same style").
  */
 const CHAT_CLAUSE = new RegExp('^(?:' + [
-  '(?:hi|hello|hey|dear\\s+\\p{L}+|good\\s+(?:morning|afternoon|evening)|salam|slaw)(?:\\s+(?:there|team|all|everyone))?(?:\\s+(?:i\\s+)?hope\\s+.*)?',
+  `(?:${GREETING_WORDS}|dear\\s+\\p{L}+)(?:\\s+(?:${ADDRESS_WORDS}))*(?:\\s+(?:i\\s+)?hope\\s+.*)?`,
   "(?:i\\s+)?hope\\s+(?:you\\s+are|you'?re|all\\s+is|everything\\s+is)\\s+(?:well|good|fine).*", 'how\\s+are\\s+you.*',
   "(?:i\\s+)?(?:just\\s+)?(?:wanted\\s+to\\s+)?(?:say\\s+)?(?:thanks?|thank\\s+you)(?:\\s+(?:so\\s+much|a\\s+lot|again))?(?:\\s+for\\s+.*)?",
   '(?:great|good|nice|amazing|excellent|lovely)\\s+(?:job|work)\\b.*', 'well\\s+done\\b.*',
@@ -446,6 +450,20 @@ function ruleCopy(source: string, asks: Span[]): ProposedCopy | null {
     clean(source.slice(from, end), false);
   }
   return kept.length ? { headline: kept[0], lines: kept.slice(1) } : null;
+}
+
+/**
+ * ADR-284 addendum (follow-up, 2026-10-03): the copy a request line carries beside its request words, as the rules
+ * read it ("Could you design a poster for our Annual Accreditation Conference?" carries "Annual Accreditation
+ * Conference"; "Please make a poster for KAAE" carries only the client's name). Empty when the line asks for nothing.
+ */
+export function copyBesideRequest(line: string, clientNames: readonly string[] = []): string[] {
+  const source = ws(line);
+  const asks = requestSpans(source);
+  if (!asks.length) return [];
+  const rules = ruleCopy(source, asks);
+  const names = new Set(clientNames.map((n) => n.toLowerCase()));
+  return rules ? [rules.headline, ...rules.lines].filter((piece) => !names.has(piece.trim().toLowerCase())) : [];
 }
 
 /** The parts of the source that are never copy: the requests, greetings and sentences to the designer. */
