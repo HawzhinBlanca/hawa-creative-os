@@ -151,3 +151,25 @@ describe('retrieval limits (hunt-3)', () => {
     }
   });
 });
+
+describe('a tag row whose identifiers disagree (hunt-3)', () => {
+  it('is applied to no photo: a sheet sorted by one column must not give one photo another\'s consent', async () => {
+    const source = tmp('olp-h3-rows-');
+    const root = tmp('olp-h3-root-');
+    const a = syntheticPhoto(900, 900, 81), b = syntheticPhoto(900, 900, 82);
+    writeFileSync(path.join(source, 'a.png'), a);
+    writeFileSync(path.join(source, 'b.png'), b);
+    const idA = `olp_${sha(a).slice(0, 16)}`;
+    // Row says photo A by id, photo B by hash and by source name.
+    const sheet = `id,sha256,source,people,consent,usable\n${idA},${sha(b)},b.png,yes,granted,yes\n`;
+    const report = await ingestOfficePhotoFolder({ sourceDir: source, libraryRoot: root, clientId: 'kaae', tagRows: parseOfficePhotoTagSheet(sheet, 'csv') });
+    expect(report.tagRowsApplied).toBe(0);
+    expect(report.tagRowsUnmatched).toHaveLength(1);
+    expect(report.usable).toBe(0);
+    // Agreeing identifiers still apply.
+    const ok = `id,sha256,source,people,consent,usable\n${idA},${sha(a)},a.png,yes,granted,yes\n`;
+    const again = await ingestOfficePhotoFolder({ sourceDir: source, libraryRoot: root, clientId: 'kaae', tagRows: parseOfficePhotoTagSheet(ok, 'csv') });
+    expect(again.tagRowsApplied).toBe(1);
+    expect(again.usable).toBe(1);
+  });
+});

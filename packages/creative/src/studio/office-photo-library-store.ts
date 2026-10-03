@@ -396,7 +396,13 @@ export async function ingestOfficePhotoFolder(options: OfficePhotoIngestOptions)
   }
 
   for (const row of options.tagRows ?? []) {
-    const target = [...bySha.values()].find((p) => (row.id && p.id === row.id) || (row.sha256 && p.sha256 === row.sha256) || (!row.id && !row.sha256 && row.source && p.sourceName === row.source));
+    // Every identifier the row gives must name the same photo. A sheet sorted by one column in a
+    // spreadsheet pairs one photo's id with another's tags; the first match used to win, and could
+    // give a photo another photo's consent.
+    const named = (p: OfficePhotoEntry) => Boolean(row.id || row.sha256 || row.source) &&
+      (!row.id || p.id === row.id) && (!row.sha256 || p.sha256 === row.sha256) && (!row.source || p.sourceName === row.source);
+    const candidates = [...bySha.values()].filter(named);
+    const target = candidates.length === 1 ? candidates[0] : undefined;
     if (!target) { report.tagRowsUnmatched.push({ ...(row.id ? { id: row.id } : {}), ...(row.sha256 ? { sha256: row.sha256 } : {}), ...(row.source ? { source: row.source } : {}) }); continue; }
     const tags = applyTags(target.tags, row.tags);
     if (JSON.stringify(tags) !== JSON.stringify(target.tags)) {
