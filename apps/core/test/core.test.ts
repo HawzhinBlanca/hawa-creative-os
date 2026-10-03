@@ -473,6 +473,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         commitMessage: 'Certified Nawroz 2026 luxury gold palette and Kurdish typography invariants',
+        expectedVersion: 12,
         createdBy: 'creative_director',
       }),
     });

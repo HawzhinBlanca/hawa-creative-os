@@ -528,7 +528,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     await app.request(`/v1/clients/${task.clientId}/dna`, {
       method: 'POST',
       headers: operatorHeaders,
-      body: JSON.stringify(clientDna),
+      body: JSON.stringify({ ...clientDna, expectedVersion: clientDna.version }),
     });
 
     const pubRes = await app.request(`/v1/tasks/${task.id}/publish-omnichannel`, {

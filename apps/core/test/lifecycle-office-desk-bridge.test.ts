@@ -881,7 +881,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     const currentDna = await (await deliveryInternal.request(`/v1/clients/${clientId}/dna`, { headers: dnaHeaders })).json();
     const savedDna = await deliveryInternal.request(`/v1/clients/${clientId}/dna`, {
       method: 'POST', headers: dnaHeaders,
-      body: JSON.stringify({ ...currentDna, destinations: { ...(currentDna.destinations || {}),
+      body: JSON.stringify({ ...currentDna, expectedVersion: currentDna.version, destinations: { ...(currentDna.destinations || {}),
         productionFolderId: 'kaae-owned-folder', spreadsheetId: 'kaae-owned-sheet' } }),
     });
     expect([200, 201]).toContain(savedDna.status);

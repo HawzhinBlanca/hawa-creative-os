@@ -6,6 +6,7 @@ import { createDb } from '@hawa/db';
 import { kaaeClientDNA } from '@hawa/domain';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import { activeDnaVersion } from './fixtures/persisted-client-dna.js';
 
 /**
  * Group G2 of the app.ts split, second step (architecture programme 1.3, SPLIT_PLAN.md sections 6
@@ -25,7 +26,7 @@ describe('G2: client DNA snapshots are read from Postgres only', () => {
     const res = await createApp({ db }).request(`/v1/clients/${KAAE}/dna`, {
       method: 'POST',
       headers: artDirector,
-      body: JSON.stringify({ ...kaaeClientDNA, clientId: KAAE, commitMessage }),
+      body: JSON.stringify({ ...kaaeClientDNA, clientId: KAAE, commitMessage, expectedVersion: await activeDnaVersion(createApp({ db }), KAAE, artDirector) }),
     });
     expect(res.status).toBe(201);
     return ((await res.json()) as { version: number }).version;
@@ -48,7 +49,7 @@ describe('G2: client DNA snapshots are read from Postgres only', () => {
     const res = await createApp({ db }).request('/v1/clients/kaae/snapshots', {
       method: 'POST',
       headers: artDirector,
-      body: JSON.stringify({ commitMessage: 'G2: manual snapshot by code' }),
+      body: JSON.stringify({ commitMessage: 'G2: manual snapshot by code', expectedVersion: await activeDnaVersion(createApp({ db }), KAAE, artDirector) }),
     });
     expect(res.status).toBe(201);
     const made = (await res.json()) as Snapshot;
@@ -64,7 +65,7 @@ describe('G2: client DNA snapshots are read from Postgres only', () => {
     const res = await createApp({ db }).request(`/v1/clients/${KAAE}/dna/rollback`, {
       method: 'POST',
       headers: artDirector,
-      body: JSON.stringify({ targetVersion: target, reason: 'G2 rollback across a restart' }),
+      body: JSON.stringify({ targetVersion: target, reason: 'G2 rollback across a restart', expectedVersion: target + 1 }),
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { revertedToVersion: number; activeVersion: number };

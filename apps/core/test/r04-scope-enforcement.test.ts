@@ -263,7 +263,7 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
       const res = await app.request('/v1/clients/client-drustee/dna', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...original, name: 'Unsaved Test' }),
+        body: JSON.stringify({ ...original, name: 'Unsaved Test', expectedVersion: original.version }),
       });
       expect(res.status).toBe(503);
       expect(lookupCodes).toEqual([]);

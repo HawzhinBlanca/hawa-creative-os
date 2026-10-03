@@ -215,14 +215,14 @@ describe('ADR-239: a DNA save keeps the client\'s model consent only when it is 
     // Version 2: a design change saved by the office administrator (kept).
     await deskSave(office);
     // An administrator rolls back to version 1: the same privacy block, so the consent is kept.
-    const back = await app().request(at('/dna/rollback'), { method: 'POST', headers: office, body: JSON.stringify({ targetVersion: 1, reason: 'Wrong name' }) });
+    const back = await app().request(at('/dna/rollback'), { method: 'POST', headers: office, body: JSON.stringify({ targetVersion: 1, reason: 'Wrong name', expectedVersion: 2 }) });
     expect(back.status, await back.clone().text()).toBe(200);
     expect(await back.json()).toMatchObject({ rolledBack: true, activeVersion: 3, modelReading: { openai: true } });
     expect((await versions())[2]).toMatchObject({ version: 3, approved_by: OFFICE_ADMIN });
     expect((await kept()).map((a) => a.data.via)).toEqual(['dna', 'rollback']);
 
     // An art director's rollback: allowed, but the consent is not carried, and the answer says so.
-    const byArt = await app().request(at('/dna/rollback'), { method: 'POST', headers: bearer('tok-art'), body: JSON.stringify({ targetVersion: 2, reason: 'Keep the new name' }) });
+    const byArt = await app().request(at('/dna/rollback'), { method: 'POST', headers: bearer('tok-art'), body: JSON.stringify({ targetVersion: 2, reason: 'Keep the new name', expectedVersion: 3 }) });
     expect(byArt.status, await byArt.clone().text()).toBe(200);
     expect((await byArt.json()).modelReading).toMatchObject({ openai: false, reason: expect.stringMatching(/^Only an office administrator/) });
     expect(await allowed()).toBe(false);
@@ -235,7 +235,7 @@ describe('ADR-239: a DNA save keeps the client\'s model consent only when it is 
       body: JSON.stringify({ expectedVersion: 1, mode: 'approved_providers', providers: ['openai'], reason: 'Owner approved model reading for KAAE' }) });
     expect(consent.status).toBe(201);
     expect(await allowed()).toBe(true);
-    const back = await app().request(at('/dna/rollback'), { method: 'POST', headers: office, body: JSON.stringify({ targetVersion: 1, reason: 'Undo' }) });
+    const back = await app().request(at('/dna/rollback'), { method: 'POST', headers: office, body: JSON.stringify({ targetVersion: 1, reason: 'Undo', expectedVersion: 2 }) });
     expect(back.status).toBe(200);
     expect((await back.json()).modelReading).toMatchObject({ openai: false, reason: expect.stringMatching(/^The privacy block changed/) });
     expect((await versions())[2]).toMatchObject({ version: 3, approved_by: null });
