@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T12:49:36Z",
+  "generatedAt": "2026-10-03T13:14:07Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 939,
+  "fileCount": 941,
   "files": [
     {
       "path": ".dockerignore",
@@ -1356,6 +1356,11 @@
       "path": "adrs/290_sorani_shaping_checked_on_the_raster.md",
       "sha256": "34a3c3abe4be83d2e5dc04484402e071fa990a51408efa0bb274e42207fac2fb",
       "bytes": 8459
+    },
+    {
+      "path": "adrs/291_rule_effect_measured.md",
+      "sha256": "4998719899fad902b768af44adcdfcf363e18e1878d174c6fac6d34ed1c643c6",
+      "bytes": 16158
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -3663,6 +3668,11 @@
       "bytes": 8734
     },
     {
+      "path": "plans/rule-effect-2026-10-03/rule-effect.json",
+      "sha256": "e4915eb722ced8ca1f3802716dca137310904a80b23ebb1b0c88a93f69f0e0ae",
+      "bytes": 17853
+    },
+    {
       "path": "plans/service-boundary-repair-2026-09-30/LIVE_4E500451_READBACK.json",
       "sha256": "20cd5a3eccab6e8ed706941bffdcedb4fa01f90ddaf502da65409b265f1c5e2e",
       "bytes": 4679
@@ -3694,8 +3704,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "5b552ed741ae2e7d924fa9e1b6401a314fd993668f31b22f18b4da07111a82a9",
-      "bytes": 918007
+      "sha256": "6fe05cbd2c040d0b18eca78caa0620d2ba981e21a6cf593c5416e23f35cd5a72",
+      "bytes": 919021
     },
     {
       "path": "plans/user-stories.csv",
