@@ -5,7 +5,7 @@ import { checkCanvaPdf } from '../src/canva-pdf-check.js';
 /**
  * Hunt 3 (2026-10-03): the PDF readback on files a PDF writer may legally produce and the earlier tests
  * did not build: ToUnicode ranges with several code units or the array form, balanced parentheses left
- * unescaped in a literal string, and oversized streams.
+ * unescaped in a literal string, short copy lines found inside longer ones, and oversized streams.
  */
 const hex4 = (n: number) => n.toString(16).padStart(4, '0').toUpperCase();
 const utf16 = (s: string) => Buffer.from(s, 'utf16le').swap16().toString('hex').toUpperCase();
@@ -57,6 +57,30 @@ describe('literal strings', () => {
     const r = checkCanvaPdf(pdf(content, cmap), ['ACB']);
     expect(r.textLayer).toBe('ACB');
     expect(r.copyPass).toBe(true);
+  });
+});
+
+describe('each copy line is found once, in its own place', () => {
+  it('a short line found only inside a longer line is missing', () => {
+    const { cmap, content } = simple(['KAAE SUMMIT 2026']);
+    const r = checkCanvaPdf(pdf(content, cmap), ['KAAE', 'KAAE SUMMIT 2026']);
+    expect(r.copy.missing).toEqual(['KAAE']);
+    expect(r.copyPass).toBe(false);
+    // Both drawn: both found.
+    const both = simple(['KAAE', 'KAAE SUMMIT 2026']);
+    expect(checkCanvaPdf(pdf(both.content, both.cmap), ['KAAE', 'KAAE SUMMIT 2026']).copyPass).toBe(true);
+  });
+
+  it('a line the copy holds twice must be drawn twice', () => {
+    const once = simple(['Erbil', 'Join us']);
+    expect(checkCanvaPdf(pdf(once.content, once.cmap), ['Erbil', 'Join us', 'Erbil']).copy.missing).toEqual(['Erbil']);
+    const twice = simple(['Erbil', 'Join us', 'Erbil']);
+    expect(checkCanvaPdf(pdf(twice.content, twice.cmap), ['Erbil', 'Join us', 'Erbil']).copyPass).toBe(true);
+  });
+
+  it('still finds a line Canva set on two lines, and in any order', () => {
+    const { cmap, content } = simple(['SUMMIT', 'Peer Review', 'Week']);
+    expect(checkCanvaPdf(pdf(content, cmap), ['Peer Review Week', 'SUMMIT']).copyPass).toBe(true);
   });
 });
 

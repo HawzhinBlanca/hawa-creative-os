@@ -198,16 +198,34 @@ export function checkCanvaPdf(
     if (any) liveText = true;
   }
   const layer = fold(pieces.join(''));
-  const squeezed = layer.replace(/\s+/g, '');
   const latin = expectedCopy.filter((line) => fold(line) && !ARABIC.test(line));
-  const upperLayer = layer.toUpperCase();
-  const upperSqueezed = squeezed.toUpperCase();
-  const missing = expectedCopy.map((line, i) => ({ line, caps: options.uppercaseByIndex?.[i] === true }))
-    .filter(({ line }) => fold(line) && !ARABIC.test(line))
-    .filter(({ line, caps }) => caps
-      ? !upperLayer.includes(fold(line).toUpperCase()) && !upperSqueezed.includes(fold(line).replace(/\s+/g, '').toUpperCase())
-      : !layer.includes(fold(line)) && !squeezed.includes(fold(line).replace(/\s+/g, '')))
-    .map(({ line }) => line);
+  // Each line is found once, in text no other line was found in: a short line ("KAAE") is not found
+  // inside a longer one ("KAAE SUMMIT 2026"), and a line the copy holds twice must be drawn twice.
+  // Longest lines first. A line Canva set over two text lines is found with its spacing removed.
+  const units = Array.from(layer);
+  const used = units.map(() => false);
+  const take = (target: string, upper: boolean, squeeze: boolean): boolean => {
+    let view = '';
+    const owner: number[] = [];
+    units.forEach((unit, at) => {
+      if (squeeze && /\s/u.test(unit)) return;
+      const shown = used[at] ? '\u0000' : upper ? unit.toUpperCase() : unit;
+      for (let k = 0; k < shown.length; k++) owner.push(at);
+      view += shown;
+    });
+    const at = view.indexOf(target);
+    if (at < 0 || !target) return false;
+    for (let k = at; k < at + target.length; k++) used[owner[k]] = true;
+    return true;
+  };
+  const checkable = expectedCopy.map((line, i) => ({ line, i, caps: options.uppercaseByIndex?.[i] === true }))
+    .filter(({ line }) => fold(line) && !ARABIC.test(line));
+  const found = new Set<number>();
+  for (const { line, i, caps } of [...checkable].sort((a, b) => fold(b.line).length - fold(a.line).length)) {
+    const target = caps ? fold(line).toUpperCase() : fold(line);
+    if (take(target, caps, false) || take(target.replace(/\s+/g, ''), caps, true)) found.add(i);
+  }
+  const missing = checkable.filter(({ i }) => !found.has(i)).map(({ line }) => line);
   const copy = { checked: latin.length, found: latin.length - missing.length, missing, visualOnly: expectedCopy.length - latin.length };
 
   if (pages.length !== 1) errors.push(`Expected one page, found ${pages.length}`);
