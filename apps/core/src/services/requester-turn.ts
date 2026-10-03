@@ -498,11 +498,20 @@ const SOMETHING_FOR = new RegExp(`\\b(?:(?:i|we)(?:\\s+(?:also|really|will|would
   `(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+)?(?:make|design|create|do|prepare)|(?:please\\s+)?(?:make|design|create|prepare)\\s+(?:us|me))\\s+` +
   `(?:something|anything)\\s+(?:(?:nice|new|simple|quick|small|special|creative)\\s+)?` +
   `(?:for\\s+(?!(?:me|us|it|this|that|now|them|you)\\b)(?!${A_PART_HEAD}\\b)(?!${SOMETIME}\\b)(?:(?:the|our|my|a|an|this|that)\\s+)?\\p{L}|to\\s+(?:promote|announce|advertise|celebrate|invite\\s+\\p{L}+\\s+to|mark)\\s+\\p{L})`, 'iu');
+/**
+ * Hunt 3 (2026-10-03): a design asked for as "one", "another" or "the same" for a subject of its own: "can you also
+ * make one for the Book Fair on 9 November", "make one more for the graduation", "please make another for the Book
+ * Fair", "can you make the same for the Science Fair". They read as a change of the design on the way, and one sent
+ * back for changes started a paid round with them as its directive.
+ */
+const ONE_FOR = new RegExp(`\\b(?:make|design|create|do|prepare)\\s+(?:us\\s+|me\\s+)?(?:one(?:\\s+more)?|another(?:\\s+one)?|the\\s+same(?:\\s+one)?)` +
+  `(?:\\s+(?:too|as\\s+well|also))?\\s+(?:for|about)\\s+(?!(?:me|us|it|this|that|them|you|now|print(?:ing)?|instagram|facebook|social\\s+media)\\b)` +
+  `(?!${A_PART_HEAD}\\b)(?!${SOMETIME}\\b)(?:(?:the|our|my|a|an)\\s+)?\\p{L}`, 'iu');
 /** A request for a new design ("Can you make a poster for Nawroz?"), greeting or not. */
 export function asksForNewDesign(text: string): boolean {
   const t = clean(text);
   if (asksAboutPrice(t)) return false;
-  if (SOMETHING_FOR.test(t)) return true;
+  if (SOMETHING_FOR.test(t) || ONE_FOR.test(t)) return true;
   if (NEW_DESIGN_CKB.test(t) && (any(t, ASKS_TO_MAKE_CKB) || t.length <= 200)) return true;
   if (OPENS_WITH_DESIGN.test(corePhrase(t))) return true;
   return NEW_DESIGN_EN.test(t) && ASKS_TO_MAKE_EN.test(t);
@@ -512,8 +521,10 @@ export function asksForNewDesign(text: string): boolean {
 export function readsAsChange(text: string): boolean {
   const t = corePhrase(text);
   if (!t) return false;
-  // "What fonts can you use?" asks about the office, not for a change.
-  if (/^(?:what|which|how|who|where|when|why)\b[^\n]*\?\s*$/i.test(t) &&
+  // "What fonts can you use?" asks about the office, not for a change. Hunt 3: so does a yes-or-no question about the
+  // design ("did you put the date?"): it started a paid round on a design sent back for changes. "Is it possible to …",
+  // "are you able to …" and "do you mind …" ask for the change.
+  if (/^(?:what|which|how|who|where|when|why|(?:did|do|does|have|has|was|were|are|is)(?:n'?t)?\b(?!\s+(?:it\s+possible|you\s+able|you\s+mind)\b))\b[^\n]*\?\s*$/i.test(t) &&
       !/\b(?:wrong|typo|mistake|incorrect|should\s+be)\b/i.test(t)) return false;
   if (CORRECTION_EN.some((p) => p.test(t)) || any(t, CORRECTION_CKB)) return true;
   // The heuristics' own revision reading, as when a design is known to be active.
@@ -709,9 +720,16 @@ export function carriesBriefCopy(core: string): boolean {
   return events >= 2 && words >= 10;
 }
 
+/**
+ * Hunt 3 (2026-10-03): "can you make it by tomorrow?", "could you finish it by Thursday?": asking for the design by a
+ * time is timing, not a change ("make it" read as one, and a design sent back for changes started a paid round).
+ */
+const DO_IT_BY = /^(?:(?:can|could|will|would)\s+(?:you|u)\s+)?(?:please\s+)?(?:make|do|finish|complete|deliver|have|get|prepare)\s+(?:it|them|this|that)(?:\s+(?:ready|done))?\s+(?=(?:by|before|until|no\s+later\s+than)\b)/i;
 function readsAsDeadline(text: string, core: string): boolean {
   if (!core || core.length > 160 || asksForNewDesign(text) || carriesBriefCopy(core)) return false;
   if (URGENT.test(core)) return true;
+  const doIt = DO_IT_BY.exec(core);
+  if (doIt && core.slice(doIt[0].length).replace(DEADLINE_WHEN, '').replace(/^[\s?.!]*(?:please)?[\s?.!]*$/iu, '') === '') return true;
   if (RELAXED.test(core) || RELAXED_WHEN.test(core)) return true;
   if (DEADLINE_WHEN.test(core) && DEADLINE_NEED.test(core)) return true;
   if (/^(?:by|before)\s+/i.test(core) && DEADLINE_WHEN.test(core)) return true;

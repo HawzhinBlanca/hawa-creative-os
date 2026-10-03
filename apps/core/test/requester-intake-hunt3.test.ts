@@ -150,3 +150,31 @@ describe('hunt 3 / B1: a brief that ends with "send it to me" or "go ahead" is a
     expect(answer.draft.designInstructions).toMatch(/Please send it to me by Thursday/);
   });
 });
+
+describe('hunt 3 / R1: words that change nothing never start a paid round on a design sent back for changes', () => {
+  // A design the office sent back for the requester's changes: a change starts a paid round on it.
+  const waiting = () => [{ ...view('A', 'manual', 'KAAE: Quality Assurance Workshop'), rev: 3 }];
+
+  it.each(['can you also make one for the Book Fair on 9 November', 'make one more for the graduation on 12 October',
+    'please make another for the Book Fair', 'can you make the same for the Science Fair on 12 November',
+    'can you do one for the open day too'])('a design asked for with "one", "another" or "the same": "%s" opens a request', (words) => {
+    expect(readIntentByRules(words).intent).toBe('new_brief');
+    expect(plan(words, waiting())).toMatchObject({ kind: 'open' });
+  });
+
+  it.each(['did you put the date?', 'have you added the logo?', 'is the font Kurdish?', 'are the photos included?'])(
+    'a yes-or-no question about the design is the office\'s question, never a round: "%s"', (words) => {
+      expect(plan(words, waiting())).toMatchObject({ kind: 'forward', question: true });
+    });
+
+  it.each(['can you make it by tomorrow?', 'could you finish it by Thursday?', 'can you do it before 5 pm?'])('timing: "%s"', (words) => {
+    expect(plan(words, waiting())).toMatchObject({ kind: 'tell', note: 'deadline' });
+  });
+
+  it('a change said as a question is still a change', () => {
+    for (const words of ['can you make the title bigger?', 'is it possible to make the logo bigger?', 'could you add the phone number?',
+      'can you make it blue by tomorrow?']) {
+      expect(plan(words, waiting()), words).toMatchObject({ kind: 'revise' });
+    }
+  });
+});
