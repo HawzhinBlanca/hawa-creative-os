@@ -477,7 +477,10 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   const headerLogoShare = Math.max(g.header.logoWidthShare, g.poster?.logoWidthShare ?? 0);
   let lw = Math.max(minLogo, r((centred ? g.cover.logoWidthShare : cover ? 1.6 * headerLogoShare : headerLogoShare) * W));
   let lh = r(lw / aspect);
-  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < minLogo + 40) {
+  // Keep the official aspect within the 1% the validator allows after rounding (searched up from the
+  // header's own width: from the minimum, a header-sized wide logo never searched and failed LOGO).
+  const lw0 = lw;
+  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < lw0 + 40) {
     lw += 1;
     lh = r(lw / aspect);
   }

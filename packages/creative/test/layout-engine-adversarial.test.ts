@@ -63,3 +63,22 @@ describe('the page and cover composer never runs a word past its box', () => {
     }
   }
 });
+
+describe('a poster-sized or page-sized wide logo keeps its official aspect', () => {
+  // Before: the aspect search ran only while the logo was within 40px of the house minimum, but the
+  // poster's and page's logo (0.16 of the width, 173px) starts past it, so a 5:1 logo was drawn
+  // 173x35 (4.94:1) and an 8:1 logo 173x22: the validator's LOGO rule (1%) refused every design.
+  for (const logoAspect of [2.7, 5, 8]) {
+    for (const variant of [...POSTER_VARIANTS, 'page'] as const) {
+      it(`${variant}, logo ${logoAspect}:1`, () => {
+        const lines = ['Quality Assurance Workshop', '15 October 2026'];
+        const base = input(lines, ['title', 'date'], { logoAspect });
+        const l = tryCompose(() => (variant === 'page' ? composeGrammarLayout({ ...base, variant: 'brand_card' }) : composePosterLayout({ ...base, variant })));
+        expect(l).toBeDefined();
+        expect(Math.abs(l!.logo.width / l!.logo.height - logoAspect) / logoAspect).toBeLessThanOrEqual(0.01);
+        const v = validate(l!, lines, logoAspect);
+        expect(v.ok ? 'ok' : `${v.code}: ${v.message}`).toBe('ok');
+      });
+    }
+  }
+});

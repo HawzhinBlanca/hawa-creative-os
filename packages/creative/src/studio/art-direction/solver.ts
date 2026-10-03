@@ -541,8 +541,10 @@ class SolveContext {
     const minW = Math.max(minLogoWidth(this.W), this.input.logoMinimumWidthPx ?? 0);
     let width = Math.max(minW, Math.round(0.1 * Math.min(this.W, 1.25 * this.H)));
     let height = Math.round(width / aspect);
-    // Keep the official aspect within the 1% the validator allows after rounding.
-    while (Math.abs(width / height - aspect) / aspect > 0.009 && width < minW + 40) {
+    // Keep the official aspect within the 1% the validator allows after rounding (searched up from the
+    // starting width, which may already be past the minimum).
+    const start = width;
+    while (Math.abs(width / height - aspect) / aspect > 0.009 && width < start + 40) {
       width += 1;
       height = Math.round(width / aspect);
     }

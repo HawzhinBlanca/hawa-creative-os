@@ -264,7 +264,10 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const minLogo = Math.max(minLogoWidth(W), input.logoMinimumWidthPx ?? 0);
   let lw = Math.max(minLogo, r(P.logoWidthShare * Math.min(W, 1.25 * H)));
   let lh = r(lw / aspect);
-  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < minLogo + 40) {
+  // Keep the official aspect within the 1% the validator allows after rounding (searched up from the
+  // poster's own width: from the minimum, a poster-sized wide logo never searched and failed LOGO).
+  const lw0 = lw;
+  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < lw0 + 40) {
     lw += 1;
     lh = r(lw / aspect);
   }
