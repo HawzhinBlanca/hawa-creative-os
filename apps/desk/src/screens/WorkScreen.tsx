@@ -1,8 +1,9 @@
 import { TaskControls } from '../components/TaskControls.js';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
-import { StudioPanel } from '../components/StudioPanel.js';
+// The design tools for one task: loaded when a task is first opened, kept out of the entry chunk.
+const CanvaTaskPanel = lazy(() => import('../components/CanvaTaskPanel.js').then((m) => ({ default: m.CanvaTaskPanel })));
+const StudioPanel = lazy(() => import('../components/StudioPanel.js').then((m) => ({ default: m.StudioPanel })));
 import { AskLedgerPanel } from '../components/AskLedger.js';
 import { RequesterSendEvidencePanel } from '../components/RequesterSendEvidencePanel.js';
 import { VectorInspector } from '../components/VectorInspector.js';
@@ -1172,8 +1173,10 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   <p dir="auto" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{selectedTask.description || selectedTask.title}</p>
                   {selectedTask.referenceImages?.length ? <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{selectedTask.referenceImages.map((photo,i) => <AuthorizedImage key={photo.sha256} src={photo.url} alt={`Request photo ${i+1}`} style={{width:96,height:96,objectFit:'contain'}} />)}</div> : null}
                 </section>
-                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} taskStatus={selectedTask.status} hasCanvaBinding={Boolean(selectedTask.canvaBinding)} onOpenCanva={() => void handleEditInCanva()} />
-                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} taskStatus={selectedTask.status} revision={detailQuery.dataUpdatedAt} onOpenSettings={onNavigateToSettings} />
+                <Suspense fallback={<p role="status" aria-live="polite">Loading the design tools…</p>}>
+                  <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} taskStatus={selectedTask.status} hasCanvaBinding={Boolean(selectedTask.canvaBinding)} onOpenCanva={() => void handleEditInCanva()} />
+                  <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} taskStatus={selectedTask.status} revision={detailQuery.dataUpdatedAt} onOpenSettings={onNavigateToSettings} />
+                </Suspense>
 
               {/* =================================================================== */}
               {/* LARGE CAPTURED PREVIEW STAGE (FR-077)                               */}

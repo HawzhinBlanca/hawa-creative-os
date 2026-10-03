@@ -2,6 +2,9 @@
 import React from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkScreen } from '../src/screens/WorkScreen.js';
+// Loaded lazily by WorkScreen (kept out of the entry chunk); loaded here first so a task opens at once.
+import '../src/components/StudioPanel.js';
+import '../src/components/CanvaTaskPanel.js';
 import { App } from '../src/App.js';
 import { DeskProviders, createDeskRuntime, type DeskRuntime } from '../src/DeskProviders.js';
 import { apiClient } from '../src/api/client.js';
