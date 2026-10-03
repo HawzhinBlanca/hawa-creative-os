@@ -1,6 +1,6 @@
 {
   "date": "2026-10-03",
-  "status": "HTTP_MANIFEST_AND_POOL_REPAIR_FOCUSED_PASS_NATIVE_RERUN_PENDING",
+  "status": "NATIVE_SIX_PHOTO_HTTP_WORKER_RETENTION_AND_CURRENT_FULL_REGRESSION_PASS_GENERATION_OPEN",
   "requirements": [
     "FR-006",
     "FR-018",
@@ -57,23 +57,95 @@
     "initialFailure": "three missing SQL result annotations, repaired"
   },
   "lint": "PASS; any957<=1053; provider egress unchanged",
-  "nativeRerun": "PENDING",
+  "nativeRerun": {
+    "testedEngineCommit": "371e18a95070c060e5da92140a8dc2262b7f51c9",
+    "websiteCommit": "79c388c344a403b9cfdc092ffcce05b0129ef490",
+    "websiteProofPath": "/Users/hawzhin/Hawdesign/.worktrees/hawzhin-app-integration/docs/NATIVE_SIX_PHOTO_PROOF.json",
+    "websiteProofSha256": "41256e9f82146474c904ef2e54140d631e01d89c30844f1c6629e563f0d50b34",
+    "controls": {
+      "core": {
+        "passed": 24,
+        "failed": 0
+      },
+      "browserIntake": {
+        "passed": 13,
+        "failed": 0
+      },
+      "worker": {
+        "passed": 10,
+        "failed": 0
+      },
+      "browserReadback": {
+        "passed": 9,
+        "failed": 0
+      }
+    },
+    "total": 56,
+    "photoCount": 6,
+    "requesterOrderPreserved": true,
+    "photoUsage": {
+      "mode": "all"
+    },
+    "syntheticFileContents": true,
+    "actualDecoderAndCAS": true,
+    "providersConfigured": false,
+    "exactNativeRetry": [
+      {
+        "target_service_name": "DesignRun",
+        "target_service_key": "dr-cb886c22-3324-4777-887e-eabc6d9baf9b",
+        "status": "backing-off",
+        "code": "MODEL_NOT_CONFIGURED"
+      }
+    ],
+    "cleanup": {
+      "vendorContainersRemoved": 6,
+      "ownedNetworksRemoved": 2,
+      "privateFilesRemoved": [
+        "worker-runtime-private.log",
+        "customer-worker-launch-private.log",
+        "customer-core-private.log",
+        "customer-browser-error-private.log",
+        "local-private.json",
+        "restate-runtime-private.log",
+        "customer-browser-worker-error-private.log"
+      ],
+      "priorContainersUnchanged": 10,
+      "coreDatabaseRemoved": true,
+      "browserWorkerAndRestateContainersAbsent": true
+    }
+  },
   "fullRegression": {
-    "testedCommit": "f5d9ec8c",
+    "testedCommit": "371e18a9",
     "passed": 8288,
     "failed": 0,
     "skipped": 67,
     "filesPassed": 750,
     "filesSkipped": 6,
-    "appliesToCurrentPoolRepair": false
+    "seconds": 323.61,
+    "runtimeEqualsTestedCommit": true
   },
-  "coverage": "prior FAIL, not rerun",
+  "coverage": {
+    "status": "FAIL",
+    "actual": [
+      53.68,
+      51.37,
+      44.24,
+      41.74
+    ],
+    "required": [
+      80,
+      80,
+      80,
+      75
+    ],
+    "rerun": false
+  },
   "deployed": false,
   "publicGenerationEnabled": false,
   "sourceHashes": {
     "apps/core/src/routes/lifecycle-internal.routes.ts": "3107231085686c65ba2f78ab3fe87f1c1fb86804b938f76a0ef1572c3fbf708f",
     "apps/core/test/customer-requests.test.ts": "c492f8f1670c0e0a1fcd282a0b81e5d6eff57db948a8dc7a03fad9846af4d17d",
-    "adrs/279_customer_photo_manifest_http_projection.md": "bf00bd3f883eef99eea4cff5718eb1339b275ebc599f9b3883d9c3c5882e2e7d",
+    "adrs/279_customer_photo_manifest_http_projection.md": "69f162917f55e76e860e1a75990d1f99ced06ebd25ae41bd7fc7b521e983964c",
     "apps/core/src/services/lifecycle-projection.ts": "1d51921be8357a30ec2d5d13f7750b09bbf6ea8f4525781254a458be195f6785"
   },
   "reportHashes": {
@@ -86,13 +158,18 @@
     "output/qualification/2026-10-03/customer-photo-http/pool-focused.log": "eceaf9d18f4abdbc722614074f2dba02fa4df1f125688876e6835e47fe284031",
     "output/qualification/2026-10-03/customer-photo-http/pool-types.log": "f6bde7d061c554074edd5245e88381194f0193be988dc2779831feee8dd29ef3",
     "output/qualification/2026-10-03/customer-photo-http/pool-lint.log": "4a4b0dee3ffcc865f8e0789267277548ad4bca2e6460a15ef04033fe98dd2dc3",
-    "output/qualification/2026-10-03/customer-photo-http/full.log": "2d41eeaa86f6328043b25e7cc064924d38c95cd45bb632be7fd0c7bbf49e0ddd"
+    "output/qualification/2026-10-03/customer-photo-http/full.log": "2d41eeaa86f6328043b25e7cc064924d38c95cd45bb632be7fd0c7bbf49e0ddd",
+    "output/qualification/2026-10-03/customer-photo-http/pool-full.log": "bbee43a91d6340d6014f64aecd43a290b11c8f90605f1a293712048a5acfbfbd",
+    "output/qualification/2026-10-03/customer-photo-http/pool-seal-blueprint.log": "9658d07f6d74d45d2583049a899fe4f5460fe988f95f558406f8a8eeb3a17d77"
   },
   "remaining": [
-    "Real provider and native Canva complete customer journey",
-    "Creative photo composition and human quality",
-    "Hosted customer and other three apps",
-    "Interrupted state, backup/restore, CI/coverage, hosting/HTTPS/cutover"
+    "Actual customer provider generation and native Canva outcome",
+    "Creative photo compositions and native languages/fonts/edit-save-reexport/human quality",
+    "Real preview/revision/acceptance/editable-download journey",
+    "Hosted two-user customer and other-three-tools/PWA",
+    "Interrupted uploads/unsaved-state/orphan reconciliation",
+    "Coverage/remote CI and hosted security qualification",
+    "Legacy/coordinated restore/rollback/hosting/trusted HTTPS/migrations/cutover"
   ],
   "initialVerificationErrors": [
     "incorrect evidence column; use acceptance_evidence",
@@ -139,5 +216,73 @@
     "expected": 200,
     "actual": 409,
     "durationSeconds": 8.79
+  },
+  "initialFullRegression": {
+    "testedCommit": "f5d9ec8c",
+    "passed": 8288,
+    "failed": 0,
+    "skipped": 67,
+    "filesPassed": 750,
+    "filesSkipped": 6,
+    "appliesToCurrentPoolRepair": false
+  },
+  "qualificationScope": "Real file input/native Auth/HTTP/decoder/original storage/database/restricted worker/Restate/readback, not creative photo generation or Canva.",
+  "websiteSourceHashes": {
+    "scripts/qualify-customer-browser.mjs": "9dbe70ab59096167e4a9c8f52fcf8b57cfb86cf8fe9ec54e6ccf790342dd56fb",
+    "scripts/qualify-customer-core.py": "8d0d3bf32fa962da6adf3632d35ca2eac8ea9b42495e172353bc7c40aa37b682",
+    "scripts/qualify-customer-worker.py": "566253aa5df0b0f6d4755285fdf1f7693ff2a97a14efa0d298bc0be347dc604d",
+    "scripts/test-customer-core.mjs": "dafe2713ea34d7a0a1ccb226c1c144069aa15fb2b5a625fa8773748be26a4c01",
+    "src/features/designer/api.ts": "cc2ccdb402b99f703036ebd19deb1123807f6ce8c940c942479f13045341e04f",
+    "src/features/designer/PhotoInputs.tsx": "aeab00b3651792e2955b65cf1bafa6ccfead4e6c948934f9adb5d8d0125ff89c",
+    "src/features/designer/DesignerWorkspace.tsx": "a0406a8de165f769e699752f528c8dc576cbe5ae06371cdfef0eec50fe92c6c3",
+    "docs/adr/0024-native-six-photo-customer-flow.md": "789ac5f752942232bcdc241fe8022d12d9841f5e7c0fc8d1724ee681cebaf6d9",
+    "package.json": "f370d2ba1ffa8165fc235f190f8f185750c729f597e747140e2789329f46a469",
+    "package-lock.json": "87ab867657eced46ffdd4f20e2c1c23d9844abb686cf5e8c931850cbd8ff6a36"
+  },
+  "websiteReportHashes": {
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/qualified-sources.json": "1d72da61cd22510c2016b1600e9b14ca7362f66f4335e4c2894173d92529e572",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/fresh-isolation.json": "f7ed7771110197029f7b3fa8fd13d9d06b31e7f3a50810d0ff97ff4fbfd0c97a",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/fresh-bootstrap-result.json": "9c23892934d332fc5e5808e625a0cca942791703b787c4ac5afab7a2bd0638db",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/provision-only.json": "2d855530e11ec60d16e86d9ba08be69148a3df0327fe74bc40a79a2a7f9999c2",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/customer-browser-ready.json": "b839db0e5bc2119f5cd8bba38e6a73059e376f48d97528a7a06fee7c07004368",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/owned-run.json": "1c101b8f3ffcac6f84a0cfbf3c00c3cd483093c5f30b587b05c674f6b3e92113",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/customer-core-result.json": "9e58ecb7c2cf009737eb79fa31e2124ff47359d79d80635b716a9a62453453a9",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/customer-core-sources.json": "4a3b350abca1ed746da2718c2ea9afe563b55bc8371eeb179ff01358e02b6dbb",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/fresh-schema.json": "21aec77c3f98471117a190deb6ca519eaa5bf9b787e06b0e2df6cdc43e667184",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/CLEANUP.json": "2c2f8d805f641fc965570a944638002e998b9c2f0f03f82a42c29ca358a2f502",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/customer-worker-result.json": "20ade2485d112d1f23938129700f86e05da9c77c1f5698177de1e23c774c01f0",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/customer-browser-result.json": "f6a7caef46a529eab51393ffb965000581084340a18966db269b239aa34cac4b",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/customer-worker-sources.json": "f0df060deeaf1824badc6cfc06f02d85d446d4918c51802e0b1589bdbe32b865",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-native/customer-photo-evidence.json": "ea1c6d8037ace8ddaa34037db2f0b8ebb1d3998e3170e00e911cd75ff13f538f",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/qualified-sources.json": "1d72da61cd22510c2016b1600e9b14ca7362f66f4335e4c2894173d92529e572",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/fresh-isolation.json": "19b9c5147289cdc4c6010dfd592a8669036761126aa5dc0b2cd2d011e3a0ac7c",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/fresh-bootstrap-result.json": "9c23892934d332fc5e5808e625a0cca942791703b787c4ac5afab7a2bd0638db",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/provision-only.json": "5cdad94f13566ec165c5850a3e9a36c83ff471d57316bd934b3e5a69212a93ac",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/customer-browser-ready.json": "395aec529f80bc64212002a6005f5130eab0f23a6a37f8d8f5554b6ef57966c8",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/owned-run.json": "59250e658836c7710206dc3e328d8af5fb1878402b82963fde2da87af49da4da",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/customer-core-result.json": "9e58ecb7c2cf009737eb79fa31e2124ff47359d79d80635b716a9a62453453a9",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/customer-core-sources.json": "2f6669b079fb2dc70715cdac7951044977a3fbe56f6276a00ffa61c45c2f5ca0",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/fresh-schema.json": "21aec77c3f98471117a190deb6ca519eaa5bf9b787e06b0e2df6cdc43e667184",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/CLEANUP.json": "2c2f8d805f641fc965570a944638002e998b9c2f0f03f82a42c29ca358a2f502",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/customer-worker-result.json": "4a73189929a596c02b51238255f290bfa12c2a8174c982a47573019c582cc2ae",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/customer-browser-result.json": "b9daec4efd75855345ce164e39d98d4a61a09a5ec2fa81fb002508d1afe58b56",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/customer-worker-sources.json": "cea5a03381dc395650dca40794e1e7216df91d8d63308545623e0dd0d57e6640",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-repaired/customer-photo-evidence.json": "de157ee43e760204bf98a9a5e297d5f6db2aced768f8acb490a35bd2d5dccb0c",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/qualified-sources.json": "1d72da61cd22510c2016b1600e9b14ca7362f66f4335e4c2894173d92529e572",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/fresh-isolation.json": "e520b9f53bafbe97aa246727c051aed68e3743462fcd266de06065e27e38abbc",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/fresh-bootstrap-result.json": "9c23892934d332fc5e5808e625a0cca942791703b787c4ac5afab7a2bd0638db",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/provision-only.json": "a5554fd60c26ae3201d6119d0ed7e7202fb860d6a36aec34a49b99e418d7e11b",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/customer-browser-ready.json": "97c658563e90b349455db7e1db439b221e0a2e13703a9108848b341ea725fd50",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/owned-run.json": "d94290ce6bb7657975bdd9a4deb369d4d4cb0329ecdc3fe7cfae42be1a575583",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/customer-core-result.json": "d5b4d173db210e4a7c5d5565dacdc54f00ec0c11685e205bc5dad05980531fff",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/customer-core-sources.json": "f31a5d9eb20921bbf408d2beaef3edf345d7ba0c52d67504277defaa98a882b0",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/fresh-schema.json": "21aec77c3f98471117a190deb6ca519eaa5bf9b787e06b0e2df6cdc43e667184",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/CLEANUP.json": "b240f6299f7ad9f72d47108941f1f7461c496fce0e89770ad3f07ccb61411950",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/customer-worker-result.json": "cb07faa0f1a81899fb67eac111b660ca6dc3b042eb7ae553a96d53cc6d6409fb",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/customer-browser-result.json": "0a57fda4b2f2578e74ddb4685c6e6e11495dd75c7d31e317eaff6937962dc0b4",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/customer-browser-worker-result.json": "0396587d8e63d11015e6aa66740e72517a6a6b4af70ca9a8d6925b636c533fd9",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/customer-worker-sources.json": "f8d587b96d77ddd0281c5bbbce54795296858940c26f8c9fe1442872445ba354",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/customer-photo-evidence.json": "ab38942ad832aac6748a811ef2fb8ea1d95ba0a34a138724f6a13a4b5eef28a3",
+    "output/qualification/2026-10-03-managed-supabase/customer-six-photo-pool-fixed/source-security.json": "08c0c99d835bdea6746c874353ac2c398130e7b58707ef10959a1528f57e4c26"
   }
 }

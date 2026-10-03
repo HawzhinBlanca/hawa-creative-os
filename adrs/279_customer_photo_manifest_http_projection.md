@@ -1,6 +1,6 @@
 # ADR279 — Preserve admitted web photos at the internal HTTP boundary
 
-Date: 2026-10-03. Status: repair implementation; native rerun pending.
+Date: 2026-10-03. Status: locally qualified; not deployed.
 Requirements: FR-006/018/068/069, NFR-006/024/025.
 Sources: ADR261; docs/09_MESSAGING_AND_OFFICE_INBOX.md;
 docs/08_MEMORY_RAG_CLIENT_DNA.md; docs/14_SECURITY_THREAT_MODEL.md.
@@ -32,3 +32,14 @@ to BlobStore.read instead. Size and hash checks remain required, and owner/clien
 receipt validation still occurs inside the projection transaction. This avoids
 six redundant metadata queries and dependence on a spare pool connection. Keep
 the original native failure and the one-connection red assertion; rerun both.
+
+Final engine371e18a9:86 connected controls and757 strict test roots/lint pass;
+full8288 passed/0 failed/67 skipped. Actual shared-login browser/native Auth/Core/
+restricted worker/Restate lane passes24 Core/13 intake/10 worker/9 readback checks.
+Six ordered originals and explicit all survive, exact file replay creates no new
+receipt, foreign-member photo attachment fails, and Queued notices survive reload.
+Providerless MODEL_NOT_CONFIGURED/backing-off is not successful design generation.
+All three owned fixtures are removed; ten prior containers remain unchanged.
+CUSTOMER_PHOTO_HTTP_PROOF.json and website NATIVE_SIX_PHOTO_PROOF.json retain the
+two failed native lanes and both mounted red regressions. Native Canva, actual
+creative photo quality, hosted launch, coverage and recovery gates remain open.
