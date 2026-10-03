@@ -82,3 +82,29 @@ describe('a poster-sized or page-sized wide logo keeps its official aspect', () 
     }
   }
 });
+
+describe('the header label beside the logo stays inside the safe margin', () => {
+  // Before: an eyebrow beside a wide, short logo was centred on the logo's line and rose above the
+  // safe margin: a 1920x1080 poster with a 3.2:1 logo set it at y 67 against a margin of 76, a page
+  // with a 5:1 logo at y 74: the validator's BOUNDS refused both.
+  const lines = ['Announcement', 'Quality Assurance Workshop'];
+  const cases: Array<[number, number, number]> = [[1920, 1080, 3.2], [1920, 1080, 8], [1080, 1350, 5], [1080, 1920, 8]];
+  for (const [width, height, logoAspect] of cases) {
+    for (const variant of [...POSTER_VARIANTS, 'page'] as const) {
+      it(`${variant} ${width}x${height}, logo ${logoAspect}:1`, () => {
+        const base = input(lines, ['eyebrow', 'title'], { width, height, logoAspect });
+        const l = tryCompose(() => (variant === 'page' ? composeGrammarLayout({ ...base, variant: 'brand_card' }) : composePosterLayout({ ...base, variant })));
+        if (!l) return;
+        const v = validate(l, lines, logoAspect);
+        expect(v.ok ? 'ok' : `${v.code}: ${v.message}`).toBe('ok');
+      });
+    }
+  }
+  it('still composes the navy and cream 1920x1080 posters with a 3.2:1 logo, the label set in the flow', () => {
+    for (const variant of ['navy', 'cream'] as const) {
+      const l = tryCompose(() => composePosterLayout({ ...input(lines, ['eyebrow', 'title'], { width: 1920, height: 1080, logoAspect: 3.2 }), variant }));
+      expect(l, variant).toBeDefined();
+      expect(l!.text.find((t) => t.copyIndex === 0)!.y).toBeGreaterThanOrEqual(l!.logo.y + l!.logo.height);
+    }
+  });
+});

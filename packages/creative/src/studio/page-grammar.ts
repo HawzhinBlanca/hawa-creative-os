@@ -561,8 +561,10 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
       const colW = contentX + contentW - x0;
       const t = el(b, 'label', sizes.label, g.header.label.color, colW, b.arabic ? 'right' : 'right');
       const mm = measure(t, b.text);
-      if (mm.lines === 1 && colW > 0) {
-        const y = r(logo.y + logo.height / 2 - mm.height / 2);
+      // Centred on the logo's line, never above the safe margin nor over the header rule (a label
+      // taller than a wide, short logo's clear space is set in the flow instead).
+      const y = Math.max(safe.y, r(logo.y + logo.height / 2 - mm.height / 2));
+      if (mm.lines === 1 && colW > 0 && y + mm.height < ruleY) {
         text.push({ ...t, ...intBox({ x: x0, y, width: colW, height: mm.height }) });
         unitsToFlow.shift();
       }
