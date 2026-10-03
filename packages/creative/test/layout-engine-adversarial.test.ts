@@ -255,3 +255,29 @@ describe('the renderer never breaks a line at a no-break space', () => {
     expect(m.status === 'measured' && m.lineCount).toBe(2);
   });
 });
+
+describe('the transfer plan records capitals only where the deck draws them', () => {
+  // Before: the deck set cap="all" only where uppercaseApplies (no Arabic-script copy, no Arabic face),
+  // while the plan recorded textTransform "uppercase" for every left-to-right capitals block. Core
+  // reads the plan's textTransform into the frozen export policy, so a block the deck drew as typed
+  // ("Cycle ٢٠٢٧", or Latin copy set in an Arabic face) was compared without regard to case.
+  const LOGO = readFileSync(new URL('../assets/logos/kaae-official-logo.png', import.meta.url));
+  const layout = (copyFont: string): StudioLayoutV2 => ({
+    version: 2, width: 1080, height: 1350, grid: { margin: 76, columns: 12, gutter: 22, baseline: 8 }, background: { color: '#FFFFFF' }, shapes: [],
+    text: [{ copyIndex: 0, role: 'title', x: 76, y: 400, width: 928, height: 200, fontSize: 80, lineHeight: 1.2, fontFamily: copyFont as never, color: '#0A1628', align: 'left', bold: true, rtl: false, textTransform: 'uppercase' }],
+    logo: { x: 76, y: 76, width: 173, height: 173 },
+  });
+  for (const [copy, font] of [['Accreditation Cycle ٢٠٢٧', 'Inter'], ['Accreditation Cycle 2027', 'Noto Sans Arabic']] as const) {
+    it(`${copy} in ${font}`, async () => {
+      const deck = await encodeStudioTransferV2(layout(font), [copy], { bytes: LOGO, mimeType: 'image/png', sha256: createHash('sha256').update(LOGO).digest('hex') });
+      const slide = Object.entries(unzipSync(new Uint8Array(deck.bytes))).find(([n]) => /^ppt\/slides\/slide\d+\.xml$/.test(n))![1];
+      const drawnInCapitals = /cap="all"/.test(strFromU8(slide));
+      expect(drawnInCapitals).toBe(false);
+      expect(deck.plan.text[0].textTransform).toBeUndefined();
+    });
+  }
+  it('a Latin capitals block keeps both', async () => {
+    const deck = await encodeStudioTransferV2(layout('Inter'), ['Accreditation Cycle 2027'], { bytes: LOGO, mimeType: 'image/png', sha256: createHash('sha256').update(LOGO).digest('hex') });
+    expect(deck.plan.text[0].textTransform).toBe('uppercase');
+  });
+});

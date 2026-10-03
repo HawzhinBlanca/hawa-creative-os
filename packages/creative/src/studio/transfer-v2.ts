@@ -272,7 +272,17 @@ function effectiveRtl(t: { rtl?: boolean; fontFamily: string }): boolean {
   return t.rtl ?? ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
 }
 
-export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTransferPlan {
+/**
+ * ADR-275: whether the deck draws a block in capitals (cap="all"): set in capitals, its copy Latin and
+ * its face not an Arabic-script one. The plan records textTransform on exactly these blocks, so the
+ * export checks that read it compare without regard to case only what the deck capitalised.
+ */
+function deckCapitals(t: TextElement, copy: string | undefined): boolean {
+  const isArabic = t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
+  return copy === undefined ? t.textTransform === 'uppercase' && !effectiveRtl(t) : uppercaseApplies(t, copy) && !isArabic;
+}
+
+export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2, copy?: string[]): EditableTransferPlan {
   return {
     width: layout.width,
     height: layout.height,
@@ -309,7 +319,7 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       // ADR-275: the weight the deck's face carries, and the capitals it is drawn in. The Canva
       // export checks read them to compare this block's copy without regard to case.
       ...(t.fontWeight !== undefined ? { fontWeight: elementFontFace(t).weight, fontFace: deckFontFace(t).face } : {}),
-      ...(t.textTransform === 'uppercase' && !effectiveRtl(t) ? { textTransform: 'uppercase' as const } : {}),
+      ...(deckCapitals(t, copy?.[t.copyIndex]) ? { textTransform: 'uppercase' as const } : {}),
       // The tracking as drawn, in em, not the model's raw request: the plan is both the manifest's
       // record of the delivered design and an input the v1 encoder accepts, and a plan carrying a
       // value the renderer never used describes a design nobody ever saw.
@@ -755,7 +765,7 @@ export async function encodeStudioTransferV2(
         : text;
     // ADR-275: the weighted face, and capitals as a run property over the copy as typed.
     const deckFace = deckFontFace(t);
-    const caps = uppercaseApplies(t, copy[t.copyIndex]) && !isArabic;
+    const caps = deckCapitals(t, copy[t.copyIndex]);
     if (caps) capitals.add(capsTextObjectName(t.copyIndex));
     slide.addText(runs as any, {
       x: t.x / 96,
@@ -801,7 +811,7 @@ export async function encodeStudioTransferV2(
   const bytes = capitals.size ? withCapitals(filled, capitals) : filled;
   const sha256 = createHash('sha256').update(bytes).digest('hex');
 
-  const plan = studioLayoutV2ToTransferPlan(layout);
+  const plan = studioLayoutV2ToTransferPlan(layout, copy);
 
   return {
     bytes,
