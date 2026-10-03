@@ -125,9 +125,10 @@ DUMP_NAME="$(basename "$DUMP")"; STAMP="$(sed -E 's/^hawa_([0-9]{8}T[0-9]{6}Z)\.
 TARGET="$(sed -E 's/^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z$/\1-\2-\3T\4:\5:\6Z/' <<< "$STAMP")"
 MANIFEST="$ARCHIVE_DEST/hawa_${STAMP}.blobs"
 [[ -f "$MANIFEST" ]] || fail "$DUMP_NAME has no file manifest (hawa_${STAMP}.blobs); it predates the file store or its night failed"
-if [[ -f "$DUMP.sha256" ]]; then
-  [[ "$("${HAWA_SHA256[@]}" "$DUMP" | cut -d' ' -f1)" == "$(cut -d' ' -f1 < "$DUMP.sha256")" ]] || fail "$DUMP_NAME does not match its checksum"
-fi
+# The nightly backup publishes the checksum before the dump: a dump without one is a damaged set, and was
+# restored unchecked (hunt 3).
+[[ -f "$DUMP.sha256" ]] || fail "$DUMP_NAME has no checksum file ($DUMP_NAME.sha256); the nightly publishes it first, so the set is damaged"
+[[ "$("${HAWA_SHA256[@]}" "$DUMP" | cut -d' ' -f1)" == "$(cut -d' ' -f1 < "$DUMP.sha256")" ]] || fail "$DUMP_NAME does not match its checksum"
 
 # 2. Verify all required packs and extract only validated regular files into a new
 # private directory before creating a scratch database. System tar never writes archive paths.
