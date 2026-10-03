@@ -14,7 +14,7 @@ import type { SpendingPolicyDetail, SpendingPolicyChange, SpendingPolicyResult }
  */
 
 import { getAuthToken, setAuthToken, clearAuthToken, getCsrfToken, getAuthHeaders } from '../services/auth.js';
-import type { CallCostDetail, CallCostKind, CallCostPage } from '@hawa/contracts';
+import type { CallCostDetail, CallCostKind, CallCostPage, SpendingSummary } from '@hawa/contracts';
 export interface SettlementBody {
   expectedSnapshot:string; reason:string;
   calls:Array<{callId:string;conclusion:'provider_not_accepted'|'provider_finished';reportedCostUsd:number;evidenceReference:string;evidenceSha256:string}>;
@@ -478,6 +478,8 @@ class HawaApiClient {
 
   public readonly callCosts = {
     list: (cursor?:string|null) => this.request<CallCostPage>(`/spending/calls${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`),
+    /** ADR-289: every paid call by office day and budget role, intake readings included. */
+    summary: (days?:number) => this.request<SpendingSummary>(`/spending/summary${days?`?days=${days}`:''}`),
     get: (kind:CallCostKind,id:string) => this.request<CallCostDetail>(`/spending/calls/${kind}/${encodeURIComponent(id)}`),
     record: (kind:CallCostKind,id:string,actionId:string,body:SettlementBody) => this.request<unknown>(
       `/spending/calls/${kind}/${encodeURIComponent(id)}/evidence`,{method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
