@@ -617,14 +617,23 @@ const CANCEL_FILLER = /^(?:ok(?:ay)?|no|nope|sorry|thanks?|thank\s+you|please|ac
  * off, plans changed, not needed any more. A closed list: a clause that asks for a change is not one.
  * ADR-239 follow-up: "it was by mistake" and "I sent it by mistake" are mistakes too.
  */
-const CANCEL_REASON = new RegExp('^(?:(?:because|since|cause|cos)\\s+)?(?:sorry\\s+)?(?:' + [
+/** Hunt 3: what an event is called when the requester says it was called off ("the workshop got cancelled"). */
+const EVENT_NOUN = '(?:event|meeting|ceremony|party|conference|celebration|day|workshop|seminar|training|course|lecture|session|fair|concert|' +
+  'festival|exhibition|tournament|launch|graduation|programme|program|trip|competition|forum|summit|gala|dinner|visit|class)';
+/** Hunt 3: "the workshop got cancelled", "the event was called off", "so the seminar is cancelled": the event is off. */
+const EVENT_CALLED_OFF = new RegExp(`^(?:(?:ok(?:ay)?|so|well|unfortunately|sadly|actually|because|since|as)[\\s,]+)*(?:(?:the|our|this|that)\\s+)?` +
+  `(?:[\\p{L}'’-]+\\s+){0,2}?${EVENT_NOUN}\\s+(?:was|is|has\\s+been|got|have\\s+been)\\s+(?:cancel+ed|called\\s+off)(?:\\s+(?:now|today|unfortunately))?[\\s!.]*$`, 'iu');
+const CANCEL_REASON = new RegExp('^(?:(?:because|since|cause|cos|ok(?:ay)?\\s+so|so|well|unfortunately|sadly|as)\\s+)*(?:sorry\\s+)?(?:' + [
   "(?:it|this|that)(?:'s|\\s+(?:was|is))\\s+(?:only\\s+|just\\s+)?(?:a\\s+)?(?:test|trial|mistake|an?\\s+error|error|the\\s+wrong\\s+one|wrong)",
   // ADR-239 follow-up (canary 2026-10-02): "it was by mistake", "I sent it by mistake", "it was sent by accident".
   "(?:(?:it|this|that)(?:'s|\\s+(?:was|is))\\s+|(?:i|we)\\s+)?(?:(?:sent|opened|made|ordered|asked\\s+for)\\s+(?:(?:it|this|that)\\s+)?)?by\\s+(?:mistake|accident)",
   'my\\s+(?:mistake|bad|fault)',
   '(?:only\\s+|just\\s+)?(?:a\\s+)?test(?:ing)?', 'wrong\\s+one',
   "(?:we|i|they)(?:'ve|\\s+have)?\\s+(?:postponed|cancel+ed|moved|delayed|changed|called\\s+off)\\s+(?:it|the\\s+(?:event|date|plans?|meeting|ceremony|party|conference|day))",
-  '(?:the\\s+)?(?:event|meeting|ceremony|party|conference|celebration|day)\\s+(?:was|is|has\\s+been|got)\\s+(?:cancel+ed|postponed|called\\s+off|moved|delayed)',
+  `(?:(?:the|our|this|that)\\s+)?(?:[\\p{L}'’-]+\\s+){0,2}?${EVENT_NOUN}\\s+(?:was|is|has\\s+been|got|have\\s+been)\\s+(?:cancel+ed|postponed|called\\s+off|moved|delayed|rescheduled)`,
+  // Hunt 3: "sorry for the trouble", "thanks anyway" said after a cancel.
+  '(?:sorry|apologies)\\s+(?:for|about)\\s+(?:the\\s+|any\\s+|all\\s+the\\s+)?(?:trouble|inconvenience|confusion|bother|that)',
+  '(?:thanks?|thank\\s+you)\\s+(?:anyway|anyways|for\\s+(?:your|the)\\s+(?:time|help|work|effort))',
   '(?:the\\s+)?plans?\\s+(?:have\\s+|has\\s+)?changed', "(?:we|i)(?:'ve|\\s+have)?\\s+changed\\s+(?:our|my)\\s+minds?",
   "(?:we|i)\\s+(?:don'?t|do\\s+not|no\\s+longer)\\s+need\\s+(?:it|this|that|them)(?:\\s+any\\s?more)?", "(?:it'?s|it\\s+is)\\s+no\\s+longer\\s+needed",
   'not\\s+needed(?:\\s+any\\s?more)?', 'no\\s+longer\\s+needed',
@@ -648,9 +657,11 @@ const cancelClauses = (core: string) =>
  */
 const SORANI_CANCEL_VERB = /هەڵ\s*(?:ی\s*)?(?:ب)?وەشێنەوە/u;
 const SORANI_NAMED_CANCEL_LAST = new RegExp(`(?:${['هەڵیوەشێنەوە', 'هەڵبوەشێنەوە', 'هەڵوەشێنەوە', 'هەڵیبوەشێنەوە'].join('|')})[\\s!.]*$`, 'u');
-const cancelsClause = (c: string) => !CANCELS_A_PART.test(c) && (CANCEL_EN.test(c) || CANCEL_DESCRIBED.test(c) ||
+/** Hunt 3: "please" before a clause's cancel ("unfortunately the training was called off, please cancel the poster"). */
+const unpolite = (c: string) => c.replace(/^(?:please|pls|plz)\s+/iu, '');
+const cancelsClause = (said: string) => { const c = unpolite(said); return !CANCELS_A_PART.test(c) && (CANCEL_EN.test(c) || CANCEL_DESCRIBED.test(c) ||
   (isSoraniText(c) && c.split(/\s+/).length <= 4 && any(c, CANCEL_CKB)) ||
-  (isSoraniText(c) && c.split(/\s+/).length <= 8 && SORANI_NAMED_CANCEL_LAST.test(c)));
+  (isSoraniText(c) && c.split(/\s+/).length <= 8 && SORANI_NAMED_CANCEL_LAST.test(c))); };
 
 function readsAsCancel(core: string): boolean {
   if (!core || core.length > 160) return false;
@@ -668,8 +679,8 @@ function readsAsCancel(core: string): boolean {
  * "no need"). Such words withdrew the chat's only design unasked; they are asked about first.
  */
 export function cancelNamesNothing(core: string): boolean {
-  const names = (c: string) => !DISMISSAL.test(c) && (CANCEL_DESCRIBED.test(c) || CANCEL_EN_NAMED.test(c) || (CANCEL_SAID_OF_IT.test(c) && CANCEL_EN.test(c))) ||
-    (isSoraniText(c) && any(c, CANCEL_CKB_NAMED));
+  const names = (said: string) => { const c = unpolite(said); return !DISMISSAL.test(c) && (CANCEL_DESCRIBED.test(c) || CANCEL_EN_NAMED.test(c) || (CANCEL_SAID_OF_IT.test(c) && CANCEL_EN.test(c))) ||
+    (isSoraniText(c) && any(c, CANCEL_CKB_NAMED)); };
   return ![core, ...cancelClauses(core)].some(names);
 }
 
@@ -888,7 +899,15 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   // (ADR-144's one call per update, within the allowance) before anything is kept or asked.
   // ADR-272: cancel words said of a part of a design ("cancel the gold frame on the … poster") are a change.
   // Sorani cancel verbs the patterns cannot place are cancel words too: never "a new design" (ADR-255).
-  if (core.length <= 160 && (CANCEL_SOMEWHERE.test(core) || (isSoraniText(core) && SORANI_CANCEL_VERB.test(core))) &&
+  // A stop said for a while ("drop it for now", "until …") is a pause, never cancel words (ADR-272 2.4).
+  const TEMPORARY = /\b(?:for\s+now|for\s+the\s+(?:moment|time\s+being)|until|till|yet)\b/iu;
+  // Hunt 3: a cancel said beside words the rules cannot place ("we don't need that poster anymore, the boss decided to
+  // go with the old one"), or the event said to be called off on its own ("the workshop got cancelled"), read as a
+  // substantial brief and opened a new request that drafted by itself. They are cancel words, asked about.
+  const cancelBeside = core.length <= 300 && !EXPLICIT_NEW.test(t) && !asksForNewDesign(t) &&
+    (cancelClauses(core).some((c) => cancelsClause(c) && !TEMPORARY.test(c)) || cancelClauses(core).every((c) => EVENT_CALLED_OFF.test(c) || CANCEL_FILLER.test(c) || CANCEL_REASON.test(c)) &&
+      cancelClauses(core).some((c) => EVENT_CALLED_OFF.test(c)));
+  if ((cancelBeside || (core.length <= 160 && (CANCEL_SOMEWHERE.test(core) || (isSoraniText(core) && SORANI_CANCEL_VERB.test(core))))) &&
       !readsAsHold(core) && !cancelsAPart(core)) {
     const every = cancelNamesEvery(core);
     return rules('unclear', 'Cancel words the rules cannot place', { instructionOnly: true, cancelWords: true, ...(every ? { every } : {}) });

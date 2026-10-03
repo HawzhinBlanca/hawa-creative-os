@@ -196,3 +196,29 @@ describe('hunt 3 / U1: event copy said as an update of the design on the way is 
       [view('A', 'in_review', QA)])).toMatchObject({ kind: 'open' });
   });
 });
+
+describe('hunt 3 / K1: a cancel with its reason never opens a new request', () => {
+  const QA = 'KAAE: Quality Assurance Workshop';
+  it.each(["ok so the workshop got cancelled, we don't need that poster anymore, sorry for the trouble",
+    "we don't need the poster anymore because the seminar was postponed, thanks anyway",
+    'unfortunately the training was called off, please cancel the poster'])('"%s" withdraws the design it names', (words) => {
+    for (const stage of ['designing', 'in_review'] as const) {
+      expect(plan(words, [view('A', stage, QA)]), stage).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+    }
+    expect(plan(words)).not.toMatchObject({ kind: 'open' });
+  });
+
+  it.each(['the workshop got cancelled', 'the event was called off', 'so the seminar is cancelled'])(
+    '"%s" alone asks whether to cancel the design, never offering a new one', (words) => {
+      const p = plan(words, [view('A', 'designing', QA)]);
+      expect(p).toMatchObject({ kind: 'ask', intent: 'cancel', allowNew: false });
+      expect(plan(words)).not.toMatchObject({ kind: 'open' });
+    });
+
+  it('cancel words beside clauses the rules cannot place are asked about, never opened', () => {
+    const words = "we don't need that poster anymore, the boss decided to go with the old one from last year";
+    const p = plan(words, [view('A', 'in_review', QA)]);
+    expect(p.kind).not.toBe('open');
+    expect(p).toMatchObject({ kind: 'ask', intent: 'cancel', allowNew: false });
+  });
+});
