@@ -201,7 +201,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
         return c.json({ items, total: page.total, limit: page.limit, ...(cursor ? {} : { offset }), nextCursor: page.nextCursor });
       } catch (err: any) {
         log.error('[core:tasks:list] DB list query error:', err);
-        return problem(c, 500, 'Database Error', `Failed to query tasks from database: ${err.message}`);
+        return problem(c, 500, 'Database Error', 'The task list could not be read from the database; try again');
       }
     }
 

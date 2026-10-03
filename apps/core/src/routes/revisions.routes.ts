@@ -340,7 +340,7 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       } catch (err: any) {
         if (err instanceof LifecycleOwnedRevisionConflict) return problem(c, 409, 'LIFECYCLE_OWNED');
         log.error('[core:revisions:create] DB revision error:', err);
-        return problem(c, 503, 'Durable Storage Unavailable', `Failed to persist revision: ${err.message}`);
+        return problem(c, 503, 'Durable Storage Unavailable', 'The revision could not be saved; try again');
       }
     }
 

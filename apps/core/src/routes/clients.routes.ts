@@ -4,6 +4,7 @@ import { withRlsContext } from '@hawa/db';
 import { validateClientDna, type ClientDNA } from '@hawa/domain';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { computeDnaHash } from '../core-helpers.js';
+import { log } from '../logging.js';
 import { findClientRowId, snapshotFromRow } from '../services/client-row.js';
 import { ModelConsentError, modelReadingAfterSave, readClientModelConsent, recordClientModelConsent,
   saveDnaVersionKeepingConsent, type DnaSaveConsent } from '../services/client-model-consent.js';
@@ -189,9 +190,11 @@ export function registerClientsRoutes(ctx: RouteContext) {
         });
       } catch (err: any) {
         if (err.message && (err.message.includes('OptimisticConcurrencyConflict') || err.message.includes('unique') || err.code === '23505')) {
-          return problem(c, 409, 'Conflict', err.message);
+          return problem(c, 409, 'Conflict', 'The client DNA changed since it was read; reload it and save again');
         }
-        return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist DNA to database');
+        if (err?.code === '42501') return problem(c, 403, 'Forbidden', 'Your role may not change this client\'s DNA');
+        log.error('[core:clients:dna] DNA not saved:', err?.message || err);
+        return problem(c, 500, 'Database Transaction Failed', 'The client DNA could not be saved; try again');
       }
     }
 
@@ -307,9 +310,11 @@ export function registerClientsRoutes(ctx: RouteContext) {
         });
       } catch (err: any) {
         if (err.message && err.message.includes('OptimisticConcurrencyConflict')) {
-          return problem(c, 409, 'Conflict', err.message);
+          return problem(c, 409, 'Conflict', 'The client DNA changed since it was read; reload it and try again');
         }
-        return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist snapshot to database');
+        if (err?.code === '42501') return problem(c, 403, 'Forbidden', 'Your role may not change this client\'s DNA');
+        log.error('[core:clients:snapshot] snapshot not saved:', err?.message || err);
+        return problem(c, 500, 'Database Transaction Failed', 'The snapshot could not be saved; try again');
       }
     }
 
@@ -430,7 +435,9 @@ export function registerClientsRoutes(ctx: RouteContext) {
           })).consent;
         });
       } catch (err: any) {
-        return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist rollback to database');
+        if (err?.code === '42501') return problem(c, 403, 'Forbidden', 'Your role may not change this client\'s DNA');
+        log.error('[core:clients:rollback] rollback not saved:', err?.message || err);
+        return problem(c, 500, 'Database Transaction Failed', 'The rollback could not be saved; try again');
       }
     }
 

@@ -135,7 +135,8 @@ export function registerControlsRoutes(ctx: RouteContext): void {
       return c.json(result, result.ok ? 200 : 500);
     } catch (err: any) {
       if (err instanceof CanvaFlowError) return problem(c, err.status, err.code, err.message);
-      return problem(c, 500, 'REDRIVE_FAILED', err.message || 'Task redrive failed');
+      log.error('[core:redrive] failed:', err?.message || err);
+      return problem(c, 500, 'REDRIVE_FAILED', 'The task could not be re-driven; try again');
     }
   });
 
@@ -149,7 +150,8 @@ export function registerControlsRoutes(ctx: RouteContext): void {
       const result = await sweepFailedTasks(tenantId);
       return c.json(result, 200);
     } catch (err: any) {
-      return problem(c, 500, 'SWEEP_FAILED', err.message || 'Failed tasks sweep failed');
+      log.error('[core:sweep-failed] failed:', err?.message || err);
+      return problem(c, 500, 'SWEEP_FAILED', 'The sweep of failed tasks did not complete; try again');
     }
   });
 

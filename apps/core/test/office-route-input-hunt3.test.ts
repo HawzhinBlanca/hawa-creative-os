@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { createDb } from '@hawa/db';
+import { createDb, sql } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 
@@ -27,5 +27,18 @@ describe('a task id that is not an id (hunt-3)', () => {
       const res = await app.request(path);
       expect(res.status, path).toBe(404);
     }
+  });
+});
+
+describe('a database failure is not echoed to the caller (hunt-3)', () => {
+  const owner = createDb(process.env.TEST_DATABASE_OWNER_URL!);
+  afterAll(async () => { await owner.destroy(); });
+  const app = createApp({ db, testAuth: { principal: scope } });
+  it('the task list says the list could not be read, without the database error', async () => {
+    await sql.raw('REVOKE SELECT ON hawa.tasks FROM hawa_app').execute(owner);
+    let res: Response;
+    try { res = await app.request('/v1/tasks'); } finally { await sql.raw('GRANT SELECT ON hawa.tasks TO hawa_app').execute(owner); }
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(await res.text()).not.toMatch(/permission denied|relation|for table/i);
   });
 });

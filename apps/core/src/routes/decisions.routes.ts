@@ -477,7 +477,8 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         if (err.message?.includes('Precondition failed') || err.message?.includes('QA run')) {
           return problem(c, 412, 'Precondition Failed', err.message);
         }
-        return problem(c, 503, 'Durable Storage Unavailable', `Failed to record approval in durable storage: ${err.message}`);
+        log.error('[core:decisions] approval not recorded:', err?.message || err);
+        return problem(c, 503, 'Durable Storage Unavailable', 'The decision could not be recorded; try again with the same action');
       }
     }
 
