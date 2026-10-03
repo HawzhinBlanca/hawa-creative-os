@@ -178,3 +178,21 @@ describe('hunt 3 / R1: words that change nothing never start a paid round on a d
     }
   });
 });
+
+describe('hunt 3 / U1: event copy said as an update of the design on the way is asked about, never opened', () => {
+  const QA = 'KAAE: Quality Assurance Workshop';
+  it.each(['sorry the workshop date is 16 October 2026', "it's at the Divan hotel now, 16 October at 10 am",
+    'we moved the workshop to the Divan Hotel on 16 October at 10 am', 'the seminar is on 16 October at 10 am in the main hall',
+    'ئاهەنگەکە دواخرا بۆ ١٦ی تشرینی یەکەم'])('"%s"', (words) => {
+    for (const stage of ['designing', 'in_review', 'awaiting_answer'] as const) {
+      const p = plan(words, [view('A', stage, QA)]);
+      expect(p.kind, `${stage}: ${JSON.stringify(p)}`).not.toBe('open');
+      expect(p.kind, stage).not.toBe('revise');
+    }
+  });
+
+  it('a new brief with its own event, date and place still opens while a draft waits', () => {
+    expect(plan('Research ethics workshop for postgraduate students at the university hall, 20 October 2026 at 10 AM',
+      [view('A', 'in_review', QA)])).toMatchObject({ kind: 'open' });
+  });
+});
