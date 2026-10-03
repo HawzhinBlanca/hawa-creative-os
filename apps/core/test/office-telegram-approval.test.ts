@@ -1395,3 +1395,36 @@ describe('one person who is both the requester and an office member (ADR-239, li
       approvals: [{ decision: 'rejected', decision_payload: { rejectionCategory: 'task' } }] });
   });
 });
+
+describe('hunt 3: a cancel that names nothing never rejects a draft (ADR-251 for the office)', () => {
+  it.each([['never mind', 'unclear'], ['nvm', 'unclear'], ['stop', 'unclear'], ['no need', 'unclear'], ['not needed', 'unclear'],
+    ['forget it', 'unclear'], ['ok never mind', 'unclear'], ['no, stop', 'unclear'], ['can you stop?', 'unclear'], ['ڕاوەستە', 'unclear'],
+    ['پێویست ناکات', 'unclear'],
+    // Cancelling words that name the design still reject it.
+    ['cancel it', 'reject'], ['drop it', 'reject'], ["we don't need it anymore", 'reject'], ['forget the design', 'reject'],
+  ] as const)('"%s" → %s', (words, intent) => {
+    expect(readOfficeIntent(words).intent).toBe(intent);
+  });
+
+  it('"never mind" with one draft waiting, said with no reply: nothing is rejected', async () => {
+    await forgetOfficeTurns();
+    await emptyQueue();
+    const draft = await draftInReview('Library week poster', { requesterName: 'Sewa' });
+    const { calls } = gateway();
+    const answer = await intake(say(OFFICE_A, 'never mind'));
+    expect(answer.chatAnswer.text).not.toMatch(/^Rejected/);
+    expect(calls).toHaveLength(0);
+    expect((await rows(draft.requestId, draft.taskId)).request).toMatchObject({ stage: 'in_review' });
+  });
+
+  it('"stop" in reply to the draft\'s picture: the member is asked what to do; nothing is rejected', async () => {
+    await forgetOfficeTurns();
+    await emptyQueue();
+    const draft = await draftInReview('Science fair banner', { requesterName: 'Sewa' });
+    const { calls } = gateway();
+    const answer = await intake(say(OFFICE_A, 'stop', replyTo(draft.messageIds[OFFICE_A])));
+    expect(answer.chatAnswer.text).toMatch(/What should I do with <b>Science fair banner<\/b>/);
+    expect(calls).toHaveLength(0);
+    expect((await rows(draft.requestId, draft.taskId)).request).toMatchObject({ stage: 'in_review' });
+  });
+});
