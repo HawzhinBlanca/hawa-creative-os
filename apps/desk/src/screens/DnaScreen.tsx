@@ -494,7 +494,7 @@ const DnaClientScreen: React.FC<{
   // Dismiss candidate rule
   const handleDismissCandidate = async (ruleId: string) => {
     try {
-      const res = await apiClient.clients.dismissCandidate(selectedClientId, ruleId, 'Dismissed by art director');
+      const res = await apiClient.clients.dismissCandidate(selectedClientId, ruleId, 'Dismissed in Hawa Desk');
       // Core answers 200 with dismissed: false when it has no such rule.
       if (res?.dismissed !== true) {
         setErrorNotice(`Core has no candidate rule ${ruleId} to dismiss, so it stays open.`);

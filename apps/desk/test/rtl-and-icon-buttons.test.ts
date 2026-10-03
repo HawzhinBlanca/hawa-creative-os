@@ -62,3 +62,10 @@ describe('the Work screen never makes up a request (hunt-3)', () => {
     expect(text).not.toMatch(/apiClient\.tasks\.create\(/);
   });
 });
+
+describe('the Desk does not name the approver in recorded reasons (hunt-3)', () => {
+  // Core records who decided, by the session; a fixed "by art director" was recorded for every role.
+  it.each(['screens/WorkScreen.tsx', 'screens/DnaScreen.tsx'])('%s', (rel) => {
+    expect(read(rel).text).not.toMatch(/(Approved|Dismissed) by art director/);
+  });
+});

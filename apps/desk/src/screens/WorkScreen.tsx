@@ -563,7 +563,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[]; requestOwned: boolean; rtlVisualReview?: { confirmed: true; exportSha256: string }; actionKey: string; reservation: ReservedDecisionAction }) =>
       apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
         action: 'approve',
-        reason: 'Approved by art director',
+        reason: 'Approved in Hawa Desk',
         pinnedExportIds: input.pinnedExportIds,
         ...(input.rtlVisualReview ? { rtlVisualReview: input.rtlVisualReview } : {}),
       }, input.reservation.actionId),
