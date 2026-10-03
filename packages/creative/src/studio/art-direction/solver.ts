@@ -19,6 +19,7 @@ import { maxStrokeWidth } from '../studio-normalize.js';
 import { coverCrop } from '../photo-crop.js';
 import { photoUpscale } from '../photo-cutout.js';
 import { packPhotoSequence } from './photo-packing.js';
+import { ALIGNMENT_POLICY, computeLayoutMetrics } from '../layout-metrics.js';
 import { rankPhotosForHero, type QuietArea } from './recipes.js';
 import { candidateRecipeTypeScales, type RecipeTypeScale as TypeScale } from './type-scale-search.js';
 import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
@@ -974,6 +975,12 @@ class SolveContext {
       if (ratio < requiredContrast(t.fontSize, Boolean(t.bold))) {
         throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} is ${ratio.toFixed(2)}:1 on its surface`);
       }
+    }
+    // Hard QA's alignment check, as the poster and page composers promise it: a title-only cut-out
+    // speaker or story mosaic lined up 0.5, and hard QA always refused it (POOR_GRID_ALIGNMENT).
+    const alignment = computeLayoutMetrics(layout).alignmentScore;
+    if (alignment < ALIGNMENT_POLICY.passScore) {
+      throw new RecipeInfeasibleError(this.recipe, `alignment ${alignment} is under hard QA's ${ALIGNMENT_POLICY.passScore}`);
     }
   }
 

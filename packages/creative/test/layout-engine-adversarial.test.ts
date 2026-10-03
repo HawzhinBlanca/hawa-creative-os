@@ -281,3 +281,27 @@ describe('the transfer plan records capitals only where the deck draws them', ()
     expect(deck.plan.text[0].textTransform).toBe('uppercase');
   });
 });
+
+describe('the recipe solver promises hard QA\'s alignment check, as the composers do', () => {
+  // Before: a title-only cut-out speaker set its title in the column beside the cut-out (x 432) and the
+  // logo on the margin, and lined up 0.5 against hard QA's 0.70; a title-only mosaic on a story 0.5.
+  // The solver handed them on, and hard QA always refused them (POOR_GRID_ALIGNMENT). It now treats
+  // such a layout as infeasible, so the concept is replaced by one that can ship.
+  const photos: SolverPhoto[] = [0, 1, 2, 3].map((i) => ({ photoIndex: i, width: 1280, height: 853, salient: { x: 0.45, y: 0.6 }, quiet: 'none' as const,
+    ...(i === 3 ? { focus: { x: 0.3, y: 0.35 }, faceShare: 0.3, cutoutSize: { width: 600, height: 1100 }, cutoutPixelSize: { width: 600, height: 1100 } } : {}) }));
+  for (const [recipe, width, height] of [['cutout_speaker', 1080, 1920], ['cutout_speaker', 1080, 1350], ['photo_mosaic', 1080, 1920]] as const) {
+    it(`${recipe} ${width}x${height}, title only`, () => {
+      let l: StudioLayoutV2 | undefined;
+      try {
+        l = solveRecipe({
+          width, height, copy: { text: { 0: 'Workshop' } }, photos, photoSelection: { mode: 'choose', minimum: 1 }, palette: PALETTE, logoAspect: 1,
+          choice: { recipe, heroPhotoIndex: recipe === 'cutout_speaker' ? 3 : 0, texturePhotoIndex: null, supportingPhotoIndices: recipe === 'photo_mosaic' ? [1, 2] : undefined,
+            cutoutPhotoIndex: recipe === 'cutout_speaker' ? 3 : null, slots: [{ copyIndex: 0, slot: 'title' }], params: { frame: 'inset', align: 'start' } },
+        });
+      } catch (err) {
+        if (!(err instanceof RecipeInfeasibleError)) throw err;
+      }
+      if (l) expect(computeLayoutMetrics(l).alignmentScore).toBeGreaterThanOrEqual(ALIGNMENT_POLICY.passScore);
+    });
+  }
+});
