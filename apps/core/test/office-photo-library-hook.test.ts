@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -265,5 +265,22 @@ describe('a photo the office takes back (hunt-3)', () => {
     await attachOfficeLibraryPhotos(ctx, stages, input({ env: ON(dir), request: { directed: { parentTaskId: 'p' } }, parentRecord: async () => parent }));
     expect(ctx.photos).toBeUndefined();
     expect(stages.officePhotoLibrary).toMatchObject({ status: 'unavailable', inheritedFromParent: true });
+  });
+});
+
+describe('what the run records about an unreadable library (hunt-3)', () => {
+  it('never records a filesystem path: the reason is shown in the Desk', async () => {
+    const dir = tmp('olp-eacces-');
+    mkdirSync(path.join(dir, CLIENT), { recursive: true });
+    const manifest = path.join(dir, CLIENT, 'library.json');
+    writeFileSync(manifest, '{}');
+    chmodSync(manifest, 0o000);
+    try {
+      const stages = stagesWithBrief();
+      await attachOfficeLibraryPhotos(context(), stages, input({ env: ON(dir) }));
+      expect(stages.officePhotoLibrary).toMatchObject({ status: 'unavailable' });
+      expect(JSON.stringify(stages.officePhotoLibrary)).not.toContain(dir);
+      expect((stages.officePhotoLibrary as OfficeLibraryRunRecord).reason).toMatch(/could not be read/);
+    } finally { chmodSync(manifest, 0o600); }
   });
 });

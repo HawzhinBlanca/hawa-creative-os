@@ -85,6 +85,18 @@ export interface OfficeLibraryHookInput {
 }
 
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
+
+/**
+ * The reason a run records (and the Desk shows). The library's own refusals name no path; a filesystem
+ * error does ("EACCES: permission denied, open '/srv/…/library.json'"), so it is logged and recorded by
+ * its code only.
+ */
+function recordedReason(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/^OFFICE_PHOTO_[A-Z_]+:/.test(message)) return message;
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  return `The photo library could not be read${code ? ` (${code})` : ''}.`;
+}
 const SELECTION = { mode: 'choose', minimum: 1 } as const;
 
 function isRecord(value: unknown): value is OfficeLibraryRunRecord {
@@ -157,8 +169,8 @@ export async function attachOfficeLibraryPhotos(ctx: StageContext, stages: Recor
   try {
     read = await readOfficePhotoLibrary(clientDir);
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    log.warn(`[office-photo-library] run ${ctx.runId}: library unreadable (${reason})`);
+    log.warn(`[office-photo-library] run ${ctx.runId}: library unreadable (${err instanceof Error ? err.message : String(err)})`);
+    const reason = recordedReason(err);
     stages.officePhotoLibrary = { ...(carried ?? {}), version: 1, provenance: 'office_library', status: 'unavailable', clientId: ctx.clientId, stage: carried?.stage ?? input.status, photos: carried?.photos ?? [], reason } satisfies OfficeLibraryRunRecord;
     return;
   }
@@ -178,7 +190,7 @@ export async function attachOfficeLibraryPhotos(ctx: StageContext, stages: Recor
       stages.officePhotoLibrary = carried;
     } catch (err) {
       ctx.photos = undefined;
-      stages.officePhotoLibrary = { ...carried, status: 'unavailable', reason: err instanceof Error ? err.message : String(err) };
+      stages.officePhotoLibrary = { ...carried, status: 'unavailable', reason: recordedReason(err) };
     }
     return;
   }
@@ -212,7 +224,7 @@ export async function attachOfficeLibraryPhotos(ctx: StageContext, stages: Recor
     stages.officePhotoLibrary = { ...base, status: 'attached', photos, photoSelection: { ...SELECTION } };
   } catch (err) {
     ctx.photos = undefined;
-    stages.officePhotoLibrary = { ...base, status: 'unavailable', photos, reason: err instanceof Error ? err.message : String(err) };
+    stages.officePhotoLibrary = { ...base, status: 'unavailable', photos, reason: recordedReason(err) };
   }
 }
 
