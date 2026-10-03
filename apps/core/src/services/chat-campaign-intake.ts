@@ -9,7 +9,7 @@ import { type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
 import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml, neutralRequestTitle } from '@hawa/integrations';
 import { isWeakBriefLine } from './requester-turn.js';
-import { clientNamesFor, copyBesideRequest, requestSpans, speaksToTheDesigner } from './request-copy-extraction.js';
+import { clientNamesFor, closingStart, copyBesideRequest, namesTheClientOnly, requestSpans, speaksToTheDesigner } from './request-copy-extraction.js';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
 import { autoDraftAllowedFor, clientPackOf, matchRequestClient, positiveClientWords } from './client-packs.js';
 import { defaultCanvasFor } from '@hawa/creative';
@@ -45,13 +45,23 @@ export { isCopyIntroducer };
  * speaks to the designer too, so "Hi! Could you make a poster for Peer Review Week on 20 October … ? Don't
  * forget the logo. Thanks" lost its request sentence, event and all, and was titled and printed "Hi!". The
  * request sentence stays for the copy extraction, which takes the request words and the greeting out of it.
+ *
+ * ADR-284 addendum (brief phrasing fuzz, classes 1 and 2): the closing at the end with the sender's name on the next
+ * line ("Best regards,⏎Ahmed"), "Many thanks!", a closing glued to the last line ("… 5 November Thanks"), and a last
+ * line that only says whom the design is for ("It's for KAAE.", "For KAAE please.", the client's full name) are
+ * peeled too. "Many thanks to our sponsors" and "For KAAE members" are the audience's words, and stay.
  */
-export function peelClosingInstructions(text: string): { copy: string; remarks: string } {
+export function peelClosingInstructions(text: string, clientNames: readonly string[] = []): { copy: string; remarks: string } {
   let copy = text.trim();
   const remarks: string[] = [];
   const asksForTheDesign = (said: string) => requestSpans(said.replace(/\s*\n\s*/g, ' ')).length > 0;
   const peel = (kept: string, said: string) => { remarks.unshift(said.trim()); copy = kept.trim(); };
   for (let guard = 0; guard < 20; guard++) {
+    const closing = closingStart(copy);
+    if (closing < copy.trimEnd().length && copy.slice(0, closing).trim() && !asksForTheDesign(copy.slice(closing))) {
+      peel(copy.slice(0, closing), copy.slice(closing));
+      continue;
+    }
     const paragraphs = copy.split(/\n\s*\n/);
     if (paragraphs.length > 1 && speaksToTheDesigner(paragraphs.at(-1)!.replace(/\s*\n\s*/g, ' ')) && !asksForTheDesign(paragraphs.at(-1)!)) {
       peel(paragraphs.slice(0, -1).join('\n\n'), paragraphs.at(-1)!);
@@ -62,9 +72,14 @@ export function peelClosingInstructions(text: string): { copy: string; remarks: 
       peel(lines.slice(0, -1).join('\n'), lines.at(-1)!);
       continue;
     }
+    if (lines.length > 1 && namesTheClientOnly(lines.at(-1)!, clientNames)) {
+      peel(lines.slice(0, -1).join('\n'), lines.at(-1)!);
+      continue;
+    }
     const last = lines.at(-1)!;
     const sentences = last.split(/(?<=[.!?؟])\s+(?=\S)/u);
-    if (sentences.length > 1 && speaksToTheDesigner(sentences.at(-1)!) && !asksForTheDesign(sentences.at(-1)!)) {
+    if (sentences.length > 1 && (speaksToTheDesigner(sentences.at(-1)!) || namesTheClientOnly(sentences.at(-1)!, clientNames)) &&
+        !asksForTheDesign(sentences.at(-1)!)) {
       peel([...lines.slice(0, -1), sentences.slice(0, -1).join(' ')].join('\n'), sentences.at(-1)!);
       continue;
     }
@@ -301,10 +316,21 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       clientInstructions = [clientInstructions, peeled.remarks].filter(Boolean).join('\n');
     }
     // "Keep it simple.", "Regards, Ahmed", "… Thanks!" closing a laid-out brief are said to the designer (hunt 3).
-    const closing = peelClosingInstructions(payloadText);
+    const closing = peelClosingInstructions(payloadText, clientNamesFor(clientId, clientId === KAAE_CLIENT_ID ? 'KAAE' : null));
     if (closing.remarks) {
       payloadText = closing.copy;
       clientInstructions = [clientInstructions, closing.remarks].filter(Boolean).join('\n');
+    }
+
+    // ADR-284 addendum (brief phrasing fuzz, class 3): a list the requester typed, two or more lines opening with the
+    // same mark ("- ", "* ", "• "). The marks were printed and named the design ("KAAE: - Research Day"); each item
+    // is one copy line, in order, without its mark (as under a line that introduces the copy).
+    const listMark = (line: string) => /^\s*([-*•])\s+(?=\S)/u.exec(line)?.[1];
+    const marks = payloadText.split('\n').map(listMark).filter(Boolean);
+    const mark = marks.find((m) => marks.filter((x) => x === m).length >= 2);
+    if (mark) {
+      payloadText = payloadText.split('\n').map((line) => (listMark(line) === mark ? line.replace(/^\s*[-*•]\s+/u, '') : line)).join('\n');
+      copyIsIntroduced = true;
     }
 
     const payloadLines = payloadText.split('\n').map((l) => l.trim()).filter(Boolean);

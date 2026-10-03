@@ -68,6 +68,8 @@ export interface CopyExtractionReceipt {
   capitalised?: string[];
   /** ADR-253 (L21): the client's possessive left out at the start of the headline ("KAAE's"). */
   withoutClient?: string;
+  /** ADR-284 addendum (brief phrasing fuzz): the closing words left out at the end ("Many thanks!", "Best regards, Ahmed"). */
+  closing?: string;
 }
 
 const MAX_MODEL_TEXT = 1500;
@@ -106,13 +108,25 @@ const EN_ASK = '(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+|kindly
  */
 const ONE = "(?:(?:a\\s+)?new\\s+one|another(?:\\s+one)?(?=\\s+(?:for|about)\\b)|one(?:\\s+more)?(?=\\s+(?:for|about)\\b))";
 const EN_OPENER = new RegExp(`(?<![\\p{L}\\p{N}'’])${EN_ASK}(?:\\s+(?:us|me))?\\s+(?=${words(4)}(?:${NOUN}|something|anything)|${ONE})`, 'giu');
-/** An order at the start of a sentence: "Design a simple KAAE banner", "Make us two posters". */
-const EN_IMPERATIVE = new RegExp(`^(?:please\\s+)?(?:make|create|design|prepare|produce|draw)\\s+(?:us\\s+|me\\s+)?(?=(?:a|an|the|another|one|two|three|some|\\d+)\\s+${words(4)}${NOUN})`, 'iu');
+/**
+ * An order at the start of a sentence: "Design a simple KAAE banner", "Make us two posters". ADR-284 addendum (brief
+ * phrasing fuzz, class 10): a bare "need a poster for …" / "want a flyer for …" with no subject, only at the start of
+ * a sentence (after a greeting): "Students need a card to enter" later in a brief stays copy.
+ */
+const EN_IMPERATIVE = new RegExp(`^(?:please\\s+)?(?:make|create|design|prepare|produce|draw|need|want)\\s+(?:us\\s+|me\\s+)?(?=(?:a|an|the|another|one|two|three|some|\\d+)\\s+${words(4)}${NOUN})`, 'iu');
+/**
+ * ADR-284 addendum (brief phrasing fuzz, class 3): "… a post with these details:", "… with this text:", "… with the
+ * following information:", "… as follows:" close a request whose copy follows on its own lines. The tail was printed
+ * as the headline and named the design ("KAAE: With these details").
+ */
+const DETAILS_TAIL = '(?:(?:with|using|containing|including|that\\s+has)\\s+(?:these|this|those|the\\s+following|the|following)\\s+' +
+  '(?:details?|texts?|info(?:rmation)?|words|wording|copy|content|lines)|as\\s+follows)(?:\\s+(?:please|pls|plz))?(?![\\p{L}])[\\s:]*';
 /** The design named after an ask, and what it is for: "a KAAE poster for our", "an Instagram story and a poster announcing the". */
 const EN_DESIGN = new RegExp(`(?:${ONE}|${words(4)}(?:${NOUN}|something|anything))` +
   `(?:\\s+${NOUN})*(?:\\s+(?:and|or|&)\\s+${words(3)}${NOUN}(?:\\s+${NOUN})*)*` +
   '(?:\\s+(?:please|pls|plz))?' +
-  '(?:\\s*:|\\s+(?:to\\s+(?:announce|promote|advertise|celebrate|invite\\s+(?:people\\s+)?to)|announcing|promoting|advertising|celebrating|inviting\\s+(?:people\\s+)?to|for|about|on|of|regarding|that\\s+(?:says|reads|announces)))?' +
+  `(?:\\s+${DETAILS_TAIL}|` +
+  '\\s*:|\\s+(?:to\\s+(?:announce|promote|advertise|celebrate|invite\\s+(?:people\\s+)?to)|announcing|promoting|advertising|celebrating|inviting\\s+(?:people\\s+)?to|for|about|on|of|regarding|that\\s+(?:says|reads|announces)))?' +
   '(?:\\s+(?:our|my|the|this|their|your))?(?![\\p{L}])\\s*', 'iuy');
 /** A question to the bot: "Could you help with our …?", "Can you …". Its ask, verb and preposition are not copy. */
 const EN_QUESTION = /^(?:(?:and|also|so|ok(?:ay)?|please)[\s,]+)*(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+|kindly\s+|also\s+)?[\p{L}'’]+(?:\s+(?:us|me))?(?:\s+(?:with|for|on|about))?(?:\s+(?:our|my|the|this|their|your))?(?![\p{L}])\s*/iu;
@@ -143,7 +157,8 @@ const EN_INSTRUCTION = new RegExp('^(?:' + [
   '(?:also\\s+|and\\s+)?use\\s+(?:the\\s+|these\\s+|those\\s+|this\\s+|our\\s+|my\\s+|attached\\s+)?(?:photos?|pictures?|images?|logos?|colou?rs?|fonts?|brand|template|style|reference|attached)\\b',
   '(?:also\\s+|and\\s+)?(?:add|include|put)\\s+(?:the|our|my|a|an)\\s+(?:logo|photos?|pictures?|images?|qr|text|date|phone|number|link)\\b',
   'make\\s+(?:it|sure)\\b', 'make\\s+the\\s+(?:design|poster|post|text|title|logo|background|fonts?|colou?rs?)\\b',
-  "(?:thanks?|thank\\s+you)(?:\\s+(?:so\\s+much|a\\s+lot|in\\s+advance|very\\s+much))?[\\s!.,🙏]*$", 'cheers[\\s!.]*$',
+  // ADR-284 addendum (brief phrasing fuzz, class 1): "Many thanks!" too ("Many thanks to our sponsors" goes on: copy).
+  "(?:many\\s+)?(?:thanks?|thank\\s+you)(?:\\s+(?:so\\s+much|a\\s+lot|in\\s+advance|very\\s+much|again))?[\\s!.,🙏]*$", 'cheers[\\s!.]*$',
   '(?:can|could|would)\\s+you\\b', "(?:we|i)\\s+(?:want|need|would\\s+like|'d\\s+like)\\s+(?:it|this|the\\s+(?:design|poster|post))\\b",
   'it\\s+should\\b', '(?:in|with)\\s+(?:our\\s+)?(?:brand|blue|red|green|yellow|black|white|gold)\\s+colou?rs?\\b', 'no\\s+need\\b',
   '(?:the\\s+)?(?:photos?|pictures?|images?|logo)\\s+(?:are|is|should|must)\\b', '(?:these|those)\\s+(?:photos?|pictures?|images?)\\b',
@@ -166,8 +181,9 @@ const EN_DESIGNER = new RegExp('^(?:(?:please|pls|plz|kindly|also|and|but|oh|ok(
   'mention\\b(?!\\s+this\\b)',
   // "with 3 photos of the campus", "using the attached pictures"
   '(?:with|using)\\s+(?:(?:the|these|those|our|my|some|a\\s+few|attached|\\d+|two|three|four|five|six)\\s+)*(?:photos?|pictures?|images?|pics?|logos?)\\b',
-  // Sign-offs: "Regards, Ahmed", "Best regards", "Sincerely", "Thanks, Sara"
-  '(?:(?:best|kind|warm|many)\\s+)?regards\\b', 'sincerely\\b', 'yours\\s+(?:truly|faithfully|sincerely)\\b',
+  // Sign-offs: "Regards, Ahmed", "Best regards", "Sincerely", "Thanks, Sara". ADR-284 addendum (brief phrasing fuzz):
+  // "regards" ends the sentence or takes a comma; "Best Regards Gala" is an event's name (see SIGN_OFF_NAME).
+  '(?:(?:best|kind|warm|many)\\s+)?regards(?=\\s*(?:[,.!]|$))', 'best\\s+wishes(?=\\s*(?:[,.!]|$))', 'sincerely\\b', 'yours\\s+(?:truly|faithfully|sincerely)\\b',
   "(?:thanks?|thank\\s+you|cheers)\\s*,\\s*\\p{L}+(?:\\s+\\p{L}+)?[\\s!.]*$",
   // "ASAP please", "Urgent!", "Please hurry"
   "(?:asap|urgent(?:ly)?|it'?s\\s+urgent|very\\s+urgent|hurry(?:\\s+up)?|as\\s+soon\\s+as\\s+possible)(?:\\s+please)?[\\s!.]*$",
@@ -183,6 +199,64 @@ const EN_DESIGNER = new RegExp('^(?:(?:please|pls|plz|kindly|also|and|but|oh|ok(
   // To the bot: "Let me know if …", "I'll send the photos later", "Ignore the old one"
   'let\\s+(?:me|us)\\s+know\\b', "(?:i|we)(?:'ll|\\s+will)\\s+(?:send|share|forward|add|give|bring)\\b", 'ignore\\s+(?:the|my|our|that|this)\\b',
 ].join('|') + ')', 'iu');
+/**
+ * "Best regards Ahmed", "Regards Sara": a sign-off with the sender's name and no comma. Matched with the letters' case
+ * (no `i` flag): "regards" is written in lower case after "best"/"kind", or opens the line; "Best Regards Gala" is an
+ * event's name in title case, and stays copy.
+ */
+const SIGN_OFF_NAME = /^(?:Regards|REGARDS|regards|(?:Best|best|Kind|kind|Warm|warm|Many|many)\s+regards)\s+\p{L}+(?:\s+\p{L}+)?[\s!.]*$/u;
+
+// --- closing words at the end of a brief -------------------------------------------------------------
+
+/**
+ * ADR-284 addendum (brief phrasing fuzz, class 1): the closing at the very end of a brief, with what follows it. The
+ * sender's name after "Best regards," on the next line (the line break made it a sentence of its own), "Many thanks!",
+ * and a closing glued to the last detail with no punctuation ("… Science Camp on 20 March 2027 thanks", "… 15/10/2026
+ * pls Regards, Sara") were printed as the design's copy.
+ */
+const CLOSING_WORDS = [
+  '(?:many\\s+)?(?:thanks?|thank\\s+you|thx)(?:\\s+(?:so\\s+much|a\\s+lot|in\\s+advance|very\\s+much|again))?',
+  'cheers', '(?:(?:best|kind|warm|many)\\s+)?regards', 'best\\s+wishes', 'sincerely', 'yours\\s+(?:truly|faithfully|sincerely)',
+].join('|');
+/** A closing that ends the text: the closing words, then a name after a comma (on the same line or the next), marks or emoji. */
+const CLOSING_AT_END = new RegExp(`(?<![\\p{L}\\p{N}'’])(${CLOSING_WORDS})(\\s*,\\s*(?:\\p{L}+(?:[ \\t]+\\p{L}+)?)?)?[\\s!.,🙏😊❤️]*$`, 'iu');
+/** "pls" (or "please" after a date) left at the end once the closing is taken off: "… 20 March 2027 pls". */
+const PLEASE_AT_END = /(?<![\p{L}\p{N}'’])(?:pls|plz|please)[\s!.,]*$/iu;
+/** A closing written with more than one word, or with the sender's name, is a closing even when glued to the copy. */
+const PLAIN_CLOSING = /^(?:thanks?|thank\s+you|thx|cheers|regards)$/iu;
+const MONTHS = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+/** The word before a glued closing that ends a detail: a date, a time, a day, a month, "pls". */
+const DETAIL_END = new RegExp(`(?:\\p{N}[\\p{L}\\p{N}:./-]*|${MONTHS}|(?:mon|tues|wednes|thurs|fri|satur|sun)day|today|tomorrow|tonight|am|pm|a\\.m\\.?|p\\.m\\.?|pls|plz|please)$`, 'iu');
+
+/**
+ * Where the closing at the end of a text starts (the text's length when it has none). A closing is taken off when a
+ * sentence break, a line break or a comma stands before it, when it is glued to a detail that ends in a date, time,
+ * day or "pls", or when it is written with more than one word or with a name ("Many thanks", "Thanks a lot", "Best
+ * regards, Ahmed"). One word glued to a name stays ("… A Night of Thanks"); closings inside the copy stay ("Many
+ * thanks to our sponsors", "Thanks Giving Fair", "Best Regards Gala").
+ */
+export function closingStart(text: string): number {
+  let end = text.length;
+  for (let guard = 0; guard < 6; guard++) {
+    const head = text.slice(0, end);
+    const closing = CLOSING_AT_END.exec(head);
+    const please = closing ? null : PLEASE_AT_END.exec(head);
+    const found = closing ?? please;
+    if (!found || !head.slice(0, found.index).trim()) break;
+    const before = head.slice(0, found.index).replace(/[^\S\n]+$/u, '');
+    const broken = /[.!?؟,;:\n…)]$/u.test(before);
+    const word = before.match(/\S+$/u)?.[0] ?? '';
+    const detail = DETAIL_END.test(word);
+    const said = closing ? closing[1] : found[0].trim();
+    if (please) {
+      // "please" ends a detail only after a date or time ("RSVP please" stays); "pls" and "plz" always.
+      if (!(broken || /^(?:pls|plz)/iu.test(said) || (DETAIL_END.test(word) && !/^(?:pls|plz|please)$/iu.test(word)))) break;
+    } else if (!(broken || detail || !PLAIN_CLOSING.test(said.replace(/\s+/g, ' ')) || (closing && closing[2]?.trim().length > 1))) break;
+    end = before.length;
+  }
+  return end;
+}
+
 /** "PS:", "Note:", "NB:" before words to the designer ("Note: the logo must be on top", "PS: use our colours"). */
 const ASIDE = /^(?:p\.?\s?s\.?|n\.?\s?b\.?|note)\s*[:.\-–]\s*/iu;
 /** Sorani: "don't forget" (لەبیر مەکە, لەبیرت نەچێت), "urgent" said alone (بەپەلە, پەلەیە). Needs native review. */
@@ -191,10 +265,15 @@ const CKB_INSTRUCTION = /^(?:تکایە|سوپاس|ئەم\s+وێنانە|وێن�
 
 const ws = (text: string) => text.replace(/\s+/g, ' ').trim();
 
-/** Sentences with their offsets: split after . ! ? ؟ (not "Dr." or "a.m.") and at line breaks. */
+/**
+ * Sentences with their offsets: split after . ! ? ؟ (not "Dr." or "a.m.") and at line breaks. ADR-284 addendum (brief
+ * phrasing fuzz, class 9): nor after a month written short before a number ("Oct. 20", "5 Nov. 2026"), which printed
+ * "Oct" and "20 in the main campus" as two lines.
+ */
+const SENTENCE_END = /(?<!\b(?:Dr|Mr|Mrs|Ms|Prof|St|No|vs|a\.m|p\.m|e\.g|i\.e))(?!(?<=\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec))\.\s+\p{N})[.!?؟](?=\s|$)|\n/giu;
 function sentences(text: string, from = 0): Array<{ start: number; end: number }> {
   const out: Array<{ start: number; end: number }> = [];
-  const re = /(?<!\b(?:Dr|Mr|Mrs|Ms|Prof|St|No|vs|a\.m|p\.m|e\.g|i\.e))[.!?؟](?=\s|$)|\n/giu;
+  const re = new RegExp(SENTENCE_END);
   let start = from, m: RegExpExecArray | null;
   re.lastIndex = from;
   while ((m = re.exec(text))) {
@@ -284,16 +363,37 @@ const ADDRESS_LEAD = `(?:(?:${GREETING_WORDS}|${ADDRESS_WORDS}|dear|so|also|and|
 const ADDRESS_SEP = '[\\s,،:;\\-–—]*';
 const EN_ADDRESS_AFTER = '(?:for|about|announcing|promoting|advertising|celebrating|regarding|on|to\\s+(?:announce|promote|advertise|celebrate))';
 
+/**
+ * ADR-284 addendum (brief phrasing fuzz, class 6): a name in Arabic script of more than one word may repeat its last
+ * word. The pack keeps the start of KAAE's Sorani spelling, letter by letter, as its routing phrase; the requester
+ * spells out every letter, and the last one repeats.
+ */
+const namePattern = (name: string) => {
+  const parts = name.trim().split(/\s+/u);
+  return parts.length > 1 && /[\u0600-\u06FF]/u.test(name) ? `${escapeName(name)}(?:\\s+${escapeName(parts.at(-1)!)})*` : escapeName(name);
+};
+/** What closes a request named "for <client>": "please", then "with these details:" or the end of its sentence. */
+const AFTER_NAME_PLEASE = '(?:\\s+(?:please|pls|plz))?';
+
 function addresseePatterns(names: readonly string[]) {
-  const name = `(?:${names.map(escapeName).join('|')})${NAME_END}`;
+  const name = `(?:${names.map(namePattern).join('|')})${NAME_END}`;
   const addressee = `(?:(?:(?:for|to)\\s+(?:the\\s+)?|بۆ\\s+)?${name})`;
   return {
+    /**
+     * ADR-284 addendum (brief phrasing fuzz, class 2): a sentence that only says whom the design is for, anywhere in
+     * the brief: "It's for KAAE.", "This is for KAAE.", "For KAAE please.", "It is for the <full name>.", or the same
+     * glued to the end of a sentence ("… 3rd of December pls It is for the <full name>."). "For KAAE members" and
+     * "Free for KAAE members" go on after the name, and stay copy.
+     */
+    sentence: new RegExp(`^(?:(?:it'?s|it’s|it\\s+is|this\\s+is|this\\s+one\\s+is|that'?s|that’s)\\s+)?(?:for|to)\\s+(?:the\\s+)?${name}${AFTER_NAME_PLEASE}[\\s.!]*$`, 'iu'),
+    glued: new RegExp(`(?<![\\p{L}\\p{N}'’])(?:it'?s|it’s|it\\s+is|this\\s+is|this\\s+one\\s+is)\\s+for\\s+(?:the\\s+)?${name}${AFTER_NAME_PLEASE}[\\s.!]*$`, 'iu'),
     /** The words before an ask, in its sentence: greetings and the addressee only. */
     lead: new RegExp(`^${ADDRESS_LEAD}${addressee}${ADDRESS_SEP}$`, 'iu'),
     /** A sentence or line that only names the addressee. */
     alone: new RegExp(`^${addressee}${ADDRESS_SEP}$`, 'iu'),
     /** After a design asked "for": the name, then what the design is for (its connective and determiner), or the end. */
-    after: new RegExp(`^${name}\\s*,?\\s*(?:${EN_ADDRESS_AFTER}(?![\\p{L}])\\s*(?:(?:our|my|the|this|their|your)(?![\\p{L}])\\s*)?|(?=[\\s.!?؟]*$))`, 'iu'),
+    // ADR-284 addendum (brief phrasing fuzz, class 6): "for KAAE please", "for KAAE with these details:", "for KAAE:".
+    after: new RegExp(`^${name}${AFTER_NAME_PLEASE}\\s*,?\\s*(?:${EN_ADDRESS_AFTER}(?![\\p{L}])\\s*(?:(?:our|my|the|this|their|your)(?![\\p{L}])\\s*)?|${DETAILS_TAIL}|(?=[\\s.!?؟:]*$))`, 'iu'),
     ckbAfter: new RegExp(`^${name}\\s*[،,]?\\s*(?:(?:بۆمان|بۆم)?\\s*${CKB_VERB}\\s*)?(?:(?:بۆ|دەربارەی|لەسەر|سەبارەت\\s+بە)(?![\\p{L}\\p{M}])\\s*|(?=[\\s.!?؟]*$))`, 'u'),
   };
 }
@@ -327,7 +427,21 @@ export function withAddressee(source: string, asks: Span[], names: readonly stri
     }
     out.push([a, b]);
   }
+  // A sentence (or the end of one) that only says whom the design is for, anywhere in the brief.
+  for (const { start, end } of all) {
+    const said = source.slice(start, end);
+    const at = re.sentence.test(said) ? 0 : re.glued.exec(said)?.index ?? -1;
+    if (at < 0) continue;
+    const span: Span = [start + at, end];
+    if (!out.some(([x, y]) => span[0] < y && x < span[1])) out.push(span);
+  }
   return out.sort((x, y) => x[0] - y[0]);
+}
+
+/** ADR-284 addendum (brief phrasing fuzz, class 2): a line or sentence that only says whom the design is for. */
+export function namesTheClientOnly(sentence: string, names: readonly string[]): boolean {
+  const usable = names.filter((n) => n.trim().length >= 2);
+  return usable.length > 0 && addresseePatterns(usable).sentence.test(sentence.trim());
 }
 
 /** Whether text still asks the bot for something: never printed (the final check, ADR-232 addendum). */
@@ -350,7 +464,7 @@ export function readsAsInstruction(sentence: string): boolean {
   const s = sentence.trim();
   const aside = ASIDE.exec(s);
   if (aside && aside[0].length < s.length) return readsAsInstruction(s.slice(aside[0].length));
-  return EN_INSTRUCTION.test(s) || EN_DESIGNER.test(s) || CKB_INSTRUCTION.test(s) || CKB_DESIGNER.test(s) || isDesignerRemark(s);
+  return EN_INSTRUCTION.test(s) || EN_DESIGNER.test(s) || SIGN_OFF_NAME.test(s) || CKB_INSTRUCTION.test(s) || CKB_DESIGNER.test(s) || isDesignerRemark(s);
 }
 
 /**
@@ -362,7 +476,7 @@ export function speaksToTheDesigner(sentence: string): boolean {
   const s = sentence.trim();
   const aside = ASIDE.exec(s);
   if (aside && aside[0].length < s.length) return speaksToTheDesigner(s.slice(aside[0].length));
-  return EN_INSTRUCTION.test(s) || EN_DESIGNER.test(s) || CKB_DESIGNER.test(s) || /^(?:زۆر\s+)?سوپاس[\s!.🙏]*$/u.test(s) || isDesignerRemark(s);
+  return EN_INSTRUCTION.test(s) || EN_DESIGNER.test(s) || SIGN_OFF_NAME.test(s) || CKB_DESIGNER.test(s) || /^(?:زۆر\s+)?سوپاس[\s!.🙏]*$/u.test(s) || isDesignerRemark(s);
 }
 
 // --- the grounding guard -------------------------------------------------------------------------------
@@ -463,7 +577,7 @@ const DETAIL_GLUE = /^(?:(?:and|or|but|so|also|it|it's|it’s|its|is|are|will|be
  */
 function unquotedDetails(source: string): string[] {
   const rest = source.replace(QUOTED, '\n');
-  const rules = ruleCopy(rest, requestSpans(rest));
+  const rules = ruleCopy(rest, requestSpans(rest), closingStart(rest));
   if (!rules) return [];
   return [rules.headline, ...rules.lines].map((line) => line.replace(DETAIL_GLUE, '').trim())
     .filter((line) => /\p{N}/u.test(line) && contentWords(line) > 0 && !readsAsInstruction(line));
@@ -502,26 +616,79 @@ function withoutChat(piece: string, beforeAsk: boolean): string {
   return clauses.join(' ').replace(/\s+/g, ' ');
 }
 
-function ruleCopy(source: string, asks: Span[]): ProposedCopy | null {
+/**
+ * ADR-284 addendum (brief phrasing fuzz, classes 4 and 7): an event-first brief, "Our Open Day is on 5 November.
+ * Could you make a poster for it?", printed the whole sentence. Its first sentence is split at the copula only: the
+ * event's name before "is on / is at / is in / will be held on …" and the rest after it, both the requester's own words
+ * ("Open Day", "5 November"). Nothing is reworded; when the name is not a clean name (a pronoun, more than eight
+ * words, a second verb, nothing after the copula) the requester's line is kept as it was.
+ */
+const EVENT_FIRST = /^(?:(?:our|the|this\s+year'?s|this\s+year’s)\s+)?(\S.{1,80}?)\s+(?:is|are|will\s+be|is\s+going\s+to\s+be)\s+(?:(?:held|taking\s+place|happening)\s+)?(?:on|at|in)\s+(\S.*)$/iu;
+const NOT_A_SUBJECT = /^(?:it|its|it's|it’s|this|that|there|here|he|she|we|they|i|you|everything|everyone|everybody|nothing|which|what|who|when|where)$/iu;
+function eventFirst(piece: string): [string, string] | null {
+  const m = EVENT_FIRST.exec(piece);
+  if (!m) return null;
+  const [name, rest] = [m[1].trim(), m[2].trim()];
+  const said = name.split(/\s+/u);
+  if (said.length > 8 || NOT_A_SUBJECT.test(said[0]) || /(?<![\p{L}])(?:is|are|was|were|will|be)(?![\p{L}])/iu.test(name) ||
+    !contentWords(name) || !contentWords(rest)) return null;
+  return [name, rest];
+}
+/**
+ * Class 7: a greeting glued to an event-first sentence with no comma ("Hello Our Open Day is on …", "Salam The
+ * graduation ceremony is on …", "hello KAAE parents meeting is on …"). It is left out only before "our/the/this/my" or
+ * a name in capitals, so "Hello Kitty Day" keeps its words.
+ */
+const gluedGreetingBefore = (rest: string) => /^(?:our|the|this|my|their)\s/iu.test(rest) || /^\p{Lu}{2,}(?:'s|’s)?\s/u.test(rest);
+
+/**
+ * Class 11: a rules headline longer than a design's headline (110 characters) opened with no copy at all. It is split
+ * at its date ("… on Monday 12 November …") and then its audience (the last "… for …" before the date): "Upcoming
+ * KAAE Quality Assurance Workshop" / "for parents and students" / "Monday 12 November at 2 pm in the main campus",
+ * each still one stretch of the requester's words.
+ */
+const ON_A_DATE = new RegExp(`\\s+on\\s+(?=(?:\\p{N}|(?:mon|tues|wednes|thurs|fri|satur|sun)day\\b|next\\b|this\\b|the\\s+\\p{N}|(?:${MONTHS})\\b))`, 'iu');
+function splitLong(line: string, max: number): string[] {
+  if (line.length <= max) return [line];
+  const date = ON_A_DATE.exec(line);
+  const head = date ? line.slice(0, date.index) : line;
+  const tail = date ? [line.slice(date.index + date[0].length)] : [];
+  const audience = [...head.matchAll(/\s+(?=for\s+\S)/giu)].at(-1);
+  const parts = audience && audience.index! > 0 ? [head.slice(0, audience.index), head.slice(audience.index! + audience[0].length)] : [head];
+  return [...parts, ...tail].map((p) => p.trim()).filter(Boolean);
+}
+
+function ruleCopy(source: string, asks: Span[], until = source.length): ProposedCopy | null {
   const kept: string[] = [];
   const firstAsk = asks.length ? Math.min(...asks.map(([a]) => a)) : Infinity;
-  const clean = (piece: string, beforeAsk: boolean, beforeFirst = false) => {
-    let t = withoutChat(piece, beforeFirst).replace(/^[\s,،:;!.-]+|[\s,،:;.?؟!-]+$/gu, '').replace(CKB_TRAILING_VERB, '').replace(/[\s,،]+$/u, '');
+  const clean = (piece: string, beforeAsk: boolean, beforeFirst = false, head = false) => {
+    let t = withoutChat(piece, beforeFirst);
+    // Class 7: a greeting glued to the first words ("Hello Our Open Day is on …").
+    const greeting = beforeFirst ? GREETING.exec(t) : null;
+    if (greeting && gluedGreetingBefore(t.slice(greeting[0].length))) t = t.slice(greeting[0].length);
+    // Class 3: a list mark the requester typed ("- ", "* ", "• ") is not a word to print.
+    t = t.replace(/^[\s,،:;!.\-*•·–—]+|[\s,،:;.?؟!-]+$/gu, '').replace(CKB_TRAILING_VERB, '').replace(/[\s,،]+$/u, '');
     if (beforeAsk) t = t.replace(/^(?:(?:for|about)\s+(?:our|the|this|my|their)|بۆ)\s+/iu, '');
     t = t.replace(GLUE_START, '').replace(/^(?:(?:ئەوە|ئەمە)\s+)?(?:لە)\s+/u, '').trim();
-    if (t && contentWords(t)) kept.push(t);
+    // Class 1: "pls" left at the end of a detail ("… 20 March 2027 pls").
+    t = t.replace(/\s+(?:pls|plz)$/iu, '').trim();
+    if (!t || !contentWords(t)) return;
+    const split = head && !kept.length ? eventFirst(t) : null;
+    if (split) kept.push(...split);
+    else kept.push(t);
   };
-  for (const { start, end } of sentences(source)) {
+  for (const { start, end } of sentences(source.slice(0, until))) {
     const s = source.slice(start, end);
     const inside = asks.filter(([a, b]) => a >= start && b <= end);
     // A sentence with a request in it is taken apart around the request ("Could you design … for our X?").
     if (!inside.length && (readsAsInstruction(s) || GREETING_ONLY.test(s))) continue;
-    if (!inside.length) { clean(s, false, end <= firstAsk); continue; }
+    if (!inside.length) { clean(s, false, end <= firstAsk, end <= firstAsk); continue; }
     let from = start;
     for (const [a, b] of inside) { clean(source.slice(from, a), true, a <= firstAsk); from = b; }
     clean(source.slice(from, end), false);
   }
-  return kept.length ? { headline: kept[0], lines: kept.slice(1) } : null;
+  const lines = kept.flatMap((line, i) => splitLong(line, i === 0 ? MAX_HEADLINE : MAX_LINE));
+  return lines.length ? { headline: lines[0], lines: lines.slice(1) } : null;
 }
 
 /**
@@ -533,8 +700,8 @@ export function copyBesideRequest(line: string, clientNames: readonly string[] =
   const source = ws(line);
   const asks = requestSpans(source);
   if (!asks.length) return [];
-  // ADR-284 addendum: "For KAAE, could you design a poster?" carries nothing to print.
-  const rules = ruleCopy(source, withAddressee(source, asks, clientNames));
+  // ADR-284 addendum: "For KAAE, could you design a poster?" carries nothing to print; nor does its closing.
+  const rules = ruleCopy(source, withAddressee(source, asks, clientNames), closingStart(source));
   const names = new Set(clientNames.map((n) => n.toLowerCase()));
   return rules ? [rules.headline, ...rules.lines].filter((piece) => !names.has(piece.trim().toLowerCase())) : [];
 }
@@ -595,7 +762,9 @@ const isArabic = (text: string) => /[؀-ۿ]/.test(text);
  * ADR-253: routing words in a client pack that are ordinary nouns, not the client's name ("university",
  * "accreditation" route to KAAE): "University's Open Day" keeps its words.
  */
-const NOT_A_NAME = new Set(['university', 'accreditation', 'education', 'school', 'college', 'ministry', 'news', 'podcast', 'edition', 'office']);
+const NOT_A_NAME = new Set(['university', 'accreditation', 'education', 'school', 'college', 'ministry', 'news', 'podcast', 'edition', 'office',
+  // The same nouns in Sorani (university; accreditation), KAAE's routing phrases: ordinary words, not its name.
+  'زانکۆ', 'باوەڕپێدان']);
 
 /** The names the identified client goes by: its short label, its pack's code, names and aliases (ADR-253). */
 export function clientNamesFor(clientId: string | null | undefined, label: string | null): string[] {
@@ -604,7 +773,9 @@ export function clientNamesFor(clientId: string | null | undefined, label: strin
   const pack = clientId ? clientPackOf(clientId) : undefined;
   if (pack) {
     for (const name of [pack.code, pack.displayName, pack.displayName.replace(/\s*\(.*$/u, ''), pack.names.en, pack.names.ckb, pack.names.ar,
-      ...pack.routing.latinAliases, ...pack.routing.scriptAliases]) {
+      ...pack.routing.latinAliases, ...pack.routing.scriptAliases,
+      // ADR-284 addendum (brief phrasing fuzz, class 6): the Sorani spelling of KAAE is only a routing phrase.
+      ...pack.routing.phrases]) {
       if (typeof name === 'string' && name.trim().length >= 2 && !NOT_A_NAME.has(name.trim().toLowerCase())) names.add(name.trim());
     }
   }
@@ -669,9 +840,13 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   if (!asked.length) return draft;
   const asks = withAddressee(source, asked, draft.clientId
     ? clientNamesFor(draft.clientId, draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : null) : []);
-  const forbidden = forbiddenSpans(source, asks);
+  // ADR-284 addendum (brief phrasing fuzz, class 1): the closing at the end ("Many thanks!", "Best regards,⏎Ahmed")
+  // is never copy, for the rules and the model's guard alike.
+  const closing = closingStart(source);
+  const forbidden = [...forbiddenSpans(source, asks), ...(closing < source.length ? [[closing, source.length] as Span] : [])];
   const base: Omit<CopyExtractionReceipt, 'method' | 'why'> = { v: 1,
-    request: asks.map(([a, b]) => source.slice(a, b).trim()).join(' … ') };
+    request: asks.map(([a, b]) => source.slice(a, b).trim()).join(' … '),
+    ...(closing < source.length ? { closing: source.slice(closing).trim() } : {}) };
 
   let chosen: { method: CopyExtractionReceipt['method']; why: string; copy: NonNullable<ReturnType<typeof grounded>> } | null = null;
   let refused: CopyExtractionReceipt['refused'];
@@ -695,7 +870,7 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
     }
   }
   if (!chosen) {
-    const rules = ruleCopy(source, asks);
+    const rules = ruleCopy(source, asks, closing);
     const checked = rules && grounded(flat, rules, forbidden);
     if (checked) chosen = { method: 'rules', why: 'The request was one sentence. The request words at its start were removed and the rest kept sentence by sentence (no model reading was available, allowed or usable).', copy: checked };
   }
