@@ -73,11 +73,11 @@ describe('the approval target sweep', () => {
   });
   afterAll(async () => { await owner?.destroy(); await db?.destroy(); });
 
-  const ours = (taskIds: string[]) => taskIds.filter((id) => Object.values(ids).includes(id));
+  const ours = (taskIds: string[]) => taskIds.filter((id) => (Object.values(ids) as string[]).includes(id));
   const sent = () => withRlsContext(db, { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
     (await sql<{ idempotency_key: string; aggregate_id: string; payload: any }>`SELECT idempotency_key, aggregate_id, payload
       FROM hawa.outbox_commands WHERE tenant_id = ${TENANT}::uuid AND idempotency_key LIKE 'notify.office:approval-sla:%'`.execute(trx))
-      .rows.filter((r) => Object.values(ids).includes(r.aggregate_id)));
+      .rows.filter((r) => (Object.values(ids) as string[]).includes(r.aggregate_id)));
 
   it('names the late drafts, in working time, to every office member, and never the canary\'s', async () => {
     // Sunday 14:00: five working hours since 09:00; two since 12:00; Thursday 16:00 to now is
