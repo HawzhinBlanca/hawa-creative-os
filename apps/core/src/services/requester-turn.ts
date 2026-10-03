@@ -925,6 +925,36 @@ function namesOnlyASubject(core: string): boolean {
 }
 
 /**
+ * Hunt 3 (2026-10-03): words about a design already made, not a new one: "the poster looks cheap", "send me the
+ * poster", "I don't like it", "this design", Sorani "the design" (دیزاینەکە). With nothing on the way they are
+ * about an older design, and the office reads them.
+ */
+const ABOUT_A_DESIGN = new RegExp(`\\b(?:the|this|that|these|those|your|its|my|our)\\s+(?:[\\p{L}\\d'’-]+\\s+){0,2}?` +
+  `(?:${DESIGN_NOUNS}|draft|version|options?|${PART_NOUNS})s?\\b|\\b(?:it|this|that|them)\\b|` +
+  '(?:دیزاین|پۆستەر|پۆست|ڕەشنووس|لۆگۆ|ناونیشان|ڕەنگ|وێنە)(?:ەکە|ەکان)', 'iu');
+/** Something a design could be about: an event, a subject ("for the deans"), a name, a date or a time. */
+function namesItsOwnSubject(core: string): boolean {
+  return DATE_OR_TIME.test(core) || (core.match(EVENT_WORDS)?.length ?? 0) > 0 || OWN_SUBJECT_EN.test(core) ||
+    OWN_SUBJECT_CKB.test(core) || A_NAME.test(core);
+}
+/**
+ * Hunt 3 (2026-10-03): what words the rules cannot place mean in a chat with nothing on the way. They were opened
+ * whenever the heuristics called them a brief, as one that drafts by itself: "the event was cancelled", "the poster
+ * looks cheap", "not bad", "I don't like it" (said days after a delivery) each opened a request, and a paid draft
+ * printed the words as its copy. Only words with brief copy of their own (an event with its date or time) still
+ * open as before; words with a subject but no copy open for a person, as any short brief does
+ * (`readIntentByRules`); anything else, said about an earlier design or about nothing, goes to the office.
+ */
+function unplacedWithNothingOnTheWay(words: string): TurnPlan {
+  const h = classifyWithHeuristics(words, false, false);
+  if (h.kind !== 'new_brief') return { kind: 'conversation' };
+  const core = corePhrase(words);
+  if (carriesBriefCopy(core)) return { kind: 'open', text: words, instructionOnly: h.isInstructionOnly === true };
+  if (namesItsOwnSubject(core) && !ABOUT_A_DESIGN.test(core) && !readsAsChange(core)) return { kind: 'open', text: words, instructionOnly: true };
+  return { kind: 'forward', words };
+}
+
+/**
  * ADR-182: a message that goes on with a brief its sender is still sending (the brief is held a few
  * seconds for photos, ADR-143): people type a brief as several short messages ("Hi, we need a poster
  * for the graduation" / "Date: 12 October at 5 pm" / "Venue: the main hall"), add a line of style
@@ -1631,10 +1661,7 @@ export function planTurn(full: TurnInput): TurnPlan {
       if (reading.cancelWords && !input.bound.length) return planCancel(input, open, changeable, words, reading, ask, true);
       const bound = changeable.filter((r) => input.bound.includes(r.requestId));
       if (bound.length === 1) return changeFor(bound[0], words, 'reply', undefined) ?? ask('unclear', bound, true);
-      if (!changeable.length) {
-        const h = classifyWithHeuristics(words, false, false);
-        return h.kind === 'new_brief' ? { kind: 'open', text: words, instructionOnly: h.isInstructionOnly === true } : { kind: 'conversation' };
-      }
+      if (!changeable.length) return unplacedWithNothingOnTheWay(words);
       return ask('unclear', [...(bound.length ? bound : changeable)].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), true);
     }
   }
@@ -1876,9 +1903,12 @@ export function questionOfficeAlert(who: string, words: string): string {
     '', 'Their question:', quotedWords(words)].join('\n');
 }
 
-/** The office's alert for words about a design this bot cannot link to a current request. */
+/**
+ * The office's alert for words about a design this bot cannot link to a current request: a reply to an older
+ * message, or words about an earlier design said with nothing open (hunt 3).
+ */
 export function forwardOfficeAlert(who: string, words: string): string {
-  return [`${who} replied to an older message from the bot, about a design that is no longer open in their chat. Nothing was changed; please answer them in the chat.`,
+  return [`${who} wrote about a design that is no longer open in their chat. Nothing was changed; please answer them in the chat.`,
     '', 'Their words:', quotedWords(words)].join('\n');
 }
 
