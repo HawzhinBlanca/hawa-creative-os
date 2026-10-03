@@ -54,3 +54,11 @@ describe('icon-only buttons have a name (hunt-3)', () => {
     for (const el of found) expect(el).toMatch(/aria-label=/);
   });
 });
+
+describe('the Work screen never makes up a request (hunt-3)', () => {
+  it('has no fallback that creates a task with invented words', () => {
+    const { text } = read('screens/WorkScreen.tsx');
+    expect(text).not.toMatch(/Intake campaign instructions|Campaign Brief \$\{/);
+    expect(text).not.toMatch(/apiClient\.tasks\.create\(/);
+  });
+});

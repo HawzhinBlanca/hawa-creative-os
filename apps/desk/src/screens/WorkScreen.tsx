@@ -762,35 +762,18 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     Sign Out
                   </button>
                 )}
-                <button
-                  className="btn primary btn-sm work-queue-new-btn"
-                  onClick={async () => {
-                    if (onNewTask) {
-                      onNewTask();
-                      return;
-                    }
-                    try {
-                      setActionLoading(true);
-                      const res: any = await apiClient.tasks.create({
-                        title: `Campaign Brief ${new Date().toLocaleDateString()}`,
-                        description: 'Intake campaign instructions for client brand review',
-                        priority: 'high',
-                      });
-                      const createdTask = res.task || res;
-                      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
-                      if (createdTask?.id) setSelectedTaskId(createdTask.id);
-                      showToast(`Created server task: ${createdTask?.id || 'new'}`, 'success');
-                    } catch (err: any) {
-                      showToast(`Task creation failed: ${err.message}`, 'error');
-                    } finally {
-                      setActionLoading(false);
-                    }
-                  }}
-                  disabled={actionLoading}
-                  aria-label="Create New Task"
-                >
-                  + New Task
-                </button>
+                {/* A new request is written in the request form (App.tsx). Without it there is no button: the
+                    fallback created a task with an invented title and description ("Intake campaign
+                    instructions for client brand review"), shown as the requester's submitted copy. */}
+                {onNewTask && (
+                  <button
+                    className="btn primary btn-sm work-queue-new-btn"
+                    onClick={onNewTask}
+                    aria-label="Create New Task"
+                  >
+                    + New Task
+                  </button>
+                )}
               </div>
             </div>
 
