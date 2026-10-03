@@ -4,6 +4,9 @@ name: Hawa Creative OS — Continuous Assurance CI/CD
 # (60 of 60 runs died before a runner was assigned), and the test job had no database, no Verdana
 # and no rsvg, so it could not have passed on a clean runner either: 146 of 430 test files failed
 # on a fresh Linux checkout. See output/audits/2026-09-27-hawdesign-audit/REPORT.md.
+# By 2026-10-02 it passed 9 of 100 runs, every failure a Mac-vs-clean-runner difference (a doc link into
+# git-ignored output/, host-generated env files, no ffmpeg, no nginx image). ADR-281 closed them so that
+# a local `validate_pack.py` and a clean runner give the same verdict.
 
 on:
   push:
@@ -90,8 +93,18 @@ jobs:
 
       # Also the Pango/Cairo headers `pnpm test` needs to compile the shared text-measurement helper
       # (packages/creative/native, ADR-118); the runner's own Pango runtime draws the text.
-      - name: Install render dependencies (rsvg, Verdana, ImageMagick, Pango headers)
+      - name: Install render dependencies (rsvg, Verdana, ImageMagick, Pango headers, ffmpeg, heif-convert)
         run: bash scripts/ci/install_render_deps.sh
+
+      # The nginx tests run infra/docker/nginx.conf in the production image with `docker run
+      # --pull=never`, so a test never downloads on its own. A fresh runner has no images: the
+      # pinned-image validation in packages/testkit/test/chaos-service-boundaries.test.ts failed
+      # (exit 125) and four other nginx suites skipped. Pull the tag compose pins (ADR-281).
+      - name: Pull the production nginx image the nginx tests run
+        run: |
+          image=$(sed -n 's/^ *image: \(nginx:[^ ]*\)$/\1/p' infra/docker/docker-compose.prod.yml)
+          test -n "$image" || { echo "no nginx image in docker-compose.prod.yml"; exit 1; }
+          docker pull "$image"
 
       - name: Gate C — Strict TypeScript build (builds every package's dist/)
         run: pnpm typecheck
@@ -160,8 +173,14 @@ jobs:
           name: sbom
           path: ${{ runner.temp }}/sbom.json
 
+      # Core and the workers read host-generated files (.env.service-boundaries, .env.worker) that are
+      # never committed: deploy.sh writes them with infra/ops/prepare_service_boundaries.py (ADR-163).
+      # Generate them here the same way, from the example files, with throwaway values that live only
+      # on this runner, and validate every profile, the workers included (ADR-281).
       - name: Gate S — Validate Docker Compose topology
         run: |
           cp infra/docker/.env.production.example infra/docker/.env.production
-          docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.example config --quiet
+          cp infra/docker/.env.example infra/docker/.env
+          python3 infra/ops/prepare_service_boundaries.py --directory infra/docker
+          docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.example --profile '*' config --quiet
           echo "Docker Compose declarative topology valid."

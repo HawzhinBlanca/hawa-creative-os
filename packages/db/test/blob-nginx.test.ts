@@ -92,16 +92,24 @@ describe.skipIf(!haveImage)(`the /_blobs/ location in ${IMAGE}`, () => {
         res.end('desk');
       }
     });
-    await new Promise<void>((resolve) => stub.listen(0, '127.0.0.1', resolve));
-    const port = (stub.address() as AddressInfo).port;
-    const conf = fs.readFileSync(nginxConf, 'utf8')
-      .replace('server core:3001 resolve;', `server host.docker.internal:${port} resolve;`)
-      .replace('server desk:80 resolve;', `server host.docker.internal:${port} resolve;`);
-    fs.writeFileSync(path.join(work, 'nginx.conf'), conf, { mode: 0o644 });
-    fs.writeFileSync(path.join(work, 'office-proof.conf'), `proxy_set_header X-Hawa-Office-Proof "${'a'.repeat(64)}";\n`, { mode: 0o644 });
     // Docker's embedded resolver is available on user-defined networks, as in production.
     const madeNetwork = docker(['network','create',network]);
     if (madeNetwork.status !== 0) throw new Error(`test network did not start: ${madeNetwork.stderr}`);
+    // Docker Desktop answers host.docker.internal with this machine and forwards to its loopback. A
+    // native Linux engine (the CI runner) has no such name, and no container reaches the host's
+    // 127.0.0.1 (ADR-281): there the stub listens on the test network's gateway, the host's own
+    // address on that bridge, and nginx is given that address.
+    const desktop = docker(['info', '--format', '{{.OperatingSystem}}']).stdout.includes('Docker Desktop');
+    const gateway = desktop ? '' : docker(['network', 'inspect', network, '--format', '{{(index .IPAM.Config 0).Gateway}}']).stdout.trim();
+    if (!desktop && !/^\d+\.\d+\.\d+\.\d+$/.test(gateway)) throw new Error(`test network has no IPv4 gateway: ${gateway}`);
+    await new Promise<void>((resolve) => stub.listen(0, desktop ? '127.0.0.1' : gateway, resolve));
+    const port = (stub.address() as AddressInfo).port;
+    const upstream = desktop ? `server host.docker.internal:${port} resolve;` : `server ${gateway}:${port};`;
+    const conf = fs.readFileSync(nginxConf, 'utf8')
+      .replace('server core:3001 resolve;', upstream)
+      .replace('server desk:80 resolve;', upstream);
+    fs.writeFileSync(path.join(work, 'nginx.conf'), conf, { mode: 0o644 });
+    fs.writeFileSync(path.join(work, 'office-proof.conf'), `proxy_set_header X-Hawa-Office-Proof "${'a'.repeat(64)}";\n`, { mode: 0o644 });
     const run = docker(['run', '-d', '--rm', '--network',network, '-p', '127.0.0.1::80', '-v', `${path.join(work, 'nginx.conf')}:/etc/nginx/nginx.conf:ro`, '-v', `${path.join(work, 'office-proof.conf')}:/etc/nginx/hawa-office-proof.conf:ro`, '-v', `${blobs}:/srv/hawa-blobs:ro`, IMAGE]);
     if (run.status !== 0) throw new Error(`nginx did not start: ${run.stderr}`);
     container = run.stdout.trim();
