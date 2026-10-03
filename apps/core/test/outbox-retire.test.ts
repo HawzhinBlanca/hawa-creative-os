@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import crypto from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { createDb, withRlsContext, OutboxRepository } from '@hawa/db';
@@ -52,6 +52,24 @@ describe('retiring an obsolete dead letter', () => {
     const after = await (await app.request('/v1/outbox/failed', { headers })).json();
     expect(after.commands.map((c: any) => c.id)).not.toContain(cmd.id);
     expect((await app.request(url, { method: 'POST', headers, body: JSON.stringify({ reason: 'again' }) })).status).toBe(409);
+  });
+
+  it('bounds the reason and answers a database failure with a problem, not a crash (bug hunt 3)', async () => {
+    const { task, cmd } = await taskWithCommand('failed');
+    const url = `/v1/tasks/${task.id}/outbox/${cmd.id}/retire`;
+    const long = await app.request(url, { method: 'POST', headers, body: JSON.stringify({ reason: 'x'.repeat(1001) }) });
+    expect(long.status).toBe(422);
+    expect((await long.json()).title).toBe('Reason Too Long');
+    const failing = vi.spyOn(OutboxRepository.prototype, 'findById').mockRejectedValueOnce(new Error('connection reset by synthetic peer'));
+    try {
+      const res = await app.request(url, { method: 'POST', headers, body: JSON.stringify({ reason: 'Superseded' }) });
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.title).toBe('Database Unavailable');
+      expect(JSON.stringify(body)).not.toContain('synthetic peer');
+    } finally { failing.mockRestore(); }
+    // Still failed, so it can be retired once the database answers.
+    expect((await app.request(url, { method: 'POST', headers, body: JSON.stringify({ reason: 'x'.repeat(1000) }) })).status).toBe(200);
   });
 
   it('never retires a command that can still be delivered', async () => {
