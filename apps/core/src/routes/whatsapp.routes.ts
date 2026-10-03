@@ -294,6 +294,18 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
       </body></html>`);
   };
 
+  // The answer when Postgres did not take the change: nothing was recorded, and the same link can be pressed again.
+  const notRecorded = (c: any, asPage: boolean) => {
+    if (!asPage) return problem(c, 503, 'Not Recorded', 'Your answer could not be recorded. Nothing changed; press the same button again in a moment.');
+    c.header('Cache-Control', 'no-store');
+    return c.html(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+      <body style="font-family: system-ui; background: #0B192C; color: #F8FAFC; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center;">
+        <div style="background: rgba(255,255,255,0.06); padding: 40px; border-radius: 16px; max-width: 440px;">
+          <h3 style="margin: 0 0 16px 0;">Your answer could not be recorded. Nothing changed; go back and press the same button again in a moment.</h3>
+        </div>
+      </body></html>`, 503);
+  };
+
   const handleActionCallback = async (c: any) => {
     // The confirmation page posts a form and is answered with a page; an API caller posts JSON.
     const asPage = String(c.req.header('content-type') || '').includes('application/x-www-form-urlencoded');
@@ -349,6 +361,7 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
         return c.json({ ok: true, status: 'COMPLETE', taskId, message: 'Campaign approved and published successfully', publishRes });
       }
 
+      const approveFromStatus = task.status;
       if (task.status !== 'APPROVED') {
         const effectiveStatus = (task.status === 'RECEIVED' && task.outboundDispatch) ? 'AWAITING_APPROVAL' : task.status;
         const sm = new TaskStateMachine(taskId, effectiveStatus);
@@ -374,7 +387,10 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
             }, trx);
           });
         } catch (err) {
+          // Not recorded: the client is told so, and asked to press again, instead of "approved".
           log.error('[core:whatsapp:approve] DB transition error:', err);
+          task.status = approveFromStatus;
+          return notRecorded(c, asPage);
         }
       }
 
@@ -423,6 +439,8 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
           });
         } catch (err) {
           log.error('[core:whatsapp:revision] DB transition error:', err);
+          task.status = revisionFromStatus;
+          return notRecorded(c, asPage);
         }
       }
 
