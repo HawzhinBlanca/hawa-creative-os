@@ -8,10 +8,14 @@
  * Canva sweeper, alerts every office member once per request per stage entry: the outbox key names the
  * request and its revision, which changes on every transition, so the same wait is never alerted twice
  * and a later wait at another stage is.
+ *
+ * ADR-288: a draft waiting in office review has one reminder, the approval target alert in working hours
+ * (approval-sla.ts). The in_review stage here runs only when that alert is switched off.
  */
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { officeReviewUrl } from './desk-review-link.js';
+import { approvalSlaConfig } from './approval-sla.js';
 
 const HOUR_MS = 60 * 60_000;
 
@@ -76,9 +80,16 @@ const baseKey = (request: Pick<StaleRequest, 'requestId' | 'rev'>) => `notify.of
  */
 export async function sweepStaleLifecycleRequests(db: Kysely<Database>, options: {
   tenantId: string; officeChatIds: readonly string[]; nowMs: number; limit?: number;
+  /**
+   * Whether this sweep reminds about drafts waiting in office review. ADR-288: the approval target alert
+   * (approval-sla.ts) is the one reminder for that wait, so this stage runs only while that alert is
+   * switched off (HAWA_APPROVAL_SLA_ENABLED=off): one reminder per waiting draft, and never none.
+   */
+  inReview?: boolean;
 }): Promise<StaleRequest[]> {
   const members = [...new Set(options.officeChatIds.map((c) => c.trim()).filter(Boolean))];
   if (!members.length) return [];
+  const inReview = options.inReview ?? !approvalSlaConfig().enabled;
   const now = new Date(options.nowMs);
   const horizon = new Date(options.nowMs - STALE_HORIZON_MS);
   const due = (stage: StaleStage) => new Date(options.nowMs - STALE_AFTER_MS[stage]);
@@ -90,7 +101,7 @@ export async function sweepStaleLifecycleRequests(db: Kysely<Database>, options:
         JOIN hawa.tasks t ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id
        WHERE r.tenant_id = ${options.tenantId}::uuid AND r.owner = 'restate'
          AND (
-           (r.stage = 'in_review' AND r.updated_at <= ${due('in_review')})
+           (${inReview}::boolean AND r.stage = 'in_review' AND r.updated_at <= ${due('in_review')})
         OR (r.stage = 'approved' AND r.updated_at <= ${due('approved')})
         OR (r.stage = 'delivering' AND r.updated_at <= ${due('delivering')})
         OR (r.stage = 'manual' AND t.state = 'failed_operator' AND r.updated_at <= ${due('manual')})

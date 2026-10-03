@@ -167,9 +167,16 @@ A value that cannot be read keeps its default. Offsets come from Intl, so a time
 - A draft that has waited more than 14 days is not alerted on a first sweep.
 - At most five drafts are alerted per pass.
 
+**Switching it off:** `HAWA_APPROVAL_SLA_ENABLED=off`.
+
 **Wording** (plain English): "A draft has been waiting for office approval for 6 working hours, longer than the 4-hour target: "Graduation banner" for KAAE. It has waited since Thursday 16:00 (Baghdad time). Please approve it or ask for changes." This is followed by the Desk review link when one is configured.
 
-**Relation to the stale sweep:** this alert is in addition to the stale sweep's 2-hour wall-clock `in_review` reminder (ADR-155), which is unchanged. That reminder exists because a draft once waited overnight. The two measure different things: the reminder is a prompt, and this is the office's target. Whether to keep both is the owner's decision (see 4).
+**Relation to the stale sweep (owner decision, 2026-10-03): one reminder per waiting draft.**
+
+- While this alert is on (the default), it is the only reminder about a draft waiting in office review. `sweepStaleLifecycleRequests` skips its `in_review` stage.
+- The stale sweep keeps its other stages unchanged: approved but not sent, delivering, handed to the office after a failed design, and an unanswered question.
+- `HAWA_APPROVAL_SLA_ENABLED=off` switches this alert off, and the stale sweep's 2-hour wall-clock `in_review` reminder (ADR-155) comes back. A waiting draft is never left unwatched.
+- Both passes read the same setting (`approvalSlaConfig().enabled`), so they cannot disagree about which one owns the wait.
 
 ## 3. Consequences
 
@@ -180,8 +187,7 @@ A value that cannot be read keeps its default. Offsets come from Intl, so a time
 
 ## 4. Open
 
-- **Office hours and working days** (Sunday to Thursday, 09:00 to 17:00) are an assumption. The owner should confirm them and set `HAWA_OFFICE_HOURS` and `HAWA_OFFICE_DAYS`.
-- **Two review reminders.** The owner should decide whether the 2-hour wall-clock `in_review` stale reminder stays beside the 4-working-hour target alert.
+- **Office hours and working days.** The defaults, 09:00 to 17:00, Sunday to Thursday, Asia/Baghdad, are an assumption and stay as configured defaults. The owner should confirm them. If they differ, set `HAWA_OFFICE_HOURS` and `HAWA_OFFICE_DAYS`.
 - **The production cause is inferred.** The exact cause of production's "1 approval, 1 delivery, 0 samples" was not read from production data: no SQL is run on production. Faults 1 and 2 in section 1 each produce that picture, and both are reproduced in `apps/core/test/funnel-request-units.test.ts`. Which of them caused it is an inference.
 - **Unconfirmed Canva scope.** Canva's documentation does not say whether `GET /v1/users/me` needs a scope beyond the three Hawa requests (`design:meta:read`, `design:content:read`, `design:content:write`). A 403 is read as connected, so a scope refusal cannot show as an outage.
 
@@ -191,6 +197,6 @@ A value that cannot be read keeps its default. Offsets come from Intl, so a time
 - `apps/core/test/health-semantics.test.ts` (4)
 - `apps/core/test/paid-model-health.test.ts` (5)
 - `apps/core/test/canva-readiness.test.ts` (8)
-- `apps/core/test/approval-sla.test.ts` (5)
+- `apps/core/test/approval-sla.test.ts` (7). Two of these check the reminder ownership: a draft waiting 6 working hours gets one alert in total with the target alert on, and gets the stale sweep's in-review reminder once with it off.
 - `apps/desk/test/operations-presentation.test.ts` (2)
 - Unchanged and passing: `funnel-monitor`, `funnel-stall-condition`, `production-entrypoint`, `lifecycle-only-telegram`, `lifecycle-internal-intake`, `telegram-poller-owner-health`, `core`, `fault-recovery-security-cv20`, and the integrations Canva client tests.

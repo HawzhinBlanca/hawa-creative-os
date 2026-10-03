@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { CANARY_TEST_CLIENT_ID, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
@@ -36,6 +36,8 @@ describe('working hours under the office calendar', () => {
     const broken = approvalSlaConfig({ HAWA_APPROVAL_SLA_BUSINESS_HOURS: 'soon', HAWA_OFFICE_DAYS: 'someday',
       HAWA_OFFICE_HOURS: '17:00-09:00', HAWA_OFFICE_TIMEZONE: 'Mars/Olympus' });
     expect(broken).toEqual(config);
+    expect(config.enabled).toBe(true);
+    expect(approvalSlaConfig({ HAWA_APPROVAL_SLA_ENABLED: 'OFF' }).enabled).toBe(false);
   });
 });
 
@@ -105,5 +107,69 @@ describe('the approval target sweep', () => {
 
   it('writes nothing without office members', async () => {
     expect(await sweepApprovalSla(db, { tenantId: TENANT, officeChatIds: [' '], nowMs: baghdad('2026-10-08T12:00:00') })).toEqual([]);
+  });
+});
+
+/**
+ * ADR-288 (owner decision): one reminder per waiting draft. While the approval target alert runs it is
+ * the only reminder about a draft in office review, and the lifecycle stale sweep skips its in_review
+ * stage; switched off (HAWA_APPROVAL_SLA_ENABLED=off), the stale sweep's in_review reminder comes back.
+ */
+describe('one reminder per draft waiting in office review', () => {
+  let owner: Kysely<Database>;
+  let db: Kysely<Database>;
+  const MEMBER = ['7300001'];
+  const since = '2026-10-04T09:00:00';
+  const now = baghdad('2026-10-04T15:00:00'); // six working hours later
+
+  async function waitingDraft() {
+    const taskId = randomUUID(), requestId = randomUUID();
+    await owner.transaction().execute(async (trx) => {
+      await sql`SET LOCAL session_replication_role = replica`.execute(trx);
+      await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, request_id, title, state, priority, version, created_at, updated_at)
+        VALUES (${taskId}::uuid, ${TENANT}::uuid, 'c1000000-0000-4000-8000-000000000002'::uuid, ${requestId}::uuid, 'Open day poster',
+          'human_review', 3, 2, ${new Date(baghdad(since) - HOUR)}, ${new Date(baghdad(since))})`.execute(trx);
+      await sql`INSERT INTO hawa.task_events (tenant_id, task_id, event_type, aggregate_version, actor_type, actor_id, correlation_id, data, occurred_at)
+        VALUES (${TENANT}::uuid, ${taskId}::uuid, 'task.state_changed', 2, 'workflow', 'fixture', ${randomUUID()},
+          '{"fromState":"qa","toState":"human_review"}'::jsonb, ${new Date(baghdad(since))})`.execute(trx);
+      await sql`INSERT INTO hawa.requests (request_id, tenant_id, root_task_id, current_task_id, owner, stage, rev, chat_id, created_at, updated_at)
+        VALUES (${requestId}::uuid, ${TENANT}::uuid, ${taskId}::uuid, ${taskId}::uuid, 'restate', 'in_review', 3, '7000001',
+          ${new Date(baghdad(since) - HOUR)}, ${new Date(baghdad(since))})`.execute(trx);
+    });
+    return { taskId, requestId };
+  }
+  const remindersFor = (taskId: string) => withRlsContext(db, { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+    async (trx) => (await sql<{ idempotency_key: string }>`SELECT idempotency_key FROM hawa.outbox_commands
+      WHERE tenant_id = ${TENANT}::uuid AND aggregate_id = ${taskId}::uuid AND command_type = 'notify.telegram'`.execute(trx)).rows
+      .map((r) => r.idempotency_key));
+  const sweepBoth = async () => {
+    const { sweepStaleLifecycleRequests } = await import('../src/services/lifecycle-stale-sweep.js');
+    // As app.ts runs them: the stale pass, then the approval target pass, each reading the configuration.
+    for (const at of [now, now + 15 * 60_000]) {
+      await sweepStaleLifecycleRequests(db, { tenantId: TENANT, officeChatIds: MEMBER, nowMs: at, limit: 100 });
+      await sweepApprovalSla(db, { tenantId: TENANT, officeChatIds: MEMBER, nowMs: at, limit: 100 });
+    }
+  };
+
+  beforeAll(async () => {
+    owner = createDb(process.env.TEST_DATABASE_OWNER_URL!);
+    db = createDb(process.env.TEST_DATABASE_URL!);
+  });
+  afterEach(() => { vi.unstubAllEnvs(); });
+  afterAll(async () => { await owner?.destroy(); await db?.destroy(); });
+
+  it('with the approval target alert on (the default): one alert, the target alert, and no stale reminder', async () => {
+    const { taskId, requestId } = await waitingDraft();
+    await sweepBoth();
+    expect(await remindersFor(taskId)).toEqual([`notify.office:approval-sla:${taskId}`]);
+    expect((await remindersFor(taskId)).some((k) => k.includes(requestId))).toBe(false);
+  });
+
+  it('with it switched off: the stale sweep\'s in-review reminder comes back, once', async () => {
+    vi.stubEnv('HAWA_APPROVAL_SLA_ENABLED', 'off');
+    expect(approvalSlaConfig().enabled).toBe(false);
+    const { taskId, requestId } = await waitingDraft();
+    await sweepBoth();
+    expect(await remindersFor(taskId)).toEqual([`notify.office:lifecycle-stale:${requestId}:3`]);
   });
 });

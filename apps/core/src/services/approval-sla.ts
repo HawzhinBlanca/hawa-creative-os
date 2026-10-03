@@ -8,6 +8,9 @@
  * lifecycle-stale-sweep.ts), which counts wall-clock hours per request stage; this one is keyed by the
  * task (one draft), so a draft is named once however often its request changes revision.
  *
+ * It is the one reminder about a draft waiting in office review: the lifecycle stale sweep's in_review
+ * stage stands down while it runs, and returns when HAWA_APPROVAL_SLA_ENABLED=off.
+ *
  * Configuration: HAWA_APPROVAL_SLA_BUSINESS_HOURS (default 4), HAWA_OFFICE_TIMEZONE (Asia/Baghdad),
  * HAWA_OFFICE_DAYS (Sun-Thu; a range or a comma list of three-letter days), HAWA_OFFICE_HOURS
  * (09:00-17:00).
@@ -29,7 +32,16 @@ export interface OfficeCalendar {
   closeMinute: number;
 }
 
-export interface ApprovalSlaConfig { calendar: OfficeCalendar; thresholdMs: number }
+export interface ApprovalSlaConfig {
+  /**
+   * Whether this alert runs (HAWA_APPROVAL_SLA_ENABLED, on unless `off`). It is the only reminder about a
+   * draft waiting in office review: while it runs, the lifecycle stale sweep skips its in_review stage;
+   * switched off, that stage comes back, so a waiting draft is never left unwatched.
+   */
+  enabled: boolean;
+  calendar: OfficeCalendar;
+  thresholdMs: number;
+}
 
 function parseDays(value: string): Set<number> | null {
   const days = new Set<number>();
@@ -55,7 +67,8 @@ export function approvalSlaConfig(env: Record<string, string | undefined> = proc
   const days = parseDays(env.HAWA_OFFICE_DAYS || '') ?? parseDays('sun-thu')!;
   const [openMinute, closeMinute] = parseHours(env.HAWA_OFFICE_HOURS || '') ?? [9 * 60, 17 * 60];
   const hours = Number(env.HAWA_APPROVAL_SLA_BUSINESS_HOURS);
-  return { calendar: { timeZone, days, openMinute, closeMinute },
+  return { enabled: (env.HAWA_APPROVAL_SLA_ENABLED || '').trim().toLowerCase() !== 'off',
+    calendar: { timeZone, days, openMinute, closeMinute },
     thresholdMs: (Number.isFinite(hours) && hours > 0 && hours <= 100 ? hours : 4) * HOUR_MS };
 }
 
@@ -131,6 +144,7 @@ export async function sweepApprovalSla(db: Kysely<Database>, options: {
   const members = [...new Set(options.officeChatIds.map((c) => c.trim()).filter(Boolean))];
   if (!members.length) return [];
   const config = options.config ?? approvalSlaConfig();
+  if (!config.enabled) return [];
   const horizon = new Date(options.nowMs - APPROVAL_SLA_HORIZON_MS);
   return withRlsContext(db, { tenantId: options.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
     // Waiting since the draft last entered review (its task event), else the task's last change.
