@@ -2,6 +2,7 @@ import { afterAll, afterEach, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext, DesignStudioRepository } from '@hawa/db';
 import { resolveModel } from '@hawa/domain';
+import { OpenAiStudioClient, reserveStudioText, listPriceTextUsd } from '@hawa/creative';
 import { CallCostAccountingService } from '../src/services/call-cost-accounting.js';
 import { createRequesterIntentModel, intentRequestBody, readOnce } from '../src/services/requester-intent-model.js';
 import { createApp } from '../src/app.js';
@@ -80,7 +81,7 @@ async function fixture(office = false) {
   const rows = async () => (await sql<{ id: string; update_id: string; status: string; cost_usd: string | null; input_tokens: string | null;
     output_tokens: string | null; served_model: string | null; reservation: any }>`SELECT id,update_id::text,status,cost_usd::text,input_tokens::text,
       output_tokens::text,served_model,reservation FROM hawa.requester_intent_calls WHERE tenant_id=${tenantId}::uuid ORDER BY started_at`.execute(owner)).rows;
-  return { tenantId, userId, clientId, token, scope, tx, service, studio, voice, intakeRow, rows };
+  return { tenantId, userId, clientId, runId, token, scope, tx, repo, service, studio, voice, intakeRow, rows };
 }
 
 const completion = (decision: Record<string, unknown>, usage = { prompt_tokens: 420, completion_tokens: 30, total_tokens: 450 }) =>
@@ -201,4 +202,47 @@ it('serves the summary to the Desk over HTTP', async () => {
   const listed = await (await app.request('/v1/spending/calls', { headers })).json() as any;
   expect(listed.items.some((i: any) => i.kind === 'intake_router')).toBe(true);
   expect((await app.request('/v1/spending/summary')).status).toBe(401);
+});
+
+it('ADR-289 addendum: an intake reading and a Studio call with identical usage count identical cost, at list price', async () => {
+  // Sol: list $2 in, $0.10 cached in, $10 out per 1M; its reservation rate is $4.50 in (input plus a cache write).
+  const SOL = 'gpt-6.1-sol';
+  vi.stubEnv('HAWA_MODEL_TEXT', SOL);
+  const f = await fixture();
+  const usage = { prompt_tokens: 420, completion_tokens: 30, total_tokens: 450, prompt_tokens_details: { cached_tokens: 100 } };
+  const reply = () => new Response(JSON.stringify({ id: `chatcmpl-${randomUUID().slice(0, 8)}`, model: SOL, usage,
+    choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ kind: 'change', design: 1, confidence: 0.9 }) } }] }),
+    { headers: { 'x-request-id': 'req_parity_fixture' } });
+  // The intake router's reading, through readOnce.
+  await createRequesterIntentModel(db, { fetcher: (async () => reply()) as any, apiKey: key })
+    .read({ tenantId: f.tenantId, updateId: updateId(), chatId: '64000003', text: 'Members evening', requests: [view(f.clientId)], lang: 'en' });
+  const [intake] = await f.rows();
+  // A Studio call, recorded as design-studio-service's ledger client records it: admitted before
+  // dispatch with its reservation, finalized with the receipt the Studio client computed.
+  const id = randomUUID();
+  let reservation: ReturnType<typeof reserveStudioText> | undefined;
+  const client = new OpenAiStudioClient({ apiKey: key(), fetcher: (async () => reply()) as any });
+  const result = await client.createStructuredCompletion({ model: SOL, messages: [{ role: 'user', content: 'Members evening' }],
+    jsonSchema: { name: 'parity_fixture', schema: { type: 'object' } }, beforeDispatch: async (body) => {
+      reservation = reserveStudioText(body);
+      await f.repo.recordCallStart({ id, tenantId: f.tenantId, runId: f.runId, actorId: f.userId, stage: 'critique', provider: 'openai',
+        model: SOL, requestedModel: SOL, callOrdinal: 1, logicalCallSha256: hash(id), reservation });
+    } });
+  await f.repo.finalizeCall({ id, tenantId: f.tenantId, status: 'ok', responseId: result.receipt.responseId, inputTokens: result.receipt.inputTokens,
+    cachedInputTokens: result.receipt.cacheReadTokens, outputTokens: result.receipt.outputTokens, usdEstimate: result.receipt.costUsd,
+    costBasis: result.receipt.costBasis ?? 'estimate' });
+  const listed = new Map((await f.service.list(f.scope)).items.map(i => [`${i.kind}:${i.id}`, i]));
+  const intakeCost = listed.get(`intake_router:${intake.id}`)!.accountedCostUsd, studioCost = listed.get(`studio:${id}`)!.accountedCostUsd;
+  // 320 uncached x $2 + 100 cached x $0.10 + 30 out x $10, per 1M tokens.
+  const expected = (320 * 2 + 100 * 0.1 + 30 * 10) / 1_000_000;
+  expect(intakeCost).toBe(studioCost);
+  expect(intakeCost).toBeCloseTo(expected, 9);
+  expect(listPriceTextUsd(SOL, { inputTokens: 420, cachedInputTokens: 100, outputTokens: 30 })).toBe(intakeCost);
+  expect(listed.get(`studio:${id}`)!.requiresCostEvidence).toBe(false);
+  // The reservation rate only bounds what is held before settling: it is far above the counted cost.
+  expect(Number(intake.reservation.usd)).toBeGreaterThan(intakeCost);
+  expect(reservation!.usd).toBeGreaterThan(studioCost);
+  const summary = await f.service.summary(f.scope, '1');
+  expect(summary.roles.find(r => r.role === 'intake_router')!.accountedUsd).toBe(intakeCost);
+  expect(summary.roles.find(r => r.role === 'creative_director')!.accountedUsd).toBe(studioCost);
 });

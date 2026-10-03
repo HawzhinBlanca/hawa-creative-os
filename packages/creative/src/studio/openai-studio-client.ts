@@ -1,10 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { assertModelAllowed, modelSupportsReasoningEffort, resolveModel } from '@hawa/domain';
 import { StudioReservationError, type StudioNativeInputCount } from './spending-reservation.js';
+import { loadListPricing, priceTextUsage, resolveRatesForModel } from './list-price.js';
 import {
   StudioModelError,
   StudioModelHttpError,
@@ -68,26 +66,8 @@ export interface OpenAiImageResponse {
   };
 }
 
-/**
- * Rates for a model id, matching a dated snapshot to its base model.
- *
- * The API echoes the snapshot it served — "o4-mini-2025-04-16" for a request for "o4-mini" — and a
- * snapshot is the same model at the same price. Matching the longest priced prefix keeps the
- * ledger honest without needing a row per snapshot, while an unrelated model still finds nothing
- * and is reported rather than priced at someone else's rate.
- */
-export function resolveRatesForModel(
-  models: Record<string, any> | undefined,
-  model: string
-): any | undefined {
-  if (!models || !model) return undefined;
-  if (models[model]) return models[model];
-  let best: string | undefined;
-  for (const known of Object.keys(models)) {
-    if (model.startsWith(known + '-') && /^\d{4}-\d{2}-\d{2}$/.test(model.slice(known.length + 1)) && (!best || known.length > best.length)) best = known;
-  }
-  return best ? models[best] : undefined;
-}
+// ADR-289 addendum: one list-price source for Studio receipts and every other text ledger.
+export { resolveRatesForModel } from './list-price.js';
 
 export class OpenAiModelHttpError extends StudioModelHttpError {
   readonly status: number;
@@ -406,33 +386,8 @@ export class OpenAiStudioClient {
   }
 
   private loadPricing(): any {
-    // Looks beside the compiled module and beside the source. tsc does not copy JSON, so for a
-    // long time only the built path was checked, it never existed, and every price silently came
-    // from the fallback table below — which made the table-driven pricing an illusion.
-    try {
-      const currentDir = path.dirname(fileURLToPath(import.meta.url));
-      for (const candidate of [
-        path.join(currentDir, 'pricing.json'),
-        path.resolve(currentDir, '../../src/studio/pricing.json'),
-        path.resolve(process.cwd(), 'packages/creative/src/studio/pricing.json'),
-      ]) {
-        if (fs.existsSync(candidate)) {
-          return JSON.parse(fs.readFileSync(candidate, 'utf8'));
-        }
-      }
-    } catch {
-      // Fallback defaults
-    }
-    return {
-      currency: 'USD',
-      models: {
-        'gpt-6.1-sol': { inputPerMillion: 2, outputPerMillion: 10, cacheReadPerMillion: 0.1, cacheWritePerMillion: 2.5 },
-        'gpt-6-astra': { inputPerMillion: 10.0, outputPerMillion: 50.0, cacheReadPerMillion: 1.0, cacheWritePerMillion: 12.5 },
-        'gpt-image-2.5-sunburst': { outputPerMillionImageTokens: 30.0, image1k: 0.04, image2k: 0.08, image4k: 0.16 },
-        'gpt-4.1-mini': { inputPerMillion: 0.4, outputPerMillion: 1.6, cacheReadPerMillion: 0.1 },
-        'o4-mini': { inputPerMillion: 1.1, outputPerMillion: 4.4, cacheReadPerMillion: 0.275 },
-      },
-    };
+    // ADR-289 addendum: the shared list-price table (list-price.ts), the same one every ledger uses.
+    return loadListPricing();
   }
 
   calculateCost(model: string, usage: {
@@ -460,21 +415,12 @@ export class OpenAiStudioClient {
     }
     if (!rates || !rates.inputPerMillion) return 0.01;
 
-    const inTok = usage.prompt_tokens ?? usage.input_tokens ?? 0;
-    const outTok = usage.completion_tokens ?? usage.output_tokens ?? 0;
-    const cacheReadTokens = usage.cache_read_input_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0;
-    const cacheWriteTokens = usage.cache_creation_input_tokens ?? 0;
-    const regularInputTokens = Math.max(0, inTok - cacheReadTokens);
-
-    // Astra and Sol 6.1 price the entire request at long-context rates above 272K input tokens.
-    const longContext = /^(?:gpt-6-astra|gpt-6\.1-sol)(?:-\d{4}-\d{2}-\d{2})?$/.test(model) && inTok > 272000;
-    const inputMultiplier = longContext ? 2 : 1, outputMultiplier = longContext ? 1.5 : 1;
-    const inCost = (regularInputTokens / 1_000_000) * rates.inputPerMillion * inputMultiplier;
-    const outCost = (outTok / 1_000_000) * rates.outputPerMillion * outputMultiplier;
-    const cacheReadCost = rates.cacheReadPerMillion ? (cacheReadTokens / 1_000_000) * rates.cacheReadPerMillion * inputMultiplier : 0;
-    const cacheWriteCost = rates.cacheWritePerMillion ? (cacheWriteTokens / 1_000_000) * rates.cacheWritePerMillion * inputMultiplier : 0;
-
-    return Number((inCost + outCost + cacheReadCost + cacheWriteCost).toFixed(6));
+    return priceTextUsage(model, rates, {
+      inputTokens: usage.prompt_tokens ?? usage.input_tokens ?? 0,
+      outputTokens: usage.completion_tokens ?? usage.output_tokens ?? 0,
+      cachedInputTokens: usage.cache_read_input_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0,
+      cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+    });
   }
 
   async createStructuredCompletion<T = any>(options: {

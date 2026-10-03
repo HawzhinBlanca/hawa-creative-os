@@ -48,7 +48,10 @@ describe('ADR-148 Sol 6.1 candidate transport and budget', () => {
     expect(large.usd).toBeCloseTo((large.inputTokens * 9 + large.outputTokens * 15) / 1e6, 5);
     expect(reserveStudioText(body({ model: 'gpt-6-astra' })).policy).toBe('studio-2026-09-29-v3');
     const usage = studioTextUsage('gpt-6.1-sol', 'gpt-6.1-sol', { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 });
-    expect(usage?.estimatedCostUsd).toBe(0.00095);
+    // ADR-289 addendum: usage is priced at list price ($2 in, $10 out per 1M), never the reservation rate.
+    expect(usage?.estimatedCostUsd).toBe(0.0007);
+    expect(usage?.estimatedCostUsd).toBe(new OpenAiStudioClient({ apiKey: 'fixture', fetcher: vi.fn() })
+      .calculateCost('gpt-6.1-sol', { prompt_tokens: 100, completion_tokens: 50 }));
     expect(studioTextModelMatches('gpt-6.1-sol', 'gpt-6-astra')).toBe(false);
     expect(studioTextModelMatches('gpt-6.1-sol', 'gpt-6.1-sol-2026-09-30')).toBe(true);
   });
