@@ -70,6 +70,14 @@ caught:
    files differ from `RELEASE_MANIFEST.json`'s build commit (run 37074297042 failed it for that reason, by
    design). This branch therefore ends with a seal commit, as the integration branch does.
 
+7. **A once-seen race failure is made to name itself, not hidden.** CI run 37078578560 (decisions 1–6)
+   passed everything except one race in `lifecycle-album-settle` ("never starts twice when the settle, a
+   brief and /use_album race"): one of four racing answers was neither the opened request, a skipped
+   settle nor an album message. It had passed both earlier CI runs and 45 local runs under CPU stress,
+   and the assertion (`.every(...)).toBe(true)`) did not say which answer it was. The assertion is now the
+   same rule written as `toEqual([])` over the offending answers, so the next failure prints the answer.
+   This is lifecycle code shared with Codex; it is reported, not changed.
+
 No assertion was weakened or skipped. No test was gated off the hosted runner.
 
 ## Consequences

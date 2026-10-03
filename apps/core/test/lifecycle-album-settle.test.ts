@@ -288,8 +288,10 @@ describe('an album settles by itself (ADR-143)', () => {
     const opened = answers.filter((a) => a.lifecycleAction === 'open-request');
     expect(opened.length).toBeGreaterThan(0);
     expect(new Set(opened.map((a) => a.requestId)).size).toBe(1);
-    expect(answers.filter((a) => a.lifecycleAction !== 'open-request').every((a) =>
-      a.settle === 'skipped' || a.lifecycleAction === 'album-message')).toBe(true);
+    // The same rule as an equality, so a failure names the answer that broke it (it failed once on a
+    // loaded CI runner, run 37078578560, and never in 45 stressed local runs: ADR-281).
+    expect(answers.filter((a) => a.lifecycleAction !== 'open-request' &&
+      !(a.settle === 'skipped' || a.lifecycleAction === 'album-message'))).toEqual([]);
     const frozen = await withRlsContext(db, scope, async (trx) => (await sql<{ n: string }>`SELECT count(*) AS n
       FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'lifecycle_album_frozen'
         AND source_event_id IN (SELECT payload->>'groupKey' FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid

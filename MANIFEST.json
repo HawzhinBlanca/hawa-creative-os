@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-02T23:38:43Z",
+  "generatedAt": "2026-10-03T00:02:03Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1304,8 +1304,8 @@
     },
     {
       "path": "adrs/281_ci_runs_on_a_clean_checkout.md",
-      "sha256": "f7a86f904e62356e96f522d865f609fd4bdbb3a1ce26f6b4bbb935ab0a9b41bd",
-      "bytes": 6666
+      "sha256": "936b210b2f725e49ac868bcbda6663c5b85ecc9999632b1cff4321632cbbdc84",
+      "bytes": 7367
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -3584,8 +3584,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "85e557c1b285c5dfaa2902162705c3853971480ded40b0220ca40d01df0d5f65",
-      "bytes": 897573
+      "sha256": "840439d41ddb587e49adb8593c186388f4c7e16f3b42bd7f2951e45c46ee3f61",
+      "bytes": 897705
     },
     {
       "path": "plans/user-stories.csv",
