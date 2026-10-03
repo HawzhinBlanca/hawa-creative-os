@@ -9,7 +9,7 @@ import { type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
 import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml, neutralRequestTitle } from '@hawa/integrations';
 import { isWeakBriefLine } from './requester-turn.js';
-import { speaksToTheDesigner } from './request-copy-extraction.js';
+import { requestSpans, speaksToTheDesigner } from './request-copy-extraction.js';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
 import { autoDraftAllowedFor, clientPackOf, matchRequestClient, positiveClientWords } from './client-packs.js';
 import { defaultCanvasFor } from '@hawa/creative';
@@ -39,25 +39,31 @@ export { isCopyIntroducer };
  * Ahmed", "Don't forget the logo, and please send it to me by Thursday."), a last line ("Keep it simple."), or a
  * last sentence ("… Family Mall. Thanks!"). They were printed as the design's copy (only remarks about attachments
  * were known). Closing words to the event's audience ("Join us!") stay; the brief's first line always stays.
+ *
+ * Live 2026-10-03 (deploy 1e6881ac, canary chat): the sentence that asks for the design is never peeled. It
+ * speaks to the designer too, so "Hi! Could you make a poster for Peer Review Week on 20 October … ? Don't
+ * forget the logo. Thanks" lost its request sentence, event and all, and was titled and printed "Hi!". The
+ * request sentence stays for the copy extraction, which takes the request words and the greeting out of it.
  */
 export function peelClosingInstructions(text: string): { copy: string; remarks: string } {
   let copy = text.trim();
   const remarks: string[] = [];
+  const asksForTheDesign = (said: string) => requestSpans(said.replace(/\s*\n\s*/g, ' ')).length > 0;
   const peel = (kept: string, said: string) => { remarks.unshift(said.trim()); copy = kept.trim(); };
   for (let guard = 0; guard < 20; guard++) {
     const paragraphs = copy.split(/\n\s*\n/);
-    if (paragraphs.length > 1 && speaksToTheDesigner(paragraphs.at(-1)!.replace(/\s*\n\s*/g, ' '))) {
+    if (paragraphs.length > 1 && speaksToTheDesigner(paragraphs.at(-1)!.replace(/\s*\n\s*/g, ' ')) && !asksForTheDesign(paragraphs.at(-1)!)) {
       peel(paragraphs.slice(0, -1).join('\n\n'), paragraphs.at(-1)!);
       continue;
     }
     const lines = copy.split('\n');
-    if (lines.length > 1 && lines.at(-1)!.trim() && speaksToTheDesigner(lines.at(-1)!)) {
+    if (lines.length > 1 && lines.at(-1)!.trim() && speaksToTheDesigner(lines.at(-1)!) && !asksForTheDesign(lines.at(-1)!)) {
       peel(lines.slice(0, -1).join('\n'), lines.at(-1)!);
       continue;
     }
     const last = lines.at(-1)!;
     const sentences = last.split(/(?<=[.!?؟])\s+(?=\S)/u);
-    if (sentences.length > 1 && speaksToTheDesigner(sentences.at(-1)!)) {
+    if (sentences.length > 1 && speaksToTheDesigner(sentences.at(-1)!) && !asksForTheDesign(sentences.at(-1)!)) {
       peel([...lines.slice(0, -1), sentences.slice(0, -1).join(' ')].join('\n'), sentences.at(-1)!);
       continue;
     }

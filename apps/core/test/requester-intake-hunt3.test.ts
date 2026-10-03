@@ -292,3 +292,21 @@ describe('hunt 3 / L1: a message with no letters is answered in the chat\'s lang
     expect([ROUTING_MESSAGES.unhappyAsk.ckb, ROUTING_MESSAGES.unhappyPassed.ckb]).toContain(unhappy.chatAnswer?.text);
   });
 });
+
+describe('live 2026-10-03: a brief that opens with a greeting keeps its request sentence and its copy', () => {
+  // Deploy 1e6881ac, canary chat: the closing-words peel took the request sentence too (it speaks to the
+  // designer), so the copy and the title were the greeting alone ("KAAE: Hi!").
+  it.each([
+    "Hi! Could you make a poster for Peer Review Week on 20 October 2026 at 10:00 AM in the KAAE hall, Erbil? Don't forget the logo. Thanks",
+    'Hello! Please make a KAAE poster for Peer Review Week, 20 October 2026, 10:00 AM, Erbil.',
+  ])('%s', async (words) => {
+    const a = app();
+    const res = await intake(a, text(chatId(), words));
+    expect(res.lifecycleAction).toBe('open-request');
+    const copy = (res.draft.exactCopy as Array<{ text: string }>).map((b) => b.text).join(' | ');
+    expect(copy).toContain('Peer Review Week');
+    expect(copy).toContain('20 October 2026');
+    expect(copy).not.toMatch(/^(Hi|Hello)!/);
+    expect(res.draft.title).toMatch(/Peer Review Week/);
+  });
+});
