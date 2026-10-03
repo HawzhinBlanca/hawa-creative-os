@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T14:57:14Z",
+  "generatedAt": "2026-10-03T15:16:51Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 941,
+  "fileCount": 947,
   "files": [
     {
       "path": ".dockerignore",
@@ -29,8 +29,8 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "25648b0beb1801e5d2d1796cdbb8e9faaf5ed372ccc309f9dd474cffad9266bb",
-      "bytes": 7814
+      "sha256": "cbf4d3aa0e247b4388f726b95e09ab67e0a4ff66b70132539df2fda6f5c5a808",
+      "bytes": 7841
     },
     {
       "path": "AGENTS.md",
@@ -1361,6 +1361,16 @@
       "path": "adrs/291_rule_effect_measured.md",
       "sha256": "4998719899fad902b768af44adcdfcf363e18e1878d174c6fac6d34ed1c643c6",
       "bytes": 16158
+    },
+    {
+      "path": "adrs/293_numbers_taken_across_branches_and_worktrees.md",
+      "sha256": "248538c348a804075031c0515877bdfd871319a515fd2503539edea88077fc9f",
+      "bytes": 254
+    },
+    {
+      "path": "adrs/NUMBER_BLOCKS.json",
+      "sha256": "1981ddfea81c543eb1ae4dcd0a5901f4c2b3dde58e1eb313abdedd96e1a17ba9",
+      "bytes": 2940
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -3993,6 +4003,11 @@
       "bytes": 4150
     },
     {
+      "path": "scripts/check_numbers.ts",
+      "sha256": "b1ea9ebd0cd9b97101b12f56cd989698fa38e21e7cb3dbe8ca7b9206c4a30b27",
+      "bytes": 1591
+    },
+    {
       "path": "scripts/check_office_access.ts",
       "sha256": "63367586bd021162c7a101114d3177b4fa8017528237a4f7e4f82f3efc4a9583",
       "bytes": 1238
@@ -4271,6 +4286,16 @@
       "path": "scripts/measure_operations_slo.ts",
       "sha256": "3c2bdb4b02362a5109cfa29b18e664b383a1e58678efeb85435271dd9fe8595c",
       "bytes": 16912
+    },
+    {
+      "path": "scripts/next_number.ts",
+      "sha256": "689faed5057063cc0feb5664cc49deabf19fd1c5dcaa69a6d62ee335940f12d0",
+      "bytes": 3318
+    },
+    {
+      "path": "scripts/numbering_lib.ts",
+      "sha256": "acb7815c0f67b2ab1cae3fb335fe29b288f208fd3221cd871285317db03ad95e",
+      "bytes": 15569
     },
     {
       "path": "scripts/office_photo_library_ingest.ts",
@@ -4601,6 +4626,11 @@
       "path": "scripts/test/nginx-reload.test.ts",
       "sha256": "8c2f8fe1460a62c9325376f523b40b9c65c1612fb84a8fc1552f06325c734fed",
       "bytes": 3500
+    },
+    {
+      "path": "scripts/test/numbering.test.ts",
+      "sha256": "b6e52f827b4c0c0f26c88a53a8a980e70fdef2166633e95250b0a0545ce8822b",
+      "bytes": 8668
     },
     {
       "path": "scripts/test/provider-credential-update.test.ts",
