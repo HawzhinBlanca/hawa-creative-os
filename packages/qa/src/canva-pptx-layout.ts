@@ -215,6 +215,11 @@ export interface PptxPicture {
   box: PptxBox;
   /** The media part the picture draws, e.g. `ppt/media/image1.jpeg`. */
   media: string;
+  /**
+   * How the picture is turned on the slide, through every enclosing group: the angle of its x axis in
+   * degrees (0 to 360) and whether it is mirrored. A logo flipped or turned in its own box has the same box.
+   */
+  orientation: { rotation: number; mirrored: boolean };
 }
 
 export interface PptxPictures {
@@ -267,7 +272,10 @@ export function readPptxPictures(bytes: Uint8Array): PptxPictures {
     const media = embed ? targets.get(embed) : undefined;
     if (!f || !media) return;
     const nv = child(node, kind === 'pic' ? 'p:nvPicPr' : 'p:nvSpPr');
-    pictures.push({ kind, shapeId: attr(child(nv, 'p:cNvPr'), 'id') ?? '', box: boundsOf(multiply(matrix, aboutCentre(f)), f), media });
+    const placed = multiply(matrix, aboutCentre(f));
+    const rotation = ((Math.atan2(placed[1], placed[0]) * 180) / Math.PI + 360) % 360;
+    pictures.push({ kind, shapeId: attr(child(nv, 'p:cNvPr'), 'id') ?? '', box: boundsOf(placed, f), media,
+      orientation: { rotation, mirrored: placed[0] * placed[3] - placed[1] * placed[2] < 0 } });
   };
   const walk = (container: Node | undefined, matrix: Matrix, depth: number) => {
     if (depth > 32) throw new Error('Groups nested too deep');

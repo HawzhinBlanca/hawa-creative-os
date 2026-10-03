@@ -43,6 +43,12 @@ const shareOf = (p: PptxPicture, doc: PptxPictures): Share =>
 /** Same place: every edge within half a percent of the page (about 5 px on a 1080 px design). */
 const samePlace = (a: Share, b: Share) => Math.abs(a.x - b.x) <= 0.005 && Math.abs(a.y - b.y) <= 0.005 &&
   Math.abs(a.w - b.w) <= 0.005 && Math.abs(a.h - b.h) <= 0.005;
+/** Turned the same way: mirrored alike, and the angle within a degree (Canva writes near-zero angles). */
+const sameTurn = (a: PptxPicture, b: PptxPicture) => a.orientation.mirrored === b.orientation.mirrored &&
+  Math.min(Math.abs(a.orientation.rotation - b.orientation.rotation), 360 - Math.abs(a.orientation.rotation - b.orientation.rotation)) <= 1;
+/** Drawn on the page: a picture whose box lies wholly off the page, or has no area, shows nothing. */
+const onPage = (p: PptxPicture, doc: PptxPictures) => p.box.width > 0 && p.box.height > 0 &&
+  p.box.x < doc.slideWidth && p.box.x + p.box.width > 0 && p.box.y < doc.slideHeight && p.box.y + p.box.height > 0;
 
 /**
  * @param logoBoxPx the logo box the transfer manifest records (`manifest.logo`, in layout pixels: the
@@ -51,6 +57,9 @@ const samePlace = (a: Share, b: Share) => Math.abs(a.x - b.x) <= 0.005 && Math.a
 export async function checkExportPictures(sourcePptx: Uint8Array, exportPptx: Uint8Array,
   options: { logoBoxPx?: { x: number; y: number; width: number; height: number }; rsvgConvertPath?: string } = {}): Promise<PictureFidelity> {
   const source = readPptxPictures(sourcePptx), exported = readPptxPictures(exportPptx);
+  // Only pictures the page draws are compared: a logo dragged off the page is missing, not moved.
+  const sourcePictures = source.pictures.filter((p) => onPage(p, source));
+  const drawn = exported.pictures.filter((p) => onPage(p, exported));
   const prints = new Map<string, ImageFingerprint | null>();
   const printOf = async (doc: PptxPictures, media: string, side: string) => {
     const key = `${side}:${media}`;
@@ -66,13 +75,14 @@ export async function checkExportPictures(sourcePptx: Uint8Array, exportPptx: Ui
   const moved: string[] = [], missing: string[] = [], transparencyLost: string[] = [];
   let logo: PictureFidelity['logo'] = 'not_in_source';
   let matched = 0;
-  for (const pic of source.pictures) {
+  for (const pic of sourcePictures) {
     const place = shareOf(pic, source);
     const isLogo = Boolean(logoAt && samePlace(place, logoAt));
     const mine = await printOf(source, pic.media, 'source');
-    const candidates = await Promise.all(exported.pictures.map(async (e, i) => {
+    const candidates = await Promise.all(drawn.map(async (e, i) => {
       const theirs = await printOf(exported, e.media, 'export');
-      return { i, e, here: samePlace(place, shareOf(e, exported)), d: mine && theirs ? hammingDistance(mine.dhash, theirs.dhash) : 64, theirs };
+      // In its place means where the source put it and turned as the source turned it.
+      return { i, e, here: samePlace(place, shareOf(e, exported)) && sameTurn(pic, e), d: mine && theirs ? hammingDistance(mine.dhash, theirs.dhash) : 64, theirs };
     }));
     const same = (c: { d: number }) => c.d <= MATCH_DISTANCE;
     const hit = candidates.filter((c) => !used.has(c.i) && c.here && same(c)).sort((a, b) => a.d - b.d)[0];
@@ -86,8 +96,8 @@ export async function checkExportPictures(sourcePptx: Uint8Array, exportPptx: Ui
     if (isLogo) logo = !found ? 'missing' : lostAlpha ? 'transparency_lost' : !hit ? 'moved' : 'preserved';
   }
   // Unpaired export pictures over the same media as a paired one are a frame Canva split, not an addition.
-  const pairedMedia = new Set([...used].map((i) => exported.pictures[i].media));
-  const addedByProvider = exported.pictures.filter((e, i) => !used.has(i) && !pairedMedia.has(e.media)).length;
+  const pairedMedia = new Set([...used].map((i) => drawn[i].media));
+  const addedByProvider = drawn.filter((e, i) => !used.has(i) && !pairedMedia.has(e.media)).length;
   const sum = (doc: PptxPictures) => doc.media.reduce((n, m) => n + m.bytes.length, 0);
   const warnings = [
     ...(logo === 'missing' ? ['the logo is missing from the Canva export'] : []),
@@ -98,7 +108,7 @@ export async function checkExportPictures(sourcePptx: Uint8Array, exportPptx: Ui
   ];
   return {
     pass: missing.length === 0 && moved.length === 0 && transparencyLost.length === 0,
-    sourcePictures: source.pictures.length, exportPictures: exported.pictures.length, matched, moved, missing, transparencyLost,
+    sourcePictures: sourcePictures.length, exportPictures: drawn.length, matched, moved, missing, transparencyLost,
     logo, addedByProvider, byteRatio: sum(source) ? Math.round((sum(exported) / sum(source)) * 1000) / 1000 : null, warnings,
   };
 }

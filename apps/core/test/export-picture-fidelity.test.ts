@@ -45,8 +45,8 @@ const effect = () => rgbaPng(100, 20, (x) => [Math.round(x * 2.5), Math.round(x 
 
 const PX = 9525;
 const SLIDE = { cx: 1080 * PX, cy: 1350 * PX };
-interface Pic { media: string; box: [number, number, number, number]; as?: 'pic' | 'filled' }
-const xfrm = ([x, y, w, h]: Pic['box']) => `<a:xfrm><a:off x="${x * PX}" y="${y * PX}"/><a:ext cx="${w * PX}" cy="${h * PX}"/></a:xfrm>`;
+interface Pic { media: string; box: [number, number, number, number]; as?: 'pic' | 'filled'; xfrmAttrs?: string }
+const xfrm = ([x, y, w, h]: Pic['box'], attrs = '') => `<a:xfrm${attrs}><a:off x="${x * PX}" y="${y * PX}"/><a:ext cx="${w * PX}" cy="${h * PX}"/></a:xfrm>`;
 
 /** A one-page PPTX drawing `pics` (source: `p:pic`; Canva export: image-filled `p:sp`) over `media`. */
 function deck(pics: Pic[], media: Record<string, Uint8Array>, height = SLIDE.cy, title?: string): Uint8Array {
@@ -55,7 +55,7 @@ function deck(pics: Pic[], media: Record<string, Uint8Array>, height = SLIDE.cy,
   const shapes = pics.map((p, i) => {
     const rid = `rId${names.indexOf(p.media) + 2}`;
     return p.as === 'filled'
-      ? `<p:sp><p:nvSpPr><p:cNvPr id="${i + 2}" name="s${i}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(p.box)}<a:custGeom/><a:blipFill><a:blip r:embed="${rid}"/><a:stretch/></a:blipFill></p:spPr></p:sp>`
+      ? `<p:sp><p:nvSpPr><p:cNvPr id="${i + 2}" name="s${i}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(p.box, p.xfrmAttrs)}<a:custGeom/><a:blipFill><a:blip r:embed="${rid}"/><a:stretch/></a:blipFill></p:spPr></p:sp>`
       : `<p:pic><p:nvPicPr><p:cNvPr id="${i + 2}" name="p${i}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rid}"/><a:stretch/></p:blipFill><p:spPr>${xfrm(p.box)}<a:prstGeom prst="rect"/></p:spPr></p:pic>`;
   }).join('');
   const ns = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
@@ -185,6 +185,36 @@ describe('pictureDownloadVerdict: the customer download contract (ADR-258)', () 
     expect(pictureDownloadVerdict({ measured: false, reason: 'Not measured: timeout' })).toMatchObject({ status: 'block' });
     expect(pictureDownloadVerdict({ measured: false, reason: 'The design was not imported from an editable source; there is nothing to compare its pictures with.' }))
       .toMatchObject({ status: 'not_applicable' });
+  });
+});
+
+describe('a picture the export does not draw as the source did (hunt 3, 2026-10-03)', () => {
+  /** The export with the logo drawn under the transform attributes `attrs` (rotation, flips), in its own box. */
+  const transformed = (attrs: string) => deck([
+    { media: 'image1.png', box: [0, 0, 670, 1067], as: 'filled' },
+    { media: 'image2.png', box: [685, 0, 395, 526], as: 'filled' },
+    { media: 'image3.png', box: [76, 76, 108, 108], as: 'filled', xfrmAttrs: attrs },
+  ], { 'image1.png': sky(0.5, 2), 'image2.png': blocks(0.6, 3), 'image3.png': logo() }, SLIDE.cy - 6350);
+
+  it('a logo moved off the page is missing, and blocks the download', async () => {
+    for (const box of [[1100, 76, 108, 108], [76, 1400, 108, 108], [-200, 76, 108, 108]] as Pic['box'][]) {
+      const r = await checkExportPictures(SOURCE, exported({}, { logo: box }), { logoBoxPx: LOGO_BOX });
+      expect(r, String(box)).toMatchObject({ pass: false, logo: 'missing', missing: ['ppt/media/image-1-3.png'] });
+      expect(pictureDownloadVerdict(r).status).toBe('block');
+    }
+    // Partly on the page it is drawn, and only moved.
+    const edge = await checkExportPictures(SOURCE, exported({}, { logo: [1020, 76, 108, 108] }), { logoBoxPx: LOGO_BOX });
+    expect(edge).toMatchObject({ logo: 'moved' });
+  });
+
+  it('a logo mirrored or turned in its own box is not the logo the source placed', async () => {
+    const mirrored = await checkExportPictures(SOURCE, transformed(' flipH="1"'), { logoBoxPx: LOGO_BOX });
+    expect(mirrored).toMatchObject({ pass: false, logo: 'moved' });
+    const upsideDown = await checkExportPictures(SOURCE, transformed(' rot="10800000"'), { logoBoxPx: LOGO_BOX });
+    expect(upsideDown).toMatchObject({ pass: false, logo: 'moved' });
+    // Canva's own near-zero angles and explicit false flips are the source's orientation.
+    const canva = await checkExportPictures(SOURCE, transformed(' rot="3300" flipH="false" flipV="false"'), { logoBoxPx: LOGO_BOX });
+    expect(canva).toMatchObject({ pass: true, logo: 'preserved' });
   });
 });
 
