@@ -71,12 +71,15 @@ cleanup() {
   if [[ "$DB_CREATED" == 1 ]]; then docker exec "$PG" dropdb -U hawa_owner --if-exists "$DDB" >/dev/null 2>&1 || echo "WARNING: could not drop $DDB" >&2; fi
   if [[ -n "$WORK" ]]; then rm -rf "$WORK"; fi
 }
+# The run that holds the archive lock fails with 3, so the waiting parent can tell its failure (already
+# recorded and alerted) from archive_lock.py's 1 for a busy lock.
+FAIL_STATUS=1; [[ -z "${HAWA_ARCHIVE_LOCK_FD:-}" ]] || FAIL_STATUS=3
 fail() {
   trap - ERR
   echo "$(date -u +%FT%TZ) DRILL FAIL: $1" >&2
   record failed "$1"
   notify "🔴 Hawa monthly restore drill FAILED: $1"
-  exit 1
+  exit "$FAIL_STATUS"
 }
 trap 'fail "stopped unexpectedly at line $LINENO"' ERR
 trap cleanup EXIT
@@ -92,10 +95,23 @@ decrypt() { # file -> stdout; every caller fails the drill on a non-zero status
 }
 
 [[ -d "$ARCHIVE_DEST" ]] || fail "no archive at ${ARCHIVE_DEST/#$HOME/~}"
+# A busy lock (the nightly backup still writing) is waited for, up to HAWA_DRILL_LOCK_WAIT_SECONDS (3600),
+# then fails the drill, recorded and alerted. It used to end the drill at once with exit 1, unrecorded and
+# unalerted, and the month went without one (hunt 3).
 if [[ -z "${HAWA_ARCHIVE_LOCK_FD:-}" ]]; then
-  python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode shared \
-    -- bash "$ROOT/infra/backup/restore_drill.sh" "$@" && exit 0
-  exit 1
+  LOCK_WAIT="${HAWA_DRILL_LOCK_WAIT_SECONDS:-3600}"
+  [[ "$LOCK_WAIT" =~ ^[0-9]+$ ]] || fail "HAWA_DRILL_LOCK_WAIT_SECONDS must be a whole number"
+  waited=0
+  while :; do
+    rc=0
+    python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode shared \
+      -- bash "$ROOT/infra/backup/restore_drill.sh" "$@" || rc=$?
+    if [[ $rc == 0 ]]; then exit 0; fi
+    if [[ $rc != 1 ]]; then exit 1; fi
+    (( waited < LOCK_WAIT )) || fail "the backup archive stayed locked for ${LOCK_WAIT} s (the nightly backup still holds it); no drill was run"
+    (( waited > 0 )) || echo "waiting for the backup archive lock (the nightly backup holds it)" >&2
+    sleep 30; waited=$((waited + 30))
+  done
 fi
 python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode shared --check \
   || fail "restore drill does not own this archive lock"
@@ -109,9 +125,10 @@ DUMP_NAME="$(basename "$DUMP")"; STAMP="$(sed -E 's/^hawa_([0-9]{8}T[0-9]{6}Z)\.
 TARGET="$(sed -E 's/^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z$/\1-\2-\3T\4:\5:\6Z/' <<< "$STAMP")"
 MANIFEST="$ARCHIVE_DEST/hawa_${STAMP}.blobs"
 [[ -f "$MANIFEST" ]] || fail "$DUMP_NAME has no file manifest (hawa_${STAMP}.blobs); it predates the file store or its night failed"
-if [[ -f "$DUMP.sha256" ]]; then
-  [[ "$("${HAWA_SHA256[@]}" "$DUMP" | cut -d' ' -f1)" == "$(cut -d' ' -f1 < "$DUMP.sha256")" ]] || fail "$DUMP_NAME does not match its checksum"
-fi
+# The nightly backup publishes the checksum before the dump: a dump without one is a damaged set, and was
+# restored unchecked (hunt 3).
+[[ -f "$DUMP.sha256" ]] || fail "$DUMP_NAME has no checksum file ($DUMP_NAME.sha256); the nightly publishes it first, so the set is damaged"
+[[ "$("${HAWA_SHA256[@]}" "$DUMP" | cut -d' ' -f1)" == "$(cut -d' ' -f1 < "$DUMP.sha256")" ]] || fail "$DUMP_NAME does not match its checksum"
 
 # 2. Verify all required packs and extract only validated regular files into a new
 # private directory before creating a scratch database. System tar never writes archive paths.

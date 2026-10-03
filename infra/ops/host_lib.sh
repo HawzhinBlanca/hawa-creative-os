@@ -73,12 +73,16 @@ hawa_host_role() {
 # host, so a host that is off, asleep, locked at FileVault after an update, or offline says nothing. A
 # healthy pass pings HAWA_HEARTBEAT_URL (an https check URL from a dead-man's-switch service the owner
 # chooses, e.g. healthchecks.io or Better Stack); that service alerts the owner when the pings stop. Read
-# from the environment or the production env file (quotes and a trailing CR stripped); unset or not https:
-# nothing is sent. Returns 1 when the ping failed, so the caller can say so.
+# from the environment or the production env file (spaces around it, quotes and a trailing CR stripped);
+# unset: nothing is sent. Returns 1 when the ping failed, and 2 when the value is set but is not an https
+# URL (a URL pasted without its scheme sent nothing and said nothing, and a new check never alerts before
+# its first ping), so the caller can say so.
 hawa_heartbeat() { # env file
   local url="${HAWA_HEARTBEAT_URL:-}"
   [[ -n "$url" ]] || url="$(grep -E '^HAWA_HEARTBEAT_URL=' "$1" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r' || true)"
+  url="$(printf '%s' "$url" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
   url="${url%\"}"; url="${url#\"}"; url="${url%\'}"; url="${url#\'}"
-  [[ "$url" =~ ^https://[^[:space:]]+$ ]] || return 0
+  [[ -n "$url" ]] || return 0
+  [[ "$url" =~ ^https://[^[:space:]]+$ ]] || return 2
   curl -fsS -m 10 -o /dev/null "$url" >/dev/null 2>&1 || return 1
 }

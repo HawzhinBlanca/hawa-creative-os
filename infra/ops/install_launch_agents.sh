@@ -83,7 +83,21 @@ write_plist design.hawa.offsite-copy "$ROOT/infra/backup/offsite_copy.sh" "<key>
 write_plist design.hawa.live-canary "$ROOT/infra/ops/live_canary.sh" "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>4</integer><key>Minute</key><integer>30</integer></dict>" "" \
   "$(carried_env design.hawa.nightly-backup '^HAWA_BACKUP_ARCHIVE_DEST$')"
 if [[ "$RENDER" == 1 ]]; then echo "rendered ${#AGENT_LABELS[@]} launch agents into $OUT"; exit 0; fi
+# launchd finishes a bootout after the command returns, and a bootstrap straight after it often fails
+# ("Bootstrap failed: 5: Input/output error"). The first such failure used to stop the script under set -e
+# with that agent and every one after it unloaded: no watchdog, no backup (hunt 3). Each bootstrap is now
+# retried, the others are loaded whatever happens to one, and the script fails naming what did not load.
+not_loaded=()
 for label in "${AGENT_LABELS[@]}"; do
-  launchctl bootstrap "gui/$uid" "$AGENTS/$label.plist"
-  launchctl print "gui/$uid/$label" >/dev/null 2>&1 && echo "✓ $label loaded" || { echo "ERROR: $label did not load"; exit 1; }
+  loaded=0; err=""
+  for attempt in 1 2 3 4 5; do
+    err="$(launchctl bootstrap "gui/$uid" "$AGENTS/$label.plist" 2>&1)" || true
+    if launchctl print "gui/$uid/$label" >/dev/null 2>&1; then loaded=1; break; fi
+    sleep "$attempt"
+  done
+  if [[ "$loaded" == 1 ]]; then echo "✓ $label loaded"; else echo "! $label did not load: ${err:-no reason given}"; not_loaded+=("$label"); fi
 done
+if [[ ${#not_loaded[@]} -gt 0 ]]; then
+  echo "ERROR: not loaded: ${not_loaded[*]}. Run this script again; if it still fails: launchctl bootstrap gui/$uid $AGENTS/<label>.plist"
+  exit 1
+fi

@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -73,11 +74,13 @@ exit 0
   fs.writeFileSync(path.join(bin, 'curl'), `#!/bin/bash
 case "$*" in
   *"/v1/health"*) cat '${f('health')}' ;;
-  *sendMessage*) for a in "$@"; do [[ "$a" == text=* ]] && printf '%s\\n' "ALERT \${a#text=}" >> '${f('calls')}'; done ;;
+  *sendMessage*) [[ -f '${f('telegram-down')}' ]] && { echo "curl: (22) The requested URL returned error: 502" >&2; exit 22; }
+    for a in "$@"; do [[ "$a" == text=* ]] && printf '%s\\n' "ALERT \${a#text=}" >> '${f('calls')}'; done ;;
 esac
 exit 0
 `, { mode: 0o755 });
   for (const tool of ['sleep', 'open']) fs.writeFileSync(path.join(bin, tool), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
+
   const kb = opts.freeKb ?? 500 * 1048576;
   fs.writeFileSync(path.join(bin, 'df'), `#!/bin/bash
 case "$1" in
@@ -186,6 +189,121 @@ describe('the watchdog\'s alerts', () => {
     const commit = execFileSync('git', ['-C', s.release, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
     expect(s.calls()).toContain(`docker compose -f ${s.release}/infra/docker/docker-compose.prod.yml -f ${s.release}/infra/docker/canva-release.override.yml --env-file ${s.release}/infra/docker/.env start stamp=${commit}`);
     expect(s.calls()).not.toContain(`-f ${repo}/infra/docker`);
+  });
+
+  // Hunt 3 (the 2026-10-02 Telegram outage nobody was told about): notify() counted any answer, or none,
+  // as sent. A refused token, a rate limit or Telegram being unreachable from this host marked the alert
+  // sent, so the 30-minute cooldown held back the next try, and nothing in the log said it was lost.
+  it('an alert Telegram did not take is logged, not counted as sent, and tried again at the next pass', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('telegram-down'), '');
+    fs.writeFileSync(s.f('health'), health({ parkedClientMessages: 1 }, 'degraded'));
+    const r = s.run();
+    expect(r.code).toBe(1);
+    expect(s.alerts()).toEqual([]);
+    expect(r.stdout).toMatch(/Z ALERT NOT SENT: Telegram did not take it \(curl exit 22\)/);
+    expect(s.state()).toMatch(/^alert_key=''$/m);
+    expect(r.out).not.toContain('stub:alerts');
+    // Telegram answers again five minutes later: the same problem goes out now, not after the cooldown.
+    fs.rmSync(s.f('telegram-down'));
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+    expect(s.alerts()[0]).toContain('parkedClientMessages');
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+  });
+
+  it('a problem whose every alert was lost is still announced as over once Telegram takes messages again', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('telegram-down'), '');
+    fs.writeFileSync(s.f('health'), health({ telegramApi: 'unreachable' }, 'degraded'));
+    s.run(); s.run();
+    expect(s.alerts()).toEqual([]);
+    fs.rmSync(s.f('telegram-down'));
+    fs.writeFileSync(s.f('health'), health());
+    expect(s.run().code).toBe(0);
+    expect(s.alerts()).toHaveLength(1);
+    expect(s.alerts()[0]).toMatch(/^ALERT ✅ Hawa is back to normal .*telegramApi/);
+  });
+
+  it('a recovery notice Telegram did not take is sent at the next healthy pass', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('health'), health({ parkedClientMessages: 1 }, 'degraded'));
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+    fs.writeFileSync(s.f('health'), health());
+    fs.writeFileSync(s.f('telegram-down'), '');
+    expect(s.run().code).toBe(0);
+    expect(s.alerts()).toHaveLength(1);
+    fs.rmSync(s.f('telegram-down'));
+    expect(s.run().code).toBe(0);
+    expect(s.alerts()).toHaveLength(2);
+    expect(s.alerts()[1]).toMatch(/^ALERT ✅ Hawa is back to normal .*parkedClientMessages/);
+    s.run();
+    expect(s.alerts()).toHaveLength(2);
+  });
+
+  it('--notify and --announce fail when the message was not delivered (the canary then says it could not alert)', () => {
+    const s = setup();
+    expect(s.run(['--notify', 'canary failed']).code).toBe(0);
+    expect(s.alerts()).toEqual(['ALERT canary failed']);
+    fs.writeFileSync(s.f('telegram-down'), '');
+    const notify = s.run(['--notify', 'canary failed again']);
+    expect(notify.code).toBe(1);
+    expect(notify.stdout).toMatch(/ALERT NOT SENT/);
+    expect(s.run(['--announce']).code).toBe(1);
+    expect(s.alerts()).toHaveLength(1);
+  });
+
+  // Hunt 3: while deploy.sh --apply recreated containers, the watchdog saw one missing and ran its own
+  // `compose start` / `up -d --no-recreate` beside the deploy's `up -d`: two compose runs creating the same
+  // container (a name conflict that ends the deploy half-way, or containers left "Created", as on
+  // 2026-09-18). While a deploy applies, containers are left to it; the pass still checks and reports.
+  it('starts no container while a deploy holds the deploy lock, and still reports what it sees', async () => {
+    const s = setup({ running: STACK.filter((c) => !c.includes('core')) });
+    const lockFile = path.join(s.home, '.hawa', 'deploy.lock');
+    // The holder's command line names the job: bash -c '…' <name>.
+    const hold = (name: string) => spawn('python3', [path.join(repo, 'infra/ops/deploy_lock.py'), '--lock', lockFile, '--',
+      'bash', '-c', 'echo held; exec /bin/sleep 30', name]);
+    // The nightly canary (or backup) holding it changes no container: the pass starts what is missing.
+    const canary = hold('infra/ops/live_canary.sh');
+    await once(canary.stdout, 'data');
+    try { s.run(); } finally { canary.kill('SIGTERM'); await once(canary, 'exit'); }
+    expect(s.calls()).toMatch(/docker compose .* start stamp=/);
+    fs.rmSync(s.f('calls'));
+    // A deploy holding it: left to the deploy.
+    const deploy = hold('infra/docker/deploy.sh');
+    await once(deploy.stdout, 'data');
+    let r: ReturnType<typeof s.run>;
+    try { r = s.run(); } finally { deploy.kill('SIGTERM'); await once(deploy, 'exit'); }
+    expect(r.code).toBe(1);
+    expect(r.stdout).toMatch(/Z a deploy holds the deploy lock: its containers are left to it this pass/);
+    expect(s.calls()).not.toMatch(/docker compose .* (start|up)/);
+    expect(s.calls()).not.toMatch(/docker start/);
+    expect(r.stdout).toMatch(/Z PROBLEM: only 5\/6 stack containers running \(down: core\)/);
+    // Once the deploy is over, the pass starts what is missing as before.
+    s.run();
+    expect(s.calls()).toMatch(/docker compose .* start stamp=/);
+  });
+
+  // Hunt 3: on 2026-10-02 production was unreachable for 70 minutes (17:15-18:25Z) and nobody was told.
+  // A Mac that sleeps, is shut down or waits at FileVault runs no watchdog pass at all, and the first pass
+  // afterwards found everything healthy and said nothing. The watchdog now notices its own gap.
+  it('tells the operator, once, when it did not run for a while (the host asleep, off or locked)', () => {
+    const s = setup();
+    const lastRun = path.join(s.home, '.hawa', 'watchdog', 'last_run');
+    fs.writeFileSync(lastRun, `${Math.floor(Date.now() / 1000) - 70 * 60}\n`);
+    const r = s.run();
+    expect(r.code).toBe(0);
+    expect(s.alerts()).toHaveLength(1);
+    expect(s.alerts()[0]).toMatch(/^ALERT 🟠 The Hawa watchdog did not run for 70 min \(\d\d:\d\d to \d\d:\d\d\)/);
+    expect(r.stdout).toMatch(/Z the watchdog did not run for 70 min/);
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+    // Passes five or ten minutes apart are normal.
+    fs.writeFileSync(lastRun, `${Math.floor(Date.now() / 1000) - 10 * 60}\n`);
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
   });
 
   it('judges the disk by free space: 97% used with 30 GiB free is fine, 20 GiB free is reported', () => {
