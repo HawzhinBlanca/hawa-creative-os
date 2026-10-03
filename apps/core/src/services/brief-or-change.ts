@@ -98,7 +98,11 @@ export function editsADesignOnTheWay(text: string, requests: ChatRequestView[]):
  */
 export function reconsiderNewBrief(input: TurnInput, plan: TurnPlan): { reading: IntentReading; plan: TurnPlan } | null {
   const { reading } = input;
-  if (reading.intent !== 'new_brief' || reading.explicitNew || reading.source !== 'rules') return null;
+  // Hunt 3: words short of a brief of their own (an event named without its date) are read as unclear, and asked
+  // "a change to it, or a new design?"; when they certainly edit a part of the design on the way ("the title should
+  // just be Quality Assurance Workshop for university deans") they are its change, as when they read as a brief.
+  const unclear = reading.intent === 'unclear' && !reading.cancelWords && !reading.redo;
+  if ((reading.intent !== 'new_brief' && !unclear) || reading.explicitNew || reading.source !== 'rules') return null;
   // A brief planTurn opens, or asks about ("a change to it, or a new design?") because it repeats a design's words.
   const asked = plan.kind === 'ask' && plan.allowNew && !plan.redo && !plan.photo;
   if (!(plan.kind === 'open' && !plan.resolves) && !asked) return null;

@@ -56,8 +56,8 @@
   },
   "rulesReadingOnly": {
     "cases": 356,
-    "correct": 340,
-    "accuracy": 95.5,
+    "correct": 339,
+    "accuracy": 95.2,
     "note": "readIntentByRules alone, without context or planning"
   },
   "perLanguage": {
@@ -142,11 +142,11 @@
     },
     "change": {
       "support": 103,
-      "predicted": 101,
+      "predicted": 102,
       "truePositives": 101,
-      "precision": 1,
+      "precision": 0.99,
       "recall": 0.981,
-      "f1": 0.99
+      "f1": 0.985
     },
     "cancel": {
       "support": 36,
@@ -214,11 +214,11 @@
     },
     "unclear": {
       "support": 22,
-      "predicted": 22,
+      "predicted": 21,
       "truePositives": 19,
-      "precision": 0.864,
+      "precision": 0.905,
       "recall": 0.864,
-      "f1": 0.864
+      "f1": 0.884
     }
   },
   "target": {
@@ -243,8 +243,8 @@
         "cancel": 36
       },
       "hold": {
-        "hold": 11,
-        "unclear": 1
+        "change": 1,
+        "hold": 11
       },
       "approval": {
         "approval": 14
@@ -275,7 +275,7 @@
     "unclear -> conversation": 3,
     "change -> conversation": 1,
     "change -> unclear": 1,
-    "hold -> unclear": 1,
+    "hold -> change": 1,
     "acknowledgement -> unclear": 1
   },
   "costlyErrors": [],
@@ -356,10 +356,10 @@
       "heldOut": true,
       "text": "drop it for now, we'll come back to it next month",
       "expected": "hold",
-      "got": "unclear",
+      "got": "change",
       "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
+      "reason": "Edits a part of a design on the way (ADR-250)",
+      "plan": "note:change -> A",
       "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Temporary stop."
     },
     {
@@ -2470,8 +2470,8 @@
     {
       "id": "ho3-hold-01",
       "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "got": "change",
+      "plan": "note:change -> A"
     },
     {
       "id": "ho3-hold-02",

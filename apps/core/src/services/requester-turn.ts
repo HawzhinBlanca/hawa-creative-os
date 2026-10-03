@@ -346,14 +346,17 @@ const HOLD_OBJECT = `(?:it|them|this|that|(?:the|these|those|this|that|my|our)\\
 const HOLD_WHILE = '(?:yet|for\\s+now|for\\s+the\\s+(?:moment|time\\s+being)|for\\s+a\\s+(?:bit|while|few\\s+days|day\\s+or\\s+two)|until|till|til)\\b';
 /** A temporary stop of the design, never a quoted instruction or a pause of a design element. */
 export function readsAsHold(text: string): boolean {
-  const t = corePhrase(text);
+  // Hunt 3: "can you hold the workshop poster until we confirm the venue": the polite ask is no part of the pause.
+  const t = corePhrase(text).replace(/^(?:(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+|kindly\s+)?)/iu, '');
   if (!t || t.length > 500) return false;
   // Pronouns must name the whole job, not a design element ("hold this button", "pause it animation").
   const wholeJobTail = '(?=$|[\\s,.!:-]+(?:please\\b|for\\s+now\\b|until\\b|while\\b|because\\b|we\\b|i\\b)|[,.!:-])';
   // ADR-272: "don't continue with the design for now", "don't go ahead with the poster yet", "please stop working
   // on it for now", "hold off on it until …": a stop said with "yet", "for now" or "until" is a pause.
   return new RegExp(`^(?:(?:wait|hold\\s+on|hang\\s+on)[\\s,.!:-]+)?(?:don['’]?t|do\\s+not)\\s+(?:make|start|continue(?:\\s+with)?|proceed(?:\\s+with)?|go\\s+ahead\\s+with|go\\s+on\\s+with|carry\\s+on\\s+with|work\\s+on|finish)\\s+${HOLD_OBJECT}\\s+${HOLD_WHILE}`, 'iu').test(t) ||
-    new RegExp(`^(?:stop|pause|halt|freeze|hold\\s+off)(?:\\s+(?:working|work))?(?:\\s+on)?(?:\\s+${HOLD_OBJECT})?\\s+${HOLD_WHILE}`, 'iu').test(t) ||
+    new RegExp(`^(?:stop|pause|halt|freeze|hold(?:\\s+off)?)(?:\\s+(?:working|work))?(?:\\s+on)?(?:\\s+${HOLD_OBJECT})?\\s+${HOLD_WHILE}`, 'iu').test(t) ||
+    // Hunt 3: "please wait until we confirm the time": the design waits for the requester.
+    /^(?:please\s+)?wait\s+(?:until|till|til)\s+(?:we|i|they|you\s+(?:hear|get))\b/iu.test(t) ||
     // "don't go ahead yet", "don't start yet", "do not proceed for now": the design is understood.
     new RegExp(`^(?:(?:wait|hold\\s+on|hang\\s+on)[\\s,.!:-]+)?(?:please\\s+)?(?:don['’]?t|do\\s+not)\\s+(?:start|continue|proceed|go\\s+ahead|go\\s+on|carry\\s+on|finish)\\s+${HOLD_WHILE}`, 'iu').test(t) ||
     // Sorani: "don't make it yet" (هێشتا … مەکە): "yet" with a "don't" verb. Needs native review.
@@ -380,7 +383,8 @@ const STATUS_EN: RegExp[] = [
   /^(?:status|eta|update)\s*\??$/i,
   // ADR-272 (NLU eval, en-status-10): a design named by up to four words ("the workshop poster", "our new
   // workshop flyer"), and "coming along", "coming on", "getting on", "progressing".
-  /^(?:is|are)\s+(?:it|they|(?:the|my|our)\s+\p{L}+(?:\s+\p{L}+){0,3})\s+(?:ready|done|finished|complete|coming|on\s+(?:its|the)\s+way|sent)(?:\s+yet)?\b/iu,
+  // Hunt 3: "is the poster for the graduation ceremony ready yet?": a name of up to six words.
+  /^(?:is|are)\s+(?:it|they|(?:the|my|our)\s+\p{L}+(?:\s+\p{L}+){0,5})\s+(?:ready|done|finished|complete|coming|on\s+(?:its|the)\s+way|sent)(?:\s+yet)?\b/iu,
   /^how'?s\s+(?:it|(?:the|my|our)\s+\p{L}+(?:\s+\p{L}+){0,3}?)(?:\s+(?:going|coming(?:\s+(?:along|on))?|getting\s+on|progressing))?\s*\??$/iu,
   /^how\s+(?:is|are)\s+(?:it|things|(?:the|my|our)\s+\p{L}+(?:\s+\p{L}+){0,3}?)\s+(?:going|coming(?:\s+(?:along|on))?|getting\s+on|progressing)\b/iu,
   /^(?:where\s+is|where'?s)\s+(?:it|my|our|the)\b/i,
@@ -922,7 +926,13 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
   const fullBrief = heuristics.kind === 'new_brief' && heuristics.reason === FULL_BRIEF_REASON;
   const eventWords = /\b(date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|ceremony|conference|seminar|workshop|party|dinner|meeting)\b/i.test(t) ||
     /(ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس)/u.test(t);
-  const substantial = fullBrief || words >= 20 || (eventWords && words >= 8) || t.split(/\n\s*\n/).length >= 2;
+  // Hunt 3 (2026-10-03): an event word in eight words or more ("I showed it to my manager at the meeting and she liked
+  // it", "the conference went really well, thanks for the poster"), or twenty words of chat, was a substantial brief and
+  // opened a request that drafted by itself, in every context. A brief of that kind carries the event's details: a
+  // date or a time, or several details (`carriesBriefCopy`), or, at twenty words, a name, a number or an event.
+  const longWithCopy = words >= 20 && (carriesBriefCopy(core) || DATE_OR_TIME.test(t) || (t.match(EVENT_WORDS)?.length ?? 0) > 0 ||
+    /(?<![.!?]\s)(?<!^)\b\p{Lu}\p{Ll}+|\b\p{Lu}{2,}\b|\d|["“«:]/u.test(t));
+  const substantial = fullBrief || longWithCopy || (eventWords && words >= 8 && carriesBriefCopy(core)) || t.split(/\n\s*\n/).length >= 2;
   const designRequest = asksForNewDesign(t);
   const explicitNew = EXPLICIT_NEW.test(t) || designRequest;
   if (explicitNew) {

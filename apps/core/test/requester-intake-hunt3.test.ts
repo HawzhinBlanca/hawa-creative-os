@@ -222,3 +222,33 @@ describe('hunt 3 / K1: a cancel with its reason never opens a new request', () =
     expect(p).toMatchObject({ kind: 'ask', intent: 'cancel', allowNew: false });
   });
 });
+
+describe('hunt 3 / S1: an event word in a long sentence is no brief by itself', () => {
+  const QA = 'KAAE: Quality Assurance Workshop';
+  // Each was a "substantial" brief (an event word in eight words or more) and opened a request that drafted by
+  // itself, in every context, while the design it was about was on the way.
+  it.each(['thank you so much, the workshop poster looks amazing, everyone loved it',
+    'the dean saw the poster for the ceremony and he is very happy', 'I showed it to my manager at the meeting and she liked it',
+    'can you tell me the price of the poster for the workshop', 'the conference went really well, thanks for the poster',
+    'I will send you the details of the next workshop later today', 'can you hold the workshop poster until we confirm the venue',
+    'please wait until we confirm the time of the meeting', 'is the poster for the graduation ceremony ready yet?',
+    'we are all so happy with how everything turned out, the dean and all the teachers said it was the best design we have had in years'])(
+    '"%s"', (words) => {
+      for (const requests of [[], [view('A', 'designing', QA)], [view('A', 'in_review', QA)]]) {
+        const p = plan(words, requests);
+        if (p.kind === 'open') expect(p.instructionOnly, `${requests.length ? requests[0].stage : 'none'}: opened a paid draft`).toBe(true);
+        if (requests.length) expect(p.kind, requests[0].stage).not.toBe('open');
+      }
+    });
+
+  it('a pause, a status question and timing are read as such', () => {
+    const designing = [view('A', 'designing', QA)];
+    expect(plan('can you hold the workshop poster until we confirm the venue', designing)).toMatchObject({ kind: 'note', note: 'hold' });
+    expect(plan('please wait until we confirm the time of the meeting', designing)).toMatchObject({ kind: 'note', note: 'hold' });
+    expect(plan('is the poster for the graduation ceremony ready yet?', designing)).toMatchObject({ kind: 'reply', what: 'status' });
+  });
+
+  it('a brief with its event and date still opens as a draft', () => {
+    expect(plan('Annual KAAE conference for school principals at the Rotana Hotel on 5 November 2026 at 9 am')).toMatchObject({ kind: 'open', instructionOnly: false });
+  });
+});
