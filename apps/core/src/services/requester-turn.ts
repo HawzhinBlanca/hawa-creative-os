@@ -747,6 +747,33 @@ export function carriesBriefCopy(core: string): boolean {
 }
 
 /**
+ * Brief phrasing fuzz (2026-10-03, class 5): dates people write that `DATE_OR_TIME` does not read: a numeric date
+ * ("15/10/2026", "15.10.2026"), a month cut short with a period ("Oct. 20", "Nov. 5"), a day said from today ("next
+ * Thursday", "this Friday"; "tomorrow" is a deadline more often than a date), and a year ("Erbil, 2026", Sorani digits too). Read only where the words
+ * already ask for a design (`readIntentByRules`'s request branch), never for a change, a cancel or a status.
+ */
+const LOOSE_DATE = new RegExp([
+  '\\b\\d{1,2}\\s*[/.-]\\s*\\d{1,2}\\s*[/.-]\\s*\\d{2,4}\\b', '\\b\\d{1,2}\\s*/\\s*\\d{1,2}\\b',
+  '\\b(?:jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\\.\\s*\\d{1,2}\\b', '\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\\.',
+  '\\b(?:this|next|coming)\\s+(?:mon|tues|wednes|thurs|fri|satur|sun)day\\b', '\\b(?:on\\s+)(?:mon|tues|wednes|thurs|fri|satur|sun)day\\b',
+  '\\b20\\d{2}\\b', '(?<![\\d٠-٩۰-۹])[٢۲][٠۰][٠-٩۰-۹]{2}(?![\\d٠-٩۰-۹])',
+].join('|'), 'iu');
+/** Sorani design nouns, the request's own word for what to make (English ones are `DESIGN_NOUNS`). */
+const DESIGN_NOUN_CKB = /(?:پۆستەر|دیزاین|بانەر|فلایەر|بانگهێشت|کارت|پۆست|بڕوانامە|ستۆری)/u;
+/**
+ * Class 5: a request that names its event with a date `carriesBriefCopy` does not read ("pls make a post for the Book
+ * Fair next Thursday", "a KAAE flyer for the Parents Meeting Oct. 20"). A year with only a design noun needs eight
+ * words or more, so "can you make a poster for 2026?" stays for a designer.
+ */
+export function carriesLooseBriefCopy(core: string, words: number): boolean {
+  // As `carriesBriefCopy`: a deadline ("by next Thursday") is not the event's date.
+  const rest = core.replace(DEADLINE_WHEN, ' ');
+  if (!LOOSE_DATE.test(rest)) return false;
+  if ((rest.match(EVENT_WORDS)?.length ?? 0) > 0) return true;
+  return words >= 8 && (new RegExp(`\\b(?:${DESIGN_NOUNS})s?\\b`, 'i').test(rest) || DESIGN_NOUN_CKB.test(rest));
+}
+
+/**
  * Hunt 3 (2026-10-03): "can you make it by tomorrow?", "could you finish it by Thursday?": asking for the design by a
  * time is timing, not a change ("make it" read as one, and a design sent back for changes started a paid round).
  */
@@ -950,10 +977,16 @@ export function readIntentByRules(text: string, options: { redo?: boolean } = {}
     // ADR-182: a short request that names the event with its date or time ("Another poster please: KAAE
     // staff football tournament, 14 November 2026 at 4 pm, Franso Hariri stadium") carries its copy,
     // and is drafted as a longer one is, instead of going to a designer by hand.
-    const complete = substantial || (words >= 6 && carriesBriefCopy(core));
+    // Brief phrasing fuzz (2026-10-03, class 5): a request asked for with a date the stricter reading does not know
+    // ("15/10/2026", "next Thursday", "Oct. 20", a last line of a city and a year) carries its copy too
+    // (`carriesLooseBriefCopy`), only here, where the words already ask for a design.
+    const complete = substantial || (words >= 6 && (carriesBriefCopy(core) || carriesLooseBriefCopy(core, words)));
+    // Class 5: the heuristics read "Hi pls make …", "Hello We'd like …" (a greeting with under twelve words) and a brief
+    // ending in "?" as a greeting or a question, and the brief opened for a designer with no copy. When the request
+    // carries its copy, their reading is not what it is; with no copy it still opens for a designer.
     return rules('new_brief', designRequest ? 'Asks for a new design' : 'Said to be a new design', {
       explicitNew: true, substantial: complete,
-      instructionOnly: heuristics.kind !== 'new_brief' || heuristics.isInstructionOnly === true || (!complete && !fullBrief),
+      instructionOnly: (heuristics.kind !== 'new_brief' && !complete) || heuristics.isInstructionOnly === true || (!complete && !fullBrief),
     });
   }
   // ADR-231 (live 2026-10-01 14:03Z): "can you also make videos?" asks what the office makes. It is the

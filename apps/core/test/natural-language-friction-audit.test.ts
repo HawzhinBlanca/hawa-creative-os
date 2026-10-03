@@ -263,7 +263,10 @@ describe('F9: a request that opens with a greeting or is phrased as a question i
     const answer = await intake(app(), message(chat, { text: words }));
     // Today: no open-request; legacy finish-only answers "Hello! How can Hawa Creative OS assist you today?"
     // or "Question received … For revisions on an existing design, reply directly to the preview message."
-    expect(answer.body.lifecycleAction, `bot answered: ${JSON.stringify(sent.map((m) => m.text))}`).toBe('open-request');
+    // Brief phrasing fuzz (2026-10-03, class 5): no organisation is named, so the request is kept and its sender is
+    // asked who it is for (ADR-235), as any brief is; it is never answered with a canned reply and dropped.
+    expect(answer.body.lifecycleAction === 'open-request' || answer.body.clientQuestion === true,
+      `bot answered: ${JSON.stringify(sent.map((m) => m.text))} ${JSON.stringify(answer.body.lifecycleAction)}`).toBe(true);
   });
 
   it('heuristics evidence: the local classifier reads these requests as chatter (documents today)', () => {

@@ -281,7 +281,10 @@ describe('a message while designs are open', () => {
 
   it('a greeting with a Sorani request opens a request for a person, never a paid draft', async () => {
     const chat = chatId();
-    const answer = await intake(app(), message(chat, 'سڵاو، پۆستەرێک بۆ نەورۆز دروست بکە'));
+    const asked = await intake(app(), message(chat, 'سڵاو، پۆستەرێک بۆ نەورۆز دروست بکە'));
+    // Brief phrasing fuzz (2026-10-03, class 5): no organisation is named, so its sender is asked first (ADR-235).
+    expect(asked).toMatchObject({ intakeStatus: 200, lifecycleAction: 'chat-answer', clientQuestion: true });
+    const answer = await intake(app(), message(chat, 'KAAE'));
     expect(answer).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request',
       draft: { autoGenerate: false, rawText: 'سڵاو، پۆستەرێک بۆ نەورۆز دروست بکە' } });
   });
@@ -394,7 +397,10 @@ describe('group chats (F8)', () => {
   it('a request addressed to the bot by mention opens one', async () => {
     const chat = group();
     const text = '@hawa_design_bot can you make a poster for the Nawroz party?';
-    const answer = await intake(app(), inGroup(chat, text, { entities: [{ type: 'mention', offset: 0, length: 16 }] }));
+    const asked = await intake(app(), inGroup(chat, text, { entities: [{ type: 'mention', offset: 0, length: 16 }] }));
+    // Brief phrasing fuzz (2026-10-03, class 5): no organisation is named, so the sender is asked in the group (ADR-235).
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', clientQuestion: true });
+    const answer = await intake(app(), inGroup(chat, 'KAAE'));
     expect(answer).toMatchObject({ lifecycleAction: 'open-request', draft: { autoGenerate: false } });
   });
 });

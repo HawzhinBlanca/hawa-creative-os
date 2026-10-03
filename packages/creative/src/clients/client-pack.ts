@@ -121,6 +121,8 @@ export function assertPacksConsistent(packs: ClientPack[]): void {
     for (const alias of [...pack.routing.latinAliases, ...pack.routing.scriptAliases, ...pack.routing.phrases]) {
       claim('alias', alias.toLowerCase(), pack.code);
     }
+    // A full name routes too (`packNamedIn`): two packs may not share one, nor one pack's name be another's alias.
+    for (const name of [pack.names.en, pack.names.ckb, pack.names.ar]) if (name) claim('alias', name.toLowerCase().replace(/\s+/g, ' ').trim(), pack.code);
   }
 }
 
@@ -172,9 +174,24 @@ const LETTER = '[\\p{L}\\p{N}\\p{M}_]';
 /** Common Sorani suffixes a name carries in running text ("KAAEی", "هەڵوێستەکان"). */
 const SORANI_SUFFIX = '(?:ی|یە|ە|یش|ەکان|کان|ەکە|کە)?';
 
-/** Whether a pack's words name the client in this message. */
+/**
+ * Brief phrasing fuzz (2026-10-03, class 8): the client's own full name ("the Kurdistan Accrediting Association for
+ * Education") names it, as a whole name: every word, in order, any case, the words apart by spaces, line breaks or
+ * hyphens, "and" written "&" or the other way. Part of a name ("Kurdistan Association") is not the name.
+ */
+function nameNamedIn(name: string, lower: string, normalizedText: string): boolean {
+  const words = name.trim().toLowerCase().split(/[\s-]+/u).filter(Boolean);
+  if (!words.length) return false;
+  const body = words.map((w) => (w === 'and' || w === '&' ? '(?:and|&)' : escapeRegex(w))).join('[\\s-]+');
+  if (/^[\x00-\x7f]+$/.test(name)) return new RegExp(`(?<!${LETTER})${body}(?![A-Za-z0-9_])`, 'u').test(lower);
+  return new RegExp(`(?<!${LETTER})${body}${SORANI_SUFFIX}(?!${LETTER})`, 'u').test(normalizedText.toLowerCase());
+}
+
+/** Whether a pack's words name the client in this message: its routing aliases and phrases, or its full name. */
 export function packNamedIn(pack: ClientPack, rawText: string, normalizedText: string = rawText): boolean {
   const lower = rawText.toLowerCase();
+  const names = [pack.names.en, pack.names.ckb, pack.names.ar].filter((n): n is string => Boolean(n));
+  if (names.some((name) => nameNamedIn(name, lower, normalizedText))) return true;
   // Latin: the left edge is a Unicode letter class (a Latin name welded into a Kurdish word is not a
   // match); the right edge is ASCII so a Sorani suffix may follow ("KAAEی" is still KAAE).
   const latin = pack.routing.latinAliases.some((alias) =>

@@ -34,7 +34,9 @@ import { isGreetingOnly } from '../src/services/greetings.js';
  * Pinned on 2026-10-03 (claude/briefuzz on release 3, b7541da6: total 490, I2 232, I3 185, I4 32); lowered the same day by
  * the copy-class fixes (ADR-284 addendum "brief phrasing fuzz: copy classes"). Lower these when a fix lands; never raise them.
  */
-const BASELINE = { total: 101, I1: 0, I2: 0, I3: 30, I4: 30, I5: 41 };
+// Release 3b (copy classes + intent, routing and title classes merged): every one of the 428 briefs holds every
+// invariant. The ratchet is now zero: any new violation fails.
+const BASELINE = { total: 0, I1: 0, I2: 0, I3: 0, I4: 0, I5: 0 };
 
 // --- deterministic generation --------------------------------------------------------------------------------
 const SEED = 20261003;

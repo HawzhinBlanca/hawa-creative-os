@@ -299,7 +299,9 @@ export function classifyWithHeuristics(
 
   // Detect explicit new design phrasing
   const hasNewBriefIndicator = /\b(new\s+(?:poster|design|flyer|banner|brief|invitation)|another\s+(?:poster|design|event))\b/i.test(trimmed) || /(دیزاینێکی\s+نوێ|پۆستەری\s+نوێ)/u.test(trimmed);
-  const hasDesignKeyword = /\b(poster|design|flyer|banner|brochure|invitation)\b/i.test(trimmed) || /(دیزاین|پۆستەر|فلایەر|بانەر|بانگهێشت)/u.test(trimmed);
+  // Brief phrasing fuzz (2026-10-03, class 5): "post" and "story" (an Instagram post, a story) are what is asked for as
+  // often as a poster; without them a twelve-word brief opening with "Hi" read as a greeting.
+  const hasDesignKeyword = /\b(poster|design|flyer|banner|brochure|invitation|post|story)\b/i.test(trimmed) || /(دیزاین|پۆستەر|فلایەر|بانەر|بانگهێشت)/u.test(trimmed);
 
   // Detect whether the incoming message is a full structured brief with event body copy
   const hasMultipleParagraphs = trimmed.split(/\n\s*\n/).filter(Boolean).length >= 2;

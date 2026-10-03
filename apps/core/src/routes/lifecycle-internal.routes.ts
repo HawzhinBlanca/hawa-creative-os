@@ -1034,7 +1034,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               }
               // ADR-235: nothing names the organisation (the chat is bound to none, the words name none): the
               // brief is kept and its sender asked. Never guessed; a split brief or an album opens as before.
-              if (!opts.clientId && !opts.forOffice && parts.length === 1 && !instructionOnly && !parts[0].detailsRequired &&
+              // Brief phrasing fuzz (2026-10-03, class 5): a request for a design with no copy of its own ("could you
+              // make a poster for us?") is asked too; it opens for a designer once answered. Other words opened for a
+              // designer (a change, redo words or a subject with nothing on the way) open as before.
+              if (!opts.clientId && !opts.forOffice && parts.length === 1 && (!instructionOnly || readIntentByRules(briefText).intent === 'new_brief') &&
+                  !parts[0].detailsRequired &&
                   prepared.clientId === null && !admittedAlbum && !boundPhoto && scope) {
                 // A held photo is not used yet (the answer's brief takes it): its notice is not said.
                 beside = besideOnEntry;
