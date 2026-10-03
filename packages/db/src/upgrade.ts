@@ -4,11 +4,12 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import pg from 'pg';
 import { resolveWorkspaceFile } from './migrate.js';
+import { isForwardMigration } from './migration-files.js';
 
 export function discoverMigrations(migrationsDir?: string): string[] {
   const dir = migrationsDir || resolveWorkspaceFile('packages/db/migrations');
   const files = readdirSync(dir)
-    .filter((f) => /^\d{3}_(?!.*_down\.sql$).*\.sql$/.test(f))
+    .filter(isForwardMigration)
     .sort();
 
   for (let i = 0; i < files.length; i++) {

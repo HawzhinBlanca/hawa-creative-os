@@ -109,7 +109,7 @@ jobs:
       - name: Gate C — Strict TypeScript build (builds every package's dist/)
         run: pnpm typecheck
 
-      - name: Lint (scripts typecheck, any-ratchet, provider egress)
+      - name: Lint (scripts typecheck, any-ratchet, provider egress, ADR and migration numbers)
         run: pnpm lint
 
       - name: Provision the test databases (hawa_test, hawa_repair)

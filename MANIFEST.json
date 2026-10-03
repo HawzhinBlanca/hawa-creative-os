@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T15:16:51Z",
+  "generatedAt": "2026-10-03T15:19:09Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 947,
+  "fileCount": 948,
   "files": [
     {
       "path": ".dockerignore",
@@ -1364,8 +1364,8 @@
     },
     {
       "path": "adrs/293_numbers_taken_across_branches_and_worktrees.md",
-      "sha256": "248538c348a804075031c0515877bdfd871319a515fd2503539edea88077fc9f",
-      "bytes": 254
+      "sha256": "56b3c87709376527fe5149dc93c09202054c48bb537e04fbfe118ffd875ec37f",
+      "bytes": 5361
     },
     {
       "path": "adrs/NUMBER_BLOCKS.json",
@@ -1751,6 +1751,11 @@
       "path": "docs/30_FUTURE_EVOLUTION.md",
       "sha256": "4d39b5e6d71483dc5330d59ce223516524ad217c4c6b000221616b6c796b74cd",
       "bytes": 2604
+    },
+    {
+      "path": "docs/NUMBERING.md",
+      "sha256": "215960fb92b2733fa83085bd852d27ddc25b79e5225a4e32a8cb8b12df59ca04",
+      "bytes": 3438
     },
     {
       "path": "docs/RUNBOOK_STRANDED_CANVA_RECOVERY.md",
@@ -4629,8 +4634,8 @@
     },
     {
       "path": "scripts/test/numbering.test.ts",
-      "sha256": "b6e52f827b4c0c0f26c88a53a8a980e70fdef2166633e95250b0a0545ce8822b",
-      "bytes": 8668
+      "sha256": "271544bf44dd954a97f7edb418e247cf9239ca6be1ad44b7e70ee7a6395f312b",
+      "bytes": 8687
     },
     {
       "path": "scripts/test/provider-credential-update.test.ts",

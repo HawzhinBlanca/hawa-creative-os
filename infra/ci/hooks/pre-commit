@@ -7,3 +7,8 @@ cd "$ROOT"
 python3 infra/security/security_scan.py --self-test >/dev/null
 python3 infra/security/security_scan.py
 python3 scripts/validate_pack.py >/dev/null || { echo "validate_pack failed; run: python3 scripts/refresh_manifest.py && python3 scripts/validate_pack.py"; exit 1; }
+# ADR and migration numbers (docs/NUMBERING.md): no duplicate, no gap, ADRs inside their owner's block.
+# Skipped only where the checkout has no Node toolchain installed yet (a fresh worktree before pnpm install).
+if command -v node >/dev/null 2>&1 && [ -x node_modules/.bin/tsx ]; then
+  node_modules/.bin/tsx scripts/check_numbers.ts --quiet || { echo "check_numbers failed; take numbers with: pnpm next-number adr --owner <you> (docs/NUMBERING.md)"; exit 1; }
+fi
