@@ -114,6 +114,10 @@ export async function computeOfficePhotoFeatures(bytes: Buffer, options: { rsvgC
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}"><image xlink:href="${file}" width="${width}" height="${height}" preserveAspectRatio="none"/></svg>`;
   const pngBytes = await svgToPngAsync(svg, width, height, options.rsvgConvertPath ? { rsvgConvertPath: options.rsvgConvertPath } : undefined, { [file]: bytes });
   const png = PNG.sync.read(pngBytes);
+  // rsvg draws nothing for an image it cannot decode; a photo always covers its canvas.
+  let drawn = false;
+  for (let i = 3; i < png.data.length && !drawn; i += 4) drawn = png.data[i] > 0;
+  if (!drawn) throw new Error('OFFICE_PHOTO_UNREADABLE: the photo could not be decoded');
   const analysis = analysePixels(png, size);
   let lum = 0;
   const bins = new Map<number, { n: number; r: number; g: number; b: number }>();
@@ -181,6 +185,8 @@ export function parseCsv(text: string): string[][] {
       row = [];
     } else field += c;
   }
+  // A quote never closed would otherwise take every row after it into one field, silently.
+  if (quoted) throw new Error(`OFFICE_PHOTO_TAGS_INVALID: a quote opened on line ${rows.length + 1} is never closed`);
   row.push(field);
   if (row.some((f) => f.trim() !== '')) rows.push(row);
   return rows;
@@ -292,6 +298,17 @@ export interface OfficePhotoIngestReport {
   wrote: boolean;
 }
 
+/** ISO-BMFF major brands of HEIC/HEIF stills; an MP4 or MOV video carries 'ftyp' too. */
+const HEIF_BRANDS = new Set(['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'mif1', 'msf1', 'avif']);
+/** The manifest's sourceName rule (office-photo-library.ts): one line, at most 300 characters. */
+const sourceNameFits = (name: string) => name.length >= 1 && name.length <= 300 && !/[\u0000-\u001f]/u.test(name);
+
+/** The stored copy is on disk and still the bytes the manifest recorded. */
+async function storedIntact(clientDir: string, entry: OfficePhotoEntry): Promise<boolean> {
+  const bytes = await fs.readFile(path.join(clientDir, entry.file)).catch(() => undefined);
+  return Boolean(bytes && sha256(bytes) === entry.storedSha256);
+}
+
 async function listFiles(dir: string, skip: string): Promise<string[]> {
   const out: string[] = [];
   const walk = async (d: string) => {
@@ -328,24 +345,36 @@ export async function ingestOfficePhotoFolder(options: OfficePhotoIngestOptions)
   const report: OfficePhotoIngestReport = { clientDir, manifestPath, added: [], unchanged: [], updated: [], skipped: [], tagRowsApplied: 0, tagRowsUnmatched: [], usable: 0, excluded: 0, wrote: false };
   const stamp = now().toISOString();
   const pendingFiles = new Map<string, Buffer>();
+  const seenThisRun = new Set<string>();
 
   for (const file of await listFiles(path.resolve(options.sourceDir), path.resolve(clientDir))) {
     const sourceName = path.relative(path.resolve(options.sourceDir), file).split(path.sep).join('/');
+    // One unusable name used to fail the whole run at the manifest check, after every photo was measured.
+    if (!sourceNameFits(sourceName)) { report.skipped.push({ source: sourceName.slice(0, 300), reason: 'its path in the folder is too long or not one line; rename it' }); continue; }
     const stat = await fs.stat(file);
     if (stat.size > OFFICE_PHOTO_LIMITS.maxFileBytes) { report.skipped.push({ source: sourceName, reason: `over the ${OFFICE_PHOTO_LIMITS.maxFileBytes} byte limit` }); continue; }
     const bytes = await fs.readFile(file);
     const type = sniffImageType(bytes);
     if (!type) {
-      const heic = bytes.length > 12 && bytes.toString('latin1', 4, 8) === 'ftyp';
+      const heic = bytes.length > 12 && bytes.toString('latin1', 4, 8) === 'ftyp' && HEIF_BRANDS.has(bytes.toString('latin1', 8, 12));
       report.skipped.push({ source: sourceName, reason: heic ? 'HEIC/HEIF is not supported; export it as JPEG first' : 'not an image' });
       continue;
     }
     if (!(OFFICE_PHOTO_ALLOWED_TYPES as readonly string[]).includes(type)) { report.skipped.push({ source: sourceName, reason: `type ${type} is not allowed (JPEG, PNG or WebP only)` }); continue; }
     const hash = sha256(bytes);
+    if (seenThisRun.has(hash)) { report.skipped.push({ source: sourceName, reason: 'duplicate of a photo already in this folder' }); continue; }
+    seenThisRun.add(hash);
     const prior = bySha.get(hash);
-    if (prior && prior.features.version === OFFICE_PHOTO_FEATURES_VERSION) { report.unchanged.push(prior.id); continue; }
-    if (report.added.includes(`olp_${hash.slice(0, 16)}`)) { report.skipped.push({ source: sourceName, reason: 'duplicate of a photo already in this folder' }); continue; }
-    const upright = await uprightPhoto(bytes, options.rsvgConvertPath ? { rsvgConvertPath: options.rsvgConvertPath } : undefined);
+    // Unchanged only when its stored copy is still there and intact; otherwise it is prepared again.
+    if (prior && prior.features.version === OFFICE_PHOTO_FEATURES_VERSION && await storedIntact(clientDir, prior)) { report.unchanged.push(prior.id); continue; }
+    // The header's pixel size is checked before anything decodes it (a small file can claim billions of pixels).
+    const declared = imagePixelSize(bytes);
+    if (declared && Math.max(declared.width, declared.height) > OFFICE_PHOTO_LIMITS.maxSide) { report.skipped.push({ source: sourceName, reason: 'larger than the pixel limit' }); continue; }
+    let upright;
+    try { upright = await uprightPhoto(bytes, options.rsvgConvertPath ? { rsvgConvertPath: options.rsvgConvertPath } : undefined); } catch (err) {
+      report.skipped.push({ source: sourceName, reason: `unreadable (${(err as Error).message})` });
+      continue;
+    }
     const storedType = sniffImageType(upright.bytes);
     if (!storedType || !(OFFICE_PHOTO_ALLOWED_TYPES as readonly string[]).includes(storedType)) { report.skipped.push({ source: sourceName, reason: 'could not be prepared for rendering' }); continue; }
     let measured;
@@ -387,7 +416,7 @@ export async function ingestOfficePhotoFolder(options: OfficePhotoIngestOptions)
   report.usable = photos.filter((p) => p.status === 'usable').length;
   report.excluded = photos.length - report.usable;
   const unchangedManifest = existing && JSON.stringify(existing.library.photos) === JSON.stringify(photos);
-  if (unchangedManifest || options.dryRun) return report;
+  if (options.dryRun || (unchangedManifest && pendingFiles.size === 0)) return report;
 
   const library = parseOfficePhotoLibrary({ version: OFFICE_PHOTO_LIBRARY_VERSION, clientId: options.clientId, updatedAt: stamp, photos });
   await fs.mkdir(path.join(clientDir, 'photos'), { recursive: true });
@@ -396,6 +425,9 @@ export async function ingestOfficePhotoFolder(options: OfficePhotoIngestOptions)
     const current = await fs.readFile(target).catch(() => undefined);
     if (!current || !current.equals(bytes)) await fs.writeFile(target, bytes, { mode: 0o600 });
   }
+  report.wrote = true;
+  // A stored copy put back under an unchanged manifest: the manifest and its hash stay as they were.
+  if (unchangedManifest) return report;
   const tmp = `${manifestPath}.${process.pid}.tmp`;
   await fs.writeFile(tmp, `${JSON.stringify(library, null, 2)}\n`, { mode: 0o600 });
   await fs.rename(tmp, manifestPath);
