@@ -95,6 +95,8 @@ import { createChannelKillSwitchStore } from './services/channel-kill-switches.j
 import { acceptedServiceTokensOf, isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
 import { retiredTelegramSettings, telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
+import { latestOf, readProgressEvidence } from './services/progress-evidence.js';
+import { CanvaReadinessProbe } from './services/canva-readiness.js';
 import { PaidModelProbeService } from './services/paid-model-probe.js';
 import { evaluatePaidModelHealth, paidModelConfigFingerprint, readLatestPaidModelObservation, type PaidModelHealth } from './services/paid-model-health.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
@@ -683,6 +685,19 @@ export function createApp(options?: CreateAppOptions) {
     return status;
   };
 
+  // ADR-288: Canva asked whether it honours the office's connection, at most every ten minutes, with an
+  // office alert when it stops. Production only (entrypoint-options.ts); tests pass their own.
+  const scheduledCanvaReadiness = options?.enableCanvaReadinessProbe && db && canvaConnectService
+    ? new CanvaReadinessProbe({ db, service: canvaConnectService, tenantId: DEFAULT_TENANT_ID, actorId: PRIMARY_OPERATOR_USER_ID,
+      officeChatIds: () => telegramAllowedUsers })
+    : null;
+  const canvaReadiness = options?.canvaReadinessProbe ?? scheduledCanvaReadiness;
+  if (scheduledCanvaReadiness) {
+    const ask = () => { scheduledCanvaReadiness.check().catch((err: unknown) => log.warn('[canva-readiness] check failed:', (err as Error)?.message || err)); };
+    setTimeout(ask, 60_000).unref?.();
+    setInterval(ask, 10 * 60_000).unref?.();
+  }
+
   const healthCutouts = new PhotoCutouts();
   const restateInvocations = createRestateInvocationProbe();
   const honestHealthHandler = async (c: any) => {
@@ -694,7 +709,9 @@ export function createApp(options?: CreateAppOptions) {
     // transfer while the breaker stays closed: from 2026-09-17 to 2026-09-18 health said "connected"
     // while the connection needed reconnecting. Designs transfer as the Primary Operator, so that is
     // the connection that counts.
-    if (canvaStatus === 'unverified' && db) {
+    const canvaCheck = canvaReadiness ? await canvaReadiness.current() : null;
+    if (canvaStatus === 'unverified' && canvaCheck) canvaStatus = canvaCheck.status;
+    if (canvaStatus === 'unverified' && db && !canvaCheck) {
       try {
         const connection = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: PRIMARY_OPERATOR_USER_ID, role: 'operator' }, async (trx) =>
           (await sql<{ status: string }>`SELECT status FROM hawa.canva_connections
@@ -725,7 +742,19 @@ export function createApp(options?: CreateAppOptions) {
     // ADR-158: with HAWA_BILLING_PROBE_ENABLED off there is no probe to wait for. "disabled" says so,
     // and it is not counted as degraded (production was "degraded" permanently for this alone).
     const paidProbeScheduled = !(options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule);
-    const modelProviderStatus = !paidProbeScheduled && modelHealth.status === 'unverified' ? 'disabled' : modelHealth.status;
+    const paidProbeStatus = !paidProbeScheduled && modelHealth.status === 'unverified' ? 'disabled' : modelHealth.status;
+    // ADR-288: "disabled" described the probe, not the provider, while production models drafted every
+    // request. Without a probe the provider's status is read from production's own recorded calls:
+    // connected (one of the newest three answered), failing (none did), idle (no call in 24 h).
+    let progress: Awaited<ReturnType<typeof readProgressEvidence>> | null = null;
+    if (db && dbStatus === 'connected') {
+      try {
+        progress = await readProgressEvidence(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID });
+      } catch (err) {
+        log.warn('[HealthProbe] Production call evidence unreadable:', (err as Error)?.message || err);
+      }
+    }
+    const modelProviderStatus = paidProbeStatus === 'disabled' && progress ? progress.modelStatus : paidProbeStatus;
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
     // Restate can only register the worker once it is running.
@@ -775,8 +804,11 @@ export function createApp(options?: CreateAppOptions) {
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
     // Canva's "unverified" is not degraded: no Canva probe exists, so it could never become "connected"
     // (ADR-158). An expired connection is "reconnect_required" and a failing one opens the breaker.
-    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
-      || (isProduction && modelProviderStatus !== 'connected' && modelProviderStatus !== 'disabled')
+    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required'
+      || canvaStatus === 'expired' || canvaStatus === 'revoked' || canvaStatus === 'unreachable'
+      || channelKillSwitches.telegram || channelKillSwitches.waha
+      || (isProduction && modelProviderStatus !== 'connected' && modelProviderStatus !== 'disabled' && modelProviderStatus !== 'idle')
+      || modelProviderStatus === 'failing'
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
       || modelProviderStatus === 'billing_exhausted' || modelProviderStatus === 'rate_limited'
       || modelProviderStatus === 'http_error' || modelProviderStatus === 'budget_held' || modelProviderStatus === 'reconciliation_required'
@@ -803,10 +835,14 @@ export function createApp(options?: CreateAppOptions) {
       // Who is meant to ask Telegram for updates: the watchdog then requires a polling worker colour
       // when this says worker (ADR-129).
       telegramPoller: telegramPollerOf(process.env),
-      lastVerifiedProgressAt,
+      // The newest thing production demonstrably did: a paid probe sent, a model call answered, or a
+      // Canva draft made (ADR-288). It was only ever a probe, so null for good with the probe off.
+      lastVerifiedProgressAt: latestOf(lastVerifiedProgressAt, progress?.modelCalls.lastAnsweredAt, progress?.lastDraftAt),
+      lastDraftAt: progress?.lastDraftAt ?? null,
+      modelCalls: progress?.modelCalls ?? null,
       lastPaidProbe: {
         at: modelHealth.at,
-        status: modelProviderStatus,
+        status: paidProbeStatus,
         observedStatus: modelHealth.observedStatus,
         schemaVersion: modelHealth.schemaVersion,
         detail: modelHealth.spendingStatus || null,
@@ -816,6 +852,8 @@ export function createApp(options?: CreateAppOptions) {
         everyMinutes: paidProbeScheduled ? billingProbeMs / 60_000 : null,
       },
       funnel: funnelMetrics,
+      // ADR-288: what Canva said when last asked; null where no check runs (tests, no database).
+      canvaReadiness: canvaCheck,
       restateInvocations: restateWork,
       spendingPolicy: { status: spendingPolicyStatus, policies: policyChecks,
         ...(spendingPolicyStatus !== 'valid' ? { warning: 'Re-check the provider prices and renew the price policy (runbooks/SPENDING_POLICY.md).' } : {}) },
@@ -1105,6 +1143,14 @@ export function createApp(options?: CreateAppOptions) {
         if (alerted.length) log.info(`[lifecycle-stale] alerted the office about ${alerted.length} waiting request(s):`, JSON.stringify(alerted));
       } catch (err) {
         log.warn('[lifecycle-stale] pass failed:', (err as Error)?.message || err);
+      }
+      // ADR-288: drafts past the office's approval target in working hours, named once per draft.
+      try {
+        const { sweepApprovalSla } = await import('./services/approval-sla.js');
+        const late = await sweepApprovalSla(staleDb, { tenantId: DEFAULT_TENANT_ID, officeChatIds: telegramAllowedUsers, nowMs: Date.now() });
+        if (late.length) log.info(`[approval-sla] named ${late.length} draft(s) past the approval target:`, JSON.stringify(late.map((l) => l.taskId)));
+      } catch (err) {
+        log.warn('[approval-sla] pass failed:', (err as Error)?.message || err);
       }
     };
     setInterval(stalePass, 15 * 60_000).unref?.();

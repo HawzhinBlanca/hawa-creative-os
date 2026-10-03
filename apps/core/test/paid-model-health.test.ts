@@ -81,8 +81,10 @@ describe('paid provider observations', () => {
     const changedModel = await (await healthReader().request('/v1/health')).json();
     expect(changedModel.dependencies.modelProvider).toBe('unverified');
     const disabled = await (await createApp({ db, enableBillingProbeSchedule: false }).request('/v1/health')).json();
-    // A recorded success still proves nothing without a schedule; health says the probe is off (ADR-158).
-    expect(disabled.dependencies.modelProvider).toBe('disabled');
+    // A recorded probe success still proves nothing without a schedule; health says the probe is off
+    // (ADR-158), and the provider is read from production's own calls, of which there are none (ADR-288).
+    expect(disabled.lastPaidProbe.status).toBe('disabled');
+    expect(disabled.dependencies.modelProvider).toBe('idle');
   });
 
   it('ages evidence under a controlled clock and never treats a future or unknown version as connected', async () => {

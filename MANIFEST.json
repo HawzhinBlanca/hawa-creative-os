@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T11:22:09Z",
+  "generatedAt": "2026-10-03T11:24:17Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 935,
+  "fileCount": 936,
   "files": [
     {
       "path": ".dockerignore",
@@ -1336,6 +1336,11 @@
       "path": "adrs/286_model_reading_never_acts_alone.md",
       "sha256": "a32591c80d1ce3e561bc4d687d526cd2ed30c949901ec194f8f6549166649bae",
       "bytes": 5839
+    },
+    {
+      "path": "adrs/288_truthful_operations_health.md",
+      "sha256": "5acd71ce6c89006aff0a23121244e3ad1fa28c21cee0a98bd980500943634963",
+      "bytes": 15682
     },
     {
       "path": "adrs/289_every_paid_call_in_one_report.md",
@@ -3679,8 +3684,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "497bc5c78e5afc547b1824330cc0f7fc7191d14ae6c869d65b6f7682762848a5",
-      "bytes": 914086
+      "sha256": "9690c8bca1023302da46f6bebf53511e576b43d074bde134dc299fba5aeabd46",
+      "bytes": 915120
     },
     {
       "path": "plans/user-stories.csv",
