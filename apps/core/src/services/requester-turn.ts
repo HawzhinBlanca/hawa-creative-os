@@ -1376,7 +1376,7 @@ function changeFor(request: ChatRequestView, words: string, how: string, confide
   resolves?: number): TurnPlan | null {
   if (waitsForRequester(request)) {
     // Recency never starts a paid round, and a model's pick never does: below 0.85 it is asked here, and
-    // above it `withoutModelAction` asks (ADR-285).
+    // above it `withoutModelAction` asks (ADR-286).
     if (how === 'recent' || (how === 'model' && (confidence ?? 0) < 0.85)) return null;
     return { kind: 'revise', requestId: request.requestId, directive: words, ...(resolves ? { resolves } : {}) };
   }
@@ -1514,7 +1514,7 @@ function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) 
   const drafted = recent.filter(hasDraft);
   const pool = bound.length > 1 ? bound : drafted.length ? drafted : recent;
   if (!pool.length) return null;
-  // The intake router's pick (asked when the rules could not tell) names the design; ADR-285: it is asked
+  // The intake router's pick (asked when the rules could not tell) names the design; ADR-286: it is asked
   // about ("redo it, or a new design?", `withoutModelAction`), never redone on the model's word.
   if (reading.source === 'model' && reading.requestId && (reading.confidence ?? 0) >= 0.85) {
     const named = pool.find((r) => r.requestId === reading.requestId);
@@ -1530,7 +1530,7 @@ function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) 
 }
 
 /**
- * ADR-285 (NLU model-first experiment, 2026-10-03): a model's reading never acts on a design by itself. The
+ * ADR-286 (NLU model-first experiment, 2026-10-03): a model's reading never acts on a design by itself. The
  * intake router is asked only about words the rules could not place, and on the labelled set its "change"
  * readings were wrong five times in six (fragments such as "for the deans" kept as changes) and started a paid
  * redo of a delivered design for "do a better design for the conference". So whatever its confidence, a plan

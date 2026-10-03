@@ -413,7 +413,7 @@ describe('the decision is made once', () => {
       .toMatchObject({ intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
   });
 
-  it('the intake router is asked once per update, and its pick never starts a round by itself (ADR-285)', async () => {
+  it('the intake router is asked once per update, and its pick never starts a round by itself (ADR-286)', async () => {
     const chat = chatId();
     const kaae = await seed(chat, 'manual', 3, { title: 'KAAE members evening' });
     await seed(chat, 'manual', 3, { title: 'Graduation flyer' });
@@ -443,7 +443,7 @@ describe('the decision is made once', () => {
       .toMatchObject({ choiceRequired: true });
   });
 
-  it('a redo the router is sure of is asked about, never redone on its word (ADR-285, NLU eval en-unclear-05)', async () => {
+  it('a redo the router is sure of is asked about, never redone on its word (ADR-286, NLU eval en-unclear-05)', async () => {
     const chat = chatId();
     await seed(chat, 'delivered', 2, { title: 'Quality Assurance Workshop' });
     const read = vi.fn<RequesterIntentModel['read']>(async (input) => ({ intent: 'change', reason: 'fixture', source: 'model',
@@ -456,7 +456,7 @@ describe('the decision is made once', () => {
     expect(await tasksInChat(chat)).toHaveLength(before);
   });
 
-  it('a fragment the router reads as a change is asked about, not kept as a change (ADR-285, NLU eval en-unclear-03)', async () => {
+  it('a fragment the router reads as a change is asked about, not kept as a change (ADR-286, NLU eval en-unclear-03)', async () => {
     const chat = chatId();
     await seed(chat, 'in_review', 2, { title: 'KAAE: Quality Assurance Workshop' });
     const read = vi.fn<RequesterIntentModel['read']>(async (input) => ({ intent: 'change', reason: 'fixture', source: 'model',
@@ -512,7 +512,7 @@ describe('the intake router\'s paid call (migration 068)', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('ADR-285: whatever the router\'s confidence, its reading alone plans a question, never a paid round or a kept change', async () => {
+  it('ADR-286: whatever the router\'s confidence, its reading alone plans a question, never a paid round or a kept change', async () => {
     const id = await client();
     const waiting = view(randomUUID(), id);
     const planWith = async (text: string, requests: ChatRequestView[], decision: Record<string, unknown>) => {

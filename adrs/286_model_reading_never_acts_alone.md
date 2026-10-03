@@ -1,4 +1,4 @@
-# ADR-285: A Model Reading Never Acts on a Design by Itself
+# ADR-286: A Model Reading Never Acts on a Design by Itself
 
 **Date:** 2026-10-03
 **Status:** Implemented on branch `claude/nlu-model-first` (from `claude/hunt3-fixes` 87f1a981). Not deployed. The owner approved acting on the recommendation of `plans/nlu-eval-2026-10-02/MODEL_FIRST_RESULTS.md`.
@@ -69,7 +69,7 @@ It never starts by recency or by a model reading.
 
 Measured from the cached answers. There were no new paid calls. Both samples gave the same result.
 
-| Production intake path (356 cases) | Before (router as deployed) | After ADR-285 | Rules only |
+| Production intake path (356 cases) | Before (router as deployed) | After ADR-286 | Rules only |
 |---|---|---|---|
 | Overall | 344 | **349** | 349 |
 | Held out (54) | 47 | 49 | 49 |
@@ -86,7 +86,7 @@ After the guard, the router changes the plan in two cases:
 Tests:
 
 - `apps/core/test/requester-intent-routing.test.ts`: the router's pick never starts a round by itself; a sure redo is asked about; a fragment is asked about. All go through intake.
-- In the same file, under "ADR-285: whatever the router's confidence…": the real `createRequesterIntentModel` with a fixture completion, then `planTurn`.
+- In the same file, under "ADR-286: whatever the router's confidence…": the real `createRequesterIntentModel` with a fixture completion, then `planTurn`.
 - Each new test fails with the guard removed.
 
 ## 4. Consequences
