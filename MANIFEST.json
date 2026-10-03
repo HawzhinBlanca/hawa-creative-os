@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T00:33:58Z",
+  "generatedAt": "2026-10-03T04:38:45Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 912,
+  "fileCount": 919,
   "files": [
     {
       "path": ".dockerignore",
@@ -29,8 +29,8 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "dfef4edb419a6a2ab67151c98306ea1dd8cc7e8c5176cc6c5b0d556c9f97d7d1",
-      "bytes": 6283
+      "sha256": "25648b0beb1801e5d2d1796cdbb8e9faaf5ed372ccc309f9dd474cffad9266bb",
+      "bytes": 7814
     },
     {
       "path": "AGENTS.md",
@@ -1283,6 +1283,11 @@
       "bytes": 16153
     },
     {
+      "path": "adrs/272_requester_reading_after_nlu_eval.md",
+      "sha256": "6cb6fdc6b99ba6eed69d9e40e06af255502a84a8e0572ac847bea6da103abaeb",
+      "bytes": 12974
+    },
+    {
       "path": "adrs/273_gates_calibrated_on_office_posts.md",
       "sha256": "10f900fd1b9893b15a2260d078d099648153b7022283c2529d02e4a8f9a95070",
       "bytes": 20454
@@ -1301,6 +1306,16 @@
       "path": "adrs/276_frozen_display_export_policy.md",
       "sha256": "267325c19ed813778bb7fae68c6c8aa617b447980984fe40d92734d519e34717",
       "bytes": 4957
+    },
+    {
+      "path": "adrs/280_office_photo_library.md",
+      "sha256": "3622b30b0bdb621f8030a14626b767724f2d14b612e43f78d0b217be92d66469",
+      "bytes": 16855
+    },
+    {
+      "path": "adrs/281_ci_runs_on_a_clean_checkout.md",
+      "sha256": "936b210b2f725e49ac868bcbda6663c5b85ecc9999632b1cff4321632cbbdc84",
+      "bytes": 7367
     },
     {
       "path": "adrs/282_own_open_is_not_in_flight.md",
@@ -2499,8 +2514,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES.md",
-      "sha256": "cfd24914bdd48d4e6528d5925e9eb1098ee7f893f620e0e0ee3e7b50ab2770d2",
-      "bytes": 5963
+      "sha256": "8cf96a8dc86f802075763de43f1a0268025364dcae5c25f3fadeb7f483d6d132",
+      "bytes": 6056
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/DESK_AUDIT_FIXES_PROOF.json",
@@ -3073,6 +3088,16 @@
       "bytes": 2120
     },
     {
+      "path": "plans/nlu-eval-2026-10-02/BASELINE.json",
+      "sha256": "5816093418d1403a835e0be5cee6568ff6bb07ba8fb5f8e7ae3c98863a2bcdeb",
+      "bytes": 50335
+    },
+    {
+      "path": "plans/nlu-eval-2026-10-02/README.md",
+      "sha256": "d811e569e3193f48dddc37b38164ba0f635d33e6c05cfdcb0fb157670b529f53",
+      "bytes": 11938
+    },
+    {
       "path": "plans/reliability-2026-09-30/LOCAL_PROOF.json",
       "sha256": "620db236add13a770f1f3667dc4049985b578fd84e117ab4efa664c6ae9b5f67",
       "bytes": 11267
@@ -3584,8 +3609,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "cfe7c10dbb27ef5cf8aadfaf65411b0b2bd0e70033e1af0355023a010f905ed8",
-      "bytes": 904681
+      "sha256": "6c30a0e9320afb46f352d19cd0a56680db5de248cef87653147245bef0b93236",
+      "bytes": 907841
     },
     {
       "path": "plans/user-stories.csv",
@@ -3879,8 +3904,8 @@
     },
     {
       "path": "scripts/ci/install_render_deps.sh",
-      "sha256": "1631d6362d55b4167ed6158dd514538071be0ccd50d30c829cb602faac12eb01",
-      "bytes": 1919
+      "sha256": "085cda874588b2f6b9e827a23e258c8961beef10544ba7eca528a1ffd495b263",
+      "bytes": 2757
     },
     {
       "path": "scripts/compare_cutout_outlines.ts",
@@ -4143,6 +4168,11 @@
       "bytes": 16912
     },
     {
+      "path": "scripts/office_photo_library_ingest.ts",
+      "sha256": "821ef5bbce926ffe713c94d87647601e95b7e032c46d66f0bba24584d0f80b6f",
+      "bytes": 2956
+    },
+    {
       "path": "scripts/package_current_export_study.ts",
       "sha256": "d6708f6031d65ad4970691ae86a1768b9af1cda4d6064dc98d2ad4df7f412b96",
       "bytes": 16441
@@ -4156,6 +4186,11 @@
       "path": "scripts/populate_ledger.ts",
       "sha256": "f32c534dabebdc162df01db1718856389538187e7bf2d8a8ede401266cf80dbd",
       "bytes": 8496
+    },
+    {
+      "path": "scripts/poster_composer_snapshot.ts",
+      "sha256": "d4aec4abeb2ab6fae67b9f30367bb264d1b50cfb394ca478b331fd473c674583",
+      "bytes": 7089
     },
     {
       "path": "scripts/process_kaae_logo.ts",
@@ -4524,8 +4559,8 @@
     },
     {
       "path": "scripts/validate_pack.py",
-      "sha256": "4267c1324816b2d6febebd83324bbb21534d779be23d41183340893691748fd8",
-      "bytes": 25723
+      "sha256": "1e386d692a41842f1ae18fb659cec166619d13a720ceaebde6b8c7117cb6c114",
+      "bytes": 27895
     },
     {
       "path": "scripts/verify_live_h01_h03.ts",
