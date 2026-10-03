@@ -1262,7 +1262,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 requests: await activeChatRequests(trx, TENANT, chatId, 7),
                 bindings: replyMessageId ? await replyBindings(trx, TENANT, chatId, replyMessageId)
                   : { requestIds: [] as string[], askUpdateId: null as number | null },
-                opening: priorIntent ? [] : await openingChatRequests(trx, TENANT, chatId),
+                opening: priorIntent ? [] : await openingChatRequests(trx, TENANT, chatId, update.update_id),
               }));
               // ADR-235: the answer to "who is this design for?" opens the kept brief, for the organisation named or
               // for the office to choose. Words that do not answer it are read as any message is.
