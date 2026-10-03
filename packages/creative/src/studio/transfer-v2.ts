@@ -272,7 +272,17 @@ function effectiveRtl(t: { rtl?: boolean; fontFamily: string }): boolean {
   return t.rtl ?? ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
 }
 
-export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTransferPlan {
+/**
+ * ADR-275: whether the deck draws a block in capitals (cap="all"): set in capitals, its copy Latin and
+ * its face not an Arabic-script one. The plan records textTransform on exactly these blocks, so the
+ * export checks that read it compare without regard to case only what the deck capitalised.
+ */
+function deckCapitals(t: TextElement, copy: string | undefined): boolean {
+  const isArabic = t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
+  return copy === undefined ? t.textTransform === 'uppercase' && !effectiveRtl(t) : uppercaseApplies(t, copy) && !isArabic;
+}
+
+export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2, copy?: string[]): EditableTransferPlan {
   return {
     width: layout.width,
     height: layout.height,
@@ -309,7 +319,7 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       // ADR-275: the weight the deck's face carries, and the capitals it is drawn in. The Canva
       // export checks read them to compare this block's copy without regard to case.
       ...(t.fontWeight !== undefined ? { fontWeight: elementFontFace(t).weight, fontFace: deckFontFace(t).face } : {}),
-      ...(t.textTransform === 'uppercase' && !effectiveRtl(t) ? { textTransform: 'uppercase' as const } : {}),
+      ...(deckCapitals(t, copy?.[t.copyIndex]) ? { textTransform: 'uppercase' as const } : {}),
       // The tracking as drawn, in em, not the model's raw request: the plan is both the manifest's
       // record of the delivered design and an input the v1 encoder accepts, and a plan carrying a
       // value the renderer never used describes a design nobody ever saw.
@@ -377,6 +387,10 @@ export async function encodeStudioTransferV2(
     'Vazirmatn',
     'Inter',
     'Crimson Pro',
+    // ADR-238: KAAE's Sorani display face, which the poster and page composers set every Sorani title
+    // in. Without it here every Sorani composed design threw "Unsupported font" at the transfer, as
+    // production passes only the client's formal faces in extraFonts.
+    'IBM Plex Sans Arabic',
     ...(options.extraFonts || []).filter((f) => typeof f === 'string' && /^[A-Za-z0-9 ]{2,40}$/.test(f)),
   ];
 
@@ -408,7 +422,9 @@ export async function encodeStudioTransferV2(
     }
   };
 
-  const maxFontSize = Math.max(240, Math.round(0.25 * layout.height));
+  // A sanity bound on the canvas's long side: the composers size a display title by the width (KAAE up
+  // to 0.2 of it), which on a landscape canvas is over a quarter of the height.
+  const maxFontSize = Math.max(240, Math.round(0.25 * Math.max(layout.width, layout.height)));
   for (const t of layout.text) {
     bounds(t);
     hex(t.color);
@@ -749,7 +765,7 @@ export async function encodeStudioTransferV2(
         : text;
     // ADR-275: the weighted face, and capitals as a run property over the copy as typed.
     const deckFace = deckFontFace(t);
-    const caps = uppercaseApplies(t, copy[t.copyIndex]) && !isArabic;
+    const caps = deckCapitals(t, copy[t.copyIndex]);
     if (caps) capitals.add(capsTextObjectName(t.copyIndex));
     slide.addText(runs as any, {
       x: t.x / 96,
@@ -795,7 +811,7 @@ export async function encodeStudioTransferV2(
   const bytes = capitals.size ? withCapitals(filled, capitals) : filled;
   const sha256 = createHash('sha256').update(bytes).digest('hex');
 
-  const plan = studioLayoutV2ToTransferPlan(layout);
+  const plan = studioLayoutV2ToTransferPlan(layout, copy);
 
   return {
     bytes,

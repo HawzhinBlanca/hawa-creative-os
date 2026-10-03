@@ -12,13 +12,14 @@ import type {
   TextElement,
 } from '../layout-v2.js';
 import { balancedBoxWidths, measureTextGeometry } from '../render-layout-v2.js';
-import { HOUSE_RULES, getSafeZoneBox, isStoryFormat, logoClearZone, minLogoWidth, requiredContrast } from '../house-rules.js';
+import { COPY_WIDTH_TOLERANCE_PX, HOUSE_RULES, getSafeZoneBox, isStoryFormat, logoClearZone, minLogoWidth, requiredContrast } from '../house-rules.js';
 import { calculateLuminanceContrastRatio, hexToLuminance } from '../composite-contrast.js';
 import { hexToRgb } from '../color-science.js';
 import { maxStrokeWidth } from '../studio-normalize.js';
 import { coverCrop } from '../photo-crop.js';
 import { photoUpscale } from '../photo-cutout.js';
 import { packPhotoSequence } from './photo-packing.js';
+import { ALIGNMENT_POLICY, computeLayoutMetrics } from '../layout-metrics.js';
 import { rankPhotosForHero, type QuietArea } from './recipes.js';
 import { candidateRecipeTypeScales, type RecipeTypeScale as TypeScale } from './type-scale-search.js';
 import { recipePhotoMinimum, type PhotoSelection } from '../photo-selection.js';
@@ -391,7 +392,12 @@ class SolveContext {
     this.m = marginFor(this.W, this.H);
     this.wide = this.W / this.H >= 1.3;
     this.story = isStoryFormat(this.W, this.H);
-    this.safe = getSafeZoneBox(this.W, this.H, this.m);
+    // A story's safe zone takes its own side share (0.06 of the width), narrower than the margin the
+    // layout's grid declares (0.07); its sides are drawn in to the margin, so a logo or a block set on
+    // the safe area lines up with the grid the layout declares (and hard QA's alignment reads).
+    const zone = getSafeZoneBox(this.W, this.H, this.m);
+    const side = Math.max(zone.x, this.m);
+    this.safe = { x: side, y: zone.y, width: this.W - 2 * side, height: zone.height };
     this.tones = brandTones(input.palette);
     this.blocks = blocksOf(input);
     this.rtl = this.blocks.filter((b) => b.arabic).length > this.blocks.length / 2;
@@ -541,8 +547,10 @@ class SolveContext {
     const minW = Math.max(minLogoWidth(this.W), this.input.logoMinimumWidthPx ?? 0);
     let width = Math.max(minW, Math.round(0.1 * Math.min(this.W, 1.25 * this.H)));
     let height = Math.round(width / aspect);
-    // Keep the official aspect within the 1% the validator allows after rounding.
-    while (Math.abs(width / height - aspect) / aspect > 0.009 && width < minW + 40) {
+    // Keep the official aspect within the 1% the validator allows after rounding (searched up from the
+    // starting width, which may already be past the minimum).
+    const start = width;
+    while (Math.abs(width / height - aspect) / aspect > 0.009 && width < start + 40) {
       width += 1;
       height = Math.round(width / aspect);
     }
@@ -693,7 +701,10 @@ class SolveContext {
       const flat = sets.flat();
       const titleOk = flat.every((b) => (b.block.slot === 'title' || b.block.slot === 'accent' ? b.lines <= titleLines : true));
       const bodyOk = flat.every((b) => (b.block.slot === 'cta' ? b.lines === 1 : b.lines <= 8));
-      if (titleOk && bodyOk && fits(sets)) return sets;
+      // No word runs past its column (a long word, a URL), and a call to action fits its pill, which is
+      // the column less the pill's padding (placeStack): hard QA's COPY_OVERFLOW refuses either.
+      const widthOk = flat.every((b) => b.lineWidth <= (b.block.slot === 'cta' ? b.width - 2 * this.pillPad(b).x : b.width + COPY_WIDTH_TOLERANCE_PX));
+      if (titleOk && bodyOk && widthOk && fits(sets)) return sets;
     }
     throw new RecipeInfeasibleError(this.recipe, `the copy does not fit ${this.W}x${this.H} at the house's smallest sizes`);
   }
@@ -964,6 +975,12 @@ class SolveContext {
       if (ratio < requiredContrast(t.fontSize, Boolean(t.bold))) {
         throw new RecipeInfeasibleError(this.recipe, `copy block ${t.copyIndex} is ${ratio.toFixed(2)}:1 on its surface`);
       }
+    }
+    // Hard QA's alignment check, as the poster and page composers promise it: a title-only cut-out
+    // speaker or story mosaic lined up 0.5, and hard QA always refused it (POOR_GRID_ALIGNMENT).
+    const alignment = computeLayoutMetrics(layout).alignmentScore;
+    if (alignment < ALIGNMENT_POLICY.passScore) {
+      throw new RecipeInfeasibleError(this.recipe, `alignment ${alignment} is under hard QA's ${ALIGNMENT_POLICY.passScore}`);
     }
   }
 

@@ -264,7 +264,10 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
   const minLogo = Math.max(minLogoWidth(W), input.logoMinimumWidthPx ?? 0);
   let lw = Math.max(minLogo, r(P.logoWidthShare * Math.min(W, 1.25 * H)));
   let lh = r(lw / aspect);
-  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < minLogo + 40) {
+  // Keep the official aspect within the 1% the validator allows after rounding (searched up from the
+  // poster's own width: from the minimum, a poster-sized wide logo never searched and failed LOGO).
+  const lw0 = lw;
+  while (Math.abs(lw / lh - aspect) / aspect > 0.009 && lw < lw0 + 40) {
     lw += 1;
     lh = r(lw / aspect);
   }
@@ -322,8 +325,11 @@ function attemptPoster(input: ComposeGrammarInput & { variant: PosterVariant }, 
     const colour = variant === 'navy' ? spec.lead : g.header.label.color;
     const t = el(b, 'label', sizes.label, colour, colW);
     const p = colW > 0 ? set({ ...t, align: 'right' }, b.text, x0, colW, 0) : undefined;
-    if (p && p.lines === 1) {
-      text.push({ ...p.el, y: r(logo.y + logo.height / 2 - p.el.height / 2) });
+    // Centred on the logo's line, never above the safe margin; a label taller than the logo's clear
+    // space (beside a wide, short logo) is set in the flow instead.
+    const ly = p ? Math.max(safe.y, r(logo.y + logo.height / 2 - p.el.height / 2)) : 0;
+    if (p && p.lines === 1 && ly + p.el.height <= Math.ceil(clear.y + clear.height)) {
+      text.push({ ...p.el, y: ly });
       flow.shift();
     }
   }
