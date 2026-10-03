@@ -222,10 +222,27 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   });
   const detail = detailQuery.data?.id === selectedTaskId ? detailQuery.data : undefined;
 
+  // Another task (or revision) on screen: nothing typed or read for the previous one may reach it. Notes
+  // typed for one task were sent as the next task's revision request, and a late export read of one
+  // task was pinned to the next task's approval.
+  const approvalRead = useRef(0);
   useEffect(() => {
     setIsApprovalModalOpen(false);
     setIsRevisionModalOpen(false);
     setIsRejectionModalOpen(false);
+    approvalRead.current++;
+    setApprovalExports({ state: 'loading' });
+    setPinnedExportIds([]);
+    setRtlReviewed(false);
+    setRevisionNotes('');
+    setRevisionScope('');
+    setRevisionCategory('');
+    setRevisionTargets('');
+    setRevisionPriority('');
+    setRevisionReusable(false);
+    setRejectionCategory(undefined);
+    setRejectionReason('');
+    setCanvaLinkInput('');
   }, [selectedTaskId, reviewRevisionId]);
   const reviewBlocked = Boolean(initialTaskId && reviewRevisionId && selectedTaskId === initialTaskId &&
     (!detail?.latestRevisionId || (detail.latestRevisionId !== reviewRevisionId && confirmedReviewRevision !== detail.latestRevisionId)));
@@ -525,6 +542,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const openApprovalModal = async () => {
     if (reviewBlocked || !selectedTask) return;
     const taskId = selectedTask.id;
+    const ticket = ++approvalRead.current;
     setIsApprovalModalOpen(true);
     setApprovalExports({ state: 'loading' });
     setPinnedExportIds([]);
@@ -533,6 +551,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       const state = await apiClient.canva.taskState(taskId);
       return Array.isArray(state?.artifacts) ? (state.artifacts as StoredExport[]) : [];
     });
+    // A read answered after another task (or a newer opening) took the modal belongs to no one.
+    if (ticket !== approvalRead.current) return;
     setApprovalExports(reading);
     if (reading.state === 'known') setPinnedExportIds(defaultPins(reading.value, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion : undefined));
   };
