@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-03T17:45:27+03:00",
+  "generatedAt": "2026-10-03T18:12:14+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "fe934fa0e0d8a4e46257ff03dfd68efb34fc2dc3",
+    "commit": "c596624cddbe848aa613c5214e38307318374b44",
     "treeClean": true,
-    "commitTimestamp": "2026-10-03T17:45:27+03:00",
+    "commitTimestamp": "2026-10-03T18:12:14+03:00",
     "branch": "codex/hawzhin-app-integration"
   },
   "migrations": {
-    "targetVersion": "088_customer_native_review",
-    "latestMigrationFile": "088_customer_native_review.sql",
-    "totalMigrations": 88
+    "targetVersion": "089_customer_acceptance_downloads",
+    "latestMigrationFile": "089_customer_acceptance_downloads.sql",
+    "totalMigrations": 89
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,8 +39,8 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "903399c04848a5d1c60216500001e8523a2649188dcf1cd1d08ca20f4319df1e",
-        "apps/core/src/index.ts": "0803fe6449448b04feb9f3c28bf2b7b3e70fc6845a1a71779d8d5c84c415f31a",
+        "apps/core/src/app.ts": "483d0f54c2f5b4b44c9f5e310ed608836ca5c36308c17662568b51e9e8899200",
+        "apps/core/src/index.ts": "41f4bebe0173880eb3cb889982ae8e9f52bb89601e2440b4657e173f3fc5e32f",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
     },
@@ -48,7 +48,7 @@
       "service": "desk",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/desk/src/App.tsx": "6836ed5f6f8ae9ba5d22f65aa4285b0df954a895da34540201c26fdb4b5b9225",
+        "apps/desk/src/App.tsx": "9da0c9cc217911eab90c01ef9a6973855cd88ee2f4e125b9eedabc17d2660d5e",
         "apps/desk/src/main.tsx": "ee234aa0846b3baa9aed56ba633e50ff95f0d039343d052a8a7d7860feffa8c8"
       }
     },
@@ -56,7 +56,7 @@
       "service": "worker",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "b0e6a32e1b5e410979fca6a08a0af00c6f6bdb9b9d2461c134fda57dc2c51947"
+        "apps/worker/src/index.ts": "0b2764a51b5f5e92022dfdef88a49eacfb9cc60b67bdd3bb963000372b580654"
       }
     }
   },
@@ -75,7 +75,7 @@
       "apps/core/src/services/design-studio/prompts.ts": "12c1a1628d4fe56c28058458d38f8b6d12f77c6c9703606076d6fa4711c0a204",
       "apps/core/src/services/canva-design-planner.ts": "f913252c64ef050e57b84ceb79ff65fbbeb94d580eb47e541441728a2f000ed2",
       "packages/creative/src/studio/layout-generator-v3.ts": "b2fec55a85e5e1818bd8e16c33172c5c5092bdcd09d01b17d78ac6a632c8276a",
-      "packages/creative/src/studio/pairwise-judge-v3.ts": "a696d3e2258e9ff95fe347ebc0127980ac7b59dc67fa858b134d2e724d4557f1",
+      "packages/creative/src/studio/pairwise-judge-v3.ts": "8fa8cb55faea6231d402bf4201c41e8a4b6beea6a8f4fd0743c6c63ffa36afe5",
       "packages/creative/src/studio/box-critique-v3.ts": "f6a643f5df5aaf69f355f12a6494b2479b942d2b6d702cc1cc42af8d24cb85e2"
     }
   },
@@ -84,11 +84,11 @@
     "sourceHashes": {
       "packages/qa/src/engine.ts": "454d81402825a4ccfdf00445b556afeb3282b01957585ba6689eec4436ab79c5",
       "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
-      "packages/qa/src/canva-pptx-check.ts": "6958c1af7642ef27e83e199a6c9df9e3c9b8599a8b589e915e6cd3e3fa310a38",
+      "packages/qa/src/canva-pptx-check.ts": "129d765453b8ba854c61466770d3461221560da224efac7553aec096b959ab4a",
       "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
       "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "79eb2f911166b0b593d6929bc0b5ef772f5a3e8b470b598577126533726c5bda"
+  "sha256": "5fd46a2bc5fab3ee98ef44328bcbad3dcdf25b9b3fb137969dfcc83d825ed030"
 }
