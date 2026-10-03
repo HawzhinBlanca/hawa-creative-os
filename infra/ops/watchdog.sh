@@ -343,7 +343,11 @@ if [[ ${#problems[@]} -eq 0 && "$disk_full" -eq 0 ]]; then
   say "healthy"
   [[ "$MODE" == "--status" ]] && exit 0
   # The outside service alerts when these pings stop (host_lib.sh, hawa_heartbeat).
-  hawa_heartbeat "$PROD" || say "the outside heartbeat could not be reached"
+  hb=0; hawa_heartbeat "$PROD" || hb=$?
+  case "$hb" in
+    1) say "the outside heartbeat could not be reached" ;;
+    2) say "HAWA_HEARTBEAT_URL is set but is not an https URL: no outside heartbeat is sent (fix it in ${PROD})" ;;
+  esac
   if [[ "$alerted" == 1 ]] && ! notify "✅ Hawa is back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"; then
     disk_was_full=0; save healthy; exit 0   # the recovery notice is tried again at the next pass
   fi
