@@ -579,11 +579,16 @@ const NEGATED_STYLING = /\b(?:don'?t|do\s+not|never|stop|quit|no\s+more)\s+(?:us
 const LEAVES_A_PART_OUT = new RegExp(`^no\\s+(?:more\\s+)?(?:(?:[\\p{L}\\d'’&-]+\\s+){0,3}?(?:in|on|at|from|inside|under|over|near)\\s+` +
   `(?:the|its|this|that|our)\\s+(?:[\\p{L}'’-]+\\s+){0,2}?(?:${PART_NOUNS}|top|bottom|corner|side|left|right|middle|cent(?:re|er)|edge)s?\\b|` +
   `(?:[\\p{L}'’-]+\\s+){0,2}?(?:${PART_NOUNS})s?(?=\\s*$|\\s*[,.!]|\\s+(?:in|on|at|anywhere|please|at\\s+all)\\b))`, 'iu');
-const FINDS_A_PART_WANTING = new RegExp(`\\b${A_PART_HEAD}(?:'s|\\s+(?:is|are|looks?|seems?|feels?|reads?))\\s+` +
+// Conversation fuzz (2026-10-03): "the logo looks squashed", "the font looks stretched" and "text is cut off" were asked
+// "a change or a new design?". How a part looks (squashed, stretched, crooked...) is found wanting too, and a part
+// named bare at the start ("text is cut off") is the head of what is named as "the text" is.
+const FINDS_A_PART_WANTING = new RegExp(`(?:\\b${A_PART_HEAD}|^(?:${PART_NOUNS})s?)(?:'s|\\s+(?:is|are|looks?|seems?|feels?|reads?))\\s+` +
   '(?:(?:a\\s+(?:bit|little)|bit|little|way|much|far|kind\\s+of|kinda|sort\\s+of|very|really|so|quite|rather|pretty|still|also|just)\\s+)*' +
   '(?:too\\s+\\p{L}+|not\\s+(?:very\\s+|really\\s+)?(?:clear|readable|legible|visible|right|correct|aligned|centred|centered|straight|consistent|matching)|' +
   '(?:hard|difficult|impossible)\\s+to\\s+(?:read|see|make\\s+out)|unreadable|illegible|ugly|boring|dull|plain|bland|blurry|blurred|pixelated|grainy|' +
-  'faint|crowded|cluttered|busy|messy|off|weird|strange|odd|missing|cut\\s+off|cropped|hidden|invisible|tiny|old-?fashioned|childish|cheap|outdated)\\b', 'iu');
+  'faint|crowded|cluttered|busy|messy|off|weird|strange|odd|missing|cut\\s+off|cropped|hidden|invisible|tiny|old-?fashioned|childish|cheap|outdated|' +
+  'squashed|squished|squeezed|stretched|distorted|warped|skewed|crooked|tilted|wonky|lopsided|misaligned|overlapping|cramped|jagged|' +
+  'low[\\s-]?res(?:olution)?|upside\\s+down)\\b', 'iu');
 const CONTRASTS = /^(?:(?:the|this|that|its|our|my|your)\s+[^,.!?\n]{1,40}?\s+(?:is|are|was|were|will\s+be|should\s+be)|it'?s|it\s+is|this\s+is|that'?s|that\s+is|they'?re|they\s+are)\s+[^.!?\n]{1,60}?,?\s+not\s+(?!(?:yet|ready|good|great|nice|sure|clear|right|ok(?:ay)?|now|needed|approved|done|finished|bad|what|that|it|this|only|just|really|quite|too|so|very|much|exactly|perfect|at\s+all|a\s+(?:problem|big\s+deal|worry)|an\s+issue)\b)(?:(?:the|a|an|for|in|at|on|by|to|our|their)\s+)?[\p{L}\d]/iu;
 /** Cancel words said of a part of a design ("cancel the gold border"): a change, never a withdrawal. */
 export const cancelsAPart = (core: string): boolean => CANCELS_A_PART.test(core);

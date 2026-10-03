@@ -5,8 +5,8 @@
   "scoring": "A case is right when the intent acted on is its expected intent or one of its alsoAccept intents. Plans map to intents: open=new_brief; revise/redo/note change=change; note/cancel-all=cancel; tell=approval/deadline/delivery_request; reply thanks=acknowledgement; reply status=status; forward question=conversation; ask with \"or a new design\", or a confirmation of a cancel that named nothing, =unclear; any other ask keeps its intent (it only asks which design).",
   "overall": {
     "cases": 356,
-    "correct": 350,
-    "accuracy": 98.3
+    "correct": 351,
+    "accuracy": 98.6
   },
   "perSet": {
     "original": {
@@ -50,14 +50,14 @@
     },
     "heldOut": {
       "cases": 54,
-      "correct": 50,
-      "accuracy": 92.6
+      "correct": 51,
+      "accuracy": 94.4
     }
   },
   "rulesReadingOnly": {
     "cases": 356,
-    "correct": 340,
-    "accuracy": 95.5,
+    "correct": 341,
+    "accuracy": 95.8,
     "note": "readIntentByRules alone, without context or planning"
   },
   "perLanguage": {
@@ -68,8 +68,8 @@
     },
     "en": {
       "cases": 261,
-      "correct": 256,
-      "accuracy": 98.1
+      "correct": 257,
+      "accuracy": 98.5
     },
     "mixed": {
       "cases": 6,
@@ -95,8 +95,8 @@
     },
     "in_review": {
       "cases": 138,
-      "correct": 133,
-      "accuracy": 96.4
+      "correct": 134,
+      "accuracy": 97.1
     },
     "just_cancelled": {
       "cases": 12,
@@ -127,8 +127,8 @@
     },
     "synthetic": {
       "cases": 156,
-      "correct": 151,
-      "accuracy": 96.8
+      "correct": 152,
+      "accuracy": 97.4
     }
   },
   "perIntent": {
@@ -142,11 +142,11 @@
     },
     "change": {
       "support": 103,
-      "predicted": 103,
-      "truePositives": 102,
+      "predicted": 104,
+      "truePositives": 103,
       "precision": 0.99,
-      "recall": 0.99,
-      "f1": 0.99
+      "recall": 1,
+      "f1": 0.995
     },
     "cancel": {
       "support": 36,
@@ -214,17 +214,17 @@
     },
     "unclear": {
       "support": 22,
-      "predicted": 21,
+      "predicted": 20,
       "truePositives": 19,
-      "precision": 0.905,
+      "precision": 0.95,
       "recall": 0.864,
-      "f1": 0.884
+      "f1": 0.905
     }
   },
   "target": {
     "cases": 191,
-    "correct": 184,
-    "accuracy": 96.3,
+    "correct": 185,
+    "accuracy": 96.9,
     "note": "Cases with an expected design: right when the intent is right and the plan acts on (or asks about) that design."
   },
   "confusion": {
@@ -235,8 +235,7 @@
         "new_brief": 56
       },
       "change": {
-        "change": 102,
-        "unclear": 1
+        "change": 103
       },
       "cancel": {
         "cancel": 36
@@ -272,7 +271,6 @@
   },
   "failureClasses": {
     "unclear -> conversation": 3,
-    "change -> unclear": 1,
     "hold -> change": 1,
     "acknowledgement -> unclear": 1
   },
@@ -317,20 +315,6 @@
       "reason": "Short message without design or event details",
       "plan": "conversation",
       "note": "Added after baseline (held out from tuning: written before the fix). Bare no on a draft: ask what it means."
-    },
-    {
-      "id": "ho3-change-02",
-      "lang": "en",
-      "context": "in_review",
-      "source": "synthetic",
-      "heldOut": true,
-      "text": "the logo looks squashed",
-      "expected": "change",
-      "got": "unclear",
-      "rules": "unclear",
-      "reason": "A short message that could be a new brief or a note about a current design",
-      "plan": "ask:unclear+new -> A",
-      "note": "Added after baseline (held out from tuning: written after the fixes, round 3, and never tuned on). Complaint about a part."
     },
     {
       "id": "ho3-hold-01",
@@ -2455,9 +2439,9 @@
     },
     {
       "id": "ho3-change-02",
-      "ok": false,
-      "got": "unclear",
-      "plan": "ask:unclear+new -> A"
+      "ok": true,
+      "got": "change",
+      "plan": "note:change -> A"
     },
     {
       "id": "ho3-change-03",

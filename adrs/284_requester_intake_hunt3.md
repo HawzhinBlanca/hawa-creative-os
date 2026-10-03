@@ -333,3 +333,19 @@ J4, J6 and J7 were 0 before and stay 0. The remaining friction is 9 changes aske
 - A bare organisation name with nothing open ("KAAE") opens a request for a designer.
 - "The logo looks squashed" (NLU held-out case ho3-change-02) is still asked "a change or a new design?".
 - The Arabic cancel and thanks words need native review.
+
+## Addendum: the conversation fuzz's four open issues (2026-10-03)
+
+**Date:** 2026-10-03. **Status:** implemented on branch `claude/convfix2` (from `claude/release-3` 007bc040, live); not deployed. **Changes a foundation:** no. No migration, dependency or paid call. Two new inbox-ledger row kinds (first write wins): `lifecycle_client_question_note` (words kept with a waiting brief) and `lifecycle_client_named` (an organisation named alone). Four new requester phrases in `CLIENT_QUESTION_MESSAGES`. Their Sorani joins phrases already in the catalogue and is listed in SORANI_REVIEW.md.
+
+1. **A change while the brief waits for "who is this design for?"** used to go to the office with an alert saying the design is "no longer open". Now no design on the way takes the change, so it is kept with the waiting brief. The requester hears "Got it. I've kept that with **X**." followed by the question again. There is no alert. When the brief opens (after the answer, the office's choice or the timeout), the change is added to the request's words and to its design instructions. It never becomes the request's copy or its name.
+2. **A deadline sent at that point** used to get the waiting question back, and its words were lost. Now it is kept the same way and said back: "Noted — by tomorrow. Who is this design for? …". With no timing words to repeat ("it's urgent"), the reply is "Noted. I've kept the timing with **X**. …". The deadline reaches the request's words, which the office reads.
+3. **An organisation's name sent alone with nothing open** used to misfire. "KAAE" and "for Erbil Chess Club" opened a request for a designer. "It's for the Erbil Chess Club" went to the office as words about a design "no longer open". Now the requester is asked "What would you like designed for **Erbil Chess Club**? …" and nothing opens. A bare name is short, names no design, part or request, and is an office client or reads as an organisation (the ADR-235 `namesUnknownOrganisation` signs). The brief that follows within 30 minutes is for that organisation, so its sender is not asked "who is this design for?" again. A known client opens for that client; an unknown one goes to the office to choose, as an unmatched answer does.
+4. **"The logo looks squashed"** used to be asked "a change or a new design?". Now a part of the design that "looks", "is" or "seems" squashed, stretched, distorted, crooked, tilted, misaligned, overlapping, low-res and the like counts as found wanting, so it is a change to the open design. The same applies to a part named bare at the start of the words ("text is cut off").
+
+**Verification.**
+- `conversation-fuzz-classes.test.ts` gained classes 9 to 12: 18 route tests. 14 of them failed on 007bc040. The 4 that passed are the control ("Logo for Erbil Chess Club" still reads as a brief) and three visual complaints the old rules already caught.
+- The intake-related core test files (the pattern above): 80 files, 1734 passed, 2 skipped.
+- The brief phrasing fuzz and all four conversation fuzz shards stay at 0. Neither ratchet changed.
+- The NLU evaluation went from 350/356 to 351/356 (ho3-change-02), with 0 costly errors.
+- `pnpm typecheck` and `pnpm lint` pass.

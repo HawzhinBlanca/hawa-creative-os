@@ -91,7 +91,8 @@ import { createOfficeIntentModel, type OfficeIntentModel } from '../services/off
 import { createCopyExtractionModel, extractRequestCopy, type CopyExtractionModel } from '../services/request-copy-extraction.js';
 import { CLIENT_QUESTION_MS, CLIENT_QUESTION_RULES, answeredUpdateOf, clientName, clientQuestionTimeout, knownClientNames,
   overdueClientQuestions, pendingClientQuestion, readClientAnswer, readClientResolution, recordClientQuestion, resolveClientQuestion,
-  saysDontKnow, timedOutClientQuestion, type ClientQuestion } from '../services/lifecycle-client-question.js';
+  saysDontKnow, timedOutClientQuestion, type ClientQuestion, bareOrganisationName, clientQuestionNotes, deadlineWords, keepClientQuestionNote,
+  recentNamedOrganisation, recordNamedOrganisation, withClientQuestionNotes, type ClientQuestionNote } from '../services/lifecycle-client-question.js';
 import { plainClientAnswer, resolveSourceClient } from '../services/lifecycle-source-natural.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
@@ -951,13 +952,18 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             /** Opens a lifecycle request for a brief (ADR-135), one per language (ADR-139). */
             const openBrief = async (briefText: string, instructionOnly: boolean, takeHeldPhoto = true,
               /** ADR-235: the organisation the sender named for a kept brief, or the office to choose it; and its photo. */
-              opts: { clientId?: string; forOffice?: boolean; keptImage?: ClientQuestion['image']; clientChoice?: ClientChoice } = {}): Promise<Response> => {
+              opts: { clientId?: string; forOffice?: boolean; keptImage?: ClientQuestion['image']; clientChoice?: ClientChoice;
+                /** Conversation fuzz (2026-10-03): a change or a deadline kept with the brief while it waited for its answer. */
+                notes?: ClientQuestionNote[] } = {}): Promise<Response> => {
               // ADR-235: the kept brief whose question timed out opens, as it was kept, for the office to choose.
               if (clientTimeout && clientTimeout.briefUpdateId === update.update_id) {
-                briefText = clientTimeout.words;
+                const timedOut = clientTimeout;
+                briefText = timedOut.words;
+                // Conversation fuzz (2026-10-03): with the change or deadline kept with it while it waited.
+                const notes = await withRlsContext(db, system, (trx) => clientQuestionNotes(trx, TENANT, timedOut.briefUpdateId));
                 instructionOnly = clientTimeout.instructionOnly;
                 takeHeldPhoto = false;
-                opts = { forOffice: true, ...(clientTimeout.image ? { keptImage: clientTimeout.image } : {}),
+                opts = { forOffice: true, ...(clientTimeout.image ? { keptImage: clientTimeout.image } : {}), ...(notes.length ? { notes } : {}),
                   clientChoice: { outcome: 'timeout', lang: requesterLang(clientTimeout.words) } };
                 // ADR-284 addendum (live canary 2026-10-03): the request's first answer says it, with "a designer will
                 // make …", in one message; the notice is said only if the brief does not open after all.
@@ -1024,7 +1030,14 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   updateId: update.update_id, senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester' });
                 return parts.length>1 && allocation.kind==='multiple' ? {...draft,title:`${draft.title} (${parts.indexOf(part)+1}/${parts.length})`} : draft;
               };
-              const prepared = await prepare(parts[0]);
+              let prepared = await prepare(parts[0]);
+              // Conversation fuzz (2026-10-03): words kept with the brief while it waited are never its copy or its name.
+              // The requester's words keep them (the office reads them); a change is an instruction for the design too.
+              if (opts.notes?.length) {
+                const changes = opts.notes.filter((n) => n.kind === 'change').map((n) => n.words.trim());
+                prepared = { ...prepared, rawText: withClientQuestionNotes(prepared.rawText, opts.notes),
+                  ...(changes.length ? { designInstructions: [prepared.designInstructions, ...changes].filter(Boolean).join('\n\n') } : {}) };
+              }
               let lifecycleImage: ChatIntake['lifecycleImage'];
               if (opts.keptImage) {
                 // ADR-235: the photo the kept brief came with, retained when the question was asked.
@@ -1053,6 +1066,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               if (!opts.clientId && !opts.forOffice && parts.length === 1 && (!instructionOnly || readIntentByRules(briefText).intent === 'new_brief') &&
                   !parts[0].detailsRequired &&
                   prepared.clientId === null && !admittedAlbum && !boundPhoto && scope) {
+                // Conversation fuzz (2026-10-03): the organisation its sender named alone just before ("KAAE", then the brief)
+                // says who it is for; they were asked what to design for it, never again who it is for.
+                const named = await withRlsContext(db, system, (trx) => recentNamedOrganisation(trx, TENANT,
+                  { chatId, senderId: scope.senderId, topicId: scope.topic }, update.update_id));
+                if (named) return await openBrief(briefText, instructionOnly, takeHeldPhoto, named.clientId ? { ...opts, clientId: named.clientId }
+                  : { ...opts, forOffice: true, clientChoice: { outcome: 'unmatched', lang: requesterLang(briefText), named: named.name.slice(0, 120) } });
                 // A held photo is not used yet (the answer's brief takes it): its notice is not said.
                 beside = besideOnEntry;
                 return await askWhoItsFor(briefText, instructionOnly, scope, photoInput && lifecycleImage
@@ -1284,7 +1303,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   // designer will make …" came back to back. The request's first answer says both, in the answer's language.
                   const officeChooses = resolution.outcome === 'office' || resolution.outcome === 'unmatched' || resolution.outcome === 'expired'
                     ? { outcome: resolution.outcome, lang, ...(resolution.outcome === 'unmatched' && text.trim() ? { named: text.trim().slice(0, 120) } : {}) } as ClientChoice : null;
-                  return await openBrief(question.words, question.instructionOnly, true, {
+                  // Conversation fuzz (2026-10-03): a change or a deadline kept with the brief while it waited opens with it.
+                  const notes = await withRlsContext(db, system, (trx) => clientQuestionNotes(trx, TENANT, question.briefUpdateId));
+                  return await openBrief(question.words, question.instructionOnly, true, { ...(notes.length ? { notes } : {}),
                     ...(resolution.outcome === 'client' && resolution.clientId ? { clientId: resolution.clientId } : { forOffice: true }),
                     ...(officeChooses ? { clientChoice: officeChooses } : {}),
                     ...(question.image ? { keptImage: question.image } : {}) });
@@ -1437,12 +1458,46 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   }
                 }
                 // Words that answer neither question are read as usual; these two are about the waiting brief.
-                if (brief && plan.kind === 'reply' && plan.what === 'status' && !plan.requestIds.length) {
+                if (brief && plan.kind === 'reply' && plan.what === 'status' && !plan.requestIds.length && reading.intent !== 'deadline') {
                   return await decided(200, chatAnswer(say(ROUTING_MESSAGES.statusAwaitingAnswer, lang, { title: name(true), question: brief.text })));
                 }
                 if (brief && option && plan.kind === 'reply' && plan.what === 'nothing-to-cancel') {
                   plan = { kind: 'ask', intent: 'cancel', words: text, options: [{ requestId: option, title: keptBriefName(brief.words, lang, false) }], allowNew: false };
                   return await decided(200, chatAnswer(say(WITHDRAW_MESSAGES.askCancel, lang, { title: name(false) }), { choiceRequired: true }));
+                }
+                // Conversation fuzz (2026-10-03): a change no design on the way took went to the office as words about a design
+                // "no longer open"; a deadline got the question back and its words were lost. Both are kept with the brief,
+                // which opens with them, and the question is asked again.
+                const unplaced = plan.kind === 'forward' || (plan.kind === 'reply' && !plan.requestIds.length &&
+                  (plan.what === 'status' || plan.what === 'nothing-to-change'));
+                if (brief && unplaced && (reading.intent === 'change' || reading.intent === 'deadline')) {
+                  const kind = reading.intent;
+                  await withRlsContext(db, system, (trx) => keepClientQuestionNote(trx, TENANT,
+                    { briefUpdateId: brief.briefUpdateId, updateId: update.update_id, kind, words: text }));
+                  const when = kind === 'deadline' && lang === 'en' ? deadlineWords(text) : null;
+                  const phrase = kind === 'change' ? CLIENT_QUESTION_MESSAGES.changeKeptAsk
+                    : when ? CLIENT_QUESTION_MESSAGES.deadlineKeptAskWhen : CLIENT_QUESTION_MESSAGES.deadlineKeptAsk;
+                  plan = { kind: 'reply', what: 'nothing-to-change', requestIds: [] };
+                  return await decided(200, chatAnswer(say(phrase, lang, { title: name(false), question: brief.text, ...(when ? { when } : {}) }),
+                    { keptWithBrief: brief.briefUpdateId }));
+                }
+              }
+              /**
+               * Conversation fuzz (2026-10-03): an organisation's name sent alone with nothing open ("KAAE", "for Erbil Chess
+               * Club") opened a request for a designer named after it, or went to the office as words about a design "no longer
+               * open". Its sender is asked what to design for it, nothing opens, and the brief that follows is for it.
+               */
+              const scopeOfSender = senderScopeOf(update);
+              if (!priorIntent && !mediaKind && !waiting.question && !askedAboutBrief && scopeOfSender &&
+                  (plan.kind === 'open' || plan.kind === 'conversation' || plan.kind === 'forward') &&
+                  !requests.some((r) => ['designing', 'awaiting_answer', 'in_review', 'manual', 'approved', 'delivering'].includes(r.stage))) {
+                const bare = await withRlsContext(db, system, (trx) => bareOrganisationName(trx, TENANT, chatId, text));
+                if (bare) {
+                  await withRlsContext(db, system, (trx) => recordNamedOrganisation(trx, TENANT, { updateId: update.update_id, chatId,
+                    senderId: scopeOfSender.senderId, topicId: scopeOfSender.topic, name: bare.name, clientId: bare.clientId, at: new Date().toISOString() }));
+                  plan = { kind: 'reply', what: 'nothing-to-change', requestIds: [] };
+                  return await decided(200, chatAnswer(say(CLIENT_QUESTION_MESSAGES.whatToDesignFor, lang, { client: bold(bare.name) }),
+                    { namedOrganisation: bare.name }));
                 }
               }
               if (!priorIntent && (plan.kind === 'open' || plan.kind === 'revise' || plan.kind === 'redo' || plan.kind === 'conversation')) {

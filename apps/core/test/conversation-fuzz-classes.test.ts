@@ -232,3 +232,106 @@ describe('class 8 (J5): praise and closing wishes are thanks, never "a change or
     expect(answer.chatAnswer.text).toMatch(/^🙏 Thank you\./);
   });
 });
+
+/** The draft a kept brief opened with (its open decision's, as Core holds it). */
+const openedDrafts = async (chat: number) => (await withRlsContext(db, scope, (trx) => sql<{ draft: Record<string, any> }>`SELECT payload->'draft' AS draft
+  FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'lifecycle_chat_open'
+    AND payload->>'chatId' = ${String(chat)}`.execute(trx))).rows.map((r) => r.draft);
+
+describe('class 9 (J1): a change while the brief waits for "who is it for?" is kept with the brief, never "no longer open"', () => {
+  it('"make the title bigger": noted, the question again; it opens with the brief', async () => {
+    const chat = chatId();
+    expect(await intake(chat, NO_CLIENT_BRIEF)).toMatchObject({ clientQuestion: true });
+    // Before: "I've passed your message to the office", and an office alert that the design "is no longer open".
+    const answer = await intake(chat, 'make the title bigger');
+    expect(answer.lifecycleAction).toBe('chat-answer');
+    expect(answer.officeAlert).toBeUndefined();
+    expect(answer.chatAnswer.text).toBe("Got it. I've kept that with <b>Nawroz Celebration</b>. Who is this design for? Tell me the organisation's name.");
+    expect(await opened(chat)).toBe(0);
+    expect(await intake(chat, 'KAAE')).toMatchObject({ lifecycleAction: 'open-request' });
+    const [draft] = await openedDrafts(chat);
+    expect(draft.rawText).toContain('make the title bigger');
+    expect(draft.designInstructions).toContain('make the title bigger');
+    expect(JSON.stringify([draft.title, draft.exactCopy])).not.toContain('bigger');
+  });
+
+  it('the kept change opens with the brief when the question times out too', async () => {
+    const chat = chatId();
+    await intake(chat, NO_CLIENT_BRIEF);
+    const brief = nextUpdate;
+    await intake(chat, 'can you make the logo larger');
+    const due = await withRlsContext(db, scope, (trx) => clientQuestionTimeout(trx, tenantId, brief, Date.now() + 31 * 60_000));
+    expect(due).toMatchObject({ kind: 'open' });
+    const { clientQuestionNotes } = await import('../src/services/lifecycle-client-question.js');
+    expect((await withRlsContext(db, scope, (trx) => clientQuestionNotes(trx, tenantId, brief))).map((n) => n.words))
+      .toEqual(['can you make the logo larger']);
+  });
+});
+
+describe('class 10 (J1): a deadline while the brief waits is kept with the brief; its words are never lost', () => {
+  it('"need it by tomorrow": "Noted — by tomorrow." and the question; it opens with the brief', async () => {
+    const chat = chatId();
+    await intake(chat, NO_CLIENT_BRIEF);
+    // Before: the waiting question came back, and "need it by tomorrow" reached nobody.
+    const answer = await intake(chat, 'need it by tomorrow');
+    expect(answer.lifecycleAction).toBe('chat-answer');
+    expect(answer.chatAnswer.text).toBe("Noted — by tomorrow. Who is this design for? Tell me the organisation's name.");
+    expect(await opened(chat)).toBe(0);
+    expect(await intake(chat, 'KAAE')).toMatchObject({ lifecycleAction: 'open-request' });
+    const [draft] = await openedDrafts(chat);
+    expect(draft.rawText).toContain('need it by tomorrow');
+    expect(JSON.stringify([draft.title, draft.exactCopy])).not.toMatch(/tomorrow|Need It/);
+  });
+
+  it('"it\'s urgent": noted with the brief', async () => {
+    const chat = chatId();
+    await intake(chat, NO_CLIENT_BRIEF);
+    const answer = await intake(chat, "it's urgent");
+    expect(answer.chatAnswer.text).toMatch(/^Noted\. I've kept the timing with <b>Nawroz Celebration<\/b>\. Who is this design for\?/);
+    expect(await opened(chat)).toBe(0);
+  });
+});
+
+describe('class 11 (J1): a bare organisation name with nothing open asks what to design for it; it opens nothing', () => {
+  it.each([['Erbil Chess Club', 'Erbil Chess Club'], ['Erbil Chess Club.', 'Erbil Chess Club'], ['for Erbil Chess Club', 'Erbil Chess Club'],
+    ["It's for the Erbil Chess Club", 'Erbil Chess Club'], ['Kurdistan Engineers Union', 'Kurdistan Engineers Union'], ['KAAE', 'KAAE']])('"%s"', async (words, name) => {
+    const chat = chatId();
+    // Before: "KAAE" and "for Erbil Chess Club" opened a request for a designer; "It's for the Erbil Chess Club" went to
+    // the office as words about a design "no longer open"; "Erbil Chess Club" was greeted as if nothing was said.
+    const answer = await intake(chat, words);
+    expect(answer.lifecycleAction).toBe('chat-answer');
+    expect(answer.officeAlert).toBeUndefined();
+    expect(answer.chatAnswer.text).toBe(`What would you like designed for <b>${name}</b>? Tell me in your own words, with the text that should go on it.`);
+    expect(await opened(chat)).toBe(0);
+  });
+
+  it('the brief that follows is for that organisation: never asked "who is this design for?"', async () => {
+    const chat = chatId();
+    await intake(chat, 'KAAE');
+    expect(await intake(chat, NO_CLIENT_BRIEF)).toMatchObject({ lifecycleAction: 'open-request' });
+    const other = chatId();
+    await intake(other, 'Erbil Chess Club');
+    const answer = await intake(other, NO_CLIENT_BRIEF);
+    expect(answer.clientQuestion).toBeUndefined();
+    expect(answer.lifecycleAction).toBe('open-request');
+  });
+
+  it('a brief that names the organisation still opens as before', async () => {
+    const chat = chatId();
+    const answer = await intake(chat, 'Logo for Erbil Chess Club');
+    expect(answer.chatAnswer?.text ?? '').not.toMatch(/^What would you like designed for/);
+  });
+});
+
+describe('class 12 (J3): a visual complaint that names a part of the design is a change to it, never "change or new?"', () => {
+  it.each(['the logo looks squashed', 'the title is too small', 'the photo is blurry', 'text is cut off', 'the font looks stretched',
+    'background is too dark'])('"%s"', async (words) => {
+    const chat = chatId();
+    const { requestId } = await seed(chat, 'KAAE: Book Fair', 'in_review');
+    const answer = await intake(chat, words);
+    expect(answer.choiceRequired).toBeUndefined();
+    expect(answer).toMatchObject({ lifecycleAction: 'late-change', requestId });
+    expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, requestId))).toHaveLength(1);
+  });
+});
+

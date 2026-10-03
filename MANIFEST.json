@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T16:10:36Z",
+  "generatedAt": "2026-10-03T16:37:07Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1324,8 +1324,8 @@
     },
     {
       "path": "adrs/284_requester_intake_hunt3.md",
-      "sha256": "ec4f20b55100186aa445497d32fbea47506d73f63ecc7890c8adbaa85100fd30",
-      "bytes": 51833
+      "sha256": "c39b3f8fb6ff327f85a1e5b9f5f619528271d1f67a452743c6411b3a2040a1f3",
+      "bytes": 55043
     },
     {
       "path": "adrs/285_office_boundaries_after_bug_hunt_3.md",
@@ -2739,8 +2739,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "8ba96c230c77f6e7922bdf584427137294ac8691b21a03fffb7a61f8dacf668d",
-      "bytes": 81249
+      "sha256": "e6ba946c20aea180a27d03670f6697a005f68569410e0df1035bfb274e23359f",
+      "bytes": 76874
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -3189,8 +3189,8 @@
     },
     {
       "path": "plans/nlu-eval-2026-10-02/BASELINE.json",
-      "sha256": "c5cd88075944d6f97179a036fc7994a8574536b7b9aac6f2177841b800234192",
-      "bytes": 50973
+      "sha256": "55f34a56a52b9b59b9cf6c4e15694f94d530084dc65cdf91e69559bdf4637c09",
+      "bytes": 50380
     },
     {
       "path": "plans/nlu-eval-2026-10-02/MODEL_FIRST_RESULTS.md",
