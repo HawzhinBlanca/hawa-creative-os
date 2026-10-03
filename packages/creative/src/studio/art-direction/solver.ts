@@ -12,7 +12,7 @@ import type {
   TextElement,
 } from '../layout-v2.js';
 import { balancedBoxWidths, measureTextGeometry } from '../render-layout-v2.js';
-import { HOUSE_RULES, getSafeZoneBox, isStoryFormat, logoClearZone, minLogoWidth, requiredContrast } from '../house-rules.js';
+import { COPY_WIDTH_TOLERANCE_PX, HOUSE_RULES, getSafeZoneBox, isStoryFormat, logoClearZone, minLogoWidth, requiredContrast } from '../house-rules.js';
 import { calculateLuminanceContrastRatio, hexToLuminance } from '../composite-contrast.js';
 import { hexToRgb } from '../color-science.js';
 import { maxStrokeWidth } from '../studio-normalize.js';
@@ -695,7 +695,10 @@ class SolveContext {
       const flat = sets.flat();
       const titleOk = flat.every((b) => (b.block.slot === 'title' || b.block.slot === 'accent' ? b.lines <= titleLines : true));
       const bodyOk = flat.every((b) => (b.block.slot === 'cta' ? b.lines === 1 : b.lines <= 8));
-      if (titleOk && bodyOk && fits(sets)) return sets;
+      // No word runs past its column (a long word, a URL), and a call to action fits its pill, which is
+      // the column less the pill's padding (placeStack): hard QA's COPY_OVERFLOW refuses either.
+      const widthOk = flat.every((b) => b.lineWidth <= (b.block.slot === 'cta' ? b.width - 2 * this.pillPad(b).x : b.width + COPY_WIDTH_TOLERANCE_PX));
+      if (titleOk && bodyOk && widthOk && fits(sets)) return sets;
     }
     throw new RecipeInfeasibleError(this.recipe, `the copy does not fit ${this.W}x${this.H} at the house's smallest sizes`);
   }

@@ -12,6 +12,7 @@ import { studioReferenceFromRaw } from '../src/studio/hard-qa.js';
 import { encodeStudioTransferV2 } from '../src/studio/transfer-v2.js';
 import { checkCanvaPptx } from '../../qa/src/canva-pptx-check.js';
 import type { StudioLayoutV2 } from '../src/studio/layout-v2.js';
+import { RecipeInfeasibleError, solveRecipe, type SolverPhoto } from '../src/studio/art-direction/solver.js';
 
 /**
  * Hunt 3 (2026-10-03): adversarial deterministic briefs through the real composers. Each test is a
@@ -184,4 +185,33 @@ describe('the composer\'s contrast check is at least as strict as hard QA\'s', (
     if (!l) return;
     for (const t of l.text) expect(declaredTextContrast(l, t), `block ${t.copyIndex}`).toBeGreaterThanOrEqual(requiredContrast(t.fontSize, Boolean(t.bold)));
   });
+});
+
+describe('the recipe solver never sets a word or a call to action wider than its box', () => {
+  // Before: fitScale counted a block's lines but never compared its longest line with its column, and
+  // set a call to action measured on the full column into a pill narrower by its padding. On a 1080x1350
+  // mosaic "QUALITY ASSURANCE WORKSHOP" ran a 413px word in a 350px column and "Registration is free"
+  // wrapped inside its pill to 68px of text in a 35px box: hard QA's COPY_OVERFLOW refused both.
+  const lines = ['Quality Assurance Workshop', 'For university deans', '15 October 2026 · 9:30 AM', 'Rotana Hotel, Erbil', 'Registration is free'];
+  const slots = ['title', 'accent', 'meta', 'meta', 'cta'] as const;
+  const photos: SolverPhoto[] = [0, 1, 2, 3].map((i) => ({ photoIndex: i, width: 1280, height: 853, salient: { x: 0.45, y: 0.6 }, quiet: 'none' as const }));
+  for (const [width, height] of [[1080, 1350], [1080, 1080], [1920, 1080]] as const) {
+    for (const recipe of ['photo_mosaic', 'editorial_split', 'hero_fade_report', 'scrim_caption'] as const) {
+      it(`${recipe} ${width}x${height}`, () => {
+        let l: StudioLayoutV2 | undefined;
+        try {
+          l = solveRecipe({
+            width, height, copy: { text: Object.fromEntries(lines.map((t, i) => [i, t])) }, photos, photoSelection: { mode: 'choose', minimum: 1 }, palette: PALETTE, logoAspect: 1,
+            choice: { recipe, heroPhotoIndex: 0, texturePhotoIndex: null, supportingPhotoIndices: [1, 2, 3], cutoutPhotoIndex: null, slots: slots.map((slot, copyIndex) => ({ copyIndex, slot })), params: {} },
+          });
+        } catch (err) {
+          if (!(err instanceof RecipeInfeasibleError)) throw err;
+        }
+        if (l) expect(overflowing(l, lines)).toEqual([]);
+        if (l) for (const m of measureTextGeometry(l, Object.fromEntries(lines.map((t, i) => [i, t])))) {
+          if (m.status === 'measured') expect(m.requiredHeightPx, `block ${m.copyIndex}`).toBeLessThanOrEqual(l.text.find((t) => t.copyIndex === m.copyIndex)!.height + 1);
+        }
+      });
+    }
+  }
 });
