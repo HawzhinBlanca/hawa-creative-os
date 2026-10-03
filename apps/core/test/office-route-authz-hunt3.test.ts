@@ -32,3 +32,15 @@ describe('the review dispatch carries approval authority (hunt-3)', () => {
     expect(res.status).not.toBe(403);
   });
 });
+
+describe('promotion writes as the caller (hunt-3)', () => {
+  it('a non-administrator cannot name another tenant or user for the new task', async () => {
+    for (const body of [
+      { messageEventId: 'm1', tenantId: '00000000-0000-4000-a000-000000000007' },
+      { messageEventId: 'm2', userId: '00000000-0000-4000-b000-000000000007' },
+    ]) {
+      const res = await app.request('/v1/ingress/promote', as('operator', body));
+      expect(res.status, JSON.stringify(body)).toBe(403);
+    }
+  });
+});
