@@ -1288,36 +1288,48 @@ describe('one person who is both the requester and an office member (ADR-239, li
   const withdraw = (requestId: string, update: { update_id: number }) => recordWithdraw(objectFor(requestId), core,
     { v: 1, kind: 'withdraw', eventId: `chatinbox:withdraw:${update.update_id}`, requestId, updateId: update.update_id });
 
-  it('the owner\'s exact words cancel their own draft as its requester: withdrawn and told so, never "Rejected"', async () => {
+  it('the owner\'s exact words cancel their own draft as its requester: withdrawn after they confirm and told so, never "Rejected"', async () => {
     await emptyQueue();
     const draft = await draftInReview('KAAE: Quality Assurance Workshop', { requesterChat: String(OFFICE_A), requesterName: 'Hawzhin' });
     const { calls } = gateway();
     const words = say(OFFICE_A, 'please cancel the Quality Assurance Workshop poster, it was only a test');
-    const decided = await intake(words);
+    const asked = await intake(words);
     // Live, 2026-10-01: "About the <b>KAAE: Quality Assurance Workshop</b> draft I sent you just now:\nRejected: …
-    // Nothing was sent to you." Now intake decides the requester's withdraw and says nothing yet.
+    // Nothing was sent to you." Now intake asks as it asks any requester (ADR-284 addendum, conversation fuzz).
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true,
+      chatAnswer: { text: 'Do you want me to cancel <b>Quality Assurance Workshop</b>?' } });
+    expect(asked.officeTurn).toBeUndefined();
+    expect(calls).toHaveLength(0);
+    expect((await rows(draft.requestId, draft.taskId)).request).toMatchObject({ stage: 'in_review' });
+    // Their "yes" answers as the requester: intake decides the withdraw and says nothing yet.
+    const yes = say(OFFICE_A, 'yes');
+    const decided = await intake(yes);
     expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId: draft.requestId, requestStage: 'in_review' });
     expect(decided.chatAnswer).toBeUndefined();
     expect(calls).toHaveLength(0);
     sent.length = 0;
-    expect(await withdraw(draft.requestId, words)).toMatchObject({ accepted: true, stage: 'cancelled', fromStage: 'in_review' });
+    expect(await withdraw(draft.requestId, yes)).toMatchObject({ accepted: true, stage: 'cancelled', fromStage: 'in_review' });
     expect(sent.filter((m) => m.chatId === String(OFFICE_A)).map((m) => m.text))
       .toEqual(['Cancelled <b>Quality Assurance Workshop</b>. Nothing more will be made for it.']);
     expect(sent.map((m) => m.text).join('\n')).not.toMatch(/Rejected/);
     expect(await rows(draft.requestId, draft.taskId)).toMatchObject({ request: { stage: 'cancelled' }, approvals: [] });
-    // A replay of the same update is handed over again, whatever the queue holds now.
-    expect(await intake(words)).toMatchObject({ lifecycleAction: 'withdraw', requestId: draft.requestId });
+    // A replay of the same confirming update is handed over again, whatever the queue holds now.
+    expect(await intake(yes)).toMatchObject({ lifecycleAction: 'withdraw', requestId: draft.requestId });
     expect(calls).toHaveLength(0);
   });
 
-  it('"cancel this" in reply to the picture of their own draft withdraws it the same way', async () => {
+  it('"cancel this" in reply to the picture of their own draft is asked the same way, and withdrawn after they confirm', async () => {
     await emptyQueue();
     const other = await draftInReview('Clinic leaflet', { alertedMinutesAgo: 5 });
     const own = await draftInReview('KAAE: Nawroz greeting', { requesterChat: String(OFFICE_A), requesterName: 'Hawzhin' });
     const { calls } = gateway();
     const words = say(OFFICE_A, 'cancel this', replyTo(own.messageIds[OFFICE_A]));
-    expect(await intake(words)).toMatchObject({ lifecycleAction: 'withdraw', requestId: own.requestId });
-    expect(await withdraw(own.requestId, words)).toMatchObject({ accepted: true, stage: 'cancelled' });
+    expect(await intake(words)).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true,
+      chatAnswer: { text: 'Do you want me to cancel <b>Nawroz greeting</b>?' } });
+    expect((await rows(own.requestId, own.taskId)).request).toMatchObject({ stage: 'in_review' });
+    const yes = say(OFFICE_A, 'yes');
+    expect(await intake(yes)).toMatchObject({ lifecycleAction: 'withdraw', requestId: own.requestId });
+    expect(await withdraw(own.requestId, yes)).toMatchObject({ accepted: true, stage: 'cancelled' });
     expect(calls).toHaveLength(0);
     // The other requester's draft is untouched.
     expect(await rows(other.requestId, other.taskId)).toMatchObject({ request: { stage: 'in_review' }, approvals: [] });
