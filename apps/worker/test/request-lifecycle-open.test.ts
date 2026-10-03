@@ -98,6 +98,35 @@ describe('RequestLifecycle first manual open', () => {
     expect(c.post).toHaveBeenCalledTimes(1);
   });
 
+  it('ADR-284 addendum (live canary 2026-10-03): the office chooses the organisation: one first answer says both things', async () => {
+    // The requester heard "No problem. I've passed it to the office, and they'll choose the organisation." from Core and
+    // then "Got it. A designer will make … and send it to you here." from here: two messages back to back.
+    const cases = [
+      ['office', 'en', "No problem. I've passed it to the office, and they'll choose the organisation. A designer will make <b>Autumn event</b> and send it to you here."],
+      ['unmatched', 'en', "I couldn't match that to an organisation I know, so I've passed it to the office to choose. A designer will make <b>Autumn event</b> and send it to you here."],
+      ['expired', 'en', "It's been a while since I asked, so I've passed your request to the office to choose the organisation. A designer will make <b>Autumn event</b> and send it to you here."],
+      ['timeout', 'en', "I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. A designer will make <b>Autumn event</b> and send it to you here."],
+      // In the language of the answer: an English brief answered in Sorani.
+      ['office', 'ckb', 'کێشە نییە. ناردم بۆ ئۆفیسەکە، ئەوان دامەزراوەکە هەڵدەبژێرن. دیزاینەرێک <b>Autumn event</b> دروست دەکات و لێرە بۆت دەنێرێت.'],
+    ] as const;
+    for (const [outcome, lang, text] of cases) {
+      const e = event();
+      const ctx = new FakeContext(e.requestId);
+      await openManualRequest(ctx, coreInternalFixture({ v: 1, taskId: randomUUID(), stage: 'manual', rev: 1, autoGenerate: false,
+        clientChoice: { outcome, lang } }), e);
+      expect(ctx.sent, outcome).toHaveLength(1);
+      expect(ctx.sent[0]).toMatchObject({ key: `${e.requestId}:1:ack`, parseMode: 'HTML', text });
+      // The request keeps the brief's own language for everything after.
+      expect(ctx.state).toMatchObject({ lang: 'en', initialClientChoice: { outcome, lang } });
+    }
+    // Anything Core did not mean is the usual first answer.
+    const e = event();
+    const ctx = new FakeContext(e.requestId);
+    await openManualRequest(ctx, coreInternalFixture({ v: 1, taskId: randomUUID(), stage: 'manual', rev: 1, autoGenerate: false,
+      clientChoice: { outcome: 'guess', lang: 'en' } }), e);
+    expect(ctx.sent[0].text).toBe('Got it. A designer will make <b>Autumn event</b> and send it to you here.');
+  });
+
   it('registers the stable RequestLifecycle service name', () => {
     const service = createRequestLifecycle(core());
     expect(service.name).toBe('RequestLifecycle');

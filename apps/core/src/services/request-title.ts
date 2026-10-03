@@ -86,6 +86,93 @@ export function spokenTitle(line: string): string {
   return said.split(/\s+/).filter(Boolean).length < 2 ? line : said.replace(/^[a-z]/, (c) => c.toUpperCase());
 }
 
+// --- the name without its date, time and place (ADR-284 addendum, live canary 2026-10-03) ---------------
+
+const WEEKDAY = '(?:mon|tues|wednes|thurs|fri|satur|sun)day';
+const MONTH_AT = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\p{L}*';
+const MONTH_NAME = '(?:january|february|march|april|may|june|july|august|september|october|november|december)';
+/** A day: "9 October", "October 9", "9/10", "the 9th", "tomorrow". A weekday needs a word before it (below). */
+const DAY = `(?:\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?${MONTH_AT}|${MONTH_AT}\\s+\\d{1,2}(?:st|nd|rd|th)?\\b|\\d{1,2}\\s*[/.]\\s*\\d{1,2}(?:\\s*[/.]\\s*\\d{2,4})?\\b|the\\s+\\d{1,2}(?:st|nd|rd|th)\\b)`;
+const HOUR = '(?:\\d{1,2}(?:[:.]\\d{2})?\\s*(?:am|pm|a\\.m\\.|p\\.m\\.)(?![\\p{L}])|\\d{1,2}:\\d{2}\\b|noon\\b|midday\\b|midnight\\b)';
+const VENUE_WORD = '(?:hall|hotel|hotell?|ballroom|room|auditorium|theat(?:re|er)|cent(?:re|er)|mall|park|stadium|campus|library|gallery|gardens?|museum|school|university|college|office|building|square|restaurant|cafe|club|venue|lobby|courtyard|arena|citadel)';
+/** Where a Sorani month starts (a headline cut at 65 characters may end inside "تشرینی دووەم"). */
+const MONTHS_CKB = 'کانوونی|شوبات|ئازار|نیسان|ئایار|حوزەیران|تەمموز|ئاب|ئەیلوول|تشرینی|' +
+  'خاکەلێوە|گوڵان|جۆزەردان|پووشپەڕ|گەلاوێژ|خەرمانان|ڕەزبەر|گەڵاڕێزان|سەرماوەز|بەفرانبار|ڕێبەندان|ڕەشەمە';
+const DIGIT_CKB = '[\\d٠-٩۰-۹]';
+/** Sorani: a day of a month ("٢٠ی ئازار", "٢٥ی مانگ"), a date with slashes, an hour ("کاتژمێر ٥"), a weekday ("ڕۆژی پێنجشەممە"). */
+const DAY_CKB = `(?:(?:ڕێکەوتی|بەرواری)\\s+)?(?:${DIGIT_CKB}{1,2}\\s*ی?\\s*(?:${MONTHS_CKB}|مانگ)|${DIGIT_CKB}{1,2}\\s*/\\s*${DIGIT_CKB}{1,2}|کاتژمێر\\s*${DIGIT_CKB}|ڕۆژی\\s+(?:شەممە|یەکشەممە|دووشەممە|سێشەممە|چوارشەممە|پێنجشەممە|هەینی))`;
+const VENUE_CKB = '(?:هۆڵی|هۆتێلی|پارکی|سەنتەری|ناوەندی|زانکۆی|قوتابخانەی)';
+
+/**
+ * Where the date, time or place said after a design's name starts, as people write them after the name:
+ * " on Thursday 9 October", " at 10am", " this Thursday", " next week", " from 9 to 12 November",
+ * ", 8 November", " in June", " in the main hall" (a place: only after a name of two words or more, so
+ * "Art in the Park" keeps its words), and the Sorani " لە ٢٠ی ئازار", "، ١٢ی تشرینی یەکەم", " لە هۆڵی …".
+ * A weekday needs a word before it ("on", "this", "next", a comma): "Black Friday Sale" is a name.
+ */
+const TAILS: Array<{ re: RegExp; twoWords?: true }> = [
+  { re: new RegExp(`(?:\\s+(?:on|from|starting|until|till|by|every)\\s+(?:the\\s+)?|\\s*[,;–—]\\s*|\\s+-\\s+|\\s+)${DAY}`, 'iu') },
+  { re: new RegExp(`(?:\\s+(?:on|this|next|coming|every)\\s+|\\s*[,;–—]\\s*)${WEEKDAY}\\b`, 'iu') },
+  { re: /\s+(?:this|next|coming)\s+(?:week(?:end)?|month|year|term|semester)\b|\s+(?:tomorrow|today|tonight)\b/iu },
+  { re: new RegExp(`\\s+(?:from|between)\\s+(?:the\\s+)?(?:\\d|${WEEKDAY}\\b|${MONTH_AT}\\s+\\d)`, 'iu') },
+  { re: new RegExp(`(?:\\s+(?:at|from|@)\\s+|\\s*[,;–—]\\s*|\\s+)${HOUR}`, 'iu') },
+  { re: new RegExp(`\\s+in\\s+(?:early\\s+|late\\s+|mid-?)?${MONTH_NAME}\\b`, 'iu') },
+  { re: new RegExp(`\\s+(?:in|at)\\s+(?:the\\s+)?(?:[\\p{L}\\p{N}'’&.-]+\\s+){0,4}?${VENUE_WORD}\\b`, 'iu'), twoWords: true },
+  { re: /\s+(?:in|at)\s+the\s+\S/iu, twoWords: true },
+  { re: new RegExp(`(?:\\s+لە\\s+|\\s*[،,]\\s*|\\s+)${DAY_CKB}`, 'u') },
+  { re: new RegExp(`(?:\\s+لە\\s+|\\s*[،,]\\s*)${VENUE_CKB}\\s`, 'u'), twoWords: true },
+];
+/**
+ * "for school principals", "for all students": who it is for, at the end of the name, said with a word for
+ * people. "Invitation card for the graduation ceremony" names its event, and "Run for Hope" is a name.
+ */
+const AUDIENCE = /\s+for\s+(?:(?:the|our|all|every|new)\s+)?(?:[\p{L}-]+\s+){0,2}(?:principals|deans|students|pupils|teachers|parents|staff|members|employees|families|children|kids|alumni|graduates|everyone|public|participants|attendees|guests|professors|lecturers|academics|doctors|nurses|youth|women|men|managers|leaders|colleagues|faculty|trainees|beginners|researchers|volunteers|partners|customers|clients)$/iu;
+/** A head that is a sentence rather than a name ("we're hoping for something …", "could we get …"). */
+const NOT_A_NAME = /\b(?:i|i'm|we|we're|we'd|you|could|can|would|will|need|want|like|hoping|make|do|get|please|something|anything)\b/iu;
+const FORMAT_ONLY = new RegExp(`^(?:(?:a|an|the|our|my|this)\\s+)?(?:${TITLE_NOUNS})s?$`, 'iu');
+/** Small words kept small inside a title-cased name. */
+const SMALL_WORDS = /^(?:a|an|the|and|or|of|for|in|on|at|to|by|with|from|&)$/iu;
+
+const wordsOf = (text: string) => text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+/** The name before `index`, without the separators and small words left at its end. */
+const headAt = (name: string, index: number) => name.slice(0, index).replace(/(?:[\s,;:–—·-]+|\s+(?:and|or|on|at|in|for|the|from|لە|و))+$/iu, '').trim();
+/** A head that still names something: a word with letters, and more than a format ("Poster"). */
+const namesSomething = (head: string, twoWords: boolean) => {
+  const words = wordsOf(head);
+  return words.length >= (twoWords ? 2 : 1) && words.some((w) => /\p{L}/u.test(w)) && !FORMAT_ONLY.test(head);
+};
+
+/**
+ * ADR-284 addendum (live canary 2026-10-03): "Hi! Could you make a poster announcing our staff workshop on
+ * Thursday 9 October at 10am in the main hall?" was named "Staff workshop on Thursday 9 October at 10am in
+ * the main…" to the requester and the office. A title names the thing ("Staff Workshop"): the name stops
+ * before the date, time or place said after it, and, when the name is still longer than `fit`, before an
+ * audience said in small letters ("for school principals"). A name the requester wrote whole keeps their
+ * words and casing; a Latin name taken out of a longer phrase is title-cased as people write event names.
+ * Only the title changes: the copy keeps every word. A name that would lose its last word stays as it was.
+ */
+export function titleName(line: string, fit = TITLE_CUT_LENGTH): string {
+  const name = line.replace(/[\s?؟!.,،:;]+$/u, '').trim();
+  let cut = -1;
+  for (const tail of TAILS) {
+    const m = tail.re.exec(name);
+    if (m && m.index > 0 && (cut < 0 || m.index < cut) && namesSomething(headAt(name, m.index), Boolean(tail.twoWords))) cut = m.index;
+  }
+  let head = cut > 0 ? headAt(name, cut) : name;
+  // An audience goes with the date it was said beside, or when the name would not fit whole.
+  const audience = (cut > 0 || Array.from(head).length > fit) ? AUDIENCE.exec(head) : null;
+  if (audience && audience.index > 0) {
+    const named = headAt(head, audience.index);
+    if (namesSomething(named, true) && !NOT_A_NAME.test(named)) head = named;
+  }
+  if (head === name) return line;
+  const words = head.split(/\s+/);
+  // Title case only for a short Latin name (a sentence left by an unrecognised lead-in keeps its casing).
+  if (/[؀-ۿ]/u.test(head) || words.length > 6) return head;
+  return words.map((word, i) => (i > 0 && SMALL_WORDS.test(word)) || /\p{Lu}/u.test(word) ? word
+    : word.replace(/^\p{Ll}/u, (c) => c.toUpperCase())).join(' ');
+}
+
 /**
  * A request's title from its headline (the first line that names it) and its label (the client's short
  * name, else the sender's): "<label>: <name>…", or "<name>…" when the name already starts with the
@@ -102,7 +189,8 @@ export function requestTitle(input: { headline: string; label: string; rawText?:
   const said = trimTitleMarks(spokenTitle(trimTitleMarks(headline)));
   // ADR-253 (L21): "KAAE's Quality Assurance Workshop" is titled "KAAE: Quality Assurance Workshop…", the
   // same form as any other title, never "KAAE's …" beside a sibling's "KAAE: …".
-  const line = (input.clientLabel && label && afterPossessive(said, label)) || said;
+  // ADR-284 addendum (live canary 2026-10-03): the name without the date, time and place said after it.
+  const line = titleName((input.clientLabel && label && afterPossessive(said, label)) || said);
   if (!line) return `${label}: no copy sent`;
   // ADR-255 (live 2026-10-02): "…" says the name was cut; a whole name ("Harvest Fair") ends as it is.
   const cut = cutText(line, TITLE_CUT_LENGTH);
