@@ -173,3 +173,22 @@ describe('a tag row whose identifiers disagree (hunt-3)', () => {
     expect(again.usable).toBe(1);
   });
 });
+
+describe('links in the archive folder (hunt-3)', () => {
+  it('a symbolic link is not followed, and is reported rather than silently left out', async () => {
+    const { symlinkSync } = await import('node:fs');
+    const source = tmp('olp-h3-link-');
+    const outside = tmp('olp-h3-outside-');
+    const root = tmp('olp-h3-root-');
+    writeFileSync(path.join(outside, 'private.png'), syntheticPhoto(900, 900, 91));
+    symlinkSync(path.join(outside, 'private.png'), path.join(source, 'linked.png'));
+    symlinkSync(outside, path.join(source, 'linked-folder'));
+    writeFileSync(path.join(source, 'ok.png'), syntheticPhoto(900, 900, 92));
+    const report = await ingestOfficePhotoFolder({ sourceDir: source, libraryRoot: root, clientId: 'kaae' });
+    expect(report.added).toHaveLength(1);
+    expect(report.skipped).toEqual([
+      { source: 'linked-folder', reason: 'a symbolic link; links are not followed' },
+      { source: 'linked.png', reason: 'a symbolic link; links are not followed' },
+    ]);
+  });
+});

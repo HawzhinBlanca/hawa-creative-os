@@ -309,19 +309,22 @@ async function storedIntact(clientDir: string, entry: OfficePhotoEntry): Promise
   return Boolean(bytes && sha256(bytes) === entry.storedSha256);
 }
 
-async function listFiles(dir: string, skip: string): Promise<string[]> {
-  const out: string[] = [];
+/** The files under `dir`, sorted; symbolic links are listed apart and never followed (one could lead out of the archive). */
+async function listFiles(dir: string, skip: string): Promise<{ files: string[]; links: string[] }> {
+  const files: string[] = [];
+  const links: string[] = [];
   const walk = async (d: string) => {
     for (const entry of (await fs.readdir(d, { withFileTypes: true })).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
       if (entry.name.startsWith('.')) continue;
       const full = path.join(d, entry.name);
       if (path.resolve(full) === skip) continue;
-      if (entry.isDirectory()) await walk(full);
-      else if (entry.isFile()) out.push(full);
+      if (entry.isSymbolicLink()) links.push(full);
+      else if (entry.isDirectory()) await walk(full);
+      else if (entry.isFile()) files.push(full);
     }
   };
   await walk(dir);
-  return out;
+  return { files, links };
 }
 
 function applyTags(base: OfficePhotoTags, patch: Partial<OfficePhotoTags>): OfficePhotoTags {
@@ -347,7 +350,11 @@ export async function ingestOfficePhotoFolder(options: OfficePhotoIngestOptions)
   const pendingFiles = new Map<string, Buffer>();
   const seenThisRun = new Set<string>();
 
-  for (const file of await listFiles(path.resolve(options.sourceDir), path.resolve(clientDir))) {
+  const listed = await listFiles(path.resolve(options.sourceDir), path.resolve(clientDir));
+  for (const link of listed.links) {
+    report.skipped.push({ source: path.relative(path.resolve(options.sourceDir), link).split(path.sep).join('/').slice(0, 300), reason: 'a symbolic link; links are not followed' });
+  }
+  for (const file of listed.files) {
     const sourceName = path.relative(path.resolve(options.sourceDir), file).split(path.sep).join('/');
     // One unusable name used to fail the whole run at the manifest check, after every photo was measured.
     if (!sourceNameFits(sourceName)) { report.skipped.push({ source: sourceName.slice(0, 300), reason: 'its path in the folder is too long or not one line; rename it' }); continue; }
