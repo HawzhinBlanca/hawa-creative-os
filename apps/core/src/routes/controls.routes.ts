@@ -130,6 +130,8 @@ export function registerControlsRoutes(ctx: RouteContext): void {
       const result = await redriveTask(taskId, undefined, { id: auth.userId || 'operator', role: auth.role || 'operator' });
       if (!result.ok && (result as any).code === 'TASK_GENERATION_BLOCKED') return problem(c, 409, 'TASK_GENERATION_BLOCKED', (result as any).message || '');
       if (!result.ok && (result as any).code === 'LIFECYCLE_OWNED') return problem(c, 409, 'LIFECYCLE_OWNED', (result as any).message || '');
+      // ADR-287: the task workflow that re-drove a studio task outside RequestLifecycle is retired.
+      if (!result.ok && result.code === 'LEGACY_WORKFLOW_RETIRED') return problem(c, 409, 'LEGACY_WORKFLOW_RETIRED', result.message || '');
       if (!result.ok && (result as any).code === 'CLIENT_REQUIRED') return problem(c, 422, 'CLIENT_REQUIRED', (result as any).message || '');
       if (!result.ok && (result as any).code === 'TASK_NOT_FOUND') return problem(c, 404, 'TASK_NOT_FOUND', (result as any).message || '');
       return c.json(result, result.ok ? 200 : 500);

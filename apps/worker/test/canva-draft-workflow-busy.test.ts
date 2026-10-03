@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { runCanvaDraft, OUTCOME_REPORT_RETRY_MS } from '../src/canva-draft-workflow.js';
-import type { WorkflowInput } from '../src/workflow.js';
+import type { WorkflowInput } from '../src/design-input.js';
 
 /**
  * A studio start that Core answers with 429 STUDIO_BUSY (two of the tenant's runs still unfinished)

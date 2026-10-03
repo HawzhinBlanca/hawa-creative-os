@@ -396,7 +396,7 @@ Placed today, in the worker only:
 |---|---|---|
 | `worker.outbox.after-claim` | `outbox-consumer.ts` `processClaim`, before the handler | claimed, nothing done; the lease must run out and another claim act once |
 | `worker.outbox.before-record` | after the handler, before the result is recorded | acted, not recorded; the handler's own checks must stop a second act |
-| `worker.dispatch.after-submit` | `workflow-dispatcher.ts`, after Restate accepted the workflow | a re-dispatch must meet Restate's 409 |
+| `worker.dispatch.after-submit` | retired with the task workflow dispatch (ADR-287); no scenario used it since ADR-135 | — |
 | `worker.step.after-action` (`detail.step`) | `durable-context.ts` `withStepChaosPoints`, inside every `TaskWorkflow` step after its action, before Restate journals it | the step runs again on replay; Core's idempotency keys must make it harmless |
 | `worker.sender.after-telegram` (`detail.kind`, `step`) | `outbox-consumer.ts` `sendOnce`, after the Telegram send, before the `sent` mark | the send is only `attempted` on record: must end uncertain, never sent twice, one office alert |
 | `worker.poller.after-getupdates` (`detail.chats`) | `lifecycle/telegram-poller.ts`, after getUpdates returned updates, before any is handed on | nothing handed on, offset unmoved: the next poll asks again |

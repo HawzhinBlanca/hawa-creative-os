@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as restate from '@restatedev/restate-sdk';
 import { runCanvaDraft } from '../src/canva-draft-workflow.js';
-import type { WorkflowInput } from '../src/workflow.js';
+import type { WorkflowInput } from '../src/design-input.js';
 
 /**
  * Bug hunt 2026-09-24: what the worker leaves behind when it gives up on a studio run.

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { runCanvaDraft } from '../src/canva-draft-workflow.js';
-import type { WorkflowInput } from '../src/workflow.js';
+import type { WorkflowInput } from '../src/design-input.js';
 
 /**
  * Every automatic draft imports and exports through the office's one Canva connection, and Canva

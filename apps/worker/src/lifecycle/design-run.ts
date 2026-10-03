@@ -2,7 +2,7 @@
 import * as restate from '@restatedev/restate-sdk';
 import { withStepChaosPoints, type WorkflowDurableContext, type WorkflowStepRetry } from '../durable-context.js';
 import { runCanvaDraft, type LifecycleOutcomeReporter } from '../canva-draft-workflow.js';
-import type { WorkflowInput, WorkflowOutput } from '../workflow.js';
+import type { WorkflowInput, WorkflowOutput } from '../design-input.js';
 import { withInvocationLogContext } from '../logging.js';
 import { RequestLifecycleApi, type DesignFinishedEvent } from './request-lifecycle.js';
 import { TelegramSenderApi } from './telegram-sender.js';
@@ -63,7 +63,7 @@ export async function runOwnedDesign(
   if (!validDesignRun(input, key)) {
     throw new restate.TerminalError('DESIGN_RUN_REFUSED: invalid request, task or workflow identity', { errorCode: 409 });
   }
-  return runCanvaDraft(input, ctx, fetcher, undefined, {
+  return runCanvaDraft(input, ctx, fetcher, {
     requestId: input.lifecycle.requestId, runId: input.lifecycle.runId, report, ...(started ? { started } : {}),
   });
 }
