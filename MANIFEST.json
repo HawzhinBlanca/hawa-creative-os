@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T11:14:46Z",
+  "generatedAt": "2026-10-03T11:22:09Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1339,8 +1339,8 @@
     },
     {
       "path": "adrs/289_every_paid_call_in_one_report.md",
-      "sha256": "46d0493d6c335ce4699ceebd6cee8101a507faa63bb3e2952db82e4350336bc5",
-      "bytes": 13436
+      "sha256": "9568883d0f43e10d5e29815ec8a24f1abf3781ce1624cf72bad38edc3d43490b",
+      "bytes": 16170
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -3679,8 +3679,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "e091c7ed688e699551c7eda93fdc64db5c971ec3fb6939db3fb1b6904a09720d",
-      "bytes": 913738
+      "sha256": "497bc5c78e5afc547b1824330cc0f7fc7191d14ae6c869d65b6f7682762848a5",
+      "bytes": 914086
     },
     {
       "path": "plans/user-stories.csv",
