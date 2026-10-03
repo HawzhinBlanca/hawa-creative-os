@@ -67,3 +67,15 @@ describe('re-driving a design spends on it again (hunt-3)', () => {
     expect((await app.request(`/v1/tasks/${taskId}/redrive`, as('operator'))).status).not.toBe(403);
   });
 });
+
+describe('the Canva outcome notification is the worker\'s (hunt-3)', () => {
+  // It records the task's outcome and messages the requester a Canva link.
+  it.each(['auditor', 'requester', 'designer', 'art_director'])('%s cannot report an outcome', async (role) => {
+    const res = await app.request('/v1/tasks/00000000-0000-4000-8000-0000000000aa/notifications/canva-status', as(role, { status: 'DRAFT_READY', designId: 'DAFabcd1234' }));
+    expect(res.status).toBe(403);
+  });
+  it('the operator role (the design worker) is not refused for the role', async () => {
+    const res = await app.request('/v1/tasks/00000000-0000-4000-8000-0000000000aa/notifications/canva-status', as('operator', { status: 'DRAFT_READY' }));
+    expect(res.status).not.toBe(403);
+  });
+});
