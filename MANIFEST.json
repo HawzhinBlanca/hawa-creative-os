@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T10:49:58Z",
+  "generatedAt": "2026-10-03T12:01:23Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 916,
+  "fileCount": 918,
   "files": [
     {
       "path": ".dockerignore",
@@ -2358,6 +2358,16 @@
       "bytes": 16078
     },
     {
+      "path": "plans/hawzhin-app-integration-2026-10-02/LIVE_CLIENT_GENERATION_PROOF.json",
+      "sha256": "62e09ce46846af5496a84da2d5eace25e0ab29132d25c50f78791c997c38864e",
+      "bytes": 7772
+    },
+    {
+      "path": "plans/hawzhin-app-integration-2026-10-02/NATIVE_BRAND_PROVIDER_WAIT_PROOF.json",
+      "sha256": "cec2288e616b4960db96aabc41a1a018b311b76ed128c5d5ca670b4b4ce552e8",
+      "bytes": 4444
+    },
+    {
       "path": "plans/hawzhin-app-integration-2026-10-02/NATIVE_CUSTOMER_CORE_PROOF.json",
       "sha256": "df3faf7db71da4f33b65794fadf6bbabd700d1710a840c935d4e04f152de15ee",
       "bytes": 4087
@@ -2379,8 +2389,8 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/PLAN.md",
-      "sha256": "62fee3d2c40794431290f5c4b6686f1423ee8515d06a500adfeb27aad6e454ed",
-      "bytes": 26156
+      "sha256": "de3587ea60caa3d43f4bbefc379e9dec5bc87b61e1784c8af4b37fe240d2cf03",
+      "bytes": 28090
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/WEBSITE_CI_PROOF.json",
@@ -3604,8 +3614,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "70ea9bd7a67562ffd588ff1919cd0e7bdd7bc88faaf4d90da665e68398f35908",
-      "bytes": 910416
+      "sha256": "09bb9988d2095f77ae4fea02c6c899e5578590aaef86f1a9c2f4ea48818e76fb",
+      "bytes": 915825
     },
     {
       "path": "plans/user-stories.csv",
@@ -4079,8 +4089,8 @@
     },
     {
       "path": "scripts/kaae_2025_guideline_live_trial.ts",
-      "sha256": "2169662fc483d3f25af5accd269a6f6e04abbc06c5a6471457c36a306b25771e",
-      "bytes": 30411
+      "sha256": "d3002a34ae81bc2afe160a210df5222e10eea72663c655e8a388ead91d6983ad",
+      "bytes": 30878
     },
     {
       "path": "scripts/launch_hawa_os.sh",

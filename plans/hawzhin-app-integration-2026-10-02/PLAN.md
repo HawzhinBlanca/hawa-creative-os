@@ -279,3 +279,31 @@ stale parent cleanup metadata; the fresh lane reloads the child's marker and
 retains exact container/login/volume cleanup. Both fixtures and private inputs
 removed; ten prior containers unchanged. Current full suites/expiry/coverage not
 rerun. NATIVE_WORKER_HANDOFF_PROOF.json cross-links the website report/hash.
+
+## Valid brand/font provider wait and actual paid v3 trial — 2026-10-03
+
+Website cb3b77b/ADR0023 now proves the unchanged real browser request with actual
+versioned DNA, verified stored logo/palette and fonts that cover its mixed copy.
+23 Core/9 browser intake/8 worker/8 browser readback pass. Native Restate's exact
+dr-<browser-task-id> records MODEL_NOT_CONFIGURED/backing-off; the providerless
+fixture keeps the queued request/notice after native login/reload. Initial
+21-vs20 guard, vendor bootstrap failure, Noto glyph refusal and6/2 incorrect
+terminal-outcome assertions remain in the proof. Production retry policy is unchanged.
+All five owned fixtures cleaned; ten pre-existing containers unchanged. No paid
+provider or Canva is connected to this web lane, and it proves no completed design.
+
+A separate actual gpt-6.1-sol workshop trial uses v3 (stored tournament evidence),
+13 calls/$0.19488/182.5s, passes local QA and produces a PPTX with5 exact live copy
+strings/7 text shapes/2 pictures. Inter/Inter ExtraBold are admitted KAAE poster
+faces; Crimson Pro is the document heading preference, not a universal poster rule.
+The suspected root-only source-channel bypass is disproved: the task repository
+retains both root and payload and the real tournament is explicitly v3. The trial
+script now records the stored mode and input hashes to prevent future guesswork.
+Native Canva upload remains unverified: connector raw PPTX upload403, then a fresh
+URL400 Unsupported file format ZIP. Browser upload confirmation is pending.
+Model judge status is advisory, not human-quality admission. No production
+deployment/push/public activation. Full customer provider/Canva/photos/revision/
+accept/download, native RTL/fonts/edit-save-reexport/human/taste, hosted tools/PWA,
+interrupted state/restore/coverage/CI/hosting/cutover remain open.
+
+Evidence: NATIVE_BRAND_PROVIDER_WAIT_PROOF.json and LIVE_CLIENT_GENERATION_PROOF.json.

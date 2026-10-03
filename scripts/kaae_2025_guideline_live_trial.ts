@@ -412,8 +412,13 @@ async function collect(n: number, variant: string, dir: string, owner: any, runI
   });
   const runReceipts = receipts.filter((r) => r.run === n);
   const ledgerUsd = ledger.reduce((a: number, r: any) => a + Number(r.usd), 0);
+  const retainedRequest = parse(runRow.request);
   const summary = {
     run: n, variant, taskId, runId, status: runRow.status, diagnostic: runRow.diagnostic, judgeStatus: runRow.judge_status,
+    pipeline: { requestedV3: retainedRequest?.pipelineV3 === true, observedTournament: stages.tournament?.pipeline ?? null },
+    inputBasis: { clientId: retainedRequest?.clientId, referenceHash: retainedRequest?.referenceHash,
+      dnaVersion: retainedRequest?.dnaVersion ?? null, logoSha256: retainedRequest?.logoSha256 },
+    nativeCanvaImported: false, // This trial intentionally stops at the transfer boundary.
     winner: winner ? label[winner.id] : null, wallSeconds: Math.round(wallMs / 100) / 10,
     calls: runReceipts.length, costUsd: Number(runReceipts.reduce((a, r) => a + r.usd, 0).toFixed(5)), ledgerUsd: Number(ledgerUsd.toFixed(5)),
     budget: parse(runRow.budget), copy, caption: text, trail,

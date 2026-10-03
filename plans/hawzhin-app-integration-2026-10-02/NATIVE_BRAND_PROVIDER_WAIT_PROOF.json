@@ -1,0 +1,138 @@
+{
+  "date": "2026-10-03",
+  "status": "VALID_NATIVE_BRAND_FONTS_EXACT_MODEL_WAIT_AND_BROWSER_READBACK_DESIGN_OPEN",
+  "websiteCommit": "cb3b77b7bfa8361bb62db62812068039080dac8d",
+  "testedEngineCommit": "067db71309360d33848619e159b2739299f89dc5",
+  "requirements": [
+    "FR-001",
+    "FR-006",
+    "FR-017",
+    "FR-068",
+    "FR-069",
+    "NFR-006",
+    "NFR-012",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "websiteProof": {
+    "path": "/Users/hawzhin/Hawdesign/.worktrees/hawzhin-app-integration/docs/NATIVE_BRAND_PROVIDER_WAIT_PROOF.json",
+    "sha256": "30dd76b1c981116eaa3cfe2bd278287eeb4adc83384b31338a0a536b91f1fdb7"
+  },
+  "qualification": {
+    "core": {
+      "passed": 23,
+      "failed": 0
+    },
+    "browserIntake": {
+      "passed": 9,
+      "failed": 0
+    },
+    "worker": {
+      "passed": 8,
+      "failed": 0
+    },
+    "browserReadback": {
+      "passed": 8,
+      "failed": 0
+    }
+  },
+  "retryEvidence": [
+    {
+      "target_service_name": "DesignRun",
+      "target_service_key": "dr-0a321177-e551-4b83-b540-9f3ab4484b36",
+      "status": "backing-off",
+      "code": "MODEL_NOT_CONFIGURED"
+    }
+  ],
+  "cleanup": {
+    "vendorContainersRemoved": 6,
+    "ownedNetworksRemoved": 2,
+    "privateFilesRemoved": [
+      "worker-runtime-private.log",
+      "customer-worker-launch-private.log",
+      "customer-core-private.log",
+      "customer-browser-error-private.log",
+      "local-private.json",
+      "restate-runtime-private.log",
+      "customer-browser-worker-error-private.log"
+    ],
+    "priorContainersUnchanged": 10,
+    "coreDatabaseRemoved": true,
+    "browserWorkerAndRestateContainersAbsent": true,
+    "workerLoginRemoved": true,
+    "restateVolumeRemoved": true,
+    "brandStoreRemoved": true
+  },
+  "initialAttempts": {
+    "launcher": "21 native pass; stale20-check guard prevented browser/worker",
+    "bootstrap": "one vendor bootstrap failed with0 product migrations; cause unavailable; owned reset then succeeded",
+    "glyphRefusal": {
+      "core": 23,
+      "browserIntake": 9,
+      "worker": 7,
+      "browserReadback": 8,
+      "code": "CLIENT_FONT_UNAVAILABLE"
+    },
+    "incorrectImmediateFailureExpectation": {
+      "workerPassed": 6,
+      "workerFailed": 2,
+      "actualState": "designing; model configuration is retryable503"
+    },
+    "unscopedWait": "8 worker/8 browser pass; retry query included baseline request, strengthened and rerun exactly"
+  },
+  "retainedNotRerun": {
+    "nativeIdentityExpiryLane": {
+      "browserPassed": 8,
+      "failed": 0
+    },
+    "managedServiceChecks": 25,
+    "websiteUnits": 1109,
+    "modeledBrowserChecks": 51,
+    "engineFull": {
+      "passed": 8277,
+      "failed": 0,
+      "skipped": 67
+    }
+  },
+  "coverage": {
+    "status": "FAIL",
+    "actual": [
+      53.68,
+      51.37,
+      44.24,
+      41.74
+    ],
+    "required": [
+      80,
+      80,
+      80,
+      75
+    ],
+    "rerun": false
+  },
+  "remaining": [
+    "Actual customer provider generation and native Canva outcome",
+    "Photo upload and scoped content-aware composition in the real journey",
+    "Native Canva languages/fonts/edit-save-reexport and human quality",
+    "Real preview/revision/acceptance/editable-download journey",
+    "Hosted two-user customer and other-three-tools journeys/PWA",
+    "Interrupted uploads/unsaved-state/orphan reconciliation",
+    "Current full regression/coverage/remote CI/security gates",
+    "Legacy/coordinated restore/rollback/hosting/trusted HTTPS/migrations/cutover"
+  ],
+  "rollout": {
+    "deployed": false,
+    "pushed": false,
+    "publicGenerationEnabled": false,
+    "productionRuntimeChanged": false
+  },
+  "engineRuntimeChange": "none; only trial summary telemetry and evidence changed",
+  "sourceHashes": {
+    "scripts/kaae_2025_guideline_live_trial.ts": "d3002a34ae81bc2afe160a210df5222e10eea72663c655e8a388ead91d6983ad",
+    "apps/core/src/services/design-studio/design-studio-service.ts": "e01bc0ccdd8014aa80f3ee98aec09d6a1e90fcf6da6275d48adae1524f758f6c",
+    "apps/core/src/services/chat-intake.ts": "f5eb17341df176d71128219c29c75308d86183c34a853c68787396e80b89be6e",
+    "packages/db/src/repositories/task.repository.ts": "bff488fb789483f6215d1d2805a300be03a2860f11a5738f81989913de092567",
+    "apps/worker/src/index.ts": "b0e6a32e1b5e410979fca6a08a0af00c6f6bdb9b9d2461c134fda57dc2c51947",
+    "apps/worker/src/canva-draft-workflow.ts": "091e8c937fb5d2a78c1e8f3bc3676bc1cbf3b8af65bbe53dea4cede8617a5136"
+  }
+}

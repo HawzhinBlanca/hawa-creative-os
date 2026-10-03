@@ -1,0 +1,192 @@
+{
+  "date": "2026-10-03T11:49:19.328662+00:00",
+  "status": "ACTUAL_V3_PROVIDER_GENERATION_AND_LOCAL_EDITABLE_TRANSFER_NATIVE_CANVA_OPEN",
+  "engineCommit": "067db71309360d33848619e159b2739299f89dc5",
+  "pipelineEvidence": {
+    "source": "run1_text/stages.json:tournament.pipeline",
+    "value": "v3",
+    "priorHypothesis": "root-only sourceChannelId might bypass v3",
+    "resolution": "Disproved: task repository retains both root and payload fields; actual tournament explicitly records v3."
+  },
+  "generation": {
+    "status": "transferring",
+    "wallSeconds": 182.5,
+    "calls": 13,
+    "costUsd": 0.19488,
+    "ledgerUsd": 0.19488,
+    "judgeStatus": "RELIABLE"
+  },
+  "qa": {
+    "qa": {
+      "passed": true,
+      "metrics": {
+        "lines": {
+          "0": 3,
+          "1": 1,
+          "2": 1,
+          "3": 1,
+          "4": 1
+        },
+        "marginMin": 76,
+        "contrastP05": {
+          "0": 10.9,
+          "1": 4.84,
+          "2": 8.2,
+          "3": 11.5,
+          "4": 8.2
+        },
+        "logoWidthPct": 16.02,
+        "overlapCount": 0,
+        "balanceOffset": 5.08,
+        "alignmentScore": 0.929,
+        "hierarchyRatio": 1,
+        "whitespaceRatio": 0.59,
+        "bodyCharsPerLine": 0
+      },
+      "findings": [],
+      "messages": [],
+      "placement": {
+        "art": null,
+        "photos": [],
+        "version": 1
+      },
+      "candidateId": "bd586e23-9280-4ef5-ade4-764118f7ed7a",
+      "defectCodes": [],
+      "measuredContrast": {
+        "0": 10.9,
+        "1": 4.84,
+        "2": 8.2,
+        "3": 11.5,
+        "4": 8.2
+      },
+      "textMeasurements": [
+        {
+          "method": "fontkit-wrap-v1",
+          "status": "measured",
+          "copyIndex": 0,
+          "lineCount": 3,
+          "copySha256": "a05c7609370e87ab1ed274c2fb315184d34c1b14a6fbbb440b62021b1476863c",
+          "fontFamily": "Inter",
+          "fontSha256": "4c7c1cdb4365b130b400f8679cf4e00b451a4f3ddc0773dd0de0bd25a1cfe016",
+          "inputSha256": "573f831d0948ffff8d926568ad511042cee1e8821fa3f317d8dd80bedcc2799d",
+          "maxLineWidthPx": 928,
+          "requiredHeightPx": 436
+        },
+        {
+          "method": "fontkit-wrap-v1",
+          "status": "measured",
+          "copyIndex": 1,
+          "lineCount": 1,
+          "copySha256": "e2a955538c0ba26e18814036cc3167d36bc814ca7f69aea8e5cac95bb36f14b1",
+          "fontFamily": "Inter",
+          "fontSha256": "f065eb148431a276995ba88b79e9225e4aa05f05b3bfeb857cf0457dcc1064a9",
+          "inputSha256": "9a786af16a0cbf21a2368a1563910af9f84194344b3fceade5944a015e599725",
+          "maxLineWidthPx": 474,
+          "requiredHeightPx": 65
+        },
+        {
+          "method": "fontkit-wrap-v1",
+          "status": "measured",
+          "copyIndex": 2,
+          "lineCount": 1,
+          "copySha256": "3b02fabbc76d0be44c131563f320cdb94ce679d58e972b4ce99d0453ebbcaf5b",
+          "fontFamily": "Inter",
+          "fontSha256": "c0ce77048ab920e0fbfc167bb647b6795c71eadce34781061aea272c57fc3443",
+          "inputSha256": "dfe91e76daad7ee47cf050efe6e08a88e8590b6e3ebbcd7741a705a81fbb14f1",
+          "maxLineWidthPx": 662,
+          "requiredHeightPx": 60
+        },
+        {
+          "method": "fontkit-wrap-v1",
+          "status": "measured",
+          "copyIndex": 3,
+          "lineCount": 1,
+          "copySha256": "c567dc188704fda04345bdb7c7f160bf73f1292e619d9a7db8d1c576eccb7212",
+          "fontFamily": "Inter",
+          "fontSha256": "00ba8f073d30f44ba2f950e6d4112713cd34ea51e002f3e2c19b07644d115d57",
+          "inputSha256": "c53230d1b671e757a1df2e7b20d58ce7c2634502238432d04eb1deb6c81bbf20",
+          "maxLineWidthPx": 389,
+          "requiredHeightPx": 60
+        },
+        {
+          "method": "fontkit-wrap-v1",
+          "status": "measured",
+          "copyIndex": 4,
+          "lineCount": 1,
+          "copySha256": "7c7bd46e27287d757f5e0c6dd5883da46dd9ee31a71ae610c642356f88a2f746",
+          "fontFamily": "Inter",
+          "fontSha256": "c0ce77048ab920e0fbfc167bb647b6795c71eadce34781061aea272c57fc3443",
+          "inputSha256": "5586379a00fc1ebe324e8838a07d3237fc1a71d5546a26834783b033bec440e4",
+          "maxLineWidthPx": 896,
+          "requiredHeightPx": 70
+        }
+      ]
+    },
+    "excluded": []
+  },
+  "editableTransfer": {
+    "exactCopyMatches": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "textShapes": 7,
+    "pictures": 2,
+    "fonts": [
+      "Inter",
+      "Inter ExtraBold"
+    ]
+  },
+  "canvaUploadAttempts": [
+    {
+      "method": "connector single-use raw PPTX upload",
+      "httpStatus": 403,
+      "createdDesignKnown": false
+    },
+    {
+      "method": "fresh single-use raw PPTX upload",
+      "httpStatus": 400,
+      "reason": "Unsupported file format ZIP",
+      "createdDesignKnown": false
+    }
+  ],
+  "nativeImport": "unverified; browser upload approval pending",
+  "humanQuality": "not qualified; model judge status is advisory",
+  "notQualified": [
+    "actual website/worker/provider/Canva chain",
+    "native edit-save-reopen-reexport",
+    "Sorani/Arabic native Canva fidelity",
+    "human approval/taste learning",
+    "customer launch"
+  ],
+  "artifacts": {
+    "run1_text/brief.json": "65596ff8e84eb9f26edfa48b66aeb0e3b7fb25ef9605d82c224d3bfa2c8f817a",
+    "run1_text/cand0_none.layout.json": "988562df19fbf16beb47d798b811e59fb5a9136773643fbf763511b2f6e39b35",
+    "run1_text/cand0_none_runner_up.png": "22716babba78de76bdc93add662a8a25df8eed27025d4d5e870637a5e9fc3796",
+    "run1_text/cand1_none.layout.json": "2675157d3f7c97f8eff5fed06e504109081282242fb2362ab9f4bb866cc0de72",
+    "run1_text/cand1_none_winner.png": "11dbb3e007979a7d74928c0e2354f735e63d5533be1a3518c402c3e6c406577d",
+    "run1_text/cand2_none.layout.json": "897a210cd62a80378d7f1f38d8cb8fba415e9ed0599281b60ecff93067761eb7",
+    "run1_text/cand2_none_after.png": "828d200ee4850848bf64eea1df27f407cf0f4b5b48c3931502037a79411b7486",
+    "run1_text/cand2_none_before.layout.json": "4f47b32f8319980e2f22d965790542a7720a9978637c40924495d7c53658db85",
+    "run1_text/cand2_none_before.png": "df18deef47e4873f185499ed42aa617f5d2ecdce47929ec56e8222e4fb1af231",
+    "run1_text/cand2_none_runner_up.png": "828d200ee4850848bf64eea1df27f407cf0f4b5b48c3931502037a79411b7486",
+    "run1_text/candidates.json": "31ddf17be1452edd0ee92a8b836611aa83feb323b404c4293f6451929981aa3e",
+    "run1_text/draft.json": "4aaa1051fe6db60a8d1b1a552b17af22f28fd21e7d51150eeb0e0f5f9fcb9e05",
+    "run1_text/intake_step0.json": "106c4bbaa4bfc5d55d3fa635d43a650592d8848bf17bfd9f51a1bce83d54cf86",
+    "run1_text/judge.json": "9c03252f1b7b302191b4e7cd5d9c386574bba5aa915570b9adc7ce4045595171",
+    "run1_text/qa.json": "3438eeb962424927299a5c3df0ce62ecb806e2f0f70e7797246081736f28f9dc",
+    "run1_text/receipts.json": "7b25703fab3649f4b92682505758549e72dfcf4b8618385e7573b5268321f76b",
+    "run1_text/review.json": "69b748e61844a5cc7df94f18579316e68ca9558d69e1cb5124d8c6ffdb9d2efd",
+    "run1_text/stages.json": "1e9c329e4e29d3601570c904d7b61c41c1f7582f56235a8f13bad65ad401c1e3",
+    "run1_text/summary.json": "6a7c60f94b2c602f5d644da48d96bb74cd97f1fd2676a132050cfc9fa6263313",
+    "run1_text/winner.png": "11dbb3e007979a7d74928c0e2354f735e63d5533be1a3518c402c3e6c406577d",
+    "run1_text/winner_transfer.pptx": "b82db8e29de110162cdfa9c48a7010d60c90b2f15febede17b9e319d33f8d51d"
+  },
+  "inspection": {
+    "path": "/Users/hawzhin/Hawdesign/.worktrees/content-aware-design/output/qualification/2026-10-03/current-client-design-trial/INSPECTION.json",
+    "sha256": "e3e8553fe756259bfbfd0929945074e6b50b8521ede633ad1ade68cf8d16784d"
+  },
+  "trialScriptTelemetry": "Future summaries now record stored requestedV3, observed tournament pipeline and input hashes; no new paid run was needed for this metadata edit."
+}
