@@ -96,6 +96,7 @@ import { acceptedServiceTokensOf, isInternalPath, registerLifecycleInternalRoute
 import { retiredTelegramSettings, telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 import { latestOf, readProgressEvidence } from './services/progress-evidence.js';
+import { CanvaReadinessProbe } from './services/canva-readiness.js';
 import { PaidModelProbeService } from './services/paid-model-probe.js';
 import { evaluatePaidModelHealth, paidModelConfigFingerprint, readLatestPaidModelObservation, type PaidModelHealth } from './services/paid-model-health.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
@@ -684,6 +685,19 @@ export function createApp(options?: CreateAppOptions) {
     return status;
   };
 
+  // ADR-288: Canva asked whether it honours the office's connection, at most every ten minutes, with an
+  // office alert when it stops. Production only (entrypoint-options.ts); tests pass their own.
+  const scheduledCanvaReadiness = options?.enableCanvaReadinessProbe && db && canvaConnectService
+    ? new CanvaReadinessProbe({ db, service: canvaConnectService, tenantId: DEFAULT_TENANT_ID, actorId: PRIMARY_OPERATOR_USER_ID,
+      officeChatIds: () => telegramAllowedUsers })
+    : null;
+  const canvaReadiness = options?.canvaReadinessProbe ?? scheduledCanvaReadiness;
+  if (scheduledCanvaReadiness) {
+    const ask = () => { scheduledCanvaReadiness.check().catch((err: unknown) => log.warn('[canva-readiness] check failed:', (err as Error)?.message || err)); };
+    setTimeout(ask, 60_000).unref?.();
+    setInterval(ask, 10 * 60_000).unref?.();
+  }
+
   const healthCutouts = new PhotoCutouts();
   const restateInvocations = createRestateInvocationProbe();
   const honestHealthHandler = async (c: any) => {
@@ -695,7 +709,9 @@ export function createApp(options?: CreateAppOptions) {
     // transfer while the breaker stays closed: from 2026-09-17 to 2026-09-18 health said "connected"
     // while the connection needed reconnecting. Designs transfer as the Primary Operator, so that is
     // the connection that counts.
-    if (canvaStatus === 'unverified' && db) {
+    const canvaCheck = canvaReadiness ? await canvaReadiness.current() : null;
+    if (canvaStatus === 'unverified' && canvaCheck) canvaStatus = canvaCheck.status;
+    if (canvaStatus === 'unverified' && db && !canvaCheck) {
       try {
         const connection = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: PRIMARY_OPERATOR_USER_ID, role: 'operator' }, async (trx) =>
           (await sql<{ status: string }>`SELECT status FROM hawa.canva_connections
@@ -788,7 +804,9 @@ export function createApp(options?: CreateAppOptions) {
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
     // Canva's "unverified" is not degraded: no Canva probe exists, so it could never become "connected"
     // (ADR-158). An expired connection is "reconnect_required" and a failing one opens the breaker.
-    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
+    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required'
+      || canvaStatus === 'expired' || canvaStatus === 'revoked' || canvaStatus === 'unreachable'
+      || channelKillSwitches.telegram || channelKillSwitches.waha
       || (isProduction && modelProviderStatus !== 'connected' && modelProviderStatus !== 'disabled' && modelProviderStatus !== 'idle')
       || modelProviderStatus === 'failing'
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
@@ -834,6 +852,8 @@ export function createApp(options?: CreateAppOptions) {
         everyMinutes: paidProbeScheduled ? billingProbeMs / 60_000 : null,
       },
       funnel: funnelMetrics,
+      // ADR-288: what Canva said when last asked; null where no check runs (tests, no database).
+      canvaReadiness: canvaCheck,
       restateInvocations: restateWork,
       spendingPolicy: { status: spendingPolicyStatus, policies: policyChecks,
         ...(spendingPolicyStatus !== 'valid' ? { warning: 'Re-check the provider prices and renew the price policy (runbooks/SPENDING_POLICY.md).' } : {}) },

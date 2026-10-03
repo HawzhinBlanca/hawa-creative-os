@@ -108,6 +108,10 @@ export interface CreateAppOptions {
   skipTelegramProbe?: boolean;
   /** Settle Canva imports and exports nobody is following any more (sweepStrandedOperations). */
   enableCanvaSweeper?: boolean;
+  /** Ask Canva whether it honours the office's connection, every ten minutes, and alert when it stops (ADR-288). */
+  enableCanvaReadinessProbe?: boolean;
+  /** A test's own probe, read by /v1/health in place of the scheduled one. */
+  canvaReadinessProbe?: { current(): Promise<import('./services/canva-readiness.js').CanvaReadiness> };
   /** Charge Studio and planner calls with no outcome for hours their whole reservation (ADR-159). */
   enableUncertainCallExpiry?: boolean;
   enablePublicationInspections?: boolean;
