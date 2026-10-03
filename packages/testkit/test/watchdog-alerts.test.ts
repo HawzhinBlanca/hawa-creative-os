@@ -286,6 +286,26 @@ describe('the watchdog\'s alerts', () => {
     expect(s.calls()).toMatch(/docker compose .* start stamp=/);
   });
 
+  // Hunt 3: on 2026-10-02 production was unreachable for 70 minutes (17:15-18:25Z) and nobody was told.
+  // A Mac that sleeps, is shut down or waits at FileVault runs no watchdog pass at all, and the first pass
+  // afterwards found everything healthy and said nothing. The watchdog now notices its own gap.
+  it('tells the operator, once, when it did not run for a while (the host asleep, off or locked)', () => {
+    const s = setup();
+    const lastRun = path.join(s.home, '.hawa', 'watchdog', 'last_run');
+    fs.writeFileSync(lastRun, `${Math.floor(Date.now() / 1000) - 70 * 60}\n`);
+    const r = s.run();
+    expect(r.code).toBe(0);
+    expect(s.alerts()).toHaveLength(1);
+    expect(s.alerts()[0]).toMatch(/^ALERT 🟠 The Hawa watchdog did not run for 70 min \(\d\d:\d\d to \d\d:\d\d\)/);
+    expect(r.stdout).toMatch(/Z the watchdog did not run for 70 min/);
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+    // Passes five or ten minutes apart are normal.
+    fs.writeFileSync(lastRun, `${Math.floor(Date.now() / 1000) - 10 * 60}\n`);
+    s.run();
+    expect(s.alerts()).toHaveLength(1);
+  });
+
   it('judges the disk by free space: 97% used with 30 GiB free is fine, 20 GiB free is reported', () => {
     const fine = setup({ freeKb: 30 * 1048576 });
     expect(fine.run().code).toBe(0);

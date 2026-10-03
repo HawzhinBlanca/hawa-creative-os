@@ -110,6 +110,23 @@ if [[ "$HOST_ROLE_RC" != 0 || "$HOST_ROLE" != production ]]; then
 fi
 if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login or boot, nightly backup 03:30." || exit 1; say "announced"; exit 0; fi
 
+# Its own gap. A Mac asleep, shut down or waiting at FileVault after an update runs no pass at all, and the
+# first pass afterwards finds everything healthy and says nothing: on 2026-10-02 production was unreachable
+# for 70 minutes and nobody was told (hunt 3). Every pass (the ones a running backup skips too) records
+# when it ran; a pass more than HAWA_WATCHDOG_GAP_SECONDS (900) after the one before says so, once. The
+# outside heartbeat (hawa_heartbeat) is what tells anyone while the host is still down.
+LAST_RUN_FILE="$STATE_DIR/last_run"; GAP_SECONDS="${HAWA_WATCHDOG_GAP_SECONDS:-900}"
+if [[ "$MODE" != "--status" ]]; then
+  previous_run="$(tr -dc '0-9' < "$LAST_RUN_FILE" 2>/dev/null || true)"
+  printf '%s\n' "$NOW" > "$LAST_RUN_FILE" || true
+  if [[ "$previous_run" =~ ^[0-9]+$ && "$GAP_SECONDS" =~ ^[0-9]+$ ]] && (( previous_run < NOW && NOW - previous_run > GAP_SECONDS )); then
+    gap_min=$(( (NOW - previous_run) / 60 ))
+    gap_from="$(python3 -c 'import sys,time; print(time.strftime("%H:%M", time.localtime(int(sys.argv[1]))))' "$previous_run" 2>/dev/null || echo '?')"
+    say "the watchdog did not run for ${gap_min} min (since ${gap_from}): this host was asleep, shut down, locked or stalled"
+    notify "🟠 The Hawa watchdog did not run for ${gap_min} min (${gap_from} to $(date '+%H:%M')): this Mac was asleep, shut down, waiting at FileVault or stalled. Nothing was watched meanwhile, and client messages may have waited. It is running again now." || true
+  fi
+fi
+
 # The worker Telegram poller (Phase 2.1). With HAWA_TELEGRAM_POLLER=worker Core does not poll, and a
 # colour whose poller was off, never started or failing left every check green while no client message
 # was read (ADR-129, Phase 4 operations finding 3). Core's health says who is meant to poll; each running
