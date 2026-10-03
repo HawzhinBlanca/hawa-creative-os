@@ -1,0 +1,2478 @@
+{
+ "generatedAt": "2026-10-03T12:29:39.175Z",
+ "summary": {
+  "correctRenders": {
+   "posts": 6,
+   "blocks": 15,
+   "exactFailures": 0,
+   "colourFailures": 0,
+   "exactLowest": 0.982,
+   "colourLowest": 0.992,
+   "exactMaxMs": 349,
+   "colourMaxMs": 983
+  },
+  "negativeControls": {
+   "exact": {
+    "unjoined": {
+     "cases": 15,
+     "detected": 15,
+     "verdicts": {
+      "shaping-mismatch": 15
+     },
+     "highestScore": 0.515
+    },
+    "one-join-broken": {
+     "cases": 15,
+     "detected": 15,
+     "verdicts": {
+      "shaping-mismatch": 15
+     },
+     "highestScore": 0.778
+    },
+    "reversed": {
+     "cases": 15,
+     "detected": 15,
+     "verdicts": {
+      "wrong-direction": 15
+     },
+     "highestScore": 0.541
+    },
+    "substituted-face": {
+     "cases": 15,
+     "detected": 15,
+     "verdicts": {
+      "shaping-mismatch": 15
+     },
+     "highestScore": 0.852
+    },
+    "rewrapped": {
+     "cases": 13,
+     "detected": 13,
+     "verdicts": {
+      "wrapped-differently": 12,
+      "shaping-mismatch": 1
+     },
+     "highestScore": 0.998
+    },
+    "missing-glyph": {
+     "cases": 15,
+     "detected": 15,
+     "verdicts": {
+      "missing-glyphs": 14,
+      "shaping-mismatch": 1
+     },
+     "highestScore": 0.375
+    }
+   },
+   "colour": {
+    "unjoined": {
+     "cases": 15,
+     "detected": 15,
+     "verdicts": {
+      "shaping-mismatch": 15
+     },
+     "highestScore": 0.575
+    },
+    "one-join-broken": {
+     "cases": 15,
+     "detected": 15,
+     "verdicts": {
+      "shaping-mismatch": 15
+     },
+     "highestScore": 0.894
+    },
+    "reversed": {
+     "cases": 15,
+     "detected": 15,
+     "verdicts": {
+      "wrong-direction": 15
+     },
+     "highestScore": 0.629
+    },
+    "substituted-face": {
+     "cases": 15,
+     "detected": 11,
+     "verdicts": {
+      "shaping-mismatch": 11,
+      "ok": 4
+     },
+     "highestScore": 0.929
+    },
+    "rewrapped": {
+     "cases": 13,
+     "detected": 13,
+     "verdicts": {
+      "wrapped-differently": 12,
+      "shaping-mismatch": 1
+     },
+     "highestScore": 0.631
+    },
+    "missing-glyph": {
+     "cases": 15,
+     "detected": 15,
+     "verdicts": {
+      "missing-glyphs": 14,
+      "shaping-mismatch": 1
+     },
+     "highestScore": 0.38
+    }
+   },
+   "maxMs": 1543
+  },
+  "canvaExports": {
+   "sheets": 7,
+   "blocks": 55,
+   "lines": 67,
+   "flagged": [
+    {
+     "verdict": "shaping-mismatch",
+     "fontFamily": "Cairo"
+    },
+    {
+     "verdict": "shaping-mismatch",
+     "fontFamily": "Cairo"
+    },
+    {
+     "verdict": "shaping-mismatch",
+     "fontFamily": "Cairo"
+    }
+   ],
+   "unmeasured": 1,
+   "maxMs": 1138
+  }
+ },
+ "positives": [
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "exact": {
+    "pass": true,
+    "ms": 320,
+    "lowest": 0.982,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 2,
+      "found": 2,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.996,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.992,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-1",
+      "verdict": "ok",
+      "designed": 2,
+      "found": 2,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.982,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.995,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-2",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.989,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   },
+   "colour": {
+    "pass": true,
+    "ms": 534,
+    "lowest": 0.992,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 2,
+      "found": 2,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.996,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.992,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-1",
+      "verdict": "ok",
+      "designed": 2,
+      "found": 2,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.993,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.998,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-2",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.995,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "exact": {
+    "pass": true,
+    "ms": 158,
+    "lowest": 0.989,
+    "blocks": [
+     {
+      "id": "text-copy-1",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.989,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-2",
+      "verdict": "ok",
+      "designed": 2,
+      "found": 2,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.996,
+        "widthRatio": 1.001
+       },
+       {
+        "verdict": "ok",
+        "score": 0.996,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   },
+   "colour": {
+    "pass": true,
+    "ms": 305,
+    "lowest": 0.994,
+    "blocks": [
+     {
+      "id": "text-copy-1",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.994,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-2",
+      "verdict": "ok",
+      "designed": 2,
+      "found": 2,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.996,
+        "widthRatio": 1.001
+       },
+       {
+        "verdict": "ok",
+        "score": 0.996,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "post": "photo06_global_partnership_plate_ckb",
+   "exact": {
+    "pass": true,
+    "ms": 190,
+    "lowest": 0.999,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.999,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   },
+   "colour": {
+    "pass": true,
+    "ms": 442,
+    "lowest": 0.999,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.999,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "exact": {
+    "pass": true,
+    "ms": 177,
+    "lowest": 0.988,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.992,
+        "widthRatio": 0.998
+       }
+      ]
+     },
+     {
+      "id": "text-copy-1",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.988,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   },
+   "colour": {
+    "pass": true,
+    "ms": 370,
+    "lowest": 0.995,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.996,
+        "widthRatio": 0.998
+       }
+      ]
+     },
+     {
+      "id": "text-copy-1",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.995,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "post": "photo09_eid_al_adha_sky_title",
+   "exact": {
+    "pass": true,
+    "ms": 168,
+    "lowest": 0.998,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.998,
+        "widthRatio": 0.998
+       }
+      ]
+     }
+    ]
+   },
+   "colour": {
+    "pass": true,
+    "ms": 361,
+    "lowest": 0.999,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.999,
+        "widthRatio": 0.998
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "exact": {
+    "pass": true,
+    "ms": 349,
+    "lowest": 0.983,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 1,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-1",
+      "verdict": "ok",
+      "designed": 2,
+      "found": 2,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.998,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.997,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-2",
+      "verdict": "ok",
+      "designed": 3,
+      "found": 3,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.993,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.997,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.985,
+        "widthRatio": 0.996
+       }
+      ]
+     },
+     {
+      "id": "text-copy-3",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.989,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-4",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.983,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-5",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.994,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   },
+   "colour": {
+    "pass": true,
+    "ms": 983,
+    "lowest": 0.992,
+    "blocks": [
+     {
+      "id": "text-copy-0",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 1,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-1",
+      "verdict": "ok",
+      "designed": 2,
+      "found": 2,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.999,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.998,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-2",
+      "verdict": "ok",
+      "designed": 3,
+      "found": 3,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.997,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.999,
+        "widthRatio": 1
+       },
+       {
+        "verdict": "ok",
+        "score": 0.993,
+        "widthRatio": 0.996
+       }
+      ]
+     },
+     {
+      "id": "text-copy-3",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.994,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-4",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.992,
+        "widthRatio": 1
+       }
+      ]
+     },
+     {
+      "id": "text-copy-5",
+      "verdict": "ok",
+      "designed": 1,
+      "found": 1,
+      "lines": [
+       {
+        "verdict": "ok",
+        "score": 0.997,
+        "widthRatio": 1
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "negatives": [
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-0",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.334,
+   "colourScore": 0.347,
+   "ms": 1129
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-0",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.454,
+   "colourScore": 0.547,
+   "ms": 1153
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-0",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.106,
+   "colourScore": 0.462,
+   "ms": 1146
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-0",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.359,
+   "colourScore": 0.395,
+   "ms": 1543
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-0",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 1078
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-0",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0.375,
+   "colourScore": 0.38,
+   "ms": 981
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-1",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 1027
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-1",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.778,
+   "colourScore": 0.894,
+   "ms": 1006
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-1",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.206,
+   "colourScore": 0.238,
+   "ms": 994
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-1",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "ok",
+   "exactScore": 0.564,
+   "colourScore": 0.915,
+   "ms": 608
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-1",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0.631,
+   "colourScore": 0.631,
+   "ms": 1018
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-1",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 894
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-2",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.21,
+   "colourScore": 0,
+   "ms": 597
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-2",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.357,
+   "colourScore": 0.481,
+   "ms": 594
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-2",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.379,
+   "colourScore": 0.543,
+   "ms": 596
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-2",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "ok",
+   "exactScore": 0.846,
+   "colourScore": 0.929,
+   "ms": 516
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-2",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0.978,
+   "colourScore": 0,
+   "ms": 544
+  },
+  {
+   "post": "photo02_k12_field_visit_report_ckb",
+   "block": "text-copy-2",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 546
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-1",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 495
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-1",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.397,
+   "colourScore": 0.473,
+   "ms": 472
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-1",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.448,
+   "colourScore": 0.523,
+   "ms": 484
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-1",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.378,
+   "colourScore": 0.479,
+   "ms": 465
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-1",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 954
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-1",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 302
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-2",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.279,
+   "colourScore": 0.279,
+   "ms": 971
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-2",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.344,
+   "colourScore": 0.694,
+   "ms": 973
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-2",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.298,
+   "colourScore": 0.422,
+   "ms": 975
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-2",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.816,
+   "colourScore": 0.816,
+   "ms": 989
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-2",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 955
+  },
+  {
+   "post": "photo04_why_accreditation_card_ckb",
+   "block": "text-copy-2",
+   "control": "missing-glyph",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.286,
+   "colourScore": 0.297,
+   "ms": 969
+  },
+  {
+   "post": "photo06_global_partnership_plate_ckb",
+   "block": "text-copy-0",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 752
+  },
+  {
+   "post": "photo06_global_partnership_plate_ckb",
+   "block": "text-copy-0",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.329,
+   "colourScore": 0.624,
+   "ms": 760
+  },
+  {
+   "post": "photo06_global_partnership_plate_ckb",
+   "block": "text-copy-0",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.409,
+   "colourScore": 0.443,
+   "ms": 759
+  },
+  {
+   "post": "photo06_global_partnership_plate_ckb",
+   "block": "text-copy-0",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.398,
+   "colourScore": 0.512,
+   "ms": 744
+  },
+  {
+   "post": "photo06_global_partnership_plate_ckb",
+   "block": "text-copy-0",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0.998,
+   "colourScore": 0,
+   "ms": 284
+  },
+  {
+   "post": "photo06_global_partnership_plate_ckb",
+   "block": "text-copy-0",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 388
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-0",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 574
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-0",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.395,
+   "colourScore": 0.794,
+   "ms": 573
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-0",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.413,
+   "colourScore": 0.606,
+   "ms": 571
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-0",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.257,
+   "colourScore": 0.321,
+   "ms": 547
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-0",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 696
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-0",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 368
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-1",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 530
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-1",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.666,
+   "colourScore": 0.845,
+   "ms": 563
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-1",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.315,
+   "colourScore": 0.353,
+   "ms": 565
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-1",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "ok",
+   "exactScore": 0.823,
+   "colourScore": 0.903,
+   "ms": 349
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-1",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0.965,
+   "colourScore": 0,
+   "ms": 671
+  },
+  {
+   "post": "photo08_prime_minister_meeting_scrim_ckb",
+   "block": "text-copy-1",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 341
+  },
+  {
+   "post": "photo09_eid_al_adha_sky_title",
+   "block": "text-copy-0",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 613
+  },
+  {
+   "post": "photo09_eid_al_adha_sky_title",
+   "block": "text-copy-0",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.393,
+   "colourScore": 0.508,
+   "ms": 623
+  },
+  {
+   "post": "photo09_eid_al_adha_sky_title",
+   "block": "text-copy-0",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.387,
+   "colourScore": 0.421,
+   "ms": 665
+  },
+  {
+   "post": "photo09_eid_al_adha_sky_title",
+   "block": "text-copy-0",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.371,
+   "colourScore": 0.483,
+   "ms": 651
+  },
+  {
+   "post": "photo09_eid_al_adha_sky_title",
+   "block": "text-copy-0",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 449
+  },
+  {
+   "post": "photo09_eid_al_adha_sky_title",
+   "block": "text-copy-0",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 357
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-0",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.515,
+   "colourScore": 0.553,
+   "ms": 1224
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-0",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.273,
+   "colourScore": 0.521,
+   "ms": 1220
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-0",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.541,
+   "colourScore": 0.611,
+   "ms": 1230
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-0",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "ok",
+   "exactScore": 0.852,
+   "colourScore": 0.905,
+   "ms": 986
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-0",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 1032
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-1",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.437,
+   "colourScore": 0.575,
+   "ms": 1225
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-1",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.469,
+   "colourScore": 0.553,
+   "ms": 1153
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-1",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.442,
+   "colourScore": 0.561,
+   "ms": 1350
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-1",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.739,
+   "colourScore": 0.874,
+   "ms": 1223
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-1",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 1002
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-2",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0,
+   "colourScore": 0.377,
+   "ms": 1086
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-2",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.331,
+   "colourScore": 0.413,
+   "ms": 1132
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-2",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.387,
+   "colourScore": 0.561,
+   "ms": 1171
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-2",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.764,
+   "colourScore": 0.898,
+   "ms": 1152
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-2",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 1145
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-2",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 1033
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-3",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 1097
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-3",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.523,
+   "colourScore": 0.802,
+   "ms": 1120
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-3",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.436,
+   "colourScore": 0.629,
+   "ms": 1109
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-3",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.284,
+   "colourScore": 0.376,
+   "ms": 1111
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-3",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 1156
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-3",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 990
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-4",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.351,
+   "colourScore": 0.453,
+   "ms": 1071
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-4",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.369,
+   "colourScore": 0.498,
+   "ms": 1066
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-4",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0,
+   "colourScore": 0.373,
+   "ms": 1076
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-4",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.107,
+   "colourScore": 0.26,
+   "ms": 1075
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-4",
+   "control": "rewrapped",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": -0.12,
+   "colourScore": -0.213,
+   "ms": 1332
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-4",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0.283,
+   "colourScore": 0.365,
+   "ms": 1167
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-5",
+   "control": "unjoined",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.331,
+   "colourScore": 0.361,
+   "ms": 1034
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-5",
+   "control": "one-join-broken",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.436,
+   "colourScore": 0.632,
+   "ms": 1038
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-5",
+   "control": "reversed",
+   "exact": "wrong-direction",
+   "colour": "wrong-direction",
+   "exactScore": 0.493,
+   "colourScore": 0.607,
+   "ms": 1028
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-5",
+   "control": "substituted-face",
+   "exact": "shaping-mismatch",
+   "colour": "shaping-mismatch",
+   "exactScore": 0.501,
+   "colourScore": 0.784,
+   "ms": 1028
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-5",
+   "control": "rewrapped",
+   "exact": "wrapped-differently",
+   "colour": "wrapped-differently",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 968
+  },
+  {
+   "post": "photo12_peer_evaluators_call_ckb",
+   "block": "text-copy-5",
+   "control": "missing-glyph",
+   "exact": "missing-glyphs",
+   "colour": "missing-glyphs",
+   "exactScore": 0,
+   "colourScore": 0,
+   "ms": 980
+  }
+ ],
+ "canva": [
+  {
+   "sheet": "output/acceptance/2026-09-27-canva-multilingual/group-1-round-2-canva.png",
+   "pass": true,
+   "ms": 725,
+   "unmeasured": [],
+   "blocks": [
+    {
+     "id": "text-copy-0",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.999,
+       "widthRatio": 1
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-1",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.991,
+       "widthRatio": 1.007
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-3",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.964,
+       "widthRatio": 0.906
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-4",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.997,
+       "widthRatio": 0.911
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-5",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.961,
+       "widthRatio": 1.025
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-6",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.968,
+       "widthRatio": 1.028
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-7",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.989,
+       "widthRatio": 1.005
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-8",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.995,
+       "widthRatio": 0.995
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-9",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.986,
+       "widthRatio": 0.883
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    }
+   ]
+  },
+  {
+   "sheet": "output/acceptance/2026-09-27-canva-multilingual/group-2-canva.png",
+   "pass": true,
+   "ms": 798,
+   "unmeasured": [],
+   "blocks": [
+    {
+     "id": "text-copy-0",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.993,
+       "widthRatio": 1.002
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-1",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.991,
+       "widthRatio": 1.046
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-2",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.99,
+       "widthRatio": 1.037
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-3",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.931,
+       "widthRatio": 1.008
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-4",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.999,
+       "widthRatio": 1.014
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-5",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.956,
+       "widthRatio": 0.99
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-6",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.984,
+       "widthRatio": 1.011
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-7",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.953,
+       "widthRatio": 1.006
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-8",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.952,
+       "widthRatio": 1.009
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-9",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.954,
+       "widthRatio": 0.936
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    }
+   ]
+  },
+  {
+   "sheet": "output/acceptance/2026-09-27-canva-multilingual/group-3-canva.png",
+   "pass": true,
+   "ms": 829,
+   "unmeasured": [],
+   "blocks": [
+    {
+     "id": "text-copy-0",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.96,
+       "widthRatio": 1.047
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-1",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.951,
+       "widthRatio": 1.028
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-2",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.995,
+       "widthRatio": 1.043
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-3",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.955,
+       "widthRatio": 1.012
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-4",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.986,
+       "widthRatio": 1.013
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-5",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.951,
+       "widthRatio": 0.96
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-6",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.996,
+       "widthRatio": 1
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-7",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.922,
+       "widthRatio": 0.969
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-8",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.984,
+       "widthRatio": 1.042
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-9",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.911,
+       "widthRatio": 1.03
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    }
+   ]
+  },
+  {
+   "sheet": "output/acceptance/2026-09-27-canva-multilingual/group-4-canva.png",
+   "pass": true,
+   "ms": 939,
+   "unmeasured": [
+    {
+     "id": "text-copy-9",
+     "reason": "the renderer cannot set it (PANGO_MISSING_GLYPHS)"
+    }
+   ],
+   "blocks": [
+    {
+     "id": "text-copy-0",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.992,
+       "widthRatio": 1.037
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-1",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.952,
+       "widthRatio": 0.945
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-2",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.993,
+       "widthRatio": 0.94
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-3",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.999,
+       "widthRatio": 0.966
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-4",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.997,
+       "widthRatio": 1.023
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-5",
+     "verdict": "ok",
+     "designed": 3,
+     "found": 3,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.95,
+       "widthRatio": 0.965
+      },
+      {
+       "verdict": "ok",
+       "score": 0.952,
+       "widthRatio": 0.914
+      },
+      {
+       "verdict": "ok",
+       "score": 0.984,
+       "widthRatio": 0.948
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-6",
+     "verdict": "ok",
+     "designed": 3,
+     "found": 3,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.998,
+       "widthRatio": 1
+      },
+      {
+       "verdict": "ok",
+       "score": 0.998,
+       "widthRatio": 1
+      },
+      {
+       "verdict": "ok",
+       "score": 0.983,
+       "widthRatio": 1.007
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-7",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.995,
+       "widthRatio": 1.069
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-8",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.992,
+       "widthRatio": 1.066
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    }
+   ]
+  },
+  {
+   "sheet": "output/acceptance/2026-09-27-canva-locale/locale-v1-canva.png",
+   "pass": true,
+   "ms": 680,
+   "unmeasured": [],
+   "blocks": [
+    {
+     "id": "text-copy-0",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.999,
+       "widthRatio": 1
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-1",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.991,
+       "widthRatio": 1.007
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-3",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.964,
+       "widthRatio": 0.906
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-4",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.997,
+       "widthRatio": 0.911
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-5",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.961,
+       "widthRatio": 1.025
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-6",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.968,
+       "widthRatio": 1.028
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-7",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.989,
+       "widthRatio": 1.005
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-8",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.995,
+       "widthRatio": 0.995
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-9",
+     "verdict": "ok",
+     "designed": 1,
+     "found": 1,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.986,
+       "widthRatio": 0.883
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    }
+   ]
+  },
+  {
+   "sheet": "output/acceptance/2026-09-27-canva-locale/locale-v2-canva.png",
+   "pass": false,
+   "ms": 736,
+   "unmeasured": [],
+   "blocks": [
+    {
+     "id": "text-copy-0",
+     "verdict": "ok",
+     "designed": 2,
+     "found": 2,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.991,
+       "widthRatio": 1.024
+      },
+      {
+       "verdict": "ok",
+       "score": 0.997,
+       "widthRatio": 0.911
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-1",
+     "verdict": "shaping-mismatch",
+     "designed": 2,
+     "found": 2,
+     "lines": [
+      {
+       "verdict": "shaping-mismatch",
+       "score": 0.855,
+       "widthRatio": 1.013,
+       "detail": "glyphs differ from the face (broken joining, marks or a substituted face)"
+      },
+      {
+       "verdict": "shaping-mismatch",
+       "score": 0.899,
+       "widthRatio": 1.024,
+       "detail": "glyphs differ from the face (broken joining, marks or a substituted face)"
+      }
+     ],
+     "fontFamily": "Cairo"
+    },
+    {
+     "id": "text-copy-3",
+     "verdict": "ok",
+     "designed": 2,
+     "found": 2,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.967,
+       "widthRatio": 1.025
+      },
+      {
+       "verdict": "ok",
+       "score": 0.989,
+       "widthRatio": 1.005
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    }
+   ]
+  },
+  {
+   "sheet": "output/acceptance/2026-09-27-explicit-direction/direction-v2-canva.png",
+   "pass": false,
+   "ms": 1138,
+   "unmeasured": [],
+   "blocks": [
+    {
+     "id": "text-copy-0",
+     "verdict": "ok",
+     "designed": 2,
+     "found": 2,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.991,
+       "widthRatio": 1.024
+      },
+      {
+       "verdict": "ok",
+       "score": 0.997,
+       "widthRatio": 0.911
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-1",
+     "verdict": "shaping-mismatch",
+     "designed": 2,
+     "found": 2,
+     "lines": [
+      {
+       "verdict": "shaping-mismatch",
+       "score": 0.855,
+       "widthRatio": 1.013,
+       "detail": "glyphs differ from the face (broken joining, marks or a substituted face)"
+      },
+      {
+       "verdict": "shaping-mismatch",
+       "score": 0.899,
+       "widthRatio": 1.024,
+       "detail": "glyphs differ from the face (broken joining, marks or a substituted face)"
+      }
+     ],
+     "fontFamily": "Cairo"
+    },
+    {
+     "id": "text-copy-3",
+     "verdict": "ok",
+     "designed": 2,
+     "found": 2,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.961,
+       "widthRatio": 1.025
+      },
+      {
+       "verdict": "ok",
+       "score": 0.985,
+       "widthRatio": 1.005
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    },
+    {
+     "id": "text-copy-4",
+     "verdict": "shaping-mismatch",
+     "designed": 2,
+     "found": 2,
+     "lines": [
+      {
+       "verdict": "shaping-mismatch",
+       "score": 0.858,
+       "widthRatio": 1.011,
+       "detail": "glyphs differ from the face (broken joining, marks or a substituted face)"
+      },
+      {
+       "verdict": "ok",
+       "score": 0.992,
+       "widthRatio": 1.034
+      }
+     ],
+     "fontFamily": "Cairo"
+    },
+    {
+     "id": "text-copy-5",
+     "verdict": "ok",
+     "designed": 2,
+     "found": 2,
+     "lines": [
+      {
+       "verdict": "ok",
+       "score": 0.999,
+       "widthRatio": 1
+      },
+      {
+       "verdict": "ok",
+       "score": 1,
+       "widthRatio": 1.016
+      }
+     ],
+     "fontFamily": "Noto Sans Arabic"
+    }
+   ]
+  }
+ ]
+}
