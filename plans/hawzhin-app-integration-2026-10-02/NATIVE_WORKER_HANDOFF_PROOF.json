@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-03",
+  "status": "ACTUAL_WORKER_HANDOFF_REFUSAL_AND_BROWSER_OUTCOME_QUALIFIED_DESIGN_OPEN",
+  "websiteCommit": "a11cf9c",
+  "testedEngineCommit": "7641f7fb1c211784c2cbbc20216431792c12526e",
+  "requirements": [
+    "FR-001",
+    "FR-006",
+    "FR-017",
+    "FR-068",
+    "FR-069",
+    "NFR-006",
+    "NFR-012",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "websiteProof": {
+    "path": "/Users/hawzhin/Hawdesign/.worktrees/hawzhin-app-integration/docs/NATIVE_WORKER_HANDOFF_PROOF.json",
+    "sha256": "46ece6482e5ad0f7d65232822fb7cc6d60bc99824de2d2bc96f1716249312e38"
+  },
+  "counts": {
+    "browserIntake": 9,
+    "actualWorker": 7,
+    "browserWorkerOutcome": 8,
+    "nativeCore": 22
+  },
+  "actualOutcome": {
+    "status": "DESIGN_REJECTED",
+    "code": "CLIENT_REFERENCE_CHANGED",
+    "cause": "identity-only fixture has incomplete client DNA; not a production/provider defect"
+  },
+  "cleanup": {
+    "vendorContainersRemoved": 6,
+    "ownedNetworksRemoved": 2,
+    "privateFilesRemoved": [
+      "worker-runtime-private.log",
+      "customer-worker-launch-private.log",
+      "customer-core-private.log",
+      "customer-browser-error-private.log",
+      "local-private.json",
+      "restate-runtime-private.log",
+      "customer-browser-worker-error-private.log"
+    ],
+    "priorContainersUnchanged": 10,
+    "coreDatabaseRemoved": true,
+    "browserWorkerAndRestateContainersAbsent": true,
+    "workerLoginRemoved": true,
+    "workerContainersRemoved": 2,
+    "restateVolumeRemoved": true
+  },
+  "remaining": [
+    "Valid client reference and real provider/Canva generated design outcome",
+    "Photo upload and scoped content-aware composition in the real journey",
+    "Native Canva languages/fonts/edit-save-reexport and human quality",
+    "Real preview/revision/acceptance/editable-download journey",
+    "Hosted two-user customer and other-three-tools journeys/PWA",
+    "Interrupted uploads/unsaved-state/orphan reconciliation",
+    "Current full regression/coverage/remote CI/security gates",
+    "Legacy/coordinated restore/rollback/hosting/trusted HTTPS/migrations/cutover"
+  ],
+  "retainedNotRerun": {
+    "nativeIdentityExpiryLane": {
+      "browserPassed": 8,
+      "failed": 0
+    },
+    "managedServiceChecks": 25,
+    "websiteUnits": 1109,
+    "modeledBrowserChecks": 51,
+    "engineFull": {
+      "passed": 8277,
+      "failed": 0,
+      "skipped": 67
+    }
+  },
+  "coverage": {
+    "status": "FAIL",
+    "actual": [
+      53.68,
+      51.37,
+      44.24,
+      41.74
+    ],
+    "required": [
+      80,
+      80,
+      80,
+      75
+    ],
+    "rerun": false
+  },
+  "rollout": {
+    "publicGenerationEnabled": false,
+    "privateFixtureGenerationEnabled": true,
+    "designerLauncher": "soon",
+    "paidCalls": false,
+    "push": false,
+    "deploy": false,
+    "productionWrites": false,
+    "goal": "active"
+  },
+  "engineRuntimeUnchanged": true,
+  "sourceHashes": {
+    "apps/core/src/app.ts": "903399c04848a5d1c60216500001e8523a2649188dcf1cd1d08ca20f4319df1e",
+    "apps/core/src/customer/customer-web-lifecycle.ts": "128ff15963766c707ac7f70ba6723c64726d8b4cf266f3ded8ed865368f49ba8",
+    "apps/core/src/services/lifecycle-projection.ts": "c75676314384ccf2495fc9ea62bc667c6ed24dc5df255d5955f7fb94e64f6404",
+    "apps/worker/src/index.ts": "b0e6a32e1b5e410979fca6a08a0af00c6f6bdb9b9d2461c134fda57dc2c51947",
+    "apps/worker/src/workflow-dispatcher.ts": "de0cfb5e42d6f7ec7c7d5d5e0c389faa48cdd1971ecd53c24f50aa9850b391cc",
+    "apps/worker/src/lifecycle/customer-web-entry.ts": "b71d30f3bc2f06e81ab67dfbb998c2bf1f4ffb7daa3a633f1bd71df7ae768a4b",
+    "apps/worker/src/lifecycle/request-lifecycle.ts": "198d42f585097ce02f28c517d20728b34938cd4b0a95a79129e527a201b93466",
+    "packages/db/migrations/073_restricted_worker_database.sql": "93edd3192da208139ee78a655325ebcf571c7368e64bbe4a4c4c0254c4972abc",
+    "packages/db/migrations/084_customer_web_lifecycle.sql": "ffb4d6ee6e60e21b5b4e4109367bf06c1c0fdfb4041cdeabd56d6ad5650d1045"
+  }
+}

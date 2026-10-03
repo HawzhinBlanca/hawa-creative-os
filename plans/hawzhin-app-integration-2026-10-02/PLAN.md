@@ -252,3 +252,30 @@ cutover remain open. Full app goal stays active.
 ## ADR278 actual browser canonical intake — 2026-10-03
 
 Existing explicit generation startup switch now reaches the production factory; defaults/example/public remain off. Malformed switches and generation-on/API-off refuse.82/2 baseline →118/0/0 contracts;757 strict roots/types/security/egress/ratchet pass. Actual production browser/native Auth/Core/restricted DB form201, reload and exact body/key replay200 pass9 browser/22 native Core controls on fresh126/89 migrations. Native stored declared Sorani copy/story geometry/owner and one canonical outbox command match. No projected task/worker/provider/Canva result is fabricated. All owned resources/private inputs removed; ten prior containers unchanged. Prior expiry8/0/default services25/full suites retained, not rerun; coverage FAIL. Whole worker/Canva/photos/hosted/native human quality/CI/restore/hosting/cutover remain open. NATIVE_INTAKE_PROOF.json.
+
+
+## Website ADR0022 actual worker/browser handoff — 2026-10-03
+
+Website a11cf9c on unchanged engine7641f7fb passes9 actual browser intake,7 real
+worker/Restate and8 post-worker browser controls plus22 actual Core controls.
+One actual request/task/open command, two durable web notices; fresh login/reload
+shows Needs attention/no invented preview, second-member exact-ID read denied.
+Worker uses distinct service/design credentials and a separate restricted login
+with no task writes or RLS bypass. Current source/dependency binding and native
+Restate1.7.10 registration verified; no synthetic Core or design handler.
+
+Automatic outcome DESIGN_REJECTED/CLIENT_REFERENCE_CHANGED comes from the
+identity-only fixture's incomplete brand record. This qualifies actual handoff
+and truthful refusal reporting, not successful generation. Next use a valid
+versioned client reference for the real photo/provider/Canva journey. Native
+preview/revision/acceptance/download, fonts/RTL/edit-save-reexport/human quality,
+hosted customer/other-three-tools/PWA, interrupted state/recovery, coverage/current
+full regression/remote CI/security, hosting/HTTPS/coordinated restore/cutover remain
+open. Defaults/public off/Soon unchanged. No push/deploy/paid/provider call.
+
+Historical cached Core image was absent and refused before engine setup; current
+28fe72f2 dependencies match current mounted source. First native handoff6/0 had
+stale parent cleanup metadata; the fresh lane reloads the child's marker and
+retains exact container/login/volume cleanup. Both fixtures and private inputs
+removed; ten prior containers unchanged. Current full suites/expiry/coverage not
+rerun. NATIVE_WORKER_HANDOFF_PROOF.json cross-links the website report/hash.
