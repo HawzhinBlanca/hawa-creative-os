@@ -75,6 +75,7 @@ GET /api/search
 GET /api/spending/calls
 GET /api/spending/calls/:kind/:callId
 GET /api/spending/policy
+GET /api/spending/summary
 GET /api/system/cutover/status
 GET /api/system/funnel/health
 GET /api/system/revision-metrics
@@ -175,6 +176,7 @@ GET /api/v1/search
 GET /api/v1/spending/calls
 GET /api/v1/spending/calls/:kind/:callId
 GET /api/v1/spending/policy
+GET /api/v1/spending/summary
 GET /api/v1/system/cutover/status
 GET /api/v1/system/funnel/health
 GET /api/v1/system/revision-metrics
@@ -279,6 +281,7 @@ GET /search
 GET /spending/calls
 GET /spending/calls/:kind/:callId
 GET /spending/policy
+GET /spending/summary
 GET /system/cutover/status
 GET /system/funnel/health
 GET /system/revision-metrics
@@ -382,6 +385,7 @@ GET /v1/search
 GET /v1/spending/calls
 GET /v1/spending/calls/:kind/:callId
 GET /v1/spending/policy
+GET /v1/spending/summary
 GET /v1/system/cutover/status
 GET /v1/system/funnel/health
 GET /v1/system/providers
