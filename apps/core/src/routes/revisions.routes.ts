@@ -621,7 +621,8 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       clientId: row.client_id,
       designRevisionId: revisionId ?? '',
       polarity,
-      category,
+      // Stored categories are wider than the domain's seven (callers record 'logo'); the answer echoes what was stored.
+      category: category as FeedbackEvent['category'],
       rawFeedbackText,
       attributedActor,
       governance: {
