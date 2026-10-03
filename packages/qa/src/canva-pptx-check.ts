@@ -298,12 +298,17 @@ export function checkCanvaPptx(
     const paragraphTexts: string[] = [];
     for (const paragraph of paragraphs) {
       const start = text.length;
-      const nodes: any[] = [];
-      find(paragraph, 'a:t', nodes);
-      for (const n of nodes) {
-        if (Array.isArray(n)) text += n.map((x: any) => String(x?.['#text'] ?? '')).join('');
-        else if (n && typeof n === 'object') text += String(n['#text'] ?? '');
-        else if (typeof n === 'string') text += n;
+      // A soft line break (`a:br`) draws a new line inside the paragraph: two words either side of
+      // one are not one word.
+      for (const child of Array.isArray(paragraph) ? paragraph : [paragraph]) {
+        if (child && typeof child === 'object' && Object.hasOwn(child, 'a:br')) { text += '\n'; continue; }
+        const nodes: any[] = [];
+        find(child, 'a:t', nodes);
+        for (const n of nodes) {
+          if (Array.isArray(n)) text += n.map((x: any) => String(x?.['#text'] ?? '')).join('');
+          else if (n && typeof n === 'object') text += String(n['#text'] ?? '');
+          else if (typeof n === 'string') text += n;
+        }
       }
       paragraphTexts.push(text.slice(start));
       text += '\n';
@@ -331,6 +336,7 @@ export function checkCanvaPptx(
         const inherited = listCap(Number.isInteger(lvl) && lvl >= 0 && lvl <= 8 ? lvl + 1 : 1);
         // Runs are the paragraph's own children, in document order.
         for (const child of children) {
+          if (child && typeof child === 'object' && Object.hasOwn(child, 'a:br')) { shown += '\n'; continue; }
           const runNode = child?.['a:r'] ?? child?.['a:fld'];
           if (!runNode) continue;
           const nodes: any[] = [];

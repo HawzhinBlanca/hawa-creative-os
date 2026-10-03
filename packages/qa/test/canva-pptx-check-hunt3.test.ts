@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
 import { checkCanvaPptx } from '../src/canva-pptx-check.js';
+import { readPptxTextLayout } from '../src/canva-pptx-layout.js';
 import { scriptFontRun, scriptFontDeck } from './fixtures/script-font-deck.js';
 
 /**
@@ -56,5 +57,27 @@ describe('a block set in capitals is drawn in capitals (ADR-275 section 4)', () 
     const copy = ['Week هەفتە', 'Join us.'];
     const sent = deck(shape(2, p(run('Week هەفتە', 'Inter'))), shape(3, p(run('Join us.', 'Inter'))));
     expect(checkCanvaPptx(sent, copy, POLICY).copyPass).toBe(true);
+  });
+});
+
+describe('soft line breaks and text outside shapes', () => {
+  it('reads <a:br/> as a line break, as PowerPoint and Canva draw it', () => {
+    const broken = deck(shape(2, p(run('PEER REVIEW', 'Inter'), '<a:br><a:rPr lang="en-US"/></a:br>', run('WEEK', 'Inter'))), shape(3, p(run('Join us.', 'Inter'))));
+    const r = checkCanvaPptx(broken, COPY, POLICY);
+    expect(r.copyPass).toBe(true);
+    expect(r.shownTexts[0]).toBe('PEER REVIEW\nWEEK');
+    expect(r.sourceTextObjects?.[0]?.text).toBe('PEER REVIEW\nWEEK');
+    // Two words drawn on two lines are not one word.
+    const split = deck(shape(2, p(run('Peer', 'Inter'), '<a:br/>', run('Review', 'Inter'))));
+    expect(checkCanvaPptx(split, ['PeerReview'], { fontsByIndex: ['Inter'] }).copyPass).toBe(false);
+  });
+
+  it('the layout reader keeps the soft break in the frame text', () => {
+    const placed = `<p:sp><p:nvSpPr><p:cNvPr id="2" name="t"/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="9525" cy="9525"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/>${p(run('PEER', 'Inter'), '<a:br/>', run('WEEK', 'Inter'))}</p:txBody></p:sp>`;
+    const bytes = zipSync({
+      'ppt/presentation.xml': strToU8('<p:presentation><p:sldSz cx="10287000" cy="12858750"/></p:presentation>'),
+      'ppt/slides/slide1.xml': strToU8(`<p:sld><p:cSld><p:spTree>${placed}</p:spTree></p:cSld></p:sld>`),
+    });
+    expect(readPptxTextLayout(bytes).frames[0].text).toBe('PEER\nWEEK');
   });
 });

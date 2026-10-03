@@ -149,7 +149,8 @@ function readFrame(shape: Node, matrix: Matrix, scale: number): { frame?: PptxTe
     const level = Math.min(9, Math.max(1, num(child(paragraph, 'a:pPr'), 'lvl', 0) + 1));
     const levelDefaults = path(listStyle, `a:lvl${level}pPr`, 'a:defRPr');
     let line = '';
-    for (const run of kids(paragraph).filter((n) => tagOf(n) === 'a:r' || tagOf(n) === 'a:fld')) {
+    for (const run of kids(paragraph).filter((n) => tagOf(n) === 'a:r' || tagOf(n) === 'a:fld' || tagOf(n) === 'a:br')) {
+      if (tagOf(run) === 'a:br') { line += '\n'; continue; }
       const text = textOf(run);
       line += text;
       if (!text.trim()) continue;
