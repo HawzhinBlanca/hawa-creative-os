@@ -64,25 +64,6 @@ describe('the page and cover composer never runs a word past its box', () => {
   }
 });
 
-describe('a poster-sized or page-sized wide logo keeps its official aspect', () => {
-  // Before: the aspect search ran only while the logo was within 40px of the house minimum, but the
-  // poster's and page's logo (0.16 of the width, 173px) starts past it, so a 5:1 logo was drawn
-  // 173x35 (4.94:1) and an 8:1 logo 173x22: the validator's LOGO rule (1%) refused every design.
-  for (const logoAspect of [2.7, 5, 8]) {
-    for (const variant of [...POSTER_VARIANTS, 'page'] as const) {
-      it(`${variant}, logo ${logoAspect}:1`, () => {
-        const lines = ['Quality Assurance Workshop', '15 October 2026'];
-        const base = input(lines, ['title', 'date'], { logoAspect });
-        const l = tryCompose(() => (variant === 'page' ? composeGrammarLayout({ ...base, variant: 'brand_card' }) : composePosterLayout({ ...base, variant })));
-        expect(l).toBeDefined();
-        expect(Math.abs(l!.logo.width / l!.logo.height - logoAspect) / logoAspect).toBeLessThanOrEqual(0.01);
-        const v = validate(l!, lines, logoAspect);
-        expect(v.ok ? 'ok' : `${v.code}: ${v.message}`).toBe('ok');
-      });
-    }
-  }
-});
-
 describe('the header label beside the logo stays inside the safe margin', () => {
   // Before: an eyebrow beside a wide, short logo was centred on the logo's line and rose above the
   // safe margin: a 1920x1080 poster with a 3.2:1 logo set it at y 67 against a margin of 76, a page
@@ -107,4 +88,48 @@ describe('the header label beside the logo stays inside the safe margin', () => 
       expect(l!.text.find((t) => t.copyIndex === 0)!.y).toBeGreaterThanOrEqual(l!.logo.y + l!.logo.height);
     }
   });
+});
+
+describe('a poster-sized or page-sized wide logo keeps its official aspect', () => {
+  // Before: the aspect search ran only while the logo was within 40px of the house minimum, but the
+  // poster's and page's logo (0.16 of the width, 173px) starts past it, so a 5:1 logo was drawn
+  // 173x35 (4.94:1) and an 8:1 logo 173x22: the validator's LOGO rule (1%) refused every design.
+  for (const logoAspect of [2.7, 5, 8]) {
+    for (const variant of [...POSTER_VARIANTS, 'page'] as const) {
+      it(`${variant}, logo ${logoAspect}:1`, () => {
+        const lines = ['Quality Assurance Workshop', '15 October 2026'];
+        const base = input(lines, ['title', 'date'], { logoAspect });
+        const l = tryCompose(() => (variant === 'page' ? composeGrammarLayout({ ...base, variant: 'brand_card' }) : composePosterLayout({ ...base, variant })));
+        expect(l).toBeDefined();
+        expect(Math.abs(l!.logo.width / l!.logo.height - logoAspect) / logoAspect).toBeLessThanOrEqual(0.01);
+        const v = validate(l!, lines, logoAspect);
+        expect(v.ok ? 'ok' : `${v.code}: ${v.message}`).toBe('ok');
+      });
+    }
+  }
+});
+
+describe('a Sorani composed design reaches the Canva deck', () => {
+  // Before: the poster and page composers set every Sorani title in IBM Plex Sans Arabic (ADR-238), the
+  // deck's admitted faces did not include it, and production's transfer stage passes only the client's
+  // formal faces (Inter, Noto Sans Arabic) as extra fonts: every Sorani composition threw "Unsupported
+  // font or unreadable size: IBM Plex Sans Arabic 148px" and produced no deliverable.
+  const lines = ['وۆرکشۆپی دڵنیایی جۆری', 'بۆ ڕاگرانی زانکۆکان', '١٥ی تشرینی یەکەمی ٢٠٢٦', 'هوتێل ڕۆتانا، هەولێر', 'تۆمارکردن بەخۆڕاییە'];
+  const roles = ['title', 'subtitle', 'date', 'venue', 'cta'];
+  const LOGO = readFileSync(new URL('../assets/logos/kaae-official-logo.png', import.meta.url));
+  const sha256 = createHash('sha256').update(LOGO).digest('hex');
+  // As apps/core's transfer stage passes them for KAAE (latinFont, arabicFont and its fixed list).
+  const extraFonts = ['Inter', 'Noto Sans Arabic', 'Verdana', 'Noto Sans Arabic', 'Cinzel', 'Playfair Display'];
+  for (const variant of [...POSTER_VARIANTS, 'page'] as const) {
+    it(variant, async () => {
+      const base = input(lines, roles);
+      const l = variant === 'page' ? composeGrammarLayout({ ...base, variant: 'brand_card' }) : composePosterLayout({ ...base, variant });
+      expect(l.text.find((t) => t.role === 'title')!.fontFamily).toBe('IBM Plex Sans Arabic');
+      const deck = await encodeStudioTransferV2(l, lines, { bytes: LOGO, mimeType: 'image/png', sha256 }, { extraFonts });
+      const fontsByIndex = lines.map((_, i) => l.text.find((t) => t.copyIndex === i)!.fontFamily);
+      const check = checkCanvaPptx(deck.bytes, lines, { fontsByIndex, uppercaseByIndex: lines.map(() => false) });
+      expect(check.copyPass).toBe(true);
+      expect(check.fontPass).toBe(true);
+    });
+  }
 });

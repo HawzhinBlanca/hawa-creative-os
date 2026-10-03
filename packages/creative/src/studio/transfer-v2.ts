@@ -377,6 +377,10 @@ export async function encodeStudioTransferV2(
     'Vazirmatn',
     'Inter',
     'Crimson Pro',
+    // ADR-238: KAAE's Sorani display face, which the poster and page composers set every Sorani title
+    // in. Without it here every Sorani composed design threw "Unsupported font" at the transfer, as
+    // production passes only the client's formal faces in extraFonts.
+    'IBM Plex Sans Arabic',
     ...(options.extraFonts || []).filter((f) => typeof f === 'string' && /^[A-Za-z0-9 ]{2,40}$/.test(f)),
   ];
 
