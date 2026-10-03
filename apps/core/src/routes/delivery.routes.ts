@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { isLateChangeReceiptId } from '@hawa/domain';
+import { isAuthorizedReviewerRole, isLateChangeReceiptId } from '@hawa/domain';
 import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus, isTaskDbState } from '@hawa/contracts';
 import { withRlsContext, toApiTaskStatus } from '@hawa/db';
 import { buildOutboundReviewDispatch, signLifecycleOfficeEvent } from '@hawa/integrations';
@@ -400,6 +400,12 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const headlineCkb = text(task.headlineCkb) || text(body.headlineCkb);
     const headlineEn = text(task.headlineEn) || text(body.headlineEn);
     if (!headlineCkb && !headlineEn) return problem(c, 422, 'COPY_REQUIRED', COPY_REQUIRED_DETAIL);
+    // The answer carries a signed approve link, and the public WhatsApp action webhook approves the task
+    // on it: handing one out takes the authority to approve (decisions.routes.ts), not just a sign-in.
+    const role = (auth.role || '').toLowerCase().trim();
+    if (role === 'operator' || !isAuthorizedReviewerRole(role)) {
+      return problem(c, 403, 'Forbidden', 'Sending a design for client approval needs a reviewer role.');
+    }
     if (!recipientPhone) return problem(c, 422, 'No Review Recipient', 'The client of this task has no review phone number and none was given');
 
     const dispatch = buildOutboundReviewDispatch({
