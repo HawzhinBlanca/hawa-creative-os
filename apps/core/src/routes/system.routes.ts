@@ -503,6 +503,10 @@ export function registerSystemRoutes(ctx: RouteContext) {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required for fault injection');
     }
+    // The breaker is global: tripping it stops every Canva transfer and turns /health to outage.
+    if (auth.role !== 'operator' && auth.role !== 'administrator') {
+      return problem(c, 403, 'Forbidden', 'Fault injection is for office operators.');
+    }
     globalCanvaCircuitBreaker.recordFailure();
     globalCanvaCircuitBreaker.recordFailure();
     globalCanvaCircuitBreaker.recordFailure();
@@ -515,6 +519,10 @@ export function registerSystemRoutes(ctx: RouteContext) {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required for fault injection');
+    }
+    // The breaker is global: tripping it stops every Canva transfer and turns /health to outage.
+    if (auth.role !== 'operator' && auth.role !== 'administrator') {
+      return problem(c, 403, 'Forbidden', 'Fault injection is for office operators.');
     }
     globalCanvaCircuitBreaker.reset();
     const snapshot = globalCanvaCircuitBreaker.getSnapshot();

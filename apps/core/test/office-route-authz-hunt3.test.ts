@@ -44,3 +44,15 @@ describe('promotion writes as the caller (hunt-3)', () => {
     }
   });
 });
+
+describe('fault injection is for operators (hunt-3)', () => {
+  it.each(['auditor', 'requester', 'designer', 'art_director'])('%s cannot trip or reset the Canva circuit breaker', async (role) => {
+    for (const path of ['/v1/operations/canva/simulate-outage', '/v1/operations/canva/simulate-recovery']) {
+      expect((await app.request(path, as(role))).status, path).toBe(403);
+    }
+  });
+  it('an operator can', async () => {
+    expect((await app.request('/v1/operations/canva/simulate-outage', as('operator'))).status).toBe(200);
+    expect((await app.request('/v1/operations/canva/simulate-recovery', as('operator'))).status).toBe(200);
+  });
+});
