@@ -365,7 +365,9 @@ export function readsAsHold(text: string): boolean {
     new RegExp('^put\\s+(?:it|them|this|that|(?:the|these|those)\\s+(?:designs?|posters?|drafts?))\\s+on\\s+hold' + wholeJobTail, 'i').test(t) ||
     // ADR-251 (friction 10): a bare "wait" / "hold on" asks for a moment and pauses nothing (`ASKS_FOR_A_MOMENT`);
     // a bare Sorani "stop" is a cancel that names nothing, and is asked about.
-    /^ڕایبگرە(?:[\s،,.!]|$)/u.test(t) || /^ڕاوەستە[\s،,]+[^\s،,.!]/u.test(t);
+    /^ڕایبگرە(?:[\s،,.!]|$)/u.test(t) || /^ڕاوەستە[\s،,]+[^\s،,.!]/u.test(t) ||
+    // Hunt 3: Sorani "(please) wait until we …" (چاوەڕێ بکە تا …). Needs native review.
+    /^(?:تکایە\s+)?چاوەڕێ\s*(?:بکە|بکەن)\s+(?:تا|هەتا)\s+\S/u.test(t);
 }
 
 /**
@@ -651,7 +653,12 @@ const CANCEL_REASON = new RegExp('^(?:(?:because|since|cause|cos|ok(?:ay)?\\s+so
  * ADR-272: Sorani reasons said after a cancel: "it was only a test" (تەنها تاقیکردنەوە بوو), "it was by mistake"
  * (بە هەڵە بوو), "I / we sent it by mistake" (بە هەڵە ناردم / ناردمان). Needs native review.
  */
-const CANCEL_REASON_CKB = /^(?:(?:تەنها|تەنیا)\s+)?(?:تاقیکردنەوە|تاقیکاری)(?:یەک)?\s*بوو[\s!.]*$|^بە\s*هەڵە\s+(?:بوو|ناردم|ناردمان|نێردرا)[\s!.]*$/u;
+const CANCEL_REASON_CKB = /^(?:(?:تەنها|تەنیا)\s+)?(?:تاقیکردنەوە|تاقیکاری)(?:یەک)?\s*بوو[\s!.]*$|^بە\s*هەڵە\s+(?:بوو|ناردم|ناردمان|نێردرا)[\s!.]*$|^\S+(?:ەکە|ەکەمان)\s+(?:هەڵوەشایەوە|هەڵوەشێنرایەوە|هەڵوەشێندرایەوە|دواخرا)[\s!.]*$/u;
+/**
+ * Hunt 3: Sorani "we don't need the poster" (پێویستمان بە پۆستەرەکە نییە): the need said of the design by name. With
+ * "the party was cancelled" (ئاهەنگەکە هەڵوەشایەوە) beside it, it was asked "a change, or a new design?". Needs native review.
+ */
+const SORANI_NOT_NEEDED = /^پێویست(?:مان|م|یان)\s+بە\s+(?:\S+\s+){0,3}?\S+(?:ەکە|ەکان)(?:ە)?\s+نییە[\s!.]*$/u;
 const cancelClauses = (core: string) =>
   core.split(/\s*[,،;.!:–—]+\s*|\s+-\s+|\s+(?=(?:because|since)\s)/iu).map((c) => c.trim()).filter(Boolean);
 /**
@@ -665,7 +672,7 @@ const SORANI_NAMED_CANCEL_LAST = new RegExp(`(?:${['هەڵیوەشێنەوە', '
 const unpolite = (c: string) => c.replace(/^(?:please|pls|plz)\s+/iu, '');
 const cancelsClause = (said: string) => { const c = unpolite(said); return !CANCELS_A_PART.test(c) && (CANCEL_EN.test(c) || CANCEL_DESCRIBED.test(c) ||
   (isSoraniText(c) && c.split(/\s+/).length <= 4 && any(c, CANCEL_CKB)) ||
-  (isSoraniText(c) && c.split(/\s+/).length <= 8 && SORANI_NAMED_CANCEL_LAST.test(c))); };
+  (isSoraniText(c) && c.split(/\s+/).length <= 8 && SORANI_NAMED_CANCEL_LAST.test(c)) || SORANI_NOT_NEEDED.test(c)); };
 
 function readsAsCancel(core: string): boolean {
   if (!core || core.length > 160) return false;
@@ -684,7 +691,7 @@ function readsAsCancel(core: string): boolean {
  */
 export function cancelNamesNothing(core: string): boolean {
   const names = (said: string) => { const c = unpolite(said); return !DISMISSAL.test(c) && (CANCEL_DESCRIBED.test(c) || CANCEL_EN_NAMED.test(c) || (CANCEL_SAID_OF_IT.test(c) && CANCEL_EN.test(c))) ||
-    (isSoraniText(c) && any(c, CANCEL_CKB_NAMED)); };
+    (isSoraniText(c) && (any(c, CANCEL_CKB_NAMED) || SORANI_NOT_NEEDED.test(c))); };
   return ![core, ...cancelClauses(core)].some(names);
 }
 
@@ -1147,6 +1154,12 @@ export function parseChoice(text: string, ask: Pick<PendingAsk, 'options' | 'all
   const t = said.replace(/[٠-٩۰-۹]/g, (d) => DIGITS[d] ?? d).toLowerCase();
   if (!t || t.length > 80) return null;
   const n = ask.options.length;
+  // Hunt 3: "yes, the second", "yeah the teacher one": a yes before the choice says nothing more (several designs asked).
+  const yesLead = /^(?:yes|yeah|yep|sure|ok(?:ay)?)[\s,]+(?=\S)/iu.exec(said);
+  if (n >= 2 && yesLead && !SAYS_ALL.test(t) && !SAYS_BOTH.test(t)) {
+    const inner = parseChoice(said.slice(yesLead[0].length), ask);
+    if (inner) return inner;
+  }
   // ADR-255: every design asked about ("both" of two, "all of them" of two or more), or "yes" to a question
   // that named them all.
   if (n >= 2 && ((n === 2 && SAYS_BOTH.test(t)) || SAYS_ALL.test(t))) return { every: true };

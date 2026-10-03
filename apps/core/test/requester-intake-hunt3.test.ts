@@ -252,3 +252,28 @@ describe('hunt 3 / S1: an event word in a long sentence is no brief by itself', 
     expect(plan('Annual KAAE conference for school principals at the Rotana Hotel on 5 November 2026 at 9 am')).toMatchObject({ kind: 'open', instructionOnly: false });
   });
 });
+
+describe('hunt 3 / K2: Sorani cancels with their reason, and a Sorani wait (needs native review)', () => {
+  const QA = 'KAAE: Quality Assurance Workshop';
+  // "The party was cancelled, we don't need the poster": it was asked "a change, or a new design?".
+  it('"the event was cancelled, we do not need the poster" withdraws the design', () => {
+    const words = 'ئاهەنگەکە هەڵوەشایەوە، پێویستمان بە پۆستەرەکە نییە';
+    expect(plan(words, [view('A', 'designing', QA)])).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+  });
+  // "Please wait until we set the place": a pause, never a new request.
+  it('"please wait until we set the place" pauses the design', () => {
+    const words = 'تکایە چاوەڕێ بکە تا شوێنەکە دیاری دەکەین';
+    expect(plan(words, [view('A', 'designing', QA)])).toMatchObject({ kind: 'note', note: 'hold', requestId: 'A' });
+    expect(plan(words)).not.toMatchObject({ kind: 'open' });
+  });
+});
+
+describe('hunt 3 / P1: "yes, the second" answers "which design?"', () => {
+  it('picks the design it names', async () => {
+    const { parseChoice } = await import('../src/services/requester-turn.js');
+    const ask = { options: [{ requestId: 'A', title: 'KAAE: Quality Assurance Workshop' }, { requestId: 'B', title: 'KAAE: Teacher Appreciation Day' }], allowNew: true };
+    expect(parseChoice('yes the second', ask)).toEqual({ option: 1 });
+    expect(parseChoice('yes, number 1', ask)).toEqual({ option: 0 });
+    expect(parseChoice('yeah the teacher one', ask)).toEqual({ option: 1 });
+  });
+});
