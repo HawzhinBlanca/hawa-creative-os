@@ -92,3 +92,33 @@ describe('soft line breaks and text outside shapes', () => {
     expect(checkCanvaPptx(deck(shape(2, p(run('PEER REVIEW WEEK', 'Inter'))), shape(3, p(run('Join us.', 'Inter'))), empty), COPY, POLICY).copyPass).toBe(true);
   });
 });
+
+describe('digits and punctuation in a Sorani block (Canva splits them into their own run)', () => {
+  // Observed in Canva's multilingual export (2026-09-27): "کاتژمێر " (ar-EG) then "8:30" (en-US), both
+  // in Noto Sans Arabic. The digits have no script; the block's own face draws them.
+  const N = 'Noto Sans Arabic';
+  const sorani = scriptFontDeck(scriptFontRun('کاتژمێر ', N, N) + scriptFontRun('8:30', N, N));
+
+  it('accepts the block\'s Arabic-script face on a run of digits, under every font policy', () => {
+    for (const options of [
+      { allowedFontsByScript: { latin: ['Inter'], arabic: [N] } },
+      { scriptFonts: { arabic: N } },
+      { documentKind: 'formal_document' as const, roles: ['body'] },
+    ]) {
+      const r = checkCanvaPptx(sorani, ['کاتژمێر 8:30'], options);
+      expect(r.copyPass, JSON.stringify(options)).toBe(true);
+      expect(r.fontPass, JSON.stringify(options)).toBe(true);
+    }
+  });
+
+  it('still refuses an unapproved face on the digits, and Latin letters in an Arabic-script face', () => {
+    const allowed = { allowedFontsByScript: { latin: ['Inter'], arabic: [N] } };
+    expect(checkCanvaPptx(scriptFontDeck(scriptFontRun('کاتژمێر ', N, N) + scriptFontRun('8:30', 'Arial', 'Arial')),
+      ['کاتژمێر 8:30'], allowed).fontPass).toBe(false);
+    expect(checkCanvaPptx(scriptFontDeck(scriptFontRun('کاتژمێر ', N, N) + scriptFontRun('PM', N, N)),
+      ['کاتژمێر PM'], allowed).fontPass).toBe(false);
+    // Digits in a Latin block keep the Latin policy.
+    expect(checkCanvaPptx(scriptFontDeck(scriptFontRun('Meeting ', 'Inter') + scriptFontRun('2026', N, N)),
+      ['Meeting 2026'], allowed).fontPass).toBe(false);
+  });
+});

@@ -365,6 +365,7 @@ export function checkCanvaPptx(
     }
 
     const isArabic = ARABIC_SCRIPT.test(text);
+    const arabicLetters = [...text].some(character => /\p{Letter}/u.test(character) && ARABIC_SCRIPT.test(character));
     if (isArabic) {
       arabicObjects++;
       const owners: any[] = [];
@@ -404,6 +405,42 @@ export function checkCanvaPptx(
       });
     }
 
+    /** Whether `face` meets the font policy for `script` text in this object. */
+    const judgeFace = (script: 'latin' | 'arabic', face: string, role: string):
+      { matches: boolean; expectedFont?: string; reason: string } => {
+      const familyMatches = (expected: string) => fontFamilyMatches(face, expected);
+      let expectedFont: string | undefined;
+      let matches: boolean;
+      let reason: string;
+      if (options.allowedFontsByScript) {
+        const allowed = options.allowedFontsByScript[script] || [];
+        fontExpectations.push(...allowed);
+        matches = allowed.some(font => face.toLowerCase() === font.toLowerCase());
+        reason = `The ${script} run must explicitly use an approved client font family`;
+      } else if (options.fontsByIndex) {
+        expectedFont = options.fontsByIndex[textIdx];
+        fontExpectations.push(expectedFont || 'none sent');
+        matches = expectedFont !== undefined && expectedFont !== '' && familyMatches(expectedFont);
+        reason = expectedFont ? `Sent in '${expectedFont}', returned by Canva in '${face}' for ${script} text`
+          : 'Canva returned a text object that was not sent';
+      } else if (options.documentKind === 'formal_document' && role === 'body') {
+        expectedFont = script === 'arabic' ? (options.formalBodyFonts?.arabic || options.scriptFonts?.arabic || 'Noto Sans Arabic')
+          : (options.formalBodyFonts?.latin || 'Verdana');
+        fontExpectations.push(expectedFont);
+        matches = familyMatches(script === 'arabic' ? formalBodyArabic : formalBodyLatin);
+        reason = `Formal document body must use ${expectedFont}; observed '${face}' for ${script} text`;
+      } else if (options.documentKind === 'formal_document' || options.documentKind === 'design_piece') {
+        fontExpectations.push(face);
+        matches = admitted.some(familyMatches);
+        reason = `Typeface '${face}' is not in the admitted Canva-native font list`;
+      } else {
+        expectedFont = script === 'arabic' && options.scriptFonts?.arabic ? options.scriptFonts.arabic : requiredFont;
+        fontExpectations.push(expectedFont);
+        matches = fontFamilyMatches(face, expectedFont, true);
+        reason = `Expected font '${expectedFont}', observed '${face}' (Canva substitution or unlisted font)`;
+      }
+      return { matches, ...(expectedFont ? { expectedFont } : {}), reason };
+    };
     for (const run of runs) {
       const runTextNodes: any[] = [];
       find(run, 'a:t', runTextNodes);
@@ -412,6 +449,7 @@ export function checkCanvaPptx(
       if (!runText.trim()) continue;
       const scripts: Array<'latin' | 'arabic'> = [];
       if (ARABIC_SCRIPT.test(runText)) scripts.push('arabic');
+      const neutral = !scripts.length && !/\p{Script=Latin}/u.test(runText);
       if (/\p{Script=Latin}/u.test(runText) || !scripts.length) scripts.push('latin');
 
       const properties: any[] = [];
@@ -443,37 +481,15 @@ export function checkCanvaPptx(
         }
         const face = declared[0];
         fonts.push(face);
-        const familyMatches = (expected: string) => fontFamilyMatches(face, expected);
-        let expectedFont: string | undefined;
-        let matches: boolean;
-        let reason: string;
-        if (options.allowedFontsByScript) {
-          const allowed = options.allowedFontsByScript[script] || [];
-          fontExpectations.push(...allowed);
-          matches = allowed.some(font => face.toLowerCase() === font.toLowerCase());
-          reason = `The ${script} run must explicitly use an approved client font family`;
-        } else if (options.fontsByIndex) {
-          expectedFont = options.fontsByIndex[textIdx];
-          fontExpectations.push(expectedFont || 'none sent');
-          matches = expectedFont !== undefined && expectedFont !== '' && familyMatches(expectedFont);
-          reason = expectedFont ? `Sent in '${expectedFont}', returned by Canva in '${face}' for ${script} text`
-            : 'Canva returned a text object that was not sent';
-        } else if (options.documentKind === 'formal_document' && role === 'body') {
-          expectedFont = script === 'arabic' ? (options.formalBodyFonts?.arabic || options.scriptFonts?.arabic || 'Noto Sans Arabic')
-            : (options.formalBodyFonts?.latin || 'Verdana');
-          fontExpectations.push(expectedFont);
-          matches = familyMatches(script === 'arabic' ? formalBodyArabic : formalBodyLatin);
-          reason = `Formal document body must use ${expectedFont}; observed '${face}' for ${script} text`;
-        } else if (options.documentKind === 'formal_document' || options.documentKind === 'design_piece') {
-          fontExpectations.push(face);
-          matches = admitted.some(familyMatches);
-          reason = `Typeface '${face}' is not in the admitted Canva-native font list`;
-        } else {
-          expectedFont = script === 'arabic' && options.scriptFonts?.arabic ? options.scriptFonts.arabic : requiredFont;
-          fontExpectations.push(expectedFont);
-          matches = fontFamilyMatches(face, expectedFont, true);
-          reason = `Expected font '${expectedFont}', observed '${face}' (Canva substitution or unlisted font)`;
+        // Digits and punctuation belong to no script; Canva gives them a run of their own ("8:30" in
+        // en-US between Sorani runs, multilingual export 2026-09-27) in the block's own face. In a block
+        // with Arabic-script letters such a run may use the face the policy admits for either script.
+        let verdict = judgeFace(script, face, role);
+        if (!verdict.matches && neutral && arabicLetters) {
+          const asArabic = judgeFace('arabic', face, role);
+          if (asArabic.matches) verdict = asArabic;
         }
+        const { matches, expectedFont, reason } = verdict;
         if (!matches) offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), role,
           observedFont, ...(expectedFont ? {expectedFont} : {}), reason });
       }
