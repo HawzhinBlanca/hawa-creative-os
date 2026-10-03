@@ -145,5 +145,8 @@ describe('hunt 3 / B1: a brief that ends with "send it to me" or "go ahead" is a
     const chat = chatId();
     const answer = await intake(app(), text(chat, BRIEFS[1]));
     expect(answer).toMatchObject({ lifecycleAction: 'open-request' });
+    // Its closing words to the designer are instructions, never printed (chat-campaign-intake.ts).
+    expect(JSON.stringify(answer.draft.exactCopy)).not.toMatch(/send it to me/i);
+    expect(answer.draft.designInstructions).toMatch(/Please send it to me by Thursday/);
   });
 });

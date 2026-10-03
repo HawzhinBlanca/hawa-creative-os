@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatIntake } from '../src/services/chat-intake.js';
 import { extractRequestCopy } from '../src/services/request-copy-extraction.js';
+import { peelClosingInstructions } from '../src/services/chat-campaign-intake.js';
 
 /**
  * Bug hunt 3 (2026-10-03): copy taken from a request sentence by the rules (ADR-232's path when no model reading is
@@ -50,5 +51,20 @@ describe('quoted words are the headline; the date, time and place said beside th
   it('quotes that carry the copy keep it as before, with nothing added', async () => {
     expect(await printed('Could you design a flyer that says "Grand Opening Sale" and "50% off everything"?')).toEqual(['Grand Opening Sale', '50% off everything']);
     expect(await printed('Please make a poster with the title "Erbil Book Fair". Use our colours.')).toEqual(['Erbil Book Fair']);
+  });
+});
+
+describe('a laid-out brief: its closing words to the designer are not copy (chat-campaign-intake)', () => {
+  it.each([
+    ['KAAE Chess Club tournament\n8 November 2026, 3 pm, Family Mall\nKeep it simple.', ['KAAE Chess Club tournament\n8 November 2026, 3 pm, Family Mall']],
+    ['KAAE Chess Club tournament, 8 November 2026, 3 pm, Family Mall. Thanks!', ['KAAE Chess Club tournament, 8 November 2026, 3 pm, Family Mall.']],
+    ['KAAE Chess Club tournament\n8 November 2026, 3 pm, Family Mall\n\nRegards,\nAhmed', ['KAAE Chess Club tournament\n8 November 2026, 3 pm, Family Mall']],
+    ["KAAE Chess Club tournament\n8 November 2026, 3 pm, Family Mall\n\nDon't forget the logo, and please send it to me by Thursday.",
+      ['KAAE Chess Club tournament\n8 November 2026, 3 pm, Family Mall']],
+    // The audience's words stay.
+    ['KAAE Chess Club tournament\n8 November 2026, 3 pm, Family Mall\nJoin us!', ['KAAE Chess Club tournament\n8 November 2026, 3 pm, Family Mall\nJoin us!']],
+  ])('%s', (words, copy) => {
+    const prepared = peelClosingInstructions(words);
+    expect(prepared.copy.split(/\n\s*\n/).map((p) => p.trim())).toEqual(copy);
   });
 });

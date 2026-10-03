@@ -9,6 +9,7 @@ import { type DesignBrief, type ExactCopyBlock } from '@hawa/domain';
 import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
 import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml, neutralRequestTitle } from '@hawa/integrations';
 import { isWeakBriefLine } from './requester-turn.js';
+import { speaksToTheDesigner } from './request-copy-extraction.js';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
 import { autoDraftAllowedFor, clientPackOf, matchRequestClient, positiveClientWords } from './client-packs.js';
 import { defaultCanvasFor } from '@hawa/creative';
@@ -32,6 +33,38 @@ export function createChatCampaignIntake(ctx: CoreContext): ChatCampaignIntake {
 }
 
 export { isCopyIntroducer };
+
+/**
+ * Hunt 3 (2026-10-03): the closing words of a laid-out brief that speak to the designer: a last paragraph ("Regards,
+ * Ahmed", "Don't forget the logo, and please send it to me by Thursday."), a last line ("Keep it simple."), or a
+ * last sentence ("… Family Mall. Thanks!"). They were printed as the design's copy (only remarks about attachments
+ * were known). Closing words to the event's audience ("Join us!") stay; the brief's first line always stays.
+ */
+export function peelClosingInstructions(text: string): { copy: string; remarks: string } {
+  let copy = text.trim();
+  const remarks: string[] = [];
+  const peel = (kept: string, said: string) => { remarks.unshift(said.trim()); copy = kept.trim(); };
+  for (let guard = 0; guard < 20; guard++) {
+    const paragraphs = copy.split(/\n\s*\n/);
+    if (paragraphs.length > 1 && speaksToTheDesigner(paragraphs.at(-1)!.replace(/\s*\n\s*/g, ' '))) {
+      peel(paragraphs.slice(0, -1).join('\n\n'), paragraphs.at(-1)!);
+      continue;
+    }
+    const lines = copy.split('\n');
+    if (lines.length > 1 && lines.at(-1)!.trim() && speaksToTheDesigner(lines.at(-1)!)) {
+      peel(lines.slice(0, -1).join('\n'), lines.at(-1)!);
+      continue;
+    }
+    const last = lines.at(-1)!;
+    const sentences = last.split(/(?<=[.!?؟])\s+(?=\S)/u);
+    if (sentences.length > 1 && speaksToTheDesigner(sentences.at(-1)!)) {
+      peel([...lines.slice(0, -1), sentences.slice(0, -1).join(' ')].join('\n'), sentences.at(-1)!);
+      continue;
+    }
+    break;
+  }
+  return { copy, remarks: remarks.join('\n') };
+}
 
 /**
  * The first line that introduces the copy, with the instructions above it and the copy below it.
@@ -243,6 +276,12 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     if (peeled.remarks) {
       payloadText = peeled.copy;
       clientInstructions = [clientInstructions, peeled.remarks].filter(Boolean).join('\n');
+    }
+    // "Keep it simple.", "Regards, Ahmed", "… Thanks!" closing a laid-out brief are said to the designer (hunt 3).
+    const closing = peelClosingInstructions(payloadText);
+    if (closing.remarks) {
+      payloadText = closing.copy;
+      clientInstructions = [clientInstructions, closing.remarks].filter(Boolean).join('\n');
     }
 
     const payloadLines = payloadText.split('\n').map((l) => l.trim()).filter(Boolean);

@@ -271,6 +271,18 @@ export function readsAsInstruction(sentence: string): boolean {
   return EN_INSTRUCTION.test(s) || EN_DESIGNER.test(s) || CKB_INSTRUCTION.test(s) || CKB_DESIGNER.test(s) || isDesignerRemark(s);
 }
 
+/**
+ * Hunt 3 (2026-10-03): closing words a laid-out brief says to the designer (chat-campaign-intake.ts). Narrower than
+ * `readsAsInstruction` for Sorani: a closing line that starts with "please" or "thanks" may be the event's own
+ * ("سوپاس بۆ ئامادەبوونتان", thank you for attending), so only Sorani "don't forget", "urgent" and thanks said alone count.
+ */
+export function speaksToTheDesigner(sentence: string): boolean {
+  const s = sentence.trim();
+  const aside = ASIDE.exec(s);
+  if (aside && aside[0].length < s.length) return speaksToTheDesigner(s.slice(aside[0].length));
+  return EN_INSTRUCTION.test(s) || EN_DESIGNER.test(s) || CKB_DESIGNER.test(s) || /^(?:زۆر\s+)?سوپاس[\s!.🙏]*$/u.test(s) || isDesignerRemark(s);
+}
+
 // --- the grounding guard -------------------------------------------------------------------------------
 
 const GLUE = new Set(['a', 'an', 'the', 'our', 'my', 'your', 'its', 'their', 'it', "it's", 'is', 'are', 'will', 'be', 'held',
