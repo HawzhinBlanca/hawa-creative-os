@@ -39,7 +39,7 @@ export function generateReleaseManifest(): ReleaseManifest {
 
   const migrationsDir = path.join(root, 'packages/db/migrations');
   const migrationFiles = fs.existsSync(migrationsDir)
-    ? fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql') && !f.includes('_down'))
+    ? fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql') && !f.endsWith('_down.sql'))
     : [];
   migrationFiles.sort();
   const latestMigrationFile = migrationFiles[migrationFiles.length - 1] || 'none';

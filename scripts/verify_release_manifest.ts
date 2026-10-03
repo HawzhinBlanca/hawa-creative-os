@@ -94,7 +94,7 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
   // 5. Database migrations check
   const migrationsDir = path.join(root, 'packages/db/migrations');
   if (fs.existsSync(migrationsDir)) {
-    const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql') && !f.includes('_down'));
+    const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql') && !f.endsWith('_down.sql'));
     files.sort();
     const currentLatest = files[files.length - 1]?.replace('.sql', '');
     if (currentLatest && manifest.migrations.targetVersion !== currentLatest) {
