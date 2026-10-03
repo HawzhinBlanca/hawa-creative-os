@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T10:35:33Z",
+  "generatedAt": "2026-10-03T11:25:22Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 934,
+  "fileCount": 935,
   "files": [
     {
       "path": ".dockerignore",
@@ -744,8 +744,8 @@
     },
     {
       "path": "adrs/135_lifecycle_only_telegram_requests.md",
-      "sha256": "37daeffb9b3cfdf6d453764e7a549fd2e1c60432dd804e6fed1fdae13a36e0e6",
-      "bytes": 22513
+      "sha256": "3993fddf07b9c3a96b580276f79ca0c189a688e302fbc4b200b1121b636d097c",
+      "bytes": 22627
     },
     {
       "path": "adrs/136_cutover_handoff_and_poller_rollback.md",
@@ -1336,6 +1336,11 @@
       "path": "adrs/286_model_reading_never_acts_alone.md",
       "sha256": "a32591c80d1ce3e561bc4d687d526cd2ed30c949901ec194f8f6549166649bae",
       "bytes": 5839
+    },
+    {
+      "path": "adrs/287_desk_requests_on_the_lifecycle_and_task_workflow_retired.md",
+      "sha256": "fe15b2377e752ee9c837b536d1c566cbad00073c163b594320095cdc91336371",
+      "bytes": 11191
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -3674,8 +3679,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "85e5371c18c2c318e16e1aa056ca85034eeeac0f29a9ff3050faf927606b253d",
-      "bytes": 912703
+      "sha256": "fb6c7e1b707f6466420990b09cd0be110a2af35e136e276c592ffd113006da16",
+      "bytes": 914056
     },
     {
       "path": "plans/user-stories.csv",
