@@ -1346,7 +1346,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                       {selectedTask.description ? (
                         <div className="copy-block-card">
                           <div className="copy-label">Original submitted request</div>
-                          <div className="copy-value-en" style={{whiteSpace:'pre-wrap'}}>{selectedTask.description}</div>
+                          <div className="copy-value-en" dir="auto" style={{whiteSpace:'pre-wrap'}}>{selectedTask.description}</div>
                         </div>
                       ) : (
                         <SubmittedCopy
@@ -1571,6 +1571,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
             <label className="hawa-revision-label" htmlFor="revision-comment">Requested change</label>
             <textarea
               id="revision-comment"
+              dir="auto"
               className="hawa-textarea"
               rows={4}
               maxLength={2000}
@@ -1703,7 +1704,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
             </select>
             <label className="hawa-revision-label" htmlFor="rejection-reason">Reason</label>
             <textarea id="rejection-reason" className="hawa-textarea" rows={4} maxLength={2000}
-              value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} />
+              dir="auto" value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button className="btn" onClick={() => setIsRejectionModalOpen(false)}>Cancel</button>
               <button className="btn primary" onClick={handleReject}

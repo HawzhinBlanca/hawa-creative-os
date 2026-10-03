@@ -1474,9 +1474,10 @@ const DnaClientScreen: React.FC<{
                     className="pill bad"
                     style={{ fontSize: 12, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6 }}
                   >
-                    <span>{phrase}</span>
+                    <span dir="auto">{phrase}</span>
                     <button
                       onClick={() => handleRemoveProhibitedPhrase(phrase)}
+                      aria-label={`Remove prohibited phrase ${phrase}`}
                       style={{
                         background: 'transparent',
                         border: 'none',
@@ -1717,6 +1718,7 @@ const DnaClientScreen: React.FC<{
               </div>
               <button
                 onClick={() => setShowSnapshotModal(false)}
+                aria-label="Close"
                 style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}
               >
                 ✕
@@ -1814,6 +1816,7 @@ const DnaClientScreen: React.FC<{
               </div>
               <button
                 onClick={() => setInspectingSnapshot(null)}
+                aria-label="Close"
                 style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}
               >
                 ✕

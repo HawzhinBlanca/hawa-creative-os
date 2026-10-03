@@ -408,7 +408,7 @@ export const App: React.FC = () => {
                 {t.modal.taskTitleLabel} (required)
               </label>
               <input
-                id="modal-task-title" required aria-describedby="request-save-help"
+                id="modal-task-title" dir="auto" required aria-describedby="request-save-help"
                 disabled={isSubmitting || pendingManualRetry || draftReadBlocked}
                 ref={taskTitleInputRef}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
