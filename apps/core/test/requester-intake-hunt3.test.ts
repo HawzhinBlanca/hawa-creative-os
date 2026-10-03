@@ -277,3 +277,18 @@ describe('hunt 3 / P1: "yes, the second" answers "which design?"', () => {
     expect(parseChoice('yeah the teacher one', ask)).toEqual({ option: 1 });
   });
 });
+
+describe('hunt 3 / L1: a message with no letters is answered in the chat\'s language (ADR-251)', () => {
+  it('"👍" after a Sorani brief is thanked in Sorani', async () => {
+    const { ROUTING_MESSAGES } = await import('@hawa/integrations');
+    const a = app();
+    const chat = chatId();
+    const brief = await intake(a, text(chat, 'پۆستەرێک بۆ ئاهەنگی نەورۆزی KAAE، ٢٠ی ئازاری ٢٠٢٧، پارکی سامی عەبدولڕەحمان'));
+    expect(brief).toMatchObject({ lifecycleAction: 'open-request' });
+    const thanks = await intake(a, text(chat, '👍'));
+    expect(thanks.chatAnswer?.text).toBe(ROUTING_MESSAGES.thanks.ckb);
+    // An unhappy emoji, answered by the chat answers (ADR-252), in Sorani too.
+    const unhappy = await intake(a, text(chat, '👎'));
+    expect([ROUTING_MESSAGES.unhappyAsk.ckb, ROUTING_MESSAGES.unhappyPassed.ckb]).toContain(unhappy.chatAnswer?.text);
+  });
+});

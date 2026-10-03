@@ -28,6 +28,7 @@ import { officeChatFor } from './office-chats.js';
 import { parseRulesCommand } from './standing-rules-chat.js';
 import { handleRulesCommand, saveChatRule, type RulesIntakeDeps } from './telegram-rules-intake.js';
 import { waitingLifecycleRequests } from './lifecycle-chat-target.js';
+import { replyLanguage } from './lifecycle-album.js';
 
 /** The answer the intake route returns: an HTTP-like status and the fields ChatInbox reads. */
 export interface ChatAnswer { status: number; extra: Record<string, unknown> }
@@ -76,8 +77,8 @@ export const REDO_ANSWER = redoAnswer('en');
  * The words for a greeting, a question or thanks (ADR-140 for thanks; ADR-145: no product name, no
  * reply-to instruction, and the requester's language by the script they wrote in).
  */
-export function inquiryAnswer(kind: 'question' | 'other', reason: string, rawText: string): string {
-  const lang = requesterLang(rawText);
+export function inquiryAnswer(kind: 'question' | 'other', reason: string, rawText: string, fallback: RequesterLang = 'en'): string {
+  const lang = requesterLang(rawText, fallback);
   if (reason === 'Acknowledgement') return say(ROUTING_MESSAGES.thanks, lang);
   return say(kind === 'question' ? CONVERSATION_MESSAGES.question : CONVERSATION_MESSAGES.greeting, lang);
 }
@@ -256,12 +257,12 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
    * stands. Null: the chat has nothing going on, and the words are answered as a greeting.
    */
   async function contextAnswer(chatId: string, updateId: number, msg: Json, rawText: string,
-    reason: string): Promise<ChatAnswer | null> {
+    reason: string, chatLang: RequesterLang): Promise<ChatAnswer | null> {
     const context = await chatContext(chatId);
     if (!context) return null;
     const { requests, withdrawn } = context;
     const latest = [...requests].sort((a, b) => Date.parse(b.activeAt) - Date.parse(a.activeAt))[0] ?? null;
-    const lang = requesterLang(rawText, requesterLang([...requests.map((r) => r.title), withdrawn?.title ?? ''].join(' '), 'en'));
+    const lang = requesterLang(rawText, chatLang);
     const office = officeChatFor(chatId);
     const who = requesterName(msg.from) || 'A requester';
     const nameOf = (title: string) => {
@@ -375,10 +376,14 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
       return { status: 200, extra: { status: 'MESSAGE_ONLY' } };
     }
 
+    // Hunt 3: words with no letter ("🤔", "👎") tell no language: they are answered in the chat's (its latest brief's,
+    // else the sender's Telegram language), never in English in a Sorani chat (ADR-251, friction 11).
+    const chatLang: RequesterLang = /\p{L}/u.test(rawText) ? requesterLang(rawText)
+      : await withRlsContext(db, scope, (trx) => replyLanguage(trx, DEFAULT_TENANT_ID, chatId, [], msg.from?.language_code)).catch(() => 'en' as const);
     // ADR-252 (friction 7): words that name the cancel ("I cancelled by mistake, please continue") read as
     // feedback to the heuristics; they are answered about the withdrawal, never as a brief or a change.
     if (asksToUndoCancel(rawText) || readsAsUndo(rawText)) {
-      const said = await contextAnswer(chatId, updateId, msg, rawText, 'Takes back a cancel');
+      const said = await contextAnswer(chatId, updateId, msg, rawText, 'Takes back a cancel', chatLang);
       if (said) return said;
     }
     const classification = classifyWithHeuristics(rawText, false, false);
@@ -395,12 +400,12 @@ export function createLifecycleChatAnswers(ctx: Pick<CoreContext, 'db' | 'isProd
     // ADR-252: words that are neither thanks nor a question, in a chat with a design going on, are never
     // answered with the new-design greeting.
     if (classification.kind === 'other' && classification.reason !== 'Acknowledgement') {
-      const said = await contextAnswer(chatId, updateId, msg, rawText, classification.reason);
+      const said = await contextAnswer(chatId, updateId, msg, rawText, classification.reason, chatLang);
       if (said) return said;
     }
     if (classification.kind === 'question' || classification.kind === 'other') {
       return answerOnce(chatId, updateId, `inquiry_${classification.kind}`, 200,
-        { text: escapeTelegramHtml(inquiryAnswer(classification.kind, classification.reason, rawText)), parseMode: 'HTML' },
+        { text: escapeTelegramHtml(inquiryAnswer(classification.kind, classification.reason, rawText, chatLang)), parseMode: 'HTML' },
         { status: 'PROCESSED', inquiry: classification.kind });
     }
     // A brief or a change the lifecycle path could not take here (a channel post, a change with no
