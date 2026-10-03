@@ -138,6 +138,43 @@ const EN_INSTRUCTION = new RegExp('^(?:' + [
   'it\\s+should\\b', '(?:in|with)\\s+(?:our\\s+)?(?:brand|blue|red|green|yellow|black|white|gold)\\s+colou?rs?\\b', 'no\\s+need\\b',
   '(?:the\\s+)?(?:photos?|pictures?|images?|logo)\\s+(?:are|is|should|must)\\b', '(?:these|those)\\s+(?:photos?|pictures?|images?)\\b',
 ].join('|') + ')', 'iu');
+/**
+ * Hunt 3 (2026-10-03): more sentences addressed to the designer, which the rules printed as the design's copy
+ * ("Don't forget the logo.", "Send it to me by Thursday.", "Keep it simple.", "Avoid red.", "Regards, Ahmed"). Each
+ * speaks of the design or its making, never to the event's audience: "Don't miss it!", "Please bring your ID",
+ * "Use code SAVE10", "Send your CV to …" and "Join us" stay copy.
+ */
+const COLOURS = 'red|blue|green|yellow|black|white|gold(?:en)?|silver|orange|purple|pink|gr[ae]y|brown|navy|maroon|beige|teal|dark|bright|neon|pastel';
+const EN_DESIGNER = new RegExp('^(?:(?:please|pls|plz|kindly|also|and|but|oh|ok(?:ay)?)[\\s,]+)*(?:' + [
+  // "Don't forget the logo", "Do not include prices", "Don't put any photos", "never use red"
+  "(?:don'?t|do\\s+not|never)\\s+(?:forget\\s+(?:the|our|my|a|an|to\\s+(?:add|include|put|use|mention|write|show|place))\\b|" +
+    `(?:include|put|add|show|write|mention|place|print|change|remove)\\b|use\\s+(?:any\\s+|the\\s+|our\\s+|my\\s+|too\\s+much\\s+)?(?:photos?|pictures?|images?|logos?|colou?rs?|fonts?|emojis?|${COLOURS})\\b)`,
+  'remember\\s+to\\s+(?:add|include|put|use|mention|write|show|place)\\b',
+  // "Keep it simple", "Put it in Kurdish too", "Write it in English", "Send it to me by Thursday"
+  '(?:keep|put|write|translate|send|set|print)\\s+(?:it|them|this|the\\s+(?:design|poster|post|flyer|banner|text|title|card|story))\\b',
+  `avoid\\s+(?:using\\s+)?(?:the\\s+)?(?:colou?rs?\\s+)?(?:${COLOURS}|photos?|pictures?|images?|emojis?|clip\\s*art|stock)\\b`,
+  'mention\\b(?!\\s+this\\b)',
+  // Sign-offs: "Regards, Ahmed", "Best regards", "Sincerely", "Thanks, Sara"
+  '(?:(?:best|kind|warm|many)\\s+)?regards\\b', 'sincerely\\b', 'yours\\s+(?:truly|faithfully|sincerely)\\b',
+  "(?:thanks?|thank\\s+you|cheers)\\s*,\\s*\\p{L}+(?:\\s+\\p{L}+)?[\\s!.]*$",
+  // "ASAP please", "Urgent!", "Please hurry"
+  "(?:asap|urgent(?:ly)?|it'?s\\s+urgent|very\\s+urgent|hurry(?:\\s+up)?|as\\s+soon\\s+as\\s+possible)(?:\\s+please)?[\\s!.]*$",
+  // "Also in Kurdish please", "With our logo please", "A4 size please", "Bigger title please"
+  '(?:in|into)\\s+(?:kurdish|english|arabic|sorani|both\\s+languages)\\b',
+  '(?:with|in)\\s+(?:our|the|my)\\s+(?:logo|colou?rs?|brand(?:ing)?|template|style|font)s?\\b(?:\\s+please)?[\\s!.]*$',
+  '(?:a[0-6]|square|portrait|landscape|story|vertical|horizontal|instagram|print)\\s+(?:size|format)\\b',
+  '(?:bigger|smaller|larger|bolder|brighter|darker)\\s+(?:title|text|font|logo|photo|picture|letters)\\b',
+  // Style: "Same style as last time", "Something modern", "Nothing too fancy", "Blue and gold colours"
+  '(?:the\\s+)?same\\s+(?:style|design|look|colou?rs?|layout|template)\\s+as\\b',
+  '(?:something|nothing)\\s+(?:too\\s+|very\\s+|more\\s+|really\\s+|a\\s+bit\\s+)?(?:modern|simple|fancy|elegant|colou?rful|bright|clean|minimal(?:ist)?|professional|classic|formal|fun|creative|bold|cute|nice|beautiful|plain|flashy)\\b',
+  `(?:(?:${COLOURS})\\s*(?:,|and|&)\\s*)*(?:${COLOURS})\\s+colou?rs?(?:\\s+please)?[\\s!.]*$`,
+  // To the bot: "Let me know if …", "I'll send the photos later", "Ignore the old one"
+  'let\\s+(?:me|us)\\s+know\\b', "(?:i|we)(?:'ll|\\s+will)\\s+(?:send|share|forward|add|give|bring)\\b", 'ignore\\s+(?:the|my|our|that|this)\\b',
+].join('|') + ')', 'iu');
+/** "PS:", "Note:", "NB:" before words to the designer ("Note: the logo must be on top", "PS: use our colours"). */
+const ASIDE = /^(?:p\.?\s?s\.?|n\.?\s?b\.?|note)\s*[:.\-–]\s*/iu;
+/** Sorani: "don't forget" (لەبیر مەکە, لەبیرت نەچێت), "urgent" said alone (بەپەلە, پەلەیە). Needs native review. */
+const CKB_DESIGNER = /(?:لەبیر\s*مەکە|لەبیرت\s*نەچێت)|^(?:زۆر\s+)?(?:بەپەلە|پەلەیە)[\s!.]*$/u;
 const CKB_INSTRUCTION = /^(?:تکایە|سوپاس|ئەم\s+وێنانە|وێنەکان|لۆگۆکە|ڕەنگی)|(?:بەکاربهێنە|بەکاربێنە|دابنێ|زیاد\s*بکە)[.!؟?]*$/u;
 
 const ws = (text: string) => text.replace(/\s+/g, ' ').trim();
@@ -227,7 +264,9 @@ export function requestLead(text: string): { end: number; words: string } | null
 /** A sentence to the designer, not copy. */
 export function readsAsInstruction(sentence: string): boolean {
   const s = sentence.trim();
-  return EN_INSTRUCTION.test(s) || CKB_INSTRUCTION.test(s) || isDesignerRemark(s);
+  const aside = ASIDE.exec(s);
+  if (aside && aside[0].length < s.length) return readsAsInstruction(s.slice(aside[0].length));
+  return EN_INSTRUCTION.test(s) || EN_DESIGNER.test(s) || CKB_INSTRUCTION.test(s) || CKB_DESIGNER.test(s) || isDesignerRemark(s);
 }
 
 // --- the grounding guard -------------------------------------------------------------------------------
