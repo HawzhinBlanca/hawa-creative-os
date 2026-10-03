@@ -32,14 +32,16 @@ function setup() {
   fs.writeFileSync(f('env.production'), 'TELEGRAM_BOT_TOKEN=700:stub:lock\nTELEGRAM_ALLOWED_USERS=9000004\n', { mode: 0o600 });
   const stub = (name: string, body: string) => fs.writeFileSync(path.join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
   // Postgres is never ready: a run that got the lock stops at its first step, and says so.
-  stub('docker', `echo "docker $*" >> '${f('calls')}'; exit 1`);
+  // With probe-deploy-lock present it first records whether a deploy could take the deploy lock now.
+  stub('docker', `[[ -f '${f('probe-deploy-lock')}' ]] && { python3 '${path.join(repo, 'infra/ops/deploy_lock.py')}' --wait 0 -- true 2>/dev/null; echo "deploy-lock-rc=$?" >> '${f('calls')}'; }
+echo "docker $*" >> '${f('calls')}'; exit 1`);
   stub('curl', `for a in "$@"; do [[ "$a" == text=* ]] && printf '%s\\n' "\${a#text=}" >> '${f('alerts')}'; done; exit 0`);
   // The lock wait's own pauses are shortened to a tenth of a second.
   stub('sleep', `echo "sleep $*" >> '${f('sleeps')}'; exec /bin/sleep 0.1`);
   const env = {
     PATH: `${bin}:${process.env.PATH ?? '/usr/bin:/bin'}`, HOME: home,
     HAWA_BACKUP_ARCHIVE_DEST: archive, HAWA_BACKUP_SNAPSHOT_DIR: snapshots, HAWA_BACKUP_NOTIFY_ENV: f('env.production'),
-    HAWA_DRILL_DIR: f('drill'), HAWA_BACKUP_PG_CONTAINER: 'hawa-test-postgres-stub',
+    HAWA_DRILL_DIR: f('drill'), HAWA_BACKUP_PG_CONTAINER: 'hawa-test-postgres-stub', HAWA_DEPLOY_LOCK: f('deploy.lock'),
   };
   const run = (script: string, extra: Record<string, string> = {}) =>
     spawnSync(BASH, [path.join(repo, script)], { encoding: 'utf8', env: { ...env, ...extra }, timeout: 60_000 });
@@ -110,6 +112,41 @@ describe('the monthly restore drill when the archive lock is busy', () => {
       expect(s.read('calls')).toContain('psql -U hawa_owner');
     } finally {
       await lock.release();
+    }
+  });
+});
+
+/**
+ * Hunt 3: a deploy and the nightly backup could overlap. The backup stops Restate and pauses intake for its
+ * cold copy, and a deploy's `up -d` started Restate again mid-copy (a torn Restate archive, unnoticed), or a
+ * deploy reached the worker switch while Restate was stopped and failed half-way. The backup now runs
+ * under the deploy lock (ADR-240 addendum): it waits for a deploy in progress, and a deploy waits for it.
+ */
+describe('the nightly backup and deploys', () => {
+  it('holds the deploy lock for its whole run, so a deploy that starts meanwhile waits', () => {
+    const s = setup();
+    fs.writeFileSync(s.f('probe-deploy-lock'), '');
+    const r = s.run('infra/backup/nightly_backup.sh');
+    expect(r.status).toBe(1);
+    expect(s.read('calls')).toMatch(/^deploy-lock-rc=75$/m);
+    expect(s.log()).toMatch(/FAIL \d{8}T\d{6}Z: postgres container not ready/);
+  });
+
+  it('waits for a deploy in progress, and fails the night loudly if it does not end in time', async () => {
+    const s = setup();
+    const deploy = spawn('python3', [path.join(repo, 'infra/ops/deploy_lock.py'), '--lock', s.f('deploy.lock'), '--',
+      'python3', '-c', "import sys,time; print('deploying',flush=True); time.sleep(20)"]);
+    const [ready] = await once(deploy.stdout, 'data');
+    expect(String(ready)).toContain('deploying');
+    try {
+      const r = s.run('infra/backup/nightly_backup.sh', { HAWA_BACKUP_DEPLOY_LOCK_WAIT: '0' });
+      expect(r.status, r.stdout + r.stderr).toBe(1);
+      expect(s.log()).toMatch(/^\S+ FAIL \d{8}T\d{6}Z: a deploy held the deploy lock for 0 s; no backup was taken/m);
+      expect(s.read('alerts')).toContain('Hawa nightly backup FAILED');
+      expect(s.read('calls')).toBe('');
+    } finally {
+      deploy.kill('SIGTERM');
+      await once(deploy, 'exit');
     }
   });
 });

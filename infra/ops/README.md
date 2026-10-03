@@ -52,6 +52,12 @@ backup runs: its process, or its exclusive hold on the archive lock (`HAWA_BACKU
 the canary's launch agent takes from the nightly agent's). Its client is the shipped "Canary Test" pack
 (`c1000000-0000-4000-8000-000000000099`, ADR-254).
 
+The nightly backup holds the same deploy lock for its whole run (ADR-240, addendum of 2026-10-03): it
+stops Restate and pauses intake for its copy, so it waits for a deploy in progress
+(`HAWA_BACKUP_DEPLOY_LOCK_WAIT`, 3600 s) and a deploy waits for it. It and the monthly data drill also
+wait for a busy archive lock (`HAWA_BACKUP_LOCK_WAIT_SECONDS`, `HAWA_DRILL_LOCK_WAIT_SECONDS`, 3600 s);
+either wait running out fails the run, logged and alerted.
+
 Logs go to `~/.hawa/logs/<launch agent label>.log` on both hosts. The settings the jobs need
 (`HAWA_BACKUP_ARCHIVE_DEST`, `HAWA_BACKUP_ARCHIVE_KEYFILE`, `HAWA_BACKUP_ARCHIVE_KEEP`,
 `HAWA_RESTATE_BACKUP_ENABLED`, `HAWA_RESTATE_BACKUP_HELPER_IMAGE`, `HAWA_OFFSITE_*`) live:

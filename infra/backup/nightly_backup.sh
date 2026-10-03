@@ -109,17 +109,29 @@ fi
 # other failure. It used to end the run at once with exit 1 and nothing logged or sent: an off-site copy
 # or a restore drill still reading the archive, or launchd starting every job a sleeping Mac missed at
 # the same moment on wake, cost the night's backup, and the watchdog noticed only 26 hours later (hunt 3).
+#
+# The whole run also holds the deploy lock (infra/ops/deploy_lock.py; ADR-240, addendum of 2026-10-03): it
+# stops Restate and pauses intake for its copy, and a deploy's `up -d` started Restate again in the middle
+# of it (a torn archive nobody noticed), or a deploy reached the worker switch while Restate was down and
+# failed half-way. A deploy in progress is waited for, up to HAWA_BACKUP_DEPLOY_LOCK_WAIT (3600 s), and a
+# deploy that starts meanwhile waits for the backup. Under a caller that holds it already, it is not taken.
 if [[ -z "${HAWA_ARCHIVE_LOCK_FD:-}" ]]; then
-  LOCK_WAIT="${HAWA_BACKUP_LOCK_WAIT_SECONDS:-3600}"
-  [[ "$LOCK_WAIT" =~ ^[0-9]+$ ]] || fail "HAWA_BACKUP_LOCK_WAIT_SECONDS must be a whole number"
+  LOCK_WAIT="${HAWA_BACKUP_LOCK_WAIT_SECONDS:-3600}"; DEPLOY_WAIT="${HAWA_BACKUP_DEPLOY_LOCK_WAIT:-3600}"
+  [[ "$LOCK_WAIT" =~ ^[0-9]+$ && "$DEPLOY_WAIT" =~ ^[0-9]+$ ]] \
+    || fail "HAWA_BACKUP_LOCK_WAIT_SECONDS and HAWA_BACKUP_DEPLOY_LOCK_WAIT must be whole numbers"
+  LOCKED=(python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode exclusive -- bash "$ROOT/infra/backup/nightly_backup.sh" "$@")
+  DEPLOY_LOCKED=0
+  if [[ "${HAWA_DEPLOY_LOCK_HELD:-}" != 1 ]]; then
+    LOCKED=(python3 "$ROOT/infra/ops/deploy_lock.py" --wait "$DEPLOY_WAIT" -- "${LOCKED[@]}"); DEPLOY_LOCKED=1
+  fi
   waited=0
   while :; do
     rc=0
-    python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode exclusive \
-      -- bash "$ROOT/infra/backup/nightly_backup.sh" "$@" || rc=$?
-    # 0: the night passed. 1: archive_lock.py found the lock busy. Anything else: the run failed and has
-    # already logged and alerted it.
+    "${LOCKED[@]}" || rc=$?
+    # 0: the night passed. 1: archive_lock.py found the lock busy. 75: deploy_lock.py waited out a deploy.
+    # Anything else: the run failed and has already logged and alerted it.
     if [[ $rc == 0 ]]; then exit 0; fi
+    if [[ $rc == 75 && $DEPLOY_LOCKED == 1 ]]; then fail "a deploy held the deploy lock for ${DEPLOY_WAIT} s; no backup was taken"; fi
     if [[ $rc != 1 ]]; then exit 1; fi
     (( waited < LOCK_WAIT )) || fail "the backup archive stayed locked for ${LOCK_WAIT} s (an off-site copy, a restore drill or another backup still holds it); no backup was taken"
     (( waited > 0 )) || echo "waiting for the backup archive lock (an off-site copy, a restore drill or another backup holds it)" >&2

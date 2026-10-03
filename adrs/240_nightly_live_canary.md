@@ -229,3 +229,23 @@ The result goes to `~/.hawa/logs/canary/<stamp>.json` and `.txt`, and to `latest
 **Found while building it** (not fixed here; not this stream's):
 - "cancel the … flyer, sorry, it was by mistake" names the design but is asked about ("Do you want me to cancel …?"). ADR-230 §8's reasons cover "by mistake" and "sorry" apart, not "it was by mistake" after "sorry". The canary answers "yes", so it passes, but the bot asked for an answer it did not need.
 - On a paid night, "Got it. I'll add that to … as soon as the current draft is done" is told while the allowance will refuse the round. The requester then hears "was finished before your changes could be added", which is true. The first line promised a round that admission had not yet decided.
+
+## Addendum (2026-10-03, bug hunt 3): the nightly backup holds the deploy lock too
+
+**Found.** Nothing kept a deploy and the nightly backup apart. The backup stops Restate and pauses Telegram
+intake for its cold copy (ADR-053/134). A deploy's `up -d` in that window started Restate again in the middle
+of the copy, a torn Restate archive that nothing would notice until a restore; a deploy that reached the
+worker switch while Restate was stopped failed half-way, after Core had been replaced. Agents deploy at any
+hour (44 deploys in 5 days), so an overlap with the few minutes of the copy was a matter of time.
+
+**Decision.** `infra/backup/nightly_backup.sh` runs its whole night under the deploy lock
+(`deploy_lock.py --wait HAWA_BACKUP_DEPLOY_LOCK_WAIT`, 3600 s), taken before the archive lock, unless its
+caller already holds it (`HAWA_DEPLOY_LOCK_HELD=1`). A deploy started meanwhile waits for the backup
+(`HAWA_DEPLOY_LOCK_WAIT`, 1800 s; a night takes minutes). A deploy that holds the lock for the whole wait
+fails the night, logged in `backup.log` (the watchdog reports it) and alerted. The canary is unchanged:
+it runs an hour after the backup; if a delayed backup still holds the lock at 04:30, the canary skips that
+night as it would for a deploy.
+
+**Verification.** `packages/testkit/test/archive-lock-wait.test.ts`: a deploy cannot take the lock while
+the night runs (exit 75 from inside the run), and a deploy holding it past the wait fails the night with a
+FAIL line and an alert, nothing dumped. Both fail on the code before this change.
