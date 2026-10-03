@@ -46,11 +46,17 @@ export interface NewBriefDecision {
   clientChoice?: ClientChoice;
 }
 
-export interface ClientChoice { outcome: 'office' | 'unmatched' | 'expired' | 'timeout'; lang: 'en' | 'ckb' }
+/**
+ * `named`: the organisation the requester named that the office does not know (`unmatched`), as they wrote
+ * it, so the office alert can say it (live canary 2026-10-03: it said "no organisation was named").
+ */
+export interface ClientChoice { outcome: 'office' | 'unmatched' | 'expired' | 'timeout'; lang: 'en' | 'ckb'; named?: string }
 export function parseClientChoice(value: unknown): ClientChoice | undefined {
   const v = value as Partial<ClientChoice> | null;
-  return v && typeof v === 'object' && ['office', 'unmatched', 'expired', 'timeout'].includes(String(v.outcome)) &&
-    (v.lang === 'en' || v.lang === 'ckb') ? { outcome: v.outcome!, lang: v.lang } : undefined;
+  if (!(v && typeof v === 'object' && ['office', 'unmatched', 'expired', 'timeout'].includes(String(v.outcome)) &&
+    (v.lang === 'en' || v.lang === 'ckb'))) return undefined;
+  const named = v.outcome === 'unmatched' && typeof v.named === 'string' && v.named.trim() ? v.named.trim().slice(0, 120) : undefined;
+  return { outcome: v.outcome!, lang: v.lang, ...(named ? { named } : {}) };
 }
 
 /** The draft a new-brief decision recorded for this request: its first request's, or a sibling's. */

@@ -1255,7 +1255,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   // ADR-284 addendum (live canary 2026-10-03): "No problem. I've passed it to the office…" and "Got it. A
                   // designer will make …" came back to back. The request's first answer says both, in the answer's language.
                   const officeChooses = resolution.outcome === 'office' || resolution.outcome === 'unmatched' || resolution.outcome === 'expired'
-                    ? { outcome: resolution.outcome, lang } as ClientChoice : null;
+                    ? { outcome: resolution.outcome, lang, ...(resolution.outcome === 'unmatched' && text.trim() ? { named: text.trim().slice(0, 120) } : {}) } as ClientChoice : null;
                   return await openBrief(question.words, question.instructionOnly, true, {
                     ...(resolution.outcome === 'client' && resolution.clientId ? { clientId: resolution.clientId } : { forOffice: true }),
                     ...(officeChooses ? { clientChoice: officeChooses } : {}),

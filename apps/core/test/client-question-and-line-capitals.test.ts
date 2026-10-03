@@ -99,6 +99,14 @@ const clientChoiceOf = async (open: Record<string, any>) => {
   expect(res.status).toBe(200);
   return ((await res.json()) as { clientChoice?: unknown }).clientChoice;
 };
+/** The projection's whole answer: its client choice and the office alerts it asks the worker to send. */
+const projectionOf = async (open: Record<string, any>) => {
+  const res = await app().request(`/v1/internal/lifecycle/${open.requestId}/project`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WORKER}` },
+    body: JSON.stringify({ v: 1, expectedRev: 0, rev: 1, key: `${open.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: open.draft }] }) });
+  expect(res.status).toBe(200);
+  return (await res.json()) as { clientChoice?: unknown; officeAlerts?: Array<{ chatId: string; text: string }> };
+};
 
 describe('a brief that names no organisation asks who it is for (ADR-235)', () => {
   it('the live sentence in the owner\'s office chat: kept, asked with the names; "KAAE" opens it for KAAE, once', async () => {
@@ -156,7 +164,7 @@ describe('a brief that names no organisation asks who it is for (ADR-235)', () =
     await sentAnswer(brief.update_id, 4402);
     const unknown = await intake(message(chat, OUTSIDER, 'The Erbil Teachers Union', replyTo(4402)));
     expect(unknown).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null, autoGenerate: false } });
-    expect(await clientChoiceOf(unknown)).toEqual({ outcome: 'unmatched', lang: 'en' });
+    expect(await clientChoiceOf(unknown)).toEqual({ outcome: 'unmatched', lang: 'en', named: 'The Erbil Teachers Union' });
   });
 
   it('live 2026-10-03: an organisation nobody knows, named without a reply, still answers the question', async () => {
@@ -167,7 +175,11 @@ describe('a brief that names no organisation asks who it is for (ADR-235)', () =
       await intake(message(chat, OUTSIDER, TEACHER));
       const opened = await intake(message(chat, OUTSIDER, words));
       expect(opened, words).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null, autoGenerate: false, rawText: TEACHER } });
-      expect(await clientChoiceOf(opened), words).toEqual({ outcome: 'unmatched', lang: 'en' });
+      // The office hears the name the requester gave, never "no organisation was named".
+      const projected = await projectionOf(opened);
+      expect(projected.clientChoice, words).toEqual({ outcome: 'unmatched', lang: 'en', named: words });
+      expect(projected.officeAlerts?.[0]?.text, words).toContain(`The requester said it is for: ${words}.`);
+      expect(projected.officeAlerts?.[0]?.text, words).not.toContain('no organisation was named');
     }
     // Small talk is no organisation's name: the question stays open and the brief is not opened.
     for (const words of ['hello', 'Great', 'Good Morning', 'wait', 'Thank You', 'its for us']) {
