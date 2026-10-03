@@ -145,6 +145,22 @@ export function candidateRuleFromCore(rule: any): CandidateRule {
   };
 }
 
+/**
+ * ADR-291: what a DNA layout rule does to the next design, from Core's rule-effect report (returned
+ * with the candidate rules). Every rule here used to carry a fixed pill calling it a QA invariant: no rule
+ * in this list is checked by QA, and for a client that designs from its packaged reference (KAAE) the
+ * list is not read at all unless the rule was promoted from feedback.
+ */
+export function ruleEffectBadge(effect: any, rule: string): { label: string; tone: 'ok' | 'warn' | 'bad' | 'blue'; note: string } {
+  const rows: any[] = Array.isArray(effect?.rules) ? effect.rules : [];
+  const row = rows.find((r) => r?.text === rule && (r?.source === 'dna_layout_rule' || r?.source === 'learned_rule'));
+  if (!row) return { label: 'Effect not read', tone: 'blue', note: 'Core did not report what this rule does to a design.' };
+  const note = String(row.note ?? '');
+  if (row.status === 'applied_deterministically') return { label: 'Applied by code', tone: 'ok', note };
+  if (row.status === 'prompt_only') return { label: 'Read by the models only', tone: 'warn', note };
+  return { label: 'Not used in designs', tone: 'bad', note };
+}
+
 /** What Core's font inspector (packages/qa font-inspector.ts) reports about an uploaded font. */
 export interface FontInspectionResult {
   fontFamily: string;
@@ -248,6 +264,8 @@ const DnaClientScreen: React.FC<{
 
   // Candidate rules from governed learning loop
   const [candidateRules, setCandidateRules] = useState<CandidateRule[]>([]);
+  // ADR-291: Core's report of what each active rule does to the next design; null when not read.
+  const [ruleEffect, setRuleEffect] = useState<any>(null);
 
   // Kurdish WebFont Ingestion & Diacritic Clearance Inspector State (Horizon 4)
   const [inspectedFont, setInspectedFont] = useState<FontInspectionResult | null>(null);
@@ -296,6 +314,7 @@ const DnaClientScreen: React.FC<{
 
     const rules = rulesRes.state === 'known' ? rulesRes.value?.candidateRules : undefined;
     setCandidateRules(Array.isArray(rules) ? rules.map(candidateRuleFromCore) : []);
+    setRuleEffect(rulesRes.state === 'known' && rulesRes.value?.ruleEffect?.clientId === clientId ? rulesRes.value.ruleEffect : null);
     markRead('rules', rulesRes.state === 'unknown' ? rulesRes.reason : undefined);
 
     setLoading(false);
@@ -1528,7 +1547,10 @@ const DnaClientScreen: React.FC<{
                       <b>Principle #{idx + 1}</b>
                       <p style={{ margin: '2px 0 0', fontSize: 13 }}>{rule}</p>
                     </div>
-                    <span className="pill ok" style={{ fontSize: 10 }}>Hard QA Invariant</span>
+                    {(() => {
+                      const badge = ruleEffectBadge(ruleEffect, rule);
+                      return <span className={`pill ${badge.tone}`} style={{ fontSize: 10 }} title={badge.note}>{badge.label}</span>;
+                    })()}
                   </div>
                 ))}
               </div>

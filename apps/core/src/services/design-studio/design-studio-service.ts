@@ -22,7 +22,6 @@ import {
   type Kysely,
   DesignStudioRepository,
   ClientRulesRepository,
-  formatClientRulesForPrompt,
   type DesignStudioStatus,
   type DesignStudioTier,
   type DesignStudioJudgeStatus,
@@ -62,6 +61,7 @@ export function packagedAdmittedDisplayFonts(reference: Record<string, any>): { 
   const arabic = names.filter((f: string) => fontFamilyScript(f) === 'arabic');
   return latin.length && arabic.length ? { latin, arabic } : undefined;
 }
+import { contextWithClientRules, listLearnedRulesInForceAt, mergeRulesByTime, readsPackagedReference } from '../rule-effect.js';
 import { briefPhotoFacts } from './art-direction.js';
 import { recordedPhotoSelection, studioCopyBlocks } from './design-quality.js';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
@@ -963,10 +963,12 @@ export class DesignStudioService {
   }
 
   /**
-   * Adds the office's standing rules for this client, said in chat or read from its guidelines.
-   * Every stage reads promotedRules in its system prompt, so they reach the brief, the layouts, the
-   * critique and the judge alike. A read failure stops the run: designing without rules the office
-   * set is the silent failure this replaced.
+   * Adds the office's standing rules for this client, said in chat or read from its guidelines, and
+   * for a packaged-reference client the rules governed learning promoted (ADR-291). The v2 stages
+   * read promotedRules in their system prompts; in v3 the brief, the layout model (when one is
+   * called) and the visual review read them, and the v3 judge does not (ADR-291 section 3). Only
+   * models read them: no code reads a rule's words. A read failure stops the run: designing without
+   * rules the office set is the silent failure this replaced.
    */
   private async withClientRules(s: Scope, ctx: StageContext, runStartedAt?: Date | string): Promise<StageContext> {
     // No database (a unit harness) means no rules to read; with one, a failed read stops the run.
@@ -974,17 +976,17 @@ export class DesignStudioService {
     // The rules as they stood when the run started: every stage re-read the current ones, so a rule
     // sent mid-run changed the critique and the judge but not the brief (audit 2026-09-27 #16).
     const startedAt = runStartedAt ? new Date(runStartedAt) : undefined;
-    const rules = await this.tx(s, (db) => {
+    const frozen = startedAt && !Number.isNaN(startedAt.getTime()) ? startedAt : undefined;
+    const rules = await this.tx(s, async (db) => {
       const repo = new ClientRulesRepository(db);
-      return startedAt && !Number.isNaN(startedAt.getTime())
-        ? repo.listInForceAt(s.tenantId, ctx.clientId, startedAt)
-        : repo.listActive(s.tenantId, ctx.clientId);
+      const standing = frozen ? await repo.listInForceAt(s.tenantId, ctx.clientId, frozen) : await repo.listActive(s.tenantId, ctx.clientId);
+      // ADR-291: governed learning promotes a rule into the DNA row, which a packaged reference
+      // (KAAE) never reads; a promoted KAAE rule reached no design. Its promotion record is read
+      // instead, as it stood when the run started. A DNA client already has it in its reference.
+      const learned = readsPackagedReference(ctx.referencePack) ? await listLearnedRulesInForceAt(db, s.tenantId, ctx.clientId, frozen) : [];
+      return mergeRulesByTime(standing, learned);
     });
-    const text = formatClientRulesForPrompt(rules);
-    if (!text) return ctx;
-    ctx.clientRules = text;
-    ctx.promotedRules = `${ctx.promotedRules}\n\n${text}`;
-    return ctx;
+    return contextWithClientRules(ctx, rules);
   }
 
   /**

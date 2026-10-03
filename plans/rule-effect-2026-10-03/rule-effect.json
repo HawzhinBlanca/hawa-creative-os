@@ -1,0 +1,673 @@
+{
+  "measuredAt": "2026-10-03T13:12:02.917Z",
+  "table": [
+    {
+      "kind": "logo placement",
+      "rule": "Always put the logo in the bottom-right corner",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": "logoCorner=bottom-right",
+      "status": "prompt-only up to the brief; then enforced on 1 of 3 on model-drawn layouts; ignored on the composed KAAE poster",
+      "modelDrawn": {
+        "with": 1,
+        "without": 0,
+        "of": 3,
+        "changed": true
+      },
+      "misses": [
+        {
+          "path": "model-drawn",
+          "candidate": "cream",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            475,
+            140,
+            130,
+            130
+          ],
+          "background": "#FDF8F3",
+          "title": {
+            "color": "#4770A3",
+            "bold": true,
+            "fontWeight": null,
+            "fontFamily": "Crimson Pro",
+            "align": "center"
+          }
+        },
+        {
+          "path": "model-drawn",
+          "candidate": "editorial",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            86,
+            76,
+            130,
+            130
+          ],
+          "background": "#FFFFFF",
+          "title": {
+            "color": "#4770A3",
+            "bold": true,
+            "fontWeight": null,
+            "fontFamily": "Crimson Pro",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (white page, full-width title band)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FFFFFF",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (cream ground, display title, details card)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FDF8F3",
+          "title": {
+            "color": "#1E3A5F",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (navy gradient, display title, sunburst)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#0A1628",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        }
+      ],
+      "composedPoster": {
+        "with": 0,
+        "without": 0,
+        "of": 3,
+        "changed": false
+      }
+    },
+    {
+      "kind": "typeface",
+      "rule": "Use sans-serif type only, no serif faces",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": "typeface=sans",
+      "status": "prompt-only up to the brief; then enforced on model-drawn layouts; already so on the composed KAAE poster, rule or not",
+      "modelDrawn": {
+        "with": 3,
+        "without": 0,
+        "of": 3,
+        "changed": true
+      },
+      "composedPoster": {
+        "with": 3,
+        "without": 3,
+        "of": 3,
+        "changed": false
+      }
+    },
+    {
+      "kind": "type weight",
+      "rule": "Set titles in a regular weight, not bold",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": "titleWeight=regular",
+      "status": "prompt-only up to the brief; then enforced on model-drawn layouts; ignored on the composed KAAE poster",
+      "modelDrawn": {
+        "with": 3,
+        "without": 0,
+        "of": 3,
+        "changed": true
+      },
+      "composedPoster": {
+        "with": 0,
+        "without": 0,
+        "of": 3,
+        "changed": false
+      },
+      "misses": [
+        {
+          "path": "composed",
+          "candidate": "Office poster (white page, full-width title band)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FFFFFF",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (cream ground, display title, details card)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FDF8F3",
+          "title": {
+            "color": "#1E3A5F",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (navy gradient, display title, sunburst)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#0A1628",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "alignment",
+      "rule": "Centre every line of text",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": "alignment=center",
+      "status": "prompt-only up to the brief; then enforced on model-drawn layouts; ignored on the composed KAAE poster",
+      "modelDrawn": {
+        "with": 3,
+        "without": 1,
+        "of": 3,
+        "changed": true
+      },
+      "composedPoster": {
+        "with": 0,
+        "without": 0,
+        "of": 3,
+        "changed": false
+      },
+      "misses": [
+        {
+          "path": "composed",
+          "candidate": "Office poster (white page, full-width title band)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FFFFFF",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (cream ground, display title, details card)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FDF8F3",
+          "title": {
+            "color": "#1E3A5F",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (navy gradient, display title, sunburst)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#0A1628",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "title colour",
+      "rule": "Titles in our darkest navy",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": "titleColor=dark",
+      "status": "prompt-only up to the brief; then enforced on 2 of 3 on model-drawn layouts; ignored on the composed KAAE poster",
+      "modelDrawn": {
+        "with": 2,
+        "without": 0,
+        "of": 3,
+        "changed": true
+      },
+      "misses": [
+        {
+          "path": "model-drawn",
+          "candidate": "band",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            86,
+            76,
+            130,
+            130
+          ],
+          "background": "#FFFFFF",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": null,
+            "fontFamily": "Crimson Pro",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (white page, full-width title band)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FFFFFF",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (cream ground, display title, details card)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FDF8F3",
+          "title": {
+            "color": "#1E3A5F",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (navy gradient, display title, sunburst)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#0A1628",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        }
+      ],
+      "composedPoster": {
+        "with": 0,
+        "without": 0,
+        "of": 3,
+        "changed": false
+      }
+    },
+    {
+      "kind": "forbidden element: dividers",
+      "rule": "No divider lines between the blocks",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": "dividers=no",
+      "status": "prompt-only up to the brief; then enforced on model-drawn layouts; ignored on the composed KAAE poster",
+      "modelDrawn": {
+        "with": 3,
+        "without": 0,
+        "of": 3,
+        "changed": true
+      },
+      "composedPoster": {
+        "with": 0,
+        "without": 0,
+        "of": 3,
+        "changed": false
+      },
+      "misses": [
+        {
+          "path": "composed",
+          "candidate": "Office poster (white page, full-width title band)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FFFFFF",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (cream ground, display title, details card)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FDF8F3",
+          "title": {
+            "color": "#1E3A5F",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (navy gradient, display title, sunburst)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#0A1628",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "forbidden element: cards",
+      "rule": "No boxes or cards behind the copy",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": "panels=none",
+      "status": "prompt-only up to the brief; then enforced on model-drawn layouts; ignored on the composed KAAE poster",
+      "modelDrawn": {
+        "with": 3,
+        "without": 0,
+        "of": 3,
+        "changed": true
+      },
+      "composedPoster": {
+        "with": 1,
+        "without": 1,
+        "of": 3,
+        "changed": false
+      },
+      "misses": [
+        {
+          "path": "composed",
+          "candidate": "Office poster (white page, full-width title band)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FFFFFF",
+          "title": {
+            "color": "#FFFFFF",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        },
+        {
+          "path": "composed",
+          "candidate": "Office poster (cream ground, display title, details card)",
+          "canvas": "1080x1350 margin 76",
+          "logo": [
+            76,
+            76,
+            173,
+            173
+          ],
+          "background": "#FDF8F3",
+          "title": {
+            "color": "#1E3A5F",
+            "bold": true,
+            "fontWeight": 800,
+            "fontFamily": "Inter",
+            "align": "left"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "background colour",
+      "rule": "Always on our cream background",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": "requestedBackground=#FDF8F3",
+      "status": "prompt-only up to the brief; then enforced on model-drawn layouts; enforced on the composed KAAE poster",
+      "modelDrawn": {
+        "with": 3,
+        "without": 1,
+        "of": 3,
+        "changed": true
+      },
+      "composedPoster": {
+        "with": 3,
+        "without": 1,
+        "of": 3,
+        "changed": true
+      }
+    },
+    {
+      "kind": "type case",
+      "rule": "Titles always in capital letters",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": null,
+      "status": "prompt-only: StyleSpec has no value for it; unverifiable without a model"
+    },
+    {
+      "kind": "forbidden colour pairing",
+      "rule": "Never gold text on white",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": null,
+      "status": "prompt-only: StyleSpec has no value for it; unverifiable without a model"
+    },
+    {
+      "kind": "wording",
+      "rule": "Never use exclamation marks",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": null,
+      "status": "prompt-only: StyleSpec has no value for it; unverifiable without a model"
+    },
+    {
+      "kind": "imagery",
+      "rule": "No stock photos of people",
+      "reach": {
+        "briefSystemPrompt": true,
+        "briefAskedForStyleValues": true,
+        "briefContract": true,
+        "layoutModelPrompt": true,
+        "visualReview": true,
+        "judgeHouseRules": false
+      },
+      "readByCode": false,
+      "styleValue": null,
+      "status": "prompt-only: StyleSpec has no value for it; unverifiable without a model"
+    }
+  ]
+}
