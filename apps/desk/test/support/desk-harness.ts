@@ -64,6 +64,7 @@ export interface FetchCall {
   path: string;
   search: URLSearchParams;
   body?: any;
+  headers: Headers;
 }
 
 /** Answers every request with `route` (a 404 problem when it returns nothing) and records it. */
@@ -78,6 +79,7 @@ export function stubCore(route: (call: FetchCall) => Response | Promise<Response
         path: url.pathname,
         search: url.searchParams,
         body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+        headers: new Headers(init?.headers),
       };
       calls.push(call);
       return (await route(call)) ?? json({ title: 'Not Found', status: 404 }, 404);

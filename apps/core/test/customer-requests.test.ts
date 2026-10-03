@@ -747,6 +747,33 @@ it('retains six originals in requester order through the actual canonical projec
   await expect(projectLifecycleOpen(db,{requestId:open.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:open.draft,key:'open:'+open.requestId})).resolves.toEqual(projected);
   for(const p of photos)expect((await blobStoreFor(db)!.read(p.sha256,{verify:true})).length).toBe(p.size);
 });
+it('marks a zero-photo web request explicitly with an empty manifest so no office archive photo can join it',async()=>{
+  const f=await fixture();
+  const admitted=await f.service.create(f.a.member,'zero_photos',f.body);
+  const open=await customerWebOpenEvent(db,f.tenantId,admitted.job.id);
+  // A website request is always marked as one, even without a photo (bug hunt 3): the office photo library
+  // reads the absence of this manifest as "an office request".
+  expect(open.draft.customerWebPhotos).toEqual({v:1,images:[]});
+  await projectLifecycleOpen(db,{requestId:open.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:open.draft,key:'open:'+open.requestId});
+  const task=(await sql<{id:string;source:Record<string,unknown>}>`SELECT t.id,e.data AS source FROM hawa.tasks t JOIN hawa.task_events e ON e.task_id=t.id AND e.event_type='task.created' WHERE t.request_id=${open.requestId}::uuid`.execute(owner)).rows[0];
+  const payload=task.source.payload as Record<string,unknown>;
+  expect(payload.customerWebPhotos).toEqual({v:1,images:[]});
+  expect(orderedCustomerPhotos(payload.customerWebPhotos,[])).toEqual([]);
+  const studio=new DesignStudioService(db,undefined,{blobStore:blobStoreFor(db)});
+  const readImages=(studio as unknown as {requestImages:(scope:{tenantId:string;actorId:string},taskId:string)=>Promise<string[]>}).requestImages.bind(studio);
+  expect(await readImages({tenantId:f.tenantId,actorId:CHANNEL_INGRESS_USER_ID},task.id)).toEqual([]);
+  // A zero-photo open journalled by a worker before this change (no manifest) still projects.
+  const legacy=await f.service.create(f.a.member,'zero_photos_legacy',{...f.body,title:'Legacy in-flight'});
+  const legacyOpen=await customerWebOpenEvent(db,f.tenantId,legacy.job.id);
+  const {customerWebPhotos:_omitted,...legacyDraft}=legacyOpen.draft;
+  await expect(projectLifecycleOpen(db,{requestId:legacyOpen.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:legacyDraft,key:'open:'+legacyOpen.requestId})).resolves.toBeTruthy();
+  // ...but a worker may not drop the manifest of a request that has photos.
+  const photo=(await upload(f,3,f.b.member)).photo;
+  const withPhoto=await f.service.create(f.b.member,'one_photo_dropped',{...f.body,photoIds:[photo.id]});
+  const photoOpen=await customerWebOpenEvent(db,f.tenantId,withPhoto.job.id);
+  const {customerWebPhotos:_dropped,...dropped}=photoOpen.draft;
+  await expect(projectLifecycleOpen(db,{requestId:photoOpen.requestId,tenantId:f.tenantId,expectedRev:0,rev:1,draft:dropped,key:'open:'+photoOpen.requestId})).rejects.toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
+});
 it('never forces all photos automatically and bounds an explicit count',async()=>{
   const f=await fixture();const a=(await upload(f,1)).photo,b=(await upload(f,2)).photo;
   const result=await f.service.create(f.a.member,'auto_photo',{...f.body,photoIds:[a.id,b.id]});

@@ -4,7 +4,7 @@ import {createDb,sql,withRlsContext} from '@hawa/db';
 import type {ClientDNA} from '@hawa/domain';
 import {createClientDnaResolver} from '../src/services/client-dna-resolver.js';
 import {createAppWithClientFixtures} from './fixtures/app-with-client-fixtures.js';
-import {persistClientDnaFixture,clientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {activeDnaVersion,persistClientDnaFixture,clientDnaFixture} from './fixtures/persisted-client-dna.js';
 import {approvedRefinementPair} from './fixtures/approved-refinement-pair.js';
 import {memoryExportStore} from './pinned-exports-fixture.js';
 import type {Publisher,PublishRequest} from '@hawa/contracts';
@@ -111,7 +111,7 @@ describe('authoritative Client DNA boundary',()=>{
   const publish=(core:typeof first)=>core.request(`/v1/tasks/${pair.taskId}/publish-omnichannel`,{method:'POST',headers,body:'{}'});
   expect((await publish(first)).status).toBe(422);expect(requests).toHaveLength(1);
   const dna=await persistClientDnaFixture(first,foreign,headers);
-  const changed=await first.request(`/v1/clients/${foreign}/dna`,{method:'POST',headers,body:JSON.stringify({...dna,
+  const changed=await first.request(`/v1/clients/${foreign}/dna`,{method:'POST',headers,body:JSON.stringify({...dna,expectedVersion:await activeDnaVersion(first,foreign,headers),
    name:'Renamed office',destinations:{...dna.destinations,productionFolderId:'new-folder',spreadsheetId:'new-sheet',sheetId:17}})});
   expect(changed.status).toBe(201);
   const second=createAppWithClientFixtures({db,deliverableStore:exports.store,publisher});
@@ -153,12 +153,12 @@ describe('authoritative Client DNA boundary',()=>{
   const core=createAppWithClientFixtures({db,deliverableStore:exports.store,publisher});
   const dna=await persistClientDnaFixture(core,foreign,headers);
   expect((await core.request(`/v1/clients/${foreign}/dna`,{method:'POST',headers,
-   body:JSON.stringify({...dna,destinations:{...dna.destinations,spreadsheetId:'',sheetId:0}})})).status).toBe(201);
+   body:JSON.stringify({...dna,expectedVersion:await activeDnaVersion(core,foreign,headers),destinations:{...dna.destinations,spreadsheetId:'',sheetId:0}})})).status).toBe(201);
   const pair=await approvedRefinementPair(core,headers,foreign,exports);
   const publish=()=>core.request(`/v1/tasks/${pair.taskId}/publish-omnichannel`,{method:'POST',headers,body:'{}'});
   expect((await publish()).status).toBe(422);expect(requests).toHaveLength(1);
   expect((await core.request(`/v1/clients/${foreign}/dna`,{method:'POST',headers,
-   body:JSON.stringify({...dna,name:'New identity',destinations:{...dna.destinations,productionFolderId:'new-drive',spreadsheetId:'first-sheet',sheetId:19}})})).status).toBe(201);
+   body:JSON.stringify({...dna,expectedVersion:await activeDnaVersion(core,foreign,headers),name:'New identity',destinations:{...dna.destinations,productionFolderId:'new-drive',spreadsheetId:'first-sheet',sheetId:19}})})).status).toBe(201);
   expect((await publish()).status).toBe(503);expect(requests).toHaveLength(2);
   expect(requests[1].destination).toEqual({...requests[0].destination,spreadsheetId:'first-sheet',sheetId:19});
   expect(requests[1].files).toEqual(requests[0].files);

@@ -9,6 +9,7 @@ import { clientPacks } from './services/client-packs.js';
 import { probeRestate } from './services/restate-probe.js';
 import { createRestateInvocationProbe } from './services/restate-invocations.js';
 import { log, requestLogContext, bindLogContext } from './logging.js';
+import { CORE_MAX_BODY_BYTES, coreBodyLimit } from './body-limit.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -204,6 +205,10 @@ export function createApp(options?: CreateAppOptions) {
       c.header('Content-Security-Policy', "default-src 'none'; img-src 'self' data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https:; frame-ancestors 'none';");
     }
   });
+
+  // Bug hunt 3: no request body above CORE_MAX_BODY_BYTES is read (body-limit.ts).
+  app.use('*', coreBodyLimit(CORE_MAX_BODY_BYTES, (c) => problem(c, 413, 'Payload Too Large',
+    `Request bodies are limited to ${CORE_MAX_BODY_BYTES} bytes`)));
 
   app.onError((err, c) => {
     if (err instanceof ClientDnaUnavailableError) return problem(c, 503, 'Client DNA Unavailable', err.message);

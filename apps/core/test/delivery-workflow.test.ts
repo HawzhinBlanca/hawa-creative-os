@@ -166,7 +166,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
     const saved = await app.request(`/v1/clients/${kaae}/dna`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ ...current, destinations: { ...(current.destinations || {}), productionFolderId: 'kaae-slice22-folder', spreadsheetId: 'kaae-slice22-sheet' } }),
+      body: JSON.stringify({ ...current, expectedVersion: current.version, destinations: { ...(current.destinations || {}), productionFolderId: 'kaae-slice22-folder', spreadsheetId: 'kaae-slice22-sheet' } }),
     });
     if (![200, 201].includes(saved.status)) throw new Error(`DNA save: ${saved.status} ${await saved.text()} from ${JSON.stringify(current).slice(0, 400)}`);
     destinationSaved = true;

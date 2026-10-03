@@ -12,8 +12,9 @@ const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js').then((m)
 const OpsScreen = lazy(() => import('./screens/OpsScreen.js').then((m) => ({ default: m.OpsScreen })));
 const EvalScreen = lazy(() => import('./screens/EvalScreen.js').then((m) => ({ default: m.EvalScreen })));
 const ComparisonScreen = lazy(() => import('./screens/ComparisonScreen.js').then((m) => ({ default: m.ComparisonScreen })));
-import { GuidedTour } from './components/GuidedTour.js';
-import { CommandPalette } from './components/CommandPalette.js';
+// Opened on demand (Cmd+K, the tour): loaded on first open, kept out of the entry chunk.
+const GuidedTour = lazy(() => import('./components/GuidedTour.js').then((m) => ({ default: m.GuidedTour })));
+const CommandPalette = lazy(() => import('./components/CommandPalette.js').then((m) => ({ default: m.CommandPalette })));
 import { draftStore } from './services/draftStore.js';
 import { submitManualTask, getPendingManualDraft } from './services/manualTaskIntake.js';
 import { useI18n } from './services/i18n.js';
@@ -56,6 +57,12 @@ export const App: React.FC = () => {
   }, [appToast]);
   const [showTour, setShowTour] = useState<boolean>(false);
   const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
+  // Mounted from their first opening on and kept, so they keep their state between openings as before
+  // they were split out of the entry chunk (the tour resumes at its step).
+  const tourOpened = useRef(false);
+  const paletteOpened = useRef(false);
+  if (showTour) tourOpened.current = true;
+  if (showCommandPalette) paletteOpened.current = true;
 
   // Global Keyboard Shortcuts (Cmd+K omnisearch & 1 - 7 screen navigation)
   useEffect(() => {
@@ -538,29 +545,37 @@ export const App: React.FC = () => {
       )}
 
       {/* Guided 60-Second Operator Onboarding Tour */}
-      <GuidedTour
-        isOpen={showTour}
-        onClose={() => setShowTour(false)}
-        onNavigateScreen={(s) => handleNavigate(s as ScreenId)}
-      />
+      {tourOpened.current && (
+        <Suspense fallback={null}>
+          <GuidedTour
+            isOpen={showTour}
+            onClose={() => setShowTour(false)}
+            onNavigateScreen={(s) => handleNavigate(s as ScreenId)}
+          />
+        </Suspense>
+      )}
 
       {/* Raycast-Grade Global Command Palette (Cmd+K) */}
-      <CommandPalette
-        isOpen={showCommandPalette && sessionState.status === 'signed_in'}
-        onClose={() => setShowCommandPalette(false)}
-        onNavigate={(screen) => handleNavigate(screen)}
-        activeClientId={searchClientId}
-        activeClientName={searchClientName}
-        onAction={(actionId) => {
-          if (actionId === 'start_tour') {
-            setShowTour(true);
-          } else if (actionId === 'toggle_language') {
-            toggleLocale();
-          } else if (actionId === 'new_task') {
-            handleOpenModal();
-          }
-        }}
-      />
+      {paletteOpened.current && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            isOpen={showCommandPalette && sessionState.status === 'signed_in'}
+            onClose={() => setShowCommandPalette(false)}
+            onNavigate={(screen) => handleNavigate(screen)}
+            activeClientId={searchClientId}
+            activeClientName={searchClientName}
+            onAction={(actionId) => {
+              if (actionId === 'start_tour') {
+                setShowTour(true);
+              } else if (actionId === 'toggle_language') {
+                toggleLocale();
+              } else if (actionId === 'new_task') {
+                handleOpenModal();
+              }
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

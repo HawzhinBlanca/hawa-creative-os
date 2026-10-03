@@ -1,5 +1,5 @@
 import {beforeAll as prepareDna} from 'vitest';
-import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {activeDnaVersion,persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import {createApp as dnaFixtureCore} from '../src/app.js';
 import crypto from 'node:crypto';
 import { describe, expect, it, afterAll } from 'vitest';
@@ -50,7 +50,8 @@ async function setup() {
     const res = await app.request(`/clients/${NO_SHEET_CLIENT}/dna`, {
       method: 'POST',
       headers: auth,
-      body: JSON.stringify({ ...kaaeDna, clientId: NO_SHEET_CLIENT, code: 'NOSHEETN', name: 'No Sheet Notify Client', destinations: { ...kaaeDna.destinations, spreadsheetId } }),
+      body: JSON.stringify({ ...kaaeDna, clientId: NO_SHEET_CLIENT, code: 'NOSHEETN', name: 'No Sheet Notify Client', destinations: { ...kaaeDna.destinations, spreadsheetId },
+        expectedVersion: await activeDnaVersion(app, NO_SHEET_CLIENT, auth, '') }),
     });
     expect(res.status).toBe(201);
   };

@@ -574,6 +574,10 @@ export function registerSystemRoutes(ctx: RouteContext) {
     if ((!authHeader && auth.authMethod !== 'trusted_office') || !auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to test telegram connection');
     }
+    // It calls Telegram with the bot token: provider configuration is the administrator's (bug hunt 3).
+    if (auth.role !== 'administrator') {
+      return problem(c, 403, 'Forbidden', 'Administrator authority required to test the Telegram connection');
+    }
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token || token === 'replace_with_telegram_bot_token') {
       return c.json({ ok: false, message: 'Telegram bot token is not configured' });

@@ -1,5 +1,5 @@
 import {beforeAll as prepareDna} from 'vitest';
-import {persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
+import {activeDnaVersion,persistClientDnaFixture} from './fixtures/persisted-client-dna.js';
 import {createApp as dnaFixtureCore} from '../src/app.js';
 import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { describe, expect, it, afterAll, vi } from 'vitest';
@@ -50,7 +50,8 @@ async function setup(publisher?: Publisher) {
     const res = await app.request(`/clients/${NO_SHEET_CLIENT}/dna`, {
       method: 'POST',
       headers: auth,
-      body: JSON.stringify({ ...kaaeDna, clientId: NO_SHEET_CLIENT, code: 'NOSHEET', name, destinations: { ...kaaeDna.destinations, productionFolderId: folderId, spreadsheetId, sheetId } }),
+      body: JSON.stringify({ ...kaaeDna, clientId: NO_SHEET_CLIENT, code: 'NOSHEET', name, destinations: { ...kaaeDna.destinations, productionFolderId: folderId, spreadsheetId, sheetId },
+        expectedVersion: await activeDnaVersion(app, NO_SHEET_CLIENT, auth, '') }),
     });
     expect(res.status).toBe(201);
   };

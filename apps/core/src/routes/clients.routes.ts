@@ -9,6 +9,21 @@ import { findClientRowId, snapshotFromRow } from '../services/client-row.js';
 import { ModelConsentError, modelReadingAfterSave, readClientModelConsent, recordClientModelConsent,
   saveDnaVersionKeepingConsent, type DnaSaveConsent } from '../services/client-model-consent.js';
 
+/**
+ * Office roles that may change a client's DNA (bug hunt 3). Row-level security (hawa.can_write_client)
+ * stays the database guard; this refuses the other roles before any read, and is the only guard
+ * without a database. Rollback keeps its narrower set below.
+ */
+export const DNA_EDIT_ROLES = ['administrator', 'operator', 'designer', 'client_dna_manager',
+  'art_director', 'creative_director', 'office_admin'] as const;
+const DNA_ROLLBACK_ROLES = ['administrator', 'art_director', 'creative_director'] as const;
+
+/** The DNA version a write changes: required, an integer, compared strictly (bug hunt 3). */
+function expectedVersionOf(body: unknown): number | null {
+  const v = body && typeof body === 'object' ? (body as { expectedVersion?: unknown }).expectedVersion : undefined;
+  return typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : null;
+}
+
 export function registerClientsRoutes(ctx: RouteContext) {
   const {
     registerRoute,
@@ -115,8 +130,15 @@ export function registerClientsRoutes(ctx: RouteContext) {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to modify client DNA');
     }
+    if (!(DNA_EDIT_ROLES as readonly string[]).includes(auth.role || '')) {
+      return problem(c, 403, 'Forbidden', 'Your role may not change this client\'s DNA');
+    }
     const clientId = c.req.param('clientId');
     const body = await c.req.json().catch(() => ({}));
+    const expectedVersion = expectedVersionOf(body);
+    if (expectedVersion === null) {
+      return problem(c, 400, 'Expected Version Required', 'Send expectedVersion: the DNA version this change was made from');
+    }
 
     const validation = validateClientDna(body);
     if (!validation.ok) return problem(c, 400, 'Invalid Client DNA', validation.error.message);
@@ -149,8 +171,8 @@ export function registerClientsRoutes(ctx: RouteContext) {
       currentVersion = prevDna.version || 0;
     }
 
-    if (body.expectedVersion !== undefined && body.expectedVersion !== currentVersion) {
-      return problem(c, 409, 'Conflict', `Optimistic lock failed: expected version ${body.expectedVersion} but current version is ${currentVersion}`);
+    if (expectedVersion !== currentVersion) {
+      return problem(c, 409, 'Conflict', `Optimistic lock failed: expected version ${expectedVersion} but current version is ${currentVersion}`);
     }
 
     const version = currentVersion + 1;
@@ -184,7 +206,7 @@ export function registerClientsRoutes(ctx: RouteContext) {
             dna: { ...dna, __commitMessage: body.commitMessage || `Client DNA updated to v${dna.version}`, __createdBy: author },
             contentHash: hash,
             createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
-            expectedVersion: body.expectedVersion,
+            expectedVersion,
             via: 'dna',
           })).consent;
         });
@@ -247,11 +269,18 @@ export function registerClientsRoutes(ctx: RouteContext) {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to create client snapshot');
     }
+    if (!(DNA_EDIT_ROLES as readonly string[]).includes(auth.role || '')) {
+      return problem(c, 403, 'Forbidden', 'Your role may not change this client\'s DNA');
+    }
     const clientId = c.req.param('clientId');
+    const body = await c.req.json().catch(() => ({}));
+    const expectedVersion = expectedVersionOf(body);
+    if (expectedVersion === null) {
+      return problem(c, 400, 'Expected Version Required', 'Send expectedVersion: the DNA version this snapshot follows');
+    }
     const dna = await resolveClientDna(clientId, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role });
     if (!dna) return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
 
-    const body = await c.req.json().catch(() => ({}));
     const tenantId = auth.tenantId || defaultTenantId;
     const scope = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
     // With a database the snapshot is a version of hawa.client_dna_versions, numbered after the
@@ -272,8 +301,8 @@ export function registerClientsRoutes(ctx: RouteContext) {
       }
       if (!targetId) return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
     }
-    if (body.expectedVersion !== undefined && body.expectedVersion !== currentVersion) {
-      return problem(c, 409, 'Conflict', `Optimistic lock failed: expected version ${body.expectedVersion} but current version is ${currentVersion}`);
+    if (expectedVersion !== currentVersion) {
+      return problem(c, 409, 'Conflict', `Optimistic lock failed: expected version ${expectedVersion} but current version is ${currentVersion}`);
     }
 
     const newVersion = currentVersion + 1;
@@ -304,7 +333,7 @@ export function registerClientsRoutes(ctx: RouteContext) {
             dna: { ...updatedDna, __commitMessage: commitMessage, __createdBy: author },
             contentHash: hash,
             createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
-            expectedVersion: body.expectedVersion !== undefined ? body.expectedVersion : undefined,
+            expectedVersion,
             via: 'snapshot',
           })).consent;
         });
@@ -354,8 +383,12 @@ export function registerClientsRoutes(ctx: RouteContext) {
 
     // SA-01: Derive role strictly from auth.role; do NOT use body.role
     const role = (auth.role || 'operator') as string;
-    if (role !== 'art_director' && role !== 'creative_director' && role !== 'administrator') {
+    if (!(DNA_ROLLBACK_ROLES as readonly string[]).includes(role)) {
       return problem(c, 403, 'Forbidden', 'Only art_director, creative_director, or administrator can rollback client DNA');
+    }
+    const expectedVersion = expectedVersionOf(body);
+    if (expectedVersion === null) {
+      return problem(c, 400, 'Expected Version Required', 'Send expectedVersion: the active DNA version this rollback replaces');
     }
 
     const currentDna = await resolveClientDna(clientId, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role });
@@ -394,6 +427,9 @@ export function registerClientsRoutes(ctx: RouteContext) {
     if (!targetSnap) {
       return problem(c, 404, 'Snapshot Not Found', `No snapshot found matching version ${targetVersion || snapshotId}`);
     }
+    if (expectedVersion !== activeVersion) {
+      return problem(c, 409, 'Conflict', `Optimistic lock failed: expected version ${expectedVersion} but current version is ${activeVersion}`);
+    }
 
     const newVersion = activeVersion + 1;
     const author = auth.userId || auth.role || 'system';
@@ -431,10 +467,14 @@ export function registerClientsRoutes(ctx: RouteContext) {
             dna: { ...restoredDna, __commitMessage: rollbackSnap.commitMessage, __createdBy: rollbackSnap.createdBy },
             contentHash: hash,
             createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
+            expectedVersion,
             via: 'rollback',
           })).consent;
         });
       } catch (err: any) {
+        if (err.message && (err.message.includes('OptimisticConcurrencyConflict') || err.code === '23505')) {
+          return problem(c, 409, 'Conflict', 'The client DNA changed since it was read; reload it and roll back again');
+        }
         if (err?.code === '42501') return problem(c, 403, 'Forbidden', 'Your role may not change this client\'s DNA');
         log.error('[core:clients:rollback] rollback not saved:', err?.message || err);
         return problem(c, 500, 'Database Transaction Failed', 'The rollback could not be saved; try again');
