@@ -1375,7 +1375,8 @@ const options = (requests: ChatRequestView[]) => requests.map((r) => ({ requestI
 function changeFor(request: ChatRequestView, words: string, how: string, confidence: number | undefined,
   resolves?: number): TurnPlan | null {
   if (waitsForRequester(request)) {
-    // Recency never starts a paid round, and a model's pick only when it is sure.
+    // Recency never starts a paid round, and a model's pick never does: below 0.85 it is asked here, and
+    // above it `withoutModelAction` asks (ADR-285).
     if (how === 'recent' || (how === 'model' && (confidence ?? 0) < 0.85)) return null;
     return { kind: 'revise', requestId: request.requestId, directive: words, ...(resolves ? { resolves } : {}) };
   }
@@ -1513,7 +1514,8 @@ function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) 
   const drafted = recent.filter(hasDraft);
   const pool = bound.length > 1 ? bound : drafted.length ? drafted : recent;
   if (!pool.length) return null;
-  // The intake router's pick (asked when the rules could not tell), when it is sure enough to start a round.
+  // The intake router's pick (asked when the rules could not tell) names the design; ADR-285: it is asked
+  // about ("redo it, or a new design?", `withoutModelAction`), never redone on the model's word.
   if (reading.source === 'model' && reading.requestId && (reading.confidence ?? 0) >= 0.85) {
     const named = pool.find((r) => r.requestId === reading.requestId);
     if (named) return redoFor(named, words);
@@ -1527,8 +1529,35 @@ function planRedo(input: TurnInput, words: string, mayAct: (r: ChatRequestView) 
   return clear ? redoFor(latest, words) : askRedo(oldestFirst, false);
 }
 
+/**
+ * ADR-285 (NLU model-first experiment, 2026-10-03): a model's reading never acts on a design by itself. The
+ * intake router is asked only about words the rules could not place, and on the labelled set its "change"
+ * readings were wrong five times in six (fragments such as "for the deans" kept as changes) and started a paid
+ * redo of a delivered design for "do a better design for the conference". So whatever its confidence, a plan
+ * that a model reading alone would turn into a paid round (`revise`, `redo`) or a change kept for the office
+ * (a `note` of a change) is the rules' own question instead: "a change to …, or a new design?" (or "redo it, or
+ * a new design?" for redo words), about the design the model named. The requester's answer then acts, as any
+ * answer does. A plan that answers the bot's question (`resolves`) is the requester's choice, not the model's.
+ * This supersedes the "model reading with confidence of 0.85 or more" path of ADR-144/ADR-200 for paid rounds.
+ */
+function withoutModelAction(plan: TurnPlan, input: TurnInput): TurnPlan {
+  if (input.reading.source !== 'model') return plan;
+  if (!(plan.kind === 'revise' || plan.kind === 'redo' || (plan.kind === 'note' && plan.note === 'change'))) return plan;
+  if (plan.resolves) return plan;
+  const request = input.requests.find((r) => r.requestId === plan.requestId);
+  if (!request) return { kind: 'forward', words: input.text.trim() };
+  const words = input.text.trim();
+  const redo = plan.kind === 'redo' || plan.redo === true;
+  const allowNew = !input.reading.cancelWords && !SAYS_CANCEL.test(words);
+  return { kind: 'ask', intent: 'unclear', words, options: options([request]), allowNew, ...(redo && allowNew ? { redo: 'or-new' as const } : {}) };
+}
+
 /** What to do with this message. Pure: the route records the plan once per update and carries it out. */
 export function planTurn(full: TurnInput): TurnPlan {
+  return withoutModelAction(planByReading(full), full);
+}
+
+function planByReading(full: TurnInput): TurnPlan {
   // Delivered designs older than DELIVERED_LIVE_MS concern redo words only (ADR-200 addendum).
   // ADR-230 addendum (L17): a closed request (withdrawn, rejected, expired) is never offered or acted on.
   full = { ...full, requests: full.requests.filter((r) => CHANGEABLE.includes(r.stage)) };

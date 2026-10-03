@@ -248,6 +248,33 @@ Sample 2 differs in two cases, and both break:
    - "fantastic, my boss is really happy with it" (praise);
    - bare "no" or "nope" on a draft.
 
+## After ADR-285 (same day)
+
+The owner approved acting on recommendation 3. ADR-285 (`adrs/285_model_reading_never_acts_alone.md`) adds one guard to `planTurn`: a plan made from a model reading never starts a paid round (`revise`, `redo`) and never keeps a change for the office by itself. Whatever the confidence, it becomes the rules' own question about the design the model named:
+
+- "a change to …, or a new design?";
+- "redo it, or a new design?" for redo words.
+
+Fragments are asked about too, because the router's change readings were wrong five times in six on this set (the production diff above). The production arm was re-run from the cached answers, with no new paid call.
+
+| Production intake path | Before (router as deployed) | After ADR-285 | Rules only |
+|---|---|---|---|
+| Overall (356) | 344 (96.6 %) | **349 (98.0 %)** | 349 (98.0 %) |
+| Original set (302) | 297 | 300 | 300 |
+| Held out (54) / round 3 (18) | 47 / 13 | 49 / 14 | 49 / 14 |
+| Sorani (89) | 88 | 88 | 88 |
+| Target (191) | 189 | 188 | 188 |
+| Costly errors | 0 | **0** | 0 |
+| Wrong paid rounds | 1 (`en-unclear-05`) | **0** | 0 |
+| Recall of `unclear` (22) | 59.1 % | 86.4 % | 86.4 % |
+| Cost per message | $0.000067 | $0.000067 (the router is still asked) | $0 |
+
+Both samples give these numbers.
+
+After the guard, the router changes the plan in two cases. In `en-brief-29` it opens a brief that the rules asked about; both plans are accepted. In `ho3-ack-01` it answers praise as conversation instead of asking; both are wrong. Every other case is planned exactly as the rules plan it.
+
+The guard applies to every model reading, so the experiment's model-first variant is held to it too. On Sol it falls to 254 of 356 under ADR-285, because every change it reads becomes a question. That is expected: under ADR-285 a model can no longer act on a design alone, which is what was asked. The tables above this section are the measurements before ADR-285.
+
 ## Caveats
 
 - **The original 302 cases were tuned on by the rules (ADR-272).** The comparison there favours the rules. The held-out cases are the fair signal, but there are only 54, all English, and round 3 is 18. A difference of two cases there is not significant.
