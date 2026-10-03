@@ -10,6 +10,19 @@ import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { settleAlbum, isAffirmativeOnly, isBriefText, ALBUM_TEXT } from '../src/services/lifecycle-album.js';
 
+/**
+ * ADR-282: a gate in front of the "opens still in flight" read (openingChatRequests), so a test can hold
+ * one intake call there while another finishes. Without a hook it is the real read, unchanged.
+ */
+const openingGate = vi.hoisted(() => ({ hook: null as null | (() => Promise<void>) }));
+vi.mock('../src/services/requester-turn-store.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/services/requester-turn-store.js')>();
+  return { ...real, openingChatRequests: async (...args: Parameters<typeof real.openingChatRequests>) => {
+    await openingGate.hook?.();
+    return real.openingChatRequests(...args);
+  } };
+});
+
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const userId = '00000000-0000-4000-b000-000000000001';
 const clientId = 'c1000000-0000-4000-8000-000000000002';
@@ -21,7 +34,7 @@ const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${t
 let id = 830_000_000;
 const photo = (n: number) => Buffer.concat([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64'), Buffer.from([n])]);
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); openingGate.hook = null; });
 afterAll(async () => { await db.destroy(); await owner.destroy(); });
 
 /** The owner's brief of 2026-09-29, in shape: a report cover with its exact copy under a divider. */
@@ -296,6 +309,36 @@ describe('an album settles by itself (ADR-143)', () => {
           AND source_account_id = 'lifecycle_album_part' AND payload->>'chatId' = ${String(f.chat)})`.execute(trx)).rows[0].n);
     expect(Number(frozen)).toBe(1);
     expect(await f.opens()).toBe(1);
+  });
+
+  it('ADR-282: a settle delivered twice at once names the one request in both answers, never its own open as in flight', async () => {
+    // The interleaving of CI run 37078578560, made certain: both calls of one settle have read "no
+    // decision yet" for the update; the first then opens the request while the second is held at the
+    // read of opens in flight, which it reaches only after that open is recorded.
+    const f = setup();
+    const parts = [f.part(201, 1, BRIEF), f.part(202, 2)];
+    for (const p of parts) await f.intake(p);
+    const deferred = () => { let resolve!: () => void; const promise = new Promise<void>((r) => { resolve = r; }); return { promise, resolve }; };
+    const bounded = (p: Promise<void>, what: string) => Promise.race([p, new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error(`gate: ${what} never happened`)), 15_000))]);
+    const bothRead = deferred();
+    const firstAnswered = deferred();
+    let arrivals = 0;
+    openingGate.hook = async () => {
+      if (++arrivals === 1) await bounded(bothRead.promise, 'the second settle reading opens in flight');
+      else if (arrivals === 2) { bothRead.resolve(); await bounded(firstAnswered.promise, 'the first settle answering'); }
+    };
+    const calls = [f.settle(parts[1]), f.settle(parts[1])];
+    await Promise.race(calls);
+    firstAnswered.resolve();
+    const answers = await Promise.all(calls);
+    expect(arrivals).toBe(2);
+    expect(answers.map((a) => [a.intakeStatus, a.lifecycleAction, a.code])).toEqual([[200, 'open-request', undefined], [200, 'open-request', undefined]]);
+    expect(answers[1].requestId).toBe(answers[0].requestId);
+    expect(answers[1].draft).toEqual(answers[0].draft);
+    expect(await f.opens()).toBe(1);
+    expect((await project(f.app, answers[0])).status).toBe(200);
+    expect(await f.tasks()).toHaveLength(1);
   });
 
   it('refuses nothing it should not: the photos of a revision reply start that revision at the settle', async () => {
