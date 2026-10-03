@@ -14,7 +14,8 @@
  * Advisory: the result is recorded in the QC report and named in the office alert; it never changes
  * `passed` or `criticalPass` (ADR-257's rule). The customer download contract (ADR-258) reads `pass`.
  */
-import { countInkLines, decodePicture, hammingDistance, imageFingerprint, MATCH_DISTANCE, type ImageFingerprint } from '@hawa/creative';
+import { checkTextShaping, countInkLines, decodePicture, hammingDistance, imageFingerprint, MATCH_DISTANCE, textShapingBlocks,
+  type ImageFingerprint, type ShapingTextBlock, type ShapingVerdict, type TextShapingFidelity } from '@hawa/creative';
 import { readPptxPictures, readPptxTextLayout, type PptxPicture, type PptxPictures, type PptxTextLayout } from '@hawa/qa';
 
 export interface PictureFidelity {
@@ -207,5 +208,61 @@ export function checkTextLines(studioPng: Buffer, canvaPng: Buffer, sourcePptx: 
     pass: changed.length === 0,
     frames, unmeasured,
     warnings: changed.map((f) => `'${f.text}' wraps differently in Canva (${f.studio} line${f.studio === 1 ? '' : 's'} in the design, ${f.canva} in Canva)`),
+  };
+}
+
+/** What `qaReport.textShaping` holds when the shaping check did not run, and why. */
+export interface TextShapingNotMeasured { measured: false; reason: string }
+
+/** How a block's verdict reads in the office alert. */
+const SHAPING_WORDS: Record<Exclude<ShapingVerdict, 'ok'>, string> = {
+  'wrapped-differently': 'is set on other lines than the design',
+  'shaping-mismatch': 'is drawn with other letter forms than the design (unjoined letters or another typeface)',
+  'missing-glyphs': 'shows boxes where letters are missing',
+  'wrong-direction': 'is drawn in the wrong direction',
+};
+
+/**
+ * ADR-290: whether Canva drew each Kurdish or Arabic block's letters joined, ordered and wrapped as the
+ * design sets them, read from the PNG of the same Canva version. The copy checks compare characters and
+ * `checkTextLines` counts lines; neither sees unjoined letters, a reversed line, boxes for missing glyphs
+ * or another face. Each block of the transfer plan the design was imported from (`manifest.plan`) is
+ * drawn with the bundled face it was measured with and compared with Canva's pixels
+ * (`checkTextShaping`, read by colour: Canva's own rasteriser and build of the face). Run colours from
+ * the editable source (an accent line) are read as ink too. Advisory, like the picture and line checks:
+ * it never changes `passed`, `criticalPass` or the download verdict.
+ */
+export function checkExportTextShaping(canvaPng: Buffer, manifest: unknown, sourcePptx?: Uint8Array | null): TextShapingFidelity | TextShapingNotMeasured {
+  const m = manifest as { copy?: unknown; plan?: { width?: unknown; text?: unknown } } | null | undefined;
+  const copy = Array.isArray(m?.copy) && m!.copy.every((c) => typeof c === 'string') ? m!.copy as string[] : null;
+  const text = Array.isArray(m?.plan?.text) ? m!.plan!.text as unknown[] : null;
+  const planWidth = typeof m?.plan?.width === 'number' && m.plan.width > 0 ? m.plan.width : null;
+  const wellFormed = (t: unknown): t is ShapingTextBlock => {
+    const b = t as Record<string, unknown> | null;
+    return Boolean(b) && Number.isSafeInteger(b!.copyIndex) && typeof b!.fontFamily === 'string' && typeof b!.color === 'string' &&
+      ['x', 'y', 'width', 'height', 'fontSize', 'lineHeight'].every((k) => typeof b![k] === 'number' && Number.isFinite(b![k]));
+  };
+  if (!copy || !text || !planWidth || !text.every(wellFormed)) {
+    return { measured: false, reason: 'The editable source records no transfer plan to draw the copy from.' };
+  }
+  const picture = decodePicture(canvaPng);
+  // An accent run (a gold line under a white title) is ink of its own colour.
+  const colors: Record<number, string[]> = {};
+  if (sourcePptx?.length) {
+    const frames = readPptxTextLayout(sourcePptx).frames;
+    copy.forEach((c, i) => {
+      const frame = frames.find((f) => plain(f.text) === plain(c));
+      const found = frame?.runs.map((r) => r.color).filter((x): x is string => Boolean(x)) ?? [];
+      if (found.length) colors[i] = [...new Set(found.map((x) => (x.startsWith('#') ? x : `#${x}`)))];
+    });
+  }
+  const blocks = textShapingBlocks({ text }, Object.fromEntries(copy.map((c, i) => [i, c])), { scale: picture.width / planWidth, colors });
+  if (!blocks.length) return { measured: false, reason: 'The design has no Kurdish or Arabic text to check.' };
+  const result = checkTextShaping(picture, blocks);
+  const indexOf = (id: string) => Number(id.replace('text-copy-', ''));
+  return {
+    ...result,
+    warnings: result.blocks.filter((b) => b.verdict !== 'ok')
+      .map((b) => `'${excerpt(copy[indexOf(b.id)] ?? '')}' ${SHAPING_WORDS[b.verdict as Exclude<ShapingVerdict, 'ok'>]} in Canva`),
   };
 }

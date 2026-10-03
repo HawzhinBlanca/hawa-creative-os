@@ -145,6 +145,8 @@ export interface HardQAResult {
   measuredContrast?: Record<number, number>;
   /** ADR-157: photos the requester let the design leave out and it did, by photoIndex. */
   omittedPhotos?: number[];
+  /** ADR-290: the Kurdish and Arabic lines of the render that ships, compared with the face they were measured with. Advisory. */
+  textShaping?: import('@hawa/creative').TextShapingFidelity | { measured: false; reason: string };
 }
 
 export interface ParityResult {

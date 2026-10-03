@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { readPptxPictures } from '@hawa/qa';
 import { checkExportPictures, checkTextLines, pictureDownloadVerdict } from '../src/services/export-picture-fidelity.js';
@@ -286,7 +288,7 @@ const OFFICE = ['91500011', '91500012'];
 const TITLE = 'Autumn workshop poster';
 const hash = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 
-async function imported(exportDeck: Uint8Array, source: Uint8Array | null, pictures?: { studio: Buffer; canva: Buffer }) {
+async function imported(exportDeck: Uint8Array, source: Uint8Array | null, pictures?: { studio: Buffer; canva: Buffer }, manifest: object = { copy: [TITLE], logo: LOGO_BOX }) {
   vi.stubEnv('TELEGRAM_ALLOWED_USERS', OFFICE.join(','));
   const requestId = randomUUID();
   const { taskId } = await projectLifecycleOpen(db, {
@@ -305,7 +307,7 @@ async function imported(exportDeck: Uint8Array, source: Uint8Array | null, pictu
           '{"method":"pptx_import"}'::jsonb)`.execute(trx);
       await sql`INSERT INTO hawa.canva_editable_sources (id, tenant_id, task_id, client_id, actor_id, operation_id, sha256, content, manifest)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, 'test', ${create}::uuid, ${hash(source)}, ${Buffer.from(source)},
-          ${JSON.stringify({ copy: [TITLE], logo: LOGO_BOX })}::jsonb)`.execute(trx);
+          ${JSON.stringify(manifest)}::jsonb)`.execute(trx);
     }
     if (pictures) {
       const runId = randomUUID();
@@ -377,6 +379,39 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('the recorded QC run carries the
       { media: 'image-1-1.png', box: [0, 0, 670, 1067] }, { media: 'image-1-2.png', box: [685, 0, 395, 526] }, { media: 'image-1-3.png', box: [76, 76, 108, 108] },
     ], { 'image-1-1.png': sky(), 'image-1-2.png': blocks(), 'image-1-3.png': logo() }, SLIDE.cy, TITLE));
     expect(report.textLines).toMatchObject({ measured: false, reason: 'No PNG of the same Canva version was retrieved.' });
+  });
+
+  // ADR-290: a real Canva export on record (golden sheet 1) and the plan it was imported from.
+  const golden = (() => {
+    const root = resolve(__dirname, '../../../output/acceptance/2026-09-27-canva-multilingual');
+    const group = JSON.parse(readFileSync(`${root}/fixtures.json`, 'utf8')).groups.find((g: { id: string }) => g.id === 'group-1');
+    return { manifest: group.manifest, png: readFileSync(`${root}/group-1-round-2-canva.png`), source: new Uint8Array(readFileSync(`${root}/group-1-input.pptx`)) };
+  })();
+
+  it('records the Kurdish shaping check on the same-version PNG, advisory (ADR-290)', async () => {
+    const { report, result } = await imported(exported({}, {}, false, TITLE), golden.source, { studio: golden.png, canva: golden.png }, golden.manifest);
+    expect(report.textShaping).toMatchObject({ pass: true, warnings: [] });
+    expect(report.textShaping.blocks.length).toBeGreaterThanOrEqual(9);
+    expect(report.checks).toContainEqual(expect.objectContaining({ name: 'textShaping', passed: true }));
+    expect(result.officePhotoAlerts?.[0].text ?? result.officeAlerts?.[0].text).not.toContain('in the wrong direction');
+  });
+
+  it('a block Canva drew other than designed is named in the office alert, without changing the verdict (ADR-290)', async () => {
+    const swapped = { ...golden.manifest, copy: [golden.manifest.copy[1], golden.manifest.copy[0], ...golden.manifest.copy.slice(2)] };
+    const { report, result } = await imported(exported({}, {}, false, TITLE), golden.source, { studio: golden.png, canva: golden.png }, swapped);
+    expect(report.textShaping.pass).toBe(false);
+    expect(report.checks).toContainEqual(expect.objectContaining({ name: 'textShaping', passed: false }));
+    expect(report.passed).toBe(true);
+    const alert = result.officePhotoAlerts?.[0].text ?? result.officeAlerts?.[0].text;
+    expect(alert).toContain('in Canva');
+    expect(report.warnings.filter((w: string) => w.endsWith('in Canva') && !w.includes('wraps differently')).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('without a transfer plan or a same-version PNG, the shaping check says why it measured nothing (ADR-290)', async () => {
+    const noPng = await imported(exported({}, {}, false, TITLE), deck([], {}, SLIDE.cy, TITLE));
+    expect(noPng.report.textShaping).toEqual({ measured: false, reason: 'No PNG of the same Canva version was retrieved.' });
+    const noPlan = await imported(exported({}, {}, false, TITLE), golden.source, { studio: golden.png, canva: golden.png });
+    expect(noPlan.report.textShaping).toEqual({ measured: false, reason: 'The editable source records no transfer plan to draw the copy from.' });
   });
 
   it('a design not imported from an editable source says there is nothing to compare', async () => {
