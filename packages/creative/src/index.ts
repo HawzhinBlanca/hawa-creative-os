@@ -33,6 +33,8 @@ export * from './studio/export-text-measure.js';
 export * from './studio/export-image-fidelity.js';
 export * from './studio/export-text-lines.js';
 export * from './studio/export-text-shaping.js';
+export * from './studio/text-shaping-job.js';
+export * from './studio/text-shaping-pool.js';
 export * from './studio/motifs.js';
 export * from './studio/color-science.js';
 export * from './studio/png-export.js';
