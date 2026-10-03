@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T09:19:07Z",
+  "generatedAt": "2026-10-03T10:35:23Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 920,
+  "fileCount": 934,
   "files": [
     {
       "path": ".dockerignore",
@@ -1294,8 +1294,8 @@
     },
     {
       "path": "adrs/274_selection_without_the_document_default.md",
-      "sha256": "5b921b4860c313788ee598e786c405135996abfb9beccc4ec57b4c0c56d6be91",
-      "bytes": 13652
+      "sha256": "fb7d32b3360b6fb565d938797f1fdcc0093b644ce5fdae08879110406d513354",
+      "bytes": 20856
     },
     {
       "path": "adrs/275_heavy_sans_display_caps.md",
@@ -1326,6 +1326,16 @@
       "path": "adrs/284_requester_intake_hunt3.md",
       "sha256": "fe929f90951c35b6598c4884b9896c64a681faa5888e8336ce79929fc90e0f76",
       "bytes": 7316
+    },
+    {
+      "path": "adrs/285_office_boundaries_after_bug_hunt_3.md",
+      "sha256": "bedcc7c8c64da671668a41d01246ab01c8ea61289f4610f446e49727e355334d",
+      "bytes": 5109
+    },
+    {
+      "path": "adrs/286_model_reading_never_acts_alone.md",
+      "sha256": "a32591c80d1ce3e561bc4d687d526cd2ed30c949901ec194f8f6549166649bae",
+      "bytes": 5839
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -2403,9 +2413,54 @@
       "bytes": 47459
     },
     {
+      "path": "plans/judge-calibration-2026-10-02/RESULTS.md",
+      "sha256": "5fa97df34dd54210e592af9cb53f2009bf05b3e2e43adf01ee12d3c7a7c74dfd",
+      "bytes": 17000
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/analysis-poster-vote.json",
+      "sha256": "6700bee72f9fa050e97584dd2733050d4a111d2d41565d591b36e9446c9500dc",
+      "bytes": 6836
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/analysis.json",
+      "sha256": "c1abd925fd4f9bb791f58fb50f2966563fe19935826277d70e0e7b2c56dd6a90",
+      "bytes": 6993
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/analyze.py",
+      "sha256": "b85771aacbdb4608d7b5f93c9f6c8f67a1fa605c770fde7e042b49baad553860",
+      "bytes": 7797
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/call-cache.json",
+      "sha256": "46bd68a786fc42c081cf1c8bc9ec784a4b092431645b789c3486c42ede3b6665",
+      "bytes": 402061
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/canary-poster-vote.json",
+      "sha256": "88e7c8d06ece1847de036accd2176f8e66dc3f3127833209f497292026b4a63e",
+      "bytes": 9536
+    },
+    {
       "path": "plans/judge-calibration-2026-10-02/frozen-set.json",
       "sha256": "c913caf4ed345e4d5d4f68192592c5932b9fd2eb4d79616d385dd994a901676a",
       "bytes": 8040
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/panel-scores.json",
+      "sha256": "7d886ebde9adc6392c91fcbeb72178c57d31ba7d53700223b3643d10df109b14",
+      "bytes": 39339
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/results-poster-vote.json",
+      "sha256": "41f1e9863c8a7407d36b6e3053aceb494dce78da281e3eae105542047234d994",
+      "bytes": 267967
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/results.json",
+      "sha256": "58eefb208b4bcc58fd836db0d0edcf1e73b65cb35c45be323d99186a3de64c66",
+      "bytes": 254214
     },
     {
       "path": "plans/kaae-2025-guideline/CODEX_MERGE_NOTE.md",
@@ -3098,9 +3153,14 @@
       "bytes": 50298
     },
     {
+      "path": "plans/nlu-eval-2026-10-02/MODEL_FIRST_RESULTS.md",
+      "sha256": "878a13a9812fa3001d0d565289972282015cb90504a0c26949f528abd50a86e7",
+      "bytes": 25509
+    },
+    {
       "path": "plans/nlu-eval-2026-10-02/README.md",
-      "sha256": "d811e569e3193f48dddc37b38164ba0f635d33e6c05cfdcb0fb157670b529f53",
-      "bytes": 11938
+      "sha256": "69bafcf00c243c09cc8ca220b2019d0646a6855c1f84b3dfc206aedf93780abd",
+      "bytes": 12932
     },
     {
       "path": "plans/reliability-2026-09-30/LOCAL_PROOF.json",
@@ -3614,8 +3674,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "c06e434f8fb4fd60138224365464ebe2150974ea917e790b91de92fba5ca8f23",
-      "bytes": 909909
+      "sha256": "85e5371c18c2c318e16e1aa056ca85034eeeac0f29a9ff3050faf927606b253d",
+      "bytes": 912703
     },
     {
       "path": "plans/user-stories.csv",
@@ -3949,18 +4009,28 @@
     },
     {
       "path": "scripts/experiments/judge-calibration.ts",
-      "sha256": "82d11924c469b83616474cc6d62e3fd1fa6183b747b3cc8859b8928a5e2d1478",
-      "bytes": 13633
+      "sha256": "748f8580839016500da9e2b6a88dca4360a37737a93467f210c3ba548fa80aac",
+      "bytes": 20520
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",
-      "sha256": "9dd15a3e95d726ebb6b37591751f30bf5e3afeeec53b0e51bd7dce01821d28c6",
-      "bytes": 11715
+      "sha256": "c8cb3c6d974ed7c5353b8771625f561fd9805b51e6dd30b43207cbca0eb4537e",
+      "bytes": 11732
     },
     {
       "path": "scripts/experiments/layout-reasoning-effort.ts",
       "sha256": "8ab730b959d123fd3851bf0798c9e5d3c978c27cd4106d744f1467fce0edac5f",
       "bytes": 7272
+    },
+    {
+      "path": "scripts/experiments/nlu-model-first.ts",
+      "sha256": "6a60ea13fd544168129dd7a6be8ef132c6a15764c8f4d40b0f45267cefd4f632",
+      "bytes": 39329
+    },
+    {
+      "path": "scripts/experiments/poster-vote-canary.ts",
+      "sha256": "9fd4977a3e3dfd29b74592a512b1b01d00dac15c5112bf50a59c0da19c04bb1d",
+      "bytes": 7313
     },
     {
       "path": "scripts/experiments/prompt-cache-probe.ts",
@@ -4064,8 +4134,8 @@
     },
     {
       "path": "scripts/generate_release_manifest.ts",
-      "sha256": "db200b4f5da328d41805e4bb1ce4e76a7625c4e6183b3408801283c57c7acdf2",
-      "bytes": 5845
+      "sha256": "ff5cfe934190f5043f2a654fcbfdd1e7514a3a5573400759e490f6b4b0d30f38",
+      "bytes": 5849
     },
     {
       "path": "scripts/generate_symbol_fallback_faces.py",
@@ -4574,8 +4644,8 @@
     },
     {
       "path": "scripts/verify_release_manifest.ts",
-      "sha256": "ce34f198de8b012ff8db48e820557b4409efe8f03ab8ef3e27dda92466c061a6",
-      "bytes": 10431
+      "sha256": "d0337ce1a5b65894bc60708aa1826e4ff0000972ca29f039e68fa313ac84ca43",
+      "bytes": 10435
     },
     {
       "path": "scripts/verify_t8_ratings.ts",
