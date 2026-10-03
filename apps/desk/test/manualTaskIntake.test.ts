@@ -99,3 +99,19 @@ describe('definitive client refusal versus uncertain recovery', () => {
     expect(getPendingManualDraft()).toEqual(draft);
   });
 });
+
+describe('a Google (cookie) session (hunt-3)', () => {
+  it('sends the CSRF proof Core requires of a cookie-session write, so the request is not refused with 403', async () => {
+    vi.stubGlobal('document', { cookie: 'hawa_csrf=proof-123' });
+    const storage = { getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) };
+    vi.stubGlobal('window', { localStorage: storage, sessionStorage: storage });
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'task-1' }), { status: 201 }));
+    vi.stubGlobal('fetch', fetcher);
+    await submitManualTask(draft);
+    const headers = fetcher.mock.calls[0][1].headers;
+    expect(headers['x-hawa-csrf']).toBe('proof-123');
+    expect(headers.Authorization).toBeUndefined();
+    expect(fetcher.mock.calls[0][1].credentials).toBe('same-origin');
+  });
+});
