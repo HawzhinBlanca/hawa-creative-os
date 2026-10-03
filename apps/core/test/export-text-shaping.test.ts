@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { checkExportTextShaping } from '../src/services/export-picture-fidelity.js';
+import { TextShapingPool } from '@hawa/creative';
+import { checkExportTextShaping, checkExportTextShapingOffThread } from '../src/services/export-picture-fidelity.js';
 
 /**
  * ADR-290: Kurdish and Arabic shaping in a Canva export, read from the PNG of the same version against
@@ -42,4 +43,47 @@ describe('checkExportTextShaping (ADR-290)', () => {
     expect(checkExportTextShaping(png, { copy: ['x'] })).toEqual({ measured: false, reason: 'The editable source records no transfer plan to draw the copy from.' });
     expect(checkExportTextShaping(png, null)).toMatchObject({ measured: false });
   });
+});
+
+describe('checkExportTextShapingOffThread (ADR-290 addendum)', () => {
+  const pool = new TextShapingPool({ timeoutMs: 60_000 });
+  afterAll(() => pool.close());
+  const withoutTime = <T extends object>(r: T) => ('ms' in r ? { ...r, ms: 0 } : r);
+
+  it.each([['group-1', 'group-1-round-2-canva.png'], ['group-2', 'group-2-canva.png'], ['group-3', 'group-3-canva.png'], ['group-4', 'group-4-canva.png']])(
+    '%s: the worker records exactly what the in-process check records', async (id, file) => {
+      const { manifest, png, source } = sheet(id, file);
+      const inProcess = checkExportTextShaping(png, manifest, source);
+      const run = await checkExportTextShapingOffThread(png, manifest, source, pool);
+      if (!run.ran) throw new Error(run.reason);
+      expect(withoutTime(run.result)).toEqual(withoutTime(inProcess));
+    }, 60_000);
+
+  it('the office\'s words for a block drawn other than designed are the same off the thread', async () => {
+    const { manifest, png, source } = sheet('group-2', 'group-2-canva.png');
+    const copy = [...manifest.copy];
+    [copy[3], copy[4]] = [copy[4], copy[3]];
+    const inProcess = checkExportTextShaping(png, { ...manifest, copy }, source);
+    const run = await checkExportTextShapingOffThread(png, { ...manifest, copy }, source, pool);
+    if (!run.ran || 'measured' in run.result || 'measured' in inProcess) throw new Error('not measured');
+    expect(run.result.warnings).toEqual(inProcess.warnings);
+    expect(run.result.warnings).toHaveLength(2);
+  }, 60_000);
+
+  it('a manifest without a plan is answered on this thread, in the same words', async () => {
+    const { png } = sheet('group-1', 'group-1-round-2-canva.png');
+    expect(await checkExportTextShapingOffThread(png, { copy: ['x'] }, null, pool))
+      .toEqual({ ran: true, result: { measured: false, reason: 'The editable source records no transfer plan to draw the copy from.' } });
+  });
+
+  it('a check that did not run says so, and never throws', async () => {
+    const { manifest, png, source } = sheet('group-1', 'group-1-round-2-canva.png');
+    const late = new TextShapingPool({ timeoutMs: 50 });
+    try {
+      expect(await checkExportTextShapingOffThread(png, manifest, source, late)).toEqual({ ran: false, reason: 'timeout' });
+    } finally {
+      await late.close();
+    }
+    expect(await checkExportTextShapingOffThread(Buffer.from('not a png'), manifest, source, pool)).toMatchObject({ ran: false, reason: expect.stringMatching(/^Not measured: /) });
+  }, 60_000);
 });

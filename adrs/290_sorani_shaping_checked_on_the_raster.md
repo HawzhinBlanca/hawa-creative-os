@@ -94,7 +94,8 @@ with the bundled faces pinned (ADR-118).
     in the line is.
   - The Canva check reads the transfer plan's sizes, so a block the renderer shrank to fit (an eyebrow)
     is checked at its planned size.
-  - The check is synchronous: up to about a second of Core's event loop per Canva capture.
+  - ~~The check is synchronous: up to about a second of Core's event loop per Canva capture.~~ Resolved by
+    the addendum below: Core runs it on a worker thread.
 - **Open:**
   - ~~The renderer's own fontkit measurement shares one instance between layout and bbox reads.~~
     Resolved in release-3: `render-layout-v2.ts` reads every ink box (the ink-width probe, line ink
@@ -106,3 +107,71 @@ with the bundled faces pinned (ADR-118).
     by what the long-running Core process happened to draw earlier.
   - Make the check blocking only after it has run on live exports for a while.
   - Re-run the calibration inside the core image.
+
+## Addendum (2026-10-03): the check runs off Core's event loop
+
+**Branch:** `claude/shapingworker` (from `claude/release-3`; nothing deployed).
+
+The check is synchronous CPU work: the blocks (`textShapingBlocks`: fontkit fitting and the Pango
+fallback query, 0.4 to 0.6 s on a Canva sheet) and the raster comparison (0.6 to 0.9 s). In Core both ran
+on the main thread, in the Canva QC recording and in the Studio QA stage, so HTTP, Telegram replies and
+Restate handlers waited up to 1.5 s on every capture and every QA.
+
+1. **One job, plain data** (`packages/creative/src/studio/text-shaping-job.ts`). `runTextShapingJob` takes
+   PNG bytes (and the text-free PNG), the layout's text blocks, the copy, the scale (or the plan's width,
+   read against the picture) and the run colours, and returns exactly what the in-process path returned:
+   the `checkTextShaping` report, or `{ measured: false, reason }` when no block has Arabic-script copy.
+   Faces travel as paths: the pool pins `fontsDir` to the caller's `defaultFontsDir()` before the job
+   leaves the thread, so the worker opens the same pinned files and builds the same fontconfig file.
+   The worker keeps the check's own font cache, one shaping and one outline instance per face, as on
+   the main thread (rule 5); nothing parsed crosses the thread boundary.
+2. **A small `worker_threads` pool** (`text-shaping-pool.ts`, no dependency; nothing in the repository ran
+   CPU work on a thread before). One worker by default (`HAWA_TEXT_SHAPING_WORKERS`, 1 to 8), started on
+   first use, warm afterwards. Idle workers are unreferenced, so they never keep a process alive.
+   - **Deadline per call**, counted from the call, 5 s by default (`HAWA_TEXT_SHAPING_TIMEOUT_MS`, or per
+     call). A queued job is dropped; a running job's worker is terminated (synchronous work cannot be
+     interrupted otherwise) and the next job starts a new one. Recorded as `{ measured: false, reason:
+     'timeout' }`.
+   - **A worker that dies** (an exit, an uncaught error, an entry that will not load) answers its job
+     `worker-failed`; the next job gets a fresh worker. A check that throws inside the worker is
+     answered with its message and recorded as `Not measured: <message>`, as the callers recorded it
+     in-process.
+   - **Bounded queue** (8 by default, `HAWA_TEXT_SHAPING_QUEUE`): past it a call answers `queue-full` at
+     once instead of waiting behind a backlog it would time out in.
+   - Nothing rejects. Core's QC records any of these as not measured, with a `textShaping` check of
+     `passed: null`, exactly as it records a check that threw; the QA stage records it as not measured.
+     Neither changes `passed`, `criticalPass` or the download verdict (rule 4 is unchanged).
+3. **Core.** `checkExportTextShapingOffThread` (export-picture-fidelity.ts) validates the manifest and reads
+   the editable source's run colours on the main thread (milliseconds), then hands the job to the
+   process's pool; `addTextShaping` awaits it. `shapingOfRender` in the QA stage does the same with the
+   render and its text-free render. The in-process `checkExportTextShaping` stays for scripts and tests
+   and shares the job builder, so the two paths cannot drift. Core's shutdown hook closes the pool after
+   the HTTP server has closed: a check still running answers `shut-down`, and the threads have exited
+   before the process does.
+4. **Evidence** (`packages/creative/test/text-shaping-pool.test.ts`, `apps/core/test/export-text-shaping.test.ts`,
+   `apps/core/test/qa-stage-text-shaping.test.ts`, `apps/core/test/export-picture-fidelity.test.ts`).
+   - **Parity.** The worker's report equals the in-process report, field by field (every verdict, score,
+     width ratio, detail, warning and unmeasured block; only the wall time `ms` differs): the six Sorani
+     office posts read exactly and by colour, the six negative controls on one post read both ways, the
+     four Canva sheets and a sheet checked against swapped copy (29 reports), plus a check that throws (same
+     message) and a design with no Arabic-script copy (same words); through Core's export path, the four
+     sheets and the swapped sheet with the office's words.
+   - **Event loop.** A 50 ms interval during the slowest sheet (group 4, read by colour), three runs on this
+     Mac: in-process the longest gap was 1292 to 1368 ms over a 1282 to 1358 ms check; on the worker it was
+     51 ms over a 890 to 911 ms check. The test requires the gap on the worker to stay under 250 ms and
+     under a third of the check's time.
+   - **Failure.** A hung worker is terminated at its deadline and the next job runs on a new one; a queued
+     job past its deadline is dropped without stopping the running one; workers that exit or throw answer
+     `worker-failed` and are replaced; a missing entry answers `worker-failed`; a full queue answers at
+     once; closing answers waiting and running jobs `shut-down` and leaves no thread. On the test database
+     the QC run of a real Canva sheet, with a 100 ms deadline, records `{ measured: false, reason:
+     'timeout' }` and a `textShaping` check of `passed: null`, and the run is still recorded and passes.
+5. **Limits.**
+   - The PNG bytes are copied to the worker (a 1080 x 1350 sheet is about 1 to 2 MB), not transferred: the
+     caller keeps its buffer.
+   - A worker holds its own parsed faces and the creative module (tens of MB). One worker is the default;
+     more only buy parallel checks.
+   - A Canva capture now holds its QC transaction (and the task's row lock) while it awaits the check, as
+     it already did for the picture check; the deadline bounds the wait at 5 s.
+   - `checkTextLines` (ADR-258) still decodes and counts lines on the main thread (tens of milliseconds);
+     it was not moved.

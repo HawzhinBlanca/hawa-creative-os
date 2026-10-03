@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import { closeSharedTextShapingPool } from '@hawa/creative';
 import { createApp } from './app.js';
 import { productionAppOptions } from './entrypoint-options.js';
 
@@ -126,13 +127,19 @@ const shutdown = (signal: string) => {
   }
 
   server.close((err?: Error) => {
-    clearTimeout(forceTimeout);
-    if (err) {
-      log.error(`[${SERVICE_NAME}] Error during server close:`, err);
-      process.exit(1);
-    }
-    log.info(`[${SERVICE_NAME}] Server stopped gracefully`);
-    process.exit(0);
+    // The Sorani shaping check's worker threads (ADR-290 addendum), once the requests that may be
+    // waiting on a check have been answered: the threads exit before the process does.
+    void closeSharedTextShapingPool().catch((poolErr: unknown) => {
+      log.warn(`[${SERVICE_NAME}] text shaping workers did not stop cleanly: ${poolErr instanceof Error ? poolErr.message : String(poolErr)}`);
+    }).then(() => {
+      clearTimeout(forceTimeout);
+      if (err) {
+        log.error(`[${SERVICE_NAME}] Error during server close:`, err);
+        process.exit(1);
+      }
+      log.info(`[${SERVICE_NAME}] Server stopped gracefully`);
+      process.exit(0);
+    });
   });
 };
 

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { readPptxPictures } from '@hawa/qa';
+import { closeSharedTextShapingPool } from '@hawa/creative';
 import { checkExportPictures, checkTextLines, pictureDownloadVerdict } from '../src/services/export-picture-fidelity.js';
 import { png, u8, zipSync } from './fixtures/shipped-export.js';
 
@@ -341,6 +342,8 @@ async function imported(exportDeck: Uint8Array, source: Uint8Array | null, pictu
   return { result, report };
 }
 
+afterAll(() => closeSharedTextShapingPool());
+
 describe.skipIf(!process.env.TEST_DATABASE_URL)('the recorded QC run carries the picture check (ADR-258)', () => {
   it('an import whose pictures all survive records pass, logo preserved; the verdict is the copy check\'s', async () => {
     const { report, result } = await imported(exported({}, {}, false, TITLE), deck([
@@ -405,6 +408,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('the recorded QC run carries the
     const alert = result.officePhotoAlerts?.[0].text ?? result.officeAlerts?.[0].text;
     expect(alert).toContain('in Canva');
     expect(report.warnings.filter((w: string) => w.endsWith('in Canva') && !w.includes('wraps differently')).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a shaping check past its deadline is recorded as not measured and the QC run is still recorded (ADR-290 addendum)', async () => {
+    // The check runs on the process's worker pool; a pool whose deadline no check meets.
+    await closeSharedTextShapingPool();
+    process.env.HAWA_TEXT_SHAPING_TIMEOUT_MS = '100';
+    try {
+      const { report } = await imported(exported({}, {}, false, TITLE), golden.source, { studio: golden.png, canva: golden.png }, golden.manifest);
+      expect(report.textShaping).toEqual({ measured: false, reason: 'timeout' });
+      expect(report.checks).toContainEqual({ name: 'textShaping', passed: null, details: 'not measured' });
+      expect(report.passed).toBe(true);
+    } finally {
+      delete process.env.HAWA_TEXT_SHAPING_TIMEOUT_MS;
+      await closeSharedTextShapingPool();
+    }
   });
 
   it('without a transfer plan or a same-version PNG, the shaping check says why it measured nothing (ADR-290)', async () => {
