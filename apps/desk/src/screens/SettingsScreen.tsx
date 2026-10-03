@@ -61,6 +61,7 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleDeleteWebhook = async () => {
+    if (!window.confirm('Delete the Telegram webhook? Telegram then delivers new messages only to the worker\'s poller. Messages already waiting are kept.')) return;
     setRegisteringWebhook(true);
     setRegisterWebhookResult(null);
     try {
