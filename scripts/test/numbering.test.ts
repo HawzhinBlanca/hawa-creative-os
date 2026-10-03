@@ -19,6 +19,7 @@ const REGISTRY = {
   adr: {
     legacyBelow: 270,
     ownerLineRequiredFrom: 272,
+    blocksConfirmed: true,
     blocks: [
       { owner: 'claude', from: 270, to: 299 },
       { owner: 'codex', from: 300, to: 399 },
@@ -174,6 +175,26 @@ describe('check_numbers', () => {
       expect.stringContaining('278_no_owner.md has no "**Owner:** claude" line'),
       expect.stringContaining('500 is in no block'),
     ]);
+  });
+
+  it('while the blocks are unconfirmed, block and owner-line issues warn and only shared numbers fail', () => {
+    const r = repo();
+    const registryPath = path.join(r.dir, 'adrs/NUMBER_BLOCKS.json');
+    const unconfirmed = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+    unconfirmed.adr.blocksConfirmed = false;
+    fs.writeFileSync(registryPath, JSON.stringify(unconfirmed));
+    r.write('adrs/277_codex_again.md', '# x\n\n**Owner:** codex\n');
+    r.write('adrs/278_no_owner.md', '# x\n');
+    r.write('adrs/500_outside.md');
+    r.write('adrs/201_x.md');
+    r.write('adrs/201_y.md');
+    const result = checkTree(r.dir);
+    expect(result.errors).toEqual([expect.stringContaining('ADR 201 is shared by 201_x.md and 201_y.md')]);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining("277_codex_again.md declares owner codex but 277 is in claude's block"),
+      expect.stringContaining('278_no_owner.md has no "**Owner:** claude" line'),
+      expect.stringContaining('500 is in no block'),
+    ]));
   });
 
   it('passes on this checkout', () => {

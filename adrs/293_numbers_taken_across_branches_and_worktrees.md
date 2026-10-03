@@ -69,3 +69,10 @@ directions; a reservation is seen by the next scan and the check, and refuses a 
 owner's block and a migration gap; a migration gap, a duplicate migration and a misnamed `.sql` fail;
 `_down.sql` files are ignored; grandfathered duplicates and out-of-block files pass while new ones fail;
 this checkout passes.
+
+## Addendum: blocks are proposals until Codex confirms them
+
+`adrs/NUMBER_BLOCKS.json` carries `"blocksConfirmed": false`. Until both agents confirm the blocks, three things are
+warnings, not errors: a number outside every block, a declared owner that differs from its block's, and a missing
+`**Owner:**` line. This way the other agent's next ADR never fails lint by surprise. Two files sharing an ADR number,
+and every migration rule, stay errors. Set `blocksConfirmed` to true once Codex agrees.

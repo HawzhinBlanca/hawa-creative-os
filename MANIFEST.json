@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T15:19:09Z",
+  "generatedAt": "2026-10-03T15:21:38Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1364,13 +1364,13 @@
     },
     {
       "path": "adrs/293_numbers_taken_across_branches_and_worktrees.md",
-      "sha256": "56b3c87709376527fe5149dc93c09202054c48bb537e04fbfe118ffd875ec37f",
-      "bytes": 5361
+      "sha256": "ada41c5e6a25be21348f1bc9f42a5e68268768d6e3e4753e35848c1ed2dc56d3",
+      "bytes": 5860
     },
     {
       "path": "adrs/NUMBER_BLOCKS.json",
-      "sha256": "1981ddfea81c543eb1ae4dcd0a5901f4c2b3dde58e1eb313abdedd96e1a17ba9",
-      "bytes": 2940
+      "sha256": "64312856ce6214a6c3d08324d86887c3261ca7249c15515672de26771f50d60d",
+      "bytes": 3382
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -4299,8 +4299,8 @@
     },
     {
       "path": "scripts/numbering_lib.ts",
-      "sha256": "acb7815c0f67b2ab1cae3fb335fe29b288f208fd3221cd871285317db03ad95e",
-      "bytes": 15569
+      "sha256": "9bd5b0481dc3cf9a0736793728a0ba3194e3e1f863ed6ca5f2fabfa0873c6482",
+      "bytes": 16088
     },
     {
       "path": "scripts/office_photo_library_ingest.ts",
@@ -4634,8 +4634,8 @@
     },
     {
       "path": "scripts/test/numbering.test.ts",
-      "sha256": "271544bf44dd954a97f7edb418e247cf9239ca6be1ad44b7e70ee7a6395f312b",
-      "bytes": 8687
+      "sha256": "18d67761650a4b664b5afb886d391506eefbf768c441b999f6d2e1243d2e043b",
+      "bytes": 9774
     },
     {
       "path": "scripts/test/provider-credential-update.test.ts",

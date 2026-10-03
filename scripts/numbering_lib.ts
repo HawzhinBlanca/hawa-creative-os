@@ -28,6 +28,8 @@ export interface Registry {
   adr: {
     legacyBelow: number;
     ownerLineRequiredFrom: number;
+    /** False until both agents confirm the blocks; block and owner-line issues are then warnings. */
+    blocksConfirmed?: boolean;
     blocks: Block[];
     grandfathered: {
       duplicates: { number: number; files: string[]; note?: string }[];
@@ -304,12 +306,16 @@ export function checkTree(root: string): CheckResult {
       result.warnings.push(`${DIRS.adr}/${f} is ${historical.owner}'s, in ${block ? `${block.owner}'s block ${block.from}-${block.to}` : 'no block'} (grandfathered)`);
       continue;
     }
+    // Blocks are proposed, not yet confirmed with Codex (docs/NUMBERING.md): until they are, a number outside its
+    // block or a missing owner line is a warning, so another agent's next ADR never fails lint by surprise. Two files
+    // sharing a number, and every migration rule below, stay errors.
+    const blockIssues = registry.adr.blocksConfirmed ? result.errors : result.warnings;
     if (!block) {
-      result.errors.push(`${DIRS.adr}/${f}: ${pad(n)} is in no block of ${REGISTRY_PATH}; take a number with scripts/next_number.ts adr --owner <you>`);
+      blockIssues.push(`${DIRS.adr}/${f}: ${pad(n)} is in no block of ${REGISTRY_PATH}; take a number with scripts/next_number.ts adr --owner <you>`);
     } else if (owner && owner !== block.owner) {
-      result.errors.push(`${DIRS.adr}/${f} declares owner ${owner} but ${pad(n)} is in ${block.owner}'s block ${block.from}-${block.to}`);
+      blockIssues.push(`${DIRS.adr}/${f} declares owner ${owner} but ${pad(n)} is in ${block.owner}'s block ${block.from}-${block.to}`);
     } else if (!owner && n >= ownerLineRequiredFrom) {
-      result.errors.push(`${DIRS.adr}/${f} has no "**Owner:** ${block.owner}" line (required from ADR ${ownerLineRequiredFrom}, docs/NUMBERING.md)`);
+      blockIssues.push(`${DIRS.adr}/${f} has no "**Owner:** ${block.owner}" line (required from ADR ${ownerLineRequiredFrom}, docs/NUMBERING.md)`);
     }
   }
 

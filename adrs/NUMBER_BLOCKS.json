@@ -32,30 +32,77 @@
     ],
     "history": {
       "//": "Inferred 2026-10-03 from the commit that first added each ADR file (Claude commits carry a Co-Authored-By: Claude trailer; Codex commits carry none). Before ADR-122 neither agent used trailers, so 001-121 is unattributed. To confirm with Codex.",
-      "claude": ["026-029", "032-038", "122-145", "148 (renumbered 160)", "155-159", "170", "180", "182", "200 (office_chat_understanding)", "230-240", "250-258", "270-275", "280-291"],
-      "codex": ["146-149", "161-165", "171-172", "181-226", "239 (renumbered 241)", "241-242", "256 (hawzhin_workspace)", "259-266", "276-279", "292"]
+      "claude": [
+        "026-029",
+        "032-038",
+        "122-145",
+        "148 (renumbered 160)",
+        "155-159",
+        "170",
+        "180",
+        "182",
+        "200 (office_chat_understanding)",
+        "230-240",
+        "250-258",
+        "270-275",
+        "280-291"
+      ],
+      "codex": [
+        "146-149",
+        "161-165",
+        "171-172",
+        "181-226",
+        "239 (renumbered 241)",
+        "241-242",
+        "256 (hawzhin_workspace)",
+        "259-266",
+        "276-279",
+        "292"
+      ]
     },
     "grandfathered": {
       "duplicates": [
         {
           "number": 200,
-          "files": ["200_current_font_admission_cache_basis.md", "200_office_chat_understanding.md"],
+          "files": [
+            "200_current_font_admission_cache_basis.md",
+            "200_office_chat_understanding.md"
+          ],
           "note": "Codex and Claude both took 200 on 2026-10-01; both are cited by number, so neither is renamed."
         },
         {
           "number": 148,
-          "files": ["148_caption_limit_holds_album.md", "148_sol61_candidate_and_jev_capability_review.md"],
+          "files": [
+            "148_caption_limit_holds_album.md",
+            "148_sol61_candidate_and_jev_capability_review.md"
+          ],
           "note": "Only on stale branches; Claude's file was renumbered 160."
         }
       ],
       "outOfBlock": [
-        { "file": "276_frozen_display_export_policy.md", "owner": "codex" },
-        { "file": "277_native_workspace_invalid_token_errors.md", "owner": "codex" },
-        { "file": "278_explicit_customer_generation_runtime.md", "owner": "codex" },
-        { "file": "279_customer_photo_manifest_http_projection.md", "owner": "codex" },
-        { "file": "292_standard_customer_story_constraints.md", "owner": "codex" }
+        {
+          "file": "276_frozen_display_export_policy.md",
+          "owner": "codex"
+        },
+        {
+          "file": "277_native_workspace_invalid_token_errors.md",
+          "owner": "codex"
+        },
+        {
+          "file": "278_explicit_customer_generation_runtime.md",
+          "owner": "codex"
+        },
+        {
+          "file": "279_customer_photo_manifest_http_projection.md",
+          "owner": "codex"
+        },
+        {
+          "file": "292_standard_customer_story_constraints.md",
+          "owner": "codex"
+        }
       ]
-    }
+    },
+    "blocksConfirmed": false
   },
   "migration": {
     "sharedSequence": true,
