@@ -174,7 +174,8 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !toolsBuilt)('nightly backu
       const [ready] = await once(holder.stdout, 'data');
       expect(String(ready)).toContain('locked');
       for (const script of ['infra/backup/nightly_backup.sh','infra/backup/restore_drill.sh']) {
-        const result = await run(script);
+        // No wait for the lock (by default an hour): a busy lock then fails the run loudly at once.
+        const result = await run(script, [], { HAWA_BACKUP_LOCK_WAIT_SECONDS: '0', HAWA_DRILL_LOCK_WAIT_SECONDS: '0' });
         expect(result.code).toBe(1);
         expect(result.out).toContain('lock is busy, invalid or unavailable');
       }

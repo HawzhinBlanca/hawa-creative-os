@@ -52,13 +52,16 @@ notify() { # Telegram, operator chat; values read at call time, never logged
 # fresh backup and the retention below for one of the fourteen. Only the newest two are kept, to look
 # at. A failure after the checks (the archive copy) leaves the verified dump as it is.
 DUMP_VERIFIED=0; DUMP_STARTED=0; LOCK_OWNED=0
+# The run that holds the archive lock (started again by archive_lock.py) fails with 3, so the waiting
+# parent can tell its failure, already logged and alerted, from archive_lock.py's 1 for a busy lock.
+FAIL_STATUS=1; [[ -z "${HAWA_ARCHIVE_LOCK_FD:-}" ]] || FAIL_STATUS=3
 fail() {
   trap - ERR
   if [[ "$DUMP_STARTED" == 1 && "$DUMP_VERIFIED" == 0 && -e "$OUT" ]]; then mv -f "$OUT" "$OUT.failed" || true; rm -f "$OUT.sha256"; fi
   if [[ "$LOCK_OWNED" == 1 ]]; then
     { ls -1t "$DIR"/hawa_*.dump.failed 2>/dev/null || true; } | tail -n +3 | while read -r old; do rm -f "$old"; done
   fi
-  echo "$(date -u +%FT%TZ) FAIL ${STAMP}: $1" | tee -a "$LOG" >&2; notify "🔴 Hawa nightly backup FAILED (${STAMP}): $1"; exit 1
+  echo "$(date -u +%FT%TZ) FAIL ${STAMP}: $1" | tee -a "$LOG" >&2; notify "🔴 Hawa nightly backup FAILED (${STAMP}): $1"; exit "$FAIL_STATUS"
 }
 # Anything else that stops the script is a failure too, and says so, instead of ending in silence.
 trap 'fail "stopped unexpectedly at line $LINENO"' ERR
@@ -102,10 +105,26 @@ fi
 # Serialize publication, index updates, retention and collection with restores and
 # the existing Restate archive tools. The restarted shell inherits an actual locked
 # descriptor, checked against this directory; an environment marker alone is insufficient.
+# A busy lock is waited for, up to HAWA_BACKUP_LOCK_WAIT_SECONDS (3600), and then fails the night like any
+# other failure. It used to end the run at once with exit 1 and nothing logged or sent: an off-site copy
+# or a restore drill still reading the archive, or launchd starting every job a sleeping Mac missed at
+# the same moment on wake, cost the night's backup, and the watchdog noticed only 26 hours later (hunt 3).
 if [[ -z "${HAWA_ARCHIVE_LOCK_FD:-}" ]]; then
-  python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode exclusive \
-    -- bash "$ROOT/infra/backup/nightly_backup.sh" "$@" && exit 0
-  exit 1
+  LOCK_WAIT="${HAWA_BACKUP_LOCK_WAIT_SECONDS:-3600}"
+  [[ "$LOCK_WAIT" =~ ^[0-9]+$ ]] || fail "HAWA_BACKUP_LOCK_WAIT_SECONDS must be a whole number"
+  waited=0
+  while :; do
+    rc=0
+    python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode exclusive \
+      -- bash "$ROOT/infra/backup/nightly_backup.sh" "$@" || rc=$?
+    # 0: the night passed. 1: archive_lock.py found the lock busy. Anything else: the run failed and has
+    # already logged and alerted it.
+    if [[ $rc == 0 ]]; then exit 0; fi
+    if [[ $rc != 1 ]]; then exit 1; fi
+    (( waited < LOCK_WAIT )) || fail "the backup archive stayed locked for ${LOCK_WAIT} s (an off-site copy, a restore drill or another backup still holds it); no backup was taken"
+    (( waited > 0 )) || echo "waiting for the backup archive lock (an off-site copy, a restore drill or another backup holds it)" >&2
+    sleep 30; waited=$((waited + 30))
+  done
 fi
 python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode exclusive --check \
   || fail "nightly backup does not own this archive lock"
