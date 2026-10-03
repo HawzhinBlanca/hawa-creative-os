@@ -1521,11 +1521,33 @@ export function admittedFontFace(font: string, options: AdmittedFontFaceQuery): 
  */
 export function measureTextWidth(text: string, font: any, fontSize: number, letterSpacing = 0): number {
   if (!text) return 0;
-  const run = font.layout(text);
+  const run = shapedAdvance(font, text);
   const scale = fontSize / font.unitsPerEm;
   const baseWidth = run.advanceWidth * scale;
-  const extraSpacing = letterSpacing ? (run.glyphs.length - 1) * (letterSpacing * fontSize) : 0;
+  const extraSpacing = letterSpacing ? (run.glyphCount - 1) * (letterSpacing * fontSize) : 0;
   return baseWidth + extraSpacing;
+}
+
+/**
+ * A string's shaped advance (font units) and glyph count, per font object. Shaping is independent of
+ * the size and the tracking, and is nearly all of the time a composer spends searching its sizes
+ * (the greedy wrap measures the same word prefixes at every title size), so it is shaped once. The
+ * values are fontkit's own, so every width computed from them is the same number as before. A font
+ * file that changes is loaded as a new font object (loadFontPathEntry), which starts a new cache.
+ */
+const shapedAdvances = new WeakMap<object, Map<string, { advanceWidth: number; glyphCount: number }>>();
+const SHAPED_ADVANCES_PER_FONT = 20000;
+function shapedAdvance(font: any, text: string): { advanceWidth: number; glyphCount: number } {
+  let perFont = shapedAdvances.get(font);
+  if (!perFont) shapedAdvances.set(font, (perFont = new Map()));
+  let hit = perFont.get(text);
+  if (!hit) {
+    const run = font.layout(text);
+    hit = { advanceWidth: run.advanceWidth, glyphCount: run.glyphs.length };
+    if (perFont.size >= SHAPED_ADVANCES_PER_FONT) perFont.delete(perFont.keys().next().value!);
+    perFont.set(text, hit);
+  }
+  return hit;
 }
 
 /**
