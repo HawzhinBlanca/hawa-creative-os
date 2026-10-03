@@ -14,8 +14,9 @@
  * Advisory: the result is recorded in the QC report and named in the office alert; it never changes
  * `passed` or `criticalPass` (ADR-257's rule). The customer download contract (ADR-258) reads `pass`.
  */
-import { checkTextShaping, countInkLines, decodePicture, hammingDistance, imageFingerprint, MATCH_DISTANCE, textShapingBlocks,
-  type ImageFingerprint, type ShapingTextBlock, type ShapingVerdict, type TextShapingFidelity } from '@hawa/creative';
+import { countInkLines, decodePicture, hammingDistance, imageFingerprint, MATCH_DISTANCE, runTextShapingJob, sharedTextShapingPool,
+  type ImageFingerprint, type ShapingTextBlock, type ShapingVerdict, type TextShapingFidelity, type TextShapingJob, type TextShapingOutcome,
+  type TextShapingPool, type TextShapingRun } from '@hawa/creative';
 import { readPptxPictures, readPptxTextLayout, type PptxPicture, type PptxPictures, type PptxTextLayout } from '@hawa/qa';
 
 export interface PictureFidelity {
@@ -230,9 +231,38 @@ const SHAPING_WORDS: Record<Exclude<ShapingVerdict, 'ok'>, string> = {
  * drawn with the bundled face it was measured with and compared with Canva's pixels
  * (`checkTextShaping`, read by colour: Canva's own rasteriser and build of the face). Run colours from
  * the editable source (an accent line) are read as ink too. Advisory, like the picture and line checks:
- * it never changes `passed`, `criticalPass` or the download verdict.
+ * it never changes `passed`, `criticalPass` or the download verdict. This runs in the caller's thread
+ * (tests, scripts); Core's QC runs `checkExportTextShapingOffThread`.
  */
 export function checkExportTextShaping(canvaPng: Buffer, manifest: unknown, sourcePptx?: Uint8Array | null): TextShapingFidelity | TextShapingNotMeasured {
+  const prepared = exportTextShapingJob(canvaPng, manifest, sourcePptx);
+  if ('measured' in prepared) return prepared;
+  return namedInCanva(runTextShapingJob(prepared.job), prepared.copy);
+}
+
+/**
+ * `checkExportTextShaping` on a worker thread (ADR-290 addendum): the same job and the same report, off
+ * Core's event loop. Only the editable source's run colours are read here. A check that did not run
+ * (`timeout`, `worker-failed`, a full queue, or one that threw: `Not measured: ...`) is `ran: false`.
+ */
+export async function checkExportTextShapingOffThread(canvaPng: Buffer, manifest: unknown, sourcePptx?: Uint8Array | null,
+  pool: TextShapingPool = sharedTextShapingPool()): Promise<TextShapingRun> {
+  let prepared: ReturnType<typeof exportTextShapingJob>;
+  try {
+    prepared = exportTextShapingJob(canvaPng, manifest, sourcePptx);
+  } catch (err) {
+    return { ran: false, reason: `Not measured: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  if ('measured' in prepared) return { ran: true, result: prepared };
+  const run = await pool.run(prepared.job);
+  return run.ran ? { ran: true, result: namedInCanva(run.result, prepared.copy) } : run;
+}
+
+/**
+ * The check's job: the transfer plan's text blocks, the copy, the PNG (scaled by its width over the
+ * plan's) and the run colours read from the editable source. Plain data, for either thread.
+ */
+function exportTextShapingJob(canvaPng: Buffer, manifest: unknown, sourcePptx?: Uint8Array | null): { job: TextShapingJob; copy: string[] } | TextShapingNotMeasured {
   const m = manifest as { copy?: unknown; plan?: { width?: unknown; text?: unknown } } | null | undefined;
   const copy = Array.isArray(m?.copy) && m!.copy.every((c) => typeof c === 'string') ? m!.copy as string[] : null;
   const text = Array.isArray(m?.plan?.text) ? m!.plan!.text as unknown[] : null;
@@ -245,7 +275,6 @@ export function checkExportTextShaping(canvaPng: Buffer, manifest: unknown, sour
   if (!copy || !text || !planWidth || !text.every(wellFormed)) {
     return { measured: false, reason: 'The editable source records no transfer plan to draw the copy from.' };
   }
-  const picture = decodePicture(canvaPng);
   // An accent run (a gold line under a white title) is ink of its own colour.
   const colors: Record<number, string[]> = {};
   if (sourcePptx?.length) {
@@ -256,9 +285,12 @@ export function checkExportTextShaping(canvaPng: Buffer, manifest: unknown, sour
       if (found.length) colors[i] = [...new Set(found.map((x) => (x.startsWith('#') ? x : `#${x}`)))];
     });
   }
-  const blocks = textShapingBlocks({ text }, Object.fromEntries(copy.map((c, i) => [i, c])), { scale: picture.width / planWidth, colors });
-  if (!blocks.length) return { measured: false, reason: 'The design has no Kurdish or Arabic text to check.' };
-  const result = checkTextShaping(picture, blocks);
+  return { job: { picture: canvaPng, layout: { text }, copyText: Object.fromEntries(copy.map((c, i) => [i, c])), planWidth, colors }, copy };
+}
+
+/** The report with each block drawn other than designed named in the office's words. */
+function namedInCanva(result: TextShapingOutcome, copy: string[]): TextShapingFidelity | TextShapingNotMeasured {
+  if ('measured' in result) return result;
   const indexOf = (id: string) => Number(id.replace('text-copy-', ''));
   return {
     ...result,

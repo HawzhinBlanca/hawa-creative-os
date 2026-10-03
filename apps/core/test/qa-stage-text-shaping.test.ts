@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
-import { OpenAiStudioClient, renderMotifPng, type RenderLayoutOptions, type StudioLayoutV2 } from '@hawa/creative';
-import { runQAStage } from '../src/services/design-studio/stages/qa.stage.js';
+import { closeSharedTextShapingPool, OpenAiStudioClient, renderLayoutV2Async, renderMotifPng, TextShapingPool, type RenderLayoutOptions, type StudioLayoutV2 } from '@hawa/creative';
+import { runQAStage, shapingOfRender } from '../src/services/design-studio/stages/qa.stage.js';
 import type { CandidateState, StageContext } from '../src/services/design-studio/types.js';
 import { OFFICE_POSTS } from '../../../packages/creative/test/fixtures/office-posts/office-posts.js';
 
@@ -17,6 +17,7 @@ vi.mock('@hawa/creative', async (original) => {
     actual.renderLayoutV2Async(runtime.drawAs ? { ...layout, text: layout.text.map((t) => ({ ...t, fontFamily: runtime.drawAs! })) } : layout, options) };
 });
 afterEach(() => { runtime.drawAs = undefined; });
+afterAll(() => closeSharedTextShapingPool());
 
 const hash = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 // A Sorani string already in the repository's fixtures (README of office-posts lists their sources).
@@ -65,5 +66,25 @@ describe('QA stage: Kurdish shaping of the render that ships (ADR-290)', () => {
     expect(finding).toMatchObject({ severity: 'warning', copyIndex: 0 });
     expect(finding?.message).toMatch(/^TEXT_SHAPING_MISMATCH: copy block 1 /);
     expect(qa.passed).toBe(clean.passed);
+  }, 60_000);
+});
+
+describe('QA stage: the shaping check runs off the event loop (ADR-290 addendum)', () => {
+  const faulty = new URL('../../../packages/creative/test/fixtures/text-shaping-faulty-worker.mjs', import.meta.url).pathname;
+
+  it('a check whose worker dies or misses its deadline is recorded as not measured, never thrown', async () => {
+    const { context, candidate } = stage();
+    const layout = candidate.currentLayout;
+    const copyText = { 0: SORANI };
+    const render = await renderLayoutV2Async(layout, { copyText, logoDataUri: `data:image/png;base64,${context.logo!.bytes.toString('base64')}` });
+    const slow = new TextShapingPool({ timeoutMs: 50 });
+    const dying = new TextShapingPool({ workerFile: faulty });
+    try {
+      expect(await shapingOfRender(layout, copyText, render, slow)).toEqual({ measured: false, reason: 'timeout' });
+      expect(await shapingOfRender(layout, { 0: 'exit' }, render, dying)).toEqual({ measured: false, reason: 'worker-failed' });
+      expect(await shapingOfRender(layout, copyText, undefined, dying)).toEqual({ measured: false, reason: 'The design could not be rendered for QA.' });
+    } finally {
+      await Promise.all([slow.close(), dying.close()]);
+    }
   }, 60_000);
 });

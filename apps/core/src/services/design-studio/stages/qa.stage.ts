@@ -1,6 +1,6 @@
 import type { StageContext, CandidateState, HardQAResult } from '../types.js';
-import { checkTextShaping, evaluateHardQa, layoutPlacements, renderLayoutV2Async, renderLogoTemplate, photoRecipeOf, textShapingBlocks,
-  type ArtRegionPlan, type RenderLayoutV2Result, type ReviewFinding, type StudioLayoutV2, type TextShapingFidelity } from '@hawa/creative';
+import { evaluateHardQa, layoutPlacements, renderLayoutV2Async, renderLogoTemplate, photoRecipeOf, sharedTextShapingPool,
+  type ArtRegionPlan, type RenderLayoutV2Result, type ReviewFinding, type StudioLayoutV2, type TextShapingFidelity, type TextShapingPool } from '@hawa/creative';
 import { hardQaContextFor, copyForStageV3 } from './v3.stage.js';
 import { candidateRenderOptions } from './asset-inputs.js';
 import { log } from '../../../logging.js';
@@ -50,7 +50,7 @@ export async function runQAStage(
   }
   winner.currentLayout = outcome.layout;
   winner.metrics = outcome.metrics;
-  const textShaping = shapingOfRender(rendered, copyForStageV3(ctx).text, render);
+  const textShaping = await shapingOfRender(rendered, copyForStageV3(ctx).text, render);
   if (!('measured' in textShaping)) outcome.findings.push(...shapingFindings(textShaping));
   return {
     passed: outcome.passed,
@@ -71,16 +71,14 @@ export async function runQAStage(
  * line drawn joined, ordered and wrapped as the face it was measured with sets it? Advisory: findings
  * for the office, never a reason the design failed. The layout checked is the one rendered.
  */
-function shapingOfRender(layout: StudioLayoutV2, copyText: Record<number, string>, render: RenderLayoutV2Result | undefined):
-  TextShapingFidelity | { measured: false; reason: string } {
+export async function shapingOfRender(layout: StudioLayoutV2, copyText: Record<number, string>, render: Pick<RenderLayoutV2Result, 'png' | 'noTextPng'> | undefined,
+  pool: TextShapingPool = sharedTextShapingPool((e) => log.warn(`[qa.stage] text shaping check: ${e.kind}${e.detail ? ` (${e.detail})` : ''}`))):
+  Promise<TextShapingFidelity | { measured: false; reason: string }> {
   if (!render) return { measured: false, reason: 'The design could not be rendered for QA.' };
-  try {
-    const blocks = textShapingBlocks(layout, copyText);
-    if (!blocks.length) return { measured: false, reason: 'The design has no Kurdish or Arabic text to check.' };
-    return checkTextShaping(render.png, blocks, { background: render.noTextPng });
-  } catch (err) {
-    return { measured: false, reason: `Not measured: ${err instanceof Error ? err.message : String(err)}` };
-  }
+  // On a worker thread (ADR-290 addendum), blocks and check both: up to a second of CPU that used to hold
+  // Core's event loop. A check that did not run (timed out, its worker died, it threw) is not measured.
+  const run = await pool.run({ picture: render.png, background: render.noTextPng, layout: { text: layout.text }, copyText });
+  return run.ran ? run.result : { measured: false, reason: run.reason };
 }
 
 const SHAPING_WORDS: Record<string, string> = {
