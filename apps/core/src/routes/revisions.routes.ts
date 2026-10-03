@@ -55,7 +55,10 @@ const commentFromRow = (row: CommentRow) => ({
  * which would otherwise take "diff" for a revision id.
  */
 const FEEDBACK_POLARITIES = ['positive', 'negative', 'neutral'] as const;
-const FEEDBACK_CATEGORIES = ['typography', 'color', 'layout', 'brand_voice', 'cultural', 'image_subject', 'other'] as const;
+/** The categories client learning reads as its sources (migration 076); only their own services write them. */
+const LEARNING_SOURCE_CATEGORIES = ['design_refinement', 'design_rejection', 'client_rule_instruction'] as const;
+const isFeedbackCategory = (v: unknown): v is string =>
+  typeof v === 'string' && /^[a-z][a-z_]{1,39}$/.test(v) && !(LEARNING_SOURCE_CATEGORIES as readonly string[]).includes(v);
 
 export function registerRevisionsRoutes(ctx: RouteContext): void {
   const {
@@ -574,15 +577,15 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     const stored = await withRlsContext(db, scope, (trx) => taskRepo.findById(taskId, scope.tenantId, trx));
     if (!stored) return problem(c, 404, 'Task Not Found');
     if (!stored.client_id) return problem(c, 422, 'Client Required', 'Feedback is recorded against the task\'s client, and this task has none');
-    // hawa.feedback_events is what client learning reads, so only the feedback categories are taken: the
-    // learning-source categories (client_rule_instruction, design_refinement, ...) are written by their own
-    // services with their own evidence, never named by a caller here.
+    // hawa.feedback_events is what client learning reads: the learning-source categories
+    // (client_rule_instruction, design_refinement, design_rejection) are written by their own services with
+    // their own evidence, never named by a caller here.
     const polarity = body.polarity ?? 'neutral';
     const category = body.category ?? 'layout';
     const rawFeedbackText = body.rawFeedbackText ?? body.comment ?? '';
-    if (!(FEEDBACK_POLARITIES as readonly unknown[]).includes(polarity) || !(FEEDBACK_CATEGORIES as readonly unknown[]).includes(category) ||
+    if (!(FEEDBACK_POLARITIES as readonly unknown[]).includes(polarity) || !isFeedbackCategory(category) ||
         typeof rawFeedbackText !== 'string' || rawFeedbackText.length > 4000) {
-      return problem(c, 422, 'Invalid Feedback', `polarity is one of ${FEEDBACK_POLARITIES.join(', ')}; category one of ${FEEDBACK_CATEGORIES.join(', ')}; the comment at most 4000 characters`);
+      return problem(c, 422, 'Invalid Feedback', `polarity is one of ${FEEDBACK_POLARITIES.join(', ')}; category a lowercase word (not a learning-source category); the comment at most 4000 characters`);
     }
     // The revision named must be this task's (as for a review comment); otherwise the task's current one.
     let revisionId: string | null = isValidUuid(stored.current_design_revision_id) ? stored.current_design_revision_id : null;
